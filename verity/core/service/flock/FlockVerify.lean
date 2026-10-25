@@ -247,15 +247,6 @@ theorem buildSessionOf_eq (tags : Tags) (circuitB pubB compB : ByteArray) (coins
   unfold buildSession
   simp only [hr, ↓reduceIte, ProvedScope.circuitOf, hh, Stmt.setupTables_eq]
 
-/-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
-(`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
-def programDigest (b : ByteArray) : Option String := do
-  let j ← (Lean.Json.parse (← String.fromUTF8? b)).toOption
-  let bare := match j with
-    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
-    | x => x
-  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
-
 /-- `--program F`: the verifier's own copy of the program's descriptor bytes (a path, or with `--archive` its SHA-512), from which
 it derives a template query's units. -/
 def programInput (args : List String) : IO (Except String (Option ByteArray)) := do
@@ -733,7 +724,7 @@ verity/flock-circuit+plain-leaves`, `--rec-inner-statement-coins os`, no `--rec-
 of every unit in order.
 Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
-naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
+naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `ProvedScope.programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
 work draw, whatever flags it holds, or a subset draw without `--zk` or `--plain-tables`; under `--plain-tables` every
 draw but a subset draw, `ProvedScope.drawLawP`), and under `--rec-inner` so is a session of more
@@ -753,8 +744,9 @@ deployed prover writes after the pair (`Tags.upstreamPlain`, PROTOCOL.md §8.1),
 the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_sha` to the file as received; each form is
 refused where the other is pinned. Not with `--zk`.
 `--plain-tables`: the plain path past one table (`ProvedScope.checkP`, §16.15): a plain session of public outputs at up to
-`Tags.MAX_TABLES` tables, at a subset draw, which `flock_verify_sound`'s plain multi-table claim covers. Without it a plain
-session has at most one table. Not with `--zk`. -/
+`Tags.MAX_TABLES` tables, at a subset draw, with the verifier's own `--program` the one META's `program_sha512` names
+(`ProvedScope.programP`), which `flock_verify_sound`'s plain multi-table claim covers. Without it a plain session has at
+most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -850,7 +842,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- other check, until a soundness theorem reads `Circuit.tmpl`
   let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
   let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
-    else if plainTables then ProvedScope.checkPOf parsed tags pubB count publicInputs.isSome registered.isSome
+    else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome
+      registered.isSome
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let drawLaw := if plainTables then ProvedScope.drawLawP else ProvedScope.drawLaw zk
   let setupOf := fun (draw : Option Lean.Json) =>
@@ -877,7 +870,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
     | .ok (spec, sts) => (if draw.isSome then drawLaw draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
-  let programSha := program.bind programDigest
+  let programSha := program.bind ProvedScope.programDigest
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
   let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]

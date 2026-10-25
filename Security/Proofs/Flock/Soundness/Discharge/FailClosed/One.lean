@@ -17,8 +17,9 @@ claim the `FailClosed` headlines make there:
 - without `--zk`, public outputs: `SoundExec` (`flock_headline_exec_dec`); hidden outputs: `SoundExecH`
   (`flock_headline_exec_hidden_dec`). The check refuses more than one table without `--zk`.
 - `--plain-tables` (no `--zk`), public outputs, at every number of tables up to `Tags.MAX_TABLES`: `SoundExecJ`
-  (`PlainJ.plain_session_soundJ`, the live subset draw), over `VerifiesP` (its check `ScopeP`, `ProvedScope.checkP`).
-  It is the theorem's third conjunct, since the flag is not in `Inputs`.
+  (`PlainJ.plain_session_soundJ`, the live subset draw), over `VerifiesP` (its check `ScopeP`, `ProvedScope.checkP`),
+  whose circuit's META binds the verifier's own program (`ProgramOfCircuit`). It is the theorem's third conjunct, since
+  the flag is not in `Inputs`.
 - `--zk`, public outputs: at one table `SoundZ` (`zk_session_sound`, the stratified law) and zero knowledge `ViewZ`
   (`zk_session_composed`); at every number of tables `SoundZJ` (`zk_session_soundJ`, the live subset draw).
 - `--zk`, hidden outputs: at one table `SoundZH` (`zk_session_soundH`); at every number of tables `SoundZHJ`
@@ -292,8 +293,11 @@ open FlockSoundness.Discharge.Composed (nTab nTab_pos drawJ partS)
 set_option linter.unusedVariables false in
 /-- The claim under `--plain-tables` (no `--zk`, public outputs, any number of tables up to `Tags.MAX_TABLES`), the law
 the live subset draw: `plain_session_soundJ`'s. Its reference setup is table 0 of an untyped statement (`ht`, `x₀`),
-which every session `--plain-tables` accepts at a draw `DrawOkPJ` admits has (`setupPJ_of_verifiesP`). -/
+which every session `--plain-tables` accepts at a draw `DrawOkPJ` admits has (`setupPJ_of_verifiesP`). Its first
+conjunct is what the statement is about: every session `--plain-tables` accepts is over a circuit whose META binds the
+verifier's own program (`ProgramOfCircuit`), and the bound is at that circuit's unit's key program (`keyProg`). -/
 def SoundExecJ (I : Inputs) : Prop :=
+  (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
@@ -357,6 +361,7 @@ set_option linter.unusedVariables false in
 (`Law.escapeTest`) at every `B` up to `η` (`Assumptions.UniformRandomBytesTest`), in place of every event
 exactly, and `η` added to the miss term. -/
 def SoundExecJPerTest (I : Inputs) : Prop :=
+  (∀ t, VerifiesP I t → ProgramOfCircuit I) ∧
   ∀ {n : ℕ} {mPts : ℕ} {Reg : Type} (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
     (x₀ : DrawSetup (inputsPJ I 0) mPts S₀ d₀)
@@ -417,6 +422,7 @@ def SoundExecJPerTest (I : Inputs) : Prop :=
             (rsPJ_computes ht dj x₀ hs.parse hs.load hs.tables hs.built hs.scope)) k Rw M ρ t')
 
 theorem soundExecJ (I : Inputs) : SoundExecJ I := by
+  refine ⟨fun _ h => h.2.program, ?_⟩
   intro n mPts Reg ht dj S₀ d₀ x₀ wr dg N kd hkd Ω _ _ Lb src hA3 hDraw hRec k Rw M hk hRw hM ρ hρ hr t' ht' K τ qF qS
     hCR hKS
   refine prob_scope (A := LiveAccepts I) (fun _ h => h.1) (fun _ h => h.2) _ _ _ _ fun hs => ?_
@@ -1876,7 +1882,7 @@ most the case's bound. Without `--zk`, `SoundExec` (public outputs) or `SoundExe
 knowledge `ViewZHJR`, at a public file with or without shared rows. Everywhere else `--registered F` accepts no more than
 the verifier does without it (the second conjunct), so the claims without it hold. With `--plain-tables` (no `--zk`) it
 accepts `VerifiesP`, and the bound is `SoundExecJ`'s (the third conjunct): public outputs, up to `Tags.MAX_TABLES`
-tables, the live subset draw. No hypothesis on the circuit file or the statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`, under
+tables, the live subset draw, over a circuit whose META binds the verifier's own program (`ProgramOfCircuit`). No hypothesis on the circuit file or the statement's form: the verifier refuses every statement the claims do not cover (`Flock.ProvedScope.check`, under
 `--plain-tables` `Flock.ProvedScope.checkP`), and there the event is empty.
 
 The zero-knowledge views are within `2·|Hid|` times the commitments' hiding gap at hm96-sha512's pinned key `K*`,

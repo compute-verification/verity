@@ -471,32 +471,32 @@ theorem Scope.count {I : Inputs} (h : Scope I) : I.count ≤ 1 := by
 
 /-- **`flock-verify verify --plain-tables`'s statement check** (no `--zk`, without the verifier's own registered reads,
 which change nothing without `--zk`): `ProvedScope.checkP`, which refuses hidden outputs and more than
-`Tags.MAX_TABLES` tables and is otherwise the check at one table. -/
+`Tags.MAX_TABLES` tables, is otherwise the check at one table, and holds the verifier's own program (`--program`) to the
+one the circuit's META binds (`ScopeP.program`). -/
 def ScopeP (I : Inputs) : Prop :=
-  ProvedScope.checkP I.tags I.circuitFile I.publicFile I.tables I.count false false = .ok ()
+  ProvedScope.checkP I.tags I.circuitFile I.publicFile I.tables I.count I.program false false = .ok ()
 
 /-- **What `flock-verify verify --plain-tables` accepts**: the setup and verdict `Accepts` models, and its statement
 check. -/
 def VerifiesP (I : Inputs) (t : Exec.Transcript) : Prop := Accepts I t ∧ ScopeP I
+
+/-- **The statement's circuit is the verifier's program's**: the verifier holds its own program's bytes `b` (`--program`),
+the circuit's META binds a program (`ProvedScope.metaProgram`), and `b`'s digest (`ProvedScope.programDigest`, the
+`program_sha512` the verdict names) is it. The circuit's gates are not compiled from `b` here: the binding is META's. -/
+def ProgramOfCircuit (I : Inputs) : Prop :=
+  ∃ b, I.program = some b ∧ (ProvedScope.metaProgram (circS I)).isSome = true ∧
+    ProvedScope.programDigest b = ProvedScope.metaProgram (circS I)
 
 namespace ScopeP
 
 variable {I : Inputs} (h : ScopeP I)
 include h
 
-theorem why : ProvedScope.plainTablesWhy I.tags I.count = none := by
-  unfold ScopeP ProvedScope.checkP at h
-  cases hw : ProvedScope.plainTablesWhy I.tags I.count with
-  | none => rfl
-  | some w => simp [hw] at h
+theorem why : ProvedScope.plainTablesWhy I.tags I.count = none := (ProvedScope.checkP_ok h).1
 
 /-- **The check at one table**: `checkP` passes only where `check` passes the statement at one table. The circuit and
 public file it reads are the session's (`circ` and `pubOf` read neither the count nor anything else of `I`). -/
-theorem checks : Checks I.tags false { I with count := 1 } false := by
-  have hw := h.why
-  unfold ScopeP ProvedScope.checkP at h
-  rw [hw] at h
-  exact h
+theorem checks : Checks I.tags false { I with count := 1 } false := (ProvedScope.checkP_ok h).2.1
 
 theorem hidden : I.tags.hiddenOutputs = false := by
   have hw := h.why
@@ -523,6 +523,17 @@ theorem built : Built (circS I).unit := Checks.built h.checks
 theorem tables : (pubS I).tables = none := Checks.tables_none h.checks rfl
 
 theorem scope : Layout.scopeOk (circS I) = true := Checks.scope h.checks h.hidden
+
+/-- **The verifier's own program is the circuit's** (`ProgramOfCircuit`). -/
+theorem program : ProgramOfCircuit I := by
+  obtain ⟨-, -, hp⟩ := ProvedScope.checkP_ok h
+  obtain ⟨c, hc, hw⟩ := ProvedScope.programP_ok hp
+  have hpc : ProvedScope.circuitOf I.tags I.circuitFile I.tables = .ok (circS I) := by
+    simpa [ProvedScope.circuitOf, h.hidden] using h.parse
+  rw [hpc] at hc
+  injection hc with hc
+  subst hc
+  exact ProvedScope.programWhyP_none hw
 
 /-- The tags the plain claim at `J` tables reads: public outputs, retained rounds, `hm96-sha512/v1` leaves. -/
 theorem tagsOk : I.tags.hiddenOutputs = false ∧ I.tags.retainRounds = true ∧

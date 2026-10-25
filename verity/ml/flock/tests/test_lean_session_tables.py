@@ -5,7 +5,8 @@ tables without `--zk` are a form the one-table plain claim does not cover (§16.
 that once every check has passed: a drawn one for its subset draw without `--zk` at setup first, and a draw it sets no
 statement up from keeps its setup's reason. Under `--plain-tables` (`flock_verify_sound`'s plain multi-table claim, at up to
 64 tables and a subset draw) with the verifier's own program (the RoPE Definition's, META's `program_sha512`), both drawn
-sessions are accepted, a tampered one keeps its check's reason, and the draw-less one meets D12's refusal."""
+sessions are accepted, a tampered one keeps its check's reason, the draw-less one meets D12's refusal, and the verifier
+refuses an honest session verified against another program than the one META binds, or without one."""
 from __future__ import annotations
 
 import json
@@ -155,18 +156,26 @@ def test_statements_without_several_tables_refuse_them(rope):
 DRAWLESS = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
 
 
-@pytest.fixture(scope="module")
-def program(tmp_path_factory) -> Path:
-    """The verifier's own program: the RoPE d64 Definition's descriptor, the program META's `program_sha512` names."""
+def _program(path: Path, d: int) -> Path:
+    """The RoPE Definition's descriptor at head dimension `d`, as the verifier's own `--program` file."""
     pytest.importorskip("verity_numerical")
     from verity_numerical.bench import templates as TM
 
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.ml.circuits.program import Program
 
-    p = tmp_path_factory.mktemp("program") / "program.json"
-    p.write_bytes(canonical_json(encode_program(Program(TM.rope_head(64).definition()))))
-    return p
+    path.write_bytes(canonical_json(encode_program(Program(TM.rope_head(d).definition()))))
+    return path
+
+
+def _meta(root: Path) -> dict:
+    return json.loads((root / "stage" / "circuit.txt").read_text().split("\n", 2)[1][len("META "):])
+
+
+@pytest.fixture(scope="module")
+def program(tmp_path_factory) -> Path:
+    """The verifier's own program: the RoPE d64 Definition's descriptor, the program META's `program_sha512` names."""
+    return _program(tmp_path_factory.mktemp("program") / "program.json", 64)
 
 
 @pytest.fixture(scope="module")
@@ -185,7 +194,7 @@ def plain(rope, program, tmp_path_factory):
 @pytest.mark.slow
 def test_plain_tables_accepts_an_honest_session_of_two_tables(rope, plain):
     """The honest drawn sessions pass every check and the form `--plain-tables` covers, against the verifier's own program."""
-    meta = json.loads((rope / "stage" / "circuit.txt").read_text().split("\n", 2)[1][len("META "):])
+    meta = _meta(rope)
     for name in ("honest", "honest, the other session"):
         v = plain[name]
         assert v["accepted"] is True, (name, v["why"])
@@ -202,6 +211,21 @@ def test_plain_tables_refuses_a_tampered_session_at_its_check(plain, name):
 @pytest.mark.slow
 def test_plain_tables_refuses_a_session_without_a_draw(plain):
     assert plain["no draw"]["why"] == DRAWLESS, plain["no draw"]["why"]
+
+
+@pytest.mark.slow
+def test_plain_tables_holds_the_program_to_the_circuit(rope, tmp_path):
+    """`--plain-tables` checks the verifier's own program against the circuit (`ProvedScope.programP`): an honest session
+    verified against another program (RoPE at d = 32), whose digest is not META's `program_sha512`, is refused, and so is
+    one verified without a program, each once every other check has passed."""
+    other = _program(tmp_path / "other.json", 32)
+    s = _session(rope, "j2-draw")
+    [v] = _verify(rope, 2, s, flags=("--plain-tables", "--program", str(other)))
+    assert not v["accepted"] and v["program_sha512"] != _meta(rope)["program_sha512"], v
+    assert v["why"] == (f"refused: the verifier's program (--program, program_sha512 {v['program_sha512']}) is not the "
+                        f"circuit's (META program_sha512 {_meta(rope)['program_sha512']})"), v["why"]
+    [v] = _verify(rope, 2, s, flags=("--plain-tables",))
+    assert not v["accepted"] and v["why"].startswith("refused: a session without the verifier's program (--program)"), v["why"]
 
 
 def test_plain_tables_refuses_65_tables_and_zk(rope, program):

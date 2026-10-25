@@ -279,27 +279,119 @@ def plainTablesWhy (tags : Tags) (count : Nat) : Option String :=
   else if count ≤ Tags.MAX_TABLES then none
   else some s!"{count} tables in a session under --plain-tables, more than {Tags.MAX_TABLES}"
 
+/-- The refusal of a session verified without the verifier's own program (`--program`), which `verify` reaches only when
+every check has passed. -/
+def NO_PROGRAM : String :=
+  "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
+
+/-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
+(`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
+def programDigest (b : ByteArray) : Option String := do
+  let j ← (Lean.Json.parse (← String.fromUTF8? b)).toOption
+  let bare := match j with
+    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+
+/-- META's `program_sha512`, the Program the circuit binds; none when META names none. -/
+def metaProgram (c : Circuit) : Option String := (c.metaJ.getObjValAs? String "program_sha512").toOption
+
+/-- What `--plain-tables` refuses of the verifier's own program against the circuit: a session without it
+(`NO_PROGRAM`), bytes that are not a JSON descriptor, a circuit whose META binds no program, and a program whose digest
+is not META's `program_sha512`. -/
+def programWhyP (c : Circuit) : Option ByteArray → Option String
+  | none => some NO_PROGRAM
+  | some b => match programDigest b, metaProgram c with
+    | none, _ => some "refused: the verifier's program (--program) is not a JSON descriptor"
+    | some _, none => some "refused: a circuit whose META binds no program_sha512 under --plain-tables: the verifier cannot hold its program to the circuit"
+    | some h, some m => if h = m then none
+      else some s!"refused: the verifier's program (--program, program_sha512 {h}) is not the circuit's (META program_sha512 {m})"
+
+/-- **The verifier's own program is the circuit's** (`--plain-tables`): `programWhyP` on the circuit `verify` parsed. -/
+def programP (parsed : V Circuit) (program : Option ByteArray) : Except String Unit :=
+  match parsed with
+  | .error e => .error (refusal s!"a circuit that does not parse ({e})")
+  | .ok c => match programWhyP c program with
+    | some why => .error why
+    | none => .ok ()
+
 /-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
-session of public outputs at any number of tables up to `Tags.MAX_TABLES`, and otherwise every condition `check` puts on
-a one-table plain session. The one-table plain form keeps `check` without the flag. -/
+session of public outputs at any number of tables up to `Tags.MAX_TABLES`, every condition `check` puts on a one-table
+plain session, and the verifier's own program is the one META binds (`programP`). The one-table plain form keeps `check`
+without the flag. -/
 def checkP (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
-    (publicInputs registered : Bool) : Except String Unit :=
+    (program : Option ByteArray) (publicInputs registered : Bool) : Except String Unit :=
   match plainTablesWhy tags count with
   | some why => .error (refusal why)
-  | none => check tags false circuitFile publicFile tables 1 publicInputs registered
+  | none => match check tags false circuitFile publicFile tables 1 publicInputs registered with
+    | .error e => .error e
+    | .ok () => programP (circuitOf tags circuitFile tables) program
 
 /-- `checkP` on its circuit as `circuitOf` returns it (`checkP_eq`). -/
-def checkPOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat)
+def checkPOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) (program : Option ByteArray)
     (publicInputs registered : Bool) : Except String Unit :=
   match plainTablesWhy tags count with
   | some why => .error (refusal why)
-  | none => checkOf parsed tags false publicFile 1 publicInputs registered
+  | none => match checkOf parsed tags false publicFile 1 publicInputs registered with
+    | .error e => .error e
+    | .ok () => programP parsed program
 
 theorem checkP_eq (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
-    (count : Nat) (publicInputs registered : Bool) :
-    checkP tags circuitFile publicFile tables count publicInputs registered
-      = checkPOf (circuitOf tags circuitFile tables) tags publicFile count publicInputs registered :=
+    (count : Nat) (program : Option ByteArray) (publicInputs registered : Bool) :
+    checkP tags circuitFile publicFile tables count program publicInputs registered
+      = checkPOf (circuitOf tags circuitFile tables) tags publicFile count program publicInputs registered :=
   rfl
+
+/-- **What an accepted `checkP` establishes**: the form at most `Tags.MAX_TABLES` tables of public outputs, `check` at one
+table, and the verifier's own program held to the circuit's. -/
+theorem checkP_ok {tags : Tags} {circuitFile publicFile : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
+    {program : Option ByteArray} {publicInputs registered : Bool}
+    (h : checkP tags circuitFile publicFile tables count program publicInputs registered = .ok ()) :
+    plainTablesWhy tags count = none ∧ check tags false circuitFile publicFile tables 1 publicInputs registered = .ok () ∧
+      programP (circuitOf tags circuitFile tables) program = .ok () := by
+  unfold checkP at h
+  cases hw : plainTablesWhy tags count with
+  | some w => simp [hw] at h
+  | none =>
+    simp only [hw] at h
+    cases hc : check tags false circuitFile publicFile tables 1 publicInputs registered with
+    | error e => simp [hc] at h
+    | ok u =>
+      cases u
+      simp only [hc] at h
+      exact ⟨rfl, rfl, h⟩
+
+/-- **`programWhyP` passes only the circuit's program**: the verifier holds bytes `b`, META binds a program, and `b`'s
+digest is META's `program_sha512`. -/
+theorem programWhyP_none {c : Circuit} {program : Option ByteArray} (h : programWhyP c program = none) :
+    ∃ b, program = some b ∧ (metaProgram c).isSome = true ∧ programDigest b = metaProgram c := by
+  cases program with
+  | none => simp [programWhyP] at h
+  | some b =>
+    refine ⟨b, rfl, ?_⟩
+    simp only [programWhyP] at h
+    cases hd : programDigest b with
+    | none => simp [hd] at h
+    | some d =>
+      cases hm : metaProgram c with
+      | none => simp [hd, hm] at h
+      | some m =>
+        simp only [hd, hm] at h
+        by_cases he : d = m
+        · subst he; exact ⟨rfl, rfl⟩
+        · simp [he] at h
+
+/-- **An accepted `programP` holds the verifier's program to META's**: the circuit parsed, and `programWhyP` passes. -/
+theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : programP parsed program = .ok ()) :
+    ∃ c, parsed = .ok c ∧ programWhyP c program = none := by
+  cases parsed with
+  | error e => simp [programP] at h
+  | ok c =>
+    refine ⟨c, rfl, ?_⟩
+    simp only [programP] at h
+    cases hw : programWhyP c program with
+    | none => rfl
+    | some w => simp [hw] at h
 
 /-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
 `--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset
@@ -339,11 +431,6 @@ def drawLawP : Option Lean.Json → Except String Unit
     | .ok d => match lawWhyP d with
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
-
-/-- The refusal of a session verified without the verifier's own program (`--program`), which `verify` reaches only when
-every check has passed. -/
-def NO_PROGRAM : String :=
-  "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
 
 /-- **The verifier holds its own program**: a session verified without it (`--program`) is refused (`NO_PROGRAM`),
 whatever else it passes. -/

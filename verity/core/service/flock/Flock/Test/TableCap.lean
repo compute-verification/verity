@@ -2,8 +2,8 @@
 `ProvedScope.check`'s table cap: a `--zk` session of more than `zkTableCap` tables is refused, with the text the live
 build's mirror (`proved_scope.rs`, `statement_why`) gives; one of `zkTableCap` tables passes the statement's rules, and
 without `--zk` the rule is still at most one table. Under `--plain-tables` (`ProvedScope.checkP`) a plain session of
-public outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, and a statement with hidden outputs
-is refused at any count.
+public outputs passes the cap at up to `Tags.MAX_TABLES` tables and is refused at 65, a statement with hidden outputs
+is refused at any count, and the verifier's own program must be the one META binds (`ProvedScope.programWhyP`).
 -/
 import Flock.ProvedScope
 
@@ -15,7 +15,7 @@ def why (zk : Bool) (count : Nat) : String :=
   | .ok () => ""
 
 def whyP (tags : Tags) (count : Nat) : String :=
-  match ProvedScope.checkP tags ByteArray.empty ByteArray.empty [] count false false with
+  match ProvedScope.checkP tags ByteArray.empty ByteArray.empty [] count none false false with
   | .error e => e
   | .ok () => ""
 
@@ -31,5 +31,25 @@ def whyP (tags : Tags) (count : Nat) : String :=
   "a statement form the soundness proof does not cover"
 #guard ProvedScope.plainTablesWhy Tags.circuit967b8d06 Tags.MAX_TABLES == none
 #guard ProvedScope.plainTablesWhy Tags.circuit967b8d06 1 == none
+
+/-- A circuit whose META binds `m` as its program, the one field `programWhyP` reads. -/
+def bound (m : Option String) : Circuit :=
+  { (default : Circuit) with metaJ := Lean.Json.mkObj (m.toList.map fun h => ("program_sha512", Lean.Json.str h)) }
+
+def prog : ByteArray := "{\"root\":\"r\",\"definitions\":[1,2],\"annotations\":{\"x\":1}}".toUTF8
+
+/-- `program_digest` of `{"root": "r", "definitions": [1, 2]}` (`verity.ml.circuits.codec`, which drops `annotations`). -/
+def progSha : String :=
+  "2ddb1d2afb53742ae98210afa683ceb6842b10625d88ff0ad16eca0de13512b40226451238d1cf430a87db6db4e6d34629a43fd5ee5609bd8e23bd191e6b96a4"
+
+#guard ProvedScope.programDigest prog == some progSha
+#guard ProvedScope.programWhyP (bound (some progSha)) (some prog) == none
+#guard ProvedScope.programWhyP (bound (some progSha)) (some "{\"root\":\"s\"}".toUTF8) ==
+  some s!"refused: the verifier's program (--program, program_sha512 {(ProvedScope.programDigest "{\"root\":\"s\"}".toUTF8).getD ""}) is not the circuit's (META program_sha512 {progSha})"
+#guard ProvedScope.programWhyP (bound (some progSha)) none == some ProvedScope.NO_PROGRAM
+#guard ProvedScope.programWhyP (bound (some progSha)) (some "not json".toUTF8) ==
+  some "refused: the verifier's program (--program) is not a JSON descriptor"
+#guard ProvedScope.programWhyP (bound none) (some prog) ==
+  some "refused: a circuit whose META binds no program_sha512 under --plain-tables: the verifier cannot hold its program to the circuit"
 
 end Flock.Test.TableCap
