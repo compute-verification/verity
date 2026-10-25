@@ -16,11 +16,11 @@
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
   "CertifierDevice.IssuerDifftestMain": {
-   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its coins giving each call's salt and its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the salt, the certificate's fields and signature over the salted digest, verify under the key and after each tamper (a changed signature, field, deadline bit, salt, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a salt not 64 bytes, a leaf past 2^H, a session id not 32 bytes) and the reservations the host refuses, listed in refused",
+   "why": "160 LMS keys (N = 64, W = 1 at height 1, and the toy N at W = 1, 2, 4) and calls to one issuer on each, in a certifier session of 32 bytes or of 31 or 33, on which Issuer.certify, threaded through the calls, does what the checkout's certificate.Issuer does, its coins giving each call's salt and its signer at the host's leaf: each parameters digest, the record head's encoding and digest, the salt, the certificate's fields and signature over the salted digest, verify under the key and after each tamper (a changed signature, field, deadline bit, salt, public key or session, and a changed link-window or key identifier signed again), the records it refuses (no head, a salt not 64 bytes, a leaf past 2^H, a session id not 32 bytes) and the reservations the host refuses, listed in refused; and Issuer.clock on the same issuer, each egress link-window's clock certificate (the sync's clock digest under the record certificate's message): the sync, reduced, the certificate's fields and signature, ClockCertificate.verify under the key and after each tamper (a changed sync, signature, window, direction, digest, public key or session, refused, and a changed window, direction or key identifier signed again, of which only the re-signed window, a valid clock certificate of that window, verifies), a record certificate passed as a clock refused, and the syncs and link-windows it refuses (δ, p or q past a u64, a window past a u64, a leaf past 2^H)",
    "args": ["{issuer/instances.jsonl}", "{issuer/python.jsonl}", "160"],
    "data": {
-    "issuer/instances.jsonl": "5dab5c3717dc06ec89af3b922899d26a68455dd01c2077101918cd35786b4f7d",
-    "issuer/python.jsonl": "fdd02d3ab8a00b0ad32166123abd71bf1edb440fe084da8cbeab30340b0a4ad4"
+    "issuer/instances.jsonl": "8cd4dea7513691c0d89b56db5409951ba4fe0e8d7916455ff9f9dac1d99bed96",
+    "issuer/python.jsonl": "74225e3037b8b4f41bbe76e491f818d40a665796aa549124da4f3e87a27f22cb"
    },
    "generate": ["python3", "scripts/issuer_vectors.py", "{repo}", "--out", "{out}"]
   }

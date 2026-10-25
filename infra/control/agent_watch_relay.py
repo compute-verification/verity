@@ -19,7 +19,7 @@ no handle owns are one post that leads with @infra, naming each run's sender, ru
 A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined) is posted with no handle and
 rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
 reset, never posts it again.
-A failure the watch acted on (`FAIL`: held, stalled, crashed, idle after
+A failure the watch acted on (`FAIL`: held, stalled, held unread, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: @top for a coordinator, the launcher's handle for a
 worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
 with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
@@ -83,11 +83,13 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                          "watch {action}",
        "relaunch": "needs a fresh launch ({reason}); the watch {action}",
        "not_relaunched": "was idle after its run {ended_run} ended, and the watch did not relaunch it: {why}",
-       "workers_failed": "stopped within {minutes} min"}
+       "workers_failed": "stopped within {minutes} min",
+       "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
+                      "follow-ups sat unread ({reason}); the watch {action}"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed"}       # rung to the record's handle
-FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch"}   # rung to the record's owner: whoever must follow it up
+FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
 UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
