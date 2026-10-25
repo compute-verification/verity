@@ -58,6 +58,7 @@
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
   "Flock.Test.RegionBytes",
+  "Flock.Test.PlainHidden",
   "VStar"
  ],
  "exempt": {
