@@ -1,7 +1,7 @@
 """Compute efficiency eta of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, monitored plus unmonitored. The developer must still compute the counted
 multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
-"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and DESIGN.md's Glossary.
+"Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
 
 eta <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
 proved.
@@ -183,10 +183,11 @@ STATUS = [
      "times the floor; run r20261017-123922-e558 has no published outputs), the unchecked clock 0.064 and host CPUs at "
      "INT8 AMX peak 0.118. eps' = 1e-4 is what the theorem's delta of 2.7e-8 costs (Markov over the windows)."),
     ("Memory cap", "ThreadedRuntime and ThreadedRate (draft #2343) give the closed form's shape; its value needs Threaded "
-     "at window scale, which fails. The fit bound (FitBound under Reach and Fits, on a branch) replaces it, conditional "
-     "on F1 per parameter slot (being restated), F3, F4, NET-35 (intake held to alpha F), WipeFullUse (not yet stated) "
-     "and an information form. For a token-routed MoE, Lean's per-token Reach gives 55 at 6 GB; 217 rests on the fit "
-     "page's MoE argument."),
+     "at window scale, which fails. The fit bound (FitBoundSlots under ReachSlots and FitsSlots, adopted for dense "
+     "recipes by ASK-68) replaces it at token threads, conditional on F1 and F4 per parameter slot, F3, NET-35 (intake "
+     "held to alpha F), WipeFullUse (not yet stated) and an information form; it charges each server's first window "
+     "(fitBoundSlots_init, fit.py's left_out). A token-routed MoE has no fit rung: ReachSlots at its active count (54 "
+     "at 6 GB for Kimi K2's 32B) needs a measured floor on the active count that reaches the target."),
     ("Wipe residual", "Streamed labels (MEM-51) replace the reference permutation, which is refuted (a developer passes "
      "from 1.53% of the store); the slack is proved only for an ideal permutation. Memory outside the fill is measured as "
      "gaps (on-chip 3.05 GB, the GPUs' own about 1.6 GB; GPU reserve 18.4 GB; host 29.5 GB). No theorem bounds help "

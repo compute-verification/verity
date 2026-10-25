@@ -228,6 +228,82 @@ def test_the_port_reads_the_rows_the_wardens_wiring_places_and_nothing_else(traf
             W.port(head, wiring, PARAMS, bad)
 
 
+def test_the_bucket_port_reads_every_row_whole(traffic, tmp_path):
+    """`bucket_port` (one unit a bucket, IO-TIE's) is `port`'s entry with unit `reads_from + t` reading row t, an idle
+    window's rows too, whose slots `port` can't name, under the head's value. The statement for those rows is accepted
+    by the host's read of Lean's registered reads (`refusal`), and one naming a units' wiring or with two rows swapped
+    is refused. A head of another schedule is refused."""
+    warden, _ = traffic
+    idle, _, _ = run([], {}, windows=1)
+    for record in (records(warden)[1][0], records(idle)[1][0]):
+        _, cells_, _ = _attest(tmp_path / str(id(record)), record)
+        p = W.bucket_port(cells_.head, PARAMS, reads_from=5)
+        q = cells_.wiring.connections[:1]
+        if q:
+            assert {k: v for k, v in p.items() if k not in ("reads", "reads_from")} == \
+                {k: v for k, v in W.port(cells_.head, cells_.wiring, PARAMS, [(q[0][0], 0)]).items() if k != "reads"}
+            units = W.Units(((q[0][0], 0),))
+            named = cells_.statement(W.port(cells_.head, cells_.wiring, PARAMS, units)["reads"], units)[2]
+            assert "not another value" in W.refusal(p, cells_.domain, named, [cells_.bcs[0]])
+        assert p["reads"] == list(range(T)) and p["reads_from"] == 5 and p["root"] == cells_.root.hex()
+        assert p["value"] == cells_.head.value
+        assert "reads_from" not in W.bucket_port(cells_.head, PARAMS)
+        _, _, entry = cells_.statement(list(range(T)))
+        assert W.refusal(p, cells_.domain, entry, list(cells_.bcs)) is None
+        swapped = [1, 0, *range(2, T)]
+        assert "unit 5 reads position 1" in \
+            W.refusal(p, cells_.domain, cells_.statement(swapped)[2], [cells_.bcs[t] for t in swapped])
+    assert W.wiring(records(idle)[1][0], PARAMS).connections == ()
+    with pytest.raises(ValueError, match="schedule's rows"):
+        W.bucket_port(cells_.head, dataclasses.replace(PARAMS, delay=PARAMS.delay + 1))
+
+
+def test_the_programs_units_name_their_wiring_and_a_statement_for_any_other_is_refused(traffic, tmp_path):
+    """The Program's `Units` read the rows a bare sequence of the same reads does, and the port's value names their
+    digest (`<link>/<direction>/<window>/units/<digest>`), as the statement made for them does, which the host's read
+    of Lean's registered reads (`refusal`) accepts. A statement made for any other units' wiring is refused by its
+    value, even where its rows are the same (two cells of a row swapped), and so is one that names no units' wiring;
+    rows not the units' are refused by position. `Units` refuses no read, ordinal 0, and anything but (int, int)."""
+    warden, _ = traffic
+    _, cells_, _ = _attest(tmp_path, records(warden)[1][0])
+    head, wiring = cells_.head, cells_.wiring
+    q, first, n = max(wiring.connections, key=lambda c: c[2])
+    units = W.Units.span(q, 0, n)
+    assert units.cells == tuple((q, k) for k in range(n))
+    assert units.encode() == n.to_bytes(4, "big") + b"".join(q.to_bytes(4, "big") + k.to_bytes(4, "big")
+                                                              for k in range(n))
+    assert units.digest() == W.tagged_sha512(W.UNITS_TAG, units.encode())
+    p = W.port(head, wiring, PARAMS, units, reads_from=3)
+    bare = W.port(head, wiring, PARAMS, list(units.cells), reads_from=3)
+    assert p == bare | {"value": f"responses/egress/0/units/{units.digest().hex()}"} and bare["value"] == head.value
+    positions = p["reads"]
+    _, _, entry = cells_.statement(positions, units)
+    bcs = [cells_.bcs[t] for t in positions]
+    assert entry["value"] == p["value"] and entry["positions"] == positions
+    assert W.refusal(p, cells_.domain, entry, bcs) is None
+    swapped = W.Units(((q, 1), (q, 0)) + units.cells[2:])
+    assert W.port(head, wiring, PARAMS, swapped)["reads"] == positions
+    for other in [cells_.statement(positions, swapped)[2], cells_.statement(positions)[2]]:
+        assert other["positions"] == positions
+        assert "not another value" in W.refusal(p, cells_.domain, other, bcs)
+    def named(other: W.Units) -> tuple[dict, list[bytes]]:
+        e = cells_.statement(W.port(head, wiring, PARAMS, other)["reads"], other)[2] | {"value": p["value"]}
+        return e, [cells_.bcs[t] for t in e["positions"]]
+
+    backwards, later = W.Units(units.cells[::-1]), W.Units.span(q, R, n - R)
+    moved, moved_bcs = named(backwards)
+    assert moved["positions"][0] != positions[0] and W.refusal(p, cells_.domain, moved, moved_bcs) == \
+        f"registered reads: unit 3 reads position {moved['positions'][0]}, and the verifier's program reads " \
+        f"{positions[0]}"
+    assert f"{n - R} rows for the {n} units" in W.refusal(p, cells_.domain, *named(later))
+    assert "does not open" in W.refusal(p, cells_.domain, entry, [bytes(len(b)) for b in bcs])
+    with pytest.raises(ValueError, match="aren't the rows the units' wiring reads"):
+        cells_.statement(positions[::-1] if len(set(positions)) > 1 else [positions[0] + 1] * n, units)
+    for bad in [(), [(q, 0)], ((0, 0),), ((q, -1),), ((q, 0.0),), ((q,),), (q,)]:
+        with pytest.raises(ValueError, match="a population reads|a unit reads"):
+            W.Units(bad)
+
+
 def test_the_issuers_sign_is_certifys_signature(tmp_path):
     """`certify` signs through `sign`: one leaf a certificate, both verifying under the key in the session."""
     idle, _, _ = run([], {}, windows=1)

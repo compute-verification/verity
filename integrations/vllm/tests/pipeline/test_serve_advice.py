@@ -22,6 +22,7 @@ from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
 from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
+from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.predict.phi import Phi
 from verity_vllm.predict.steps import Registered, compile_steps
 
@@ -94,7 +95,7 @@ class Server:
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=64, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
         self.loop = so.EngineLoop(self.engine, self.windows)
-        self.server = so.Server(proto=so.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
+        self.server = so.Server(proto=proto.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
                                 submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
         self.engine_thread = threading.Thread(target=self.loop.run, daemon=True)

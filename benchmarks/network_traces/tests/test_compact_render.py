@@ -78,7 +78,7 @@ def test_a_rendered_chunk_is_vllms_completion_chunk():
     assert finish is None
     with pytest.raises(ValueError):
         renderer.done()
-    renderer.text(active.compact_record(1, None, "stop"))
+    renderer.text(active.compact_record(1, FIXTURE["eos_token_ids"][0], "stop"))
     assert renderer.done() == b"data: [DONE]\n\n"
 
 
