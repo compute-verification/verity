@@ -62,6 +62,7 @@ from typing import Any
 
 from verity_vllm import protocol_options as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
+from verity_vllm import settings
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
 
@@ -77,7 +78,6 @@ from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
-from verity_vllm import settings  # noqa: E402
 
 SCHEMA = "verity/commit-integ/delta/v1"
 
