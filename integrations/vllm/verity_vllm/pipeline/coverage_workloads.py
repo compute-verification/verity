@@ -360,6 +360,22 @@ class Options:
     dry_run: bool = option("--dry-run", default=False, action="store_true", help="print the draws only")
 
 
+def checkpoint_repo(path: str | Path, role: str) -> str | None:
+    """The repo of the first checkpoint of `role` in a checkpoints.json; None when the file is unreadable, isn't the
+    `{"checkpoints": [{...}, ...]}` form up to that entry, or that entry carries no repo."""
+    try:
+        doc = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    cks = doc.get("checkpoints") if isinstance(doc, dict) else None
+    for c in cks if isinstance(cks, list) else []:
+        if not isinstance(c, dict):
+            return None
+        if c.get("role") == role:
+            return c.get("repo")
+    return None
+
+
 def main(a: Options) -> int:
     # [chunked] one parse of --variant: the sampling variant name + the feature variants (fp16's dtype= lands in the same dict);
     # [integ] the flag is repeatable (fp16's calling style) -- the values are joined and parsed once
@@ -369,13 +385,7 @@ def main(a: Options) -> int:
 
     model = a.model
     if model is None:
-        try:
-            for c in json.loads(Path(a.checkpoints).read_text())["checkpoints"]:
-                if c.get("role") == a.case:
-                    model = c["repo"]
-                    break
-        except Exception:  # noqa: BLE001
-            pass
+        model = checkpoint_repo(a.checkpoints, a.case)
     if model is None:
         model = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B"}.get(a.case)
     if a.dry_run:
