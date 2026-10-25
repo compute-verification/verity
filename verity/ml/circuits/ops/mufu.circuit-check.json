@@ -1,28 +1,36 @@
 {
  "pieces": {
   "DivFullRcp_v1": {
-   "and": 3987
+   "and": 3987,
+   "type": "b65dda3c6e4b5cb4c4477978d9f97088f105f734c03584824f7c7175f7dc2019b14289a2b7d3944f0158a8106acc0fcaf4850486697e420fb55e8286fd4cb049"
   },
   "DivFullScaleA_v1": {
-   "and": 1538
+   "and": 1538,
+   "type": "d457c0424865801f21ba3e9ec273ff28dc706d0f387904f53edce08f04097a2c3d717c83f82e7929340368d2b756a253b42f4b4d7581f4fac8d1e576d5b72133"
   },
   "Fa2InvSum_v1": {
-   "and": 290
+   "and": 290,
+   "type": "e51c5252ea3e87eef57b5570e8f687dd618837c2700a14048d4fbfd6b0411c59a3f45579d686eafcce19190f2890e82cf890e7ee70e4fded55e124958ccf8ee9"
   },
   "MufuEx2Ftz_v1": {
-   "and": 688
+   "and": 688,
+   "type": "4e600c6b8da3639500d0a3c3c9015aae4d8bcae89871137633d91263fc4e02b7ec276390484d1421cad452af4de57aa34c696b25678ee1816d1b69fe652f50c7"
   },
   "MufuRcpFtz_v1": {
-   "and": 197
+   "and": 197,
+   "type": "e94ab13274c2b730862a0bdccedf6fd27af7d7948fdb2e4e8e24ecac2c3a31972f0496f5fa6cc0f0db3dd3e8066af9db2d89aa7474ac411fd9c85cedd6e47c81"
   },
   "MufuSqrtFtz_v1": {
-   "and": 148
+   "and": 148,
+   "type": "1db448582eb278fb6c32d35b0f7cc5cf209e847f5e447e34f063fe242bad4d45c597ec950d9dddd1d36d60e0f189d1c5b22752db10685cb008abc4431d57b8cf"
   },
   "MufuTanh_v1": {
-   "and": 160
+   "and": 160,
+   "type": "39a5c92b9ab20614f86e055e6608762afee52eebabd38db3057f93b5033ce2c4794be2c91b2b5b5046fc51cc85e5b1329ad0f84b117a141c21f23c95213f6a2d"
   },
   "RsqrtApprox_v1": {
-   "and": 947
+   "and": 947,
+   "type": "557ed67189ba919c4b86581acfb5465a98e15931e45197fa1d53177346d3ee69667c2dc97421c6801e6f427c79dfaf43aa7844b1b30b174042924f88d4fe8085"
   }
  }
 }

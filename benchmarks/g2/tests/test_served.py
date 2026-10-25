@@ -1,9 +1,12 @@
 """served.py's ratios: which arm is which role (by its module and its execution, else the spec's), at most one arm per role, each
 ratio paired by interleaved rep (median, min, max over the pairs), a failed gate marking only the ratios that read its arm, the
-harness's Commit arms read as G2's are, and two runs of one model kept apart in the tables."""
+harness's Commit arms read as G2's are, a run's compiled Commit run time taken with another run's tail (``--tail``), two runs
+of one model kept apart in the tables, and which ratios count by curve.py's rules (a compiled arm's only from a run pinned to
+the Build of record, its `pin_check.txt`)."""
 from __future__ import annotations
 
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -116,6 +119,77 @@ def test_a_run_without_timed_points_still_reports_why_and_its_hosts_load():
     d["points"] = []
     md = S.report([], {}, {"r-gated": S.run_facts(d)})
     assert "| r-gated | Llama-3.1-8B FP8 | served-commit-rows-4k | 0 |  | served-commit-rows-4k tokens" in md
+
+
+def _timed(d: dict, arm: str, walls: tuple[float, ...], tails: tuple[float, ...]) -> dict:
+    for rep, wall, tail in zip(d["points"][0]["arms"][arm]["reps"], walls, tails):
+        rep.update(wall_s=wall, generated_tokens=100, host_timing={"device_tail_s": tail})
+    return d
+
+
+def test_a_runs_compiled_commit_takes_a_fixed_runs_tail_in_its_run_time_alone():
+    d = _timed(doc(), "served-commit-rows-4k", (500.0, 550.0, 600.0), (70.0, 75.0, 110.0))
+    fixed = _timed(doc(), "served-commit-rows-4k", (9.0, 9.0, 9.0), (30.0, 20.0, 25.0))
+    got = {(m.ratio, m.metric): m for m in S.measures(S.retail(d, fixed), run="r1 (tail r2)")}
+    served = got[("served", "tpot")]
+    assert (served.median, served.lo, served.hi) == (pytest.approx(455 / 400), pytest.approx(1.0), pytest.approx(515 / 400))
+    before = {(m.ratio, m.metric): m for m in S.measures(d, run="r1")}
+    assert {k for k in before if got[k] != replace(before[k], run="r1 (tail r2)")} == {("served", "tpot"), ("compiled-bi", "tpot")}
+    assert d["points"][0]["arms"]["served-commit-rows-4k"]["reps"][0]["metrics"]["time_per_output_token_s"] == 5.0
+
+
+def test_a_tail_for_a_run_that_isnt_rendered_is_refused(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["served.py", "r1", "--tail", "r9=r2"])
+    with pytest.raises(SystemExit):
+        S.main()
+    assert "--tail names runs that aren't rendered: r9" in capsys.readouterr().err
+
+
+def test_a_ratio_with_a_compiled_arm_counts_only_from_a_run_pinned_to_the_build_of_record():
+    pinned = {(m.ratio, m.metric): m for m in S.measures(doc(), run="r1", pin="pinned")}
+    assert {k: m.counts for k, m in pinned.items() if m.metric == "tpot"} == {
+        ("served", "tpot"): "", ("compiled-bi", "tpot"): "", ("f", "tpot"): ""}
+    for pin in ("unpinned", "pin-failed"):
+        ms = S.measures(doc(), run="r1", pin=pin)
+        assert {m.counts for m in ms} == {f"{pin}: not the Build of record's kernels"}
+        assert {m.pin for m in ms} == {pin}
+    eager = {m.ratio: m for m in S.measures(doc(commits=(EAGER_ROWS_4K,)), run="r2") if m.metric == "tpot"}
+    assert {r: (m.pin, m.counts) for r, m in eager.items()} == {
+        "eager": ("eager", ""), "eager-served": ("unpinned", "unpinned: not the Build of record's kernels"),
+        "f": ("unpinned", "unpinned: not the Build of record's kernels")}
+    h200 = doc()
+    h200["identity"]["preset"]["gpu_id"] = "h200"
+    assert {m.counts for m in S.measures(h200, run="r3", pin="pinned") if m.ratio == "served"} == {
+        "H200's served preset on RTX PRO 6000"}
+    failed = S.measures(doc(commit_passed=False), run="r4", pin="pinned")
+    assert {m.ratio: m.counts for m in failed if m.metric == "tpot"} == {"served": "gates failed", "compiled-bi": "gates failed",
+                                                                        "f": ""}
+
+
+def test_the_harness_commit_counts_as_rows_sha512_whatever_its_name():
+    ms = S.measures(doc(fp8=True, commits=(COMMIT, COMMIT_COMPILED)), run="r-harness")
+    assert {m.ratio: m.counts for m in ms if m.metric == "tpot"}["eager"] == ""
+
+
+def test_the_tables_say_which_ratios_count_and_each_runs_pin():
+    ms = S.measures(doc(), run="r-pinned", pin="pinned") + S.measures(doc(), run="r-free")
+    md = S.report(ms, {}, {"r-pinned": S.run_facts(doc()) | {"pin": "pinned"}, "r-free": S.run_facts(doc()) | {"pin": "unpinned"}})
+    served = {line.split(" | ")[7]: line.rsplit(" | ", 1)[1] for line in md.splitlines() if line.startswith("| Qwen3-8B | 32 |")}
+    assert served == {"r-pinned": "yes |", "r-free": "unpinned: not the Build of record's kernels |"}
+    every = [line for line in md.splitlines() if line.startswith("| Qwen3-8B | r-") and "| decode |" in line]
+    assert ["(not counted)" in line for line in every] == [True, False]
+    assert "| r-pinned | Qwen3-8B | served-commit-rows-4k | 1 |  | none | pinned |" in md
+
+
+def test_a_runs_pin_is_its_pin_check(tmp_path):
+    out = tmp_path / "r1" / "out"
+    out.mkdir(parents=True)
+    (out / "result.json").write_text('{"points": []}')
+    assert S.load("r1", tmp_path, tmp_path / "scratch") == ({"points": []}, "unpinned")
+    (out / "pin_check.txt").write_text("[served-pin] /d: winners equal to artifact 533721fc9d37833a's\n")
+    assert S.load("r1", tmp_path, tmp_path / "scratch")[1] == "pinned"
+    (out / "pin_check.txt").write_text("[served-pin] /d: a3/x.best_config: winner differs from artifact 533721fc9d37833a's\n")
+    assert S.load("r1", tmp_path, tmp_path / "scratch")[1] == "pin-failed"
 
 
 def test_two_runs_of_one_model_keep_their_own_rows():

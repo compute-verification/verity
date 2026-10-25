@@ -6,6 +6,8 @@ negatives.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside M0's tree (its `verity_flock`).
+- `r2_population.py`: the other population every driver's and `replay.py`'s registration-partition-mismatch negative (R2)
+  registers, its first template one instance short, or one over where it has a single instance.
 - `pod.sh`: the entry point on a CPU pod.
 - `a5.sh`: run A5's entry point on a CPU machine. A5 is a deferred Commit's window, a stand-in linked to its run root, the
   commitment its record was committed in and its replay bundle: the CPU RoPE d64 Commit fixture (`COMMIT_SCHEME`: vllm-v1 by
@@ -23,10 +25,26 @@ negatives.
   yet: `integrations/vllm/tests/pipeline/test_row_tables.py`'s ScaledMmS8Coordinate chunks, whose `x` rows link four row
   tables over two engine steps, each chunk one table's, as rank 0 of a one-rank step on a local challenger's coins. Lean
   verifies each drawn chunk with its table's registered reads (`--registered`, `row_tables.registered_reads`).
+- `a5_warden.py` (`a5_tp.sh` with `STANDIN=warden`, `warden:altered`, `warden:pad`, `warden:pad-named` or `warden:swapped`):
+  A5 on a window with transfer gates, which no served window has yet: two chunks of the warden's toy unit whose ports are the
+  bucket rows of one connection's ingress and egress cells (a row a bucket, registration v2), committed under the warden's
+  salts, proved whole (the work law's selection All) beside a drawn rest, on a local challenger's coins or the verifier's
+  own. The units' wiring is the Program's (`warden_rows.Units`, from public structure alone: ingress cells 0 … n − 1, egress
+  cells D·r … D·r + n − 1). Lean verifies each chunk with the verifier's own registered reads at the root the warden signed,
+  named by the units' value and each unit's read (connection, cell) placed by the wiring the warden signed
+  (`warden_rows.port`, after `check_registration` under the warden's key), which refuses a foreign, a duplicate and a
+  padding-slot read by name; the altered run, and a statement made for another units' wiring (a pad in a data cell's place,
+  its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
+  is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
+  warden, each answered with the tokens the server streamed it.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
   machine (`A5_ON`) and runs `a5_tp.sh` there in one research run.
+- `llama1b_tp1_commit.sh`: the single-GPU counterpart of `a5_glm53_commit.sh`'s deferred Commit, on Llama-3.2-1B bf16
+  bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
+  `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
+  store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's

@@ -34,8 +34,8 @@ adversary's finders, `⊤` where they fail it, capped at 1 a value of its coins 
 `breakBound`, all in `Definitions`, so other areas read the same break term). The bound reads each finder at a budget
 of SHA-512 calls computed from the adversary's time, `c · time M + d` at stated constants per path, never at the
 finder's declared cost, so no choice of finder lowers it. The constant forms stay, superseded,
-because the floors of `Models.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover are stated
-beside them and not yet proved (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
+because the floors of `Models.Pouw.Guarantees.RelativeSecurity` are proved from them; the floors per prover beside
+them are proved from these (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).
 
 **At call scope under J10-R** (RT-ALGO-17, card bbf40543). J10-R draws H1's noise once a call, so a call's rows and
 columns share their coins across the whole call, and a segment's coin × coin part is one `⟨M, 32, N⟩` product
@@ -90,7 +90,8 @@ the linear term of `Claims.KSLin` for extraction-based finders, a constant that 
 for its coins `r`. `fb` and `fz` are the analysis's reductions from those events to collisions of `sha`, built from
 `M` at `r`, one a round. Binding is at the circuit's cuts, before each round's coin, which live coins allow: a round's
 coin is released after the roots it reads, and the fork finder forks there. Under seeded coins nothing is bound before
-a round's seed, so the Fiat–Shamir statements bind at the draw instead, at a fixed oracle.
+a round's seed, so the seeded statements bind at the draw instead (`Accounting.Assumptions.Compose`, at
+`Declared.atDraw`).
 
 A square-root term folds into this form by AM–GM: `√(γ x) ≤ δ' + γ x/(4δ')` for every `δ' > 0`. So `Claims.KS`'s
 `κ + √(γ · PrB)` instantiates the zero-knowledge conjunct at `δz = κ + δ'`, `βz = γ/(4δ')`, `fz` its `B`; a machine

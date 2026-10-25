@@ -1,23 +1,35 @@
 """warden-serve without the wall clock: its varied traffic, its HTTP bytes against the fake endpoint over loopback, and
 the offline check of a run whose warden is driven tick by tick on a `VirtualClock`, its records certified by an LMS
-key: the check accepts the run, and refuses a record that isn't what was certified, a cell that reached its client in
-another bucket, and a response that isn't the record's."""
+key: the check accepts the run, whose server got each request with its release order under the run id `deployment.json`
+names, and refuses a record that isn't what was certified, a cell that reached its client in
+another bucket, and a response that isn't the record's; and a window's slow commit, which faults the next window when
+it runs in the warden's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
 import asyncio
 import importlib.util
 import json
+import math
 import sys
 from pathlib import Path
 
+import pytest
+
+from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, VirtualClock
-from verity.core.protocols.certifier.warden import END, Shim, Warden, WardenParams, cells, read_cell
+from verity.core.protocols.certifier.grid import Reason
+from verity.core.protocols.certifier.release import with_release
+from verity.core.protocols.certifier.warden import END, Shim, Warden, WardenParams, cells, read_cell, reason_frame
 
 HERE = Path(__file__).resolve().parents[1]
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
                       ingress_buckets=30, egress_cells=128)
 SESSION = bytes(range(32))
+#: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
+PROCESS_CLOCK: list[VirtualClock] = []
+#: what a window's commit takes of its process's time: TRACE-CORPUS's small-KV run measured 378-392 ms
+SLOW_COMMIT_S = 0.4
 
 
 def _load():
@@ -47,6 +59,49 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
     assert min(words) < 30 and max(words) > 500
 
 
+def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
+    """The auditor host's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs `rehearse` on traffic the
+    gate fixes, and refuses a request whose minutes are under `warden_minutes` of its requests: for every request count
+    the gate takes, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
+    origin's delay and 30 s for the key and the check."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
+    args = ws.parser().parse_args(argv[2:])
+    assert (args.command, args.upstream, args.fake, args.out, args.requests, args.max_tokens) == \
+        ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64)
+    assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
+    assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
+    window_s = args.window * args.bucket_ms / 1000
+    for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
+        last = ws.varied_traffic(n, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)[-1]["at"]
+        took = math.ceil((last + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
+        assert took <= A.warden_minutes(n) * 60, n
+
+
+def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
+    """`warden-rehearse` always passes its temperature and top_p (0 and 1 by default), and `rehearse` puts both on
+    every request, so an endpoint's own generation config never applies; the arrivals, prompts, lengths and seeds stay
+    the seed's, so `warden_minutes` still bounds the run."""
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    given = ws.parser().parse_args(
+        A.warden_command({"requests": 7, "temperature": 0.6, "top_p": 0.9}, tmp_path, "http://h:1")[2:])
+    plain = ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:])
+    assert (plain.temperature, plain.top_p, given.temperature, given.top_p) == (0.0, 1.0, 0.6, 0.9)
+    varied = ws.varied_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)
+
+    def rest(traffic):
+        return [{**x, "body": {k: v for k, v in x["body"].items() if k not in ("temperature", "top_p")}}
+                for x in traffic]
+
+    for args, want in ((plain, (0.0, 1.0)), (given, (0.6, 0.9))):
+        traffic = ws.traffic_of(args, "m")
+        assert {(x["body"]["temperature"], x["body"]["top_p"]) for x in traffic} == {want}
+        assert rest(traffic) == rest(varied)
+    assert all("top_p" not in x["body"] for x in varied)
+
+
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     """Over loopback: the request's bytes reach the endpoint, which answers a chunked event stream and closes; the
     response parses to the endpoint's tokens, its finish reason and usage, and a cut response isn't complete."""
@@ -70,6 +125,16 @@ def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
                                              "finish_reason": "length" if n == body["max_tokens"] else "stop",
                                              "prompt_tokens": None, "completion_tokens": n}
     assert not ws.parse_response(data[:-5])["complete"]
+
+    async def models() -> str:
+        server = await asyncio.start_server(lambda r, w: ws.fake_endpoint(r, w, sleep=_no_sleep), "127.0.0.1", 0)
+        port = server.sockets[0].getsockname()[1]
+        try:
+            return await asyncio.to_thread(ws.cs.served_model, f"http://127.0.0.1:{port}")
+        finally:
+            server.close()
+
+    assert asyncio.run(models()) == "fake"
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nde\r\n0\r\n\r\n") == (b"abcde", True)
     assert ws.dechunk(b"3\r\nabc\r\n2\r\nd") == (b"abcd", False)
 
@@ -99,27 +164,52 @@ def _response(texts: list[str]) -> bytes:
             + b"".join(ws._sse(e) for e in events) + b"e\r\ndata: [DONE]\n\n\r\n0\r\n\r\n")
 
 
-def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) -> None:
-    """A run of the warden for one window on a `VirtualClock`, published as `serve` and `client` publish one: its
-    records and certificates through `Publisher`, `deployment.json`, and `client.json` with every cell's arrival 1 ms
-    into the bucket it was sent in."""
+def slow_commit(*args, **kwargs):
+    """`Cells.of`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
+    holds its process's GIL, so a ticker in that process, on any thread, waits as long. A spawned process has none."""
+    for clock in PROCESS_CLOCK:
+        clock.advance(clock() + SLOW_COMMIT_S)
+    return WR.Cells.of(*args, **kwargs)
+
+
+def refusing_commit(*args, **kwargs):
+    raise ValueError("a refusing commit")
+
+
+def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
+         process: bool = False, servers: list | None = None) -> Warden:
+    """A run of the warden for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
+    its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`), each window
+    committed by `commit`, `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was
+    sent in; `servers` gets the server's side of each connection, in connect order. Returns the warden."""
     tau = PARAMS.bucket_ms / 1000
-    signer = ws.cs.signer(key, 4)
-    publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS)
+    if process:
+        import warden_serve  # by name, so that the spawned process finds its functions
+
+        ws.cs.load_key(key, 4)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
+        hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
+    else:
+        signer = ws.cs.signer(key, 4)
+        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.of)
+        hooks, public = {"publish": publisher}, signer.public_key()
     answers = iter(responses)
 
     async def connect():
         reader = asyncio.StreamReader()
         reader.feed_data(next(answers))
         reader.feed_eof()
-        return reader, _Writer()
+        writer = _Writer()
+        if servers is not None:
+            servers.append(writer)
+        return reader, writer
 
     def settled(w: Warden) -> bool:
         return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
 
-    async def main() -> list[_Writer]:
+    async def main() -> tuple[list[_Writer], Warden]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(PARAMS, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher)
+        warden = Warden(PARAMS, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
         running = asyncio.create_task(warden.run())
         clients, tasks = [], []
         for request in requests:
@@ -129,18 +219,23 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) ->
             clients.append(_Writer(warden))
             tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
         await warden.until(lambda w: w.ordinals == len(requests))
-        for t in range(PARAMS.window):
-            await warden.until(settled)
-            clock.advance(t * tau)
-            await warden.until(lambda w, t=t: w.ticks > t)
-        await running
+        PROCESS_CLOCK.append(clock)
+        try:
+            for t in range(windows * PARAMS.window):
+                await warden.until(settled)
+                clock.advance(t * tau)
+                await warden.until(lambda w, t=t: w.ticks > t)
+            await running
+        finally:
+            PROCESS_CLOCK.remove(clock)
         await asyncio.gather(*tasks)
-        return clients
+        return clients, warden
 
-    clients = asyncio.run(main())
+    clients, warden = asyncio.run(main())
     publisher.close()
-    deployment = ws.deployment_record(PARAMS, signer, SESSION, origin_unix=0.0, windows=1, listen=("127.0.0.1", 1),
-                                      upstream=("127.0.0.1", 2), slack=0.025)
+    deployment = ws.deployment_record(PARAMS, public, SESSION, origin_unix=0.0, windows=windows,
+                                      listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
+                                      run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
@@ -154,6 +249,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes]) ->
         shim.outcome = "end" if shim.arrivals and END in [k for _, k in shim.arrivals] else "cut"
         log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
     (out / "client.json").write_text(json.dumps({"connections": log}))
+    return warden
 
 
 def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(tmp_path):
@@ -161,15 +257,24 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
-    _run(out, key, requests, responses)
+    servers: list[_Writer] = []
+    warden = _run(out, key, requests, responses, servers=servers)
+    release = {e["ordinal"]: e["release"] for e in warden.log}
+    assert sorted(release.values()) == [0, 1, 2]
+    assert [b"".join(d for _, d in s.writes) for s in servers] == \
+        [with_release(r, release[k + 1], warden.run_id) for k, r in enumerate(requests)]
+    assert json.loads((out / "deployment.json").read_text())["run_id"] == warden.run_id.hex()
     result = ws.check(out)
     assert result["accepted"], result["problems"]
     s = result["summary"]
-    assert (s["requests"], s["ended"], s["certified_windows"], s["completion_tokens"]) == (3, 3, 2, 42)
+    assert (s["requests"], s["ended"], s["certified_windows"], s["completion_tokens"]) == (3, 3, 3, 42)
     assert s["cells_in_their_bucket"][0] == s["cells_in_their_bucket"][1] > 0
     assert s["wire_bits"]["egress"] == s["cells"]["egress"] * PARAMS.cell_bytes * 8
     assert s["data_bytes"] == {"ingress": sum(map(len, requests)), "egress": sum(map(len, responses))}
     assert "ACCEPTED: 3/3 ended" in ws.table(result)
+    assert {k: s["cell_rows"][k] for k in ("registered", "of", "rows", "row_bytes")} == \
+        {"registered": 2, "of": 2, "rows": [PARAMS.window], "row_bytes": [PARAMS.lanes * PARAMS.slots * PARAMS.cell_bytes]}
+    assert s["cell_rows"]["commit_ms"]["n"] == s["cell_rows"]["sign_ms"]["n"] == 2
 
     def refused(edit) -> list[str]:
         saved = {p: p.read_bytes() for p in out.iterdir()}
@@ -191,7 +296,37 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         (out / "responses.records").unlink()
         ws.ar.write_blobs(out / "responses.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
 
-    assert "responses window 0 isn't certified" in refused(flip_record)
+    problems = refused(flip_record)
+    assert "responses window 0 isn't certified" in problems and "responses window 0's cells aren't registered" in problems
+
+    def edit_cells(change) -> None:
+        lines = [json.loads(x) for x in (out / "cells.jsonl").read_text().splitlines()]
+        salts = ws.ar.read_blobs(out / "cells.salts")
+        change(lines, salts)
+        (out / "cells.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+        (out / "cells.salts").unlink()
+        for blob in salts:
+            ws.ar.write_blobs(out / "cells.salts", blob)
+
+    def other_root(lines, salts) -> None:
+        lines[1]["registration"]["root"] = "00" * 64
+
+    def other_salt(lines, salts) -> None:
+        salts[1] = bytes([salts[1][0] ^ 1]) + salts[1][1:]
+
+    def other_wiring_salt(lines, salts) -> None:
+        salts[1] = salts[1][:-1] + bytes([salts[1][-1] ^ 1])
+
+    for change in (other_root, other_salt, other_wiring_salt):
+        assert "responses window 0's cells aren't registered" in refused(lambda: edit_cells(change))
+
+    def forge_reason() -> None:
+        (record,) = ws.read_records(out, PARAMS)["fails"]
+        grid = ((reason_frame(0, "late", PARAMS.cell_bytes),) + record.grid[0][1:],) + record.grid[1:]
+        (out / "fails.records").unlink()
+        ws.ar.write_blobs(out / "fails.records", ws.ar.pack_record(ws.replace(record, grid=grid)))
+
+    assert "fails window 0 isn't certified" in refused(forge_reason)
 
     def edit_client(change) -> None:
         doc = json.loads((out / "client.json").read_text())
@@ -202,7 +337,38 @@ def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(t
         conn["arrivals_ms"][-1] += PARAMS.bucket_ms
 
     problems = refused(lambda: edit_client(late_cell))
-    assert any(p.startswith("connection 1:") and "'in_bucket'" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'in_bucket'" in p for p in problems)
     problems = refused(lambda: edit_client(lambda c: c.update(data_sha256="0" * 64)))
-    assert any(p.startswith("connection 1:") and "'response_certified': False" in p for p in problems)
+    assert any(p.startswith("connection 2:") and "'response_certified': False" in p for p in problems)
     assert ws.check(out)["accepted"]
+
+
+def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publisher_process(tmp_path):
+    """A window's commit that takes `SLOW_COMMIT_S` of its process's time (`slow_commit`), run in the warden's process
+    as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
+    (`monitor-unavailable`) and the check refuses it. In `serve`'s `PublisherProcess` the same commit runs in the
+    spawned process, which signs and commits from the rows released to it: every tick is on time, and the check
+    accepts every link-window, certified and registered. A commit that fails there fails `close`, and the warden's
+    process doesn't wait on it."""
+    requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
+    responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
+    runs = {name: tmp_path / name for name in ("inline", "process", "refusing")}
+    for out in runs.values():
+        out.mkdir()
+
+    inline = _run(runs["inline"], tmp_path / "inline-key", requests, responses, windows=2, commit=slow_commit)
+    late = [t for t, x in enumerate(inline.lateness) if x > inline.slack]
+    assert late[0] == PARAMS.window and max(inline.lateness) > SLOW_COMMIT_S
+    problems = ws.check(runs["inline"])["problems"]
+    assert {f"{name} window 1: {Reason.MONITOR_UNAVAILABLE.value}" for name in ws.CERTIFIED} <= set(problems)
+
+    process = _run(runs["process"], tmp_path / "process-key", requests, responses, windows=2, commit=slow_commit,
+                   process=True)
+    assert len(process.lateness) == 2 * PARAMS.window and max(process.lateness) == 0
+    result = ws.check(runs["process"])
+    assert result["accepted"], result["problems"]
+    s = result["summary"]
+    assert (s["certified_windows"], s["cell_rows"]["registered"], s["ended"], s["signer_refused"]) == (6, 4, 3, [])
+
+    with pytest.raises(RuntimeError, match="a refusing commit"):
+        _run(runs["refusing"], tmp_path / "refusing-key", requests, responses, commit=refusing_commit, process=True)

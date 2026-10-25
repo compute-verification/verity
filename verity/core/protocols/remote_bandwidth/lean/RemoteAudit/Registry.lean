@@ -1,5 +1,5 @@
 import Flock.Canon
-import RemoteAudit.Session
+import RemoteAudit.Shared
 
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`

@@ -1,43 +1,56 @@
 {
  "definitions": {
   "F32AddFtz_v3": {
-   "and": 888
+   "and": 888,
+   "type": "9ea847791d4c8cf25dc51acccf92f845baec3b541d7aa968eca47f7bd1874fdde3c9fbb6e6d94cf1adebecf587b3f120d5a8d6262522d1f06e5603ffa11c6045"
   },
   "F32AddFtz_v4": {
-   "and": 857
+   "and": 857,
+   "type": "c48588d1b4495f0c01ee7592fda27769fb2008af4e7957ebbaeafebae478f2a98699e72ae765b70d68e4a9da7f56305f6a819d650dc93c6873a2612ab167bb12"
   },
   "F32FmaFtz_v3": {
-   "and": 4584
+   "and": 4584,
+   "type": "0c3b18416dee32dfe499077a289e64d2fa75dd27dcdd621d95c20d16d16778a2e9fa450af96bb7555516d7078eff44fbd5aa560b0c88e3fb240db32654173ad8"
   },
   "F32FmaFtz_v4": {
-   "and": 4584
+   "and": 4584,
+   "type": "004ca4489749a439273cf66a2c1c2d3bde38d7848aa593203fc3ffcb524d4cee254b7c1810fc6a5df76b7e76988b5d6ad9ce8d218719e567808d0c965bfaa9ec"
   },
   "F32FmaSubFtz_v3": {
-   "and": 4584
+   "and": 4584,
+   "type": "86f63b5e993a305329293ec2055a1a5cb7b49a3f1c55532ed8dcdc45cf65c9bf5c16ed74947ebc762ef6dc3650f8498c1a51976218e295a6750aa593d635e594"
   },
   "F32FmaSubFtz_v4": {
-   "and": 4584
+   "and": 4584,
+   "type": "c7cd5d17e6045a32799ad50e933f55d3402b817a0f9ff4310c409433cb74ba587bcae9fd6d14ff32bdb1c50cc1aa9b8d3b0b3573d6348423ae5becabffd75507"
   },
   "F32Max_v2": {
-   "and": 237
+   "and": 237,
+   "type": "0cb200d934fd441c0c18fb6518282a502d9ec3633c54c286bffcd7b7f1ad76932ca59720ba78a6d66dd2b3cf42ad6c84ad25cd14fe2d7c60fbee93b2af91153e"
   },
   "F32MulFtz_v3": {
-   "and": 2506
+   "and": 2506,
+   "type": "839a5945e19c7c06a3d232e25987f6d52e369c96a5c7f478ffd015ac8bdfb00db647edba9473c8d11a086914562a99dc044ae50cfcd9516c5a205ee657313e40"
   },
   "F32MulFtz_v4": {
-   "and": 2474
+   "and": 2474,
+   "type": "ac4e8445b53c8f2d094a4b7850ae9d236b19026688a325c8da3f71d14db96a155c58f7a0d7f798812bf845710770aada843545c1db11113fc3947a077d836712"
   },
   "F32SubFtz_v3": {
-   "and": 952
+   "and": 952,
+   "type": "ffdd9ce9933589478472b3e9731a842222b0b23093bdf32b131ef6d3eaab34a0782343ff7566eb2549c02ca9fecf21aa49426d069213eafc9277b384fc5fb6f3"
   },
   "F32SubFtz_v4": {
-   "and": 857
+   "and": 857,
+   "type": "1830822c5b31aeb48dd09ff2dee48602461610c4ac9a83458e42e116f990255bc4047b2c7b27ffe502847e4445f63d8b560ad91b06db647fa7661384b17162be"
   },
   "Fa2InvSum_v2": {
-   "and": 947
+   "and": 947,
+   "type": "d6de3e5abf7e6195c3a5caba7d3b003efb4ad0b3dc4b63570dd144e41edde9b956ad74b185eb7401e17f64201b96e6a51bbca13eb3dfd3420c685e07c5ffb73b"
   },
   "GuardNegInfZero_v2": {
-   "and": 63
+   "and": 63,
+   "type": "d9832dfd82b46a87da1a900d5f8f8adf082c26bc7475d115466e5c098b470c2c5c55084ebf1bd64fbaf9931d47276862858f859895fc031654df908b1aec4d24"
   }
  }
 }

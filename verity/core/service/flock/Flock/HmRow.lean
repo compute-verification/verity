@@ -25,6 +25,7 @@ import Flock.RecOpen
 import Flock.RecResiduals
 import Flock.RecSparse
 import Flock.RecOpening
+import Flock.SplitNL
 
 namespace Flock
 
@@ -750,15 +751,14 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   RecOpening.check c
   return c
 
-/-- `parseFast` with the file's digest from the task `sha`, read only for the circuit it returns. Not inlined: the
-compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, which here is the last. -/
-@[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
-    V Circuit := do
-  let text ← match String.fromUTF8? bytes with
-    | some s => pure s
-    | none => throw "circuit: not UTF-8"
-  let lines0 := (text.splitOn "\n").toArray
+/-- `parseFast` with the file's digest from the task `sha`, read only for the circuit it returns, and its lines and
+rows from the tasks `ts` (`SplitNL.splitTasks`). Not inlined: the compiler sinks a `Task.spawn` bound in a body down to
+the branch that reads it, which here is the last. -/
+@[noinline] def parseFastLines (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
+    (ts : List (Task (Array String × Array Net.Row))) : V Circuit := do
+  let lines0 := SplitNL.linesOf ts
+  let rows := SplitNL.rowsOf ts
   let lines := if lines0.back? == some "" then lines0.pop else lines0
   let head := (lines.getD 0 "").trimAsciiEnd.toString
   if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
@@ -788,7 +788,7 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
     let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
     if at_ + 1 + n > lines.size then throw s!"circuit: {h[1]!} is truncated"
-    let net ← match Net.parsePar (lines.extract (at_ + 1) (at_ + 1 + n)) with
+    let net ← match Net.parseWith rows (at_ + 1) (lines.extract (at_ + 1) (at_ + 1 + n)) with
       | .ok v => pure v
       | .error e => throw s!"{h[1]!}: {e}"
     nets := nets.push (h[1]!, net)
@@ -908,7 +908,17 @@ compiler sinks a `Task.spawn` bound in a body down to the branch that reads it, 
   RecOpening.check c
   return c
 
-/-- `parse` with each net's rows read in tasks (`Net.parsePar`) and the file hashed in a task beside them,
+/-- `parseFastLines` over the file's lines split in tasks between `'\n'` cuts. -/
+@[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
+    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
+    V Circuit := do
+  let text ← match String.fromUTF8? bytes with
+    | some s => pure s
+    | none => throw "circuit: not UTF-8"
+  parseFastLines sha tags bytes tables tmpl pre (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
+
+/-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
+(`Net.parseWith`) and the file hashed in a task beside them,
 `parse_eq_fast`: the firewall's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
 `flock-verify` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
@@ -920,8 +930,8 @@ set_option maxRecDepth 20000 in
 set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
   funext tags bytes tables tmpl pre
-  unfold parse parseFast parseFastFrom
-  simp -zeta only [Net.parsePar_eq, classOf_eq_task, bind_map_left]
+  unfold parse parseFast parseFastFrom parseFastLines
+  simp -zeta only [Net.parseWith_eq, classOf_eq_task, bind_map_left, SplitNL.linesOf_splitTasks]
   try rfl
 
 /-- A typed statement (item 1e), its rows derived once through `deriveChecked` (`Typed.read`), every net built from them.

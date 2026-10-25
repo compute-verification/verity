@@ -154,7 +154,13 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
            "uv.lock", "**/*.lock", "**/price_twins.json",
            "benchmarks/numerical/reports/**", "benchmarks/numerical/tests/bench/data/**",
            "catalog/verity_catalog/silicon/captures/**", "catalog/verity_catalog/silicon/hawkeye/**",
-           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py"]
+           "tools/tc_probe_fp4/fp4_emulation_1ad1aaa2.py",
+           # the active warden (24 Oct), a new device that reuses the word after this move was done
+           "benchmarks/network_traces/*warden*", "benchmarks/network_traces/**/*warden*",
+           "verity/core/protocols/certifier/*warden*", "verity/core/protocols/certifier/**/*warden*",
+           "benchmarks/network_e2e/*warden*", "benchmarks/network_e2e/**/*warden*", "benchmarks/live_challenger/*warden*",
+           "benchmarks/live_challenger/**/*warden*", "Security/**/Warden.lean", "benchmarks/one_stage/*warden*",
+           "benchmarks/one_stage/**/*warden*"]
 
 [keep]
 # Never rewritten wherever they stand: a domain tag or format id (anything shaped `a/b/v1`), a note, artifact or branch

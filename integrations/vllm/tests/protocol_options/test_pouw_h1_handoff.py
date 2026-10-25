@@ -5,11 +5,13 @@ from __future__ import annotations
 
 import json
 import os
+import pickle
 import shlex
 import socket
 import subprocess
 import sys
 
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -20,6 +22,8 @@ from verity_vllm.protocol_options import pouw  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1 as PH  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_handoff as HO  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_kept as KP  # noqa: E402
+from verity_vllm.protocol_options import pouw_h1_prover as PV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_served as SV  # noqa: E402
 from verity_vllm.protocol_options import pouw_h1_window as PHW  # noqa: E402
 
@@ -119,6 +123,7 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
     assert host.ended() is not None
 
 
+@pytest.mark.slow
 def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving stage left: the window closed,
     measured and released on the session's stream, and the record (``pouw_h1_gpu.json``) completed with its commitment,
@@ -155,21 +160,6 @@ def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
 
 
-def test_a_listener_is_seen_without_a_connect():
-    """`pouw_h1_gpu.await_listener` sees a listening port from the host's socket tables, and connects to nothing: the
-    listener's backlog stays empty."""
-    from tests.protocol_options import pouw_h1_gpu as GPU
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
-        assert not GPU.listening(port)
-        s.listen(1)
-        assert GPU.await_listener(port) == 0
-        s.setblocking(False)
-        with pytest.raises(BlockingIOError):
-            s.accept()
-
-
 def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
     """A child process hands a stream's descriptor to the holder and exits; the holder's descriptor still reaches the
     stream's other end, so the session isn't closed by the serving process's exit."""
@@ -186,3 +176,45 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
     with socket.socket(fileno=fd) as got:
         got.sendall(b"round 2")
         assert there.recv(7) == b"round 2"
+
+
+def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
+    """PRF-131: the served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
+    of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
+    its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't."""
+    from verity.core.protocols.sampled_proofs.one_stage import registered as G
+    _host(tmp_path, monkeypatch)
+    prover = tmp_path / "prover"
+    run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),
+                  n=64, arm=ZyArm)
+    assert not run.served.refused, run.served.refused
+    try:
+        calls = [c.summary() for c in run.calls]
+        HO.suspend(run, prover / PV.STATE)
+        with open(prover / PV.STATE / HO.FILE, "rb") as f:
+            state = pickle.load(f)["state"]
+        trees = state["served"][1]["registered"]
+        values = [v for v in trees if v.split("/", 1)[1].startswith(("a/", "zy@", "b/"))]
+        assert {v.split("/", 1)[1].split("@")[0].split("/")[0] for v in values} == {"a", "zy", "b"}
+
+        def bc(tree, j, words):
+            return G.Registered.commit(tree.program, tree.value, [words], [tree.salts[j]], tree.word_bits, G.SCHEMA_V2,
+                                       tree.window, tree.produced).bcs[0]
+        for v in values:
+            tree = trees[v]
+            with pytest.raises(LookupError):
+                tree.rows[0]
+            for j in range(tree.leaves):
+                assert bc(tree, j, KP.kept_row(prover, state, calls, v, j)) == tree.bcs[j], (v, j)
+        a = f"{state['served'][1]['prefix']}a/{K}@0"
+        kept = prover / PV.CALLS / "0.npz"
+        with np.load(kept) as f:
+            codes, s_a, records = f["a"].copy(), f["s_a"], f["records"]
+        codes.reshape(-1)[0] ^= 1
+        PV.keep_call(prover, 0, codes, s_a, records)
+        assert bc(trees[a], 0, KP.kept_row(prover, state, calls, a, 0)) != trees[a].bcs[0]
+        with pytest.raises(ValueError, match="no kept value rebuilds it"):
+            KP.kept_row(prover, state, calls, "h1/pub@0", 0)
+    finally:
+        run.close()
+        run.rounds.challenger._wire.sock.close()

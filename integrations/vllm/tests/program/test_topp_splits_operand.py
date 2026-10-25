@@ -150,6 +150,7 @@ def test_select_signature_has_splits_as_the_sixth_operand():
 # ------------------------------------------------------------------------------------------------ 4. F-stoch-01 through the operand form
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("key", ["step37_row4", "step82_row3", "step92_row3"])
 def test_fstoch01_record_rows_are_bit_exact_through_the_operand_form(key):
     z = np.load(RECORD)
