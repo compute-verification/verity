@@ -82,7 +82,9 @@ def test_setdefault_keeps_what_the_environment_holds_and_environ_is_a_copy(monke
         S.setdefault("VERITY_NOT_A_SETTING", "1")
 
 
-def test_not_zero_and_a_kept_empty_read_as_their_readers_did() -> None:
+def test_one_not_zero_and_a_kept_empty_read_as_their_readers_did() -> None:
+    assert [S.one(v) for v in ("1", " 1", "true", "")] == [True, False, False, False]
+    assert S.get("VERITY_ADMIT_OVER_BOUND", {"VERITY_ADMIT_OVER_BOUND": ""}) is False
     assert [S.not_zero(v) for v in ("1", " 0 ", "false", "")] == [True, False, True, True]
     assert S.get("MATCH_COMPACT", {}) is True and S.get("MATCH_COMPACT", {"MATCH_COMPACT": ""}) is True
     assert S.get("VERITY_SPARSE_MLA_NUM_SPLITS", {"VERITY_SPARSE_MLA_NUM_SPLITS": ""}) == ""
