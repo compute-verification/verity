@@ -16,6 +16,7 @@ import Definitions.Flock.Game.Interleave
 import Definitions.Flock.Session
 import Definitions.Flock.Holo
 import Definitions.Flock.LigeritoPad
+import Definitions.Flock.Compiled
 
 /-!
 # C-Flock's definitions
