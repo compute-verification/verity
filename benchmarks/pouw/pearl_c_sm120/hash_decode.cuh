@@ -628,6 +628,22 @@ DEV void pd_line_codes(const uint32_t* h, uint64_t out, bool on) {
   o[0] = make_uint4(c[0], c[1], c[2], c[3]);
   o[1] = make_uint4(c[4], c[5], c[6], c[7]);
 }
+// pd_line_codes by a whole warp whose lanes hold the same h: lane j makes byte j's code and stores it, the square sum
+// added over the lanes (integers, so in any order).  A lane's word of h by selects, which keep h in registers
+DEV void pd_line_codes_warp(const uint32_t* h, uint64_t out) {
+  const int j = threadIdx.x & 31;
+  uint32_t hw = h[0];
+#pragma unroll
+  for (int q = 1; q < 8; q++)
+    if (j / 4 == q) hw = h[q];
+  const uint32_t b = hw >> (8 * (j % 4)) & 0xFF;
+  const int x = (b >> 7 ? -1 : 1) * (int)((b & 0x7F) + 1);
+  uint32_t sumsq = (uint32_t)(x * x);
+#pragma unroll
+  for (int o = 16; o; o >>= 1) sumsq += (uint32_t)__shfl_xor_sync(0xffffffffu, sumsq, o);
+  const uint16_t scale = pd_bdiv(PD_NORM_E, pd_f2bf((float)pd_isqrt(sumsq * 1024)));
+  reinterpret_cast<uint8_t*>(out)[j] = pd_e4m3(pd_bf2f(pd_bmul(pd_f2bf((float)x), scale)));
+}
 template <int V, int P = 0> DEV void pd_line(const uint32_t* key, uint32_t line, uint64_t out, bool on = true) {
   uint32_t h[8];
   pd_line_hash<V, P>(key, line, h);
@@ -837,7 +853,8 @@ DEV void pd_row_leaf(uint64_t hm, const uint64_t* xr, const uint64_t* mk, const 
   }
 }
 // row r's seed and line key (p3, p4), and its E_A line (p12, when nonzero), from the row digest xr, the unit block and the
-// label states lab (all shared); stored if on.  With PD_LOOP the line's hash is pd_seed's fourth block
+// label states lab (all shared); stored if on.  With PD_LOOP the line's hash is pd_seed's fourth block.  P (the whole warp,
+// converged): the line's codes a lane a byte (pd_line_codes_warp), each lane storing its own
 template <int V, int P = 0>
 DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, uint64_t index, int r, const uint64_t* xr,
                      bool on) {
@@ -858,7 +875,11 @@ DEV void pd_row_seed(const Args& a, const uint32_t* unit, const uint64_t* lab, u
     store_cv(a.p[3] + 32ull * r, seed);
     store_cv(a.p[4] + 32ull * r, key);
   }
-  if (line) pd_line_codes(h, a.p[12] + 32ull * r, on);
+  if constexpr (P != 0) {
+    if (line) pd_line_codes_warp(h, a.p[12] + 32ull * r);
+  } else if (line) {
+    pd_line_codes(h, a.p[12] + 32ull * r, on);
+  }
 }
 // the tree's levels above level 0 (tm the templates, nodes PD_NODES words, root 8, lk 8: shared), seed_A and line_a, E_A's
 // filler lines (p12 nonzero), and the counter at scratch reset (scratch nonzero).  PD_PAIR: by pair 0 (warps 0 and pw0) and
