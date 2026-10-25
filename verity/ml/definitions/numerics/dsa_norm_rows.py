@@ -4,8 +4,6 @@ is the same body over a masked block, `TritonBlockRMSNorm_v1{N, BLOCK, WARPS, EP
 kernel registers from `rows` (kernel "rows")."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 from typing import Any, Sequence
 
 import numpy as np

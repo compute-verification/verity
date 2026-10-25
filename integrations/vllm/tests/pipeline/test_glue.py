@@ -89,6 +89,17 @@ def test_hours_run_from_the_checkpoints_staging_event_to_the_first_pass_record()
                                                       "hours": {"checkpoint": "ckpt:x", "staged": None, "record": None, "hours": None}})
 
 
+def test_a_definition_is_tied_by_the_manifest_and_carries_no_marker(marks, tmp_path, monkeypatch):
+    assert not [p for p in G.DEFINITIONS_ROOT.rglob("*.py") if "__pycache__" not in p.parts and G.marked(p, G.DEFINITIONS_ROOT)]
+    rows = json.loads(G.DEFINITIONS.read_text())["models"]
+    assert rows and all(marks[rel] == tuple(ms) for rel, ms in rows.items())
+    stale = tmp_path / "definitions.json"
+    stale.write_text(json.dumps({"models": {f"{G.DEFINITIONS_PREFIX}registry/gone.py": [GLM]}}))
+    monkeypatch.setattr(G, "DEFINITIONS", stale)
+    with pytest.raises(ValueError, match="registry/gone.py, which is not a module"):
+        G.markers()
+
+
 @pytest.mark.parametrize("src", ["__models__ = 'zai-org/GLM-5.3'\n", "__models__ = ()\n", "__models__ = (REPO,)\n"])
 def test_a_malformed_marker_refuses(tmp_path, src):
     (tmp_path / "m.py").write_text(src)

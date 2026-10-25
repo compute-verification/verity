@@ -64,8 +64,6 @@ Registered functions (each `_v1`; `boolean_dsv4_indexer` has their Boolean `_v2`
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from types import SimpleNamespace
 
 from verity.ml.circuits.defs import bind, composite

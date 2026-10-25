@@ -6,8 +6,6 @@ twins against them word for word, and the H200 capture (tests/properties/glm53_b
 against them."""
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 from functools import lru_cache
 from typing import Callable
 

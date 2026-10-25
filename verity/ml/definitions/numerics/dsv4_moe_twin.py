@@ -5,8 +5,6 @@ Programs are the reference: tests/properties/test_dsv4_moe_capture.py holds each
 capture tests/properties/dsv4_moe_capture_gpu.py holds the kernels to the twins on every captured row."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from functools import lru_cache
 
 import numpy as np

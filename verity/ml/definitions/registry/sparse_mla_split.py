@@ -52,8 +52,6 @@ and `SparseMlaCombine` over them.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import json
 from functools import cache
 from importlib import resources

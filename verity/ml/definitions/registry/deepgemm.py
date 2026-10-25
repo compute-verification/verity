@@ -59,8 +59,6 @@ and 32 scales `fused_inv_rope_fp8_quant` writes), N = 1024, the weight [g, 1024,
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import Coll, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple

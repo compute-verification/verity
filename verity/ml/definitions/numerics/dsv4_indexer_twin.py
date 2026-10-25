@@ -6,8 +6,6 @@ test_dsv4_indexer_capture.py holds each step to its primitive and each twin to i
 tests/properties/dsv4_indexer_capture_gpu.py holds the kernels to the twins on every captured row."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from types import SimpleNamespace
 
 import numpy as np

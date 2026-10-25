@@ -14,8 +14,6 @@ the Hopper wgmma k16 step).
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from dataclasses import dataclass
 
 import numpy as np
