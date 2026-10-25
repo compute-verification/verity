@@ -17,8 +17,9 @@
     verity.ml.circuits.ops.moe     IR composites: a padded static MoE layer's expert GEMMs, one unit per (token slot, top-k slot) pair
                       with the expert a value selected inside it (MoeSelectBf16x{E}, MoePairCoordinate(W), MoePairGemm(W)),
                       and their numpy kernels; `ops.boolean.moe` has them on bits
-    verity.ml.circuits.ops.quant   IR composites: the torch loop's ReLU and per-row s8 quantize of a bf16 row, QuantS8Pair (two
-                      codes) and QuantS8Scale (one 16-bit half of the scale); `ops.boolean.quant` has them on bits
+    verity.ml.circuits.ops.quant   IR composites: the torch loop's ReLU and per-row s8 quantize of a bf16 row, RowAbsMax (its
+                      amax), QuantS8Pair (two codes) and QuantS8Scale (one 16-bit half of the scale); `ops.boolean.quant`
+                      has them on bits
     verity.ml.circuits.ops.boolean word arithmetic as Boolean circuits, built with `verity.ml.circuits.boolean`'s builders
                       (`forms`, `gather`, the multiplexer tree, and `trace`, Boolean Definitions from builders) and
                       `verity.ml.circuits.silicon`'s (`fp`, `tc_step`, `fp4`): `softmax`, attention's circuits over `forms`,

@@ -1,8 +1,8 @@
 """The s8 quantizer's units (`verity.ml.circuits.ops.quant`) are the loop's own ``quantize`` of each linear's input, bit for bit in
 torch on x86-64: on every row the loop quantizes after a linear while it serves (up_proj's output relu'd, RELU true; down_proj's
 as it is, RELU false), and on random and edge rows (all zero, all -0, all negative, ties, NaN with saturating neighbours, ±inf,
-subnormal). Pair j's unit reads the row rotated by 2j: the word Definitions at three rotations and both scale halves, the
-Boolean ones at every rotation."""
+subnormal). The row's amax, then pair j's unit on x[2j], x[2j + 1] and that amax and both scale halves on it: the word
+Definitions at three pairs, the Boolean ones at every pair."""
 from __future__ import annotations
 
 import numpy as np
@@ -24,16 +24,16 @@ def check(y: torch.Tensor, relu: bool, codes: torch.Tensor, scale: torch.Tensor)
     want_codes, want_scale = L.bits(codes), L.bits(scale)
     for boolean, js in ((False, (0, 1, h // 2 - 1)), (True, range(h // 2))):
         M, ev = (BQ, BS.evaluate_words) if boolean else (Q, E.evaluate_batch)
+        amax = ev(bind(M.RowAbsMax, N=h, RELU=relu), xb).astype(np.uint16)
         for j in js:
-            got = ev(bind(M.QuantS8Pair, H=h, RELU=relu), np.roll(xb, -2 * j, axis=1)).astype(np.uint8)
+            got = ev(bind(M.QuantS8Pair, RELU=relu), xb[:, 2 * j:2 * j + 2], amax).astype(np.uint8)
             assert (got == want_codes[:, 2 * j:2 * j + 2]).all(), (boolean, j, np.argwhere(got != want_codes[:, 2 * j:2 * j + 2])[:4])
-        lo, hi = (ev(bind(M.QuantS8Scale, H=h, HALF=k, RELU=relu), xb).astype(np.uint32) for k in (0, 1))
+        lo, hi = (ev(bind(M.QuantS8Scale, HALF=k), amax).astype(np.uint32) for k in (0, 1))
         assert ((hi << np.uint32(16)) | lo == want_scale).all(), boolean
 
 
-@pytest.mark.slow
 def test_the_units_are_the_quantize_of_every_row_the_loop_serves(monkeypatch):
-    """Each linear's output against the loop's next ``quantize`` call, which reads it (a request's last linear has none). ~7 s."""
+    """Each linear's output against the loop's next ``quantize`` call, which reads it (a request's last linear has none). ~3 s."""
     calls: list = []
     quantize, linear = L.quantize, L.linear
 

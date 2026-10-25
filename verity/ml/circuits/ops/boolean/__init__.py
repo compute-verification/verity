@@ -13,7 +13,7 @@
                  s8 cast
     moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
                  low bits and its range bit), MoePairCoordinate(W)_v2 and MoePairGemm(W)_v2
-    quant        the torch loop's ReLU and per-row s8 quantize on bits: QuantS8Pair_v2 and QuantS8Scale_v2
+    quant        the torch loop's ReLU and per-row s8 quantize on bits: RowAbsMax_v2, QuantS8Pair_v2 and QuantS8Scale_v2
     scalar       the bf16 comparator, the selects, the bit AND, PTX max / min, the E4M3 and E2M1 casts, the rounding f32 -> s8
                  cast and the 16-bit halves as Boolean Definitions (and names the IEEE f32 arithmetic of `elementwise` and the
                  bf16 widening of `cast`)
