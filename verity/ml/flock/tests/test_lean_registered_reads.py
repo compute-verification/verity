@@ -183,7 +183,7 @@ def test_each_table_row_opens_the_registered_root_at_its_position(staged):
 def test_a_table_of_two_registrations_rows_opens_no_one_root(staged):
     """A table whose rows are two registrations' of the value (two row tables of a window, each row under its own salt with
     a true path to its own root) is refused whichever one root the verifier holds: a port is read against one registered
-    root, so a prover that builds a chunk over two row tables can't have it verified (`row_tables.registered_reads`)."""
+    root, so a prover that builds a chunk over two row tables can't have it verified (`tables.registered_reads`)."""
     positions, _ = G.table(POSITIONS)
     other = G.Registered.commit(P.program_digest(staged.program), VALUE,
                                 np.random.default_rng(20261024).integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
@@ -448,7 +448,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the subset law's refusal without `--zk`); a
+    the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a
     transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
     inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about
@@ -486,7 +486,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     def off(xs: list[bytes], i: int) -> list[bytes]:
         return [bytes([b[0] ^ 1]) + b[1:] if j == i else b for j, b in enumerate(xs)]
 
-    assert why(root, tops) == "refused: a subset draw without --zk: no soundness claim draws by this law"
+    assert why(root, tops).startswith("session files: "), why(root, tops)
     # row r of the table reads position OUT_POSITIONS[r]: 2, 7, 0, 9, 4, 4, 1, 6
     if level == 0:
         assert why(off(root, 9), tops) == (f"setup: rec-tops: {unit}: port out's table row 3 is not node 9 of circuit's root_B, "
@@ -508,7 +508,7 @@ def rope(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)

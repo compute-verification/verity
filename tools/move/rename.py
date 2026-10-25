@@ -134,8 +134,9 @@ class Words:
         return self.sub(p, p, protect=False)
 
     def name(self, n: str, path: str = "") -> str:
-        """A Lean or Python dotted name, as it is renamed where it stands in file `path`."""
-        return self.sub(n, path, protect=False)
+        """A Lean or Python dotted name, as it is renamed where it stands in file `path`: not where [keep] keeps it (a
+        namespace that shares a module's name)."""
+        return self.sub(n, path)
 
 
 def record_spans(text: str) -> list[tuple[int, int]]:
@@ -212,8 +213,9 @@ def repin(root: Path, words: Words, pins: str, texts: dict[str, str], dest: dict
 
 
 def renamed_paths(moves: list[tuple[str, str]]) -> dict[str, str]:
-    """Each moved path up to its first renamed part ({old: new}; a directory ends in "/"), so that every file under one
-    renamed directory gives the same entry."""
+    """Each moved path up to the end of its first run of renamed parts ({old: new}; a directory ends in "/"), so that every
+    file under one renamed directory gives the same entry, and a swap (`Properties/Proofs/` to `Proofs/Properties/`) is
+    recorded whole."""
     out: dict[str, str] = {}
     for o, n in moves:
         a, b = o.split("/"), n.split("/")
@@ -221,6 +223,8 @@ def renamed_paths(moves: list[tuple[str, str]]) -> dict[str, str]:
             old, new = o, n
         else:
             i = next(i for i, (x, y) in enumerate(zip(a, b)) if x != y)
+            while i + 1 < len(a) and a[i + 1] != b[i + 1]:
+                i += 1
             old, new = "/".join(a[:i + 1]), "/".join(b[:i + 1])
             if i < len(a) - 1:
                 old, new = old + "/", new + "/"

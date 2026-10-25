@@ -1359,6 +1359,15 @@
         "verity/experimental/tests/network/": "verity/core/protocols/network/tests/",
         "verity/experimental/tests/sampled_proofs/": "verity/core/protocols/sampled_proofs/tests/"
       }
+    },
+    {
+      "paths": {
+        "integrations/vllm/verity_vllm/commit/serving_rows.py": "verity/ml/windows/rows.py",
+        "integrations/vllm/verity_vllm/commit/hiding.py": "verity/ml/windows/hiding.py",
+        "integrations/vllm/verity_vllm/commit/wiring.py": "verity/ml/windows/wiring.py",
+        "integrations/vllm/verity_vllm/commit/tables.py": "verity/ml/windows/tables.py",
+        "integrations/vllm/verity_vllm/commit/flock_inputs.py": "verity/ml/windows/flock_inputs.py"
+      }
     }
   ]
 }

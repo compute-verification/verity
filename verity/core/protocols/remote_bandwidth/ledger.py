@@ -22,9 +22,9 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 The memory line counts registered blocks only.  δ is the horizon's (the record's δ and AuditRO's 2^-slack_log2 a
 pass) plus the coin commitment's hiding terms (`hiding`), the receipts' binding term (`binding`), under sketch-sha512
 `timing.sketch_failure` over the session, and the draw's rejection (`rejection`): the statements' δc and δs, and
-`LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64.  `LineHeld`'s error also carries the windows' PRF advantages, which are
-named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond δ by name (`draw`), the advantages
-named with their claim and priced in neither."""
+`LineHeld`'s Σ_t hide_t, bind and Σ_t k_t/2^64 at the record's `samples`.  `LineHeld`'s error also carries the
+windows' PRF advantages, which are named (`PRF_CLAIM`) and in no δ here.  γ's errors carry `PooledDraw`'s terms beyond
+δ by name (`draw`), the advantages named with their claim and priced in neither."""
 from __future__ import annotations
 
 import math
@@ -34,7 +34,7 @@ from types import MappingProxyType
 
 from verity.core.protocols.profile import IntegrityProfile
 
-from . import audit, receipts, timing
+from . import audit, coins, receipts, timing
 
 SNAPSHOT, TIME_HELD, LINK_CHARGED = "snapshot", "time-held", "link-charged"
 FORMS = (SNAPSHOT, TIME_HELD, LINK_CHARGED)
@@ -136,7 +136,9 @@ class Node:
 def sketch(record: audit.Record, node: Node) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
     compression the prover could make over the span a guess or a key: Q = F·C, C the node's over the span and F its
-    `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind."""
+    `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind. It is the δs of the memory line's
+    `SketchBoundAt` premise (`LineHeld`): `SketchBoundDeployed` gives the sketch bound at it on the line's trace read on
+    the sketch outcomes, and `Accounting.Guarantees.Remote.SketchBoundLine` carries it to the line's coins."""
     if record.receipt != receipts.SKETCH_SHA512:
         return 0.0
     return float(timing.sketch_failure(compressions(record, node), record.passes, record.rows, blocks=record.blocks,
@@ -150,10 +152,15 @@ row digest."""
 
 
 def rejection(record: audit.Record) -> float:
-    """The draw's rejection, `PooledDraw`'s Σ_t k_t/2^64: the chance some window's draw rejects a first word, below
-    2^-`REJECTION_LOG2` a draw, over every window's draws (`profile.drawn`, min(k_t, U_t): k_t in a window of more
-    receipts than draws, and U_t, at most k_t, in one that opens all of them).  Exact: the draws are an integer."""
-    return sum(w.profile.drawn["receipt"] for w in record.windows) * 2.0 ** -REJECTION_LOG2
+    """The draw's rejection, `PooledDraw`'s and `LineHeld`'s Σ_t k_t/2^64: 2^-`REJECTION_LOG2` a receipt draw t
+    requested, k_t the record's `samples` in every draw (the k at which `DrawsOfRecord` holds), one draw a window, or
+    ⌈W/g⌉ draws at `groups_per_coin` g.  Not the receipts drawn (`profile.drawn`, min(k_t, U_t), short of k_t in a draw
+    that opens all its receipts): the statement's error is a constant, and a draw's U_t is the prover's.  Refused for a
+    record that states no `samples`.  Exact: the draws are an integer."""
+    if record.samples is None:
+        raise ValueError("the record states no samples, the receipts every draw requested, at which the memory line's "
+                         "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
+    return coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples * 2.0 ** -REJECTION_LOG2
 
 
 def hiding(record: audit.Record) -> float:

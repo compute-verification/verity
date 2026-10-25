@@ -101,6 +101,9 @@ OWNER = -2
 ENTRY_KEYS = ("value", "root", "leaves", "words", "domain")
 #: the entry key a value of another width than `WORD_BITS` adds
 WIDTH_KEY = "word_bits"
+#: the reads-file key of a port not named after the template parameter it reads: that parameter's `reads` key, which the
+#: Lean verifier holds its program's registered reads to (`Flock.Registered.PARAM_KEY`, `checkCover`)
+PARAM_KEY = "param"
 #: the domain binding's key a per-window value adds: the window's open root
 WINDOW_KEY = "window"
 #: the domain binding's key a produced value adds: the digest of the registration whose draw it follows (`produced`)
@@ -568,7 +571,8 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
     """The Lean verifier's `--registered` file, from the verifier's own program and query: per registered port, the value
     it reads, the value's leaf count, row width (`words` leaves of `word_bits`) and domain (`registered_entries`), each
     unit's position (`reads`), and the value's root from `roots` (`{value: root}`, of a registration the verifier
-    accepted). `ports` names a template parameter's circuit port when they differ; two reads it names one port are refused,
+    accepted). `ports` names a template parameter's circuit port when they differ, and such a port names its parameter
+    (`PARAM_KEY`); two reads it names one port are refused,
     as the Lean verifier refuses a file naming a port twice. `domains` (`{value: domain}`) gives
     an output value's domain, its earlier record's port's, which the registration's R7 held its entry to
     (`registration.check`'s `outputs`). `schemas` (`{value: schema}`) gives a value's row format when it is not
@@ -589,11 +593,12 @@ def reads_file(program: Program, query: Mapping[str, Any], values: Mapping[str, 
         read_as[port] = name
         out[port] = {"value": r["value"], "root": root, "leaves": e["leaves"], "words": e["words"],
                      "word_bits": e["word_bits"], "domain": (domains or {}).get(r["value"], e["domain"]),
-                     **schema_entry((schemas or {}).get(r["value"], SCHEMA)), "reads": list(r["rows"])}
+                     **schema_entry((schemas or {}).get(r["value"], SCHEMA)), "reads": list(r["rows"]),
+                     **({PARAM_KEY: name} if port != name else {})}
     return {"format": READS, "ports": out}
 
 
-__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
+__all__ = ["BLOCK", "ENTRY_KEYS", "OWNER", "PARAM_KEY", "PRODUCED_KEY", "READS", "REGISTERED_DOMAIN", "Registered", "SCHEMA", "SCHEMAS", "SCHEMA_KEY",
            "SCHEMA_SEG", "SCHEMA_V2", "SESSION_KEY", "SOURCES", "SUPPLIED_SALT", "WIDTHS", "WIDTH_KEY", "WINDOW_KEY", "WINDOW_SALT",
            "WORD_BITS",
            "bytes_leaves", "domain", "leaf", "log_base", "parameter_gates", "reads", "reads_file", "registered_entries",

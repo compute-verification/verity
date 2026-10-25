@@ -210,8 +210,10 @@ MUTANTS = [
     ("lig-sibling-l0", 0, flip("lig.l0.sib", 3, 5), reject("merkle:")),
     ("lig-row-l1", 0, flip("lig.l1.rows", 7), reject("merkle:")),
     ("lig-row-final", 0, flip("lig.final.rows", 7), reject("merkle:")),
-    ("lig-query-nonce", 0, flip("lig.qn", 0), ACCEPT),
-    ("lig-claim-nonce", 0, flip("lig.cbn", 1), ACCEPT),
+    ("lig-query-nonce", 0, flip("lig.qn", 0), {**reject("grinding_nonce ≠ 0"), "upstream_accepted": True}),
+    ("lig-claim-nonce", 0, flip("lig.cbn", 1), {**reject("claim_batch_grinding_nonce ≠ 0"), "upstream_accepted": True}),
+    ("lig-consistency-nonce", 0, flip("lig.consn", 0),
+     {**reject("consistency_batch_grinding_nonce ≠ 0"), "upstream_accepted": True}),
     ("rep1-zc-final-a", 1, flip("zc.fa"), reject("zerocheck: SumcheckFinalFailed")),
     ("rep1-lig-yr", 1, flip("lig.yr", 1), reject("ligerito: final check failed")),
 ]

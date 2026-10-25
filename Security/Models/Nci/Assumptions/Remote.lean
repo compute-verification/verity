@@ -5,7 +5,8 @@ import Definitions.Nci.Remote
 
 The remote dampener's three derived terms each rest on one: the certificate slack on PoUW's soundness per window
 (`PouwSound`, [POUW-SOUND]), the verdict lag on detection being terminal (`TerminalDetection`, [TERMINAL-DETECTION]),
-and the escape slack on sampled proofs catching each faulty block (`SampledEscape`, [SAMPLED-ESCAPE]).
+and the escape slack on sampled proofs catching each faulty block whatever came before (`SampledDetection`,
+[SAMPLED-DETECTION]), from which `Nci.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
 -/
 
 namespace Nci.Assumptions
@@ -31,25 +32,27 @@ use, with the verdict at most `Δ` after the detected block. Of the faulty proof
 identity runs at or after it by more than `Δ`, the identity having halted.
 
 It holds under sampled proofs (T5) too: a faulty block that isn't drawn is accepted and isn't `detected`, so it
-constrains nothing, and the faulty blocks an identity runs before its first detection (`escaped`) are charged by
-`SampledEscape`. When every proof block is proved (tiers T1–T4) every faulty block fails its own proof, `detected` holds
-them all, and it says that any two faulty blocks of one identity run within `Δ` of each other. -/
+constrains nothing, and the faulty blocks an identity runs before its first detection (`escaped`) are charged under
+`SampledDetection`. When every proof block is proved (tiers T1–T4) every faulty block fails its own proof, `detected`
+holds them all, and it says that any two faulty blocks of one identity run within `Δ` of each other. -/
 def TerminalDetection {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) (Δ : ℝ) : Prop :=
   ∀ b ∈ bad, b ∈ detected → ∀ b' ∈ bad, ident b = ident b' → τ b ≤ τ b' → τ b' ≤ τ b + Δ
 
-/-- **Sampled proofs catch each faulty block with probability at least `q`** ([SAMPLED-ESCAPE]): over the outcomes `Ω`,
-drawn from `μ`, the declared work that identity `j`'s faulty proof blocks accepted before its first detection
-(`escaped`) skip, `w_b` each, is at most `((1 − q)/q) B` in expectation, `B` the most one faulty block skips.
+/-- **Sampled proofs catch each faulty block with probability at least `q`, whatever came before**
+([SAMPLED-DETECTION]): over the outcomes `Ω`, drawn from `μ`, a block `b` that is faulty (`bad`) with no other faulty
+block of its identity detected at or before it (`noDetectionBefore`) is not detected itself with probability at most
+`(1 − q)` times that of the condition: `P(b faulty, none earlier detected, b undetected) ≤ (1 − q) P(b faulty, none
+earlier detected)`, for each block `b`.
 
-The coins of a proof block are live, drawn after its commitment, so whatever the history a faulty block is detected
-with probability at least `q`: the sampled share (tiers' `share/(overhead + replay)`) times one less the luck `p` of a
-drawn faulty block. An identity then runs `k` or more faulty blocks before its first detection with probability at most
-`(1 − q)^k`, and at most `∑_{k ≥ 1} (1 − q)^k = (1 − q)/q` of them in expectation, the stopping-time argument of
-`Population.Exfil`'s windowed audit (`ex_cumUpTo`), not yet joined to these outcomes. With every proof block proved,
-`q = 1` and none escapes. It bounds each identity's expectation only: it says nothing about how identities depend on one
-another. -/
-def SampledEscape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β) (ident : β → ι)
-    (τ w : β → ℝ) (q B : ℝ) : Prop :=
-  ∀ j, ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ with ident b = j, w b ≤ (1 - q) / q * B
+`q` is the sampled share (tiers' `share/(overhead + replay)`) times one less the luck `p` of a drawn faulty block. The
+coins that draw a proof block and check it are live: drawn after the commitment of every block at or before it, so
+after whether `b` is faulty and whether the earlier blocks are is fixed, and independently of the coins of the other
+blocks. Whatever happened before, a faulty block is then drawn with probability at least the share and, drawn, fails its
+proof but with the luck `p`. With every proof block proved the share is 1 and `q = 1 − p`. It is each block's
+conditional chance only: it says nothing about how identities depend on one another. -/
+def SampledDetection {Ω β ι : Type} [Fintype Ω] (μ : PMF Ω) (bad detected : Ω → Finset β) (ident : β → ι) (τ : β → ℝ)
+    (q : ℝ) : Prop :=
+  ∀ b, prob μ (fun ω => b ∈ bad ω ∧ b ∉ detected ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b) ≤
+    (1 - q) * prob μ (fun ω => b ∈ bad ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b)
 
 end Nci.Assumptions

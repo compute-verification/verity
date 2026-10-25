@@ -452,14 +452,26 @@ partial def premiseHead (moduleOf : Name → Option Name) (n : Nat) (t : Expr) :
     let b ← whnfR b
     if b.isForall && n > 0 then premiseHead moduleOf (n - 1) b else return head b
 
+/-- Whether a constant's result, past its binders, is one of them, as a `match`'s, a recursor's or `ite`'s is (its motive,
+`α`): what it returns is one of its arguments, its branches. -/
+def branching (c : Name) : MetaM Bool := do
+  let some ci := (← getEnv).find? c | return false
+  forallTelescope ci.type fun xs r => return xs.contains r.getAppFn
+
 /-- The heads (`premiseHead`) of the parts a hypothesis packs in `∧` and `∃`, past its binders: `(∃ x, A x) ∧ B` has
-`A` and `B`. -/
+`A` and `B`; one that applies a `branching` constant (a `match`) has those of its branches. -/
 partial def packedHeads (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
   forallTelescope t fun _ b => do
     if b.isAppOfArity ``And 2 then
       return (← packedHeads moduleOf b.appFn!.appArg!) ++ (← packedHeads moduleOf b.appArg!)
     if b.isAppOfArity ``Exists 2 then
       return ← withLocalDeclD `x b.appFn!.appArg! fun x => packedHeads moduleOf (b.appArg!.beta #[x])
+    if let .const c _ := b.getAppFn then
+      if ← branching c then
+        return ← b.getAppArgs.foldlM (init := #[]) fun out a => do
+          unless a.isLambda do return out
+          lambdaTelescope a fun _ body => do
+            return out ++ (← if ← isProp body then packedHeads moduleOf body else pure #[])
     return (← premiseHead moduleOf 4 b).toArray
 
 /-- `e` with its `let`s inlined, its metadata dropped and its β-redexes reduced: `forallTelescope` stops at each of them,
@@ -468,19 +480,30 @@ def plain (e : Expr) : MetaM Expr := do
   transform (← zetaReduce e) (pre := fun e => return if let .mdata _ b := e then .visit b else .continue)
     (post := fun e => return if e.isHeadBetaTarget then .visit e.headBeta else .done e)
 
-/-- The assumptions a premise's type mentions: the constants of an assumptions module that are `Prop`s or predicates,
-wherever they stand in it (`A ∧ B`, `A ↔ B`, `¬ A`, `∃ x, A x`, `id A`), their types unfolded (`A : Pred`). -/
-def mentioned (env : Environment) (moduleOf : Name → Option Name) (t : Expr) : MetaM (Array Name) :=
-  t.getUsedConstants.filterM fun c => do
-    unless ((moduleOf c).map (·.components.contains `Assumptions)).getD false do return false
-    let some ci := env.find? c | return false
-    forallTelescopeReducing ci.type fun _ b => return b.isProp
+/-- The assumptions a premise's type mentions: the constants of an assumptions module, or of a module under `premises`
+(the lock's `shape.premises`), that are `Prop`s or predicates, wherever they stand in it (`A ∧ B`, `A ↔ B`, `¬ A`,
+`∃ x, A x`, `id A`), their types unfolded (`A : Pred`). A premises module's abbrev stands for the ones its value
+mentions, as `premiseHead` sees through it, and for itself when its value mentions none. -/
+partial def mentioned (env : Environment) (premises : Array Name) (moduleOf : Name → Option Name) (t : Expr) :
+    MetaM (Array Name) :=
+  t.getUsedConstants.foldlM (init := #[]) fun out c => do
+    let some m := moduleOf c | return out
+    let assumed := m.components.contains `Assumptions
+    unless assumed || under premises m do return out
+    let some ci := env.find? c | return out
+    let predicate ← forallTelescopeReducing ci.type fun _ b => return b.isProp
+    unless predicate do return out
+    if let .defnInfo dv := ci then
+      if !assumed && (dv.hints matches .abbrev) then
+        let inner ← mentioned env premises moduleOf dv.value
+        return out ++ (if inner.isEmpty then #[c] else inner)
+    return out.push c
 
 /-- The assumptions the fields of the structure a binder ranges over mention (`s : {k // A k}`, `g : G` with a field
 `h : A g.k`), at every index of a family (`Fin n → G`), and those of the structures under `meaning` its fields range
 over, transitively. -/
-partial def fieldPremises (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (top : Bool)
-    (t : Expr) : MetaM (Array Name) :=
+partial def fieldPremises (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name)
+    (top : Bool) (t : Expr) : MetaM (Array Name) :=
   forallTelescope t fun _ cod => do
     let cod ← whnfR cod
     let .const s us := cod.getAppFn | return #[]
@@ -493,8 +516,8 @@ partial def fieldPremises (env : Environment) (meaning : Array Name) (moduleOf :
       (cod.getAppArgs.extract 0 cv.numParams)
     forallTelescope ctorType fun fs _ => fs.foldlM (init := #[]) fun out f => do
       let ft ← inferType f
-      let inner ← if ← isProp ft then pure #[] else fieldPremises env meaning moduleOf false ft
-      return out ++ (← mentioned env moduleOf ft) ++ inner
+      let inner ← if ← isProp ft then pure #[] else fieldPremises env meaning premises moduleOf false ft
+      return out ++ (← mentioned env premises moduleOf ft) ++ inner
 
 /-- For `e` applying a `Guarantees` definition or another definition under `meaning` outside an assumptions module,
 whether it is a `Guarantees` one and its value applied to `e`'s arguments. -/
@@ -507,16 +530,74 @@ def unfoldSpec? (env : Environment) (meaning : Array Name) (moduleOf : Name → 
   guard (statement || (under meaning m && !m.components.contains `Assumptions))
   return (statement, (dv.value.instantiateLevelParams dv.levelParams us).beta e.getAppArgs)
 
+mutual
+/-- Whether the constant `c` states its argument `i`, a predicate: whether that argument stands as a proposition
+(`states`) in `c`'s value or in a `Prop` field of one of its constructors (`List.Pairwise R` takes `∀ a' ∈ l, R a a'`).
+A constant that takes it as data does not: a measure takes its event (`prob p`, `if p x then 1 else 0`, `{x | p x} ∈ f`),
+and so does a constant whose value isn't a proposition. A `branching` constant does, and so does one the walk can't see
+into (no value, the argument an index, `fuel` spent). -/
+partial def asserts (fuel : Nat) (c : Name) (i : Nat) : MetaM Bool := do
+  let some ci := (← getEnv).find? c | return true
+  if fuel == 0 || (← branching c) then return true
+  unless ← withReducible (forallTelescopeReducing ci.type fun _ r => return r.isProp) do return false
+  match ci with
+  | .defnInfo v => lambdaTelescope v.value fun xs b => do
+    let some p := xs[i]? | return true
+    if ← isProp b then states (fuel - 1) c p b else return true
+  | .inductInfo v =>
+    if i ≥ v.numParams then return true
+    v.ctors.anyM fun k => do
+      let some kc := (← getEnv).find? k | return true
+      forallTelescope kc.type fun xs _ => do
+        let some p := xs[i]? | return true
+        (xs.extract v.numParams xs.size).anyM fun f => do
+          let t ← inferType f
+          return (← isProp t) && (← states (fuel - 1) c p t)
+  | _ => return true
+
+/-- Whether the predicate `p` stands as a proposition in the proposition `e` (`asserts`, for `c`'s value): applied, under
+`∀`, `→` and `let`, or passed (itself, in a `fun`, or in a proposition) to a constant that states that argument. `c`
+applied again (a recursive definition, an inductive type's constructor) decides nothing. -/
+partial def states (fuel : Nat) (c : Name) (p e : Expr) : MetaM Bool := do
+  match e with
+  | .mdata _ b => states fuel c p b
+  | .forallE n t b bi =>
+    if (← isProp t) && (← states fuel c p t) then return true
+    withLocalDecl n bi t fun x => states fuel c p (b.instantiate1 x)
+  | .letE _ _ v b _ => states fuel c p (b.instantiate1 v)
+  | .app .. =>
+    let f := e.getAppFn
+    if f == p then return true
+    let args := e.getAppArgs
+    for h : j in [0:args.size] do
+      let a := args[j]
+      unless a.containsFVar p.fvarId! do continue
+      if let .const g _ := f then
+        if g == c then continue
+        unless ← asserts fuel g j do continue
+      if a == p then return true
+      let stated ← if a.isLambda then lambdaTelescope a fun _ b => do return (← isProp b) && (← states fuel c p b)
+        else if ← isProp a then states fuel c p a
+        else withReducible <| forallTelescopeReducing (← inferType a) fun ys t => do
+          return t.isProp && !ys.isEmpty && (← states fuel c p (mkAppN a ys))
+      if stated then return true
+    return false
+  | _ => return e == p
+end
+
 /-- The premises a statement takes (`plain`): the `Prop` hypotheses of each conjunct, each named by its head after
 reducible unfolding (so a `Premises` abbrev names the assumption it stands for), by the heads of the parts it packs in `∧`
 and `∃` (`packedHeads`) and by the assumptions it mentions, and the assumptions the fields of a structure a binder ranges
 over mention (`fieldPremises`); also those under the statement definitions (a `Guarantees` namespace's) a conclusion
 applies. In each conjunct, disjunct, `if` branch and `∃` body of a conclusion, under any other definition under `meaning`
 a conclusion applies (outside an assumptions module, `unfoldSpec?`), and in each predicate a conclusion passes to a
-constant it doesn't unfold (a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive definition's step), only the
-assumptions its hypotheses mention (`only`): its other hypotheses (an acceptance event, a target) are what the conclusion
-means, not premises. -/
-partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Name → Option Name) (only : Bool)
+constant it doesn't unfold that states it (`asserts`: a `match`'s branches, `List.Pairwise (fun a b => …)`, a recursive
+definition's step), only the assumptions and the constants of a module under `premises` (`shape.premises`) its
+hypotheses mention (`only`): its other hypotheses (an acceptance event, a target) are what the conclusion means, not
+premises. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
+holding when `prob E ≤ ε`), is what the conclusion means too: `A` there is part of the event, not something the
+statement rests on. -/
+partial def premisesOf (env : Environment) (meaning premises : Array Name) (moduleOf : Name → Option Name) (only : Bool)
     (e : Expr) : MetaM (Array Json) := do
   let mut out := #[]
   for c in conjuncts e do
@@ -524,28 +605,33 @@ partial def premisesOf (env : Environment) (meaning : Array Name) (moduleOf : Na
       let mut ps := #[]
       for x in xs do
         let t ← inferType x
-        let hs ← if !(← isProp t) then fieldPremises env meaning moduleOf true t
-          else if only then mentioned env moduleOf t
-          else do pure ((← packedHeads moduleOf t) ++ (← mentioned env moduleOf t))
+        let hs ← if !(← isProp t) then fieldPremises env meaning premises moduleOf true t
+          else if only then mentioned env premises moduleOf t
+          else do pure ((← packedHeads moduleOf t) ++ (← mentioned env premises moduleOf t))
         for h in hs do
           ps := ps.push <| Json.mkObj [("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))]
       if body.isAppOfArity ``And 2 || body.isAppOfArity ``Or 2 || body.isAppOfArity ``ite 5 then
         for b in body.getAppArgs.extract (body.getAppNumArgs - 2) body.getAppNumArgs do
-          ps := ps ++ (← premisesOf env meaning moduleOf true b)
+          ps := ps ++ (← premisesOf env meaning premises moduleOf true b)
       else if body.isAppOfArity ``Exists 2 then
         if let .lam n ty b bi := body.appArg! then
-          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning moduleOf true (b.instantiate1 y))
+          ps := ps ++ (← withLocalDecl n bi ty fun y => premisesOf env meaning premises moduleOf true (b.instantiate1 y))
       else if let some (statement, v) := unfoldSpec? env meaning moduleOf body then
-        ps := ps ++ (← premisesOf env meaning moduleOf (only || !statement) (← plain v))
+        ps := ps ++ (← premisesOf env meaning premises moduleOf (only || !statement) (← plain v))
       else
-        for a in body.getAppArgs do
+        let args := body.getAppArgs
+        for h : j in [0:args.size] do
+          let a := args[j]
+          unless a.isLambda || (unfoldSpec? env meaning moduleOf a).isSome do continue
+          if let .const c _ := body.getAppFn then
+            unless ← (asserts 6 c j <|> pure true) do continue
           if a.isLambda then
             ps := ps ++ (← lambdaTelescope a fun _ b => do
-              if ← isProp b then premisesOf env meaning moduleOf true b else return #[])
-          else if (unfoldSpec? env meaning moduleOf a).isSome then
+              if ← isProp b then premisesOf env meaning premises moduleOf true b else return #[])
+          else
             ps := ps ++ (← forallTelescopeReducing (← inferType a) fun ys t => do
-              if t.isProp then premisesOf env meaning moduleOf true (mkAppN a ys) else return #[])
+              if t.isProp then premisesOf env meaning premises moduleOf true (mkAppN a ys) else return #[])
       return ps)
   return out
 
@@ -591,7 +677,7 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
       ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b))]],
       hs.any (·.isConstOf ``False))
 
-def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (axioms : Std.HashMap Name NameSet)
+def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning premises : Array Name) (axioms : Std.HashMap Name NameSet)
     (ranges : Std.HashMap Name DeclarationRanges) (rs : Array (Name × Name × ConstantInfo) × Array (Name × Name)) (n : Name) :
     MetaM Json := do
   let some ci := env.find? n | return Json.mkObj [("kind", "missing")]
@@ -619,7 +705,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     ("at", toJson (ranges[n]?.map fun (d : DeclarationRanges) => #[d.range.pos.line, d.range.pos.column])),
     ("signature", toJson signature), ("axioms", toJson ((axioms.getD n {}).toArray.qsort Name.lt |>.map toString)),
     ("hypotheses", toJson hypotheses), ("shape", ← shapeInfo env table meaning moduleOf ci.type),
-    ("premises", ← (do return toJson (← premisesOf env meaning moduleOf false (← plain ci.type))) <|> pure Json.null),
+    ("premises", ← (do return toJson (← premisesOf env meaning premises moduleOf false (← plain ci.type))) <|> pure Json.null),
     ("body", ← (do
       let (h, neg) ← bodyHead ci.type
       let (cs, absurd) ← conclusionOf env meaning ci.type
@@ -716,6 +802,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   let cfg ← IO.ofExcept (Json.parse (← IO.FS.readFile cfgPath))
   let roots := names cfg "roots"
   let meaning := names cfg "meaning"
+  let premises := names cfg "premises"
   let allowed := names cfg "allowed"
   let pins := names cfg "pins"
   let spec := names cfg "spec"
@@ -806,7 +893,7 @@ unsafe def main (args : List String) : IO UInt32 := do
   -- each pin's facts are a function of the environment and the maps above, so each pin is a task, joined in order
   let tasks ← pins.mapM fun p => IO.asTask do
     let (out, _) ← (MetaM.run' do
-      return (p.toString, ← pinInfo env table meaning axioms ranges (readsOf.getD p (#[], #[])) p)).toIO ctx { env }
+      return (p.toString, ← pinInfo env table meaning premises axioms ranges (readsOf.getD p (#[], #[])) p)).toIO ctx { env }
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size

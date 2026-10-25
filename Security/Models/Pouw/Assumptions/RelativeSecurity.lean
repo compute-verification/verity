@@ -90,7 +90,8 @@ the linear term of `Claims.KSLin` for extraction-based finders, a constant that 
 for its coins `r`. `fb` and `fz` are the analysis's reductions from those events to collisions of `sha`, built from
 `M` at `r`, one a round. Binding is at the circuit's cuts, before each round's coin, which live coins allow: a round's
 coin is released after the roots it reads, and the fork finder forks there. Under seeded coins nothing is bound before
-a round's seed, so the Fiat–Shamir statements bind at the draw instead, at a fixed oracle.
+a round's seed, so the seeded statements bind at the draw instead (`Accounting.Assumptions.Compose`, at
+`Declared.atDraw`).
 
 A square-root term folds into this form by AM–GM: `√(γ x) ≤ δ' + γ x/(4δ')` for every `δ' > 0`. So `Claims.KS`'s
 `κ + √(γ · PrB)` instantiates the zero-knowledge conjunct at `δz = κ + δ'`, `βz = γ/(4δ')`, `fz` its `B`; a machine
