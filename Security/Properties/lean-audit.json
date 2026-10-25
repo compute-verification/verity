@@ -3702,11 +3702,11 @@
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
-   "digest": "aa61381a6870692a0cb93298f0b695b764f8b55851309f9f214f6a1d47a9deae",
+   "digest": "13fddd7383210a4e3caf86cbfdd4ef304c8bd8b48c199c4b426df97929d3051e",
    "definitions": {
     "Accounting.Remote.Draw.Assumptions.Counted": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62",
     "Accounting.Remote.Draw.Assumptions.Live": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9",
-    "Accounting.Remote.Draw.Assumptions.Refused": "a6140fd270d4bdec60585a30263c5c2920e51076d780afbf573b7149ecee25ff"
+    "Accounting.Remote.Draw.Assumptions.Refused": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
    },
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
@@ -8800,13 +8800,13 @@
    ]
   },
   "Properties.RemoteAudit.Line": {
-   "digest": "f36189abd2f3ed314e8f04fc8676b5ea72448a34edaf1d54378db27efbd693de",
+   "digest": "265a515992f1aef176002771ab04379435b2019213cb98e869530b138ad97987",
    "definitions": {
     "Properties.RemoteAudit.Line.Credits": "9eec9eb1330187d597bef59966923e5ccf2461e6b517b9ffe07fbd35fba6844d",
     "Properties.RemoteAudit.Line.HeldAt": "069a74d91e7fe3ad77f199f4f9967298c6eaeddaa9ff54415a5fe5aa20254a36",
     "Properties.RemoteAudit.Line.LineChecked": "1c5505e0b300c71854bafd0ede4feac0aea5016477e28030deb3bc4f7989742a",
-    "Properties.RemoteAudit.Line.LineHeld": "69fe3bec2cf654e5a79d48d33f7b9f662ace66fdf183f38156b31a591ac3f59b",
-    "Properties.RemoteAudit.Line.LineHeldIdentity": "b7ab7915d4996f2fa295399527360131a4b841f758997ad41e640be351d56c64",
+    "Properties.RemoteAudit.Line.LineHeld": "031f33f585e4ff119a2b73ebc68904c5ead1e1b86d7099da934c5797efbbcf01",
+    "Properties.RemoteAudit.Line.LineHeldIdentity": "1c0d9aeae853a4ae11fc5a1677dac511b116de42147d4a207362eb4a9269fa2e",
     "Properties.RemoteAudit.Line.StretchBound": "81d15d41252aa8d919aeb78bacb4b616b3eadb2ce5f86146d0fad010ac89cc97"
    },
    "guarantees": [
