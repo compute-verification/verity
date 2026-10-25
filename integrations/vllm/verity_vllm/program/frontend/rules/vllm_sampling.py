@@ -1,4 +1,4 @@
-"""The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
+"""[R15 stoch] The frontend rule for the STOCHASTIC token select: `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p,
 pos, splits)` -> one `GumbelTopPTokenSelect_v1{V}(logits_row, top_p, seed, pos, temp, splits)` per logits row (verity_vllm.program.registry.sampling).
 
 What the op stands for (vLLM d9105ea80 `Sampler.sample` for a request whose `SamplingParams` are temperature T > 0, top_p < 1, top_k 0,

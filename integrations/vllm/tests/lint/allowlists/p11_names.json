@@ -375,6 +375,7 @@
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "doc-board-id", "symbol": "StochasticServe", "detail": "M-nnnn"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "doc-round", "symbol": "StochasticServe", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "def-name", "symbol": "<module>", "detail": "_serve_v3_binder"},
+    {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-board-id", "symbol": "TargetProfile", "detail": "M-nnnn", "count": 6},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-board-id", "symbol": "TargetProfile.modelled_engine", "detail": "M-nnnn"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
