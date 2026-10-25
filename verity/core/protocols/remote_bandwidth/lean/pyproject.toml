@@ -12,6 +12,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/core/protocols/profile.py", "verity/core/protocols/remote_bandwidth/__init__.py",
           "verity/core/protocols/remote_bandwidth/audit.py", "verity/core/protocols/remote_bandwidth/codec.py",
+          "verity/core/protocols/remote_bandwidth/wire.py",
           "verity/core/protocols/remote_bandwidth/coins.py", "verity/core/protocols/remote_bandwidth/receipts.py",
           "verity/core/protocols/remote_bandwidth/store.py", "verity/core/protocols/remote_bandwidth/line.py",
           "verity/core/protocols/remote_bandwidth/pooled.py", "verity/core/protocols/remote_bandwidth/schedule.py",

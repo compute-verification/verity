@@ -134,6 +134,10 @@ DELTA = 2.0 ** -40
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
+RECEIPT_LIMIT = 1 << 64
+"""A window's receipts, its passes' lengths summed, stay below this: `Session.receive` rejects with `plan` a pass that
+would take them to it, so each draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
+`U < 2^448`)."""
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
 LIFETIME_NS = 30 * 10**9
@@ -164,18 +168,27 @@ class Pace:
     t − 1 has its root, and window 0's at once), and leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)),
     never sooner than `Params.window_ns` after its challenge (`Session.next_boundary_ns`).  When its coins leave
     follows its roots, so is a value: its γ is declared per fixed window of `window_ns`, the stated T, from its first
-    challenge (`ledger.windows`)."""
+    challenge (`ledger.windows`).
+
+    `in_flight` f is the windows in flight: at 2 (the default) the schedule above, the next coin out while the
+    window's last pass runs.  At 1, window t's boundary message is due once t has its k roots and leaves after the
+    last of them arrived, at the latest at max(its challenge + k·A, D_(t−1)); a root of window t after its boundary
+    is out of turn (`order`), so every coin leaves after the root before it (`coins.released_reason`), and the
+    prover idles a round trip between windows.  `to_json` names `in_flight` only at 1."""
 
     k: int
     window_ns: int = WINDOW_NS
+    in_flight: int = 2
 
     def __post_init__(self) -> None:
         for name in ("k", "window_ns"):
             if type(getattr(self, name)) is not int or getattr(self, name) < 1:
                 raise ValueError(f"a pace's {name} is a positive integer")
+        if type(self.in_flight) is not int or self.in_flight not in (1, 2):
+            raise ValueError(f"a pace's in_flight is 1 or 2, not {self.in_flight!r}")
 
     def to_json(self) -> dict:
-        return {"k": self.k, "window_ns": self.window_ns}
+        return {"k": self.k, "window_ns": self.window_ns} | ({"in_flight": 1} if self.in_flight == 1 else {})
 
 
 @dataclass(frozen=True, slots=True)
@@ -726,7 +739,8 @@ class Record:
     capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
     and the law is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
     Given how many land in a window, they are uniform over its receipts, so its own reading holds at its share's
-    count (none at a share of none)."""
+    count (none at a share of none).  A record whose pace has one window in flight (`Pace.in_flight`) releases each
+    window's challenge after every root of the window before arrived, and one that doesn't is refused."""
 
     registration: bytes
     coins: bytes
@@ -744,6 +758,11 @@ class Record:
     appends: bytes | None = None
     pace: Pace | None = None
     groups_per_coin: int = 1
+
+    def __post_init__(self) -> None:
+        if self.pace is not None and self.pace.in_flight == 1 and any(
+                a > w.released_ns for v, w in zip(self.windows, self.windows[1:]) for a in v.arrived_ns):
+            raise ValueError("at one window in flight a window's challenge leaves after the window before's last root")
 
     @property
     def start_ns(self) -> int:
@@ -895,7 +914,8 @@ class Session:
         """Why this session's coins are not the challenger's as it signed them (`coins.released_reason`), the commitment
         `signed` and the roots `received` read from the challenger's side; None when they are."""
         return coins.released_reason(self.coins, [w.roots for w in self.windows],
-                                     [a[2].root for a in self._appends], signed, received)
+                                     [a[2].root for a in self._appends], signed, received,
+                                     2 if self.params.pace is None else self.params.pace.in_flight)
 
     def trusted_reason(self, directory: Any, heads: Sequence[Any], key: coins.ChallengerKey, pins: Any, main: Any,
                        verify: coins.Verify, period: str | None = None) -> str | None:
@@ -939,7 +959,8 @@ class Session:
 
     def boundary(self) -> coins.LiveOpening | None:
         """The end of the next unended window: the following window's challenge, or None, the close, after the last.
-        Refused sooner than `window_ns` after the window's challenge left."""
+        Refused sooner than `window_ns` after the window's challenge left, and at one window in flight
+        (`Pace.in_flight`) before its last root arrived."""
         self._live()
         now = self.clock()
         t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
@@ -948,14 +969,16 @@ class Session:
         if now < self.windows[t].released_ns + self.params.window_ns:
             raise SessionError(f"window {t} is {self.params.window_ns} ns, stated: its boundary may leave at "
                                f"{self.windows[t].released_ns + self.params.window_ns} ns, not {now}")
+        if self._one_in_flight and any(now < a for a in self.windows[t].arrived):
+            raise SessionError(f"window {t}'s boundary leaves after its last root at one window in flight, not at {now}")
         self.windows[t].boundary_ns = now
         return self._release(t + 1, now) if t + 1 < self.params.windows else None
 
     def next_boundary_ns(self) -> int | None:
         """When the next unended window's boundary message (`boundary`) is to leave on the verifier's clock, given the
         roots received so far: `window_ns` after its challenge, or in a paced session (`Pace`) then once it is due,
-        and at the latest at max(its challenge + (k − 1)·A, the window before's deadline).  None once every window
-        has ended or before the session starts."""
+        and at the latest at max(its challenge + (k − 1)·A, the window before's deadline), at one window in flight
+        max(its challenge + k·A, that deadline).  None once every window has ended or before the session starts."""
         t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
         if t is None:
             return None
@@ -964,9 +987,17 @@ class Session:
         if pace is None:
             return soonest
         k = pace.k
+        if self._one_in_flight:
+            if len(w.roots) >= k:
+                return max(soonest, w.arrived[-1])
+            return max(soonest, w.released_ns + k * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
         if len(w.roots) >= k - 1 and (k > 1 or t == 0 or len(self.windows[t - 1].roots) >= 1):
             return soonest
         return max(soonest, w.released_ns + (k - 1) * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
+
+    @property
+    def _one_in_flight(self) -> bool:
+        return self.params.pace is not None and self.params.pace.in_flight == 1
 
     def append(self, root: bytes, count: int) -> tuple[int, bytes] | Verdict:
         """The root of an append's payload tree (`append_tree`), `count` blocks written after the codec seed: they take
@@ -1029,13 +1060,15 @@ class Session:
         """Root `i` of window `t`, its pass's plan as the prover sends it, and the step it covers, as they arrive: `runs`
         (None: the registered store in order; a numpy array of rows (first, count): `Plan.from_array`), or `change`,
         the blocks (added, removed) from the session's previous pass's plan (`Plan.changed`; before its first pass, the
-        registered store).  A plan is over the store's blocks so far, registered and appended, and holds none released;
-        its rejection, `lifetime`, if it holds an appended block that joined a window `Params.lifetime` or more before
-        `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
+        registered store).  A plan is over the store's blocks so far, registered and appended, holds none released,
+        and keeps its window's receipts below `RECEIPT_LIMIT`; its rejection, `lifetime`, if it holds an appended block
+        that joined a window `Params.lifetime` or more before `t`.  `step` is the step of the served circuit whose reads the pass covers, above the previous pass's: the plan
         is to hold every complete block the circuit reads at it, filler beside them allowed (`PlanMatches`), which the
         plan's proof unit checks against the prover's memory map (`PROTOCOL.md` §8); its rejection, `step`, if it is
         missing or not above.  A paced session's window holds at
-        most k roots, and a later one is out of turn (`order`).  The root's arrival, the clock now, goes in the record.
+        most k roots, and a later one is out of turn (`order`), as is, at one window in flight (`Pace.in_flight`), a
+        root that passes every other check after its window's boundary.  The root's arrival, the clock now, goes in
+        the record.
         Returns the rejection they cause, if any."""
         self._live()
         if not self.windows:
@@ -1069,9 +1102,13 @@ class Session:
             return self._fail(t, "plan")
         if self._gone and any(self._released(f, c) for f, c in plan.runs):
             return self._fail(t, "plan")
+        if sum(p.length for p in self.windows[t].plans) + plan.length >= RECEIPT_LIMIT:
+            return self._fail(t, "plan")
         self._joined.extend([t] * (len(self._appends) - len(self._joined)))
         if (below := self._stale_below(t)) > N and any(f < below and f + c > N for f, c in plan.runs):
             return self._fail(t, "lifetime")
+        if self._one_in_flight and self.windows[t].boundary_ns is not None:
+            return self._fail(t, "order")
         if extent > N:
             held = [(max(f, N), f + c) for f, c in (change[0] if change is not None else plan.runs) if f + c > N]
             if held:
@@ -1150,12 +1187,13 @@ class Session:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-        """Window t's verdict on the prover's openings of its draws, in the order drawn."""
+        """Window t's verdict on the prover's openings of its draws, in the order drawn: `malformed` on a window with
+        no draws, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
             raise SessionError(f"window {t} has no draws awaiting openings")
-        if len(openings) != len(w.draws):
+        if not w.draws or len(openings) != len(w.draws):
             return self._fail(t, "malformed")
         key, receipters = self.registration.key, {}
         for (i, p), o in zip(w.draws, openings):
@@ -1626,8 +1664,8 @@ def pooled(record: Record) -> tuple[float, float]:
     except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
-    draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes
-    (`Accounting.Guarantees.Remote.PooledDraw`).
+    draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
+    + the coin commitment's hiding terms (`Accounting.Guarantees.Remote.PooledDraw`, `ledger.hiding`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
     `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least

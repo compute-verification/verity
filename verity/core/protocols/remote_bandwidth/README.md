@@ -84,8 +84,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
 
 ## Code
 
-- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes), the
-  record and its ledger.
+- `audit.py`: the lifecycle (`register`, `Registry`, `Session`), pacing (`Pace`: a live coin every k passes, two
+  windows in flight or, at `in_flight` 1, each coin after the root before it), the record and its ledger.
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`).
@@ -95,6 +95,8 @@ A transcript written before it named its session's pace (20 Oct) replays only wi
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`).
 - `receipts.py`: seeds, plans, receipts and their trees.
 - `codec.py`: the store's encoding (kv/v0).
+- `wire.py`: the openings frame a prover sends a window's openings in, and a window's openings from its frames
+  (`openings_of`), beside `lean/RemoteAudit/Wire.lean`'s.
 - `memory_map.py`: memory-map/v1, serving's record of the KV blocks it wrote and freed, as the audit's appends,
   releases and plan changes, and as the schedule the prover publishes (`schedule`).
 - `schedule.py`: the schedule check, without which `ledger` credits nothing after the seed: each pass's plan is the

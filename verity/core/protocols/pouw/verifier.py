@@ -2,7 +2,9 @@
 rules"), and PoUW has switched to it by the 8 Oct procedure (`.agents/skills/friction/SKILL.md`): the served window's checks
 are its Lean's, `lean/check` (`pouw-check`), `lean/commit` (`pouw-commit`) and `lean/window` (`pouw-window`), whose
 verdicts `benchmarks/pouw/served_zk/of_record.py` publishes. The Python beside them (`core_check`, `coins`, `window`) is kept
-as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict.
+as the reference, and the difftests hold it to the Lean: a disagreement fails with the Lean's verdict. A served H1
+window's statements are judged here too: `credit.window` and `credit.period_credit` take each drawn unit's outcome from
+`lean("credit-verified", …)` (`PouwCheck.Verified`), with `credit._verified` the reference.
 
 `RECORD_VERDICT` is the switch, and setting it to ``"python"`` is the one line that undoes it.
 
@@ -103,6 +105,16 @@ class _Server:
 
 _server = _Server()
 atexit.register(_server.close)
+
+
+def lean(fn: str, value: Any) -> Any:
+    """`pouw-check-difftest`'s answer to function `fn` on `value`, a check of record whose verdict the caller takes (a
+    refusal is part of that answer, never a reject). Raises `LeanError` where the Lean can't run or rejects the
+    input."""
+    kind, body = _server.call(fn, value)
+    if kind != "output":
+        raise LeanError(f"{EXE} rejected {fn}'s input: {body}")
+    return body
 
 
 def coins(n: int) -> bytes:
