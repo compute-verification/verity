@@ -92,7 +92,7 @@ theorem honestRep_of_repP {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H)
     (hok : JsonRT.TableOk sts[k / 2]) {sch : Schedule} (hsch : fast100 sts[k / 2].m = some sch)
     {e : Array Claim} (he : sts[k / 2].extraClaims (pointsOf spec c₁) = .ok e) (he2 : e.size ≤ 2048)
     (resp : ℕ → Claims.Msg) (tr : Trace) {salt₀ : ℕ → ByteArray} {cm : Commit}
-    (hcm : commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes V) (Setup.ofCircuit sts[k / 2]).merkle
+    (hcm : commitP (Hashes.ofSha512 (Claims.hOf H) : Hashes Flock.V) (Setup.ofCircuit sts[k / 2]).merkle
       (sch.levels.getD 0 default) (packed tr (Setup.ofCircuit sts[k / 2]).m) salt₀ = .ok cm)
     (salt : ℕ → ℕ → ByteArray) (nonce : ℕ → ℕ → UInt64) (d : ByteArray) {l l' : Array Claims.Msg}
     {pt : Flock.Proof × Transcript}
