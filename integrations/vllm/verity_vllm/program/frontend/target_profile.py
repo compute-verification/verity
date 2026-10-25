@@ -581,7 +581,7 @@ class TargetProfile:
 
     @classmethod
     def from_run_profile(cls, profile_doc) -> "TargetProfile | None":
-        """The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
+        """[R13 hopper] The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
         built with when the capture recorded one (`profile["target"]`, written by `vllm_adapter.build_engine(target=...)` — exact,
         including `flash_attn_version`), else the X-01 device document (`from_gpu_document`) with the FA version the runner's attention
         layers reported (`profile["backends"]["attention_flash_attn_version"]`) when it is NOT the selector's default for that

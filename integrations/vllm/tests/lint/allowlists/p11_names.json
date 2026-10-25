@@ -370,6 +370,7 @@
     {"file": "verity_vllm/program/compact.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "def-name", "symbol": "<module>", "detail": "_serve_v3_binder"},
     {"file": "verity_vllm/program/frontend/rules/vllm_sampling.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
+    {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "doc-round", "symbol": "TargetProfile.from_run_profile", "detail": "R1N"},
     {"file": "verity_vllm/program/instances_form.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN", "count": 2},
     {"file": "verity_vllm/program/instances_form.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 3},
     {"file": "verity_vllm/program/instances_form.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
