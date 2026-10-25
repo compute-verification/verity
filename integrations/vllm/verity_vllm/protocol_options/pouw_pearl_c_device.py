@@ -569,11 +569,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls):
         cur = room(self, tiles, m, CALL_CAPACITY)
         index = len(cur.matmuls)
         self.join_before(sh)
-        sh.xa[:m].copy_(x2)
         self.eager_only = self.eager_only and not self.graphs
-        filled = sh.dirty if self.eager_only else m16
-        if filled > m:
-            sh.xa[m:filled].zero_()
+        self._stage_a(sh, x2, m, sh.dirty if self.eager_only else m16)
         sh.dirty = m
         pipe, steps, side = self._pipe(w, sh)
         raw = self.stream()
