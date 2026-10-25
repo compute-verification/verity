@@ -1,19 +1,24 @@
+import Proofs.Flock.Claims.KS.PlainDraw
+import Proofs.Flock.Claims.KS.DecodeHidden
 import Proofs.Flock.Claims.KS.PlainDrawK
-import Proofs.Flock.Claims.KS.PlainDrawAcc
 
 /-!
 # flock-verify's acceptance at a draw value, through `keep`
 
-`PlainDrawAcc`'s lemmas at `AcceptsAtDK keep`, by their proofs on the walkers of `verifyWithMK keep` at SHA-512
-(`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep` (`decodeWithK_points`, `decodeWithK_roundsWF`,
-`decodeWithK_allRetained`), each lemma's session the one the record decodes to through `keep`:
+The acceptance lemmas the deployed plain decoders read take `Exec.Accepts`, and read it only as a setup that succeeds
+and `verify`'s acceptance against it, with the record's draw only an argument of `Stmt.setupTables`. So each holds at
+`AcceptsAtDK keep I dr`, the setup at a draw value `dr`, with `dr` for the record's draw, by its proof on the walkers of
+`verifyWithMK keep` at SHA-512 (`verifyK_ok_tables`, `verifyK_one_ok`) and of `Record.decodeWithK keep`
+(`decodeWithK_points`, `decodeWithK_roundsWF`, `decodeWithK_allRetained`), each lemma's session the one the record
+decodes to through `keep`. At `keep := id` they are `PlainDrawAcc`'s:
 
-* `accepts_oneAnyDK`, `accepts_rep_roundsAnyDK`, `accepts_verdict_hm96AnyDK`: `accepts_oneAnyD` (with its table's
-  registry scheme), `accepts_rep_roundsAnyD`, `accepts_verdict_hm96AnyD`.
-* `accepts_req0DK`, `accepts_opens₀LDK`: `accepts_req0D`, `accepts_opens₀LD`.
-* `accepts_repsOneDK`: `accepts_repsOneD`.
+* `accepts_oneAnyDK`, `accepts_rep_roundsAnyDK`, `accepts_verdict_hm96AnyDK`: `accepts_oneAny` (with its table's
+  registry scheme), `accepts_rep_roundsAny`, `accepts_verdict_hm96Any`, for either tag.
+* `accepts_req0DK`, `accepts_opens₀LDK`: `accepts_req0`, `accepts_opens₀L`.
+* `accepts_repsOneDK`: `accepts_reps` and `accepts_repsH` at once, the one table's statement `setupOne`'s at `dr`.
 * `drawSetup_of_acceptsDK`, `tableAt_of_acceptsDK`, `drawSetupH_of_acceptsDK`, `tableAtH_of_acceptsDK`:
-  `drawSetup_of_acceptsD`, `tableAt_of_acceptsD`, `drawSetupH_of_acceptsD`, `tableAtH_of_acceptsD`.
+  `drawSetup_of_accepts`, `tableAt_of_accepts`, `drawSetupH_of_accepts`, `tableAtH_of_acceptsI` at the draw `some d`,
+  with no premise on a record's draw.
 -/
 
 namespace FlockSoundness.Discharge.AtDraw
