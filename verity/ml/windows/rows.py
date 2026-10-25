@@ -3,7 +3,7 @@ format (``verity_flock.circuit``'s statement rows, PR #83), with the registratio
 labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
-counts (``population_program``, ``verity.ml.circuits.population``'s builders, which core's ``one_stage.partition`` names), its
+counts (``verity.ml.windows.population``, over the builders core's ``one_stage.partition`` names too), its
 query the template query over them, so the partition (``verity/partition/v1``, ``partition_object``) and its digest are core's
 over that program, and the registration is core's ``verity/registration/v1`` record with ``window = {"kind": "served" |
 "stand-in", "run": <the record's run root>, ...provenance}`` (``registration``), made by the ``registrar`` the caller passes
@@ -66,7 +66,6 @@ from typing import Any
 import numpy as np
 
 from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.population import mixed_population_program, population_program as template_population
 from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -75,6 +74,7 @@ from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.windows.population import population_program, template_partition
 
 from . import wiring as WI
 from .hiding import HidingLeaves
@@ -299,27 +299,6 @@ class Member:
     def port(self, name: str) -> str:
         """The name a root, its domain and the registration use: ``<member>/<port>``."""
         return f"{self.key}/{name}"
-
-
-def population_program(templates: Sequence[tuple[Any, int]], several: bool = False) -> tuple[Any, dict[str, Any]]:
-    """The verifier's population program and query over ``(template Definition, instances)`` in order: ``TemplateInstances`` and
-    ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several (or, ``several``,
-    for one)."""
-    if len(templates) == 1 and not several:
-        (t, n), = templates
-        return template_population(t, n), PO.template_instance_query(t)
-    return mixed_population_program(list(templates)), PO.template_instances_query([t for t, _ in templates])
-
-
-def template_partition(program: Any, query: Mapping[str, Any]) -> PO.TemplatePartition:
-    """``query`` applied to ``program`` (``partition_object.evaluate``): a window's query is a template query, so its
-    units are template instances.  Core's one-stage partition refuses more (a unit wider than the widest class, a template of no
-    gate), and its registration record applies it, so ``write`` refuses such a window."""
-    part = PO.evaluate(program, query)
-    if not isinstance(part, PO.TemplatePartition):
-        raise ValueError(f"a window's query is a template query ({PO.Q_TEMPLATE_INSTANCE[0]} or "
-                         f"{PO.Q_TEMPLATE_INSTANCES[0]}), not {dict(query)!r}")
-    return part
 
 
 @dataclass(frozen=True)
