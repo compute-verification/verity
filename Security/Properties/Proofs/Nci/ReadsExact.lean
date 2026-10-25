@@ -66,22 +66,27 @@ gates of one width) and an index, and holds each of `Desc`'s operations on them 
   decoder's `buildNode` gives): stride 1 reads the carry's leaves through `carry` and the ys iteration by iteration
   through `fromCallee` (`down_scan_head`, `scanOne`, `ys_agree`, `scanYs_agree`), any other stride position by
   position (`scanPts`); `scanSpec_of`;
+* `carry`'s step: a scan's return leaves of iteration `m` that the step's summary returns in place (`Desc.carryRuns`,
+  `carryRuns_cover`) are the initial carry's leaves through `throughArg` (`init_agree`, `carry_init`), and any other
+  follows carry leaf by carry leaf (`Desc.chainOf`, `chainOf_ok`) to the leaf a callee returns through `fromCallee`
+  (`carry_chain`) or around a cycle back to the initial carry (`chainAt_cyc`); so `carry` one step up keeps what it
+  reads wherever the step's summary holds `RetOk` and `fromCallee` and `throughArg` one step down do
+  (`carrySpec_succ`);
 * a batch of a composite's piece in its one-run case, the node's leaf `m·L + t` being the run's gate for member `m`'s
   return leaf `t` (`batchAffine`, `batchSpec_of`), and past it as below; so `down`, `fromCallee`,
   `throughArg` and `carry` keep the gates they read at every fuel (`specs`, `specs_of`) wherever the callees' summaries
   hold `RetOk`, a composite's return has as many leaves as its type, a primitive returns one leaf, a scan's output is
-  `ScanOut`'s, the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims), and so do the steps
-  open here (`OpenSteps`): `carry` one step up (`CarrySpec`). A batch past its one-run case is proved: more than one
-  row row by row (`down_batch_rows`); one row and stride 1 as copies of a member's return of gates
-  (`copies_seg_agree`), of leaves of arguments the members share (`batchSharedMid`), or of one run of a mapped
+  `ScanOut`'s and the decoder's facts on the body hold (`Resolve.BodyOk`, `ArgOk`, a batch's dims). A batch past its
+  one-run case is proved: more than one row row by row (`down_batch_rows`); one row and stride 1 as copies of a
+  member's return of gates (`copies_seg_agree`), of leaves of arguments the members share (`batchSharedMid`), or of one run of a mapped
   argument's leaves within one row of its axis through `throughPS` (`throughPS_some`, `batchThroughMid`), or member
   by member, the cut members at either end each through its return (`down_batch_one`, `ends_agree`,
   `batchOne_agree`); a stride of whole members as copies of a member's leaf of gates (`gateStride_agree`,
   `batchStride_agree`) or of leaves of arguments the members share (`batchShared`), which `fromCallee` reads the same
   for every member (`fromCallee_shared`, a slice's pieces having its segments' targets, `psSlice_tgt`); any other
   stride position by position (`down_batch_pts`, `batchPts_agree`). In a Definition's body, wherever its references
-  (`Resolve.BodyOk`), its callees' summaries (`RetOk`), the decoder's facts its private `composite` sets (`Decoded`,
-  `ScanOut`) and `OpenSteps` do (`specs_decoded`);
+  (`Resolve.BodyOk`), its callees' summaries (`RetOk`) and the decoder's facts its private `composite` sets (`Decoded`,
+  `ScanOut`) do (`specs_decoded`);
 * so every summary `memoOf` makes of a reached Definition other than the root holds `RetOk` (`summarize_retOk`,
   `memoOf_retOk`), callees first (`reached` marks a composite's callees, `reached_closed`), wherever besides those
   the segments `down` gives name their `len` positions, at or past 0 and none a node's (`DownShape`, open), and a
@@ -4100,17 +4105,18 @@ theorem segPos_one_rep {s : Seg} (h : s.reps = 1) : segPos s = posAll s.ps := by
 
 /-- Definition `f`'s summarized return (`memo`'s entry), read in any activation of `f`: segments as `PS.of` makes them,
 positions at or past 0 naming `f`'s gates or its parameters' leaves in range, a segment of more than one copy gates
-only or copies all alike (`shift = 0`, as `down` gives a batch's members returning what they share), and position by
-position the gate `f`'s return leaf resolves to. -/
+only or copies all alike (`shift = 0`, as `down` gives a batch's members returning what they share), position by
+position the gate `f`'s return leaf resolves to, and pieces each of positive count. -/
 def RetOk (P : Prog) (memo : Array Desc.Summary) (f : Nat) : Prop :=
   PSOk (memo[f]!).ret ∧
   (∀ x ∈ psPos (memo[f]!).ret, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
     ∀ i, x.1 = .ref true i → i < (P.defs[f]!).body.params.size ∧
       x.2 < (((P.defs[f]!).body.params[i]!).2.leaves : Int)) ∧
   (∀ s ∈ (memo[f]!).ret.segs.toList, s.reps > 1 → (∀ g ∈ s.ps.toList, ∃ w, g.tgt = .gate w) ∨ s.shift = 0) ∧
-  ∀ sc : Flock.Program.Scope, sc.d = f →
+  (∀ sc : Flock.Program.Scope, sc.d = f →
     Agree P sc (psPos (memo[f]!).ret) ((List.range (P.defs[f]!).body.ret.count).map fun j =>
-      Flock.Program.resolve P sc ((P.defs[f]!).body.ret.get j))
+      Flock.Program.resolve P sc ((P.defs[f]!).body.ret.get j))) ∧
+  ∀ s ∈ (memo[f]!).ret.segs.toList, ∀ g ∈ s.ps.toList, 0 < g.count
 
 /-- What `throughArg` keeps of member `m`'s parameter `i`'s leaves `g`, each in range: the gate each names in the
 member's activation. -/
@@ -4189,7 +4195,7 @@ theorem calleeSpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
   dsimp only at h
   have h' := ok_bind_pure h
   rw [← Array.forIn_toList] at h'
-  obtain ⟨hps, hpos, hgo, hag⟩ := hR k node hn
+  obtain ⟨hps, hpos, hgo, hag, -⟩ := hR k node hn
   have hnode : c.body.nodes[k]! = node := node_get hn
   rw [hnode] at hm hb
   rw [hnode]
@@ -5617,7 +5623,7 @@ theorem copies_seg_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
       ((List.range' (m0 * (c.P.defs[node.fn]!).outLeaves) ((m1 - m0) * (c.P.defs[node.fn]!).outLeaves)).map fun j =>
         Flock.Program.resolve c.P (c.P.child sc k (j / (c.P.defs[node.fn]!).outLeaves))
           ((c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.get (j % (c.P.defs[node.fn]!).outLeaves))) := by
-  obtain ⟨hok, hnn, -, hag⟩ := hR
+  obtain ⟨hok, hnn, -, hag, -⟩ := hR
   have hflat := psPos_flat _ hok (fun x hx => (hgo x hx).1)
   unfold segPos
   simp only [copy_pos, shiftGates_pos, List.map_map, shiftPos_shiftPos]
@@ -5674,7 +5680,7 @@ theorem batchAffine (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
       (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) : BatchAffine c sc := by
   intro q k node p ht hn hform hp hL h0 hq hf ha
-  obtain ⟨hok, -, -, hag⟩ := hR k node hn
+  obtain ⟨hok, -, -, hag, -⟩ := hR k node hn
   have hol := hOL k node hn hp
   unfold affineOf at ha
   dsimp only at ha
@@ -5794,7 +5800,7 @@ theorem gateStride_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
           (q.base.toNat % (c.P.defs[node.fn]!).outLeaves + 1)).flatMap (·.ps)))
       1 q.len (q.stride / ((c.P.defs[node.fn]!).outLeaves : Int) * ((c.P.defs[node.fn]!).gates : Int))])
       ((pos q).map (den c.P sc)) := by
-  obtain ⟨hok, hnn, hgo, hag⟩ := hR
+  obtain ⟨hok, hnn, hgo, hag, -⟩ := hR
   rw [segsPos_singleton]
   apply batch_den_at c sc hd q ht hn hform hp h1 hq
   generalize hLd : (c.P.defs[node.fn]!).outLeaves = L at *
@@ -6420,7 +6426,7 @@ theorem batchThroughMid (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
     rw [← hpt J (by unfold Desc.Piece.count; omega)]
     simp only [ppt, Prod.mk.injEq, true_and, Nat.div_eq_of_lt hJl, Nat.mod_eq_of_lt hJl]
     simp
-  obtain ⟨hokR, hnn, -, hag⟩ := hR k node hn
+  obtain ⟨hokR, hnn, -, hag, -⟩ := hR k node hn
   have hol := hOL k node hn hp
   set L := (c.P.defs[node.fn]!).outLeaves with hLdef
   set R := (c.memo[node.fn]!).ret with hRdef
@@ -6668,14 +6674,715 @@ theorem batchSpec_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
     subst h
     exact hAff q k node p ht hn hform hp hL h0 hq hf ha
 
-/-- **Open: `down`'s step past what is proved here**, one step up from the specs at its fuel: `carry` (`CarrySpec`),
-which follows a scan's carry back through its iterations. -/
-def OpenSteps (c : Desc.Ctx) (sc : Flock.Program.Scope) : Prop :=
-  ∀ fuel, CalleeSpec c sc fuel → ThroughSpec c sc fuel → CarrySpec c sc (fuel + 1)
+/-! ## `carry`'s step
+
+`carry` follows a scan's return leaves `[a, b)` of iteration `m` back through the step's summary (`Desc.carryRuns`,
+`Desc.chainOf`): a run the step returns in place is the initial carry's leaves through `throughArg` (`init_agree`,
+`carry_init`), and any other return leaf follows carry leaf by carry leaf (`chainOf_ok`) to the leaf a callee returns
+(`fromCallee`, `carry_chain`) or around a cycle back to the initial carry (`chainAt_cyc`). -/
+
+/-- A loop whose every step continues with `g`: the fold of `g`. -/
+theorem forIn_id_yield {α β : Type} (l : List α) (b : β) (g : α → β → β) (f : α → β → Id (ForInStep β))
+    (hf : ∀ a b, f a b = pure (.yield (g a b))) : forIn l b f = pure (l.foldl (fun b a => g a b) b) := by
+  induction l generalizing b with
+  | nil => rfl
+  | cons a l ih => rw [List.forIn_cons, hf, List.foldl_cons]; exact ih (g a b)
+
+/-- A piece `Piece.slice` gives of positions within `q` has some. -/
+theorem pieceSlice_count (q : Piece) (x y : Nat) (hy : y ≤ q.count) : ∀ p ∈ (q.slice x y).toList, 0 < p.count := by
+  intro p hp
+  unfold Desc.Piece.slice at hp
+  split at hp
+  · simp at hp
+  rename_i hxy
+  split at hp
+  · simp only [List.mem_singleton] at hp
+    subst hp
+    simp only [Desc.Piece.count, Desc.Piece.row]; omega
+  rename_i hr
+  have hl : 0 < q.len := by
+    rcases Nat.eq_zero_or_pos q.len with h | h
+    · simp [Desc.Piece.count, h] at hy; omega
+    · exact h
+  have hpart : ∀ r s e, ∀ p ∈ (if s < e then
+      #[{ q.row r with base := (q.row r).at s, len := e - s }] else (#[] : Array Piece)).toList, 0 < p.count := by
+    intro r s e p hp
+    split at hp
+    · simp only [List.mem_singleton] at hp
+      subst hp
+      simp only [Desc.Piece.count, Desc.Piece.row]; omega
+    · simp at hp
+  dsimp only at hp
+  split at hp
+  · exact hpart _ _ _ p hp
+  simp only [Array.toList_append, List.mem_append] at hp
+  rcases hp with (hp | hp) | hp
+  · by_cases ht : (x % q.len == 0) = true
+    · simp [ht] at hp
+    · rw [ite_eq_right ht] at hp
+      exact hpart _ _ _ p hp
+  · generalize (if (x % q.len == 0) = true then x / q.len else x / q.len + 1) = lo at hp
+    by_cases hlo : lo < y / q.len
+    · rw [ite_eq_left hlo] at hp
+      simp only [List.mem_singleton] at hp
+      subst hp
+      simp only [Desc.Piece.count]
+      exact Nat.mul_pos (by omega) hl
+    · rw [ite_eq_right hlo] at hp
+      simp at hp
+  · exact hpart _ _ _ p hp
+
+theorem slGo_count (a b : Nat) : ∀ (l : List Piece) (st : Nat) (out : Array Piece),
+    (∀ p ∈ out.toList, 0 < p.count) → ∀ p ∈ (slGo a b l st out).toList, 0 < p.count
+  | [], _, out, h => h
+  | q :: qs, st, out, h => by
+    unfold slGo
+    split
+    · exact h
+    · refine slGo_count a b qs _ _ ?_
+      split
+      · intro p hp
+        rw [Array.toList_append, List.mem_append] at hp
+        rcases hp with hp | hp
+        · exact h p hp
+        · exact pieceSlice_count q _ _ (by omega) p hp
+      · exact h
+
+/-- Every piece of `slicePieces` has some positions. -/
+theorem slicePieces_count (ps : Array Piece) (a b : Nat) : ∀ p ∈ (Desc.slicePieces ps a b).toList, 0 < p.count := by
+  rw [slicePieces_go]
+  exact slGo_count a b _ 0 #[] (fun p hp => by simp at hp)
+
+theorem shiftGates_count (δ : Int) (ps : Array Piece) (h : ∀ q ∈ ps.toList, 0 < q.count) :
+    ∀ p ∈ (Desc.shiftGates δ ps).toList, 0 < p.count := by
+  intro p hp
+  unfold Desc.shiftGates at hp
+  rw [Array.toList_map, List.mem_map] at hp
+  obtain ⟨q, hq, rfl⟩ := hp
+  have := h q hq
+  split <;> exact this
+
+theorem segOk_mid (s : Seg) (hs : SegOk s) (lo n : Nat) : SegOk { s with ps := s.copy lo, reps := n } := by
+  unfold SegOk at hs ⊢
+  rw [copy_length]; exact hs
+
+/-- A segment `Seg.slice` gives of one naming its `len` positions, its pieces of positive count, does too. -/
+theorem segSlice_ok (s : Seg) (hs : SegOk s) (hp : ∀ q ∈ s.ps.toList, 0 < q.count) (a b : Nat) :
+    ∀ g ∈ (s.slice a b).toList, SegOk g ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
+  intro g hg
+  have hone : ∀ (ps : Array Piece), (∀ q ∈ ps.toList, 0 < q.count) → g ∈ (ps.map Seg.one).toList →
+      SegOk g ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
+    intro ps hps h
+    rw [Array.toList_map, List.mem_map] at h
+    obtain ⟨q, hq, rfl⟩ := h
+    refine ⟨segOk_one q, fun q' hq' => ?_⟩
+    have e : q' = q := by simpa [Seg.one] using hq'
+    rw [e]; exact hps q hq
+  unfold Desc.Seg.slice at hg
+  split at hg
+  · simp at hg
+  split at hg
+  · exact hone _ (slicePieces_count _ _ _) hg
+  dsimp only at hg
+  split at hg
+  · exact hone _ (slicePieces_count _ _ _) hg
+  simp only [Array.toList_append, List.mem_append] at hg
+  rcases hg with (hg | hg) | hg
+  · split at hg
+    · simp at hg
+    · exact hone _ (slicePieces_count _ _ _) hg
+  · generalize (if (a % s.len == 0) = true then a / s.len else a / s.len + 1) = lo at hg
+    split at hg
+    · simp only [List.mem_singleton] at hg
+      subst hg
+      exact ⟨segOk_mid s hs lo _, shiftGates_count _ _ hp⟩
+    · simp at hg
+  · exact hone _ (slicePieces_count _ _ _) hg
+
+/-- A segment of a slice of a sequence `PS.of` makes, its pieces of positive count: naming its `len` positions, of a
+copy at least, its pieces of positive count. -/
+theorem psSlice_ok (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count) (a b : Nat) :
+    ∀ g ∈ (r.slice a b).toList, SegOk g ∧ 1 ≤ g.reps ∧ ∀ q ∈ g.ps.toList, 0 < q.count := by
+  intro g hg
+  obtain ⟨i, a', b', hi⟩ := psSlice_mem r a b g hg
+  have hsi : SegOk r.segs[i]! ∧ ∀ q ∈ r.segs[i]!.ps.toList, 0 < q.count := by
+    by_cases h : i < r.segs.size
+    · refine ⟨(hr.1 i h).1, hp _ ?_⟩
+      rw [getElem!_pos r.segs i h]; exact Array.getElem_mem_toList h
+    · rw [getElem!_neg r.segs i h]
+      exact ⟨rfl, fun q hq => by rw [show (default : Seg).ps = #[] from rfl] at hq; simp at hq⟩
+  obtain ⟨h1, h2⟩ := segSlice_ok _ hsi.1 hsi.2 a' b' g hi
+  exact ⟨h1, (segSlice_reps _ a' b' g hi).1, h2⟩
+
+/-- **`retAt`'s piece** names return position `j`. -/
+theorem retAt_pos (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count) {j : Nat}
+    {q : Piece} (h : Desc.retAt r j = some q) : (psPos r)[j]? = some (q.tgt, q.base) := by
+  unfold Desc.retAt at h
+  rcases hs : (r.slice j (j + 1))[0]? with _ | s
+  · rw [hs] at h; cases h
+  rw [hs] at h
+  change s.ps[0]? = some q at h
+  have hsm : s ∈ (r.slice j (j + 1)).toList := by
+    obtain ⟨h0, e⟩ := Array.getElem?_eq_some_iff.1 hs
+    rw [← e]; exact Array.getElem_mem_toList h0
+  obtain ⟨-, hrep, hpos⟩ := psSlice_ok r hr hp j (j + 1) s hsm
+  have hq := first_mem_segPos (by omega) h (hpos q (by
+    obtain ⟨h0, e⟩ := Array.getElem?_eq_some_iff.1 h
+    rw [← e]; exact Array.getElem_mem_toList h0))
+  have hmem : (q.tgt, q.base) ∈ sl (psPos r) j (j + 1) := by
+    rw [← psSlice_pos r hr]
+    exact List.mem_flatMap.2 ⟨s, hsm, hq⟩
+  unfold sl at hmem
+  rw [show j + 1 - j = 1 by omega] at hmem
+  rw [show j = j + 0 by rfl, ← List.getElem?_drop]
+  rcases hd : (psPos r).drop j with _ | ⟨x, l⟩
+  · rw [hd] at hmem; simp at hmem
+  · rw [hd] at hmem
+    simp only [List.take_succ_cons, List.take_zero, List.mem_singleton] at hmem
+    rw [hmem]; rfl
+
+/-- A loop that continues keeping `I` or stops with `Q` ends with one of them. -/
+theorem forIn_done {α σ : Type} (I Q : σ → Prop) (f : α → σ → Except String (ForInStep σ))
+    (hf : ∀ x s y, I s → f x s = .ok y → (∃ s', y = .yield s' ∧ I s') ∨ (∃ s', y = .done s' ∧ Q s')) :
+    ∀ (l : List α) (s out : σ), I s → forIn l s f = .ok out → I out ∨ Q out
+  | [], s, out, hs, h => by
+    simp only [List.forIn_nil, pure, Except.pure, Except.ok.injEq] at h
+    subst h; exact .inl hs
+  | x :: l, s, out, hs, h => by
+    rw [List.forIn_cons] at h
+    rcases hx : f x s with e | y <;> rw [hx] at h
+    · exact absurd h (by intro h; cases h)
+    rcases hf x s y hs hx with ⟨s', rfl, hs'⟩ | ⟨s', rfl, hq⟩
+    · exact forIn_done I Q f hf l s' out hs' h
+    · change Except.ok s' = Except.ok out at h
+      injection h with h
+      subst h; exact .inr hq
+
+/-- What `chainOf` follows from return position `j`: each next position the carry leaf the one before returns, then
+the piece the last one returns when no carry leaf, else (`exit = none`) the carry leaf it returns is position `cyc`'s. -/
+def ChainOk (r : PS) (j : Nat) (ch : Desc.Chain) : Prop :=
+  0 < ch.hist.size ∧ ch.hist[0]! = j ∧
+  (∀ s, s + 1 < ch.hist.size → ∃ q, Desc.retAt r ch.hist[s]! = some q ∧ q.tgt = .ref true 0 ∧
+    q.base.toNat = ch.hist[s + 1]!) ∧
+  (∀ q, ch.exit = some q → Desc.retAt r ch.hist[ch.hist.size - 1]! = some q ∧ q.tgt ≠ .ref true 0) ∧
+  (ch.exit = none → ch.cyc < ch.hist.size ∧ ∃ q, Desc.retAt r ch.hist[ch.hist.size - 1]! = some q ∧
+    q.tgt = .ref true 0 ∧ q.base.toNat = ch.hist[ch.cyc]!)
+
+theorem push_get! (a : Array Nat) (x i : Nat) (hi : i < a.size) : (a.push x)[i]! = a[i]! := by
+  rw [getElem!_pos (a.push x) i (by simp; omega), Array.getElem_push_lt hi, getElem!_pos a i hi]
+
+theorem push_get!_size (a : Array Nat) (x : Nat) : (a.push x)[a.size]! = x := by
+  rw [getElem!_pos (a.push x) a.size (by simp), Array.getElem_push_eq]
+
+/-- **`chainOf`** follows return position `j` as `ChainOk` says. -/
+theorem chainOf_ok (r : PS) (j : Nat) (ch : Desc.Chain) (h : Desc.chainOf r j = .ok ch) : ChainOk r j ch := by
+  unfold Desc.chainOf at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  obtain ⟨st, hst, h⟩ := Walk.except_bind_ok h
+  let I : Option Desc.Chain × Array Nat × Std.HashMap Nat Nat → Prop := fun st =>
+    st.1 = none ∧ 0 < st.2.1.size ∧ st.2.1[0]! = j ∧
+    (∀ s, s + 1 < st.2.1.size → ∃ q, Desc.retAt r st.2.1[s]! = some q ∧ q.tgt = .ref true 0 ∧
+      q.base.toNat = st.2.1[s + 1]!) ∧
+    ∀ x v, st.2.2[x]? = some v → v < st.2.1.size ∧ st.2.1[v]! = x
+  let Q : Option Desc.Chain × Array Nat × Std.HashMap Nat Nat → Prop := fun st =>
+    ∃ ch, st.1 = some ch ∧ ChainOk r j ch
+  have hI0 : I (none, #[j], (∅ : Std.HashMap Nat Nat).insert j 0) := by
+    refine ⟨rfl, by simp, rfl, fun s hs => absurd hs (by simp), fun x v hv => ?_⟩
+    rw [Std.HashMap.getElem?_insert] at hv
+    split at hv
+    · rename_i e
+      simp only [beq_iff_eq] at e
+      simp only [Option.some.injEq] at hv
+      subst hv; subst e
+      exact ⟨by simp, rfl⟩
+    · simp at hv
+  refine (forIn_done I Q _ ?_ _ _ st hI0 hst).elim (fun hI => ?_) (fun ⟨ch', hch, hok⟩ => ?_)
+  rotate_left
+  · rw [hI.1] at h; exact absurd h (by intro h; cases h)
+  · rw [hch] at h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h; exact hok
+  intro _ s y ⟨hs1, hsz, hs0, hsc, hseen⟩ hy
+  rcases hq : Desc.retAt r s.2.1.back! with _ | q <;> rw [hq] at hy <;> dsimp only at hy
+  · exact absurd hy (by intro h; cases h)
+  have hback : s.2.1.back! = s.2.1[s.2.1.size - 1]! := rfl
+  rw [hback] at hq
+  split at hy
+  · rename_i ht
+    split at hy
+    · rename_i cy hcy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      obtain ⟨hcl, hce⟩ := hseen _ _ hcy
+      refine .inr ⟨_, rfl, _, rfl, hsz, hs0, hsc, fun q' hq' => (by cases hq'), fun _ => ⟨hcl, q, hq, ht, hce.symm⟩⟩
+    · rename_i hnone
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      refine .inl ⟨_, rfl, rfl, by simp, ?_, fun t ht' => ?_, fun x v hv => ?_⟩
+      · rw [push_get! _ _ _ hsz]; exact hs0
+      · simp only [Array.size_push] at ht'
+        by_cases hlt : t + 1 < s.2.1.size
+        · rw [push_get! _ _ _ (by omega), push_get! _ _ _ hlt]
+          exact hsc t hlt
+        · have e : t = s.2.1.size - 1 := by omega
+          subst e
+          rw [push_get! _ _ _ (by omega), show s.2.1.size - 1 + 1 = s.2.1.size by omega, push_get!_size]
+          exact ⟨q, hq, ht, rfl⟩
+      · simp only [Array.size_push]
+        rw [Std.HashMap.getElem?_insert] at hv
+        split at hv
+        · rename_i e
+          simp only [beq_iff_eq] at e
+          simp only [Option.some.injEq] at hv
+          subst hv; subst e
+          exact ⟨by omega, push_get!_size _ _⟩
+        · obtain ⟨h1, h2⟩ := hseen x v hv
+          exact ⟨by omega, by rw [push_get! _ _ _ h1]; exact h2⟩
+  · rename_i ht
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    refine .inr ⟨_, rfl, _, rfl, hsz, hs0, hsc, fun q' hq' => ?_, fun h => (by cases h)⟩
+    simp only [Option.some.injEq] at hq'
+    subst hq'
+    exact ⟨hq, fun e => ht e⟩
+
+/-- Index `t` of a chain of `n` positions whose cycle starts at `c`: past its positions, around the cycle. -/
+def cycIdx (n c t : Nat) : Nat := if t < n then t else c + (t - c) % (n - c)
+
+theorem chainAt_idx (ch : Desc.Chain) (t : Nat) : ch.at t = ch.hist[cycIdx ch.hist.size ch.cyc t]! := by
+  unfold Desc.Chain.at cycIdx
+  split <;> rfl
+
+theorem chainAt_lt (ch : Desc.Chain) {t : Nat} (ht : t < ch.hist.size) : ch.at t = ch.hist[t]! := by
+  rw [chainAt_idx, cycIdx, ite_eq_left ht]
+
+/-- Past its positions a chain goes around its cycle `[c, n)`: each index the one after the one before, after the last
+`c`. -/
+theorem cyc_idx (n c t : Nat) (hc : c < n) : cycIdx n c t < n ∧
+    ((cycIdx n c t + 1 < n ∧ cycIdx n c (t + 1) = cycIdx n c t + 1) ∨
+      (cycIdx n c t = n - 1 ∧ cycIdx n c (t + 1) = c)) := by
+  have hL : 0 < n - c := by omega
+  unfold cycIdx
+  by_cases h1 : t + 1 < n
+  · rw [ite_eq_left (show t < n by omega), ite_eq_left h1]; omega
+  by_cases h2 : t + 1 = n
+  · rw [ite_eq_left (show t < n by omega), ite_eq_right h1, show t + 1 - c = n - c by omega, Nat.mod_self]; omega
+  rw [ite_eq_right (show ¬t < n by omega), ite_eq_right h1]
+  have hm := Nat.mod_lt (t - c) hL
+  have hdm := Nat.div_add_mod (t - c) (n - c)
+  by_cases h3 : (t - c) % (n - c) + 1 < n - c
+  · rw [show t + 1 - c = ((t - c) % (n - c) + 1) + (n - c) * ((t - c) / (n - c)) by omega,
+      Nat.add_mul_mod_self_left, Nat.mod_eq_of_lt h3]
+    omega
+  · rw [show t + 1 - c = 0 + (n - c) * ((t - c) / (n - c) + 1) by rw [Nat.mul_add, Nat.mul_one]; omega,
+      Nat.add_mul_mod_self_left, Nat.zero_mod]
+    omega
+
+/-- **In a cycle** (`exit = none`) every position of the chain returns the carry leaf the next one is. -/
+theorem chainAt_cyc {r : PS} {j : Nat} {ch : Desc.Chain} (h : ChainOk r j ch) (hx : ch.exit = none) (t : Nat) :
+    ∃ q, Desc.retAt r (ch.at t) = some q ∧ q.tgt = .ref true 0 ∧ q.base.toNat = ch.at (t + 1) := by
+  obtain ⟨hsz, -, hsc, -, hcy⟩ := h
+  obtain ⟨hc, q, hq, ht, hb⟩ := hcy hx
+  obtain ⟨-, hstep⟩ := cyc_idx ch.hist.size ch.cyc t hc
+  rw [chainAt_idx, chainAt_idx ch (t + 1)]
+  rcases hstep with ⟨h1, h2⟩ | ⟨h1, h2⟩
+  · rw [h2]; exact hsc _ h1
+  · rw [h1, h2]; exact ⟨q, hq, ht, hb⟩
+
+theorem agree_get {P : Prog} {sc : Flock.Program.Scope} : ∀ {xs : List (Tgt × Int)} {vs : List (Except String Nat)},
+    Agree P sc xs vs → ∀ {i : Nat} {x : Tgt × Int} {v : Except String Nat}, xs[i]? = some x → vs[i]? = some v →
+      ∀ a, v = .ok a → den P sc x = .ok a
+  | _, _, .nil, _, _, _, hx, _ => by simp at hx
+  | _, _, .cons h _, 0, x, v, hx, hv => by
+    simp only [List.getElem?_cons_zero, Option.some.injEq] at hx hv
+    subst hx; subst hv; exact h
+  | _, _, .cons _ hrest, i + 1, _, _, hx, hv => by
+    simp only [List.getElem?_cons_succ] at hx hv
+    exact agree_get hrest hx hv
+
+/-- **Up through a step's return**: a return leaf of an iteration that the step's summary names as carry leaf `h'`
+resolves as that leaf. -/
+theorem carry_up (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hRet : RetOk c.P c.memo node.fn) {m h h' a : Nat}
+    (hx : (psPos (c.memo[node.fn]!).ret)[h]? = some (.ref true 0, (h' : Int)))
+    (hv : Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[node.fn]!).body.ret.get h) = .ok a) :
+    Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, h'⟩ = .ok a := by
+  obtain ⟨-, -, -, hag, -⟩ := hRet
+  have hd' : (c.P.child sc k m).d = node.fn := by rw [child_eq c sc hd hn m]; rfl
+  have hA := hag _ hd'
+  have hlt : h < (c.P.defs[node.fn]!).body.ret.count := by
+    have := (List.getElem?_eq_some_iff.1 hx).1
+    rw [hA.length_eq] at this; simpa using this
+  have := agree_get hA hx (by rw [List.getElem?_map, List.getElem?_range hlt]; rfl) a hv
+  simp only [den, Int.toNat_natCast] at this
+  rwa [ite_eq_right (by omega)] at this
+
+/-- **Back one iteration**: the carry leaf `h` of an iteration past the first resolves as the iteration before's return
+leaf `h`. -/
+theorem carry_back (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hform : node.form = .scan) {m h a : Nat} (hm : m ≠ 0)
+    (hv : Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, 0, h⟩ = .ok a) :
+    Flock.Program.resolve c.P (c.P.child sc k (m - 1)) ((c.P.defs[node.fn]!).body.ret.get h) = .ok a := by
+  have hnode : (c.P.defs[sc.d]!).body.nodes[k]! = node := by rw [hd]; exact node_get hn
+  rw [child_eq c sc hd hn m] at hv
+  have := den_up_scan0 c.P sc hnode hform hv
+  rw [ite_eq_right hm] at this
+  rw [child_eq c sc hd hn (m - 1)]
+  obtain ⟨n, rfl⟩ : ∃ n, m = n + 1 := ⟨m - 1, by omega⟩
+  rw [Nat.add_sub_cancel] at this ⊢
+  rwa [show sc.off + (c.P.defs[sc.d]!).body.offsets[k]! + (n + 1) * (c.P.defs[node.fn]!).gates -
+      (c.P.defs[node.fn]!).gates = sc.off + (c.P.defs[sc.d]!).body.offsets[k]! + n * (c.P.defs[node.fn]!).gates by
+    rw [Nat.add_mul, Nat.one_mul]; omega] at this
+
+/-- **Back through the carry**: a return leaf of iteration `m` the step's summary names carry leaf by carry leaf `t`
+times (`f`) resolves as iteration `m - t`'s return leaf `f t`. -/
+theorem carry_chain (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
+    {m a : Nat} : ∀ t ≤ m, (∀ s < t, (psPos (c.memo[node.fn]!).ret)[f s]? = some (.ref true 0, (f (s + 1) : Int))) →
+      Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[node.fn]!).body.ret.get (f 0)) = .ok a →
+      Flock.Program.resolve c.P (c.P.child sc k (m - t)) ((c.P.defs[node.fn]!).body.ret.get (f t)) = .ok a
+  | 0, _, _, hv => hv
+  | t + 1, ht, hs, hv => by
+    have ih := carry_chain c sc hd hn hform hRet f t (by omega) (fun s hs' => hs s (by omega)) hv
+    have hup := carry_up c sc hd hn hRet (hs t (by omega)) ih
+    have := carry_back c sc hd hn hform (m := m - t) (by omega) hup
+    rwa [show m - t - 1 = m - (t + 1) by omega] at this
+
+/-- **Back to the initial carry**: a return leaf of iteration `m` the step's summary names carry leaf by carry leaf
+`m + 1` times resolves as the first iteration's carry leaf `f (m + 1)`. -/
+theorem carry_init (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) {k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hform : node.form = .scan) (hRet : RetOk c.P c.memo node.fn) (f : Nat → Nat)
+    {m a : Nat} (hs : ∀ s ≤ m, (psPos (c.memo[node.fn]!).ret)[f s]? = some (.ref true 0, (f (s + 1) : Int)))
+    (hv : Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[node.fn]!).body.ret.get (f 0)) = .ok a) :
+    Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, f (m + 1)⟩ = .ok a := by
+  have := carry_chain c sc hd hn hform hRet f m le_rfl (fun s hs' => hs s (by omega)) hv
+  rw [Nat.sub_self] at this
+  exact carry_up c sc hd hn hRet (hs m le_rfl) this
+
+theorem pos_carry (lo n : Nat) :
+    pos { tgt := .ref true 0, base := (lo : Int), stride := 1, len := n } =
+      (List.range' lo n).map fun (j : Nat) => (Tgt.ref true 0, (j : Int)) := by
+  rw [pos_one, List.range'_eq_map_range, List.map_map]
+  apply List.map_congr_left
+  intro t _
+  simp
+
+/-- **The initial carry's leaves `[lo, hi)`**, through `throughArg`, keep the gates the first iteration's carry leaves
+resolve to. -/
+theorem init_agree (c : Desc.Ctx) (sc : Flock.Program.Scope) {fuel k : Nat} {node : Flock.Program.Node}
+    (hn : c.node k = .ok node) (hT : ThroughSpec c sc fuel) (hm0 : 0 < node.members) {lo hi : Nat}
+    (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
+      j < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves) {segs : Array Seg}
+    (h : Desc.throughArg c fuel k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo } = .ok segs) :
+    Agree c.P sc (segsPos segs) ((List.range' lo (hi - lo)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, j⟩) := by
+  have hnode := node_get hn
+  have := hT k 0 0 _ segs (by rw [hnode]; exact hm0) rfl (fun x hx => by
+    rw [pos_carry, List.mem_map] at hx
+    obtain ⟨j, hj, rfl⟩ := hx
+    rw [List.mem_range'_1] at hj
+    rw [hnode]
+    have := hlv j hj.1 (by omega)
+    exact ⟨by simp, this.1, by show (j : Int) < _; exact_mod_cast this.2⟩) h
+  rw [pos_carry, List.map_map] at this
+  have e : ((List.range' lo (hi - lo)).map fun j =>
+      Flock.Program.resolve c.P (c.P.child sc k 0) ⟨true, 0, j⟩) =
+      (List.range' lo (hi - lo)).map (den c.P (c.P.child sc k 0) ∘ fun (j : Nat) => (Tgt.ref true 0, (j : Int))) := by
+    apply List.map_congr_left
+    intro j _
+    simp [den]
+  rw [e]; exact this
+
+/-- `carryRuns`' step over a piece of a segment of one copy. -/
+def runStep (st : Array (Nat × Nat × Bool) × Nat) (q : Piece) : Array (Nat × Nat × Bool) × Nat :=
+  (st.1.push (st.2, st.2 + q.count, q.tgt == Tgt.ref true 0 && decide (q.rows ≤ 1) && q.base == (st.2 : Int) &&
+    (q.stride == 1 || decide (q.len ≤ 1))), st.2 + q.count)
+
+/-- `carryRuns`' step over a segment. -/
+def segStep (st : Array (Nat × Nat × Bool) × Nat) (s : Seg) : Array (Nat × Nat × Bool) × Nat :=
+  if s.reps > 1 then (st.1.push (st.2, st.2 + s.count, false), st.2 + s.count) else s.ps.toList.foldl runStep st
+
+theorem carryRuns_eq (r : PS) (a b : Nat) :
+    Desc.carryRuns r a b = ((r.slice a b).toList.foldl segStep (#[], a)).1 := by
+  unfold Desc.carryRuns
+  simp only [Id.run]
+  rw [← Array.forIn_toList, forIn_id_yield _ _ (fun s st => segStep st s)]
+  · rfl
+  intro s st
+  unfold segStep
+  split
+  · rfl
+  · rw [← Array.forIn_toList, forIn_id_yield _ _ (fun q st => runStep st q)]
+    · rfl
+    · intro q st; rfl
+
+/-- Runs `out` lie end to end over `[a, p)`, a run the step returns in place (`id`) naming carry leaves where `L` (the
+positions from `a`) does. -/
+def RunsOk (L : List (Tgt × Int)) (a : Nat) (out : List (Nat × Nat × Bool)) (p : Nat) : Prop :=
+  a ≤ p ∧ out.flatMap (fun x => List.range' x.1 (x.2.1 - x.1)) = List.range' a (p - a) ∧
+  ∀ x ∈ out, x.2.2 = true → ∀ j, x.1 ≤ j → j < x.2.1 → a ≤ j ∧ L[j - a]? = some (.ref true 0, (j : Int))
+
+theorem runsOk_push {L : List (Tgt × Int)} {a p : Nat} {out : List (Nat × Nat × Bool)} (h : RunsOk L a out p)
+    (n : Nat) (id : Bool)
+    (hid : id = true → ∀ j, p ≤ j → j < p + n → L[j - a]? = some (.ref true 0, (j : Int))) :
+    RunsOk L a (out ++ [(p, p + n, id)]) (p + n) := by
+  obtain ⟨hap, hfl, hids⟩ := h
+  refine ⟨by omega, ?_, fun x hx hxid j h1 h2 => ?_⟩
+  · rw [List.flatMap_append, hfl, List.flatMap_singleton, range'_split a p (p + n) hap (by omega)]
+  · rw [List.mem_append, List.mem_singleton] at hx
+    rcases hx with hx | rfl
+    · exact hids x hx hxid j h1 h2
+    · exact ⟨by dsimp only at h1; omega, hid hxid j h1 h2⟩
+
+theorem runs_pieces (L : List (Tgt × Int)) (a : Nat) : ∀ (qs : List Piece) (st : Array (Nat × Nat × Bool) × Nat),
+    RunsOk L a st.1.toList st.2 → (∀ i x, (qs.flatMap pos)[i]? = some x → L[st.2 - a + i]? = some x) →
+    RunsOk L a (qs.foldl runStep st).1.toList (qs.foldl runStep st).2 ∧
+      (qs.foldl runStep st).2 = st.2 + (qs.flatMap pos).length
+  | [], st, h, _ => ⟨h, by simp⟩
+  | q :: qs, st, h, hL => by
+    rw [List.foldl_cons]
+    have h1 : RunsOk L a (runStep st q).1.toList (runStep st q).2 := by
+      unfold runStep
+      dsimp only
+      rw [Array.toList_push]
+      refine runsOk_push h q.count _ fun hid j hj1 hj2 => ?_
+      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, Bool.or_eq_true] at hid
+      obtain ⟨⟨⟨ht, hrows⟩, hbase⟩, hst⟩ := hid
+      have ht := tgt_eq_of_beq ht
+      have hx := hL (j - st.2) (q.tgt, ppt q (j - st.2)) (by
+        rw [List.flatMap_cons, List.getElem?_append_left (by rw [pos_length]; omega), pos_getElem?,
+          ite_eq_left (by omega)])
+      have hr1 : q.rows = 1 := by
+        rcases Nat.lt_or_ge q.rows 1 with h0 | h0
+        · have : q.rows = 0 := by omega
+          simp [Desc.Piece.count, this] at hj2; omega
+        · omega
+      have hlt : j - st.2 < q.len := by
+        have : q.count = q.len := by simp [Desc.Piece.count, hr1]
+        omega
+      rw [show st.2 - a + (j - st.2) = j - a by have := h.1; omega] at hx
+      rw [hx, ht]
+      simp only [Option.some.injEq, Prod.mk.injEq, true_and]
+      unfold ppt
+      rw [Nat.div_eq_of_lt hlt, Nat.mod_eq_of_lt hlt, hbase]
+      rcases hst with hs | hs
+      · rw [hs]; push_cast; omega
+      · have : j - st.2 = 0 := by omega
+        rw [this]; push_cast; omega
+    have hL1 : ∀ i x, (qs.flatMap pos)[i]? = some x → L[(runStep st q).2 - a + i]? = some x := by
+      intro i x hx
+      have := hL (q.count + i) x (by
+        rw [List.flatMap_cons, List.getElem?_append_right (by rw [pos_length]; omega), pos_length,
+          Nat.add_sub_cancel_left]
+        exact hx)
+      unfold runStep; dsimp only
+      rw [show st.2 + q.count - a + i = st.2 - a + (q.count + i) by have := h.1; omega]
+      exact this
+    obtain ⟨h2, e2⟩ := runs_pieces L a qs (runStep st q) h1 hL1
+    refine ⟨h2, ?_⟩
+    rw [e2, List.flatMap_cons, List.length_append, pos_length]
+    unfold runStep; dsimp only; omega
+
+theorem runs_segs (L : List (Tgt × Int)) (a : Nat) : ∀ (ss : List Seg) (st : Array (Nat × Nat × Bool) × Nat),
+    (∀ s ∈ ss, SegOk s ∧ 1 ≤ s.reps) → RunsOk L a st.1.toList st.2 →
+    (∀ i x, (ss.flatMap segPos)[i]? = some x → L[st.2 - a + i]? = some x) →
+    RunsOk L a (ss.foldl segStep st).1.toList (ss.foldl segStep st).2 ∧
+      (ss.foldl segStep st).2 = st.2 + (ss.flatMap segPos).length
+  | [], st, _, h, _ => ⟨h, by simp⟩
+  | s :: ss, st, hs, h, hL => by
+    rw [List.foldl_cons]
+    obtain ⟨hok, hrep⟩ := hs s List.mem_cons_self
+    have hlen : (segPos s).length = s.count := segPos_length s hok
+    have h1 : RunsOk L a (segStep st s).1.toList (segStep st s).2 ∧ (segStep st s).2 = st.2 + s.count := by
+      unfold segStep
+      split
+      · dsimp only
+        rw [Array.toList_push]
+        exact ⟨runsOk_push h s.count false (fun h => by cases h), rfl⟩
+      · rename_i hr
+        have h1 : s.reps = 1 := by omega
+        have hpa : segPos s = s.ps.toList.flatMap pos := segPos_one_rep h1
+        obtain ⟨h2, e2⟩ := runs_pieces L a s.ps.toList st h (fun i x hx => hL i x (by
+          rw [List.flatMap_cons, List.getElem?_append_left (by rw [hpa]; exact (List.getElem?_eq_some_iff.1 hx).1),
+            hpa]
+          exact hx))
+        refine ⟨h2, ?_⟩
+        rw [e2, ← hpa, hlen]
+    have hL1 : ∀ i x, (ss.flatMap segPos)[i]? = some x → L[(segStep st s).2 - a + i]? = some x := by
+      intro i x hx
+      have := hL (s.count + i) x (by
+        rw [List.flatMap_cons, List.getElem?_append_right (by omega), hlen, Nat.add_sub_cancel_left]
+        exact hx)
+      rw [h1.2, show st.2 + s.count - a + i = st.2 - a + (s.count + i) by have := h.1; omega]
+      exact this
+    obtain ⟨h2, e2⟩ := runs_segs L a ss (segStep st s) (fun g hg => hs g (List.mem_cons_of_mem _ hg)) h1.1 hL1
+    refine ⟨h2, ?_⟩
+    rw [e2, h1.2, List.flatMap_cons, List.length_append, hlen]
+    omega
+
+/-- **`carryRuns`' runs** lie end to end over `[a, b)`, each one the step returns in place (`id`) naming carry leaf `j`
+at every return position `j` of it. -/
+theorem carryRuns_cover (r : PS) (hr : PSOk r) (hp : ∀ s ∈ r.segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (a b : Nat) (hb : a < b → b ≤ (psPos r).length) :
+    (Desc.carryRuns r a b).toList.flatMap (fun x => List.range' x.1 (x.2.1 - x.1)) = List.range' a (b - a) ∧
+    ∀ x ∈ (Desc.carryRuns r a b).toList, x.2.2 = true → ∀ j, x.1 ≤ j → j < x.2.1 →
+      (psPos r)[j]? = some (.ref true 0, (j : Int)) := by
+  rw [carryRuns_eq]
+  have hsl := psSlice_pos r hr a b
+  obtain ⟨⟨-, hfl, hids⟩, e⟩ := runs_segs (sl (psPos r) a b) a (r.slice a b).toList (#[], a)
+    (fun s hs => by obtain ⟨h1, h2, -⟩ := psSlice_ok r hr hp a b s hs; exact ⟨h1, h2⟩)
+    ⟨le_rfl, by simp, fun x hx => by simp at hx⟩
+    (fun i x hx => by
+      show (sl (psPos r) a b)[a - a + i]? = some x
+      rw [Nat.sub_self, Nat.zero_add, ← hsl]; exact hx)
+  have hlen : ((r.slice a b).toList.flatMap segPos).length = b - a := by
+    change (segsPos (r.slice a b)).length = b - a
+    rw [hsl]
+    unfold sl
+    rw [List.length_take, List.length_drop]
+    by_cases hab : a < b
+    · have := hb hab; omega
+    · omega
+  dsimp only at e
+  rw [hlen] at e
+  refine ⟨by rw [hfl, e]; congr 1; omega, fun x hx hid j h1 h2 => ?_⟩
+  obtain ⟨haj, hj⟩ := hids x hx hid j h1 h2
+  unfold sl at hj
+  rw [List.getElem?_take] at hj
+  split at hj
+  · rw [List.getElem?_drop, show a + (j - a) = j by omega] at hj
+    exact hj
+  · cases hj
+
+
+theorem forall2_map_same {α β γ : Type} (R : β → γ → Prop) (f : α → β) (g : α → γ) :
+    ∀ (l : List α), (∀ x ∈ l, R (f x) (g x)) → List.Forall₂ R (l.map f) (l.map g)
+  | [], _ => .nil
+  | x :: l, h => .cons (h x List.mem_cons_self) (forall2_map_same R f g l fun y hy => h y (List.mem_cons_of_mem _ hy))
+
+theorem flatMap_single {α β : Type} (l : List α) (f : α → β) : (l.flatMap fun x => [f x]) = l.map f := by
+  induction l with
+  | nil => rfl
+  | cons x l ih => rw [List.flatMap_cons, List.map_cons, ih]; rfl
+
+/-- A return position the step's summary names as a carry leaf, as `retAt` gives it. -/
+theorem carryPos_of_retAt {P : Prog} {memo : Array Desc.Summary} {f : Nat} (hR : RetOk P memo f) {h h' : Nat}
+    {q : Piece} (hq : Desc.retAt (memo[f]!).ret h = some q) (ht : q.tgt = .ref true 0) (hb : q.base.toNat = h') :
+    (psPos (memo[f]!).ret)[h]? = some (.ref true 0, (h' : Int)) := by
+  obtain ⟨hps, hpos, -, -, hpp⟩ := hR
+  have hx := retAt_pos _ hps hpp hq
+  have h0 := (hpos _ (List.mem_of_getElem? hx)).1
+  rw [hx, ht, ← hb]
+  dsimp only at h0
+  congr 2; omega
+
+/-- **`carry`'s step**: one step up, `carry` keeps the gates scan iteration `m`'s return leaves resolve to, wherever
+the step's summary holds `RetOk` and `fromCallee` and `throughArg` one step down keep what they read. -/
+theorem carrySpec_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hC : CalleeSpec c sc fuel)
+    (hT : ThroughSpec c sc fuel) : CarrySpec c sc (fuel + 1) := by
+  intro k m a b segs hform hm hb h
+  rw [Desc.carry.eq_2] at h
+  obtain ⟨node, hn, h⟩ := Walk.except_bind_ok h
+  dsimp only at h
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  rw [hnode] at hform hm hb ⊢
+  have hRk := hR k node hn
+  obtain ⟨hps, hpos, -, hag, hpp⟩ := hRk
+  have hlenR : (psPos (c.memo[node.fn]!).ret).length = (c.P.defs[node.fn]!).body.ret.count := by
+    have := (hag (c.P.child sc k 0) (by rw [child_eq c sc hd hn 0]; rfl)).length_eq
+    simpa using this
+  obtain ⟨hcov, hid⟩ := carryRuns_cover _ hps hpp a b (fun hab => by rw [hlenR]; exact hb hab)
+  have hm0 : 0 < node.members := by omega
+  have hcarry : ∀ h j' : Nat, (psPos (c.memo[node.fn]!).ret)[h]? = some (.ref true 0, (j' : Int)) →
+      0 < (c.P.defs[node.fn]!).body.params.size ∧ j' < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves := by
+    intro h j' hx
+    have := (hpos _ (List.mem_of_getElem? hx)).2.2 0 rfl
+    exact ⟨this.1, by have h2 : ((j' : Nat) : Int) < _ := this.2; exact_mod_cast h2⟩
+  obtain ⟨out, hout, hA⟩ : ∃ out, segs = #[] ++ out ∧ Agree c.P sc (segsPos out)
+      ((Desc.carryRuns (c.memo[node.fn]!).ret a b).toList.flatMap fun x =>
+        (List.range' x.1 (x.2.1 - x.1)).map fun j =>
+          Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[node.fn]!).body.ret.get j)) := by
+    refine forIn_ext (P := c.P) (sc := sc) _ _ _ ?_ #[] segs h'
+    intro x hx r' y hy
+    split at hy
+    · rename_i hxid
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      refine ⟨v, rfl, ?_⟩
+      have hin := init_agree c sc hn hT hm0 (fun j h1 h2 => hcarry j j (hid x hx hxid j h1 h2)) hv
+      refine agree_weaken hin (forall2_map_same _ _ _ _ fun j hj => ?_)
+      intro a ha
+      rw [List.mem_range'_1] at hj
+      exact carry_init c sc hd hn hform (hR k node hn) (fun _ => j) (fun s _ => hid x hx hxid j hj.1 (by omega)) ha
+    · have hy := walkAtMost_bind _ _ _ hy
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      subst hy
+      simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+      obtain ⟨segs', hsegs', hA2⟩ : ∃ segs', v = r' ++ segs' ∧ Agree c.P sc (segsPos segs')
+          ((List.range' x.1 ((x.2.1 - x.1 + 1 - 1) / 1)).flatMap fun j =>
+            [Flock.Program.resolve c.P (c.P.child sc k m) ((c.P.defs[node.fn]!).body.ret.get j)]) := by
+        refine forIn_ext (P := c.P) (sc := sc) _ _ _ ?_ r' v hv
+        intro j _ r'' y' hy'
+        obtain ⟨ch, hch, hy'⟩ := Walk.except_bind_ok hy'
+        have hok := chainOf_ok _ j ch hch
+        split at hy'
+        · rename_i hcond
+          simp only [Bool.and_eq_true, decide_eq_true_eq, Option.isSome_iff_exists] at hcond
+          obtain ⟨⟨q0, hq0⟩, he⟩ := hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          obtain ⟨hsz, h0, hsc, hex, -⟩ := hok
+          obtain ⟨hq, -⟩ := hex q0 hq0
+          have hlt : ch.hist[ch.hist.size - 1]! < (c.P.defs[node.fn]!).body.ret.count := by
+            have := retAt_pos _ hps hpp hq
+            rw [← hlenR]; exact (List.getElem?_eq_some_iff.1 this).1
+          have hcal := hC k (m - (ch.hist.size - 1)) _ _ v' (by rw [hnode]; omega) (by rw [hnode]; intro; omega) hv'
+          rw [hnode, show ch.hist[ch.hist.size - 1]! + 1 - ch.hist[ch.hist.size - 1]! = 1 by omega] at hcal
+          simp only [List.range'_one, List.map_cons, List.map_nil] at hcal
+          refine agree_weaken hcal (List.Forall₂.cons (fun a ha => ?_) List.Forall₂.nil)
+          have := carry_chain c sc hd hn hform (hR k node hn) (fun s => ch.hist[s]!) (ch.hist.size - 1) he
+            (fun s hs => by
+              obtain ⟨q, hq, ht, hb⟩ := hsc s (by omega)
+              exact carryPos_of_retAt (hR k node hn) hq ht hb) (by rw [h0]; exact ha)
+          exact this
+        · rename_i hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          have hs : ∀ s ≤ m, (psPos (c.memo[node.fn]!).ret)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := by
+            intro s hs
+            rcases hex : ch.exit with _ | q0
+            · obtain ⟨q, hq, ht, hb⟩ := chainAt_cyc hok hex s
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+            · have he : ¬ ch.hist.size - 1 ≤ m := fun he => hcond (by simp [hex, he])
+              obtain ⟨-, -, hsc, -, -⟩ := hok
+              obtain ⟨q, hq, ht, hb⟩ := hsc s (by omega)
+              rw [chainAt_lt ch (show s < ch.hist.size by omega), chainAt_lt ch (show s + 1 < ch.hist.size by omega)]
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+          have hin := init_agree c sc hn hT hm0 (lo := ch.at (m + 1)) (hi := ch.at (m + 1) + 1)
+            (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv'
+          rw [show ch.at (m + 1) + 1 - ch.at (m + 1) = 1 by omega] at hin
+          simp only [List.range'_one, List.map_cons, List.map_nil] at hin
+          refine agree_weaken hin (List.Forall₂.cons (fun a ha => ?_) List.Forall₂.nil)
+          have h0 : ch.at 0 = j := by rw [chainAt_lt ch hok.1]; exact hok.2.1
+          exact carry_init c sc hd hn hform (hR k node hn) ch.at hs (by rw [h0]; exact ha)
+      refine ⟨segs', by rw [hsegs'], ?_⟩
+      rw [show (x.2.1 - x.1 + 1 - 1) / 1 = x.2.1 - x.1 by omega, flatMap_single] at hA2
+      exact hA2
+  rw [hout, Array.empty_append, ← hcov, List.map_flatMap]
+  exact hA
 
 /-- **`down`, `fromCallee`, `throughArg` and `carry` keep the gates they read, at every fuel**, wherever the callees'
 summaries hold (`RetOk`), a composite's return has as many leaves as its type, a scan's output is its final carry's
-leaves and then its ys (`ScanOut`), the decoder's facts on the body do, and so do `down`'s open steps (`OpenSteps`). -/
+leaves and then its ys (`ScanOut`) and the decoder's facts on the body do. -/
 theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
     (hP1 : ∀ f : Nat, (c.P.defs[f]!).prim = true → (c.P.defs[f]!).outLeaves = 1)
     (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
@@ -6684,13 +7391,12 @@ theorem specs_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB
       ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
     (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn)
     (hOL : ∀ k node, c.node k = .ok node → (c.P.defs[node.fn]!).prim = false →
-      (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) (hSO : ScanOut c)
-    (hO : OpenSteps c sc) :
+      (c.P.defs[node.fn]!).outLeaves = (c.P.defs[node.fn]!).body.ret.count) (hSO : ScanOut c) :
     ∀ fuel, DownSpec c sc fuel ∧ CalleeSpec c sc fuel ∧ ThroughSpec c sc fuel ∧ CarrySpec c sc fuel :=
   specs c sc hd hB hP1 hA hL0 hR
     (fun fuel hD hC => batchSpec_of c sc hd hB fuel hD hC hR hOL (batchAffine c sc hd hR hOL)
       (batchThroughMid c sc hd hB hA hR hOL fuel hD))
-    (fun fuel hC hK => scanSpec_of c sc hd hB hSO fuel hC hK) hO
+    (fun fuel hC hK => scanSpec_of c sc hd hB hSO fuel hC hK) (fun fuel hC hT => carrySpec_succ c sc hd fuel hR hC hT)
 
 
 /-! ## The decoder's facts the core reads -/
@@ -6716,8 +7422,7 @@ the decoder's facts (`Decoded`, `ScanOut`), the body's references (`Resolve.Body
 (`RetOk`) hold. -/
 theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d < P.defs.size) (hDec : Decoded P)
     (hB : Resolve.BodyOk P d) (hR : ∀ k node, (ctxOf P memo d).node k = .ok node → RetOk P memo node.fn)
-    (hSO : ScanOut (ctxOf P memo d)) (sc : Flock.Program.Scope) (hd : sc.d = d)
-    (hO : OpenSteps (ctxOf P memo d) sc) :
+    (hSO : ScanOut (ctxOf P memo d)) (sc : Flock.Program.Scope) (hd : sc.d = d) :
     ∀ fuel, DownSpec (ctxOf P memo d) sc fuel ∧ CalleeSpec (ctxOf P memo d) sc fuel ∧
       ThroughSpec (ctxOf P memo d) sc fuel ∧ CarrySpec (ctxOf P memo d) sc fuel := by
   have hfn : ∀ k node, (ctxOf P memo d).node k = .ok node → node.fn < P.defs.size := by
@@ -6726,7 +7431,7 @@ theorem specs_decoded (P : Prog) (memo : Array Desc.Summary) {d : Nat} (hdP : d 
     have := (hB.1 k hk).1
     have hg : (P.defs[d]!).body.nodes[k]! = node := node_get hn
     rwa [hg] at this
-  refine specs_of (ctxOf P memo d) sc hd hB ?_ ?_ ?_ hR ?_ hSO hO
+  refine specs_of (ctxOf P memo d) sc hd hB ?_ ?_ ?_ hR ?_ hSO
   · intro f hf
     by_cases hlt : f < P.defs.size
     · exact (hDec f hlt).1 hf
@@ -6840,16 +7545,17 @@ theorem forall2_mem {α β : Type} {R : α → β → Prop} : ∀ {l : List α} 
       exact ⟨a', List.mem_cons_of_mem _ ha', h'⟩
 
 /-- A segment of Definition `d`'s body as `down` gives it: naming its `len` positions, each at or past 0 and naming a
-gate or a leaf of one of `d`'s parameters in range. -/
+gate or a leaf of one of `d`'s parameters in range, its pieces each of positive count. -/
 def ShapeOk (P : Prog) (d : Nat) (s : Seg) : Prop :=
-  SegOk s ∧ ∀ x ∈ segPos s, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
+  SegOk s ∧ (∀ x ∈ segPos s, 0 ≤ x.2 ∧ (∀ k, x.1 ≠ .ref false k) ∧
     ∀ i, x.1 = .ref true i → i < (P.defs[d]!).body.params.size ∧
-      x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)
+      x.2 < (((P.defs[d]!).body.params[i]!).2.leaves : Int)) ∧
+  ∀ g ∈ s.ps.toList, 0 < g.count
 
-/-- **Open: the shape of `down`'s segments**, at every fuel: of a piece whose positions are at or past 0 and name its
-nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`. -/
+/-- **Open: the shape of `down`'s segments**, at every fuel: of a piece of positive count whose positions are at or past
+0 and name its nodes' output leaves and its parameters' leaves in range, each segment `down` gives is `ShapeOk`. -/
 def DownShape (c : Desc.Ctx) : Prop :=
-  ∀ fuel q segs, (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
+  ∀ fuel q segs, 0 < q.count → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) →
     (∀ x ∈ pos q, ∀ i, x.1 = .ref true i → i < c.body.params.size ∧ x.2 < ((c.body.params[i]!).2.leaves : Int)) →
     Desc.down c fuel q = .ok segs → ∀ s ∈ segs.toList, ShapeOk c.P c.d s
 
@@ -6900,7 +7606,7 @@ theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
     subst h
     have h0 : (P.defs[d]!).body.ret.count = 0 := (hRP d hdP).1 hp
     refine ⟨psOk_default, fun x hx => absurd hx (by rw [psPos_default]; simp), fun g hg => (by cases hg),
-      fun sc _ => ?_⟩
+      fun sc _ => ?_, fun g hg => (by cases hg)⟩
     rw [psPos_default, h0]
     exact List.Forall₂.nil
   · rename_i hp
@@ -6952,18 +7658,31 @@ theorem summarize_retOk (P : Prog) (memo : Array Desc.Summary) (d : Nat) (s : De
       have := (hrefOk t ht).1 hi.1
       rw [← hi.2]
       exact ⟨this.1, by show ((body.ret.get t).j : Int) < _; exact_mod_cast this.2⟩
+    have hq0 : ∀ q ∈ ((Desc.ofSeq body.ret).segs.toList.flatMap fun s => s.ps.toList), 0 < q.count := by
+      intro q hq
+      obtain ⟨g, hg, hqg⟩ := List.mem_flatMap.1 hq
+      unfold Desc.ofSeq at hg
+      rw [of_segs, Array.toList_filter, List.mem_filter, Array.toList_map, List.mem_map] at hg
+      obtain ⟨⟨q', -, rfl⟩, hc⟩ := hg
+      have e : q = q' := by simpa [Seg.one] using hqg
+      subst e
+      simpa [Desc.Seg.count, Seg.one] using hc
     have hshape : ∀ g ∈ ret.toList, ShapeOk P d g := by
       intro g hg
       rw [hout] at hg
       rcases mem_foldl outs ret0 g hg with hg | ⟨v, hv, hg⟩
       · exact absurd hg (by simp [ret0])
       · obtain ⟨q, hq, hqv⟩ := forall2_mem hF v hv
-        exact hS hp' Flock.Steps.FUEL q v (hq1 q hq) (hq2 q hq) (hq3 q hq) hqv g hg
+        exact hS hp' Flock.Steps.FUEL q v (hq0 q hq) (hq1 q hq) (hq2 q hq) (hq3 q hq) hqv g hg
     obtain ⟨hok, hpsPos, -⟩ := of_ok ret fun g hg => (hshape g hg).1
-    refine ⟨hok, fun x hx => ?_, fun g hg => (h3 g hg).2, fun sc hsc => ?_⟩
+    refine ⟨hok, fun x hx => ?_, fun g hg => (h3 g hg).2, fun sc hsc => ?_, fun g hg => ?_⟩
     · rw [hpsPos] at hx
       obtain ⟨g, hg, hxg⟩ := List.mem_flatMap.1 hx
-      exact (hshape g hg).2 x hxg
+      exact (hshape g hg).2.1 x hxg
+    rotate_left
+    · change g ∈ (PS.of ret).segs.toList at hg
+      rw [of_segs, Array.toList_filter, List.mem_filter] at hg
+      exact (hshape g hg.1).2.2
     · show Agree P sc (psPos (PS.of ret)) ((List.range body.ret.count).map fun j =>
         Flock.Program.resolve P sc (body.ret.get j))
       rw [hpsPos, hout, segsPos_foldl, show segsPos ret0 = [] from rfl, List.nil_append]
@@ -7040,12 +7759,6 @@ theorem marks_spec : ∀ (ns : List Flock.Program.Node) (b : Array Bool),
         · exact .inr (.inl ⟨rfl, hx⟩)
         · exact .inl ⟨m, hm, rfl, hx⟩
       · exact .inr (.inr hx)
-
-theorem forIn_id_yield {α β : Type} (l : List α) (b : β) (g : α → β → β) (f : α → β → Id (ForInStep β))
-    (hf : ∀ a b, f a b = pure (.yield (g a b))) : forIn l b f = pure (l.foldl (fun b a => g a b) b) := by
-  induction l generalizing b with
-  | nil => rfl
-  | cons a l ih => rw [List.forIn_cons, hf, List.foldl_cons]; exact ih (g a b)
 
 /-- **`Desc.reached` is closed under calls**: a composite it marks has its callees marked, its Definitions' callees
 decoded before them. -/
@@ -7129,16 +7842,14 @@ theorem reached_closed (P : Prog)
 
 /-- **Every summary `memoOf` makes of a reached Definition other than the root holds `RetOk`**, wherever every
 Definition's callees are decoded before it and none is the root, and the reached Definitions' references
-(`Resolve.BodyOk`), the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) and, given their callees' summaries,
-`down`'s open steps (`OpenSteps`) and its segments' shape (`DownShape`) hold. -/
+(`Resolve.BodyOk`), the decoder's facts (`Decoded`, `ScanOut`, `RetParts`) and, given their callees' summaries, the
+shape of `down`'s segments (`DownShape`) hold. -/
 theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok memo)
     (hRP : RetParts P) (hDec : Decoded P)
     (hcf : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn < d)
     (hnr : ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ((P.defs[d]!).body.nodes[k]!).fn ≠ P.root)
     (hB : ∀ d < P.defs.size, (Desc.reached P)[d]! = true → Resolve.BodyOk P d)
     (hSO : ∀ m d, ScanOut (ctxOf P m d))
-    (hO : ∀ m d, (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) →
-      ∀ sc : Flock.Program.Scope, sc.d = d → OpenSteps (ctxOf P m d) sc)
     (hS : ∀ m d, (∀ k node, (ctxOf P m d).node k = .ok node → RetOk P m node.fn) → DownShape (ctxOf P m d)) :
     ∀ f < P.defs.size, (Desc.reached P)[f]! = true → f ≠ P.root → RetOk P memo f := by
   unfold memoOf at h
@@ -7176,7 +7887,7 @@ theorem memoOf_retOk (P : Prog) (memo : Array Desc.Summary) (h : memoOf P = .ok 
       exact hI _ (hcf f htP k hk) (reached_closed P hcf f hrf hp k hk) (hnr f htP k hk)
     refine summarize_retOk P r f v htP hRP (hB f htP hrf) (fun hp => hS r f (hR hp))
       (fun hp sc hsc => (specs_decoded P r htP hDec (hB f htP hrf) (hR hp) (hSO r f) sc hsc
-        (hO r f (hR hp) sc hsc) Flock.Steps.FUEL).1) hv (r.push v) ?_
+        Flock.Steps.FUEL).1) hv (r.push v) ?_
     subst hsz
     rw [getElem!_pos (r.push v) r.size (by simp), Array.getElem_push_eq]
 
