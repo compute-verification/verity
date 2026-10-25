@@ -33,9 +33,8 @@ theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.me
       (x >>= f) = f a := by
     intro α β x f a h; rw [h]; rfl
   unfold verifyRepPWith
-  simp only [monadLift_self, With.bindAndZerocheckWith_std, With.lincheckWith_std, With.ringSwitchWith_std,
-    With.ligeritoWith_std _ hN]
-  dsimp only
+  simp only [With.bindAndZerocheckWith_std, With.lincheckWith_std, With.ringSwitchWith_std, With.ligeritoWith_std _ hN]
+  try dsimp only
   rw [ite_eq_right (by rw [hpar]; exact Bool.false_ne_true)]
   refine Eq.trans (ebind hprog) ?_
   change (if (t₄.k != stream.rounds.size) = true then _ else _) = _
@@ -59,7 +58,7 @@ theorem verifyRepDWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.me
     intro α β x f a h; rw [h]; rfl
   unfold FlockDeploy.verifyRepDWith
   try simp only [monadLift_self]
-  dsimp only
+  try dsimp only
   rw [hs]
   refine Eq.trans (ebind hex) ?_
   exact verifyRepPWith_std_of_prog spec st hN sch sess i r stream extras p t₄ hpar hprog hk hcap
