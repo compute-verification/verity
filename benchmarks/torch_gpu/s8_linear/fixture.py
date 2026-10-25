@@ -20,44 +20,115 @@ Inputs (`run.py` builds them on the GPU; the codes from a torch generator, the s
 """
 from __future__ import annotations
 
+import re
 import struct
+from dataclasses import dataclass
 
 import numpy as np
 
-#: The layer's linears at d_model d, (N, K): QKV fused (3d), the attention output, a non-gated 4x MLP's up and down.
-LINEARS = ("qkv", "o", "up", "down")
-D_MODELS = (8192, 10240, 12288)
 #: the output head's rows (once a model, not a layer)
 HEAD_N = 256
+
+
+@dataclass(frozen=True)
+class Model:
+    """A decoder-only shape: width d, its layers, its linears (name, N, K, the quantizer whose codes it reads: ``attn``,
+    ``o``, ``mlp`` or ``down``), its attention (query heads of head_dim, at a context), and the sequences of a decode step."""
+    name: str
+    d: int
+    layers: int
+    linears: tuple[tuple[str, int, int, str], ...]
+    heads: int
+    head_dim: int
+    context: int
+    sequences: int
+
+    @property
+    def mlp(self) -> int:
+        return next(n for name, n, _k, _q in self.linears if name == "up")
+
+    @property
+    def weight_bytes(self) -> int:
+        return self.layers * sum(n * k for _, n, k, _ in self.linears) + HEAD_N * self.d
+
+
+def _mha(d: int, layers: int, heads: int, head_dim: int, context: int, sequences: int, name: str) -> Model:
+    return Model(name, d, layers, (("qkv", 3 * d, d, "attn"), ("o", d, d, "o"), ("up", 4 * d, d, "mlp"),
+                                   ("down", d, 4 * d, "down")), heads, head_dim, context, sequences)
+
+
+#: compute-accounting's shapes (estimated, frozen with the circuits on 26 Oct): MQA at width 16384 (its recommended one, 22:40Z)
+#: and MHA at width 8192 (22:20Z), each a non-gated 4x MLP and int8 weights
+MODELS = {
+    "mqa16k": Model("mqa16k", 16384, 35, (("q", 16384, 16384, "attn"), ("kv", 128, 16384, "attn"), ("o", 16384, 16384, "o"),
+                                          ("up", 65536, 16384, "mlp"), ("down", 16384, 65536, "down")), 256, 64, 96, 4096),
+    "mha8k": _mha(8192, 70, 128, 64, 32, 1023, "mha8k"),
+}
+DEFAULT_MODELS = ("mqa16k", "mha8k")
+
+
+def model(name: str) -> Model:
+    """One of `MODELS`, or ``d<width>``: the fused-QKV 4x MLP layer at that width, 80 GB of int8 weights' layers, heads of
+    128, a context of 0 and a decode step of 256."""
+    if name in MODELS:
+        return MODELS[name]
+    hit = re.fullmatch(r"d(\d+)", name)
+    if not hit:
+        raise ValueError(f"{name}: not one of {sorted(MODELS)} or d<width>")
+    d = int(hit.group(1))
+    return _mha(d, round(80e9 / (12 * d * d)), d // 128, 128, 0, 256, name)
+
+
+def linears(d: int) -> dict[str, tuple[int, int]]:
+    """The fused-QKV 4x MLP layer's linears at width d, (N, K)."""
+    return {name: (n, k) for name, n, k, _ in model(f"d{d}").linears}
+
+
+#: what a layer commits a token row (commit.py): the served commit's quantizer tables, compute-accounting's fused cuts, every op
+UNIT_SETS = ("quantize", "fused", "every")
+
+
+def units(md: Model, unit_set: str) -> list[tuple[str, int, bool]]:
+    """One layer's tables, (op under ``model.layers.L.``, bytes a token row, whether it ends in an f32 scale): the four
+    quantizers' s8 codes; fused adds each linear's bf16 output, attention's output and its probabilities (heads x the full
+    context), and the two residual adds; every adds the two RMSNorms', the ReLU's and attention's scores."""
+    d, up, att = md.d, md.mlp, md.heads * md.head_dim
+    rows = [("self_attn.input_quant", d, True), ("self_attn.o_proj.input_quant", att, True), ("mlp.input_quant", d, True),
+            ("mlp.down_proj.input_quant", up, True)]
+    if unit_set == "quantize":
+        return rows
+    rows += [(f"{'mlp' if q in ('mlp', 'down') else 'self_attn'}.{name}_proj", 2 * n, False) for name, n, _k, q in md.linears]
+    rows += [("self_attn.attn_out", 2 * att, False), ("self_attn.residual", 2 * d, False), ("mlp.residual", 2 * d, False)]
+    if md.context:
+        rows.append(("self_attn.probs", 2 * md.heads * md.context, False))
+    if unit_set == "every":
+        rows += [("input_layernorm", 2 * d, False), ("post_attention_layernorm", 2 * d, False), ("mlp.act", 2 * up, False)]
+        if md.context:
+            rows.append(("self_attn.scores", 2 * md.heads * md.context, False))
+    if unit_set not in UNIT_SETS:
+        raise ValueError(f"{unit_set}: not one of {UNIT_SETS}")
+    return rows
 #: the largest K the s8 Definitions take that is a multiple of 32 (S8_K_LIMIT = 2^17 refuses 2^17)
 EDGE_K = 131040
 S32_MAX = 2**31 - 1
 
-#: Ms the gate runs: decode (a masked tile at 7, 33 and 257) and prefill
-GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 2048, 8192)
+#: Ms the gate runs: decode (a masked tile at 7, 33, 257 and 1023, the models' steps at 1023 and 4096) and prefill
+GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 1023, 2048, 4096, 8192)
 STRUCTURED = ("min", "max", "zero", "alt")
 STRUCT_ROWS = {1: "min", 2: "max", 3: "zero"}
 STRUCT_COLS = {0: "min", 1: "max", 2: "zero", 3: "alt"}
 FIRST_SPECIAL = 4
 
 
-def linears(d: int) -> dict[str, tuple[int, int]]:
-    return {"qkv": (3 * d, d), "o": (d, d), "up": (4 * d, d), "down": (d, 4 * d)}
-
-
-def head(d: int) -> tuple[int, int]:
-    return HEAD_N, d
-
-
-def shapes(ds: tuple[int, ...] = D_MODELS, with_head: bool = True) -> list[tuple[str, int, int]]:
-    """(name, N, K) of every distinct linear at the d_models `ds`, the layer's first, then the heads."""
+def shapes(models: tuple[str, ...] = DEFAULT_MODELS, with_head: bool = True) -> list[tuple[str, int, int]]:
+    """(name, N, K) of every distinct linear of `models`, the layers' first, then the heads."""
     out: dict[tuple[int, int], str] = {}
-    for d in ds:
-        for name, nk in linears(d).items():
-            out.setdefault(nk, f"d{d}:{name}")
+    for m in map(model, models):
+        for name, n, k, _ in m.linears:
+            out.setdefault((n, k), f"{m.name}:{name}")
     if with_head:
-        for d in ds:
-            out.setdefault(head(d), f"d{d}:head")
+        for m in map(model, models):
+            out.setdefault((HEAD_N, m.d), f"{m.name}:head")
     return [(name, n, k) for (n, k), name in out.items()]
 
 

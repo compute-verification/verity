@@ -1,7 +1,7 @@
 """Where the INT8 tensor cores, not DRAM, start to limit the large model's linears: each linear's time against M, for the exact
 kernel and the fastest plain int8 GEMMs, interleaved rep by rep on one GPU.
 
-Per linear (N, K) of `fixture.shapes(ds)` and M, the arms (`kbench.timed`: one CUDA graph per arm over weight copies past 3x
+Per linear (N, K) of `fixture.shapes(models)` and M, the arms (`kbench.timed`: one CUDA graph per arm over weight copies past 3x
 the L2, so the weights stream from DRAM; items of about 10 ms alternating arm by arm, order rotated each rep; the SM clock read
 around every item), each gated in this run before it is timed:
     exact         int8_fused.scaled_mm at `run.cfg_for` (bf16 out, the Definition's epilogue): y into 0xA5 equal to
@@ -14,9 +14,9 @@ around every item), each gated in this run before it is timed:
                   M a multiple of 16, its words counted against the Definition's
 DRAM read bandwidth is measured in the run, before and after (a streaming read of 4 GiB, `read_kernel`, interleaved with a
 copy), and the s8 tensor-core peak is the card's recorded mma.sync rate, `--peak-tops` (807.5 at locked 2100 MHz,
-r20260930-062850-de8e, kb/sm120/gotchas.md). Per d, the layer's linear set is qkv + o + up + down at the same M.
+r20260930-062850-de8e, kb/sm120/gotchas.md). A model's layer set is its linears (`fixture.MODELS`) at the same M.
 
-crossing.json, per arm and d (layer set) and per linear:
+crossing.json, per arm and model (layer set) and per linear:
     tops, frac_peak       2 M N K / t, and over the peak
     gbs, frac_bw          (weights + X + Y + scales) / t, and over the measured bandwidth
     ridge_card            M* where 2 M W / P = bytes(M) / B: the card's roofline ridge for this shape
@@ -24,7 +24,7 @@ crossing.json, per arm and d (layer set) and per linear:
                           flat in M and starts growing with it
     at_ridge              the arm's time, TOPS and fraction of peak at the card's ridge and at its own (log-log interpolation)
 
-    python bench.py --out OUT [--ds 8192,12288] [--ms 1,8,...] [--reps 9] [--arms exact,lt,cutlass,cutlass_swap] [--no-head]
+    python bench.py --out OUT [--models mqa16k,mha8k] [--ms 1,8,...] [--reps 9] [--arms exact,lt,cutlass,cutlass_swap] [--no-head]
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ import run as R  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
-SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1024, 2048, 4096, 8192)
+SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192)
 ARMS = ("exact", "lt", "cutlass", "cutlass_swap")
 PEAK_TOPS = 807.5
 OUT_BYTES = {"exact": 2, "lt": 4, "cutlass": 2, "cutlass_swap": 2}
@@ -180,7 +180,7 @@ class Linear:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--ds", default="8192,12288")
+    ap.add_argument("--models", default=",".join(FX.DEFAULT_MODELS))
     ap.add_argument("--ms", default=",".join(map(str, SWEEP_MS)))
     ap.add_argument("--reps", type=int, default=9)
     ap.add_argument("--arms", default=",".join(ARMS))
@@ -189,7 +189,7 @@ def main() -> int:
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    ds = tuple(int(v) for v in a.ds.split(","))
+    models = tuple(a.models.split(","))
     ms = tuple(int(v) for v in a.ms.split(","))
     arms = tuple(a.arms.split(","))
     clock = kbench.nvml()
@@ -199,7 +199,7 @@ def main() -> int:
     meta["bw_before"] = bandwidth(clock, a.reps)
     print(json.dumps({"bw_before": {k: meta["bw_before"][k] for k in ("read_gbs", "copy_gbs")}}), flush=True)
     rows = []
-    for name, n, k in FX.shapes(ds, with_head=not a.no_head):
+    for name, n, k in FX.shapes(models, with_head=not a.no_head):
         for m in ms:
             t0 = time.time()
             lin = Linear(n, k, m)
@@ -222,11 +222,11 @@ def main() -> int:
             torch.cuda.empty_cache()
     meta["bw_after"] = bandwidth(clock, a.reps)
     bw = max(meta["bw_before"]["read_gbs"], meta["bw_after"]["read_gbs"])
-    doc = {**meta, **RF.summarize(rows, ds, a.peak_tops, bw, OUT_BYTES)}
+    doc = {**meta, **RF.summarize(rows, models, a.peak_tops, bw, OUT_BYTES)}
     (out / "crossing.json").write_text(json.dumps(doc, indent=1) + "\n")
-    for d in ds:
-        for arm, c in doc["layers"].get(f"d{d}", {}).items():
-            print(json.dumps({"d": d, "arm": arm, "ridge_card": round(c["ridge_card"], 1), "ridge_arm": round(c["ridge_arm"], 1),
+    for name in models:
+        for arm, c in doc["layers"].get(name, {}).items():
+            print(json.dumps({"model": name, "arm": arm, "ridge_card": round(c["ridge_card"], 1), "ridge_arm": round(c["ridge_arm"], 1),
                               "at_ridge": {lab: {kk: round(vv, 3) for kk, vv in v.items()} for lab, v in c["at_ridge"].items()}}),
                   flush=True)
     return 0

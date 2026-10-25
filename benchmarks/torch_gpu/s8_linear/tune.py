@@ -7,7 +7,7 @@ into 0xA5 equal to `run.reference` (torch's epilogue, which run.py's gate holds 
 the last copy's y equal after the timing's replays. Writes sweep.jsonl (every config's record) and best.json after each
 shape ({"table": {"n,k": [[m, cfg, us, vllm_tiles_us], ...]}}, what configs.CONFIGS takes).
 
-    python tune.py --out OUT [--ds 8192,12288] [--ms 1,16,32,...] [--top 3] [--reps 7] [--no-head]
+    python tune.py --out OUT [--models mqa16k,mha8k] [--ms 1,16,32,...] [--top 3] [--reps 7] [--no-head]
 """
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ import run as R  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
-TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 8192)
+TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192)
 WARPS, STAGES = (4, 8), (2, 3, 4, 5)
 
 
@@ -127,7 +127,7 @@ def best(med: dict, top: int) -> list[X.Cfg]:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--ds", default="8192,12288")
+    ap.add_argument("--models", default=",".join(FX.DEFAULT_MODELS))
     ap.add_argument("--ms", default=",".join(map(str, TUNE_MS)))
     ap.add_argument("--top", type=int, default=3)
     ap.add_argument("--reps", type=int, default=7)
@@ -135,12 +135,12 @@ def main() -> int:
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    ds = tuple(int(v) for v in a.ds.split(","))
+    models = tuple(a.models.split(","))
     ms = tuple(int(v) for v in a.ms.split(","))
     clock = kbench.nvml()
     work = X.Workspace("cuda")
     table: dict = {}
-    for name, n, k in FX.shapes(ds, with_head=not a.no_head):
+    for name, n, k in FX.shapes(models, with_head=not a.no_head):
         for m in ms:
             t0 = time.time()
             shape = Shape(n, k, m)
@@ -156,7 +156,7 @@ def main() -> int:
             del shape
             torch.cuda.empty_cache()
             (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(),
-                                                       "ds": ds, "ms": ms, "table": table}, indent=1) + "\n")
+                                                       "models": models, "ms": ms, "table": table}, indent=1) + "\n")
     return 0
 
 

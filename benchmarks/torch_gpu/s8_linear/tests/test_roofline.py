@@ -52,14 +52,14 @@ def test_an_arm_at_fixed_fractions_has_its_own_ridge():
     assert max(c["frac_peak"]) == pytest.approx(0.5) and max(c["frac_bw"]) == pytest.approx(0.9)
 
 
-def test_a_layer_is_its_four_linears_summed():
-    d = 8192
+def test_a_layer_is_its_linears_summed():
+    lin = [(n, k) for _, n, k, _ in FX.MODELS["mqa16k"].linears]
     rows = [{"n": n, "k": k, "m": m, "us": {"exact": _roof_us(n, k, m, P, B), "lt": _roof_us(n, k, m, P, B, 4)}}
-            for n, k in FX.linears(d).values() for m in MS]
-    s = RF.summarize(rows, (d, 12288), P, B, {"exact": 2, "lt": 4})
-    assert set(s["layers"]) == {"d8192"} and set(s["layers"]["d8192"]) == {"exact", "lt"}
-    lay = s["layers"]["d8192"]["exact"]
-    assert lay["us"][0] == pytest.approx(sum(_roof_us(n, k, 1, P, B) for n, k in FX.linears(d).values()))
-    assert set(s["linears"]) == {f"{n},{k}" for n, k in FX.linears(d).values()}
-    assert lay["ridge_card"] == pytest.approx(RF.ridge(12 * d * d, lambda m: sum(
-        RF.bytes_of(n, k, m, 2) for n, k in FX.linears(d).values()), P, B))
+            for n, k in lin for m in MS]
+    s = RF.summarize(rows, ("mqa16k", "mha8k"), P, B, {"exact": 2, "lt": 4})
+    assert set(s["layers"]) == {"mqa16k"} and set(s["layers"]["mqa16k"]) == {"exact", "lt"}
+    lay = s["layers"]["mqa16k"]["exact"]
+    assert lay["us"][0] == pytest.approx(sum(_roof_us(n, k, 1, P, B) for n, k in lin))
+    assert set(s["linears"]) == {f"{n},{k}" for n, k in lin} and len(lin) == 5
+    assert lay["ridge_card"] == pytest.approx(RF.ridge(sum(n * k for n, k in lin), lambda m: sum(
+        RF.bytes_of(n, k, m, 2) for n, k in lin), P, B))

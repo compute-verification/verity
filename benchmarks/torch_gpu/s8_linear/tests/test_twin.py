@@ -113,5 +113,19 @@ def test_a_flushing_epilogue_would_differ():
 
 def test_the_shapes():
     got = {name: (n, k) for name, n, k in FX.shapes()}
-    assert got["d8192:qkv"] == (24576, 8192) and got["d12288:down"] == (12288, 49152) and got["d8192:head"] == (256, 8192)
+    assert got["mqa16k:q"] == (16384, 16384) and got["mqa16k:kv"] == (128, 16384) and got["mqa16k:down"] == (16384, 65536)
+    assert got["mha8k:qkv"] == (24576, 8192) and got["mha8k:down"] == (8192, 32768) and got["mha8k:head"] == (256, 8192)
+    assert got["mha8k:o"] == (8192, 8192) and got["mqa16k:head"] == (256, 16384)
     assert all(k % 32 == 0 and k < 2**17 for _, _, k in FX.shapes())
+    assert FX.linears(12288)["down"] == (12288, 49152) and FX.model("d12288").layers == 44
+    assert abs(FX.MODELS["mqa16k"].weight_bytes / 2**30 - 87.58) < 0.05
+    assert abs(FX.MODELS["mha8k"].weight_bytes / 2**30 - 52.5) < 0.05
+
+
+def test_the_units_a_token_row():
+    """One layer's committed bytes a token row (codes, without the kernels' 4-byte words): mha8k's fused set is 256 KiB
+    against compute-accounting's 254 KB, every op 360 KiB against their 365 KB (their scores at the mean context)."""
+    per = {s: sum(k for _, k, _ in FX.units(FX.MODELS["mha8k"], s)) for s in FX.UNIT_SETS}
+    assert per == {"quantize": 7 * 8192, "fused": 262144, "every": 368640}
+    ops = [op for op, _, _ in FX.units(FX.MODELS["mqa16k"], "every")]
+    assert len(ops) == len(set(ops)) == 17 and all(k % 2 == 0 for _, k, _ in FX.units(FX.MODELS["mqa16k"], "every"))

@@ -16,7 +16,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from fixture import linears
+from fixture import model
 
 
 def bytes_of(n: int, k: int, m: float, out_bytes: int) -> float:
@@ -51,8 +51,8 @@ def curve(w: int, bytes_fn: Callable[[float], float], us_by_m: dict[int, float],
     return doc
 
 
-def summarize(rows: list[dict], ds: tuple[int, ...], peak: float, bw: float, out_bytes: dict[str, int]) -> dict:
-    """rows: bench.jsonl's ({"n", "k", "m", "us": {arm: microseconds}}) -> per linear and per d's layer set, per arm."""
+def summarize(rows: list[dict], models: tuple[str, ...], peak: float, bw: float, out_bytes: dict[str, int]) -> dict:
+    """rows: bench.jsonl's ({"n", "k", "m", "us": {arm: microseconds}}) -> per linear and per model's layer set, per arm."""
     by: dict[tuple[int, int, str], dict[int, float]] = {}
     for r in rows:
         for arm, us in r["us"].items():
@@ -61,8 +61,8 @@ def summarize(rows: list[dict], ds: tuple[int, ...], peak: float, bw: float, out
     for (n, k, arm), tm in by.items():
         out["linears"].setdefault(f"{n},{k}", {})[arm] = curve(
             n * k, lambda m, n=n, k=k, a=arm: bytes_of(n, k, m, out_bytes[a]), tm, peak, bw)
-    for d in ds:
-        lin = list(linears(d).values())
+    for name in models:
+        lin = [(n, k) for _, n, k, _ in model(name).linears]
         for arm in sorted({arm for (_, _, arm) in by}):
             curves = [by.get((n, k, arm), {}) for n, k in lin]
             if not all(curves):
@@ -71,6 +71,6 @@ def summarize(rows: list[dict], ds: tuple[int, ...], peak: float, bw: float, out
             if not common:
                 continue
             tm = {m: sum(c[m] for c in curves) for m in common}
-            out["layers"].setdefault(f"d{d}", {})[arm] = curve(
+            out["layers"].setdefault(name, {})[arm] = curve(
                 sum(n * k for n, k in lin), lambda m, a=arm: sum(bytes_of(n, k, m, out_bytes[a]) for n, k in lin), tm, peak, bw)
     return out

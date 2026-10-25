@@ -6,9 +6,9 @@ the tensor cores (`tl.dot`, mma.sync m16n8k32 on sm_120), whose epilogue is the 
 mul.rn by s_a, mul.rn by s_w, cvt.rn.bf16.f32, no FTZ, no FMA. Its configs here are `configs.CONFIGS` (tune.py's gated
 winners at these shapes), else `int8_fused.pick`.
 
-    python run.py --out OUT [--ds 8192,12288] [--ms 1,7,16,...] [--extra-cfgs CFG,...] [--no-edge] [--no-swap]
+    python run.py --out OUT [--models mqa16k,mha8k] [--ms 1,7,16,...] [--extra-cfgs CFG,...] [--no-edge] [--no-swap]
 
-Per linear (N, K) of `fixture.shapes(ds)` and M, on `fixture`'s inputs (all of s8, structured rows and columns, special
+Per linear (N, K) of `fixture.shapes(models)` and M, on `fixture`'s inputs (all of s8, structured rows and columns, special
 scales):
     sums       z = X W^T by torch._int_mm (cuBLASLt, s32), held to `fixture.sums` (float64, exact) on the structured and
                special rows and columns and sampled others
@@ -244,7 +244,7 @@ def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple[X.Cf
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
-    ap.add_argument("--ds", default="8192,12288")
+    ap.add_argument("--models", default=",".join(FX.DEFAULT_MODELS))
     ap.add_argument("--ms", default=None, help="default: fixture.GATE_MS and every configs.CONFIGS m_max")
     ap.add_argument("--extra-cfgs", default=",".join(EXTRA_CFGS))
     ap.add_argument("--no-edge", action="store_true")
@@ -255,7 +255,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     if not FX.fp_env_ok():
         raise SystemExit("this process flushes float32 subnormals; the twin would be wrong")
-    ds = tuple(int(v) for v in a.ds.split(","))
+    models = tuple(a.models.split(","))
     tuned = {m for rows in CONFIGS.values() for m, _ in rows}
     ms = tuple(int(v) for v in a.ms.split(",")) if a.ms else tuple(sorted(set(FX.GATE_MS) | tuned))
     extra = tuple(X.Cfg.parse(c) for c in a.extra_cfgs.split(",") if c)
@@ -270,13 +270,13 @@ def main() -> int:
             "ref_vs_twin": rec["reference_vs_twin"]}), flush=True)
 
     recs = []
-    for name, n, k in FX.shapes(ds, with_head=not a.no_head):
+    for name, n, k in FX.shapes(models, with_head=not a.no_head):
         recs += gate_shape(name, n, k, ms, extra, work, not a.no_swap, log)
     if not a.no_edge:
         recs += gate_shape("s32-edge", EDGE_N, FX.EDGE_K, EDGE_MS, extra, work, not a.no_swap, log)
     cases = [r["picked"] for r in recs] + [e for r in recs for e in r["extra"] if "skipped" not in e]
     doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__,
-           "triton": __import__("triton").__version__, "ds": ds, "ms": ms, "configs": {f"{n},{k}": v for (n, k), v in CONFIGS.items()},
+           "triton": __import__("triton").__version__, "models": models, "ms": ms, "configs": {f"{n},{k}": v for (n, k), v in CONFIGS.items()},
            "cases": len(cases), "kernel_mismatches": sum(c.get("mismatch_call0", 0) + c.get("mismatch_call1", 0)
                                                          + c.get("mismatch_graph", 0) for c in cases),
            "failed": [(r["name"], r["m"]) for r in recs if not r["ok"]],
