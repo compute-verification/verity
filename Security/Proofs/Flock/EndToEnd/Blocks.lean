@@ -47,9 +47,9 @@ theorem integrity_on (W : ℕ → HiddenWindow) (T : ℕ) (I : Finset ℕ) {q : 
     (fun t => if t ∈ I then (W t).ks + (W t).link else 0)
     (fun t τ hτ => by
       by_cases ht : t ∈ I
-      · rw [ite_cond_eq_true _ _ (eq_true ht)]
+      · rw [ite_eq_left_of_eq_true _ _ (eq_true ht)]
         exact (prob_mono (fun o ho => ho.2) _ _).trans ((W t).accepted_drawnWrong_le τ hτ)
-      · rw [ite_cond_eq_false _ _ (eq_false ht)]
+      · rw [ite_eq_right_of_eq_false _ _ (eq_false ht)]
         exact (prob_mono (q := fun _ => False) (fun o ho => ht ho.1) _ _).trans_eq (prob_false _ _)) T 0 s hs
   -- every draw of `I` misses, with at least `M` wrong units in `I`
   have hB := period_horizon (fun t => (W t).game) (fun t => (W t).record t)
@@ -57,11 +57,11 @@ theorem integrity_on (W : ℕ → HiddenWindow) (T : ℕ) (I : Finset ℕ) {q : 
     (fun t τ => (W t).CR τ) x hx
     (fun t τ _ => by
       by_cases ht : t ∈ I
-      · refine ⟨((W t).wrongSet τ).card, fun _ => ite_cond_eq_true _ _ (eq_true ht), ?_⟩
+      · refine ⟨((W t).wrongSet τ).card, fun _ => ite_eq_left_of_eq_true _ _ (eq_true ht), ?_⟩
         refine (prob_mono (q := fun o => ¬ ∃ u ∈ o.2.1, u ∈ (W t).wrongSet τ) (fun o ho => ho ht) _ _).trans ?_
         exact ((W t).drawMiss_le (hA3 t ht) _ τ).trans
           (pow_le_pow_left₀ zero_le ((W t).one_sub_le hq (hqt t ht)) _)
-      · exact ⟨0, fun _ => ite_cond_eq_false _ _ (eq_false ht), (prob_le_one _ _ _).trans_eq (pow_zero x).symm⟩) T 0 s M hs
+      · exact ⟨0, fun _ => ite_eq_right_of_eq_false _ _ (eq_false ht), (prob_le_one _ _ _).trans_eq (pow_zero x).symm⟩) T 0 s M hs
   calc value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
         M ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.wrong).sum) (Period.run W T s)
       ≤ value (fun l => (∃ r ∈ l, r.idx ∈ I ∧ r.accepted ∧ r.drawnWrong) ∨
