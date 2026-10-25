@@ -132,6 +132,21 @@ def test_lock_moves_are_the_shortest_renamed_prefixes(tmp_path):
         "Warden": "NetworkCertifier"}
 
 
+def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
+    """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
+    quoted string names the module, and everywhere else the name stands."""
+    areas = M.Words(tomllib.loads((HERE.parent / "areas_map.toml").read_text()))
+    code = ("import Properties.RemoteAudit.Line.Record\nimport Proofs.Properties.RemoteAudit.Line\n"
+            "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
+            "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
+            'roots = ["Properties.RemoteAudit.Line", "Properties.RemoteAudit.Line.LineHeld"]\n')
+    assert areas.sub(code, "Security/Proofs/Properties/X.lean") == (
+        "import Properties.Accounting.Remote.Line.Record\nimport Proofs.Properties.Accounting.Remote.Line\n"
+        "open RemoteAudit\n  Properties.RemoteAudit.Line\n"
+        "theorem t (r : Properties.RemoteAudit.Line.Record) : Properties.RemoteAudit.Line.LineHeld r := x\n"
+        'roots = ["Properties.Accounting.Remote.Line", "Properties.RemoteAudit.Line.LineHeld"]\n')
+
+
 def test_a_namespace_that_shares_a_modules_name_stands(tmp_path):
     """The areas move renames module `Properties.CertifierDevice` and keeps namespace `Properties.CertifierDevice`: the
     rewrite and the declaration renames the locks need agree on what stands."""
