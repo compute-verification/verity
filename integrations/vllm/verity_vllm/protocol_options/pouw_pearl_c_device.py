@@ -49,11 +49,9 @@ roots copied into a pass buffer by one driver copy; filler rows zeroed only wher
 torch's raw accessor.  The key table and filler bookkeeping hold while no call has run under graphs (`eager_only`).
 
 The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
-``deferred`` runs the tile hashing on a side lane beside the next calls, and ``deferred-a`` A's tree there too, where the
-kernel splits A's commitment.  The commitments are the serial schedule's.
-
-With ``hashing`` off (the bench's ``pearlc-nohash``) the call skips A's tree, E_A's lines, the leaves and the records.  What
-is left is the same forming and GEMM without hashing, for the time split.  ``hashing`` may change between passes, never within.
+``deferred`` hashes tiles on a side lane beside the next calls, ``deferred-a`` A's tree too where the kernel splits A's
+commitment; the commitments are the serial schedule's.  With ``hashing`` off (``pearlc-nohash``) a call skips A's tree, E_A's
+lines, the leaves and the records, for the time split.  ``hashing`` may change between passes, never within.
 """
 from __future__ import annotations
 
