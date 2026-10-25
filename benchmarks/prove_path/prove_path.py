@@ -313,7 +313,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
 
     for k, (r, n) in enumerate(zip(rows, nodes[n_in:])):
         want = {"i": k, "spec": descriptor_id(n.fn), "form": n.form,
-                "args": [merged(map(param, a)) for a in expanded_file_args([file_items_from_refs(a.refs) for a in n.args])]}
+                "args": [merged([param(run) for run in a]) for a in expanded_file_args([file_items_from_refs(a.refs) for a in n.args])]}
         try:
             have = {"i": r.get("i"), "spec": r.get("spec"), "form": r.get("form"), "args": [merged(a) for a in r.get("args") or ()]}
         except (AttributeError, TypeError, ValueError):
@@ -354,7 +354,7 @@ def input_layout(desc: Mapping[str, Any], sizes: Sequence[int]) -> list[tuple[in
     return out
 
 
-def merged(runs: Iterable[Sequence]) -> list[list]:
+def merged(runs: Sequence[Sequence]) -> list[list]:
     """Operand runs ``[space, index, lo, hi]`` with each run that continues the one before folded into it: one leaf sequence,
     one spelling, however the Input batches split a parameter."""
     out: list[list] = []
