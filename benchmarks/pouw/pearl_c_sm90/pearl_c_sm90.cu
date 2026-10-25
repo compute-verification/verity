@@ -160,13 +160,16 @@ template <int N> DEV void qmma(float* d, uint64_t da, uint64_t db, uint32_t sd) 
 }
 // d += A B: one BF16 step (k = 16), the accumulators as qmma's
 template <int N> DEV void hmma(float* d, uint64_t da, uint64_t db) {
-  static_assert(N == 128 || N == 64, "n128 or n64");
+  static_assert(N == 128 || N == 64 || N == 32, "n128, n64 or n32");
   if constexpr (N == 128)
     asm volatile("{\n .reg .pred p;\n setp.ne.b32 p, %66, 0;\n wgmma.mma_async.sync.aligned.m64n128k16.f32.bf16.bf16 " ACC64_S
                  ", %64, %65, p, 1, 1, 0, 0;\n}" : ACC64_F : "l"(da), "l"(db), "r"(1));
-  else
+  else if constexpr (N == 64)
     asm volatile("{\n .reg .pred p;\n setp.ne.b32 p, %34, 0;\n wgmma.mma_async.sync.aligned.m64n64k16.f32.bf16.bf16 " ACC32_S
                  ", %32, %33, p, 1, 1, 0, 0;\n}" : ACC32_F : "l"(da), "l"(db), "r"(1));
+  else
+    asm volatile("{\n .reg .pred p;\n setp.ne.b32 p, %18, 0;\n wgmma.mma_async.sync.aligned.m64n32k16.f32.bf16.bf16 " ACC16_S
+                 ", %16, %17, p, 1, 1, 0, 0;\n}" : ACC16_F : "l"(da), "l"(db), "r"(1));
 }
 // after WG_WAIT: the accumulators are read only from here on (the compiler would otherwise move their readers above the wait)
 template <int NA> DEV void acc_fence(float* d) {
@@ -229,7 +232,6 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   constexpr bool PEEL = MODE == M_PEARLC || MODE == M_PEARLC_S;
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
   static_assert(G == 0 || G == BK / 32, "a promotion window is one stage");
-  static_assert(!PEEL || BN >= 64, "the peel's wgmma is n64 or n128");
   static_assert(MODE != M_WIN || G != 0, "a window's sum is a promotion window's");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (sa(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
@@ -472,8 +474,9 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
 }
 
 // G4: pearl-c-h100-v1 (pearl_c_device.H100); gemm_fast is the plain GEMM unpromoted.  The 128 x 128 tile; _n64: 128 x 64
-// (n a multiple of 64, not 128); _d: 64 x 64 (decode's few rows, m a multiple of 64, not 128); gemm_words: 128 x 32 and
-// gemm_words_d: 64 x 32, the 32-column words (A'F_B, B~F_A, G); gemm_words_win_d: gemm_words_d's windows a CTA each (WIN)
+// (n a multiple of 64, not 128); _d: 64 x 64 (decode's few rows, m a multiple of 64, not 128); _d32: 64 x 32 (decode, twice
+// _d's CTAs where n / 64 leaves SMs idle; each element's sum is _d's); gemm_words: 128 x 32 and gemm_words_d: 64 x 32, the
+// 32-column words (A'F_B, B~F_A, G); gemm_words_win_d: gemm_words_d's windows a CTA each (WIN)
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                       \
   extern "C" __global__ void __launch_bounds__(Tile<TM, BN>::NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = Tile<TM, BN>::SMEM; }
@@ -492,6 +495,11 @@ GEMM(gemm_fast_d, M_PLAIN, 64, 64, 0)
 GEMM(gemm_ct_d, M_CT, 64, 64, 4)
 GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_pearlc_s_d, M_PEARLC_S, 64, 64, 4)
+GEMM(gemm_plain_d32, M_PLAIN, 64, 32, 4)
+GEMM(gemm_fast_d32, M_PLAIN, 64, 32, 0)
+GEMM(gemm_ct_d32, M_CT, 64, 32, 4)
+GEMM(gemm_pearlc_d32, M_PEARLC, 64, 32, 4)
+GEMM(gemm_pearlc_s_d32, M_PEARLC_S, 64, 32, 4)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_d, M_CT, 64, 32, 4)
 GEMM(gemm_words_win_d, M_WIN, 64, 32, 4)
