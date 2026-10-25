@@ -41,8 +41,10 @@ reordered, moved or altered cell, a covert byte, a cell on another stream or in 
 fabricated output, an early, late or missing `END`, a `FAIL`, a wrong id and a forged port row each make it 0.
 
     IoTieCell{B}(cell: Array<B, Byte>) -> Array<67>        ok, data, end, stream (u32), id (u32), LSB first
+    IoTieSwitch{W}(a: Array<W>, b: Array<W>, s) -> Array<2, Array<W>>    (a, b), swapped iff s: W ANDs
     IoTieRoute{W, D}(xs: Array<M, Array<W>>, switches: Array<S_W>) -> Array<M, Array<W>>
-        a Beneš network of S_W = (2D − 1)·2^(D − 1) switches, W ANDs each
+        a Beneš network of S_W = (2D − 1)·2^(D − 1) switches: a column of 2^(D − 1) `IoTieSwitch`es, two
+        `IoTieRoute{W, D − 1}`, a column, so a binding is built once whatever its uses
     IoTieMatch{N, D, E}(cells: Array<N, Array<67>>, map: Array<N, Array<8, Byte>>, routed: Array<M, Array<32 + D>>)
         -> Value<1>
     IoTieContent{B, R, P, S}(cells: Array<R, Array<B, Byte>>, map: Array<R, Array<8, Byte>>,
@@ -666,35 +668,56 @@ def _sig_route(S):
             Array(1 << S.D, Array(S.W, BIT)))
 
 
-def _swap(C, s, a: Sequence, b: Sequence) -> tuple[list, list]:
-    t = [C.AND(s, x ^ y) for x, y in zip(a, b)]
-    return [x ^ u for x, u in zip(a, t)], [y ^ u for y, u in zip(b, t)]
+def _sig_switch(S):
+    if type(S.W) is not int or S.W < 1:
+        raise ValueError(f"a switch has W >= 1, not W={S.W!r}")
+    return (("a", Array(S.W, BIT)), ("b", Array(S.W, BIT)), ("s", BIT)), Array(2, Array(S.W, BIT))
 
 
-def _build_route(C, S, *e):
-    it = iter(e[-1])
-
-    def run(v: list) -> list:
-        if len(v) == 2:
-            return list(_swap(C, next(it), v[0], v[1]))
-        up, down = [], []
-        for k in range(len(v) // 2):
-            a, b = _swap(C, next(it), v[2 * k], v[2 * k + 1])
-            up.append(a)
-            down.append(b)
-        up, down = run(up), run(down)
-        res = []
-        for a, b in zip(up, down):
-            res += _swap(C, next(it), a, b)
-        return res
-
-    return run([list(x) for x in e[:-1]])
+def _build_switch(C, S, a, b, s):
+    t = [C.AND(s[0], x ^ y) for x, y in zip(a, b)]
+    return [[x ^ u for x, u in zip(a, t)], [y ^ u for y, u in zip(b, t)]]
 
 
-IoTieRoute = _part(
-    "IoTieRoute", ("W", "D"), _sig_route, _build_route,
-    "a Beneš network on 2^D W-bit inputs: the input column's 2^(D − 1) switches (s swaps inputs 2k and 2k + 1 "
-    "into the halves), the upper half's network, the lower half's, the output column's switches; W ANDs a switch")
+IoTieSwitch = _part(
+    "IoTieSwitch", ("W",), _sig_switch, _build_switch,
+    "(a, b), swapped iff s: W ANDs")
+
+
+def _body_route(B, S, xs, switches_):
+    W, h = S.W, 1 << (S.D - 1)
+    sw, half = HC._refs(switches_), Array(h, Array(W, BIT))
+
+    def words(refs: list) -> list:
+        return [refs[W * k:W * (k + 1)] for k in range(len(refs) // W)]
+
+    def column(pairs: list, bits: list) -> list:
+        """The h switches' (a, b) pairs, swapped by their bits: one batch of `IoTieSwitch`."""
+        out = words(HC._refs(B.batch(bind(IoTieSwitch, W=W), HC._coll(half, [r for a, _ in pairs for r in a]),
+                                     HC._coll(half, [r for _, b in pairs for r in b]), HC._coll(Array(h, BIT), bits),
+                                     axes=(0, 0, 0))))
+        return list(zip(out[0::2], out[1::2]))
+
+    x = words(HC._refs(xs))
+    if S.D == 1:
+        last = column([(x[0], x[1])], sw)
+    else:
+        # `benes`' bit order: the input column, the upper half's, the lower half's, the output column
+        sub = (2 * S.D - 3) << (S.D - 2)
+        first = column([(x[2 * k], x[2 * k + 1]) for k in range(h)], sw[:h])
+        net = bind(IoTieRoute, W=W, D=S.D - 1)
+        up, down = (words(HC._refs(B.call(net, HC._coll(half, [r for p in first for r in p[i]]),
+                                          HC._coll(Array(sub, BIT), sw[h + i * sub:h + (i + 1) * sub]))))
+                    for i in (0, 1))
+        last = column(list(zip(up, down)), sw[h + 2 * sub:])
+    return HC._coll(Array(2 * h, Array(W, BIT)), [r for p in last for w in p for r in w])
+
+
+IoTieRoute = CompositeDefinition(
+    "IoTieRoute", 1, ("W", "D"), _sig_route, _body_route, conformance="exact-model-tested",
+    doc="a Beneš network on 2^D W-bit inputs: the input column's 2^(D − 1) switches (`IoTieSwitch`: s swaps "
+        "inputs 2k and 2k + 1 into the halves), the upper half's `IoTieRoute{W, D − 1}`, the lower half's, the "
+        "output column's switches; W ANDs a switch")
 
 
 def _check_match(S) -> None:
@@ -821,9 +844,9 @@ def bucket_arguments(inst: Instance, t: int, bits: Sequence[int]) -> list[list[i
 
 
 __all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "END", "END_ENTRY", "ID_AT", "ID_EVENT_BYTES", "Instance",
-           "IoTieBucket", "IoTieCell", "IoTieContent", "IoTieMatch", "IoTieRoute", "MAP", "MapEntry", "Output", "PORT",
-           "Parsed", "SAMPLED", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply", "bucket_arguments",
-           "bucket_reference", "bucket_rows", "cells_match", "content_arguments", "data_cell", "domain", "end_cell",
-           "entry_perm", "expected_cell", "fake_salt", "id_event", "map_bytes", "open_port", "pad_cell", "parse_cell",
-           "port_id", "port_reads", "port_row", "reference", "reference_parts", "route_depth", "rows_levels",
-           "rows_path", "rows_root", "switches", "window_map"]
+           "IoTieBucket", "IoTieCell", "IoTieContent", "IoTieMatch", "IoTieRoute", "IoTieSwitch", "MAP", "MapEntry",
+           "Output", "PORT", "Parsed", "SAMPLED", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply",
+           "bucket_arguments", "bucket_reference", "bucket_rows", "cells_match", "content_arguments", "data_cell",
+           "domain", "end_cell", "entry_perm", "expected_cell", "fake_salt", "id_event", "map_bytes", "open_port",
+           "pad_cell", "parse_cell", "port_id", "port_reads", "port_row", "reference", "reference_parts",
+           "route_depth", "rows_levels", "rows_path", "rows_root", "switches", "window_map"]

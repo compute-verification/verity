@@ -21,7 +21,7 @@ import pytest
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import advice as ADV
-from verity.ml.commitments.gates.frame_v3 import opens
+from verity.ml.commitments.gates.frame_v3 import _part, opens
 from verity.ml.commitments.merkle import tree_levels
 from verity.ml.commitments.rowleaf import row_leaf
 from verity.core.protocols.certifier import head_check as HC, io_tie as IT, warden as W, warden_rows as WR
@@ -599,6 +599,51 @@ def test_the_route_circuit_is_its_reference():
     out = np.asarray(evaluate_bits(fn, _bits([[b for x in xs for b in x]] * len(cases)), _bits(cases)))
     for bits, o in zip(cases, out.reshape(len(cases), 1 << D, W_)):
         assert o.tolist() == IT.benes_apply(xs, bits)
+
+
+def _build_flat_route(C, S, *e):
+    """`IoTieRoute` as one flat trace, the build the recursive one replaced."""
+    it = iter(e[-1])
+
+    def swap(s, a, b):
+        t = [C.AND(s, x ^ y) for x, y in zip(a, b)]
+        return [x ^ u for x, u in zip(a, t)], [y ^ u for y, u in zip(b, t)]
+
+    def run(v):
+        if len(v) == 2:
+            return list(swap(next(it), v[0], v[1]))
+        up, down = [], []
+        for k in range(len(v) // 2):
+            a, b = swap(next(it), v[2 * k], v[2 * k + 1])
+            up.append(a)
+            down.append(b)
+        up, down = run(up), run(down)
+        res = []
+        for a, b in zip(up, down):
+            res += swap(next(it), a, b)
+        return res
+
+    return run([list(x) for x in e[:-1]])
+
+
+FLAT_ROUTE = _part("IoTieRouteFlat", ("W", "D"), IT._sig_route, _build_flat_route, "IoTieRoute's flat trace")
+
+
+def test_the_recursive_route_is_the_flat_one():
+    """`IoTieRoute` (a column of switches, two half networks, a column) against the flat trace it replaced: the same
+    ANDs, and the same outputs on random inputs and switch bits, at depths 1 to 6; and a binding's body is its four
+    nodes, so a deep network is built once a depth (IoTieRequestIds{4096, 16, 1, 512, 6}'s sort is D = 14)."""
+    rng = random.Random(7)
+    for W_, D in ((1, 1), (5, 1), (3, 2), (8, 3), (9, 4), (36, 4), (44, 5), (2, 6)):
+        new, flat = bind(IT.IoTieRoute, W=W_, D=D), bind(FLAT_ROUTE, W=W_, D=D)
+        n = (2 * D - 1) << (D - 1)
+        assert HC.ands(new) == HC.ands(flat) == W_ * n
+        xs = _bits([[rng.randrange(2) for _ in range(W_ << D)] for _ in range(16)])
+        bits = _bits([[rng.randrange(2) for _ in range(n)] for _ in range(16)])
+        assert np.array_equal(np.asarray(evaluate_bits(new, xs, bits)), np.asarray(evaluate_bits(flat, xs, bits)))
+    deep = bind(IT.IoTieRoute, W=46, D=14)
+    assert [nd.form for nd in deep.body.nodes] == ["batch", "call", "call", "batch"]
+    assert HC.ands(deep) == 46 * (27 << 13)
 
 
 def _changed(inst, cells, cmap):

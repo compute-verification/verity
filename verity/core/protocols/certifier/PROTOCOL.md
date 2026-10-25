@@ -482,6 +482,10 @@ a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's
   positions carries each of the bucket's E = S·P port entries, its id and its index e (W = 32 + D bits), and its
   (2D − 1)·2^(D − 1) switches are witness. Every setting is a permutation, and `IoTieMatch` holds each data cell's
   routed entry to the index the map names, so the switches can only find entries, never choose them.
+  `IoTieRoute{W, D}` is built recursively: a column of 2^(D − 1) `IoTieSwitch{W}`es, the two halves'
+  `IoTieRoute{W, D − 1}`, and a column. Its ANDs, their order and its lowering's circuit digest are the flat network's
+  (`test_the_recursive_route_is_the_flat_one`, the sidecar's pins). Each depth is built once, so the build's memory is
+  the wiring's. The flat trace took about 1.9 KB a gate: 15 GB at `IoTieRoute{42, 12}`, which now takes 129 MB.
 
 **(c) Decision: the stream is the warden's, and a bucket has one order.**
 - **The stream** is warden framing: the request's ingress ordinal, which the warden writes from the connection it
@@ -958,10 +962,10 @@ are a function of the map and the port, so the prover rebuilds them, and it comp
   holds it to the advice. **The port** is the Commit's root, and its layout and its binding to the run root are
   compute's and vllm's.
 
-**Reuse.** The new Definitions (`IoTieCell`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`, `IoTieBucket`) are Boolean
-composites with no hash. No unit hashes a row or climbs a tree: both ties read the warden's registered rows, and the
-egress and ingress-ids ties the Commit's, whose rows the statement's registered-read slots hash (`NetworkRowDigest`'s
-and `Hm96Sha512Leaf`'s work) and whose paths the verifier climbs.
+**Reuse.** The new Definitions (`IoTieCell`, `IoTieSwitch`, `IoTieRoute`, `IoTieMatch`, `IoTieContent`,
+`IoTieBucket`) are Boolean composites with no hash. No unit hashes a row or climbs a tree: both ties read the warden's
+registered rows, and the egress and ingress-ids ties the Commit's, whose rows the statement's registered-read slots
+hash (`NetworkRowDigest`'s and `Hm96Sha512Leaf`'s work) and whose paths the verifier climbs.
 
 **The prototype** (`io_tie`, on the warden's own egress and a fake upstream's port) has the reference
 (`io_tie.reference`, in the clear), the Boolean Definitions above, and their tests:
