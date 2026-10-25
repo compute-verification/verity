@@ -22,7 +22,7 @@
 # of exactly 64 tokens over GATE_S seconds with a GATE_TIMEOUT client timeout, summarized in $OUT/gate.json once sealed: each
 # request's latency, time to its first token and longest wait between two tokens (against the warden's cell delay,
 # GATE_DEADLINE_S=3), and the engine's step gaps, collections and pauses (pauses.jsonl) meanwhile. GATE_PLAN=PATH (in the tree)
-# sends a certifier rehearsal's own requests instead, each at its send_ms (its out/plan.json). SEAL_HOLD_GB (64), SEAL_WARM_GB (0)
+# sends a certifier rehearsal's own requests instead, each at its send_ms times GATE_STRETCH (1) (its out/plan.json). SEAL_HOLD_GB (64), SEAL_WARM_GB (0)
 # and MAX_NUM_SEQS (8) are serve-openai's --seal-hold-gb, --seal-warm-gb and --max-num-seqs.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
@@ -203,7 +203,7 @@ fi
 
 if [ "${GATE:-0}" -gt 0 ] || [ -n "${GATE_PLAN:-}" ]; then   # certifier-rehearse's load: GATE varied requests of exactly 64 tokens over GATE_S (600) s, or GATE_PLAN's, 60 s timeout
   run=$("$PY" -c "import uuid; print(uuid.uuid4().hex)"); rel=(); [ "$ADMIT" = release-order ] && rel=(--release "$run")
-  if [ -n "${GATE_PLAN:-}" ]; then load=(--plan "$TREE/$GATE_PLAN"); else
+  if [ -n "${GATE_PLAN:-}" ]; then load=(--plan "$TREE/$GATE_PLAN" --stretch "${GATE_STRETCH:-1}"); else
     load=(--varied "$GATE" --rate "$("$PY" -c "print($GATE / ${GATE_S:-600})")" --prompt-range "${GATE_PROMPTS:-16:1024}" --max-tokens 64 --exact-tokens)
   fi
   "$PY" tools/serve_load.py --port "$PORT" --model "$REPO" "${load[@]}" --timeout "${GATE_TIMEOUT:-60}" "${rel[@]}" \

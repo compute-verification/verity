@@ -102,20 +102,20 @@ def varied(port: int, model: str, n: int, *, rate: float, prompt_tokens: tuple[i
     return out
 
 
-def planned(path: str, model: str) -> list[dict]:
+def planned(path: str, model: str, stretch: float = 1.0) -> list[dict]:
     """A certifier rehearsal's requests (its ``out/plan.json``), each {user, at_s, body}: the body it sent, at its ``send_ms``
-    after the first, streamed with its token ids; ``user`` ``plan.<j>`` in send order."""
+    after the first (times ``stretch``), streamed with its token ids; ``user`` ``plan.<j>`` in send order."""
     with open(path) as fh:
         reqs = sorted(json.load(fh)["requests"], key=lambda r: float(r["send_ms"]))
     t0 = float(reqs[0]["send_ms"])
-    return [{"user": f"plan.{j:05d}", "at_s": (float(r["send_ms"]) - t0) / 1000,
+    return [{"user": f"plan.{j:05d}", "at_s": (float(r["send_ms"]) - t0) / 1000 * stretch,
              "body": {**r["id_request"], "model": model, "user": f"plan.{j:05d}", "stream": True, "return_token_ids": True}}
             for j, r in enumerate(reqs)]
 
 
 def run_varied(a: argparse.Namespace) -> int:
     lo, _, hi = a.prompt_range.partition(":")
-    reqs = planned(a.plan, a.model) if a.plan else \
+    reqs = planned(a.plan, a.model, a.stretch) if a.plan else \
         varied(a.port, a.model, a.varied, rate=a.rate, prompt_tokens=(int(lo), int(hi)), max_tokens=a.max_tokens, seed=a.seed)
     if a.exact_tokens:
         for q in reqs:
@@ -174,6 +174,7 @@ def main() -> int:
                          "a response with fewer is cut")
     ap.add_argument("--plan", default=None, help="instead of drawing them, a certifier rehearsal's requests (its out/plan.json), "
                                                  "each sent at its send_ms, numbered with --release as --varied's are")
+    ap.add_argument("--stretch", type=float, default=1.0, help="--plan: send times scaled by this (2: half the plan's rate)")
     ap.add_argument("--timeout", type=float, default=600, help="the client's socket timeout, seconds")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
