@@ -16,7 +16,10 @@
 * the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
-* only the warden session's public files are published, its certificates without the heads and salts they sign.
+* only the warden session's public files are published, its certificates without the heads and salts they sign;
+* the scan's answer of link-window 0 is its audit record re-decided at the leg's δ, a refusal a reject, and
+  `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's (`period_case.build`), taken apart into
+  a warden run's windows and scans and rebuilt, is the same commitment and evidence, and the mirror accepts it.
 """
 from __future__ import annotations
 
@@ -419,6 +422,34 @@ def test_a_rows_case_is_the_rows_forms():
         L.rows_case_of(rw, [3, 4], scans, audits, 3, [])
     with pytest.raises(RuntimeError, match="2 Programs"):
         L.rows_case_of(rw, [3, 4], scans | {4: (LOOP, {}, 26 * 32)}, audits, 3, [FREE])
+
+
+def test_a_signed_rows_period_rebuilt_by_rows_case_of_is_accepted(monkeypatch):
+    import warden_serve as WS
+
+    case = PERIOD.build("rows-honest", 19)
+    p = case["params"]
+    c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    lp = p["lms"]
+    assert not lp["toy"] and len(c["audits"]) == 2 and p["first"] == 3
+    monkeypatch.setattr(WS, "LINK", p["link"])
+    dep = {"key": {"params": [lp["N"], lp["W"], lp["H"]], "public": p["key"]}, "params": p["schedule"],
+           "session": p["session"]}
+    ws = range(p["first"], p["first"] + p["windows"])
+    rw = {"deployment": dep, "windows": {w: {
+        "registrations": dict(zip(("ingress", "egress"), x["registrations"])),
+        "certificates": dict(zip((WS.INGRESS, WS.EGRESS, WS.FAILS), x["certificates"]))}
+        for w, x in zip(ws, e["windows"])}}
+    scans = {w: (reg, x["answer"], p["scan"]["free"]) for w, reg, x in zip(ws, c["windows"], e["windows"])}
+    free = [a["free"] for a in p["audits"]]
+    got = L.rows_case_of(rw, list(ws), scans, list(zip(c["audits"], e["audits"])), p["first"], free)
+    assert (got["commitment"], got["evidence"]) == (case["commitment"], case["evidence"])
+    assert sorted(got["params"]) == PERIOD.ROWS_PARAMS_KEYS
+    T = p["schedule"]["window"]
+    assert got["params"]["scan"] == {"free": p["scan"]["free"], "steps": T}
+    assert got["params"]["audits"] == [{"free": f, "steps": len(ws) * T} for f in free]
+    a = PERIOD.reference(got)
+    assert a["verdict"] == "accept" and len(a["public"]["scans"]) == len(ws) and a["public"]["schedules"] == 0
 
 
 @pytest.mark.slow
