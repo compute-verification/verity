@@ -10619,4 +10619,52 @@ theorem rootSegs_of (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.
   exact segGood_of hF'.2.2.1 (rootShape P memo hm hF' hn hs) hgs
     (hG bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs g hgs)
 
+/-! ## A primitive root node's gates -/
+
+/-- **A gate of a root node calling a primitive is that primitive's**: `Prog.gate` stops at the root's scope. -/
+theorem gate_root_prim (P : Prog) (hl : Desc.rootLaidOut P = true) {g p : Nat} {ops : Array Nat}
+    {sc : Flock.Program.Scope} (h : P.gate g = .ok (p, ops, sc)) {k : Nat} (hk : k < nodeCount P)
+    (hg : g ∈ nodeGates P k) (hprim : (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).prim = true) :
+    p = ((DescAgree.rootBody P).nodes[k]!).fn ∧ sc = P.rootScope := by
+  rw [DescAgree.mem_nodeGates] at hg
+  obtain ⟨-, -, -, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+  unfold Flock.Program.Prog.gate at h
+  by_cases hge : g ≥ (P.defs[P.root]!).gates
+  · simp [hge, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  simp only [hge, ite_false, bind, Except.bind] at h
+  have hF : Flock.Steps.FUEL = (Flock.Steps.FUEL - 1) + 1 := by unfold Flock.Steps.FUEL; omega
+  rw [hF, Flock.Steps.run.eq_2] at h
+  generalize Flock.Steps.FUEL - 1 = fuel at h
+  rcases hs : Flock.Program.gateStep P g P.rootScope with e | x
+  · simp [hs, bind, Except.bind] at h
+  obtain ⟨k0, hf, hx⟩ := DescAgree.gateStep_eq P g P.rootScope x hs
+  obtain ⟨hk0, hp0⟩ := DescAgree.find?_range_some hf
+  have hd : P.rootScope.d = P.root := rfl
+  have ho : P.rootScope.off = 0 := rfl
+  simp only [hd, ho, Nat.sub_zero, Bool.and_eq_true, decide_eq_true_eq] at hk0 hp0
+  have hk0K : k0 < nodeCount P := hk0
+  have hkk : k0 = k := DescAgree.node_unique (rootOffs P) (nodeCount P) hmono hk0K hk hp0 hg
+  subst hkk
+  simp only [hd] at hx
+  rcases hx with ⟨-, ops', rfl⟩ | ⟨hprim', -, -, -⟩
+  · simp only [hs, bind, Except.bind, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+    exact ⟨h.1.symm, h.2.2.symm⟩
+  · simp only [DescAgree.rootBody] at hprim
+    rw [hprim] at hprim'
+    cases hprim'
+
+/-- **A gate of a root node calling a primitive has that primitive's width** in `circuitOf`'s circuit. -/
+theorem w_root_prim (P : Prog) {c : Circuit} (hc : circuitOf P = .ok c) (hl : Desc.rootLaidOut P = true) {k g : Nat}
+    (hk : k < nodeCount P) (hg : g ∈ nodeGates P k)
+    (hprim : (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).prim = true) :
+    (P.defs[((DescAgree.rootBody P).nodes[k]!).fn]!).ret = .value c.w[g]! := by
+  have hgl : g < gates P := by
+    obtain ⟨-, -, hlast, hmono⟩ := DescAgree.rootLaidOut_spec P hl
+    rw [DescAgree.mem_nodeGates] at hg
+    have := DescAgree.offs_mono (rootOffs P) (nodeCount P) hmono (k + 1) (nodeCount P) (by omega) le_rfl
+    omega
+  obtain ⟨p, sc, hp, hw, -⟩ := circuitOf_gate hc hgl
+  obtain ⟨rfl, -⟩ := gate_root_prim P hl hp hk hg hprim
+  exact hw
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
