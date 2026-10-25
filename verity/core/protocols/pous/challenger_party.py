@@ -104,15 +104,15 @@ class Party:
     @classmethod
     def of(cls, period: Mapping[str, Any], node: str, device: str | Path) -> Party:
         """`period.json`'s challenger host (`challenger_host`, by default `node`): this machine's process when it is the
-        node, else the `challenger` entry's `command` and `address` (`"HOST:PORT"`), which infra writes once the host
-        serves the challenger's side (the bandwidth gate's path, `benchmarks/live_verifier`)."""
+        node, else `challenger.pous`'s `command` and `address` (`"HOST:PORT"`), which infra writes once the host serves
+        the challenger's side (the bandwidth gate's path, `benchmarks/live_verifier`)."""
         host = period.get("challenger_host") or node
         if host == node:
             return cls.local(node, device)
-        entry = period.get("challenger") or {}
+        entry = (period.get("challenger") or {}).get("pous") or {}
         if not entry.get("command") or not entry.get("address"):
-            raise RuntimeError(f"the challenger host {host} isn't wired: period.json's challenger.command and "
-                               f"challenger.address start its side there and reach it from {node} (infra's)")
+            raise RuntimeError(f"the challenger host {host} isn't wired for pous: period.json's challenger.pous.command "
+                               f"and .address start its side there and reach it from {node} (infra's)")
         h, _, p = entry["address"].rpartition(":")
         return cls(host, tuple(entry["command"]), (h, int(p)))
 

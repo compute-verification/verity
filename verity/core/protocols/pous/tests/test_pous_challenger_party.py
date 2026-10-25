@@ -92,11 +92,11 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     local = CP.Party.of({}, "vy-nebius-cpu-4", tmp_path)
     assert (local.host, local.address) == ("vy-nebius-cpu-4", None) and str(tmp_path) in local.command
     assert CP.Party.of({"challenger_host": "vy-nebius-cpu-4"}, "vy-nebius-cpu-4", tmp_path) == local
-    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired"):
-        CP.Party.of({"challenger_host": "vy-auditor-1"}, "vy-nebius-cpu-4", tmp_path)
-    wired = CP.Party.of({"challenger_host": "vy-auditor-1",
-                         "challenger": {"command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}},
-                        "vy-nebius-cpu-4", tmp_path)
+    with pytest.raises(RuntimeError, match="vy-auditor-1 isn't wired for pous"):
+        CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"bandwidth": {"command": ["x"]}}},
+                    "vy-nebius-cpu-4", tmp_path)
+    wired = CP.Party.of({"challenger_host": "vy-auditor-1", "challenger": {"pous": {
+        "command": ["ssh", "gate", "pous-challenger"], "address": "127.0.0.1:7960"}}}, "vy-nebius-cpu-4", tmp_path)
     assert wired == CP.Party("vy-auditor-1", ("ssh", "gate", "pous-challenger"), ("127.0.0.1", 7960))
     assert CP.placement("n0", "n0")[CP.PREMISE].startswith("unmet: ")
     assert CP.placement("n0", "vy-auditor-1") == {
