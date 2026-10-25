@@ -25,12 +25,12 @@
   prefill rows in turn, and a resume's recompute of positions its request had reached is `discarded`, like the row past the last
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
+- GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
+  first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 - A request a Commit window carries in (admitted in an earlier window) compiles to the Program it has whole, at the C its
   admission had, and each window places its own rows: from where it had reached (its carried `made`), its kept outputs counted
   from its carried `kept`. A request the window leaves with outputs to keep reaches only as far as its rows go. A carried request
   with no row in the window has no unit there (`Plan.idle`) and needs no body.
-- GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
-  first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 
 The compiler is total: it compiles its input or refuses it by name (`Unexpressible`), deterministically. Refused, in order:
 - advice that isn't I1's bytes or an `Advice`, is over ℓ (before any of it is read), or isn't I1 v0 (`MalformedAdvice`: I1's
