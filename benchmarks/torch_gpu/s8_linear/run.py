@@ -203,6 +203,16 @@ class Weights:
         self.sw_np = FX.weight_scales(n, seed, special)
         self.sw = torch.from_numpy(self.sw_np).cuda()
 
+    @classmethod
+    def given(cls, w: np.ndarray, sw: np.ndarray) -> Weights:
+        """W's codes [N, K] int8 and s_w [N] float32 as they are."""
+        self = cls.__new__(cls)
+        self.n, self.k = w.shape
+        self.w = torch.from_numpy(np.ascontiguousarray(w, dtype=np.int8)).cuda()
+        self.sw_np = np.ascontiguousarray(sw, dtype=np.float32)
+        self.sw = torch.from_numpy(self.sw_np).cuda()
+        return self
+
 
 class Case:
     """One (N, K, M): the activations, the s32 sums, the twin's words and the reference's, on the GPU."""
@@ -293,9 +303,8 @@ def swap(case: Case) -> dict:
         return {"error": f"{type(ex).__name__}: {str(ex)[:300]}"}
 
 
-def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple, kern, do_swap: bool, log) -> list[dict]:
-    out = []
-    wt = Weights(n, k, seed=(n * 131 + k) & 0xFFFFFF)
+def gate_shape(name: str, wt: Weights, ms: tuple[int, ...], extra: tuple, kern, do_swap: bool, log) -> list[dict]:
+    out, n, k = [], wt.n, wt.k
     for m in ms:
         t0 = time.time()
         case = Case(wt, m, seed=(n * 31 + k * 7 + m) & 0xFFFFFF)
@@ -316,6 +325,30 @@ def gate_shape(name: str, n: int, k: int, ms: tuple[int, ...], extra: tuple, ker
     del wt
     torch.cuda.empty_cache()
     return out
+
+
+def logger(path: Path):
+    def log(rec):
+        with open(path, "a") as f:
+            f.write(json.dumps(rec) + "\n")
+        print(json.dumps({key: rec[key] for key in ("name", "m", "ok", "s")} | {
+            "picked": rec["picked"].get("cfg"), "mismatch": rec["picked"].get("mismatch_call0"),
+            "extra_mismatch": sum(e.get("mismatch_call0", 0) for e in rec["extra"]),
+            "ref_vs_twin": rec["reference_vs_twin"], "error": rec["picked"].get("error")}), flush=True)
+    return log
+
+
+def summary(recs: list[dict], kern, ms: tuple[int, ...]) -> dict:
+    cases = [r["picked"] for r in recs] + [e for r in recs for e in r["extra"] if "skipped" not in e]
+    table = CONFIGS.get(f"{kern.name}:{X.arch()}", {})
+    return {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__, **kern.meta(), "ms": ms,
+            "configs": {f"{n},{k}": v for (n, k), v in table.items()}, "cases": len(cases),
+            "kernel_mismatches": sum(c.get("mismatch_call0", 0) + c.get("mismatch_call1", 0) + c.get("mismatch_graph", 0)
+                                     for c in cases),
+            "failed": [(r["name"], r["m"]) for r in recs if not r["ok"]],
+            "reference_vs_twin": sum(r["reference_vs_twin"] for r in recs),
+            "swap_mismatches": sum(r.get("swap", {}).get("mismatches", 0) for r in recs),
+            "cells_checked": sum(r["m"] * r["n"] for r in recs), "ok": all(r["ok"] for r in recs)}
 
 
 def main() -> int:
@@ -342,30 +375,14 @@ def main() -> int:
     tuned = {m for rows in table.values() for m, _ in rows}
     ms = tuple(int(v) for v in a.ms.split(",")) if a.ms else tuple(sorted(set(FX.GATE_MS) | tuned))
     extra = tuple(kern.Cfg.parse(c) for c in (a.extra_cfgs.split(",") if a.extra_cfgs is not None else kern.extra) if c)
-    log_path = out / "gate.jsonl"
-
-    def log(rec):
-        with open(log_path, "a") as f:
-            f.write(json.dumps(rec) + "\n")
-        print(json.dumps({key: rec[key] for key in ("name", "m", "ok", "s")} | {
-            "picked": rec["picked"].get("cfg"), "mismatch": rec["picked"].get("mismatch_call0"),
-            "extra_mismatch": sum(e.get("mismatch_call0", 0) for e in rec["extra"]),
-            "ref_vs_twin": rec["reference_vs_twin"], "error": rec["picked"].get("error")}), flush=True)
-
+    log = logger(out / "gate.jsonl")
     recs = []
     for name, n, k in FX.shapes(models, with_head=not a.no_head):
-        recs += gate_shape(name, n, k, ms, extra, kern, not a.no_swap, log)
+        recs += gate_shape(name, Weights(n, k, seed=(n * 131 + k) & 0xFFFFFF), ms, extra, kern, not a.no_swap, log)
     if not a.no_edge:
-        recs += gate_shape("s32-edge", EDGE_N, FX.EDGE_K, EDGE_MS, extra, kern, not a.no_swap, log)
-    cases = [r["picked"] for r in recs] + [e for r in recs for e in r["extra"] if "skipped" not in e]
-    doc = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__, **kern.meta(),
-           "models": models, "ms": ms, "configs": {f"{n},{k}": v for (n, k), v in table.items()},
-           "cases": len(cases), "kernel_mismatches": sum(c.get("mismatch_call0", 0) + c.get("mismatch_call1", 0)
-                                                         + c.get("mismatch_graph", 0) for c in cases),
-           "failed": [(r["name"], r["m"]) for r in recs if not r["ok"]],
-           "reference_vs_twin": sum(r["reference_vs_twin"] for r in recs),
-           "swap_mismatches": sum(r.get("swap", {}).get("mismatches", 0) for r in recs),
-           "cells_checked": sum(r["m"] * r["n"] for r in recs), "ok": all(r["ok"] for r in recs)}
+        recs += gate_shape("s32-edge", Weights(EDGE_N, FX.EDGE_K, seed=(EDGE_N * 131 + FX.EDGE_K) & 0xFFFFFF), EDGE_MS, extra,
+                           kern, not a.no_swap, log)
+    doc = {"models": models, **summary(recs, kern, ms)}
     (out / "gate.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(json.dumps(doc), flush=True)
     return 0 if doc["ok"] else 4
