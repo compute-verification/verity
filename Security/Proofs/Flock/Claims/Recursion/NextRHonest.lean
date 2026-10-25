@@ -109,8 +109,8 @@ def RepReadsBack : Prop :=
 `c₁`. The honest prover sends round 0 from each table's level-0 cap `caps[i]` (of its `2^cap₀` nodes), and each rep's
 rounds from its proof `ps[k]` (honest, at its table's cap) at its batched value `Ts k`, with a last message the reader
 reads as `fl`, whose proofs are `ps`. On those messages `decR` decides. It reads round 0 as the link of the caps, each
-table's `root_B` its cap's nodes joined, with no public words; every rep's proof as `ps[k]`; and the round messages as
-the honest proofs' framed bytes. -/
+table's `root_B` its cap's nodes joined, with no public words; every rep's proof as `ps[k]`; the round messages as
+the honest proofs' framed bytes; and the record as the reader's (`recJ`) at them. -/
 def ReadsBack : Prop :=
   ∀ (rd : Claims.Msg → Option FinalP) (x last : Claims.Msg) (cs : List Coin) (s : Ins) (spec : SessionSpec)
     (sts : Array Stmt) (c₁ : Coin) (caps : Array (Array ByteArray)) (ps : Array Flock.Proof) (Ts : ℕ → F128)
@@ -130,7 +130,13 @@ def ReadsBack : Prop :=
           sts.toList.map fun _ => ByteArray.empty),
         c₁, ((List.range ps.size).map fun k =>
           framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten.zip
-          cs.tail.dropLast, ⟨fl.stmt, fl.j, ps⟩⟩
+          cs.tail.dropLast,
+        ⟨fl.stmt, recJ spec sts
+          ((caps.toList.map Array.toList).map (·.foldl (· ++ ·) ByteArray.empty),
+            sts.toList.map fun _ => ByteArray.empty) c₁
+          ((List.range ps.size).map fun k =>
+            framesOf (repCtx spec sts c₁ (capRows caps) cs.tail.dropLast k) ps[k]! (Ts k)).flatten
+          cs.tail.dropLast ps, ps⟩⟩
 
 /-! ## Rows fix the fit -/
 
