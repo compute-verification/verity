@@ -94,8 +94,8 @@ held to its request's slot through ``map``.
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
 holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
-- The scan's rule is PROVE-PATH's field-aligned one, which every zero-knowledge driver's scan follows (`leak_scan.scan`,
-  `benchmarks/network_traces/leak_scan.py`). It replaces REDTEAM's phase-18 rule (note:network-accounting/20261024T0558Z-finding-redteam-v3).
+- The scan's rule is the lane's one, field-aligned (`leak_scan.scan`, `benchmarks/network_traces/leak_scan.py`). It
+  replaces REDTEAM's phase-18 rule (note:network-accounting/20261024T0558Z-finding-redteam-v3).
   - A find of a witness piece or carry row counts only if it lies inside one field: one read C-Flock's proof format
     makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
     (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
@@ -106,11 +106,13 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
     is evidence for a manual analysis only.
   - The rule misses a leak written at a byte shift across fields.
-- The driver scans under it, and a ``leaked`` piece or row fails the run. It scans each witness row cut whole
-  (`leak_scan.public_pieces`), and finds whole each row shorter than the 16-byte piece: the carry rows, and ``srv``
-  rows of a few steps (10 bytes at the demo's G = 2). Runs before this left out, by byte count, the pieces and carry
-  rows with at most one nonzero byte, and checked those under the rule after the run. The aligned cutter they used
-  skipped a row's last bytes past its last 16-byte boundary, and every row shorter than 16 bytes.
+- The driver scans for every piece but those the staged circuit holds, and for each carry row whole.
+  `compile_slice_zk.py rescan` takes a finished run's scan again under the rule, its pieces recomputed; a salt the run
+  drew isn't, so a salt it found reads leaked.
+  - Each witness row is cut whole (`leak_scan.public_pieces`). A row shorter than the 16-byte piece is found whole, as
+    the carry rows are: at G < P, the ``srv`` rows of a few steps (10 bytes at the demo's G = 2).
+  - Earlier runs cut with `n2_zk.public_pieces`, which skipped a row's bytes past its last 16-byte boundary and every
+    row shorter than 16 bytes. The demo's ``srv`` rows at G = 2 were first scanned in run r20261025-011520-c02c.
 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
 6e29d34e7c, with #3972's record; the w212 slice at the class).
@@ -166,3 +168,10 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
 - At corpus-smallkv's first seven steps (7,562,498 ANDs a unit, m = 29), the honest unit and twelve negatives (run
   r20261024-175616-105c). The made-up table was refused by ``cache`` alone, and the six passes with their own served
   row by the native ``srv`` check.
+- The corpus runs' scans, rerun under the rule (`leak_scan.rescan`; the rows rebuilt at each run's commit, the salts
+  not kept), leak nothing (art:a6f573a413d3c88f336d6b0c994107a41976c7b5007d0f026cc5bebdd0e0a451). That covers 105c,
+  the wired slice's first run r20261024-145236-cf49 and the rerun r20261024-205837-adc8, which their own scans had
+  failed. Each find is in the proof streams and straddles fields:
+  - `05` and fifteen zeros over a Ligerito nonce list's length 5 and its first nonce;
+  - fifteen zeros and `80` over a zero vector length, the ring switch's nonce and `initial_cap`'s length 128;
+  - in 105c's rep1, fifteen zeros and `c0` over a zero element and the next element's first byte.
