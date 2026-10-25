@@ -8384,6 +8384,44 @@ theorem carryShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c
             (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv') r' v hv
     exact ⟨segs', by rw [hsegs'], hA2⟩
 
+/-- **`down`, `fromCallee`, `throughArg` and `carry` give `ShapeOk` segments, at every fuel**, wherever `throughArg`
+keeps what it reads (`specs`), a batch of a composite's piece and a scan's piece of one row give `ShapeOk` segments one
+step up from them, and the arguments' pieces are of positive count. -/
+theorem shapes (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
+      ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hT : ∀ fuel, ThroughSpec c sc fuel)
+    (hBatch : ∀ fuel, DownShapeAt c fuel → CalleeShape c fuel → BatchShape c fuel)
+    (hScan : ∀ fuel, CalleeShape c fuel → CarryShape c fuel → ScanShape c fuel) :
+    ∀ fuel, DownShapeAt c fuel ∧ CalleeShape c fuel ∧ ThroughShape c fuel ∧ CarryShape c fuel
+  | 0 => by
+    refine ⟨fun q segs _ _ _ _ h => absurd h (down_zero c q segs), ?_, ?_, ?_⟩
+    · intro _ _ _ _ _ _ _ h; rw [Desc.fromCallee.eq_1] at h; cases h
+    · intro _ _ _ _ _ _ _ _ h; rw [Desc.throughArg.eq_1] at h; cases h
+    · intro _ _ _ _ _ _ _ _ h; rw [Desc.carry.eq_1] at h; cases h
+  | fuel + 1 =>
+    have ⟨hD, hC, hTS, hK⟩ := shapes c sc hd hB hA hAP hL0 hR hT hBatch hScan fuel
+    ⟨downShape_succ c hB fuel hD hC (hBatch fuel hD hC) (hScan fuel hC hK),
+      calleeShape_succ c sc hd fuel hR hTS (hT fuel) (throughReps c), throughShape_succ c hB hA hAP hL0 fuel hD hK,
+      carryShape_succ c sc hd fuel hR hC hTS⟩
+
+/-- **`DownShape`** from `shapes`. -/
+theorem downShape_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
+      ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hT : ∀ fuel, ThroughSpec c sc fuel)
+    (hBatch : ∀ fuel, DownShapeAt c fuel → CalleeShape c fuel → BatchShape c fuel)
+    (hScan : ∀ fuel, CalleeShape c fuel → CarryShape c fuel → ScanShape c fuel) : DownShape c :=
+  fun fuel => (shapes c sc hd hB hA hAP hL0 hR hT hBatch hScan fuel).1
+
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
 decoded Program has them (`BodiesOk.retParts_reads`). -/
