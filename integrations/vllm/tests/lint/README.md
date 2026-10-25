@@ -31,12 +31,14 @@ failure message carries its fix.
 exception or raises a recorded count: against its merge base with `main`, no ratchet holds more entries and no entry's
 `count` is higher. An entry may move with the violation it allows. A change to a lint's own code or thresholds is judged
 like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
-lint to drop entries fails. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
+lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml` and the root `dev` group's
+ruff pin, so the gate reruns it with the base's config at the base's pin. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. Once drive.toml's `landing_gates` names it, the merge
 queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).
 Before marking, run `python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD`.
 
 To retire an entry, fix what it allows and delete it: its rule's stale-entry check then keeps it gone. Each lint's
-`test_no_new*` tests are the ones the gate runs, under drive's Python, so `test_ratchet.py` holds every lint to having one
-that takes no fixture, to a `NAME` that is a string literal, and to importing only the standard library and this directory.
+`test_no_new*` tests are the ones the gate runs, under drive's Python (with the pinned ruff, for the ruff lint), so
+`test_ratchet.py` holds every lint to having one that takes no fixture, to a `NAME` that is a string literal, and to
+importing only the standard library and this directory.
