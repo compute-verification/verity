@@ -82,20 +82,26 @@ def _descriptor(path: str) -> bytes:
 
 
 def _window(path: str):
-    """The served window's Program rebuilt from its descriptor (`credit.layout_of`'s layout, `credit.shape_of`'s prefix)
-    and held to it byte for byte, and its digest: the lane statement is `h1window.leaf_program`'s of it, as a served
-    window's verifier derives it."""
+    """The served window's Program rebuilt from its descriptor (`credit.layout_of`'s layout, `credit.shape_of`'s prefix),
+    each K's template held to the descriptor's by its descriptor id (which names every binding, so the 870 MB descriptor
+    is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
+    the template at K, as a served window's verifier derives it."""
     from verity.core.protocols.pouw import credit as CR
     from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
     layout, why = CR.layout_of(raw)
     if why is not None:
         raise SystemExit(f"REFUSED: {why}")
+    shape = CR.shape_of(raw)
     win = HW.program([tuple(x) for x in layout["linears"]], [tuple(x) for x in layout["calls"]], layout["m"],
-                     tuple(layout["tile"]), CR.shape_of(raw)["prefix"])
-    if canonical_json({x: v for x, v in encode_program(win).items() if x != "annotations"}) != raw:
-        raise SystemExit("the window Program rebuilt from the descriptor's layout is not the descriptor's")
+                     tuple(layout["tile"]), shape["prefix"])
+    got = {int(k): descriptor_id(t) for k, t in win.fn.bindings["TILES"]}
+    want = {int(k): t["fn"] for k, t in shape["tiles"].items()}
+    if got != want:
+        raise SystemExit(f"the window Program rebuilt from the descriptor's layout has other templates: K "
+                         f"{sorted(k for k in got.keys() | want.keys() if got.get(k) != want.get(k))}")
     return win, hashlib.sha512(raw).hexdigest()
 
 
