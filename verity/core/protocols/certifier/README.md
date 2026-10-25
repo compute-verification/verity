@@ -63,8 +63,8 @@ A spec-level reference for network accounting's timing channel:
   (`warden_rows.bucket_port`) holds to the warden's signed row. It has the reference (`cell`, `bucket_row`, the map
   `bucket_map` and the prover's routing `switches`) and the units' Boolean Definitions (`EgressBucket`: one bucket's R
   cells from its private map, routed ids and ready bits; `EgressRoute`: a link-window's ids through `IoTieRoute`'s
-  Beneš network). Structural Fits refuses a window holding them until causality is semantic, so they are proved
-  standalone;
+  Beneš network; `EgressMap`: one bucket's map from its request slots' streams, admissions and output counts).
+  Structural Fits refuses a window holding them until causality is semantic, so they are proved standalone;
 - the capacity counts;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's

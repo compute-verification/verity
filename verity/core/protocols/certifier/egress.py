@@ -34,16 +34,20 @@ request slot j whatever the switches. Positions t·R … t·R + R − 1 are enco
 and above aren't outputs. The router runs `IoTieRoute`'s network on its entries (the constant indices folded, the
 positions past T·R pruned), so splitting it a unit a Beneš column is a change to `_build_route` alone.
 
-**The map** (`bucket_map`) is `EgressMap_v1`'s reference (N2b, its Definition to follow): `io_tie.window_map`'s rule
-with the order the identity and e an output index.
+**The map** (`EgressMap`, one a bucket, N2b; its reference `bucket_map`, over its arguments `map_records`):
+`io_tie.window_map`'s rule with the order the identity and e an output index, from bucket b and each request slot's
+(q, admitted, n, live), live its bit 0. The live slots are ranked by (q, j), one comparison of q a pair of request
+slots; rank ρ's fields are the one-hot sum of the slots of that rank (an XOR, since ranks are distinct), so a record
+costs its comparisons of k with n and no mux. Its records are the encoder's `map`.
 
     EgressBucket{B, R, NR, K}(map: Array<R, Array<3, u32>>, routed: Array<R, Array<2, u32>>,
         ready: Array<⌈NR/16⌉, u16>) -> (o0: Array<R·B, Byte>, o1: u16)
     EgressRoute{NR, K, T, R}(ids: Array<NR·K, u32>, switches: Array<(2D − 1)·2^(D − 1), BIT>)
         -> Array<T·R, Array<2, u32>>            W = PB + 32 bits routed an entry, D = route_depth(T·R, NR·K)
+    EgressMap{R, r, NR, D}(b: u32, requests: Array<NR, Array<4, u32>>) -> (o0: Array<R, Array<3, u32>>, o1: u16)
 
 Every u32 and u16 is `Array<w, BIT>`, least significant bit first. B is even (a slot is whole u16 words) and at least
-`io_tie.CELL_USED`; K < 2^32 − 2 and NR·K < 2^32.
+`io_tie.CELL_USED`; K < 2^32 − 2 and NR·K < 2^32; r divides R and D < 2^32.
 """
 from __future__ import annotations
 
@@ -141,6 +145,14 @@ def _u32(name: str, x: object) -> int:
     return x
 
 
+def _check_map(R: object, r: object, NR: object, D: object) -> None:
+    if type(R) is not int or type(r) is not int or R < 1 or r < 1 or R % r:
+        raise ValueError(f"a bucket's R >= 1 slots are lanes of r >= 1, not R={R!r}, r={r!r}")
+    if type(NR) is not int or not 1 <= NR < 1 << 32 or type(D) is not int or not 0 <= D < 1 << 32:
+        raise ValueError(f"a window has 1 <= NR < 2^32 request slots and a delay 0 <= D < 2^32, not NR={NR!r}, "
+                         f"D={D!r}")
+
+
 # --- the reference ---------------------------------------------------------------------------------------------------
 
 def cell(B: int, NR: int, K: int, record: Sequence[int], entry: Sequence[int], ready: Sequence[int]) -> bytes:
@@ -196,6 +208,25 @@ def bucket_map(b: int, slots: Sequence[Request | None], R: int, r: int, D: int) 
             e = EMPTY if b < s.admitted + D or k > s.n else END_ENTRY if k == s.n else k
             out[rho * r + i] = Record(q, j, e)
     return tuple(out), len(live) * r > R
+
+
+def map_requests(slots: Sequence[Request | None], NR: int) -> list[tuple[int, int, int, int]]:
+    """`EgressMap`'s request slots: (q, admitted, n, 1) a held one, (0, 0, 0, 0) the rest."""
+    if len(slots) > NR:
+        raise ValueError(f"a window has NR = {NR} request slots, not {len(slots)}")
+    held = [(0, 0, 0, 0) if s is None else (s.q, s.admitted, s.n, 1) for s in slots]
+    return held + [(0, 0, 0, 0)] * (NR - len(slots))
+
+
+def map_records(R: int, r: int, NR: int, D: int, b: int,
+                requests: Sequence[Sequence[int]]) -> tuple[tuple[Record, ...], bool]:
+    """`EgressMap`'s outputs on its arguments: bucket b's records and overflow bit (`bucket_map`), request slot j
+    (q, admitted, n, live) held when bit 0 of live is 1."""
+    _check_map(R, r, NR, D)
+    if len(requests) != NR:
+        raise ValueError(f"a window has NR = {NR} request slots, not {len(requests)}")
+    rows = [tuple(_u32(n, x) for n, x in zip(("q", "admitted", "n", "live"), s, strict=True)) for s in requests]
+    return bucket_map(_u32("b", b), [Request(q, a, n) if live & 1 else None for q, a, n, live in rows], R, r, D)
 
 
 def honest_ready(b: int, slots: Sequence[Request | None], NR: int) -> list[int]:
@@ -369,6 +400,94 @@ EgressRoute = _part(
     "zero-extended to 32 bits, id) for t·R + σ < T·R")
 
 
+def _sig_map(S):
+    _check_map(S.R, S.r, S.NR, S.D)
+    return ((("b", U32), ("requests", Array(S.NR, Array(4, U32)))), Tuple(Array(S.R, Array(3, U32)), U16))
+
+
+def _sub(C, x: Sequence, y: Sequence) -> list:
+    """x − y mod 2^len(x), y as wide as x."""
+    return add(C, x, [v.inv() for v in y], cin=ONE, width=len(x))
+
+
+def _times(C, x: Sequence, c: int, w: int) -> list:
+    """x·c mod 2^w for a constant c >= 1: an add for each set bit of c but one."""
+    out = None
+    for s in range(c.bit_length()):
+        if c >> s & 1:
+            term = ([ZERO] * s + list(x) + [ZERO] * w)[:w]
+            out = term if out is None else add(C, out, term, width=w)
+    return out
+
+
+def _xor(xs: Sequence):
+    out = ZERO
+    for x in xs:
+        out = out ^ x
+    return out
+
+
+def _build_map(C, S, *els):
+    R, r, NR, D = S.R, S.r, S.NR, S.D
+    b, reqs = list(els[0]), [list(x) for x in els[1:]]
+    W, w = 32 + r.bit_length(), max(1, (NR - 1).bit_length())
+    q, x, n, pre, live = [], [], [], [], []
+    for j in range(NR):
+        qj, a, nj, lv = reqs[4 * j:4 * j + 4]
+        aD, b33 = add(C, a, _const(D, 32), width=33), b + [ZERO]
+        pj = _lt(C, b33, aD)
+        xj = _sub(C, b33, aD)[:32]
+        # b <= admitted + D + floor(n / r) is x·r <= n, x = b − admitted − D, once b >= admitted + D
+        within = _lt(C, nj + [ZERO] * (W - 32), _times(C, xj, r, W)).inv()
+        live.append(C.AND(lv[0], C.AND(_lt(C, b, a).inv(), OR(C, pj, within))))
+        q.append(qj), x.append(xj), n.append(nj), pre.append(pj)
+    # before[i][j]: request slot i ranks before j, by (q, slot): for i < j, q_i <= q_j
+    before = [[ZERO] * NR for _ in range(NR)]
+    for j in range(NR):
+        for i in range(j):
+            c = _lt(C, q[j], q[i])
+            before[j][i], before[i][j] = c, c.inv()
+    rank = []
+    for j in range(NR):
+        k = [ZERO] * w
+        for i in range(NR):
+            if i != j:
+                k = add(C, k, [C.AND(live[i], before[i][j])], width=w)
+        rank.append(k)
+    lanes = R // r
+    over = ZERO
+    if lanes < NR:
+        over = or_reduce(C, [C.AND(live[j], _lt(C, rank[j], _const(lanes, w)).inv()) for j in range(NR)])
+    out = []
+    for rho in range(lanes):
+        # the live ranks are distinct, so at most one slot is rank rho's and its fields are the XOR of the masked ones
+        sel = [C.AND(live[j], _eq(C, rank[j], _const(rho, w))) if rho < NR else ZERO for j in range(NR)]
+
+        def pick(vals):
+            return [_xor(C.AND(s, v[t]) for s, v in zip(sel, vals)) for t in range(len(vals[0]))]
+
+        sq, sx, sn, (sp,) = pick(q), pick(x), pick(n), pick([[p] for p in pre])
+        sj = [_xor(s for j, s in enumerate(sel) if j >> t & 1) for t in range(32)]
+        held = C.AND(_xor(sel), sp.inv())
+        xr, nW = _times(C, sx, r, W), sn + [ZERO] * (W - 32)
+        for i in range(r):
+            k = add(C, xr, _const(i, W), width=W)
+            data, end = C.AND(held, _lt(C, k, nW)), C.AND(held, _eq(C, k, nW))
+            # EMPTY and END_ENTRY differ in bit 0 alone
+            e = [C.AND(data, k[0]) ^ (data ^ end).inv()] + [C.AND(data, k[t]) ^ data.inv() for t in range(1, 32)]
+            out += [sq, sj, e]
+    return [*out, [over] + [ZERO] * 15]
+
+
+EgressMap = _part(
+    "EgressMap", ("R", "r", "NR", "D"), _sig_map, _build_map,
+    "(o0, o1) of one egress bucket's map: o0 its R records (q, j, e) from bucket b and each request slot j's (q, "
+    "admitted, n, live): the live slots, bit 0 of live 1, admitted <= b and b <= admitted + D + floor(n / r), ranked "
+    "by (q, j) as rho; slot rho·r + i (q_j, j, e), e = 2^32 − 1 for b < admitted + D, else with k = (b − admitted − "
+    "D)·r + i k for k < n, 2^32 − 2 for k = n, 2^32 − 1 past it; the slots past the live ones' (0, 0, 2^32 − 1); o1 "
+    "bit 0 1 when more than R / r slots are live, the records then the first R / r's. u32 and u16 LSB first")
+
+
 # --- arguments -------------------------------------------------------------------------------------------------------
 
 def _u32_bits(xs: Sequence[int]) -> list[int]:
@@ -389,6 +508,12 @@ def route_arguments(ids: Sequence[int], bits: Sequence[int]) -> list[list[int]]:
     return [_u32_bits(ids), [int(b) for b in bits]]
 
 
-__all__ = ["EgressBucket", "EgressRoute", "POISON", "Record", "Request", "Shape", "UNHELD", "bucket_arguments",
-           "bucket_map", "bucket_row", "cell", "entries", "entry_bits", "honest_ready", "ready_words",
-           "route_arguments", "route_perm", "routed", "switches"]
+def map_arguments(b: int, requests: Sequence[Sequence[int]]) -> list[list[int]]:
+    """`EgressMap`'s arguments in its signature's order, each its leaves' bits."""
+    return [_u32_bits([b]), _u32_bits([x for s in requests for x in s])]
+
+
+__all__ = ["EgressBucket", "EgressMap", "EgressRoute", "POISON", "Record", "Request", "Shape", "UNHELD",
+           "bucket_arguments", "bucket_map", "bucket_row", "cell", "entries", "entry_bits", "honest_ready",
+           "map_arguments", "map_records", "map_requests", "ready_words", "route_arguments", "route_perm", "routed",
+           "switches"]

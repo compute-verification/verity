@@ -6,6 +6,15 @@
   "EgressBucket_v1{B=256,R=8,NR=16,K=16}": {
    "and": 8032
   },
+  "EgressMap_v1{R=6,r=3,NR=4,D=0}": {
+   "and": 2333
+  },
+  "EgressMap_v1{R=64,r=4,NR=16,D=10}": {
+   "and": 37696
+  },
+  "EgressMap_v1{R=8,r=2,NR=16,D=2}": {
+   "and": 14403
+  },
   "EgressRoute_v1{NR=16,K=16,T=4,R=8}": {
    "and": 43392
   },

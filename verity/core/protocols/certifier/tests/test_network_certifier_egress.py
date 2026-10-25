@@ -156,6 +156,82 @@ def test_the_bucket_circuit_renders_the_wardens_rows():
     assert [o0 for o0, _ in _rows(bind(EG.EgressBucket, B=B, R=R, NR=NR, K=K), cases, B, R)] == want
 
 
+def _maps(fn, cases, R):
+    """`EgressMap`'s (records, overflow, o1's other bits) on each (b, requests)."""
+    args = [EG.map_arguments(b, reqs) for b, reqs in cases]
+    out = np.asarray(evaluate_bits(fn, *[np.asarray(col, dtype=np.uint8) for col in zip(*args)]))
+    got = []
+    for o in out.reshape(len(cases), -1):
+        words = [sum(int(x) << i for i, x in enumerate(o[32 * k:32 * k + 32])) for k in range(3 * R)]
+        got.append((tuple(EG.Record(*words[3 * s:3 * s + 3]) for s in range(R)), bool(o[96 * R]),
+                    [int(x) for x in o[96 * R + 1:]]))
+    return got
+
+
+def _map_cases(rng, NR, D, n):
+    """Buckets and request slots through every case of `bucket_map`: admitted after b, in the delay, at its outputs, at
+    its END and past it; not live, with live's high bits set either way; ties in q; and u32 extremes (admitted + D
+    past 2^32, n and b 2^32 − 1). A third of the buckets have every slot live, to overflow."""
+    top = (1 << 32) - 1
+    cases = []
+    for c in range(n):
+        b = rng.choice([rng.randrange(64)] * 4 + [top, rng.randrange(1 << 32)])
+        reqs = []
+        for _ in range(NR):
+            q = rng.choice([1, 2, 3, top, rng.randrange(1 << 32)])
+            if c % 3 == 0:
+                reqs.append((q, b - rng.randrange(min(b, D) + 1), rng.choice([rng.randrange(12), top]), 1))
+                continue
+            a = rng.choice([b - rng.randrange(min(b, D + 6) + 1)] * 4 + [min(b + 1, top), top, rng.randrange(1 << 32)])
+            n_ = rng.choice([rng.randrange(12)] * 3 + [0, top, rng.randrange(1 << 32)])
+            live = rng.choice([1, 1, 1, 0, 2, 3, top - 1, top])
+            reqs.append((q, a, n_, live))
+        cases.append((b, reqs))
+    return cases
+
+
+@pytest.mark.parametrize("R, r, NR, D", [(8, 2, 5, 2), (6, 3, 4, 0), (4, 1, 7, 1), (12, 2, 6, 3), (16, 4, 3, 5)])
+def test_the_map_circuit_is_its_reference(R, r, NR, D):
+    """`EgressMap` against `map_records` on random buckets through every case (r a power of two and not, D = 0,
+    more live slots than lanes and fewer): every kind of record, ties in q among the live slots, and overflow."""
+    rng = random.Random(R * r + NR * D)
+    cases = _map_cases(rng, NR, D, 300)
+    got = _maps(bind(EG.EgressMap, R=R, r=r, NR=NR, D=D), cases, R)
+    seen = {"data": 0, "end": 0, "pad": 0, "unheld": 0, "over": 0, "tie": 0}
+    for (b, reqs), (records, over, rest) in zip(cases, got):
+        want = EG.map_records(R, r, NR, D, b, reqs)
+        assert (records, over) == want and rest == [0] * 15
+        live = [q for q, a, n, lv in reqs if lv & 1 and a <= b <= a + D + n // r]
+        seen["tie"] += len(set(live)) < len(live)
+        seen["over"] += over
+        for m in records:
+            held = "unheld" if m == EG.UNHELD else "pad"
+            seen["data" if m.e < IT.END_ENTRY else "end" if m.e == IT.END_ENTRY else held] += 1
+    assert min(v for k, v in seen.items() if k != "over") >= 4 and (seen["over"] >= 4) == (R // r < NR), seen
+    for bad, match in (((8, 3, 5, 2), "lanes of r"), ((8, 2, 0, 2), "NR"), ((8, 2, 5, -1), "delay")):
+        with pytest.raises(ValueError, match=match):
+            EG.map_records(*bad, 0, [(0, 0, 0, 0)] * max(bad[2], 0))
+    with pytest.raises(ValueError, match="request slots"):
+        EG.map_records(8, 2, 5, 2, 0, [(0, 0, 0, 0)] * 4)
+
+
+def test_the_map_circuit_is_the_wardens_map():
+    """`EgressMap` on every bucket of a busy link, its request slots the window's (`map_requests`), is the map the
+    encoder's test renders the warden's rows from, overflow 0: what links the map stage to the encoder."""
+    served = busy(4, PARAMS, 14, 15, 6)
+    NR, K, T, r = 12, 16, PARAMS.window, PARAMS.slots
+    cases, want = [], []
+    for w, win in enumerate(_windows(served, NR, K)):
+        reqs = EG.map_requests(win.slots, NR)
+        for t in range(T):
+            cases.append((w * T + t, reqs))
+            want.append((win.maps[t], win.overflow[t]))
+            assert EG.map_records(PARAMS.grid.allocation, r, NR, PARAMS.delay, w * T + t, reqs) == want[-1]
+    assert not any(over for _, over in want) and sum(m.e < K for ms, _ in want for m in ms) > 40
+    fn = bind(EG.EgressMap, R=PARAMS.grid.allocation, r=r, NR=NR, D=PARAMS.delay)
+    assert [(m, o) for m, o, _ in _maps(fn, cases, PARAMS.grid.allocation)] == want
+
+
 def test_a_row_reads_no_id_but_its_ready_data_slots():
     """The local lemma (the spec's §7): a bucket's row is a function of its map, its ready bits and the ids of its
     ready DATA slots whose routed index is theirs. Every other slot's routed id, and every routed index of a slot
@@ -272,6 +348,9 @@ def test_the_parts_ands():
         assert 0 < HC.ands(bind(EG.EgressRoute, NR=NR, K=K, T=T, R=R), memo) <= sh.W * sh.switches
     one = HC.ands(bind(EG.EgressBucket, B=256, R=1, NR=16, K=4096), memo)
     assert one == ANDS_SLOT and HC.ands(bind(EG.EgressBucket, B=256, R=8, NR=16, K=4096), memo) == 8 * one
+    assert HC.ands(bind(EG.EgressMap, R=64, r=4, NR=16, D=10), memo) == ANDS_MAP
 
 
 ANDS_SLOT = 1_004
+#: `EgressMap`'s at the warden's defaults (R = 64 slots, lanes of r = 4, D = 10) and NR = 16
+ANDS_MAP = 37_696
