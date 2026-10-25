@@ -7,8 +7,12 @@
 #     bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
 #      writable; hidden_zk's by default)  SC_DRY=1 (the run and the host's read of every round only)
+#      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
+#      `warden_serve.py rehearse --fake --ids` at scan_zk's schedule, SC_REQUESTS requests at SC_RATE a second, and
+#      prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on the verifier's coins)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
-# nor a circuit (its pin is kept), nor a session's archive.
+# nor a circuit (its pin is kept), nor a session's archive. A rehearsal's public files go in $OUT/warden, its records
+# and salts (the prover's) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -24,8 +28,22 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
   > "$OUT/build-firewall.log" 2>&1
 [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "sczk: no firewall frame"; exit 7; }
 
-log "sczk: proving${SC_DRY:+, dry}"
-"$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" ${SC_DRY:+--dry} 2>&1 \
+if [ -n "${SC_REHEARSE:-}" ]; then
+  log "sczk: rehearsing the warden at scan_zk's schedule"
+  # shellcheck disable=SC2046
+  "$PY" benchmarks/network_traces/warden_serve.py rehearse --fake --ids --out "$W/warden" \
+    --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
+    $("$PY" benchmarks/network_traces/scan_zk.py schedule) 2>&1 | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
+  log "sczk: rehearsal rc ${PIPESTATUS[0]}"
+  mkdir -p "$OUT/warden"
+  for f in deployment.json cells.jsonl certified.jsonl check.json client.json warden.json serve.log traffic.json; do
+    [ -f "$W/warden/$f" ] && cp "$W/warden/$f" "$OUT/warden/"
+  done
+  SC_WARDEN_RUN=$W/warden
+fi
+log "sczk: proving${SC_DRY:+, dry}${SC_WARDEN_RUN:+, warden run $SC_WARDEN_RUN}${SC_DRAW:+, draw $SC_DRAW}"
+"$PY" benchmarks/network_traces/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$W/sczk" ${SC_DRY:+--dry} \
+  ${SC_WARDEN_RUN:+--warden-run "$SC_WARDEN_RUN"} ${SC_DRAW:+--draw "$SC_DRAW"} 2>&1 \
   | tee -a "$OUT/sczk.log" | cut -c1-4000
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"
