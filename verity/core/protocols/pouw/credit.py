@@ -76,16 +76,19 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   places it). A credited call is m_s·n·K of credited work (`served_work`), and one with m_s = 0 is no credit; the
   draw's population stays the Program's units, padded slots included (`call_work`). Each step's m_s is proved (`_live`).
 * **Each step's served rows are the live Program's** (`_live`, `live_of`): the window's evidence carries its live
-  Program (`circuit.live.program`, ``live``: its descriptor, and each round's live@<s> proof outcome, or in `window`
+  Program (`circuit.live.program_v2`, ``live``: its descriptor, and each round's live@<s> proof outcome, or in `window`
   its proof files, `_live_verified`), whose record's T, S and PREFIX must be the period's committed T, the window's
-  round count and its circuit's PREFIX, its root's units S calls of `PouwLiveSlots_v1{T}`. Every round is proved, never
+  round count and its circuit's PREFIX, its root's units S calls of `PouwLiveSlots_v2{T}`. Every round is proved, never
   sampled: round s's one accepted proof, verified against that descriptor, opened its slot ports at round s's slot table
   ``<prefix>slots@<s>`` and its header ports at round 0's request table ``<prefix>requests@0`` at their registered roots
   (each registered once with T rows; `_a_link` holds the slot table to round s's root and `_arow` the request table to
   ``request_table``), its ``m`` at the known ``<prefix>m@<s>`` of the manifest's m_s, its ``s`` at the known
-  ``<prefix>round@<s>`` of s and its ok ``o0`` at the known ``<prefix>live-ok`` rows (`live_reads.reads_file`). So m_s is rule A's count of round s's slots assigned to round 0's
-  admitted requests (`live.live_ok`), and a step whose m_s is any other refuses the window. The live statements' circuit
-  file is the period-open's ``circuit_files`` ``live``.
+  ``<prefix>round@<s>`` of s, its caps ``cap_<i>`` at the known ``<prefix>caps`` of the max_tokens its period's open
+  committed (`committed_length`) and its ok ``o0`` at the known ``<prefix>live-ok`` rows (`live_reads.reads_file`). So m_s
+  is rule A's count of round s's slots assigned to round 0's admitted requests (`live.live_ok_v2`), the admitted requests
+  are the fixed length's, each admitted in round 0 with its public max_tokens as its cap, so no request takes a decode row
+  past its own max_tokens, and a step whose m_s is any other refuses the window. The live statements' circuit file is the
+  period-open's ``circuit_files`` ``live``.
 * **No partial credit** (`_outcome`): the window is accepted only when every unit the draw coin draws has exactly one
   proof outcome and it is an accept. A drawn unit whose proof failed or is missing refuses the whole window, not only
   its call. A unit with two outcomes is refused, since a retry never reproves, and so is an outcome for a unit the draw
@@ -371,16 +374,16 @@ REQUESTS_OUTSIDE = ("the window's request table's root is not round 0's request_
 #: (`CIRCUIT_FILES`' ``live``)
 LIVE = "live"
 #: the live Program's function and its record's bindings in order, and its one template
-LIVE_FN = "PouwLiveWindow_v1"
+LIVE_FN = "PouwLiveWindow_v2"
 LIVE_RECORD = ("T", "S", "PREFIX")
-LIVE_UNIT = "PouwLiveSlots_v1"
+LIVE_UNIT = "PouwLiveSlots_v2"
 #: the live evidence with each round's proof outcome (`_window_outcomes`, the Lean's), and with its statements (`window`)
 LIVE_KEYS = ("descriptor", "proofs")
 LIVE_STATEMENTS = ("descriptor", "statements")
 #: a round's live statement: its round, the paths of its circuit file and public file, and its sessions' directories
 LIVE_STATEMENT_KEYS = ("circuit", "public", "round", "sessions")
 LIVE_FORM = ("the window's live evidence is not {descriptor, proofs}: its live Program's descriptor in lowercase hex "
-             "(circuit.live.program of its tables' T, its S rounds and its PREFIX, canonical JSON without annotations) "
+             "(circuit.live.program_v2 of its tables' T, its S rounds and its PREFIX, canonical JSON without annotations) "
              "and each round's live@<s> proof outcome, unit s round s's")
 LIVE_STATEMENTS_FORM = ("the window's live evidence is not {descriptor, statements}: its live Program's descriptor in "
                         "lowercase hex and a list of {circuit, public, round, sessions}, each round's live@<s> proof "
@@ -388,12 +391,12 @@ LIVE_STATEMENTS_FORM = ("the window's live evidence is not {descriptor, statemen
                         "least one)")
 LIVE_DESCRIPTOR_FORM = ("the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON "
                         "with its callees, definitions, program function and root")
-NOT_LIVE = ("the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v1{T=…,S=…,"
+NOT_LIVE = ("the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…,"
             "PREFIX=…}, each binding canonical JSON, T and S positive integers and PREFIX a string "
-            "(circuit.live.program's Program)")
+            "(circuit.live.program_v2's Program, whose units bind each request's cap to its public max_tokens)")
 LIVE_BODY = ("the window's live circuit's units are not its rounds: its root's nodes other than its inputs are not S "
-             "calls of PouwLiveSlots_v1{T=…}, a composite of that id bound to its record's T alone, S its record's "
-             "(circuit.live.program's body)")
+             "calls of PouwLiveSlots_v2{T=…}, a composite of that id bound to its record's T alone, S its record's "
+             "(circuit.live.program_v2's body)")
 LIVE_PROOFS_FORM = ("the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the "
                     "verifier of record's verdict for round s's live@<s> session, unit s: verdict accept or reject, "
                     "program the SHA-512 of the live descriptor, registered its finding")
@@ -1576,10 +1579,10 @@ def _parsed(descriptor: Any) -> dict | None:
 
 
 def live_of(descriptor: Any) -> tuple[dict | None, tuple[str, str] | None]:
-    """The live Program (`circuit.live.program`) whose descriptor is `descriptor` (its bytes, canonical JSON without
+    """The live Program (`circuit.live.program_v2`) whose descriptor is `descriptor` (its bytes, canonical JSON without
     annotations), ``{T, S, prefix, unit}``, and None; or None and the refusal (``live``, and why). T, S and the prefix are
     its program function's record (`LIVE_FN`'s ``T``, ``S`` and ``PREFIX``), its template ``unit`` is
-    ``PouwLiveSlots_v1{T=<T>}``, a composite of id `LIVE_UNIT` bound to T alone, and its root's nodes other than inputs
+    ``PouwLiveSlots_v2{T=<T>}``, a composite of id `LIVE_UNIT` bound to T alone, and its root's nodes other than inputs
     are S calls of it, unit s round s's. Its cost is the descriptor's bytes, never the gates its nodes unroll to."""
     def no(why: str) -> tuple[None, tuple[str, str]]:
         return None, (LIVE, why)
@@ -1648,8 +1651,9 @@ def other_live_finding(s: int, m: int) -> str:
     return (f"round {s}'s live@{s} proof opened other ports, values or roots than its statement reads: its slot ports "
             f"slot_<i> at round {s}'s slot table's registered root, its header ports req_<i> at round 0's request "
             f"table's, its m at the known m@{s} of the manifest's m_s = {m} served rows, its s at the known round@{s} "
-            f"of {s} and its ok o0 at the known live-ok rows, the one word 1: a proof at another m or round, of other "
-            "tables, or whose unit computed 0, proves no step's served rows")
+            f"of {s}, its caps cap_<i> at the known caps of the max_tokens its period's open committed and its ok o0 at "
+            "the known live-ok rows, the one word 1: a proof at another m, round or caps, of other tables, or whose unit "
+            "computed 0, proves no step's served rows")
 
 
 def _live_roots(entries: list, prefix: str, t: int, steps: int) -> tuple[dict | None, tuple[str, str] | None]:
@@ -1672,35 +1676,39 @@ def _live_roots(entries: list, prefix: str, t: int, steps: int) -> tuple[dict | 
     return out, None
 
 
-def _live_finding(program: str, prefix: str, window: str, t: int, steps: int, s: int, m: int, roots: dict
-                  ) -> dict[str, tuple[str, str]]:
+def _live_finding(program: str, prefix: str, window: str, t: int, steps: int, s: int, m: int, roots: dict,
+                  caps: str) -> dict[str, tuple[str, str]]:
     """Round s's live@<s> finding as its statement reads it (`live_reads.reads_file`), ``{port: (value, root)}``: each
     slot port at round s's slot table, each header port at round 0's request table (their roots `roots`), ``m`` at the
-    known ``m@<s>`` of `m`, ``s`` at the known ``round@<s>`` of s and ``o0`` at the known ``live-ok`` rows, each under
-    the window Program's digest `program` binding its open root `window`."""
-    sv, rv = LR.table(prefix, LR.SLOTS, s), LR.table(prefix, LR.REQUESTS)
+    known ``m@<s>`` of `m`, ``s`` at the known ``round@<s>`` of s, each ``cap_<i>`` at the known ``caps``, whose root is
+    `caps`, and ``o0`` at the known ``live-ok`` rows, each under the window Program's digest `program` binding its open
+    root `window`."""
+    sv, rv, cv = LR.table(prefix, LR.SLOTS, s), LR.table(prefix, LR.REQUESTS), LR.table(prefix, LR.CAPS)
     out = {f"slot_{i}": (sv, roots[sv]) for i in range(t)}
     out |= {f"req_{i}": (rv, roots[rv]) for i in range(t)}
     out["m"] = (LR.table(prefix, LR.M_ROWS, s), LR.m_table(program, prefix, window, s, m)[2].root.hex())
     out["s"] = (LR.table(prefix, LR.ROUND_ROWS, s), LR.round_table(program, prefix, window, s)[2].root.hex())
+    out |= {f"cap_{i}": (cv, caps) for i in range(t)}
     out[LR.OK_PORT] = (LR.table(prefix, LR.OK_VALUE), LR.ok_table(program, prefix, window, steps)[2].root.hex())
     return out
 
 
-Lived = Callable[[dict, bytes, dict, dict, list[int], str, str, str], tuple[Any, tuple[str, str] | None]]
+Lived = Callable[[dict, bytes, dict, dict, list[int], str, str, str, list[int]], tuple[Any, tuple[str, str] | None]]
 
 
 def _live(live: Any, lived: Lived, keys: tuple[str, ...], t: int, steps: int, prefix: str, program: str, window: str,
-          session: str, entries: list, served: list[int]) -> tuple[str, str] | None:
+          session: str, entries: list, served: list[int], max_tokens: list[int]) -> tuple[str, str] | None:
     """None when the window's live Program proves each round's served rows, else the refusal (``live``, or `lived`'s).
     Its live evidence `live` (`keys`: `LIVE_KEYS`, or `LIVE_STATEMENTS` in `window`) carries the live Program's
     descriptor (`live_of`), at the period's T table rows `t`, the window's `steps` rounds and its circuit's PREFIX
     `prefix`, and `lived` gives each round's proof outcome (`PROOF_KEYS`, unit s round s's) from it, the descriptor's
     bytes and `live_of`, the live tables' roots (`_live_roots`), each step's m_s (``served[s·C/S]``), the window
-    Program's digest `program`, its open root `window` and its session `session`. Each round has exactly one, accepted, verified against the live descriptor,
-    its finding `_live_finding`'s at its step's m_s and round s: a statement at an m other than the manifest's opens no
-    ``m@<s>`` row, one at another round no ``round@<s>`` row, and one whose unit computed 0 no ``live-ok`` row. A step of `window`, after `_registration`. Its cost is the
-    descriptor's bytes and the rounds' statements' ports."""
+    Program's digest `program`, its open root `window`, its session `session` and the max_tokens its period's open
+    committed (`max_tokens`, `committed_length`). Each round has exactly one, accepted, verified against the live
+    descriptor, its finding `_live_finding`'s at its step's m_s, round s and the public caps of `max_tokens`
+    (`live_reads.caps_table`): a statement at an m other than the manifest's opens no ``m@<s>`` row, one at another round
+    no ``round@<s>`` row, one at other caps no ``caps`` row, and one whose unit computed 0 no ``live-ok`` row. A step of
+    `window`, after `_registration`. Its cost is the descriptor's bytes and the rounds' statements' ports."""
     if not (isinstance(live, dict) and sorted(live) == list(keys) and type(live["descriptor"]) is str
             and _HEX.fullmatch(live["descriptor"])):
         return LIVE, LIVE_FORM if keys == LIVE_KEYS else LIVE_STATEMENTS_FORM
@@ -1719,7 +1727,7 @@ def _live(live: Any, lived: Lived, keys: tuple[str, ...], t: int, steps: int, pr
         return why
     per = len(served) // steps
     ms = [served[s * per] for s in range(steps)]
-    proofs, why = lived(live, raw, got, roots, ms, program, window, session)
+    proofs, why = lived(live, raw, got, roots, ms, program, window, session, max_tokens)
     if why is not None:
         return why
     if not (isinstance(proofs, list)
@@ -1728,6 +1736,7 @@ def _live(live: Any, lived: Lived, keys: tuple[str, ...], t: int, steps: int, pr
                     and _finding(p["registered"]) is not None for p in proofs)):
         return LIVE, LIVE_PROOFS_FORM
     digest, seen = hashlib.sha512(raw).hexdigest(), {}
+    caps = LR.caps_table(program, prefix, window, t, max_tokens)[2].root.hex()
     for p in proofs:
         s = p["unit"]
         if s >= steps:
@@ -1749,7 +1758,7 @@ def _live(live: Any, lived: Lived, keys: tuple[str, ...], t: int, steps: int, pr
             return LIVE, (f"round {s}'s live@{s} proof was verified against another circuit than the window's live "
                           "Program: its program is not the SHA-512 of the live descriptor")
         f = {port: (v, root) for port, v, root in _finding(p["registered"])}
-        if f != _live_finding(program, prefix, window, t, steps, s, ms[s], roots):
+        if f != _live_finding(program, prefix, window, t, steps, s, ms[s], roots, caps):
             return LIVE, other_live_finding(s, ms[s])
     return None
 
@@ -1765,10 +1774,10 @@ def _live_verified(files: Any, run: Run) -> Lived:
     `run` (`proofs.verify`) on its circuit file, which must hash to `files`' ``live`` (the period-open's
     `CIRCUIT_FILES`, else ``circuit``), against the live descriptor, its partition object (every instance of its
     template one unit) and the ``--registered`` file credit builds itself (`live_reads.reads_file`, under the window
-    Program's digest, its open root and its session, at the step's m_s). A session the
+    Program's digest, its open root and its session, at the step's m_s and the period's committed max_tokens). A session the
     verifier rejects refuses the window (``live``), and so does one that proved another unit than its round's."""
-    def lived(live: dict, raw: bytes, got: dict, roots: dict, ms: list[int], program: str, window: str, session: str
-              ) -> tuple[list | None, tuple[str, str] | None]:
+    def lived(live: dict, raw: bytes, got: dict, roots: dict, ms: list[int], program: str, window: str, session: str,
+              max_tokens: list[int]) -> tuple[list | None, tuple[str, str] | None]:
         statements = live["statements"]
         if not (isinstance(files, dict) and all(type(x) is str and _digest(v) is not None for x, v in files.items())):
             return None, ("circuit", FILES_FORM)
@@ -1790,7 +1799,7 @@ def _live_verified(files: Any, run: Run) -> Lived:
                                     f"the window has {got['S']} rounds: each round's live@<s> is one statement, "
                                     "verified once")
             seen.add(s)
-            reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"])
+            reg = LR.reads_file(program, got["T"], got["S"], s, roots, window, session, ms[s], got["prefix"], max_tokens)
             try:
                 found, why = run(PF.Proof(Path(st["circuit"]), Path(st["public"]), tuple(map(Path, st["sessions"]))),
                                  circuit_sha512=files[LIVE], program=raw, partition=partition, registered=reg)
@@ -1870,7 +1879,7 @@ def _window(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: A
     if why is None:
         why = _registration(window["root"], program, prefix, entries, ss, layout, len(rounds), proofs, sid)
     if why is None:
-        why = _live(live, lived, keys, t, len(rounds), prefix, program, window["root"], sid, entries, rows)
+        why = _live(live, lived, keys, t, len(rounds), prefix, program, window["root"], sid, entries, rows, max_tokens)
     return (None, why) if why is not None else (([i for i in got if rows[i] > 0], layout, rows), None)
 
 
@@ -2067,7 +2076,8 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
     8. `_live`: the window's `live` evidence (`LIVE_KEYS`) is its live Program's descriptor, at the period's T, its S
        rounds and its PREFIX (`live_of`), and each round's one accepted proof outcome, verified against it, opened round
        s's slot table and round 0's request table at their registered roots, ``m@<s>`` at the manifest's m_s,
-       ``round@<s>`` at s and the ``live-ok`` rows: each step's served rows are proved."""
+       ``round@<s>`` at s, ``caps`` at the max_tokens its period's open committed and the ``live-ok`` rows: each step's
+       served rows are proved, each served by a request of the fixed length within its public max_tokens."""
     got, why = _window(key, ledger, pins, main, window, session, salt, calls, served, commit, rounds, draw, descriptor,
                        entries, lambda *_: (proofs, None), live, _live_outcomes, LIVE_KEYS, k, rows, verify)
     return (None, why) if got is None else (got[0], None)

@@ -592,7 +592,7 @@ def _live(d, rec):
     rounds and `SV.PREFIX`, and each round's statement, its files stand-ins in `d` (the verifier of record is
     `_verifier`, which proves round s's unit s)."""
     steps = len(rec["commitment"]["rounds"])
-    return {"descriptor": SV.descriptor(L.program(ROWS, steps, SV.PREFIX)).hex(),
+    return {"descriptor": SV.descriptor(L.program_v2(ROWS, steps, SV.PREFIX)).hex(),
             "statements": [{**{x: v for x, v in _statement(d / f"live{s}", s, 1).items() if x != "call"}, "round": s}
                            for s in range(steps)]}
 
