@@ -200,14 +200,14 @@ class RankExtension:
                 "unopened": run._unopened, **({"acquired": commit[1].drain()} if commit is not None else {})}
 
     def h1rank_release(self) -> dict[str, Any] | None:
-        """The rank's hooks removed and, with the Commit, its committer finalized and closed: returns the rank's Commit
-        (its run root, tensors and errors), else None."""
+        """With the Commit, the rank's committer finalized and closed, then its hooks removed: newest first, as the Commit's
+        source wraps a routed expert's ``apply`` over H1's (`hooks.Patch.uninstall`). Returns the rank's Commit (its run
+        root, tensors and errors), else None."""
         st = getattr(self, "_h1rank", None)
         if st is None:
             return None
         out = None
         try:
-            st["hooks"].uninstall()
             if (commit := st.get("commit")) is not None:
                 com, tap = commit
                 try:
@@ -220,6 +220,7 @@ class RankExtension:
                     tap.untap()
         finally:
             self._h1rank = None
+            st["hooks"].uninstall()
         return out
 
 
