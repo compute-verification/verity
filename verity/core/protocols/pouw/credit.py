@@ -190,7 +190,7 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
-from verity.core.protocols.pouw.protocol import tagged
+from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
@@ -2314,6 +2314,39 @@ def _pin_hygiene(name: str, i: int, main: Any, pinned: str, period_pin: str | No
     return None
 
 
+CALL_RANGE_CODE, REPEATED_CALL = "call-range", "repeated-call"
+
+
+def passes_distinct(passes: Any) -> tuple[str, str] | None:
+    """Why the Pearl-C pass manifests `passes`, credited together, are refused, or None: every call index below
+    `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
+    (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
+    so a repeated index under one salt and root_B repeats its seeds, noise and tickets and would be credited twice
+    (CMP-84; `Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
+    ``index``."""
+    seen: dict[str, dict[int, int]] = {}
+    for p, m in enumerate(passes):
+        salt = m.get("salt") if isinstance(m, dict) else None
+        us = m.get("matmuls") if isinstance(m, dict) else None
+        if not isinstance(salt, str) or not isinstance(us, list) or not all(isinstance(u, dict) for u in us):
+            return ("manifest", f"pass {p} is not a Pearl-C manifest with a string salt and a list of matmuls")
+        held = seen.setdefault(salt, {})
+        for u in us:
+            i = u.get("index")
+            if type(i) is not int or not 0 <= i < CALL_RANGE:
+                return (CALL_RANGE_CODE, f"pass {p} holds call index {i!r}, outside [0, 2^32) where -h3's row seed "
+                                         "packs it: end the epoch (a new salt) before its 2^32nd call")
+            q = held.get(i)
+            if q is not None:
+                both = f"pass {p} holds call index {i} twice" if q == p else \
+                    f"passes {q} and {p} both hold call index {i}"
+                return (REPEATED_CALL, f"{both} under salt {salt[:16]}...: one epoch's calls repeat their seeds and "
+                                       "tickets, so the device numbers calls across the whole epoch and no index "
+                                       "is credited twice")
+            held[i] = p
+    return None
+
+
 def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                   run: Run = PF.verify) -> tuple[dict | None, tuple[str, str] | None]:
     """Period `name`'s credit and None, or None and the refusal: `_period_outcomes`' rules, each window's evidence
@@ -2727,12 +2760,12 @@ def _weights(window: Any, layout: Any, entries: Any, requests: Any, session: Any
     return w, None
 
 
-__all__ = ["CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LENGTH_FIELD",
+__all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "COMMIT_TAG", "CREDIT", "DELTA", "DEPTH", "DRAW_TAG", "K_FIELD", "LAYOUT_KEYS", "LENGTH_FIELD",
            "LENGTH_KEYS", "ROWS_FIELD", "LEVELS",
-           "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
+           "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
            "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "law", "layout_of", "live_of",
-           "merkle_depth", "partition_of", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "merkle_depth", "partition_of", "passes_distinct", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "window"]

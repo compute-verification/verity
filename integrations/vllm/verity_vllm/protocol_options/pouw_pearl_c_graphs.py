@@ -60,6 +60,7 @@ from typing import Any
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
+from .pouw_pass import call_index
 from .pouw_pearl_c_host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
 from .pouw_pearl_c_screen import excluded, scatter_into
 
@@ -129,10 +130,12 @@ class WholeCall:
 
 @dataclass(frozen=True)
 class _Slots:
-    """A forward's slots, for `calls` from the pass's counters `at` (matmuls, tiles, screened rows): each call's keys and
-    offsets by its weight's slot position (``pos``), each weight's prediction as `_slot` reads it, and the counters after."""
+    """A forward's slots, for `calls` from the pass's counters `at` (matmuls, tiles, screened rows) in the pass whose first
+    call has index `base`: each call's keys and offsets by its weight's slot position (``pos``), each weight's prediction as
+    `_slot` reads it, and the counters after."""
     calls: tuple[WholeCall, ...]
     at: tuple[int, int, int]
+    base: int
     pos: Any
     keys: Any
     offs: Any
@@ -290,7 +293,8 @@ class GraphCalls:
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
-        index, tiles_at, flags_at = at
+        base = self.cur.base
+        index, tiles_at, flags_at = base + at[0], at[1], at[2]
         offs, predicted = np.empty((len(calls), 3), np.int64), {}
         for i, c in enumerate(calls):
             offs[i] = self._offsets(index + i, tiles_at, flags_at)
@@ -299,17 +303,18 @@ class GraphCalls:
             flags_at += c.m
         keys = np.frombuffer(b"".join(self.keys(self.roots[c.w], index + i, c.m16) for i, c in enumerate(calls)), np.uint8)
         pos = np.fromiter((self.order[c.w] for c in calls), np.intp, len(calls))
-        return _Slots(calls, at, pos, keys.reshape(len(calls), -1), offs, predicted, (index + len(calls), tiles_at, flags_at))
+        return _Slots(calls, at, base, pos, keys.reshape(len(calls), -1), offs, predicted, (at[0] + len(calls), tiles_at, flags_at))
 
     def whole_replay(self, calls: tuple[WholeCall, ...]) -> bool:
         """Before vLLM replays a forward captured whole, with hashing: every call's keys and offsets (its index, and the
         pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream.  Returns
         whether `whole_replayed` had staged them, for these calls from where the pass is."""
         cur = self.cur
+        call_index(self, len(calls))
         if not self.hashing or not calls:
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
-        staged = s is not None and s.calls is calls and s.at == at
+        staged = s is not None and s.calls is calls and s.at == at and s.base == cur.base
         if not staged:
             s = self._slots(calls, at)
         if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
@@ -330,7 +335,8 @@ class GraphCalls:
         """After vLLM launches its replay of a forward captured whole: each call's matmul, and with hashing its tiles and
         rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
         files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
-        cur, index = self.cur, len(self.cur.matmuls)
+        cur = self.cur
+        index = cur.base + len(cur.matmuls)
         cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
         if not self.hashing or not calls:
             return
@@ -464,8 +470,9 @@ class GraphCalls:
         g.execs = (g.graph.raw_cuda_graph_exec(), g.tree.raw_cuda_graph_exec() if g.tree else 0, g.side.raw_cuda_graph_exec())
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
-        """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * index
+        """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (at its position in the pass,
+        the index past the pass's base)."""
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
