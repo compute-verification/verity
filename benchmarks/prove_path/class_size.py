@@ -15,7 +15,9 @@ lowering of one Program of the same registration at a small probe class:
   an `AllGather_v1{T, D}` of its keys), which the tests hold to an exact lowering at another class.
 
 `size` prices a census with the ANDs and k_log a unit at Llama-3.2-1B (`measured`, each with its source, scaled or
-interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log).
+interpolated where only another binding was measured, and saying so), and m = ceil(log2 Σ units · 2^k_log). A gather's
+k_log is its rows' (`rows_k`: C-Flock's composer gives each row a unit reads or writes an hm96 slot), so a unit past 256
+rows in and out, past a 2^27-bit block, is refused as C-Flock refuses it.
 
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE [--class SLOTS,PROMPT,OUTPUTS] \\
         [--probe 1,2,2]
@@ -107,6 +109,10 @@ def project(probe: Mapping[str, int], at: Any, cls: Any, heads: str = "v19") -> 
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
+#: circuits' compositions of the blocks this estimate scaled or interpolated, each staged by C-Flock's `UnitStager` at V3b's
+#: cuts (thread 1792894842.280569, 25 Oct)
+COMPOSED = ("circuits' compositions r20261025-183214-951f, r20261025-183237-6217 and r20261025-183911-2915 "
+            "(art:65bc8cddf39ec0076f17c19b4e13a74ad26554736b531b43fe6063f778cdcaf3)")
 #: ANDs and k_log a unit at Llama-3.2-1B, each with its source: k_log is CIR-95's table at its cut reads
 #: (note:circuits/20261024T0443Z-report-windows-advice-windows, r20261025-093758-baf3) unless said otherwise
 MEASURED: dict[str, tuple[int, int, str]] = {
@@ -117,22 +123,34 @@ MEASURED: dict[str, tuple[int, int, str]] = {
     "Gemm_v2{K=2048,N=16}": (16 * 1_053_595, 27, "scaled: 16 × Gemm_v2{K=2048,N=1}'s, r20261025-072834-bd85"),
     "Gemm_v2{K=8192,N=4}": (4 * 4_215_067, 27, "scaled: 4 × Gemm_v2{K=8192,N=1}'s, r20261025-072834-bd85"),
     "Gemm_v2{K=2048,N=1}": (1_053_595, 24, "r20261025-072834-bd85"),
-    "RoPEHead_v1{D=64}": (1_534_976 // 8, 22, "RoPE_v1{NHEADS=8,D=64}'s / 8, r20261025-072237-b8e3"),
+    "RoPEHead_v1{D=64}": (191_872, 22, COMPOSED + ", x cut 4"),
     "SiluMul_v2{I=8192}": (8192 * 1380, 26, "8,192 × SiluMulBf16_v4's 1,380 (circuits-bool-silu)"),
-    "TokenSelectChunk_v2{C=768}": (12 * 7_347, 22, "scaled: 12 × TokenSelectChunk_v2{C=64}'s, r20261025-082521-1daa"),
-    "TokenSelectCombine_v2{V=128256,C=768}": (round(332_633 * 167 / 2004), 27, "scaled: TokenSelectCombine_v2{V=128256,C=64}'s "
-                                              "over 2,004 chunks to 167, r20261025-082521-1daa"),
+    "TokenSelectChunk_v2{C=768}": (91_823, 22, COMPOSED),
+    "TokenSelectCombine_v2{V=128256,C=768}": (27_355, 27, COMPOSED + ", idx cut 167"),
     "AttnHeadEnd_v1{D=64}": (169_842, 22, "#4263, r20261025-123346-091b"),
     "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=false}": (9_281_000, 26, "#4263, r20261025-123346-091b"),
-    "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, "CHECK=false's (#4263, r20261025-123346-091b); "
-                                                                   "the mask's compares unmeasured"),
+    "AttnBlock_v5{D=64,NVIS=128,FIRST=false,BN=128,CHECK=true}": (9_281_000, 26, "CHECK=false's (#4263, r20261025-123346-091b), "
+                                                                   "which circuits found it equal to"),
 }
-#: `AttnBlockFirst_v1{D=64,NVIS,BN=128}` as #4263 measured it (r20261025-123346-091b): NVIS -> (ANDs, k_log)
-FIRST_BLOCKS = {1: (96_886, 22), 17: (1_231_456, 24), 128: (9_075_919, 26)}
-#: `AllGather_v1{WORLD,N}`'s k_log where CIR-95 measured it; a copy, no ANDs. Any other gather of at most `ROWS` rows takes
-#: 27, an upper bound: CIR-95's block at T = 136 for the key gathers, and the most rows a reader holds under 2^27 for the rest
-GATHERS = {(4, 16): 22, (48, 16): 25, (128, 16): 27, (128, 4): 27, (167, 1): 27}
-ROWS = 256
+#: `AttnBlockFirst_v1{D=64,NVIS,BN=128}`'s ANDs where #4263 (r20261025-123346-091b: NVIS 1, 17, 128) and circuits (`COMPOSED`)
+#: composed it, linear between
+FIRST_BLOCKS = {1: 96_886, 2: 165_175, 4: 300_567, 5: 367_670, 6: 435_639, 8: 571_031, 12: 843_099, 14: 979_101, 15: 1_047_070,
+                16: 1_115_295, 17: 1_231_456, 24: 1_708_199, 32: 2_252_527, 33: 2_368_688, 34: 2_436_657, 36: 2_573_043,
+                40: 2_845_431, 48: 3_389_759, 64: 4_526_991, 80: 5_664_223, 88: 6_257_127, 90: 6_393_065, 92: 6_529_131,
+                96: 6_801_455, 112: 7_938_687, 128: 9_075_919}
+#: its k_log: (the last NVIS at it, k_log), the steps circuits bisected to adjacent NVIS
+FIRST_K = ((4, 22), (15, 23), (33, 24), (90, 25), (128, 26))
+#: `TokenFeed_v1{NP}`'s k_log as circuits composed it: (the most NP, k_log), an upper bound below a composed NP
+FEED_K = ((1024, 23), (2048, 24))
+#: C-Flock's largest block, 2^27 bits (`verity_flock.circuit.K_MAX`)
+K_MAX = 27
+
+
+def rows_k(rows: int) -> int:
+    """The least k_log of a unit of ``rows`` rows in and out: C-Flock's composer gives each an hm96 slot, the slots rounded up
+    to a power of two, at 2^19 bits a slot of block, and no block is under 2^22. Every `AllGather_v1{W, 64}` circuits composed
+    (W 2 to 128) and `{64, 16}` take exactly this at their W + 1 rows (`COMPOSED`), so a gather of 256 parts takes 2^28."""
+    return max(22, 19 + (rows - 1).bit_length())
 
 
 def measured(lab: str) -> tuple[int, int, str]:
@@ -140,16 +158,16 @@ def measured(lab: str) -> tuple[int, int, str]:
     if lab in MEASURED:
         return MEASURED[lab]
     fam, s = statics(lab)
-    if fam == GATHER and 2 <= s["WORLD"] <= ROWS:
-        return 0, GATHERS.get((s["WORLD"], s["N"]), 27), "a copy (b1_tp2); k_log " + (
-            "CIR-95's" if (s["WORLD"], s["N"]) in GATHERS else "27, an upper bound (CIR-95: a reader holds about 256 rows under 2^27)")
+    if fam == GATHER and s["WORLD"] >= 2:
+        return 0, rows_k(s["WORLD"] + 1), f"a copy (b1_tp2); k_log its {s['WORLD'] + 1} rows' (rows_k)"
     if fam == "AttnBlockFirst_v1" and (s["D"], s["BN"]) == (64, 128) and 1 <= s["NVIS"] <= 128:
         v, (lo, hi) = s["NVIS"], next((a, b) for a, b in zip(FIRST_BLOCKS, list(FIRST_BLOCKS)[1:]) if s["NVIS"] <= b)
-        ands = round(FIRST_BLOCKS[lo][0] + (FIRST_BLOCKS[hi][0] - FIRST_BLOCKS[lo][0]) * max(v - lo, 0) / (hi - lo))
-        k = FIRST_BLOCKS[1][1] if v == 1 else FIRST_BLOCKS[hi][1]
-        return ands, k, "#4263 (r20261025-123346-091b)" + ("" if v in FIRST_BLOCKS else ": interpolated, k_log the next measured")
-    if fam == FEED:
-        return 30 if s["FIRST"] else 62, 22, "circuit-check r20261025-174007-faec; k_log unmeasured, the floor the smallest units take"
+        ands = round(FIRST_BLOCKS[lo] + (FIRST_BLOCKS[hi] - FIRST_BLOCKS[lo]) * max(v - lo, 0) / (hi - lo))
+        k = next(k for last, k in FIRST_K if v <= last)
+        return ands, k, "#4263 (r20261025-123346-091b) and " + COMPOSED + ("" if v in FIRST_BLOCKS else ": ANDs interpolated")
+    if fam == FEED and (k := next((k for most, k in FEED_K if s["NP"] <= most), None)) is not None:
+        return 30 if s["FIRST"] else 62, k, "circuit-check r20261025-174007-faec; k_log " + COMPOSED + (
+            "" if s["NP"] in dict(FEED_K) else ", an upper bound")
     raise ValueError(f"no measured ANDs or k_log for {lab} at Llama-3.2-1B: add its measurement to MEASURED")
 
 
@@ -165,6 +183,9 @@ def size(units: Mapping[str, int], times: int = 1) -> dict[str, Any]:
     if missing:
         raise ValueError(f"no measured ANDs or k_log at Llama-3.2-1B for {', '.join(missing)}: add each to MEASURED")
     rows = [(lab, n * times, *measured(lab)) for lab, n in units.items()]
+    past = [f"{lab} (2^{k})" for lab, _, _, k, _ in rows if k > K_MAX]
+    if past:
+        raise ValueError(f"{', '.join(past)}: an instance needs a block past 2^{K_MAX} bits, C-Flock's most; cut it finer")
     cells = sum(n << k for _, n, _, k, _ in rows)
     return {"units": sum(n for _, n, *_ in rows), "ands": sum(n * a for _, n, a, _, _ in rows), "m": math.ceil(math.log2(cells)),
             "templates": [{"template": lab, "units": n, "ands": a, "k_log": k, "source": src}

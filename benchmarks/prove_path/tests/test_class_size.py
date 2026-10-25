@@ -8,6 +8,8 @@
   nor full;
 * a probe that doesn't divide evenly is refused, and so is a template `size` has no measurement for; m is the log of the
   cells;
+* a gather's k_log is its rows' (its parts and its output, an hm96 slot each), circuits' composed values at every W they
+  composed, and a gather of 256 parts needs a block of 2^28 bits, which `size` refuses as C-Flock does;
 * with no ``--class``, ``prove_path.py`` takes the class of record.
 """
 from __future__ import annotations
@@ -28,7 +30,7 @@ import class_size as CZ  # noqa: E402
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
-GRAIN = Grain(gemm_words=512, rows=8, select=64)
+GRAIN = Grain(gemm_words=512, rows=9, select=64)
 PROBE = WindowClass(1, 2, 2)
 
 
@@ -62,10 +64,20 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
     s = CZ.size({"Gemm_v2{K=2048,N=1}": 3, "AllGather_v1{WORLD=4,N=16}": 1}, times=2)
     assert (s["units"], s["ands"], s["m"]) == (8, 6 * 1_053_595, math.ceil(math.log2(6 * 2**24 + 2 * 2**22)))
     ands, k, src = CZ.measured("AttnBlockFirst_v1{D=64,NVIS=72,BN=128}")
-    assert (ands, k) == (round(1_231_456 + (9_075_919 - 1_231_456) * 55 / 111), 26) and "interpolated" in src
+    assert (ands, k) == (round(4_526_991 + (5_664_223 - 4_526_991) * 8 / 16), 25) and "interpolated" in src
     assert CZ.measured("AttnBlockFirst_v1{D=64,NVIS=17,BN=128}")[:2] == (1_231_456, 24)
+    assert [CZ.measured(f"AttnBlockFirst_v1{{D=64,NVIS={v},BN=128}}")[1] for v in (4, 5, 15, 16, 33, 34, 90, 91, 128)] == [
+        22, 23, 23, 24, 24, 25, 25, 26, 26]
+    assert [CZ.measured(f"AllGather_v1{{WORLD={w},N=64}}")[1] for w in (2, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128)] == [
+        22, 22, 23, 23, 24, 24, 25, 25, 26, 26, 27]
+    wn = ((64, 16), (32, 16), (128, 4), (167, 1), (255, 16))
+    assert [CZ.measured(f"AllGather_v1{{WORLD={w},N={n}}}")[1] for w, n in wn] == [26, 25, 27, 27, 27]
     with pytest.raises(ValueError, match=r"no measured ANDs or k_log at Llama-3.2-1B for Gemm_v2\{K=4096,N=16\}, Foo_v1\{\}"):
         CZ.size({"Gemm_v2{K=4096,N=16}": 1, "AllGather_v1{WORLD=256,N=16}": 1, "Foo_v1{}": 1})
+    with pytest.raises(ValueError, match=r"AllGather_v1\{WORLD=256,N=4\} \(2\^28\): an instance needs a block past 2\^27 bits"):
+        CZ.size({"AllGather_v1{WORLD=128,N=4}": 4, "AllGather_v1{WORLD=256,N=4}": 2})
+    assert CZ.measured("TokenFeed_v1{NP=1024,FIRST=false}")[:2] == (62, 23)
+    assert CZ.measured("TokenFeed_v1{NP=2048,FIRST=true}")[:2] == (30, 24)
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
