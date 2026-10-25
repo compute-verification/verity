@@ -327,7 +327,7 @@ def case_of(rw: Mapping[str, Any], windows: Sequence[int], audits: Sequence[tupl
               "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program.pop(), "session": dep["session"],
               "sync_set": {"deltas": list(setup.sync_set.deltas),
                            "rhos": [[r.numerator, r.denominator] for r in setup.sync_set.rhos]},
-              "windows": len(xs), **({"first": first} if first else {})}
+              "windows": len(xs), "first": first}
     commitment = canonical_json({"audits": [r for r, _ in audits], "windows": [x["registration"] for x in xs]})
     evidence = canonical_json({"audits": [a for _, a in audits],
                                "windows": [{"answer": x["answer"], "certificates": x["certificates"],
