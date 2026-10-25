@@ -544,11 +544,12 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
 def test_window_and_period_credit_are_the_only_entries():
     """A caller can't credit a window with a step skipped: the steps `window` composes are internal, and so are the
     forms that take proof outcomes in place of proof files (the Lean's, until it runs the verifier of record)."""
-    for step in ("credited", "outcome", "a_link", "registration", "verified", "window_outcomes", "period_outcomes"):
+    for step in ("credited", "outcome", "a_link", "registration", "verified", "asks", "lean_verified",
+                 "window_outcomes", "period_outcomes"):
         assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
     assert {"window", "period_credit"} <= set(Cr.__all__)
-    assert not {"_credited", "_outcome", "_a_link", "_registration", "_verified", "_window_outcomes",
-                "_period_outcomes"} & set(Cr.__all__)
+    assert not {"_credited", "_outcome", "_a_link", "_registration", "_verified", "_asks", "_lean_verified",
+                "_window_outcomes", "_period_outcomes"} & set(Cr.__all__)
 
 
 @pytest.mark.parametrize("seed", SEEDS)
