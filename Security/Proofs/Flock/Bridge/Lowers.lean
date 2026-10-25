@@ -422,13 +422,18 @@ theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
   rw [hg', Option.getD_some]
   exact posOf_injective (by simpa using List.find?_some hg')
 
+theorem inputClassOf_flatten : (inputClassOf C).flatten = (inputsOf C).map fun g => [[posOf C g]] := by
+  unfold inputClassOf
+  split <;> simp_all
+
 theorem rus_partOf {n : ℕ} (P : Partition C n) :
-    (partOf P).rus = (List.finRange n).map fun u => [unitGates P u] := by
-  simp [partOf, Claims.Sampling.Partition.rus]
+    (partOf P).rus = ((List.finRange n).map fun u => [unitGates P u]) ++ (inputsOf C).map fun g => [[posOf C g]] := by
+  simp [partOf, Claims.Sampling.Partition.rus, inputClassOf_flatten]
 
 /-- Slot `u` of `partOf P` is unit `u`'s replay unit. -/
 theorem rus_partOf_getElem? {n : ℕ} (P : Partition C n) (u : Fin n) :
     (partOf P).rus[u.val]? = some [unitGates P u] := by
-  simp [rus_partOf]
+  rw [rus_partOf, List.getElem?_append_left (by simp)]
+  simp
 
 end Flock.Bridge
