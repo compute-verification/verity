@@ -269,6 +269,17 @@ its pins log doesn't record, or from a branch commit merged into main but not on
 refused; `core_check.salt` reads its session through the same `pinned_session`. A seeded epoch's commitment is unchanged (`SCHEME`, salt
 and draw only).
 
+**Pearl-C periods** (`credit.pearl_c_period_credit`, CMP-82). A live Pearl-C pass's salt is the coin of a salt-only
+session (`window.SALT_FAMILIES`) the gate opens on its salt epoch's root `salt.epoch_open_root(W, k)`
+(`core_check.live_salt`). Under that layout an abandoned session ends complete, like a used one, so a pass earns only
+inside a Pearl-C period, and the period earns only when all of these hold: its close's sessions are exactly the presented
+passes' epochs, in its order (`credit.period`), so a complete session no pass presents refuses it; each session is a
+Pearl-C salt session (``salt-only``; H1's checks refuse such a session, so the two never share a period); each session is
+credited toward the period (``circuit``, `challenger.credited_session`); each pass passes `core_check.pass_epoch`
+(``pass``); each W's epochs are numbered on from the lane's earlier credited periods with no gap or repeat (``index``),
+so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
+Its Lean port is open.
+
 ## Registered weights (`registration`)
 
 One rule for every construction that serves a checkpoint: Pearl-C4 (`PearlC4.check_registration`) and served FP8's Pearl-C
