@@ -5,8 +5,8 @@ import Proofs.Flock.Bridge.Deployed
 # A unit right on its shaped openings is not faulty
 
 `faultyRightC`, the shaped form of `FaultyRightTarget` (`Bridge.Targets`): `shaped g v` is any predicate on the value
-of an opening at wire `g` (the bridge's: RowShaped at the port's row/v2 width). A unit `u` whose committed wires each carry,
-in some shaped opening of their registered commit string, their value in `C`'s evaluation on `Xr`'s inputs
+of an opening at wire `g` (the bridge's: RowShaped at the port's row/v2 width). A unit `u` whose committed wires each
+carry, in some shaped opening of their registered commit string, their value in `C`'s evaluation on `Xr`'s inputs
 (`RightRegZc`'s second conjunct), and each of whose shaped registered openings opens its wire's position under `Cm` and
 `roots`, is not faulty in `witDep C Cm H roots Xr`. It reads the transport only at the right openings, so with
 `shaped := fun _ _ => True` it is `FaultyRightTarget`.
@@ -122,13 +122,13 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
 /-- **What the unit needs, outside its interior, is its committed wires' positions**: a gate of `need` of
 `[unitGates P u]` outside the unit, or one the unit commits, is the position of a wire in `P.io u`. -/
 theorem need_posOf {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {i : ℕ}
-    (hi : i ∈ WrongSet.need (progOf C) [unitGates P u])
+    (hi : i ∈ FlockSoundness.Discharge.ZkLink.WrongSet.need (progOf C) [unitGates P u])
     (hB : i ∉ unitGates P u ∨ (progOf C).Boundary (unitGates P u) i = true) :
     ∃ a ∈ P.io u, i = posOf C a := by
   by_cases hin : i ∈ unitGates P u
   · exact posOf_of_boundary hin (hB.resolve_left (not_not.2 hin))
   have hgates : RU.gates [unitGates P u] = unitGates P u := by simp [RU.gates]
-  simp only [WrongSet.need, hgates, List.mem_append, List.mem_flatMap] at hi
+  simp only [FlockSoundness.Discharge.ZkLink.WrongSet.need, hgates, List.mem_append, List.mem_flatMap] at hi
   rcases hi with hi | ⟨p, hp, hrd⟩
   · exact absurd hi hin
   obtain ⟨g, hu, j, hj, rfl⟩ := mem_unitGates.1 hp
@@ -156,7 +156,7 @@ theorem witDep_mem {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots
 
 /-- **`witDep` opens a wire's position at its value** wherever some datum passes there. -/
 theorem witDep_val {Cm : Commitment Bool} {H : Claims.Msg → Claims.Msg} {roots : List Claims.Msg}
-    {xv : Fin C.N → Bool} (s : Stmt) (hs : s.roots = roots) (a : Fin C.N)
+    {xv : Fin C.N → Bool} (s : Claims.Sampling.Stmt) (hs : s.roots = roots) (a : Fin C.N)
     (hex : ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C a, C.eval xv a, d⟩ = true) :
     (witDep C Cm H roots xv).val H Cm s (posOf C a) = some (C.eval xv a) := by
   unfold Wit.val
