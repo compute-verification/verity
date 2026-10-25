@@ -1,4 +1,4 @@
-import Models.Flock.Guarantees.Claims
+import Definitions.Flock.Guarantees.Claims
 import Proofs.Flock.Claims.RecursionStated
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Finder
@@ -144,6 +144,11 @@ import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.VerdictRows
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictParts
+import Proofs.Flock.Claims.Recursion.ResAccepts
+import Proofs.Flock.Claims.Recursion.RowSlots
+import Proofs.Flock.Claims.Recursion.FinalPiece
+import Proofs.Flock.Claims.Recursion.VerdictPieces
+import Proofs.Flock.Claims.Recursion.VerdictRun
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy

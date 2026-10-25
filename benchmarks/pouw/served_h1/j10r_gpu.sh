@@ -54,7 +54,7 @@ case "${JOB:-tests}" in
     [ "${NOISE:-j10r}" = v1 ] && j10r=
     cd integrations/vllm
     # shellcheck disable=SC2086
-    "$PY" -m tests.protocol_options.pouw_h1_gpu --workload fill --served --commit --negatives --receipts "$so" $j10r \
+    "$PY" -m tests.protocols.pouw_h1_gpu --workload fill --served --commit --negatives --receipts "$so" $j10r \
       --declare "${DECLARE:-32,3,32,4}" --out "$OUT" --at 2026-10-24T00:00:00Z --by compute-accounting 2>&1 \
       | tee "$OUT/window.log"
     exit "${PIPESTATUS[0]}" ;;
