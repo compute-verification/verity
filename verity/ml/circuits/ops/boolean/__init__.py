@@ -1,5 +1,7 @@
 """verity.ml.circuits.ops.boolean: word arithmetic as Boolean circuits.
 
+    argmax       the greedy argmax's 16-bit units on bits: ArgmaxChunkBest_v2, ArgmaxChunkIdx_v2 and ArgmaxCombine_v2, and the
+                 16-bit index's SelectU16_v2 and U16Add_v2
     gemm         the BF16 steps, F2FP cast, DotBf16_v3, GemmCoordinate_v3 and Gemm_v3 on bits, and the E4M3, E5M2, NVFP4 and
                  MXFP4 steps and their coordinates
     attention    FA2 attention's FTZ f32 operations, max, -inf guard and inverse sum as Boolean Definitions

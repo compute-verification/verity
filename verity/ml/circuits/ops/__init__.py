@@ -8,6 +8,9 @@
                       element-wise add / mul
     verity.ml.circuits.ops.mufu    IR primitives: the MUFU ex2 / rcp / sqrt / rsqrt / tanh approximations over their measured sm_89 tables
                       (package data), FA2's inverse sum, div.full's range scaling; numpy kernels for all but tanh
+    verity.ml.circuits.ops.argmax  IR composites: the greedy argmax of a bf16 row from its V-chunks, one 16-bit word a unit
+                      (ArgmaxChunkBest, ArgmaxChunkIdx, ArgmaxCombine), and the 16-bit index's SelectU16 and U16Add;
+                      `ops.boolean.argmax` has them on bits
     verity.ml.circuits.ops.gemm    IR composites: DotBf16 / GemmCoordinate / Gemm parameterised by the step; GEMM_AMPERE, GEMM_HOPPER;
                       the sm_120 GemmCoordinateE4m3 / GemmCoordinateNvf4 / GemmCoordinateMxf4 and their GEMM_SM120_* bindings
     verity.ml.circuits.ops.s8      IR composites: the exact s8 matmul family S8Dot / S8Matmul over the s8 and u8 x s8 IMMA steps
