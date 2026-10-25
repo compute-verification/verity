@@ -42,6 +42,7 @@ import Flock.RecSparse
 import Flock.RecVStar
 import Flock.Verify
 import Flock.Zk
+import Flock.Norm
 
 namespace Flock
 namespace RecCoins

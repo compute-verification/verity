@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Scope.Matches
 import Flock.Registered
 import Flock.RecSetup
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # The deployed verifier's statement: its bytes, its parser and its setup
@@ -291,6 +292,24 @@ theorem readOf_zk {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : readOf z
     rw [hi] at hw
     cases hw
     exact Raw.ins_zk hi
+
+/-- **A statement's draw is rebuilt** (`Flock.norm`, `Raw.ins_draw`). -/
+theorem insOf_draw_norm {zk : Bool} {x : Claims.Msg} {s : Ins} (h : insOf zk x = some s) {d : Json}
+    (hd : s.read.draw = some d) : Flock.norm d = d ∧ Claims.Json.Wf d := by
+  unfold insOf at h
+  obtain ⟨w, -, hw⟩ := Option.bind_eq_some_iff.1 h
+  split_ifs at hw with hz
+  · cases hw
+  change w.ins.toOption = some s at hw
+  cases hi : w.ins with
+  | error e => rw [hi] at hw; cases hw
+  | ok s' =>
+    rw [hi] at hw
+    cases hw
+    obtain ⟨draw, -, hdr⟩ := Raw.ins_draw hi
+    rw [hdr] at hd
+    obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
+    exact ⟨norm_norm d₀, wf_norm d₀⟩
 
 /-- **The claims' parser**: C's `parseOf` at the verifier's reading of the bytes: `Read.parse` (the verifier's setup of
 the session's statement), read as `Claims.Flock.Stmt` (`toReadable`, with the relation's fields `rel`). -/

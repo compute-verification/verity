@@ -38,35 +38,22 @@ open private stratumOfJson from Flock.Draw
 draw. -/
 theorem Raw.ins_read {w : Raw} {s : Ins} (h : w.ins = .ok s) :
     s.read.zk = w.zk ∧ (w.zk = false → s.read.I.coins = .os ∨ s.read.I.coins = .seed) ∧
-      w.draw.mapM (jsonOf "draw") = .ok s.read.draw := by
+      ∃ draw, w.draw.mapM (jsonOf "draw") = .ok draw ∧ s.read.draw = draw.map Flock.norm := by
+  refine ⟨Raw.ins_zk h, ?_, Raw.ins_draw h⟩
   unfold Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | (cases h; done)
-    | (cases h; exact ⟨rfl, fun hz => by simp_all, by assumption⟩)
+    | (cases h; exact fun hz => by simp_all)
 
-/-- The draw is JSON that `Json.parse` read. -/
-theorem draw_parse {w : Raw} {draw : Option Json} (h : w.draw.mapM (jsonOf "draw") = .ok draw) {d : Json}
-    (hd : draw = some d) : ∃ t, Json.parse t = .ok d := by
-  subst hd
-  cases hw : w.draw with
-  | none => rw [hw] at h; cases h
-  | some b =>
-    rw [hw] at h
-    simp only [Option.mapM_some] at h
-    cases hj : jsonOf "draw" b with
-    | error e => rw [hj] at h; cases h
-    | ok d' =>
-      rw [hj] at h
-      cases h
-      unfold jsonOf at hj
-      split at hj
-      · cases hj
-      · rename_i t _
-        cases hp : Json.parse t with
-        | error e => rw [hp] at hj; cases hj
-        | ok j => rw [hp] at hj; cases hj; exact ⟨t, hp⟩
+/-- The draw is well formed: the verifier rebuilt it (`Flock.norm`, `wf_norm`). -/
+theorem draw_wf {w : Raw} {draw : Option Json}
+    (h : ∃ dr, w.draw.mapM (jsonOf "draw") = .ok dr ∧ draw = dr.map Flock.norm) {d : Json} (hd : draw = some d) :
+    Claims.Json.Wf d := by
+  obtain ⟨dr, -, rfl⟩ := h
+  obtain ⟨d₀, -, rfl⟩ := Option.map_eq_some_iff.1 hd
+  exact wf_norm d₀
 
 /-- A statement of the plain verifier decodes to inputs that `Raw.ins` read. -/
 theorem insOf_false {x : Claims.Msg} {s : Ins} (h : insOf false x = some s) :
@@ -601,11 +588,10 @@ theorem stmtOk (S : Claims.JsonSpec printJ Flock.canon) : StmtOk H rel := by
       cases e : ProvedScope.lawWhy false c.s.read.tags D with
       | none => rfl
       | some _ => rw [e] at hdl; cases hdl
-    obtain ⟨t, ht⟩ := draw_parse hdraw hdd
     have hg : Good d := by
       rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-      · exact good_stratified (S.parse_wf _ _ ht) hD hK
-      · exact good_subset (S.parse_wf _ _ ht) hD hk
+      · exact good_stratified (draw_wf hdraw hdd) hD hK
+      · exact good_subset (draw_wf hdraw hdd) hD hk
     refine ⟨fun hn' => ?_, hg, D, hD, by rw [hspec]; exact hn⟩
     rw [hn'] at hg
     rw [hn'] at hD
