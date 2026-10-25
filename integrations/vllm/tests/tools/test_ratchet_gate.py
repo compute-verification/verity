@@ -2,7 +2,8 @@
 on its own, no ratchet growing (by entries, per ratchet, or by an entry's count), a new, moved or renamed ratchet, the changes
 it doesn't judge, the base's lint code run on the change's tree (a loosened, deleted or bypassed lint fails, naming what it
 still finds; a tightened one passes once its findings are fixed), the ruff lint rerun with the base's config and pin (a
-loosened config, lint or pin fails), the exemptions (a revert, a pure move the base's move_check certifies), and its
+loosened config, lint or pin fails), the `noqa` count (no change adds more than it removes; a moved one is kept; only
+comments count), the exemptions (a revert, a pure move the base's move_check certifies), and its
 command line."""
 from __future__ import annotations
 
@@ -375,6 +376,52 @@ def test_the_ruff_lint_runs_on_this_python_when_its_ruff_is_the_pin_else_on_one_
     monkeypatch.setattr(G.shutil, "which", lambda name: None)
     with pytest.raises(G.GitError, match="no `uv` to provide it"):
         G.python_for("ruff==0.0.1", ["ruff"])
+
+
+A_PY = "integrations/vllm/verity_vllm/a.py"
+
+
+def test_a_change_adds_no_more_noqa_lines_than_it_removes(repo):
+    repo.commit("noqas", {A_PY: "import os  # noqa: F401\nA = 1\n", "integrations/vllm/verity_vllm/b.py": "B = 1  # noqa: E1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("a new noqa, and one that only names it", {"integrations/vllm/verity_vllm/c.py": (
+        '"""Say why in a `# noqa: CODE`."""\nimport sys  # noqa: F401\nX = "# noqa"\n')})
+    doc = G.gate("main", "pr")
+    [c] = doc["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"], c["touched"]) == ("failed", 1, 0, [])
+    assert c["why"].startswith("adds 1 `# noqa` line(s) under integrations/vllm/ and removes 0: a noqa is an exception, so "
+                               "fix the finding each new one suppresses, or delete a stale noqa elsewhere in the same change")
+    assert c["fix"] == ["verity_vllm/c.py:2: import sys  # noqa: F401"] and doc["failures"][0]["fix"] == c["fix"]
+    repo.commit("deletes a stale one", {"integrations/vllm/verity_vllm/b.py": "B = 1\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("passed", 1, 1)
+    assert c["why"] == "1 `# noqa` line(s) added, 1 removed"
+
+
+def test_a_noqa_that_moves_with_its_code_is_kept_and_a_file_wide_one_counts(repo):
+    repo.commit("a noqa", {A_PY: "import os  # noqa: F401\nA = 1\n"})
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("moves the import to c.py, edits a line beside it", {
+        A_PY: "A = 2\n", "integrations/vllm/verity_vllm/c.py": "C = 0\n\nimport os  # noqa: F401\n"})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["noqa_added"], c["noqa_removed"]) == ("untouched", 0, 0)
+    repo.commit("edits the line it's on", {"integrations/vllm/verity_vllm/c.py": "C = 0\n\nimport re  # noqa: F401\n"})
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "passed"
+    for name, text in [("ruff", "# ruff: noqa\nA = 1\n"), ("flake8", "# flake8: noqa: E1\nA = 1\n"),
+                       ("unparsed", "A = (  # NOQA:E1\n")]:
+        repo.git("checkout", "-q", "-B", name, "main")
+        repo.commit(f"a {name} noqa", {"integrations/vllm/verity_vllm/d.py": text})
+        [c] = G.gate("main", name)["changes"]
+        assert (c["verdict"], c["fix"]) == ("failed", [f"verity_vllm/d.py:1: {text.splitlines()[0]}"]), name
+
+
+def test_a_noqa_outside_the_integration_or_in_a_revert_is_not_held(repo):
+    repo.git("checkout", "-q", "-b", "pr")
+    repo.commit("elsewhere", {"tools/x.py": "import os  # noqa: F401\n", "integrations/vllm/notes.md": "# noqa\n"})
+    assert _verdicts(G.gate("main", "pr"))[0][1] == "untouched"
+    repo.git("checkout", "-q", "-b", "revert", "main")
+    repo.commit('Revert "Queue: #9 drops a noqa"', {A_PY: "A = 1  # noqa: E1\n"})
+    assert _verdicts(G.gate("main", "revert"))[0][1] == "exempt"
 
 
 def test_the_command_line(repo):
