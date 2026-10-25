@@ -314,6 +314,12 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   audit's for an accounting bound. Every configuration (zero-knowledge, plain, recursive) and every protocol instantiates
   those theorems. A new configuration adds an instance, not a proof, and a proof that redoes a layer for one
   configuration is refactored onto the shared one.
+- **One vocabulary** (Daniel, 25 Oct). A concept that more than one guarantee reads (the circuit, commitments and
+  hashes, coins and draws, probability, partitions and units, devices and signatures) has one definition in the spec,
+  in `Core` or `Hash`, and every area and protocol reads that one. An area defines only what is its own, and no new Lean
+  adds a second definition of a shared concept. A protocol is stated over the shared definitions and the layer theorems
+  above, so adding one needs no new foundation, and guarantees of different protocols compose on them with no
+  translation lemma between two descriptions of one thing. lean owns consolidating the duplicates that exist now.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
