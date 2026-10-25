@@ -44,8 +44,10 @@ exclude = ["tools/move/**", "archive/**", "tools/research/**", ".agents/skills/f
 
 [keep]
 # A namespace where it is one: a namespace line, and a declaration's name under one of the six namespaces a statement module
-# shares (not `Proofs.Properties.*`, which are modules, nor `Runs`, a module under `Properties.CertifierNetwork`).
+# shares (not `Proofs.Properties.*`, which are modules, nor `Runs`, a module under `Properties.CertifierNetwork`). The modules
+# under `Properties.RemoteAudit` share their names with namespaces and declarations (`Line`, `Line.Record`), so one of them
+# is a module only where a whole import line or a quoted string names it.
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
             '(?m)^[ \t]*(?:namespace|end|open|export)[ \t].*$',
-            '(?<!Proofs\.)Properties\.(?:CertifierDevice|CertifierNetwork|NetworkCertifier|NetworkRecords|Identity|RemoteAudit)\.(?!Runs\b)[\w«]']
+            '(?<!Proofs\.)(?:(?<!import )(?<!")|(?!Properties\.RemoteAudit\.(?:Coins|Pooled|Schedule|Line(?:\.Premises|\.Record)?)(?:["\s]|$)))Properties\.(?:CertifierDevice|CertifierNetwork|NetworkCertifier|NetworkRecords|Identity|RemoteAudit)\.(?!Runs\b)[\w«]']
 strings = []

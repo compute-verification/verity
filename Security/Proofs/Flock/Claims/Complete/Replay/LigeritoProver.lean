@@ -272,8 +272,8 @@ theorem PRuns.powQ (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     PRuns p L (powP nonce 0) c tm ⟨c.msg, c.ood, c.cbn, c.qn + 1, c.cn⟩ (ap (pN p.queryNonces[c.qn]!) tm)
       (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with qn := st.qn.push (nonce 0 st.qn.size) }),
-    ap (pN (nonce 0 st.qn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with qn := st.qn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   refine ⟨trivial, ⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.push _ _, Pre.refl _⟩, hl, fun hE _ hc ht => ?_⟩
   subst hc ht
   refine ⟨by simp [pcur], ?_⟩
@@ -284,8 +284,8 @@ theorem PRuns.powC (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     PRuns p L (powP nonce 1) c tm ⟨c.msg, c.ood, c.cbn, c.qn, c.cn + 1⟩ (ap (pN p.consistencyNonces[c.cn]!) tm)
       (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cn := st.cn.push (nonce 1 st.cn.size) }),
-    ap (pN (nonce 1 st.cn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cn := st.cn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   refine ⟨trivial, ⟨Pre.refl _, Pre.refl _, Pre.refl _, Pre.refl _, Pre.push _ _⟩, hl, fun hE _ hc ht => ?_⟩
   subst hc ht
   refine ⟨by simp [pcur], ?_⟩
@@ -296,8 +296,8 @@ theorem PRuns.powB (nonce : ℕ → ℕ → UInt64) (c : Cur) (tm : Transcript) 
     PRuns p L (powP nonce 2) c tm ⟨c.msg, c.ood, c.cbn + 1, c.qn, c.cn⟩ (ap (pN p.claimNonces[c.cbn]!) tm)
       (fun _ => True) fun _ => True := by
   intro st t l b st' t' l' hl h
-  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push (nonce 2 st.cbn.size) }),
-    ap (pN (nonce 2 st.cbn.size)) t), l) = _ from h)
+  obtain ⟨-, rfl, rfl, rfl⟩ := ok_inj (show (Except.ok (((), { st with cbn := st.cbn.push 0 }),
+    ap (pN 0) t), l) = _ from h)
   refine ⟨trivial, ⟨Pre.refl _, Pre.refl _, Pre.push _ _, Pre.refl _, Pre.refl _⟩, hl, fun hE _ hc ht => ?_⟩
   subst hc ht
   refine ⟨by simp [pcur], ?_⟩

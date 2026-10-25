@@ -199,8 +199,8 @@ theorem close_params {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : Stat
   repeat' (split at he <;> try dsimp only at he)
   all_goals (cases he; try rfl)
 
-theorem withCoin_cases {s : State} {e : Event} {c : ByteArray} {s₁ : State}
-    (h : Verifier.withCoin s e c = .ok s₁) :
+theorem withCoin_cases {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : State}
+    (h : Verifier.withCoin g s e c = .ok s₁) :
     (∃ i x, s.coins[i]? = some x ∧ (x.isEmpty || x == c) = true ∧ s₁ = { s with coins := s.coins.set! i c }) ∨
       s₁ = { s with appendCoins := s.appendCoins.push c } := by
   unfold Verifier.withCoin at h
@@ -225,11 +225,13 @@ theorem coinsLE_of_eq {s s' : State} (h1 : s'.coins = s.coins) (h2 : s'.appendCo
     CoinsLE s s' :=
   ⟨fun i x h _ => by rw [h1]; exact h, fun k x h => by rw [h2]; exact h⟩
 
-theorem withCoin_W {s : State} {e : Event} {c : ByteArray} {s₁ : State} (h : Verifier.withCoin s e c = .ok s₁)
+theorem withCoin_W {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : State}
+    (h : Verifier.withCoin g s e c = .ok s₁)
     (c' a' : Array ByteArray) : W c' a' s₁ = W c' a' s := by
   rcases withCoin_cases h with ⟨_, _, _, _, rfl⟩ | rfl <;> rfl
 
-theorem withCoin_le {s : State} {e : Event} {c : ByteArray} {s₁ : State} (h : Verifier.withCoin s e c = .ok s₁) :
+theorem withCoin_le {g : Nat} {s : State} {e : Event} {c : ByteArray} {s₁ : State}
+    (h : Verifier.withCoin g s e c = .ok s₁) :
     CoinsLE s s₁ := by
   rcases withCoin_cases h with ⟨i, x, hx, hc, rfl⟩ | rfl
   · refine ⟨fun j y hy hs => ?_, fun k y hy => hy⟩
@@ -256,9 +258,9 @@ theorem withCoin_le {s : State} {e : Event} {c : ByteArray} {s₁ : State} (h : 
     · exact hy
 
 theorem eventOn_ok {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State}
-    (h : Verifier.eventOn 2 s e coin = .ok (r, s₂)) :
+    (h : Verifier.eventOn 2 1 s e coin = .ok (r, s₂)) :
     ∃ s₁, (∀ c a, W c a s₁ = W c a s) ∧ CoinsLE s s₁ ∧ Session.step s₁ e = .ok (r, s₂) ∧
-      Verifier.unset s₂ e (some r) = none := by
+      Verifier.unset 1 s₂ e (some r) = none := by
   unfold Verifier.eventOn at h
   simp only [bind, Except.bind, Flight.step_two, Shared.step_one] at h
   repeat' (split at h <;> try dsimp only at h)
@@ -269,8 +271,8 @@ theorem eventOn_ok {s : State} {e : Event} {coin : Option ByteArray} {r : Result
     injection h with h
     injection h with h1 h2
     subst r s₂
-    have hu : Verifier.unset s' e (some r') = none := by
-      cases hu : Verifier.unset s' e (some r') with
+    have hu : Verifier.unset 1 s' e (some r') = none := by
+      cases hu : Verifier.unset 1 s' e (some r') with
       | none => rfl
       | some why => exact (hun why hu).elim
   · exact ⟨v₁, fun c a => withCoin_W hw c a, withCoin_le hw, hstep, hu⟩
@@ -281,8 +283,8 @@ theorem eventOn_ok {s : State} {e : Event} {coin : Option ByteArray} {r : Result
 theorem bang {xs : Array ByteArray} {k : Nat} {x : ByteArray} (h : xs[k]? = some x) : xs[k]! = x := by
   rw [getElem!_def, h]
 
-theorem unset_released {s : State} {e : Event} {k : Nat} (he : ∃ now, e = .start now ∨ e = .boundary now)
-    (h : Verifier.unset s e (some (.released (some k))) = none) :
+theorem unset_released {g : Nat} {s : State} {e : Event} {k : Nat} (he : ∃ now, e = .start now ∨ e = .boundary now)
+    (h : Verifier.unset g s e (some (.released (some k))) = none) :
     ∃ x, s.coins[k]? = some x ∧ x.size = Codec.COIN_BYTES := by
   obtain ⟨now, rfl | rfl⟩ := he <;>
   · unfold Verifier.unset at h
@@ -291,9 +293,10 @@ theorem unset_released {s : State} {e : Event} {k : Nat} (he : ∃ now, e = .sta
     | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
 
 theorem unset_drew {s : State} {t : Int} {now : Nat} {d : Array (Nat × Nat)}
-    (h : Verifier.unset s (.close t now) (some (.drew d)) = none) :
+    (h : Verifier.unset 1 s (.close t now) (some (.drew d)) = none) :
     ∃ x, s.coins[s.params.windows + t.toNat]? = some x ∧ x.size = Codec.COIN_BYTES := by
   unfold Verifier.unset at h
+  try simp only [Nat.div_one] at h
   cases hk : s.coins[s.params.windows + t.toNat]? with
   | none => simp [hk] at h
   | some x => simp [hk] at h; exact ⟨x, rfl, h⟩
@@ -488,7 +491,7 @@ theorem agree_of_le {c a : Array ByteArray} {s s' : State} (h : CoinsLE s s') (h
 /-- An event the process took on `s` is the same event on the recorded run, at `W c a s`, for coins that agree with
 the ones the process holds after it. -/
 theorem event_W {s : State} {e : Event} {coin : Option ByteArray} {r : Result} {s₂ : State} {c a : Array ByteArray}
-    (h : Verifier.eventOn 2 s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
+    (h : Verifier.eventOn 2 1 s e coin = .ok (r, s₂)) (hc : Agree c a s₂) :
     Session.step (W c a s) e = .ok (r, W c a s₂) ∧ CoinsLE s s₂ := by
   obtain ⟨s₁, hW, hle, hstep, hun⟩ := eventOn_ok h
   obtain ⟨h1, h2⟩ := step_keeps hstep
