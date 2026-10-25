@@ -1416,9 +1416,16 @@ def _durations() -> dict[str, float]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+#: how many of a suite's longest tests the guard gets, of which it starts the longest it collected at the heads of the workers'
+#: shares: a run of some of a suite's files, or one that reuses passes, collects few of the suite's longest
+#: (r20261025-202541-cb5f collected none of verity-vllm's 4 longest, and ran its own longest two back to back on one worker)
+HEAVY_CANDIDATES = 1000
+
+
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: what
-    the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
+    which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
+    key or verdict reads."""
     d = per_test_dir(suite)
     last: dict[str, tuple[str, float]] = {}
     for p in d.glob("*.json") if d.is_dir() else ():
@@ -1616,7 +1623,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
     env.pop("VERITY_SUITE_HEAVY", None)
     (logs / f"{slug}.heavy.json").unlink(missing_ok=True)
-    if workers > 1 and (first := longest(suite, workers)):
+    if workers > 1 and (first := longest(suite, HEAVY_CANDIDATES)):
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []

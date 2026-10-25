@@ -359,7 +359,9 @@ uv run pytest tests/program verity_vllm        # the CPU oracle; tests that need
 ~~~
 
 Tests and tools read fixtures relative to this directory: run them from here.  The repository's merge gate (`check`) runs them as
-the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is a `verity-vllm` command
+the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  The suite is about 12000 CPU-s, 50 min in one 4-CPU job;
+`python3 tools/suite_parts.py launch` runs it as 8 `research run --on auto` jobs at once, each a suites.py run of one part's test
+modules, and prints their run ids (`tools/suite_parts.py --help`).  Every tool is a `verity-vllm` command
 (`verity-vllm --help`); a sweep row runs with `verity-vllm row run <row-id> <ROLE> <hf-repo> <revision>`.
 
 A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the
