@@ -1801,6 +1801,32 @@ theorem ctxOf_arg (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
   generalize (((P.defs[d]!).body.nodes[k]!).args[i]!).seq = s at hs ⊢
   rw [hs, partsPos_get, (Walk.ofParts_spec _).1]
 
+/-- A sequence as segments (`Desc.ofSeq`) has pieces each of positive count: one to a segment, empty ones dropped. -/
+theorem ofSeq_count (s : Seq) : ∀ g ∈ (Desc.ofSeq s).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
+  intro g hg q hq
+  unfold Desc.ofSeq at hg
+  rw [of_segs, Array.toList_filter, List.mem_filter, Array.toList_map, List.mem_map] at hg
+  obtain ⟨⟨p, -, rfl⟩, hc⟩ := hg
+  have hq' : q = p := by simpa [Desc.Seg.one] using hq
+  subst hq'
+  have h1 : (Desc.Seg.one q).count > 0 := of_decide_eq_true hc
+  have h2 : (Desc.Seg.one q).count = q.count := Nat.one_mul _
+  omega
+
+/-- **The context's arguments' pieces are of positive count** (`ofSeq_count`). -/
+theorem ctxOf_argCount (P : Prog) (memo : Array Desc.Summary) (d k i : Nat)
+    (hk : k < (P.defs[d]!).body.nodes.size) (hi : i < ((P.defs[d]!).body.nodes[k]!).args.size) :
+    ∀ g ∈ ((ctxOf P memo d).arg k i).segs.toList, ∀ q ∈ g.ps.toList, 0 < q.count := by
+  have harg : (ctxOf P memo d).arg k i = Desc.ofSeq (((P.defs[d]!).body.nodes[k]!).args[i]!).seq := by
+    unfold Desc.Ctx.arg ctxOf
+    dsimp only
+    generalize (P.defs[d]!).body.nodes = ns at hk hi ⊢
+    rw [getElem!_pos ns k hk] at hi ⊢
+    rw [Array.getElem?_map, Array.getElem?_eq_getElem hk, Option.map_some, Option.bind_some, Array.getElem?_map,
+      Array.getElem?_eq_getElem hi, Option.map_some, Option.getD_some, getElem!_pos _ i hi]
+  rw [harg]
+  exact ofSeq_count _
+
 /-- **A loop that appends each element's segments** names, in order, each element's positions, when each element's
 segments name `D` of it. -/
 theorem forIn_append_pos {β : Type} (F : β → Except String (Array Seg)) (D : β → List (Tgt × Int))
@@ -8286,6 +8312,363 @@ theorem calleeShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = 
           rw [hnode]
           exact ⟨h0, h1, h2⟩) r v hv
     exact ⟨segs', rfl, hA'⟩
+
+/-- A scan's initial carry's leaves `[lo, hi)`, each in range, through `throughArg`: `ShapeOk` segments. -/
+theorem init_shape (c : Desc.Ctx) {fuel k : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node)
+    (hTS : ThroughShape c fuel) (hm0 : 0 < node.members) {lo hi : Nat}
+    (hlv : ∀ j, lo ≤ j → j < hi → 0 < (c.P.defs[node.fn]!).body.params.size ∧
+      j < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves) {segs : Array Seg}
+    (h : Desc.throughArg c fuel k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo } = .ok segs) :
+    ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  have hnode := node_get hn
+  exact hTS k 0 0 _ segs (by rw [hnode]; exact hm0) rfl (fun x hx => by
+    rw [pos_carry, List.mem_map] at hx
+    obtain ⟨j, hj, rfl⟩ := hx
+    rw [List.mem_range'_1] at hj
+    rw [hnode]
+    have := hlv j hj.1 (by omega)
+    exact ⟨by simp, this.1, by show (j : Int) < _; exact_mod_cast this.2⟩) h
+
+/-- **`carry`'s shape step**: one step up, `carry`'s segments are `ShapeOk` wherever the step's summary holds `RetOk`
+and `fromCallee`'s and `throughArg`'s segments one step down are `ShapeOk`. -/
+theorem carryShape_succ (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (fuel : Nat)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hCS : CalleeShape c fuel)
+    (hTS : ThroughShape c fuel) : CarryShape c (fuel + 1) := by
+  intro k m a b segs hform hm hb h
+  rw [Desc.carry.eq_2] at h
+  obtain ⟨node, hn, h⟩ := Walk.except_bind_ok h
+  dsimp only at h
+  have h' := ok_bind_pure h
+  rw [← Array.forIn_toList] at h'
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  rw [hnode] at hform hm hb
+  have hRk := hR k node hn
+  obtain ⟨hps, hpos, -, hag, hpp⟩ := hRk
+  have hlenR : (psPos (c.memo[node.fn]!).ret).length = (c.P.defs[node.fn]!).body.ret.count := by
+    have := (hag (c.P.child sc k 0) (by rw [child_eq c sc hd hn 0]; rfl)).length_eq
+    simpa using this
+  obtain ⟨hcov, hid⟩ := carryRuns_cover _ hps hpp a b (fun hab => by rw [hlenR]; exact hb hab)
+  have hm0 : 0 < node.members := by omega
+  have hcarry : ∀ h j' : Nat, (psPos (c.memo[node.fn]!).ret)[h]? = some (.ref true 0, (j' : Int)) →
+      0 < (c.P.defs[node.fn]!).body.params.size ∧ j' < ((c.P.defs[node.fn]!).body.params[0]!).2.leaves := by
+    intro h j' hx
+    have := (hpos _ (List.mem_of_getElem? hx)).2.2 0 rfl
+    exact ⟨this.1, by have h2 : ((j' : Nat) : Int) < _ := this.2; exact_mod_cast h2⟩
+  have hfa := forIn_app (ShapeOk c.P c.d) _ _ ?_ #[] segs h'
+  · obtain ⟨out, rfl, hout⟩ := hfa
+    intro s hs
+    rw [Array.toList_append, List.mem_append] at hs
+    exact hs.elim (fun hs => by simp at hs) (hout s)
+  intro x hx r' y hy
+  split at hy
+  · rename_i hxid
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    exact ⟨v, rfl, init_shape c hn hTS hm0 (fun j h1 h2 => hcarry j j (hid x hx hxid j h1 h2)) hv⟩
+  · have hy := walkAtMost_bind _ _ _ hy
+    obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+    simp only [pure, Except.pure, Except.ok.injEq] at hy
+    subst hy
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+    obtain ⟨segs', hsegs', hA2⟩ := forIn_app (ShapeOk c.P c.d) _ _ (fun j _ r'' y' hy' => by
+        obtain ⟨ch, hch, hy'⟩ := Walk.except_bind_ok hy'
+        have hok := chainOf_ok _ j ch hch
+        split at hy'
+        · rename_i hcond
+          simp only [Bool.and_eq_true, decide_eq_true_eq, Option.isSome_iff_exists] at hcond
+          obtain ⟨⟨q0, hq0⟩, he⟩ := hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          obtain ⟨hsz, h0, hsc, hex, -⟩ := hok
+          obtain ⟨hq, -⟩ := hex q0 hq0
+          have hlt : ch.hist[ch.hist.size - 1]! < (c.P.defs[node.fn]!).body.ret.count := by
+            have := retAt_pos _ hps hpp hq
+            rw [← hlenR]; exact (List.getElem?_eq_some_iff.1 this).1
+          exact hCS k (m - (ch.hist.size - 1)) _ _ v' (by rw [hnode]; omega) (by rw [hnode]; intro; omega) hv'
+        · rename_i hcond
+          obtain ⟨v', hv', hy'⟩ := Walk.except_bind_ok hy'
+          simp only [pure, Except.pure, Except.ok.injEq] at hy'
+          subst hy'
+          refine ⟨v', rfl, ?_⟩
+          have hs : ∀ s ≤ m, (psPos (c.memo[node.fn]!).ret)[ch.at s]? = some (.ref true 0, (ch.at (s + 1) : Int)) := by
+            intro s hs
+            rcases hex : ch.exit with _ | q0
+            · obtain ⟨q, hq, ht, hb⟩ := chainAt_cyc hok hex s
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+            · have he : ¬ ch.hist.size - 1 ≤ m := fun he => hcond (by simp [hex, he])
+              obtain ⟨-, -, hsc, -, -⟩ := hok
+              obtain ⟨q, hq, ht, hb⟩ := hsc s (by omega)
+              rw [chainAt_lt ch (show s < ch.hist.size by omega), chainAt_lt ch (show s + 1 < ch.hist.size by omega)]
+              exact carryPos_of_retAt (hR k node hn) hq ht hb
+          exact init_shape c hn hTS hm0 (lo := ch.at (m + 1)) (hi := ch.at (m + 1) + 1)
+            (fun j' h1 h2 => by rw [show j' = ch.at (m + 1) by omega]; exact hcarry _ _ (hs m le_rfl)) hv') r' v hv
+    exact ⟨segs', by rw [hsegs'], hA2⟩
+
+/-- **`down`, `fromCallee`, `throughArg` and `carry` give `ShapeOk` segments, at every fuel**, wherever `throughArg`
+keeps what it reads (`specs`), a batch of a composite's piece and a scan's piece of one row give `ShapeOk` segments one
+step up from them, and the arguments' pieces are of positive count. -/
+theorem shapes (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
+      ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hT : ∀ fuel, ThroughSpec c sc fuel)
+    (hBatch : ∀ fuel, DownShapeAt c fuel → CalleeShape c fuel → BatchShape c fuel)
+    (hScan : ∀ fuel, CalleeShape c fuel → CarryShape c fuel → ScanShape c fuel) :
+    ∀ fuel, DownShapeAt c fuel ∧ CalleeShape c fuel ∧ ThroughShape c fuel ∧ CarryShape c fuel
+  | 0 => by
+    refine ⟨fun q segs _ _ _ _ h => absurd h (down_zero c q segs), ?_, ?_, ?_⟩
+    · intro _ _ _ _ _ _ _ h; rw [Desc.fromCallee.eq_1] at h; cases h
+    · intro _ _ _ _ _ _ _ _ h; rw [Desc.throughArg.eq_1] at h; cases h
+    · intro _ _ _ _ _ _ _ _ h; rw [Desc.carry.eq_1] at h; cases h
+  | fuel + 1 =>
+    have ⟨hD, hC, hTS, hK⟩ := shapes c sc hd hB hA hAP hL0 hR hT hBatch hScan fuel
+    ⟨downShape_succ c hB fuel hD hC (hBatch fuel hD hC) (hScan fuel hC hK),
+      calleeShape_succ c sc hd fuel hR hTS (hT fuel) (throughReps c), throughShape_succ c hB hA hAP hL0 fuel hD hK,
+      carryShape_succ c sc hd fuel hR hC hTS⟩
+
+/-- **`DownShape`** from `shapes`. -/
+theorem downShape_of (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB : Resolve.BodyOk c.P c.d)
+    (hA : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size → ArgOk c k i)
+    (hAP : ∀ k i, k < c.body.nodes.size → i < (c.body.nodes[k]!).args.size →
+      ∀ s ∈ (c.arg k i).segs.toList, ∀ q ∈ s.ps.toList, 0 < q.count)
+    (hL0 : ∀ k i d L : Nat, ((c.body.nodes[k]!).args[i]!).dims = some (d, L) → L = 0 →
+      i < (c.P.defs[(c.body.nodes[k]!).fn]!).body.params.size →
+      ((c.P.defs[(c.body.nodes[k]!).fn]!).body.params[i]!).2.leaves = 0)
+    (hR : ∀ k node, c.node k = .ok node → RetOk c.P c.memo node.fn) (hT : ∀ fuel, ThroughSpec c sc fuel)
+    (hBatch : ∀ fuel, DownShapeAt c fuel → CalleeShape c fuel → BatchShape c fuel)
+    (hScan : ∀ fuel, CalleeShape c fuel → CarryShape c fuel → ScanShape c fuel) : DownShape c :=
+  fun fuel => (shapes c sc hd hB hA hAP hL0 hR hT hBatch hScan fuel).1
+
+/-- A batch's piece of one row and any other stride, position by position through `down`: `ShapeOk` segments. -/
+theorem batchPts_shape (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel) (q : Piece) {k : Nat}
+    (ht : q.tgt = .ref false k) (h1 : q.rows = 1) (hq : ∀ x ∈ pos q, 0 ≤ x.2) (hf : ∀ x ∈ pos q, Fits c x)
+    {segs : Array Seg} (h : batchPts c fuel q = .ok segs) : ∀ s ∈ segs.toList, ShapeOk c.P c.d s := by
+  unfold batchPts at h
+  have h := walkAtMost_bind _ _ _ h
+  dsimp only at h
+  simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at h
+  rw [range'_size] at h
+  have hpt : ∀ t, pos { q with base := q.at t, stride := 1, len := 1 } = [(q.tgt, q.at t)] := by
+    intro t
+    simp [pos, h1]
+  exact loop_mem _ (fun t => Desc.down c fuel { q with base := q.at t, stride := 1, len := 1 }) (List.range q.len)
+    (fun t htm segs hs => by
+      have hm := at_mem_pos h1 (List.mem_range.1 htm)
+      exact hD _ segs (by simp [Desc.Piece.count, h1])
+        (by rw [hpt t]; intro x hx; simp only [List.mem_singleton] at hx; subst hx; exact hq _ hm)
+        (by rw [hpt t]; intro x hx; simp only [List.mem_singleton] at hx; subst hx; exact hf _ hm)
+        (by rw [hpt t]; intro x hx i hi; simp only [List.mem_singleton] at hx; subst hx; rw [ht] at hi; cases hi)
+        hs) segs h
+
+/-- **`BatchShape` from its cases**: a batch of a composite's piece row by row and position by position through
+`down` (`byRows_shape`, `batchPts_shape`), and in its one-run, stride-1 and whole-member-stride cases wherever those
+give `ShapeOk` segments. -/
+theorem batchShape_of (c : Desc.Ctx) (fuel : Nat) (hD : DownShapeAt c fuel)
+    (hAff : ∀ q k node p, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → affineOf c k node q = some p → ShapeOk c.P c.d (Seg.one p))
+    (hOne : ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.count ≠ 0 → q.rows = 1 →
+      q.stride = 1 → (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchOne c fuel k node q = .ok segs →
+      ∀ s ∈ segs.toList, ShapeOk c.P c.d s)
+    (hStride : ∀ q k node segs, q.tgt = .ref false k → c.node k = .ok node → node.form = .batch →
+      (c.P.defs[node.fn]!).prim = false → (c.P.defs[node.fn]!).outLeaves ≠ 0 → q.rows = 1 →
+      (q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0) →
+      (∀ x ∈ pos q, 0 ≤ x.2) → (∀ x ∈ pos q, Fits c x) → batchStride c fuel k node q = .ok segs →
+      ∀ s ∈ segs.toList, ShapeOk c.P c.d s) :
+    BatchShape c fuel := by
+  intro q segs k node ht hn hform hp h0 hff hq hf h
+  by_cases hL : (c.P.defs[node.fn]!).outLeaves = 0
+  · exact absurd h (down_batch0 c fuel q ht hff hn hform hp hL h0 segs)
+  rcases ha : affineOf c k node q with _ | p
+  · by_cases hr : q.rows > 1
+    · rw [down_batch_rows c fuel q ht hff hn hform hp hL h0 ha hr] at h
+      exact byRows_shape c fuel hD q (Nat.pos_of_ne_zero h0) hq hf
+        (fun x hx i hi => by rw [mem_pos_tgt hx, ht] at hi; cases hi) h
+    by_cases hs : q.stride = 1
+    · rw [down_batch_one c fuel q ht hff hn hform hp hL h0 ha hr hs] at h
+      exact hOne q k node segs ht hn hform hp hL h0 (rows_one h0 hr) hs hq hf h
+    by_cases hcp : q.len > 1 ∧ q.stride % ((c.P.defs[node.fn]!).outLeaves : Int) = 0 ∧ q.base ≥ 0
+    · rw [down_batch_stride c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
+      exact hStride q k node segs ht hn hform hp hL (rows_one h0 hr) hcp hq hf h
+    rw [down_batch_pts c fuel q ht hff hn hform hp hL h0 ha hr hs hcp] at h
+    exact batchPts_shape c fuel hD q ht (rows_one h0 hr) hq hf h
+  · rw [down_batch_affine c fuel q ht hff hn hform hp hL h0 ha] at h
+    simp only [Except.ok.injEq] at h
+    subst h
+    intro s hs
+    simp only [List.mem_singleton] at hs
+    subst hs
+    exact hAff q k node p ht hn hform hp hL h0 hq hf ha
+
+/-- A scan's ys `[lo, hi)`, `yl` leaves to an iteration, through `fromCallee` iteration by iteration: `ShapeOk`
+segments. -/
+theorem ys_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
+    {k cl yl lo hi : Nat} (hyl : yl ≠ 0) (hlh : lo < hi) (hm : (hi - 1) / yl < (c.body.nodes[k]!).members)
+    (hj : ∀ j, lo ≤ j → j < hi → cl + j % yl < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    {out0 segs : Array Seg}
+    (h : forIn (List.range' (lo / yl) ((hi - 1) / yl + 1 - lo / yl)) out0 (fun m (s : Array Seg) => do
+        let v ← Desc.fromCallee c fuel k m (cl + max lo (m * yl) - m * yl) (cl + min hi ((m + 1) * yl) - m * yl)
+        pure (ForInStep.yield (s ++ v))) = .ok segs) :
+    ∃ segs2, segs = out0 ++ segs2 ∧ ∀ s ∈ segs2.toList, ShapeOk c.P c.d s :=
+  forIn_app (ShapeOk c.P c.d) _ _ (fun m hmm r y hy => by
+      rw [List.mem_range'_1] at hmm
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      refine ⟨v, hy.symm, hCS k m _ _ v (by omega) (fun hlt => ?_) hv⟩
+      have hmL : (m + 1) * yl = m * yl + yl := by rw [Nat.add_mul, Nat.one_mul]
+      have := hj (m * yl + (min hi ((m + 1) * yl) - m * yl - 1)) (by omega) (by omega)
+      rw [show m * yl + (min hi ((m + 1) * yl) - m * yl - 1) = (min hi ((m + 1) * yl) - m * yl - 1) + m * yl by omega,
+        Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt (by omega)] at this
+      omega) out0 segs h
+
+/-- A scan's piece of stride 1: its ys past the carry's `cl` leaves, as `scanOne` reads them, give `ShapeOk`
+segments. -/
+theorem scanYs_shape (c : Desc.Ctx) (fuel : Nat) (hCS : CalleeShape c fuel)
+    {k cl yl a b : Nat} (hab : a < b) (hy0 : yl = 0 → b ≤ cl)
+    (hm : cl < b → (b - 1 - cl) / yl < (c.body.nodes[k]!).members)
+    (hj : ∀ j, max a cl ≤ j → j < b → cl + (j - cl) % yl < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count)
+    {out0 segs : Array Seg}
+    (h : (if (decide (cl < b) && decide (yl > 0)) = true then do
+        Desc.walkAtMost "iterations of a scan whose ys are read one by one" ((b - cl - 1) / yl + 1 - (max a cl - cl) / yl)
+        (forIn [(max a cl - cl) / yl:(b - cl - 1) / yl + 1] out0 fun m s => do
+          let v ← Desc.fromCallee c fuel k m (cl + max (max a cl - cl) (m * yl) - m * yl)
+            (cl + min (b - cl) ((m + 1) * yl) - m * yl)
+          pure (ForInStep.yield (s ++ v))) >>= fun s => pure s
+      else pure out0) = .ok segs) :
+    ∃ s2, segs = out0 ++ s2 ∧ ∀ s ∈ s2.toList, ShapeOk c.P c.d s := by
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    have h := walkAtMost_bind _ _ _ h
+    obtain ⟨v, hv, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.add_sub_cancel,
+      Nat.div_one] at hv
+    exact ys_shape c fuel hCS (k := k) (cl := cl) (yl := yl) (by omega)
+      (show max a cl - cl < b - cl by omega)
+      (by rw [show b - cl - 1 = b - 1 - cl by omega]; exact hm hc.1) (fun j h1 h2 => by
+        have := hj (cl + j) (by omega) (by omega)
+        rwa [show cl + j - cl = j by omega] at this) hv
+  · simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨#[], by simp, fun s hs => by simp at hs⟩
+
+/-- **A scan's piece of one row**, one step up: what `carry` and `fromCallee` give of its final carry's leaves and its
+ys is `ShapeOk` wherever their segments one step down are. -/
+theorem scanShape_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (hSO : ScanOut c) (fuel : Nat)
+    (hCS : CalleeShape c fuel) (hK : CarryShape c fuel) : ScanShape c fuel := by
+  intro q segs k node carry y ht hn hform hn0 h0 hff hr hret hq hf h
+  have hdo := downOk_of hB hn
+  have h1 := rows_one h0 hr
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  let M : Nat → Nat × Nat := fun j => if j < carry.leaves then (node.n - 1, j)
+    else ((j - carry.leaves) / y.leaves, carry.leaves + (j - carry.leaves) % y.leaves)
+  have hbd : ∀ j, j < node.out.leaves →
+      (M j).1 < node.n ∧ (M j).2 < (c.P.defs[node.fn]!).body.ret.count := by
+    intro j hj
+    have hdk := hdo j hj
+    simp only [hform] at hdk
+    obtain ⟨carry', y', hr', hmn, hj'⟩ := hdk.2 hn0
+    rw [hret] at hr'
+    injection hr' with e
+    obtain ⟨rfl, rfl⟩ : carry = carry' ∧ y = y' := by simpa using e
+    by_cases hlt : j < carry.leaves
+    · simp only [M, if_pos hlt]; rw [if_pos hlt] at hmn hj'; exact ⟨hmn, hj'⟩
+    · simp only [M, if_neg hlt]; rw [if_neg hlt] at hmn hj'; exact ⟨hmn, hj'⟩
+  have hpt : ∀ t < q.len, 0 ≤ q.at t ∧ (q.at t).toNat < node.out.leaves := by
+    intro t ht'
+    have hm := at_mem_pos h1 ht'
+    have hb := hq _ hm
+    have hfl := hf _ hm k ht
+    simp only [hnode] at hb hfl
+    exact ⟨hb, by omega⟩
+  rw [down_scan_head c fuel q ht hff hn hform hn0 h0 hr hret] at h
+  split at h
+  · rename_i hs
+    unfold scanOne at h
+    dsimp only at h
+    have hlen : 0 < q.len := by rw [← count_one h1]; omega
+    have hat : ∀ t, (q.at t).toNat = q.base.toNat + t := fun t => by
+      have := (hpt 0 hlen).1
+      simp only [Desc.Piece.at, hs] at this ⊢
+      omega
+    have hbl : q.base.toNat + q.len ≤ node.out.leaves := by
+      have := (hpt (q.len - 1) (by omega)).2
+      rw [hat] at this
+      omega
+    have hout := hSO k node carry y hn hform hret
+    have hy0 : y.leaves = 0 → q.base.toNat + q.len ≤ carry.leaves := fun h0 => by
+      rw [h0, Nat.mul_zero, Nat.add_zero] at hout; omega
+    have hmB : carry.leaves < q.base.toNat + q.len →
+        (q.base.toNat + q.len - 1 - carry.leaves) / y.leaves < (c.body.nodes[k]!).members := by
+      intro hcb
+      have := (hbd (q.base.toNat + q.len - 1) (by omega)).1
+      simp only [M, if_neg (show ¬ (q.base.toNat + q.len - 1 < carry.leaves) by omega)] at this
+      rw [hnode, members_scan hform]
+      exact this
+    have hjB : ∀ j, max q.base.toNat carry.leaves ≤ j → j < q.base.toNat + q.len →
+        carry.leaves + (j - carry.leaves) % y.leaves < (c.P.defs[(c.body.nodes[k]!).fn]!).body.ret.count := by
+      intro j h1 h2
+      have := (hbd j (by omega)).2
+      simp only [M, if_neg (show ¬ (j < carry.leaves) by omega)] at this
+      rw [hnode]
+      exact this
+    split at h
+    · rename_i hac
+      obtain ⟨v1, hv1, h⟩ := Walk.except_bind_ok h
+      obtain ⟨s2, rfl, hA2⟩ := scanYs_shape c fuel hCS (by omega) hy0 hmB hjB h
+      have hA1 := hK k (node.n - 1) _ _ v1 (by rw [hnode]; exact hform)
+        (by rw [hnode, members_scan hform]; omega) (fun hlt => by
+          have := (hbd (min (q.base.toNat + q.len) carry.leaves - 1) (by omega)).2
+          simp only [M, if_pos (show min (q.base.toNat + q.len) carry.leaves - 1 < carry.leaves by omega)] at this
+          rw [hnode]
+          omega) hv1
+      intro s hs
+      rw [Array.empty_append, Array.toList_append, List.mem_append] at hs
+      exact hs.elim (hA1 s) (hA2 s)
+    · rename_i hac
+      obtain ⟨s2, rfl, hA2⟩ := scanYs_shape c fuel hCS (by omega) hy0 hmB hjB h
+      rw [Array.empty_append]
+      exact hA2
+  · rename_i hs
+    unfold scanPts at h
+    dsimp only at h
+    have h := walkAtMost_bind _ _ _ h
+    obtain ⟨v, hv, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+    rw [range'_size] at hv
+    obtain ⟨segs', hsegs, hA⟩ := forIn_app (ShapeOk c.P c.d) _ (List.range q.len)
+      (fun t htm r y' hy => by
+        obtain ⟨hb0, hlt⟩ := hpt t (List.mem_range.1 htm)
+        obtain ⟨hmn, hjr⟩ := hbd _ hlt
+        split at hy
+        · rename_i hc
+          obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v', hy.symm, ?_⟩
+          simp only [M, if_pos hc] at hmn hjr
+          have := hK k (node.n - 1) (q.at t).toNat ((q.at t).toNat + 1) v' (by rw [hnode]; exact hform)
+            (by rw [hnode, members_scan hform]; exact hmn) (fun _ => by rw [hnode]; omega) hv'
+          simpa using this
+        · rename_i hc
+          obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v', hy.symm, ?_⟩
+          simp only [M, if_neg hc] at hmn hjr
+          have := hCS k _ _ _ v' (by rw [hnode, members_scan hform]; exact hmn) (fun _ => by rw [hnode]; omega) hv'
+          simpa using this) #[] v hv
+    rw [hsegs, Array.empty_append]
+    exact hA
 
 /-- **The decoder's facts on a Definition's return**, as its private `composite` sets them: a primitive's body (the
 default) returns none, and a composite's return is the sequence of its parts, none naming a negative position. Every
