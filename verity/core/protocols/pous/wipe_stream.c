@@ -9,12 +9,14 @@
 //   stream --labels N --fd FD [--threads T] [--chunk C] N labels from 0 written to FD in order as wipe_party's fill
 //                                                       frames, F ‖ u64 first ‖ u32 count ‖ labels, C labels a frame
 //
-// T threads derive frames into a ring of 2T buffers (frame c in buffer c mod 2T, derived by thread c mod T) and the
-// main thread writes them in order. Exit 0; 2 on a usage error; 4 when FD's reader went away (the prover left).
+// T threads (by default one a CPU this process may run on) derive frames into a ring of 2T buffers (frame c in buffer
+// c mod 2T, derived by thread c mod T) and the main thread writes them in order. Exit 0; 2 on a usage error; 4 when FD's reader went away (the prover left).
 //
 // Build: cc -O3 -pthread wipe_stream.c -o wipe_stream
+#define _GNU_SOURCE
 #include <errno.h>
 #include <pthread.h>
+#include <sched.h>
 #include <semaphore.h>
 #include <signal.h>
 #include <stdint.h>
@@ -222,7 +224,8 @@ int main(int argc, char** argv) {
   if (argc < 2) return usage();
   const char* mode = argv[1];
   uint64_t start = 0, count = 16, labels = 0, chunk = 1ULL << 14;
-  long threads = sysconf(_SC_NPROCESSORS_ONLN);
+  cpu_set_t cpus;
+  long threads = sched_getaffinity(0, sizeof cpus, &cpus) == 0 ? CPU_COUNT(&cpus) : sysconf(_SC_NPROCESSORS_ONLN);
   int fd = -1;
   for (int i = 2; i + 1 < argc; i += 2) {
     const char *k = argv[i], *v = argv[i + 1];
