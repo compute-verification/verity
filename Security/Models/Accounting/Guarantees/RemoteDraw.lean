@@ -25,9 +25,9 @@ fallbacks `rest` free; `prf` is any function, the deployed one being SHA-512's k
   multiply over the session, and by weighted AM–GM their product is at most `δ` once the wrong receipts pass the
   bound. The hybrid over windows trades window `t`'s commitment leaf for one of zeros (`hide_t`, both ways), then
   window `t`'s uniform blocks for `prf t` at the cost of `s_t / 2^64` (some first word rejected) and `adv_t`. `bind`
-  (`Receipts.binding`) is the probability that some opened receipt moved, two accepted openings of one root and rank
-  with different rows, the one its root holds and the one presented, whose checks `Hash.Guarantees.RowBinding`
-  (proved) shows hashed a SHA-512 collision: off it, every receipt `Refused` lets through is correct.
+  (`Receipts.binding`) is the probability that some opened receipt moved, presented and accepted at its root and rank
+  with a row other than the one its root holds (`Receipts.held`, the plurality of the rows it shows over the
+  window's continuations): off it, every receipt `Refused` lets through is correct.
 * **LiveCoinsDrawn**: `LiveCoins W` at that error for every `W` at least the pooled bound on every accepted outcome.
 * **HeldDrawn**, **HeldOverTimeDrawn**, **HeldOverTimeLinksDrawn**: `Held` and its time-held forms with `LiveCoins`
   replaced by the draw's premises and `W` by the record's own pooled bound at error `δc`, so the line the ledger reads
@@ -45,13 +45,14 @@ and `hash-derived-key`): at most `n·2^-191` over a session's `n` windows (`Comm
 binding term is bounded by `ReceiptsBindingOfCR` (`RemoteBinding`), under the collision resistance of SHA-512 (claim
 `cr/sha-512`) for window `t`'s fork finder (`Receipts.finder`): it runs the prover twice from window `t`'s cut on
 independent openings coins, checks both runs' openings, and outputs a collision when some receipt opened in both
-carries different accepted rows at one root. The held row being the likeliest (`HeldLikeliest`), receipt `p`'s chance
-of moving is at most the square root of the chance that the two runs show it with different rows, so window `t`'s
-share of the term is at most `√(|L_t|·s_t·(q_t²/2^513 + split_t))`, `q_t` the finder's SHA-512 calls and `split_t` the
-chance that the two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and the bound has
-`ledger.binding`'s form, `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, which the code reads at the record's `U_t` and `s'_t`. The
-prover of `F.play com` holds the commitment to every coin, and a root it computes from it reads window `t`'s coin:
-there `split_t` is not bounded, and `ledger.binding`, which takes it as 0, charges a bound no theorem gives.
+carries different accepted rows at one root. The held row being the plurality, receipt `p`'s chance of moving is at
+most the square root of the chance that the two runs show it with different rows, so window `t`'s share of the term
+is at most `√(|L_t|·s_t·(q_t²/2^513 + split_t))`, `q_t` the finder's SHA-512 calls and `split_t` the chance that the
+two runs' roots differ (`Receipts.split`). With roots fixed by the cut, `split_t = 0` and the bound has
+`ledger.binding`'s form, `Σ_t √(|L_t|·s_t)·q_t/2^256.5`, which the code reads at the session's bounds on a window's
+receipts and draws. The prover of `F.play com` holds the commitment to every coin, and a root it computes from it
+reads window `t`'s coin: there `split_t` is not bounded (the gap `binding-split`), and `ledger.binding` takes it as 0
+pending the protocol change that fixes each window's roots before the prover holds anything of its coin.
 -/
 
 namespace Accounting.Guarantees.Remote
@@ -66,8 +67,7 @@ receipts `R`) and count the trace's wrong receipts among the windows' (`Counted`
 first blocks `prf t` its coin gives and `m < 2^448` receipts a window at most, the probability that the session is
 accepted with more wrong receipts than the record's pooled bound at `δ` is at most `δ + Σ_t s_t / 2^64`, plus the
 windows' distinguishers' advantages on `prf` at the commitment with their own leaf committing zeros, plus the windows'
-hiding terms, plus the receipts' binding term (`R.binding`: some opened receipt moved, its two openings hashing a
-collision). -/
+hiding terms, plus the receipts' binding term (`R.binding`: some opened receipt moved off the row its root holds). -/
 def PooledDraw : Prop :=
   ∀ (n m : ℕ) (k : Fin n → ℕ) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m k κ X Cm) (com : Coins n κ X → Cm)
