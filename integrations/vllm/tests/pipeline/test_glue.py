@@ -95,9 +95,9 @@ def test_a_definition_is_tied_by_the_manifest_and_carries_no_marker(marks, tmp_p
     rows = json.loads(G.DEFINITIONS.read_text())["models"]
     assert rows and all(marks[rel] == tuple(ms) and not G.marked(G.source(rel), G.VERITY_HOME) for rel, ms in rows.items())
     stale = tmp_path / "definitions.json"
-    stale.write_text(json.dumps({"models": {"verity_vllm/program/registry/gone.py": [GLM]}}))
+    stale.write_text(json.dumps({"models": {"verity_vllm/gone.py": [GLM]}}))
     monkeypatch.setattr(G, "DEFINITIONS", stale)
-    with pytest.raises(ValueError, match="registry/gone.py, which is not a module"):
+    with pytest.raises(ValueError, match="gone.py, which is not a module"):
         G.markers()
 
 

@@ -3,7 +3,8 @@
 The move crosses out of the integration, so a path the codemod writes from the integration's root
 (`verity_vllm/program/registry/b1.py`) lands under `verity/` with no directory the two share, and it splits `registry/` and
 `kernels/`, which no rename pairs whole. Each `[paths]` entry, from the root and from the integration's root, and each
-`[modules]` and `[aliases]` entry is an extra.
+`[aliases]` entry is an extra. `[modules]` is not: move_check pairs an import line by its dotted names itself, and a line
+an extra has already rewritten no longer pairs.
 
     python3 tools/move/defs_move_check.py BASE HEAD [--json]
 """
@@ -26,8 +27,7 @@ def extras(map_file: Path = HERE / "defs_map.toml") -> dict[str, str]:
         out[o] = n
         if o.startswith(PKG):
             out[o[len(PKG):]] = n.removeprefix(PKG)
-    for table in ("modules", "aliases"):
-        out.update(m.get(table, {}))
+    out.update(m.get("aliases", {}))
     return out
 
 
