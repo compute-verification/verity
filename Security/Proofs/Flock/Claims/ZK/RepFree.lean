@@ -203,7 +203,7 @@ theorem fwL_get_left {S : γ → δ → Prop} {f : LigState → LP PS γ} {y : L
 theorem fwL_throw_bind {S : γ → δ → Prop} {e : String} {f : α → LP PS γ} {y : LP PS δ} :
     FwL S (throw e >>= f) y := by
   intro s s' t t' l l' _ _ c t₂ L₂ hc
-  rw [StateT.run_bind, bind_go_err (throw_go e s t l)] at hc
+  rw [StateT.run_bind, bind_go_err (LigLock.throw_go e s t l)] at hc
   simp at hc
 
 theorem fwL_ite {R : α → β → Prop} {c : Prop} [Decidable c] {x x' : LP PS α} {y y' : LP PS β}
@@ -468,8 +468,9 @@ theorem ligeritoPZk_cut_fw (coin : ℕ → ℕ → F128) (n : ℕ) (h h' : ByteA
       subst hbq
       refine fwL_bind (fwL_modify _ _ fun _ _ h => h) fun _ _ _ => ?_
       try dsimp only
-      refine fwL_bind (fwL_forIn _ _ _ (fun _ u u' => u.1 = u'.1) ?lv rfl) fun _ _ _ => ?_
-      · try dsimp only
+      refine fwL_bind (fwL_forIn _ _ _ (fun _ u u' => u.1 = u'.1) ?lv rfl) fun _ _ _ => ?done
+      case done =>
+        try dsimp only
         exact fwL_pure hr
       case lv =>
         intro i hi ⟨sd, pc, cp, rp, fi⟩ ⟨sd', pc', cp', rp', fi'⟩ hu
