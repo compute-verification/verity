@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import serving_rows as CS
+from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import SPLIT_OF, SPLITS, Template, split_keys, template
 

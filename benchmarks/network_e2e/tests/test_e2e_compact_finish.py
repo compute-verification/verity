@@ -67,5 +67,6 @@ def test_the_gates_compact_token_run_fails_the_reports_tie_by_its_finish_and_its
     assert verdicts == {"honest": ("accepted", [], True, []),
                         "token": ("refused", [], False, ["the I/O tie didn't accept the honest run"])}
     tie_run = NG.tie_run
-    monkeypatch.setattr(NG, "tie_run", lambda run, ids: {k: v for k, v in tie_run(run, ids).items() if k != "finish"})
+    monkeypatch.setattr(NG, "tie_run", lambda run, ids, aborted=(): {
+        k: v for k, v in tie_run(run, ids, aborted=aborted).items() if k != "finish"})
     assert chain.tie_gate(chain.tie({"honest": got["honest"]["dir"]}, None, ids)) == [chain.TIE_REQUIRED["finish"]]

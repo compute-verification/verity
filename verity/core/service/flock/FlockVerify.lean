@@ -100,11 +100,12 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
     return .ok (c, pb, cm, tables)
 
 /-- A recursive session's inner statement's registered reads (§16.16, a plain-leaves statement): with the verifier's own
-registered reads, its description read from the developer's registration (`Registered.checkDescription`); without, a
-statement that names registered reads is refused, as `Registered.check` refuses one. -/
+registered reads, a circuit that names each port once (`Registered.namesOnce`) and its description read from the
+developer's registration (`Registered.checkDescription`); without, a statement that names registered reads is refused, as
+`Registered.check` refuses one. -/
 def checkDescription (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   match registered with
-  | some own => Registered.checkDescription st.c st.pub own
+  | some own => Registered.namesOnce st.c >>= fun _ => Registered.checkDescription st.c st.pub own
   | none => Registered.check st.c st.pub none false
 
 /-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the
@@ -722,7 +723,7 @@ Each DIR holds `session.json`
 and `<table>.rep<r>.bin` for each table and rep. The statement is set up once; one verdict line per session, in order,
 naming with `--program` the digest of the verifier's own program it verified against (`program_sha512`, `programDigest`).
 A session whose draw is by a law no soundness claim draws by is refused at setup (`ProvedScope.drawLaw`: a bernoulli or
-work draw, whatever flags it holds, or a subset draw without `--zk`), and under `--rec-inner` so is a session of more
+work draw, whatever flags it holds, or a subset draw without `--zk` at public outputs), and under `--rec-inner` so is a session of more
 than one table or whose table holds fewer instances than its population (`RecSetup.oneFull`). Every session of a
 statement whose form the soundness proof does not cover (`ProvedScope.check`, then its tables' `m`,
 `ProvedScope.sizesOk`, §16.15) is refused, and
@@ -853,7 +854,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         r.2.forM (RecCoins.checkLink · registered (RecCoins.Source.atC3 recCoins recInner recCommits) recLink)
         if recInner.isSome then RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then ProvedScope.drawLaw zk tags draw else .ok ()).map fun () =>
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind programDigest
@@ -902,7 +903,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- then a record not in its canonical text (S0)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
-      if draw.isNone then ProvedScope.drawLaw zk draw
+      if draw.isNone then ProvedScope.drawLaw zk tags draw
       RecSetup.fullDraw recInner (recPart.isSome || recBindings.isSome || recRows.isSome) draw record
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
