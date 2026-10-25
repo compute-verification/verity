@@ -746,8 +746,8 @@ the tag (`verifyFiles (plainBytes true)`), while S17 binds the record's `proof_s
 refused where the other is pinned. Not with `--zk`.
 `--plain-tables`: the plain path past one table (`ProvedScope.checkP`, §16.15): a plain session of public outputs at up to
 `Tags.MAX_TABLES` tables, at a subset draw, with the verifier's own `--program` the one META's `program_sha512` names
-(`ProvedScope.programP`), which `flock_verify_sound`'s plain multi-table claim covers. Without it a plain session has at
-most one table. Not with `--zk`. -/
+(`ProvedScope.programP`), which `flock_verify_sound`'s plain multi-table claim covers; the check is the one without
+`--registered F` (`FailClosed.ScopeP`). Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
   let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]] | --rec-inner-coins F] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
@@ -843,8 +843,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   -- other check, until a soundness theorem reads `Circuit.tmpl`
   let parsed := if templated then HmOut.parseTmpl tags circuitB tables else ProvedScope.circuitOf tags circuitB tables
   let scope := if templated then .error (ProvedScope.refusal s!"{tags.name}, a templated statement")
-    else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome
-      registered.isSome
+    -- `FailClosed.ScopeP` is the check without --registered F, which at the public outputs --plain-tables admits
+    -- changes nothing
+    else if plainTables then ProvedScope.checkPOf parsed tags pubB count program publicInputs.isSome false
     else ProvedScope.checkOf parsed tags zk pubB count publicInputs.isSome registered.isSome
   let setupOf := fun (draw : Option Lean.Json) =>
     match (do
