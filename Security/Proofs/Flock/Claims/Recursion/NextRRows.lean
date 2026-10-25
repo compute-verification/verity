@@ -400,13 +400,13 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi
     have hk2 : 2 * i / 2 < sts.size := by omega
-    obtain ⟨-, hsc, hon, -, -⟩ := hall (2 * i) (by omega)
+    obtain ⟨-, hsc, hon, -, -, -⟩ := hall (2 * i) (by omega)
     have hok := htab (2 * i / 2) hk2
     exact rep_cap_le hsc (hon (hfc (2 * i) (by rw [hsz]; omega))) (repCtx_bounds hk2 hok.1 hok.2).1
   · intro k hk rs hrs
     rw [filePs_size, hsz] at hk
     have hk2 : k / 2 < sts.size := by omega
-    obtain ⟨-, hsc, hon, -, -⟩ := hall k hk
+    obtain ⟨-, hsc, hon, -, -, -⟩ := hall k hk
     have hok := htab (k / 2) hk2
     obtain ⟨hd, hkl, hn⟩ := repCtx_bounds (r₀ := capRows (fileCaps spec sts c₁ pfs)) (cs := cs.tail.dropLast) hk2
       hok.1 hok.2
