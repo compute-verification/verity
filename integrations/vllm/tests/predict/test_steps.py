@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace as NS
 
 import pytest
+from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.predict import batch as B
 from verity_vllm.predict.build import Unexpressible, _Specs, build_program, model_shape
 from verity_vllm.predict.common import _arr
@@ -26,6 +27,7 @@ from verity_vllm.predict.steps import (
     trace_commands,
     trace_dir,
 )
+from verity_vllm.program.prune import dead_free_versions
 from verity_vllm.program.registry import io_shell as IO
 from verity_vllm.program.registry.topp_geometry import registered_splits
 
@@ -192,8 +194,8 @@ def test_ill_formed_advice_is_refused_by_name():
         compile_steps(reg, data[: len(data) // 2], ingress)
     with pytest.raises(Unexpressible, match=rf"the advice is {8 * len(data)} bits, over the registered cap ℓ = {8 * len(data) - 8} bits"):
         compile_steps(_registered(cap_bits=8 * len(data) - 8), data, ingress)
-    with pytest.raises(Unexpressible, match="ill-formed advice: advice version 1"):
-        compile_steps(reg, bytes([1]) + data[1:], ingress)
+    with pytest.raises(Unexpressible, match="ill-formed advice: window advice version 3, not 0, 1 or 2"):
+        compile_steps(reg, bytes([3]) + data[1:], ingress)
     with pytest.raises(Unexpressible, match="not a bytearray"):
         compile_steps(reg, bytearray(data), ingress)
     with pytest.raises(ValueError, match="the cap ℓ is a whole number of bits"):
@@ -312,7 +314,8 @@ def test_a_decodes_attention_guard_is_chosen_from_the_request_alone():
     alone = compile_steps(reg, *_session([(BN, 3, body, _prompt(0, BN))], [[(0, 0, BN)], [(0, BN, 1)], [(0, BN + 1, 1)]]))
     assert c.requests[0].digest == alone.requests[0].digest
     ids = {fn.id for _, fn in calls(c.programs[c.requests[0].digest])}
-    assert alone_fn.id in ids and beside_fn.id not in ids
+    alone_id, beside_id = (bind(dead_free_versions()[fn.base_id], **fn.bindings).id for fn in (alone_fn, beside_fn))
+    assert alone_id in ids and beside_id not in ids
 
 
 def test_compile_steps_raises_the_batch_rules_refusal_and_partial_records_it(monkeypatch):
@@ -417,6 +420,20 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
     assert (c.requests[0].T, c.discarded, len(c.steps[3])) == (3, [], 1)
 
 
+def test_an_aborted_request_compiles_as_one_stopped_at_its_last_kept_output():
+    """Request 0's client aborted it after 3 outputs, and the endpoint freed it after the step in flight, whose row (step 3) ran past
+    them: it compiles to the Program of a stop at 3 outputs, that row discarded, with ignore_eos set or not. At its max_tokens vLLM
+    has finished it on length, so an abort there is refused."""
+    reg = _registered()
+    stopped, ingress = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]])
+    aborted = WA.Advice((WA.RequestAdvice("q0", 8, 3, "abort"),), stopped.steps, stopped.release)
+    c, d = compile_steps(reg, stopped, ingress), compile_steps(reg, aborted, {"q0": {**ingress["q0"], "ignore_eos": True}})
+    assert [(u.digest, u.T) for u in d.requests] == [(u.digest, u.T) for u in c.requests]
+    assert d.steps == c.steps and d.discarded == c.discarded == [(3, 0, 10, 1)]
+    with pytest.raises(Unexpressible, match="request 0: 3 kept outputs, finished on abort, against its max_tokens 3"):
+        compile_steps(reg, aborted, {"q0": {**ingress["q0"], "max_tokens": 3}})
+
+
 def test_partial_refuses_request_by_request():
     """A measurement over served traffic: request 1's hit of a part of a block and request 3's top_k refuse those requests by name,
     their rows leave the steps, and requests 0 and 2 (preempted, resumed) compile as they would alone."""
@@ -446,33 +463,61 @@ def test_partial_refuses_request_by_request():
 
 
 def test_dead_gates_are_counted_as_circuit_check_counts_them():
-    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect and the
-    top-p select at a constant split count at their versions without dead gates, and the last layer's fused qkv on the prompt rows
-    before the last narrowed to its keys and values), but gates inside Attention_v5 still reach no sample, so today's request
-    Programs have dead gates: `dead_gates_of` counts them as circuit-check does and says under which definitions."""
+    """The request wrapper is in the dead-free form (`program.prune.dead_free`: no dead unit, RMSNormTriton, TokenSelect, the top-p
+    select at a constant split count and FA2's attention at their versions without dead gates, and the last layer's fused qkv on the
+    prompt rows before the last narrowed to its keys and values), so a request Program's only dead gates are inputs no gate reads:
+    `dead_gates_of` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
+    16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.ml.circuits.liveness import dead_gates
     from verity_vllm.program.prune import dead_units
-    c = compile_steps(_registered(), *_mixed())
-    got = dead_gates_of(c)
-    assert sorted(got["programs"]) == sorted(c.programs)
-    for d, p in c.programs.items():
-        rep = dead_gates(p, limit=0, transitive=True)
-        rec = got["programs"][d]
-        assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
-        assert sum(rec["by_definition"].values()) == rep.computed + rep.input
-        by = rec["by_definition"]
-        assert sum(n for k, n in by.items() if k.startswith("Input")) == rep.input
-        assert {k for k in by if not k.startswith("Input")} <= {"Attention_v5"}
-    assert got["dead_computed"] == sum(r["dead_computed"] for r in got["programs"].values())
+    sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
+    for advice, ingress in (_mixed(), sixteen):
+        c = compile_steps(_registered(), advice, ingress)
+        got = dead_gates_of(c)
+        assert sorted(got["programs"]) == sorted(c.programs)
+        for d, p in c.programs.items():
+            rep = dead_gates(p, limit=0, transitive=True)
+            rec = got["programs"][d]
+            assert (rec["dead_computed"], rec["unread_inputs"]) == (rep.computed, rep.input) and not dead_units(p.fn.body)
+            assert rep.computed == 0 and all(k.startswith("Input") for k in rec["by_definition"])
+            assert sum(rec["by_definition"].values()) == rep.input
+        assert got["dead_computed"] == 0
 
 
 def test_a_program_with_a_dead_unit_is_refused(monkeypatch):
     """A request Program holding a node no output reads is refused, with the fix (in the lowering, never the advice) in the message."""
     import verity_vllm.predict.build as PB
-    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
     with pytest.raises(Unexpressible, match=r"request 0's Program [0-9a-f]{16} holds 56 dead units, node 104 \(RoPE_v1\{NHEADS=4,D=16\}\) first, which no "
                                             r"output reads: drop them in the lowering"):
         compile_steps(_registered(), *_mixed())
+
+
+def test_a_tensor_parallel_rank_compiles_to_its_dead_free_rank_programs(tmp_path):
+    """At TP2 each rank compiles the node's advice to its own rank's request Programs (its shards, a `peers_*` Input per collective)
+    in the registered compiler's form, which the TP2 Build of record isn't: there the last layer's rows before the prefill's last end
+    in units no output reads, its reduces among them. The rows are the one-rank compilation's, and the traces are the rank's
+    `--dead-free` Builds."""
+    from verity_vllm.program.prune import dead_units
+    advice, ingress = _mixed()
+    one = compile_steps(_registered(), advice, ingress)
+    digests = []
+    for rank in (0, 1):
+        reg = _registered(tp={"world": 2, "rank": rank})
+        c = compile_steps(reg, advice, ingress)
+        assert [[(r.request, r.start, r.n, r.samples) for r in rows] for rows in c.steps] == \
+               [[(r.request, r.start, r.n, r.samples) for r in rows] for rows in one.steps]
+        assert c.discarded == one.discarded and dead_gates_of(c)["dead_computed"] == 0
+        for u in {u.digest: u for u in c.requests if u is not None}.values():
+            p = c.programs[u.digest]
+            assert not dead_units(p.fn.body) and any(n.startswith("peers_") for n, _ in p.fn.body.params)
+            kept = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": u.policy}), "request", LP=u.LP, T=u.T).program.fn.body
+            assert {kept.nodes[i].fn.id.split("{")[0] for i in dead_units(kept)} >= {"AllReduce2_v1", "Attention_v5"}
+        digests.append(sorted(c.programs))
+        cmd = trace_commands(c.summary(), reg, str(tmp_path))[0]
+        assert cmd[-5:] == ["--tp", "2", "--rank", str(rank), "--dead-free"]
+    assert len({*digests[0], *digests[1], *one.programs}) == 3 * len(one.programs)
+    assert "--tp" not in trace_commands(one.summary(), _registered(), str(tmp_path))[0]
 
 
 def test_a_target_without_batch_invariance_is_refused():
@@ -507,5 +552,5 @@ def test_a_compiled_request_equals_the_traced_build():
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
     c = compile_steps(reg, advice, ingress)
-    assert c.requests[0].digest == ("7a96a646f3ded690fb6fbf33b1e31318e26570803b588f7560868390b1131d692f103828d10bd2351d1b9ac4bc368c9884531efaae96342bcc6763a27"
-                                    "c154bb7")
+    assert c.requests[0].digest == ("91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d84"
+                                    "11888")

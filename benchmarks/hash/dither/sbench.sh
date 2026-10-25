@@ -37,6 +37,41 @@ case $ARCH in
 esac
 GEN="arch=compute_$ARCH,code=sm_$ARCH"
 echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
+# SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
+# SBENCH_SHIP=TAR (such a tar, sent with research run --send) takes them in place of building, so a node that may not build
+# (n1, n3) builds nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
+# sources here and in codec_tensor and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
+# that leaves those alone.  Neither covers --bw-passes.
+COINS_PKG=verity/core/protocols/pouw/lean/check
+command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+SHIP_LIBS="HB_H1U HB_H1U_KSPLIT HB_H1U_KRONLY HB_H1U_KC DITHER_H1C_KC"
+# the coins' package and every path package its manifest lists (the inherited ones too), from the tree's root
+COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.path.normpath(os.path.join(p, x["dir"]))
+  for x in json.load(open(os.path.join(p, "lake-manifest.json")))["packages"] if x["type"] == "path"))' "$COINS_PKG")
+ship_key() {
+  git ls-tree -r HEAD -- benchmarks/hash/dither benchmarks/hash/codec_tensor | grep -E '\.(cu|cuh)$'
+  for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
+  echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
+  echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}"
+}
+if [ -n "${SBENCH_SHIP:-}${SBENCH_SHIP_OUT:-}" ]; then
+  case " $* " in *" --bw-passes"*) echo "sbench: SHIP_STALE: a ship doesn't cover --bw-passes"; exit 17 ;; esac
+  ship_key "$@" > "$S/key"
+fi
+if [ -n "${SBENCH_SHIP:-}" ]; then
+  tar -xf "$SBENCH_SHIP" -C "$S" || { echo "sbench: SHIP_STALE: can't unpack $SBENCH_SHIP"; exit 17; }
+  cmp -s "$S/key" "$S/ship/key" \
+    || { echo "sbench: SHIP_STALE: its key isn't this run's (< this run, > the ship):"; diff "$S/key" "$S/ship/key" | head; exit 17; }
+  (cd "$S/ship" && sha256sum -c --quiet MANIFEST.sha256) || { echo "sbench: SHIP_STALE: MANIFEST.sha256 doesn't hold"; exit 17; }
+  cp "$S"/ship/*.so "$S"/ && cp "$S"/ship/*.log "$S"/ship/*.txt "$OUT"/ 2>/dev/null
+  while read -r name f; do export "$name=$S/$f"; done < "$S/ship/libs"
+  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock tar -xf "$S/ship/lean.tar" -C "$ROOT" \
+    && lake build --no-build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+    || { echo "sbench: SHIP_STALE: lake build --no-build finds the coins' verifier unbuilt"; tail -5 "$OUT/lean-coins-build.log"
+         exit 17; }
+  echo "sbench: shipped ($(tail -1 "$S/key"))"
+else
 for lib in h1c h1f h1o; do
   nvcc -O3 -std=c++17 -gencode "$GEN" -Xptxas -v -Xcompiler -fPIC -shared \
     -o "$S/lib$lib.so" "benchmarks/hash/dither/$lib.cu" > "$OUT/build-$lib.log" 2>&1 \
@@ -110,6 +145,21 @@ case " $* " in *" --bw-passes"*)
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
+fi
+if [ "${SBENCH_SHIP_OUT:-}" = 1 ]; then
+  (cd "$COINS_PKG" && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) > "$OUT/lean-coins-build.log" 2>&1 \
+    || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
+  mkdir -p "$S/ship"
+  for name in $SHIP_LIBS; do [ -n "${!name:-}" ] && echo "$name $(basename "${!name}")"; done > "$S/ship/libs"
+  cp "$S"/*.so "$OUT"/build-*.log "$S/ship/" && { [ ! -f "$OUT/kc-flags.txt" ] || cp "$OUT/kc-flags.txt" "$S/ship/"; }
+  cp "$S/key" "$S/ship/key"
+  tar -cf "$S/ship/lean.tar" $(for p in $COINS_PKGS; do [ ! -d "$p/.lake/build" ] || echo "$p/.lake/build"; done) \
+    || { echo "sbench: SHIP_FAIL lean.tar"; exit 17; }
+  (cd "$S/ship" && sha256sum -- * > "$S/MANIFEST.sha256" && mv "$S/MANIFEST.sha256" .)
+  tar -cf "$OUT/sbench-ship.tar" -C "$S" ship
+  echo "sbench: ship $OUT/sbench-ship.tar ($(du -h "$OUT/sbench-ship.tar" | cut -f1)), key:"; cat "$S/key"
+  exit 0
+fi
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
 # the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o

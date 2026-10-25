@@ -40,7 +40,9 @@ environment extension loaded, so none of the package's code runs), and replays t
     dependencies the `.olean` files of the imported modules that a fetched package (Mathlib's cache, ArkLib's build) or the
                  toolchain provides differ from the record, which changes only with the package's imports or at a bump
     layers       a module under a `layers` prefix (other than its `except` modules) imports a module outside the layer's
-                 `imports` prefixes
+                 `imports` prefixes; a `sealed` layer's modules are ruled only by the layers at or under it, and an
+                 `imports` prefix that holds a sealed layer below it doesn't admit that layer's modules (a vocabulary
+                 `Definitions.Pouw` imports no `Definitions.Pouw.Guarantees`, which sits under it)
     assumptions  a named assumption (listed by name under `assumptions`: a definition of the spec stated as a `Prop`, taken
                  as a hypothesis or read in a guarantee's statement) has no `owner`, no guarantee reads it, or its
                  definition no longer has the digest its record holds; or the policy still lists assumption modules,
@@ -993,9 +995,11 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
+    premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
+                                  "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -1226,8 +1230,14 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
     for p in sorted(exempt):
         if not any(under([p], m) for m in files):
             fails.append(Failure("orphan.stale-exempt", p, f"orphan: `exempt` lists {p}, which matches no file; remove the entry"))
-    for layer, rule in sorted(policy.get("layers", {}).items()):
-        inside = [m for m in sorted(modules) if under([layer], m)]
+    layers = policy.get("layers", {})
+    sealed = sorted(k for k, r in layers.items() if r.get("sealed"))
+
+    def admits(prefixes: list[str], i: str) -> bool:
+        return any(under([p], i) and not any(s != p and under([p], s) and under([s], i) for s in sealed) for p in prefixes)
+    for layer, rule in sorted(layers.items()):
+        inside = [m for m in sorted(modules) if under([layer], m)
+                  and not any(under([s], m) and not under([s], layer) for s in sealed)]
         if not inside:
             fails.append(Failure("layers.empty", layer, f"layers: {layer} matches no audited module; remove the entry"))
         for m in rule.get("except", []):
@@ -1238,7 +1248,7 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
             if m in rule.get("except", []):
                 continue
             for i in facts["imports"].get(m, []):
-                if not under(rule["imports"], i) and i != "Init":
+                if not admits(rule["imports"], i) and i != "Init":
                     fails.append(Failure("layers.import", m, f"layers: {m} imports {i}, outside {layer}'s layer "
                                          f"({', '.join(rule['imports'])})"))
     if conflicts := facts.get("moved_conflicts"):
@@ -1422,7 +1432,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
-    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -1435,15 +1446,16 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                         "[...]}}, not: {claim: why}}")]
     fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
     assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
-    found = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
-             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"]) and d["name"] not in assumptions}
+    preds = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
+             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"])}
+    found = {c: m for c, m in preds.items() if c not in assumptions}
     for c, m in sorted(found.items()):
         if c not in ws and c not in nots:
             fails.append(Failure("claims.no-witnesses", c, f"claims: {c} ({m}) is a claim definition with no witnesses: name "
                                  f"its `{c}_fails` (a theorem that it is false at a toy instance) and `{c}_meets` (its "
                                  f"checkable antecedents hold at each deployed record) under `claims.witnesses`, or list it "
                                  f"under `claims.not` with the reason it is no claim"))
-    for c in sorted((set(ws) | set(nots)) - set(found)):
+    for c in sorted((set(ws) | set(nots)) - set(preds)):
         fails.append(Failure("claims.stale", c, f"claims: {c} is listed under `claims` but is no predicate of the spec under "
                              f"{', '.join(rule['modules'])}; remove the entry"))
     for c, why in sorted(nots.items()):
@@ -1518,7 +1530,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
-    definitions unfolded and a `Premises` abbrev seen through:
+    definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
+    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -2120,7 +2133,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}
@@ -2906,8 +2920,9 @@ def packages(root: Path) -> list[Path]:
 
 
 def controls(toolchain: str, out: Path, install: bool = False, log=print) -> list[str]:
-    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added.
-    ``install`` (`--build`) first installs elan and the toolchain with `setup.sh`."""
+    """Build the fixture package with ``toolchain``: it must pass clean, and fail each check once a violation is added
+    (and with none of the failures its `not` lists, by prefix).  ``install`` (`--build`) first installs elan and the
+    toolchain with `setup.sh`."""
     fails = []
     work = out / f"controls-{re.sub(r'[^A-Za-z0-9]+', '_', toolchain)}"
     shutil.rmtree(work, ignore_errors=True)
@@ -2974,6 +2989,8 @@ def controls(toolchain: str, out: Path, install: bool = False, log=print) -> lis
                 fails.append(f"controls: `{name}` should pass; the audit said:\n" + "\n".join(got))
         elif not any(f.startswith(v["fails"]) for f in got):
             fails.append(f"controls: `{name}` should fail `{v['fails']}`; the audit said:\n" + ("\n".join(got) or "PASS"))
+        if wrong := [f for f in got if any(f.startswith(n) for n in v.get("not", []))]:
+            fails.append(f"controls: `{name}` should not fail these:\n" + "\n".join(wrong))
     log(f"audit: controls with {toolchain}: {'PASS' if not fails else 'FAIL'} (clean, {', '.join(expect)}; builds "
         f"{'in the sandbox' if sandboxed() else 'without a sandbox'})")
     return fails

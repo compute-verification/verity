@@ -7,7 +7,8 @@ tie is a required gate (`chain.tie_gate`):
 2. An honest tie that raises gives the honest run no verdict, which fails the report; token's refusal by the tie, which
    did run on it, stays token's verdict rather than falling back to pending.
 3. One ``--ids`` map is handed to every run, so it must cover each run's certified requests (`chain.uncovered`): a map
-   that is nobody's ids gives the honest run no verdict, and the tie doesn't run on it.
+   that is nobody's ids gives the honest run no verdict, and the tie doesn't run on it. So does one that names a
+   request with fewer ids than it served (REDTEAM phase 14, `test_e2e_tie_coverage_phase14.py`).
 
 Beside them: without IO-TIE in the tree or without the ids the report is NOT OK and says why, never listing the tie as
 not run; and a part the tie must establish beside its verdict (`chain.TIE_REQUIRED`, the hook for CERT-VARLEN's compact
@@ -86,7 +87,7 @@ def _ties(**edits):
         x = x | edits.get(name, {})
         codes = sorted({f"IoTieWindow.{p}" for parts in x.get("failing", {}).values() for p in parts})
         out[name] = {"verdict": "refused" if codes else "accepted", "codes": codes, "failing": {}, "unplaced": 0,
-                     "held": {"egress": 3, "ingress": 3}, "missing": {}, "outputs": 3, "placed": 3} | x
+                     "held": {"egress": 3, "ingress": 3}, "missing": {}, "outputs": 3, "placed": 3, "finish": True} | x
     return out
 
 
@@ -110,7 +111,7 @@ def tied(monkeypatch):
     monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
 
     def stub(rows):
-        monkeypatch.setattr(NG, "tie_run", rows)
+        monkeypatch.setattr(NG, "tie_run", lambda run, ids, aborted=(): rows(run, ids))
     return stub
 
 
@@ -123,7 +124,7 @@ def _ids(tmp_path, pairs):
 def test_the_tie_refusing_the_honest_run_fails_the_report(runs, tmp_path, tied):
     """Positive control: the tie ran and refused the honest run, so the report is NOT OK."""
     tied(lambda run, ids: _ties(honest={"failing": {2: ["port"]}})[run.name])
-    ids = _ids(tmp_path, (("q0", [5]), ("q1", [5])))
+    ids = _ids(tmp_path, (("q0", [5, 6]), ("q1", [9])))
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(ids)), [], clock=lambda: 0.0)
     assert r["ok"] is False and r["why_not"] == ["the I/O tie didn't accept the honest run"]
     assert r["negatives"]["token"]["refused"] is True
@@ -140,7 +141,7 @@ def test_an_honest_tie_that_raises_fails_the_report_and_token_keeps_its_refusal(
         return ties[run.name]
 
     tied(tie_run)
-    ids = _ids(tmp_path, (("q0", [5]), ("q1", [5])))
+    ids = _ids(tmp_path, (("q0", [5, 6]), ("q1", [9])))
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(ids)), [], clock=lambda: 0.0)
     assert r["ok"] is False and r["why_not"] == [
         "the I/O tie gave no verdict on the honest run: ValueError(\"honest's sampled ids are not in the file\")"]
@@ -154,8 +155,9 @@ def test_an_honest_tie_that_raises_fails_the_report_and_token_keeps_its_refusal(
 
 
 def test_ids_that_dont_cover_the_honest_runs_certified_requests_fail_the_report(runs, tmp_path, tied):
-    """--ids hands one map to every run, so it must cover each run's certified requests (its io.json's users): a map
-    that is nobody's ids, or misses one request, gives the run no verdict, and the tie never runs on it."""
+    """--ids hands one map to every run, so it must cover each run's certified requests (its io.json's, an id for each
+    served output): a map that is nobody's ids, misses one request or names one with no ids gives the run no verdict,
+    and the tie never runs on it."""
     seen = []
     tied(lambda run, ids: seen.append(run.name) or _ties()[run.name])
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(_ids(tmp_path, (("nobody", [999]),)))), [], clock=lambda: 0.0)
@@ -165,11 +167,16 @@ def test_ids_that_dont_cover_the_honest_runs_certified_requests_fail_the_report(
     assert seen == [] and r["chain"]["tie"]["runs"]["honest"]["ok"] is None
     assert "the I/O tie, which alone refuses it, gave it no verdict (no sampled ids for 2 of its 2 certified requests)" \
         in (tmp_path / "out" / "report.md").read_text()
-    r = e2e.run(_args(runs, tmp_path / "out2", ids=str(_ids(tmp_path, (("q0", [5]),)))), [], clock=lambda: 0.0)
+    r = e2e.run(_args(runs, tmp_path / "out2", ids=str(_ids(tmp_path, (("q0", [5, 6]),)))), [], clock=lambda: 0.0)
     assert r["why_not"][0] == "the I/O tie gave no verdict on the honest run: no sampled ids for 1 of its 2 certified " \
                               "requests" and seen == []
+    r = e2e.run(_args(runs, tmp_path / "out5", ids=str(_ids(tmp_path, (("q0", []), ("q1", [9]))))), [],
+                clock=lambda: 0.0)
+    assert r["ok"] is False and r["why_not"] == [
+        "the I/O tie gave no verdict on the honest run: fewer sampled ids than served outputs for 1 of its 2 certified "
+        "requests (0 sampled, 2 served)", "token not refused"] and seen == []
     (runs / "honest" / "io.json").unlink()
-    r = e2e.run(_args(runs, tmp_path / "out3", ids=str(_ids(tmp_path, (("q0", [5]), ("q1", [5]))))), [],
+    r = e2e.run(_args(runs, tmp_path / "out3", ids=str(_ids(tmp_path, (("q0", [5, 6]), ("q1", [9]))))), [],
                 clock=lambda: 0.0)
     assert r["why_not"] == ["the I/O tie gave no verdict on the honest run: no certified I/O (io.json) to hold the "
                             "sampled ids to"] and "honest" not in seen and r["negatives"]["token"]["refused"] is True
@@ -179,7 +186,7 @@ def test_without_io_tie_or_the_ids_the_report_isnt_ok_and_says_why(runs, tmp_pat
     """The tie that didn't run fails the report with its reason, and token, which only it refuses, isn't refused; the
     tie is listed neither as run nor as not run."""
     monkeypatch.setattr(NG, "io_tie_module", lambda: None)
-    ids = _ids(tmp_path, (("q0", [5]), ("q1", [5])))
+    ids = _ids(tmp_path, (("q0", [5, 6]), ("q1", [9])))
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(ids)), [], clock=lambda: 0.0)
     assert r["ok"] is False and r["why_not"] == [
         f"the I/O tie didn't run, and the advice profile requires it: {NG.TIE_MISSING['io-tie']}", "token not refused"]
@@ -198,7 +205,7 @@ def test_a_part_the_tie_must_establish_beside_its_verdict_fails_the_report(runs,
     """`chain.TIE_REQUIRED`, the hook for CERT-VARLEN's compact finish: a key of the tie's row that must be true on the
     honest run, else the report is NOT OK with its reason, as when the tie refuses the honest run."""
     monkeypatch.setattr(chain, "TIE_REQUIRED", {"finish": "the compact finish didn't hold on the honest run"})
-    ids = _ids(tmp_path, (("q0", [5]), ("q1", [5])))
+    ids = _ids(tmp_path, (("q0", [5, 6]), ("q1", [9])))
     tied(lambda run, ids: _ties(honest={"finish": False})[run.name])
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(ids)), [], clock=lambda: 0.0)
     assert r["ok"] is False and r["why_not"] == ["the compact finish didn't hold on the honest run"]

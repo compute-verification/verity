@@ -99,7 +99,10 @@
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct; generation 3 bc-8f4b652b finishes its workers and stops)",
+      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+      "lineage": [
+        "bc-8f4b652b"
+      ],
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0CAGBJTJF4",
@@ -206,7 +209,7 @@
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which posts as it too: the machine model, the Lean accounting statements and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; the research work is @compute-research's",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
@@ -289,6 +292,12 @@
         "What exactly is credited as useful work when serving an LLM, and what isn't?",
         "How much overhead does the proof of useful work add to inference, and how is it measured?"
       ]
+    },
+    {
+      "handle": "compute-research",
+      "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
+      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split"
     },
     {
       "handle": "memory-accounting",
@@ -517,7 +526,7 @@
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
         "tools/research/tests/test_linear.py",
-        "integrations/slack-events/"
+        "infra/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
@@ -546,7 +555,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
