@@ -2910,7 +2910,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
 #else
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
+  if (!sm_keep<CAP, H1U_JCTA != 0>(smid, q, den, cap, next)) return;
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   if constexpr (H1U_JCTA) {
@@ -3152,7 +3152,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umjc_sm(const UCallR* 
                                                         u32* __restrict__ next, u32 cap) {
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
-  if (!sm_keep<CAP>(smid, q, den, cap, next)) return;
+  if (!sm_keep<CAP, H1U_JCTA != 0>(smid, q, den, cap, next)) return;
   __shared__ WarpSmem smem[WARPS];
   const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0;
   if constexpr (H1U_JCTA) {
