@@ -145,7 +145,8 @@ The record is UTF-8 JSON. The verifier reads only the fields below; it ignores e
 Every writer emits the record in its canonical text: Lean's `Json.compress` of it (keys in code-point order, no
 whitespace, Lean's string escapes and number printing), which `live/src/record_text.rs` (`canonical_json`) and
 `verity_flock.record_text` (`session_text`) write, both held to Lean's output by `live/src/record_text_vectors.json`. The
-agreement job re-renders the stored vectors that predate it (`verifier/ci.py`).
+agreement job re-renders the stored vectors that predate it (`verifier/ci.py`). The verifier refuses a record in any
+other text (S0), so one session has exactly one record.
 
 | field | type | meaning |
 |---|---|---|
@@ -193,6 +194,7 @@ Each check is a total predicate on the decoded record and the configuration. Fai
 
 | id | check | condition it enforces |
 |---|---|---|
+| S0 | the record's text is `Json.compress` of what it parses to (§5.1), checked after every other check (intended divergence D20, §17.1) | one record per session: two accepted texts that parse alike are the same text |
 | S1 | `kind = "flock-live-session/v1"` and `aborted = null` | the session completed |
 | S2 | `hello = Hello(statement)` byte for byte (§16) | R7: profile, reps, flavour, tables, Σ, link shape and coin scheme are the verifier's |
 | S3 | `config.require_link = true`, `link_mode = "exchange"`, `link.mode = "exchange"` | F1/E1: the statement was committed before any coin |
@@ -1708,10 +1710,13 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
    `fast100` below `22`, `--zk`'s `queries0` at `m ≤ 24`), so no session's verdict carries this reason.
 
 At setup, a drawn session whose statement sets up is refused when no soundness claim draws by its draw's sampling
-design (`Flock.ProvedScope.drawLaw`), whatever flags the verifier holds: the claims draw by the stratified sampling
-design, with or without `--zk`, and under `--zk` by the subset one (`FailClosed.SoundZJ`, `SoundZHJ`). The verdict is
-`refused: <why>: no soundness claim draws by this law`, `<why>` one of `a bernoulli draw`, `a work draw`,
-`a work draw with a closure` and `a subset draw without --zk`. A session without a draw is refused too, since every
+design (`Flock.ProvedScope.drawLaw`, by the one rule `Flock.ProvedScope.lawWhy`), whatever flags the verifier holds:
+the claims draw by the stratified sampling design, with or without `--zk`, and by the subset one under `--zk`
+(`FailClosed.SoundZJ`, `SoundZHJ`) and, at one table, at a statement with hidden outputs without it
+(`FailClosed.SoundExecH`, the plain hidden-output claim, which takes its sampling design as a parameter,
+`DrawDesign`: the stratified design or the subset one; rule 4 keeps a plain session to one table). The verdict is `refused: <why>: no soundness claim draws by this law`,
+`<why>` one of `a bernoulli draw`, `a work draw`, `a work draw with a closure` and `a subset draw without --zk` (at a
+statement with public outputs only). A session without a draw is refused too, since every
 claim is about a drawn session (each claim's record hypothesis reads the record's draw): it is verified against the
 population's statement, and its verdict is
 `refused: a session without a draw: every soundness claim is about a drawn session (D12)` only once every check has
@@ -1859,7 +1864,7 @@ expectation):
   in `vectors.json` expects that refusal of each session that upstream accepts, and of every other session its own reason
   (`agree.py --lean-refuses`): a session refused for its form alone passed every check, and is compared as accepted. So,
   too, a draw by a sampling design no soundness claim draws by (§16.15: a bernoulli draw, a work draw with or without a
-  closure, and a subset draw without `--zk`), which the Lean verifier alone refuses, at setup (the live server and
+  closure, and a subset draw without `--zk` at a statement with public outputs), which the Lean verifier alone refuses, at setup (the live server and
   upstream verify it): a set marked `lean_refuses_drawn` expects that refusal of every drawn session
   (`agree.py --lean-refuses-drawn`). `verity/ml/flock/tests/test_lean_draw_laws.py` runs each sampling design on the
   Lean verifier. So, too, a session without a draw (§16.15), which the Lean verifier alone refuses, and only once every
@@ -1921,6 +1926,12 @@ expectation):
 - **D18:** a non-empty `matrix_evals` (§8.1, §10). Upstream reads and ignores it; the spec refuses it
   (`matrix_evals: length N, want 0`), for D17's reason: no check reads it. Every honest prover writes it empty. No vector
   exercises it; `Flock.Test.ProofCanon` runs it on the Lean verifier.
+- **D20:** a record not in its canonical text (S0, §5.1). Upstream parses the record with serde and accepts any text of
+  it; the spec refuses (`S0: the record is not in its canonical text …`, `Flock.RecordText.check`), for D17's reason at
+  the record: the recursion binds a session's record, so a session has one accepted text
+  (`Flock.RecordText.check_inj`). No vector exercises it: S0 is the Lean verifier's last check, and every set the
+  agreement job mutates is refused ahead of it (D12's form refusal, and `NO_PROGRAM` without `--program`), so its
+  sessions are compared as accepted. `Flock.Test.RecordText` runs the non-canonical forms on `RecordText.check`.
 
 D3 and D4 are closed by `631567f7`; the corpus's `upstream_checks` names them per set (`--upstream-checks` in
 `redigest.py` and `fuzz.py`).

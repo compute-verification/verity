@@ -1,8 +1,8 @@
 """A window's opening checks spread over worker processes: each worker runs the driver's own check of an opening
 (`audit.Session._check`) over a copy of what it reads of the session (the parameters, the registration, the window's
 challenge, plans and roots, and the root before its first), so the verdict is `Session.verify`'s: the window is
-rejected at its first failing draw in draw order, with that draw's failure, and accepted when every draw's opening
-checks and there are as many openings as draws.
+rejected at its first failing draw in draw order, with that draw's failure, and accepted when it has draws, every
+draw's opening checks and there are as many openings as draws.
 
     checks = Checks(workers)              a pool of spawned processes
     snap = checks.snapshot(session, t)    once a window's draws are out
@@ -26,8 +26,8 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
 from verity.core.protocols.remote_bandwidth import audit  # noqa: E402
+from verity.core.protocols.remote_bandwidth import wire  # noqa: E402
 
-import wire  # noqa: E402
 
 _views: dict[bytes, tuple[audit.Session, object]] = {}
 
@@ -91,12 +91,13 @@ class Checks:
 
     @staticmethod
     def settle(session: audit.Session, t: int, results: list[dict], count: int) -> audit.Verdict:
-        """Window t's verdict from its batches' results in draw order, as `Session.verify` would give it."""
+        """Window t's verdict from its batches' results in draw order, as `Session.verify` would give it (`malformed`
+        on a window with no draws)."""
         session._live()
         w = session.windows[t]
         if w.draws is None or w.verdict is not None:
             raise audit.SessionError(f"window {t} has no draws awaiting openings")
-        if count != len(w.draws):
+        if not w.draws or count != len(w.draws):
             return session._fail(t, "malformed")
         for r in results:
             if r["failure"] is not None:
