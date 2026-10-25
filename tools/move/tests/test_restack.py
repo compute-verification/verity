@@ -165,6 +165,33 @@ def test_a_real_content_conflict_after_the_move(repo, monkeypatch, capsys):
     assert "pr: conflicted at moved (1)" in capsys.readouterr().out
 
 
+def test_a_conflict_only_in_lean_locks_takes_ontos_and_leaves_them_stale(repo, monkeypatch, capsys):
+    on(repo, "pr", ("edit util and lock", {"app/util.py": edit(UTIL, "return 5", "return 50"),
+                                           "pkg/lean-audit.json": '{"reads": "branch"}\n'}))
+    moved = RS.rev("move", str(repo))
+    git(repo, "checkout", "-q", "main")
+    onto = commit(repo, "main changes the lock", {"pkg/lean-audit.json": '{"reads": "main"}\n'})
+    r = RS.restack("pr", moved, onto=onto, cwd=str(repo))
+    assert (r["status"], r["files"]) == ("locks-stale", ["pkg/lean-audit.json"]), r
+    assert show(repo, r["result"], "pkg/lean-audit.json") == '{"reads": "main"}\n'
+    assert "return 50" in show(repo, r["result"], "app/core/util.py")
+    assert git(repo, "rev-list", "--parents", "-n", "1", r["result"]).split()[2] == onto
+    assert f"pr: locks-stale {r['result'][:12]}" in RS.line(r)
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--move-commit", moved, "--onto", onto]) == 1
+
+
+def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
+    on(repo, "pr", ("edit util and lock", {"app/util.py": edit(UTIL, "return 3", "return 30"),
+                                           "pkg/lean-audit.json": '{"reads": "branch"}\n'}))
+    moved = RS.rev("move", str(repo))
+    git(repo, "checkout", "-q", "main")
+    onto = commit(repo, "main edits both", {"app/core/util.py": edit(UTIL, "return 3", "return 33"),
+                                            "pkg/lean-audit.json": '{"reads": "main"}\n'})
+    r = RS.restack("pr", moved, onto=onto, cwd=str(repo))
+    assert (r["status"], r["step"], r["files"]) == ("conflicted", "moved", ["app/core/util.py", "pkg/lean-audit.json"])
+
+
 def test_a_conflict_with_the_tree_before_the_move(repo):
     git(repo, "checkout", "-q", "base")
     git(repo, "checkout", "-q", "-B", "main")
