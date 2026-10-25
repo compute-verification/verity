@@ -9,9 +9,10 @@ every decoded Program (`decoded_reads`), and `BodyFacts`' return is `ReadsExact.
 (`scanOut_of_ok`, `scanOut_reads`).
 
 With the root a composite without parameters (`decode_root`), every callee decoded before its caller (`BodyFacts`)
-and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program whose order passes (`rootFacts`), so
-`Novel.ReadsExact` holds wherever its two open statements do, `ReadsExact.RootNodes` and `ReadsExact.RootSet`
-(`readsExact_of_nodes_set`).
+and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program whose order passes (`rootFacts`).
+`CalleeOk`, `NodeOk` and the bodies `Desc.walkable` lays out are `ReadsExact.WidthFacts` (`widthFacts`), so the gates
+every root read names have their widths, and `Novel.ReadsExact` holds wherever its two open statements do,
+`ReadsExact.RootOneNode` and `ReadsExact.RootSet` (`readsExact_of_one_set`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
@@ -93,10 +94,34 @@ theorem rootFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode by
   have := hcf d hd k hk
   omega
 
-/-- **`Novel.ReadsExact` from its two open statements**, `ReadsExact.RootNodes` and `ReadsExact.RootSet`, with the
-decoder's facts (`rootFacts`). -/
+/-- **`Novel.ReadsExact` from `ReadsExact.RootNodes` and `ReadsExact.RootSet`**, with the decoder's facts
+(`rootFacts`). -/
 theorem readsExact_of_nodes_set (hN : ReadsExact.RootNodes) (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
   ReadsExact.readsExact_of_rootReads (ReadsExact.rootReads_of
     (ReadsExact.rootSegs_of (fun bytes P hd ho => rootFacts bytes P hd ho) (ReadsExact.rootGates_of hN)) hS)
+
+/-- **The decoder's facts the widths read hold of every decoded Program `Desc.walkable` passes**: a primitive is one
+gate (`CalleeOk`), every composite's body is laid out (`Walk.bodiesLaidOut_spec`), and its nodes call what `NodeOk`
+lets them. -/
+theorem widthFacts (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
+    (hwk : NciCheck.Desc.walkable P = true) : ReadsExact.WidthFacts P := by
+  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
+  have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  have hwk' := hwk
+  unfold NciCheck.Desc.walkable at hwk'
+  simp only [Bool.and_eq_true] at hwk'
+  obtain ⟨-, hlay, -, -⟩ := Walk.bodiesLaidOut_spec P hwk'.1.2
+  intro d hd
+  refine ⟨fun hp => ((hok d hd).1.1 hp).2.1, fun hp => ?_⟩
+  obtain ⟨-, hlast, hstep⟩ := hlay d hd hp
+  refine ⟨hstep, hlast, fun k hk => ?_⟩
+  obtain ⟨-, hnd, -⟩ := (hok d hd).2.1 k hk
+  exact ⟨hnd.2.2.1, hnd.2.2.2.1⟩
+
+/-- **`Novel.ReadsExact` from its two open statements**, `ReadsExact.RootOneNode` and `ReadsExact.RootSet`, with the
+decoder's facts (`rootFacts`, `widthFacts`): the reads' widths are `ReadsExact.rootW_circuit`'s. -/
+theorem readsExact_of_one_set (hO : ReadsExact.RootOneNode) (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
+  readsExact_of_nodes_set
+    (ReadsExact.rootNodes_of (fun bytes P hd ho hw => ⟨rootFacts bytes P hd ho, widthFacts bytes P hd hw⟩) hO) hS
 
 end NciCheck.Properties.SecurityProofs.BodiesOk

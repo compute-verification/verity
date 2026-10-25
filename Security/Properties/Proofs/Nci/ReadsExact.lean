@@ -10642,9 +10642,9 @@ def SegNodes (P : Prog) (c : Circuit) (s : Seg) : Prop :=
   (1 < s.reps → s.shift ≠ 0 → s.count ≠ 0 →
     ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos s → p.toNat ∈ nodeGates P k')
 
-/-- **Open: `RootGates` segment by segment.** With `RootGates`' premises, every segment `down` gives a piece of one of
-root node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries, is
-`SegNodes`. -/
+/-- **`RootGates` segment by segment.** With `RootGates`' premises, every segment `down` gives a piece of one of root
+node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries, is
+`SegNodes` (`rootNodes_of`, from the open `RootOneNode`). -/
 def RootNodes : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
@@ -12908,5 +12908,31 @@ theorem rootW_circuit (P : Prog) (memo : Array Desc.Summary) (c : Circuit) (hm :
   have hL := rootW P memo hm hF hWF hn hs w p hp
   obtain ⟨hLd, hlast, -⟩ := (hWF P.root hF.1).2 hF.2.1
   exact w_of_locW hc (locW_lt hL hLd hlast) hL
+
+/-- **Open: `SegNodes`' node parts.** With `RootNodes`' premises, of every segment `down` gives a piece of one of root
+node `k`'s arguments (or one `Desc.memberRows` gives), or `Desc.carriesRead` gives of its scan's carries: each piece
+of positive count names gates of one root node, and, when its copies shift, all its copies' gates are one root
+node's. -/
+def RootOneNode : Prop :=
+  ∀ (bytes : ByteArray) (P : Prog) (memo : Array Desc.Summary) (c : Circuit),
+    Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
+    Desc.inputsAtRoot P = true → Desc.walkable P = true → memoOf P = .ok memo → circuitOf P = .ok c →
+    ∀ k < nodeCount P, ∀ node, (rootCtx P memo).node k = .ok node →
+      ∀ s, ((∃ i, FromDown (rootCtx P memo) k i s) ∨ FromRows (rootCtx P memo) k node s ∨
+        FromCarry (rootCtx P memo) k node s) →
+        (∀ q ∈ s.ps.toList, q.count ≠ 0 →
+          ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ pos q → p.toNat ∈ nodeGates P k') ∧
+        (1 < s.reps → s.shift ≠ 0 → s.count ≠ 0 →
+          ∃ k' < nodeCount P, ∀ w p, (Tgt.gate w, p) ∈ segPos s → p.toNat ∈ nodeGates P k')
+
+/-- **`RootNodes` from `RootOneNode`** and the decoder's facts (`RootFacts`, `WidthFacts`): the widths are
+`rootW_circuit`'s. -/
+theorem rootNodes_of
+    (hF : ∀ bytes P, Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.walkable P = true →
+      RootFacts P ∧ WidthFacts P)
+    (hO : RootOneNode) : RootNodes := by
+  intro bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs
+  obtain ⟨hRF, hWF⟩ := hF bytes P hd ho hw
+  exact ⟨rootW_circuit P memo c hm hc hRF hWF hn hs, hO bytes P memo c hd ho hl hi hw hm hc k hk node hn s hs⟩
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
