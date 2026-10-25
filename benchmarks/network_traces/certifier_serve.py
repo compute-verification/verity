@@ -144,7 +144,8 @@ certified, the I/O, the audit and the salt accept.
 - `client` sends the plan's requests on the link as `active_replay.Peer` does, at the deployment's origin, and reads
   the wire to its end (`peer.json`). Then it asks the reveal endpoint for each window's certificates and keeps those
   that verify under the deployment's certifier key and session (`keep_certificates`: `certificates.jsonl`, and the
-  clock certificates in `clocks.jsonl`); it refuses each other one by name (`check_certificates`) and exits 1.
+  clock certificates in `clocks.jsonl`, public parts only); it refuses each other one by name, a clock certificate
+  whose signed digest an earlier window's signs among them (`check_certificates`), and exits 1.
 - `check` is the auditor's offline check of a served run (`check`): per link-window, the certifier's audit of the raw
   and committed records, N2's in-the-clear verdict through `LinkWindows` (commit, register, select, deliver,
   `unproved_outcome`: the check proves nothing, so the verdict reads the opening; `n2_zk.py` proves it) on the certified
@@ -163,15 +164,16 @@ certified, the I/O, the audit and the salt accept.
 
 **Outputs** in a run's directory: `plan.json`, `calibration.json`, `deployment.json`, the proxy's records
 (`requests.records`, `responses.records`, `committed.jsonl`) and `certified.jsonl` (each record's head, the
-certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's clock
-certificate of each egress window's sync, public, which an advised link's verifier reads: `read_clocks`),
-`proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the client's `peer.json`, `certificates.jsonl` and
-`clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and `check.json`. Records, their heads, the certifier's
-salts and the shim's events are witness, kept behind the firewall in a deployment; a rehearsal publishes them so that
-its check can be replayed. A certificate's public part is public, which the client keeps: its key id, link, direction
-and window, the digest it signs and its LMS signature, in the deployment's session. The digest is the head's salted by
-`salt_c` (`certificate_digest`), a hiding commitment, so the signature over it shows nothing of the head; a clock
-certificate's sync is public too. No PoUW salt is written, only its SHA-512
+certifier's salt for it and certificate, or the link-window the signer refused), `clocks.jsonl` (the certifier's
+salted clock certificate of each egress window's sync with its opening, the sync and its salt, which an advised
+link's verifier of record reads: `read_clocks`), `proxy.json.gz`, the shim's `server.json` and `server.events.gz`, the
+client's `peer.json`, `certificates.jsonl` and `clocks.jsonl` (in `client/` in a rehearsal), `serve.json` and
+`check.json`. Records, their heads, the syncs the certifier signed, the certifier's salts and the shim's events are
+witness, kept behind the firewall in a deployment; a rehearsal publishes them so that its check can be replayed. A
+certificate's public part is public, which the client keeps: its key id, link, direction and window, the digest it
+signs and its LMS signature, in the deployment's session. The digest is the head's, or the sync's clock digest,
+salted by its own `salt_c` (`certificate_digest`, `clock_commitment`), a hiding commitment, so the signature over it
+shows nothing of the head or the sync. No PoUW salt is written, only its SHA-512
 (`active_replay.fingerprint`). With `CERTIFIER_SERVE_TIMING` set, `serve` also writes `publisher_timing.json`: when
 each record was handed over, kept and certified, on the proxy's clock, and each step's CPU seconds (`tick_load.py`
 reads it).
@@ -208,7 +210,7 @@ from verity.core.protocols.certifier import audit as host_audit, calibration
 from verity.core.protocols.certifier.active import COMPACT_RECORD, DATA, HEADER, ID_EVENT_BYTES, REVEAL_LINE_BYTES, \
     Events, Proxy, RemoteCertifier, Requests, compact_record_data, decode_frame, event_body, fresh_salt, \
     id_event_data, id_request, id_request_fields, request_frame_count, serve_reveals
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, ClockCertificate, Direction, \
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, Direction, \
     Issuer, LmsKey, LmsSigner, RecordHead, parameters_digest
 from verity.core.protocols.certifier.grid import COMPLETE, Reason, Status, occupancy, row_count
 from verity.core.protocols.certifier.lean_audit import Audit
@@ -357,18 +359,26 @@ def certified_from_json(doc: dict) -> CertifiedRecord:
                            certificate_from_json(doc["certificate"]))
 
 
-def clock_json(clock: ClockCertificate) -> dict:
-    return {"sync": [clock.sync.delta, str(clock.sync.rho)], "certificate": certificate_json(clock.certificate)}
+def clock_json(clock: CertifiedClock) -> dict:
+    """One line of the certifier's `clocks.jsonl`: the sync and its salt, witness, and the certificate."""
+    return {"sync": [clock.sync.delta, str(clock.sync.rho)], "salt_c": clock.salt.hex(),
+            "certificate": certificate_json(clock.certificate)}
 
 
-def clock_from_json(doc: dict) -> ClockCertificate:
+def clock_from_json(doc: dict) -> CertifiedClock:
+    if "salt_c" not in doc:
+        raise ValueError("a clock certificate without its opening's salt, which opens no salted digest: an unsalted "
+                         "one from before the salted form, or the client's public copy")
     delta, rho = doc["sync"]
-    return ClockCertificate(ClockSync(delta, Fraction(rho)), certificate_from_json(doc["certificate"]))
+    return CertifiedClock(ClockSync(delta, Fraction(rho)), bytes.fromhex(doc["salt_c"]),
+                          certificate_from_json(doc["certificate"]))
 
 
-def read_clocks(path: Path) -> list[ClockCertificate]:
-    """`clocks.jsonl`: the certifier's clock certificates, one for each egress window it signed the sync of (a link's
-    clock source of record, `LinkWindows(clock_certificates=…)`); none for a run without the file."""
+def read_clocks(path: Path) -> list[CertifiedClock]:
+    """The certifier's `clocks.jsonl`: its salted clock certificates with their openings, one for each egress window it
+    signed the sync of, witness (a link's clock source of record, `LinkWindows(certified_clocks=…)`); none for a run
+    without the file. Raises `ValueError` on a line without its salt: an unsalted clock certificate, or a line of the
+    client's `clocks.jsonl`, which holds the certificates alone (`keep_certificates`)."""
     return [clock_from_json(json.loads(line)) for line in path.read_text().splitlines()] if path.exists() else []
 
 
@@ -390,8 +400,9 @@ class CertifyingPublisher(ar.Publisher):
     hands it over, under the N2 link's name `link`, the one name both ends of a link-window share
     (`service.LinkWindows.link`): one line of `certified.jsonl` each, or the link-window under `refused` when the
     signer refuses. An egress record handed with the sync the shaper ran its window under (`ServedProxy`) gets that
-    sync's clock certificate too (`Issuer.clock`), one line of `clocks.jsonl`, none when the signer refuses. `public`
-    gives a window's certificates without the heads and salts, for the reveal endpoint to serve."""
+    sync's salted clock certificate too (`Issuer.salted_clock`), one line of `clocks.jsonl` with its opening, none when
+    the signer refuses. `public` gives a window's certificates without the heads, syncs and salts, for the reveal
+    endpoint to serve."""
 
     def __init__(self, out: Path, setup: ar.Setup, issuer: Issuer, link: str, threaded: bool = True) -> None:
         super().__init__(out, setup, threaded)
@@ -399,19 +410,19 @@ class CertifyingPublisher(ar.Publisher):
         self.ends = {setup.egress_link: (Direction.EGRESS, parameters_digest(setup.egress_params, setup.sync_set)),
                      setup.ingress_link: (Direction.INGRESS, parameters_digest(setup.ingress_params))}
         self.timing: list | None = [] if os.environ.get("CERTIFIER_SERVE_TIMING") else None
-        self.issued: dict[int, list[tuple[Direction, CertifiedRecord | None, ClockCertificate | None]]] = {}
+        self.issued: dict[int, list[tuple[Direction, CertifiedRecord | None, CertifiedClock | None]]] = {}
 
     def public(self, window: int) -> dict | None:
         """Window `window`'s certificates' public part once both its records are kept, else None: the session they are
-        signed in, each certificate (`certificate_json`), each clock certificate (`clock_json`), and the link-windows
-        the signer refused (`unsigned`). A certificate signs its head's digest salted by `salt_c`, a hiding
-        commitment, so it shows nothing of the head; the head and the salt stay in `certified.jsonl`."""
+        signed in, each certificate and each clock certificate (`certificate_json`), and the link-windows the signer
+        refused (`unsigned`). Each signs a digest salted by its own `salt_c`, a hiding commitment, so it shows nothing
+        of the head or the sync it signs; heads, syncs and salts stay in `certified.jsonl` and `clocks.jsonl`."""
         kept = list(self.issued.get(window, ()))
         if len(kept) < len(self.ends):
             return None
         return {"session": self.issuer.session.hex(),
                 "certificates": [certificate_json(c.certificate) for _, c, _ in kept if c is not None],
-                "clocks": [clock_json(k) for _, _, k in kept if k is not None],
+                "clocks": [certificate_json(k.certificate) for _, _, k in kept if k is not None],
                 "unsigned": [[self.link, d.value, window] for d, c, _ in kept if c is None]}
 
     def __call__(self, record, params, sync: ClockSync | None = None) -> None:
@@ -430,7 +441,7 @@ class CertifyingPublisher(ar.Publisher):
                 else certified_json(certified))
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
-        clock = self.issuer.clock(self.link, record.window, sync) \
+        clock = self.issuer.salted_clock(self.link, record.window, sync) \
             if sync is not None and direction is Direction.EGRESS else None
         if clock is not None:
             with open(self.out / "clocks.jsonl", "a") as fh:
@@ -1029,13 +1040,19 @@ def ask_certificates(address: Sequence, window: int, timeout: float | None = 60.
         return json.loads(stream.readline(REVEAL_LINE_BYTES))
 
 
-def check_certificates(deployment: dict, window: int, answer: dict) -> tuple[list, list, list, list[str]]:
-    """Window `window`'s certificates as the reveal endpoint served them (`CertifyingPublisher.public`), each held to
-    the deployment's certifier key and session: (certificates, clock certificates, the link-windows the signer refused,
-    refusals). A refusal names the certificate and what fails: another key's, another link-window's, a second of its
-    direction, or a signature that doesn't verify over its fields in the session (forged, or a field altered). An
-    answer that is a refusal, another window's or another session's, or not certificates, is refused whole."""
+def check_certificates(deployment: dict, window: int, answer: dict,
+                       seen: dict[bytes, str] | None = None) -> tuple[list, list, list, list[str]]:
+    """Window `window`'s certificates and clock certificates as the reveal endpoint served them
+    (`CertifyingPublisher.public`, each the `Certificate` alone), each held to the deployment's certifier key and
+    session: (certificates, clock certificates, the link-windows the signer refused, refusals). A refusal names the
+    certificate and what fails: another key's, another link-window's, a clock certificate that isn't egress, a
+    signature that doesn't verify over its fields in the session (forged, or a field altered, the digest it signs
+    among them), a second of its direction, or a clock certificate signing the digest an earlier window's in `seen`
+    (digest to name, which this adds to) signs: its salt was reused, under which two windows of one sync sign one
+    digest. The client holds no sync or salt, so it checks no opening. An answer that is a refusal, another window's
+    or another session's, or not certificates, is refused whole."""
     key, session, link = read_public(deployment["certifier_key"]), deployment["session"], deployment["links"]["n2"]
+    seen = {} if seen is None else seen
     try:
         if set(answer) == {"refused"}:
             raise ValueError(f"the certifier refused them: {answer['refused']}")
@@ -1043,33 +1060,41 @@ def check_certificates(deployment: dict, window: int, answer: dict) -> tuple[lis
             raise ValueError(f"the answer is window {answer['window']}'s in session {answer['session'][:16]}…, not "
                              f"the deployment's session {session[:16]}…")
         certificates = [certificate_from_json(d) for d in answer["certificates"]]
-        clocks = [clock_from_json(d) for d in answer["clocks"]]
+        clocks = [certificate_from_json(d) for d in answer["clocks"]]
         unsigned = [[u[0], Direction(u[1]).value, u[2]] for u in answer["unsigned"]]
     except (KeyError, TypeError, ValueError, IndexError) as e:
         return [], [], [], [f"window {window}'s certificates: {e}"]
     s, kept, refused = bytes.fromhex(session), {"certificate": [], "clock certificate": []}, []
-    for what, item, c in [("certificate", c, c) for c in certificates] + \
-            [("clock certificate", k, k.certificate) for k in clocks]:
+    for what, c in [("certificate", c) for c in certificates] + [("clock certificate", k) for k in clocks]:
         name = f"window {window}'s {c.direction.value} {what} of {c.link} (key {c.key_id.hex()[:16]}…)"
+        clock = what == "clock certificate"
         if c.key_id != key.key_id:
             refused.append(f"{name}: another key's, not the deployment's {key.key_id.hex()[:16]}…")
         elif (c.link, c.window) != (link, window):
             refused.append(f"{name}: it names {c.link} window {c.window}, not {link} window {window}")
-        elif not item.verify(key, s):
+        elif clock and c.direction is not Direction.EGRESS:
+            refused.append(f"{name}: a clock is an egress window's")
+        elif not c.verify(key, s):
             refused.append(f"{name}: its signature doesn't verify under the deployment's key in its session")
-        elif any(getattr(x, "certificate", x).direction is c.direction for x in kept[what]):
+        elif any(x.direction is c.direction for x in kept[what]):
             refused.append(f"{name}: a second one of its direction")
+        elif clock and c.digest in seen:
+            refused.append(f"{name}: its signed digest is also {seen[c.digest]}'s, so its salt was reused, under "
+                           "which two windows of one sync sign one digest")
         else:
-            kept[what].append(item)
+            if clock:
+                seen[c.digest] = f"window {c.window}'s clock certificate"
+            kept[what].append(c)
     return kept["certificate"], kept["clock certificate"], unsigned, refused
 
 
 def keep_certificates(deployment: dict, out: Path, ask=ask_certificates) -> list[str]:
     """The client's copy of each window's certificates' public part, asked of the reveal endpoint (`ask`) and held
     to the deployment's key and session (`check_certificates`): those that verify go in `certificates.jsonl`, each
-    with its session (a link-window the signer refused as `unsigned`), and `clocks.jsonl` (`clock_json`), beside
-    `peer.json`. Returns the refusals, each naming what it refused."""
+    with its session (a link-window the signer refused as `unsigned`), and the clock certificates in `clocks.jsonl`,
+    each with its session too, beside `peer.json`. Returns the refusals, each naming what it refused."""
     refused: list[str] = []
+    seen: dict[bytes, str] = {}
     with open(out / "certificates.jsonl", "w") as certs, open(out / "clocks.jsonl", "w") as clocks:
         for w in range(deployment["windows"]):
             try:
@@ -1077,11 +1102,12 @@ def keep_certificates(deployment: dict, out: Path, ask=ask_certificates) -> list
             except (OSError, ValueError) as e:
                 refused.append(f"window {w}'s certificates: the reveal endpoint gave no answer: {e}")
                 continue
-            got, synced, unsigned, no = check_certificates(deployment, w, answer)
+            got, synced, unsigned, no = check_certificates(deployment, w, answer, seen)
             refused += no
             certs.writelines(json.dumps({"session": deployment["session"]} | certificate_json(c)) + "\n" for c in got)
             certs.writelines(json.dumps({"unsigned": u}) + "\n" for u in unsigned)
-            clocks.writelines(json.dumps(clock_json(k)) + "\n" for k in synced)
+            clocks.writelines(json.dumps({"session": deployment["session"]} | certificate_json(k)) + "\n"
+                              for k in synced)
     return refused
 
 
