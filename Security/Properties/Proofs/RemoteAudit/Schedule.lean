@@ -45,7 +45,7 @@ theorem check_ok {sc : Schedule.Schedule} {blocks cap : Nat} {passes : Array (Na
   unfold Schedule.check at h
   by_cases hc : cap < Schedule.bits sc
   · cases hm : Schedule.malformed sc blocks <;>
-      simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
+      simp_all [bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
   · have hle : Schedule.bits sc ≤ cap := Nat.le_of_not_lt hc
     cases hm : Schedule.malformed sc blocks <;> cases ha : Schedule.appendsDiffer sc blocks appends <;>
       cases hp : Schedule.passesDiffer sc blocks passes <;>
