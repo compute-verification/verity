@@ -86,6 +86,8 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/core/protocols/certifier/warden.py", "verity/core/protocols/certifier/release.py",
           "verity/core/protocols/certifier/io_ids.py", "verity/core/protocols/certifier/io_ids.circuit-check.py",
           "verity/core/protocols/certifier/io_ids.circuit-check.json",
+          "verity/core/protocols/certifier/ingress_scan.py", "verity/core/protocols/certifier/ingress_scan.circuit-check.py",
+          "verity/core/protocols/certifier/ingress_scan.circuit-check.json",
           "verity/core/protocols/certifier/head_check.py", "verity/core/protocols/certifier/head_check.circuit-check.py",
           "verity/core/protocols/certifier/head_check.circuit-check.json",
           "verity/core/protocols/certifier/replay_step.py", "verity/core/protocols/certifier/replay_step.circuit-check.py",
