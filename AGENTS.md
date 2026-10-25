@@ -339,8 +339,7 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
     in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
-    `Definitions/Flock` holds what has been extracted so far (its arithmetic, its Ligerito schedule and bounds, the
-    interaction model and the verifier's statement, zerocheck, lincheck, opening and Ligerito): its
+    `Definitions/Flock` holds what has been extracted so far (`Definitions/Flock.lean` lists it): its
     guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
     extracted.
   - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
