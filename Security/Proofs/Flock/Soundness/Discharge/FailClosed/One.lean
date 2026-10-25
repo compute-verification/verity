@@ -361,8 +361,8 @@ def SoundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
         (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPJ ht dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ ht dj x₀) (tabPJ ht dj x₀)
-          ((rsPJ ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh)).binding
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ (Reg := Reg) ht dj x₀) (tabPJ (Reg := Reg) ht dj x₀)
+          ((rsPJ ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh) (Reg := Reg)).binding
             (rsPJ_computes ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
@@ -426,8 +426,8 @@ def SoundExecJPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = false) : Prop :=
         (Law.subset n kd hkd).miss K + η +
         StrictCR.ksAvgStrict (planPJ ht dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ ht dj x₀) (tabPJ ht dj x₀)
-          ((rsPJ ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh)).binding
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPJ (Reg := Reg) ht dj x₀) (tabPJ (Reg := Reg) ht dj x₀)
+          ((rsPJ ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh) (Reg := Reg)).binding
             (rsPJ_computes ht dj x₀ (hs.parse hh) (hs.load hh) hs.tables hs.built (hs.scope hh))) k Rw M ρ t')
 
 theorem soundExecJ (I : Inputs) (hh : I.tags.hiddenOutputs = false) : SoundExecJ I hh := by
@@ -545,8 +545,8 @@ def SoundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
         (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ dj x₀) (tabPHJ dj x₀)
-          ((rsPHJ dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf)).binding
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
+          ((rsPHJ dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf) (Reg := Reg)).binding
             (rsPHJ_computes dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf))) k Rw M ρ t')
 
 set_option linter.unusedVariables false in
@@ -609,8 +609,8 @@ def SoundExecHJUPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
         (Law.subset n kd hkd).miss K + η +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg (circS I) hs.built n).partition (Layout.outsOf (circS I) hs.built n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ dj x₀) (tabPHJ dj x₀)
-          ((rsPHJ dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf)).binding
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
+          ((rsPHJ dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf) (Reg := Reg)).binding
             (rsPHJ_computes dj x₀ hs.typed (hs.parseH hh) (hs.loadH hh) hs.built (hs.scopeH hf))) k Rw M ρ t')
 
 theorem soundExecHJU (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) :
@@ -688,10 +688,10 @@ def SoundExecHJG (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedSco
         (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ dj x₀) (tabPHJ dj x₀)
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
           ((rsPHJI dj x₀ hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf))
               (hs.loadH hh) hs.built (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1
-              (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2).binding
+              (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2 (Reg := Reg)).binding
             (rsPHJI_computes dj x₀ hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf))
               (hs.loadH hh) hs.built (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1
               (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2)) k Rw M ρ t')
@@ -764,10 +764,10 @@ def SoundExecHJGPerTest (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : Pr
         (Law.subset n kd hkd).miss K + η +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((instProg (circS I) n).partition (outsOfI (circS I) n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ dj x₀) (tabPHJ dj x₀)
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
           ((rsPHJI dj x₀ hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf))
               (hs.loadH hh) hs.built (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1
-              (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2).binding
+              (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2 (Reg := Reg)).binding
             (rsPHJI_computes dj x₀ hs.typed (hs.parseH hh) (General.rowsFit_of_scopeGenH hs.typed (hs.parseH hh) (hs.scopeGen hh hf))
               (hs.loadH hh) hs.built (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).1
               (Layout.scopeGenH_spec hs.built (hs.scopeGen hh hf)).2)) k Rw M ρ t')

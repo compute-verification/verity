@@ -87,8 +87,8 @@ theorem plain_session_soundHJ
       (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ dj x₀) (tabPHJ dj x₀)
-          ((rsPHJ dj x₀ ht hc hpub hU hscope).binding (rsPHJ_computes dj x₀ ht hc hpub hU hscope)) k Rw M ρ t' := by
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
+          ((rsPHJ dj x₀ ht hc hpub hU hscope (Reg := Reg)).binding (rsPHJ_computes dj x₀ ht hc hpub hU hscope)) k Rw M ρ t' := by
   intro σ hCR hKS
   exact (Placed.keyProg c hU n).flock_headline_live_tables_subset_missX (Layout.outsOf c hU n) kd hkd Lb src hA3
     (planPHJ dj x₀) (tabPHJ dj x₀) (ppPHJ dj x₀ ht hc hU hscope)
@@ -146,8 +146,8 @@ theorem plain_session_soundHJI
       (Law.subset n kd hkd).miss K +
         StrictCR.ksAvgStrict (planPHJ dj x₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         ((instProg c n).partition (outsOfI c n)).linkBoundE
-          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ dj x₀) (tabPHJ dj x₀)
-          ((rsPHJI dj x₀ ht hc hrf hpub hU hpr hw).binding (rsPHJI_computes dj x₀ ht hc hrf hpub hU hpr hw))
+          (L := Law.execOS (n := n) src (.subset kd) n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ (Reg := Reg) dj x₀)
+          ((rsPHJI dj x₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).binding (rsPHJI_computes dj x₀ ht hc hrf hpub hU hpr hw))
           k Rw M ρ t' := by
   intro σ hCR hKS
   exact (instProg c n).flock_headline_live_tables_subset_missX (outsOfI c n) kd hkd Lb src hA3
