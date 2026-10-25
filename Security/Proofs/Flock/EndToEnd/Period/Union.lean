@@ -65,10 +65,10 @@ theorem value_runBind_le_add (f : α → Game δ) (k : (a : α) → Strategy (f 
             rw [avg_inv_card, one_mul]
             rfl
 
+open Classical in
 /-- **One window, then the rest: the product step.** If the rest of the run has `p` with probability at most `c` from
 every end of `g` in `q`, and never from an end outside `q`, the run has `p` with probability at most `g`'s probability
 of `q`, times `c`. -/
-open Classical in
 theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f a) → Game γ) (p : γ → Prop)
     (q : α → Prop) (c : ℝ≥0∞) :
     ∀ (g : Game α) (s : Strategy (g.bind f)),
@@ -77,11 +77,12 @@ theorem value_runBind_le_mul (f : α → Game δ) (k : (a : α) → Strategy (f 
   | .ret a, s, h => by
       classical
       show value p (k a s) ≤ (if q a then 1 else 0) * c
+      have h' : value p (k a s) ≤ if q a then c else 0 := h
       by_cases hq : q a
-      · have h' : value p (k a s) ≤ c := by simpa [hq] using h
+      · rw [if_pos hq] at h'
         rw [if_pos hq, one_mul]
         exact h'
-      · have h' : value p (k a s) ≤ 0 := by simpa [hq] using h
+      · rw [if_neg hq] at h'
         rw [if_neg hq, zero_mul]
         exact h'
   | .send _ kk, s, h => value_runBind_le_mul f k p q c (kk s.1) s.2 h

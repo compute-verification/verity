@@ -97,7 +97,7 @@ variable (w : HiddenWindow)
 def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
 
 /-- The window's audit as it runs: `EndToEndHidden`'s game. -/
-def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
+noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
   auditLive w.L w.Reg (liveOfZJ w.dg (planZHJ w.dj w.y₀) w.N w.wr)
 
 /-- The key program's partition into proof units. -/
@@ -166,7 +166,7 @@ end HiddenWindow
 namespace Period
 
 /-- **A period of `T` windows**, window `t`'s audit after window `t − 1`'s, against one prover. -/
-def game (W : ℕ → HiddenWindow) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
+noncomputable def game (W : ℕ → HiddenWindow) (T : ℕ) : Game Unit := periodG (fun t => (W t).game) 0 T
 
 /-- The period's run at the prover strategy `s`: each window's record, in order. -/
 noncomputable def run (W : ℕ → HiddenWindow) (T : ℕ) (s : Strategy (game W T)) : Game (List WindowRec) :=
