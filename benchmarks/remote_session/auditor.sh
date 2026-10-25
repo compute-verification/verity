@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # The analysis of record for a gate run: auditor_line.py's credited line over the verifier run RUN, its dir on this
-# machine (vy-nebius-1), copied to scratch with any files the node evicted to the store restored
-# (run-files.evicted.json: only verifier.json and the challenger's files, the line's inputs; hence --store-read).
+# machine (the one with the lane's gate key, vy-nebius-cpu-5), copied to scratch with any files the node evicted to the
+# store restored (run-files.evicted.json: only verifier.json and the challenger's files, the line's inputs; hence
+# --store-read).
 # PERIOD and PIN are the audit's period and challenger key, COMMIT the verifier run's recorded commit. Through the
 # lane's gate key it reads the ledger (`ledger`), a head beside each session's, and the challenger host's pins log
 # (`pins`, RT4-INT-40). A gate that refuses `pins` serves no log: then no session is pinned, and the line credits
@@ -11,14 +12,15 @@
 # remote-audit-verifier, so lake must be on the PATH, and refuses the line where line.py's differs). RUN may instead be
 # a host run's directory as vy-auditor-1 ships it (`vy-verifier-gate fetch`, out/ beside request.json): the sessions'
 # challenger peer is the record's (verifier.json's, else request.json's --challenger-peer), and PEER overrides it.
+# LOCKDOWN, if set, is infra's record of the provider's lockdown of the gate node (auditor_line.py --lockdown).
 #
-#   research run --queue --on vy-nebius-1 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
+#   research run --queue --on vy-nebius-cpu-5 --project verity --source . --cwd clone --cpus 4 --mem-gb 16 \
 #     --timeout 30m --store-read --env RUN=DIR --env PERIOD=P --env PIN=SHA512 --env COMMIT=SHA \
 #     -- bash benchmarks/remote_session/auditor.sh
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 GATE=${GATE:-research@204.12.178.84}
-KEY=${GATE_KEY:-$HOME/.ssh/vy-challenger-gate-memory-accounting}
+KEY=${GATE_KEY:-$HOME/.ssh/vy-gate-memory-accounting}
 S=$(mktemp -d)
 trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
@@ -59,7 +61,7 @@ else
 fi
 uv run python "$HERE/auditor_line.py" "$S/out" --host-bytes "${HOST_BYTES:-1843153879040}" --pin "${PIN:?}" \
   --period "${PERIOD:?}" --commit "${COMMIT:?}" ${PEER:+--peer "$PEER"} --ledger "$OUT/ledger.jsonl" "${PINS[@]}" \
-  "${MAIN[@]}" \
+  "${MAIN[@]}" ${LOCKDOWN:+--lockdown "$LOCKDOWN"} \
   --table "$OUT/credit.md" > "$OUT/auditor_line.json" 2> "$OUT/auditor_line.err"
 W=$?
 cat "$OUT/fetch.log" "$OUT/credit.md"

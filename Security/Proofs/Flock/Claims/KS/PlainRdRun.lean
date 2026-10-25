@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.PlainRawL
 import Proofs.Flock.Claims.KS.PlainCapsDep
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain table bound at one tape, each slot at the run's own level columns
@@ -32,15 +33,15 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **An accepted plain run has no level columns at or past its schedule's last level**: its reader's shape is table
 0's, whose schedule is the statement's `fast100` one. -/
-theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
-    {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
+theorem plainRawLevelCols_topK (keep : Bool → Bool) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (VK keep) x ω c).out = .acc) {s : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
     (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
     (r : ℕ) {ℓ : ℕ} (hℓ : sch.levels.size ≤ ℓ) :
-    plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ = [] := by
-  obtain ⟨s', spec', sts', link, c₁, mids, f, -, hf, hc, -, -⟩ := plain_acc_mids h
+    plainRawLevelCols (Claims.run sha512 P (VK keep) x ω c).seen r ℓ = [] := by
+  obtain ⟨s', spec', sts', link, c₁, mids, f, -, hf, hc, -, -⟩ := plain_acc_midsK keep h
   have hx := (Claims.Bridge.Custody.checks_ok hc).1
-  rcases hro : runOf false (Claims.run sha512 P (V false) x ω c).seen 0 with _ | rr
+  rcases hro : runOf false (Claims.run sha512 P (VK keep) x ω c).seen 0 with _ | rr
   · simp only [plainRawLevelCols, hro]
   · obtain ⟨f', s'', spec'', sts'', st', hf', hs', hst', hm⟩ := runOf_m hro
     obtain rfl := Option.some.inj (hf.symm.trans hf')
@@ -60,6 +61,15 @@ theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg
       omega
     simp only [plainRawLevelCols, hro]
     split <;> simp [htop]
+
+/-- `plainRawLevelCols_topK` at the deployed plain verifier (`keep := id`). -/
+theorem plainRawLevelCols_top {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
+    {c : Fin ((V false).k x) → Coin} (h : (Claims.run sha512 P (V false) x ω c).out = .acc) {s : Ins}
+    {spec : SessionSpec} {sts : Array Stmt} {st : Stmt} {sch : Flock.Schedule}
+    (hs : setupOf false x = some (s, spec, sts)) (hst : sts[0]? = some st) (hsch : fast100 st.m = some sch)
+    (r : ℕ) {ℓ : ℕ} (hℓ : sch.levels.size ≤ ℓ) :
+    plainRawLevelCols (Claims.run sha512 P (V false) x ω c).seen r ℓ = [] :=
+  plainRawLevelCols_topK id (Ω := Ω) (P := P) (x := x) (ω := ω) (c := c) (h := h) (s := s) (spec := spec) (sts := sts) (st := st) (sch := sch) (hs := hs) (hst := hst) (hsch := hsch) (r := r) (ℓ := ℓ) (hℓ := hℓ)
 
 /-- **A decoded live opening at a cap slot is a row of the run's own level columns**: where the decoded outputs
 record the deployed reps' later entries (`hE`), an output the concrete simulator's live outcome returns that opens

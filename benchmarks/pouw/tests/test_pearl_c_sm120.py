@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -195,6 +196,8 @@ def test_launch_passes_what_a_fresh_args_would():
             fresh.i[j] = v
         assert got[-1] == (want, bytes(fresh))
     assert set(dev.streams) == {7, 9}
+    dev.launch("k", 1, 32, stream=RUN.vp(0xABC))   # a harness's own CUstream object, as pouw_decode's lanes pass
+    assert got[-1][0][-1] == 0xABC and set(dev.streams) == {7, 9}
     rc[0] = 1
     with pytest.raises(RuntimeError, match="cuLaunchKernel returned CUresult 1"):
         dev.launch("k", 1, 32)
@@ -277,8 +280,10 @@ KERNEL = r'extern "C" __global__ void (?:__cluster_dims__\([^)]*\) )?(?:__launch
 #: no pads; the row digests and tile leaves by hash_fast.cuh's kernels (run.py's default, PEARLC_SHA=fast)
 H3_LAUNCHED = {"s512_heads", "s512_row_segs", "s512_tile_segs", "s512_folds", "hm_leaves", "s512_frame_leaves", "s512_nodes",
                "s512_tree_small", "s512_seeds"}
-#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, and each served variant's commitment and tile leaves
-PD_LAUNCHED = {"pd_heads", *(f"pd_{kind}_{v}" for v in RUN.PD_SERVED for kind in ("commit", "tiles"))}
+#: hash_decode.cuh's launches at the check (run.py's check_pd): its tables, each served variant's tile leaves, and its
+#: commitment, whole and split (pd_commit's mode 1, then pd_tree), on the variant without PD_GROUP
+PD_LAUNCHED = {"pd_heads", *(f"pd_{f}_{v & ~RUN.PD_GROUP}" for v in RUN.PD_SERVED for f in ("commit", "tree")),
+               *(f"pd_tiles_{v}" for v in RUN.PD_SERVED)}
 
 
 def form_kernels() -> list[str]:
@@ -368,6 +373,9 @@ def needs(name: str, p: list[int], i: list[int]) -> dict[int, int]:
         rows, k, _, m = i[:4]
         return {0: 4 * rows * k, 1: 64 * rows, 2: 64 * (2 * RUN.pow2(rows) - 1), 3: 32 * rows, 4: 32 * rows, 5: 104, 6: 64,
                 7: 32, 8: 128 + 192 * 256 * 64, 9: 16, 10: 32, 11: 32, 12: 32 * m}
+    if name.startswith("pd_tree_"):
+        rows, m = i[0], i[3]
+        return {2: 64 * (2 * RUN.pow2(rows) - 1), 5: 104, 6: 64, 10: 32, 11: 32, 12: 32 * m}
     if name.startswith("pd_tiles_"):
         return {0: 4 * i[0] * i[1], 1: 4 * i[0] * i[1], 2: 64 * -(-i[0] // 64) * (i[1] // 64)}
     if name == "pd_heads":
@@ -575,7 +583,8 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
     elif ev["op"] == "launch":
         name, p, i = ev["name"], ev["p"], ev["i"]
         for slot, n in needs(name, p, i).items():
-            if not p[slot] and (name, slot) in {("lines", 2), ("lines", 3), ("lines", 4), ("s512_seeds", 2), ("hm_leaves", 5)}:
+            if not p[slot] and ((name, slot) in {("lines", 2), ("lines", 3), ("lines", 4), ("s512_seeds", 2), ("hm_leaves", 5)}
+                                or name.startswith("pd_tree_") and slot == 12):
                 continue
             assert room(allocs, p[slot]) >= n, (name, slot, room(allocs, p[slot]), n)
         g = ev["grid"]
@@ -612,8 +621,11 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
         if name == "s512_folds":
             assert ev["block"] == RUN.RS_FOLD_NT and i[1] <= RUN.RS_MAX_SEGS and i[3] <= RUN.RS_MAX_SEGS
         if name.startswith("pd_commit_"):
-            assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] == 0
+            assert g == [i[0], 1, 1] and i[0] <= RUN.PD_MAX_ROWS and i[1] % 256 == 0 and i[1] <= RUN.PD_MAX_K and i[2] in (0, 1)
             assert ev["block"] == 32 * (-(-i[1] // 256 // 32) * 2 + 2) and RUN.PD_PAIR_SMEM <= ev["smem"] <= SM120_MAX_DYN
+        if name.startswith("pd_tree_"):
+            assert g == [1, 1, 1] and ev["block"] == 128 and i[0] <= RUN.PD_MAX_ROWS and i[1:3] == [0, 0] and i[0] <= i[3]
+            assert RUN.PD_PAIR_SMEM <= ev["smem"] <= SM120_MAX_DYN
         if name.startswith("pd_tiles_"):
             tiles = -(-i[0] // 64) * (i[1] // 64)
             if int(name.rsplit("_", 1)[1]) & RUN.PD_GROUP:
@@ -621,3 +633,17 @@ def track(ev: dict, allocs: dict[int, int], maps: set | None = None) -> None:
                 assert ev["smem"] == RUN.PD_PAIR_SMEM // 2
             else:
                 assert g[0] == tiles and ev["block"] == 32 and ev["smem"] == 0
+
+
+def test_a_persistent_gemm_leaves_a_launch_beside_it_the_sms_it_holds():
+    """`Pipeline.beside` (a whole capture's deferred A tree: pd_tree's CTA holds its SM under PD_WHOLE) comes off a
+    persistent GEMM's grid, so no CTA waits for that launch to end; a grid the caller gives, and a GEMM of fewer tiles than
+    SMs, keep theirs."""
+    grids = []
+    dev = SimpleNamespace(sms=188, launch=lambda name, grid, *a, **k: grids.append(grid))
+    pipe = SimpleNamespace(GEMM_SMEM={"gemm_pearlc_d": 1}, boxes={("at", "bt"): RUN.gemm_tile("gemm_pearlc_d")}, dev=dev, k=4096,
+                           b=dict.fromkeys(("at", "bt", "c", "tma"), 0), m_real=16)
+    for beside, n, grid in ((0, 28672, None), (1, 28672, None), (1, 28672, 64), (1, 4096, None)):
+        pipe.beside = beside
+        RUN.Pipeline.gemm(pipe, "gemm_pearlc_d", "at", "bt", 64, n, grid=grid)
+    assert grids == [188, 187, 64, 64] and RUN.Pipeline.beside == 0

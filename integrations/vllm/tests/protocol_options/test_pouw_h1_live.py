@@ -1,6 +1,6 @@
 """VLLM-85: the live unit's tables on the served path (`pouw_h1_live`). With the Commit a window registers round 0's request
 headers ``requests@0`` and each round's slot table ``slots@<s>`` as values of the live Program, under its round roots, and
-each round's ``live@<s>`` (`PouwLiveSlots_v1{T}`) accepts its slot table at m_s, the step's scheduled rows, and refuses any
+each round's ``live@<s>`` (`PouwLiveSlots_v2{T}`) accepts its slot table at m_s, the step's scheduled rows, and refuses any
 other m. Under CUDA graphs m_s is the scheduler's rows, not the graph's padded size."""
 from __future__ import annotations
 
@@ -63,6 +63,19 @@ def test_a_served_window_registers_round_0s_request_headers_and_each_rounds_slot
         run.open_slot(0, 0)
     v = GPU.core_verdict({"commitment": dict(run.commits), "calls": run.manifest(), "descriptor": _descriptor().hex()})
     assert v["a_link"] is None and v["tied"], v
+
+
+def test_a_per_round_window_states_no_live_unit(tmp_path):
+    """``live@<s>`` reads round 0's request table every round, so a window that admits per round is refused by name
+    (`admission_gap`): its statement, evaluation and dump raise it, and every round's verdict carries it, not ok."""
+    run = _window()
+    assert LV.admission_gap(run) is None
+    run.admission = RQ.PER_ROUND
+    gap = "per-round admission .* isn't served yet"
+    for build in (lambda: LV.statement(run, 0), lambda: LV.evaluated(run, 0), lambda: LV.dump(run, tmp_path)):
+        with pytest.raises(ValueError, match=gap):
+            build()
+    assert LV.verdicts(run) == [{"round": 0, "m": 3, "ok": False, "reason": LV.admission_gap(run)}]
 
 
 def test_the_gpu_harness_holds_a_commit_windows_requests_to_its_live_verdicts():
@@ -145,9 +158,10 @@ def test_core_credit_ties_the_slot_table_under_the_auditors_coins(periodic):
 
 def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
     """`pouw_h1_live.dump`: window.json holds only what the verifier may read (T, S, the prefix, the window Program's
-    digest, the open root, the session, the live roots and m_s), and each round's rows.npz and opening.json give every
-    port's words, salt, value, position and path, each opening its registered root (`registered.verify_read`) under the
-    row format its reads file names; ``m``, ``s`` and ``o0`` are the known ``m@<s>``, ``round@<s>`` and ``live-ok`` rows."""
+    digest, the open root, the session, the live roots, m_s and the public max_tokens), and each round's rows.npz and
+    opening.json give every port's words, salt, value, position and path, each opening its registered root
+    (`registered.verify_read`) under the row format its reads file names; ``m``, ``s``, ``cap_<i>`` and ``o0`` are the
+    known ``m@<s>``, ``round@<s>``, ``caps`` and ``live-ok`` rows."""
     import json
 
     import numpy as np
@@ -158,7 +172,9 @@ def test_the_provers_live_dump_opens_every_row_its_statement_reads(tmp_path):
     served = run.served
     assert got == {"dir": str(tmp_path / "live"), "rounds": 1}
     assert pub == {"T": ROWS, "S": run.steps, "prefix": "h1/", "program": served.program_digest, "window": served.root,
-                   "session": SV.LOCAL_SESSION, "roots": {v: r.root.hex() for v, r in served.live.items()}, "served": [3]}
+                   "session": SV.LOCAL_SESSION, "roots": {v: r.root.hex() for v, r in served.live.items()}, "served": [3],
+                   "max_tokens": LV.caps(run.admitted[0])}
+    assert pub["max_tokens"] and all(pub["max_tokens"])
     z = dict(np.load(tmp_path / "live" / "0" / "rows.npz"))
     opening = json.loads((tmp_path / "live" / "0" / "opening.json").read_text())
     rows, doc = LV.statement(run, 0)

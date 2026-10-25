@@ -2,8 +2,12 @@
 as outputs so that both sides' reasons are compared word for word: sessions of zero, one and many groups at every
 stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of drawn windows, `pooled`) that
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
-group's, a stretch's empty span), with malformed inputs rejected by both. The line of record is the Lean's
-(`auditor_line.py` runs the verifier process's `line` and holds it exactly to the Python's), so the Lean is of record here."""
+group's, a stretch's empty span), with malformed inputs rejected by both. The same line read off an accepted session's
+record (`line_record`, `line.line_of_record`: its groups' passes, its windows and its registered blocks the record's,
+what the auditor saw of each window beside it), with the record's own refusals (the auditor saw another count of
+windows, a window drew other than min(s, U_t)) and malformed records. The line of record is the Lean's
+(`auditor_line.py` runs the verifier process's `line_record` and holds it exactly to the Python's), so the Lean is of
+record here."""
 
 from __future__ import annotations
 
@@ -25,6 +29,10 @@ N, B = 1000, 4096
 
 def port(inputs=st.nothing(), reference=line.run_json) -> D.Port:
     return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
+
+
+def record_port(inputs=st.nothing(), reference=line.record_run_json) -> D.Port:
+    return D.Port(M.EXE, "line_record", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
 server = D.server_fixture(port())
@@ -206,3 +214,174 @@ def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why
             x["released_ns"], x["last_ns"] = 40, 40
     assert line.run_json(v) == {"refused": why}
     assert D.replay(port(), v, server) == refused(why)
+
+
+def test_both_lines_charge_the_chips_in_whole_blocks_rounded_up(server) -> None:
+    """One byte over 5 blocks of chip is charged as 6 blocks, in the Python and the Lean alike."""
+    over, six = session(1, n=8, chip_bytes=5 * B + 1), session(1, n=8, chip_bytes=6 * B)
+    assert line.run_json(over) == line.run_json(six) != line.run_json(session(1, n=8, chip_bytes=5 * B))
+    six_blocks = ("output", D.canonical(line.run_json(six)))
+    assert D.replay(port(), over, server) == D.replay(port(), six, server) == six_blocks
+
+
+def recorded(v: dict, samples: int = 1) -> dict:
+    """`session`'s inputs read off a record (`line_record`'s form): window t is group t, each of its passes reading
+    the N registered blocks, drawn `min(samples, U_t)`, the rest of the record well formed; what the auditor saw of it
+    each group's times and reads."""
+    ws = []
+    for t, g in enumerate(v["groups"]):
+        k = g["passes"]
+        ws.append({"lengths": [N] * k, "steps": list(range(3 * t, 3 * t + k)), "post_seed": [0] * k,
+                   "heads": [None, "ab" * 64][:k] + [None] * (k - 2), "stale": [N] * k,
+                   "arrived_ns": [g["last_ns"]] * k, "released_ns": g["released_ns"], "deadline_ns": g["last_ns"] + 5,
+                   "opened_ns": g["last_ns"] + 1, "drawn": min(samples, k * N)})
+    record = {"windows": ws, "blocks": v["blocks"], "appended": 0, "released": 0, "lifetime": 2,
+              "pace": {"k": 2, "window_ns": 1}, "appends": None, "registration": "00" * 64}
+    return {"record": record, "samples": samples, "seen": [{k: g[k] for k in line.SEEN} for g in v["groups"]],
+            **{k: v[k] for k in ("per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates")}}
+
+
+@st.composite
+def records(draw) -> dict:
+    """An accepted session's record and what the auditor saw of each window, as they are or with one fault: the
+    auditor seeing another count of windows, a window drawn other than min(s, U_t), one of the node's inputs `line`
+    refuses, or a malformed record, seen or input (most often none: Hypothesis leans to each choice's first)."""
+    per = draw(st.sampled_from([2, 3, 1]))
+    n_groups = draw(st.sampled_from([2 * per, 3 * per + 1, per, 1, 0]))
+    blocks, b, samples = draw(st.integers(1, 40)), draw(st.sampled_from([B, 7])), draw(st.integers(1, 30))
+    t, ws, seen = draw(st.integers(0, 10 ** 12)), [], []
+    for _ in range(n_groups):
+        lengths = draw(st.lists(st.integers(1, 4 * blocks), min_size=1, max_size=3))
+        k, last = len(lengths), t + draw(st.integers(0, 10 ** 4))
+        hbm = draw(st.one_of(st.just(k * blocks), st.integers(0, k * blocks)))
+        seen.append({"released_ns": t, "last_ns": last, "least": blocks,
+                     "weights": draw(st.one_of(st.just(hbm), st.integers(0, hbm))), "hbm": hbm,
+                     "host": k * blocks - hbm})
+        ws.append({"lengths": lengths, "steps": sorted(draw(st.sets(st.integers(0, 10 ** 6), min_size=k, max_size=k))),
+                   "post_seed": [draw(st.integers(0, x)) for x in lengths],
+                   "heads": draw(st.lists(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex)),
+                                          min_size=k, max_size=k)),
+                   "stale": [blocks] * k, "arrived_ns": [last] * k, "released_ns": t, "deadline_ns": last + 10,
+                   "opened_ns": last + 1, "drawn": min(samples, sum(lengths))})
+        t += draw(st.sampled_from([10 ** 4, 1, 0])) + draw(st.integers(0, 10 ** 4))
+    rates = {"squarings_per_s": draw(rational(10 ** 6)), "encode_squarings": draw(st.integers(1, 10)),
+             **{k: draw(rational(10 ** 5)) for k in line.RATES[1:3]},
+             **{k: draw(rational(10)) for k in line.RATES[3:]}}
+    pace = draw(st.one_of(st.none(), st.builds(lambda k, w: {"k": k, "window_ns": w}, st.integers(1, 3),
+                                               st.integers(1, 10 ** 9))))
+    record = {"windows": ws, "blocks": blocks, "appended": draw(st.integers(0, 5)),
+              "released": draw(st.integers(0, 5)), "lifetime": draw(st.integers(1, 4)), "pace": pace,
+              "appends": draw(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex))),
+              "registration": "ab" * 64}
+    v = {"record": record, "samples": samples, "seen": seen, "per": per, "block_bytes": b,
+         "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
+         "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
+    if (clock := draw(st.sampled_from([None, *line.CLOCKS]))) is not None:
+        v["clock"] = clock
+    fault = {3: "seen", 4: "drawn", 5: "malformed", 6: "times"}.get(draw(st.integers(0, 6)))
+    if fault == "times" and seen:
+        draw(st.sampled_from(seen))[draw(st.sampled_from(["released_ns", "last_ns"]))] += 1
+    elif fault == "seen":
+        v["seen"] = draw(st.sampled_from([seen[:-1], [*seen, seen[-1]]])) if seen else [
+            {k: 0 for k in line.SEEN}]
+    elif fault == "drawn" and ws:
+        w = draw(st.sampled_from(ws))
+        w["drawn"] = draw(st.integers(0, sum(w["lengths"]) + 1).filter(lambda d: d != w["drawn"]))
+    elif fault == "malformed":
+        bad = draw(st.sampled_from([-1, "1", None, True, [], {}, "xyz", "AB" * 64]))
+        at = draw(st.sampled_from(["record", "window", "list", "heads", "pace", "appends", "seen", "input"]))
+        if at == "record":
+            record[draw(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime"]))] = bad
+        elif at == "window" and ws:
+            draw(st.sampled_from(ws))[draw(st.sampled_from(["released_ns", "deadline_ns", "opened_ns", "drawn"]))] = bad
+        elif at == "list" and ws:
+            w = draw(st.sampled_from(ws))
+            k = draw(st.sampled_from(["lengths", "steps", "post_seed", "stale", "arrived_ns", "heads"]))
+            w[k] = draw(st.sampled_from([bad, [*w[k], bad]]))
+        elif at == "heads" and ws:
+            draw(st.sampled_from(ws))["heads"] = [draw(st.sampled_from(["ab", "abc", "AB", 5]))]
+        elif at == "pace":
+            record["pace"] = draw(st.sampled_from([{"k": bad, "window_ns": 1}, {"k": 1}, bad]))
+        elif at == "appends":
+            record["appends"] = draw(st.sampled_from(["abc", "AB", 5]))
+        elif at == "seen" and seen:
+            x = draw(st.sampled_from(seen))
+            x[draw(st.sampled_from(line.SEEN))] = bad
+        elif at == "input":
+            v[draw(st.sampled_from(["samples", "seen", "record", "clock"]))] = bad
+        if draw(st.booleans()):
+            target = draw(st.sampled_from([v, record, *ws[:1], *seen[:1]]))
+            target.pop(draw(st.sampled_from(sorted(target))))
+    return v
+
+
+def test_line_record(server) -> None:
+    told = {"line": 0, "credited": 0, "refused": 0}
+
+    def reference(v):
+        out = line.record_run_json(v)
+        told["refused" if "refused" in out else "line"] += 1
+        told["credited"] += "refused" not in out and line.number(out[line.TIME_HELD]["time"]["weights_share"]) > 0
+        return out
+
+    stats = D.run(record_port(records(), reference), examples=600, server=server)
+    assert stats.rejects > 20 and told["line"] > 60 and told["credited"] > 10 and told["refused"] > 60, (stats, told)
+
+
+@pytest.mark.parametrize("samples", [1, 37, 2 * N])
+def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples) -> None:
+    """Read off a record, the line is `line`'s at the record's groups (its passes, the auditor's times and reads), its
+    windows (Σ lengths_t, drawn_t) and its registered blocks, the Lean's and line.py's alike."""
+    for v in (session(9, rates=line.Rates(10 ** 6, 1)), session(1, weights=0, host=400),
+              session(9, rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))):
+        r = recorded(v, samples)
+        want = line.run_json(v | {"windows": [[2 * N, min(samples, 2 * N)]] * len(v["groups"])})
+        assert "refused" not in want and line.record_run_json(r) == want
+        assert D.replay(record_port(), r, server) == ("output", D.canonical(want))
+
+
+def short_seen(r: dict) -> None:
+    r["seen"].pop()
+
+
+def drew_five(r: dict) -> None:
+    r["record"]["windows"][3]["drawn"] = 5
+
+
+def no_blocks(r: dict) -> None:
+    r["record"]["blocks"] = 0
+
+
+def seven_a_stretch(r: dict) -> None:
+    r["per"] = 7
+
+
+@pytest.mark.parametrize("change,why", [
+    (short_seen, "the auditor saw 11 windows, not the record's 12"),
+    (drew_five, "window 3 drew 5 of its 2000 receipts, not min(1, 2000)"),
+    (no_blocks, "the store is one or more blocks"),
+    (seven_a_stretch, "the session's 12 groups at 7 a stretch leave no stretch before the closing one"),
+])
+def test_each_refusal_of_a_record_is_the_leans_word_for_word(server, change, why) -> None:
+    r = recorded(session())
+    change(r)
+    assert line.record_run_json(r) == {"refused": why}
+    assert D.replay(record_port(), r, server) == refused(why)
+
+
+def test_times_seen_are_held_to_the_records_on_its_clock_and_not_on_the_challengers(server) -> None:
+    """On the record's clock (`clock` record, the default) a window seen released or last at other times than the
+    record's is refused, the Lean's word for word; on the challenger's (its release log's) or a replay's the record
+    doesn't hold the times, and the line is read."""
+    r = recorded(session())
+    w = r["record"]["windows"][2]
+    r["seen"][2]["last_ns"] += 1
+    why = (f"window 2 was seen released at {w['released_ns']} and last at {w['arrived_ns'][-1] + 1}, not at the "
+           f"record's {w['released_ns']} and {w['arrived_ns'][-1]}")
+    for x in (r, {**r, "clock": "record"}):
+        assert line.record_run_json(x) == {"refused": why}
+        assert D.replay(record_port(), x, server) == refused(why)
+    for clock in ("challenger", "replay"):
+        x = {**r, "clock": clock}
+        got = line.record_run_json(x)
+        assert "refused" not in got and D.replay(record_port(), x, server) == ("output", D.canonical(got))

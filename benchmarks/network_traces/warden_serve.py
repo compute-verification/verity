@@ -9,6 +9,8 @@ cells; the client speaks cells through the thin, workload-blind shim (`warden.ce
 
 Nothing here is the warden's but bytes. Tonight's clients send HTTP/1.1 requests for vLLM's streamed `/v1/completions`
 with `Connection: close`, so the server's end of stream ends egress (the warden never half-closes toward a server).
+The server gets each request whole at its release, with its place in the warden's release order and the warden's run
+id (`release`), which `deployment.json` names (`run_id`).
 
 **What it can't enforce here.**
 - Run directly, the warden runs on the server's host (`trusted-host` stands for the auditor's host). The gate's
@@ -44,14 +46,22 @@ its own generation config to a request that omits them.
   outcome, the tick lateness, the refusals). Each window's records go to `requests.records`, `responses.records`
   and `fails.records` (each failed connection's reason, witness), and each is certified (`certificate.Issuer`, with
   the warden's parameters digest) into `certified.jsonl`. Each window of the wire's two records is also committed as
-  rows, a cell a row (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the cost (rows, commit
-  and sign ms), `cells.salts` the rows' salts (witness, the prover's). All of that is done by a spawned process
+  rows, a row a bucket, with its wiring (`warden_rows`), its head signed: `cells.jsonl` holds the registration and the
+  cost (rows, row bytes, commit and sign ms), `cells.salts` the rows' salts and the wiring's (witness, the prover's,
+  who holds the records the rows and the wiring are read off). All of that is done by a spawned process
   (`PublisherProcess`), which alone holds the key and gets each tick's rows as the warden releases them: a window's
-  commit takes seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
-  puts ticks past their slack.
+  commit can take seconds of CPU, and in the warden's own process, even on another thread, it holds the ticker's GIL and
+  puts ticks past their slack. Before the origin `serve` runs on the C allocator (it re-executes itself with
+  `PYTHONMALLOC=malloc`) and makes its process ready for the run's growth (`prepare_process`: its descriptor table, its
+  heap, its pages locked where permitted), and from it to the end a process of its own (`stall_probe`, unless
+  `--no-stall-probe`) samples every thread of both processes each millisecond into `stalls.json`, every episode in
+  uninterruptible sleep with the kernel function it slept in; `warden.json` keeps what was prepared (`process`) and
+  each thread's episodes and page faults (`stalls`).
 - `client` sends each request of the traffic at its time after the origin on a connection of its own, reads the cells
   to the warden's close, and writes `client.json`: per connection its ordinal, outcome, every cell's kind and arrival,
-  the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them.
+  the SHA-256 of what it sent and of the bytes it got, and the HTTP response read from them. Its descriptor table holds
+  every connection before it sends (`reserve_fds`): its process has numpy's threads too, and a table grown mid-run
+  put cells that left the warden on time a bucket late (168 ms, every connection open as the client passed 256).
 - `check` (`check`): every window of the three records has a certificate that verifies and whose head is the
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
   their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
@@ -65,19 +75,24 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import ctypes
 import dataclasses
+import fcntl
 import hashlib
 import json
 import math
 import multiprocessing
 import multiprocessing.connection
+import os
 import random
 import re
+import resource
 import secrets
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import traceback
 from dataclasses import asdict, replace
@@ -85,6 +100,7 @@ from pathlib import Path
 
 import active_replay as ar
 import certifier_serve as cs
+import stall_probe
 from verity.core.protocols.certifier import warden_rows as WR
 from verity.core.protocols.certifier.active import DATA, PAD
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
@@ -97,6 +113,17 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
+#: the heap `prepare_process` grows and touches before the origin, a lane's and at least: heavy's opening burst through
+#: the warden (1000 connections at 300 a second, 1 KiB cells) grew its heap by about 35 KB a connection
+RESERVE_PER_LANE, RESERVE_MIN = 256 << 10, 64 << 20
+#: the descriptors the warden holds beside its connections' (its listener, loop, pipes and the probe's)
+FD_MARGIN = 256
+#: in the environment of a `serve` that re-executed itself on the C allocator, so that it does so once
+C_ALLOCATOR = "WARDEN_SERVE_C_ALLOCATOR"
+#: what a finite RLIMIT_MEMLOCK must leave beyond the process's mapping for `_memlock` to lock it: the warden's heap
+#: grows tens of MB in a run
+LOCK_HEADROOM = 4 << 30
+M_TRIM_THRESHOLD, M_MMAP_THRESHOLD, MCL_CURRENT, MCL_FUTURE, CAP_IPC_LOCK = -1, -3, 1, 2, 14
 #: the schedule's defaults here, where they differ from `WardenParams`'s: r·P = 494 bytes a bucket each way stays
 #: under what vLLM streams a request even with its tokens merged into fewer events, and D = 3 s from admission covers
 #: the request's ingress and a queued prefill
@@ -277,7 +304,7 @@ class Publisher:
     committed as rows by `commit` (`attest`). `serve` runs it in `PublisherProcess`: on the ticker's thread, or on any
     thread of its process, a window's commit holds the ticker's GIL for seconds. `close` gives the issuer's refusals."""
 
-    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.commit) -> None:
+    def __init__(self, out: Path, issuer: Issuer, params: WardenParams, commit=WR.Cells.of) -> None:
         self.out, self.issuer, self.params, self.commit = out, issuer, params, commit
 
     def __call__(self, record: Record, grid: GridParams) -> None:
@@ -292,22 +319,22 @@ class Publisher:
         with open(self.out / "certified.jsonl", "a") as fh:
             fh.write(json.dumps(line) + "\n")
         if record.link != FAILS:
-            self.attest(record, grid, link, direction)
+            self.attest(record, link, direction)
 
-    def attest(self, record: Record, grid: GridParams, link: str, direction: Direction) -> None:
-        """The link-window's cells as rows (`warden_rows`), their head signed: one line of `cells.jsonl` (the
-        registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
+    def attest(self, record: Record, link: str, direction: Direction) -> None:
+        """The link-window's cells as rows and its wiring (`warden_rows`), their head signed: one line of `cells.jsonl`
+        (the registration, or the link-window under `refused`, and the cost), the salts to `cells.salts` (witness)."""
         t0 = time.perf_counter()
-        cells_ = self.commit(link, direction, record.window, WR.window_rows(record, grid), self.params.digest,
-                             self.issuer.session)
+        cells_ = self.commit(link, direction, record, self.params, self.issuer.session)
         head = cells_.head
         t1 = time.perf_counter()
         cert = self.issuer.sign(link, direction, record.window, head.digest())
         t2 = time.perf_counter()
-        cost = {"rows": len(cells_.rows), "commit_ms": round((t1 - t0) * 1000, 3), "sign_ms": round((t2 - t1) * 1000, 3)}
+        cost = {"rows": len(cells_.rows), "row_bytes": len(cells_.rows[0]), "commit_ms": round((t1 - t0) * 1000, 3),
+                "sign_ms": round((t2 - t1) * 1000, 3)}
         line = ({"refused": [link, direction.value, record.window]} if cert is None
-                else {"registration": WR.registration(head, cert, grid)})
-        ar.write_blobs(self.out / "cells.salts", b"".join(cells_.salts))
+                else {"registration": WR.registration(head, cert, self.params)})
+        ar.write_blobs(self.out / "cells.salts", cells_.witness)
         with open(self.out / "cells.jsonl", "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
 
@@ -315,27 +342,46 @@ class Publisher:
         return list(self.issuer.refused)
 
 
+def _hash_row(h, row) -> None:
+    """Row `row` into `h`, a grid's SHA-512: each slot a 0 byte, or a 1 byte and its frame."""
+    for frame in row:
+        h.update(b"\x00" if frame is None else b"\x01" + frame)
+
+
+def grid_digest(grid) -> bytes:
+    """The SHA-512 of a record's grid, row by row (`_hash_row`): the close marker's, which the publisher process
+    holds its rebuilt grid to."""
+    h = hashlib.sha512()
+    for row in grid:
+        _hash_row(h, row)
+    return h.digest()
+
+
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit) -> None:
     """`PublisherProcess`'s process: the warden's key and its leaf state are this process's alone. It sends the public
-    key, rebuilds each record from its released rows, keeps it as `Publisher` does at its close, and at the end sends
-    the issuer's refusals and its own usage."""
+    key, rebuilds each record from its released rows, keeps it as `Publisher` does at its close once the rebuilt grid's
+    digest is the close marker's, and at the end sends the issuer's refusals and its own usage."""
     try:
         own = cs.signer(key)
         results.send(("key", own.public_key()))
-        publisher = Publisher(out, Issuer(own, session), params, commit or WR.Cells.commit)
+        publisher = Publisher(out, Issuer(own, session), params, commit or WR.Cells.of)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
         while (item := rows.get()) is not None:
             link, n, data = item
+            if link is None:
+                continue
             grid = grids[link]
             if n is not None:
                 filling[link].append(tuple(data[i * B:(i + 1) * B] for i in range(n)) + (None,) * (grid.allocation - n))
                 continue
-            (window, reason), got = data, filling[link]
+            (window, reason, digest), got = data, tuple(filling[link])
             if len(got) != grid.buckets:
                 raise ValueError(f"{link} window {window} closed after {len(got)} rows, not {grid.buckets}")
-            publisher.keep(Record(link, window, tuple(got), Status(reason)), grid)
+            if grid_digest(got) != digest:
+                raise ValueError(f"{link} window {window}: the rows rebuilt aren't the grid the warden closed")
+            publisher.keep(Record(link, window, got, Status(reason)), grid)
             filling[link] = []
         results.send(("done", {"refused": publisher.close(), "usage": ar._usage()}))
         own.close()
@@ -347,10 +393,15 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
 class PublisherProcess:
     """`serve`'s `publish` and `release`: `Publisher` in one spawned process, which alone holds the warden's key.
     `release` hands it each grid's row as the warden ticks (its frames as one bytes object), and `__call__` the
-    record's close: the ticker only queues them, and the queue's own thread pickles each tick's few kilobytes, never a
-    whole window. The process rebuilds each record from its rows and keeps, certifies and commits it, so neither a
-    commit nor a signature takes the ticker's GIL. `key` is the warden's public key; `close` waits for every record and
-    gives the issuer's refusals; `usage` is then the process's own. `commit` stands in for `Cells.commit` (a test's)."""
+    record's close with its grid's SHA-512 (`grid_digest`), hashed a row at a time as each is released and held to the
+    record's grid at its close: the ticker only queues them, and the queue's own thread pickles each tick's few
+    kilobytes, never a whole window. The process rebuilds each record from its rows, refuses one whose grid isn't the
+    marker's, and keeps, certifies and commits it, so neither a commit nor a signature takes the ticker's GIL. `key`
+    is the warden's public key; `close` waits for every record and gives the issuer's refusals; `usage` is then the
+    process's own. A process that exits early, killed or failed, raises at the next close or at `close`. `commit`
+    stands in for `Cells.of` (a test's). The queue's thread is started at construction, with a row of the grid's size
+    that the process drops, so that the first tick starts no thread and the thread's buffers have grown to a row's;
+    `feeder` is its thread id."""
 
     def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None) -> None:
         ctx = multiprocessing.get_context("spawn")
@@ -361,13 +412,22 @@ class PublisherProcess:
         self.process.start()
         results.close()
         self.usage: dict | None = None
+        self._released: dict[str, list] = {}
+        self._digests: dict[str, object] = {}
+        self.rows.put((None, None, bytes(params.grid.allocation * params.cell_bytes)))
+        self.feeder: int | None = self.rows._thread.native_id
         self.key: LmsKey = self._receive("key")
 
     def _receive(self, kind: str):
         multiprocessing.connection.wait([self.results, self.process.sentinel])
-        if not self.results.poll():
+        try:
+            message = self.results.recv() if self.results.poll() else None
+        except EOFError:
+            message = None
+        if message is None:
+            self.process.join()
             raise RuntimeError(f"the publisher process exited ({self.process.exitcode}) before its {kind}")
-        got, value = self.results.recv()
+        got, value = message
         if got == "error":
             raise RuntimeError(f"the publisher process failed: {value}")
         if got != kind:
@@ -385,12 +445,17 @@ class PublisherProcess:
 
     def release(self, link: str, row) -> None:
         n = row_count(row)
+        self._released.setdefault(link, []).append(row)
+        _hash_row(self._digests.setdefault(link, hashlib.sha512()), row)
         self.rows.put((link, n, b"".join(row[:n])))
 
     def __call__(self, record: Record, grid: GridParams) -> None:
         if not self.process.is_alive():
             self._end()
-        self.rows.put((record.link, None, (record.window, record.status.reason)))
+        released, digest = self._released.pop(record.link, []), self._digests.pop(record.link, hashlib.sha512())
+        if record.grid != tuple(released):
+            raise RuntimeError(f"{record.link} window {record.window}: the record's grid isn't the rows released")
+        self.rows.put((record.link, None, (record.window, record.status.reason, digest.digest())))
 
     def close(self) -> list:
         self.rows.put(None)
@@ -409,29 +474,108 @@ def _quantiles(xs: list[float]) -> dict:
 
 
 def deployment_record(params: WardenParams, key: LmsKey, session: bytes, *, origin_unix: float, windows: int,
-                      listen: tuple[str, int], upstream: tuple[str, int], slack: float) -> dict:
+                      listen: tuple[str, int], upstream: tuple[str, int], slack: float,
+                      run_id: bytes | None = None) -> dict:
     """`deployment.json`, the auditor's record of a run: the warden's public key and session, the schedule's
-    parameters and their digest, the origin and where it listened."""
+    parameters and their digest, the origin and where it listened, and the run id its server's requests carry."""
     return {"key": cs.public_json(key), "session": session.hex(), "link": LINK,
             "params": asdict(params), "digest": params.digest.hex(), "slack_ms": slack * 1000,
-            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream)}
+            "origin_unix": origin_unix, "windows": windows, "listen": list(listen), "upstream": list(upstream),
+            "run_id": None if run_id is None else run_id.hex()}
+
+
+def _memlock(libc) -> str:
+    """mlockall(MCL_CURRENT | MCL_FUTURE) where the kernel permits it and the run can still grow under it: the process
+    has CAP_IPC_LOCK, or RLIMIT_MEMLOCK (its soft limit raised to its hard one) is unlimited or holds the whole of what
+    the process maps (VmSize, which MCL_CURRENT counts) and `LOCK_HEADROOM` more, since MCL_FUTURE then refuses any
+    mapping past it; else what kept it."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_MEMLOCK)
+    if soft != hard:
+        resource.setrlimit(resource.RLIMIT_MEMLOCK, (hard, hard))
+        soft = hard
+    status = dict(x.split(":", 1) for x in Path("/proc/self/status").read_text().splitlines() if ":" in x)
+    caps, mapped = int(status["CapEff"], 16), int(status["VmSize"].split()[0]) << 10
+    if not caps >> CAP_IPC_LOCK & 1 and soft != resource.RLIM_INFINITY and soft < mapped + LOCK_HEADROOM:
+        return (f"not locked: RLIMIT_MEMLOCK is {soft} bytes, under the {mapped} the process maps and "
+                f"{LOCK_HEADROOM} to grow, and the process lacks CAP_IPC_LOCK")
+    if libc.mlockall(MCL_CURRENT | MCL_FUTURE) != 0:
+        return f"not locked: mlockall: {os.strerror(ctypes.get_errno())}"
+    return "locked, current and future"
+
+
+def reserve_fds(n: int) -> int:
+    """Grow the process's descriptor table to hold `n` (at most RLIMIT_NOFILE's soft limit) now; returns its size. The
+    kernel grows the table as descriptors pass 64, 128, 256 …, and in a process of more than one thread each growth
+    waits for an RCU grace period (`expand_fdtable`'s synchronize_rcu), the thread asleep in D: tens of ms on a busy
+    host. The table never shrinks."""
+    n = min(n, resource.getrlimit(resource.RLIMIT_NOFILE)[0])
+    fd = os.open(os.devnull, os.O_RDONLY)
+    try:
+        os.close(fcntl.fcntl(fd, fcntl.F_DUPFD, n - 1))
+    finally:
+        os.close(fd)
+    return n
+
+
+def prepare_process(params: WardenParams) -> dict:
+    """The warden's process made ready before its origin, so that no tick waits in the kernel (state D) on what the
+    run's growth would otherwise ask of it then:
+    - descriptors: its table holds every connection's two and every queued one's (`reserve_fds`): the opening burst of
+      TRACE-CORPUS's heavy trace grew it past 256, 512 and 1024 descriptors, and the ticker waited a grace period at
+      each (`stall_probe` found every D episode of the ticker in `__wait_rcu_gp` there, 14-28 ms on CPU);
+    - memory: a page fault for fresh memory charges the memory cgroup, and a cgroup at its limit reclaims in the
+      faulting thread. glibc's heap is kept whole (no trim) and serves every allocation under 32 MiB (no mmap), a
+      lane's `RESERVE_PER_LANE` of it is touched and freed, so the run's allocations reuse resident pages, and every
+      page is locked where that is permitted (`_memlock`). `serve`'s command runs on the C allocator
+      (`PYTHONMALLOC=malloc`), so the interpreter's small objects come from that heap too and not from arenas it maps
+      as it grows.
+    Returns what `warden.json` keeps of it; what it couldn't do is also printed, as a warning."""
+    reserve = max(RESERVE_MIN, params.lanes * RESERVE_PER_LANE)
+    libc = ctypes.CDLL(None, use_errno=True)
+    report = {"allocator": "pymalloc" if sys.flags.ignore_environment else os.environ.get("PYTHONMALLOC", "pymalloc"),
+              "fds": reserve_fds(2 * params.lanes + params.queue + FD_MARGIN), "heap": None, "reserve_mb": 0}
+    if hasattr(libc, "mallopt") and libc.mallopt(M_MMAP_THRESHOLD, 32 << 20) == 1 and \
+            libc.mallopt(M_TRIM_THRESHOLD, (1 << 31) - 1) == 1:
+        report["heap"] = "kept whole, no mmap under 32 MiB"
+        libc.malloc.restype, libc.malloc.argtypes, libc.free.argtypes = ctypes.c_void_p, [ctypes.c_size_t], \
+            [ctypes.c_void_p]
+        chunks = [p for p in (libc.malloc(1 << 20) for _ in range(reserve >> 20)) if p]
+        for p in chunks:
+            ctypes.memset(p, 0, 1 << 20)
+        for p in chunks:
+            libc.free(p)
+        report["reserve_mb"] = len(chunks)
+    else:
+        report["heap"] = "not glibc's: it may give memory back and map it again during the run"
+    report["mlock"] = _memlock(libc)
+    for key, value in report.items():
+        if (key == "allocator" and value != "malloc") or str(value).startswith("not"):
+            print(f"warden-serve: {key}: {value}", file=sys.stderr, flush=True)
+    return report
 
 
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
-                announce=cs._announce) -> dict:
+                announce=cs._announce, probe: bool = False, process: dict | None = None) -> dict:
     """One run of the warden on the host's clock (the module docstring's `serve`), its records published by a
-    `PublisherProcess` that holds the key in `key`. Returns what `warden.json` holds."""
+    `PublisherProcess` that holds the key in `key`, its threads sampled by `stall_probe` when `probe`. Returns what
+    `warden.json` holds, with `process`, what `prepare_process` did. The loop's errors are kept, not logged: the
+    ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
+    errors: list[str] = []
+    loop.set_exception_handler(lambda _, context: errors.append(f"{context.get('message')}: "
+                                                               f"{context.get('exception')!r}"))
     publish = PublisherProcess(out, key, session, params)
     origin = time.monotonic() + start_in
     warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                     publish=publish, release=publish.release, slack=slack)
     server = await asyncio.start_server(warden.handle, *listen)
+    sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
+                                {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
                                    windows=windows, listen=(listen[0], server.sockets[0].getsockname()[1]),
-                                   upstream=upstream, slack=slack)
+                                   upstream=upstream, slack=slack, run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
     announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
     try:
@@ -439,11 +583,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     finally:
         server.close()
         refused = await loop.run_in_executor(None, publish.close)
+        stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
     log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused, "ticks": warden.ticks,
            "lateness_ms": _quantiles(lateness) | {"over_slack": sum(x > slack * 1000 for x in lateness)},
            "issuer_refused": [[link, d.value, w] for link, d, w in refused], "usage": ar._usage(),
-           "publisher_usage": publish.usage}
+           "publisher_usage": publish.usage, "process": process, "stalls": stalls, "loop_errors": errors}
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log
@@ -510,47 +655,46 @@ def read_certified(path: Path) -> tuple[dict[tuple[str, Direction, int], Certifi
     return got, refused
 
 
-def read_cells(run: Path) -> list[tuple[dict, list[bytes]]]:
-    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, and its
-    rows' salts."""
+def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
+    """`cells.jsonl` and `cells.salts`, line by line: each link-window's registration (or refusal) and cost, its rows'
+    salts and its wiring's (`warden_rows.read_witness`)."""
     path = run / "cells.jsonl"
     lines = [json.loads(x) for x in path.read_text().splitlines()] if path.exists() else []
     salts = ar.read_blobs(run / "cells.salts")
     if len(salts) != len(lines):
         raise ValueError(f"cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
-    n = WR.SALT_BYTES
-    return [(doc, [s[i:i + n] for i in range(0, len(s), n)]) for doc, s in zip(lines, salts)]
+    return [(doc, *WR.read_witness(s)) for doc, s in zip(lines, salts)]
 
 
 def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[Record]]) -> tuple[dict, list]:
     """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
-    under the warden's key and session, whose root is the record's rows under its salts; the per-window cost."""
+    under the warden's key and session, whose head is the record's rows and wiring under their salts; the per-window
+    cost."""
     key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
     got = {}
-    for doc, salts in read_cells(run):
+    for doc, salts, wiring_salt in read_cells(run):
         if "registration" in doc:
             r = doc["registration"]
-            got[(r["link"], r["direction"], r["window"])] = (doc, salts)
+            got[(r["link"], r["direction"], r["window"])] = (doc, salts, wiring_salt)
     problems, costs, ok_n = [], [], 0
     for name in (INGRESS, EGRESS):
         link, direction = CERTIFIED[name]
         by_window = {r.window: r for r in records[name]}
         for w in range(dep["windows"]):
-            doc, salts = got.get((link, direction.value, w), (None, None))
+            doc, salts, wiring_salt = got.get((link, direction.value, w), (None, None, None))
             ok = False
             if doc is not None and w in by_window:
                 costs.append(doc["cost"])
                 try:
-                    head, _ = WR.check_registration(doc["registration"], key, session, params.grid, params.digest, link,
-                                                    direction, w)
-                    rows = WR.window_rows(by_window[w], params.grid)
-                    ok = WR.Cells.commit(link, direction, w, rows, params.digest, session, salts).root == head.root
+                    head, _ = WR.check_registration(doc["registration"], key, session, params, link, direction, w)
+                    ok = WR.Cells.of(link, direction, by_window[w], params, session, salts, wiring_salt).head == head
                 except ValueError as e:
                     problems.append(f"{name} window {w}'s cells: {e}")
             ok_n += ok
             if not ok:
                 problems.append(f"{name} window {w}'s cells aren't registered")
     summary = {"registered": ok_n, "of": 2 * dep["windows"], "rows": sorted({c["rows"] for c in costs}),
+               "row_bytes": sorted({c["row_bytes"] for c in costs}),
                "commit_ms": _quantiles([c["commit_ms"] for c in costs]),
                "sign_ms": _quantiles([c["sign_ms"] for c in costs])}
     return summary, problems
@@ -635,6 +779,8 @@ def check(run: Path) -> dict:
                        "egress": sum(c["egress_bytes"] for c in verdict["connections"])},
         "cells_in_their_bucket": [sum(r["in_bucket"] for r in served), sum(r["cells"] for r in served)],
         "arrival_lag_ms": _quantiles(lags), "tick_lateness_ms": warden_log.get("lateness_ms"),
+        "ticker_stalls": None if not warden_log.get("stalls") else
+        warden_log["stalls"]["by_label"].get("ticker", {"episodes": 0, "max_ms": 0.0, "wchan": {}}),
         "completion_tokens": sum(r.get("completion_tokens") or 0 for r in served),
         "prompt_tokens": [min((r.get("prompt_tokens") or 0 for r in served), default=None),
                           max((r.get("prompt_tokens") or 0 for r in served), default=None)],
@@ -651,7 +797,8 @@ def table(result: dict) -> str:
             f"{s['refused']} refused, failed {s['failed']}; {s['certified_windows']}/{len(CERTIFIED) * s['windows']} "
             f"link-windows "
             f"certified; cells in their bucket {s['cells_in_their_bucket'][0]}/{s['cells_in_their_bucket'][1]}; "
-            f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}; cell rows {s['cell_rows']['registered']}/"
+            f"cells {s['cells']}; tick lateness {s['tick_lateness_ms']}; ticker D episodes "
+            f"{s.get('ticker_stalls') or 'not probed'}; cell rows {s['cell_rows']['registered']}/"
             f"{s['cell_rows']['of']} link-windows registered, {s['cell_rows']['rows']} rows a window, commit ms "
             f"{s['cell_rows']['commit_ms']}, sign ms {s['cell_rows']['sign_ms']}")
 
@@ -761,6 +908,8 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument("--key", required=True, type=Path, help="the warden's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
     s.add_argument("--windows", required=True, type=int)
+    s.add_argument("--stall-probe", action=argparse.BooleanOptionalAction, default=True,
+                   help="sample the warden's threads every millisecond for D episodes (stall_probe.py; stalls.json)")
     up = r.add_mutually_exclusive_group(required=True)
     up.add_argument("--upstream", type=cs._address, help="the server's HOST:PORT (an OpenAI endpoint)")
     up.add_argument("--fake", action="store_true", help="start the fake endpoint and use it")
@@ -804,13 +953,24 @@ def main(argv=None) -> int:
         session = bytes.fromhex(args.session)
         if len(session) != 32:
             raise SystemExit("--session is 32 bytes in hex")
+        own = argv is None or list(argv) == sys.argv[1:]
+        if own and os.environ.get("PYTHONMALLOC") != "malloc" and C_ALLOCATOR not in os.environ:
+            os.execve(sys.executable, [sys.executable, *sys.orig_argv[1:]],
+                      os.environ | {"PYTHONMALLOC": "malloc", C_ALLOCATOR: "1"})
+        params = _params(args)
         ar._quiet_runtime()
-        asyncio.run(serve(_params(args), args.out, upstream=args.upstream, listen=args.listen, key=args.key,
-                          session=session, windows=args.windows, start_in=args.start_in, slack=args.slack))
+        process = prepare_process(params)
+        for name in ("PYTHONMALLOC", C_ALLOCATOR):
+            os.environ.pop(name, None)
+        asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
+                          session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
+                          probe=args.stall_probe, process=process))
         return 0
     if args.command == "client":
         ar._quiet_runtime()
-        asyncio.run(client(json.loads(args.deployment.read_text()), json.loads(args.traffic.read_text()), args.out))
+        traffic = json.loads(args.traffic.read_text())
+        reserve_fds(len(traffic) + FD_MARGIN)
+        asyncio.run(client(json.loads(args.deployment.read_text()), traffic, args.out))
         return 0
     if args.command == "check":
         result = check(args.run)

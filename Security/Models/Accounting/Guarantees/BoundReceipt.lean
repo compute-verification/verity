@@ -1,7 +1,7 @@
 import Definitions.Accounting.BoundReceipt
 import Models.Pouw.Assumptions.Game
 import Models.Pouw.Assumptions.NCP.RouteUAssumptions
-import Models.Pouw.Assumptions.PearlC.TTOut
+import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
@@ -27,8 +27,8 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 * `TileUnpredictableOfTT` and `TileUnpredictableOfNCPU`: PoUW's `TT` and `TT_NCP_U` each give `TileUnpredictable`.
 * `TileUnpredictableMono`: `TileUnpredictable` carries to more compared entries and less credit, so one for the bound
   partial accumulators (`boundEntries`) gives it for every set that contains them.
-* `TileUnpredictablePearlCOfTTOut`: an assumption of Pearl-C's `TT_OUT` shape, at any Pearl-C protocol, gives the same
-  hypothesis in Pearl-C's game (`TileUnpredictablePearlC`).
+* `TileUnpredictablePearlCOfTTOut`: an assumption of Pearl-C's `TT_OUT` shape at W1, at any Pearl-C protocol, gives the
+  same hypothesis in Pearl-C's game at W1 (`TileUnpredictablePearlC` at `W1.w1Priced`).
 -/
 
 namespace Accounting.Guarantees
@@ -220,8 +220,8 @@ def TileUnpredictableOfTT : Prop :=
     Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
 
 /-- **NCP's `TT_NCP_U` gives `TileUnpredictable` on route U at the stacked product's work `3·m·k·n`.** For every bias
-`β`, cost model, NCP parameters, domain, target and error: `Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε` implies
-`TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D γ₀ ε`.
+`β`, cost model, NCP parameters, domain on which `γ₀ ≥ P.d/(3k)`, target and error:
+`Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε` implies `TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D γ₀ ε`.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableOfNCPU`.
 
@@ -229,6 +229,7 @@ Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for NCP's na
 def TileUnpredictableOfNCPU : Prop :=
   ∀ (β : ℤ) (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε →
       TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D γ₀ ε
 
@@ -244,8 +245,8 @@ def boundEntries {Q R S : Type} (P : Pouw.Protocol Q R S) (keep : Pouw.Shape →
 (the k-slice accumulators, inside Pearl-C's domain `D`): for every in-domain workload, every adversary within compute
 `T` and `q` oracle calls, and every unit `u` whose credit is more than `T/(1 − γ₀)`, the probability over the oracle and
 the salt that `u` is correct (`Pouw.PearlC.correctSet`) is at most `ε(q, N)`. It is the hypothesis `TileUnpredictable`
-is, for a named assumption on those accumulators to discharge: `TileUnpredictablePearlCOfTTOut` derives it from one of
-`TT_OUT`'s shape at that protocol. -/
+is, for a named assumption on those accumulators to discharge: `TileUnpredictablePearlCOfTTOut` derives it at W1 from
+one of `TT_OUT`'s shape at W1 at that protocol. -/
 def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : Pouw.PearlC.CostModel Q R S) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
     (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
@@ -254,25 +255,27 @@ def TileUnpredictablePearlC {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype 
       Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.PearlC.correctSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤
         ε q U.layout.N
 
-/-- **An assumption of `TT_OUT`'s shape gives `TileUnpredictablePearlC`.** For every cost model, Pearl-C protocol `P`,
-domain, target, error and credit per shape: if every correct unit's credit in `P` (`P.credit` on its committed
-activations and the realized noise) is nonnegative and at least `credit` of its shape,
-`Pouw.PearlC.Assumptions.TTOut CM P D γ₀ ε` implies `TileUnpredictablePearlC CM P credit D γ₀ ε`. A correct unit whose
-credit is above `T/(1 − γ₀)` puts the correct units' total credit above it. It is generic in `P`, so it takes rev1
-(`TTOutPearlCDevRev1`, `TTOut` at `pearlCProtocolDevRev1`) and an assumption of `TTOut`'s shape at a protocol whose
-tickets are the k-slice accumulators.
+/-- **An assumption of `TT_OUT`'s shape at W1 gives `TileUnpredictablePearlC` at W1.** For every W1 device `dv`, salt
+bytes `salt`, Pearl-C protocol `P`, domain, target, error and credit per shape: if every correct unit's credit in `P`
+(`P.credit` on its committed activations and the realized noise) is nonnegative and at least `credit` of its shape,
+`Pouw.PearlC.Assumptions.TTOutW1 dv salt P D γ₀ ε` implies
+`TileUnpredictablePearlC (W1.w1Priced dv salt) P credit D γ₀ ε`. A correct unit whose credit is above `T/(1 − γ₀)` puts
+the correct units' total credit above it. It is generic in `P`, so it takes rev1 (`TTOutPearlCDevRev1W1`, `TTOutW1` at
+`pearlCProtocolDevRev1`) and an assumption of `TTOutW1`'s shape at a protocol whose tickets are the k-slice
+accumulators.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut`.
 
-Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for an assumption of `TT_OUT`'s shape at any
+Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for an assumption of `TT_OUT`'s shape at W1 at any
 Pearl-C protocol. -/
 def TileUnpredictablePearlCOfTTOut : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.PearlC.CostModel Q R S)
-    (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ) (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ)
-    (ε : ℕ → ℕ → ℝ),
+  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
+    (salt : S → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (credit : Pouw.PearlC.Shape → ℝ)
+    (D : Pouw.PearlC.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
     (∀ (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : ℕ) (c : Pouw.PearlC.Commit),
       Pouw.PearlC.Correct P U H s u c → 0 ≤ P.credit H s U u c.act ∧ credit (U.layout.shape u) ≤ P.credit H s U u c.act) →
-    Pouw.PearlC.Assumptions.TTOut CM P D γ₀ ε → TileUnpredictablePearlC CM P credit D γ₀ ε
+    Pouw.PearlC.Assumptions.TTOutW1 dv salt P D γ₀ ε →
+      TileUnpredictablePearlC (Pouw.PearlC.W1.w1Priced dv salt) P credit D γ₀ ε
 
 /-- **`TileUnpredictable` carries to more compared entries and less credit.** For every cost model, protocols `P` and
 `P'` with the same checked values, `P'` comparing at every shape every entry `P` compares, and credits

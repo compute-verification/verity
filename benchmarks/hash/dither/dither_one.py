@@ -484,14 +484,19 @@ class Window:
         by: dict = {}
         for x in ph:
             by.setdefault(x["m"], []).append(x)
-        med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs if k in x])), 4)
-                                             for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
-               for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
+        top = sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]
+
+        def per(f):
+            return {str(m): {"steps": len(xs), **{k: round(float(f([x[k] for x in xs if k in x])), 4)
+                                                  for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
+                    for m, xs in top}
+        med = per(np.median)
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {**F.form_of("dither-1s"), "steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s,
                 "epsilon": "seeded",
                 "salt": "step" if self.step_salt else "epoch", "coins": self.coins.label, "units_form": self.units_form, "peel": self.peel,
-                "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
+                "percall": pc, "phases_by_m": med, "phases_mean_by_m": per(np.mean),
+                "phases_p90_by_m": per(lambda v: np.percentile(v, 90)), "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 
 def round_leaves(kinds) -> str:

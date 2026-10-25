@@ -48,12 +48,14 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   Program's units, padded slots included (`callWork`). Each step's m_s is proved (`Internal.live`).
 * `Internal.live` is `credit._live`: the window's evidence carries its live Program (`live`: its descriptor, and each
   round's live@<s> proof outcome), whose record's T, S and PREFIX (`liveOf`) must be the period's committed T, the
-  window's round count and its circuit's PREFIX, its root's units S calls of `PouwLiveSlots_v1{T}`. Every round is
+  window's round count and its circuit's PREFIX, its root's units S calls of `PouwLiveSlots_v2{T}`. Every round is
   proved, never sampled: round s's one accepted outcome, verified against that descriptor, opened its slot ports at
   `<prefix>slots@<s>` and its header ports at `<prefix>requests@0` at their registered roots (each registered once with
   T rows, `liveRoots`), its `m` at the known `<prefix>m@<s>` of the manifest's m_s, its `s` at the known
-  `<prefix>round@<s>` of s and its `o0` at the known `<prefix>live-ok` rows (`liveFinding`). So m_s is the live unit's count of round s's slots assigned to round 0's
-  admitted requests, and a step whose m_s is any other refuses the window.
+  `<prefix>round@<s>` of s, its `cap_<i>` at the known `<prefix>caps` of the max_tokens its period's open committed
+  (`capsRoot`) and its `o0` at the known `<prefix>live-ok` rows (`liveFinding`). So m_s is the live unit's count of round
+  s's slots assigned to round 0's admitted requests, those requests are the fixed length's, each with its public
+  max_tokens as its cap, and a step whose m_s is any other refuses the window.
 * `layoutOf` is `credit.layout_of`: the window's layout is its committed circuit's, read from the descriptor whose
   SHA-512 the period's open committed: its program function's record (`TILES`, `LINEARS`, `CALLS`, `M`), each K's
   template's A and B rows (R and C), and its root's nodes other than inputs, which must be each call's (M/R)·(n/C)
@@ -62,8 +64,9 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   (`tile-k`, `tileK`).
 * `Internal.outcome` is `credit._outcome`: every unit `drawn` draws has exactly one proof outcome and it is an accept,
   else the whole window is refused (no partial credit). `window` is `credit.window`: `Internal.credited`, `roundsCheck`
-  on the round log's roots and coins, `Internal.aLink` on that log and the window's registered entries, `layoutOf` of
-  its descriptor, `periodWeights`, `Internal.arow`, `Internal.servedRows`, then `Internal.outcome`'s rule under the served window's arguments
+  on the round log's roots and coins, `layoutOf` of its descriptor, `Internal.aLink` on that log and the window's
+  registered entries, `periodWeights`, `Internal.arow`, `Internal.servedRows`, `Internal.length`, then `Internal.outcome`'s
+  rule under the served window's arguments
   (the stream its root, the registration its draw root, the receipt `{"receipts": …}`), `Internal.registration` and
   `Internal.live`.
 * `period` is `credit.period`: the windows presented are exactly those the auditor's ledger lists in the period's
@@ -98,6 +101,12 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   one the open of the window's period signed (`committedWeights`), so every window of a period opens the same B rows.
   That open names the model the root is of, a role and checkpoint `models.json` pins (`PINNED_MODELS`, the file
   `credit.py` reads, embedded here), else the period counts nothing.
+* `Internal.length` is `credit._length` (Daniel, 19 Oct, ASK-39): the open of the window's period commits each
+  request's public max_tokens with the public-cap done source (`committedLength`, `{max_tokens, stop}` with stop
+  `STOP_FIXED`), and each step's served rows m_s the manifest fixed before the draw coin (`Internal.servedRows`) are
+  that fixed length's schedule:
+  round 0 at least one row a request, round s ≥ 1 one decode row for each request whose max_tokens is past s. A round
+  serving more ran a request past its public max_tokens, one serving fewer stopped one at an EOS-keyed done source.
 
 Every refusal is (code, why), the first rule the input breaks, with Python's words.
 -/
@@ -1667,11 +1676,94 @@ def prefixOf (descriptor : ByteArray) : Json :=
   let fn := (((String.fromUTF8? descriptor).bind loads?).bind fun d => str? (get d "program_fn")).getD ""
   (((Flock.Program.recordPairs fn).toList.lookup "PREFIX").bind loads?).getD .null
 
-/-- `credit._period_weights`: the session the auditor's ledger opened for the window when the window's registered
-weights (`Internal.weights`, over round 0's `requests` in its round log and that session) fold to the weights' root its
-period's open signed (`committedWeights`); else the refusal (`weights`, `layout` or `coin`). -/
+private def periodBody (ledger : Json) (name : String) : Option Json :=
+  match ledger with
+  | .arr lines => ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+      e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
+  | _ => none
+
+def LENGTH_FIELD : String := "length"
+/-- `window.STOP_FIXED`: circuits' public-cap done source. -/
+def STOP_FIXED : String := "fixed"
+def LENGTH_KEYS : List String := ["max_tokens", "stop"]
+
+def noFixedLength (name : String) : String :=
+  s!"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, \{max_tokens, stop}), so " ++
+  "its windows are not of record: a row of record serves each request's public max_tokens whatever it " ++
+  "samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop " ++
+  STOP_FIXED
+
+def eosKeyedRow (name stop : String) : String :=
+  s!"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {STOP_FIXED} (ignore_eos, " ++
+  "circuits' public-cap done source): a row of record is done only at each request's public max_tokens, " ++
+  "never at an EOS token"
+
+def lengthForm (name : String) : String :=
+  s!"period {name}'s open commits a fixed length ({LENGTH_FIELD}) that is not \{max_tokens, stop}, max_tokens " ++
+  "a non-empty list of positive integers (each request's public max_tokens, in admission order) and stop " ++
+  STOP_FIXED
+
+/-- `credit.committed_length`: each request's public max_tokens period `name`'s open committed (`LENGTH_FIELD`,
+`{max_tokens, stop}` with stop `STOP_FIXED`) in the auditor's ledger, one the challenger's checks have
+trusted; else the refusal (`length`): an open with no fixed length (its windows are not of record), one whose stop mode
+is EOS-keyed, or a malformed one. -/
+def committedLength (ledger : Json) (name : String) : R (List Nat) := do
+  let ln := ((periodBody ledger name).map (get · LENGTH_FIELD)).getD .null
+  if let .null := ln then throw ("length", noFixedLength name)
+  if let .obj _ := ln then
+    if let .str s := get ln "stop" then
+      if s != STOP_FIXED then throw ("length", eosKeyedRow name s)
+  let m := if keys ln == some LENGTH_KEYS && get ln "stop" == Json.str STOP_FIXED then
+      match get ln "max_tokens" with
+      | .arr xs => if xs.isEmpty then none else xs.toList.mapM fun x => (nat? x).filter (1 ≤ ·)
+      | _ => none
+    else none
+  let some m := m | throw ("length", lengthForm name)
+  pure m
+
+def lengthRefuse {α : Type} (why : String) : R α := throw ("length", why)
+
+/-- `credit._length`: none when the window serves its period's fixed length, `maxTokens` each request's public
+max_tokens (`committedLength`), at its calls' served rows `rows` (`Internal.servedRows`': one m_s a step, fixed before
+the draw coin); else the refusal (`length`). The window's `layout` calls are its `steps` rounds' equal blocks
+(`Internal.arow` held them so), every request is admitted in round 0, and a request of max_tokens n holds its prompt's
+rows in round 0 and one decode row in each round 1 … n − 1. So round 0 serves at least one row a request, and round
+s ≥ 1 serves exactly the requests whose max_tokens is past s. A round serving more rows than that ran a request past
+its public max_tokens, and one serving fewer stopped a request before it (an EOS-keyed done source, not the public
+cap). -/
+def Internal.length (maxTokens rows : List Nat) (layout : Json) (steps : Nat) : R Unit := do
+  let bigM := (nat? (get layout "m")).getD 0
+  let n := maxTokens.length
+  if n > bigM then
+    lengthRefuse (s!"length-mismatch: the fixed length's {n} requests are more than the window's {bigM} slots, " ++
+      "so round 0 can't hold a row of each")
+  let top := maxTokens.foldl max 0
+  if top > steps then
+    lengthRefuse (s!"length-mismatch: request {maxTokens.findIdx (· == top)}'s max_tokens {top} is past the " ++
+      s!"window's {steps} rounds, so the window can't serve it to its public cap")
+  let per := rows.length / steps
+  let first := rows.getD 0 0
+  if first < n then
+    lengthRefuse (s!"length-mismatch: round 0 served {first} rows, fewer than the fixed length's {n} " ++
+      "requests, each admitted there with its prompt")
+  for s in [1:steps] do
+    let want := (maxTokens.filter (· > s)).length
+    let got := rows.getD (s * per) 0
+    if got > want then
+      lengthRefuse (s!"length-mismatch: round {s} served {got} rows, past the {want} the fixed length " ++
+        s!"schedules there (one decode row for each request whose max_tokens is past {s}): a " ++
+        "request ran past its public max_tokens")
+    if got < want then
+      lengthRefuse (s!"length-mismatch: round {s} served {got} rows, short of the {want} the fixed length " ++
+        s!"schedules there (one decode row for each request whose max_tokens is past {s}): a " ++
+        "request stopped before its public max_tokens, so its done source is not the public cap")
+
+/-- `credit._period_weights`: the session the auditor's ledger opened for the window and the period holding it, when
+the window's registered weights (`Internal.weights`, over round 0's `requests` in its round log and that session) fold
+to the weights' root its period's open signed (`committedWeights`); else the refusal (`weights`, `layout` or
+`coin`). -/
 def periodWeights (key ledger window rounds layout entries : Json) (program : String) (prefix_ : Json) :
-    R String := do
+    R (String × String) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
   let a ← (SampledProofs.Challenger.auditedSession ledger window k).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
@@ -1688,14 +1780,14 @@ def periodWeights (key ledger window rounds layout entries : Json) (program : St
     weightsRefuse (s!"the window's registered weights' root {got.take 16}... is not {signed.take 16}..., the one " ++
       s!"period {name}'s open signed: a B row's codes or s_w differ from the ones the period registered before its " ++
       "first window's salt. Open every window of a period on its registered B rows")
-  pure a.session
+  pure (a.session, name)
 
 /-- `credit.LIVE`: the window evidence's live Program (`circuit.live`), and the period-open's circuit file of its
 template. -/
 def LIVE : String := "live"
-def LIVE_FN : String := "PouwLiveWindow_v1"
+def LIVE_FN : String := "PouwLiveWindow_v2"
 def LIVE_RECORD : List String := ["T", "S", "PREFIX"]
-def LIVE_UNIT : String := "PouwLiveSlots_v1"
+def LIVE_UNIT : String := "PouwLiveSlots_v2"
 /-- The live evidence with each round's proof outcome, the form this reads. -/
 def LIVE_KEYS : List String := ["descriptor", "proofs"]
 /-- `live_reads`' tables, words a row and the live unit's ok output row. -/
@@ -1706,25 +1798,27 @@ def M_ROWS : String := "m"
 def ROUND_ROWS : String := "round"
 /-- The live unit's public round port. -/
 def ROUND_PORT : String := "s"
+/-- `live_reads.CAPS`: the v2 unit's public caps `<prefix>caps`, its port `cap_<i>` row i. -/
+def CAPS : String := "caps"
 def LIVE_OK_VALUE : String := "live-ok"
 def LIVE_OK_PORT : String := "o0"
 def SLOT_WORDS : Nat := 2
 def HEADER_WORDS : Nat := 10
 def LIVE_FORM : String :=
   "the window's live evidence is not {descriptor, proofs}: its live Program's descriptor in lowercase hex " ++
-  "(circuit.live.program of its tables' T, its S rounds and its PREFIX, canonical JSON without annotations) and " ++
+  "(circuit.live.program_v2 of its tables' T, its S rounds and its PREFIX, canonical JSON without annotations) and " ++
   "each round's live@<s> proof outcome, unit s round s's"
 def LIVE_DESCRIPTOR_FORM : String :=
   "the window's live descriptor is not a verity-ir/descriptor/v1 descriptor in canonical JSON with its callees, " ++
   "definitions, program function and root"
 def NOT_LIVE : String :=
-  "the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v1{T=…,S=…," ++
-  "PREFIX=…}, each binding canonical JSON, T and S positive integers and PREFIX a string (circuit.live.program's " ++
-  "Program)"
+  "the window's live circuit is not a live Program: its program function is not PouwLiveWindow_v2{T=…,S=…," ++
+  "PREFIX=…}, each binding canonical JSON, T and S positive integers and PREFIX a string (circuit.live.program_v2's " ++
+  "Program, whose units bind each request's cap to its public max_tokens)"
 def LIVE_BODY : String :=
   "the window's live circuit's units are not its rounds: its root's nodes other than its inputs are not S calls of " ++
-  "PouwLiveSlots_v1{T=…}, a composite of that id bound to its record's T alone, S its record's " ++
-  "(circuit.live.program's body)"
+  "PouwLiveSlots_v2{T=…}, a composite of that id bound to its record's T alone, S its record's " ++
+  "(circuit.live.program_v2's body)"
 def LIVE_PROOFS_FORM : String :=
   "the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier of " ++
   "record's verdict for round s's live@<s> session, unit s: verdict accept or reject, program the SHA-512 of the " ++
@@ -1752,9 +1846,10 @@ def otherLiveTable (v leaves words : String) (t want : Nat) : String :=
 def otherLiveFinding (s m : Nat) : String :=
   s!"round {s}'s live@{s} proof opened other ports, values or roots than its statement reads: its slot ports " ++
   s!"slot_<i> at round {s}'s slot table's registered root, its header ports req_<i> at round 0's request table's, " ++
-  s!"its m at the known m@{s} of the manifest's m_s = {m} served rows, its s at the known round@{s} of {s} and its " ++
-  "ok o0 at the known live-ok rows, the one word 1: a proof at another m or round, of other tables, or whose unit " ++
-  "computed 0, proves no step's served rows"
+  s!"its m at the known m@{s} of the manifest's m_s = {m} served rows, its s at the known round@{s} of {s}, its " ++
+  "caps cap_<i> at the known caps of the max_tokens its period's open committed and its ok o0 at the known live-ok " ++
+  "rows, the one word 1: a proof at another m, round or caps, of other tables, or whose unit computed 0, proves no " ++
+  "step's served rows"
 
 def liveRefuse {α : Type} (why : String) : R α := throw (LIVE, why)
 
@@ -1765,9 +1860,9 @@ structure Live where
   pre : String
   unit : String
 
-/-- `credit.live_of`: the live Program (`circuit.live.program`) whose descriptor is `descriptor` (its bytes, canonical
+/-- `credit.live_of`: the live Program (`circuit.live.program_v2`) whose descriptor is `descriptor` (its bytes, canonical
 JSON without annotations), else the refusal (`LIVE`). T, S and the prefix are its program function's record
-(`LIVE_FN`'s `T`, `S` and `PREFIX`), its template `PouwLiveSlots_v1{T=<T>}` a composite of id `LIVE_UNIT` bound to T
+(`LIVE_FN`'s `T`, `S` and `PREFIX`), its template `PouwLiveSlots_v2{T=<T>}` a composite of id `LIVE_UNIT` bound to T
 alone, and its root's nodes other than inputs S calls of it, unit s round s's. Its cost is the descriptor's bytes,
 never the gates its nodes unroll to. -/
 def liveOf (descriptor : ByteArray) : R Live := do
@@ -1837,9 +1932,10 @@ def knownRoot (program window v : String) (rows : Array (Array Nat × ByteArray)
 /-- `credit._live_finding`: round s's live@<s> finding as its statement reads it (`live_reads.reads_file`),
 `(port, value, root)`: each slot port at round s's slot table, each header port at round 0's request table (their
 roots `roots`), `m` at the known `<pre>m@<s>` of `m` and `s` at the known `<pre>round@<s>` of s (`live_reads.m_table`,
-`round_table`: each one row of its two 16-bit words under `PouwCheck.publicRowSalt` of the window's open root and s) and
-`o0` at the known `<pre>live-ok` rows, whose root is `ok`. -/
-def liveFinding (program pre window : String) (t s m : Nat) (roots : List (String × String)) (ok : String) :
+`round_table`: each one row of its two 16-bit words under `PouwCheck.publicRowSalt` of the window's open root and s),
+each `cap_<i>` at the known `<pre>caps`, whose root is `caps` (`capsRoot`), and `o0` at the known `<pre>live-ok` rows,
+whose root is `ok`. -/
+def liveFinding (program pre window : String) (t s m : Nat) (roots : List (String × String)) (caps ok : String) :
     R (List (String × String × String)) := do
   let (sv, rv, mv) := (s!"{pre}{SLOTS}@{s}", s!"{pre}{REQUESTS}@0", s!"{pre}{M_ROWS}@{s}")
   let mr ← knownRoot program window mv #[(#[m % 65536, m / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS
@@ -1847,18 +1943,30 @@ def liveFinding (program pre window : String) (t s m : Nat) (roots : List (Strin
   let sr ← knownRoot program window roundV #[(#[s % 65536, s / 65536], PouwCheck.publicRowSalt window s)] SLOT_WORDS
   pure ((List.range t).map (fun i => (s!"slot_{i}", sv, (roots.lookup sv).getD "")) ++
     (List.range t).map (fun i => (s!"req_{i}", rv, (roots.lookup rv).getD "")) ++
-    [(M_ROWS, mv, mr), (ROUND_PORT, roundV, sr), (LIVE_OK_PORT, s!"{pre}{LIVE_OK_VALUE}", ok)])
+    [(M_ROWS, mv, mr), (ROUND_PORT, roundV, sr)] ++
+    (List.range t).map (fun i => (s!"cap_{i}", s!"{pre}{CAPS}", caps)) ++
+    [(LIVE_OK_PORT, s!"{pre}{LIVE_OK_VALUE}", ok)])
+
+/-- `live_reads.caps_table`'s root: the v2 unit's public caps `<pre>caps`, T = `t` rows, row q the public max_tokens of
+request q (`maxTokens`, `committedLength`), 0 past them, as two 16-bit words under `PouwCheck.publicRowSalt` of the
+window's open root and q. -/
+def capsRoot (program pre window : String) (t : Nat) (maxTokens : List Nat) : R String :=
+  knownRoot program window s!"{pre}{CAPS}"
+    ((Array.range t).map fun q =>
+      let c := maxTokens.getD q 0
+      (#[c % 65536, c / 65536], PouwCheck.publicRowSalt window q)) SLOT_WORDS
 
 /-- `credit._live`: none when the window's live Program proves each round's served rows, else the refusal (`LIVE`).
 Its live evidence `live` (`LIVE_KEYS`) carries the live Program's descriptor (`liveOf`), at the period's T table rows
 `t`, the window's `steps` rounds and its circuit's PREFIX `pre`, and each round's proof outcome (`PROOF_KEYS`, unit s
 round s's), each the verifier of record's verdict. Each round has exactly one, accepted, verified against the live
-descriptor, its finding `liveFinding`'s at its step's m_s (`served`, call c at step `c / (C/S)`), under the window
-Program's digest `program` and its open root `window`: a statement at an m other than the manifest's opens no
-`m@<s>` row, one at another round no `round@<s>` row, and one whose unit computed 0 no `live-ok` row. A step of `window`, after `Internal.registration`. Its cost
-is the descriptor's bytes and the rounds' statements' ports. -/
-def Internal.live (live : Json) (t steps : Nat) (pre program window : String) (entries : Json) (served : List Nat) :
-    R Unit := do
+descriptor, its finding `liveFinding`'s at its step's m_s (`served`, call c at step `c / (C/S)`), round s and the
+public caps of the max_tokens its period's open committed (`maxTokens`, `capsRoot`), under the window Program's digest
+`program` and its open root `window`: a statement at an m other than the manifest's opens no `m@<s>` row, one at
+another round no `round@<s>` row, one at other caps no `caps` row, and one whose unit computed 0 no `live-ok` row. A
+step of `window`, after `Internal.registration`. Its cost is the descriptor's bytes and the rounds' statements' ports. -/
+def Internal.live (live : Json) (t steps : Nat) (pre program window : String) (entries : Json) (served : List Nat)
+    (maxTokens : List Nat) : R Unit := do
   let some raw := (if keys live == some LIVE_KEYS then
       (match get live "descriptor" with
         | .str s => if isHexBytes s then hex? (.str s) else none
@@ -1878,6 +1986,7 @@ def Internal.live (live : Json) (t steps : Nat) (pre program window : String) (e
         | _, _, _, _ => none
       else none) | liveRefuse LIVE_PROOFS_FORM
   let digest := Flock.hexOf (Flock.Sha512.hash raw)
+  let caps ← capsRoot program pre window t maxTokens
   let mut seen : Std.HashMap Nat (String × String × List (String × String × String)) := {}
   for (u, v, g, f) in parsed do
     if steps ≤ u then
@@ -1899,7 +2008,7 @@ def Internal.live (live : Json) (t steps : Nat) (pre program window : String) (e
     unless g == digest do
       liveRefuse (s!"round {s}'s live@{s} proof was verified against another circuit than the window's live " ++
         "Program: its program is not the SHA-512 of the live descriptor")
-    let want ← liveFinding program pre window t s m roots ok
+    let want ← liveFinding program pre window t s m roots caps ok
     let opened : Std.HashMap String (String × String) := f.foldl (fun h (p, x, r) => h.insert p (x, r)) {}
     unless f.length == want.length && want.all (fun (p, x, r) => opened.get? p == some (x, r)) do
       liveRefuse (otherLiveFinding s m)
@@ -1932,16 +2041,19 @@ def windowLayout
     throw ("manifest", s!"the manifest's {rows.size} rows are not the circuit's {lcalls.size} calls: each call of " ++
       "the window's Program is one manifest row, in order")
   Internal.aLink rounds entries rows.size (tableRows layout log.size ((str? (prefixOf d)).getD ""))
-  let sid ← periodWeights key ledger window rounds layout entries program (prefixOf d)
+  let (sid, name) ← periodWeights key ledger window rounds layout entries program (prefixOf d)
   let ss ← strata layout
   Internal.arow log entries (((commitOf? commit).map (·.2)).getD #[]) layout ((str? (prefixOf d)).getD "")
   let rows ← Internal.servedRows calls layout log.size t
+  let maxTokens ← committedLength ledger name
+  Internal.length maxTokens rows layout log.size
   let o ← (LiveOpening.ofJson (get draw "coin")).mapError fun e => ("coin", s!"the draw coin: {e}")
   proved (← drawnOf o.coin (get window "root") (get draw "root") (Json.mkObj [("receipts", get draw "receipts")]) ss
     k) proofs
   Internal.registration ((str? (get window "root")).getD "") program ((str? (prefixOf d)).getD "") entries proofs ss
     layout log.size sid
   Internal.live live t log.size ((str? (prefixOf d)).getD "") program ((str? (get window "root")).getD "") entries rows
+    maxTokens
   pure (got.filter fun i => 0 < rows.getD i 0, layout, rows)
 
 /-- `credit.window`, an entry: a served H1 window's credited calls, else the refusal of the first step that refuses,
@@ -1953,15 +2065,16 @@ the tree over the segments those roots commit, its rows the layout's, `tableRows
 (`Internal.weights`, its period's: the window's `<PREFIX>b/<K>` fold to the weights' root the open of the period
 holding it signed, `committedWeights`, and with round 0's `requests` and its session to its open root),
 `Internal.servedRows` (each call's served rows m_s at most the period's T table rows `rows`, whose `slotOf` the
-layout's A slot M must be, one m_s a step; a credited call with m_s = 0 is no credit), and `Internal.outcome`'s rule
-on the draw coin `credited` read at its period's committed K `k`, the stream the window's root, the registration its
-draw root and the receipt
+layout's A slot M must be, one m_s a step; a credited call with m_s = 0 is no credit), those m_s its period's fixed
+length (`Internal.length` of `committedLength`), and `Internal.outcome`'s rule on the draw coin `credited` read at its
+period's committed K `k`, the stream the window's root, the registration its draw root and the receipt
 `{"receipts": …}`, its last round's receipts, each of `proofs` the verifier of record's verdict for a drawn unit's
 session (`PROOF_KEYS`), and `Internal.registration` (the `entries` the window's own registration's, under its open root
 and the descriptor's SHA-512, and each drawn unit's session verified against that descriptor, opening its registered
 values at their registered roots, its K's A value and its K's `<PREFIX>b/<K>` among them), and `Internal.live` (its
 `live` evidence: its live Program at the period's T, its rounds and its PREFIX, and each round's accepted live@<s>
-outcome opening its slot and request tables, `m@<s>` at the manifest's m_s, `round@<s>` at s and the `live-ok` rows,
+outcome opening its slot and request tables, `m@<s>` at the manifest's m_s, `round@<s>` at s, `caps` at the max_tokens
+its period's open committed and the `live-ok` rows,
 so each step's served rows are proved). `periodCredit` ties `descriptor` to the circuit the window's period committed. -/
 def window
     (key ledger pins main window session salt calls served commit rounds draw descriptor entries proofs live k rows :
@@ -2038,12 +2151,6 @@ def committedRows (ledger : Json) (name : String) : R Nat := do
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some t := (body.bind fun b => nat? (get b ROWS_FIELD)).filter (1 ≤ ·) | layoutRefuse (noRows name)
   pure t
-
-private def periodBody (ledger : Json) (name : String) : Option Json :=
-  match ledger with
-  | .arr lines => ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
-      e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
-  | _ => none
 
 /-- `credit.committed_pin`: the commit period `name`'s open recorded it opened under (`PERIOD_PIN_FIELD`, a commit
 string), or `none` when its open records none: `periodCredit` holds every window's session to within the freshness floor

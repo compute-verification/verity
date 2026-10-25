@@ -193,6 +193,9 @@ def auditor(tmp_path, monkeypatch):
 
 
 PERIOD = "p1"
+#: the fixed length `_serve`'s one request serves (its max_tokens 1, the public-cap done source), as the period's
+#: open commits it (`credit.committed_length`)
+LENGTH = {"max_tokens": [1], "stop": Wd.STOP_FIXED}
 #: the served window's layout (`_serve`'s one call of N = 64 over T = `ROWS` slots), as the period declares it: 2 units
 LAYOUT = SV.declared_layout([(64, K)], {0: "q"}, ROWS, 1)
 
@@ -260,14 +263,14 @@ def _served(**kw) -> SV.Served:
 @pytest.fixture
 def periodic(tmp_path, monkeypatch):
     """`auditor` with its session reserved inside lane vllm's period `PERIOD`, whose open commits `_circuit` and (unless
-    None) the draw K ``draw_k``, opened with ``--model`` `CH.MODEL` (unless ``model`` is False) on ``registry``
-    (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
+    None) the draw K ``draw_k`` and the fixed length `LENGTH`, opened with ``--model`` `CH.MODEL` (unless ``model`` is
+    False) on ``registry`` (default `_registry`), and ``files`` its circuit files: ``periodic(draw_k)`` is the host; close the period with
     ``host.ledger.period_close`` once the session has ended."""
     def make(draw_k, model=True, files=None, registry=None):
         leaves = itertools.count()
         ledger = CH.Ledger(tmp_path / "auditor.jsonl", 1, leaves, registry=registry or _registry())
         ledger.period_open(PERIOD, circuit=_circuit(), draw_k=draw_k, rows=ROWS, circuit_files=files,
-                           model=CH.MODEL if model else None)
+                           model=CH.MODEL if model else None, length=LENGTH)
         host = CH.Host(tmp_path / "auditor", Wd.live_challenger(0, 1, CH.entropy(1)), 1, leaves=leaves, ledger=ledger,
                        gated=True)
         monkeypatch.setattr(R.RemoteChallenger, "connect",
@@ -406,6 +409,23 @@ def test_a_credited_call_in_a_window_whose_coins_were_held_in_process_credits_no
     c = run.credit()
     assert c["gate_passed"] == {"rows": 0, "macs": 0} and c["coins"] == "in-process"
     assert c["refused"] == {"calls": 1, "rows": 3, "macs": 3 * 32 * K, "reasons": {PH.IN_PROCESS: 1}}
+
+
+def test_in_process_coins_named_by_the_leans_claim_instance_still_credit_nothing(monkeypatch):
+    """CMP-52: a claim instance names where coins come from, not who holds them. The harness's coins, held in the
+    serving process, credit nothing (``coins-not-the-auditors``) even when the Lean verifier of record's claim instance
+    names their source; a window is credited only on the auditor host's session (the int8 arm's test above)."""
+    from verity.core.protocols.pouw import verifier
+    held, real = [], Challenger
+
+    def named(epoch, entropy):
+        held.append(real(epoch, LC.named(verifier.CLAIM, entropy)))
+        return held[-1]
+    monkeypatch.setitem(globals(), "Challenger", named)
+    _y, run = _serve(FusedArm())
+    (v,) = run.verdicts.values()
+    assert [c.claim for c in held] == [verifier.CLAIM] and v["credit"] and run.coin_source == "in-process"
+    assert "coins-not-the-auditors" in PH.IN_PROCESS and run.credit()["refused"]["reasons"] == {PH.IN_PROCESS: 1}
 
 
 def test_a_credited_call_in_a_window_serving_a_request_without_an_entry_credits_nothing():
@@ -572,7 +592,7 @@ def _live(d, rec):
     rounds and `SV.PREFIX`, and each round's statement, its files stand-ins in `d` (the verifier of record is
     `_verifier`, which proves round s's unit s)."""
     steps = len(rec["commitment"]["rounds"])
-    return {"descriptor": SV.descriptor(L.program(ROWS, steps, SV.PREFIX)).hex(),
+    return {"descriptor": SV.descriptor(L.program_v2(ROWS, steps, SV.PREFIX)).hex(),
             "statements": [{**{x: v for x, v in _statement(d / f"live{s}", s, 1).items() if x != "call"}, "round": s}
                            for s in range(steps)]}
 
