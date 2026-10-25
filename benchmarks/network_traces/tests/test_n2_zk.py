@@ -89,7 +89,8 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     blobs, held = n2.blobs_of(runs["honest"])
     assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "certifier salt egress",
                                                      "record salt ingress", "sibling 1 egress"}
-    every = {b[o:o + 16] for b in blobs.values() for o in range(0, len(b) - 15, 16)}
+    assert any(len(b) % 16 for b in blobs.values())  # a head's tail (403 bytes), which only the last piece covers
+    every = {b[o:o + 16] for b in blobs.values() for o in [*range(0, len(b) - 15, 16)] + [len(b) - 16] * (len(b) % 16 > 0)}
     head = blobs["head egress 0"][16:32]
     kept, held_kept, out = n2.public_pieces(scan, blobs, held, b"g 1 2\n" + bytes(16).hex().encode() + b"\n" + head)
     assert out == sorted(x.hex() for x in every & {bytes(16), head})

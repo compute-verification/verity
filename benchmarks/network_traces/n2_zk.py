@@ -219,23 +219,9 @@ def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
     return blobs, held
 
 
-def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
-    """`blobs` cut into the scan's aligned pieces (`a8.needles`'s), each distinct piece once under its first name
-    (``"<blob> @<offset>"``), less the pieces `public` holds raw or as hex. `public` is the staged circuit, which the
-    stager writes from the Definition before any instance, so what it holds the verifier has whatever the witness: a head's
-    empty buckets are sixteen zero bytes, which the circuit holds too. Returns the pieces to scan for, the held ones (pieces
-    of a blob in `held`) and the excluded pieces' hex."""
-    pieces: dict[str, bytes] = {}
-    seen: set[bytes] = set()
-    for name, b in blobs.items():
-        for o in range(0, len(b) - a8.PIECE + 1, a8.PIECE):
-            x = b[o:o + a8.PIECE]
-            if x not in seen:
-                seen.add(x)
-                pieces[f"{name} @{o}"] = x
-    out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
-    kept = {k: x for k, x in pieces.items() if x not in out}
-    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+#: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
+#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call.
+public_pieces = LS.public_pieces
 
 
 # --- a run on an injected clock ---------------------------------------------------------------------------------------
