@@ -37,7 +37,8 @@ decides nothing.
   descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
   nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
   certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
-  (`public_pieces`), which the verifier has whatever the witness; the prover's instance files, which hold the heads,
+  (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
+  rule every zero-knowledge driver's scan follows (`leak_scan.scan`); the prover's instance files, which hold the heads,
   are the control.
 """
 from __future__ import annotations
@@ -65,6 +66,7 @@ ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
+import leak_scan as LS  # noqa: E402
 from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
@@ -516,7 +518,7 @@ def _member_scan(M, sg, rd, out: Path) -> dict:
         for x in rd.windows:
             f.write((x.statement.dir / "inst-1.bin").read_bytes())
     got = M.a8.received(out / "verifier", control, blobs, held)
-    return {**got, "public_pieces": public, "files": len(got["files"])}
+    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"])}
 
 
 def prove(a) -> int:
@@ -578,14 +580,15 @@ def prove(a) -> int:
     for name, res in done.items():
         rec = res["received"]
         good = (all(r["as_expected"] for r in res["windows"]) and res["network"]["accepted"] == (name == "honest")
-                and not rec["verifier_found"] and rec["control"]["holds_all"])
+                and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good)
         log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
             f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
             f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
             f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the public "
-            f"circuit holds left out), control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
+            f"circuit holds left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
+            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
     summary["ok"] = ok
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))
