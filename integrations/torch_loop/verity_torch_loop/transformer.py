@@ -8,9 +8,9 @@ an integration of Verity's (`verity.ml.windows.interface`) beside the two-layer 
   `loop.linear`, which is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`'s function: one unit per output
   coordinate. The score scale 1/sqrt(D) = 2^-3 is folded into the query channels' scales, which is exact.
 * **Attention** is causal over the KV cache. Its two matmuls take both operands from the run: score (h, s) is
-  ``q_h . k_h[s]`` for s <= t, and output coordinate (h, d) is ``p_h . V_h[:, d]`` over all ``CONTEXT`` positions. Past t,
-  p is exactly +0 (softmax of -inf) and the cache's rows are +0. Each is one `GemmCoordinate_v2{K, DOT}` unit, BF16 with
-  fp32 accumulation. sm_120 registers no BF16 step, so ``DOT`` is `GEMM_AMPERE`'s (`mma.sync m16n8k16`, `BF16_DOT`). A
+  ``q_h . k_h[s]`` for s <= t, and output coordinate (h, d) is ``p_h . V_h[:, d]`` over all ``CONTEXT`` positions and
+  ``PV_K - CONTEXT`` more of +0. Past t, p is exactly +0 (softmax of -inf) and the cache's rows are +0. Each is one
+  `GemmCoordinate_v2{K=64, DOT}` unit, BF16 with fp32 accumulation. sm_120 registers no BF16 step, so ``DOT`` is `GEMM_AMPERE`'s (`mma.sync m16n8k16`, `BF16_DOT`). A
   BF16 ``torch.matmul`` on CPU is another function (oneDNN's blocked fp32 sum), so the loop computes these coordinates
   through the Definition's own numpy kernel (`evaluation.evaluate_batch`).
 * **The other ops** (RMSNorm, softmax, ReLU, the per-row quantizer, the residual adds, the embedding add, argmax) run in
@@ -62,9 +62,12 @@ def dynamic(k: int):
     return bind(G.GemmCoordinate, K=k, **BF16_DOT)
 
 
-#: the circuit's templates in order: the K = H and K = F static coordinates, attention's scores (K = D) and outputs
-#: (K = CONTEXT)
-TEMPLATES = (static(H), static(F), dynamic(D), dynamic(CONTEXT))
+#: attention's output reduction: the ``CONTEXT`` positions, then +0 products to 64. C-Flock pins a unit through a row of
+#: more than one SHA-512 block, and 32 BF16 words are one, so PV takes the scores' template.
+PV_K = 2 * CONTEXT
+assert PV_K == D
+#: the circuit's templates in order: the K = H and K = F static coordinates, and attention's scores and outputs (K = D)
+TEMPLATES = (static(H), static(F), dynamic(D))
 
 
 @dataclass(frozen=True)
@@ -132,13 +135,12 @@ def bf16(a: np.ndarray) -> torch.Tensor:
 
 def units(prompts: int, p: int, g: int) -> dict[str, int]:
     """Each template's unit count (by descriptor id) for ``prompts`` requests of ``p`` prompt bytes decoded to ``p + g``."""
-    sh, sf, qk, pv = (descriptor_id(t) for t in TEMPLATES)
-    n = {sh: 0, sf: 0, qk: 0, pv: 0}
+    sh, sf, bf = (descriptor_id(t) for t in TEMPLATES)
+    n = {sh: 0, sf: 0, bf: 0}
     for t in range(p + g - 1):
         n[sh] += 2 * (3 * H + H + F) + (VOCAB if t >= p - 1 else 0)
         n[sf] += 2 * H
-        n[qk] += 2 * HEADS * (t + 1)
-        n[pv] += 2 * HEADS * D
+        n[bf] += 2 * HEADS * (t + 1 + D)
     return {k: prompts * v for k, v in n.items()}
 
 
@@ -217,9 +219,11 @@ class DecoderLoop:
                 score = self._dynamic(window, np.repeat(bits(q[cols])[None], t + 1, 0), ks, lab(layer, f"self_attn.qk.h{h}"))
                 row = torch.full((CONTEXT,), float("-inf"))
                 row[:t + 1] = score.to(torch.float32)
-                p = torch.softmax(row, 0).to(torch.bfloat16)
-                vt = bits(cache.v[layer, :, cols].T.contiguous())
-                heads.append(self._dynamic(window, np.repeat(bits(p)[None], D, 0), vt, lab(layer, f"self_attn.pv.h{h}")))
+                p = np.zeros(PV_K, np.uint16)
+                p[:CONTEXT] = bits(torch.softmax(row, 0).to(torch.bfloat16))
+                vt = np.zeros((D, PV_K), np.uint16)
+                vt[:, :CONTEXT] = bits(cache.v[layer, :, cols].T.contiguous())
+                heads.append(self._dynamic(window, np.repeat(p[None], D, 0), vt, lab(layer, f"self_attn.pv.h{h}")))
             x = add(x, self._static(window, torch.cat(heads), b.o, lab(layer, "self_attn.o_proj")))
             u = self._static(window, rmsnorm(x, b.g_mlp), b.up, lab(layer, "mlp.up_proj"))
             x = add(x, self._static(window, torch.relu(u), b.down, lab(layer, "mlp.down_proj")))

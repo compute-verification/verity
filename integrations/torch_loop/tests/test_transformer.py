@@ -17,10 +17,11 @@ import torch
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.windows import interface as IF, rows as CS
+from verity_flock import circuit as FC
 from verity_torch_loop import serve_transformer as S, transformer as T
 
 LAW = D.parse_law("subset:2")
-SH, SF, QK, PV = (descriptor_id(t) for t in T.TEMPLATES)
+SH, SF, BF = (descriptor_id(t) for t in T.TEMPLATES)
 
 
 def served(tamper: bool = False, prompts: tuple[bytes, ...] = (b"Hi",), generate: int = 3):
@@ -45,24 +46,25 @@ def test_every_unit_it_records_is_its_template_s_function():
 def test_a_tampering_decoder_s_outputs_are_not():
     _, win = served(tamper=True, generate=1)
     bad = win.mismatches()
-    assert {t: len(v) for t, v in bad.items()} == {t: win.count(t) for t in (SH, SF, QK, PV)}
+    assert {t: len(v) for t, v in bad.items()} == {t: win.count(t) for t in (SH, SF, BF)}
 
 
 def test_the_kv_cache_carries_the_k_and_v_coordinates_of_earlier_positions():
     """Score unit (t, h, s) reads position s's K coordinates of head h, and PV unit (t, h, d) reads the V coordinate d of
-    head h at every position s <= t and +0 past t: the rows a cut wire will read from those units."""
+    head h at every position s <= t and +0 past t, then the +0 padding to `PV_K`: the rows a cut wire will read from
+    those units."""
     loop, win = served(generate=4)
     qkv = {(lab["pos"], lab["layer"]): out for lab, _, out in recorded(win, SH, "qkv_proj")}
-    for lab, (x, w), _ in recorded(win, QK, "qk.h0") + recorded(win, QK, "qk.h1"):
+    for lab, (x, w), _ in recorded(win, BF, "qk.h0") + recorded(win, BF, "qk.h1"):
         t, layer, h = lab["pos"], lab["layer"], int(lab["op"][-1])
         cols = slice(T.H + h * T.D, T.H + (h + 1) * T.D)
         assert w.shape == (t + 1, T.D)
         assert all((w[s] == qkv[s, layer][cols]).all() for s in range(t + 1))
         assert (x == qkv[t, layer][h * T.D:(h + 1) * T.D]).all()
-    for lab, (_, w), _ in recorded(win, PV, "pv.h0") + recorded(win, PV, "pv.h1"):
+    for lab, (_, w), _ in recorded(win, BF, "pv.h0") + recorded(win, BF, "pv.h1"):
         t, layer, h = lab["pos"], lab["layer"], int(lab["op"][-1])
         v = np.stack([qkv[s, layer][2 * T.H + h * T.D:2 * T.H + (h + 1) * T.D] for s in range(t + 1)], axis=1)
-        assert w.shape == (T.D, T.CONTEXT) and (w[:, :t + 1] == v).all() and not w[:, t + 1:].any()
+        assert w.shape == (T.D, T.PV_K) and (w[:, :t + 1] == v).all() and not w[:, t + 1:].any()
 
 
 def test_it_tracks_its_float32_reference():
@@ -82,7 +84,7 @@ def test_its_unit_counts_are_the_plan_s():
     static coordinates (K = 128 and 512), 1,984 scores and 7,936 PV coordinates; 353,092 row and coordinate units a
     window of 4 requests less the 3,140 row units (11 a layer and position, 3 more at a logits position) not yet units."""
     n = T.units(4, 8, 24)
-    assert n == {SH: 278_528, SF: 31_744, QK: 7_936, PV: 31_744}
+    assert n == {SH: 278_528, SF: 31_744, BF: 7_936 + 31_744}
     rows = 4 * (31 * (1 + 2 * 11) + 24 * 3)
     assert sum(n.values()) + rows == 353_092
 
@@ -100,7 +102,16 @@ def test_core_accepts_its_written_window_and_the_circuit_it_registers_first_is_t
     layer = CS.leaf_layer({m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(w.members)})
     v = R.check(rec, w.program, w.query, w.law, CS.SCHEME, CS.expected_ports(w), leaf_layer=layer)
     assert v.ok, v.to_json()
-    assert rec["window"]["run"] == got["run"] and [t for t, _ in IF.templates_of(w)] == [SH, SF, QK, PV]
+    assert rec["window"]["run"] == got["run"] and [t for t, _ in IF.templates_of(w)] == [SH, SF, BF]
+
+
+def test_every_template_has_a_row_c_flock_pins_it_by():
+    """C-Flock stages a unit only if one of its rows takes a SHA-512 compression before its last block (`circuit.compose`):
+    the audit of r20261025-225017-fa7f refused every member while PV's K was 32."""
+    for fn in T.TEMPLATES:
+        ins, _ = IF.unit_rows(fn)
+        assert any(FC.Port(name, -(-n // 16), n).comps for name, _, n, _ in ins), descriptor_id(fn)
+    assert FC.Port("p", 32, 512).comps == 0
 
 
 def test_it_loads_no_vllm():
