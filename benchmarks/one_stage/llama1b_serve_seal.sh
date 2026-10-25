@@ -19,7 +19,9 @@
 # Windows are sealed off the engine loop and close at WINDOW_GB (32) committed; the server refuses to start, and later stops
 # taking requests, below DISK_FLOOR_GB (300) free on the serve dir's filesystem, and copies its records into $OUT after each
 # window and at any stop. GATE=N (GATE_S=600, GATE_TIMEOUT=60): before the bursts, certifier-rehearse's load, N varied requests
-# of exactly 64 tokens over GATE_S seconds with a GATE_TIMEOUT client timeout, summarized in $OUT/gate.json once sealed.
+# of exactly 64 tokens over GATE_S seconds with a GATE_TIMEOUT client timeout, summarized in $OUT/gate.json once sealed: each
+# request's latency, time to its first token and longest wait between two tokens (against the warden's cell delay,
+# GATE_DEADLINE_S=3), and the engine's step gaps, collections and pauses (pauses.jsonl) meanwhile.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under this tree's registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -200,7 +202,7 @@ if [ "${GATE:-0}" -gt 0 ]; then   # certifier-rehearse's load: GATE varied reque
     --seed "${GATE_SEED:-7}" --out "$D/gate.jsonl" > "$OUT/gate.log" 2>&1
   echo "$(date -u +%H:%M:%SZ) gate load ($run) rc=$?" | tee -a "$OUT/steps.txt"
   cp "$D/gate.jsonl" "$OUT/"
-  "$PY" - "$D" "${GATE_TIMEOUT:-60}" <<'EOF' | tee "$OUT/gate.json"
+  "$PY" - "$D" "${GATE_TIMEOUT:-60}" "${GATE_DEADLINE_S:-3}" <<'EOF' | tee "$OUT/gate.json"
 import json, shutil, sys, time
 from pathlib import Path
 d, timeout = Path(sys.argv[1]), float(sys.argv[2])
@@ -218,9 +220,17 @@ for _ in range(900):                       # each request's record lands at its 
 lat = sorted(q["latency_s"] for q in sent if q.get("latency_s") is not None)
 errs = [{"user": q["user"], "error": (q["response"] or {}).get("error")} for q in sent if "error" in (q["response"] or {})]
 ours = [seals[w] for w in sorted(wins) if w in seals]
-print(json.dumps({"sent": len(sent), "ok": len(sent) - len(errs), "errors": errs[:20], "over_timeout": sum(t > timeout for t in lat),
-                  "latency_s": {"p50": lat[len(lat) // 2] if lat else None, "p99": lat[int(len(lat) * .99)] if lat else None,
-                                "max": lat[-1] if lat else None},
+q3 = lambda xs: {"p50": xs[len(xs) // 2], "p99": xs[int(len(xs) * .99)], "max": xs[-1]} if xs else None  # noqa: E731
+got = lambda k: sorted(r[k] for r in (q.get("response") or {} for q in sent) if r.get(k) is not None)  # noqa: E731
+late = float(sys.argv[3])                  # the warden's cell delay: a token later than this after the last fails it closed
+pz = jl(d / "pauses.jsonl")
+st = sorted((s for s in jl(d / "step_trace.jsonl") if s["window"] in wins and s.get("t_end")), key=lambda s: s["t_end"])
+gaps = sorted(round(b["t_end"] - a["t_end"], 3) for a, b in zip(st, st[1:]) if a["window"] == b["window"])
+print(json.dumps({"pauses": {"n": len(pz), "late_max_s": max((p["late_s"] for p in pz), default=0)}, "step_gap_s": q3(gaps),
+                  "gc_max_s": max(((lines.get(w, {}).get("gc") or {}).get("max_s") or 0 for w in wins), default=0),"sent": len(sent), "ok": len(sent) - len(errs), "errors": errs[:20], "over_timeout": sum(t > timeout for t in lat),
+                  "latency_s": q3(lat), "ttft_s": q3(got("ttft_s")), "gap_max_s": q3(got("gap_max_s")), "deadline_s": late,
+                  "over_deadline": sorted(q["user"] for q in sent if max((q.get("response") or {}).get("ttft_s") or 0,
+                                                                         (q.get("response") or {}).get("gap_max_s") or 0) > late),
                   "recorded": len(recs), "checks_failed": sorted(u for u, r in recs.items() if not (r.get("check") or {}).get("passed")),
                   "windows": sorted(wins), "windows_failed": sorted(w for w in wins if not lines.get(w, {}).get("passed")),
                   "sealed": sum(1 for s in ours if "error" not in s), "seal_errors": [s.get("error") for s in ours if "error" in s],

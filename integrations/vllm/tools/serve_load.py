@@ -51,20 +51,26 @@ def body(rng: random.Random, model: str, user: str) -> dict:
 
 
 def post(port: int, b: dict, headers: dict | None = None, timeout: float = 600) -> dict:
+    """The response; streamed, its ids, finish, and when its tokens came: the first after the request was sent (``ttft_s``)
+    and the longest wait between two (``gap_max_s``), as a client reading the stream sees them."""
     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", data=json.dumps(b).encode(),
                                  headers={"content-type": "application/json", **(headers or {})})
+    t0 = time.monotonic()
     with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310  (the local endpoint)
-        raw = r.read()
-    if not b.get("stream"):
-        return json.loads(raw)
-    ids, finish = [], None
-    for e in raw.decode().split("\n\n"):
-        e = e.strip().removeprefix("data: ")
-        if e.startswith("{"):
-            for c in json.loads(e).get("choices") or ():
-                ids += c.get("token_ids") or []
-                finish = c.get("finish_reason") or finish
-    return {"token_ids": ids, "finish_reason": finish}
+        if not b.get("stream"):
+            return json.loads(r.read())
+        ids, finish, seen = [], None, []
+        for line in r:
+            e = line.decode().strip().removeprefix("data: ")
+            if e.startswith("{"):
+                for c in json.loads(e).get("choices") or ():
+                    if c.get("token_ids"):
+                        seen.append(time.monotonic() - t0)
+                    ids += c.get("token_ids") or []
+                    finish = c.get("finish_reason") or finish
+    gaps = [y - x for x, y in zip(seen, seen[1:])]
+    return {"token_ids": ids, "finish_reason": finish, "ttft_s": round(seen[0], 3) if seen else None,
+            "gap_max_s": round(max(gaps, default=0.0), 3)}
 
 
 def tokenize(port: int, model: str, text: str) -> list[int]:
