@@ -47,7 +47,8 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     rc, out = gate(host, REQUEST, started=started)
     doc = json.loads(out)
     assert rc == 0 and doc == {"run": "c20261024T110000Z-ab12", "device": "warden", "peer": "vy-nebius-1", "port": 8011,
-                               "minutes": 20, "requests": 100, "temperature": 0.0, "top_p": 1.0, "by": LANE,
+                               "minutes": 20, "requests": 100, "height": 20, "temperature": 0.0, "top_p": 1.0,
+                               "by": LANE,
                                "requested_utc": "2026-10-24T11:00:00Z",
                                "unit": "vy-certifier@c20261024T110000Z-ab12.service"}
     assert started == [doc["run"]]
@@ -62,13 +63,12 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     assert started == [doc["run"]]
     rc, out = gate(host, certifier, started=started, token="cd34")
     assert rc == 0 and "device" not in json.loads(out)
-    rc, out = gate(host, REQUEST + ["--tokens", "64", "--requests", "4", "--minutes", "4"],
-                   active=lambda r: r == "c20261024T110000Z-cd34", started=started, token="ef56")
+    small = ["--tokens", "64", "--requests", "4", "--minutes", "4", "--height", "10"]
+    rc, out = gate(host, REQUEST + small, active=lambda r: r == "c20261024T110000Z-cd34", started=started, token="ef56")
     assert rc == 3 and "c20261024T110000Z-cd34 still runs" in json.loads(out)["refused"]
-    rc, out = gate(host, REQUEST + ["--tokens", "64", "--requests", "4", "--minutes", "4"], started=started,
-                   token="ef56")
-    assert rc == 0 and {k: json.loads(out)[k] for k in ("requests", "tokens", "minutes")} == \
-        {"requests": 4, "tokens": 64, "minutes": 4}
+    rc, out = gate(host, REQUEST + small, started=started, token="ef56")
+    assert rc == 0 and {k: json.loads(out)[k] for k in ("requests", "tokens", "minutes", "height")} == \
+        {"requests": 4, "tokens": 64, "minutes": 4, "height": 10}
 
 
 @pytest.mark.parametrize("bad, why", [
@@ -78,9 +78,14 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--port", "08011"], "--port"),
     (["--minutes", "0"], "--minutes '0': 1 to 120"),
     (["--minutes", "121"], "--minutes"),
-    (["--minutes", "6"], "--minutes 6: 100 requests take 7 minutes"),
-    (["--requests", "4", "--minutes", "3"], "give --minutes 4 or more"),
-    (["--requests", "400", "--minutes", "16"], "give --minutes 17 or more, or fewer --requests"),
+    (["--minutes", "10"], "--minutes 10: 100 requests take 11 minutes"),
+    (["--minutes", "10"], "the check and the key at height 20): give --minutes 11 or more"),
+    (["--requests", "4", "--minutes", "7"], "give --minutes 8 or more"),
+    (["--requests", "400", "--minutes", "20"], "give --minutes 21 or more, or fewer --requests"),
+    (["--minutes", "6", "--height", "10"], "--minutes 6: 100 requests take 7 minutes"),
+    (["--requests", "4", "--minutes", "3", "--height", "10"], "give --minutes 4 or more"),
+    (["--requests", "400", "--minutes", "16", "--height", "10"], "give --minutes 17 or more, or fewer --requests"),
+    *[(["--height", v], f"--height {v!r}: 10 to 20") for v in ("9", "21", "010", "20.0", "H", "")],
     (["--requests", "3"], "--requests '3': 4 to 400"),
     (["--requests", "401"], "--requests"),
     (["--tokens", "15"], "--tokens '15': 16 to 256"),
@@ -117,9 +122,14 @@ def test_a_key_that_reads_only_starts_no_warden_rehearsal(host):
     assert not host.certifier.exists()
 
 
-def test_the_least_minutes_are_two_seconds_a_request_and_three_minutes_more_rounded_up():
-    assert [A.warden_minutes(n) for n in (4, 60, 61, 100, 400)] == [4, 5, 6, 7, 17]
-    assert all(A.warden_minutes(n + 30) == A.warden_minutes(n) + 1 for n in range(4, 371))
+def test_the_least_minutes_are_two_seconds_a_request_three_minutes_and_the_key_more_rounded_up():
+    """The key is 2^H one-time keys at `KEYGEN_LEAVES_S` a second: 256 s at the deployed height, the default, and
+    nothing that rounds up a minute at 10."""
+    assert [A.warden_minutes(n, 10) for n in (4, 60, 61, 100, 400)] == [4, 5, 6, 7, 17]
+    assert [A.warden_minutes(n) for n in (4, 60, 61, 100, 400)] == [A.warden_minutes(n, 20) for n in
+                                                                    (4, 60, 61, 100, 400)] == [8, 10, 10, 11, 21]
+    for h in (10, 20):
+        assert all(A.warden_minutes(n + 30, h) == A.warden_minutes(n, h) + 1 for n in range(4, 371))
 
 
 SALT_C = "5a" * 64
@@ -229,11 +239,15 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
 
 
 def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the_tunnels_local_end(tmp_path):
+    """A request.json written before the gate took `--height` runs at the deployed key's, 20, as one that gives none."""
     req = {"device": "warden", "requests": 100}
     argv = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/vy-challenger") / PIN)
     assert argv == [sys.executable, f"/opt/vy-challenger/{PIN}/benchmarks/network_traces/warden_serve.py", "rehearse",
-                    "--upstream", "127.0.0.1:40001", "--out", str(tmp_path), "--requests", "100", "--rate", "0.5",
-                    "--seed", "0", "--tail", "60", "--temperature", "0.0", "--top-p", "1.0"]
+                    "--upstream", "127.0.0.1:40001", "--out", str(tmp_path), "--height", "20", "--requests", "100",
+                    "--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature", "0.0", "--top-p", "1.0"]
+    assert A.warden_command(req | {"height": 20}, tmp_path, "http://127.0.0.1:40001",
+                            tree=Path("/opt/vy-challenger") / PIN) == argv
+    assert A.warden_command(req | {"height": 10}, tmp_path, "u")[7:9] == ["--height", "10"]
     assert A.warden_command(req | {"tokens": 64}, tmp_path, "http://127.0.0.1:1")[-2:] == ["--max-tokens", "64"]
 
 

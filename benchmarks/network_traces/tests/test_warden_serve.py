@@ -62,22 +62,25 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
     """The auditor host's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`) runs `rehearse` on traffic the
-    gate fixes, and refuses a request whose minutes are under `warden_minutes` of its requests: for every request count
-    the gate takes, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
+    gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
+    minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
+    lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
     origin's delay and 30 s for the key and the check."""
     sys.path.insert(0, str(HERE.parent / "live_challenger"))
     import auditor as A
     argv = A.warden_command({"device": "warden", "requests": 7, "tokens": 64}, tmp_path, "http://127.0.0.1:40001")
     args = ws.parser().parse_args(argv[2:])
-    assert (args.command, args.upstream, args.fake, args.out, args.requests, args.max_tokens) == \
-        ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64)
+    assert (args.command, args.upstream, args.fake, args.out, args.requests, args.max_tokens, args.height) == \
+        ("rehearse", ("127.0.0.1", 40001), False, tmp_path, 7, 64, 20)
+    assert ws.parser().parse_args(A.warden_command({"requests": 7, "height": 10}, tmp_path, "http://h:1")[2:]).height \
+        == 10
     assert (args.rate, args.seed, args.tail) == (A.WARDEN_RATE, A.WARDEN_SEED, A.WARDEN_TAIL_S)
     assert ws.parser().parse_args(A.warden_command({"requests": 7}, tmp_path, "http://h:1")[2:]).max_tokens == 256
     window_s = args.window * args.bucket_ms / 1000
     for n in range(A.WARDEN_REQUESTS[0], A.WARDEN_REQUESTS[1] + 1):
         last = ws.varied_traffic(n, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED)[-1]["at"]
         took = math.ceil((last + A.WARDEN_TAIL_S) / window_s) * window_s + args.start_in + 30
-        assert took <= A.warden_minutes(n) * 60, n
+        assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
 def test_the_gates_sampling_is_on_every_request_and_moves_nothing_else_of_the_traffic(tmp_path):
