@@ -1206,6 +1206,10 @@
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be"
   },
+  "NetTiming.Layout.Fits": {
+   "owner": "@network-accounting",
+   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
+  },
   "NetTiming.OccupancyReadsOwnBlock": {
    "owner": "@network-accounting",
    "digest": "3e0f6592aa67809f7000885433abc0a57646746fa961c9ceb71d982c21bfe373"
@@ -1608,10 +1612,6 @@
   "Verity.Declaration.Contains": {
    "owner": "@lean",
    "digest": "6c8b0ffd3222a58091c7755158d171c1f1f37b959832b0ad5b40c4452c431481"
-  },
-  "NetTiming.Layout.Fits": {
-   "owner": "@network-accounting",
-   "digest": "b5c00d137d48ec2bef002d2c9fa7bb36d831f9c1f44a3af803e835a5b86f8ca3"
   }
  },
  "meaning": [
@@ -7859,11 +7859,26 @@
    "assumptions": [],
    "type_hash": "9d968ee8cd314d2f358b07d062e218a6b24ef0ed4d1bf6669caaec94c0801c65"
   },
+  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted :",
+    "  NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted"
+   ],
+   "assumptions": [],
+   "type_hash": "7d7b2cc9599ec64be69b1be215cfba86f23ad464848daf7aef91be781b9f00ee"
+  },
   "NetTiming.SecurityProofs.EncardChargedLe": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.EncardChargedLe : NetTiming.Guarantees.EncardChargedLe"],
    "assumptions": [],
    "type_hash": "886ea913690fe8450cf3a35d36d9851949a8c17ee3fb4b36b0b98d45a6aa050a"
+  },
+  "NetTiming.SecurityProofs.EncardChargedLeCounted": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.EncardChargedLeCounted : NetTiming.Guarantees.EncardChargedLeCounted"],
+   "assumptions": [],
+   "type_hash": "89ddc83c6f306f60d9f871c3237dfdfcf2ef33fab77240d9b44398330390de03"
   },
   "NetTiming.SecurityProofs.EncardDecodableLeConstantRate": {
    "owner": "@network-accounting",
@@ -7908,6 +7923,15 @@
    "assumptions": [],
    "type_hash": "d88f0cba3aa004a8778740fc4e4abff70e425bb894d4c7ce024701cb880b4a50"
   },
+  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted :",
+    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted"
+   ],
+   "assumptions": [],
+   "type_hash": "6ad0233446a7ef060ee4bc607f1bc614267b1353c1cfa8492f14277fbdd6b6b6"
+  },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1": {
    "owner": "@network-accounting",
    "signature": [
@@ -7916,17 +7940,14 @@
    "assumptions": [],
    "type_hash": "62a501bc4842f040a02106fe3def5bb875618490e8e0f114594c719095f1547d"
   },
-  "NetTiming.SecurityProofs.EncardChargedLeCounted": {
-   "owner": "@network-accounting"
-  },
-  "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": {
-   "owner": "@network-accounting"
-  },
   "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": {
-   "owner": "@network-accounting"
-  },
-  "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": {
-   "owner": "@network-accounting"
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted :",
+    "  NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted"
+   ],
+   "assumptions": [],
+   "type_hash": "4c1965a5e2a5e713ecff8b0684b90ccb00b7f75cab2d0552c2fb38625f4bfb8e"
   },
   "NetTiming.SecurityProofs.EncardFifoGrids": {
    "owner": "@network-accounting",
@@ -15548,10 +15569,13 @@
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
@@ -15601,9 +15625,31 @@
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardChargedLe",
+    "NetTiming.SecurityProofs.EncardChargedLeCounted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
+   ]
+  },
+  "Definitions.NetworkCertifier.AdviceV1Counted": {
+   "digest": "266c372bb750fc00fc1fc94fb9d9461477a0dd1fe4542f92fce05cabaaf22f5c",
+   "definitions": {
+    "NetTiming.AdviceV1.CountCode": "1257b21d4f267da02749ac0a8b61e91f4ba28a9772b2a2bba350c66708204856",
+    "NetTiming.AdviceV1.CountCode.len": "03ef3c99c51611ef9d437aea43ab72c5028d9de9698d00e63665aedee35f8d0e",
+    "NetTiming.AdviceV1.StreamsCounted": "197bda59354aba137846a4897771bb71d390c45be576e8778c803726c65f1e9a",
+    "NetTiming.AdviceV1.bitsCounted": "4d0376ceb9e128eef5b1d07d4f1122b6e888320ccc5a4d1353fa813fcccd100f",
+    "NetTiming.AdviceV1.chargesCounted": "f362213e18f86283cd918a700375c5360d557a8e1c5a69b4890aa0900b3e1f01",
+    "NetTiming.AdviceV1.sessionCounted": "5c5c6cb4d94e33216a415d1017907c1a4ccfaccd62e57016dbdd7e938def9379",
+    "NetTiming.AdviceV1.windowCounted": "6576e2e4b8e94cab59ce126f320db38e2ef903267b508358f5936479948bed64"
+   },
+   "guarantees": [
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
+    "NetTiming.SecurityProofs.EncardChargedLeCounted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
    ]
   },
   "Definitions.NetworkCertifier.Grid": {
@@ -15635,12 +15681,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardFifoGrids",
     "NetTiming.SecurityProofs.EncardFifoGridsLeOfAvailable",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
@@ -15654,14 +15703,18 @@
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.AdviceV1": {
-   "digest": "1fcd28e8fa747deab3ac260e1821914295e91618c53951b48551742430ce30bd",
+   "digest": "92990b9f172352984e1d68f31611b5608d746222be1e12753d8ce0ed1392da39",
    "definitions": {
     "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1": "f72da5d22ba00982d6046c15c5368b06f2bf7fedb093fb209872842e438f8b8b",
-    "NetTiming.Guarantees.EncardChargedLe": "50969b0712f57bd5911434e144aad2582ab23ae6b092dbe107072c41c08163aa"
+    "NetTiming.Guarantees.EncardAccSeqsWithinLeConstantRateV1Counted": "ba09b395c7dd17b8420c666db51606f4f25459e367da0c096ac431b41249a2b0",
+    "NetTiming.Guarantees.EncardChargedLe": "50969b0712f57bd5911434e144aad2582ab23ae6b092dbe107072c41c08163aa",
+    "NetTiming.Guarantees.EncardChargedLeCounted": "e4967b61666261b8ec244a1f150644e50c3b33bcce1d304798bce73f608e9e8c"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
-    "NetTiming.SecurityProofs.EncardChargedLe"
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
+    "NetTiming.SecurityProofs.EncardChargedLe",
+    "NetTiming.SecurityProofs.EncardChargedLeCounted"
    ]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
@@ -15741,12 +15794,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -15824,12 +15880,15 @@
     "NetTiming.SecurityProofs.EncardAccSeqsLeConstantRateWindows",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate",
     "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1",
+    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRate",
     "NetTiming.SecurityProofs.EncardDecodableLeConstantRatePerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
   },
@@ -28595,7 +28654,9 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardIngressDecodableLe",
     "NetTiming.SecurityProofs.EncardIngressDecodableLeContents",
     "NetTiming.SecurityProofs.EncardIngressObsDecodableLe",
@@ -28616,7 +28677,9 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiled",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindow",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted",
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
@@ -28685,14 +28748,18 @@
    ]
   },
   "Models.NetworkCertifier.Guarantees.AdviceV1": {
-   "digest": "4dae539f4da23f0cba7dbce77e282663453b6623e8c40c9638f3eeb1e774a117",
+   "digest": "04e8744b610cbbbb57edf9066bb6470b706c55fc54dd76e9883819a61db58349",
    "definitions": {
     "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1": "7df52819eda592fffba9f6de153943aab07302effecfd68234f83e914f60ed38",
-    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1": "d4e9c6adc50d81ffe2a7139c0c6c2d0761b88a34bb88a39a941fd9ebb0531cd1"
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledPerWindowV1Counted": "659acc3ad1c2c7d772639cc4e7e50aadd718cb9786eddd36aebaf2a20b570c6c",
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1": "d4e9c6adc50d81ffe2a7139c0c6c2d0761b88a34bb88a39a941fd9ebb0531cd1",
+    "NetTiming.Guarantees.EncardDecodableWithinLeCompiledV1Counted": "062f0a3b200c503c503c0994d227715cf8e8511bc43c41a724ebe6abf7e379d3"
    },
    "guarantees": [
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1",
-    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1"
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1",
+    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted"
    ]
   },
   "Models.NetworkCertifier.Guarantees.Warden": {

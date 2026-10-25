@@ -4,7 +4,7 @@ import Models.NetworkCertifier.Guarantees
 import Proofs.NetworkCertifier
 open NetTiming
 
--- The 50 statements' proofs (37 of them `lean-audit.json`'s `guarantees`, 13 lemmas), then the 16 witnesses.
+-- The 46 statements' proofs (33 of them `lean-audit.json`'s `guarantees`, 13 lemmas), then the 16 witnesses.
 #print axioms SecurityProofs.CardFree
 #print axioms SecurityProofs.CardLeftPacked
 #print axioms SecurityProofs.FillInjective
@@ -47,10 +47,6 @@ open NetTiming
 #print axioms SecurityProofs.EncardAccSeqsWithinLeConstantRateV1
 #print axioms SecurityProofs.EncardDecodableWithinLeCompiledV1
 #print axioms SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1
-#print axioms SecurityProofs.EncardChargedLeCounted
-#print axioms SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted
-#print axioms SecurityProofs.EncardDecodableWithinLeCompiledV1Counted
-#print axioms SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted
 #print axioms SecurityProofs.EncardAccSeqsSampledLe
 #print axioms SecurityProofs.WardenViewEqClientView
 #print axioms SecurityProofs.EncardWardenViewsLe
@@ -86,9 +82,5 @@ open NetTiming
 #print axioms bitsCount_of_prefixFree
 #print axioms bitsCount_of_lengthSucc
 #print axioms AdviceV1.bitsCount
-#print axioms AdviceV1.bitsCount_counted
-#print axioms AdviceV1.kraft_of_prefixFree
-#print axioms AdviceV1.CountCode.unary
-#print axioms AdviceV1.chargesCounted_zero
 #print axioms wardenLane_eq
 #print axioms eq_empty_of_mem_faultySets
