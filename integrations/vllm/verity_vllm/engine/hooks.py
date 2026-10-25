@@ -5,7 +5,9 @@ installed through this module, and every one can be put back.
 `patch(owner, name, value)` records what ``owner`` itself held under ``name`` (its own ``__dict__`` entry, or that it
 had none because the attribute was inherited, computed or missing) and returns a `Patch`.  `Patch.uninstall` restores
 exactly that: afterwards ``vars(owner).get(name)`` is the object it was, and an inherited method is inherited again.
-`Hooks` is a set of patches one component installs together and uninstalls newest first.  `live()` lists the patches
+`Hooks` is a set of patches one component installs together and uninstalls newest first.  A patch with another live patch
+of the same attribute installed on top of it refuses to come off, so no wrapper stops running while `live()` lists it,
+and none comes back after it was uninstalled.  `live()` lists the patches
 installed in this process and not yet uninstalled.  A `Service` is an in-process service a component starts beside its
 patches (a responder thread); it is an entry like a patch, and uninstalling it stops it.  Entries made through a
 ``Hooks(tag=...)`` carry its tag, so `live(tag)` finds what one component (a protocol option) installed.
@@ -66,9 +68,15 @@ class Patch:
 
     def uninstall(self) -> None:
         """Put back what the owner held: set ``prior`` again, or remove the own attribute when there was none.
-        Idempotent."""
+        Idempotent.  Refused (`RuntimeError`, nothing changed) while a patch of the same attribute installed after this
+        one is still on: putting ``prior`` back would silently drop that patch's value, which forwards to this one's,
+        and uninstalling that patch later would bring this one's value back."""
         if not self.installed:
             return
+        top = _covering(self)
+        if top is not None:
+            raise RuntimeError(f"refused to uninstall the {_describe(self)}: the {_describe(top)} was installed on it "
+                               "later and is still on; uninstall that one first (nothing was uninstalled)")
         self.installed = False
         _forget(self)
         if self.by_value:
@@ -130,6 +138,24 @@ def _forget(entry: Any) -> None:
         if x is entry:
             del _LIVE[i]
             return
+
+
+def _covering(p: Patch, mine: frozenset[int] = frozenset()) -> Patch | None:
+    """The newest live patch of ``p``'s attribute installed after ``p`` (one whose ``id`` is not in ``mine``), or None."""
+    top, after = None, False
+    for e in _LIVE:
+        if e is p:
+            after = True
+        elif after and isinstance(e, Patch) and e.owner is p.owner and e.name == p.name and id(e) not in mine:
+            top = e
+    return top
+
+
+def _describe(p: Patch) -> str:
+    """``p`` for a message: the attribute it replaced, its value's name and its tag."""
+    owner = getattr(p.owner, "__qualname__", None) or getattr(p.owner, "__name__", None) or f"a {type(p.owner).__qualname__}"
+    value = getattr(p.value, "__qualname__", None) or type(p.value).__qualname__
+    return f"patch of {owner}.{p.name} (value {value}" + (f", tag {p.tag!r})" if p.tag else ")")
 
 
 def patch(owner: Any, name: str, value: Any) -> Patch:
@@ -233,13 +259,21 @@ class Hooks:
 
     def uninstall(self) -> None:
         """Uninstall every entry, newest first.  An entry that raises (a service's stop) does not leave the older ones
-        installed: the first error is raised once all of them are off."""
+        installed: the first error is raised once all of them are off.  Refused, with every entry still on, while another
+        component's patch sits on top of one of these (`Patch.uninstall`)."""
+        mine = frozenset(map(id, self._entries))
+        for e in self._entries:
+            top = _covering(e, mine) if isinstance(e, Patch) and e.installed else None
+            if top is not None:
+                raise RuntimeError(f"refused to uninstall Hooks(tag={self.tag!r}): the {_describe(top)} was installed on its "
+                                   f"{_describe(e)} later and is still on; uninstall that one first (nothing was uninstalled)")
         err: BaseException | None = None
-        while self._entries:
+        for e in reversed(self._entries):
             try:
-                self._entries.pop().uninstall()
-            except BaseException as e:  # noqa: BLE001
-                err = err or e
+                e.uninstall()
+            except BaseException as x:  # noqa: BLE001
+                err = err or x
+        self._entries = [e for e in self._entries if e.installed]
         if err is not None:
             raise err
 

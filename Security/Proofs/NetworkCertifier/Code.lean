@@ -1,8 +1,10 @@
 import Definitions.NetworkCertifier
 import Definitions.NetworkCertifier.AdviceV1
+import Definitions.NetworkCertifier.WindowCharge
 import NetworkCertifier.Ingress
 import NetworkCertifier.Schedule
 import NetworkCertifier.AdviceV1
+import NetworkCertifier.WindowCharge
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Finset.Dedup
@@ -27,11 +29,14 @@ and the program = the reference (proved):
 * `CodeChargesV1`: the program's advice v1 charges (`NetworkCertifier.AdviceV1.charges`, which the charge difftest runs
   against `arith_encode.reference_charge`) are the reference's (`AdviceV1.charges`, which `BitsCount` for advice v1 is
   proved of), for books with the same fields; the program's `bitlen` is Lean core's `Nat.log2` plus one, the
-  reference's `Nat.size`.
+  reference's `Nat.size`;
+* `CodeChargesWhole`: the program's whole-window charges (`NetworkCertifier.WindowCharge.charges`, which the window
+  difftest runs against `window_charge.reference_window`) are the reference's (`WindowCharge.charges`, which
+  `EncardChargedLeWhole` is proved of), for books with the same tables and priors and windows with the same fields.
 
 Each statement relates the two sides by their fields rather than by a transport, so that it reads only the two sides'
-definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`) are the
-proofs' own.
+definitions. The transports (`frameRef`, `syncRef`, `syncSetRef`, `syncSetCode`, `tallyRef`, `carryRef`, `tableRef`,
+`bookRef`, `wcarryRef`, `windowRef`) are the proofs' own.
 -/
 
 namespace NetTiming.SecurityProofs
@@ -362,5 +367,171 @@ theorem CodeChargesV1 (bk : NetworkCertifier.AdviceV1.Book) (bk' : AdviceV1.Book
     NetworkCertifier.AdviceV1.charges bk N (List.ofFn a) = AdviceV1.charges bk' N a := by
   rw [NetworkCertifier.AdviceV1.charges, AdviceV1.charges, code_session bk bk' harr htot hz N]
   simp only [carryRef, hp]
+
+/-- The reference form of the program's table. -/
+def tableRef (t : NetworkCertifier.WindowCharge.Table) : WindowCharge.Table := ⟨t.freqs, t.total⟩
+
+/-- The reference form of the program's whole-window book. -/
+def bookRef (bk : NetworkCertifier.WindowCharge.Book) : WindowCharge.Book :=
+  ⟨tableRef bk.arrived, tableRef bk.nHits, tableRef bk.hit, tableRef bk.resumes, tableRef bk.nOrder, tableRef bk.gap,
+    tableRef bk.index, tableRef bk.lag, bk.priors⟩
+
+/-- The reference form of the program's whole-window carry. -/
+def wcarryRef (c : NetworkCertifier.WindowCharge.Carry) : WindowCharge.Carry := ⟨carryRef c.dec, c.pos, c.rank⟩
+
+/-- The reference form of the program's window. -/
+def windowRef (x : NetworkCertifier.WindowCharge.Window) : WindowCharge.Window := ⟨x.ds, x.hits, x.order⟩
+
+theorem code_codeAll : ∀ (st : NetworkCertifier.AdviceV1.Tally) (ss : List (ℕ × ℕ × ℕ)),
+    (NetworkCertifier.WindowCharge.codeAll st ss).map tallyRef = WindowCharge.codeAll (tallyRef st) ss
+  | _, [] => rfl
+  | st, s :: ss => by
+    simp only [NetworkCertifier.WindowCharge.codeAll, WindowCharge.codeAll, ← code_countStep]
+    cases NetworkCertifier.AdviceV1.countStep st s.1 s.2.1 s.2.2 with
+    | none => rfl
+    | some st' => exact code_codeAll st' ss
+
+theorem code_uniform (n : ℕ) : ∀ u, NetworkCertifier.WindowCharge.uniform u n = WindowCharge.uniform u n := by
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro u
+    rw [NetworkCertifier.WindowCharge.uniform, WindowCharge.uniform]
+    show (if n ≤ AdviceV1.MAX_TOTAL then _ else _) = if n ≤ AdviceV1.MAX_TOTAL then _ else _
+    by_cases h : n ≤ AdviceV1.MAX_TOTAL
+    · rw [ite_eq_left h, ite_eq_left h]
+    · have hlt : (n - 1) / 2 ^ NetworkCertifier.WindowCharge.CHUNK + 1 < n := by
+        simp only [NetworkCertifier.WindowCharge.CHUNK, AdviceV1.MAX_TOTAL] at h ⊢
+        omega
+      rw [ite_eq_right h, ite_eq_right h, ih _ hlt]
+      rfl
+
+theorem code_low : NetworkCertifier.WindowCharge.low = WindowCharge.low := rfl
+
+theorem code_zigzag : NetworkCertifier.WindowCharge.zigzag = WindowCharge.zigzag := rfl
+
+theorem code_binned (t : NetworkCertifier.WindowCharge.Table) (hi v : ℕ) :
+    NetworkCertifier.WindowCharge.binned t hi v = WindowCharge.binned (tableRef t) hi v := by
+  simp only [NetworkCertifier.WindowCharge.binned, WindowCharge.binned, tableRef, code_bitlen, code_uniform, code_low]
+
+theorem code_countHi : NetworkCertifier.WindowCharge.countHi = WindowCharge.countHi := by
+  funext S
+  simp only [NetworkCertifier.WindowCharge.countHi, WindowCharge.countHi, code_bitlen]
+
+theorem code_decSyms : ∀ (counts : List (ℕ × ℕ)) (run : ℕ) (ds : List Bool),
+    (NetworkCertifier.WindowCharge.decSyms ⟨counts, run⟩ ds).map (fun p => (p.1, carryRef p.2)) =
+      WindowCharge.decSyms ⟨counts, run⟩ ds
+  | _, _, [] => rfl
+  | counts, run, b :: ds => by
+    simp only [NetworkCertifier.WindowCharge.decSyms, WindowCharge.decSyms, code_ktFreq, code_ktRaise, code_nextRun]
+    cases AdviceV1.ktFreq counts run with
+    | none => rfl
+    | some f =>
+      simp only [Option.bind_some]
+      show (if 1 ≤ f.1 ∧ 1 ≤ f.2 ∧ f.1 + f.2 ≤ AdviceV1.MAX_TOTAL then _ else none).map _ =
+        if 1 ≤ f.1 ∧ 1 ≤ f.2 ∧ f.1 + f.2 ≤ AdviceV1.MAX_TOTAL then _ else none
+      by_cases hc : 1 ≤ f.1 ∧ 1 ≤ f.2 ∧ f.1 + f.2 ≤ AdviceV1.MAX_TOTAL
+      · rw [ite_eq_left hc, ite_eq_left hc, ← code_decSyms _ _ ds]
+        cases NetworkCertifier.WindowCharge.decSyms _ ds <;> rfl
+      · rw [ite_eq_right hc, ite_eq_right hc]
+        rfl
+
+theorem code_hitSyms (bk : NetworkCertifier.WindowCharge.Book) : ∀ ss : List ℕ,
+    NetworkCertifier.WindowCharge.hitSyms bk ss = WindowCharge.hitSyms (bookRef bk) ss
+  | [] => rfl
+  | s :: ss => by
+    simp only [NetworkCertifier.WindowCharge.hitSyms, WindowCharge.hitSyms, code_hitSyms bk ss, code_binned]
+    rfl
+
+theorem code_entrySyms (bk : NetworkCertifier.WindowCharge.Book) : ∀ (pos rank : ℕ) (es : List (ℕ × ℕ)),
+    NetworkCertifier.WindowCharge.entrySyms bk pos rank es = WindowCharge.entrySyms (bookRef bk) pos rank es
+  | _, _, [] => rfl
+  | pos, rank, e :: es => by
+    simp only [NetworkCertifier.WindowCharge.entrySyms, WindowCharge.entrySyms, code_entrySyms bk _ _ es, code_binned,
+      code_zigzag]
+    rfl
+
+theorem code_syms (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) (cy : NetworkCertifier.WindowCharge.Carry)
+    (x : NetworkCertifier.WindowCharge.Window) :
+    (NetworkCertifier.WindowCharge.syms bk N H O cy x).map (fun q => (q.1, wcarryRef q.2)) =
+      WindowCharge.syms (bookRef bk) N H O (wcarryRef cy) (windowRef x) := by
+  obtain ⟨⟨c, r⟩, pos, rank⟩ := cy
+  simp only [NetworkCertifier.WindowCharge.syms, WindowCharge.syms, wcarryRef, carryRef, windowRef]
+  rw [← code_decSyms, ← code_hitSyms, ← code_entrySyms]
+  cases NetworkCertifier.WindowCharge.decSyms ⟨c, r⟩ x.ds with
+  | none => rfl
+  | some d =>
+    cases NetworkCertifier.WindowCharge.hitSyms bk x.hits with
+    | none => rfl
+    | some hs =>
+      cases NetworkCertifier.WindowCharge.entrySyms bk pos rank x.order with
+      | none => rfl
+      | some e =>
+        simp only [Option.map_some, Option.bind_some, code_binned, code_countHi]
+        rfl
+
+theorem code_wwindow (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) (cy : NetworkCertifier.WindowCharge.Carry)
+    (x : NetworkCertifier.WindowCharge.Window) :
+    (NetworkCertifier.WindowCharge.window bk N H O cy x).map (fun p => (p.1, wcarryRef p.2)) =
+      WindowCharge.window (bookRef bk) N H O (wcarryRef cy) (windowRef x) := by
+  simp only [NetworkCertifier.WindowCharge.window, WindowCharge.window]
+  show (if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧
+      cy.rank ≤ WindowCharge.INDEX_CAP + 1 then _ else none).map _ =
+    if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ cy.dec.run < 3 ∧
+      cy.rank ≤ WindowCharge.INDEX_CAP + 1 then _ else none
+  split_ifs
+  · rw [← code_syms]
+    cases NetworkCertifier.WindowCharge.syms bk N H O cy x with
+    | none => rfl
+    | some q =>
+      simp only [Option.bind_some, Option.map_some]
+      rw [show AdviceV1.Tally.fresh = tallyRef NetworkCertifier.AdviceV1.Tally.fresh from rfl, ← code_codeAll]
+      cases NetworkCertifier.WindowCharge.codeAll NetworkCertifier.AdviceV1.Tally.fresh q.1 with
+      | none => rfl
+      | some st =>
+        simp only [Option.bind_some, Option.map_some, code_finish]
+        cases AdviceV1.finish (tallyRef st) <;> rfl
+  · rfl
+
+theorem code_wsession (bk : NetworkCertifier.WindowCharge.Book) (N H O : ℕ) :
+    ∀ (cy : NetworkCertifier.WindowCharge.Carry) (ws : List NetworkCertifier.WindowCharge.Window),
+      NetworkCertifier.WindowCharge.session bk N H O cy ws =
+        WindowCharge.session (bookRef bk) N H O (wcarryRef cy) (ws.map windowRef)
+  | _, [] => rfl
+  | cy, x :: ws => by
+    simp only [NetworkCertifier.WindowCharge.session, WindowCharge.session, List.map_cons,
+      ← code_wwindow bk N H O cy x]
+    cases NetworkCertifier.WindowCharge.window bk N H O cy x with
+    | none => rfl
+    | some p =>
+      simp only [Option.bind_some, Option.map_some]
+      rw [code_wsession bk N H O p.2 ws]
+
+/-- **Advice v1's whole window charged in the program is the reference's** (`CodeChargesWhole`): for books with the
+same tables (each one's frequencies and total) and the same priors, and windows with the same decisions, hits and order
+entries, the program's `charges` of the windows, listed in order, is the reference's, which `EncardChargedLeWhole` is
+proved of. -/
+theorem CodeChargesWhole (bk : NetworkCertifier.WindowCharge.Book) (bk' : WindowCharge.Book)
+    (ht : [bk.arrived, bk.nHits, bk.hit, bk.resumes, bk.nOrder, bk.gap, bk.index, bk.lag].map (fun t => (t.freqs, t.total)) =
+      [bk'.arrived, bk'.nHits, bk'.hit, bk'.resumes, bk'.nOrder, bk'.gap, bk'.index, bk'.lag].map
+        (fun t => (t.freqs, t.total)))
+    (hp : bk.priors = bk'.priors) (N H O : ℕ) {W : ℕ} (a : Fin W → NetworkCertifier.WindowCharge.Window)
+    (a' : Fin W → WindowCharge.Window)
+    (ha : ∀ w, (a w).ds = (a' w).ds ∧ (a w).hits = (a' w).hits ∧ (a w).order = (a' w).order) :
+    NetworkCertifier.WindowCharge.charges bk N H O (List.ofFn a) = WindowCharge.charges bk' N H O a' := by
+  have hb : bk' = bookRef bk := by
+    obtain ⟨⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, ⟨_, _⟩, _⟩ := bk'
+    simp only [List.map_cons, List.map_nil, List.cons.injEq, Prod.mk.injEq, and_true] at ht
+    obtain ⟨⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩, rfl, rfl⟩ := ht
+    dsimp only at hp
+    subst hp
+    rfl
+  have hw : a' = fun w => windowRef (a w) := by
+    funext w
+    obtain ⟨h1, h2, h3⟩ := ha w
+    rcases e : a' w with ⟨d, h, o⟩
+    rw [e] at h1 h2 h3
+    simp only [windowRef, h1, h2, h3]
+  rw [NetworkCertifier.WindowCharge.charges, WindowCharge.charges, code_wsession, hb, hw, List.map_ofFn]
+  rfl
 
 end NetTiming.SecurityProofs
