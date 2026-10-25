@@ -2,7 +2,8 @@
  "roots": ["NetworkCertifier"],
  "exempt": {
   "NetworkCertifier.ChargeDifftestMain": "the charge difftest against arith_encode.reference_charge, under `runs`: compiled evaluation of NetworkCertifier.AdviceV1.ChargeDifftest.main, audited under NetworkCertifier, a test and not a proof",
-  "NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetworkCertifier.Difftest.main, audited under NetworkCertifier, a test and not a proof"
+  "NetworkCertifier.DifftestMain": "the difftest against the Python audit, under `runs`: compiled evaluation of NetworkCertifier.Difftest.main, audited under NetworkCertifier, a test and not a proof",
+  "NetworkCertifier.WindowDifftestMain": "the window charge's difftest against window_charge.reference_window, under `runs`: compiled evaluation of NetworkCertifier.WindowCharge.WindowDifftest.main, audited under NetworkCertifier, a test and not a proof"
  },
  "runs": {
   "NetworkCertifier.ChargeDifftestMain": {
@@ -22,6 +23,15 @@
     "difftest/python.jsonl": "355d87108c136dd003c12c07f4026ec776d07922de7c1dbbe47381f48b74796f"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
+  },
+  "NetworkCertifier.WindowDifftestMain": {
+   "why": "4,000 random instances on which advice v1's whole window charged (WindowCharge.window from a carry, and WindowCharge.charges from the book's first carry) gives what window_charge.reference_window gives, window by window and chained",
+   "args": ["{window/instances.jsonl}", "{window/python.jsonl}", "4000"],
+   "data": {
+    "window/instances.jsonl": "30e1bb0c246b19cb532f2016797fb017599ea706dc27de7575af55859201e6a3",
+    "window/python.jsonl": "a1adfd8cec5e431d1ca2f3ec1f33581128ce761a187650ffaf6ebdb02fd4e74a"
+   },
+   "generate": ["python3", "scripts/window_vectors.py", "{repo}", "--out", "{out}"]
   }
  },
  "layers": {
@@ -47,6 +57,11 @@
   },
   "NetworkCertifier.Schedule": {
    "imports": ["NetworkCertifier.Run"],
+   "except": [],
+   "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
+  },
+  "NetworkCertifier.WindowCharge": {
+   "imports": ["NetworkCertifier.AdviceV1"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   }

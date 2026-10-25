@@ -45,19 +45,19 @@ Decision 113 splits the credit in two, and `CircuitCredit` is their composition:
   (`Fits`, `ModelScope`), the data sheet's A1–A7, FOLD-OPT per word folded at the certificate it prices at
   (`FoldOptFoldedAt`) and FILL-OPT.
 
-The seeded pair is (L) and its composition with (P) under seeded coins, stated in the random-oracle model: the window's
-seeds are uniform answers to the prover's queries naming its operands' roots, and `SeedExtractedAt` (`random-oracle`)
-is where that model is named, at `ε_id` once a window. Its run is a `JointRun` on every round's answers at once, with
-no stage order. Its binding is checked at the draw (`Declared.atDraw`: `Of`, `MovedIn`, `JointSound`), after every
-seed, since a seeded round's coin is a hash the cheater can evaluate before it commits; its cones are counted at the
-IR's cuts (`Declared.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed value, and its scope needs each
-seeded round's seed to name what the round reads (`SeedNamed`). GRIND's premise (`SeedLuckAt`) at the template's
-`κ = 4` for folded tiles and the guess bound's `κ₀` for whole ones stands in for the live luck claims, and the bound
-is `rOfSeeded`, the live draw's charge on the unlucky share plus each seed group's premiums `π* = ln(T_q/δ_g)/θ` from
-the IR (`premiumOf`), folded and whole at their own rates (`seedTheta`, `wholeTheta`). No ruling grants a whole-tile
-luck per seed query, so the seeded pair's numbers are each labelled by the premise its whole rate reads: B′'s `½` a
-query (ASK-9's live value, which leaves its small-batch decode line above 50%), `GuessLuckAt` at `2^-64` or
-`WholeEntropyAt` at `K/8` nats a tile, neither granted.
+The seeded pair is (L) and its composition with (P) under seeded coins, stated as Fiat–Shamir in the random-oracle model
+(`fiat-shamir`): the window's seeds are uniform answers to the prover's queries naming its operands' roots, and
+`SeedExtractedAt` (`random-oracle`) is where that model is named, at `ε_id` once a window. Its run is a `JointRun` on
+every round's answers at once, with no stage order. Its binding is checked at the draw (`Declared.atDraw`: `Of`,
+`MovedIn`, `JointSound`), after every seed, since a seeded round's coin is a hash the cheater can evaluate before it
+commits; its cones are counted at the IR's cuts (`Declared.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed
+value, and its scope needs each seeded round's seed to name what the round reads (`SeedNamed`). GRIND's premise
+(`SeedLuckAt`) at the template's `κ = 4` for folded tiles and the guess bound's `κ₀` for whole ones stands in for the
+live luck claims, and the bound is `rOfSeeded`, the live draw's charge on the unlucky share plus each seed group's
+premiums `π* = ln(T_q/δ_g)/θ` from the IR (`premiumOf`), folded and whole at their own rates (`seedTheta`,
+`wholeTheta`). No ruling grants a whole-tile luck per seed query, so the seeded pair's numbers are each labelled by the
+premise its whole rate reads: B′'s `½` a query (ASK-9's live value, which leaves its small-batch decode line above 50%),
+`GuessLuckAt` at `2^-64` or `WholeEntropyAt` at `K/8` nats a tile, neither granted.
 
 The other guarantees are (L)'s lemmas:
 
@@ -278,12 +278,12 @@ def CircuitWork : Prop :=
     prob (fun x => Pl.accepts x ∧
       ¬ WorkAt (wordsOf Sc Cd : ℝ) a b (rOf Sc Cd Np a b Λ δs) (Pl.run x).fixed (folded x)) ≤ δs + (δbind + δks)
 
-/-- **(L) The circuit's work, seeded coins** (decision 113's logical layer under decision 122's one seed a call),
-stated in the random-oracle model: the window's seeds are uniform answers to the prover's queries naming its
-operands' roots, and `SeedExtractedAt` is where that model is named. For every declared circuit `Cd` and scheme `Sc`,
-run as one window whose rounds are seed groups: each round one call site, its coin the oracle's answers to the
-cheater's `T_q` queries for that call's seed (`Fin T_q → B`, uniform), then the service's live draw of `K_d ≥ 1` of
-the `N_p` tiles (`drawOf`) with the proofs' coins `Ξ`. The run is any joint run `R` of all the rounds' answers: a
+/-- **(L) The circuit's work, seeded coins** (decision 113's logical layer under decision 122's one seed a call), stated
+as Fiat–Shamir in the random-oracle model (`fiat-shamir`): the window's seeds are uniform answers to the prover's
+queries naming its operands' roots, and `SeedExtractedAt` is where that model is named. For every declared circuit `Cd`
+and scheme `Sc`, run as one window whose rounds are seed groups: each round one call site, its coin the oracle's answers
+to the cheater's `T_q` queries for that call's seed (`Fin T_q → B`, uniform), then the service's live draw of `K_d ≥ 1`
+of the `N_p` tiles (`drawOf`) with the proofs' coins `Ξ`. The run is any joint run `R` of all the rounds' answers: a
 cheater may choose round `r`'s operands, values and skips after querying the oracle for any round's seed. Under:
 * the seeded ranges (`ScopeSeeded`: every round holding a credited tile seeded, one call site a round, no credited
   kind GRIND hasn't priced, so H1 + fx1's attention uncredited, and `SeedNamed`: every value a seeded round reads,
@@ -430,15 +430,15 @@ def CircuitCredit : Prop :=
       CoinMode.live).Holds Pl
 
 /-- **The credit theorem, seeded coins**: `CreditOfWork ∘ CircuitWorkSeeded` at the circuit's costs `a = aOf > 0`,
-`b = bOf` (`≥ 0` under `ModelScope`). Under `CircuitWorkSeeded`'s premises at those costs and `CreditOfWork`'s on
-every run, the window's certificate in device window `win` holds at `.seeded` (`certOf`): it is accepted with time
-below `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + ε_id(T, |J|) + 2·rounds·(δ_g + δ_b)`, where
-`ε = ε_♭ + ε_μ + max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + a·Π_F + b·Π_0 + min(a, b)·D₀` (`rOfSeeded`, `Π_F` and `Π_0`
-the seed groups' premiums from the IR at the folded and the whole rates). It is stated in the random-oracle model
-(`SeedExtractedAt` names it), its binding checked at the draw (`Declared.atDraw`) and its cones at the IR
-(`Declared.atIR`), as `CircuitWorkSeeded`'s, and its luck line is that statement's, conditional as its numbers are on
-the whole-tile luck a query its `wholeTheta` reads. With `ε_♭ = 0.571%` (NOTATION r3's sm_120 sheet, H1 + fx1) and
-`ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
+`b = bOf` (`≥ 0` under `ModelScope`). Under `CircuitWorkSeeded`'s premises at those costs and `CreditOfWork`'s on every
+run, the window's certificate in device window `win` holds at `.seeded` (`certOf`): it is accepted with time below
+`(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + ε_id(T, |J|) + 2·rounds·(δ_g + δ_b)`, where
+`ε = ε_♭ + ε_μ + max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + a·Π_F + b·Π_0 + min(a, b)·D₀` (`rOfSeeded`, `Π_F` and `Π_0` the
+seed groups' premiums from the IR at the folded and the whole rates). It is stated as Fiat–Shamir in the random-oracle
+model (`fiat-shamir`; `SeedExtractedAt` names it), its binding checked at the draw (`Declared.atDraw`) and its cones at
+the IR (`Declared.atIR`), as `CircuitWorkSeeded`'s, and its luck line is that statement's, conditional as its numbers
+are on the whole-tile luck a query its `wholeTheta` reads. With `ε_♭ = 0.571%` (NOTATION r3's sm_120 sheet, H1 + fx1)
+and `ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
 * at `½` a query (ASK-9's live value; no premise per query is granted): 56.6% for Llama-3.1-8B decode at batch up to
   32, 9.5% at batch 256, 1.85% at a 2K-token prefill and 36.3% for 70B decode, so with only granted premises a seeded
   window's credit is vacuous at small-batch decode and above 1% even at prefill;

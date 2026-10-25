@@ -266,13 +266,17 @@ class Run:
         return moves
 
     def move(self, moves: list[tuple[str, str]]):
+        landing = {n for _, n in moves}
+        aside = {o: f"{o}.moving" for o, _ in moves if o in landing and not self.dry}
+        for old, tmp in aside.items():                      # a file another one lands on leaves first
+            os.rename(self.root / old, self.root / tmp)
         for old, new in moves:
             self.moved[new] = old
             if self.dry:
                 continue
             dst = self.root / new
             dst.parent.mkdir(parents=True, exist_ok=True)
-            os.rename(self.root / old, dst)
+            os.rename(self.root / aside.get(old, old), dst)
         if not self.dry:
             for p in self.dropped:
                 (self.root / p).unlink()

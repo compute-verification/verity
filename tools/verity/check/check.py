@@ -16,7 +16,8 @@
                                                             inputs when the commit changes verity/ml/flock/ against --base REF
                                                             (default origin/main), and presigned URLs for the pinned Lean
                                                             dependency bundles; with --on, in a free check slot of M
-                                                            (`tools/verity/check/slot.py`), the lock and cores the train checks take;
+                                                            (`tools/verity/check/slot.py`), the lock and cores the train checks take,
+                                                            and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks;
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
@@ -485,10 +486,11 @@ PLACED_S = 1800
 
 
 def _trees(doc: dict) -> set[str]:
-    """The shortened commits a machine's check slots hold or wait for."""
+    """The shortened commits a machine's check slots hold or wait for: each one's commit, else its tree's name (<root>/src/<sha>,
+    from a slot.py that records no commit)."""
     check = doc.get("check") or {}
     who = [s["holder"] for s in check.get("slots") or [] if s.get("holder")] + list(check.get("waiters") or [])
-    return {Path(h["tree"]).name[:12] for h in who if h.get("tree")}
+    return {(h.get("commit") or Path(h["tree"]).name)[:12] for h in who if h.get("commit") or h.get("tree")}
 
 
 def place(names: list[str], commit: str, priority: bool = False, read=None, path: Path | None = None,
@@ -523,7 +525,7 @@ def _who(h: dict) -> str:
     """A holder or waiter in a few words: since when, its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
     parts = [f"since {h['since']} ({h['minutes']} min)" if h.get("since") else f"pid {h['pid']}"]
     parts += [f"run {h['run']}"] if h.get("run") else []
-    tree = Path(h["tree"]).name if h.get("tree") else ""
+    tree = h.get("commit") or (Path(h["tree"]).name if h.get("tree") else "")
     parts += [f"tree {tree[:12] if re.fullmatch(r'[0-9a-f]{40}', tree) else tree}"] if tree and tree != h.get("run") else []
     parts += [f"by {h['by'].rstrip('/').rsplit('/', 1)[-1]}"] if h.get("by") else []
     return ", ".join(parts if len(parts) > 1 or not h.get("cmd") else [*parts, h["cmd"][:60]])
@@ -947,9 +949,11 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it
+    # a post-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
+    # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake
+    # (CI-170, 25 Oct: Flock/RecSparse.olean missing), so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None else []), "--project", "verity",
-           "--cwd", "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
+           "--cwd", "clone" if on else "source", *(x for p in PACK_FILES for x in ("--declared-output", p))]
     env = dict(os.environ)
     if "lean-agreement" in need:
         from research.store.local import LocalStore

@@ -36,11 +36,14 @@ import Proofs.Accounting.RemoteHeld.Meets
 import Proofs.Accounting.RemoteHeld.OverTime
 import Proofs.Accounting.RemoteHeld.Draw
 import Proofs.Accounting.RemoteHeld.Sketch
+import Proofs.Accounting.RemoteHeld.SketchLine
 import Proofs.Accounting.RemoteHeld.Line
 import Proofs.Accounting.Requirement
 import Proofs.Accounting.RequirementPouw
 import Proofs.Accounting.Sanity
 import Proofs.Accounting.Stacking
+import Proofs.Accounting.DeclaredCircuit.Witness
+import Proofs.Accounting.DeclaredCircuit.WitnessPrefill
 import Proofs.Accounting.Tag
 import Proofs.Accounting.TS
 import Proofs.Accounting.TS.Stages
@@ -51,6 +54,7 @@ import Proofs.Accounting.TS.FixedMeets
 import Proofs.Accounting.TS.SharedNoise
 import Proofs.Accounting.TS.J10RChecks
 import Proofs.Accounting.TS.SessionSound
+import Proofs.Accounting.TS.SessionProofSound
 import Proofs.Accounting.TS.CheckedSound
 import Proofs.Accounting.TS.LanesSound
 import Proofs.Accounting.TS.Session.Lanes.Layout
