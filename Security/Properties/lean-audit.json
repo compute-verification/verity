@@ -54,6 +54,9 @@
   "Properties.Proofs.RemoteAudit.Coins",
   "Properties.Proofs.RemoteAudit.Frozen",
   "Properties.Proofs.RemoteAudit.Order",
+  "Properties.RemoteAudit.Shared",
+  "Properties.Proofs.RemoteAudit.Shared",
+  "Properties.Proofs.RemoteAudit.SharedLink",
   "Properties.RemoteAudit.Pooled",
   "Properties.Proofs.RemoteAudit.Pooled",
   "Properties.Accounting.Compose",
@@ -1532,6 +1535,38 @@
    "assumptions": [],
    "type_hash": "00e2f065edf6e116f146ffde18cb1f3059766d17bf24b38880c6ca480be91680"
   },
+  "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.acceptDrawsOpenable : Properties.RemoteAudit.Shared.AcceptDrawsOpenable"],
+   "assumptions": [],
+   "type_hash": "0b743610595de5577ff9f84574ecfc2bbf1e882858d572dac4296642b8419bb8"
+  },
+  "Properties.RemoteAudit.Shared.drawIsSubset": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.drawIsSubset : Properties.RemoteAudit.Shared.DrawIsSubset"],
+   "assumptions": [],
+   "type_hash": "254aaf81436f73958b6d16fb3bbe114b0eec2ae6b35b35134e46339aaa03b8aa"
+  },
+  "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn : Properties.RemoteAudit.Shared.OpeningsUnreadUntilDrawn"
+   ],
+   "assumptions": [],
+   "type_hash": "183d024d49347ffdd47478d21385093afa15cb34036387386fad9590e1904208"
+  },
+  "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.recordKeptAfterDraw : Properties.RemoteAudit.Shared.RecordKeptAfterDraw"],
+   "assumptions": [],
+   "type_hash": "1ae50d1ad9c55b4689ba79cce7dd527324f382a6f166e0045ca2435bda84abae"
+  },
+  "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
+   "owner": "@memory-accounting",
+   "signature": ["Properties.RemoteAudit.Shared.sessionDrawsRecords : Properties.RemoteAudit.Shared.SessionDrawsRecords"],
+   "assumptions": [],
+   "type_hash": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773"
+  },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
@@ -2859,6 +2894,26 @@
    },
    "Properties.RemoteAudit.receiptsBelowLimit": {
     "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.acceptDrawsOpenable": {
+    "function": ["RemoteAudit.draws", "RemoteAudit.checkWindow"],
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.drawIsSubset": {
+    "function": "RemoteAudit.Shared.close",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn": {
+    "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.recordKeptAfterDraw": {
+    "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
+    "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
    }
   },
@@ -4850,6 +4905,10 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -5112,6 +5171,10 @@
     "Properties.Pouw.Commit.taggedSize",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -5186,6 +5249,10 @@
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8351,6 +8418,9 @@
     "Properties.RemoteAudit.receipterOf": "268ca32c61e77532e1168ef97dc2916273a6fc2e2b7bbddc0e2d18fdc5ecbe67"
    },
    "guarantees": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8379,6 +8449,11 @@
     "Properties.RemoteAudit.drawnOf": "f18847a737ba256cc55c274972d2d59bd2ac9163bb6a3cdfc24a8ae2d4ade3e1"
    },
    "guarantees": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.openingsUnreadUntilDrawn",
     "Properties.RemoteAudit.recordKeptAfterDraw"
@@ -8467,7 +8542,7 @@
    ]
   },
   "Properties.RemoteAudit.Live": {
-   "digest": "0a6d389208922b0a686f3d29a02194fe82da58848e8e8b98e15aabd239caba66",
+   "digest": "8ae8df90bbd5e70afe1aa0ecc28159128fae1fd80c0e18c71174f10ee5f05305",
    "definitions": {
     "Properties.RemoteAudit.Live.Answer": "250a061dcc59a1c6c8ac2c20623702e3bde86d74f98ddc873247b19e863dcc9a",
     "Properties.RemoteAudit.Live.Answer.casesOn": "39d9c6218e16d26c6bb1bba6220166c4adc7899051f99a99d115694e0ef3970a",
@@ -8493,7 +8568,7 @@
     "Properties.RemoteAudit.Live.Req.settle": "a4da87116887ca0260db4db5c5435a0029545b4d050b7860280f039ea3facef0",
     "Properties.RemoteAudit.Live.Req.verify": "f4062ee54d707a0c2f340405c409f163c8843419913d5d1ef984653aeaeeca4f",
     "Properties.RemoteAudit.Live.run": "d65128ed5d31631a0f6bfcced96ac690b4ff426f94c93b8add1ece1e8e8b9deb",
-    "Properties.RemoteAudit.Live.step": "e824c5bb56098e8062dbcd5821ebbd4eeeed3b527f9d579e8cd32cd59879e9bd",
+    "Properties.RemoteAudit.Live.step": "e6cdaee71d8ecb0456ce1b59c83f9dbfd6b36473706657b4a3542ce71fe8ab24",
     "Properties.RemoteAudit.Live.step._sparseCasesOn_5": "d83c00b80e5e08aadf4f6419f324568dda7953c037f4ba261fd189abe883760e",
     "Properties.RemoteAudit.LiveIsRun": "897367ff6c57ea9e672dc5ea7dbca0bca4a9c628c86ed1a4b92843e2bcb5dccf"
    },
@@ -8519,6 +8594,31 @@
     "Properties.RemoteAudit.ScheduleFixesLayout": "0e02152b247e6ca4f53271b0659a4ab4d1e8d0ecb744b452041044129a541cd5"
    },
    "guarantees": ["Properties.RemoteAudit.scheduleChecked", "Properties.RemoteAudit.scheduleFixesLayout"]
+  },
+  "Properties.RemoteAudit.Shared": {
+   "digest": "5fec81c7d594ad0a321c567035b6a15eba68d4bfb0252e0104453f326491bf01",
+   "definitions": {
+    "Properties.RemoteAudit.Shared.AcceptDrawsOpenable": "65753d764bfe2d2c6c3c7486bd8d9be8247eb6220f954081ce3c1450b17aede7",
+    "Properties.RemoteAudit.Shared.DrawIsSubset": "5e1391418f19c4953e71bddf5ceffb7540df4c8c18484a4f0243361eec42f4ff",
+    "Properties.RemoteAudit.Shared.OpeningsUnreadUntilDrawn": "a96403019f2e4d40479cb0376b77513e672e3e93372da4dab71018fc58f13a23",
+    "Properties.RemoteAudit.Shared.RecordKeptAfterDraw": "28b329c724115229b6cdb4dd0dfa086a0c8f3b5ed9624eb000f9070bca774d7d",
+    "Properties.RemoteAudit.Shared.SessionDrawsRecords": "83b570c39165754acd0a3695338670ed63089cc5d5d635541856dfd1434eeaea",
+    "Properties.RemoteAudit.Shared.drawLengths": "39d8453df51fe66de43380186e5c0a223d9e7d2a37155c3c9f2b0feb05ce917e",
+    "Properties.RemoteAudit.Shared.drawRecords": "a7fc2f6a62e1bb91e012500cb885a33aa0654e3a976132079d28ebb77edb7cf3",
+    "Properties.RemoteAudit.Shared.drawWindows": "a886097f0567a1ce1a0ee77b30b2999ebbe6a91216848035fe8dadbbc4d55be9",
+    "Properties.RemoteAudit.Shared.lengthsOf": "a513bbe2b2c975d42200c7ed0592c3dd5fd34e9625589017b44b456d9e1c5752",
+    "Properties.RemoteAudit.Shared.passCount": "31cc2541472556de7eea915e3142f8c57ba7655e16d37005585ac0a761dc342a",
+    "Properties.RemoteAudit.Shared.passesBefore": "cd9697ad26ab90b29c1b7e05a4035686e33897780d15ecea28e6ccaa8c6f5e69",
+    "Properties.RemoteAudit.Shared.receiptCount": "595b3d25d8ece52324f4e878b14201fc85cf1c09a4f10b91513d30207f23cb31",
+    "Properties.RemoteAudit.Shared.shareOf": "f5d5f9ef7db5cfd499fcba46f25c6d697793c1da60b46721ea3ff34c74d65ea0"
+   },
+   "guarantees": [
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords"
+   ]
   },
   "Properties.SampledProofs": {
    "digest": "cfeb4eaf8159e0067d3dc319139c7c5fb9fa0293d7ad95a719684584a1a6247d",
@@ -8648,6 +8748,11 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8710,6 +8815,11 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8832,6 +8942,11 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -8926,6 +9041,11 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",
@@ -9084,6 +9204,10 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptedMinPasses",
     "Properties.RemoteAudit.appendsInOrder",
     "Properties.RemoteAudit.lifetimeCapped",
@@ -9098,26 +9222,33 @@
    ]
   },
   "RemoteAudit.Shared": {
-   "digest": "483bee6801e6a5eb3fce6bad1fcc4d142c0d24feccea6f12914b20776471ee64",
+   "digest": "cb71d0d2a609cdf0e677995fe82694b4ca5e5508711cb48ea1dc0a9e77b1bc12",
    "definitions": {
     "RemoteAudit.Shared.close": "b2d9a87d3a4a032646e039b9608a3b0857cad46b851981bb2cd6f31c64000b8f",
     "RemoteAudit.Shared.close._sparseCasesOn_1": "2d43ff0236a5e8f407744a2211f8cb455ff1b73412a8a14b633ce3d4876d7195",
+    "RemoteAudit.Shared.run": "56783b06e01d607f4c0363c5ae8cec199ed0f2ae9331533fb7b1990f8fa8807c",
     "RemoteAudit.Shared.step": "1e3ea10c4e480bc58f024ec2dc221ad0499617246aa92449e89f7202980d2636",
     "RemoteAudit.Shared.step._sparseCasesOn_1": "30d6f85f9d8b5f4a0d9357dda410d23922fd584a3bac4170871be1c6dea08e3e"
    },
-   "guarantees": ["Properties.RemoteAudit.liveIsRun"]
+   "guarantees": [
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
+    "Properties.RemoteAudit.liveIsRun"
+   ]
   },
   "RemoteAudit.Verifier": {
-   "digest": "edac9b168a3286da9c12bd0aa1113e55c44394cc8c67c08bdf11fb4ed280a22e",
+   "digest": "7c3bfdae221653ad961a2aac4457c03fabb1e158b6ea3c7704b36990892b4668",
    "definitions": {
-    "RemoteAudit.Verifier.eventOn": "8a7703a5d2c8d79a3537af75df0d9c99ebd78823dd32419cd5d923b9fcb4af7e",
-    "RemoteAudit.Verifier.unset": "1c79eb4a305182bd7aabec7dce3c91083069ccf5094090efc3fafe3aadd70fab",
+    "RemoteAudit.Verifier.eventOn": "99f10cb9262375306d1fb6b0df144759c8635fe27a13dd5d626f4303b0c48b7e",
+    "RemoteAudit.Verifier.unset": "b1c6b3c9e79d22180af87fc108c5c055da018dd3c56cb814015b47ff83eae587",
     "RemoteAudit.Verifier.unset._sparseCasesOn_1": "891465d9b2afbe0d44c09c4be7675fdd7c80769a27389c396eba93f1e547af61",
     "RemoteAudit.Verifier.unset._sparseCasesOn_2": "dbf14f58d31ad80f631951c2e021c1fe0e7c8b443ee20a2f0e6ae667f3dd1578",
     "RemoteAudit.Verifier.unset._sparseCasesOn_3": "218c89d89bc182e2870d873c0042a0a89974828d5d5428fb35b7fb299b77b108",
     "RemoteAudit.Verifier.unset._sparseCasesOn_4": "40e73f8706fcd786cc36c38f4c0f3ad33b5b599284872de308898df8ff5aa2c0",
     "RemoteAudit.Verifier.windowCheck": "69dcf74a2651cd9df52b7ed84e9552cc830380ef2df8156974ba9f7ba042bece",
-    "RemoteAudit.Verifier.withCoin": "e68b97486c7e485256c65b7ccf9da0db7ee3c5371dd63583899ed54986033110",
+    "RemoteAudit.Verifier.withCoin": "77926544acfd80f380702ca0b8ed4a78147ad12bcd29338ab58c464050923695",
     "RemoteAudit.Verifier.withCoin._sparseCasesOn_3": "7e5672aa5433d6c08663db95ca83fb768425748418e7dde938f69e4f6b3edfef"
    },
    "guarantees": ["Properties.RemoteAudit.liveIsRun"]
@@ -9219,6 +9350,11 @@
    "guarantees": [
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
+    "Properties.RemoteAudit.Shared.acceptDrawsOpenable",
+    "Properties.RemoteAudit.Shared.drawIsSubset",
+    "Properties.RemoteAudit.Shared.openingsUnreadUntilDrawn",
+    "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
+    "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.acceptChecksOpenings",
     "Properties.RemoteAudit.acceptDrawsOpenable",
     "Properties.RemoteAudit.acceptOpensDraws",

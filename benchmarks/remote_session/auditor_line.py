@@ -70,7 +70,8 @@ the auditor's.
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons; beside each share of weights held is the same session's share of filler held (the rest of HBM and the host
 tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
-their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7). What every accepted paced session
+their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7), and deducts the chips' S_chip at no
+less than the auditor's (`verifier.recorded_chip_bytes`). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
 Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
 and `sketch_outside` every F the run's sessions were charged at.
@@ -87,9 +88,24 @@ sessions' totals: the least share is read off whichever session the run made lea
 maximum wouldn't.
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
-statement C in full, as a premise that no record of the run discharges, so every line says it is conditional on it,
-until certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
-the store and computes the receipts, breaks that premise alone.
+statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
+certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
+the store and computes the receipts, breaks that premise alone. The `memory-line-of-record` label names what the file
+names (`line_label`: `lean conditional on NoOutsideCompute`), and `research data label` refuses one that doesn't.
+
+**The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
+the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
+node mounts a shared filesystem (null while infra's answer is pending). A gate session whose span as the challenger
+signed it on the ledger (its open's `started_utc` to its end's `ended_utc`) lies strictly inside one applied interval
+is grounded by it (`no_relay`): its `NoOutsideCompute` rests on `ProviderLockdown`, under `trusted-nebius-host`,
+which names what the lockdown doesn't close. A line whose credited sessions are all grounded (every gate session's,
+with none credited) is conditional on `ProviderLockdown` in its place; any other is conditional on
+`NoOutsideCompute`, as without the file. It changes no credit.
+
+**From the transcript** (`line_of`). Where the run's out/ keeps a session's transcript (`transcripts/`, a host run
+fetched with `--transcripts`), the Lean makes the session's record itself, `Session.run` on the transcript
+(`Line.lineOfRun`, `LineHeld`'s `lineOf`), and refuses a kept record that isn't it; elsewhere it reads the kept
+record. The verifier's clock's reading holds the times seen to the record's; the challenger's clock's doesn't.
 
 **The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check
 refuses a session's credit when the network certifiers' records of the gate node's boundary links over its credited
@@ -106,12 +122,13 @@ check, so the line stays conditional on `NoOutsideCompute` with it on.
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
         [--bursts stated|none] [--line-by lean|python] [--lean-exe PATH] [--table FILE]
-        [--boundary FILE --boundary-pin SHA512]
+        [--boundary FILE --boundary-pin SHA512] [--lockdown FILE]
 """
 from __future__ import annotations
 
 import argparse
 import copy
+import gzip
 import hashlib
 import json
 import statistics
@@ -142,8 +159,8 @@ which Identity leaves in, charged in both forms as `ledger.Node`'s disks are, an
 link-charged (54.4e9 in all)."""
 BURSTS = ("stated", "none")
 """What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
-(`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces (a burst of 0
-states the rate down to one nanosecond)."""
+(`verifier.ingress_bursts`), or none, the reading of gate runs up to 7, whose recorded lines it reproduces at the S_chip
+they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate down to one nanosecond)."""
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/core/protocols/remote_bandwidth"
 LEAN_VERDICTS = ("lean", "both")
@@ -164,9 +181,19 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
     "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
     "the credited span")}
-"""The premises of the line's statement that no record of the run discharges, each with what it says: every line
-(`auditor_line.json`'s `conditional_on`, `credit.md`) is conditional on them, and the `memory-line-of-record` label
-requires the field."""
+"""The premises of the line's statement that no record of the run discharges, each with what it says: a line
+(`auditor_line.json`'s `conditional_on`, `credit.md`) is conditional on them unless a lockdown grounds them
+(`GROUNDED`), and the `memory-line-of-record` label names exactly the file's (`vocab.check_line_of_record`)."""
+LOCKDOWN = "ProviderLockdown"
+GROUNDED = {LOCKDOWN: (
+    "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
+    "trusted-nebius-host): while infra's records show it applied, no device outside the node computes on a registered "
+    "block or a receipt, which gives NoOutsideCompute for a session whose signed span lies inside an applied interval "
+    "(noOutsideCompute_of_lockdown); it assumes what the security group doesn't close: the provider's resolver, flows "
+    "opened before it was applied, and the provider's own paths (metadata, management plane, a cluster's fabric, a "
+    "shared filesystem)")}
+"""What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
+all grounded is conditional on it in its place."""
 BOUNDARY = "boundary"
 """The check `--boundary` adds to `CHECKS` (`boundary_check`)."""
 
@@ -345,11 +372,33 @@ def outcome(got: object) -> str:
         return json.dumps(got)
 
 
-def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean: lv.Lean | None = None) -> dict:
-    """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read, from
-    its line (`line_of_record`, the Lean's with `lean`; `shares_of`)."""
+def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean: lv.Lean | None = None, *,
+           clock: str = "record", transcript: dict | None = None) -> dict:
+    """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
+    (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
+    Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
     return shares_of(line_of_record(V.recorded_inputs(session, registration, host_bytes=host_bytes,
-                                                      rates=V.recorded_rates(session, registration, **rates)), lean))
+                                                      rates=V.recorded_rates(session, registration, **rates),
+                                                      clock=clock, transcript=transcript), lean))
+
+
+def transcript_of(out: Path, s: dict) -> dict | None:
+    """Session `s`'s transcript (`lean_verifier.Transcript`'s file) where the run's out/ keeps it: its name under
+    `out/transcripts/`, gzipped (`host.gzip_transcripts`) or not, held to the sha256 verifier.json gives it; None where
+    there is none (a host run fetched without `--transcripts`)."""
+    t = s.get("transcript") or {}
+    if not t.get("path") or not t.get("sha256"):
+        return None
+    name = Path(t["path"]).name
+    for p, read in ((out / "transcripts" / f"{name}.gz", gzip.open), (out / "transcripts" / name, open)):
+        if p.is_file():
+            with read(p, "rb") as f:
+                raw = f.read()
+            if hashlib.sha256(raw).hexdigest() != t["sha256"]:
+                raise SystemExit(f"auditor_line: {p} is not session {s['k']}'s transcript: its sha256 isn't the one "
+                                 "verifier.json gives it")
+            return json.loads(raw)
+    return None
 
 
 def shares_of(got: dict) -> dict:
@@ -540,6 +589,79 @@ def boundary_check(b: dict, seen: list[dict]) -> dict:
             "links": b["links"]}
 
 
+def _utc(x: object) -> bool:
+    return isinstance(x, str) and Ch.later(x, 0) == x
+
+
+def read_lockdown(path: Path) -> dict:
+    """The provider's lockdown of the gate node as infra recorded it (`--lockdown FILE`): `{"node", "allow": [{"host",
+    "ip"}, ...], "intervals": [{"applied_utc", "lifted_utc", "records": ["art:...", ...]}, ...],
+    "shared_filesystem"}`, each interval's times `YYYY-MM-DDTHH:MM:SSZ` with applied before lifted and its records
+    infra's (the rules before, during and after), and `shared_filesystem` infra's answer to whether the node mounts
+    one (true, false, or null while it is pending), with the file's SHA-512. Refused (SystemExit) where it isn't of
+    that form."""
+    raw = path.read_bytes()
+    try:
+        d = json.loads(raw)
+    except ValueError:
+        d = None
+    if not (isinstance(d, dict) and isinstance(d.get("node"), str) and isinstance(d.get("allow"), list) and d["allow"]
+            and all(isinstance(a, dict) and isinstance(a.get("host"), str) and isinstance(a.get("ip"), str)
+                    for a in d["allow"])
+            and isinstance(d.get("intervals"), list)
+            and all(isinstance(i, dict) and _utc(i.get("applied_utc")) and _utc(i.get("lifted_utc"))
+                    and i["applied_utc"] < i["lifted_utc"] and isinstance(i.get("records"), list)
+                    and all(isinstance(r, str) and r.startswith("art:") for r in i["records"]) for i in d["intervals"])
+            and "shared_filesystem" in d and d["shared_filesystem"] in (True, False, None)):
+        raise SystemExit(f"auditor_line: {path} is not a lockdown record (`read_lockdown`'s form)")
+    return {**d, "sha512": hashlib.sha512(raw).hexdigest()}
+
+
+def signed_span(w: dict | None) -> list[str] | None:
+    """A gate session's span in UTC as the challenger signed it on the ledger, which holds its credited passes: its
+    open's `started_utc` to its end's `ended_utc`; None without both."""
+    span = [(((w or {}).get(e) or {}).get("body") or {}).get(f) for e, f in (("open", "started_utc"),
+                                                                            ("end", "ended_utc"))]
+    return span if all(map(_utc, span)) else None
+
+
+def lockdown_check(lockdown: dict | None, span: list[str] | None) -> dict:
+    """What grounds a gate session's `NoOutsideCompute` (`no_relay`): the provider's lockdown (`ProviderLockdown`) where
+    its signed span lies strictly inside one applied interval at whole seconds (applied before its start and its end
+    before the lift, so the times floored to the second still bound it) and infra hasn't answered that the node mounts
+    a shared filesystem; otherwise nothing, and its line is conditional on `NoOutsideCompute` itself, with why."""
+    def bare(why: str) -> dict:
+        return {"grounded_by": None, "conditional_on": "NoOutsideCompute", "span_utc": span, "reason": why}
+
+    if lockdown is None:
+        return bare("no lockdown record (--lockdown)")
+    if span is None:
+        return bare("the ledger signs no span for it (its open's started_utc, its end's ended_utc)")
+    if lockdown["shared_filesystem"] is True:
+        return bare(f"{lockdown['node']} mounts a shared filesystem, a path the lockdown doesn't close")
+    inside = next((i for i in lockdown["intervals"] if i["applied_utc"] < span[0] and span[1] < i["lifted_utc"]), None)
+    if inside is None:
+        return bare(f"its span {span[0]} to {span[1]} lies inside no interval the lockdown was applied")
+    return {"grounded_by": LOCKDOWN, "conditional_on": LOCKDOWN, "span_utc": span,
+            "interval": [inside["applied_utc"], inside["lifted_utc"]], "records": inside["records"],
+            "shared_filesystem": "pending (infra)" if lockdown["shared_filesystem"] is None else "none mounted"}
+
+
+def conditional_on(rows: list[dict]) -> dict:
+    """What the line is conditional on (`CONDITIONAL_ON`, `GROUNDED`): the assumption each credited session's
+    `NoOutsideCompute` rests on (`no_relay`), or each gate session's when none is credited, `NoOutsideCompute` with
+    none."""
+    xs = [r for r in rows if r["credit"]["ok"]] or rows
+    names = sorted({r["no_relay"]["conditional_on"] for r in xs if "no_relay" in r}) or ["NoOutsideCompute"]
+    return {n: {**CONDITIONAL_ON, **GROUNDED}[n] for n in names}
+
+
+def line_label(doc: dict) -> str:
+    """The `memory-line-of-record` value naming the doc's line: who computed it and what it is conditional on, as
+    `research data label` holds it to this file (`vocab.check_line_of_record`)."""
+    return f"{doc['line_by']} conditional on {', '.join(doc['conditional_on'])}"
+
+
 def with_check(credit: dict, name: str, check: dict) -> dict:
     """`credit` (`credit_check`'s) with one more check, which its credit then needs too."""
     zero = [*credit["zero"], *([] if check["ok"] else [f"not {name}: {check['reason']}"])]
@@ -726,7 +848,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
             main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None,
-            boundary: dict | None = None) -> dict:
+            boundary: dict | None = None, lockdown: dict | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree, `commit`
     in full), `pins` the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
@@ -734,7 +856,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     `peer_of`), `rates` the node's (`rates_at`; None: its defaults), `lean` the Lean verifier that computes every
     session's line (`line_of_record`; None: `line.py` alone, `line_by` python), and `boundary` the certifiers' records
     of the gate node's boundary that each gate session's credit is then held to (`read_boundary`, `boundary_check`;
-    None: not checked)."""
+    None: not checked), and `lockdown` the provider's lockdown of the gate node, which grounds a gate session's
+    `NoOutsideCompute` where its signed span lies inside an applied interval (`read_lockdown`, `lockdown_check`;
+    None: none does). Each session's line is the Lean's off the record `Session.run` makes of its transcript where
+    out/ keeps it (`transcript_of`, `line_of`), else off its kept record."""
     rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
@@ -747,6 +872,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                  "line_by": "python" if lean is None else "lean", "conditional_on": dict(CONDITIONAL_ON),
                  "boundary": {"checked": False, "reason": "off by default (--boundary)"} if boundary is None else {
                      "checked": True, "sha512": boundary["sha512"], "links": boundary["links"]},
+                 "lockdown": {"read": False, "reason": "no lockdown record (--lockdown)"} if lockdown is None else {
+                     "read": True, **{k: lockdown[k] for k in ("sha512", "node", "allow", "intervals",
+                                                               "shared_filesystem")}},
                  "commit": commit, "descriptor": None if desc is None else desc.decode(),
                  "pins": None if pins is None else {"lines": len(pins), "sha512": Ch.log_digest(pins)},
                  "verifier_rtt_ms": {k: x / 1e6 for k, x in v.get("rtt", {}).items() if k.endswith("_ns")}}
@@ -786,6 +914,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
             row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc,
                                          commit=commit, pins=pins, main=main, bound=bound)
+            row["no_relay"] = lockdown_check(lockdown, signed_span(windows.get(R)))
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
             row["credit"] = no_credit("a served challenger (the verifier's machine) has no auditor's ledger, so no "
@@ -821,8 +950,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         a = copy.deepcopy(s)
         a["lean_record"], a["windows_seen"] = V.lean_record(s), seen
         row["groups"] = len(seen)
-        row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean)
-        row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean)
+        tr = transcript_of(out, s)
+        row["line_of"] = "transcript" if tr is not None and lean is not None else "record"
+        row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean, clock="challenger", transcript=tr)
+        row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean, transcript=tr)
         row["error"] = session_error(s)
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
@@ -837,6 +968,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                 "no credited span to hold to the certifiers' records: not an accepted paced session read as signed")})
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
+    doc["conditional_on"] = conditional_on(rows)
     doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
     return doc
 
@@ -909,6 +1041,10 @@ def table(doc: dict) -> str:
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     out += [f"conditional on {name}: {what}" for name, what in doc["conditional_on"].items()]
+    out += [f"no relay, session {s['k']}: " + (
+        f"{s['no_relay']['grounded_by']}, its span inside the lockdown applied {' to '.join(s['no_relay']['interval'])}"
+        if s["no_relay"]["grounded_by"] else f"conditional on NoOutsideCompute, {s['no_relay']['reason']}")
+        for s in doc["sessions"] if "no_relay" in s]
     out.append(f"boundary: held to the certifiers' records {doc['boundary']['sha512'][:16]}... of "
                f"{', '.join(doc['boundary']['links'])}" if doc["boundary"]["checked"] else
                f"boundary: not held to certifiers' records, {doc['boundary']['reason']}")
@@ -959,6 +1095,10 @@ def main(argv: list[str] | None = None) -> int:
                          "(off by default)")
     ap.add_argument("--boundary-pin", metavar="SHA512", help="SHA-512 of the certifier's public key --boundary's "
                     "records must verify under")
+    ap.add_argument("--lockdown", type=Path, metavar="FILE",
+                    help="infra's record of the provider's lockdown of the gate node (`read_lockdown`): a gate "
+                         "session whose signed span lies inside an applied interval is conditional on "
+                         "ProviderLockdown in place of NoOutsideCompute (default: none is)")
     a = ap.parse_args(argv)
     if (a.boundary is None) != (a.boundary_pin is None):
         ap.error("--boundary and --boundary-pin go together")
@@ -986,7 +1126,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
                       peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
-                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean, boundary=boundary)
+                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean, boundary=boundary,
+                      lockdown=None if a.lockdown is None else read_lockdown(a.lockdown))
     except (Disagree, lv.LeanError) as e:
         raise SystemExit(f"auditor_line: no line: {e}") from None
     finally:
@@ -996,7 +1137,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.table is not None:
         a.table.write_text(table(doc))
     print(f"auditor_line: line by {doc['line_by']}; {doc['credit']['summary']}", file=sys.stderr)
-    print(f"auditor_line: conditional on {', '.join(doc['conditional_on'])}", file=sys.stderr)
+    print(f"auditor_line: conditional on {', '.join(doc['conditional_on'])} (its memory-line-of-record label: "
+          f"`{line_label(doc)}`)", file=sys.stderr)
     bound = doc["bound"]
     print(f"auditor_line: bound: {'yes, to ' + bound['model']['name'] if bound['ok'] else 'no: ' + bound['reason']}",
           file=sys.stderr)
