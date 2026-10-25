@@ -48,7 +48,6 @@ byte, a cell on another stream or in another connection's slots, a fabricated ou
         port: Array<S, Array<4P, Byte>>, switches: Array<S_W>) -> Value<1>
     IoTiePort{P, S, DS}(root, domain, port: Array<S, Array<4P, Byte>>, salts: Array<S, Salt>,
         steps: Array<S, Array<DS>>, paths: Array<S, Array<DS, Digest>>) -> Value<1>
-    NetworkRowsRoot{N_BITS, COUNT}(rows: Array<COUNT, Array<N_BITS>>, salts: Array<COUNT, Salt>, root, domain) -> Value<1>
     IoTieBucket{B, R, P, S, DS}(row: Array<8·R·B>, map, port_root, port_domain, port, port_salts, steps, paths,
         switches) -> Value<1>
         E = S·P port entries a bucket, M = 2^D ≥ max(R, E)
@@ -60,7 +59,7 @@ gate of it hashes the row. It opens each port row at its step (`FrameV3Read`) an
 setting is a permutation, and `IoTieMatch` holds each `DATA` cell's id to the entry the map names, by its index. A
 link-window's tie is its T units. Public: the warden's root and domain id (its registration), the port's root and domain
 id, and, until the named gap closes, the steps and the map. Witness: the rows, the opened port rows, their salts and
-paths, and the switches. `NetworkRowsRoot` stays for the ingress (`io_request`), which recomputes its cells' root.
+paths, and the switches.
 """
 from __future__ import annotations
 
@@ -74,10 +73,8 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.types import Array
 from verity.ml.commitments import hm96
-from verity.ml.commitments.gates.frame_v3 import (LEVEL, FrameV3Leaf, FrameV3Node, _bytes as _fv_bytes, _hash_uint, _part,
-                                                  index_bytes, leaf_ref, node_ref, opens, read)
+from verity.ml.commitments.gates.frame_v3 import _part, leaf_ref, node_ref, opens, read
 from verity.ml.commitments.gates.hm96 import Hm96Sha512Leaf
-from verity.ml.commitments.gates.lms import LmsEqual
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import _PAD, CommitmentDomain, _hash, _uint
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
@@ -388,7 +385,7 @@ def rows_levels(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes])
 
 
 def rows_root(domain_id: bytes, rows: Sequence[bytes], salts: Sequence[bytes]) -> bytes:
-    """The rows tree's root (`NetworkRowsRoot`'s reference)."""
+    """The rows tree's root: the warden's registered root, which the proof system's registered read holds a row to."""
     return rows_levels(domain_id, rows, salts)[-1][0]
 
 
@@ -763,48 +760,6 @@ IoTieContent = CompositeDefinition(
         "the slots and matched there (`IoTieMatch`)")
 
 
-def _sig_pad(S):
-    return (("domain", DIGEST), ("x", Array(8 * S.B, BIT))), DIGEST
-
-
-FrameV3Pad = _part(
-    "FrameV3Pad", ("B",), _sig_pad, lambda C, S, *e: _hash_uint(C, _PAD, [_fv_bytes(e[0:8])], e[8], S.B, lambda u: [u]),
-    "the frame-v3-sha512 pad at rank x under the domain id domain (`CommitmentDomain.pad`); x LSB first, its uint "
-    "1 ... B bytes")
-
-
-def _sig_rows(S):
-    if type(S.N_BITS) is not int or S.N_BITS < 1 or type(S.COUNT) is not int or not 2 <= S.COUNT <= 1 << 32:
-        raise ValueError(f"a rows root has N_BITS >= 1 and 2 <= COUNT <= 2^32, not N_BITS={S.N_BITS!r}, COUNT={S.COUNT!r}")
-    return ((("rows", Array(S.COUNT, Array(S.N_BITS, BIT))), ("salts", Array(S.COUNT, SALT)), ("root", DIGEST),
-             ("domain", DIGEST)), BIT)
-
-
-def _body_rows(B, S, rows, salts, root, dom):
-    K, rr, sr, sb = HC._Consts(B), HC._refs(rows), HC._refs(salts), SALT.leaves
-    D = (S.COUNT - 1).bit_length()
-    nb = index_bytes(D)
-    level = []
-    for i in range(S.COUNT):
-        x = B.call(bind(HC.NetworkRowDigest, N_BITS=S.N_BITS), HC._coll(Array(S.N_BITS, BIT), rr[S.N_BITS * i:S.N_BITS * (i + 1)]))
-        v = B.call(Hm96Sha512Leaf, x, HC._coll(SALT, sr[sb * i:sb * (i + 1)]))[2]
-        level.append(B.call(bind(FrameV3Leaf, B=nb, SCHEMA=SCHEMA), dom, v, HC._coll(Array(8 * nb, BIT), K.bits(i, 8 * nb))))
-    for i in range(S.COUNT, 1 << D):
-        level.append(B.call(bind(FrameV3Pad, B=nb), dom, HC._coll(Array(8 * nb, BIT), K.bits(i, 8 * nb))))
-    for k in range(D):
-        nb = index_bytes(D - k - 1)
-        level = [B.call(bind(FrameV3Node, B=nb), dom, HC._coll(LEVEL, K.bits(k, 8)), HC._coll(Array(8 * nb, BIT), K.bits(t, 8 * nb)),
-                        HC._coll(BIT, K.bits(0, 1)), level[2 * t], level[2 * t + 1]) for t in range(len(level) // 2)]
-    return B.call(bind(LmsEqual, N=64), level[0], root)
-
-
-NetworkRowsRoot = CompositeDefinition(
-    "NetworkRowsRoot", 1, ("N_BITS", "COUNT"), _sig_rows, _body_rows, conformance="exact-model-tested",
-    doc="1 iff root is the dense frame-v3-sha512 root, under the domain id domain, of the COUNT N_BITS-bit rows' "
-        "hm96-sha512/row/v2 leaves, each under its salt, and the domain's pads to a power of two: every row's digest, "
-        "hm96 leaf and frame-v3 leaf, every pad and every node")
-
-
 def _sig_port(S):
     for name, least, most in (("P", 1, 1 << 28), ("S", 1, 1 << 32), ("DS", 1, 32)):
         if type(getattr(S, name)) is not int or not least <= getattr(S, name) <= most:
@@ -882,9 +837,9 @@ def bucket_arguments(inst: Instance, t: int, bits: Sequence[int]) -> list[list[i
     return [row, mp, root, dom, port, salts, steps, paths, sw]
 
 
-__all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "END", "END_ENTRY", "FrameV3Pad", "ID_AT", "ID_EVENT_BYTES", "Instance",
+__all__ = ["CELL_OUT", "CELL_USED", "EMPTY", "END", "END_ENTRY", "ID_AT", "ID_EVENT_BYTES", "Instance",
            "IoTieBucket", "IoTieCell", "IoTieContent", "IoTieMatch", "IoTiePort", "IoTieRoute", "MAP", "MapEntry",
-           "NetworkRowsRoot", "Output", "Parsed", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply", "bucket_arguments",
+           "Output", "Parsed", "Shape", "TRAILER", "UNHELD", "benes", "benes_apply", "bucket_arguments",
            "bucket_reference", "bucket_rows", "cells_match", "content_arguments", "data_cell", "domain", "end_cell",
            "entry_perm", "expected_cell", "fake_salt", "id_event", "map_bytes", "open_port", "pad_cell", "parse_cell",
            "port_arguments", "port_id", "port_row", "reference", "reference_parts", "route_depth", "rows_levels",

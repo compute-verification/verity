@@ -595,8 +595,8 @@ def test_the_ingress_tie_reads_each_requests_record_by_its_user_and_states_the_r
     assert sorted(records) == ["cmpl-1", "r0"]
     a = _advice()
     assert NG.id_requests(a, records, 404, "m") == [
-        id_request(model="m", user="r0", prompt=[1, 2, 3, 4, 5], frame_bytes=404, seed=0, **brought),
-        id_request(model="m", user="r1", prompt=[0, 0], max_tokens=2, frame_bytes=404)]
+        id_request(model="m", user="r0", prompt=[1, 2, 3, 4, 5], frame_bytes=404, seed=0, offset=0, **brought),
+        id_request(model="m", user="r1", prompt=[0, 0], max_tokens=2, frame_bytes=404, offset=0)]
     with pytest.raises(NG.NotApplicable, match="2-token prompt, the advice 5"):
         NG.id_requests(a, {"r0": records["cmpl-1"]}, 404)
     assert NG.link_framing(404, 5) == FRAMING
@@ -627,28 +627,28 @@ def test_io_tie_request_refuses_the_prompt_split_that_n2s_counts_accept():
     assert rows["prompt-split"]["untied"] == [] and rows["prompt-split"]["prompt_lens"] == {0: [5, 2], 1: [2, 5]}
 
 
-def test_phase_6s_split_of_338_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
-    """REDTEAM phase 6's literal split at the link's 4096-byte frames: prompts of 338 and 16 tokens served (two
-    request frames, then one), advised as 16 and 338. The frames' total is honest's and the first request's end a
-    frame earlier, so N2's advised counts accept it under a tie the prover states (the acausal release); IoTieRequest's
-    reference on the certified ingress refuses it, and with it N2's advised view."""
+def test_phase_6s_split_of_339_and_16_token_prompts_is_refused_by_the_ingress_tie_alone():
+    """REDTEAM phase 6's split at the link's 4096-byte cells: prompts of 339 and 16 tokens served (two request cells,
+    then one; phase 6's 338 is one cell at the warden's cut), advised as 16 and 339. The cells' total is honest's and
+    the first request's end a cell earlier, so N2's advised counts accept it under a tie the prover states (the acausal
+    release); IoTieRequest's reference on the warden's ingress refuses it, and with it N2's advised view."""
     pytest.importorskip(NG.IO_REQUEST_MODULE)
     pytest.importorskip(NG.ADVISED_MODULE)
     if V is sys.modules[__name__]:
         pytest.skip(f"{NG.ADVICE_MODULE} (I1) isn't importable")
     from verity.core.protocols.certifier.schedule import ClockSync
 
-    a = V.Advice((V.RequestAdvice("u0", 338, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
-                 (V.StepAdvice((V.Row(0, "prefill", 0, 338),)), V.StepAdvice((V.Row(0, "decode", 338, 1),
+    a = V.Advice((V.RequestAdvice("u0", 339, 2, "length"), V.RequestAdvice("u1", 16, 1, "length")),
+                 (V.StepAdvice((V.Row(0, "prefill", 0, 339),)), V.StepAdvice((V.Row(0, "decode", 339, 1),
                                                                              V.Row(1, "prefill", 0, 16)))),
                  (3, 3, 3))
-    framing = NG.link_framing(cs.FRAME_BYTES, 338)
-    assert (framing[15], framing[337]) == (1, 2)
+    framing = NG.link_framing(cs.FRAME_BYTES, 339)
+    assert (framing[15], framing[337], framing[338]) == (1, 1, 2)
     rows = NG.advice_suite(a, T=8, R=8, syncs=[ClockSync(1, Fraction(1))], request_frames=framing, received=[3],
                            frame_bytes=cs.FRAME_BYTES)
     split = rows["prompt-split"]
     assert rows["honest"]["ok"] and rows["honest"]["request_tie"] == [True]
-    assert split["prompt_lens"] == {0: [338, 16], 1: [16, 338]} and split["untied"] == []
+    assert split["prompt_lens"] == {0: [339, 16], 1: [16, 339]} and split["untied"] == []
     assert split["codes"] == [NG.REQUEST_TIE, f"{NG.ADVISED}.view"] and split["request_tie"] == [False] and split["ok"]
 
 
