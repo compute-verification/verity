@@ -1,7 +1,7 @@
 schema = "verity-bench/vllm-spec/v0"
 backend = "vllm"
 id = "llama31-8b-1gpu-pouw-h1"
-# PoUW's H1 + fx1 (`pouw:eps1-sm120-h1fx1`, `verity_vllm.protocol_options.pouw_h1`) on the eager int8_exact engine of the
+# PoUW's H1 + fx1 (`pouw:eps1-sm120-h1fx1`, `verity_vllm.protocols.pouw.h1`) on the eager int8_exact engine of the
 # int8 Llama-3.1-8B pin (int8_exact "all": every linear and attention layer on the plain exact-int8 arm), timed against
 # that engine without PoUW (`stock-int8`), its token control: H1's arm serves its own y, so its tokens must equal exact
 # int8's on every gate and timed rep. T (`rows`) is the engine's max_num_batched_tokens, 64 as in kernels' served_h1 and
@@ -12,9 +12,10 @@ id = "llama31-8b-1gpu-pouw-h1"
 # its S the run's step bound (`arms.window_steps`), opened before the clock starts and closed after it stops; each
 # window's coins are in-process (a salt coin and S round coins, the Lean verifier's entropy), so it credits nothing
 # (`pouw_h1.IN_PROCESS`): this row measures cost only. Each served call commits its A table and its z/y records' table
-# inside the forward; no receipts are computed (that is a listener's, kernels' dither arm). The arm's own gate: every
-# window static (each call inside its S steps and T rows, in order), the credit gate passing every served call, every
-# request entered. Three reps, for an interval: a b32 window is about 290 steps of commitments, five a point.
+# inside the forward, with the row-table kernels on the GPU (`pouw_h1_tables_device`); no receipts are computed (that is a
+# listener's, kernels' dither arm). The arm's own gate: every window static (each call inside its S steps and T rows, in
+# order), the credit gate passing every served call, every request entered. Three reps, for an interval: a b32 window is
+# about 290 steps of commitments, five a point.
 #
 # At T = 64 every quick prompt is chunked: int8_exact's attention takes each chunk as the last rows of its window (#3387),
 # one batched call per layer step over the step's requests (`verity_vllm.engine.int8_ops.paged_attention`).

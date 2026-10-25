@@ -1,4 +1,4 @@
-import Models.Pouw.Guarantees.Barrier
+import Definitions.Pouw.Guarantees.Barrier
 import Proofs.Pouw.Barrier.Proofs
 
 /-!
