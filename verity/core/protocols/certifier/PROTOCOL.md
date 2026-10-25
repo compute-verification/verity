@@ -2005,7 +2005,8 @@ rows are held to the committed ``srv`` row, which the verifier holds by b‖c to
 registers before the draw (`served_rows`), so REDTEAM phase 10's six passes are refused. Its charge is
 `ChargeLink_v1{D}` over the decisions the window commits, from its carry-in to its carry-out in the session's carry
 chain. In [protocol/compile-slice.md](protocol/compile-slice.md): the charge and what binds its inputs, why every
-advised window is proved, the proof of record at vLLM 8eb1's engine class (w212, 857,866 ANDs), `--zk` through
+advised window is proved, the proof of record at vLLM 8eb1's engine class (w212 under its AsyncScheduler, 1,021,302
+ANDs) and at the sync class (857,866), `--zk` through
 `benchmarks/network_traces/compile_slice_zk.py`, and the slice's earlier ZK runs with its coder.
 
 ## The replay at the served shape
