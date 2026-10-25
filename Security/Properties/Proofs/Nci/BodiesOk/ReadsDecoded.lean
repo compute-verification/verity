@@ -12,7 +12,9 @@ With the root a composite without parameters (`decode_root`), every callee decod
 and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program whose order passes (`rootFacts`).
 `CalleeOk`, `NodeOk` and the bodies `Desc.walkable` lays out are `ReadsExact.WidthFacts` (`widthFacts`), so the gates
 every root read names have their widths and are one root node's (`rootOneNode`, from `ReadsExact.rootOneNode_of`),
-and `Novel.ReadsExact` holds wherever its open statement does, `ReadsExact.RootSet` (`readsExact_of_set`).
+and `Novel.ReadsExact` holds wherever its open statement does, `ReadsExact.RootSet` (`readsExact_of_set`). Every
+reference of a node calling a primitive is read by a member (`cover_reads`), so `ReadsExact.RootSet` holds wherever
+`ReadsExact.NodeSet` does at each root node calling a composite (`rootSet_of_comp`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
@@ -129,5 +131,34 @@ theorem readsExact_of_set (hS : ReadsExact.RootSet) : Novel.ReadsExact :=
   readsExact_of_nodes_set
     (ReadsExact.rootNodes_of (fun bytes P hd ho hw => ⟨rootFacts bytes P hd ho, widthFacts bytes P hd hw⟩)
       rootOneNode) hS
+
+/-- **Every reference of a node calling a primitive is read by a member**, unless it is a batch of none, in every body
+of a decoded Program (`cover_of_nodeOk`). -/
+theorem cover_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P) :
+    ∀ d < P.defs.size, ∀ k < (P.defs[d]!).body.nodes.size, ∀ node, (P.defs[d]!).body.nodes[k]! = node →
+      (P.defs[node.fn]!).prim = true → ¬ (node.form == .batch && node.n == 0) = true →
+      ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+        ∃ t' < (if (node.form == .batch && (node.args[i]!).dims.isSome) = true then
+          ((P.defs[node.fn]!).params[i]!).2.leaves else (node.args[i]!).seq.count),
+        (if (node.form == .batch) = true then Resolve.memberIdx (node.args[i]!) m t' else t') = t := by
+  obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
+  have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
+  intro d hd k hk node hg hp hb
+  obtain ⟨-, hnd, -⟩ := (hok d hd).2.1 k hk
+  rw [hg] at hnd
+  exact cover_of_nodeOk _ node hnd hp hb
+
+/-- **`ReadsExact.RootSet` from `NodeSet` at each root node calling a composite**, with the decoder's facts (`rootFacts`,
+`widthFacts`, `cover_reads`): `ReadsExact.rootSet_of`. -/
+theorem rootSet_of_comp
+    (hComp : ∀ (bytes : ByteArray) (P : Prog) (memo : Array NciCheck.Desc.Summary) (c : NciCheck.Circuit),
+      Flock.Program.decode bytes = .ok P → P.orderViolation = none → NciCheck.Desc.rootLaidOut P = true →
+      NciCheck.Desc.inputsAtRoot P = true → NciCheck.Desc.walkable P = true → ReadsExact.memoOf P = .ok memo →
+      NciCheck.circuitOf P = .ok c →
+      ∀ k < DescAgree.nodeCount P, (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
+      ReadsExact.NodeSet P memo P.root k) :
+    ReadsExact.RootSet :=
+  ReadsExact.rootSet_of (fun bytes P hd ho => rootFacts bytes P hd ho) (fun bytes P hd hw => widthFacts bytes P hd hw)
+    (fun bytes P hd _ _ k hk => cover_reads bytes P hd P.root (decode_root bytes P hd).1 k hk) hComp
 
 end NciCheck.Properties.SecurityProofs.BodiesOk
