@@ -43,8 +43,8 @@ keyed by the component's id. On rejection or undecided nothing is public.
 | communication (the network certificate check) | yes | | `NetworkCheck.Check.protocol` (`network_check`, `../network/lean`) | `verity/network-certificate/v4` |
 | work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | integrity (sampled proofs' one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| bandwidth | yes | | stub | `verity/stub/bandwidth/v0` |
-| space (PoUS) | yes | | stub | `verity/stub/pous/v0` |
+| space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
+| bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 
 Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
 replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
