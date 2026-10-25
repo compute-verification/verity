@@ -13,9 +13,8 @@ and `bodyOk_reached`, those are `ReadsExact.RootFacts` of every decoded Program 
 `CalleeOk`, `NodeOk` and the bodies `Desc.walkable` lays out are `ReadsExact.WidthFacts` (`widthFacts`), so the gates
 every root read names have their widths and are one root node's (`rootOneNode`, from `ReadsExact.rootOneNode_of`),
 and `Novel.ReadsExact` holds wherever its open statement does, `ReadsExact.RootSet` (`readsExact_of_set`). Every
-reference of a node calling a primitive is read by a member (`cover_reads`), so `ReadsExact.RootSet` holds wherever
-`ReadsExact.NodeSet` does at each root node calling a composite (`rootSet_of_comp`). A node calling a composite has
-the shape `ReadsExact.compNodeSet` reads (`compShape_reads`).
+reference of a node calling a primitive is read by a member (`cover_reads`) and a node calling a composite has the
+shape `ReadsExact.compNodeSet` reads (`compShape_reads`), so `ReadsExact.RootSet` holds (`rootSet`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
@@ -253,42 +252,43 @@ theorem lo_of_nodeOk (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd)
       simpa [ReadsExact.upIdx] using h
     · simpa [ReadsExact.upIdx, hi0] using h
 
-/-- **A node calling a composite has the shape `ReadsExact.compNodeSet` reads**, in every body of a decoded Program: its
-callee's parameters are its body's, one per argument, a dimension of no leaves goes to a parameter of none (`DimsOk`),
-each member's parameter leaf is in range (`lo_of_nodeOk`) and, at a node with members, every reference is one
-(`tile_of_nodeOk`). -/
+/-- **A scan's carry is within its callee's return**: the callee returns `(carry, y)` and takes the carry first
+(`Shape`). -/
+theorem carry_le_of_nodeOk (c : Defn) (nd : Node) (hc : CalleeOk c) (hn : NodeOk c nd) (hp : c.prim = false)
+    (hs : nd.form = .scan) : (c.body.params[0]!).2.leaves ≤ c.body.ret.count := by
+  obtain ⟨hbp, hbr, -⟩ := hc.2 hp
+  obtain ⟨-, -, -, -, hsh, -⟩ := hn
+  obtain ⟨form, fn, args, out, axes, n, nxs⟩ := nd
+  dsimp only at hs hsh
+  subst hs
+  obtain ⟨carry, y, hret, -, hp0, -⟩ := hsh
+  rw [hbp, hp0, hbr, hret, leaves_tuple2]
+  omega
+
+/-- **A node calling a composite has the shape `ReadsExact.compNodeSet` reads** (`ReadsExact.CompShape`), in every body
+of a decoded Program: its callee's parameters are its body's, one per argument, a dimension of no leaves goes to a
+parameter of none (`DimsOk`), each member's parameter leaf is in range (`lo_of_nodeOk`), at a node with members every
+reference is one (`tile_of_nodeOk`), and a scan's carry is within its callee's return (`carry_le_of_nodeOk`). -/
 theorem compShape_reads (bytes : ByteArray) (P : Prog) (hdec : Flock.Program.decode bytes = .ok P)
     {d : ℕ} (hd : d < P.defs.size) {k : ℕ} (hk : k < (P.defs[d]!).body.nodes.size) {node : Node}
     (hg : (P.defs[d]!).body.nodes[k]! = node) (hp : (P.defs[node.fn]!).prim = false) :
-    (P.defs[node.fn]!).params = (P.defs[node.fn]!).body.params ∧
-    (P.defs[node.fn]!).body.params.size = node.args.size ∧
-    (∀ i < node.args.size, ∀ e L, (node.args[i]!).dims = some (e, L) → L = 0 →
-      ((P.defs[node.fn]!).body.params[i]!).2.leaves = 0) ∧
-    (∀ i < node.args.size, ∀ m < node.members, ∀ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves,
-      (node.form = .scan → i = 0 → m = 0) → ReadsExact.upIdx node i m j < (node.args[i]!).seq.count) ∧
-    (node.members ≠ 0 → ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
-      ∃ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves, ReadsExact.upIdx node i m j = t) := by
+    ReadsExact.CompShape P node := by
   obtain ⟨st, hP, hinv, -⟩ := decode_spec bytes P hdec
   have hok : ∀ i < P.defs.size, DefOk P.defs i P.defs[i]! := by rw [hP]; exact hinv.1
   obtain ⟨hfn, hnd, -⟩ := (hok d hd).2.1 k hk
   rw [hg] at hfn hnd
   have hc : CalleeOk P.defs[node.fn]! := (hok node.fn (by omega)).1
   obtain ⟨hbp, -, -⟩ := hc.2 hp
-  refine ⟨hbp.symm, by rw [hbp]; exact hnd.1.symm,
+  unfold ReadsExact.CompShape
+  exact ⟨hbp.symm, by rw [hbp]; exact hnd.1.symm,
     fun i hi e L h h0 => by rw [hbp]; exact hnd.2.2.2.2.2 i hi e L h h0,
-    lo_of_nodeOk _ node hc hnd hp, tile_of_nodeOk _ node hc hnd hp⟩
+    lo_of_nodeOk _ node hc hnd hp, tile_of_nodeOk _ node hc hnd hp, carry_le_of_nodeOk _ node hc hnd hp⟩
 
-/-- **`ReadsExact.RootSet` from `NodeSet` at each root node calling a composite**, with the decoder's facts (`rootFacts`,
-`widthFacts`, `cover_reads`): `ReadsExact.rootSet_of`. -/
-theorem rootSet_of_comp
-    (hComp : ∀ (bytes : ByteArray) (P : Prog) (memo : Array NciCheck.Desc.Summary) (c : NciCheck.Circuit),
-      Flock.Program.decode bytes = .ok P → P.orderViolation = none → NciCheck.Desc.rootLaidOut P = true →
-      NciCheck.Desc.inputsAtRoot P = true → NciCheck.Desc.walkable P = true → ReadsExact.memoOf P = .ok memo →
-      NciCheck.circuitOf P = .ok c →
-      ∀ k < DescAgree.nodeCount P, (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false →
-      ReadsExact.NodeSet P memo P.root k) :
-    ReadsExact.RootSet :=
+/-- **`ReadsExact.RootSet`**, from the decoder's facts (`rootFacts`, `widthFacts`, `cover_reads`, `compShape_reads`):
+`ReadsExact.rootSet_of`. -/
+theorem rootSet : ReadsExact.RootSet :=
   ReadsExact.rootSet_of (fun bytes P hd ho => rootFacts bytes P hd ho) (fun bytes P hd hw => widthFacts bytes P hd hw)
-    (fun bytes P hd _ _ k hk => cover_reads bytes P hd P.root (decode_root bytes P hd).1 k hk) hComp
+    (fun bytes P hd => cover_reads bytes P hd)
+    (fun bytes P hd _ hd' _ hk _ hg hp => compShape_reads bytes P hd hd' hk hg hp)
 
 end NciCheck.Properties.SecurityProofs.BodiesOk
