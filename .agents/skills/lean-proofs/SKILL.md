@@ -35,8 +35,10 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 - **Parallel proof work runs against fixed statements**: the final theorem's statement and each open piece's statement
   are on the branch before any worker starts. What isn't closed by the deadline is a gap list of exact lemma names, each
   with a size and an owner, with no `sorry` outside them.
-- **Definitions a guarantee reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the lock lists
-  where they are; keep it short).
+- **Definitions a guarantee or property reads go in `Definitions/` or `Models/`**, not in a proof file (`reads` in the
+  lock lists where they are; keep it short). The Lean check refuses a statement that reads the proofs tree, and a
+  definitions or properties module that imports it (`trees` in `Security/lean-audit.json`); a lemma's statement over
+  proof-only definitions is not a guarantee.
 - **Build in your own checkout.** Two agents never share a writable `.lake`. A second Lean task on one machine gets its
   own worktree, its dependencies copied (never symlinked) from a checkout with the same manifest and toolchain:
   `mkdir -p WT/PKG/.lake && cp -a --reflink=auto PKG/.lake/packages WT/PKG/.lake/`. A reviewer or red-team subagent is
@@ -68,10 +70,15 @@ python tools/verity/lean/check.py PKG  once, before pushing
   waits for another run's hold on a shared tree, and audits without the kernel replay. Where the slot file lists no `build`
   pool, or with `--dev-cache` (a slot tree whose dependencies are fetched cold), it takes the `--dev-cache` path instead:
   `check.py --dev-cache --build --no-replay` on the run's clone, its build restored from the published cache (Security:
-  about 40 minutes); it prints which path it took. Don't wrap it in `slot.py`: the pool's runner takes the check slot. The
+  about 40 minutes); it prints which path it took. In cpu-1's research pool the pool's runner takes the check slot, so don't wrap it in
+  `slot.py` there. On vy-nebius-1 a bare run is refused: wrap it in n1's Lean-record pool, `env
+  CHECK_SLOTS=/workspace/research/locks/leanrec/slots python3 tools/verity/check/slot.py --by LANE -- python3
+  tools/verity/lean/lean_changed.py --records PKG --update` (4 slots; the rest wait in slot.py's line). The
   record is in `lean-audit/audit-*/` and, when it changed, `lean-audit/record/` (with `review.txt`); commit it. It then checks every package whose
   guarantees read PKG's build (`lean-audit/requirer-<path>/`); when one fails, run `--records --update` on it too. Its
-  result is `lean-fast/v1`, which no merge check accepts.
+  result is `lean-fast/v1`, which no merge check accepts. A slot tree another run left mid-way (cancelled, timed out,
+  killed for memory) is repaired before the build, with the reason printed, so don't delete or copy a slot tree by hand.
+  A spec's failure `proved_in: P's build did not pass` points at P's own report, where its build failed.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
   tools/verity/lean/check.py --build --update PKG`, with no wrapper (vy-nebius-1 has no `python`). It exits 0 when the
   check passes; the record is at `lean-audit/audit-TAG/lean-audit.json`. Use `--cwd clone`: runs of one commit share
@@ -151,7 +158,7 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
   `P ∨ ∃ x ∈ run.hashInputs, ∃ y ∈ run.hashInputs, x ≠ y ∧ sha512 x = sha512 y`; for LMS, a verifying signature on a
   message missing from the device's log; for Merkle binding, a collision along the two openings' paths. Every `∃` is
   bounded by what the run carries. No advantage bounds, except PoUW's named random-oracle premises for SHA-512
-  (`StraightLineExtraction`, `SeedExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
+  (`StraightLineExtraction`, `SeedExtractedAt`; ASK-16), each a named `Prop` the lock lists. An input
   condition is a verifier refusal, not a hypothesis.
 - For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a commitment), and
   the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.

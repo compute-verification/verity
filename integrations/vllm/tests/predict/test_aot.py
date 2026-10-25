@@ -82,6 +82,7 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
     assert not (tmp_path / "out" / "descriptor.json.gz").exists()
 
 
+@pytest.mark.slow
 def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path, monkeypatch):
     d = tmp_path / "row"
     (d / "build" / "rank0" / "build_step").mkdir(parents=True)

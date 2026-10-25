@@ -94,8 +94,8 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
 
 class LaneCalls:
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
-    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``, ``_side_turn`` and
-    ``_side_cache``, and its
+    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``key_table``, ``eager_only``, ``roots``, ``roots_buf``,
+    ``_side_turn`` and ``_side_cache``, and its
     graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``)."""
 
     def _aside(self, sh: Any) -> bool:
@@ -156,8 +156,12 @@ class LaneCalls:
             if cuda and ("keys" in rot or g is not None) and sh.done[j] is not None:   # the side lane may still read set j's keys
                 caller.wait_event(sh.done[j])
                 waited = True
-            data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
-            self.uploads.put(keys, data, caller if self.uploads.cuda else None)
+            stream = caller if self.uploads.cuda else None
+            if self.eager_only:
+                self.key_table.put(keys, w, self.roots[w], index, sh.m16, raw, stream)
+            else:
+                data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
+                self.uploads.put(keys, data, stream)
         if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
             main.event.record(caller)
             lane.wait_event(main.event)

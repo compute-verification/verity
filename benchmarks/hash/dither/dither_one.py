@@ -74,8 +74,11 @@ PERCALL_ENV = "DITHER_PERCALL"
 # "1" (dither_so's -aom/-aomn without -ov; CA's ruling of 23 Oct, core's form not yet landed): one A table a K a step,
 # a/<K>@<s> (`a_step_fields`), its rows every call of that K's slots in call order (call c's slot r at row c T + r: the K
 # slots' buffer and their scales' rows of `scale_all`), built once after the forward; the a-step leaf of call w is the
-# root of its K's table
+# root of its K's table.  Past K = 4096 a row is n = `weights.chunks` (K) leaves (SPLITK): leaf n i + c its codes
+# [c K / n, (c + 1) K / n), then the row's scale
 A_STEP_ENV = "DITHER_A_STEP"
+# "0": A_STEP_ENV's rows whole at every K (the layout before SPLITK), only to time the chunk leaves against
+A_CHUNKS_ENV = "DITHER_A_CHUNKS"
 LIB = "dither1"
 REG = DF.REG
 CFG: dict = {}
@@ -481,14 +484,19 @@ class Window:
         by: dict = {}
         for x in ph:
             by.setdefault(x["m"], []).append(x)
-        med = {str(m): {"steps": len(xs), **{k: round(float(np.median([x[k] for x in xs if k in x])), 4)
-                                             for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
-               for m, xs in sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]}
+        top = sorted(by.items(), key=lambda kv: -len(kv[1]))[:4]
+
+        def per(f):
+            return {str(m): {"steps": len(xs), **{k: round(float(f([x[k] for x in xs if k in x])), 4)
+                                                  for k in dict.fromkeys(k for x in xs for k in x) if k != "m"}}
+                    for m, xs in top}
+        med = per(np.median)
         pc = None if self.percall is None else {**self.percall, "rounds_served": int(self.o.h1o_percall_done())}
         return {**F.form_of("dither-1s"), "steps": self.steps, "one_calls_eager": self.calls, "t": self.t, "s": self.s,
                 "epsilon": "seeded",
                 "salt": "step" if self.step_salt else "epoch", "coins": self.coins.label, "units_form": self.units_form, "peel": self.peel,
-                "percall": pc, "phases_by_m": med, "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
+                "percall": pc, "phases_by_m": med, "phases_mean_by_m": per(np.mean),
+                "phases_p90_by_m": per(lambda v: np.percentile(v, 90)), "call_forms": {DF.SITES[w % 4]: self.call_forms[w] for w in range(min(4, self.L))}}
 
 
 def round_leaves(kinds) -> str:
@@ -716,14 +724,31 @@ def xa_fault_expected(a: np.ndarray, b: np.ndarray, salt: bytes, position: int, 
     return [(256 * d * int(b[j, 0])) & M32 for j in range(32)]
 
 
+def a_chunks(k: int) -> int:
+    """A_STEP_ENV's leaves a row of K = k: `weights.chunks` (k), or 1 under A_CHUNKS_ENV=0."""
+    from verity.core.protocols.pouw import weights as WT
+    return 1 if os.environ.get(A_CHUNKS_ENV) == "0" else WT.chunks(k)
+
+
 def a_step_fields(win: Window, k: int, s: int) -> dict:
-    """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count len(linears) T)."""
-    return {"window": win.window, "step": s, "k": k, "linears": win.a_calls[k], "slots": win.t, "schema": CM.SCHEMA}
+    """A_STEP_ENV's table a/<k>@<s>: its domain's fields (kind "a-table", count n len(linears) T at n = `a_chunks` (k),
+    which the fields name past 1)."""
+    n = a_chunks(k)
+    return {"window": win.window, "step": s, "k": k, "linears": win.a_calls[k], "slots": win.t, "schema": CM.SCHEMA,
+            **({"chunks": n} if n > 1 else {})}
+
+
+def a_step_rows(q: np.ndarray, sc: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """A_STEP_ENV's leaves over rows q ([R, K] int8) and their scales sc ([R]): R n leaves of K / n codes at n =
+    `a_chunks` (K), leaf n i + c row i's chunk c, each ending in row i's scale."""
+    n = a_chunks(q.shape[1])
+    return q.reshape(-1, q.shape[1] // n), np.repeat(np.asarray(sc).reshape(-1), n)
 
 
 def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
     """commit.py's A root of each call in `calls` at step s from its slot rows q_of(w) ([T, k] int8) and scales sc_of(w)
-    ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order)."""
+    ([T] float32): its own table a/<s>/<w>, or under a_step its K's a/<K>@<s> (the K's calls' rows in call order, as
+    `a_step_rows` leaves)."""
     calls, out = list(calls), {}
     for w in calls:
         k = win.nk[w][1]
@@ -735,9 +760,8 @@ def a_roots_cpu(win: Window, s: int, calls, q_of, sc_of) -> dict[int, bytes]:
         if w in out:
             continue
         cs = win.a_calls[k]
-        q = np.concatenate([q_of(v) for v in cs])
-        sc = np.concatenate([sc_of(v) for v in cs])
-        r = CM.s8_table(CM.domain(a_step_fields(win, k, s), len(cs) * win.t, "a-table"), win.key, f"a/{k}@{s}", q, sc).root
+        q, sc = a_step_rows(np.concatenate([q_of(v) for v in cs]), np.concatenate([sc_of(v) for v in cs]))
+        r = CM.s8_table(CM.domain(a_step_fields(win, k, s), len(q), "a-table"), win.key, f"a/{k}@{s}", q, sc).root
         out.update(dict.fromkeys(cs, r))
     return {w: out[w] for w in calls}
 

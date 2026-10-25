@@ -81,6 +81,7 @@ def test_forward_equals_the_numpy_definition(m, k, scale):
     assert bad.size == 0, f"{len(bad)} words differ, first at {bad[0].tolist()}"
 
 
+@pytest.mark.slow
 def test_each_expert_gemm_is_the_dense_plain_linear_and_steps_py():
     (w13b, w2b), (w13, s13, w2, s2) = _layer(3)
     rng = np.random.default_rng(4)

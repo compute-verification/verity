@@ -1,51 +1,61 @@
 """The active warden: the network certifier as a relay that knows bytes only and retransmits everything on a fixed
 schedule, so it rebuilds the framing of every connection it carries.
 
-The warden runs on an auditor host (`trusted-nebius-host`; co-located with the server for tonight's demo, a named
+The warden runs on an auditor host (`trusted-host`; co-located with the server for tonight's demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
-bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. What it decides is the framing
-and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the
-certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+bytes unchanged in content: no tokenizer, API, request or stop string is the warden's. The one addition is the release
+order on the server's copy of an HTTP request (`release`): what the warden decides is the framing and the timing, both
+public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the certifier's grid
+(`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
-exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked padding), `FAIL` one byte, whose side failed
-the connection closed (`FAILS`), and `REFUSED` none (a connection the warden doesn't take). Both directions are cut
+exactly P bytes, `END` the last 0 … P of a direction, `PAD` none (marked padding), `FAIL` none (the connection failed
+closed, for whatever reason), and `REFUSED` none (a connection the warden doesn't take). Both directions are cut
 the same way: byte k of a direction is in its cell ⌊k/P⌋, so a cell's content is fixed by the bytes and never by how
-they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server gets the
-ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
+they were read. The client speaks cells both ways through a thin, workload-blind shim (`cells`, `Shim`); the server
+gets the ingress payloads as bytes (co-located tonight; deployed, its own shim strips the cells as the client's does).
 
-**Admission.** The k-th connection to arrive has ordinal k. At most `lanes` connections are served at once; one that
-arrives with every lane taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell and is closed.
+**Admission.** The k-th connection to arrive, from 0, has ordinal k + 1, as the active certifier's `Requests` streams
+it: ordinal 0 is no connection's. At most `lanes` connections are served at once; one that arrives with every lane
+taken waits in a FIFO queue of at most `queue`, else it gets one `REFUSED` cell, on ordinal 0, and is closed.
 The queue's head is admitted at the first bucket with a free lane, and holds that lane, r cells a bucket each way,
 until its last bucket. Nothing admitted is dropped or reordered.
 
-**The schedule.** Connection q, admitted at bucket s, carries r = `slots` cells a bucket each way from s on:
+**The schedule.** Connection q, admitted at bucket s on the warden's own schedule, carries r = `slots` cells a bucket
+each way from s on:
 - ingress: the client's bytes as `DATA` cells, as soon as a whole cell's bytes have arrived, then `END` once the
   client's `END` cell (or its end of stream) has arrived, `PAD` in a slot with neither; the bucket of the `END` is a,
   and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
-  release never waits on the server: what it releases before the server's connection opens is written once it does;
-- egress: `PAD` in every slot of the buckets before a + D, D = `delay`; then egress cell i is in bucket
-  a + D + ⌊i/r⌋, slot i mod r: `DATA` with the server's bytes iP … (i+1)P − 1 if it has sent them, else `END` with its
+  release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
+  `release.with_release` puts it, N the count of `END`s the warden released before (so the order of the `END` cells
+  in the ingress records) and the run the warden's `run_id`; what it releases before then, or before the server's
+  connection opens, is held for the server (at most the `ingress_cells` cells' bytes the ingress bound allows; past
+  them the connection fails closed, and the server gets none of it);
+- egress: `PAD` in every slot of the buckets before s + D, D = `delay`; then egress cell i is in bucket
+  s + D + ⌊i/r⌋, slot i mod r: `DATA` with the server's bytes iP … (i+1)P − 1 if it has sent them, else `END` with its
   remaining 0 … P bytes if it has ended, else `FAIL` (late): the cell's deadline passed. The rest of the bucket of
   an `END` or a `FAIL` is `PAD`, and the connection ends with that bucket. Egress holds at most `egress_cells` cells.
-So the cells on a connection, their sizes and their buckets are a function of (s, a, the number of egress cells, the
-failure's cell) and the public parameters alone: s of the arrivals and the admission rule, a of the client's bytes, and
-the egress cells of the server's bytes.
+Egress is based on the admission bucket s, never on the ingress's end, the server's connect or its response: nothing
+the server does moves s + D. So the egress cells on a connection, their sizes and their buckets are a function of (s,
+the number of egress cells, the failure's cell) and the public parameters alone, s of the arrivals and the admission
+rule; the ingress cells are a function of s and the client's bytes.
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells (limit), the server's connection failing (upstream),
 ingress past its bounds (ingress), a client cell of another kind than `DATA` or `END` (malformed). Its `FAIL` cell is
-in the slot of the next egress cell, and it is in the egress record. The server's three are one code on the wire,
-`server`, and only at an egress slot (the reason is in the warden's log), so the server, which controls whether and
-where a connection fails, chooses one of at most (cells + 1) outcomes; the client's two are the client's own doing. A
-tick that runs more than `slack` past its boundary faults both grids' windows (`monitor-unavailable`), as the active
-certifier's do.
+in the slot of the next egress cell, and it is in the egress record. Every `FAIL` is the same bytes: the reason is a
+frame of the warden's `fails` record (`reason_frame`), witness the client never sees. The server's three reasons show
+only at an egress slot, so the server, which controls whether and where a connection fails, chooses one of at most
+(cells + 1) outcomes; the client's two fail at once, and are the client's own doing. A tick that runs more than
+`slack` past its boundary faults every grid's window (`monitor-unavailable`), as the active certifier's do.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the warden sent that way: every connection's r cells of the bucket, in ordinal order, padding included. So the
-records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. `audit` is the
-read of the records in the clear: every connection's cells are the schedule's, and no connection failed.
+records are the wire, and each window's frames root (`certificate.frames_root`) attests every byte on it. The third,
+`fails`, has `lanes` slots a bucket and one frame a failed connection, its reason, in the bucket of its `FAIL`
+(`WardenParams.fails_grid`). `audit` is the read of the records in the clear: every connection's cells are the
+schedule's, every `FAIL` has its one reason, and no connection failed.
 
 `PROTOCOL.md`'s "The active warden" has the leak bound. The module imports only the standard library and `verity`.
 """
@@ -55,6 +65,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import math
+import secrets
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable, Sequence
@@ -63,18 +74,17 @@ from functools import cached_property
 from typing import Any
 
 from verity.ml.commitments.identity import canonical_json_bytes, tagged_sha512
-from verity.core.protocols.certifier.active import DATA, HEADER, PAD, decode_frame, encode_frame, precise_sleep
-from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, row_count
+from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BYTES, decode_frame, encode_frame,
+                                                   precise_sleep)
+from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, row_count
+from verity.core.protocols.certifier.release import with_release
 
-PARAMETERS_TAG = "verity-network-warden/parameters/v1"
+PARAMETERS_TAG = "verity-network-warden/parameters/v2"
 #: the warden's cell kinds, beside `active`'s PAD and DATA
 END, FAIL, REFUSED = 0x20, 0x21, 0x22
 KIND_NAMES = {PAD: "pad", DATA: "data", END: "end", FAIL: "fail", REFUSED: "refused"}
-#: a FAIL cell's one byte: whose side failed the connection
-FAILS = {"server": 1, "ingress": 2, "malformed": 3}
-FAIL_NAMES = {v: k for k, v in FAILS.items()}
-#: the warden's reasons for a server's failure, kept in its log, never on the wire
-SERVER_FAILS = ("late", "limit", "upstream")
+#: why a connection failed: the server's three, then the client's two; only the `fails` record holds them
+REASONS = ("late", "limit", "upstream", "ingress", "malformed")
 #: the bytes the warden reads from a server at once
 READ_BYTES = 1 << 16
 #: the most a client connection may hold unwritten before the warden stops writing to it
@@ -88,7 +98,7 @@ class WardenParams:
     cell_bytes: int = 256  # B
     slots: int = 4  # r: a connection's cells a bucket, each way
     bucket_ms: int = 100  # τ
-    delay: int = 10  # D: buckets from the bucket ingress ends to the first egress cell's
+    delay: int = 10  # D: buckets from admission to the first egress cell's
     lanes: int = 16  # connections served at once
     queue: int = 64  # connections waiting for a lane, past which REFUSED
     window: int = 600  # T: buckets a record covers
@@ -113,11 +123,16 @@ class WardenParams:
         """Each direction's record: r·lanes cells a bucket of B bytes."""
         return GridParams(self.window, self.lanes * self.slots, self.cell_bytes, self.bucket_ms)
 
+    @property
+    def fails_grid(self) -> GridParams:
+        """The `fails` record: at most one reason a connection, so `lanes` a bucket."""
+        return GridParams(self.window, self.lanes, self.cell_bytes, self.bucket_ms)
+
     @cached_property
     def digest(self) -> bytes:
         """The 64 bytes each record head's `parameters` carries."""
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(asdict(self) | {"kinds": sorted(KIND_NAMES),
-                                                                                  "fails": FAILS}))
+                                                                                  "reasons": list(REASONS)}))
 
 
 def cell(kind: int, ordinal: int, payload: bytes, cell_bytes: int) -> bytes:
@@ -133,10 +148,25 @@ def read_cell(data: bytes, cell_bytes: int) -> tuple[int, int, bytes]:
     if kind not in KIND_NAMES or HEADER.unpack_from(data)[2] != size or \
             cell(kind, ordinal, payload, cell_bytes) != data:
         raise ValueError("not a warden cell")
-    if (kind == DATA and size != cell_bytes - HEADER.size) or (kind in (PAD, REFUSED) and size) or \
-            (kind == FAIL and (size != 1 or payload[0] not in FAIL_NAMES)):
+    if (kind == DATA and size != cell_bytes - HEADER.size) or (kind in (PAD, FAIL, REFUSED) and size):
         raise ValueError(f"a {KIND_NAMES[kind]} cell of {size} bytes")
     return kind, ordinal, payload
+
+
+def reason_frame(ordinal: int, reason: str, cell_bytes: int) -> bytes:
+    """A frame of the `fails` record: why connection `ordinal` failed, as one byte, its index in `REASONS`."""
+    return encode_frame(FAIL, ordinal, bytes([REASONS.index(reason)]), cell_bytes)
+
+
+def read_reason(data: bytes, cell_bytes: int) -> tuple[int, str]:
+    """(ordinal, reason) of a `reason_frame`, or ValueError."""
+    if len(data) != cell_bytes:
+        raise ValueError(f"a reason is {cell_bytes} bytes, not {len(data)}")
+    kind, ordinal, payload = decode_frame(data)
+    if kind != FAIL or len(payload) != 1 or payload[0] >= len(REASONS) or \
+            reason_frame(ordinal, REASONS[payload[0]], cell_bytes) != data:
+        raise ValueError("not a reason frame")
+    return ordinal, REASONS[payload[0]]
 
 
 def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
@@ -151,8 +181,8 @@ def cells(data: bytes, cell_bytes: int, ordinal: int = 0) -> bytes:
 @dataclass
 class Shim:
     """The client's thin shim, reading half: every cell the warden sends on one connection, until it closes, each kept
-    with the time it arrived; `data` is the `DATA` and `END` payloads, `outcome` "end", "refused", the failure's name,
-    or "cut" when the connection closed before any of those, or inside a cell."""
+    with the time it arrived; `data` is the `DATA` and `END` payloads, `outcome` "end", "fail" or "refused", or "cut"
+    when the connection closed before any of those, or inside a cell."""
 
     cell_bytes: int
     clock: Callable[[], float] = time.monotonic
@@ -178,10 +208,8 @@ class Shim:
                 continue
             if kind in (DATA, END):
                 self.data += payload
-            if kind in (END, REFUSED):
+            if kind in (END, FAIL, REFUSED):
                 self.outcome = KIND_NAMES[kind]
-            elif kind == FAIL:
-                self.outcome = FAIL_NAMES[payload[0]]
 
 
 @dataclass(eq=False)
@@ -194,16 +222,18 @@ class _Connection:
     admitted: int | None = None
     server: Any = None
     ingress: bytearray = field(default_factory=bytearray)  # received, not yet released
-    unsent: bytearray = field(default_factory=bytearray)  # released before the server's connection opened
+    held: bytearray = field(default_factory=bytearray)  # released, held for the server until the END's release
+    unsent: bytearray = field(default_factory=bytearray)  # released whole before the server's connection opened
+    release: int | None = None  # N: its END's place in the warden's release order
     ingress_ended: bool = False  # the client's END has been received
     ingress_end: int | None = None  # a: the bucket the warden released ingress's END
     ingress_cells: int = 0
     egress: bytearray = field(default_factory=bytearray)  # the server's bytes, not yet released
     egress_ended: bool = False
-    egress_cells: int = 0  # egress slots past a + D, released
+    egress_cells: int = 0  # egress slots past s + D, released
     problem: str | None = None  # the client's: failed at the next slot
     upstream: str | None = None  # the server connection's: failed at the first egress slot without a whole cell
-    failed: str | None = None  # a client's problem or one of SERVER_FAILS
+    failed: str | None = None  # one of REASONS
     failed_at: int | None = None  # the egress cell of the FAIL
     ended: int | None = None  # the bucket of the connection's last cells
     bytes_in: int = 0
@@ -216,22 +246,35 @@ class Warden:
     the schedule from `origin`, the clock's time of bucket 0, for `windows` record windows, then cuts whatever is still
     served or queued. `connect()` opens a server connection, a (reader, writer) pair.
 
-    - `publish(record, params)` receives each window's records, ingress then egress, as they close (by default they
-      are kept in `records`); `log` has one entry a connection once it ends, `refused` the ordinal-less refusals'
-      count, `lateness` each tick's in seconds;
+    - `publish(record, params)` receives each window's records, ingress, egress, then fails, as they close (by
+      default they are kept in `records`); `log` has one entry a connection once it ends, `refused` the ordinal-less
+      refusals' count, `lateness` each tick's in seconds;
+    - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
+      that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
+      tick never hands it a whole window at once;
+    - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
+      `run_id`, `RUN_ID_BYTES` drawn from `run_nonce` at construction, names the run on the server's side;
     - `until(predicate)` waits until the warden's state satisfies it, for a caller that drives a `VirtualClock`."""
 
     def __init__(self, params: WardenParams, connect: Callable[[], Awaitable[tuple[Any, Any]]], *, origin: float,
                  windows: int, clock: Callable[[], float] = time.monotonic,
                  sleep: Callable[[float], Awaitable[None]] = precise_sleep,
-                 publish: Callable[[Record, GridParams], None] | None = None, slack: float = 0.025,
-                 egress_link: str = "responses", ingress_link: str = "requests") -> None:
+                 publish: Callable[[Record, GridParams], None] | None = None,
+                 release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
+                 egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
+                 run_nonce: Callable[[int], bytes] = secrets.token_bytes) -> None:
+        self.run_id = run_nonce(RUN_ID_BYTES)
+        if not (isinstance(self.run_id, bytes) and len(self.run_id) == RUN_ID_BYTES):
+            raise ValueError(f"a run id is {RUN_ID_BYTES} bytes")
+        self.requests_released = 0
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
         self.egress = Certifier(egress_link, params.grid)
         self.ingress = Certifier(ingress_link, params.grid)
+        self.fails = Certifier(fails_link, params.fails_grid)
         self.records: list[Record] = []
         self.publish = publish or (lambda record, grid: self.records.append(record))
+        self.release = release
         self.queue: deque[_Connection] = deque()
         self.active: list[_Connection] = []
         self.ordinals = 0
@@ -256,7 +299,7 @@ class Warden:
             writer.close()
             self._changed.set()
             return
-        connection = _Connection(self.ordinals, reader, writer, asyncio.get_running_loop().create_future(),
+        connection = _Connection(self.ordinals + 1, reader, writer, asyncio.get_running_loop().create_future(),
                                  self._bucket())
         self.ordinals += 1
         self.queue.append(connection)
@@ -275,8 +318,8 @@ class Warden:
                 late = self.clock() - deadline
                 self.lateness.append(late)
                 if late > self.slack:
-                    self.ingress.fault(Reason.MONITOR_UNAVAILABLE)
-                    self.egress.fault(Reason.MONITOR_UNAVAILABLE)
+                    for grid in (self.ingress, self.egress, self.fails):
+                        grid.fault(Reason.MONITOR_UNAVAILABLE)
                 self._tick(t)
                 self.ticks += 1
                 self._changed.set()
@@ -301,11 +344,14 @@ class Warden:
             if c.ended is not None:
                 self._end(c)
         self.active = [c for c in self.active if c.ended is None]
-        self.ingress.tick()
-        self.egress.tick()
+        for grid in (self.ingress, self.egress, self.fails):
+            row = grid.tick()
+            if self.release is not None:
+                self.release(grid.link, row)
         if (t + 1) % self.params.window == 0:
             self.publish(self.ingress.close_window(), self.params.grid)
             self.publish(self.egress.close_window(), self.params.grid)
+            self.publish(self.fails.close_window(), self.params.fails_grid)
 
     def _admit(self, c: _Connection, t: int) -> None:
         c.admitted = t
@@ -366,8 +412,9 @@ class Warden:
             self._changed.set()
 
     def _ingress(self, c: _Connection, t: int) -> list[bytes]:
-        """Connection c's r ingress cells at bucket t, their payloads written to the server, or kept until its
-        connection opens: the release never waits on the server, so the server can't move a."""
+        """Connection c's r ingress cells at bucket t, their payloads held for the server until the `END`'s release,
+        then written whole with the release order, or kept until its connection opens (at most the ingress bound's
+        bytes): the release never waits on the server."""
         B, p, r = self.params.cell_bytes, self.params.payload, self.params.slots
         out, sent = [], []
         for _ in range(r):
@@ -387,15 +434,21 @@ class Warden:
         c.ingress_cells += len(sent)
         if c.ingress_end is None and t - c.admitted + 1 >= self.params.ingress_buckets:
             c.problem = c.problem or "ingress"
-        if sent and c.server is None:
-            c.unsent += b"".join(sent)
-        elif sent and not c.server[1].is_closing():
-            c.server[1].write(b"".join(sent))
+        c.held += b"".join(sent)
+        if c.ingress_end == t:
+            c.release, self.requests_released = self.requests_released, self.requests_released + 1
+            whole = with_release(bytes(c.held), c.release, self.run_id)
+            c.held.clear()
+            if c.server is None:
+                c.unsent += whole
+            elif not c.server[1].is_closing():
+                c.server[1].write(whole)
         return out
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
-        """Connection c's r egress cells at bucket t (the module docstring's schedule). A client's problem fails the
-        connection at once; the server's only at an egress slot, so where it fails is one of the egress cells."""
+        """Connection c's r egress cells at bucket t (the module docstring's schedule), from s + D on. A client's
+        problem fails the connection at once; the server's only at an egress slot, so where it fails is one of the
+        egress cells. The reason goes to the `fails` record, never into the cell."""
         B, p, r, D = self.params.cell_bytes, self.params.payload, self.params.slots, self.params.delay
         out = []
         for _ in range(r):
@@ -405,7 +458,7 @@ class Warden:
             failed = None
             if c.problem is not None:
                 failed = c.problem
-            elif c.ingress_end is None or t < c.ingress_end + D:
+            elif t < c.admitted + D:
                 out.append(cell(PAD, c.ordinal, b"", B))
                 continue
             else:
@@ -426,7 +479,8 @@ class Warden:
                 else:
                     failed = "upstream" if c.upstream else "late"
             c.failed, c.failed_at, c.ended = failed, c.egress_cells, t
-            out.append(cell(FAIL, c.ordinal, bytes([FAILS["server" if failed in SERVER_FAILS else failed]]), B))
+            out.append(cell(FAIL, c.ordinal, b"", B))
+            self.fails.enqueue(reason_frame(c.ordinal, failed, B))
         return out
 
     def _write(self, c: _Connection, data: bytes) -> None:
@@ -447,24 +501,37 @@ class Warden:
         if not c.done.done():
             c.done.set_result(None)
         self.log.append({"ordinal": c.ordinal, "arrived": c.arrived, "admitted": c.admitted,
-                         "ingress_end": c.ingress_end, "ended": c.ended, "ingress_cells": c.ingress_cells,
+                         "ingress_end": c.ingress_end, "release": c.release, "ended": c.ended,
+                         "ingress_cells": c.ingress_cells,
                          "egress_cells": c.egress_cells, "bytes_in": c.bytes_in, "bytes_out": c.bytes_out,
                          "failed": c.failed, "failed_at": c.failed_at, "upstream": c.upstream, "cut": cut})
 
 
-def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record]) -> dict:
+def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Record], fails: Sequence[Record]) -> dict:
     """The read of a run's records in the clear (a rehearsal's; a deployment's is N2's, in ZK). Every cell is a warden
     cell; in every bucket of each direction each live connection has r cells, in ordinal order, and admissions are in
     ordinal order; each connection's ingress is data and padding, then one `END` and padding to its bucket a; and its
-    egress is exactly the schedule's for (its admission s, a, its egress cells): padding through bucket a + D − 1, then
-    `DATA` in every slot, then one `END` or `FAIL`, then padding to the bucket's end. A window is accepted when both its
-    records are complete, its cells are the schedule's and no connection failed in it. Each connection's entry has its
-    buckets, cells, outcome and the SHA-256 of each direction's bytes."""
+    egress is exactly the schedule's for (its admission s, its egress cells): padding through bucket s + D − 1 (up to
+    its `FAIL`, for a client's failure before then), then `DATA` in every slot, then one `END` or `FAIL`, then padding
+    to the bucket's end. Every `FAIL` has one reason in the `fails` record, in its bucket, and every reason its `FAIL`.
+    A window is accepted when its three records are complete, its cells are the schedule's and no connection failed in
+    it. Each connection's entry has its buckets, cells, outcome, its failure's reason and the SHA-256 of each
+    direction's bytes."""
     T, r, D = params.window, params.slots, params.delay
     verdicts: dict[int, list[str]] = defaultdict(list)
-    for record in [*ingress, *egress]:
+    for record in [*ingress, *egress, *fails]:
         if not record.status.complete:
             verdicts[record.window].append(f"{record.link}: {record.status.reason.value}")
+    reasons: dict[int, list[tuple[int, str]]] = defaultdict(list)
+    for record in fails:
+        for b, row in enumerate(record.grid):
+            for f in row[:row_count(row)]:
+                try:
+                    o, why = read_reason(f, params.cell_bytes)
+                except ValueError as e:
+                    verdicts[record.window].append(f"fails bucket {record.window * T + b}: {e}")
+                    continue
+                reasons[o].append((record.window * T + b, why))
     per: dict[int, dict[str, dict[int, list[tuple[int, bytes]]]]] = defaultdict(lambda: {"ingress": {}, "egress": {}})
     total = {"ingress": 0, "egress": 0}
     for name, records in (("ingress", ingress), ("egress", egress)):
@@ -487,7 +554,7 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
     for n, o in enumerate(sorted(per)):
         ing, eg = per[o]["ingress"], per[o]["egress"]
         s = min([*ing, *eg])
-        problems = [f"connection {o} where {n} is next"] if o != n else []
+        problems = [f"connection {o} where {n + 1} is next"] if o != n + 1 else []
         if s < last_admitted:
             problems.append(f"admitted at {s}, before connection {o - 1}")
         last_admitted = s
@@ -510,27 +577,37 @@ def audit(params: WardenParams, ingress: Sequence[Record], egress: Sequence[Reco
         failed = failed_at = None
         if live:
             last = live[-1]
-            lead = (a + D - s) * r if a is not None else kinds.index(FAIL) if FAIL in kinds else len(kinds)
+            lead = kinds.index(FAIL) if live == [FAIL] and kinds.index(FAIL) < D * r else D * r
             expected = [PAD] * lead + [DATA] * (len(live) - 1) + [last]
             expected += [PAD] * (-len(expected) % r)
-            if last not in (END, FAIL) or kinds != expected or (a is None and live != [FAIL]):
-                problems.append("its egress isn't padding to a + D, data in every slot, one END or FAIL, padding")
-            if last == FAIL:
-                failed = FAIL_NAMES[eg_cells[kinds.index(FAIL)][1][0]]
-                failed_at = len(live) - 1
+            if last not in (END, FAIL) or kinds != expected:
+                problems.append("its egress isn't padding to s + D, data in every slot, one END or FAIL, padding")
+        got = reasons.pop(o, [])
+        if FAIL in kinds:
+            failed_at = live.index(FAIL)
+            if [t for t, _ in got] == [s + kinds.index(FAIL) // r]:
+                failed = got[0][1]
+            else:
+                failed = "fail"
+                problems.append("its FAIL hasn't one reason, in its bucket")
+        elif got:
+            problems.append("it has a reason and no FAIL")
         data_in = b"".join(p for k, p in ing_cells if k in (DATA, END))
         data_out = b"".join(p for k, p in eg_cells if k in (DATA, END))
         ended = max(eg) if live and live[-1] in (END, FAIL) else None
         for problem in problems:
             verdicts[s // T].append(f"connection {o}: {problem}")
         if failed:
-            verdicts[ended // T].append(f"connection {o} failed closed ({failed}) at egress cell {failed_at}")
+            verdicts[max(eg) // T].append(f"connection {o} failed closed ({failed}) at egress cell {failed_at}")
         connections.append({"ordinal": o, "admitted": s, "ingress_end": a, "ended": ended,
                             "egress_cells": len(live), "ingress_bytes": len(data_in), "egress_bytes": len(data_out),
                             "failed": failed, "failed_at": failed_at,
                             "ingress_sha256": hashlib.sha256(data_in).hexdigest(),
                             "egress_sha256": hashlib.sha256(data_out).hexdigest()})
-    windows = sorted({rec.window for rec in [*ingress, *egress]})
+    for o, got in reasons.items():
+        for t, _ in got:
+            verdicts[t // T].append(f"a reason for connection {o}, which has no cells")
+    windows = sorted({rec.window for rec in [*ingress, *egress, *fails]})
     out = [{"window": w, "accepted": not verdicts.get(w), "problems": verdicts.get(w, [])} for w in windows]
     return {"accepted": bool(out) and all(w["accepted"] for w in out), "windows": out, "connections": connections,
             "cells": total}
