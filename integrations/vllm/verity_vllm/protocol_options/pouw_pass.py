@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.schemes.pearl_c import CALL_RANGE
+from verity.core.protocols.pouw.protocol import CALL_RANGE
 
 #: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
 MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
@@ -55,14 +55,14 @@ def call_index(run: Any, calls: int = 1) -> int:
     seed binds the salt and the index but no pass, so two passes of one salt sharing an index would repeat their seeds and
     tickets (CMP-84).  The pass's own buffers stay positional (``index - run.cur.base``); a pass begun without a base
     (`finish`'s) takes `EpochCalls.epoch_calls`.  ``RuntimeError`` where ``calls`` more calls would reach
-    `pearl_c.CALL_RANGE`, which the verifier refuses."""
+    `protocol.CALL_RANGE`, which the verifier refuses."""
     p = run.cur
     if p.base is None:
         p.base = run.epoch_calls()
     index = p.base + len(p.matmuls)
     if index + calls > CALL_RANGE:
         raise RuntimeError(f"{run.entry}: the epoch is at call {index}, and {calls} more would reach 2^32 calls, the range of "
-                           "-h3's row seed (`pearl_c.CALL_RANGE`); end the epoch: reinstall under a new salt")
+                           "-h3's row seed (`protocol.CALL_RANGE`); end the epoch: reinstall under a new salt")
     run._used = max(run._used, index + calls)
     return index
 

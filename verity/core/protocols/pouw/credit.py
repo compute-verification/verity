@@ -178,8 +178,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.circuit import live_reads as LR
-from verity.core.protocols.pouw.protocol import tagged
-from verity.core.protocols.pouw.schemes import pearl_c as PC
+from verity.core.protocols.pouw.protocol import CALL_RANGE, tagged
 from verity.core.protocols.pouw.weights import CHUNK_ALIGN, CHUNK_MAX, chunks, leaf_words, weights_root
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
@@ -2169,7 +2168,7 @@ CALL_RANGE_CODE, REPEATED_CALL = "call-range", "repeated-call"
 
 def passes_distinct(passes: Any) -> tuple[str, str] | None:
     """Why the Pearl-C pass manifests `passes`, credited together, are refused, or None: every call index below
-    `pearl_c.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
+    `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
     (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
     so a repeated index under one salt and root_B repeats its seeds, noise and tickets and would be credited twice
     (CMP-84; `Properties.Pouw.LiveSalt.PassesDistinct`). A pass's calls are its manifest's ``matmuls``, each an
@@ -2183,7 +2182,7 @@ def passes_distinct(passes: Any) -> tuple[str, str] | None:
         held = seen.setdefault(salt, {})
         for u in us:
             i = u.get("index")
-            if type(i) is not int or not 0 <= i < PC.CALL_RANGE:
+            if type(i) is not int or not 0 <= i < CALL_RANGE:
                 return (CALL_RANGE_CODE, f"pass {p} holds call index {i!r}, outside [0, 2^32) where -h3's row seed "
                                          "packs it: end the epoch (a new salt) before its 2^32nd call")
             q = held.get(i)

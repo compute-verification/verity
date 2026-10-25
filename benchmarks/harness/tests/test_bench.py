@@ -1073,8 +1073,11 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
 
-        def begin(self, stepped=False):
-            self.stepped = stepped
+        def begin(self, stepped=False, at=None):
+            self.stepped, self.ats = stepped, [*getattr(self, "ats", []), at]
+
+        def epoch_calls(self):
+            return 7
 
         def poison(self):
             pass
@@ -1088,7 +1091,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
     exact = runner._pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
-    assert run.stepped
+    assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]

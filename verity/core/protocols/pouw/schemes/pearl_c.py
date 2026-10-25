@@ -84,7 +84,7 @@ from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
 from verity.ml.circuits.silicon import fp32
 
-from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..registration import check_registration
 from ..serving import HASH_FORMATS
 from . import pearl_kw as P
@@ -159,10 +159,6 @@ def seed_b(salt: bytes, root_b: bytes, hashing: str = "h0") -> bytes:
 def line_key(seed: bytes) -> bytes:
     """The key a seed's noise lines are drawn under: Pearl's (`pearl_kw._line_key`), or an `S512Seed`'s H_"noise-line"(seed)."""
     return _s512_line_key(seed) if isinstance(seed, S512Seed) else P._line_key(seed)
-
-
-CALL_RANGE = 1 << 32
-"""Call indices of one epoch (one salt) lie below this: `row_seed` packs the index into the high half of a u64."""
 
 
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
