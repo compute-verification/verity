@@ -19,6 +19,9 @@ failure message carries its fix.
  - P10: size, at most 800-line modules and 150-line functions;
  - P11: names;
  - P12: shared keys.
+- **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
+ `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
+ the record), never dropped with `pass`, `continue` or a default.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **The ratchet itself** (`test_ratchet.py`). A new key fails: fix the new code. A moved violation moves its entry in
