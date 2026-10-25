@@ -20,7 +20,7 @@ protocol's audit:
 * PoUB: `Bandwidth.Guarantees.AuditRO`, the device's ingress, at `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`;
 * PoUS: `Pous.Guarantees.ContinuousAudit`, the freed share of memory over the period's challenges, at
   `βe + n·(β + 1)·π`, or the remote audit's memory line (`Properties.RemoteAudit.Line.LineHeld`);
-* the network certifier: the leak through the wardens over a period of sampled audits, each window at
+* the network certifier: the leak through the network certifiers over a period of sampled audits, each window at
   `δ + ε_ks + ε_bind`, whose count of secrets gives `K`;
 * sampled proofs: the sampled audit's live knowledge soundness, at `δ + ε_ks + δ_link`, read as a bound on the
   committed transcript's wrong units.
@@ -38,8 +38,8 @@ space whose five audits (sampled proofs, PoUW, PoUS, PoUB and the network certif
 at certificates `c` (integrity `ε`, work `W`, space `S`, bandwidth `Q`, communication `K`), price `p` and errors `δ`,
 the probability over the period's coins that some audit accepts while its claim fails on that run (more than an `ε`
 share of the circuit's units wrong, less than `W` of work, fewer than `S` bits held on average, fewer than `Q` bits
-read, or more than `K` bits through the wardens) is at most `∑ δ`. The audits are decided separately: each accepted
-audit's claim holds, whatever the other audits decided. -/
+read, or more than `K` bits through the network certifiers) is at most `∑ δ`. The audits are decided separately:
+each accepted audit's claim holds, whatever the other audits decided. -/
 def JointPeriod : Prop :=
   ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (r : PeriodRun d α C Ω) (c : Certificates) (p : Price)
@@ -53,8 +53,8 @@ function of every coin, so a period may adapt to the earlier periods' coins) who
 guarantees, period `j`'s at certificates `c j`, price `p` and errors `δ j`: the probability that some audit of some
 period accepts while its claim fails on that run is at most `∑_j ∑_a δ j a`. Outside it, every accepted audit of every
 period holds its claim, so the horizon's work, bits held and bits read are at least the sums of the certificates of
-the periods whose PoUW, PoUS and PoUB audits accepted, and its bits through the wardens at most the sum of those whose
-network certifier accepted. -/
+the periods whose PoUW, PoUS and PoUB audits accepted, and its bits through the network certifiers at most the sum of
+those whose network certifier accepted. -/
 def JointHorizon : Prop :=
   ∀ (ι α I : Type) [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     [∀ i, Nonempty (Ω i)] (d : Device ι) (C : Verity.Circuit) (m : ℕ) (r : Fin m → PeriodRun d α C Ω)

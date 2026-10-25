@@ -12,7 +12,7 @@ A period is one window of one node's run, over one circuit (`Verity.Circuit`, co
 * PoUW, on work: the compute account did at least `W` of work at price `p`;
 * PoUS, on space: the capacity account held at least `S` bits of device memory on average;
 * PoUB, the bandwidth audit, on bandwidth: the bandwidth account read at least `Q` bits from device memory;
-* the network certifier, on communication: what the node moved through the wardens is within `K` bits.
+* the network certifier, on communication: what the network certifiers saw the node move is within `K` bits.
 
 The period's coins are one space, `(i : I) → Ω i`, uniform (`Pouw.pr`, as `Accounting.Joint`'s), and each audit draws
 its own coordinate of it (`PeriodRun.own`). The device sees every coin, so the schedule and the committed transcript are
@@ -41,7 +41,7 @@ inductive Audit
   | pous
   /-- PoUB, the bandwidth audit: bits read from device memory -/
   | poub
-  /-- the network certifier: communication through the wardens -/
+  /-- the network certifier: communication through the network certifiers -/
   | network
   deriving DecidableEq
 
@@ -59,7 +59,7 @@ structure Certificates where
   S : ℝ
   /-- bandwidth: at least this many bits read from device memory (Q_cert) -/
   Q : ℝ
-  /-- communication: at most this many bits through the wardens (K) -/
+  /-- communication: at most this many bits through the network certifiers (K) -/
   K : ℝ
 
 /-- A period of a node's run on device `d` with accounts `α`, over the circuit `C`, on the coins `(i : I) → Ω i`: the
@@ -84,7 +84,8 @@ structure PeriodRun {ι : Type} (d : Device ι) (α : Type) [Fintype α] (C : Ve
   fits : ∀ ξ, (schedule ξ).Fits d
   /-- the circuit's transcript the node committed in the period, at the coins -/
   transcript : ((i : I) → Ω i) → C.Transcript
-  /-- the network certifier's claim at `K`: what the node moved through the wardens in the period is within `K` bits -/
+  /-- the network certifier's claim at `K`: what the network certifiers saw the node move in the period is within `K`
+  bits -/
   commWithin : ℝ → ((i : I) → Ω i) → Prop
   /-- the verdict of an audit at the coins -/
   accepts : Audit → ((i : I) → Ω i) → Prop
