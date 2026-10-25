@@ -198,14 +198,25 @@ def test_the_snapshot_is_helds_conclusion(store) -> None:
     assert snap.lost_blocks == pytest.approx(W / P + (X * r.span_ns + 3 + 5) / P + 2, rel=1e-12)
     assert snap.epsilon == min(1, snap.lost_blocks / N) and snap.held_bytes == (1 - snap.epsilon) * N * B
     draws = sum(w.profile.drawn["receipt"] for w in r.windows)
-    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.sketch(r, n)
-                          + draws * 2.0 ** -64)
+    assert snap.delta == (r.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + ledger.hiding(r)
+                          + ledger.sketch(r, n) + draws * 2.0 ** -64)
     d = ledger.delta_parts(r, n)
     assert d == {"profile": r.windows[0].profile.delta, "slack": P * 2.0 ** -audit.SLACK_LOG2,
-                 "sketch": ledger.sketch(r, n), "rejection": draws / 2 ** 64} and tuple(d) == ledger.DELTA_PARTS
-    assert snap.delta == d["profile"] + d["slack"] + d["sketch"] + d["rejection"] and draws > 0
+                 "hiding": ledger.hiding(r), "sketch": ledger.sketch(r, n), "rejection": draws / 2 ** 64}
+    assert tuple(d) == ledger.DELTA_PARTS
+    assert snap.delta == d["profile"] + d["slack"] + d["hiding"] + d["sketch"] + d["rejection"] and draws > 0
     assert Fraction(d["rejection"]) == Fraction(draws, 2 ** ledger.REJECTION_LOG2)
     assert "unpaced" in held.refused and links.refused == held.refused and held.epsilon is None
+
+
+def test_the_coin_commitments_hiding_is_charged(store) -> None:
+    """`ledger.hiding` is `PooledDraw`'s hiding terms under hm96-sha512's pinned key: two distances a window, each
+    within 2^-192, n·2^-191 over the record's n windows, which the line's δ carries."""
+    s, prover, passes, clock = drive(store, params(), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r = s.record()
+    assert len(r.windows) > 1 and ledger.hiding(r) == pytest.approx(len(r.windows) * 2.0 ** -191, rel=1e-12)
+    assert ledger.hiding(r) == ledger.hiding_over(len(r.windows))
 
 
 def test_the_lines_prf_advantages_are_named_by_a_registered_claim_and_in_no_part_of_delta() -> None:

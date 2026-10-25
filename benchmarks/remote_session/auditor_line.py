@@ -74,10 +74,11 @@ Each session's `sketch` is its δs at the outside-compute factor F its verifier 
 and `sketch_outside` every F the run's sessions were charged at.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
-`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its four
+`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its five
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
-41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), δs, the
-sketch's, and the draw's rejection Σ_t k_t/2^64 (added to the total of a record whose ledger didn't charge it), plus
+41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
+commitment's hiding terms n·2^-191, δs, the sketch's, and the draw's rejection Σ_t k_t/2^64 (the hiding and the
+rejection added to the total of a record whose ledger didn't charge them), plus
 the windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no number and are in no total. The
 line at each T, and the line of record over every T (`credit`'s `error`), fail with at most the sum of their credited
 sessions' totals: the least share is read off whichever session the run made least, so the union bound holds where a
@@ -369,13 +370,14 @@ def session_error(session: dict) -> dict:
     """An accepted session's failure probability, the chance its line credits more than the node held: `total`, the
     memory line's δ as the ledger computed it (`ledger.memory`'s `Line.delta`, every form's in the record's
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
-    beside it its four parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
-    2^-slack a pass, `delta_sketch`, δs, and `delta_rejection`, the draw's Σ_t k_t/2^64. A record that carries the
-    parts (verifier.json's `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`);
-    one written before them gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at
-    the slack its ledger was charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and
-    δs as the rest. A ledger that didn't charge the rejection (no such part) has it added to its total, from its
-    windows' draws (`recorded_windows`, as `ledger.rejection` reads them). Each in floats and exact beside them
+    beside it its five parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
+    2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_sketch`, δs, and `delta_rejection`, the
+    draw's Σ_t k_t/2^64. A record that carries the parts (verifier.json's `delta`) must sum to the total as the ledger
+    adds them, or there is no line (`Disagree`); one written before them gives the profile δ from its windows
+    (`recorded_windows`) and the slack from its passes at the slack its ledger was charged at (its `inputs`'
+    `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger that didn't charge the
+    hiding or the rejection (no such part) has it added to its total, from its windows (`recorded_windows`, as
+    `ledger.hiding` and `ledger.rejection` read them). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total."""
     lg = session["ledger"]
@@ -383,7 +385,7 @@ def session_error(session: dict) -> dict:
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
     total = Fraction(totals.pop())
-    rejection = None
+    hiding = rejection = None
     if (d := lg.get("delta")) is not None:
         added = 0.0
         for n in ledger.DELTA_PARTS:
@@ -391,17 +393,22 @@ def session_error(session: dict) -> dict:
         if added != float(total):
             raise Disagree(f"session {session['k']}'s δ parts {d} don't sum to its memory line's δ {float(total)!r}")
         profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
+        if "hiding" in d:
+            hiding = Fraction(d["hiding"])
         if "rejection" in d:
             rejection = Fraction(d["rejection"])
     else:
         profile = pooled.number(V.recorded_windows(session)[1])
         slack = Fraction(lg["inputs"]["passes"], 2 ** lg["inputs"].get("slack_log2", V.UNRECORDED_SLACK_LOG2))
         sketch = total - profile - slack
+    if hiding is None:
+        hiding = Fraction(ledger.hiding_over(len(V.recorded_windows(session)[0])))
+        total += hiding
     if rejection is None:
         rejection = Fraction(sum(s for _, s in V.recorded_windows(session)[0]), 2 ** ledger.REJECTION_LOG2)
         total += rejection
-    exact = {"delta_profile": profile, "delta_slack": slack, "delta_sketch": sketch, "delta_rejection": rejection,
-             "total": total}
+    exact = {"delta_profile": profile, "delta_slack": slack, "delta_hiding": hiding, "delta_sketch": sketch,
+             "delta_rejection": rejection, "total": total}
     return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
             "log2_total": timing.log2(exact["total"]), "named_terms": NAMED_TERMS}
 
@@ -892,7 +899,8 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
                    + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-slack + δs + Σ_t k_t/2^64) summed over the credited sessions, beside "
+                      "(profile δ + P·2^-slack + Σ_t hide_t + δs + Σ_t k_t/2^64) summed over the credited sessions, "
+                      "beside "
                       "Σ_t Adv(prf t) (claim prf/sha-512), named and in no total"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
