@@ -635,12 +635,17 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 // H1U_JSB = 1 (with JCS): a column block's B fragments (B + c + U) are the same in its r warps, so they share them too:
 // in each group of NS segments, the warp of rank e loads B for and unpacks the next group's segments jj with jj % r = e
 // and stores their fragments in the group's shared slots (double-buffered by group where r > 1); the warps meet once a
-// group and read every segment's fragments back. B leaves the load ring; the same fragments and receipts
+// group and read every segment's fragments back. B leaves the load ring; the same fragments and receipts.
+// H1U_JSB = 2: one buffer of slots where r > 1, with a second barrier a group before the put (half the slots, so a CTA
+// fits twice in sm_120's 100 KB); r = 1 has no slots there and traps
 #ifndef H1U_JSB
 #define H1U_JSB 0
 #endif
 #if H1U_JSB && !H1U_JCS
 #error "H1U_JSB shares a JCS column block's B fragments, so it needs H1U_JCS"
+#endif
+#if H1U_JSB != 0 && H1U_JSB != 1 && H1U_JSB != 2
+#error "H1U_JSB is 0, 1 (double-buffered slots) or 2 (single-buffered, r > 1 only)"
 #endif
 constexpr int JSB_NS = H1U_JPD + H1U_JRING;
 // a JCS unit's column-block group: its 2 r buffers (set s's block e at s % 2 * r + e), its rank, r = 1 << lr, its
@@ -904,7 +909,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
           bn[jj][r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + 32 * (sn + jj) + 8 * q);
   };
   const auto sb_put = [&](u32 sn, const uint8_t* cb, u32 jn) {
-    uint4(*d)[2][32] = js.sb + (js.lr ? ((sn / NS) & 1) * NS : 0);
+    uint4(*d)[2][32] = js.sb + (H1U_JSB == 1 && js.lr ? ((sn / NS) & 1) * NS : 0);
 #pragma unroll
     for (int jj = 0; jj < NS; ++jj)
       if ((jj & ((1u << js.lr) - 1)) == js.rank) {
@@ -1209,7 +1214,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
         u32 wbf[OS ? 4 : 1][2], cf[PL ? 4 : 1][2], b0[PL ? 4 : 1][2];  // PL: c as 0/1 B fragments, B itself
         if constexpr (SB) {
-          const uint4(*d)[2][32] = js.sb + (js.lr ? (((16 * blk + j0) / NS) & 1) * NS : 0);
+          const uint4(*d)[2][32] = js.sb + (H1U_JSB == 1 && js.lr ? (((16 * blk + j0) / NS) & 1) * NS : 0);
           const uint4 v0 = d[jj][0][lane], v1 = d[jj][1][lane];
           bf[0][0] = v0.x;
           bf[0][1] = v0.y;
@@ -1286,6 +1291,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       if constexpr (SB) {
         const u32 sn = 16 * blk + j0 + NS, jn = (j0 + NS) & 15;
         if (sn < ks) {
+          if (H1U_JSB == 2) js_sync(js);
           sb_put(sn, jn ? cbits : reinterpret_cast<const uint8_t*>(&sb_cw(it + 1)[0][0]), jn);
           js_sync(js);
         }
@@ -2945,7 +2951,8 @@ __device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 n
       u = nth_rb(live, nrb, d / ncb, false) * ncb + d % ncb;
     }
   }
-  const JShare js{jcb + ((2 * k) << lr), wp / C, lr, 1 + k, H1U_JSB ? jsb + (lr ? 2 * k : k) * JSB_NS : nullptr};
+  const JShare js{jcb + ((2 * k) << lr), wp / C, lr, 1 + k,
+                  H1U_JSB ? jsb + (H1U_JSB == 1 && lr ? 2 * k : k) * JSB_NS : nullptr};
   if (c.md == 3)
     h1u_unit<3, false, false, false, false, false, true, false, true, WarpSmemJC, true>(
         c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, S, js);
@@ -2967,8 +2974,8 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
   __shared__ WarpSmemJC smem[WARPS];
   __shared__ u32 jcb[2 * WARPS][32][17];
 #if H1U_JSB
-  // a group's slots: 2 NS where r > 1 (WARPS / r groups), NS where r = 1
-  __shared__ uint4 jsb[WARPS * JSB_NS][2][32];
+  // a group's slots: 2 NS where r > 1 (WARPS / r groups), NS where r = 1; H1U_JSB = 2: NS, r > 1 only
+  __shared__ uint4 jsb[(H1U_JSB == 2 ? WARPS / 2 : WARPS) * JSB_NS][2][32];
 #else
   uint4(*jsb)[2][32] = nullptr;
 #endif
@@ -2986,6 +2993,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
     ok = ok && calls[i].u0 % WARPS == 0 && calls[i + 1].u0 - calls[i].u0 == nrb * ncb && ncb % (WARPS >> lr) == 0;
   }
   if (!__all_sync(0xFFFFFFFFu, ok)) lr = 0;
+  if (H1U_JSB == 2 && lr == 0) __trap();
   for (;;) {
     __syncthreads();
     if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
