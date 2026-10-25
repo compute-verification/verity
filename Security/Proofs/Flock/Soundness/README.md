@@ -152,9 +152,8 @@ link term per audit.
   the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
   `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
-  `δ_reg = qR²/2^513` (`Reads.prob_off_le`). At hidden outputs with the verifier's own `--registered F`,
-  `FailClosed.flock_verify_sound` states every drawn unit's registered reads checked, under `--zk` (`SoundZHJR`) and
-  without it (`SoundExecHR`, over `VerifiesR`; `Discharge/PlainReg/`).
+  `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, drawn units' reads are
+  checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
 
 ### 1.4 Status
 
