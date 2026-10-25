@@ -4,6 +4,7 @@
   "Properties.Pouw.Check",
   "Properties.Pouw.Commit",
   "Properties.Pouw.LiveSalt",
+  "Properties.Pouw.Period",
   "Properties.Proofs.Pouw",
   "Properties.Proofs.Pouw.Check",
   "Properties.Proofs.Pouw.Commit",
@@ -249,7 +250,7 @@
  "layers": {
   "Properties.Pouw": {
    "imports": ["PouwWindow", "PouwCheck", "PouwCommit"],
-   "except": ["Properties.Pouw.Credit"],
+   "except": ["Properties.Pouw.Credit", "Properties.Pouw.Period"],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Pouw.Commit": {
@@ -383,6 +384,11 @@
    "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
    "except": [],
    "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
+  },
+  "Properties.Pouw.Period": {
+   "imports": ["Definitions.Accounting", "Models.Accounting.Assumptions", "PouwCheck"],
+   "except": [],
+   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Models.Accounting.Assumptions`), never a proof"
   },
   "Properties.RemoteAudit.Pooled": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],
@@ -3023,6 +3029,8 @@
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
+   "Properties.Pouw.Period.CheckedWorkPeriod": "unstated: E2E-POUW's draft statement, CircuitWorkPeriod at the deployed check's accepted prefix (PouwCheck.protocol.check), its JointSound replaced by DrawIsCoin and ServiceSound; it gets a guarantee entry once red team has read it and it is proved",
+   "Properties.Pouw.Period.CheckedCreditPeriod": "unstated: E2E-POUW's draft statement, CircuitCreditPeriod at the deployed check's accepted prefix (PouwCheck.protocol.check), its JointSound replaced by DrawIsCoin and ServiceSound; it gets a guarantee entry once red team has read it and it is proved",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "NciCheck.Properties.DescReports": "unstated: descReports_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Reports, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
    "NciCheck.Properties.DescWitnesses": "unstated: descWitnesses_of (Properties.Proofs.Nci.DescVerdict) proves it from DescAgrees and Witnesses, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
