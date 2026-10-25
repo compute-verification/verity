@@ -1,5 +1,6 @@
 import Proofs.Flock.VBridge.Family.Opened
 import Proofs.Flock.VBridge.Algebra.Holo
+import Proofs.Flock.Claims.Recursion.VStarParts
 
 /-!
 # A rep's Ligerito openings at V*'s scheme, query by query
@@ -18,9 +19,10 @@ what one query must give and assembles a level and a rep from it; nothing in it 
 * `openedAll_of_levels`: every context `verifierRows` gives, from one fact per level at the level's context
   (`rows_conss`). `verifierRows_info_comb`: the contexts and `κ` don't read the comb, so the coins' run at
   `RecCoins.ZERO_COMB` (`staged_rep_drawn`) gives the rep's.
-* `queryOpens_of_climb`: `QueryOpens` from a climb at any index whose low `d − c` bits are the position's, as a rec-open
-  copy computes it. `dirsRow_testBit`: the `dirs` row check 5 registers (`RecCoins.checkOpen`) spells the position's low
-  `H` bits, 16 a word.
+* `queryOpens_of_climb`: `QueryOpens` from a climb at any index whose low `d − c` bits are the position's.
+  `climb_of_outs`, `queryOpens_of_outs`: the climb a rec-open copy computes is on its first 64 output bytes
+  (`Readable.OpenOuts`), so `QueryOpens` holds where those bytes are the cap's entry. `dirsRow_testBit`: the `dirs` row
+  check 5 registers (`RecCoins.checkOpen`) spells the position's low `H` bits, 16 a word.
 -/
 
 namespace RecDeploy.OpenedPlain
@@ -113,6 +115,30 @@ theorem queryOpens_of_climb {sch : Flock.Schedule} {cap : Array ByteArray} {p : 
   unfold QueryOpens
   rw [hr, hss]
   exact ⟨hsize, (Conss.climb_congr plain ss _ pos idx fun h hh => (hbits h (hlen ▸ hh)).symm).trans hclimb⟩
+
+/-- **A rec-open copy's first 64 output bytes are its climb** (`Readable.OpenOuts`, what `Readable.climb_of_check`
+gives at a satisfied table): the bytes from `outCol` are the climb under `plain` from the row's plain leaf. -/
+theorem climb_of_outs {v : ℕ → Bool} {LANES H : ℕ} {r a cf : Array F128} {rest : ByteArray} {idx : ℕ}
+    {ss : List ByteArray} (h : Readable.OpenOuts v plain LANES H r a cf rest idx ss) :
+    bytesAt v (outCol LANES H) 64 = climb plain (Sha512.hash (MerkleScheme.rowBytes r)) idx ss := by
+  unfold Readable.OpenOuts at h
+  have hX := bytesAt_of_cols (colsHold_left (colsHold_left h))
+  rw [FlockVBridge.AccChain.climb_size_of plain (fun _ _ => rfl) _ _ _ (sha512_size _)] at hX
+  exact hX
+
+/-- **`QueryOpens` from a rec-open copy's outputs**: `queryOpens_of_climb` at the climb on the copy's output columns
+(`climb_of_outs`), where those columns' first 64 bytes are the cap's entry `pos >>> (d − c)` (`htop`, the copy's `out`
+registered as a read of the level's top, `RecCoins.checkOpenTops`). -/
+theorem queryOpens_of_outs {sch : Flock.Schedule} {cap : Array ByteArray} {p : LigeritoProof} {ℓ j pos : ℕ}
+    {v : ℕ → Bool} {LANES H : ℕ} {r a cf : Array F128} {rest : ByteArray} {idx : ℕ} {ss : List ByteArray}
+    (h : Readable.OpenOuts v plain LANES H r a cf rest idx ss) (hr : (openAt p (sch.levels.size - 1) ℓ).1[j]! = r)
+    (hss : sibsOf (openAt p (sch.levels.size - 1) ℓ).2.1 ((sch.levels[ℓ]!).d - (sch.levels[ℓ]!).cap) j = ss)
+    (hsize : r.size = 2 ^ (sch.levels[ℓ]!).lanes) (hlen : ss.length = (sch.levels[ℓ]!).d - (sch.levels[ℓ]!).cap)
+    (hbits : ∀ h < (sch.levels[ℓ]!).d - (sch.levels[ℓ]!).cap, idx.testBit h = pos.testBit h)
+    (htop : bytesAt v (outCol LANES H) 64 =
+      (capAt cap p ℓ).getD (pos >>> ((sch.levels[ℓ]!).d - (sch.levels[ℓ]!).cap)) ByteArray.empty) :
+    QueryOpens sch cap p ℓ j pos :=
+  queryOpens_of_climb hr hss hsize hlen hbits ((climb_of_outs h).symm.trans htop)
 
 /-- **The `dirs` row spells the position's low bits**: bit `h % 16` of word `h / 16` of `RecCoins.dirsRow pos H` is
 bit `h` of `pos`, for `h < H ≤ 32` (`rec_open.dirs_words`: the low `H` bits, 16 a word). -/
