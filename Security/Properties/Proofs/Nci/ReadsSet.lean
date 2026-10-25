@@ -2232,4 +2232,93 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
         · exact hk2 t (List.mem_range'_1.2 ⟨by omega, by omega⟩)
   · exact hjp s1 y hG1 (fun t h1 h2 => hC1 t h1 (by omega)) hy
 
+/-! ## A composite node's reads, its arguments' and its carries' together -/
+
+/-- **A composite node's positions name outside it exactly what its gates read there** (`compSet_of`), its arguments'
+reads by `argSet_of` and its carries' by `carrySet`, its members' reads succeeding as its callee's `UsedExact` says,
+wherever its read succeeds and its arguments are shaped as the decoder holds them. -/
+theorem compNodeSet (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Scope} {k : Nat} (hL : Laid P sc.d)
+    (hk : k < (P.defs[sc.d]!).body.nodes.size) {node : Flock.Program.Node}
+    (hn : (ctxOf P memo sc.d).node k = .ok node) (hp : (P.defs[node.fn]!).prim = false)
+    (hend : (P.defs[sc.d]!).body.offsets[k + 1]! ≤ (P.defs[sc.d]!).gates) (hloc : Located P sc)
+    (hU : UsedExact P memo node.fn) (hRet : RetOk P memo node.fn)
+    (hD : DownSpec (ctxOf P memo sc.d) sc Flock.Steps.FUEL) (hC : CalleeSpec (ctxOf P memo sc.d) sc Flock.Steps.FUEL)
+    (hT : ThroughSpec (ctxOf P memo sc.d) sc Flock.Steps.FUEL)
+    {rs : Array Seg} (hrs : Desc.nodeReads (ctxOf P memo sc.d) k = .ok rs)
+    (hA : ∀ i < node.args.size, ArgOk (ctxOf P memo sc.d) k i)
+    (hR : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count,
+      Resolve.RefOk P sc.d k ((node.args[i]!).seq.get t))
+    (hprm : (P.defs[node.fn]!).params = (P.defs[node.fn]!).body.params)
+    (hpa : (P.defs[node.fn]!).body.params.size = node.args.size)
+    (hused : ∀ i j, Width.inIvs (((memo[node.fn]!).used[i]?.getD #[]).toList) j →
+      i < (P.defs[node.fn]!).body.params.size ∧ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves)
+    (hL0 : ∀ i < node.args.size, ∀ d L, (node.args[i]!).dims = some (d, L) → L = 0 →
+      ((P.defs[node.fn]!).body.params[i]!).2.leaves = 0)
+    (hlo : ∀ i < node.args.size, ∀ m < node.members, ∀ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves,
+      (node.form = .scan → i = 0 → m = 0) → upIdx node i m j < (node.args[i]!).seq.count)
+    (htile : ∀ i < node.args.size, ∀ t < (node.args[i]!).seq.count, ∃ m < node.members,
+      ∃ j < ((P.defs[node.fn]!).body.params[i]!).2.leaves, upIdx node i m j = t)
+    (hgw : ∀ w p, (Tgt.gate w, p) ∈ psPos (memo[node.fn]!).ret → p.toNat < (P.defs[node.fn]!).gates)
+    (hu0 : node.form = .scan → ∀ j, Width.inIvs (((memo[node.fn]!).used[0]?.getD #[]).toList) j →
+      j < (P.defs[node.fn]!).body.ret.count) (a : Nat) :
+    ((∃ x ∈ nodePos (ctxOf P memo sc.d) node k, den P sc x = .ok a) ∧ ¬ InNodeAt P sc k a) ↔
+      (NodeReadsAt P sc k a ∧ ¬ InNodeAt P sc k a) := by
+  have hg : (P.defs[sc.d]!).body.nodes[k]! = node := node_get hn
+  have hlaid : (P.defs[sc.d]!).body.offsets[k + 1]! =
+      (P.defs[sc.d]!).body.offsets[k]! + node.members * (P.defs[node.fn]!).gates := by
+    have := hL k hk; rw [hg] at this; exact this
+  by_cases hm0 : node.members = 0
+  · have hp' : ((ctxOf P memo sc.d).P.defs[node.fn]!).prim = false := hp
+    unfold nodePos
+    simp only [hp', Bool.false_eq_true, ↓reduceIte, hm0, List.not_mem_nil, false_and, exists_false, false_iff,
+      not_and]
+    rintro ⟨g, ⟨h1, h2⟩, -⟩
+    rw [hlaid, hm0, Nat.zero_mul, Nat.add_zero] at h2
+    omega
+  have hsucc : ∀ m < node.members, ∀ i j, Width.inIvs (((memo[node.fn]!).used[i]?.getD #[]).toList) j →
+      ∃ a, Flock.Program.resolve P (P.child sc k m) ⟨true, i, j⟩ = .ok a := by
+    intro m hm i j hij
+    have hd' : ((ctxOf P memo sc.d).P.child sc k m).d = node.fn := by
+      rw [child_eq (ctxOf P memo sc.d) sc rfl hn m]; rfl
+    have hp2 : (P.defs[((P.defs[sc.d]!).body.nodes[k]!).fn]!).prim = false := by rw [hg]; exact hp
+    have hm2 : m < ((P.defs[sc.d]!).body.nodes[k]!).members := by rw [hg]; exact hm
+    obtain ⟨g, -, -, ops, -, a, -, hr⟩ := (hU (P.child sc k m) hd' (located_child P hL hk hp2 hm2 hend hloc)).2 i j hij
+    exact ⟨a, hr⟩
+  obtain ⟨hok, hcr⟩ := nodeReads_comp_ok (ctxOf P memo sc.d) k node hn hp hrs hm0
+  have hlv : ∀ i < node.args.size, (((P.defs[node.fn]!).params[i]?.map (·.2.leaves)).getD 0) =
+      ((P.defs[node.fn]!).body.params[i]!).2.leaves := by
+    intro i hi
+    rw [hprm, Array.getElem?_eq_getElem (by omega), getElem!_pos _ i (by omega)]
+    rfl
+  refine compSet_of P memo hL hk hg hp hend hloc hU (fun i j hij => by have := (hused i j hij).1; omega)
+    (fun i hi a => ?_) (fun a => ?_) a
+  · exact argSet_of (ctxOf P memo sc.d) sc rfl hD hn (hA i hi) (hR i hi) hm0 (hok i hi) (hlv i hi)
+      (fun j hj => (hused i j hj).2) (hL0 i hi) (hlo i hi) (htile i hi)
+      (fun m j hB => hsucc m hB.1 i j hB.2.2) a
+  · by_cases hs : node.form = .scan ∧ 2 ≤ node.n
+    · have hsc : (node.form == .scan && decide (node.n ≥ 2)) = true := by
+        rw [Bool.and_eq_true, hs.1, decide_eq_true_eq]; exact ⟨rfl, hs.2⟩
+      obtain ⟨segs, hsegs⟩ := hcr hsc
+      have e : carryPos (ctxOf P memo sc.d) k node = segsPos segs := by
+        unfold carryPos; rw [if_pos hsc, hsegs]
+      rw [e]
+      have hpa' : ((ctxOf P memo sc.d).P.defs[node.fn]!).body.params.size = node.args.size := hpa
+      have key := carrySet (ctxOf P memo sc.d) sc rfl hD hC hT hn hs.1 hs.2 hRet hlaid hgw (by omega) hA hR
+        (fun i h1 hi m hm j hj => hlo i (by omega) m hm j hj (fun _ h => absurd h (by omega))) (hu0 hs.1)
+        (fun m j _ hm hj => hsucc m hm 0 j hj) hsegs a
+      refine key.trans ?_
+      unfold CarryRead
+      constructor
+      · rintro ⟨⟨m, h1, h2, j, hj, hr⟩, hout⟩; exact ⟨⟨m, hs.1, h1, h2, j, hj, hr⟩, hout⟩
+      · rintro ⟨⟨m, -, h1, h2, j, hj, hr⟩, hout⟩; exact ⟨⟨m, h1, h2, j, hj, hr⟩, hout⟩
+    · have e : carryPos (ctxOf P memo sc.d) k node = [] := by
+        have hsc : ¬ (node.form == .scan && decide (node.n ≥ 2)) = true := fun h => by
+          simp only [Bool.and_eq_true, decide_eq_true_eq] at h; exact hs ⟨form_eq_scan h.1, h.2⟩
+        unfold carryPos; rw [if_neg hsc]
+      rw [e]
+      simp only [List.not_mem_nil, false_and, exists_false, false_iff, not_and]
+      rintro ⟨m, hf, h1, h2, -⟩ -
+      have := members_scan hf
+      exact hs ⟨hf, by omega⟩
+
 end NciCheck.Properties.SecurityProofs.ReadsExact
