@@ -1,7 +1,7 @@
-"""[R17-1 / F-moe-r17-03 (moe M-0283)] the EXECUTED PREFIX OF RECORD of every request -- the execution extent check (`executed_prefix`),
+"""The EXECUTED PREFIX OF RECORD of every request -- the execution extent check (`executed_prefix`),
 the one fact the Commit's consumers count on.
 
-BRIEF s4 / COORD R17-1: a request has TWO lengths.  `served_output_len` a_r = the tokens the driver served (its EOS included);
+A request has TWO lengths.  `served_output_len` a_r = the tokens the driver served (its EOS included);
 `executed_prefix_len` = the engine rows that ran for it = the cap when the request generated its cap (length stop), a_r + LAG when it
 stopped by EOS before the cap -- the LAG row(s) after the EOS are active internal computation (their VUs are required) whose sampled token
 is not served.  LAG is the workload Program's DECLARED specialization parameter (Workload_v1{..., lag}); the served tokens are the driver's;
@@ -11,11 +11,11 @@ Call there is 'execution past the stop' (the caller checks the binding map again
 Fail closed, by name: an early stop (a_r < cap) with no declared stop rule, no declared LAG, or a last served token that is not a declared
 EOS id (F-pm-24) is a problem -- the population then stays the cap's (nothing is accepted) and `ok` is False.  Never default LAG 0 or 1.
 
-The first record: OLMoE B2 i32/o32 mixedstop (cp-moe 2026-09-20 18:45Z, lane e32550951): r0 served 11 / executed 12 (EOS 50279 at output
+The first record: OLMoE B2 i32/o32 mixedstop (cp-moe, lane e32550951): r0 served 11 / executed 12 (EOS 50279 at output
 index 10, LAG 1), r1 32 / 32 (cap) -- G6 PASS with the lag exercised; the Commit's population, placed over every request's cap, required
 r0's 20 unexecuted steps (bound 13808/19988) and failed by name.
 
-COORD R17-27 (Daniel, 19:22Z) puts this in a box -- the ACTIVE-REFERENCE table only, on three conditions `link_to_match_account` checks:
+Daniel's ruling puts this in a box -- the ACTIVE-REFERENCE table only, on three conditions `link_to_match_account` checks:
 (a) n_exec is determined from the properly LINKED serving transcript: the Commit's own served tokens count only because they EQUAL the Match
 record's served output (capture/tokens.json of the same attempt) and the Match account (GM-01 G6: PASS, the same two lengths per request)
 -- "the committer says EOS happened here" is never sufficient by itself; (b) the lag rule is attested: declared == the engine's read-back ==
@@ -42,7 +42,7 @@ PROTOCOL SUMMARY (Commit stage: the execution extent check (`executed_prefix`) -
     sampled_replay takes, from whichever account is of record).
   Invariants: LAG is never defaulted to 0 or 1 -- an early stop with no declared EOS set / LAG, a non-EOS last token, or served > cap
     is a problem and the population stays the cap's; a prefix reduced from its cap on the committer's own count alone is never
-    accepted (R17-27 (a)): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
+    accepted (condition (a) above): it rests on the Match account or on served tokens opened from the run root, both when both are beside the
     Commit and the row committed its sampled ids; the lag must agree on every leg (declared == tokens.json == G6, or declared == the
     token record's == the engine's read-back); the boundary linkage a token record leans on runs over the same executed prefix; a committed Call past the prefix fails by name.
   Protocol spec: Notion -> "vLLM integration — protocol spec (Build · Match · Commit)".
@@ -168,14 +168,14 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
 
 def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order: dict[str, str], declared_lag: int | None,
                           served_tokens: dict[str, list[int]] | None = None) -> dict[str, Any]:
-    """[COORD R17-27 (a)+(b)] the executed prefix of record is ACCEPTED only when the Commit's own served tokens are linked to the served
+    """Conditions (a) and (b) of the module docstring: the executed prefix of record is ACCEPTED only when the Commit's own served tokens are linked to the served
     output and the Match account of the SAME attempt: for every request, the Match record's tokens.json generated ids == the Commit's
     served tokens (tokens_equal), its served_output_len / executed_prefix_len == this rule's; GM-01 (global_match.json, when present)
     PASSED and its G6 lengths_by_request agree; the lag rule is attested on every leg (Program declared == the Match record's tokens.json
     lag == G6's declared / record_attests; no variable lag).  `order`: {workload request_id: r<i>}.
 
     A request whose prefix was REDUCED from its cap (an EOS stop) with no linkable Match account is a problem: the committer's count alone
-    is never sufficient (R17-27 (a)).  With no reduction anywhere (every request ran its cap) a missing account is recorded, not a
+    is never sufficient (condition (a)).  With no reduction anywhere (every request ran its cap) a missing account is recorded, not a
     problem -- nothing was placed on the committer's word.  `served_tokens` {r<i>: [the Commit's served ids]}: when given, tokens_equal
     is the FULL generated_token_ids list equality (rev S-r17-23 (c)); without it, length + last token.  Returns {"ok", "required",
     "problems", "tokens_equal", "g6", ...}."""
@@ -300,14 +300,14 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
 
 def executed_prefix_facts(epr: dict[str, Any], binding: dict[str, Any], linkage: dict[str, Any] | None, arrivals: dict[str, int],
                            stop: dict[str, Any], served_tokens: dict[str, list[int]] | None = None) -> dict[str, dict[str, Any]]:
-    """[COORD R17-26/R17-27; reqval M-0343, revb M-0349 n1/n2] the per-request FACTS OF RECORD reqval's `sampled_replay.executed_prefix_of_record`
-    normalises into the not-executed(R17-1) class -- every one a named record fact, never a literal: `a_r` READ from the Match record
+    """The per-request FACTS OF RECORD reqval's `sampled_replay.executed_prefix_of_record`
+    normalises into the not-executed class -- every one a named record fact, never a literal: `a_r` READ from the Match record
     (binding.coverage.match_account_link: tokens.json served_by_request, else G6 lengths_by_request; `a_r_source` names the file + sha256;
     with NO Match record a_r is the Commit's own served length, labelled so, and `linked` is False -> the class faults by name);
     `served_len_commit` = this run's own served length; `linked` = the Match-account link held (Commit served == Match served per request,
     GM-01 PASS, G6 agrees) AND the C2 boundary linkage passed; `lag_attested` = declared == tokens.json == G6 declared == G6 record_attests;
     `eos_declared` = the served token a_r-1 is a declared EOS id (F-pm-24); `rows_past_stop` = coverage's execution-past-the-stop count.
-    [reqval M-0585 / revb S-r17b-20 R3] with `served_tokens` (this run's own served ids per request) the facts also carry `served` (the list)
+    With `served_tokens` (this run's own served ids per request) the facts also carry `served` (the list)
     and `eos_ids` (the Program's declared set) so a consumer that derives the class from Continuation_v1's recurrence (r_t) does so from the
     record's own list -- ONE code path on Build, Match and Commit; the caller passes only the keys the consumer's signature accepts.
     With no Match record beside the Commit (no `match_dir`) the account is the Commit's token record (binding.coverage.commit_account_link,
@@ -393,11 +393,11 @@ def rows_past_the_stop(bmap: dict[str, Any], request_steps: dict[str, Iterable[i
     (a row the Program says was never executed carries committed values): named per request with the steps, FAIL by name.  Entries of
     other request ids (`*`, unmapped) are not this check's.
 
-    [R17-42 / reqval M-1318 (1)] On a PADDED record the rows past the stop are PRESENT by construction -- every not-executed row is a
+    On a PADDED record the rows past the stop are PRESENT by construction -- every not-executed row is a
     required value assigned bot -- and each such entry says so (`activity = bot-by-enablement`): those are the padding, counted
     (`padding_entries_n`), never execution past the stop.  An entry there that is `active` (or has no activity field: an unpadded record)
     IS execution past the stop, exactly as before.  The converse is named too: a `bot-by-enablement` entry INSIDE the executed prefix is a
-    row the Program says was executed and the record says was not -- the prohibited inactive fallback (R17-42), FAIL by name."""
+    row the Program says was executed and the record says was not -- the prohibited inactive fallback, FAIL by name."""
     allowed = {str(k): {int(s) for s in v} for k, v in request_steps.items()}
     past: dict[str, set[int]] = {}
     inside: dict[str, set[int]] = {}
@@ -495,7 +495,7 @@ def restrict_manifest_identities(identities: list[dict[str, Any]], request_steps
                                  engine_step_of: Any = None, stats: dict[str, Any] | None = None) -> tuple[list[dict[str, Any]], int]:
     """The flat manifest identities (`required_manifest["identities"]`, engine_step annotated) CLASSIFIED against the executed prefix of
     record for the layouts-only coverage check: a per-request row at an engine step its request did not execute is the named class
-    not-executed(R17-1) (left out of the requirement, counted); a batch-level row (request `*` with `requests`) keeps only the requests
+    not-executed (left out of the requirement, counted); a batch-level row (request `*` with `requests`) keeps only the requests
     executing at that step (the class when none does).  `engine_step_of(row) -> int` overrides the row's engine_step (the caller's
     rebasing by the observed schedule).  `stats` (new_classification()) receives the counts by family / request / kind.  Nothing here
     edits the manifest of record: the caller keeps its digest and identity count beside the classification.  Returns (required, n_class)."""
@@ -528,7 +528,7 @@ def restrict_manifest_identities(identities: list[dict[str, Any]], request_steps
 
 
 def expected_cells_from_population(manifest_identities: list[dict[str, Any]] | None, population: dict[str, Any]) -> dict[str, dict[str, int]]:
-    """[revb M-0452 (i)(ii)] For the families the population's ROW split does not classify, the count the population's OWN facts imply:
+    """For the families the population's ROW split does not classify, the count the population's OWN facts imply:
     per batch-level row (a plane identity, `*` + requests) the (request, plane) CELLS of listed requests at engine_step - arrive(q) >= n_exec(q);
     per named-input identity (request r, step) one cell when its request-relative step >= n_exec(r).  n_exec / arrive are read from
     population.not_executed_by_rule.by_request -- never from the Commit's own prefix, so the arithmetic is a cross-check."""
@@ -564,12 +564,12 @@ def expected_cells_from_population(manifest_identities: list[dict[str, Any]] | N
 
 def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict[str, Any] | None, epr: dict[str, Any] | None, *,
                            manifest_identities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """[COORD R17-26/R17-27; rel M-0410 (a); revb M-0452] ONE mechanism, checked on the record: the Commit's classification of the manifest
+    """ONE mechanism, checked on the record: the Commit's classification of the manifest
     identities (binding coverage, `commit_class` = load_required_manifest's header `not_executed_by_rule`) and the population's third bucket
     (`population["not_executed_by_rule"]`, reqval: identities at request-relative steps >= n_exec leave the pool before any draw) must
     name the SAME identities.  Per request: the population's n_exec == the Commit's executed_prefix_len (`epr` = executed_prefix_of_record).
     Per ROW family (kind `row`): the Commit's count == the population's N_excluded.  A NAMED-INPUT family (revb (i): a per-request family
-    by R17-1's rule; reqval 699bf6ee2 `kind_by_family[fam] = named-input`): the Commit's count == the population's N_excluded, exactly as
+    by the executed-prefix rule; reqval 699bf6ee2 `kind_by_family[fam] = named-input`): the Commit's count == the population's N_excluded, exactly as
     for rows.  A BATCH-LEVEL family (revb (ii): the plane identity stays required while any listed request executes, so identity-level
     N_excluded 0 is right; the Commit expands the plane per request): the Commit's (request, plane) CELLS == the population's
     `totals.by_family[fam].plane_cells_not_executed.cells` (== `batch_level[fam].cells_not_executed`, reqval 8eeff13eb / d13ea5153).
