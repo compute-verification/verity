@@ -169,12 +169,12 @@ def horizon_leak(periods: Sequence[Mapping[str, Any]], delta: Fraction, count: i
     count = len(periods) if count is None else count
     audits = [a for p in periods for a in p["audits"]]
     q = min(Fraction(a["drawn"], a["units"]) for a in audits)
-    fmax = math.ceil(math.log(1 / float(delta)) / float(q))
+    fmax = math.ceil(math.log(1 / float(delta)) / float(q) * (1 + 1e-12))
     scale = Fraction(count, len(periods))
     N = math.ceil(scale * sum(a["units"] for a in audits))
     terms = {"schedules": math.ceil(scale * sum(p["schedules"] for p in periods)),
              "cells": math.ceil(scale * sum(p["cells"] for p in periods)),
-             "faulty_bits": OUT_BITS * fmax, "faulty_sets": math.ceil(fmax * math.log2(N + 1)),
+             "faulty_bits": OUT_BITS * fmax, "faulty_sets": ((N + 1) ** fmax - 1).bit_length(),
              "free": math.ceil(scale * sum(a["free"] for a in audits)),
              "jitter": math.ceil(scale * sum(a["jitter"] for a in audits))}
     K = sum(terms.values())
