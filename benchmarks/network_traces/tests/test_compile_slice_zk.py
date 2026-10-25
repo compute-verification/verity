@@ -1,6 +1,7 @@
 """compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
-received holds the rows it finds whole, those shorter than a piece, to the rule every zero-knowledge driver's scan follows
-(`leak_scan`), with no byte-count exemption. Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
+received judges every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count
+exemption, each row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves
+(`compile_slice_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ from types import SimpleNamespace
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
+#: `a8.find`'s answer, by substring: each piece (named by its needles) found in `data`
+A8 = SimpleNamespace(find=lambda data, table: {v: 1 for k, v in table.items() if k in data})
 
 
 def _load():
@@ -34,36 +37,71 @@ def test_w212_is_proved_at_its_runs_engine_class(monkeypatch):
         Z.load("w212")
 
 
-def test_the_rows_shorter_than_a_piece_are_scanned_whole_under_the_leak_rule(tmp_path):
-    """The rows `leak_scan.cut` can't cut, the carry rows (12 bytes) and the ``srv`` rows of a few steps (10 bytes at
-    the demo's G = 2), are found whole and held to `leak_scan`'s rule like any piece, with no byte-count exemption. A
-    restart from zero counts commits a ``cin`` row of twelve zero bytes: found in a file whose format isn't read it is
-    leaked, and it is excused only once the statement (a ``pub`` row) holds its bytes, while a row the statement doesn't
-    hold stays leaked. The control is held to every row."""
+def test_a_piece_with_one_nonzero_byte_is_judged_by_the_rule(tmp_path):
+    """No piece is left out for its byte count: a witness piece with one nonzero byte found in a file whose format isn't
+    read is leaked, and one whose bytes the public rows hold is structured."""
     Z = _load()
-    a8 = SimpleNamespace(find=lambda data, table: {v: 1 for k, v in table.items() if k in data}, PIECE=16)
+    low, pub = b"\x05" + bytes(15), bytes(15) + b"\x80"
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "openings.json").write_bytes(b"[" + low + b"]")
+    (vdir / "pub-2.bin").write_bytes(b"\x01" + pub)
+    (tmp_path / "inst.bin").write_bytes(low + pub)
+    got = Z.received(A8, vdir, tmp_path / "inst.bin", {"wit 0 @0": low, "wit 8 @0": pub}, {"wit 0 @0", "wit 8 @0"})
+    assert got["verifier_found"] == ["wit 0 @0", "wit 8 @0"]
+    assert got["leaked"] == ["wit 0 @0"] and got["structured"] == {"wit 8 @0": "public"}
+    assert got["control"]["holds_all"]
+
+
+def test_the_carry_rows_are_each_scanned_whole_under_the_rule(tmp_path):
+    """Each unit's carry rows (12 bytes) are scanned whole, the public priors' ``cin`` not among them. A restart's zero
+    ``cin`` row is structured where the public rows hold its bytes, and leaked where they don't; a carry row found off
+    them is leaked; the control holds every row."""
+    Z = _load()
     zero, live, sent = [0] * 6, [58, 50, 58, 0, 392, 48], [1, 2, 3, 4, 5, 6]
     units = [SimpleNamespace(words={"cin": zero, "cout": live}, chained=False),
              SimpleNamespace(words={"cin": live, "cout": sent}, chained=True)]
-    carry = Z.carry_rows(units, SimpleNamespace(public=False))
-    assert list(carry) == ["cout 0", "cin 0", "cout 1", "cin 1"] and {len(x) for x in carry.values()} == {12}
     assert list(Z.carry_rows(units, SimpleNamespace(public=True))) == ["cout 0", "cin 0", "cout 1"]
-    srv = Z._u16([7, 9, 11, 13, 15])
-    with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece"):
-        Z.LS.public_pieces(a8, {"srv1 0": srv}, set(), b"")
+    carry = Z.carry_rows(units, SimpleNamespace(public=False))
+    assert carry == {"cout 0": Z._u16(live), "cin 0": bytes(12), "cout 1": Z._u16(sent), "cin 1": Z._u16(live)}
     vdir = tmp_path / "verifier"
     vdir.mkdir()
-    (vdir / "proof.bin").write_bytes(bytes(64) + Z._u16(sent) + srv.hex().encode())
-    (tmp_path / "control.bin").write_bytes(Z._u16(zero) + Z._u16(live) + Z._u16(sent) + srv)
+    (vdir / "openings.json").write_bytes(bytes(64) + Z._u16(sent))
+    (vdir / "pub-2.bin").write_bytes(b"\x07" + bytes(20))
+    (tmp_path / "inst.bin").write_bytes(b"".join(carry.values()))
+    got = Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))
+    assert got["verifier_found"] == ["cin 0", "cout 1"]
+    assert got["structured"] == {"cin 0": "public"} and got["leaked"] == ["cout 1"] and got["control"]["holds_all"]
 
-    def scan():
-        return Z.found(a8, vdir, tmp_path / "control.bin", {**carry, "srv1 0": srv})
+    (vdir / "pub-2.bin").write_bytes(bytes(range(1, 22)))
+    assert Z.received(A8, vdir, tmp_path / "inst.bin", carry, set(carry))["leaked"] == ["cin 0", "cout 1"]
 
-    got = scan()
-    assert (got["distinct_rows"], got["verifier_found"], got["control_holds_all"]) == (
-        4, ["cin 0", "cout 1", "srv1 0"], True)
-    assert got["leaked"] == ["cin 0", "cout 1", "srv1 0"] and got["structured"] == {}
-    assert got["placed"]["cin 0"][0] == ("proof.bin", 0, "file")
-    (vdir / "pub-2.bin").write_bytes(bytes(32))
-    got = scan()
-    assert got["leaked"] == ["cout 1", "srv1 0"] and got["structured"] == {"cin 0": "public"}
+
+def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
+    """`scan_pieces` cuts each row of at least 16 bytes whole (`leak_scan.public_pieces`) and keeps each shorter row
+    whole: the ``srv`` rows of a few steps (10 bytes at the demo's G = 2, 6 at G = 1), which `leak_scan.cut` refuses
+    and the aligned cutter before it never scanned. Such a row is found raw or as hex, a raw one under 8 bytes too
+    (`a8.find` keys each needle on its first 8 bytes, so `_find` searches those itself), and judged by the rule: leaked
+    off the statement's bytes, structured once a ``pub`` row holds them."""
+    Z = _load()
+    a8 = SimpleNamespace(PIECE=16,
+                         needles=lambda pieces: {nd: k for k, x in pieces.items() for nd in (x, x.hex().encode())},
+                         find=lambda data, table: {k: 1 for nd, k in table.items() if len(nd) >= 8 and nd in data})
+    wit, srv0, srv1 = list(range(1, 19)), [7, 9, 11, 13, 15], [21, 23, 25]
+    units = [SimpleNamespace(words={"wit": wit, "srv0": srv0, "srv1": srv1}, chained=False)]
+    with pytest.raises(ValueError, match="shorter than the scan's 16-byte piece"):
+        Z.LS.public_pieces(a8, {"srv0 0": Z._u16(srv0)}, set(), b"")
+    pieces, held, public = Z.scan_pieces(a8, units, {}, SimpleNamespace(public=False), ("srv0", "srv1"), b"")
+    assert pieces == {"wit 0 @0": Z._u16(wit)[:16], "wit 0 @16": Z._u16(wit)[16:32], "wit 0 @20": Z._u16(wit)[20:],
+                      "srv0 0": Z._u16(srv0), "srv1 0": Z._u16(srv1)}
+    assert held == set(pieces) and public == []
+    vdir = tmp_path / "verifier"
+    vdir.mkdir()
+    (vdir / "openings.json").write_bytes(Z._u16(srv0).hex().encode() + b"," + Z._u16(srv1) + b"\x01\x02")
+    (tmp_path / "inst.bin").write_bytes(Z._u16(wit) + Z._u16(srv0) + Z._u16(srv1))
+    got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
+    assert got["verifier_found"] == ["srv0 0", "srv1 0"] and got["leaked"] == ["srv0 0", "srv1 0"]
+    assert got["control"]["holds_all"] and got["control"]["pieces_found"] == 5
+    (vdir / "pub-2.bin").write_bytes(Z._u16(srv1) + bytes(4))
+    got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
+    assert got["leaked"] == ["srv0 0"] and got["structured"] == {"srv1 0": "public"}
