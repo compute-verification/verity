@@ -38,6 +38,7 @@ import Proofs.Flock.SessionLoop.FinishIsRet
 import Proofs.Flock.SessionLoop.FinRepFinal
 import Proofs.Flock.SessionLoop.FinRepOpen
 import Proofs.Flock.SessionLoop.FinRepTarget
+import Proofs.Flock.SessionLoop.FinRepRestart
 import Proofs.Flock.SessionLoop.FinRepL0
 
 /-!
