@@ -28,7 +28,7 @@ theorem faulty_mem_faultySets {H : Msg → Msg} {Cm : Commitment Bool} {δ : ℝ
     (hRel : RelS H Cm δ s P w) (hdisj : Disjoint (faulty H Cm s P w) (allSlots s.design P)) :
     faulty H Cm s P w ∈ faultySets s.design P δ := by
   simp only [faultySets, Finset.mem_filter, Finset.mem_powerset]
-  exact ⟨Finset.filter_subset _ _, hRel, hdisj⟩
+  exact ⟨fun _ hv => (Finset.mem_filter.mp hv).1, hRel, hdisj⟩
 
 theorem rLeak_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → Option Stmt}
     {partition : Stmt → Option Partition} {L K S : ℕ} {lay : Stmt → Layout L S} {k : Stmt → ℕ} {δ : ℝ}
@@ -178,7 +178,7 @@ theorem sampledLeak_free (hSA : Guarantees.SampledAuditAccepted) (H : Msg → Ms
             ((2 ^ (freeInputs s.prog (lay s) (k s)).card * (faultySets s.design P δ).card * 2 ^ β s * Dj ^ k s : ℕ) :
               ℕ∞) :=
   sampledLeak hSA H D hks L K S lay k δ decode hδ hdec _ (fun s => (freeInputs s.prog (lay s) (k s)).card) β Dj
-    (fun s => encard_asFree_le _ _ _) hβ fun s P _ => adviceIn_asFree K _ _ _ _ _ _
+    (fun _ => encard_asFree_le _ _ _) hβ fun _ _ _ => adviceIn_asFree K _ _ _ _ _ _
 
 end Deploy
 
