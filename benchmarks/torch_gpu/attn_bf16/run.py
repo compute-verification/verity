@@ -267,11 +267,11 @@ def timing(cu: Cuda, funcs: dict, reps: int) -> dict:
     for fn in arms.values():
         for _ in range(3):
             fn()
-    got = {k: [] for k in arms}
+    got = {arm: [] for arm in arms}
     for _ in range(reps):
-        for k, fn in arms.items():
-            got[k].append(fn())
-    out["median_ms"] = {k: round(statistics.median(v), 4) for k, v in got.items()}
+        for arm, fn in arms.items():
+            got[arm].append(fn())
+    out["median_ms"] = {arm: round(statistics.median(ts), 4) for arm, ts in got.items()}
     out["ours_qk_plus_pv_ms"] = round(out["median_ms"]["qk"] + out["median_ms"]["pv"], 4)
     a.free()
     return out
