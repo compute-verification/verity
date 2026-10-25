@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.DeclaredCircuit
+import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Proofs.Accounting.RateAudit.SketchHonest
 
 /-!
