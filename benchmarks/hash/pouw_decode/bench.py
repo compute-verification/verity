@@ -44,7 +44,7 @@ def _served_steps() -> tuple[tuple[str, ...], frozenset[str]]:
     """CALL_STEPS and HASH_STEPS as the served path declares them (pouw_pearl_c_device.py), read from its source: importing
     it pulls in vLLM's side of the integration, which the node's bare python3 doesn't need."""
     import ast
-    path = os.path.join(ROOT, "integrations/vllm/verity_vllm/protocol_options/pouw_pearl_c_device.py")
+    path = os.path.join(ROOT, "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/__init__.py")
     found = {}
     for node in ast.parse(open(path).read()).body:
         if isinstance(node, ast.Assign) and len(node.targets) == 1 and getattr(node.targets[0], "id", "") in ("CALL_STEPS", "HASH_STEPS"):

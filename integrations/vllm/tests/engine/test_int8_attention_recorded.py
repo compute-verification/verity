@@ -14,7 +14,7 @@ Computes that read it.
 """
 from __future__ import annotations
 
-__models__ = ("verity-int8/Llama-3.1-8B-INT8",)
+__models__ = ("unsloth/Llama-3.1-8B",)
 
 import dataclasses
 import functools

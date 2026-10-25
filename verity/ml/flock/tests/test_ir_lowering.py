@@ -1330,3 +1330,81 @@ def test_a_cells_domain_is_the_one_its_statement_proves():
         assert pipe.domain == ("finite-only" if FL._layout(pipe)[0].asserts else "total"), relation
     assert {p.domain for p in FL.PIPES.values()} == {"finite-only"}
     assert FL.Pipe("t", None, (8, 8), 25, -132, True, "AMPERE_BF16_M16N8K16", total=True).domain == "total"
+
+
+# --- the registered compiler's dead-free Definitions: RMSNormTriton_v5 and AttentionHead_v18 ----------------------------------
+
+#: ``unit_rows_sha256`` of AttentionHead_v18's one tensor-core step, at every (D, BN, T)
+V18_UNIT_ROWS = "68063483886a889a27180764bcf913cabb1a2599be427752f7fd2e681b75f50c"
+
+
+def _gate_shape(U):
+    by = {g.index: k for k, g in enumerate(U.tail)}
+    cut = {g: k for k, g in enumerate(U.cut)}
+    return [(g.prim.id, [("t", by[o]) if o in by else ("c", cut[o]) for o in g.operands]) for g in U.tail]
+
+
+@pytest.mark.parametrize("n", [2048, 4096])
+def test_rmsnorm_triton_v5_is_v1s_lowering(n):
+    """v5 drops the 129 butterfly adds a warp that v1's lowering already left out (no output depends on them): the same warp units
+    (signature, leaf maps, cut words) and the same tail, so v5 takes v1's unit netlist and its pins."""
+    v5, v1 = (IL.units(TM.subcircuit(t, N=n, EPS=1e-5).definition(), IL.reduction_cut(256)) for t in ("rmsnorm-triton-v5", "rmsnorm-triton"))
+    assert (v5.n, len(v5.cut)) == (n // 256, n // 256 + 1)
+    assert v5.signature == v1.signature and (v5.in_src, v5.out_src) == (v1.in_src, v1.out_src)
+    assert _gate_shape(v5) == _gate_shape(v1)
+    assert sum(g.prim.id == "F32Add_v1" for g in v5.gates) == 31
+    mod = REG.module("rmsnorm-triton-v5")
+    assert mod.UNIT == REG.module("rmsnorm-triton").UNIT and mod.PINS[(n, 1e-05)] == REG.module("rmsnorm-triton").PINS[(n, 1e-05)]
+
+
+def test_dead_free_templates_say_what_they_prove_under():
+    v5 = REG.module("rmsnorm-triton-v5")
+    assert [v5.width(n) for n in (128, 1024, 1536, 2048, 4096, 5120)] == [None, 256, None, 256, 256, 256]
+    assert "not N = 128" in REG.supports(TM.subcircuit("rmsnorm-triton-v5", N=128, EPS=1e-6), CIRCUIT_SCHEME)
+    for sub in (TM.subcircuit("rmsnorm-triton-v5", N=2048, EPS=1e-5), TM.attention_head_v18(64, 128), TM.attention_head_v18(128, 64)):
+        assert REG.supports(sub, CIRCUIT_SCHEME) is None
+        assert "not under frame-v3/blake3-keyed" in REG.supports(sub, "frame-v3/blake3-keyed")
+        assert REG.relation(sub, CIRCUIT_SCHEME) == "verity/flock-circuit"
+    assert "not D = 24" in REG.supports(TM.attention_head_v18(24, 32), CIRCUIT_SCHEME)
+
+
+@pytest.mark.parametrize("D,BN,T", [(64, 128, 1), (64, 128, 129), (64, 128, 512), (128, 64, 65)])
+def test_attention_v18_units_are_sm120_tensor_core_steps(D, BN, T):
+    """Every HopperBF16WgmmaDot16 gate is a unit: D/16 QK steps a key, D PV steps per k-step of 16 visible keys; v18 pads only the
+    first visited block's value rows of its last k-step (zero words), none of its key rows. The unit rows are one step's at
+    every binding (a class manifest's ``unit_rows``)."""
+    from verity_flock.templates import attention_head as A
+
+    low = REG.module("attention-head-v18").lowering(TM.attention_head_v18(D, BN), T)
+    U = low.units
+    nvis = T - (T - 1) // BN * BN
+    ksteps = (T - nvis) // 16 + -(-nvis // 16)
+    assert U.signature == ("HopperBF16WgmmaDot16_v1",) and U.n == D // 16 * T + D * ksteps
+    assert sum(k == "zero" for u in U.in_src for k, _ in u) == D * (-nvis % 16)
+    assert len(U.public) == D and low.leaves["out"] == [[]] * U.n and len(low.cut["outputs"]) == D
+    assert {op[1] for op in low.cut["tail"]} <= {"Const", *IL.TAIL_PRIMS}
+    assert A.unit_rows_sha256(low.text) == V18_UNIT_ROWS
+
+
+@pytest.mark.parametrize("D,BN,T", [(64, 128, 129), (128, 64, 65)])
+def test_attention_v18_units_reproduce_the_ir_on_a_masked_from_head(D, BN, T, tmp_path):
+    """Two key blocks at a decode launch: MASKED_FROM = 1, so the second block rescales by the running max as it is. On synthetic
+    heads the laid-out units reproduce every tensor-core value of the IR."""
+    sub = TM.attention_head_v18(D, BN, T=f"{T}:{T}")
+    s = InputSet.open(generate(sub, 2, 20260926, tmp_path)["path"])
+    mod = REG.module("attention-head-v18")
+    assert mod.key_count(s) == T and sub.definition(T).statics["MASKED_FROM"] == 1
+    low = mod.lowering_for_set(s)
+    fin = IL.flat_ports(s, sub.inputs, 0, s.n)
+    cuts = IL.cut_words(low, fin)
+    _res, cut_out, ok = low.evaluate(fin, cuts)
+    assert ok == (1 << (s.n * low.units.n)) - 1 and (cut_out == cuts).all()
+
+
+@SLOW
+@pytest.mark.parametrize("n", [2048, 4096])
+def test_rmsnorm_triton_v5_pins_are_v1s(n):
+    sub = TM.subcircuit("rmsnorm-triton-v5", N=n, EPS=1e-5)
+    mod = REG.module("rmsnorm-triton-v5")
+    low = mod.circuit_lowering(sub)
+    assert low.sha256 == mod.PINS[(n, 1e-05)] and low.text == REG.module("rmsnorm-triton").lowering(TM.subcircuit("rmsnorm-triton", N=n, EPS=1e-5)).text

@@ -1,5 +1,5 @@
-import Models.Accounting.Assumptions.RemoteOutside
-import Models.Accounting.Assumptions.RemoteSketch
+import Definitions.Accounting.Assumptions.RemoteOutside
+import Definitions.Accounting.Assumptions.RemoteSketch
 import Proofs.Accounting.RemoteHeld
 
 /-!
@@ -11,7 +11,9 @@ on the node or computed on outside it at a tick of the pass was on the node (`pr
 * `SketchBoundAt` and `NoOutsideCompute` give `SketchBound` (`sketchBound_of_noOutside`), and `SketchBound` gives
   `SketchBoundAt` at every record of outside computation (`sketchBoundAt_of_sketchBound`);
 * the sketch model's `Present` is `PresentAt`, the same with outside computation allowed, under C over the model's
-  passes (`present_of_noOutside`, `presentAt_of_present`).
+  passes (`present_of_noOutside`, `presentAt_of_present`);
+* the provider's lockdown (`ProviderLockdown`) over an interval holding every credited pass gives `NoOutsideCompute`
+  (`noOutsideCompute_of_lockdown`).
 -/
 
 namespace Accounting.SecurityProofs.Remote
@@ -31,6 +33,13 @@ theorem present_of_outside (hO : NoOutsideCompute T O) {ω : Ω} (ha : T.accepts
   · exact h
   · rw [(hO ω ha p hp t h1 h2).1] at h
     simp at h
+
+/-- The provider's lockdown over `[applied, lifted)` grounds `NoOutsideCompute` when every credited pass of every
+accepting outcome lies inside that interval. -/
+theorem noOutsideCompute_of_lockdown {applied lifted : ℕ} (hL : ProviderLockdown T O applied lifted)
+    (inside : ∀ ω, T.accepts ω → ∀ p < T.passes, applied ≤ T.tick ω p ∧ T.tick ω (p + 1) ≤ lifted) :
+    NoOutsideCompute T O := fun ω ha p hp t h1 h2 =>
+  hL ω ha t ((inside ω ha p hp).1.trans h1) (lt_of_lt_of_le h2 (inside ω ha p hp).2)
 
 variable [Fintype Ω]
 

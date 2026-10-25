@@ -58,6 +58,7 @@ HERE = Path(__file__).resolve().parent
 ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 
+import leak_scan as LS  # noqa: E402
 import warden_serve as ws  # noqa: E402
 from verity.ml.circuits import boolean as BL  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
@@ -357,21 +358,9 @@ def pad_cells(at: SimpleNamespace) -> bytes:
     return b"".join(cell(PAD, q, b"", at.params.cell_bytes) for q, _, _ in at.opening.wiring.connections)
 
 
-def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
-    """`blobs` cut into the scan's aligned pieces (`a8.needles`'s), each distinct piece once under its first name, less
-    the pieces `public` holds raw or as hex: the staged circuit, written from the Definition before any instance, the
-    empty slot's zero bytes, which the schedule makes public, and the pads (`pad_cells`)."""
-    pieces: dict[str, bytes] = {}
-    seen: set[bytes] = set()
-    for name, b in blobs.items():
-        for o in range(0, len(b) - a8.PIECE + 1, a8.PIECE):
-            x = b[o:o + a8.PIECE]
-            if x not in seen:
-                seen.add(x)
-                pieces[f"{name} @{o}"] = x
-    out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
-    kept = {k: x for k, x in pieces.items() if x not in out}
-    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+#: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces `public` holds: the staged
+#: circuit, the empty slot's zero bytes, which the schedule makes public, and the pads, `pad_cells`).
+public_pieces = LS.public_pieces
 
 
 def expected(name: str, res: dict) -> bool:
