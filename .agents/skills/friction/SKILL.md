@@ -127,6 +127,9 @@ Landing:
 - (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
+- (25 Oct 11:20Z, the vLLM coordinator under that delegation) A `# noqa` is an exception too: in `integrations/vllm`, no
+  change adds more `noqa` lines than it removes. One that moves with its code counts as kept, and deleting a stale one is a
+  retirement. The ratchet gate counts them, with no allowlist.
 
 Protocols and claims:
 
