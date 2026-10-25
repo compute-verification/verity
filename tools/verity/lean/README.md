@@ -200,7 +200,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
-  closed hypothesis, or reads in its statement. `--update` writes each one's `digest`, the one its `reads` record holds, so
+  closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
+  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner.
+  In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
+  module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`, the one
+  its `reads` record holds, so
   a changed assumption fails under its own name; an entry no guarantee reads fails. A list of modules is the old form:
   it fails, and `--update` converts it into the definitions the guarantees read there, each owned by their owner.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
@@ -266,7 +270,7 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The trees** (Daniel, 24 Oct): `trees` names which module prefixes are the definitions tree (what a reader reads:
   each area's vocabulary, named assumptions and guarantee statements), the properties tree (statements about the code)
   and the proofs tree (every proof, lemma and proof-only definition); a module's tree is that of its longest prefix
-  (`Properties.Proofs` before `Properties`), and a package's trees reach the packages that require it by path
+  (`Proofs.Properties` before `Properties`), and a package's trees reach the packages that require it by path
   (`Security`'s reach `Security/Properties` and `Security/Proofs`). The check refuses a guarantee or property whose
   statement reads a definition of a module of the proofs tree (move it into the definitions tree, or take the statement
   off the guarantees: it is a lemma), and a module of the definitions or properties tree that imports one. `except`

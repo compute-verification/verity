@@ -62,7 +62,7 @@
 //   kh_lanes(A, B, L, K, seeds, out, lr, stream)   L drawn leaves on gathered operands: their receipts and lane records
 //              (option A's partials, partials.py; at the end of this file)
 //   kh_seeds_j10r(data, call, base, U, seeds, stream), kh_units_multi_j10r(calls, ncalls, units, M, live, mode, stream)
-//              kh_units_multi's receipts under J10-R's call-scale noise (measured only; at the end of this file), with
+//              kh_units_multi's receipts under J10-R's call-scale noise (#3574's form; at the end of this file), with
 //              kh_units_multi_j10r_sm and a served step's seeds from h1r's call table, kh_seeds_j10r_h1r
 //   kh_units_multi_j10rc(calls, ncalls, units, M, live, mode, stream)   (H1U_JRC) kh_units_multi_j10r's receipts with
 //              each call's column blocks hashed once a call too, its workspace kh_j10r_ws_bytes(M, N, K), its units
@@ -605,7 +605,10 @@ static_assert(H1U_JPD >= 1 && (H1U_JRING == 0 || H1U_JRING == 1) && 16 % (H1U_JP
 #define H1U_JRCPF 0
 #endif
 // H1U_JPROBE = 1 (RW without RC): a timing probe, never a receipt: the column blocks are the row block's words, not
-// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe)
+// hashed, so a unit's time less its column hash bounds what sharing the column blocks can save (unitsbench --probe).
+// With JX, which reads no row block, they are a multiply of their stream position into the midstate's words. Bits 2
+// and 4 (any RW unit) hold B's and A's (X's) segment loads at their first segments, which stay in L1, so the probe's
+// time against the unit's bounds what those loads' L2 latency costs
 #ifndef H1U_JPROBE
 #define H1U_JPROBE 0
 #endif
@@ -677,7 +680,52 @@ static_assert(!(H1U_JAP && H1U_JRY), "H1U_JAP's A' and H1U_JRY's digits both sit
 #if H1U_JXS && !H1U_JX
 #error "H1U_JXS swizzles JX's X, so it needs H1U_JX = 1"
 #endif
-static_assert(!(H1U_JAP && H1U_JX), "H1U_JAP's A' and H1U_JX's X both sit after the row blocks");
+// H1U_JCS = G (2 or 4; with JX and H1U_JCTA, not JN2 or H1U_JPROBE & 1): a column block's blocks are its seed_c
+// stream's, the same in every row block's unit, so h1umj_sm's CTA takes its WARPS units as a tile of r live row blocks
+// by WARPS / r column blocks (r = G, else 2, else 1: the most that divides the live row blocks), the live tiles first,
+// and a column block's r warps share its blocks: each hashes 32 / r of its columns for r blocks a pass (sets of r
+// blocks, one set ahead, double-buffered in the CTA's shared memory) and they meet once a set. r = 1 is the units in
+// their own order, each warp hashing its own blocks; the same blocks and receipts
+#ifndef H1U_JCS
+#define H1U_JCS 0
+#endif
+#if H1U_JCS && (!H1U_JX || H1U_JN2 || (H1U_JPROBE & 1) || (H1U_JCS != 2 && H1U_JCS != 4))
+#error "H1U_JCS (2 or 4) shares JX's column blocks, which JN2 and the hash-free probe don't hash one at a time"
+#endif
+// a JCS unit's column-block group: its 2 r buffers (set s's block e at s % 2 * r + e), its rank, r = 1 << lr, and its
+// named barrier
+struct JShare {
+  u32 (*buf)[32][17];
+  u32 rank, lr, bar;
+};
+struct alignas(16) WarpSmemJC {
+  static constexpr bool RX = false;
+  NoiseMid nm;
+  u32 utab[32][9];
+  u32 ring[32][33];
+};
+// immediate barrier ids and counts: a register id has ptxas reserve all 16 of the CTA's barriers. barrier.sync, not
+// bar.sync (barrier.sync.aligned, undefined for a warp that reaches it diverged): a warp can come to it straight from
+// cs_hash's per-lane store
+static_assert(WARPS <= 8, "js_sync names barriers 1 .. WARPS / 2");
+__device__ __forceinline__ void js_sync(const JShare& js) {
+  if (js.lr == 0) {
+    __syncwarp();
+  } else if (js.lr == 2) {
+    if (js.bar == 1) asm volatile("barrier.sync 1, 128;" ::: "memory");
+    else asm volatile("barrier.sync 2, 128;" ::: "memory");
+  } else {
+    switch (js.bar) {
+      case 1: asm volatile("barrier.sync 1, 64;" ::: "memory"); break;
+      case 2: asm volatile("barrier.sync 2, 64;" ::: "memory"); break;
+      case 3: asm volatile("barrier.sync 3, 64;" ::: "memory"); break;
+      default: asm volatile("barrier.sync 4, 64;" ::: "memory"); break;
+    }
+  }
+}
+// JX already does JAP and JAY's work: h1jr_x writes X = A + b (JAP's A', at the same offset) and A_d from Y (JAY's
+// sums), so a JX unit (JCS's too) has no dither add, Y MMA or Y tail left for them to remove
+static_assert(!(H1U_JAP && H1U_JX), "H1U_JX's X is H1U_JAP's A' and its A_d covers H1U_JAY's Y: build one of them");
 constexpr u32 JX_AD_WORDS = 3 * 8 * 32;
 __host__ __device__ __forceinline__ u64 jx_x_off(u32 M, u32 K) { return 64ull * M * (K / 512 + 1); }
 __host__ __device__ __forceinline__ u64 jx_ad_off(u32 M, u32 K) { return jx_x_off(M, K) + (u64)M * K; }
@@ -713,11 +761,11 @@ __device__ __forceinline__ void pack_digits(const int (&Y)[8][4], u32 g, u32 q, 
   }
 }
 template <int MD, bool WS, bool OS, bool J10 = false, bool PL = false, bool DG = false, bool RW = false, bool RC = false,
-          bool RY = false, bool YO = false, bool JX = false, class Sm = WarpSmem>
+          bool RY = false, bool YO = false, bool JX = false, class Sm = WarpSmem, bool CS = false>
 __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int8_t* __restrict__ B, u32 M, u32 N, u32 K,
                                          const u64* __restrict__ seeds, const uint8_t* __restrict__ live,
                                          u32* __restrict__ out, const u32* __restrict__ ws, const OneOut oo, const u32 u,
-                                         Sm& S) {
+                                         Sm& S, const JShare js = JShare{}) {
   constexpr bool RX = Sm::RX;
   static_assert(!RX || (RC && !DG), "WarpSmemX is RC's units' (no seed stream, no ring)");
   static_assert(!DG || !(WS || OS || J10 || PL), "a gathered diagonal is the fused receipts-only form");
@@ -726,6 +774,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   static_assert(!RY || RC, "RY is RC's units with their row blocks' digits read");
   static_assert(!YO || RY, "YO is RY's row block digits");
   static_assert(!JX || (RW && !RC), "JX is J10-R's units reading their row block's X and A_d");
+  static_assert(!CS || (JX && !H1U_JN2 && !(H1U_JPROBE & 1)), "CS shares JX's column blocks (H1U_JCS)");
   constexpr bool BW = RW && H1U_JBW;
   constexpr bool N2 = JX && H1U_JN2;
   constexpr bool XS = JX && H1U_JXS;
@@ -736,6 +785,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   constexpr int PD = RW ? H1U_JPD : H1U_PD, NS = PD + RING;
   constexpr bool PI = RW && H1U_JPI;
   static_assert(!PI || (PF && RING && NS % 4 == 0), "H1U_JPI is the prefetch ring's, in whole groups of 4 segments");
+  constexpr bool PBK = RW && (H1U_JPROBE & 2), PAK = RW && (H1U_JPROBE & 4);
   const u32 lane = threadIdx.x & 31;
   const u32 g = lane >> 2, q = lane & 3;
   const u32 ncb = DG ? 1 : N / 32;
@@ -848,19 +898,19 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
   // segment sg's A rows 16 mt + g + 8 h and B columns 8 nt + g, 8 bytes each at k = 32 sg + 8 q, in ring slot sg % NS
   uint2 pa[NS][4], pb[NS][4];
   const auto load_seg = [&](u32 sg, uint2(&a)[4], uint2(&b)[4]) {
-    const u32 kofs = 32 * sg + 8 * q;
+    const u32 ka = PAK ? 8 * q : 32 * sg + 8 * q, kb = PBK ? 8 * q : 32 * sg + 8 * q;
 #pragma unroll
     for (int r = 0; r < 4; ++r) {
       if constexpr (XS) {
         if (r % 2 == 0) {
-          const uint4 v = ld4<H1U_L2HINT>(Ab + 1024ull * sg + 256 * r + 16 * lane);
+          const uint4 v = ld4<H1U_L2HINT>(Ab + 1024ull * (PAK ? 0 : sg) + 256 * r + 16 * lane);
           a[r] = make_uint2(v.x, v.z);
           a[r + 1] = make_uint2(v.y, v.w);
         }
       } else {
-        a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + kofs);
+        a[r] = ld2<H1U_L2HINT>(Ab + (u64)(16 * (r >> 1) + g + 8 * (r & 1)) * K + ka);
       }
-      if constexpr (!YO) b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kofs);
+      if constexpr (!YO) b[r] = ld2e<H1U_L2HINT, H1U_EVF && H1U_EVFU>(Bb + (u64)(8 * r + g) * K + kb);
     }
   };
   // PI: the rows' pointers at segment PD of the ring pass to come (A's one under XS), the L2 prefetches' at segment 16
@@ -898,10 +948,43 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
 #pragma unroll
     for (int d = 0; d < PD; ++d) load_seg(d, pa[d], pb[d]);
   }
+  // CS: set st's blocks i = r st + e (pass i's, i = 0 the coins' block), lane's e and column (32 / r of them a warp);
+  // its body under CS, since #3889's Sm (WarpSmemX, JcSmem) have no nm
+  const auto cs_hash = [&](u32 st) {
+    if constexpr (CS) {
+      const u32 cl = 5 - js.lr, e = lane >> cl, col = (js.rank << cl) + (lane & ((1u << cl) - 1)), i = (st << js.lr) + e;
+      u64 s[8];
+      noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + col) * cb + (i == 0 ? chunks : i - 1), s);
+      if (i <= chunks) {
+        u32* d = js.buf[((st & 1) << js.lr) + e][col];
+#pragma unroll
+        for (int j = 0; j < 8; ++j) {
+          d[2 * j] = (u32)(s[j] >> 32);
+          d[2 * j + 1] = (u32)s[j];
+        }
+      }
+    }
+  };
 #pragma unroll 1
   for (u32 it = 0; it <= chunks; ++it) {
     const u32 blk = it == 0 ? chunks : it - 1;
-    if constexpr (N2) {
+    const u32(*cw32)[17];
+    if constexpr (CS) {
+      // set 0 at it = 0 in the same loop as the sets ahead, so the unit inlines one SHA-512
+      if ((it & ((1u << js.lr) - 1)) == 0) {
+#pragma unroll 1
+        for (u32 h = it == 0 ? 0 : 1; h < 2; ++h) {
+          if (h) js_sync(js);
+          const u32 st = (it >> js.lr) + h;
+          if ((st << js.lr) <= chunks) cs_hash(st);
+        }
+      }
+      cw32 = js.buf[(((it >> js.lr) & 1) << js.lr) + (it & ((1u << js.lr) - 1))];
+    } else {
+      cw32 = S.colbits;
+    }
+    if constexpr (CS) {
+    } else if constexpr (N2) {
       const u64 t0 = (u64)M * rb + (u64)(32 * cj + lane) * cb;
       if (it == 0 || (blk % 2 == 1 && blk + 1 < chunks)) {
         u64 sa[8], sb[8];
@@ -924,7 +1007,13 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
     } else if constexpr (JX) {
       u64 s[8];
-      noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+      if constexpr (H1U_JPROBE & 1) {
+        const u64 x = ((u64)(32 * cj + lane) * cb + blk) * 0x9E3779B97F4A7C15ull;
+#pragma unroll
+        for (int j = 0; j < 8; ++j) s[j] = x ^ S.nm.mid[j];
+      } else {
+        noise_block(S.nm, (u64)M * rb + (u64)(32 * cj + lane) * cb + blk, s);
+      }
 #pragma unroll
       for (int j = 0; j < 8; ++j) {
         S.colbits[lane][2 * j] = (u32)(s[j] >> 32);
@@ -967,7 +1056,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
         }
       } else {
         u64 s[8];
-        if constexpr (H1U_JPROBE) {
+        if constexpr (H1U_JPROBE & 1) {
 #pragma unroll
           for (int j = 0; j < 8; ++j)
             s[j] = ((u64)(j & 1 ? rv[j >> 1].z : rv[j >> 1].x) << 32 | (j & 1 ? rv[j >> 1].w : rv[j >> 1].y)) ^ (blk + cj);
@@ -1044,7 +1133,7 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       if constexpr (!YO) {
 #pragma unroll
         for (int h = 0; h < 8; ++h) {
-          const u32 hv = S.colbits[lane][h];
+          const u32 hv = cw32[lane][h];
           u32 w = 0;
 #pragma unroll
           for (int b = 0; b < 4; ++b) {
@@ -1068,8 +1157,12 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
       continue;
     }
-    const uint8_t* rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
-    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(N2 && blk % 2 == 0 ? &S.rowbits[0][0] : &S.colbits[0][0]);
+    const uint8_t* rbits = nullptr;
+    const uint8_t* cbits = reinterpret_cast<const uint8_t*>(&cw32[0][0]);
+    if constexpr (!JX || N2) {
+      rbits = reinterpret_cast<const uint8_t*>(&S.rowbits[0][0]);
+      if (N2 && blk % 2 == 0) cbits = rbits;
+    }
     u32 rw = 0;  // RX: the lane's word of the chunk (red_put)
 #pragma unroll 1
     for (u32 j0 = 0; j0 < 16; j0 += NS) {
@@ -1199,9 +1292,9 @@ __device__ __forceinline__ void h1u_unit(const int8_t* __restrict__ A, const int
       }
       if constexpr (PI) {
 #pragma unroll
-        for (int r = 0; r < (XS ? 1 : 4); ++r) par[r] += ASEG * NS;
+        for (int r = 0; r < (XS ? 1 : 4); ++r) par[r] += PAK ? 0 : ASEG * NS;
 #pragma unroll
-        for (int r = 0; r < 4; ++r) pbr[r] += 32 * NS;
+        for (int r = 0; r < 4; ++r) pbr[r] += PBK ? 0 : 32 * NS;
         pfa += ASEG * NS;
         pfb += 32 * NS;
       }
@@ -2595,9 +2688,10 @@ extern "C" int kh_one_peel_band(const void* A, const void* B, unsigned rows, uns
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream, band, mode);
 }
 
-// J10-R (CA's RT-ALGO r3 at 3dc80591df; measured only, never served or credited until CA adopts J10 and the verifier
-// takes the form): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call scale, row i's blocks
-// at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and columns 32 cj .. of it.
+// J10-R (CA's RT-ALGO r3 at 3dc80591df; RT-ALGO-16's verifier form, #3574, whose credit derives a unit's call and
+// blocks at the window's slot M): the call's noise is one stream, h1tile.noise(cseed, Layout(rows, N, K)) at call
+// scale, row i's blocks at i RB and column j's at rows RB + j CB, so unit (ri, cj) reads call rows 32 ri .. and
+// columns 32 cj .. of it.
 // cseed: the call's seed as 8 big-endian words (16 read as h1s_noise reads a unit's). Each unit keeps its own fold keys
 // (seeds' sigma_R). ws: kh_j10_ws_bytes(rows, N, K) bytes; kh_one's other arguments.
 extern "C" unsigned long long kh_j10_ws_bytes(unsigned rows, unsigned N, unsigned K) {
@@ -2936,12 +3030,95 @@ __device__ __forceinline__ void h1umj_one(const UCallR* __restrict__ calls, u32 
 #ifndef H1U_JCTA
 #define H1U_JCTA 0
 #endif
+#if H1U_JCS && !H1U_JCTA
+#error "H1U_JCS tiles the WARPS units a CTA takes together, so it needs H1U_JCTA = 1"
+#endif
+#if H1U_JCS
+// the k-th live (want) or dead row block of the M / 32, the warp's lanes taking 32 at a time
+__device__ __forceinline__ u32 nth_rb(const uint8_t* __restrict__ live, u32 nrb, u32 k, bool want) {
+  const u32 lane = threadIdx.x & 31;
+  for (u32 b0 = 0; b0 < nrb; b0 += 32) {
+    const u32 b = b0 + lane;
+    u32 m = __ballot_sync(0xFFFFFFFFu, b < nrb && (!live || live[b] != 0) == want);
+    const u32 n = __popc(m);
+    if (k < n) {
+      for (u32 j = 0; j < k; ++j) m &= m - 1;
+      return b0 + __ffs(m) - 1;
+    }
+    k -= n;
+  }
+  return 0;
+}
+
+// h1umj_one under H1U_JCS: slot gu of its call's tiles (nl live row blocks, r = 1 << lr of them a tile; r = 1 is the
+// unit gu itself), its group's buffers in jcb
+__device__ __forceinline__ void h1umj_cs(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
+                                         const uint8_t* __restrict__ live, u32 gu, u32 nl, u32 lr, WarpSmemJC& S,
+                                         u32 (*jcb)[32][17]) {
+  u32 lo = 0, hi = ncalls;
+  while (hi - lo > 1) {
+    const u32 mid = (lo + hi) >> 1;
+    if (calls[mid].u0 <= gu) lo = mid;
+    else hi = mid;
+  }
+  const UCallR c = calls[lo];
+  const u32 wp = threadIdx.x >> 5, s = gu - c.u0, ncb = c.N / 32, nrb = M / 32, C = WARPS >> lr, k = wp % C;
+  u32 u = s;
+  if (lr) {
+    if (s < nl * ncb) {
+      const u32 t = s / WARPS, nct = ncb / C;
+      u = nth_rb(live, nrb, ((t / nct) << lr) + wp / C, true) * ncb + C * (t % nct) + k;
+    } else {
+      const u32 d = s - nl * ncb;
+      u = nth_rb(live, nrb, d / ncb, false) * ncb + d % ncb;
+    }
+  }
+  const JShare js{jcb + ((2 * k) << lr), wp / C, lr, 1 + k};
+  if (c.md == 3)
+    h1u_unit<3, false, false, false, false, false, true, false, false, false, true, WarpSmemJC, true>(
+        c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, S, js);
+  else
+    h1u_unit<2, false, false, false, false, false, true, false, false, false, true, WarpSmemJC, true>(
+        c.A, c.B, M, c.N, c.K, c.seeds, live, c.out, c.rws, OneOut{}, u, S, js);
+}
+#endif
 // h1umj on the SMs whose %smid % den < q alone, its warps taking units from *next in turn (h1um_sm's partition, its last
 // CTA's fallback and its CAP too)
 template <bool CAP>
 __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* __restrict__ calls, u32 ncalls, u32 M,
                                                        const uint8_t* __restrict__ live, u32 q, u32 den,
                                                        u32* __restrict__ next, u32 cap) {
+#if H1U_JCS
+  u32 smid;
+  asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
+  if (!sm_keep<CAP, true>(smid, q, den, cap, next)) return;
+  __shared__ WarpSmemJC smem[WARPS];
+  __shared__ u32 jcb[2 * WARPS][32][17];
+  __shared__ u32 claim;
+  const u32 wp = threadIdx.x >> 5, lane = threadIdx.x & 31, total = calls[ncalls].u0, nrb = M / 32;
+  // r: H1U_JCS live row blocks a tile, else 2, else 1, the most that divides them; more than 1 only where every call's
+  // units are its nrb ncb, from a multiple of WARPS, and its column blocks a multiple of WARPS / r
+  u32 nl = 0;
+  for (u32 b = lane; b < nrb; b += 32) nl += !live || live[b] ? 1u : 0u;
+  nl = __reduce_add_sync(0xFFFFFFFFu, nl);
+  u32 lr = (H1U_JCS >= 4 && WARPS % 4 == 0 && nl % 4 == 0) ? 2 : (WARPS % 2 == 0 && nl % 2 == 0) ? 1 : 0;
+  bool ok = true;
+  for (u32 i = lane; i < ncalls; i += 32) {
+    const u32 ncb = calls[i].N / 32;
+    ok = ok && calls[i].u0 % WARPS == 0 && calls[i + 1].u0 - calls[i].u0 == nrb * ncb && ncb % (WARPS >> lr) == 0;
+  }
+  if (!__all_sync(0xFFFFFFFFu, ok)) lr = 0;
+  for (;;) {
+    __syncthreads();
+    if (threadIdx.x == 0) claim = atomicAdd(next, (u32)WARPS);
+    __syncthreads();
+    const u32 g0 = claim, gu = g0 + wp;
+    if (g0 >= total) break;
+    if (gu >= total) continue;
+    h1umj_cs(calls, ncalls, M, live, gu, nl, lr, smem[wp], jcb);
+    __syncwarp();
+  }
+#else
   u32 smid;
   asm volatile("mov.u32 %0, %%smid;" : "=r"(smid));
   if (!sm_keep<CAP, H1U_JCTA != 0>(smid, q, den, cap, next)) return;
@@ -2969,6 +3146,7 @@ __global__ void __launch_bounds__(32 * WARPS, H1U_MINB) h1umj_sm(const UCallR* _
       __syncwarp();
     }
   }
+#endif
 }
 
 // h1r.cu's H1Call, field for field (kh_h1rcall_bytes() against its h1r_call_bytes())

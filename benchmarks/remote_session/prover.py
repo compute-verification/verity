@@ -24,7 +24,7 @@ kv:P            honest, beside a serving node's KV writes (`ServingTrace`): befo
 kvdrop:P        kv:P, but the appended pages are not held: each pass's receipts for them are of zeros, and an
                 opening of one carries the true page, as skip's do
 serve           honest, beside the backend's own serving (`backend.serving`: a node's `Store`, whose engine steps
-                write, free and re-key its KV, `verity_vllm.store.remote`): before each pass the backend's engine runs
+                write, free and re-key its KV, `verity_vllm.protocols.remote_bandwidth.remote`): before each pass the backend's engine runs
                 its next step (pass 0's before the first window, `ready`), and the pass reads every live block at it;
                 one pass in flight, since a launch waits on its step, and a pass whose step ran past a boundary of a
                 window with a root is the next window's first, so the allowance covers a read, not a step; paced, a
@@ -638,6 +638,13 @@ class ProverSide:
                 self.jobs.task_done()
 
     def _open_window(self, t: int, draws: list) -> None:
+        """Window t's openings of `draws`, sent in parts. A window whose share of its draw is none
+        (`audit.Params.groups_per_coin` above 1) has nothing to open: the verifier accepted it at its draw's close."""
+        if not draws:
+            with self.lock:
+                for key in [key for key in self.kept if key[0] == t]:
+                    del self.kept[key]
+            return
         c0 = time.perf_counter_ns()
         by_pass = defaultdict(list)
         for k, (i, p) in enumerate(draws):
@@ -713,7 +720,7 @@ class ProverSide:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
         one = head.get("in_flight") == 1
         commitment = wire.commitment_of(head["commitment"])
-        why = coins.layout_reason(commitment, k, W)
+        why = coins.layout_reason(commitment, k, W, head.get("groups_per_coin", 1))
         if why is not None:
             raise ValueError(f"the session's coins are not session {k}'s: {why}")
         N = self.backend.blocks
@@ -733,7 +740,7 @@ class ProverSide:
                                            daemon=True)
         elif mode in ("serve", "servedrop"):
             if not hasattr(self.backend, "serving"):
-                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.store.remote)")
+                raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.protocols.remote_bandwidth.remote)")
             trace = self.backend.serving(self.registration, head["lifetime"])
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
