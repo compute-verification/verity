@@ -148,8 +148,14 @@ theorem piopCut_counts (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap roo
   obtain ⟨rfl, rfl⟩ := Replay.rankCheckP_go h₃
   try dsimp only at h
   obtain ⟨⟨ss, T, sws⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
-  obtain ⟨h, rfl⟩ := Prod.mk.inj h
-  obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj h)
+  first
+  | (obtain ⟨h, rfl⟩ := Prod.mk.inj h
+     obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj h))
+  | (obtain ⟨rfl, rfl⟩ := Replay.rankCheckP_go h₄
+     try dsimp only at h
+     obtain ⟨⟨ss, T, sws⟩, t₄, l₄, h₄, h⟩ := run_bind_ok h
+     obtain ⟨h, rfl⟩ := Prod.mk.inj h
+     obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj h))
   have s1 := (zerocheckCut_at coin n hm _ _ _ _ _ h₁).2
   have s2 := (lincheckCut_at coin n _ _ _ _ _ h₂).2
   have s3 := (ringSwitchCut_sws coin n _ _ (by simp [abcClaims]) h₄).2.1
@@ -261,16 +267,10 @@ theorem repFwC_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp 
     rw [_root_.Flock.Firewall.Finish.throw_run_go] at h'
     cases h'
   have hpl : P.proof.ligerito = lg ∧ P.level0 = zl := by
-    first
-    | (obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
-       obtain ⟨⟨rfl, -⟩, -⟩ := hp
-       exact ⟨rfl, rfl⟩)
-    | (obtain ⟨_, _, _, -, hc'⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
-       obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc'
-       simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
-       obtain ⟨⟨rfl, -⟩, -⟩ := hp
-       exact ⟨rfl, rfl⟩)
+    obtain ⟨_, _, _, -, hp⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hc
+    simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hp
+    obtain ⟨⟨rfl, -⟩, -⟩ := hp
+    exact ⟨rfl, rfl⟩
   have s1 := (zerocheckCut_at coin n hm _ _ _ _ _ h₁).2
   have s2 := (lincheckCut_at coin n _ _ _ _ _ h₂).2
   have s3 := (ringSwitchCut_sws coin n _ _ (by simp [_root_.Flock.abcClaims]) h₃).2.1
@@ -286,13 +286,10 @@ theorem repFwC_open0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp 
   refine h0.trans ?_
   have e : t₃.k + 2 + qOff sch 0 = piopZk st extras + sch.k0 + 8 := by
     unfold qOff
-    rw [if_pos (by omega)]
+    rw [ite_eq_left (by omega)]
     unfold piopZk
     omega
-  first
-  | (simp only [posAt, cfOf, e]; done)
-  | (unfold posAt cfOf
-     rw [e])
+  simp only [posAt, cfOf, e]
 
 end FinRep
 
@@ -372,7 +369,6 @@ theorem FlockSoundness.Discharge.ZkView.Coined.swExe_l0 {K W Hi VL : Type} [Fiel
   have key : ((T.swExe w v ω ys).rows, (T.swExe w v ω ys).xrows, (T.swExe w v ω ys).salts0) =
       ((T.viewExe w ω ys).rows, (T.viewExe w ω ys).xrows, (T.viewExe w ω ys).salts0) := by
     refine e1.trans (Eq.trans ?_ e2)
-    beta_reduce
     split_ifs
     · exact (FlockSoundness.ZK.Table.toBase_l0 T.tab _).trans
         ((FlockSoundness.ZK.Table.Hm96.onVals_viewR_l0 T.hm96 w v T.tab.vals ω ys).trans
@@ -395,12 +391,7 @@ theorem tabSrcView_l0 (P : Composed.LigProver) (x : Msg) (cz : ∀ j, Composed.C
     (tabSrcView P x cz v i).row0 = (tabSrcView P x cz v' i).row0 ∧
       (tabSrcView P x cz v i).salt0 = (tabSrcView P x cz v' i).salt0 := by
   unfold tabSrcView
-  first
-  | simp only [dite_eq_left hi, h1, h2, h3, and_self]
-  | (rw [dite_eq_left hi, dite_eq_left hi]
-     dsimp only
-     rw [h1, h2, h3]
-     exact ⟨rfl, rfl⟩)
+  simp only [dite_eq_left hi, h1, h2, h3, and_self]
 
 end Claims.ZKMal.Masked
 
@@ -516,7 +507,7 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
   obtain ⟨-, -, hT, -⟩ := FlockComplete.ZkTables.tables_of_setup hsc hsx
   have hJ : Masked.jOf x = (Masked.stsOf x).size := by
     unfold Masked.jOf
-    rw [if_pos hx]
+    rw [ite_eq_left hx]
   have hj : k / 2 < Masked.jOf x := by omega
   have hr : k % 2 < 2 := Nat.mod_lt _ (by decide)
   have hi' : k / 2 < (Masked.stsOf x).size := Masked.lt_of_jOf ⟨k / 2, hj⟩
