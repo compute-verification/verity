@@ -1,4 +1,4 @@
-import Definitions.Pous.Model.Mutable
+import Definitions.Pous.P2.Mutable
 
 /-!
 # P2's per-round floor for content committed before its key coin (conjectured)

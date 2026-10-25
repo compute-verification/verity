@@ -1,4 +1,4 @@
-import Definitions.Pous.Model.Mutable
+import Definitions.Pous.P2.Mutable
 import Definitions.Pous.Assumptions.P2
 import Definitions.Pous.Assumptions.Obligation
 
@@ -6,7 +6,7 @@ import Definitions.Pous.Assumptions.Obligation
 # PoUS as an obligation: the mutable store's audit window reduces to P2's per-round floor (trusted)
 
 The store is the weights' encoding and the KV pages', each page re-encoded on write under a fresh tag
-(`Security/Definitions/Pous/Model/Mutable.lean`). A window's reads are answered against its snapshot. The snapshot's
+(`Security/Definitions/Pous/P2/Mutable.lean`). A window's reads are answered against its snapshot. The snapshot's
 key pairs are the oracle's values at distinct tags, so they are uniform and independent of every other tag's
 (`SnapshotFresh`). A window is then P2's audit of the snapshot with whatever the prover holds about the other tags as
 advice: a payload and a responder fixed by the other tags' keys meet P2's graded bound (`ObligationOfRoundSecure`, from

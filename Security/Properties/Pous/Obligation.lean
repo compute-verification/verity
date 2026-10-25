@@ -1,12 +1,12 @@
 import Properties.Pous.Period
-import Definitions.Pous.Model.Mutable
+import Definitions.Pous.P2.Mutable
 
 /-!
 # PoUS as an obligation over one audit window: the deployed check's acceptance certifies the snapshot's space
 
 Under PoUS as an obligation the store changes while the prover serves: each KV page is re-encoded on write under a fresh
 tag, its coin drawn by the memory challenger after the page's plaintext commitment
-(`Security/Definitions/Pous/Model/Mutable.lean`). One audit window runs one session against the store's snapshot at
+(`Security/Definitions/Pous/P2/Mutable.lean`). One audit window runs one session against the store's snapshot at
 the window's start, so the window is `PeriodHeld`'s period with that snapshot as `C*`. The store's oracle is the ring's
 labeling and a key pair per tag. The window's capacity coins are the snapshot's primitive (`Mutable.snap`) and the
 memory challenger's coins. The key pairs of every other tag (`Mutable.rest`: earlier versions, pages outside the
