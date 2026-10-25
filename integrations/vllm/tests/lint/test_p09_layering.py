@@ -58,8 +58,8 @@ def layer_violations() -> list[R.Violation]:
     return out
 
 
-#: Engine modules every layer calls (the patch owner and the env-pin writer); they import nothing from the package.
-LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {"verity_vllm.engine.env"}
+#: Modules every layer calls (the patch owner, the env-pin writer and the settings registry); they import nothing from the package.
+LEAF_MODULES = frozenset(p.removesuffix(".py").replace("/", ".") for p in PATCH_OWNERS) | {"verity_vllm.engine.env", "verity_vllm.settings"}
 
 
 #: The unit a package cycle counts these modules and subpackages in (longest prefix wins), whatever package they sit in:
@@ -277,7 +277,7 @@ def test_allowlist_has_no_stale_entries() -> None:
 
 def test_leaf_modules_import_nothing() -> None:
     out = [f"{e.file}:{e.line} {_short(e.dst)}" for e in I.edges() if e.src in LEAF_MODULES]
-    assert not out, f"engine.hooks and engine.env must import nothing from verity_vllm (every layer calls them): {out}"
+    assert not out, f"engine.hooks, engine.env and settings must import nothing from verity_vllm (every layer calls them): {out}"
 
 
 def test_layer_map_names_existing_modules() -> None:
