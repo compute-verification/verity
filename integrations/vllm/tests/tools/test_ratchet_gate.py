@@ -285,8 +285,12 @@ def test_tightening_a_lint_passes_once_its_findings_are_fixed_and_fails_if_they_
 
 
 def test_shared_lint_code_runs_every_lint_and_an_error_is_named(linted):
+    linted.commit("a test that isn't a lint", {"integrations/vllm/tests/lint/test_other.py": "import no_such_package\n"})
+    linted.git("checkout", "-q", "main")
+    linted.git("merge", "-q", "pr")
+    linted.git("checkout", "-q", "-b", "helper")
     linted.commit("a helper", {"integrations/vllm/tests/lint/_helper.py": "X = 1\n"})
-    [c] = G.gate("main", "pr")["changes"]
+    [c] = G.gate("main", "helper")["changes"]
     assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
     assert G.violations([{"lint": "p10_size", "test": "test_no_new_x", "error": True,
                           "message": "Traceback:\n  File x\nFileNotFoundError: gone.py\n"}]) == [

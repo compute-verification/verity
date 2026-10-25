@@ -54,9 +54,10 @@ CHEAPEST = 12
 
 #: Run as ``python -I -c RUNNER LINT_DIR SLUGS`` (SLUGS a JSON list, or null for every lint): imports the lint directory as a
 #: package of its own, so no other file of the tree runs, with a stand-in for pytest (its marks), and calls each selected
-#: lint's ``test_no_new*`` tests.  Prints ``{"ran": [NAME, ...], "failures": [{"lint", "test", "message"}, ...]}``.
+#: lint's ``test_no_new*`` tests.  A lint is a module whose ``NAME`` is a string literal, read before it is imported, so a
+#: test module that isn't one is never run.  Prints ``{"ran": [NAME, ...], "failures": [{"lint", "test", "message"}, ...]}``.
 RUNNER = r'''
-import importlib, inspect, json, re, sys, traceback, types
+import ast, importlib, inspect, json, re, sys, traceback, types
 from pathlib import Path
 
 sys.dont_write_bytecode = True
@@ -78,18 +79,25 @@ pkg = types.ModuleType("base_lints")
 pkg.__path__ = [str(lint)]
 sys.modules["base_lints"] = pkg
 
+def lint_name(f):
+    """A lint's `NAME`, read without running the module: other test modules here may need what this Python lacks."""
+    for node in ast.parse(f.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "NAME" for t in node.targets):
+            return node.value.value if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str) else None
+    return None
+
+
 slug = lambda s: re.sub(r"^p\d+_", "", s)
 out = {"ran": [], "failures": []}
 for f in sorted(lint.glob("test_*.py")):
     selected = slugs is None or slug(f.stem[5:]) in slugs
     try:
+        name = lint_name(f)
+        if name is None or not (selected or slug(name) in slugs):
+            continue
         mod = importlib.import_module(f"base_lints.{f.stem}")
     except Exception:
-        if selected:
-            out["failures"].append({"lint": f.name, "test": None, "error": True, "message": traceback.format_exc(limit=2)})
-        continue
-    name = getattr(mod, "NAME", None)
-    if not isinstance(name, str) or not (selected or slug(name) in slugs):
+        out["failures"].append({"lint": f.name, "test": None, "error": True, "message": traceback.format_exc(limit=2)})
         continue
     tests = [(n, fn) for n, fn in vars(mod).items() if n.startswith("test_no_new") and inspect.isfunction(fn)]
     if not tests:
