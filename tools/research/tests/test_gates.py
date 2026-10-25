@@ -26,8 +26,9 @@ def test_git_env_drops_a_hooks_repository_and_the_callers_slots_and_import_path(
     driver = {"GIT_CONFIG_KEY_1": "merge.lean-audit.name", "GIT_CONFIG_KEY_2": "merge.lean-audit.driver",
               "GIT_CONFIG_KEY_3": "merge.lean-imports.name", "GIT_CONFIG_KEY_4": "merge.lean-imports.driver",
               "GIT_CONFIG_KEY_5": "merge.lakefile-lists.name", "GIT_CONFIG_KEY_6": "merge.lakefile-lists.driver",
-              "GIT_CONFIG_KEY_7": "merge.fixture-map.name", "GIT_CONFIG_KEY_8": "merge.fixture-map.driver"}
-    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "9", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
+              "GIT_CONFIG_KEY_7": "merge.fixture-map.name", "GIT_CONFIG_KEY_8": "merge.fixture-map.driver",
+              "GIT_CONFIG_KEY_9": "merge.vllm-allowlist.name", "GIT_CONFIG_KEY_10": "merge.vllm-allowlist.driver"}
+    assert env == {**env, **kept, **driver, "GIT_CONFIG_COUNT": "11", "GIT_TERMINAL_PROMPT": "0", "HOME": "/home/y"}
 
 
 def test_a_gates_merge_runs_the_record_driver_in_a_clone_without_it(tmp_path):

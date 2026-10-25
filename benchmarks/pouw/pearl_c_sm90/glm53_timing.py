@@ -174,7 +174,7 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     from verity.core.protocols.pouw.audit import weights_root
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     dev = torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261023)
@@ -298,7 +298,10 @@ def whole(run, weights: dict, xs: dict, stock: dict, reps: int) -> dict:
             errors[nm] = err
     names = [*arms, *stocks]
 
+    at = run.epoch_calls()
+
     def fresh(nm):
+        run.repeat_at = at          # every compared pass from one call index, so their commitments can repeat
         run.end_pass()
         run.hashing, run.whole_defer = arms[nm][0], arms[nm][1]
 
@@ -364,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)
     import torch
-    from verity_vllm.protocol_options.pouw_pearl_c_graphs import GRAPH_ROWS
+    from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
 
     out, dev = Path(a.out), torch.device("cuda")
     table = glm53.in_domain(a.scheme)
@@ -416,7 +419,7 @@ def main(argv: list[str] | None = None) -> int:
         gam = {r: float(glm53.gamma(glm53.scheme(f, a.scheme), n, k)) for r, f in glm53.FADD_READINGS.items()}
         for m in ms:
             x = torch.randn(m, k, device=dev, generator=gen).to(torch.bfloat16)
-            ys = {}
+            ys, at = {}, run.epoch_calls()
 
             def pearlc(nm: str, hashing: bool, schedule: str, graphs: bool, x=x, w=w, W=W):
                 """The arm's call, and before it a fresh pass under `hashing`, `schedule` and `graphs` (the open pass
@@ -425,6 +428,7 @@ def main(argv: list[str] | None = None) -> int:
                     ys[nm] = run.gemm(w, x, W, None)
 
                 def before():
+                    run.repeat_at = at      # every compared pass from one call index, so their commitments can repeat
                     run.end_pass(schedule=schedule)
                     run.hashing, run.graphs = hashing, graphs
                 return f, before, run.end_pass
@@ -468,6 +472,7 @@ def main(argv: list[str] | None = None) -> int:
             want, y_want = ends["pearlc"][0], ys["pearlc"].clone()
             agree = {}
             for nm, (sc, g) in pearls.items():
+                run.repeat_at = at
                 run.end_pass(schedule=sc)
                 run.hashing, run.graphs = True, g
                 run.poison()
