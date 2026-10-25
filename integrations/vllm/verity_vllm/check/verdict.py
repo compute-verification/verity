@@ -309,7 +309,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
         for k, v in re.findall(r"--engine-arg\s+([A-Za-z_]+)=([^\s]+)", cmd):
             try:
                 es[k] = json.loads(v)
-            except Exception:  # noqa: BLE001
+            except ValueError:
                 es[k] = v
         for flag, key in (("--max-num-seqs", "max_num_seqs"), ("--openings", "openings"), ("--pairs", "pairs")):
             m = re.search(flag + r"\s+(\d+)", cmd)
