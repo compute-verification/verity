@@ -145,7 +145,7 @@ statement is over the declared circuit; these are the checks that make its `comm
   its proof reads at a committed table, `--registered`) is among them: its call's record table (h1_prove's `zy@<c>`),
   under round `r`'s root before its coin;
 * the challenger: every round's coin opened by the live challenger, the auditor's device (AGENTS.md, auditor-trusted
-  devices; `trusted-nebius-host`), on a machine the prover doesn't control and never a process on the prover's node.
+  devices; `trusted-host`), on a machine the prover doesn't control and never a process on the prover's node.
   A challenger in the prover's process gives the prover its coins as they are drawn, so its coins are seeded ones,
   whatever the record calls them. `serve.py` builds `live_challenger` in the prover's process today (#2639 l.446–454,
   `window.py`'s `entropy=os.urandom`), so its runs establish only the order of roots and coins (RT2-INT-6, SG-11);
@@ -395,7 +395,7 @@ def Form.ServedLink (fused : Prop) : Form → Prop
   the form's (`Form.rounds`), and each call site's round its form's (`Form.roundOf`: its step's, or `perCall`'s own);
 * `inRange`: every gate's call site is one of them;
 * `live`: every round's coin is live: the live challenger's, which runs off the prover's node, on the auditor's device
-  (AGENTS.md, auditor-trusted devices; `trusted-nebius-host`). A challenger in the prover's process gives seeded coins,
+  (AGENTS.md, auditor-trusted devices; `trusted-host`). A challenger in the prover's process gives seeded coins,
   however `coinMode` records them, so a `Declared` with `.live` rounds is the run's only under the module docstring's
   challenger check, which today's `serve.py` doesn't meet;
 * `coin`, `registered`, `act`, `pub`, `computed`, `outWords`: a gate is a coin input exactly when it is of class
