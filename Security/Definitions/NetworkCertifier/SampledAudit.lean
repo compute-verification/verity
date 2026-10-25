@@ -32,7 +32,7 @@ at step `t`'s egress gates. The advice is the inputs other than the ingress, plu
   (`Covered`).
 
 **What this module does not model.** The certifier's signed rows and the operator's moves are tied to the transfer gates
-by the transfer-gate units and, beyond them, by the certifier's trust (`trusted-nebius-host`). That tie is the condition
+by the transfer-gate units and, beyond them, by the certifier's trust (`trusted-host`). That tie is the condition
 `Carries` picks out, inside the conclusion. The statuses are the certifier's published record, which the network check
 reads (`Covered`).
 -/

@@ -389,14 +389,11 @@
     {"file": "verity_vllm/query/required.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
     {"file": "verity_vllm/observe/fold/patterns/collectives.py", "kind": "doc-lane", "symbol": "TpCollective", "detail": "[lane"},
     {"file": "verity_vllm/observe/fold/patterns/collectives.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
-    {"file": "verity_vllm/collectives/collective_sites.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
-    {"file": "verity_vllm/collectives/collective_sites.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "doc-board-id", "symbol": "linkage_component", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "doc-board-id", "symbol": "oracle_compare_component", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/tp/c2.py", "kind": "doc-board-id", "symbol": "weights_pin_component", "detail": "M-nnnn"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "doc-lane", "symbol": "_build_dirs", "detail": "[lane"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
-    {"file": "verity_vllm/collectives/embedding_shard.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"},
     {"file": "verity_vllm/program/frontend/export_ops.py", "kind": "doc-lane", "symbol": "CollectiveBus._peers_of", "detail": "[lane"},
     {"file": "verity_vllm/program/frontend/export_ops.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
     {"file": "verity_vllm/pipeline/tp/fold_match.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
@@ -449,6 +446,9 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension._tp2_binding", "detail": "R1N"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension.tp2_coll_install.observer_rec", "detail": "R1N"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "TP2CaptureWorkerExtension.tp2_commit_binding_map_dump", "detail": "R1N"},
-    {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "repo_modules_loaded", "detail": "R1N"}
+    {"file": "verity_vllm/engine/rank_worker.py", "kind": "doc-round", "symbol": "repo_modules_loaded", "detail": "R1N"},
+    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
+    {"file": "verity_vllm/engine/collectives/collective_sites.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 2},
+    {"file": "verity_vllm/engine/collectives/embedding_shard.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N"}
   ]
 }
