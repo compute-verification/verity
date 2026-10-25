@@ -128,7 +128,7 @@ class Stored:
     """One weight kept on a storage grid with sticky scales: `w` holds the dequantized grid values (the simulation's container;
     nothing off the grid survives a write)."""
 
-    def __init__(self, w: torch.Tensor, fmt: str):
+    def __init__(self, w: torch.Tensor, fmt: str, headroom: float = 1.0):
         self.w, self.fmt, self.saturated = w, fmt, 0
         with torch.no_grad():
             a = w.float().abs().amax().clamp(min=1e-30).item()
@@ -136,7 +136,8 @@ class Stored:
             if fmt == "fp8":
                 self.g = pow2_ceil(a / E4M3_MAX)
             else:
-                self.g = pow2_ceil(a / (E4M3_MAX * 6.0))
+                # NVFP4's tensor scale never changes: `headroom` lets a weight grow that many times past the initial amax
+                self.g = pow2_ceil(headroom * a / (E4M3_MAX * 6.0))
                 out, inn = w.shape
                 assert inn % 16 == 0, w.shape
                 self.s = _ceil_e4m3(w.float().view(out, inn // 16, 16).abs().amax(-1, keepdim=True) / self.g / 6.0)
@@ -226,7 +227,7 @@ def target_linears(model):
     return [(n, m) for n, m in model.named_modules() if isinstance(m, nn.Linear) and n.split(".")[-1] in TARGETS]
 
 
-def setup(model, arm):
+def setup(model, arm, headroom=1.0):
     """Freeze everything but the target weights, patch them for the arm, and return (params, stored list)."""
     for p in model.parameters():
         p.requires_grad_(False)
@@ -239,7 +240,7 @@ def setup(model, arm):
         fmt = "fp8" if arm.startswith("fp8") else "nvfp4"
         store = arm.endswith("_store") or arm.endswith("_store_sign")
         if store:
-            stored.append(Stored(m.weight.data, fmt))
+            stored.append(Stored(m.weight.data, fmt, headroom))
         parent, _, child = name.rpartition(".")
         setattr(model.get_submodule(parent), child, QLinear(m, fmt, wq=not store))
     return [m.weight for _, m in lins], stored
@@ -314,7 +315,7 @@ def train(a):
     else:
         model = AutoModelForCausalLM.from_pretrained(a.model, dtype=torch.float32).to(dev)
     model.config.use_cache = True
-    params, stored = setup(model, a.arm)
+    params, stored = setup(model, a.arm, a.headroom)
     n_train = sum(p.numel() for p in params)
     val = task.plains(256, 900 + a.order)
     test = task.plains(512, 800 + a.order)
@@ -324,7 +325,7 @@ def train(a):
     rec = {"arm": a.arm, "order": a.order, "task": TAGS[a.order], "H_bits": task.H, "lr": a.lr, "seed": a.seed, "bs": a.bs,
            "max_steps": a.max_steps, "every": a.every, "model": "tiny" if a.tiny else a.model, "trained_params": n_train, "seq_len": seq,
            "flops_per_step": flops_step, "optimizer": "sign descent, no state" if a.arm.endswith("_sign") else "AdamW, fp32 moments",
-           "run_id": os.environ.get("RESEARCH_RUN_ID"), "log": []}
+           "headroom": a.headroom, "run_id": os.environ.get("RESEARCH_RUN_ID"), "log": []}
     v0 = evaluate(model, task, val)
     rec["val_nll_step0"] = sum(v0[2]) / len(v0[2])
     rec["val_exact_step0"] = sum(v0[0]) / len(v0[0])
@@ -416,7 +417,8 @@ def table(dirs):
     print("|" + "---|" * 14)
     for r in sorted(recs, key=lambda r: (r["task"], r.get("every", 25), ARMS.index(r["arm"]), r["lr"], r["seed"])):
         lo, hi = boot_ci(r["test_exact_per_string"])
-        print(f"| {r['task']} | {r['arm']} | {r['lr']:g} | {r['seed']} | {r['run']} | {r['steps']} ({r.get('every', 25)}) | {f(r['test_exact'])} "
+        arm = r["arm"] + (f" (headroom {r['headroom']:g})" if r.get("headroom", 1.0) != 1.0 else "")
+        print(f"| {r['task']} | {arm} | {r['lr']:g} | {r['seed']} | {r['run']} | {r['steps']} ({r.get('every', 25)}) | {f(r['test_exact'])} "
               f"[{lo:.3f}, {hi:.3f}] | {f(r['test_letters'])} | {f(r['test_nll'])} | {e(r['flops_to_50'])} | {e(r['flops_to_99'])} | "
               f"{f(r.get('test_exact_bf16_arith'))} | {f(r['val_nll_step0'])} | {r['train_s'] / r['steps']:.2f} |")
 
@@ -435,6 +437,7 @@ def main():
     t.add_argument("--model", default="Qwen/Qwen2.5-0.5B-Instruct")
     t.add_argument("--tiny", action="store_true", help="a 2-layer random Qwen2 for a CPU smoke test")
     t.add_argument("--deadline-epoch", type=float, default=0.0)
+    t.add_argument("--headroom", type=float, default=1.0, help="NVFP4 storage: the tensor scale's room above the initial amax")
     t.add_argument("--out", required=True)
     tb = sub.add_parser("table")
     tb.add_argument("dirs", nargs="+")
