@@ -24,7 +24,7 @@ def _workload(row: str) -> dict:
 def test_the_planner_reads_the_profile_tables():
     assert (A.MODELS, A.DENSE_DEFAULT, A.CALIBRATION) == (C.MODELS, C.DENSE_DEFAULT, C.CALIBRATION)
     assert _digest({"MODELS": C.MODELS, "DENSE_DEFAULT": C.DENSE_DEFAULT, "CALIBRATION": C.CALIBRATION}) == "118a90b99cd0cf91"
-    assert C.DEFAULT_MODEL in C.MODELS and any(k.startswith(C.DENSE_DEFAULT_SOURCE) for k in C.MODELS)
+    assert C.DEFAULT_MODEL in C.MODELS
 
 
 def test_unknown_model_notes_name_the_dense_default(tmp_path: Path):

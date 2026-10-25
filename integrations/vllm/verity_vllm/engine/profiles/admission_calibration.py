@@ -8,8 +8,6 @@ MiB = 1 << 20
 GiB = 1 << 30
 #: The model an attempt is planned as when its directory names no row.
 DEFAULT_MODEL = "llama32-1b"
-#: The model whose coefficients `DENSE_DEFAULT` carries: the largest measured dense set.
-DENSE_DEFAULT_SOURCE = "phi3"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Model table: structural constants + measured per-model coefficients.  `instances_per_layer_token` and
@@ -41,6 +39,16 @@ MODELS: dict[str, dict[str, Any]] = {
 DENSE_DEFAULT = {"family": "dense", "layers": 32, "hidden": 4096, "heads": 32, "dtype_bytes": 2, "weights_bytes": 16 * GiB, "per_token_bytes": 4_000_000,
                      "instances_per_layer_token": 10.1, "hidden_per_token_K": 4.4e-3, "c2_oracle_per_instance": 17_500,
                      "c2_programs_per_instance": 21_500, "build_graph_per_row_ctx_layer": 6_800, "largest_tensor_per_prompt": 554_000_000}
+
+
+def unknown_model_note(model: str) -> str:
+    """The plan's note for an attempt whose model `MODELS` doesn't have: it is planned under `DENSE_DEFAULT`."""
+    return f"model {model!r} not in MODELS: dense defaults (phi3 coefficients) used"
+
+
+def uncalibrated_model_note(key: str) -> str:
+    """The plan's note for a workload row whose model `MODELS` doesn't have: every term comes from `DENSE_DEFAULT`."""
+    return f"no calibration for model '{key}': dense default coefficients (phi3's, the largest measured dense set) -- every term is an estimate"
 
 # ---------------------------------------------------------------------------------------------------------------------
 # Measured constants.  value + unit + the R17 evidence that pins it.  These are the only numbers in the model.

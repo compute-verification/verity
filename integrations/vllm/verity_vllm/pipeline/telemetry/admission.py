@@ -42,7 +42,8 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROW_ID_PATTERN, row_tokens
-from verity_vllm.engine.profiles.admission_calibration import CALIBRATION, DENSE_DEFAULT, DENSE_DEFAULT_SOURCE, DEFAULT_MODEL, MODELS
+from verity_vllm.engine.profiles.admission_calibration import (CALIBRATION, DENSE_DEFAULT, DEFAULT_MODEL, MODELS, uncalibrated_model_note,
+                                                               unknown_model_note)
 
 MiB = 1 << 20
 GiB = 1 << 30
@@ -609,7 +610,7 @@ def row_config_from_attempt(attempt_dir: str) -> RowConfig:
     if not cfg.fork_gc_freeze:
         notes.append("modelled without gc.freeze before the fork (pre-R19 record; --no-fork-gc-freeze equivalent)")
     if model not in MODELS:
-        notes.append(f"model {model!r} not in MODELS: dense defaults ({DENSE_DEFAULT_SOURCE} coefficients) used")
+        notes.append(unknown_model_note(model))
     # timeline row start carries B/LP/T
     tl = os.path.join(attempt_dir, "timeline.jsonl")
     if os.path.exists(tl):
@@ -954,7 +955,7 @@ def row_config_from_workload(workload_path: str | dict[str, Any], row_id: str | 
     key = model_key_for_row(row)
     notes = []
     if key not in MODELS:
-        notes.append(f"no calibration for model '{key}': dense default coefficients ({DENSE_DEFAULT_SOURCE}'s, the largest measured dense set) -- every term is an estimate")
+        notes.append(uncalibrated_model_note(key))
     cfg = RowConfig(model=key, requests=b, prompt_tokens=prompt, decode_rows=decode, steps=steps, max_context=int(ea.get("max_model_len") or (i_max + o_max)),
                     pairs=pairs, replay_workers=replay_workers, host_limit_bytes=host_limit_bytes,
                     largest_request_rows=t_max, largest_request_ctx=lp_max + t_max, notes=notes)
