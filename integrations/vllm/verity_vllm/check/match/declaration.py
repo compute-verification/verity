@@ -18,7 +18,7 @@ GP_SCHEMA = "cb-a/global-program/v1"
 
 
 def request_id_of(index: int) -> str:
-    """`r<k>` (COORD R15 ruling 2) -- the same function as global_program.request_id_of (kept local: this module must not import torch paths)."""
+    """`r<k>` -- the same function as global_program.request_id_of (kept local: this module must not import torch paths)."""
     return f"r{int(index)}"
 
 
@@ -42,7 +42,7 @@ _VARIANT_RE = re.compile(r"^stoch-t(?P<t>[0-9.]+)-p(?P<p>[0-9.]+)(?:-k(?P<k>[0-9
 
 
 def manifest_sampling(wl: dict, variant: str | None = None) -> dict:
-    """The manifest's declared sampling policy as the header records it.  SOURCES, all read, none trusted alone [rev-pm M-0667 TIP N5]:
+    """The manifest's declared sampling policy as the header records it.  SOURCES, all read, none trusted alone:
     (1) `variants[variant]` -- the table the DRIVER consumes (vllm_adapter.load_workload) and the header records: the value of record;
     (2) the variant LABEL (greedy | stoch-t<T>-p<P>[-k<K>]) parsed; (3) explicit `sampling.{temperature,top_p,top_k}`; (4) `sweep.sampling_params`.
     When two sources disagree on a key the result carries `conflict` (G1 fails closed, named): a manifest whose label says p0.95 while
@@ -89,7 +89,7 @@ def manifest_sampling(wl: dict, variant: str | None = None) -> dict:
 def mock_global_program(workload_path: str, component_dirs: list[str], eos_token_ids: list[int] | None = None, lag: int | None = None) -> dict:
     """The rooted workload Program's INTERFACE assembled from the declared workload and the Build's request components, so the
     global check can run before lane gprog's builder lands.  It reads the manifest and the components only -- never the record.
-    [R17-1] `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = a pre-R17-1 Program that
+    `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = an older Program that
     declares no lag (G6 then fails by name on any EOS stop)."""
     wl = json.load(open(workload_path))
     sw = wl.get("sweep") or {}
@@ -142,11 +142,11 @@ _LAG_STATIC_RE = re.compile(r",lag=(-?\d+)\}$")
 
 
 def workload_lag_static(desc: dict) -> int | None:
-    """[R17-1] the `lag` static of the workload Program AS THE CODEC WROTE IT, read from the descriptor (both places are inside the digest
+    """The `lag` static of the workload Program AS THE CODEC WROTE IT, read from the descriptor (both places are inside the digest
     program_digest verifies): the codec inlines a specialization's binding record into its spec id in static-parameter order
     (`Workload_v1{requests=[...],shared=[...],lag=1}`, verity.ml.circuits.codec._spec_id), so `desc["program_fn"]` ends in `,lag=<n>}` and the
     root id `Root[Workload_v1{...,lag=<n>}]_v1` carries the same suffix; the two must agree.  A descriptor whose root definition carries an
-    explicit `bindings.lag` (the mock form) is read from there.  None = a Program that declares no lag (every pre-R17-1 Build)."""
+    explicit `bindings.lag` (the mock form) is read from there.  None = a Program that declares no lag (every Build from before the static)."""
     ddefs = desc.get("definitions")
     root_id = desc.get("root")
     root_def = ddefs.get(root_id) if isinstance(ddefs, dict) and isinstance(root_id, str) else None
@@ -286,7 +286,7 @@ ENGINE_FACT_KEYS = ("enforce_eager", "enable_prefix_caching", "enable_chunked_pr
 
 
 def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
-    """[COORD M-0213 / ruling 21 / DP-pad-02] how many rows the engine computes for a request AFTER its EOS sample.
+    """How many rows the engine computes for a request AFTER its EOS sample (DP-pad-02).
 
     vLLM's async scheduling (``async_scheduling=True``) schedules step t+1 before step t's sample is known, so a request whose
     sample at step t is an EOS is still forwarded once more at t+1 (a placeholder row whose input is the EOS and whose sample is
@@ -306,7 +306,7 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
 
 
 def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
-    """The execution conditions the record attests, gathered from EVERY location a recorder writes them [rev-pm M-0261 / F-pm-21]:
+    """The execution conditions the record attests, gathered from EVERY location a recorder writes them:
     the production recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
     `RunHeader.profile.compilation` (vllm_adapter build_manifest); older/foreign headers put them at the top level; the run's
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},

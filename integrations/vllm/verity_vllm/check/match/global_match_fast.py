@@ -1,6 +1,6 @@
 """MATCH_IMPL=fast -- compute-once / index-once for the Match stage (GM-01 `global_match.check`, X-09 `batch_decomp.decompose`).
 
-[R17 mprof, BRIEF s5 / MATCH-PROFILE.md] The checker of record traverses immutable per-request structure many times per invocation:
+The checker of record traverses immutable per-request structure many times per invocation:
 `Prog.canon(i)` (every operand source of an instance) >= 6x per instance (G3 loop, compare_steps wiring, _canonical_hash, dag_hashes,
 G8 dependency order, live_cone; then everything again in the alternate-criterion run, and again inside X-09), `compare_steps(A, P)` 2x
 per request, `dag_hashes(A)` once per REQUEST (not per component) and `dag_hashes(A) + dag_hashes(P)` over the FULL programs once per
@@ -199,7 +199,7 @@ class _Hashes(dict):
 
 
 def _check_origin(h) -> None:
-    """[F-r17-07, hardening F-r17-08] a memo hit must be a _Hashes of THIS process (or of the parent whose id table a forked worker
+    """A memo hit must be a _Hashes of THIS process (or of the parent whose id table a forked worker
     inherited); a plain dict (no origin) is refused like a foreign one -- never compared."""
     if not isinstance(h, _Hashes):
         raise RuntimeError(f"global_match_fast: dag_hashes memo holds a {type(h).__name__} without an origin pid -- only a _Hashes computed "
@@ -478,7 +478,7 @@ def dep_order_violations(P, rid: str) -> list[dict]:
 # ------------------------------------------------------------------------------------------------ the fast path's Programs and operations
 
 def _spec_id_memo(fn):
-    """[R17 mprof unit 3, BRIEF s5 'cache immutable Definition/specialization analysis'] `codec._spec_id(fn)` serialises a
+    """`codec._spec_id(fn)` serialises a
     specialization's static bindings to canonical JSON on EVERY call; `compare.Prog.__init__` calls it once per NODE (162 k for the
     B8 256/32 fold, 3-9 k per component), while the `fn` objects are shared by every node of the same specialization -- 11 % of a
     component's load on the real record.  The id is a pure function of the (immutable after construction) definition + bindings: it
@@ -589,7 +589,7 @@ COMPACT_ENV = "MATCH_COMPACT"
 
 
 def workers(n_items: int) -> int:
-    """[R17 mfast, BRIEF §5 step 3] How many forked workers the per-request legs run on: `MATCH_WORKERS` (default min(cpu_count, 8)),
+    """How many forked workers the per-request legs run on: `MATCH_WORKERS` (default min(cpu_count, 8)),
     never more than there are legs; 1 = every leg in the parent process (the memo-only path)."""
     raw = os.environ.get(WORKERS_ENV, "").strip()
     n = int(raw) if raw else min(os.cpu_count() or 1, 8)
@@ -606,7 +606,7 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
 
 
 def seed_dag_hashes(P: SEQ.Prog, hashes: dict) -> None:
-    """RETIRED (F-r17-07, rev M-0154): a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
+    """RETIRED: a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
     The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
     raise RuntimeError("seed_dag_hashes is retired (F-r17-07): legs return matching facts, never hash dicts across processes")
 
@@ -698,10 +698,10 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
 def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: str | None = None, run_x09: bool = True,
           within_step: str | None = None, record_alternate: bool = True, _loaded: dict | None = None,
           tokens_optional: bool = False) -> dict:
-    """[R17 mfast] The candidate's global Match as `global_match.impl_module("fast").check(...)` runs it: the checker of record's
+    """The candidate's global Match as `global_match.impl_module("fast").check(...)` runs it: the checker of record's
     `check` over this module's `ops()` for the duration of the call (whatever the environment says).  Same signature, same result
     schema; nothing else is different by construction -- the differential harness proves it on the artifacts.
-    [rel r17-int-2] `tokens_optional` (stoch F-r17-01, CLI --tokens-optional) forwarded unchanged so the CLI's `mod.check(...)` call has one
+    `tokens_optional` (CLI --tokens-optional) forwarded unchanged so the CLI's `mod.check(...)` call has one
     signature for both implementations."""
     global _force
     from verity_vllm.check.match import global_match as _record  # deferred: global_match imports this module at load
