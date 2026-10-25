@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.CoinFlow
+import Definitions.Accounting.Guarantees.CoinFlow
 import Proofs.Accounting.HMu.Luck
 
 /-!
