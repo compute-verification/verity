@@ -10,7 +10,7 @@
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256; the weights stream's manifest, and layer LAYER's
 # blocks of W generated once into STORE/w.bin (`weights write`, seed SEED) and kept with `research keep`. Under one lease
 # of at most LEASE_MIN minutes (default 25), in order: `bench`, memory-accounting's decode_bench.py unchanged on the lib;
-# then layer.py's `encode` (ENCODE_BUDGET seconds, default 1200), `stage` and `gemm`. After the lease, `check`: check.py on
+# then layer.py's `encode` (ENCODE_BUDGET seconds, default 1080), `stage` and `gemm`. After the lease, `check`: check.py on
 # every encoded block and the GEMM samples. Each step's exit code is in $OUT/rc.txt; exits non-zero if any failed.
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
@@ -70,7 +70,8 @@ nvidia-smi --query-gpu=timestamp,index,clocks.sm,clocks.mem,power.draw,temperatu
 SMI=$!
 echo "p2_stage: steps $STEPS, asking for the GPU at $(date -u +%H:%M:%SZ)"
 LAYER_STEPS=$(echo "$STEPS" | tr , '\n' | grep -E '^(encode|stage|gemm)$' | paste -sd, -)
-export LAYER_STEPS ENCODE_BUDGET=${ENCODE_BUDGET:-1200}
+export LAYER_STEPS ENCODE_BUDGET=${ENCODE_BUDGET:-1080}
+if [[ ,$STEPS, == *,bench,* || -n $LAYER_STEPS ]]; then
 # shellcheck disable=SC2016
 GPU_LEASE_TIMED=1 gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
   step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
@@ -90,6 +91,7 @@ GPU_LEASE_TIMED=1 gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
   nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER > "$O/clocks-end.txt" 2>&1
   echo "released at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"'
 step lease $?
+fi
 kill "$SMI" 2>/dev/null
 
 if [[ ,$STEPS, == *,check,* ]]; then

@@ -42,6 +42,8 @@ def _blocks(r: tuple[int, int]) -> list[tuple[int, str]]:
 
 
 def check_decode(args, lay: L.StoreLayout) -> dict:
+    if not (args.store / "c.json").exists():
+        return {"checked": 0, "mismatches": 0, "store": "none yet"}
     meta = json.loads((args.store / "c.json").read_text())
     first, done = meta["first"], meta["done"]
     stop = first + (done if args.blocks is None else min(done, args.blocks))
