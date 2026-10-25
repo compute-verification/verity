@@ -21,5 +21,6 @@ import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.SamplingScope
+import Proofs.Flock.Claims.XorChain
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
