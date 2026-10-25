@@ -6,4 +6,5 @@ import MemoryChallenger.Protocol
 import MemoryChallenger.Judge
 import MemoryChallenger.StreamedWipe
 import MemoryChallenger.WipeJudge
+import MemoryChallenger.WipeProtocol
 import MemoryChallenger.Difftest
