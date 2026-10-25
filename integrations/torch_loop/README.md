@@ -10,7 +10,8 @@ committed row longer than one SHA-512 block.
 
 - `verity_torch_loop/serve.py`: the window written for the audit (`--out DIR`, `--tamper` for a loop whose outputs are not
   its model's, `--opening FILE` to commit its schedule as advice under its compiler), or the circuit's SHA-512 from the
-  loop's shape alone (`--circuit-only`), the one the verifier registers when there is no compiler.
+  loop's shape and run alone (`--circuit-only`), the one the verifier registers when there is no compiler. `--run-id ID`
+  names the run, which its root binds: two runs of one shape are two roots, since infra's gate opens a root's coins once.
 - `verity_torch_loop/compile.py`: its registered compiler, the command the audit runs on the opened advice (the contract in
   `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
   It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the

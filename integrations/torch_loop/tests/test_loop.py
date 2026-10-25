@@ -1,6 +1,7 @@
 """The torch loop as an integration of Verity's (`verity.ml.windows.interface`): its model computes its template's function,
 its written window is the one core's registration check derives (and a port under another domain is refused), the
-verifier's window from its records alone is the loop's, the circuit it registers before running is the one it writes, its
+verifier's window from its records alone is the loop's, the circuit it registers before running is the one it writes (two
+runs of one shape: two roots and two circuits), its
 compiler registers its code's digest at its commit, compiles its committed schedule to the circuit it registers and refuses
 advice that is not a schedule, its unit
 composes into C-Flock's unit statement, a tampering loop's outputs are not its Definition's, and it loads no vLLM."""
@@ -67,6 +68,18 @@ def test_the_circuit_it_registers_before_running_is_the_one_it_writes(tmp_path, 
     assert S.main(["--out", str(tmp_path / "t"), *shape, "--tamper"]) == 0
     tampered = json.loads(capsys.readouterr().out)
     assert tampered["circuit"] == before and list(tampered["mismatched"].values()) == [2 * L.H]
+
+
+def test_two_runs_of_one_shape_are_two_roots_each_registering_its_own_circuit(tmp_path, capsys):
+    shape = ["--law", "subset:2", "--requests", "3", "--steps", "1", "--cap", "32"]
+    got = {}
+    for run in ("a", "b"):
+        assert S.main(["--circuit-only", *shape, "--run-id", run]) == 0
+        before = json.loads(capsys.readouterr().out)["circuit"]
+        assert S.main(["--out", str(tmp_path / run), *shape, "--run-id", run]) == 0
+        got[run] = json.loads(capsys.readouterr().out)
+        assert got[run]["circuit"] == before
+    assert got["a"]["run"] != got["b"]["run"] and got["a"]["circuit"] != got["b"]["circuit"]
 
 
 def test_its_compiler_compiles_the_committed_schedule_to_the_circuit_it_registers(tmp_path, capsys):

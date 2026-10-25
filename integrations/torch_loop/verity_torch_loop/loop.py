@@ -86,10 +86,11 @@ def bits(t: torch.Tensor) -> np.ndarray:
 
 
 class TorchLoop:
-    """The loop over ``requests`` (token ids) for ``steps`` decode steps of ``model`` (module docstring)."""
+    """The loop over ``requests`` (token ids) for ``steps`` decode steps of ``model`` (module docstring); ``run_id`` names
+    the run, so two runs of one shape have two roots (infra's gate opens a root's coins once, ever)."""
 
-    def __init__(self, model: Model, requests: list[int], steps: int = 2, tamper: bool = False) -> None:
-        self.model, self.requests, self.steps, self.tamper = model, list(requests), steps, tamper
+    def __init__(self, model: Model, requests: list[int], steps: int = 2, tamper: bool = False, run_id: str = "") -> None:
+        self.model, self.requests, self.steps, self.tamper, self.run_id = model, list(requests), steps, tamper, run_id
         self.outputs: dict[tuple[int, int], torch.Tensor] = {}
 
     @property
@@ -98,9 +99,9 @@ class TorchLoop:
 
     @property
     def run_root(self) -> str:
-        """The run's root: SHA-512 of what the loop served (its model's seed and width, its requests and steps)."""
+        """The run's root: SHA-512 of what the loop served (its model's seed and width, its requests and steps) and its id."""
         return hashlib.sha512(json.dumps({"loop": "torch-loop/mlp-w8a8", "h": self.model.h, "seed": self.model.seed,
-                                          "requests": self.requests, "steps": self.steps}).encode()).hexdigest()
+                                          "requests": self.requests, "steps": self.steps, "id": self.run_id}).encode()).hexdigest()
 
     def circuit(self) -> IF.Circuit:
         return IF.Circuit(f"torch-loop/mlp-w8a8-h{self.model.h}", ((template(self.model.h), self.units),))

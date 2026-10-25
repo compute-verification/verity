@@ -1,8 +1,8 @@
 """The torch loop's window, written for the audit from its records alone (`benchmarks/prove_path/records_audit.py`).
 
-    python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--tamper] \\
-        [--opening FILE]
-    python -m verity_torch_loop.serve --circuit-only [the same shape]
+    python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--run-id ID] \\
+        [--tamper] [--opening FILE]
+    python -m verity_torch_loop.serve --circuit-only [the same shape and --run-id]
 
 The first serves the requests (`loop.TorchLoop`), commits every unit and writes the window (``circuit.json``, the
 registration under core's ``one_stage.registration``, the value files) to ``--out``, and prints the circuit record's
@@ -33,12 +33,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--steps", type=int, default=2)
     ap.add_argument("--h", type=int, default=L.H)
     ap.add_argument("--cap", type=int, default=8)
+    ap.add_argument("--run-id", default="", help="the run's name, which its root binds (`TorchLoop`)")
     ap.add_argument("--tamper", action="store_true")
     ap.add_argument("--opening")
     a = ap.parse_args(argv)
     if bool(a.out) == a.circuit_only:
         ap.error("--out DIR, or --circuit-only")
-    loop = L.TorchLoop(L.Model(h=a.h), [int(x) for x in a.requests.split(",")], a.steps, a.tamper)
+    loop = L.TorchLoop(L.Model(h=a.h), [int(x) for x in a.requests.split(",")], a.steps, a.tamper, a.run_id)
     law = D.parse_law(a.law)
     if a.circuit_only:
         empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap)
