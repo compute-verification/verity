@@ -200,6 +200,8 @@ end PouwCheck.Period
 
 namespace PouwCheck
 
+open Lean (Json)
+
 /-- `pearl_c_period.pearl_c_period_credit`: Pearl-C period `name`'s credit, the manifests of `passes` in order, under the
 pinned challenger key `key`, the auditor's ledger `ledger`, the host's pins log `pins` and the verifier's copy of main's
 first-parent history `main`; `passes` each `{context, descriptor, manifest, session}` and `earlier` the lane's epochs
