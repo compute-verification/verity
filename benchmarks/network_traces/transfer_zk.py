@@ -29,7 +29,10 @@ proves the statement behind the Lean firewall, and the Lean verifier's registere
     that read (`WHY`);
   - ``unsigned``: o0 under the prover's own commitment of the units' outputs (its own salts and tree), against the
     certifier's root, to be refused at that read. The prover's registration of its own root under the certifier's
-    certificate is refused by `transfer_rows.check_registration` and by `blocks.certified`.
+    certificate is refused by `transfer_rows.check_registration` and by `blocks.certified`;
+  - ``request`` and ``weight``: unit 0's x (a request byte) or wrow (a loaded weight) one s8 code off the row the
+    certifier signed, under its salts and paths (`changed`: the first code whose change leaves the unit's output, and so
+    the signed response, as it was), to be refused at that read alone.
   Each is drawn by the verifier's Lean (every unit, `flock-verify draw --stratified n`), proved ``--zk`` behind the
   firewall (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean ``verify --zk --partition --program --registered``.
 * **What the verifier receives**, scanned for every 16-byte piece of every x and wrow row and every salt of the
@@ -73,9 +76,13 @@ PARAMS = lms.Params(64, 1, 6)
 VALUES = {"x": ("request", "request", WINDOW), "sx": ("request_scale", "request", WINDOW), "wrow": ("w", "load", 0),
           "sw": ("sw", "load", 0), "o0": ("response", "response", WINDOW)}
 INS, PORTS = ("x", "sx", "wrow", "sw"), ("x", "sx", "wrow", "sw", "o0")
-MEMBERS = {"honest": True, "forged": False, "unsigned": False}
-#: what Lean's registered reads, and the host's read of them, refuse each refused member by, at port o0
-WHY = {"forged": "does not open", "unsigned": "does not open"}
+MEMBERS = {"honest": True, "forged": False, "unsigned": False, "request": False, "weight": False}
+#: the port each refused member is refused at, alone
+REFUSED_AT = {"forged": "o0", "unsigned": "o0", "request": "x", "weight": "wrow"}
+#: what Lean's registered reads, and the host's read of them, refuse each refused member by, at its `REFUSED_AT`
+WHY = {name: "does not open" for name in REFUSED_AT}
+#: the members whose units read a row one code off the one the network certifier signed, and that port
+CHANGED = {"request": "x", "weight": "wrow"}
 
 
 def log(msg: str) -> None:
@@ -112,10 +119,29 @@ def values(n: int, seed: int = 0) -> dict[str, np.ndarray]:
     x, w = (rng.integers(-128, 128, (n, K)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(n)) / 127 + 1e-3).astype(np.float32) for _ in range(2))
     ins = [x.view(np.uint8), sx.view(np.uint32), w.view(np.uint8), sw.view(np.uint32)]
-    o0 = np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16).reshape(n, 1)
     lay = dict(IF.layout(COORD).rows)
     words = {p: IF.words(a, 8 if p in ("x", "wrow") else 32, n, lay[p]) for p, a in zip(INS, ins)}
-    return {**words, "o0": o0}
+    return {**words, "o0": outputs(words)}
+
+
+def outputs(words: dict[str, np.ndarray]) -> np.ndarray:
+    """The Definition's ``o0`` on the units' input rows, ``(n, 1)``."""
+    n = len(words["x"])
+    ins = [np.ascontiguousarray(words["x"]).view(np.uint8), np.ascontiguousarray(words["sx"]).view(np.uint32).reshape(n),
+           np.ascontiguousarray(words["wrow"]).view(np.uint8), np.ascontiguousarray(words["sw"]).view(np.uint32).reshape(n)]
+    return np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16).reshape(n, 1)
+
+
+def changed(words: dict[str, np.ndarray], p: str) -> tuple[dict[str, np.ndarray], int]:
+    """`words` with unit 0's row of port `p` one s8 code off (its low bit flipped), at the first code whose change leaves
+    unit 0's output the one on the signed rows: a server that computed on a byte the network certifier didn't relay, and
+    whose response is still the signed one, so that only the read of `p` can refuse it. Also the code's index."""
+    for k in range(K):
+        w = dict(words, **{p: words[p].copy()})
+        w[p][0].view(np.uint8)[k] ^= 1
+        if np.array_equal(outputs({q: a[:1] for q, a in w.items()}), words["o0"][:1]):
+            return w, k
+    raise ValueError(f"every code of unit 0's {p} changes its output")
 
 
 # --- the network certifier and the verifier ---------------------------------------------------------------------------
@@ -156,8 +182,17 @@ def attestation(n: int, out: Path) -> SimpleNamespace:
     forged, forged_reg = attest(cert, doc["program"], "response", forged_rows)
     own = TR.Transfer.commit(UPLINK, Direction.EGRESS, WINDOW, "response", doc["program"], "response",
                              [list(map(int, r)) for r in words["o0"]])
+    changes = {name: changed(words, p) for name, p in CHANGED.items()}
     return SimpleNamespace(n=n, circuit=c, doc=doc, blocks=blocks(n), words=words, cert=cert, transfers=tr,
-                           registrations=regs, forged=forged, forged_registration=forged_reg, own=own)
+                           registrations=regs, forged=forged, forged_registration=forged_reg, own=own,
+                           changed={name: w for name, (w, _k) in changes.items()},
+                           changed_code={name: k for name, (_w, k) in changes.items()})
+
+
+def member_rows(name: str, at: SimpleNamespace) -> dict[str, np.ndarray]:
+    """The rows member `name`'s units read and write: the signed ones, but ``request``'s and ``weight``'s unit 0 one code
+    off at its `CHANGED` port."""
+    return at.changed.get(name, at.words)
 
 
 def layouts(doc: dict) -> dict:
@@ -222,15 +257,15 @@ def member_ports(name: str, at: SimpleNamespace) -> dict[str, tuple[list[bytes],
     return out
 
 
-def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int) -> dict[str, str]:
-    """The host's read of each registered port against the verifier's, as Lean's registered reads make it
-    (`warden_rows.refusal`): the ports it refuses, with why."""
-    out = {}
+def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int, name: str = "honest") -> dict[str, str]:
+    """The host's read of each registered port of member `name`'s statement against the verifier's, as Lean's registered
+    reads make it (`warden_rows.refusal`): the ports it refuses, with why."""
+    out, rows = {}, member_rows(name, at)
     for p in PORTS:
         h = v.heads[VALUES[p][0]]
         salts, entry = mp[p]
         why = WR.refusal(TR.port(h, list(range(at.n)), base), TR.domain(at.doc["program"], h.value, h.words, h.rows),
-                         entry, [TR.bc(list(map(int, r)), s) for r, s in zip(at.words[p], salts)])
+                         entry, [TR.bc(list(map(int, r)), s) for r, s in zip(rows[p], salts)])
         if why is not None:
             out[p] = why
     return out
@@ -284,7 +319,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
         raise SystemExit(f"{name}: m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
     v = verifier(at, presented(name, at))
     mp = member_ports(name, at)
-    rows = {p: at.words[p] for p in INS}
+    rows = {p: member_rows(name, at)[p] for p in INS}
     got = st.stage(rows, out, os.urandom(32), salts={p: mp[p][0] for p in PORTS},
                    indices=range(sg.base, sg.base + n), set_name=f"{st.iset.name}-{name}", tables=rows,
                    refs={p: list(range(n)) for p in INS}, registered={p: mp[p][1] for p in PORTS})
@@ -301,7 +336,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
          "set": f"{st.iset.name}-{name}", "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"],
          "unit_nnz": got["unit_nnz"], "salts": got["salts"], "ports": st.ports, "partition_file": sg.partition_file,
          "program_file": sg.program_file, "registered_file": out / "registered.json",
-         "registrations_file": out / "transfer-registrations.json", "predicted": refused(at, v, mp, sg.base),
+         "registrations_file": out / "transfer-registrations.json", "predicted": refused(at, v, mp, sg.base, name),
          "pins": v.pins, "free": v.free, "free_unpinned": v.free_unpinned, "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     return m
@@ -385,18 +420,21 @@ def audit_member(M, a, sg, m: dict, out: Path, port: int) -> dict:
 def blobs_of(at: SimpleNamespace, m: dict) -> tuple[dict[str, bytes], set[str]]:
     """The witness pieces the verifier must not receive: every x and wrow row and every salt of the statement, all of
     which the prover's instance file holds."""
-    blobs = {f"{p} {i}": r.astype("<u2").tobytes() for p in ("x", "wrow") for i, r in enumerate(at.words[p])}
+    rows = member_rows(m.get("name", "honest"), at)
+    blobs = {f"{p} {i}": r.astype("<u2").tobytes() for p in ("x", "wrow") for i, r in enumerate(rows[p])}
     blobs.update({f"salt {p} {i}": s for p, ss in m["salts"].items() for i, s in enumerate(ss)})
     return blobs, set(blobs)
 
 
 def expected(name: str, res: dict) -> bool:
-    """The member to be accepted is; the others are refused by Lean's registered reads at port o0, each by its `WHY`."""
+    """The member to be accepted is; the others are refused by Lean's registered reads at their `REFUSED_AT` port, each
+    by its `WHY`."""
     lean = res["verdicts"].get(f"lean-verify/{name}")
     if MEMBERS[name]:
         return res["accepted"] and lean is True
     why = res["why"].get(f"lean-verify/{name}") or ""
-    return not res["accepted"] and lean is False and "registered reads" in why and "o0" in why and WHY[name] in why
+    return not res["accepted"] and lean is False and "registered reads" in why and f"port {REFUSED_AT[name]}:" in why \
+        and WHY[name] in why
 
 
 def prove(a) -> int:
@@ -406,7 +444,8 @@ def prove(a) -> int:
     v = verifier(at, presented("honest", at))
     summary: dict = {"template": TID, "units": at.n, "uplink": UPLINK, "window": WINDOW, "blocks": at.blocks,
                      "circuit": at.doc, "registrations": at.registrations, "forged_registration": at.forged_registration,
-                     "pins": v.pins, "free": v.free, "free_unpinned": v.free_unpinned, "refusals": refusals(at)}
+                     "pins": v.pins, "free": v.free, "free_unpinned": v.free_unpinned, "refusals": refusals(at),
+                     "changed": {name: {"port": CHANGED[name], "unit": 0, "code": k} for name, k in at.changed_code.items()}}
     log(f"{TID} × {at.n} on {UPLINK}: the certifier signed {sorted(at.registrations)}; the verifier pins "
         f"{sorted(v.pins)}, free {v.free} bits (with no pins {v.free_unpinned}); refusals {summary['refusals']}")
     if v.free != 0 or v.free_unpinned == 0 or not all(r.startswith("refused") for r in summary["refusals"].values()):
@@ -423,9 +462,8 @@ def prove(a) -> int:
         summary.setdefault("members", {})[name] = {"ands": m["ands"], "stage_s": m["stage_s"], "free": m["free"],
                                                    "predicted": m["predicted"] or "accepted"}
         log(f"staged {name}: {m['ands']} ANDs, every port registered; the host's read: {m['predicted'] or 'accepted'}")
-        bad = set(m["predicted"]) - {"o0"} or (not m["predicted"]) != MEMBERS[name] or \
-            WHY.get(name, "") not in m["predicted"].get("o0", "")
-        if bad:
+        at_ = REFUSED_AT.get(name)
+        if set(m["predicted"]) != ({at_} if at_ else set()) or (at_ and WHY[name] not in m["predicted"][at_]):
             raise SystemExit(f"{name}: the host's read of its statement ({m['predicted'] or 'accepted'}) is not the member's")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     if a.dry:

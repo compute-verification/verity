@@ -2,8 +2,9 @@
 pins, from the network certifier's registrations alone, leave no free input (and none leave every input free); a
 response without its certificate, the prover's own root under the certifier's certificate and the certifier's
 certificate of another window are refused; each member's statement is read as the member says (honest accepted, forged
-and unsigned refused at o0 alone, each by its `WHY`), forged's response being one byte off unit 0's output; the
-leak scan's blobs are whole pieces. Nothing here lowers or proves (`transfer_zk.prove` does, on a node)."""
+and unsigned refused at o0 alone, request at x alone and weight at wrow alone, each by its `WHY`), forged's response
+being one byte off unit 0's output and request's and weight's unit 0 one code off the signed row with its output
+unchanged; the leak scan's blobs are whole pieces. Nothing here lowers or proves (`transfer_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -58,11 +59,17 @@ def test_each_members_statement_is_read_as_the_member_says(at):
     got = {}
     for name in tz.MEMBERS:
         v = tz.verifier(at, tz.presented(name, at))
-        got[name] = tz.refused(at, v, tz.member_ports(name, at), base=3)
+        got[name] = tz.refused(at, v, tz.member_ports(name, at), base=3, name=name)
     assert got["honest"] == {}
-    for name in ("forged", "unsigned"):
-        assert set(got[name]) == {"o0"} and tz.WHY[name] in got[name]["o0"], (name, got[name])
-        assert got[name]["o0"].startswith("registered reads: table row 0 does not open")
+    for name, p in tz.REFUSED_AT.items():
+        assert set(got[name]) == {p} and tz.WHY[name] in got[name][p], (name, got[name])
+        assert got[name][p].startswith("registered reads: table row 0 does not open")
+    for name, p in tz.CHANGED.items():
+        rows, k = tz.member_rows(name, at), at.changed_code[name]
+        diff = rows[p].view(np.uint8) ^ at.words[p].view(np.uint8)
+        assert diff.sum() == 1 and diff[0, k] == 1, name
+        assert all(np.array_equal(rows[q], at.words[q]) for q in tz.PORTS if q != p)
+        assert np.array_equal(tz.outputs(rows), at.words["o0"])
     rows = np.asarray(at.forged.committed.rows, dtype=np.uint16)
     assert (rows != at.words["o0"]).sum() == 1 and rows[0, 0] ^ at.words["o0"][0, 0] == 1
     assert at.own.root != at.transfers["response"].root and not set(at.own.salts) & set(at.transfers["response"].salts)
