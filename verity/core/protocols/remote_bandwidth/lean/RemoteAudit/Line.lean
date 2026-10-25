@@ -242,6 +242,49 @@ def lineOfRecord (sm : Session.Summary) (samples : Nat) (seen : Array Seen) (per
   | .ok (gs, ws) => line gs per sm.blocks blockBytes chipBytes nodeBytes ws δ rates
   | .error why => .error why
 
+/-- A window's last root's arrival in the record: its last pass's, or its coin's release when it has none (as
+`verifier.paced_groups` reads a window seen). -/
+def lastNs (w : Session.WindowSummary) : Nat := w.arrivedNs.back?.getD w.releasedNs
+
+/-- Why the times `seen` aren't the record's own, or none: the first window whose coin's release or last root's arrival
+seen isn't the one `sm` records (`releasedNs`, `lastNs`). -/
+def timesOff (sm : Session.Summary) (seen : Array Seen) : Option String :=
+  (List.range (min seen.size sm.windows.size)).findSome? fun t =>
+    let s := seen[t]!
+    let w := sm.windows[t]!
+    if s.releasedNs == w.releasedNs && s.lastNs == lastNs w then none
+    else some (s!"window {t} was seen released at {s.releasedNs} and last at {s.lastNs}, not at the record's "
+      ++ s!"{w.releasedNs} and {lastNs w}")
+
+/-- `lineOfRecord` with the times seen held to the record's where they are on its clock (`onRecord`): refused, after
+`ofSummary`'s refusals, where they differ (`timesOff`). Off it they are another clock's, the challenger's release log,
+which the record doesn't hold, and this is `lineOfRecord`. -/
+def lineOfRecordOn (onRecord : Bool) (sm : Session.Summary) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  match ofSummary sm samples seen, (if onRecord then timesOff sm seen else none) with
+  | .ok _, some why => .error why
+  | _, _ => lineOfRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+
+/-- The record `Session.run` makes of a session from `s` over `events`, none where the run fails or doesn't accept
+(`Session.State.summary`): `LineHeld`'s `Record.summary`. -/
+def summaryOfRun (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=
+  match Session.run s events with
+  | .ok (_, s') => s'.summary
+  | .error _ => none
+
+/-- `lineOfRecordOn` of a record, or `lineOf`'s refusal where there is none. -/
+def lineOfSummary? (onRecord : Bool) (sm? : Option Session.Summary) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  match sm? with
+  | some sm => lineOfRecordOn onRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+  | none => .error "the Lean verifier gave the session no record"
+
+/-- The line of a session run from `s` over `events`, as `LineHeld`'s `lineOf` reads a record: `lineOfRecordOn` of the
+run's own record (`summaryOfRun`), or why it has none. -/
+def lineOfRun (onRecord : Bool) (s : Session.State) (events : Array Session.Event) (samples : Nat) (seen : Array Seen)
+    (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
+  lineOfSummary? onRecord (summaryOfRun s events) samples seen per blockBytes chipBytes nodeBytes δ rates
+
 private def digits? (s : String) : Option Nat :=
   if !s.isEmpty && s.all Char.isDigit then s.toNat? else none
 

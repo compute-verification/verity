@@ -790,8 +790,11 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
 
     lg = r["ledger"]
     reading = next(lg[n] for n in ("spec", "measured") if "error" in lg[n])
-    assert lg["memory"]["error"] == verifier.memory_error(lg) == pytest.approx(
-        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"])
+    assert lg["memory"]["error"] == verifier.memory_error(lg) == (
+        reading["error"]["horizon"] + 2.0 ** lg["sketch_failure"]["log2"] + lg["delta"]["hiding"]
+        + lg["delta"]["rejection"])
+    assert lg["delta"]["hiding"] == ledger.hiding_over(len(record.windows)) > 0
+    assert lg["delta"]["rejection"] == sum(w.profile.drawn["receipt"] for w in record.windows) / 2 ** 64 > 0
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
     assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
@@ -968,6 +971,41 @@ def test_the_line_of_record_reads_the_lean_verifiers_record_of_the_session():
         verifier.recorded_inputs(r, {**got["reg"], "digest": "00" * 64}, host_bytes=0, rates=rates)
     with pytest.raises(ValueError, match="not its record's"):
         verifier.lean_record({**old, "windows_seen": old["windows_seen"][:-1]})
+
+
+def test_the_line_of_record_deducts_at_least_the_auditors_s_chip():
+    """`verifier.recorded_chip_bytes`: a record its verifier wrote at an S_chip under `timing.CHIP_BYTES` (gate runs 7
+    to 9's 3,045,746,688 B) is deducted at `timing.CHIP_BYTES`, in the line of record's inputs (`recorded_inputs`, which
+    the Lean and line.py both read) and in the verifier's diagnostic (`recorded_paced`): every stretch, in both forms
+    and both readings, charges the difference in whole blocks more as absent than the record's own S_chip would. A
+    record at a larger S_chip keeps its own."""
+    line = verifier.line
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)],
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    mem = r["ledger"]["memory"]
+    b, short = mem["block_bytes"], 3_045_746_688
+    assert mem["chip_bytes"] == timing.CHIP_BYTES > short
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+
+    def at(chip: int) -> dict:
+        return {**r, "ledger": {**r["ledger"], "memory": {**mem, "chip_bytes": chip}}}
+
+    inputs = verifier.recorded_inputs(at(short), got["reg"], host_bytes=0, rates=rates)
+    assert inputs["chip_bytes"] == timing.CHIP_BYTES
+    assert inputs == verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    charged, own = line.record_run_json(inputs), line.record_run_json({**inputs, "chip_bytes": short})
+    more = -(-timing.CHIP_BYTES // b) - -(-short // b)
+    assert more > 0
+    for f in line.FORMS:
+        assert charged[f]["stretches"] and len(charged[f]["stretches"]) == len(own[f]["stretches"])
+        for x, y in zip(charged[f]["stretches"], own[f]["stretches"]):
+            for reading in line.READINGS:
+                assert line.number(x[reading]["lost_blocks"]) == line.number(y[reading]["lost_blocks"]) + more
+    assert verifier.recorded_paced(at(short), got["reg"], host_bytes=0)["chip_blocks"] == -(-timing.CHIP_BYTES // b)
+    larger = timing.CHIP_BYTES + b
+    assert verifier.recorded_inputs(at(larger), got["reg"], host_bytes=0, rates=rates)["chip_bytes"] == larger
+    assert verifier.recorded_paced(at(larger), got["reg"], host_bytes=0)["chip_blocks"] == -(-larger // b)
 
 
 def test_the_auditor_line_reads_a_last_root_by_its_request_not_by_its_value():
@@ -1347,6 +1385,53 @@ def test_a_session_drawn_two_windows_a_coin_at_one_window_in_flight_is_refused_b
         verifier.main()
     assert e.value.code == 2 and "one window in flight" in capsys.readouterr().err
     assert not (tmp_path / "out").exists()
+
+
+def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_makes_of_it(tmp_path):
+    """`line_record` with the session's transcript (`session`) runs `Session.run` on it and reads the line off the
+    record that run makes (`Line.lineOfRun`, `LineHeld`'s `lineOf`): the line of the session's kept record, given
+    beside it or not, with the times seen on the verifier's clock the record's own. A kept record that isn't the run's,
+    a transcript cut short of its verdict, `samples` other than its parameters' and times seen off the record's are
+    refused, and a transcript drawn two windows a coin has no line, as its record has none (`line.SHARED`); on the
+    challenger's clock the times aren't held to the record."""
+    import copy
+    import json
+
+    import lean_verifier as lv
+
+    got = {}
+    (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
+                  then=lambda v: got.update(reg=wire.registration_json(v.registration)))
+    case = json.loads(Path(r["transcript"]["path"]).read_bytes())
+    rates = verifier.recorded_rates(r, got["reg"], disk_bytes_per_s=4.4e9, link_bytes_per_s=5e10)
+    inputs = verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates)
+    want = verifier.line.record_run_json(inputs)
+    assert "refused" not in want and inputs["clock"] == "record"
+    assert verifier.recorded_inputs(r, got["reg"], host_bytes=0, rates=rates, transcript=case)["session"] is case
+    moved = copy.deepcopy(inputs)
+    moved["record"]["windows"][0]["stale"][0] += 1
+    late = copy.deepcopy(inputs)
+    late["seen"][1]["released_ns"] += 1
+    lean = lv.Lean(lv.build(), lambda _: None)
+    try:
+        def call(x: dict) -> dict:
+            return lean.call({"op": "line_record", **x})
+
+        bare = {k: x for k, x in inputs.items() if k != "record"}
+        assert call(inputs) == call({**inputs, "session": case}) == call({**bare, "session": case}) == want
+        assert call({**moved, "session": case}) == {
+            "refused": "the record is not the one Session.run makes of the session's transcript"}
+        assert call({**bare, "session": {**case, "events": case["events"][:-1]}}) == {
+            "refused": "the Lean verifier gave the session no record"}
+        with pytest.raises(lv.LeanError, match="samples: the session's"):
+            call({**bare, "session": case, "samples": inputs["samples"] + 1})
+        assert call({**bare, "session": {**case, "params": {**case["params"], "groups_per_coin": 2}}}) == {
+            "refused": verifier.line.SHARED}
+        why = verifier.line.record_run_json(late)["refused"]
+        assert why.startswith("window 1 was seen released at") and call({**late, "session": case}) == {"refused": why}
+        assert "refused" not in call({**late, "session": case, "clock": "challenger"})
+    finally:
+        lean.close()
 
 
 def test_books_whose_record_is_not_the_leans_refuse_the_session_as_disagreement(monkeypatch):

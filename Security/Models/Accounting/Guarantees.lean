@@ -39,6 +39,7 @@ import Models.Accounting.Guarantees.Responder
 import Models.Accounting.Guarantees.RemoteHeld
 import Models.Accounting.Guarantees.RemoteDraw
 import Models.Accounting.Guarantees.RemoteSketch
+import Models.Accounting.Guarantees.RemoteSketchLine
 import Models.Accounting.Guarantees.Requirement
 import Models.Accounting.Guarantees.RequirementPouw
 import Models.Accounting.Guarantees.Sketch

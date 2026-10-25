@@ -154,6 +154,9 @@ DISK_BYTES_PER_S = 4.4e9
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
+UNRECORDED_SLACK_LOG2 = 41
+"""The AuditRO slack a ledger whose `inputs` carry no `slack_log2` was charged at, bits a pass: every record written
+before they carried it, gate runs 8 and 9's among them."""
 
 
 def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
@@ -372,11 +375,14 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
-    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`); `delta` alone
-    understates it by the passes' slack.  None when no reading has a ledger."""
+    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
+    commitment's hiding terms and the draw's rejection (`ledger.hiding`, `ledger.rejection`, the ledger's `delta`
+    parts); `delta` alone understates it by the passes' slack.  None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
-            return ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+            d = ledgers.get("delta", {})
+            return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+                    + d.get("hiding", 0.0) + d.get("rejection", 0.0))
     return None
 
 
@@ -526,16 +532,23 @@ def paced_line(mem: dict, seen: list[dict], *, groups: int, wrong: float, blocks
             "node_bytes": node_bytes, "stretches": stretches, "snapshot": worst(AVERAGE), "time": worst(TIME_HELD)}
 
 
+def recorded_chip_bytes(mem: dict) -> int:
+    """S_chip as a recorded session's line deducts it: the record's, or the auditor's `timing.CHIP_BYTES` where that is
+    larger. A record keeps the S_chip its verifier ran at, which can be short of the node's: gate runs 7 to 9's
+    3,045,746,688 B took the host's term from an estimate of its caches, 59,906,048 B under `timing.HOST_CHIP_BYTES`."""
+    return max(mem["chip_bytes"], timing.CHIP_BYTES)
+
+
 def recorded_paced(session: dict, registration: dict, *, host_bytes: int, ingress_bytes_per_s: float = 0.0) -> dict:
     """An accepted paced session's line (`paced_line`) from its record in `verifier.json`, against its HBM and
-    `host_bytes`, with `ingress_bytes_per_s` of other routes into node memory charged, and their bursts
-    (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
+    `host_bytes`, its S_chip at least the auditor's (`recorded_chip_bytes`), with `ingress_bytes_per_s` of other routes
+    into node memory charged, and their bursts (`ingress_bursts`); the pooled wrong receipts are the recorded line's."""
     lg, mem = session["ledger"], session["ledger"]["memory"]
     b, codec = mem["block_bytes"], wire.codec_named(registration["codec"])
     return paced_line(mem, session["windows_seen"], groups=session["pace"]["groups"], wrong=lg["paced"]["wrong"],
                       blocks=registration["blocks"],
                       rebuild_per_ns=line.number(lg["inputs"]["squarings_per_s"]) / codec.encode_squarings / line.NS,
-                      chip_bytes=mem["chip_bytes"], block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
+                      chip_bytes=recorded_chip_bytes(mem), block_bytes=b, node_bytes=mem["hbm_bytes"] + host_bytes,
                       burst_bytes=ingress_bursts(ingress_bytes_per_s),
                       ingress_per_ns=line.number(ingress_bytes_per_s) / b / line.NS)
 
@@ -588,12 +601,16 @@ def record_seen(mem: dict, seen: list[dict], record: dict, *, block_bytes: int) 
     return [line.Seen(g.released_ns, g.last_ns, g.least, g.weights, g.hbm, g.host) for g in gs]
 
 
-def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> dict:
+def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates, clock: str = "record",
+                    transcript: dict | None = None) -> dict:
     """An accepted paced session's line's inputs in the line's record form (`line.record_inputs_json`, the Lean
     verifier's `line_record` request reads them): the Lean verifier's record of it (`lean_record`), whose groups'
     passes, windows and registered blocks the line reads, at the session's `samples` and δ; and what the auditor saw of
-    each window beside it (`record_seen`, on the clock its `windows_seen` read), against its HBM and `host_bytes`, at
-    `rates` (`recorded_rates`). Refused unless the record is of `registration`."""
+    each window beside it (`record_seen`, on the clock its `windows_seen` read: `clock` record, the verifier's, which
+    the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
+    (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`); with `transcript`, the
+    session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself. Refused unless the
+    record is of `registration`."""
     mem, record = session["ledger"]["memory"], lean_record(session)
     if record["registration"] != registration["digest"]:
         raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
@@ -601,8 +618,8 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     return line.record_inputs_json(
         record, samples=session["samples"],
         seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
-        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=mem["chip_bytes"],
-        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates)
+        per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=recorded_chip_bytes(mem),
+        node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates, clock=clock, session=transcript)
 
 
 def recorded_line(session: dict, registration: dict, *, host_bytes: int, rates: line.Rates) -> line.Line:
@@ -1524,9 +1541,10 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        `delta` is the memory line's δ in its five parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
-        (`slack_log2`); a record without it was charged 41 bits a pass."""
+        (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
@@ -1574,6 +1592,7 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+        out["delta"] = ledger.delta_parts(record, stated)
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")

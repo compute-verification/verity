@@ -327,19 +327,22 @@ def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
 def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes, *, verdict: str = "lean",
              pins: list[str] | None = PINS, main: list[str] | None = MAIN, bound: dict | None = MODEL,
              model: dict | None = MODEL, peer: str | None = None, lean: dict | None = None,
-             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None) -> dict:
+             commit: str = VERIFIER, line_by: al.lv.Lean | None = None, boundary: dict | None = None,
+             lockdown: dict | None = None) -> dict:
     """`auditor_line`'s analysis of the run, its verifier.json recording a binding of the store to `bound` (none if
     None), the Lean's `hold` answering `lean` (by default bound at the registration's root), the line held to `model`
     (`--model-pin`'s), `peer` its --peer (None: the record's), `commit` the commit its verifier ran at, each line
-    computed by the Lean verifier `line_by` (None: line.py alone), and its credit held to the certifiers' records
-    `boundary` (`read_boundary`'s; None: not checked)."""
+    computed by the Lean verifier `line_by` (None: line.py alone), its credit held to the certifiers' records
+    `boundary` (`read_boundary`'s; None: not checked), and its sessions' NoOutsideCompute grounded by `lockdown`
+    (`read_lockdown`'s; None: by nothing)."""
     held = {"regions": [], "expected_root": reg["payload_root"]} if lean is None else lean
     binding = {} if bound is None else {"binding": {**bound, "payload_root": reg["payload_root"],
                                                     "expected_root": reg["payload_root"], "bound": True, "lean": held}}
     (out / "verifier.json").write_text(json.dumps(
         {"registration": reg, "sessions": [{**s, "verdict": verdict} for s in sessions]} | binding))
     return al.analyse(out, host_bytes=1 << 30, pin=host.pin, period="p-1", heads=[host.host.ledger], desc=desc,
-                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary)
+                      commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, boundary=boundary,
+                      lockdown=lockdown)
 
 
 def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
@@ -412,10 +415,17 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
                           for x in ("time", "filler_time"))
         assert (f"| 0 | {t} | yes | yes | yes | yes | yes | credited: weights {shares}, filler {filler} |"
                 in al.table(doc).splitlines())
-        assert honest["error"] == al.session_error(sessions[0], reg) and "error" not in dropper
+        assert honest["error"] == al.session_error(sessions[0]) and "error" not in dropper
+        lg = sessions[0]["ledger"]
+        assert honest["error"]["total"] == lg["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]
+        assert [honest["error"][f"delta_{n}"] for n in al.ledger.DELTA_PARTS] == [
+            lg["delta"][n] for n in al.ledger.DELTA_PARTS]
+        assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
         assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
-            "): δ + δs summed over the credited sessions")
+            "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + δs + Σ_t k_t/2^64) summed over the credited "
+            "sessions, "
+            "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON and list(doc["conditional_on"]) == ["NoOutsideCompute"]
         assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
         assert f"conditional on NoOutsideCompute: {al.CONDITIONAL_ON['NoOutsideCompute']}" in al.table(doc).splitlines()
@@ -683,6 +693,66 @@ def test_a_session_earns_no_credit_when_its_boundarys_certifiers_show_ingress_be
         al.read_boundary(path, "00" * 64)
 
 
+def test_a_session_inside_the_providers_lockdown_rests_on_it_and_any_other_on_no_outside_compute(tmp_path, host,
+                                                                                                monkeypatch):
+    """RD-20: with infra's lockdown record (`--lockdown`), a gate session whose span as the challenger signed it (its
+    open's started_utc to its end's ended_utc) lies strictly inside an applied interval has its NoOutsideCompute
+    grounded by `ProviderLockdown`, and the line is conditional on that in its place. A span that starts or ends on
+    an interval's edge at whole seconds, a node that mounts a shared filesystem, or no record leaves it conditional
+    on NoOutsideCompute. It changes no credit, and the line's label names what the file names (`line_label`). A
+    record not of `read_lockdown`'s form is refused."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", defer_openings=True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0 and json.loads(closed)["body"]["complete"] is True, closed
+
+    def record(name: str, intervals: list[tuple[str, str]], shared: bool | None = None) -> Path:
+        p = tmp_path / f"{name}.json"
+        p.write_text(json.dumps({"node": "vy-nebius-2", "allow": [{"host": "vy-auditor-1", "ip": "81.85.1.145"}],
+                                 "intervals": [{"applied_utc": a, "lifted_utc": b, "records": ["art:" + "0" * 64]}
+                                               for a, b in intervals], "shared_filesystem": shared}))
+        return p
+
+    def locked(name: str, intervals: list[tuple[str, str]], shared: bool | None = None) -> dict:
+        return analysed(out, host, sessions, reg, desc, line_by=None,
+                        lockdown=al.read_lockdown(record(name, intervals, shared)))
+
+    doc = analysed(out, host, sessions, reg, desc, line_by=None)
+    (s,) = doc["sessions"]
+    start, end = s["no_relay"]["span_utc"]
+    assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and doc["conditional_on"] == al.CONDITIONAL_ON
+    assert doc["lockdown"] == {"read": False, "reason": "no lockdown record (--lockdown)"}
+    assert al.line_label(doc) == "python conditional on NoOutsideCompute"
+    before, after = A.later(start, -1), A.later(end, 1)
+    doc = locked("inside", [(A.later(start, -30), A.later(start, -20)), (before, after)])
+    (s,) = doc["sessions"]
+    assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] == "ProviderLockdown"
+    assert s["no_relay"]["interval"] == [before, after] and s["no_relay"]["shared_filesystem"] == "pending (infra)"
+    assert doc["conditional_on"] == al.GROUNDED and al.line_label(doc) == "python conditional on ProviderLockdown"
+    assert doc["lockdown"]["read"] and doc["lockdown"]["sha512"] == hashlib.sha512(
+        (tmp_path / "inside.json").read_bytes()).hexdigest()
+    assert f"no relay, session 0: ProviderLockdown, its span inside the lockdown applied {before} to {after}" in \
+        al.table(doc).splitlines()
+    for name, intervals, shared, why in (
+            ("at-start", [(start, after)], None, "lies inside no interval"),
+            ("at-end", [(before, end)], None, "lies inside no interval"),
+            ("shared", [(before, after)], True, "vy-nebius-2 mounts a shared filesystem")):
+        doc = locked(name, intervals, shared)
+        (s,) = doc["sessions"]
+        assert s["credit"]["ok"] and s["no_relay"]["grounded_by"] is None and why in s["no_relay"]["reason"]
+        assert doc["conditional_on"] == al.CONDITIONAL_ON
+    assert locked("answered", [(before, after)], False)["sessions"][0]["no_relay"]["shared_filesystem"] == \
+        "none mounted"
+    for bad in ({"node": "n", "allow": [], "intervals": [], "shared_filesystem": None},
+                {"node": "n", "allow": [{"host": "a", "ip": "1"}], "intervals": [
+                    {"applied_utc": after, "lifted_utc": before, "records": []}], "shared_filesystem": None},
+                {"node": "n", "allow": [{"host": "a", "ip": "1"}], "intervals": []}):
+        (tmp_path / "bad.json").write_text(json.dumps(bad))
+        with pytest.raises(SystemExit, match="is not a lockdown record"):
+            al.read_lockdown(tmp_path / "bad.json")
+
+
 def test_the_boundary_check_needs_the_certifiers_windows_that_meet_the_span_to_cover_it():
     """A credited span from σ_0's release at 100 ns to the last root's arrival at 250 ns is covered by windows
     [0, 120) and [120, 251), whatever lies beyond it, and not with a gap at 120 or a last window ending at 250."""
@@ -709,34 +779,103 @@ def test_the_clock_rate_beside_the_line_doesnt_read_the_first_coins_round_trip()
     assert al.clock_rate_ppm(Rv[:3], Ra[:3]) is None
 
 
-def test_the_line_records_delta_the_sketchs_delta_and_their_sum_over_its_credited_sessions():
-    """Each accepted paced session's error is the pooled bound's δ (its record's float, exactly) plus the sketch's δs
-    (`timing.sketch_failure` of the compressions the verifier charged over the record's passes, rows and store blocks,
-    as `ledger.sketch` reads it, and 0 for a block-sha512 record), exactly; the line at each T, and over every T, fails
-    with at most the sum over its credited sessions, and a T that credits none has error 0."""
-    def session(delta: float, compressions: int) -> dict:
-        return {"record": {"public": {"blocks": 1 << 20},
-                           "profile": {"windows": [{"lengths": [8], "profile": {"delta": delta,
-                                                                                "drawn": {"receipt": 2}}}]}},
-                "ledger": {"inputs": {"passes": 700, "rows": 16}, "sketch_failure": {"compressions": compressions}}}
+def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_credited_sessions():
+    """Each accepted paced session's error is the memory line's δ as the ledger computed it (its record's `declared`
+    forms', exactly; a refused form records none), beside its five parts (verifier.json's `delta`,
+    `ledger.delta_parts`), which must sum to it as the ledger adds them: forms that record two δ, or parts that don't
+    sum to it, give no line. The hiding part, n·2^-191, is below the float δ's precision, so the exact parts exceed
+    the recorded total by it. A ledger that didn't charge the draw's rejection has Σ_t k_t/2^64 of its windows' draws
+    added, so it reads as one that did. Every error names the windows' PRF advantages (claim prf/sha-512) with no
+    value, in no total. The line at each T, and over every T, fails with at most the sum over its credited sessions,
+    and a T that credits none has error 0."""
+    def session(profile: float, passes: int, sketch: float, *, charged: bool = True) -> dict:
+        d = {"profile": profile, "slack": passes * 2.0 ** -41, "hiding": al.ledger.hiding_over(passes),
+             "sketch": sketch}
+        if charged:
+            d["rejection"] = 48 * passes * 2.0 ** -64
+        total = 0.0
+        for x in d.values():
+            total += x
+        memory = {f: {"delta": total} for f in al.ledger.FORMS} | {al.ledger.TIME_HELD: {"refused": "unpaced"}}
+        window = {"lengths": [4096], "profile": {"delta": profile, "drawn": {"receipt": 48}}}
+        return {"k": 0, "record": {"profile": {"windows": [window] * passes}},
+                "ledger": {"delta": d, "inputs": {"passes": passes}, "declared": {"memory": memory}}}
 
-    sketch = {"receipt": al.receipts.SKETCH_SHA512}
-    ds = al.timing.sketch_failure(10 ** 12, 700, 16, blocks=1 << 20)
-    assert ds > al.timing.sketch_failure(10 ** 12, 700, 16)
-    a, b = al.session_error(session(2.0 ** -40, 10 ** 12), sketch), al.session_error(session(2.0 ** -30, 0), sketch)
-    total = Fraction(1, 2 ** 40) + ds
-    assert a["exact"] == {"delta": "1/1099511627776", "delta_sketch": str(ds), "total": str(total)}
-    assert a["total"] == float(total) and a["log2_total"] == al.timing.log2(total)
-    blocks = al.session_error(session(2.0 ** -40, 10 ** 12), {"receipt": al.receipts.BLOCK_SHA512})
-    assert blocks["exact"] == {"delta": "1/1099511627776", "delta_sketch": "0", "total": "1/1099511627776"}
+    a, b = session(2.0 ** -40, 700, 2.0 ** -60), session(2.0 ** -30, 96, 0.0)
+    e = al.session_error(a)
+    total = Fraction(a["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
+    parts = {"delta_profile": Fraction(1, 2 ** 40), "delta_slack": Fraction(700, 2 ** 41),
+             "delta_hiding": Fraction(al.ledger.hiding_over(700)), "delta_sketch": Fraction(1, 2 ** 60),
+             "delta_rejection": Fraction(48 * 700, 2 ** 64)}
+    assert e["exact"] == {**{k: str(x) for k, x in parts.items()}, "total": str(total)}
+    assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
+    assert sum(parts.values()) - total == parts["delta_hiding"] and e["delta_slack"] > 300 * e["delta_profile"]
+    assert e["named_terms"] == al.NAMED_TERMS == {"prf_advantage": {
+        "claim": "prf/sha-512", "term": "Σ_t Adv(prf t)", "value": None, "in_total": False}}
+    uncharged = session(2.0 ** -40, 700, 2.0 ** -60, charged=False)
+    assert Fraction(uncharged["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]) == total - Fraction(
+        48 * 700, 2 ** 64) and al.session_error(uncharged) == e
+    bad = json.loads(json.dumps(a))
+    bad["ledger"]["delta"]["sketch"] = 2.0 ** -31
+    with pytest.raises(al.Disagree, match="don't sum to its memory line's δ"):
+        al.session_error(bad)
+    two = json.loads(json.dumps(a))
+    two["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"] *= 2
+    with pytest.raises(al.Disagree, match="the ledger computes one"):
+        al.session_error(two)
     held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
 
     def row(k: int, t: str, ok: bool, error: dict) -> dict:
         return {"k": k, "T": t, "shares_auditor_clock": held, "error": error,
                 "credit": {"ok": ok, "zero": [] if ok else ["not accepted: the Lean refused it (receipt)"]}}
 
-    out, credit = al.credited_line([row(0, "T=1s", True, a), row(1, "T=1s", True, b), row(2, "T=60s", False, a)])
-    both = total + Fraction(1, 2 ** 30) + al.timing.sketch_failure(0, 700, 16, blocks=1 << 20)
+    out, credit = al.credited_line([row(0, "T=1s", True, e), row(1, "T=1s", True, al.session_error(b)),
+                                    row(2, "T=60s", False, e)])
+    both = total + Fraction(b["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"])
     assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
-                                                       "log2": al.timing.log2(both)}
-    assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None}
+                                                       "log2": al.timing.log2(both), "named_terms": al.NAMED_TERMS}
+    assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None, "named_terms": {}}
+
+
+# Gate runs 8 and 9's accepted sessions (fire runs r20261024-090758-3b8a and r20261024-112611-902d, their
+# verifier.json): (passes, the memory line's δ every form records, the sketch's log2 its `sketch_failure` records,
+# each window's draws, one window a pass, every one of 9.75·10^7 receipts or more: r20261024-210802-42c2).
+GATE_RUNS = {(8, 0): (2118, 9.640646787142758e-10, -51.59094185809943, 48),
+             (8, 2): (96, 4.4565254207300316e-11, -56.00597544028051, 232),
+             (9, 0): (2118, 9.6406468008027e-10, -51.58427317163358, 48),
+             (9, 2): (96, 4.4565254698432485e-11, -55.95559677531685, 232)}
+
+
+@pytest.mark.parametrize("run,k", GATE_RUNS)
+def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
+    """On gate runs 8 and 9's records, written before verifier.json carried δ's parts or the slack (`slack_log2`), a
+    session's error is the memory line's δ its ledger recorded, bit for bit, plus the coin commitment's hiding and the
+    draw's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
+    which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
+    which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 over its windows' draws
+    (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its slack is split at it: at 67 bits the total is
+    2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995 and 2^-40.0000 before the rejection."""
+    passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
+    window = {"lengths": [2 ** 27], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": drawn}}}
+    memory = {f: {"delta": delta} for f in al.ledger.FORMS}
+    s = {"k": k, "record": {"profile": {"windows": [window] * passes}},
+         "ledger": {"inputs": {"passes": passes}, "declared": {"memory": memory}}}
+    e = al.session_error(s)
+    parts = {n: al.line.number(e["exact"][f"delta_{n}"]) for n in al.ledger.DELTA_PARTS}
+    rejection = Fraction(passes * drawn, 2 ** al.ledger.REJECTION_LOG2)
+    assert parts["rejection"] == rejection == (Fraction(3177, 2 ** 59) if passes == 2118 else Fraction(87, 2 ** 56))
+    hiding = Fraction(al.ledger.hiding_over(passes))
+    assert parts["hiding"] == hiding and float(hiding) == pytest.approx(passes * 2.0 ** -191, rel=1e-12)
+    assert al.line.number(e["exact"]["total"]) == Fraction(delta) + hiding + rejection == sum(parts.values())
+    assert e["total"] == float(Fraction(delta) + rejection) and e["named_terms"] == al.NAMED_TERMS
+    assert al.V.UNRECORDED_SLACK_LOG2 == 41 < al.audit.SLACK_LOG2
+    assert parts["profile"] == Fraction(1, 2 ** 40) and parts["slack"] == Fraction(passes, 2 ** 41)
+    assert al.timing.log2(parts["sketch"]) == pytest.approx(sketch_log2, abs=1e-6)
+    assert e["log2_total"] == pytest.approx(-29.950 if passes == 2118 else -34.385, abs=1e-3)
+    stated = json.loads(json.dumps(s))
+    stated["ledger"]["inputs"]["slack_log2"] = al.audit.SLACK_LOG2
+    slack = al.line.number(al.session_error(stated)["exact"]["delta_slack"])
+    assert slack == Fraction(passes, 2 ** al.audit.SLACK_LOG2) and al.timing.log2(slack) < -55.9
+    at67 = parts["profile"] + slack + parts["sketch"]
+    assert al.timing.log2(at67) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
+    assert al.timing.log2(at67 + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)
