@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.certifier.certificate import Certificate, Direction, clock_digest
+from verity.core.protocols.certifier.certificate import SALT_BYTES, Certificate, Direction, clock_commitment
 from verity.core.protocols.certifier.schedule import ClockSync
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
@@ -72,12 +72,14 @@ def link_window(w: int, program: str = "cc" * 64) -> dict:
             "law": {"law": "subset", "k": 1}, "window": {"kind": "served", "window": w}}
 
 
-def test_a_period_is_its_own_link_window_with_its_own_prompts():
+def test_a_period_is_its_own_link_window_with_its_own_prompts_and_the_last_takes_the_tail():
     report, p = plan(3)
-    assert [L.period_windows(p, i, len(PROMPTS)) for i in range(3)] == [[0], [1], [2]]
+    assert [L.period_windows(p, i, len(PROMPTS), 3, [0, 1, 2]) for i in range(3)] == [[0], [1], [2]]
+    assert [L.period_windows(p, i, len(PROMPTS), 3, [0, 1, 2, 3, 4]) for i in range(3)] == [[0], [1], [2, 3, 4]]
     assert [q["body"]["prompt"] for q in p["requests"]] == [[3], [7]] * 3
-    with pytest.raises(RuntimeError, match="carries 3 periods, not period 3"):
-        L.period_windows(p, 3, len(PROMPTS))
+    for period, periods in ((3, 3), (2, 2)):
+        with pytest.raises(RuntimeError, match=f"carries {min(3, periods)} periods, not period {period}"):
+            L.period_windows(p, period, len(PROMPTS), periods, [0, 1, 2])
     assert cs.ar.Setup(report).sync_set.deltas
 
 
@@ -150,6 +152,7 @@ def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> di
     session, link = hashlib.sha512(b"session").digest()[:lms.SESSION_BYTES], "n2"
     sync = ClockSync(setup.sync_set.deltas[0], setup.sync_set.rhos[0])
     q = iter(range(2 ** params.H))
+    salts = iter(hashlib.sha512(b"salt %d" % i).digest()[:SALT_BYTES] for i in range(1 << 10))
 
     def sign(d: Direction, w: int, digest: bytes) -> dict:
         c = Certificate(key.I, link, d, w, digest, b"")
@@ -164,8 +167,8 @@ def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> di
                  "answer": L.answer_of_outcome(reg, {"units": [0]}, w not in refused, "N2's verifier of record: {}"),
                  "certificates": [sign(Direction.EGRESS, w, hashlib.sha512(b"e%d" % w).digest()),
                                   sign(Direction.INGRESS, w, hashlib.sha512(b"i%d" % w).digest())],
-                 "clock": {"certificate": sign(Direction.EGRESS, w, clock_digest(sync)),
-                           "sync": [sync.delta, sync.rho.numerator, sync.rho.denominator]}}
+                 "clock": L.clock_evidence({"session": session.hex()}
+                                           | sign(Direction.EGRESS, w, clock_commitment(next(salts), sync)))}
     dep = {"certifier_key": {"params": [params.N, params.W, params.H], "public": lms.public_key(key).hex()},
            "links": {"n2": link}, "session": session.hex()}
     return {"deployment": dep, "calibration": report, "windows": xs}
@@ -175,23 +178,86 @@ def session_run(windows: list[int], refused: frozenset[int] = frozenset()) -> di
 def test_the_case_is_the_period_checks(delta):
     rw = session_run([1, 2])
     audits = [(LOOP, L.audit_answer(LOOP, {"verdict": "accept"}, ACCEPTED, delta))]
-    case = L.case_of(rw, [1, 2], audits, STEPS, 1)
+    case = L.case_of(rw, [1, 2], audits, 1, [FREE])
     assert sorted(case["params"]) == PERIOD.PARAMS_KEYS
+    assert case["params"]["audits"] == [{"free": FREE, "steps": 2 * cs.WINDOW_BUCKETS}]
     a = PERIOD.reference(case)
     assert a["verdict"] == "accept", a["reason"]
     pub = a["public"]
     bound = audits[0][1]["public"]["bound"]
     assert pub["eps"] == str(delta) and pub["windows"] == 2 and pub["cells"] == 0
     assert pub["audits"][0]["wrong_units"] == bound and pub["audits"][0]["jitter"] == 0
-    assert pub["K"] == pub["schedules"] + pub["audits"][0]["faulty_sets"] + 16 * bound
-    assert PERIOD.reference(L.case_of(rw, [1, 2], audits, STEPS, 0))["verdict"] == "reject"
+    assert pub["audits"][0]["free"] == FREE and pub["audits"][0]["faulty_bits"] == 16 * bound
+    assert pub["K"] == pub["schedules"] + pub["audits"][0]["faulty_sets"] + 16 * bound + FREE
+    assert PERIOD.reference(L.case_of(rw, [1, 2], audits, 0, [FREE]))["verdict"] == "reject"
     refused = session_run([1, 2], frozenset({2}))
-    assert PERIOD.reference(L.case_of(refused, [1, 2], audits, STEPS, 1))["verdict"] == "reject"
+    assert PERIOD.reference(L.case_of(refused, [1, 2], audits, 1, [FREE]))["verdict"] == "reject"
+    with pytest.raises(ValueError, match="free-input counts"):
+        L.case_of(rw, [1, 2], audits, 1, [])
+
+
+def test_a_clock_certificate_is_the_evidence_without_the_session_or_the_sync():
+    rw = session_run([1])
+    c = rw["windows"][1]["clock"]
+    assert sorted(c) == ["digest", "direction", "key_id", "link", "signature", "window"]
+    assert L.clock_evidence({"session": rw["deployment"]["session"], **c}) == c
+
+
+def circuit(wires: list = (), external: list = ()) -> dict:
+    """A loop window's ``circuit.json`` as `torch_loop` writes it: one template of 1,024 units, four input rows."""
+    t = 'ScaledMmS8Coordinate_v1{K=128,DOT={"fn":"BlackwellS8ImmaDot32_v1"}}'
+    rows = [["x", "s8", 1024, ["x"]], ["sx", "u32", 32, ["sx"]], ["wrow", "s8", 1024, ["w"]],
+            ["sw", "u32", 32, ["sw"]]]
+    return {"templates": [[t, 1024]], "statements": {t: {"in_rows": rows}}, "wires": list(wires),
+            "external": list(external)}
+
+
+FREE = 1024 * (1024 + 32 + 1024 + 32)
+
+
+def test_free_inputs_are_every_units_input_rows_less_the_wired_and_the_external():
+    c = circuit()
+    t = c["templates"][0][0]
+    assert L.free_inputs(c) == {"bits": FREE, "per_template": {t: FREE}}
+    assert L.free_inputs(circuit(external=[f"{t}/x"]))["bits"] == FREE - 1024 * 1024
+    wire = {"reader": t, "port": "w", "writer": t, "out": "o0", "at": 512, "radix": [256], "base": 0, "step": [1]}
+    assert L.free_inputs(circuit(wires=[wire]))["bits"] == FREE - 256 * 1024
+    with pytest.raises(ValueError, match="no template"):
+        L.free_inputs(circuit(external=["other/x"]))
+
+
+def n2(exit: int = 0, **member) -> dict:
+    m = {"ok": True, "leaked": [], "verifier_found": [], "structured": [], "control_holds": True}
+    return {"exit": exit, "ok": exit == 0, "members": {"honest": m, "extra": m | member}}
+
+
+def test_n2s_prove_is_refused_on_a_leak_a_blind_scan_or_its_exit():
+    assert L.n2_refusal(n2()) is None
+    assert "leaked" in L.n2_refusal(n2(leaked=["salt"]))
+    assert "leaked" in L.n2_refusal(n2(verifier_found=["head"]))
+    assert "control" in L.n2_refusal(n2(control_holds=False))
+    assert "control" in L.n2_refusal(n2(control_holds=None))
+    assert "exited 1" in L.n2_refusal(n2(1, ok=False))
+
+
+def test_only_the_sessions_public_files_are_published(tmp_path):
+    s = tmp_path / "scratch" / L.SESSION
+    for strategy in ("honest", "extra"):
+        run = s / "rehearsal" / strategy
+        for f in (*L.PUBLIC_SESSION, "plan.json", "requests.records", "responses.records", "shim.jsonl",
+                  "certifier/clocks.jsonl", "client/syncs.jsonl"):
+            (run / f).parent.mkdir(parents=True, exist_ok=True)
+            (run / f).write_text(f)
+    out = tmp_path / "out" / L.SESSION
+    L.publish({"dir": str(s), "strategies": ["honest", "extra"]}, out)
+    got = sorted(str(f.relative_to(out)) for f in out.rglob("*") if f.is_file())
+    assert got == sorted(f"{st}/{f}" for st in ("honest", "extra") for f in L.PUBLIC_SESSION)
 
 
 @pytest.mark.slow
 def test_a_loop_period_registers_what_the_stub_serves(tmp_path):
-    a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={})
+    a = Namespace(law="subset:2", cap=8, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
+                  periods=1)
     d, _ = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     units = L.loop_units(d)
     assert L.requests_of(d, units) == ([3, 7], STEPS, H)
