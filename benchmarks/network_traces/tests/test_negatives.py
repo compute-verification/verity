@@ -823,6 +823,20 @@ def test_the_tie_on_a_fixed_plans_runs_has_no_verdict_and_names_what_they_lack(r
         assert NG.tie_ok(s, row) is None
 
 
+def test_the_tie_owes_the_extra_run_a_refusal_by_content_as_it_owes_token_and_drop():
+    """Extra's run is a shim tamper the fake upstream doesn't build (`TIE_RUN_PARTS`, not `TIE_PARTS`), and `tie_ok`
+    holds it to IoTieWindow.content's refusal as it holds token's and drop's: refused by content is the verdict it
+    owes, accepted or another part's refusal isn't, and a run with no verdict owes none."""
+    def row(verdict, *parts):
+        return {"verdict": verdict, "codes": [f"{NG.TIE}.{p}" for p in parts]}
+    assert NG.TIE_RUN_PARTS.keys().isdisjoint(NG.TIE_PARTS)
+    for name in ("extra", "token", "drop"):
+        assert NG.tie_ok(name, row("refused", "content")) is True
+        assert NG.tie_ok(name, row("accepted")) is False
+        assert NG.tie_ok(name, row("refused", "cells_root")) is False
+        assert NG.tie_ok(name, row(NG.NOT_APPLICABLE)) is None
+
+
 # --- the Commit record: a stand-in of I3 as drafted --------------------------------------------------------------------
 
 def test_wrong_token_changes_one_committed_sampled_id_and_keeps_the_registered_root(tmp_path):

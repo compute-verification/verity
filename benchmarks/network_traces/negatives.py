@@ -66,7 +66,7 @@ directory of runs), each egress window's certified frames held to its certified 
 lacks what the tie opens, which `missing` names by `TIE_MISSING`'s keys), its `codes` (``IoTieWindow.PART``), the
 failing parts by window, its `finish` (on a compact plan its records held to the sampled ids,
 `active.compact_finish_violations`, which refuses it when they aren't), and `ok` (`tie_ok`: honest accepted, a
-negative the tie reads refused by its part); and
+negative the tie reads refused by its part, `TIE_PARTS` or, for a shim tamper only a run has, `TIE_RUN_PARTS`); and
 `stand_ins`, what the tie takes for what the run doesn't keep (`TIE_STAND_INS`). It exits 0 when every run has a
 verdict and none is `ok` false, else 1.
 
@@ -132,6 +132,9 @@ WARDEN_READ = "Flock.Registered.checkPort"
 TIE_PARTS = {"drop": "content", "token": "content", "frame": "cells_root", "advice-length": "content",
              "advice-missing": "content", "advice-extra": "map", "advice-release": "map", "advice-start": None,
              "wrong-token": "port", "advice-chunk": None, "prompt-split": None}
+#: the part of the I/O tie that refuses each shim tamper it reads only on a certifier run (`tie-run`), not on a fake
+#: upstream (`tie_suite`): extra's one event past a response's end is a data cell no committed output is
+TIE_RUN_PARTS = {"extra": "content"}
 CHECKS_TODAY = (HEAD, SERVED, "audit")  # the checks `n2` runs; every other code's check is pending
 ENDS = ("egress", "ingress")
 
@@ -1479,12 +1482,12 @@ def run_dirs(src: Path, scratch: Path) -> dict[str, Path]:
 
 def tie_ok(name: str, row: dict) -> bool | None:
     """Whether the tie's verdict on run `name` is the one it owes: honest's accepted, a negative's it reads
-    (`TIE_PARTS`) refused by its part; None for any other run, or one with no verdict."""
+    (`TIE_PARTS`, `TIE_RUN_PARTS`) refused by its part; None for any other run, or one with no verdict."""
     if row["verdict"] == NOT_APPLICABLE:
         return None
     if name == "honest":
         return row["verdict"] == "accepted"
-    part = TIE_PARTS.get(name)
+    part = TIE_PARTS.get(name) or TIE_RUN_PARTS.get(name)
     return f"{TIE}.{part}" in row["codes"] if part else None
 
 
