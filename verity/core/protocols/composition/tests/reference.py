@@ -1,6 +1,7 @@
 """The Python the composition's Lean (`CoreComposition`, `CoreOnsite`, `CoreRemote`) is held to: the composition rule
 vendored from #1036's trial, over the harness's framing of the core interface (`verity_difftest.protocol.answer`, as
-`Core.Protocol.case` and `answer` decode a case) and mirrors of the stub components.
+`Core.Protocol.case` and `answer` decode a case), mirrors of the stub components, and onsite's real components (space,
+bandwidth) by their Python verifiers' answers on the cases the difftest draws for them (`Recorded`, `periods.py`).
 
 The rule is the trial's onsite and remote over their components' statements, from danielreuter/verity#1036, branch
 `cursor/protocol-interfaces-c3b2` at 46820ebcb, which no branch this one builds on carries:
@@ -28,7 +29,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from verity_difftest import Reject, canonical
@@ -85,6 +86,27 @@ class Stub:
     def answer(self, case: Any) -> dict:
         return P.answer(self.id, case, params=lambda j: P.nat(j, "k"), commitment=self._root, evidence=self._evidence,
                         check=self._check)
+
+
+@dataclass(frozen=True)
+class Recorded:
+    """A real component on the cases drawn for it: `cases` holds each kind's case and the answer its Python verifier gave
+    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was drawn,
+    or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both real components refuse with no
+    digest, as they do params that don't decode; any other case is a difference."""
+
+    id: str
+    cases: dict[str, tuple[dict, dict]] = field(default_factory=dict, compare=False, hash=False)
+
+    def answer(self, case: Any) -> dict:
+        for c, a in self.cases.values():
+            if canonical(c) == canonical(case):
+                return a
+        try:
+            P.canonical_json(P.unhex(case["commitment"]))
+        except Reject as e:
+            return P.outcome(self.id, REJECT, f"commitment: {e}")
+        raise KeyError(f"{self.id}: no answer recorded for this case")
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
@@ -192,6 +214,10 @@ def stub_ids(*names: str) -> tuple[Stub, ...]:
     return tuple(Stub(f"verity/stub/{n}/v0") for n in names)
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over the stubs that stand in for their components.
+#: Onsite's space and bandwidth components, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
+POUS = Recorded("verity/pous/p2/v4/run")
+BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components: the real ones, and the stubs that stand in
+#: for the rest.
 REMOTE = Product("verity/remote/v0", stub_ids("pouw", "sampled-proofs"))
-ONSITE = Product("verity/onsite/v0", stub_ids("certifier", "pous", "pouw", "sampled-proofs"))
+ONSITE = Product("verity/onsite/v0", (POUS, BANDWIDTH, *stub_ids("certifier", "pouw", "sampled-proofs")))

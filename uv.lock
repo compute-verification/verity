@@ -2239,11 +2239,17 @@ name = "verity-core-composition"
 version = "0.0.0"
 source = { virtual = "verity/core/protocols/composition" }
 dependencies = [
+    { name = "hypothesis" },
+    { name = "verity" },
     { name = "verity-difftest" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "verity-difftest" }]
+requires-dist = [
+    { name = "hypothesis", specifier = ">=6.100" },
+    { name = "verity" },
+    { name = "verity-difftest" },
+]
 
 [[package]]
 name = "verity-core-evaluate"

@@ -56,10 +56,14 @@ which each product's `#guard` checks). NCI and the trial's reconciling are not c
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
-with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`) and a
-mirror of the stub. Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or
-fails to decode, and the composition's inputs or the case itself are often broken. The port follows top's rule where the
-trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
+with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), a
+mirror of the stub, and onsite's space and bandwidth components by their Python verifiers' answers on small periods of
+their hooks (`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
+`remote_bandwidth.period.run`, honest, cheating and unverified). Each component's own Lean is held to its Python verifier
+by its package's difftest (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
+Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode,
+and the composition's inputs or the case itself are often broken. The port follows top's rule where the trial's differs,
+and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
 - **Reject dominates.** In the trial a missing statement leaves the product with no verdict even when another component's
   statement has failed, so a prover could hide a rejection by leaving another component undecided. Here any rejection

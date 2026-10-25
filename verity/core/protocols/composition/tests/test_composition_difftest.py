@@ -1,9 +1,11 @@
 """Onsite's and remote's Lean (`onsite serve`, `remote serve`: each product's executable, the core CLI) against the Python
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
-core interface and mirrors of the stub components). Hypothesis draws each component's case to accept, reject, be
+core interface, mirrors of the stub components, and onsite's space and bandwidth components by their Python verifiers'
+answers on small periods of their hooks, `periods.py`). Hypothesis draws each component's case to accept, reject, be
 undecided or fail to decode, then often breaks the composition's own inputs (a component dropped, unknown, repeated or
 out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case
-itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly."""
+itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly:
+the real components' certified quantities and profiles among them."""
 
 from __future__ import annotations
 
@@ -16,6 +18,7 @@ from pathlib import Path
 import pytest
 from hypothesis import strategies as st
 
+import periods
 import reference as R
 import verity_difftest as D
 from verity_difftest import canonical
@@ -23,15 +26,23 @@ from verity_difftest import canonical
 PROTOCOLS = Path(__file__).resolve().parents[2]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
+
+@pytest.fixture(autouse=True, scope="module")
+def _periods(tmp_path_factory):
+    """The real components' cases, made once (their memory challenger's session logs under the suite's basetemp)."""
+    if not R.POUS.cases:
+        periods.build(tmp_path_factory.mktemp("periods"))
+
 JSON = st.recursive(st.none() | st.booleans() | st.integers(-3, 3) | st.text(max_size=3),
                     lambda inner: st.lists(inner, max_size=3) | st.dictionaries(st.text(max_size=3), inner, max_size=3),
                     max_leaves=6)
 
 
 @st.composite
-def stub_case(draw, cid: str) -> dict:
-    """A stub's case that accepts, rejects, is undecided, or fails to decode (its params, root or evidence)."""
-    kind = draw(st.sampled_from([R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken"]))
+def stub_case(draw, cid: str, kind: str | None = None) -> dict:
+    """A stub's case that accepts, rejects, is undecided, or fails to decode (its params, root or evidence); of `kind`
+    if one is given."""
+    kind = kind or draw(st.sampled_from([R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken"]))
     k = draw(st.integers(0, 3))
     if kind == R.REJECT:
         drawn = draw(st.integers(1, 4))
@@ -43,7 +54,8 @@ def stub_case(draw, cid: str) -> dict:
     else:
         drawn = draw(st.integers(k, k + 2))
         passed = draw(st.integers(drawn, drawn + 1))
-    case = {"id": cid, "params": {"k": k}, "root": draw(st.binary(min_size=32, max_size=32)),
+    root = draw(st.binary(min_size=32, max_size=32))
+    case = {"id": cid, "params": {"k": k}, "root": root, "digest": root,
             "evidence": canonical({"drawn": drawn, "passed": passed}).encode()}
     if kind == "broken":
         how = draw(st.sampled_from(["params", "root", "evidence"]))
@@ -58,6 +70,18 @@ def stub_case(draw, cid: str) -> dict:
     return case
 
 
+#: A real component's kinds of case (`periods.build`), accepted ones first and thrice, as the stubs'.
+KINDS = [R.ACCEPT] * 3 + [R.REJECT, R.UNDECIDED, "broken-params", "broken-evidence"]
+
+
+@st.composite
+def recorded_case(draw, C: R.Recorded, kind: str | None = None) -> dict:
+    """One of a real component's recorded cases (of `kind` if one is given), its digest the one its answer carries."""
+    case, answer = C.cases[kind or draw(st.sampled_from([k for k in KINDS if k in C.cases]))]
+    return {"id": C.id, "params": case["params"], "root": bytes.fromhex(case["commitment"]),
+            "digest": bytes.fromhex(answer["commitment"] or ""), "evidence": bytes.fromhex(case["evidence"])}
+
+
 #: The binding breaks come thrice: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
 MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
@@ -68,12 +92,20 @@ MUTATIONS = [None] * 10 + ["drop-param", "drop-case", "unknown-param", "unknown-
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
-    """One case of `product`: its components' cases, then at most one break of the composition's own inputs."""
-    cases = [draw(stub_case(C.id)) for C in product.components]
+    """One case of `product`: its components' cases (one time in six every one accepting, and one in six every one but one
+    that is undecided, so that a product of five reaches its binding breaks and its undecided verdict), then at most one
+    break of the composition's own inputs."""
+    mode = draw(st.integers(0, 5))
+    pending = draw(st.sampled_from([j for j, C in enumerate(product.components)
+                                    if not isinstance(C, R.Recorded) or R.UNDECIDED in C.cases]))
+    kinds = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
+             for j in range(len(product.components))]
+    cases = [draw(recorded_case(C, k) if isinstance(C, R.Recorded) else stub_case(C.id, k))
+             for C, k in zip(product.components, kinds)]
     named = [{"id": c["id"], "params": c["params"]} for c in cases]
     entries = [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "id": c["id"], "params": c["params"]}
                for c in cases]
-    commitment = R.bind(product.id, [(c["id"], c["root"]) for c in cases])
+    commitment = R.bind(product.id, [(c["id"], c["digest"]) for c in cases])
     params: object = {"components": named}
     m = draw(st.sampled_from(MUTATIONS))
     i = draw(st.integers(0, len(cases) - 1))
@@ -92,7 +124,7 @@ def composite(draw, product: R.Product) -> dict:
     elif m == "binding":
         commitment = draw(st.binary(min_size=64, max_size=64).filter(lambda b: b != commitment))
     elif m == "binding-id":
-        commitment = R.bind("verity/other/v0", [(c["id"], c["root"]) for c in cases])
+        commitment = R.bind("verity/other/v0", [(c["id"], c["digest"]) for c in cases])
     elif m == "commitment-size":
         commitment = draw(st.binary(max_size=70).filter(lambda b: len(b) != 64))
     elif m == "params-extra-key":
@@ -171,6 +203,7 @@ def test_remote_agrees(remote_server):
     _agree(REMOTE, remote_server, SEEN["remote"], 1000)
 
 
+@pytest.mark.slow
 def test_onsite_agrees(onsite_server):
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000)
 
@@ -187,6 +220,7 @@ class Trial(R.Product):
         return super().check(ps, c, ev)
 
 
+@pytest.mark.slow
 def test_a_reference_without_reject_dominance_is_caught(onsite_server):
     """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
