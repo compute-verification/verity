@@ -13,7 +13,7 @@ bound holds at the challenge times PoUS grades (`Definitions.Accounting.JointBri
 
 namespace Accounting.SecurityProofs.Bridge
 
-open Pouw Pous.EndToEnd PousCheck PousCheck.Properties Pous.Period
+open Pous Pous.EndToEnd PousCheck PousCheck.Properties Pous.Period
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
@@ -34,9 +34,10 @@ theorem SpaceOfPeriodHeld (hd : AcceptsDecodes) (hp : PublishesRoot)
     (hS : c.S * (run.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ Pous.EndToEnd.S) :
     r.Sound c p .pous ((Params.δ : ℝ) + Params.εMax.toReal) := by
   intro ξ
-  have h := periodHeld hd hp hH D Q L hP ι α ΩW ΩQ d run P round c.S hdev hS (hR.other ξ)
-  refine le_trans ?_ ((pr_equiv hR.coins _).trans_le h)
-  refine pr_mono fun x hx => ?_
+  have h := Pous.Period.SecurityProofs.periodHeld hd hp hH D Q L hP ι α ΩW ΩQ d run P round c.S hdev hS
+    (hR.other ξ)
+  refine le_trans ?_ ((Pouw.pr_equiv hR.coins _).trans_le h)
+  refine Pouw.pr_mono fun x hx => ?_
   obtain ⟨ha, hn⟩ := hx
   have hA := hR.accepts _ ha
   have hH' := hR.held (Function.update ξ (r.own .pous) x)
