@@ -40,7 +40,7 @@ theorem Pa_subset {d : Design} {kd : ℕ} (hd : SubsetDesign d kd) {P : Partitio
       (P.rus.length.choose kd : ℝ) := by
   have h1 : d.Pa P B = (Rule.mk (.subset kd) none).Pa (strataSizes c) (ruSizes c) (window 0 c.flatten.length B) * 1 := by
     unfold Design.Pa
-    rw [hd, hP]
+    rw [show d.rules = [⟨.subset kd, none⟩] from hd, hP]
     rfl
   rw [h1, mul_one, rus_length hP]
   change ((((strataSizes c).sum - _).choose kd : ℕ) : ℝ) / (((strataSizes c).sum.choose kd : ℕ) : ℝ) = _
