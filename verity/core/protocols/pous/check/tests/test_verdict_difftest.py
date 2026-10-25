@@ -207,6 +207,7 @@ EVAL = D.Port("pous-verdict-difftest", "eval", _counted,
 server = D.server_fixture(GATES)
 
 
+@pytest.mark.slow
 def test_the_gates_agree(server):
     stats = D.run(GATES, examples=150, server=server)
     assert stats.outputs > 50 and stats.rejects > 5, stats
@@ -218,6 +219,7 @@ def test_the_gates_agree_at_the_sidecars_statics(server, K, M, LIMIT, count):
     assert kind == "output" and json.loads(line)["count"] == count
 
 
+@pytest.mark.slow
 def test_the_runs_agree(server):
     ACCEPTS.clear()
     stats = D.run(EVAL, examples=300, server=server)
@@ -240,7 +242,7 @@ def _cases(K: int, M: int) -> dict[str, list[str]]:
     return cases
 
 
-@pytest.mark.parametrize("K,M,LIMIT,count", SIDECAR)
+@pytest.mark.parametrize("K,M,LIMIT,count", [pytest.param(*SIDECAR[0], marks=pytest.mark.slow), SIDECAR[1]])
 def test_the_runs_agree_on_named_sessions(server, K, M, LIMIT, count):
     """Each named session's outcome is what it is named for, and the code's and the circuit's agree on it."""
     for n, (name, kinds) in enumerate(_cases(K, M).items()):
