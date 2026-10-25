@@ -774,6 +774,10 @@ def test_every_live_salt_mutation_hits_its_refusal():
                                                                                       name)))
             assert (got is None and len(salt) == 32) if want is None else (
                 salt is None and got is not None and got[0] == want[0] and want[1] in got[1]), (name, seed, got)
+    d = passes.live_salt_instance(random.Random("a float pass_index"))
+    for bad in (0.0, 1.0, 1.5, float(d["manifest"]["pass_index"])):
+        m = {**d["manifest"], "pass_index": bad}
+        assert CC.live_salt(*passes.live_salt_args({**d, "manifest": m})) == (None, ("manifest", CC.PASS_FORM)), bad
 
 
 def _live_pass(seed: str, name: str = "honest") -> tuple[str | None, tuple[str, str] | None]:

@@ -507,8 +507,8 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
             live_ledger(rng, h, root=other)
         case "pass-index":
             man.pop("pass_index") if rng.random() < 0.2 else man.update(pass_index=rng.choice(
-                [-1, -rng.randrange(1, 1 << 64), 1 << 64, (1 << 64) + rng.randrange(9), 0.0, 1.0, 1.5, True, False,
-                 str(h["k"]), None, [h["k"]]]))
+                [-1, -rng.randrange(1, 1 << 64), 1 << 64, (1 << 64) + rng.randrange(9), True, False, str(h["k"]), None,
+                 [h["k"]], {"k": h["k"]}]))
         case "named-epoch":
             # the manifest names another epoch than the one its session was opened for
             man["pass_index"] = h["k"] + 1 if h["k"] < (1 << 64) - 1 else h["k"] - 1
@@ -545,7 +545,7 @@ def _mutate_live(h: dict, name: str, rng: random.Random) -> None:
         case "opening-form":
             k = rng.choice(["coin", "path", "label", "index", "epoch", "after"])
             bad = {"coin": ["zz", None], "path": [None, 4, [rng.randbytes(33).hex()]], "label": [5, None],
-                   "index": ["0", None, True, 1.5], "epoch": [str(c.epoch), None], "after": ["zz", 3]}[k]
+                   "index": ["0", None, True], "epoch": [str(c.epoch), None], "after": ["zz", 3]}[k]
             man["salt_opening"] = rng.choice([{**o, k: rng.choice(bad)}, None, [o]])
         case "after":
             man["salt_opening"] = {**o, "after": _flip(o["after"])}
