@@ -81,6 +81,8 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
+PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
+                                         period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
