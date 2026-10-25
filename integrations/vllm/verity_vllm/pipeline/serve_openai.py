@@ -3,7 +3,8 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
         [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
-        [--admit arrival|release-order [--admit-hold-ms 5000]]
+        [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
+        [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -48,14 +49,26 @@ streamed ids, the seed it carried, and where its finish says the stream ends. ``
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
 line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
 record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
-whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl`` (one line a request: the HTTP id, the engine id,
-the body's ``user``, its release and its place among the engine's adds (``admitted``, and as ``arrival`` the id its served
-rows name it by), the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and
-seeds, and its check) and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the
-bench row's declared Commit does, with its committer parts built from the row's ``--required-manifest`` and taps (the
-acquisition plan under ``acquisition/``), and ``--seal`` seals each closed window as a deferred Commit's row dir
-(`serve_seal`). SIGTERM or SIGINT stops it: the open window is closed and its requests checked, and ``summary.json`` counts
-the requests and checks, and the admissions' order (`ReleaseOrder.summary`).
+whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
+(one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
+the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
+and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
+committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
+``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. The
+seals run on a thread of their own (`serve_seal.Sealer`) while the engine serves the next window; a close waits only while
+the windows awaiting their seal hold ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
+``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
+``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
+has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
+not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
+run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
+the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`).
+
+The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
+the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
+``--switch-interval-ms`` (0.1 ms; Python's is 5 ms). ``pauses.jsonl``
+(`serve_seal.Watchdog`) records each stall of the process of 0.2 s or more.
 """
 from __future__ import annotations
 
@@ -64,6 +77,7 @@ import json
 import queue
 import shutil
 import signal
+import sys
 import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -75,8 +89,8 @@ from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, advice_trace, ingress_of, param_of, served_statics,
-                                               user_of)
+from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
+                                               served_statics, user_of)
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
                                                  error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -125,6 +139,30 @@ class Options:
                          help="the Commit's scheme: vllm-v1 (NativeHostCommitter, 32-byte roots) or rows-sha512 (the declared Commit's)")
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
+    seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
+                                 help="seal on a thread of its own while the engine serves the next window (serve_seal.Sealer; default "
+                                      "on); --no-seal-off-loop seals on the engine loop, which stops serving for the seal")
+    seal_hold_gb: float = option("--seal-hold-gb", type=float, default=64.0,
+                                 help="the committed GB the windows awaiting their seal may hold (pinned host memory) before a "
+                                      "close waits for room")
+    seal_warm_gb: float = option("--seal-warm-gb", type=float, default=0.0,
+                                 help="grow the committer's pinned pool by this many GB before serving (serve_seal.warm_pool), so "
+                                      "the held windows and the open one find blocks ready (about --seal-hold-gb plus --window-gb); "
+                                      "0: the pool grows on the engine loop as windows need it")
+    window_gb: float = option("--window-gb", type=float, default=32.0,
+                              help="close a Commit window once its steps have committed this many GB, which bounds its sealed "
+                                   "bundle (0: no bound)")
+    disk_floor_gb: float = option("--disk-floor-gb", type=float, default=300.0,
+                                  help="--seal: refuse to start unless OUT's filesystem has this many GB free beyond one window "
+                                       "(--window-gb), and stop cleanly (no new requests) rather than seal a window that would "
+                                       "leave less (0: no floor)")
+    copy_records_to: str | None = option("--copy-records-to", default=None,
+                                         help="copy serve.json, requests.jsonl, windows.jsonl and the step traces into this "
+                                              "directory (the run's $OUT) after each window and at the stop")
+    switch_interval_ms: float = option("--switch-interval-ms", type=float, default=0.1,
+                                       help="the interpreter's switch interval while serving (Python's is 5 ms): how long the engine's "
+                                            "thread may wait for the GIL after each torch call while the seal's thread runs Python "
+                                            "(0: leave Python's)")
     required_manifest: str | None = option("--required-manifest", default=None,
                                            help="rows-sha512: the bench row's required manifest (its manifest.json), which the Commit of "
                                                 "record's committer parts and the sealed binding map are built from")
@@ -162,6 +200,7 @@ class EngineLoop:
         self.q: queue.Queue = queue.Queue()
         self.live: dict[str, Admission] = {}
         self.error: str | None = None
+        self.draining: str | None = None
         self.steps = 0
 
     def submit(self, adm: Admission) -> None:
@@ -173,16 +212,26 @@ class EngineLoop:
     def stop(self) -> None:
         self.q.put(self._STOP)
 
+    def drain(self, why: str) -> None:
+        """Stop once the requests in flight have finished; every request admitted after this is refused with ``why``."""
+        self.q.put(("drain", why))
+
     def _take(self, item: Any) -> bool:
         """Apply one queued item; False for the stop."""
         if item is self._STOP:
             return False
+        if isinstance(item, tuple) and item[0] == "drain":
+            self.draining = self.draining or str(item[1])
+            return True
         if isinstance(item, tuple):
             eid = item[1]
             if self.live.pop(eid, None) is not None:
                 self.engine.abort_request([eid])
                 if self.commit is not None:
-                    self.commit.aborted(eid)
+                    self.commit.aborted(eid, "client")
+            return True
+        if self.draining is not None:
+            item.deliver(Delta([], "", error=f"the endpoint is stopping: {self.draining}"))
             return True
         try:
             self.engine.add_request(request_id=item.engine_id, prompt={"prompt_token_ids": list(item.prompt_ids)}, params=item.params)
@@ -214,6 +263,8 @@ class EngineLoop:
                 idle = not self.engine.has_unfinished_requests()
                 if idle and self.commit is not None:
                     self.commit.idle()
+                if idle and self.draining is not None:
+                    break
                 item = self.q.get() if idle else self._poll()
                 while item is not None:
                     if not self._take(item):
@@ -236,7 +287,7 @@ class EngineLoop:
             for adm in list(self.live.values()):
                 adm.deliver(Delta([], "", error=self.error or "the server stopped"))
                 if self.commit is not None:
-                    self.commit.aborted(adm.engine_id)
+                    self.commit.aborted(adm.engine_id, "server")
             self.live.clear()
             if self.commit is not None and self.commit.is_open:
                 self.commit.close()
@@ -490,14 +541,30 @@ def served_class(opts: Options) -> dict[str, int]:
             **{k: int(v) for k, v in given.items()}}
 
 
-def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which) -> None:
+def disk_floor_of(opts: Options, usage: Callable[[Any], Any] = shutil.disk_usage) -> SS.DiskFloor | None:
+    """``--seal``'s `serve_seal.DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without
+    a floor."""
+    if not (opts.seal and opts.disk_floor_gb > 0):
+        return None
+    p = Path(opts.out).resolve()
+    while not p.exists() and p != p.parent:
+        p = p.parent
+    return SS.DiskFloor(p, int(opts.disk_floor_gb * SS.GB), usage)
+
+
+def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
+              usage: Callable[[Any], Any] = shutil.disk_usage) -> None:
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1 or opts.admit_hold_ms < 1:
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
+    if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
+        raise UsageError("--window-gb, --seal-hold-gb, --seal-warm-gb, --disk-floor-gb and --switch-interval-ms are at least 0")
     if opts.seal and not opts.commit:
         raise UsageError("--seal seals each Commit window: it needs the Commit (drop --no-commit)")
+    if (floor := disk_floor_of(opts, usage)) is not None and (why := floor.refusal(int(opts.window_gb * SS.GB))):
+        raise UsageError(f"--seal: {why}")
     if opts.scheme == "rows-sha512" and not opts.gpu_tree:
         raise UsageError("--scheme rows-sha512 is the windowed collector's, which hashes its rows on the GPU: drop --no-gpu-tree")
     if opts.commit and opts.scheme == "rows-sha512" and not opts.required_manifest:
@@ -542,16 +609,22 @@ def main(opts: Options) -> int:
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
-    windows = None
+    mirror = records_mirror(out, opts.copy_records_to)
+    windows = sealer = warmed = None
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
+        warmed = SS.warm_pool(com, opts.seal_warm_gb)
+        sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
-                                served=served_statics(scheduler_config(trace.sched), served_class(opts)))
+                                served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror)
     loop = EngineLoop(engine, windows)
+    if windows is not None:
+        windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
     order = rows = None
     if opts.admit == "release-order":
@@ -570,6 +643,10 @@ def main(opts: Options) -> int:
         # the queue's lock is not reentrant: the stop is queued from a thread of its own, never from inside the handler
         signal.signal(sig, lambda *_: threading.Thread(target=loop.stop, daemon=True).start())
     bound = [http.address]
+    if opts.switch_interval_ms:
+        sys.setswitchinterval(opts.switch_interval_ms / 1000)
+    watchdog = SS.Watchdog(out / "pauses.jsonl")
+    watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
               "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
@@ -579,21 +656,41 @@ def main(opts: Options) -> int:
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
+              "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
+              "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),
               "arena": getattr(com, "arena_sizing_record", None), "engine": llm.engine_record, "run_id": opts.run_id,
-              **SS.target_of()}
+              "switch_interval_s": sys.getswitchinterval(), "watchdog": {"period_s": watchdog.period_s, "min_s": watchdog.min_s},
+              "clocks": {"perf_counter": time.perf_counter(), "time": time.time()}, **SS.target_of()}
     (out / "serve.json").write_text(json.dumps(record, indent=1, default=str))
+    if mirror is not None:
+        mirror()
     print(f"SERVE-OPENAI listening on {bound[0][0]}:{bound[0][1]} model={served} commit={opts.commit} protocol={proto.name}", flush=True)
     try:
         loop.run()
     finally:
         http.shutdown()
-        summary = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error,
-                   "commit": windows.summary() if windows is not None else None, "admit": order and order.summary()}
-        (out / "summary.json").write_text(json.dumps(summary, indent=1))
+        if mirror is not None:
+            mirror()                                     # the requests closed at the stop, before the seals still pending
+        def stopped() -> dict[str, Any]:
+            got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+                   "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
+                   "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
+                   "mirror_errors": mirror.errors[:10] if mirror else None}
+            (out / "summary.json").write_text(json.dumps(got, indent=1))
+            if mirror is not None:
+                mirror()
+            return got
+
+        if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
+            stopped()
+            print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
+            sealer.close()
+        watchdog.stop()
+        summary = stopped()
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
         if rows is not None:
@@ -601,3 +698,16 @@ def main(opts: Options) -> int:
         if com is not None:
             com.close()
     return 0 if loop.error is None and (windows is None or windows.summary()["passed"] or not server.served) else 1
+
+
+def records_mirror(out: Path, dst: str | None) -> Mirror | None:
+    """`serve_commit.Mirror` of ``out``'s records into ``--copy-records-to`` (None without one, or when it is ``out``)."""
+    if not dst or Path(dst).resolve() == Path(out).resolve():
+        return None
+    return Mirror(out, dst)
+
+
+def disk_record(windows: CommitWindows | None) -> dict[str, Any] | None:
+    """serve.json's disk floor: the filesystem it watches, its floor and what was free at the start."""
+    d = windows.disk if windows is not None else None
+    return None if d is None else {"path": str(d.path), "floor_gb": d.floor / SS.GB, "free_gb_at_start": round(d.free() / SS.GB, 1)}
