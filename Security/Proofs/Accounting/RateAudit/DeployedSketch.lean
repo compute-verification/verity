@@ -18,22 +18,6 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_exists_le pr_le_of_card pr_mono pr_or_le)
 
-/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
-`g/m`. -/
-private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
-    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
-    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
-    pr P ≤ (g : ℝ≥0∞) / m := by
-  unfold pr
-  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
-  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
-      ((g : ℝ≥0∞) * Fintype.card α) / m by
-        simp only [ENNReal.div_eq_inv_mul]
-        ac_rfl]
-  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
-  rw [Finset.filter_congr_decidable]
-  exact_mod_cast h
-
 namespace Device
 
 variable {N m ρ h S L q ks : ℕ}
@@ -118,10 +102,10 @@ theorem pr_unpaid_rank_le
       refine Rate.pr_le_of_fiber _ _ (fun D => ?_)
       change pr (fun O : Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) =>
         t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D) ≤ (1 : ℝ≥0∞) / 2 ^ h
-      have hbound := pr_le_div_of_card_mul_le
-        (α := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
+      have hbound := Bandwidth.pr_le_of_card
+        (Ω := Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
         (fun O => t ∈ A.correct sketch σ O D ∧ t ∉ queried A sketch σ O D)
-        1 (2 ^ h) Fintype.card_ne_zero (by positivity)
+        (2 ^ h) 1 (by positivity)
         (by simpa [Device.correct, and_comm] using card_guess_le A sketch σ D t)
       push_cast at hbound
       simpa using hbound
@@ -133,8 +117,8 @@ theorem pr_unpaid_rank_le
           Bad A sketch σ x.2 x.1 i g) ≤ (g : ℝ≥0∞) / 2 ^ 256 := by
       intro i
       refine Rate.pr_le_of_fiber _ _ (fun O => ?_)
-      convert pr_le_div_of_card_mul_le (fun D : Data N m ρ Sector => Bad A sketch σ O D i g)
-        g (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector])
+      convert Bandwidth.pr_le_of_card (fun D : Data N m ρ Sector => Bad A sketch σ O D i g)
+        (Fintype.card Sector) g (by simp [Sector])
         (card_bad_le A sketch σ O i g) using 1
       all_goals norm_num [Sector]
     refine (Finset.sum_le_sum (fun i _ => hi i)).trans ?_

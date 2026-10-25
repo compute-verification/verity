@@ -114,22 +114,6 @@ open Bandwidth (pr_exists_le pr_mono pr_or_le)
 
 variable {N m h S L q ks : ℕ}
 
-/-- A uniform finite event whose count times `m` is at most `g` times the sample-space size has probability at most
-`g/m` (restating `DeployedSketchSum.lean`'s private lemma). -/
-private theorem pr_le_div_of_card_mul_le {α : Type} [Fintype α] (P : α → Prop) [DecidablePred P] (g m : ℕ)
-    (hα : Fintype.card α ≠ 0) (hm : m ≠ 0)
-    (h : (Finset.univ.filter P).card * m ≤ g * Fintype.card α) :
-    pr P ≤ (g : ℝ≥0∞) / m := by
-  unfold pr
-  rw [ENNReal.div_le_iff (by exact_mod_cast hα) (ENNReal.natCast_ne_top _)]
-  rw [show (g : ℝ≥0∞) / m * Fintype.card α =
-      ((g : ℝ≥0∞) * Fintype.card α) / m by
-        simp only [ENNReal.div_eq_inv_mul]
-        ac_rfl]
-  rw [ENNReal.le_div_iff_mul_le (Or.inl (by exact_mod_cast hm)) (Or.inl (ENNReal.natCast_ne_top _))]
-  rw [Finset.filter_congr_decidable]
-  exact_mod_cast h
-
 /-- A device's correct receipt of a block one of whose sectors it never obtained, at a key. -/
 def Miss (A : RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)))
     (κ : Key N m h ks) (D : Data N m 0 Sector) : Prop :=
@@ -247,9 +231,9 @@ theorem pr_pass_le {C : ℕ}
   · refine Accounting.Rate.pr_le_of_fiber _ _ (fun κ => ?_)
     have hcard := Device.card_bad_keys_le A sketch (fun c => (κ c).1) (fun c => (κ c).2) g qtot
       (fun D => hq κ D)
-    have hbound := pr_le_div_of_card_mul_le
+    have hbound := Bandwidth.pr_le_of_card
       (fun D : Data N m 0 Sector => ∃ c, ∃ i : Fin q, Bad (A c) sketch (κ c).1 (κ c).2 D i g)
-      (g * qtot) (Fintype.card Sector) Fintype.card_ne_zero (by simp [Sector]) (by
+      (Fintype.card Sector) (g * qtot) (by simp [Sector]) (by
         simpa using hcard)
     have hXc : (Fintype.card Sector : ℝ≥0∞) = 2 ^ 256 := by
       norm_num [Sector]
