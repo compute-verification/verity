@@ -381,8 +381,8 @@ def bf16Step (p : Pipeline) (acc : ℕ) (x y : List ℕ) : ℕ :=
 def s8Value (c : ℕ) : ℤ := if c < 128 then c else c - 256
 
 /-- **The S8 fragment's step** (PTX `mma.sync.aligned.m16n8k32.row.col.satfinite.s32.s8.s8.s32`, SASS
-`IMMA.16832.S8.S8.SAT`): the accumulator word as an s32, plus every product `x_l·y_l` of the codes as s8, summed exactly
-and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.ml.circuits.silicon.integer`'s
+`IMMA.16832.S8.S8.SAT`): the accumulator word as an s32, plus every product `x_l·y_l` of the codes as s8, summed
+exactly and clamped once to `[-2^31, 2^31 - 1]`, as a 32-bit word. It is `verity.ml.circuits.silicon.integer`'s
 `BLACKWELL_SM120_S8_M16N8K32`, the served INT8 dot `BlackwellS8ImmaDot32`, which the RTX PRO 6000 reproduced on all
 10,243,968 words of run `r20261015-084000-06d8`, the clamp only at D; an H200 and a B200 compute the same function. -/
 def s8Step (acc : ℕ) (x y : List ℕ) : ℕ :=
