@@ -79,12 +79,18 @@ theorem repCut_inner_of_ret (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup)
     (FlockComplete.CutPrefix.ligeritoCut_shift coin n st.merkle sch T _ _ _ src t₃) rfl hL
   have hs₃ : l.size ≤ l₃.size := by rw [hbs₃, Array.size_append]; omega
   have hs₄ : l₃.size ≤ l₄.size := by rw [hbs₄, Array.size_append]; omega
-  have hPCc := FlockComplete.CutPrefix.eq_of_agree
-    (FlockComplete.CutPrefix.piopCut_cut_agree coin (Nat.le_of_lt hl₄n) st _ src _ _ extras prior words t₀)
-    (le_trans hs₃ hs₄) hPF hs₄
-  have hLc := FlockComplete.CutPrefix.eq_of_agree
-    (FlockComplete.CutPrefix.ligeritoCut_cut_agree coin (Nat.le_of_lt hl₄n) st.merkle sch T _ _ _ src t₃)
-    hs₄ hL (Nat.le_refl _)
+  have hPCc : ((FlockComplete.piopCut (FlockComplete.asksCut coin l₄.size) st (Zk.PadLayout.new st.m st.kLog sch.k0)
+      src (FlockComplete.flat cm0.cap) ic.root extras prior words).run t₀).go l =
+      (.ok (({ zp with finalC := src.masked (Zk.PadLayout.new st.m st.kLog sch.k0).fc }, lp, ss, T, sws), t₃), l₃) :=
+    FlockComplete.CutPrefix.eq_of_agree
+      (FlockComplete.CutPrefix.piopCut_cut_agree coin (Nat.le_of_lt hl₄n) st _ src _ _ extras prior words t₀)
+      (le_trans hs₃ hs₄) hPF hs₄
+  have hLc : ((FlockComplete.ligeritoCut (FlockComplete.asksCut coin l₄.size) (Hashes.ofSha512 Sha512.hash) st.merkle
+      sch T cm0 (FlockComplete.basisVals sws (st.m - 7)) (Zk.PadLayout.new st.m st.kLog sch.k0)
+      src).run t₃).go l₃ = (.ok ((lg, zl, rec), t₄), l₄) :=
+    FlockComplete.CutPrefix.eq_of_agree
+      (FlockComplete.CutPrefix.ligeritoCut_cut_agree coin (Nat.le_of_lt hl₄n) st.merkle sch T _ _ _ src t₃)
+      hs₄ hL (Nat.le_refl _)
   -- the stop's place
   obtain ⟨-, hl₃, hn₃⟩ := FlockComplete.piopCut_at hs.m hPC default
   have hl₄ := ((FlockComplete.CutEq.ligeritoCut_eqAt coin n st.merkle sch T cm0
