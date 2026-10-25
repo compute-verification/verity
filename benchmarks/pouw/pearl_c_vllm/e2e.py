@@ -254,7 +254,8 @@ def arm_of(mode: str, run, args):
 
 def gate(run, weights: dict, whole: bool = False) -> list[dict]:
     """Served y against x·Wᵀ, and with hashing the same call's commitment twice and the negative control, at every
-    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too."""
+    distinct (n, k) and both m; with `whole` (``--whole-step``), `whole_check` too.  The checks that compare passes repeat
+    one pass's call indices (`PearlCDeviceRun.begin`'s ``at``), since the epoch numbers calls across passes."""
     import torch
     out, seen = [], set()
     gen = torch.Generator(device=next(iter(weights.values())).device).manual_seed(20260930)
@@ -264,9 +265,9 @@ def gate(run, weights: dict, whole: bool = False) -> list[dict]:
         seen.add(tuple(W.shape))
         for m in (PREFILL, BATCH):
             x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-            commits, served = [], None
+            commits, served, at = [], None, run.epoch_calls()
             for omit in ((), (), ("hash_leaf",)) if run.hashing else ((),):
-                run.begin()
+                run.begin(at=at)
                 run.poison()
                 run.omit = frozenset(omit)
                 y = run.gemm(w, x, W, None)
@@ -315,6 +316,7 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
 
     run.graphs = False
     run.begin()
+    at = run.cur.base
     run.poison()
     forward()
     want = ended(forward())
@@ -332,7 +334,7 @@ def whole_check(run, weights: dict, m: int | None = None) -> dict:
     run.end()
     got, staged = [], []
     for _ in range(2):
-        run.begin()
+        run.begin(at=at)
         run.poison()
         for _ in range(2):
             staged.append(run.whole_replay(calls))
@@ -366,6 +368,7 @@ def whole_retained_check(run, forward, side) -> bool:
     try:
         run.graphs = False
         run.begin(retain=str(dirs[0]))
+        at = run.cur.base
         forward()
         want = ended()
         run.graphs = True
@@ -380,7 +383,7 @@ def whole_retained_check(run, forward, side) -> bool:
         finally:
             calls = run.whole_capture_end()
         run.end()
-        run.begin(retain=str(dirs[1]))
+        run.begin(retain=str(dirs[1]), at=at)
         run.whole_replay(calls)
         graph.replay()
         run.whole_replayed(calls)
@@ -401,9 +404,9 @@ def schedule_check(run, weights: dict) -> dict:
     w, W = next(iter(weights.items()))
     gen = torch.Generator(device=W.device).manual_seed(20260932)
     xs = [torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16) for m in (32, 128, 32)]
-    commits, mine = {}, run.schedule.name
+    commits, mine, at = {}, run.schedule.name, run.epoch_calls()
     for name in ("serial", mine):
-        run.begin(schedule=name)
+        run.begin(schedule=name, at=at)
         run.poison()
         for x in xs:
             run.gemm(w, x, W, None)
@@ -426,10 +429,10 @@ def graphs_check(run, weights: dict) -> list[dict]:
             continue
         seen.add(tuple(W.shape))
         x = torch.randn(BATCH, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-        got = []
+        got, at = [], run.epoch_calls()
         for graphs in (False, True, True):
             run.graphs = graphs
-            run.begin()
+            run.begin(at=at)
             run.poison()
             y = run.gemm(w, x, W, None).clone()
             flags = run.flag_buf[:BATCH].clone()
@@ -586,8 +589,9 @@ def serve(conn, args, group: str, coins: dict) -> None:
                 if whole is not None:
                     whole.take()
                 for name, prompts, sp in (("prefill", [cmd["prefill"]], one), ("decode", cmd["decode"], many)):
-                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     want = cmd["want"][name]
+                    run.repeat_at = want.get("base")     # the timed pass's call indices, so its commitment can repeat
+                    _, _, got, _ = timed([{"prompt_token_ids": x} for x in prompts], sp, retain=str(Path(args.retain) / name))
                     same = all(got.get(k) == want.get(k) for k in ("transcript_root", "activation_roots", "units", "tiles"))
                     out[name] = {"manifest": got.get("manifest"), "commitment": got, "same_commitment_as_timed": same,
                                  **({"whole_step": whole.take()} if whole is not None else {})}
@@ -597,8 +601,10 @@ def serve(conn, args, group: str, coins: dict) -> None:
                             whole.enabled = False
                         try:
                             if whole is not None:
+                                run.repeat_at = want.get("base")
                                 _, _, ref, _ = timed(p, sp)
                             run.graphs = False
+                            run.repeat_at = want.get("base")
                             _, _, eager, _ = timed(p, sp)
                         finally:
                             run.graphs = True
@@ -651,14 +657,18 @@ def prompt_logprobs(llm, sampling_params, timed, windows: list[list[int]]) -> di
 
 class Coins:
     """The challenger's side of one epoch in the controller: its coins (`coins.Challenger`), committed before any engine
-    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`).
-    A coin opens once; an engine started again in the same epoch (the ABAB blocks) asking for it after the same record
-    gets the one opening again, and after any other record a refusal, so nothing redraws."""
+    starts, drawn from `entropy` (by default the Lean verifier of record's, `pouw.verifier.coins`, `IO.getRandomBytes`),
+    which a claim instance must name (`challenger.served_claim`). A coin opens once; an engine started again in the same
+    epoch (the ABAB blocks) asking for it after the same record gets the one opening again, and after any other record a
+    refusal, so nothing redraws."""
 
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier
         from verity.core.protocols.pouw.coins import Challenger
-        self.challenger, self.opened = Challenger(epoch, entropy or verifier.coins), {}
+        from verity.core.protocols.sampled_proofs.challenger import served_claim
+        entropy = verifier.coins if entropy is None else entropy
+        served_claim(entropy)
+        self.challenger, self.opened = Challenger(epoch, entropy), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
@@ -827,7 +837,8 @@ def split(results: dict) -> dict:
 def state_entropy(path: str):
     """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
     verifier of record's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`)."""
+    and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
+    by the Lean's claim instance (`verifier.CLAIM`)."""
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
     p = Path(path)
@@ -842,6 +853,7 @@ def state_entropy(path: str):
     def take(n: int) -> bytes:
         at[0] += n
         return data[at[0] - n:at[0]]
+    take.claim = verifier.CLAIM
     return take
 
 

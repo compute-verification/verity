@@ -650,18 +650,20 @@ def statement(call: int, circuit: str | Path, public: str | Path, sessions: Sequ
 def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Sequence[str | Path], window: Mapping[str, Any],
                   key: ChallengerKey, descriptor: bytes | None, statements: Any = (), k: int | None = None,
                   verify: Any = lms_verify, run: Any = None, *, pins: Sequence[str | Path] | None,
-                  main: Sequence[str] | None) -> dict[str, Any]:
+                  main: Sequence[str] | None, live: Any = None) -> dict[str, Any]:
     """One window's credit by core's one composed entry (`credit.window`, PRF-132) on its evidence (`window_evidence`:
     its record `pouw_h1.CALLS_FILE`, its session `directory`, `window` ``{root}``, `descriptor`, the bytes of the circuit
-    its period committed, and its drawn calls' `statements`), under the ledger at `heads` and `key`, its session run
-    from a commit the pins log at `pins` records (`pins_head`) on the verifier's own first-parent history of main `main`
+    its period committed, its drawn calls' `statements` and its `live` evidence), under the ledger at `heads` and `key`,
+    its session run from a commit the pins log at `pins` records (`pins_head`) on the verifier's own first-parent history
+    of main `main`
     (`challenger.pinned_session`), the circuit files its period's open committed (`credit.committed_files`) and its K
     (`credit.committed_k`, or `k`) and table rows T (`credit.committed_rows`). `run` is the
     verifier of record (default credit's own, `proofs.verify`). The refusal (or None) of ``manifest``
     (`manifest_reason`) and ``window`` (core's: each credit bit fixed before the draw coin, the round log the
     challenger's, every A table the tree its round root commits, each K's ``b/<K>`` the weights its period's open
     signed (``weights``), the units the draw coin draws at K, each verified from its statement's proof files, and the
-    window's registration, each drawn session opening its A and its K's ``b/<K>``); ``k``; ``drawn``, the units core
+    window's registration, each drawn session opening its A and its K's ``b/<K>``, and each round's live@<s> proving its
+    step's served rows, ``live``); ``k``; ``drawn``, the units core
     draws (`drawn_of`); ``calls``, the credited calls (a call whose step served no rows is none); ``eps``, what the
     draw established at δ over their served rows' work (`credit.established`); and ``credit``, the calls only when every refusal is None. A period's credit is
     `period_credit`'s."""
@@ -671,7 +673,7 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         lines = ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
         log, main = pins_head(pins), _listed(main)
         audited = pinned_session(lines, window, key, log, main, verify)
-        ev = window_evidence(record, directory, window, statements, descriptor or b"")
+        ev = window_evidence(record, directory, window, statements, descriptor or b"", live)
     except (CoinError, ValueError) as e:
         out["window"] = ("coin", f"the window's coins, session or salt can't be read ({e})")
     else:
@@ -689,8 +691,8 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
         if why is None:
             out["calls"], why = CR.window(key.to_json(), lines, log, main, ev["window"], ev["session"],
                                           ev["salt"], ev["calls"], ev["served"], ev["commit"], ev["rounds"],
-                                          ev["draw"], ev["descriptor"], ev["entries"], ev["statements"], files,
-                                          out["k"], rows, verify, **({} if run is None else {"run": run}))
+                                          ev["draw"], ev["descriptor"], ev["entries"], ev["statements"], ev["live"],
+                                          files, out["k"], rows, verify, **({} if run is None else {"run": run}))
         out["window"] = why
     ok = out["manifest"] is None and out["window"] is None
     if ok:
@@ -701,12 +703,13 @@ def credit_reason(record: Mapping[str, Any], directory: str | Path, heads: Seque
 
 
 def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Mapping[str, Any], statements: Any,
-                    descriptor: bytes) -> dict[str, Any]:
+                    descriptor: bytes, live: Any = None) -> dict[str, Any]:
     """One window's evidence as core's `credit.window` and `credit.period_credit` read it (`credit.WINDOW_KEYS`), from its
     record (`pouw_h1.CALLS_FILE`: its manifest, salt, round log, draw, its served Commit's record ``commit`` and
     registered ``entries``, every call table and the period's ``b/<K>``), its session's ``out/`` `directory`, its drawn
-    calls' `statements` (`statement`: proof files, never verdicts) and `descriptor`, the bytes of the circuit its period
-    committed (`pouw_h1_served.descriptor`).
+    calls' `statements` (`statement`: proof files, never verdicts), `descriptor`, the bytes of the circuit its period
+    committed (`pouw_h1_served.descriptor`), and `live`, its live Program's evidence (`credit.LIVE_STATEMENTS`: the live
+    descriptor in hex and each round's live@<s> proof files), which credit refuses when absent.
     Round 0's ``requests`` in its round log is the request table's root its open root binds (`salt.window_open_root`).
     ValueError on a record whose served trees or salt can't be read."""
     from verity_vllm.protocol_options import pouw_h1_served as SV
@@ -719,7 +722,7 @@ def window_evidence(record: Mapping[str, Any], directory: str | Path, window: Ma
         raise ValueError(f"the window's served trees or salt can't be read ({e})") from e
     return {"calls": list(record.get("calls") or ()), "commit": c.get("commit"), "descriptor": bytes(descriptor).hex(),
             "draw": c.get("draw"),
-            "entries": list((served or {}).get("entries") or ()), "rounds": c.get("rounds"), "salt": salt,
+            "entries": list((served or {}).get("entries") or ()), "live": live, "rounds": c.get("rounds"), "salt": salt,
             "served": digest, "session": remote.session_files(directory), "statements": list(statements),
             "window": dict(window)}
 

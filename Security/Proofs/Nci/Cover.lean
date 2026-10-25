@@ -18,6 +18,9 @@ import Proofs.Nci.Cover.Sum
 import Proofs.Nci.Cover.Training
 import Proofs.Nci.Cover.Aligned
 import Proofs.Nci.Cover.Checked
+import Proofs.Nci.Cover.Chained
+import Proofs.Nci.Cover.CheckedChained
+import Proofs.Nci.Cover.ChainedWitness
 
 /-!
 # Proofs of the cover theorem
@@ -37,5 +40,8 @@ and their witness (`PartialSumWitness`). `Bits` translates a declaration's gates
 the block of a set of gates, what it computes and what it is handed. `Sum` adds the per-block bounds over a division at
 the NCI policy's rate. `Training` joins them to a declaration that complies with the NCI policy
 (`Models.Nci.Guarantees.CoverTraining`), `Aligned` gives its variant on whole-word activations, and `Checked` carries it
-to a verdict of the NCI check: the gate-level check's, and the check of record's given `DescAgrees`'s open statements.
+to a verdict of the NCI check: the gate-level check's, and the check of record's given `DescAgrees`'s open statement
+(`Novel.ReadsExact`). `Chained` is the same join counting the covering bound's chained multiplication blocks on the reference
+circuit's bits as a declaration (`Models.Nci.Guarantees.CoverChained`), with its witness (`ChainedWitness`), and
+`CheckedChained` carries it to a verdict as `Checked` does.
 -/

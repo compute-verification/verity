@@ -1,7 +1,7 @@
 # Verity
 
 Verity represents AI datacenter computations exactly as Boolean circuits, proves claims about them, and derives
-compute, memory and network accounting from those proofs. `DESIGN.md` has the architecture and the Glossary, whose terms
+compute, memory and network accounting from those proofs. `ARCHITECTURE.md` has the architecture and the Glossary, whose terms
 code, docs and output use. This file states what is true on `main` now: what each directory is, the design rules, and how
 work lands. Each package's contents are in its own README and docstrings. Your checkout, and this file in your prompt, can
 be older than `main` (a cloud VM boots from a snapshot), so when they differ, `git show origin/main:AGENTS.md` wins.
@@ -46,7 +46,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
+- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
   through C-Flock's prover and the Lean verifier.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
@@ -67,6 +67,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
     Daniel's laptop.
   - `nebius/`: the console's units.
+  - `slack-events/`: the Slack events service, a Vercel project (root `infra/slack-events/service`) that routes people's
+    posts and new members through `research msg`'s code. comms owns it.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
@@ -90,6 +92,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
   Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
+- Nothing under `verity/` imports an integration, apart from the sites `KNOWN` lists in
+  `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
 check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
@@ -109,8 +113,8 @@ the standing rulings stated nowhere else.
 
 - **Circuits and values.** A circuit holds only gates. Everything a program or a request brings, every intermediate and
   every output, is a value. A value is committed under a hiding leaf and touched only inside a zero-knowledge proof.
-- **Everything zero-knowledge.** Every protocol is zero-knowledge, PoUS included, with no clear mode. Only four kinds of
-  things are public, each with its reason:
+- **Everything zero-knowledge.** Every protocol is zero-knowledge, PoUS included. Only four kinds of things are public,
+  each with its reason:
   - protocol structure;
   - the protocol's outputs;
   - the verifier's coins and draws;
@@ -119,6 +123,11 @@ the standing rulings stated nowhere else.
   Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
   two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
   provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
+
+  A plain path, C-Flock without `--zk`, stays beside the zero-knowledge ones, for a deployment whose values needn't be
+  hidden (Daniel, 24 Oct). It has to work end to end, every zero-knowledge path keeps working, and tests cover both. Its
+  guarantee is soundness alone, and `flock-verify` refuses a plain session past what the plain theorem covers (one table
+  today).
 - **One proof service.** PoUW, PoUS and network accounting all use one proof service: the workers behind the firewall,
   the challenger, and the verifier.
   - A protocol states what is committed, which units need proofs, the public Program each must pass, and what it does
@@ -171,6 +180,25 @@ the standing rulings stated nowhere else.
 - **Soundness and zero knowledge in Lean; completeness may be Python** (Daniel, 18 Oct). What a guarantee says about a
   cheating prover, soundness and zero knowledge, is proved in Lean or rests on an auditor-trusted device. That honest
   serving passes (completeness: the Commit's gates, pre-flights, other prover-side checks) may be checked in Python.
+- **That a circuit computes what the model computes is completeness, never proved** (Daniel, 24 Oct). Whether a
+  Definition, its silicon semantics included, matches what the served model computes on its hardware decides only whether
+  honest serving passes. No guarantee rests on it (exfiltration security, infiltration security, work soundness), since
+  each is stated about the registered circuit. The developer validates it empirically: circuit-check, the hardware
+  captures, the served outputs. Nobody proves it, lists it as an assumption, or counts it as an open gap in a guarantee.
+- **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
+  values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
+  schedulers, and none enters `verity/`. An integration hands Verity only:
+  - a circuit, partitioned into proof units, with its public layout (which gates are the system's external I/O, such as
+    the network frames the certifiers see), registered by digest;
+  - when the circuit depends on choices made at run time, a registered compiler (itself a circuit, with a public length
+    cap) and the advice it compiles: a bit string Verity never interprets, whose length is charged;
+  - the circuit's values, committed in a `verity.ml.commitments` scheme and registered with the circuit before any coin;
+  - on a draw, the drawn units' openings, to the prover behind the firewall.
+
+  What the circuit means, and how it was built, is the integration's; that it computes what is served is completeness
+  (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
+  so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
+  still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
 
 ## Tests
 
@@ -255,9 +283,10 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   the lock) waits for its Lean check: a `lean-audit` that passed on a commit of `next` at or above it, which drive launches on
   the reviewed prefix's top (`train.sh TOP MACHINES --deferred lean-audit`), and after a failure there on the PR's own commit;
   only a failure at its own commit goes to its owner. Any recorded run whose `lean-audit` passed there counts too. The top
-  stops below a PR that came onto `next` in the last three ticks; a rebuilt `next` with the same PRs at the same heads keeps
-  the check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner,
-  or one its owner withdrew, carries that change and doesn't wait for it.
+  stops below a PR that came onto `next` in the same tick, and while a lower check runs, one at the top starts too when a
+  machine has a free Lean check slot (at most two running). A rebuilt `next` with the same PRs at the same heads keeps the
+  check, and an eject from its prefix rebuilds `next` only once it ends. A PR containing an unmarked PR of the same owner, or
+  one its owner withdrew, carries that change and doesn't wait for it.
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
@@ -277,6 +306,11 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   Lean verifier accepts, for arbitrary Boolean circuits, with no hypothesis on the circuit file or the statement's form.
   The verifier must refuse any form the proof doesn't cover, and it gains no new form ahead of its proof. Circuit inputs
   and outputs are to use one canonical format, proved in general, so a new workload needs no verifier or proof change.
+- **The math is modular** (Daniel, 24 Oct). Each layer of an end-to-end guarantee is proved once, over the guarantee of
+  the layer below as its hypothesis: a session verifier's knowledge soundness for sampling, sampling's for an audit, an
+  audit's for an accounting bound. Every configuration (zero-knowledge, plain, recursive) and every protocol instantiates
+  those theorems. A new configuration adds an instance, not a proof, and a proof that redoes a layer for one
+  configuration is refactored onto the shared one.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
@@ -304,9 +338,10 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
-    until its spec is extracted.
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
+    `Definitions/Flock` holds what has been extracted so far (`Definitions/Flock.lean` lists it): its
+    guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
+    extracted.
   - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
     guarantee statements), properties (statements about the code, reading only the definitions and that code) and
     proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
@@ -321,7 +356,7 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   - an assumption is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, and listed by name in the
     lock with its own record;
   - every file is built, and every declaration is replayed through the kernel.
-- **The lock.** A guarantee (DESIGN.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
+- **The lock.** A guarantee (ARCHITECTURE.md "Glossary") is listed in `lean-audit.json`, and `check.py --update` records its
   statement and every definition the statement reads; those records are the lock.
   - When a changed record lands on `main`, Daniel gets a DM showing it. That DM is the check: nobody signs off and nothing
     waits on it.
@@ -340,7 +375,7 @@ abstractions or procedures. Enforce deterministic requirements in code, with the
 in prose. Remove obsolete rules and machinery rather than accumulating them.
 
 **A decision rolls out in the change that records it.** When Daniel rules, or a PR retires a term, a path or a procedure,
-that PR rewrites every place that states the old way: `git grep` the old phrase across this file, DESIGN.md and its
+that PR rewrites every place that states the old way: `git grep` the old phrase across this file, ARCHITECTURE.md and its
 Glossary, the skills, READMEs, docstrings and CLI help. When code has to change first, the ruling's relay names the
 owner and the PR, and the docs change with that PR. A stale statement found later is fixed on sight, by whoever finds
 it. `tests/test_doc_paths.py` fails on a maintained doc that names a repository path that no longer exists.
@@ -377,7 +412,7 @@ Never print a secret's value.
   issue, filed into the owning team at creation; each lead's subscription to its own team is the wake path, and pickup
   is the issue's state change. Slack carries conversation, broadcasts, alerts and Daniel's cards, never the brief.
 - **This repo** holds code, tests, small fixtures, and maintained current-truth docs only: `README.md`, `AGENTS.md`,
-  `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
+  `ARCHITECTURE.md`, `DESIGN.md`, `DISCREPANCIES.md`, `SKILL.md`, `CHANGELOG.md`, `*.template.md`, and `PROTOCOL.md`.
   - A protocol keeps a `PROTOCOL.md` only while it is experimental. Lean is the source of truth for a mature protocol,
     whose README is an outline, signposts and its core API, and the PR whose Lean covers it deletes the file.
   - `tests/test_repository.py` enforces the file rules: report-genre names, generated output, the 256 KiB cap. Large

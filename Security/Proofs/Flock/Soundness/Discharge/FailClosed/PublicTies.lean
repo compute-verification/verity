@@ -217,7 +217,7 @@ theorem flock_verify_public_ties (zk : Bool) (I : Inputs) (own : Array Flock.Reg
   obtain ⟨spec, sts, hs⟩ : ∃ spec sts, setupOf (if zk then zkInputs I else I) t.record = .ok (spec, sts) := by
     cases zk <;> rcases h with h | h
     · obtain ⟨⟨spec, sts, hs, -⟩, -⟩ := (h : Verifies I t); exact ⟨spec, sts, hs⟩
-    · obtain ⟨⟨spec, sts, hs, -⟩, -⟩ := (h : Verifies I t); exact ⟨spec, sts, hs⟩
+    · obtain ⟨⟨spec, sts, hs, -, -⟩, -⟩ := (h : VerifiesR I own t); exact ⟨spec, sts, hs⟩
     · obtain ⟨⟨spec, sts, hs, -⟩, -⟩ := (h : VerifiesZK I t); exact ⟨spec, sts, hs⟩
     · obtain ⟨⟨spec, sts, hs, -⟩, -⟩ := (h : VerifiesZKR I own t); exact ⟨spec, sts, hs⟩
   obtain ⟨hpos, hall⟩ := ties_of_setupOf hs

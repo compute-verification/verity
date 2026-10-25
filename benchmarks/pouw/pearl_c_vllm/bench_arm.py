@@ -223,9 +223,9 @@ class PearlCArm:
             seen.add(tuple(W.shape))
             for m in (16, 64):
                 x = torch.randn(m, W.shape[1], device=W.device, generator=gen).to(torch.bfloat16)
-                commits, served = [], None
+                commits, served, at = [], None, run.epoch_calls()
                 for omit in ((), (), ("hash_leaf",)):
-                    run.begin()
+                    run.begin(at=at)
                     run.poison()
                     run.omit = frozenset(omit)
                     y = run.gemm(w, x, W, None)

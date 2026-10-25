@@ -36,9 +36,10 @@ the serial capture's.
 With ``whole_defer_a`` too, where the kernel's pipeline splits A's commitment (``rows_a``, then ``tree_seed_a``, A's tree;
 `pouw_pearl_c_lanes`' ``deferred-a`` split, with no padding rows' E_A lines), a whole capture forks each call's A tree
 after its per-row keying onto a tree stream of the run's own, beside the call's forming and GEMM, which read nothing the
-tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps, whose scatter copies
-A's root to the pass, and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a
-call of its shape joins that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
+tree writes.  What reads A's root or tree waits for it first (`_tree_joined`): the call's side steps' scatter, which copies
+A's root to the pass (the tile hashing before it reads nothing the tree writes, and runs beside it: `TILES_BESIDE_TREE`),
+and a retained capture's copy of A's tree to its stage; and so a call joining the side steps of a call of its shape joins
+that call's tree too.  The forward's last call joins the tree stream before vLLM's capture ends.
 With ``whole_tree_sm`` too, the call's GEMMs beside its tree launch one persistent CTA fewer (the pipeline's ``beside``),
 since the tree's CTA holds an SM whole and a GEMM CTA left without one would start only when the tree ends; each tile is
 computed as before, by another CTA.
@@ -59,6 +60,7 @@ from typing import Any
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 
+from .pouw_pass import call_index
 from .pouw_pearl_c_host import _bytes, _event, _Lane, _write, _zeros, torch_uint8
 from .pouw_pearl_c_screen import excluded, scatter_into
 
@@ -70,6 +72,12 @@ GRAPH_ROWS = 256
 SLOT_BYTES = 176
 #: a lane graph's slot (`_lane_graph`): dom_a ‖ unit padded to `SLOT_BYTES`, then the call's three offsets
 LANE_SLOT_BYTES = SLOT_BYTES + 24
+#: a deferred-a whole capture's side steps join the A trees forked so far only before the scatter, the one step that reads
+#: A's root, so a call's tile hashing (it reads C~ and U alone) runs beside its A tree, PD_G tiles a CTA (the pipeline's
+#: ``tiles_group``) so that its CTAs leave pd_commit's and pd_tree's whole SMs free (beside the tree a CTA a tile, and
+#: grouped after it, each lost: r20261025-015411-7d73, r20261025-020344-e838).  False joins them first (e8ea036243's
+#: PEARLC_TILES_BESIDE_TREE=0 arm)
+TILES_BESIDE_TREE = True
 
 
 def _capturing() -> bool:
@@ -122,10 +130,12 @@ class WholeCall:
 
 @dataclass(frozen=True)
 class _Slots:
-    """A forward's slots, for `calls` from the pass's counters `at` (matmuls, tiles, screened rows): each call's keys and
-    offsets by its weight's slot position (``pos``), each weight's prediction as `_slot` reads it, and the counters after."""
+    """A forward's slots, for `calls` from the pass's counters `at` (matmuls, tiles, screened rows) in the pass whose first
+    call has index `base`: each call's keys and offsets by its weight's slot position (``pos``), each weight's prediction as
+    `_slot` reads it, and the counters after."""
     calls: tuple[WholeCall, ...]
     at: tuple[int, int, int]
+    base: int
     pos: Any
     keys: Any
     offs: Any
@@ -283,7 +293,8 @@ class GraphCalls:
 
     def _slots(self, calls: tuple[WholeCall, ...], at: tuple[int, int, int]) -> _Slots:
         import numpy as np
-        index, tiles_at, flags_at = at
+        base = self.cur.base
+        index, tiles_at, flags_at = base + at[0], at[1], at[2]
         offs, predicted = np.empty((len(calls), 3), np.int64), {}
         for i, c in enumerate(calls):
             offs[i] = self._offsets(index + i, tiles_at, flags_at)
@@ -292,17 +303,18 @@ class GraphCalls:
             flags_at += c.m
         keys = np.frombuffer(b"".join(self.keys(self.roots[c.w], index + i, c.m16) for i, c in enumerate(calls)), np.uint8)
         pos = np.fromiter((self.order[c.w] for c in calls), np.intp, len(calls))
-        return _Slots(calls, at, pos, keys.reshape(len(calls), -1), offs, predicted, (index + len(calls), tiles_at, flags_at))
+        return _Slots(calls, at, base, pos, keys.reshape(len(calls), -1), offs, predicted, (at[0] + len(calls), tiles_at, flags_at))
 
     def whole_replay(self, calls: tuple[WholeCall, ...]) -> bool:
         """Before vLLM replays a forward captured whole, with hashing: every call's keys and offsets (its index, and the
         pass's running tiles and screened rows) into its weight's slot, in one upload on the replaying stream.  Returns
         whether `whole_replayed` had staged them, for these calls from where the pass is."""
         cur = self.cur
+        call_index(self, len(calls))
         if not self.hashing or not calls:
             return False
         at, s = (len(cur.matmuls), cur.tiles, cur.flag_rows), self._next
-        staged = s is not None and s.calls is calls and s.at == at
+        staged = s is not None and s.calls is calls and s.at == at and s.base == cur.base
         if not staged:
             s = self._slots(calls, at)
         if s.after[1] > self.capacity or self.nb * s.after[0] > len(self.roots_buf) or s.after[2] > len(self.flag_buf):
@@ -323,7 +335,8 @@ class GraphCalls:
         """After vLLM launches its replay of a forward captured whole: each call's matmul, and with hashing its tiles and
         rows, appended to the pass, as `_after` appends them for a call made alone; in a retained pass, each call's record and
         files; and with hashing, the next forward's slots for the same calls, staged while the GPU runs this one."""
-        cur, index = self.cur, len(self.cur.matmuls)
+        cur = self.cur
+        index = cur.base + len(cur.matmuls)
         cur.matmuls.extend(Matmul(index + i, Shape(c.m16, c.k, c.n), c.w) for i, c in enumerate(calls))
         if not self.hashing or not calls:
             return
@@ -457,8 +470,9 @@ class GraphCalls:
         g.execs = (g.graph.raw_cuda_graph_exec(), g.tree.raw_cuda_graph_exec() if g.tree else 0, g.side.raw_cuda_graph_exec())
 
     def _offsets(self, index: int, tiles_at: int, flags_at: int) -> tuple[int, int, int]:
-        """A call's byte offsets in the pass's buffers: its leaves, its flags, its A root."""
-        return self.nb * tiles_at, 2 * flags_at, self.nb * index
+        """Call `index`'s byte offsets in the pass's buffers: its leaves, its flags, its A root (at its position in the pass,
+        the index past the pass's base)."""
+        return self.nb * tiles_at, 2 * flags_at, self.nb * (index - self.cur.base)
 
     def _slot(self, w: int, index: int, m16: int, m: int, stream: Any) -> None:
         """The call's keys and offsets in its weight's slot, which its graph reads.  At a forward's first weight, every
@@ -582,7 +596,11 @@ class GraphCalls:
                             g.steps[i]()
                 finally:
                     pipe.beside = 0
-                self._fork(sh, g.steps[b:], raw)
+                pipe.tiles_group = t is not None and TILES_BESIDE_TREE
+                try:
+                    self._fork(sh, g.steps[b:], raw)
+                finally:
+                    pipe.tiles_group = False
                 if len(self._whole) == len(self.order):
                     self._join()
                     self._join_tree()
@@ -638,17 +656,21 @@ class GraphCalls:
         self._tree_open = False
 
     def _fork(self, sh: Any, steps: list, raw: int) -> None:
-        """`steps` on the side stream, after everything the capturing stream has launched so far and the A trees forked so far
-        (the scatter copies A's root), with torch's current stream the side's too (the scatter is a Triton launch); the next
-        `_join` makes the capturing stream wait for them."""
+        """`steps` on the side stream, after everything the capturing stream has launched so far, the last (with hashing, the
+        scatter, which copies A's root) after the A trees forked so far too (`TILES_BESIDE_TREE`), with torch's current stream
+        the side's too (the scatter is a Triton launch); the next `_join` makes the capturing stream wait for them."""
         import torch
         side = self._side_stream
         side.wait_stream(torch.cuda.current_stream(self.device))
-        self._tree_joined(side)
+        cut = len(steps) - 1 if TILES_BESIDE_TREE and self.hashing and steps else 0
+        if not cut:
+            self._tree_joined(side)
         self.kernel.dev.stream = side.cuda_stream
         try:
             with torch.cuda.stream(side):
-                for f in steps:
+                for i, f in enumerate(steps):
+                    if cut and i == cut:
+                        self._tree_joined(side)
                     f()
         finally:
             self.kernel.dev.stream = raw

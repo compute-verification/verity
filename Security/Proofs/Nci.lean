@@ -11,6 +11,7 @@ import Proofs.Nci.Threads
 import Proofs.Nci.Layered
 import Proofs.Nci.Contained
 import Proofs.Nci.Fit
+import Proofs.Nci.FitKeep
 import Proofs.Nci.FitSlotsWitness
 import Proofs.Nci.WeightsSlotsWitness
 import Proofs.Nci.FitRate
@@ -25,11 +26,14 @@ import Proofs.Nci.Packed
 import Proofs.Nci.PackedTraining
 import Proofs.Nci.Remote
 import Proofs.Nci.Verdict
+import Proofs.Nci.DescVerdict
 import Proofs.Nci.Activations
 import Proofs.Nci.Covering
 import Proofs.Nci.CoveringWitness
 import Proofs.Nci.CoveringTwoCosts
 import Proofs.Nci.CoveringTwoCostsWitness
+import Proofs.Nci.CoveringPriced
+import Proofs.Nci.CoveringPricedWitness
 import Proofs.Nci.Cover
 
 /-!

@@ -182,32 +182,43 @@ theorem sumFPar_eq (b n : Nat) (f : Nat → F128) : sumFPar b n f = sumF n f := 
   dsimp only
   rw [hp, ← sumF_blocks, ← sumF_add, Nat.add_sub_cancel' (Nat.mul_div_le n b)]
 
-/-- **Byte `j`'s buckets**: entry `b < 256` is `Σ_{y < |e|, byte_j(g[y]) = b} e[y]` (`byteBuckets_go`). The term comes
-first for the reason `sumFFast`'s does: sixteen tasks read `e`. -/
-def byteBuckets (g e : Array F128) (j : Nat) : Array F128 :=
-  foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 e.size (Array.replicate 256 0)
+theorem foldRange_succ_at {α : Type} (f : α → Nat → α) (lo n : Nat) (acc : α) :
+    foldRange f lo (n + 1) acc = f (foldRange f lo n acc) (lo + n) := by
+  rw [foldRange_eq, foldRange_eq, List.range'_1_concat, List.foldl_append]
+  rfl
 
-/-- After the first `n` words, the buckets' sum over the bytes with bit `i` set is `Σ_{y < n} bit_{8j+i}(g[y])·e[y]`. -/
-theorem byteBuckets_go (g e : Array F128) (j : Nat) {i : Nat} (hj : j < 16) (hi : i < 8) : ∀ n : Nat,
-    (foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0)).size = 256 ∧
-    (sumF 256 fun b => if b.testBit i then
-      (foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0))[b]! else 0) =
-      sumF n fun y => if (g[y]!).bit (8 * j + i) then e[y]! else 0
+/-- `e + a`, kept out of line: `B.modify k (addTo e)` then hands it the entry with no other reference, so the sum
+reuses the entry's cell; inlined, the entry is still in `B` when the sum is built, and every update allocates. -/
+@[noinline] def addTo (e a : F128) : F128 := e + a
+
+/-- **Byte `j`'s buckets** of the words `lo, …, lo + n − 1`: entry `b < 256` is
+`Σ_{y, byte_j(g[lo + y]) = b} e[lo + y]` (`byteBuckets_go`). -/
+def byteBuckets (g e : Array F128) (j lo n : Nat) : Array F128 :=
+  foldRange (fun B y => B.modify ((g[y]!).byte j) (addTo e[y]!)) lo n (Array.replicate 256 0)
+
+/-- After `n` words from `lo`, the buckets' sum over the bytes with bit `i` set is
+`Σ_{y < n} bit_{8j+i}(g[lo + y])·e[lo + y]`. -/
+theorem byteBuckets_go (g e : Array F128) (j lo : Nat) {i : Nat} (hj : j < 16) (hi : i < 8) : ∀ n : Nat,
+    (byteBuckets g e j lo n).size = 256 ∧
+    (sumF 256 fun b => if b.testBit i then (byteBuckets g e j lo n)[b]! else 0) =
+      sumF n fun y => if (g[lo + y]!).bit (8 * j + i) then e[lo + y]! else 0
   | 0 => by
-    refine ⟨by simp [foldRange], ?_⟩
+    refine ⟨by simp [byteBuckets, foldRange], ?_⟩
     rw [sumF_zero]
     apply sumF_eq_zero
     intro b hb
-    simp only [foldRange]
+    simp only [byteBuckets, foldRange]
     split
     · rw [getElem!_eq _ (by simpa using hb)]; simp
     · rfl
   | n + 1 => by
-    obtain ⟨hs, ih⟩ := byteBuckets_go g e j hj hi n
-    rw [foldRange_succ]
-    generalize foldRange (fun B y => B.modify ((g[y]!).byte j) (e[y]! + ·)) 0 n (Array.replicate 256 0) = B at hs ih ⊢
+    obtain ⟨hs, ih⟩ := byteBuckets_go g e j lo hj hi n
+    unfold byteBuckets at hs ih ⊢
+    rw [foldRange_succ_at]
+    generalize foldRange (fun B y => B.modify ((g[y]!).byte j) (addTo e[y]!)) lo n (Array.replicate 256 0) = B
+      at hs ih ⊢
     refine ⟨by rw [Array.size_modify, hs], ?_⟩
-    have hk := (g[n]!).byte_lt j
+    have hk := (g[lo + n]!).byte_lt j
     rw [sumF_succ n, ← ih, ← F128.testBit_byte _ hj hi]
     apply sumF_update _ hk
     · rw [getElem!_eq (B.modify _ _) (by rw [Array.size_modify, hs]; exact hk), getElem!_eq B (by rw [hs]; exact hk),
@@ -482,19 +493,15 @@ def sendMsg (m : F256 × F256) : LP M Unit := do
   liftT (liftTM (absorbK m.1))
   liftT (liftTM (absorbK m.2))
 
-/-- A grinding nonce from the tape onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message. -/
-def powP (nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
+/-- A grinding nonce onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message: `0`, the only one the
+verifier accepts (R4), so the tape's nonces are unread. -/
+def powP (_nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
   let st ← get
-  let i := match kind with
-    | 0 => st.qn.size
-    | 1 => st.cn.size
-    | _ => st.cbn.size
-  let v := nonce kind i
   set (match kind with
-    | 0 => { st with qn := st.qn.push v }
-    | 1 => { st with cn := st.cn.push v }
-    | _ => { st with cbn := st.cbn.push v })
-  liftT (liftTM (pow v))
+    | 0 => { st with qn := st.qn.push 0 }
+    | 1 => { st with cn := st.cn.push 0 }
+    | _ => { st with cbn := st.cbn.push 0 })
+  liftT (liftTM (pow 0))
 
 /-- A challenge: fold the table and the weight at it; then the next message, after splitting when `split`. -/
 def challengeP (io : Asks M) (split : Bool) : LP M F256 := do

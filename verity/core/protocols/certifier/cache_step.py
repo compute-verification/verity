@@ -47,7 +47,10 @@ An admitting candidate's call (nins = 0) derives the longest cached prefix. The 
 prefix less the candidate's shortfall (0 while the bound holds, advice v1's sent one past it). A second call, from
 the hit's trail entry, computes the units the row completes. r is the row's I1 request number. The replay's state chain
 (`replay_chain`) carries the table in its state row, and `ReplayStep_v1` carries each running slot's pfx.
-N = num_gpu_blocks − 1 holds every unit computed while the bound holds. Past it, N is the session's units.
+N = num_gpu_blocks − 1 holds every unit computed while the bound holds. Past it, N is the session's units. The compile
+slice, inside the bound, runs an engine step's calls by `build_scan_step` (`scan_step` its reference) on
+ReplayStep_v1's wires and the requests' certified tokens, with the table and the slots' pfx in a cache row
+(`cache_fields`) carried beside the state row from the empty one.
 
 **Cost** (`size`): a unit costs about N·(2·(U·TW + EW) + 2·RW) ANDs. That is a comparison against every entry and a
 masked write to every entry. A call costs KU units plus its range checks: 5,856 ANDs at (N, U, TW, RW, L) =
@@ -407,5 +410,276 @@ def size(**st_) -> dict[str, int]:
             "ands": Z.KU * p["CacheUnit"] + p["CacheStepEnd"]}
 
 
-__all__ = ["CacheStep", "CacheStepEnd", "CacheUnit", "Entry", "Out", "PARTS", "Row", "STATICS", "arguments", "decode",
-           "evaluate", "reference", "size", "sources", "statics", "unit", "widths"]
+# --- the composition: an engine step's calls (the compile slice's) ---------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Cache:
+    """The cache between engine steps: the table, and per running slot the walk's entry (its request's last complete
+    unit, ROOT before the first; 0 for an empty slot)."""
+
+    table: tuple[Entry, ...] = ()
+    pfx: tuple[int, ...] = ()
+
+
+def scan_widths(X) -> SimpleNamespace:
+    """The calls' classes at an engine step, on the slice's statics X: ReplayStep_v1's R, W, A, the engine's B, T and
+    IW, and CN entries, CTW a token id's width and CU the units of each arrival's tokens the slice holds. A lookup walks
+    a request's first KL = min(CN + 1, CU) units from ROOT (no walk from ROOT matches more than CN, since every entry's
+    parent is an earlier one); a compute walks the KC = ⌊(B − 1 + T) / B⌋ units a row of at most T tokens can complete."""
+    KL, KC = min(X.CN + 1, X.CU), (X.B - 1 + X.T) // X.B
+    look = SimpleNamespace(**statics(X.CN, X.B, X.CTW, X.IW, KL * X.B))
+    comp = SimpleNamespace(**statics(X.CN, X.B, X.CTW, X.IW, KC * X.B))
+    return SimpleNamespace(KL=KL, KC=KC, look=look, comp=comp, EW=_bitlen(X.CN), UW=X.B * X.CTW, LB=X.B.bit_length() - 1)
+
+
+def cache_fields(X) -> list[tuple[str, int, int]]:
+    """A cache row: the table (CN entries: valid, parent, the unit's tokens, owner) and the R running slots' entries."""
+    Y = scan_widths(X)
+    return [("valid", X.CN, 1), ("parent", X.CN, Y.EW), ("tok", X.CN, Y.UW), ("owner", X.CN, X.IW), ("pfx", X.R, Y.EW)]
+
+
+def cache_width(X) -> int:
+    return sum(n * w for _, n, w in cache_fields(X))
+
+
+def encode_cache(X, c: Cache) -> list[int]:
+    if len(c.table) > X.CN or len(c.pfx) > X.R:
+        raise ValueError("the cache exceeds the size class")
+    ents = list(c.table) + [Entry(0, (0,) * X.B, 0)] * (X.CN - len(c.table))
+    vals = {"valid": [int(e < len(c.table)) for e in range(X.CN)], "parent": [x.parent for x in ents],
+            "tok": [sum(t << (X.CTW * k) for k, t in enumerate(x.tokens)) for x in ents], "owner": [x.owner for x in ents],
+            "pfx": list(c.pfx) + [0] * (X.R - len(c.pfx))}
+    return [b for name, _n, w in cache_fields(X) for v in vals[name] for b in _bits(v, w)]
+
+
+def decode_cache(X, bits: Sequence[int], running: int) -> Cache:
+    """A cache row as `Cache`, its first `running` slots' entries; ValueError unless the valid entries are a prefix and
+    every other entry and slot is zero."""
+    at, vals = 0, {}
+    for name, n, w in cache_fields(X):
+        vals[name] = [sum(int(bits[at + e * w + b]) << b for b in range(w)) for e in range(n)]
+        at += n * w
+    m = sum(vals["valid"])
+    if vals["valid"] != [1] * m + [0] * (X.CN - m) or any(vals[k][e] for k in ("parent", "tok", "owner")
+                                                        for e in range(m, X.CN)) or any(vals["pfx"][running:]):
+        raise ValueError("a cache row whose valid entries aren't a prefix, or with an unused entry or slot not zero")
+    mask = (1 << X.CTW) - 1
+    table = tuple(Entry(vals["parent"][e], tuple((vals["tok"][e] >> (X.CTW * k)) & mask for k in range(X.B)),
+                        vals["owner"][e]) for e in range(m))
+    return Cache(table, tuple(vals["pfx"][:running]))
+
+
+def units_of(X, tokens: Sequence[int]) -> tuple[tuple[int, ...], ...]:
+    """A request's first CU units, zero past its tokens."""
+    t = (list(tokens) + [0] * (X.CU * X.B))[:X.CU * X.B]
+    return tuple(tuple(t[k * X.B:(k + 1) * X.B]) for k in range(X.CU))
+
+
+def candidates(X, st, inp) -> list[tuple[int, int] | None]:
+    """ReplayStep_v1's candidates (W waiting slots, then A arrivals; when the engine is quiet the first arrival is
+    waiting slot 0) as (request, known tokens P + out), None for an empty one."""
+    arr = [(a.id, a.P) for a in inp.arrivals]
+    wait = [(r.id, r.P + r.out) for r in st.waiting]
+    if not st.running and not st.waiting and arr:
+        wait, arr = arr[:1], arr[1:]
+    return (wait + [None] * X.W)[:X.W] + (arr + [None] * X.A)[:X.A]
+
+
+def longest(S, table: Sequence[Entry], units: Sequence[Sequence[int]], K: int) -> tuple[int, int]:
+    """The longest cached prefix a lookup may take (each unit (j + 1)·U < K), in units, and the walk's entry after it."""
+    index = {(x.parent, x.tokens): e for e, x in enumerate(table)}
+    pfx, j = S.N, 0
+    while j < len(units) and (j + 1) * S.U < K and (pfx, tuple(units[j])) in index:
+        pfx, j = index[(pfx, tuple(units[j]))], j + 1
+    return j, pfx
+
+
+def scan_step(X, cache: Cache, st, inp, out, tokens: dict[int, Sequence[int]], *, derive: bool = False):
+    """The cache through one engine step: ReplayStep_v1's state `st`, inputs `inp` and output `out` (its rows at their
+    slots), the requests' certified `tokens`. Slot by slot, an admitted row (at a slot no request ran in) first looks
+    its candidate's hit up from ROOT on its first KL units at the table so far, and every row computes the units it
+    completes from its walk's entry; then the first candidate left unadmitted looks its hit up at the step's last table.
+    The running slots' next entries follow ReplayStep_v1's next state by request.
+
+    With `derive`, each lookup finds the `longest` prefix (the hits a prover runs, `hits`) and the row computes from
+    the walk's entry after the row's own hit, where the two agree; else it checks `inp.hit` by `reference`, and None
+    refuses: a lookup or a compute that `reference` refuses, a hit not inside the lookup's
+    window, a row whose request isn't among the candidates or `tokens`, or a row reaching past CU units."""
+    Y = scan_widths(X)
+    table, pfx = tuple(cache.table), list(cache.pfx) + [0] * X.R
+    cands = candidates(X, st, inp)
+    rows = {r[0]: r[1:] for r in out.rows}
+    hits, admitted, after = [0] * (X.W + X.A), set(), {}
+
+    def lookup(c: int, units) -> int | None:
+        rid, K = cands[c]
+        h = inp.hit[c] if c < len(inp.hit) else 0
+        if derive:
+            hits[c] = longest(Y.look, table, units[:Y.KL], K)[0]
+            return longest(Y.look, table, units[:min(h, hits[c])], K)[1] if hits[c] < Y.KL else None
+        got = reference(Y.look, table, Row(rid, units[:Y.KL], admit=True, K=K, wh=h)) if h < Y.KL else Out(False)
+        return got.pfx if got.ok else None
+
+    for p in range(X.R):
+        if p not in rows:
+            if p < len(st.running):
+                after[st.running[p].id] = pfx[p]
+            continue
+        rid, _kind, start, n = rows[p]
+        if rid not in tokens:
+            return None
+        units = units_of(X, tokens[rid])
+        w = pfx[p]
+        if p >= len(st.running):
+            c = next((c for c, x in enumerate(cands) if x is not None and x[0] == rid), None)
+            w = None if c is None else lookup(c, units)
+            if w is None:
+                return None
+            admitted.add(rid)
+        u0, end = start >> Y.LB, (start + n) >> Y.LB
+        if end > X.CU:
+            return None
+        got = reference(Y.comp, table, Row(rid, (units + ((0,) * X.B,) * Y.KC)[u0:u0 + Y.KC], pfx=w, nins=end - u0))
+        if not got.ok:
+            return None
+        table, after[rid] = got.table, got.pfx
+    rest = [c for c, x in enumerate(cands) if x is not None and x[0] not in admitted]
+    if rest and (cands[rest[0]][0] not in tokens or lookup(rest[0], units_of(X, tokens[cands[rest[0]][0]])) is None):
+        return None
+    if any(r.id not in after for r in out.state.running):
+        return None
+    return SimpleNamespace(cache=Cache(table, tuple(after[r.id] for r in out.state.running)), hits=tuple(hits))
+
+
+def _first(C, m):
+    """The first set bit of `m`, one-hot."""
+    out, seen = [], ZERO
+    for x in m:
+        out.append(C.AND(x, seen.inv()))
+        seen = x ^ seen ^ C.AND(x, seen)
+    return out
+
+
+def _pick(C, sel, items):
+    """The item a one-hot `sel` picks (zero for none): an XOR of the masked items, free beyond the masks."""
+    acc = [ZERO] * len(items[0])
+    for s, x in zip(sel, items):
+        acc = [a ^ b for a, b in zip(acc, _sel(C, s, x))]
+    return acc
+
+
+def _clamp(C, x, w):
+    """x saturated to w bits (all ones past them)."""
+    hi = or_reduce(C, x[w:])
+    return [b ^ hi ^ C.AND(b, hi) for b in _pad(x, w)]
+
+
+def _call(C, S, table, pfx, r, flags, K, wh, nins, units):
+    """One CacheStep_v1 call traced inline, its units unrolled (their index a constant): (ok, table', pfx')."""
+    Z = widths(S)
+    carry = list(table) + [ONE] + list(pfx) + const_bits(0, Z.HW + 1)
+    for u in units:
+        carry = _build_unit(C, S, carry, u, r, flags, K, wh, nins)[0]
+    fin = _unpack(_carry_layout(S), carry)
+    ok = _build_end(C, S, fin["ok"], wh, nins)[0]
+    return ok, fin["valid"] + fin["parent"] + fin["tok"] + fin["owner"], fin["pfx"]
+
+
+def build_scan_step(C, X, cache, st, fa, forced, out, hit, cert):
+    """`scan_step` as a circuit: (ok, the next cache row). `cache` is the cache row's bits; `st`, `fa` and `out` are
+    ReplayStep_v1's state, arrival and output fields (each a list of elements); `forced` its quiet step's arrival bit;
+    `hit` the W + A hits it reads; `cert` the certified arrivals' (valid, id) and tokens: {"valid", "id", "tok"}, tok[k]
+    the CU units of slot k. The table moves through the calls; the lookups (nins = 0) write nothing."""
+    Y = scan_widths(X)
+    Zl, Zc = widths(Y.look), widths(Y.comp)
+    LW = len(fa["arr_P"][0])
+    cur = {}
+    at = 0
+    for name, n, w in cache_fields(X):
+        cur[name] = [cache[at + e * w:at + (e + 1) * w] for e in range(n)]
+        at += n * w
+    table = [x for name in ("valid", "parent", "tok", "owner") for e in cur[name] for x in e]
+
+    def arrival(a):
+        if a >= X.A:
+            return ZERO, [ZERO] * X.IW, [ZERO] * (LW + 1)
+        return fa["arr_valid"][a][0], fa["arr_id"][a], _pad(fa["arr_P"][a], LW + 1)
+
+    cands = []
+    for c in range(X.W):
+        v, i, k = st["wait_valid"][c][0], st["wait_id"][c], add(C, st["wait_P"][c], st["wait_out"][c], width=LW + 1)
+        if c == 0:
+            av, ai, ak = arrival(0)
+            v, i, k = v ^ forced, mux(C, forced, ai, i), mux(C, forced, ak, k)
+        cands.append((v, i, k))
+    for a in range(X.A):
+        (v0, i0, k0), (v1, i1, k1) = arrival(a), arrival(a + 1)
+        cands.append((mux(C, forced, [v1], [v0])[0], mux(C, forced, i1, i0), mux(C, forced, k1, k0)))
+
+    def tokens_of(rid):
+        m = [C.AND(cert["valid"][k], _eq(C, cert["id"][k], rid)) for k in range(len(cert["tok"]))]
+        sel = _first(C, m)
+        return or_reduce(C, m), [_pick(C, sel, [t[u] for t in cert["tok"]]) for u in range(X.CU)]
+
+    def look(sel, rid, units):
+        h, K = _pick(C, sel, hit), _pick(C, sel, [k for _v, _i, k in cands])
+        wh = h[:Zl.HW]
+        inside = C.AND(or_reduce(C, h[Zl.HW:]).inv(), _lt(C, wh, const_bits(Y.KL, Zl.HW + 1)))
+        ok, _t, w = _call(C, Y.look, table, [ZERO] * Y.EW, rid, [ONE, ZERO], _clamp(C, K, Zl.LW), wh, [ZERO] * Zl.HW,
+                          units[:Y.KL])
+        return C.AND(inside, ok), w
+
+    oks, adm, after = [], [], []
+    for p in range(X.R):
+        rv, rid, run_v = out["row_valid"][p][0], out["row_id"][p], st["run_valid"][p][0]
+        start, n = out["row_start"][p], out["row_n"][p]
+        a = C.AND(rv, run_v.inv())
+        m = [C.AND(v, _eq(C, i, rid)) for v, i, _k in cands]
+        found, units = tokens_of(rid)
+        l_ok, l_pfx = look(_first(C, m), rid, units)
+        oks.append(C.AND(a, C.AND(or_reduce(C, m), l_ok).inv()).inv())
+        u0 = start[Y.LB:]
+        end = add(C, start, n, width=LW + 1)[Y.LB:]
+        d = sub(C, end, u0, len(end))[0]
+        nins = [C.AND(rv, b) for b in d[:Zc.HW]]
+        fits = and_reduce(C, [found, or_reduce(C, d[Zc.HW:]).inv(), _lt(C, const_bits(X.CU, len(end)), end).inv()])
+        oks.append(C.AND(rv, fits.inv()).inv())
+        w = mux(C, a, l_pfx, cur["pfx"][p])
+        c_units = _front(C, units, u0[:_bitlen(X.CU)], Y.KC)
+        c_ok, table, c_pfx = _call(C, Y.comp, table, w, rid, [ZERO, ZERO], [ZERO] * Zc.LW, [ZERO] * Zc.HW, nins, c_units)
+        oks.append(c_ok)
+        adm.append((a, rid))
+        after.append((rv ^ run_v ^ C.AND(rv, run_v), mux(C, rv, rid, st["run_id"][p]), mux(C, rv, c_pfx, cur["pfx"][p])))
+
+    left = [C.AND(v, or_reduce(C, [C.AND(x, _eq(C, i, rid)) for x, rid in adm]).inv()) for v, i, _k in cands]
+    sel = _first(C, left)
+    rid = _pick(C, sel, [i for _v, i, _k in cands])
+    found, units = tokens_of(rid)
+    l_ok, _w = look(sel, rid, units)
+    oks.append(C.AND(or_reduce(C, left), C.AND(found, l_ok).inv()).inv())
+
+    nxt = []
+    for q in range(X.R):
+        qv, qid = out["run_valid"][q][0], out["run_id"][q]
+        m = [C.AND(v, _eq(C, i, qid)) for v, i, _w in after]
+        oks.append(C.AND(qv, or_reduce(C, m).inv()).inv())
+        nxt += _sel(C, qv, _pick(C, _first(C, m), [w for _v, _i, w in after]))
+    return and_reduce(C, oks), table + nxt
+
+
+def _front(C, xs, amt, n):
+    """xs[amt:amt + n], zero entries past the end (`replay_chain._front`'s shifter; importing that module would make
+    this one read the sampled-proofs package)."""
+    zero = [ZERO] * len(xs[0])
+    cur = [list(e) for e in xs]
+    for j in reversed(range(len(amt))):
+        d = 1 << j
+        cur = [mux(C, amt[j], cur[k + d] if k + d < len(cur) else zero, cur[k]) for k in range(min(n + d - 1, len(cur)))]
+    return (cur + [zero] * n)[:n]
+
+
+__all__ = ["Cache", "CacheStep", "CacheStepEnd", "CacheUnit", "Entry", "Out", "PARTS", "Row", "STATICS", "arguments",
+           "build_scan_step", "cache_fields", "cache_width", "candidates", "decode", "decode_cache", "encode_cache",
+           "evaluate", "longest", "reference", "scan_step", "scan_widths", "size", "sources", "statics", "unit",
+           "units_of", "widths"]

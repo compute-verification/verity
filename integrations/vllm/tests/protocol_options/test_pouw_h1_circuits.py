@@ -83,6 +83,7 @@ def test_the_period_open_commits_each_stratums_circuit_file_sha512(program, tmp_
     argv = RH.period_open_argv("vllm-h1-p", 1, _sha(raw), 2, None, doc["files"])
     assert argv[:9] == ["period-open", "--name", "vllm-h1-p", "--cap", "1", "--circuit", _sha(raw), "--draw-k", "2"]
     assert _auditor(monkeypatch).circuit_files_of(argv[argv.index("--circuit-files") + 1]) == files
+    assert _auditor(monkeypatch).length_of(argv[argv.index("--length") + 1]) == RH.fill_length()
     ledger = CH.Ledger(tmp_path / "windows.jsonl", 1)
     ledger.period_open("vllm-h1-p", circuit=_sha(raw), draw_k=2, circuit_files=files)
     assert json.loads(ledger.lines[0])["body"]["circuit_files"] == files

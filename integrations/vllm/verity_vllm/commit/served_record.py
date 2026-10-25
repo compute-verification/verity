@@ -8,8 +8,9 @@ attached keeps each step's rows (`Row`: the runner's request id, its token rows 
 its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
-- ``inputs``: position p -> the committed input id at p (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on
-  the eager one), every row that computed p; a recompute must commit the same id again;
+- ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
+  the compiled path or ``model.embed_tokens/in`` on the eager one), every row that computed p; a recompute must commit the
+  same id again;
 - ``sampled``: position p -> the committed id sampled from p's logits, the token at p + 1, for every row whose last position
   reaches its prefill length (Model Runner V2 samples every row and drops a partial prefill's; those are ``discarded``);
 - ``seeds``, ``rows``, the prefix-cache hit (a first row starting past 0) and the preemptions (a row starting before the
@@ -18,7 +19,9 @@ reads a finished window back from the committed bytes into one `RequestRecord` p
 `RequestRecord.check` holds that to the streamed I/O: with t = prompt ids + streamed ids, P prompt ids and K streamed,
 the committed inputs at every position in [hit, P + K - 1) are t's, the committed samples at every position in
 [P - 1, P + K - 1) are the next of t's, every seed is the one the request carried (the client's, or the served default,
-`engine.served_seed`), and a cached prefix [0, hit) is some other request's committed inputs. Rows past the finish
+`engine.served_seed`), and a cached prefix [0, hit) is other requests' committed inputs, each committed no later than the
+request's first row by a request whose committed ids agree with t up to there (`RequestRecord.prefix_cover`: a turn's
+prefix can be its first turn's prompt and its previous turn's suffix). Rows past the finish
 (positions from P + K - 1 on) are ``overrun``: computed and committed, never streamed, each input there the previous
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
 cut short can't pass with its missing ids taken for an overrun.
@@ -33,9 +36,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 SCHEMA = "verity-vllm/served-record/v1"
-#: The embedding's input ids, by execution: the compiled path's name, then the eager path's (`NativeHostCommitter`'s
-#: ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
-IDS_NAMES = ("c00.input/ids", "model.embed_tokens/in")
+#: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
+PORT_NAMES = ("step.input/ids", "step.input/positions")
+#: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager
+#: path's (`NativeHostCommitter`'s ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
+IDS_NAMES = (PORT_NAMES[0], "c00.input/ids", "model.embed_tokens/in")
 SAMPLED = "runner.sampler/sampled_token_ids"
 #: Each sampled row's seed and the position its draw read, one i64 a row (`SamplerInputsSource`).
 SAMPLER_INPUTS = ("runner.sampler/seed", "runner.sampler/pos")
@@ -126,6 +131,64 @@ class SamplerInputsSource:
                                for i in range(n)]
 
 
+class StepInputPort:
+    """The committer source that starts every step's stream with the step-input port the certifier's served-rows tie and
+    IO-TIE's ``IoTieRequest`` read (`verity.core.protocols.certifier.served_tie`): the step's input ids, then its positions,
+    each ``T`` little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
+    (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves of
+    the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them from
+    its call (``input_ids``, ``positions``) before any module of it commits."""
+
+    short_name = "step_input_port"
+    own_names = frozenset(PORT_NAMES)
+    IB = PB = 8
+
+    def __init__(self, committer: Any, T: int) -> None:
+        chunk = int(getattr(committer, "chunk", 4096) or 4096)
+        if T < 1 or (T * self.IB) % chunk:
+            raise ValueError(f"step-input port: T = {T} i64s is not a whole number of {chunk}-byte chunks; "
+                             f"pass --max-num-batched-tokens a multiple of {chunk // self.IB}")
+        self.com, self.T, self._h = committer, int(T), None
+
+    def describe(self) -> dict[str, Any]:
+        """The port as a sealed window's context states it: names, T, the element bytes and each tensor's byte range."""
+        T, IB, PB = self.T, self.IB, self.PB
+        return {"names": list(PORT_NAMES), "T": T, "IB": IB, "PB": PB, "ids_bytes": [0, T * IB], "positions_bytes": [T * IB, T * (IB + PB)]}
+
+    def install(self) -> None:
+        self._h = self.com.model.register_forward_pre_hook(self._pre, with_kwargs=True)
+
+    def uninstall(self) -> None:
+        if self._h is not None:
+            self._h.remove()
+            self._h = None
+
+    def on_step_begin(self) -> None:
+        pass
+
+    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:  # noqa: ARG002
+        return {"per_step_bytes": self.T * (self.IB + self.PB), "tensors_per_step": len(PORT_NAMES)}
+
+    def _pre(self, _m: Any, args: tuple, kwargs: dict) -> None:
+        import torch
+
+        com, job = self.com, getattr(self.com, "_cur", None)
+        if job is None:
+            return None
+        ids = kwargs.get("input_ids", args[0] if args else None)
+        pos = kwargs.get("positions", args[1] if len(args) > 1 else None)
+        n = int((getattr(com, "_plan_shape", None) or (0, 0))[0])
+        if ids is None or pos is None or ids.dim() != 1 or pos.dim() != 1 or not 0 < n <= min(self.T, int(ids.shape[0]), int(pos.shape[0])):
+            com.errors.append(f"step-input port: step {job.step} has N = {n} tokens for T = {self.T}, "
+                              f"ids {None if ids is None else tuple(ids.shape)}, positions {None if pos is None else tuple(pos.shape)}")
+            return None
+        for name, t in zip(PORT_NAMES, (ids, pos)):
+            out = torch.zeros(self.T, dtype=torch.int64, device=t.device)
+            out[:n] = t[:n].long()
+            com._acquire(name, out, job)
+        return None
+
+
 def served_rows(committer: Any) -> dict[int, list[tuple]]:
     """The rows its `SamplerInputsSource` kept, by step; empty without one."""
     src = next((s for s in getattr(committer, "sources", ()) if isinstance(s, SamplerInputsSource)), None)
@@ -171,6 +234,7 @@ class RequestRecord:
     recomputed: int = 0
     end: int = 0                                            # positions computed so far
     conflicts: list[str] = field(default_factory=list)
+    first_at: dict[int, tuple[int, int]] = field(default_factory=dict)   # position -> (window, step) it was first committed
 
     def add(self, window: int, step: int, row: Row, ids: Sequence[int], sampled: int, seed: int | None) -> None:
         if self.hit is None:
@@ -183,6 +247,8 @@ class RequestRecord:
                 self.recomputed += 1
                 if self.inputs[p] != tok:
                     self.conflicts.append(f"position {p}: committed input {tok} at step {step}, {self.inputs[p]} before")
+            else:
+                self.first_at[p] = (window, step)
             self.inputs[p] = int(tok)
         if row.samples:
             if row.last in self.sampled and self.sampled[row.last] != sampled:
@@ -236,16 +302,49 @@ class RequestRecord:
                 break
         if seed is not None and self.seeds - {int(seed)}:
             problems.append(f"seeds: committed {sorted(self.seeds)}, the request carried {seed}")
-        source = None
+        spans: list[list[Any]] = []
         if hit:
-            source = next((rid for rid, r in (prefix_sources or {}).items()
-                           if rid != self.request and all(r.inputs.get(p) == t[p] for p in range(hit))), None)
-            if source is None:
-                problems.append(f"prefix cache: positions [0, {hit}) were read from cache, and no committed request holds those inputs")
-        return {"passed": not problems, "prompt_ids": P, "streamed_ids": K, "cache_hit": hit, "prefix_source": source,
+            spans, gap = self.prefix_cover(t, hit, prefix_sources or {})
+            if gap is not None:
+                problems.append(f"prefix cache: position {gap} of [0, {hit}) was read from cache, and no other request committed "
+                                "it by then with the served ids up to it")
+        return {"passed": not problems, "prompt_ids": P, "streamed_ids": K, "cache_hit": hit,
+                "prefix_source": spans[0][0] if spans else None, "prefix_spans": spans,
                 "rows": len(self.rows), "preemptions": self.preemptions, "recomputed_positions": self.recomputed,
                 "discarded_samples": len(self.discarded), "overrun_rows": len(over_s), "seeds": sorted(self.seeds),
                 "problems": problems[:8]}
+
+    def prefix_cover(self, t: Sequence[int], hit: int, sources: Mapping[str, RequestRecord]) -> tuple[list[list[Any]], int | None]:
+        """Who computed the cached prefix [0, ``hit``) of the served ids ``t``: spans ``[request, lo, hi)`` of other requests that
+        committed ``t``'s ids there no later than this request's first row, each with no committed id before ``hi`` that
+        differs from ``t``'s (a cached block's KV is its whole prefix's); the first position no span covers, else None. A
+        turn's prefix can be several requests' (its first turn's prompt, its previous turn's suffix)."""
+        first = tuple(self.rows[0][:2]) if self.rows else (0, 0)
+        reach: dict[str, int] = {}
+        for rid, r in sources.items():
+            if rid == self.request:
+                continue
+            reach[rid] = min((q for q, v in r.inputs.items() if q < hit and v != t[q]), default=hit)
+
+        def covers(rid: str, p: int) -> bool:
+            r = sources[rid]
+            return p < reach[rid] and p in r.inputs and r.first_at.get(p, first) <= first
+
+        spans: list[list[Any]] = []
+        p = 0
+        while p < hit:
+            best, best_hi = None, p
+            for rid in reach:
+                hi = p
+                while hi < hit and covers(rid, hi):
+                    hi += 1
+                if hi > best_hi:
+                    best, best_hi = rid, hi
+            if best is None:
+                return spans, p
+            spans.append([best, p, best_hi])
+            p = best_hi
+        return spans, None
 
     def to_json(self) -> dict[str, Any]:
         """The record as I3 publishes it: rows, and the committed ids by position."""

@@ -48,8 +48,9 @@ names it.  The rows commit u16 words: a template's every port is 16-bit elements
 Boolean element's bit j is bit j of its word, `boolean.elements`), or, for a row or coordinate template, elements of ``PACKED`` widths with each
 port whole u16 words (``Template.packed``): a port's words are then its elements' little-endian bytes, two to a word, which are
 the port's bits in M0's row order (an 8-bit element is half a word, a 32-bit one two words, low half first); refused otherwise.
-A committed member of a wider signed integer dtype than its output port (``BY_VALUE``: the sampler's i64 token under
-`TokenSelect`'s i32) is read by value, as the replay links tokens, each element below 2^bits or refused.
+A committed member of a wider signed integer dtype than its port (``BY_VALUE``: the sampler's i64 token under `TokenSelect`'s
+i32 output, and under the vocabulary shard's i32 ``tok`` input) is read by value, as the replay links tokens, each element below
+2^bits or refused.
 Each member's ports, by the family of the template's word (``LAYOUTS``):
 
   ``RoPEHead_v1{D=..}``            every head of every ``RoPE_v1`` row: ``x``, ``cs`` -> ``out`` (D words each)
@@ -116,11 +117,11 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P
+from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import serving_rows as CS
+from verity_vllm.commit import index as IX, row_tables as RTB, serving_rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import kchunk_rows as KC
 from verity_vllm.pipeline import slice_rows as SL
@@ -330,7 +331,7 @@ def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
-    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``RowTable.key``; each table's token rows by request,
+    ``ScaledMmS8_v1`` rows in the canonical order serving commits them in (``row_tables.table_key``; each table's token rows by request,
     then token row), and each template's units cut again into chunks of at most its chunk cap (its first chunk's size in
     ``members``) that each read one row table: a chunk ends at its cap or where its units' next token row is another
     table's.  Each chunk is a shared-row member whose ``x`` table is the distinct token rows its units read (``links``: each
@@ -351,7 +352,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             specs[k][4].append((str(rid), int(d["row"]), int(r["i"])))
             segs.setdefault(t, []).append((lo, lo + n, k, len(specs[k][4]) - 1))
             lo += n
-    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *CS.table_key(specs[k][1])))
+    order = sorted(range(len(specs)), key=lambda k: (specs[k][0], *RTB.table_key(specs[k][1])))
     ranks = [sorted(range(len(s[4])), key=lambda j, rs=s[4]: rs[j][:2]) for s in specs]
     new_k = {k: i for i, k in enumerate(order)}
     new_rank = [{j: i for i, j in enumerate(r)} for r in ranks]
@@ -361,8 +362,10 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
             out.append(m)
         elif m.base == next(x.base for x in ms if x.template == m.template):
             out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
-    return out, tuple(CS.RowTable(specs[k][0], specs[k][1], specs[k][2], specs[k][3], tuple(specs[k][4][j] for j in ranks[k]))
-                      for k in order)
+    made = tuple(RTB.row_table(specs[k][0], specs[k][1], specs[k][2], specs[k][3], [specs[k][4][j] for j in ranks[k]])
+                 for k in order)
+    RTB.check_order(made)
+    return out, made
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
@@ -470,7 +473,7 @@ def read(m: CS.Member, rows: list[Row], store: Any, weights: Callable,
     for rid, pi, r, d in rows:
         arrive = int((arrivals or {}).get(rid, 0))
         if tp.packed:
-            ops = [_packed(_slices(pi, store, weights, rid, arrive, g), b, f"row {r['i']} argument {k}")
+            ops = [_packed(_slices(pi, store, weights, rid, arrive, g, bits=b), b, f"row {r['i']} argument {k}")
                    for k, (g, b) in enumerate(zip(r["args"], tp.packed))]
         else:
             ops = [_operand(pi, store, weights, rid, arrive, g) for g in r["args"]]
@@ -682,9 +685,12 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
     return np.concatenate(_slices(pi, store, weights, rid, arrive, group))
 
 
-def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence) -> list[np.ndarray]:
+def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, *,
+            bits: int | None = None) -> list[np.ndarray]:
     """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
-    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression."""
+    replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
+    element width ``bits``, a committed member of a wider signed integer dtype (``BY_VALUE``: the sampler's i64 token under the
+    vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`)."""
     words = []
     for sl in runs_from_file_items(group):
         kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
@@ -692,12 +698,15 @@ def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group
             m = pi.member_at(a, lo, hi)
             if m is None:
                 raise LookupError(f"arg slice {list(sl)} is not inside one committed member")
-            pd, member, mlo, mhi, _dt = m
+            pd, member, mlo, mhi, dt = m
             width = next(int(mm[1]) for mm in pd["members"] if mm[0] == member)
             w, why = store.words(rid, arrive + pd["step"], pd["op_path"], member, pd["row"] * width + mlo, pd["row"] * width + mhi)
             if w is None:
                 raise LookupError(why)
-            words.append(np.asarray(w).reshape(-1))
+            w = np.asarray(w).reshape(-1)
+            if bits is not None and dt in BY_VALUE and w.dtype.itemsize * 8 > bits:
+                w = _by_value(w, bits, f"member {member} of {pd['op_path']}")
+            words.append(w)
         elif kind == "p" and (pi.pnames[a] if a < len(pi.pnames) else None) == "weights":
             ws = pi.weight_slice(lo, hi)
             if ws is None:
@@ -742,7 +751,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     store = CommittedStore.of_record(bmap, committed, manifest)
     got = read_all(ms, rows, store, weights, arrivals)
     t_read = time.perf_counter()
-    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), step_roots=rt.get("step_roots"),
+    c = CS.commit(window, [g[0] for g in got], row_salt_key=rt.get("key"), segment_roots=rt.get("step_roots"),
                   workers=workers or min(16, os.cpu_count() or 1))
     prov = {"commitment": "vllm-v1", "row": row, "research_run": run, "committer": dict(committer or {}, module=CS.__name__),
             "served_programs": {str(k): str(v) for k, v in sorted((digests or {}).items())}, "scope": pf.get("scope"),
@@ -751,7 +760,8 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
-    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served")
+    res = CS.write(c, out_dir, prov, IX.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
+                   registrar=R)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

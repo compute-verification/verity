@@ -10,8 +10,8 @@ a live unit. `without_dead_units` drops the dead units and renumbers the referen
 `registry.dead_free`): the same statics, signature and function, so only the node's gates change. And it narrows each linear
 whose output words are read only in part (`narrowed`, `COLUMNS`) to the columns read: the last layer's fused qkv on the prompt
 rows before the last, whose queries nothing reads, becomes a K/V-only projection over the weight's K and V rows. The Build's
-derive and `predict.build` put the request wrapper alike in that form at one rank (`kept_records`), the registered compiler's
-Programs; rows of record keep the v1s.
+derive and `predict.build` put the request wrapper alike in that form at one rank (`kept_records`), and at a tensor-parallel rank
+under the Build's `--dead-free` (`build_program(dead_free=True)`): the registered compiler's Programs. Rows of record keep the v1s.
 """
 from __future__ import annotations
 
@@ -99,7 +99,8 @@ def without_dead_units(body: Body) -> tuple[Body, list[int]]:
 def dead_free_versions() -> dict[str, Any]:
     """`Name_vN` of each Definition with dead gates the registered compiler emits -> its version without them."""
     from verity_vllm.program.registry import dead_free as DF
-    return {"RMSNormTriton_v1": DF.RMSNormTritonV5, "TokenSelect_v1": DF.TokenSelectV4, "GumbelTopPTokenSelect_v2": DF.GumbelTopPTokenSelectV3}
+    return {"RMSNormTriton_v1": DF.RMSNormTritonV5, "TokenSelect_v1": DF.TokenSelectV4, "GumbelTopPTokenSelect_v2": DF.GumbelTopPTokenSelectV3,
+            "Attention_v5": DF.AttentionV18}
 
 
 def swapped(body: Body) -> Body:
