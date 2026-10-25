@@ -87,7 +87,7 @@ def _ties(**edits):
         x = x | edits.get(name, {})
         codes = sorted({f"IoTieWindow.{p}" for parts in x.get("failing", {}).values() for p in parts})
         out[name] = {"verdict": "refused" if codes else "accepted", "codes": codes, "failing": {}, "unplaced": 0,
-                     "held": {"egress": 3, "ingress": 3}, "missing": {}, "outputs": 3, "placed": 3} | x
+                     "held": {"egress": 3, "ingress": 3}, "missing": {}, "outputs": 3, "placed": 3, "finish": True} | x
     return out
 
 

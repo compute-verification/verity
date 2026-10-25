@@ -53,6 +53,7 @@ import hashlib
 import importlib.util
 import json
 import math
+import struct
 import sys
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -64,6 +65,7 @@ sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 import active_replay as ar  # noqa: E402
 import negatives as NG  # noqa: E402
 from verity.core.protocols.certifier import advice as I1  # noqa: E402
+from verity.core.protocols.certifier.active import compact_record_data  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.commitments import advice as AC  # noqa: E402
 
@@ -540,7 +542,9 @@ TIE_OWED = ("token",)
 #: key of `negatives.tie_run`'s row that must be true, with the report's reason when it isn't. CERT-VARLEN's compact
 #: finish (each response's length and finish held to the advice, `active.compact_finish_violations`; REDTEAM phase 12
 #: target 3) goes here if the tie reports it as a key of its own; as a failing part it already refuses the honest run.
-TIE_REQUIRED: dict[str, str] = {}
+TIE_REQUIRED: dict[str, str] = {
+    "finish": "the I/O tie didn't establish the honest run's finish (`negatives.tie_run`'s finish: on a compact run "
+              "its records held to its sampled ids, `active.compact_finish_violations`)"}
 
 
 def _read_json(path: Path):
@@ -567,10 +571,27 @@ def served_ids(ep: Path, deployment: dict) -> dict[str, list[int]]:
     return out
 
 
+def _output_stream(slot: bytes, compact: bool) -> int | None:
+    """The stream (request ordinal) of a certified egress frame that `negatives.tie_run` places as its stream's next
+    output: on a compact plan every frame, each a compact record (`active.compact_record_data`), else each id event;
+    None for another frame of a plan of id events. Raises ValueError for a frame neither reads: a compact plan's frame
+    that isn't a record, or one `decode_frame` can't parse."""
+    if compact:
+        got = compact_record_data(slot)
+        if got is None:
+            raise ValueError(f"a compact plan's egress frame that isn't a compact record ({slot[:16].hex()})")
+        return got[0]
+    try:
+        return NG.id_event_data(NG.decode_frame(slot)[2])[0] if NG._is_id_event(slot) else None
+    except struct.error as err:
+        raise ValueError(f"an egress frame that doesn't decode ({err}): {slot[:16].hex()}") from err
+
+
 def changed_windows(run: Path) -> list[int] | None:
     """The link-windows a token run's changed ids fall in: each output its shim logged as changed (``server.json``'s
-    ``tampered``, (session, index)), placed as `negatives.tie_run` places the certified egress's id events, each its
-    stream's next output and the stream's user the certified I/O's. None when the shim logged none."""
+    ``tampered``, (session, index)), placed as `negatives.tie_run` places the certified egress's id events, or on a
+    compact plan its compact records (`_output_stream`), each its stream's next output and the stream's user the
+    certified I/O's. None when the shim logged none. Raises ValueError for an egress frame it can't place."""
     changed = (_read_json(run / "server.json") or {}).get("tampered")
     if not changed:
         return None
@@ -580,12 +601,12 @@ def changed_windows(run: Path) -> list[int] | None:
     ins = [ar.unpack_record(b, i.frame_bytes) for b in ar.read_blobs(run / "requests.records")]
     outs = [ar.unpack_record(b, e.frame_bytes) for b in ar.read_blobs(run / "responses.records")]
     users = {r["stream"]: r["user"] for r in NG.cs.certified_io(plan, setup, ins, outs)["records"]}
-    at, nxt = {}, defaultdict(int)
+    compact, at, nxt = bool(plan.get("compact")), {}, defaultdict(int)
     for rec in sorted(outs, key=lambda r: r.window):
-        for s in (s for row in rec.grid for s in row if s is not None and NG._is_id_event(s)):
-            q = NG.id_event_data(NG.decode_frame(s)[2])[0]
-            at[users.get(q), nxt[q]] = rec.window
-            nxt[q] += 1
+        for q in (_output_stream(s, compact) for row in rec.grid for s in row if s is not None):
+            if q is not None:
+                at[users.get(q), nxt[q]] = rec.window
+                nxt[q] += 1
     return sorted({at[u, k] for u, k in changed if (u, k) in at})
 
 
@@ -638,7 +659,7 @@ def tie(runs: dict[str, Path], ep: Path | None, ids: Path | None, why: str | Non
                 continue
             t = NG.tie_run(d, got)
             changed = changed_windows(d) if name in TIE_OWED else None
-        except (OSError, KeyError, ValueError) as err:
+        except (OSError, KeyError, ValueError, struct.error) as err:
             rows[name] = row | {"why": repr(err)}
             continue
         ok = NG.tie_ok(name, t)
