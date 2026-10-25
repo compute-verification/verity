@@ -172,8 +172,8 @@ def test_without_mem_gb_a_run_in_a_check_slot_keeps_to_the_slot(monkeypatch):
 def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypatch):
     """r20261018-024149-8607: suites.py sizes the suite's xdist workers at `worker_gb` each from a memory every worker shares, so a
     circuit-check a test starts budgets that worker's share (conftest.py's `worker_slot_gb`), or the slot's when smaller, never
-    the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding the 25 GiB catalog leaves its
-    targets the rest of its share, one job."""
+    the slot or the cgroup the others share; outside xdist nothing is set.  A worker holding 25 GiB leaves its targets the rest
+    of its share, one job."""
     from conftest import WORKER_GB, worker_slot_gb
 
     worker = {"PYTEST_XDIST_WORKER": "gw3"}
@@ -186,3 +186,20 @@ def test_a_circuit_check_in_an_xdist_worker_keeps_to_the_worker_s_share(monkeypa
     monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
     monkeypatch.setenv(cli.SLOT_MEM_ENV, str(worker_slot_gb(worker, 32)))
     assert cli.budget_gb(None) == 7.0 and cli.auto_jobs() == 1
+
+
+def test_the_catalog_s_build_keeps_to_what_the_session_s_workers_were_given(monkeypatch):
+    """The xdist worker that builds the catalog (conftest.py's `_budget`) budgets its bindings' processes the workers' shares,
+    `worker_gb` each, less what each holds as it waits: not the slot's mem=, which `check`'s suites running beside this one
+    share, and never more than the slot or the memory leaves; outside xdist, `cli.budget_gb`."""
+    from conftest import _budget
+
+    monkeypatch.setattr(cli, "_rss_gb", lambda: 0.5)
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 900)
+    four = {"PYTEST_XDIST_WORKER": "gw0", "PYTEST_XDIST_WORKER_COUNT": "4"}
+    assert _budget({**four, cli.SLOT_MEM_ENV: "480"}, 8) == 30.0 and _budget(four, 8) == 30.0
+    assert _budget({**four, cli.SLOT_MEM_ENV: "20"}, 8) == 18.0
+    monkeypatch.setattr(cli, "memory_gb", lambda root=None: 10)
+    assert _budget(four, 8) == 10.0
+    monkeypatch.setenv(cli.SLOT_MEM_ENV, "320")
+    assert _budget({cli.SLOT_MEM_ENV: "320"}, 8) == cli.budget_gb(None) == 10

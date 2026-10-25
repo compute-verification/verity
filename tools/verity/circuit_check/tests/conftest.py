@@ -6,8 +6,8 @@ circuit-check's catalog (`Catalog`: `targets.suite()` and what its roots reach) 
 that asks for it (the `catalog` or `suite` fixture): when collection ends, before any test runs, as circuit-check builds it
 (`targets.suite()` grows as tracing registers Definitions, so a later build would list more targets).  It is made from the
 catalog bindings' records that `check`'s circuit-check keeps (`circuit_check.units`, `RECORDS`) when they count.  Otherwise
-each binding is built in a process of its own, as many at once as the session has workers (or this process CPUs) and the memory
-holds at `heavy.json`'s peaks (`units.built_apart`): under xdist, by the first worker that asks, which writes what each binding
+each binding is built in a process of its own, as many at once as the session has workers (or this process CPUs) and their
+memory holds at `heavy.json`'s peaks (`_budget`, `units.built_apart`): under xdist, by the first worker that asks, which writes what each binding
 reaches beside the workers' basetemps (`MANIFEST`), while the others wait on its lock and then take that
 (`units.from_manifest`).  Every process makes the catalog's roots itself and each suite
 target from its id, or from its binding's record (`units.make`).  A test that asks for it is marked slow, so `--quick` builds
@@ -140,12 +140,24 @@ def _jobs(env: Mapping[str, str]) -> int:
     return int(n) if n.isdigit() and int(n) > 0 else cli.cores()
 
 
+def _budget(env: Mapping[str, str], worker_gb: float = WORKER_GB) -> float:
+    """What the catalog's build may take at once, in GiB.  In an xdist worker: what suites.py gave the session's workers,
+    ``worker_gb`` each (within the slot's mem=, which is the whole run's and the suites beside this one share), less what they
+    hold as they wait on the build, each counted at this worker's resident set; at most what `cli.memory_gb` leaves.  Outside
+    one, `cli.budget_gb`."""
+    n = env.get("PYTEST_XDIST_WORKER_COUNT", "")
+    if not (n.isdigit() and int(n) > 0):
+        return cli.budget_gb(None)
+    slot, n = env.get(cli.SLOT_MEM_ENV, ""), int(n)
+    share = min(n * worker_gb, int(slot)) if slot.isdigit() else n * worker_gb
+    return min(float(cli.memory_gb()), share - n * (cli._rss_gb() or 0.0))
+
+
 def _apart_built(entries: list[UN.Entry], jobs: int) -> tuple[list[UN.Entry], list[tuple[str, ...]], str]:
-    """`units.built_apart` within the memory this process may use now (`cli.budget_gb`: the other workers wait, holding what
-    they hold), each binding counted at how far `heavy.json` says its process grows; and how the build went, naming the
-    bindings that grew past that, whose growth belongs in `heavy.json`."""
+    """`units.built_apart` within `_budget`, each binding counted at how far `heavy.json` says its process grows; and how the
+    build went, naming the bindings that grew past that, whose growth belongs in `heavy.json`."""
     weights = cli.heavy()
-    kept, dropped, grew = UN.built_apart(entries, jobs, cli.budget_gb(None), weights)
+    kept, dropped, grew = UN.built_apart(entries, jobs, _budget(os.environ), weights)
     past = sorted(((gb, name) for name, gb in grew.items() if gb > weights.get(name, UN.APART_GB)), reverse=True)
     return kept, dropped, "built apart" + (f" ({len(past)} grew past their heavy.json GiB: "
                                            + ", ".join(f"{name} {gb}" for gb, name in past[:5]) + ")" if past else "")

@@ -36,8 +36,9 @@ parallel = true
 # one xdist worker's share, which `--mem-gb` (else the cgroup's memory.max) divides by. Each worker of a run with a slow catalog
 # test makes circuit-check's catalog before any test runs (conftest.py's `catalog`; `--quick` makes none) from what each catalog
 # binding reaches, building no body: 2.6 GiB (r20261025-205455-6022). Where no record of this checker's version counts, the
-# first worker builds that, a process forked per binding, while the others wait: its processes take the memory the waiting
-# workers leave, as much as `heavy.json` says each grows (boolean_sigma's roots 23.9 GiB, the next 12.0) and the memory holds.
+# first worker builds that, a process forked per binding, while the others wait: its processes take what the workers' shares
+# leave as they wait (conftest.py's `_budget`), each counted at what `heavy.json` says it grows (boolean_sigma's roots 23.9
+# GiB, the next 12.0).
 # Built whole in each worker, as before, a worker peaked at 52.8 GB (r20261022-105829-2a96). A circuit-check a test starts
 # keeps to this share too (conftest.py's `worker_slot_gb`).
 worker_gb = 8
