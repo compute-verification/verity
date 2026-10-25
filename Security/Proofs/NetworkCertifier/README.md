@@ -200,6 +200,9 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 - **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
   `RAcc δ` on the statements whose layout fits the program: no faulty unit is drawn `all`, and the advice holding the
   faulty units' committed gates at the trace's values makes `Accepted` every run the trace carries.
+  `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
+  conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
+  at the masked and plain records.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
   `EncardAccSeqsSampledLe`, the count of what `SampledAuditAccepted`'s `RAcc δ` allows: the inputs other than the
   ingress, the faulty units' committed bits and the choice of faulty set. An accepted sampled audit reaches it except
