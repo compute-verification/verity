@@ -3,7 +3,8 @@ gate open the session it reserved on the weights' root it committed, its coins t
 (`window.SALT_FAMILIES`), takes that coin after the root (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`)
 and closes the session at release, so the session ends closed and complete; refused, before any patch or any coin: no
 session, a session of H1's layout, a session bound to another commitment or another root, an in-process coin beside the
-challenger's, and a mix of the two. The verifier holds the pass to that session (`pouw_h1_challenger.session_reason`'s
+challenger's, a mix of the two, and a reinstall whose weights' root already had its session (each install draws a fresh
+hm96 key, so its root is its own). The verifier holds the pass to that session (`pouw_h1_challenger.session_reason`'s
 Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`): it counts only reserved salt-only and ended
 closed and complete, and the pass's coins and salt are read from the session, never from the pass.
 
@@ -15,6 +16,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 import shutil
 import socket
 import threading
@@ -33,6 +35,7 @@ from verity_vllm import protocol_options as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocol_options import pouw
 from verity_vllm.protocol_options import pouw_h1_challenger as PHC
+from verity_vllm.protocol_options import pouw_h1_window as PHW
 from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
 from verity_vllm.protocol_options import pouw_pearl_c_manifest as PPM
 
@@ -104,6 +107,7 @@ def _device_run_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: ROOTS)
     monkeypatch.setattr(PPD, "PearlCDeviceRun", Run)
     monkeypatch.setattr(pouw, "_SALT_KEYS", {})
+    monkeypatch.setattr(PHW, "SPENT", set())
     RUNS.clear()
 
 
@@ -152,6 +156,26 @@ def test_a_served_install_takes_the_sessions_salt_coin_after_the_weights_root(tm
     assert answers == [{"session": SID, "seq": answers[0]["seq"], "root": root.hex(), "commitment": coins.root.hex()}]
     assert c["session"] == answers[0]
     assert R.released_roots(host.directory / R.RELEASES, coins) == {Wd.SALT: (root,)}
+    _untouched(model)
+
+
+def test_each_install_commits_under_a_fresh_hm96_key_and_a_spent_weights_root_is_refused_before_the_gate(
+        tmp_path, monkeypatch):
+    """Each install's `commit_weights` draws its own hm96 key, so a reinstall's weights' root W, and its salt session,
+    are its own. A reinstall committing a W this process already had a session opened on (the stand-in's fixed roots:
+    the same key over the same weights) is refused before the gate is asked, since the gate opens a root once."""
+    keys = []
+    monkeypatch.setattr(PPD, "weight_roots", lambda kernel, weights, scheme, salt_key=None: keys.append(salt_key) or ROOTS)
+    host, model, root = _host(tmp_path, monkeypatch), _model(), weights_root(ROOTS).hex()
+    with PO.install(model, _served(host.open)):
+        pass
+    assert host.ended() is None and RUNS[0].finished
+    asked = []
+    with pytest.raises(ValueError, match=re.escape(f"{ENTRY}: the weights' root {root[:16]}...'s salt session is spent "
+                                                   "(this process had the gate open one on it): re-key hm96")):
+        PO.install(model, _served(lambda sid, r: asked.append(r)))
+    assert asked == [] and len(RUNS) == 1 and len(keys) == 2 and keys[0] != keys[1]
+    assert all(len(k) == 32 for k in keys) and pouw._SALT_KEYS[ENTRY] == keys[1]
     _untouched(model)
 
 
@@ -298,7 +322,7 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
     complete with that one coin released, and the verifier holds the pass to it (`session_reason`'s Pearl-C branch): the
     one session the ledger opened on the weights' root, read through the gate's fetch. The manifest head names it by its
     `SESSION_KEYS` alone (`session_head`). The verifier's own weights' root, or the period's registered one, must be the
-    pass's."""
+    pass's; a pass naming its session by another ledger seq, or with its hello's secret, is refused."""
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(5))
     with PO.install(_model(), _served(s.open)) as comp:
@@ -317,6 +341,11 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
         "the pass's weights' root is not the one the period registered")
     assert PHC.session_reason({**c, "coin_source": "in-process"}, ledger, fetch).startswith(
         "the window's coins were held in the serving process")
+    seq = c["session"]["seq"]
+    assert PHC.session_reason({**c, "session": {**c["session"], "seq": seq + 1}}, ledger, fetch) == (
+        f"the window's session {SID} is ledger entry {seq + 1} in its reply, but entry {seq} opened it")
+    assert PHC.session_reason({**c, "session": {**c["session"], "secret": "ab" * 32}}, ledger, fetch) == (
+        "the pass's session names its hello's secret, which a pass never records: a refused pass")
     assert PPM.SESSION_KEYS == PHC.SESSION_FIELDS and PPM.session_head({}) == {}
     assert PPM.session_head({**c, "session": {**c["session"], "secret": "ab" * 32}}) == {
         "session": {k: c["session"][k] for k in PHC.SESSION_FIELDS}}

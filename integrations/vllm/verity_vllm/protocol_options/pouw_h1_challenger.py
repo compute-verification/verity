@@ -436,13 +436,14 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
                         commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why a Pearl-C pass (its device run's commitment `commits`) isn't held to its salt session, the one whose salt
     coin follows the pass's weights' root W (``weights_root``) rather than a window's open root (statement: Lean
-    `Properties.Pouw.LiveSalt.Accepted`); None when it is. The session is the one the auditor's `ledger` opened on W, ended closed and complete under the commitment the pass names (`held`; `commit` and
-    `registered`, when the verifier holds them, must be W), reserved with the salt coin alone (`window.SALT_FAMILIES`)
-    and having released that coin and nothing else. Its coins are read as core reads a session (`evidence`), never
-    from the pass: the commitment its challenger signed, of that layout (`window.salt_epoch_reason`) and the pass's
-    ``coins``, and its log, showing W alone as the root its salt coin followed. Under that commitment the pass's
-    ``salt_opening`` is ``pouw/salt`` coin 0 opened after W (`challenger.live_reason`), and its ``salt`` is
-    `audit.salt_of` of that coin over W. Fails closed."""
+    `Properties.Pouw.LiveSalt.Accepted`); None when it is. The session is the one the auditor's `ledger` opened on W,
+    ended closed and complete under the commitment the pass names (`held`, its ``session``: id, ledger ``seq``, W and
+    commitment, never its hello's ``secret``; `commit` and `registered`, when the verifier holds them, must be W),
+    reserved with the salt coin alone (`window.SALT_FAMILIES`) and having released that coin and nothing else. Its
+    coins are read as core reads a session (`evidence`), never from the pass: the commitment its challenger signed, of
+    that layout (`window.salt_epoch_reason`) and the pass's ``coins``, and its log, showing W alone as the root its
+    salt coin followed. Under that commitment the pass's ``salt_opening`` is ``pouw/salt`` coin 0 opened after W
+    (`challenger.live_reason`), and its ``salt`` is `audit.salt_of` of that coin over W. Fails closed."""
     w = commits.get("weights_root")
     if not (isinstance(w, str) and _ROOT.match(w)):
         return "the pass's weights' root is not 128 lowercase hex, so no session was opened on it"
@@ -450,6 +451,8 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
         return f"the pass's weights' root {w[:16]}... is not {str(commit)[:16]}..., the one the verifier holds"
     if registered is not None and w != bytes(registered).hex():
         return "the pass's weights' root is not the one the period registered"
+    if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
+        return "the pass's session names its hello's secret, which a pass never records: a refused pass"
     why, window = held(commits.get("session"), ledger, w)
     if why is not None:
         return why

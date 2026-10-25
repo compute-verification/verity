@@ -34,6 +34,9 @@ RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
 #: how many times a session the gate has just opened is tried, a second apart, while it refuses connections (the
 #: auditor host's ``ssh -R`` to this machine not up yet)
 TRIES = 120
+#: the weights' roots (hex) this process has asked the gate to open a Pearl-C salt session on: the gate opens a root
+#: once, so a reinstall committing the same W (the same hm96 key over the same weights) is refused before it asks
+SPENT: set[str] = set()
 
 
 def session_setting(raw: Any) -> dict[str, Any] | None:
@@ -184,8 +187,13 @@ def salt_session(entry: str, settings: Any, root: bytes, opens: bool
     ``settings.gate`` opens on `root` (`opened`), its coins the salt coin alone (`window.salt_epoch_reason`, so it ends
     complete once that coin is released), else (ncp-v2's) the session the gate's open answer ``settings.session``
     names (`session`). Returns the session, its coin commitment, the salt coin's opening, the epoch's salt
-    (`audit.salt_of` over `root`) and the gate's answer as the run carries it (`pouw_h1_challenger.carried`)."""
+    (`audit.salt_of` over `root`) and the gate's answer as the run carries it (`pouw_h1_challenger.carried`). A Pearl-C
+    `root` this process has asked a session on before (`SPENT`) is refused (ValueError) before the gate is asked."""
     if opens:
+        if root.hex() in SPENT:
+            raise ValueError(f"{entry}: the weights' root {root.hex()[:16]}...'s salt session is spent (this process had the "
+                             "gate open one on it): re-key hm96, so the install commits its weights under a fresh key")
+        SPENT.add(root.hex())
         client, c, opening, given = opened(entry, settings.challenger, 0, settings.gate, settings.session["session"], root,
                                            "the weights' root", TRIES, layout=Wd.salt_epoch_reason)
     else:
@@ -285,5 +293,5 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["Gate", "RESERVE_FIELDS", "TRIES", "Window", "at_port", "closed_on_error", "connect", "finish", "gate_of",
+__all__ = ["Gate", "RESERVE_FIELDS", "SPENT", "TRIES", "Window", "at_port", "closed_on_error", "connect", "finish", "gate_of",
            "open_session", "opened", "refusals", "reserved_of", "salt_session", "session", "session_setting"]
