@@ -20,11 +20,12 @@ preemptions, cache hits, admissions and stops (`window`) as the vectors the cert
 server's `window` open and close records, `verity_vllm.engine.step_trace`), renumbered from its first step, and
 refuses a window that doesn't open on a drained engine, since the slice's replay starts from the empty one.
 `slice_inputs` gives `compile_slice.CompileSlice_v1`'s inputs for such a window in `compile_slice_smallkv.json`'s
-layout: the statics, the certified arrivals (id, P, O), the decisions in the scan's order, the executed step count and
-each step's rows (slot, request, kind, start, n). The slice's ReplayStep_v1 is sync, so it refuses a window whose sync
-schedule isn't the served one.
+layout: the statics, the certified arrivals (id, P, O, and cap at AS = 1), the decisions in the scan's order, the
+executed step count and each step's rows (slot, request, kind, start, n). The scheduler (AS) is the engine class's, the
+trace's own unless the class is the sync one (AS = 0), and it refuses a window whose schedule at that AS isn't the
+served one.
 
-    python3 replay_vectors.py --slice TRACE --window N [--max-model-len L] [--served SEAL] --out FIXTURE.json
+    python3 replay_vectors.py TRACE --slice N [--max-model-len L] [--served SEAL] [--AS 0|1] --out FIXTURE.json
 """
 from __future__ import annotations
 
@@ -261,16 +262,20 @@ def served_window(records: Sequence[Mapping[str, Any]], window: int) -> tuple[li
 
 def slice_inputs(trace: RP.Trace, *, R: int, W: int, A: int, base: int = 0, session: int | None = None,
                  Q: int | None = None, D: int | None = None, P: int | None = None,
-                 K: int | None = None, AS: int = 0) -> dict[str, Any]:
+                 K: int | None = None, AS: int | None = None) -> dict[str, Any]:
     """CompileSlice_v1's inputs for `trace`, one window from the empty engine (`served_window`'s), at size class
     (R, W, A), in `compile_slice_smallkv.json`'s layout. A request's id is `base` plus its index in
     the trace (with `served_window`'s base, its index in the session), and IW holds the ids of a session of `session`
     requests (default the window's last). Q and K default to the window's arrivals, D to its decisions and P to its
     executed units; a public class larger than the window pads it (empty arrival slots, decisions past the count, idle
-    steps), and one smaller is refused. The window is replayed under sync scheduling (AS = 0), or with AS = 1 under the
-    trace's async scheduling: the engine then keeps `async_scheduling`, each arrival is (id, P, O, cap), cap meaning
-    O is its max_tokens, and a unit is one schedule and the update of the step before it. It is refused if that
-    schedule isn't the trace's (`vectors`) or a unit is outside the class."""
+    steps), and one smaller is refused. AS is the class's scheduler, so one AS holds for every window of a run: by
+    default the trace's own (its header's `scheduler`), and 0 only for the sync class. At AS = 0 the window is replayed
+    under sync scheduling. At AS = 1 it is replayed under the trace's async scheduling: the engine keeps
+    `async_scheduling`, each arrival is (id, P, O, cap), cap meaning O is its max_tokens, and a unit is one schedule and
+    the update of the step before it. It is refused if that schedule isn't the trace's (`vectors`) or a unit is outside
+    the class."""
+    if AS is None:
+        AS = int(trace.engine.async_scheduling)
     if AS and not trace.engine.async_scheduling:
         raise ValueError("AS = 1 needs a trace served under async scheduling")
     e = trace.engine if AS else dataclasses.replace(trace.engine, async_scheduling=False)
@@ -349,8 +354,9 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("--max-model-len", type=int, help="with --slice: the engine's, where the trace's header lacks it")
     for k, what in (("Q", "pending arrivals"), ("D", "decisions"), ("P", "steps"), ("K", "certified arrival slots")):
         ap.add_argument(f"--{k}", type=int, help=f"with --slice: the public class's {what} (default the window's own)")
-    ap.add_argument("--AS", type=int, choices=(0, 1), default=0,
-                    help="with --slice: 1 replays the window under the trace's async scheduling (`slice_inputs`)")
+    ap.add_argument("--AS", type=int, choices=(0, 1),
+                    help="with --slice: the engine class's scheduler, the same for every window of a run (default the "
+                    "trace's own; 0 is the sync class, 1 the trace's async scheduling; `slice_inputs`)")
     ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     if a.slice is not None:
@@ -362,13 +368,15 @@ def main(argv: Sequence[str] | None = None) -> None:
         tr = RP.load_step_trace(sub)
         name = p.resolve().relative_to(REPO) if p.resolve().is_relative_to(REPO) else p
         cls = {k: getattr(a, k) for k in ("Q", "D", "P", "K") if getattr(a, k) is not None}
-        at = ", ".join(f"{k} {v}" for k, v in {"R": a.R, "W": a.W, "A": a.A, **cls, **({"AS": 1} if a.AS else {})}.items())
+        AS = int(tr.engine.async_scheduling) if a.AS is None else a.AS
+        given = {"R": a.R, "W": a.W, "A": a.A, **cls, **({"AS": 1} if AS else {})}
+        at = ", ".join(f"{k} {v}" for k, v in given.items())
         fx = {"source": f"{name} window {a.slice} (replay_vectors.py --slice {a.slice} at {at})",
               **slice_inputs(tr, R=a.R, W=a.W, A=a.A, base=base,
-                             session=sum(r.get("kind") == "arrive" for r in recs), AS=a.AS, **cls)}
+                             session=sum(r.get("kind") == "arrive" for r in recs), AS=AS, **cls)}
         if a.served:
             fx["served"], fx["ids"] = served_record(RP.records(a.served), a.slice, tr.ids, base)
-            if a.AS:
+            if AS:
                 fx["served"] = by_unit(fx["rows"], fx["served"])
         text = json.dumps(fx, indent=1) + "\n"
         a.out.write_text(text) if a.out else print(text, end="")

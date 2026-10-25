@@ -29,7 +29,7 @@ WINDOW = {"kind": "served", "row": 1, "run": "r-test"}
 
 def _ports(program, query) -> dict:
     part, n = P.partition(program, query), P.units(program, query)
-    return {"x": {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1", n,
+    return {"x": {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), "x", "hm96-sha512/row/v1", n,
                                                          "r-test")}}
 
 
