@@ -120,7 +120,8 @@ theorem honestRun_decides {rd : Claims.Msg → Option FinalP} {x last : Claims.M
     rw [honestPs_size] at hk
     have hk2 : k / 2 < sts.size := by omega
     obtain ⟨-, e, he⟩ := htab (k / 2) hk2
-    have hs := schedOf_repCtx (r₀ := capRows (honestCaps spec sts c₁)) hk2 (htab (k / 2) hk2).1 he
+    have hs := schedOf_repCtx (r₀ := capRows (honestCaps spec sts c₁)) (cs := cs.tail.dropLast) hk2
+      (htab (k / 2) hk2).1 he
     obtain ⟨-, -, -, -, hlv⟩ := RecDeploy.fast100_sizes (hsch (k / 2) hk2)
     have hL : 2 ≤ ((fast100 (tabsOf sts)[k / 2]!.m).getD default).levels.size := by
       rw [hlv]
