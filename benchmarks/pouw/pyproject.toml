@@ -45,7 +45,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "verity/ml/kernels", "verity/ml/randomness", "verity/ml/flock/python",
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/config.py",
           "integrations/vllm/verity_vllm/commit/__init__.py", "integrations/vllm/verity_vllm/commit/hiding.py",
-          "integrations/vllm/verity_vllm/commit/serving_rows.py",
+          "integrations/vllm/verity_vllm/commit/serving_rows.py", "integrations/vllm/verity_vllm/errors.py",
           "integrations/vllm/verity_vllm/engine", "integrations/vllm/verity_vllm/linear",
           "integrations/vllm/verity_vllm/protocol_options/__init__.py",
           "integrations/vllm/verity_vllm/protocol_options/credit_gate.py",

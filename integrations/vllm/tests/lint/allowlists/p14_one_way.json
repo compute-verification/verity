@@ -28,7 +28,6 @@
     {"file": "verity_vllm/engine/step_trace.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/engine/step_trace.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "llm_engine"},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "vllm-internals", "symbol": "throwaway_requests", "detail": "llm_engine"},
-    {"file": "verity_vllm/linear/api.py", "kind": "refusal-class", "symbol": "<module>", "detail": "Refused"},
     {"file": "verity_vllm/observe/chunks.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "engine_core", "count": 2},
     {"file": "verity_vllm/observe/chunks.py", "kind": "vllm-internals", "symbol": "scheduler_of", "detail": "llm_engine"},
     {"file": "verity_vllm/pipeline/build.py", "kind": "refusal-class", "symbol": "<module>", "detail": "_Refused"},
