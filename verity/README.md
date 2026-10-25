@@ -2,7 +2,7 @@
 
 One distribution, one module per concern. Import from the module that owns an object
 (`from verity.ml.circuits import Program`); `verity` itself re-exports nothing. The architecture is the root
-`DESIGN.md`, and the repository map is the root `AGENTS.md`.
+`ARCHITECTURE.md`, and the repository map is the root `AGENTS.md`.
 
 | module | what it owns |
 |---|---|
@@ -35,4 +35,21 @@ that core's edges into ml (`CORE_ML_EDGES`) and what they reach (`SOUNDNESS_PATH
 
 ~~~sh
 uv run tools/verity/check/suites.py   # each directory's tests are a suite of their own; `check` runs them all
+~~~
+
+Build, evaluate and query a circuit from the primitive library:
+
+~~~python
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits import Program, query
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.ops.gemm import GEMM_AMPERE, Gemm
+
+gemm = bind(Gemm, K=64, N=8, **GEMM_AMPERE)   # x[64] @ W[8, 64]^T in BF16, as an A100's tensor cores compute it
+x, W = [0x3F80] * 64, [0x3F80] * (8 * 64)     # BF16 encodings of 1.0, with W flattened row by row
+evaluate(gemm, x, W)                          # eight BF16 words 0x4280, that is 64.0
+program = Program(gemm)
+program_digest(program)                       # the circuit's name: its SHA-512 digest
+query(program.circuit, "//GemmCoordinate")    # its 8 output coordinates, each with its interval of gates
 ~~~

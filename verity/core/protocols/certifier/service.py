@@ -447,20 +447,39 @@ BC_BYTES = 128
 
 def _commitments(public: Path, unit: int) -> dict[str, bytes] | None:
     """The row commitments a statement's public file holds for its one instance whose unit index is `unit`, by port
-    (`PORTS`, in their order after the header line, instance-major); None when no one instance is, or the file is
-    short."""
+    (`PORTS`, in their order after the header line): instance-major, or in a shared-row file (header ``shared_rows``,
+    `verity_flock.circuit.write`) each port's table port-major, then every instance's refs into them (u32 LE,
+    instance-major, the ports in order); None when no one instance is, or the file is short."""
     try:
         with open(public, "rb") as f:
-            indices = list(json.loads(f.readline())["units"]["indices"])
+            head = json.loads(f.readline())
+            indices, shared = list(head["units"]["indices"]), head.get("shared_rows")
             if indices.count(unit) != 1:
                 return None
-            f.seek(f.tell() + indices.index(unit) * len(PORTS) * BC_BYTES)
-            data = f.read(len(PORTS) * BC_BYTES)
+            i, k = indices.index(unit), len(PORTS)
+            if shared is None:
+                f.seek(f.tell() + i * k * BC_BYTES)
+                data = f.read(k * BC_BYTES)
+            else:
+                counts = [int(shared[p]) for p in PORTS]
+                if set(shared) != set(PORTS) or min(counts) < 1:
+                    return None
+                body = f.read(sum(counts) * BC_BYTES + len(indices) * k * 4)
+                if len(body) != sum(counts) * BC_BYTES + len(indices) * k * 4:
+                    return None
+                refs = body[sum(counts) * BC_BYTES + i * k * 4:][:k * 4]
+                data, base = b"", 0
+                for j, n in enumerate(counts):
+                    r = int.from_bytes(refs[4 * j:4 * j + 4], "little")
+                    if r >= n:
+                        return None
+                    data += body[(base + r) * BC_BYTES:(base + r + 1) * BC_BYTES]
+                    base += n
     except (OSError, ValueError, KeyError, TypeError):
         return None
-    if len(data) != len(PORTS) * BC_BYTES:
+    if len(data) != k * BC_BYTES:
         return None
-    return {p: data[k * BC_BYTES:(k + 1) * BC_BYTES] for k, p in enumerate(PORTS)}
+    return {p: data[j * BC_BYTES:(j + 1) * BC_BYTES] for j, p in enumerate(PORTS)}
 
 
 def _opens(data: bytes, bits: int, salt: Any, bc: bytes) -> bool:

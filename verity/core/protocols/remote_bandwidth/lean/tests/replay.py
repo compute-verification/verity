@@ -319,6 +319,10 @@ def replay_record(path: Path, s: D.Server) -> list[dict]:
         if not session.get("windows_seen"):
             rows.append(row | {"agree": None, "held": None, "why": "no window seen"})
             continue
+        if session.get("groups_per_coin", 1) != 1:
+            rows.append(row | {"agree": None, "held": None, "why": "drawn more than one window a coin "
+                               "(groups_per_coin): its windows' closes are its transcript's, which replays it"})
+            continue
         case, made = case_of(v["registration"], session)
         if earlier:
             made["registration"] = f"recorded before it named {' and '.join(earlier)}, its digest not today's"

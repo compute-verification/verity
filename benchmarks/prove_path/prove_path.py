@@ -17,7 +17,8 @@ Two kinds of committed run:
 * **A single-GPU Commit** (``--bundle DIR --row-dir DIR --workload F``, TP1): one window, ``rank0/``, from the Commit's sealed
   bundle (``<row dir>/commit/replay_bundle_p0``) under its run root. The compiler is `Capped` over `I2Compiler`: I2's
   `predict.steps.compile_steps` on the advice and the requests' bodies, each Program the one I2 compiles, its body read from
-  the Build's files of that digest (`I2Compiler.load`). The window is a stand-in of the record's SHA-512 rows root (`stand_in1`).
+  the Build's files of that digest and held to it (`I2Compiler.load`, `build_of`). The window is a stand-in of the record's
+  SHA-512 rows root (`stand_in1`).
 * **A served window** (``--serve-run DIR --window K --row-dir DIR``, TP1): one closed Commit window of a `verity-vllm
   serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
@@ -35,7 +36,8 @@ Two kinds of committed run:
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
-        [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local --main FILE]
+        [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] [--challenger local|gate:USER@HOST --main FILE]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
     prove_path.py circuit --serve-run DIR --window K --row-dir DIR --partition F --advice FILE --out FILE [--hf-config F] \\
@@ -52,7 +54,11 @@ Two kinds of committed run:
   draw's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the draw and Lean refused the outcome
-  (`forged_row`).
+  (`forged_row`). ``--plain``: the sessions are plain C-Flock, not `--zk` (a5's ``--plain``: a stratified draw over a window of
+  one member, no registered reads or shared rows, Lean `verify --coins os --stratified K`, no firewall), and the summary
+  names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
+  (``charge``, `charge_terms`): ``advice_bits``, ``delta``, ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ)
+  and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest names the tree's code (`source_identity.code_identity`:
   ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's. Where the model's
@@ -80,9 +86,12 @@ registration to that list and no other. Until COMPILER lists the I/O shell's uni
 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
 the compiler listing none and under it less each one gate (`more_negatives`).
 
-**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local --main FILE`` on the
-auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is read;
-``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent history).
+**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local|gate:USER@HOST --main
+FILE`` on the auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is
+read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
+history; ``gate:USER@HOST`` is vy-challenger-1 through infra's gate with the lane's gate key ``--gate-key``, its challenger on
+``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
+a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
 `advice_before_draw` holds the advice to the receipt of the stream that drew.
 """
 from __future__ import annotations
@@ -107,7 +116,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, free_ports  # noqa: E402, F401
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -129,6 +139,9 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``, #3619)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
+#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
+PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
+                 "C); the statement reads no registered values and no shared rows")
 
 
 @dataclass(frozen=True)
@@ -164,8 +177,9 @@ class I2Compiler:
     compiles from the advice and each request's body by its I1 id (``ingress``; I2's prompts and sampling are values the request
     brings, never advice), under the registered φ (``registered``: the model, target, engine and ℓ, no workload). `load` reads
     each Program's body from the Build's files of the digest I2 compiled (a ``build_request*/`` under ``programs_root`` whose
-    ``result.json`` names it), refused where no Build dir holds it: the Build's files are the bodies' cache, I2's digests are the
-    Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
+    ``result.json`` names it), refused where no Build dir holds it or its files aren't that Program (`build_of`: its digest
+    recomputed from its descriptor, its rows held to the descriptor's): the Build's files are the bodies' cache, I2's digests
+    are the Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
     I2 lists the I/O shell's own. Its digest names I2's code (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them,
     so a node's ignored build outputs don't move it), φ, the default seed, ℓ and that list; a served window's I2 is named as the
     server registered it instead (``registered_digest``, `served_identity`), with that list beside it where it lists any."""
@@ -208,23 +222,24 @@ class I2Compiler:
 
     def load(self, rank: int, world: int, requests: Any) -> SimpleNamespace:
         """The window's Programs for I2's ``requests`` (`requests`), as `deferred_rows.of_record` holds the Build's: by request id
-        its instances, its dir and its digest, and each request's arrival, its first step in the advice."""
-        from verity_vllm.query.manifest import format as MF
-
+        its instances, its dir and its digest, and each request's arrival, its first step in the advice. Each Build dir is held to
+        I2's digest (`build_of`) before its instances are read, so the rows the window and the audit read are I2's Program's, not
+        the Build's word for it."""
         if (int(rank), int(world)) != (0, 1):
             raise ValueError(f"I2 compiles a single-GPU session: rank {rank} of a world of {world}")
         by = bodies_by_digest(self.programs_root)
-        loaded, digs = {}, {}
+        loaded, digs, held = {}, {}, {}
         for q in requests:
             d = by.get(str(q.get("digest")))
             if d is None:
                 raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program "
                                  f"{str(q.get('digest'))[:16]}")
-            v = MF.load_program(d)
-            got = str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "")
-            if got != q["digest"]:
-                raise ValueError(f"request {q['request_id']}: {d}'s instances are Program {got[:16]}, not I2's {q['digest'][:16]}")
-            loaded[q["request_id"]], digs[q["request_id"]] = v, got
+            if (d, q["digest"]) not in held:
+                try:
+                    held[d, q["digest"]] = build_of(d, q["digest"])
+                except ValueError as e:
+                    raise ValueError(f"request {q['request_id']}: {e}") from None
+            loaded[q["request_id"]], digs[q["request_id"]] = held[d, q["digest"]], q["digest"]
         return SimpleNamespace(progs={k: v["instances"] for k, v in loaded.items()}, dirs={k: v["dir"] for k, v in loaded.items()},
                                digs=digs, arrivals={q["request_id"]: int(q["arrive_step"]) for q in requests})
 
@@ -261,6 +276,110 @@ def bodies_by_digest(programs_root: str) -> dict[str, str]:
         res = json.loads(d.read_text())
         if res.get("ok") and (dig := (res.get("program") or {}).get("digest")):
             out.setdefault(str(dig), str(d.parent))
+    return out
+
+
+def build_of(d: str, digest: str) -> dict[str, Any]:
+    """Build dir ``d``'s Program as `MF.load_program` reads it, held to Program ``digest``, each failure a `ValueError` naming it.
+
+    The digest is recomputed from the Build's body (``descriptor.json.gz``, `codec.program_digest`) and must be ``digest``, and
+    each digest the Build records (``result.json``'s, the instances head's) must be the recomputed one. The rows the window and
+    the audit read (``instances.json.gz``) must be the descriptor's: row k is the root's node k past its Input batches, by spec,
+    form and operand leaves, a read of an Input batch as the parameter leaves it binds. That layout is the program function's
+    binding record's (I2's ``Derived[...]{SRC}``: the shapes of its parameters but the last, the weights, which binds every
+    later Input batch). A word Build only: I2 compiles word Programs. Row names, the head's parameter names and types and its
+    ``supplied``, and the Build's correspondence and ``prefix_cache.json`` stay the Build's: no Program digest covers them."""
+    import gzip
+
+    from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
+    from verity.ml.circuits.program import is_input
+    from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
+    from verity_vllm.program.registry.catalog import load
+    from verity_vllm.query.manifest import format as MF
+
+    p = Path(d) / "descriptor.json.gz"
+    if not p.is_file():
+        raise ValueError(f"{d} has no descriptor.json.gz: its Program's digest can't be recomputed")
+    with gzip.open(p, "rt") as f:
+        desc = json.load(f)
+    got = program_digest(desc)
+    if got != digest:
+        raise ValueError(f"{p} is Program {got[:16]}, not I2's {str(digest)[:16]}")
+    v = MF.load_program(d)
+    inst = v["instances"]
+    for what, rec in (("result.json", ((v["result"] or {}).get("program") or {}).get("digest")), ("instances.json.gz", inst.get("digest"))):
+        if rec != got:
+            raise ValueError(f"{d}'s {what} records Program {str(rec)[:16]}, and its descriptor.json.gz is Program {got[:16]}")
+    if inst.get("ir") is not None:
+        raise ValueError(f"{d}'s instances.json.gz is a Build in IR {inst['ir']!r}, and I2 compiles word Programs")
+    nodes = decode_program(desc, load()[0]).root.body.nodes
+    n_in = next((k for k, n in enumerate(nodes) if not is_input(n.fn)), len(nodes))
+    where = input_layout(desc, [n.n for n in nodes[:n_in]])
+    rows = inst.get("rows") or []
+    if len(rows) != len(nodes) - n_in:
+        raise ValueError(f"{d}'s instances.json.gz has {len(rows)} rows, and its descriptor.json.gz {len(nodes) - n_in} nodes")
+
+    def param(run: Sequence) -> list:
+        sp, i, lo, hi = run
+        if sp != "n":
+            return [sp, i, lo, hi]
+        if i < n_in:
+            j, off = where[i]
+            return ["p", j, off + lo, off + hi]
+        return ["n", i - n_in, lo, hi]
+
+    for k, (r, n) in enumerate(zip(rows, nodes[n_in:])):
+        want = {"i": k, "spec": descriptor_id(n.fn), "form": n.form,
+                "args": [merged([param(run) for run in a]) for a in expanded_file_args([file_items_from_refs(a.refs) for a in n.args])]}
+        try:
+            have = {"i": r.get("i"), "spec": r.get("spec"), "form": r.get("form"), "args": [merged(a) for a in r.get("args") or ()]}
+        except (AttributeError, TypeError, ValueError):
+            have = {}
+        if have != want:
+            bad = ", ".join(x for x in want if have.get(x) != want[x])
+            raise ValueError(f"{d}'s instances.json.gz row {k} is not its descriptor.json.gz's node {k}: they differ in {bad}")
+    return v
+
+
+def input_layout(desc: Mapping[str, Any], sizes: Sequence[int]) -> list[tuple[int, int]]:
+    """Each root Input batch of leaf count ``sizes[m]`` as (parameter, leaf offset): in order, the parameters the program
+    function's ``SRC`` record shapes, then the last parameter, the weights, for every later batch. Refused where the record
+    names no shapes or the batches don't fill them."""
+    import math
+
+    pf = str(desc.get("program_fn") or "")
+    _, sep, rec = pf.partition("{SRC=")
+    try:
+        shapes = json.loads(rec[:-1])["dict"]["inputs"] if sep and rec.endswith("}") else None
+        need = [math.prod(int(x) for x in s) for s in shapes]
+    except (ValueError, KeyError, TypeError):
+        need = None
+    if need is None:
+        raise ValueError(f"the program function {pf[:80]} records no SRC input shapes: not one of I2's Programs")
+    out, j, off = [], 0, 0
+    for m, size in enumerate(sizes):
+        while j < len(need) and need[j] == 0:
+            j += 1
+        out.append((j, off))
+        off += int(size)
+        if j < len(need) and off >= need[j]:
+            if off > need[j]:
+                raise ValueError(f"Input batch {m} runs past parameter {j}'s {need[j]} leaves")
+            j, off = j + 1, 0
+    if any(need[j:]):
+        raise ValueError(f"the root's {len(sizes)} Input batches don't fill the {len(need)} parameters SRC shapes")
+    return out
+
+
+def merged(runs: Sequence[Sequence]) -> list[list]:
+    """Operand runs ``[space, index, lo, hi]`` with each run that continues the one before folded into it: one leaf sequence,
+    one spelling, however the Input batches split a parameter."""
+    out: list[list] = []
+    for sp, i, lo, hi in runs:
+        if out and out[-1][0] == sp and out[-1][1] == i and out[-1][3] == lo:
+            out[-1][3] = hi
+        else:
+            out.append([sp, i, lo, hi])
     return out
 
 
@@ -809,6 +928,31 @@ def per_unit(s: dict) -> dict[str, dict]:
     return out
 
 
+def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
+    """The bits one unit of each of the window's templates commits (`partition._template_bits`), by template."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    return {m.template: P._template_bits(SRW.template(m.template).fn if m.schemas else sets[m.template][1]) for m in mine.members}
+
+
+def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
+    """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
+    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
+    (``location_bits``, `consumers.location_bits`); β_δ, the faulty units' committed bits (``harm_bound``: the profile's
+    `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
+    templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
+    (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
+    if not record.get("accepted"):
+        return None
+    p = AU.profile(record["registration"], record["draw"], delta)
+    law = p.strata()
+    weights: float | dict[str, float] = max(bits.values())
+    if law is not None and {s.name for s in law.strata} <= set(bits):
+        weights = {s.name: float(bits[s.name]) for s in law.strata}
+    return {"advice_bits": advice_bits, "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
+            "location_bits": location_bits(p), "harm_bound": p.harm_bound(weights), "exfiltration_bound": exfiltration_bound(p, weights)}
+
+
 def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
     """Rank ``r``'s audit (`rank_audit`). On the challenger's coins, a rank that ends without its draw says so, so the run root's
     one session closes once every other rank has drawn."""
@@ -836,11 +980,14 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         more = {**more, **serve_negatives(serve_window(str(a.serve_run), int(a.window)), compiler, bound, bytes(rr.run.run_root).hex(),
                                           rr.store.commit_scheme)}
         check = lambda w: with_serve(src(w, mine, held), sv)
-    s, ok = A5.audit(a, A5.template_sets(Path(a.template_sets)), out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
+    sets = A5.template_sets(Path(a.template_sets))
+    s, ok = A5.audit(a, sets, out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
                      {"rank": r, "tp": held.get("tp"), "binding": bound, "requests": requests, "verifier_window_s": window_s,
                       **({"serve": sv} if sv else {})}, more, rank=r)
+    record = json.loads((out / "audit.json").read_text()) if (out / "audit.json").is_file() else {}
     row = {"ok": ok, "seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "per_unit": per_unit(s),
-           **({"serve": sv} if sv else {}),
+           "charge": charge_terms(record, template_bits(mine, sets), bound["advice"]["bits"], a.delta),
+           **({"serve": sv} if sv else {}), **({"plain": s["plain"]} if "plain" in s else {}),
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
     if s.get("draw") is not None:
@@ -897,9 +1044,11 @@ def audit(a: argparse.Namespace) -> int:
                      "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
                      **({"i2": i2_against_record(a, requests)} if single(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
-                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {}}
+                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
+                     **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
     if a.challenger:
-        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main)
+        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main, ssh_key=a.gate_key,
+                                              peer=a.peer, key_record=a.challenger_key)
     try:
         for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
             summary["ranks"][str(r)] = row
@@ -919,8 +1068,12 @@ def audit(a: argparse.Namespace) -> int:
              | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
              | ({"forged": s["forged"]} if a.forged else {"accepted": (s.get("audit") or {}).get("accepted"),
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
+             | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("location_bits", "harm_bound", "exfiltration_bound")}
+                | {"wrong_units_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
              for r, s in summary["ranks"].items()}
     print("PROVE-PATH " + json.dumps({"run_root" if single(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],
+                                      "proof": "plain" if a.plain else "zk", **({"plain": summary["plain"]} if a.plain else {}),
+                                      "advice_bits": bound["advice"]["bits"], "delta": a.delta,
                                       "coins": summary["coins"]["source"], "transfer_gates": summary["transfer_gates"],
                                       **({"i2_equal": summary["i2"]["equal"]} if single(a) else {}),
                                       **({"serve": {k: summary["serve"][k] for k in ("window", "ok", "codes")}} if served(a) else {}),
@@ -1043,8 +1196,16 @@ def main(argv: list[str] | None = None) -> int:
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--challenger", choices=["local"], help="draw each window on the auditor's challenger's coins, the run root's one "
-                   "session (a5_coins; local: a development session on this machine), not the verifier's own")
+    p.add_argument("--plain", action="store_true", help="plain C-Flock sessions, not --zk (a5's --plain): the partition's law "
+                   "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
+    p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
+                   "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
+                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
+                   "127.0.0.1 the session's challenger listens on")
+    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
+                   "(infra's challenger-key/v1), never the session's key.json")
+    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
@@ -1099,9 +1260,14 @@ def main(argv: list[str] | None = None) -> int:
                  "--window K --row-dir DIR")
     elif not a.opening or (a.cmd == "commit" and not a.advice):
         ap.error("--opening FILE (and commit's --advice FILE)")
-    if a.cmd == "audit" and a.challenger and not a.main:
-        ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the commit "
-                 "the session's host pins")
+    if a.cmd == "audit" and a.challenger:
+        if a.challenger != "local" and not a.challenger.startswith("gate:"):
+            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
+            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the "
+                     "commit the session's host pins")
     return commit(a) if a.cmd == "commit" else audit(a)
 
 

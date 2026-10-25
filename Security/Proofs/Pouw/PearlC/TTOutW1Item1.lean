@@ -52,9 +52,11 @@ variable {Q R S : Type}
 /-- One unit of shape `1 × 1 × k`, weight id 0, weights `w`. -/
 def oneUnit (k : ℕ) (w : Codes) : Workload := ⟨⟨1, fun _ => ⟨1, 1, k⟩, fun _ => 0⟩, fun _ => w⟩
 
-/-- Constant word 0 to ticket word `(0, 0, 0)` and constant word 1 to useful word `(0, 0, 0)`. -/
+/-- Constant word 0 to ticket word `(0, 0, 0)` and constant word 1 to useful word `(0, 0, 0)`: three nodes of text and two
+constants, within W1's bound. -/
 def guessProg (t y : ℕ) : W1.Prog :=
-  ⟨fun _ => [t, y], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) (.op (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) .done)⟩
+  ⟨fun _ => [t, y], fun _ => .op (.mov (W1.ticketAt 0 0 0) (W1.constAt 0)) (.op (.mov (W1.usefulAt 0 0 0) (W1.constAt 1)) .done),
+    fun _ => by norm_num [W1.Code.size]⟩
 
 /-- The guessing adversary: no preprocessing, `guessProg t y` online, activations `a` for every unit. -/
 noncomputable def guessAdv (dv : W1.W1Device) (salt : S → List ℕ) (a : Codes) (t y : ℕ) :
