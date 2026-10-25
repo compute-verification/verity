@@ -37,6 +37,15 @@ negatives.
   its rows under the Program's value, two units swapped: `--made-for`), are refused by Lean's registered reads. Its warden run
   is rehearsed against a fake endpoint, or (`A5_WARDEN_RUN`) is `warden_replay.py`'s: a served window's requests through the
   warden, each answered with the tokens the server streamed it.
+- `a5_tp_gates.py` (`a5_tp.sh` with `A5_COINS=verifier` and `STANDIN=tp-gates`, `tp-gates:altered`, `tp-gates:swapped`,
+  `tp-gates:other-collective`, `tp-gates:other-request` or `tp-gates:own`): A5 on both ranks of a synthetic Llama TP2 step
+  of two requests whose cross-rank transfers hold transfer gates, which no served TP2 window has yet. Each rank's partial of
+  each reduction (layer 0's embedding, o_proj and down_proj, H = 2048) for each request is a registered value its
+  registration names; each rank's `TpAllReduce2{H}` chunk of a request's reduction (the `AllReduce2_v1` sums on two ports) is
+  proved whole beside a drawn rest, and Lean verifies it with the verifier's own registered reads of both ranks' partials of
+  that request at the roots each owner registered, every registration read before any rank's coin. A received row moved one
+  bit (`--altered`), two tokens' rows swapped, another collective's partial, another request's, and the receiving rank's own
+  partial read as its peer's (`--made-for`) are each refused by Lean's registered reads on rank 1, rank 0 accepted.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job (`research run --on
   vy-glm53-eu2 --cwd source -- bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
