@@ -6,7 +6,8 @@
 
 For each set (in `vectors.json` `replayable.sets`) whose PR #83 commit has an upstream binary, the job:
 - fetches its inputs from the evidence store (`research data fetch`), among them the verifier's own registered reads
-  (`statement.registered`, `agree.py --registered`) for a statement that reads registered values;
+  (`statement.registered`, `agree.py --registered`) for a statement that reads registered values, and passes the verifier's
+  own K (`statement.stratified`, `agree.py --stratified`) for sessions drawn by the stratified law;
 - for a set that names `mutants`, regenerates the proof mutants (`redigest.py`), the retained-bytes sessions
   (`redigest.py --retain`) and `N` fuzz cases (`fuzz.py --seed S`) from its honest session;
 - adds the set's stored forgeries, if it has any;
@@ -143,6 +144,8 @@ def run_set(i, s, a, ups, store):
            "--out", w / "agree", "--jobs", a.session_jobs, "--sessions", *sessions]
     if tables:
         cmd += ["--tables", tables]
+    if "stratified" in st:
+        cmd += ["--stratified", str(st["stratified"])]
     if "lean_refuses" in s:
         cmd += ["--lean-refuses", s["lean_refuses"]]
     if "lean_refuses_drawn" in s:
