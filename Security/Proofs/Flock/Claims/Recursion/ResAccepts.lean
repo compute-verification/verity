@@ -42,13 +42,13 @@ theorem partAccepts_staged {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
       0 < p.sts.size ∧ _root_.Flock.Readable.StmtCopies sv p w ∧ L.Agrees cmt x s w xO ms ∧
       (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w)).isSome = false ∧
       showsTr untr s x xO c := by
-  obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm⟩ := h
+  obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedReads hs
   have hck' : Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w =
       true := hck
   exact ⟨xO, w, p, r, sv, hx, ht, hpi, hr, hss, hsz,
     _root_.Flock.Readable.stmtCopies_of_allOuts htab (_root_.Flock.Readable.allOuts_of_check hck' hx ht hpi),
-    ⟨hh, hp, hm⟩, hT, hc, hs.1⟩
+    ⟨hh, hp, hm, hrw⟩, hT, hc, hs.1⟩
 
 /-- **An algebra part's copies compute its residuals, from `PartAccepts`**: at the deployed outer record and the staging
 `showsPart`, where part `s`'s V\* statement at `x`'s inner shape is an algebra part (`.inner`), `PartAccepts` names a
