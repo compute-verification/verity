@@ -914,13 +914,12 @@ class Pair:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
 
     def record(self) -> audit.Record:
-        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it), or under
-        `python` the books'."""
+        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
+        session's bounds, `audit.Session.bounded`), or under `python` the books'."""
         if self.lean is None:
             return self.s.record()
-        return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
-                            self.s.params.delta, samples=self.s.params.samples,
-                            append_coins=self.s.commitment.family(coins.APPEND) or 0)
+        return self.s.bounded(lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
+                                           self.s.params.delta))
 
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]
@@ -1404,10 +1403,9 @@ class Verifier:
             if head["k"] == k:
                 break
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
-               "samples": samples, "append_coins": appends, "delta": self.delta, "window_ns": window_ns, "windows": W,
-               "pace": pace,
+               "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
-               "appended": session.extent - reg.blocks, "released": session.released,
+               "appended": session.extent - reg.blocks, "released": session.released, "append_coins": appends,
                "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,
                "transcript": None if case is None else case.close(lv.released_coins(session.coins)),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},

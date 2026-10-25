@@ -91,7 +91,7 @@ import os
 import secrets
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from typing import Any, Protocol
 
@@ -695,11 +695,11 @@ class Record:
     rows: int = receipts.SKETCH_ROWS
     appended: int = 0
     released: int = 0
+    samples: int | None = field(default=None, kw_only=True)
+    append_coins: int | None = field(default=None, kw_only=True)
     lifetime: int | None = None
     appends: bytes | None = None
     pace: Pace | None = None
-    samples: int | None = None
-    append_coins: int | None = None
 
     @property
     def start_ns(self) -> int:
@@ -1151,7 +1151,16 @@ class Session:
         return None
 
     def record(self) -> Record:
-        """The session's record, once every window is accepted."""
+        """The session's record, once every window is accepted, with its bounds (`bounded`)."""
+        return self.bounded(self._record())
+
+    def bounded(self, record: Record) -> Record:
+        """`record` with the bounds every window of this session obeys, whatever its outcome: its draw cap and the
+        append coins its coin commitment reserved (`Record.samples`, `Record.append_coins`, `ledger.binding`)."""
+        return replace(record, samples=self.params.samples, append_coins=self.commitment.family(coins.APPEND) or 0)
+
+    def _record(self) -> Record:
+        """The session's record without its bounds."""
         self._live()
         if len(self.windows) != self.params.windows or any(w.verdict is None or not w.verdict.accepted for w in self.windows):
             raise SessionError("a record needs every window of the session accepted")
@@ -1164,8 +1173,7 @@ class Session:
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
-                      self.params.lifetime, self._head, self.params.pace, self.params.samples,
-                      self.coins.commitment.family(coins.APPEND) or 0)
+                      self.params.lifetime, self._head, self.params.pace)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"
