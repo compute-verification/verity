@@ -17,7 +17,6 @@ from __future__ import annotations
 import itertools
 import json
 import random
-import re
 import shutil
 import socket
 import threading
@@ -225,7 +224,7 @@ def test_pearl_c_takes_its_coins_from_one_live_session_or_is_refused_before_any_
                                               "commitment, and nothing else"):
             PPD.epoch_of(workload, ROOTS, coins, opening, 3)
     for k in (None, -1, True, 1 << 64, "3"):
-        with pytest.raises(DomainError, match=re.escape(PS.PASS_FORM)):
+        with pytest.raises(DomainError, match="a salt epoch's number is an integer in"):
             PPD.epoch_of(workload, ROOTS, live.commitment, live_opening, k)
     for k in (0, 2, 4):                                   # opened after epoch 3's root, so no other epoch's
         with pytest.raises(DomainError, match="the salt's "):
@@ -338,7 +337,7 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
     (`session_reason`'s Pearl-C branch): the one session the ledger opened on R, which it recomputes from W and the
     pass's ``pass_index``, read through the gate's fetch. The manifest head names it by its `SESSION_KEYS` alone, with
     ``pass_index`` (`session_head`). The verifier's own weights' root, or the period's registered one, must be the
-    pass's; a pass naming no epoch number (`salt.PASS_FORM`), another epoch's, its session by another ledger seq, or
+    pass's; a pass naming no epoch number, another epoch's, its session by another ledger seq, or
     its hello's secret, is refused."""
     gate = CH.Gate(PRIVATE, KEY)
     s = _GateSession(tmp_path, monkeypatch, gate, Wd.SALT_FAMILIES, salt_only(5))
@@ -365,8 +364,10 @@ def test_a_served_pass_counts_from_its_salt_only_session_ended_closed_and_comple
     assert PHC.session_reason({**c, "session": {**c["session"], "secret": "ab" * 32}}, ledger, fetch) == (
         "the pass's session names its hello's secret, which a pass never records: a refused pass")
     for k in (None, True, -1, 1 << 64, "0", 0.0):
-        assert PHC.session_reason({**c, "pass_index": k}, ledger, fetch) == PS.PASS_FORM
-    assert PHC.session_reason({k: v for k, v in c.items() if k != "pass_index"}, ledger, fetch) == PS.PASS_FORM
+        assert PHC.session_reason({**c, "pass_index": k}, ledger, fetch) == (
+            f"the pass's pass_index names no salt epoch: a salt epoch's number is an integer in [0, 2^64), not {k!r}")
+    assert PHC.session_reason({k: v for k, v in c.items() if k != "pass_index"}, ledger, fetch).startswith(
+        "the pass's pass_index names no salt epoch")
     r1 = PS.epoch_open_root(root, 1).hex()
     assert PHC.session_reason({**c, "pass_index": 1}, ledger, fetch) == (
         f"the window's session is for Commit {r.hex()}, not the window's Commit {r1}")

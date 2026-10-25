@@ -8,7 +8,6 @@ import importlib.util
 import json
 import math
 import random
-import re
 import shutil
 import sys
 import types
@@ -947,7 +946,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(
     session's coins and k; a retained pass's manifest names k (``pass_index``) and the session the install carries by its
     id, ledger seq, root and commitment alone (never the gate's hello secret or the rest of its answer, which core's
     check of the pass reads from the ledger). One opened after another root (another epoch's, the bare W, or W before
-    the weights were committed), a run naming no epoch (`salt.PASS_FORM`), one bound to another session's commitment, a
+    the weights were committed), a run naming no epoch number, one bound to another session's commitment, a
     session of H1's layout (salt, draw and round coins, which a Pearl-C pass leaves unreleased, so its session never
     ends complete), and a live opening against an in-process commitment or the reverse are refused."""
     _, kernel, weights, roots, _ = device_run
@@ -975,9 +974,9 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(
         with pytest.raises(DomainError, match="not opened after"):
             PPD.manifest_epoch({**man, "pass_index": k}, c)
     for k in (None, True, -1):
-        with pytest.raises(DomainError, match=re.escape(PS.PASS_FORM)):
+        with pytest.raises(DomainError, match="salt epoch's number"):
             make(c, o, k)
-    with pytest.raises(DomainError, match=re.escape(PS.PASS_FORM)):
+    with pytest.raises(DomainError, match="salt epoch's number"):
         PPD.manifest_epoch({k: v for k, v in man.items() if k != "pass_index"}, c)
     with pytest.raises(DomainError, match="not opened after"):
         make(*live_coin(root))

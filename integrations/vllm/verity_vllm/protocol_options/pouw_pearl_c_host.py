@@ -88,8 +88,8 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
     (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
     commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
     opening against it after the salt epoch's root (`challenger.live_reason`), `salt.epoch_open_root` of the weights' root
-    W and `pass_index`, the epoch's number k over W (`salt.PASS_FORM` unless it is one).  Either is refused with
-    `DomainError`; a live salt is `audit.salt_of`'s over W, as H1's and ncp-v2's are."""
+    W and `pass_index`, the epoch's number k over W, an integer in [0, 2^64).  Either is refused with `DomainError`; a
+    live salt is `audit.salt_of`'s over W, as H1's and ncp-v2's are."""
     live = isinstance(coins, LiveCommitment), isinstance(opening, LiveOpening)
     if not any(live):
         return Epoch.start(workload, roots, coins, opening)
@@ -97,8 +97,6 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
         raise DomainError("a live session's salt coin opens against that session's live coin commitment, and nothing else")
     if set(roots) != set(workload.weights()):
         raise DomainError("every weight of the workload is committed, and only those")
-    if (why := PS.pass_index_reason(pass_index)) is not None:
-        raise DomainError(why)
     root = weights_root(roots)
     why = Wd.salt_epoch_reason(coins) or Ch.live_reason(coins, opening, Wd.SALT, 0, PS.epoch_open_root(root, pass_index))
     if why is not None:

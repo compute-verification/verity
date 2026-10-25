@@ -18,7 +18,6 @@ import hashlib
 import itertools
 import json
 import random
-import re
 
 import pytest
 
@@ -161,27 +160,24 @@ def test_window_open_root_form():
 
 
 def test_epoch_open_root_form():
-    """A Pearl-C salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v1" ‖ weights' root ‖ k as 8 bytes big-endian),
-    97 bytes hashed (Lean's `Properties.Pouw.LiveSalt.epochMessage`), pinned on one vector: another weights' root or
-    another k is another root, and so is k's little-endian form; a root that isn't 64 bytes is refused, and so is a k
-    that isn't an integer in [0, 2^64)."""
+    """A Pearl-C salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v1" ‖ weights' root ‖ u64be(k)), 97 bytes
+    hashed, pinned on one vector: another weights' root or epoch is another root, no epoch root is a window-open root's
+    tag, a root that isn't 64 bytes is refused, and so is an epoch number that isn't an integer in [0, 2^64)."""
     weights = bytes(range(64))
     root = PS.epoch_open_root(weights, 0)
-    assert PS.EPOCH_OPEN_TAG == b"verity/pouw-epoch-open/v1" and len(PS.EPOCH_OPEN_TAG) == 25
     assert root.hex() == (
         "e0dac4297e47d4ac5b82943ee85b7f76269ffc92c0da80a2c89a76813910064c"
         "97853737d76148923908e6a266f73f75abd3a8b9c512d38a726a3656e7067701")
-    assert PS.epoch_open_root(weights, 7) == hashlib.sha512(PS.EPOCH_OPEN_TAG + weights + (7).to_bytes(8, "big")).digest()
-    assert len({root, PS.epoch_open_root(weights, 1), PS.epoch_open_root(bytes(64), 0), PS.epoch_open_root(weights, (1 << 64) - 1),
-                hashlib.sha512(PS.EPOCH_OPEN_TAG + weights + (1).to_bytes(8, "little")).digest()}) == 5
+    assert PS.EPOCH_OPEN_TAG == b"verity/pouw-epoch-open/v1" and len(PS.EPOCH_OPEN_TAG + weights + bytes(8)) == 97
+    assert PS.epoch_open_root(weights, 258) == hashlib.sha512(PS.EPOCH_OPEN_TAG + weights + bytes(6) + b"\1\2").digest()
+    assert PS.epoch_open_root(weights, (1 << 64) - 1) == hashlib.sha512(PS.EPOCH_OPEN_TAG + weights + b"\xff" * 8).digest()
+    assert len({root, PS.epoch_open_root(weights, 1), PS.epoch_open_root(bytes(64), 0)}) == 3
     for bad in (weights[:32], weights + b"\0", bytearray(weights), weights.hex(), None):
         with pytest.raises(DomainError, match="weights' root is 64 bytes"):
             PS.epoch_open_root(bad, 0)
-    for bad in (-1, 1 << 64, True, 0.0, "0", None):
-        assert PS.pass_index_reason(bad) == PS.PASS_FORM
-        with pytest.raises(DomainError, match=re.escape(PS.PASS_FORM)):
+    for bad in (-1, 1 << 64, 1.0, True, "0", None):
+        with pytest.raises(DomainError, match="salt epoch's number"):
             PS.epoch_open_root(weights, bad)
-    assert [PS.pass_index_reason(k) for k in (0, 1, (1 << 64) - 1)] == [None] * 3
 
 
 def test_a_context_names_its_pouw_window():

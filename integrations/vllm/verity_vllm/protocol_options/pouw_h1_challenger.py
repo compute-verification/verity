@@ -86,6 +86,7 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import salt_of
+from verity.core.protocols.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveCommitment, LiveOpening,
@@ -438,7 +439,7 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
                         commit: str | None = None, verify: Any = lms_verify) -> str | None:
     """Why a Pearl-C pass (its device run's commitment `commits`) isn't held to its salt session, the one whose salt
     coin follows the pass's salt epoch's root R = `salt.epoch_open_root` of its weights' root W (``weights_root``)
-    and its epoch's number k (``pass_index``, `salt.PASS_FORM` unless it is one) rather than a window's open root
+    and its epoch's number k (``pass_index``, an integer in [0, 2^64)) rather than a window's open root
     (statement: Lean `Properties.Pouw.LiveSalt.Accepted`); None when it is. R is recomputed here, never read from the
     pass. The session is the one the auditor's `ledger` opened on R, ended closed and complete under the commitment the
     pass names (`held`, its ``session``: id, ledger ``seq``, R and commitment, never its hello's ``secret``; `commit`
@@ -455,11 +456,12 @@ def salt_session_reason(commits: Mapping[str, Any], ledger: Ledger, fetch: Fetch
         return f"the pass's weights' root {w[:16]}... is not {str(commit)[:16]}..., the one the verifier holds"
     if registered is not None and w != bytes(registered).hex():
         return "the pass's weights' root is not the one the period registered"
-    if (why := PS.pass_index_reason(commits.get("pass_index"))) is not None:
-        return why
+    try:
+        root = PS.epoch_open_root(bytes.fromhex(w), commits.get("pass_index"))
+    except DomainError as e:
+        return f"the pass's pass_index names no salt epoch: {e}"
     if isinstance(commits.get("session"), Mapping) and "secret" in commits["session"]:
         return "the pass's session names its hello's secret, which a pass never records: a refused pass"
-    root = PS.epoch_open_root(bytes.fromhex(w), commits["pass_index"])
     why, window = held(commits.get("session"), ledger, root.hex())
     if why is not None:
         return why
