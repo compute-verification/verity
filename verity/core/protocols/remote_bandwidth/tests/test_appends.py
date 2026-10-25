@@ -80,7 +80,7 @@ class Run:
     before the pass's root (`head`).  With a `registry`, the session is its next over the store's registration."""
 
     def __init__(self, store: audit.Store, prover_store: audit.Store | None = None, windows: int = 2,
-                 samples: int = 10**6, lifetime: int = audit.LIFETIME, registry: audit.Registry | None = None,
+                 samples: int = 10**6, lifetime: int | None = None, registry: audit.Registry | None = None,
                  deferred: bool = False, appends: int = coins.APPENDS) -> None:
         reg = store.registration
         self.p = Params(blocks=reg.blocks, deadline_ns=10**6, windows=windows, samples=samples, delta=1e-6,
@@ -439,7 +439,7 @@ def test_a_requirement_link_caps_nothing_unless_its_memory_map_unit_makes_the_re
 def test_a_record_carries_each_pass_s_head_and_stale_bound(honest) -> None:
     """Each pass's head is the chain over the appends received before its root, which its seed binds: none before
     pages 8 … 11, then theirs through window 0, then theirs and 12 … 13's through window 1.  Its stale bound is N
-    throughout, since no block reaches L = 60, and the received appends give the same.  The public record lists the
+    throughout, since no block reaches L (30 s of 10 ns windows), and the received appends give the same.  The public record lists the
     heads per window (hiding commitments), the verifier's profile heads and bounds both, and the honest session's
     map, step 0 appending 8 … 11 and step 2 12 … 13, is the units' at every pass.  A link reads the heads, not the
     bounds, which its unit recomputes: a record without heads is refused one, and one without bounds is not."""
@@ -694,6 +694,21 @@ def test_an_appended_block_opens_only_with_its_digest(appended, digest, failure)
     assert r.s.verify(0, opened) == audit.Verdict(0, False, failure, draws[n])
 
 
+@pytest.mark.parametrize("opened", [0, 1], ids=["no-openings", "an-opening"])
+def test_a_window_with_no_draws_is_malformed_whatever_its_openings(opened) -> None:
+    """No session draws nothing (`Params` refuses `samples` or `min_passes` under 1), but a window whose draws are
+    empty is `malformed` at `verify`, with or without openings, as the Lean `Session.verify` has it: a frame that
+    doesn't decode, read as no openings, is refused on every window."""
+    r = Run(store(), windows=1)
+    assert r.run() is None
+    r.boundary()
+    r.clock.now = r.s.deadline(0) + 1
+    draws = r.s.close(0)
+    openings = [r.prover.open(r.passes[0, i], q) for i, q in draws][:opened]
+    r.s.windows[0].draws = ()
+    assert r.s.verify(0, openings) == audit.Verdict(0, False, "malformed") == r.s.failed
+
+
 def test_an_append_s_leaves_bind_the_indices_the_verifier_assigns() -> None:
     """A prover that commits its append's tree one index past the one the verifier assigns, and opens its pages with
     that tree's paths (the same shape), fails the payload path."""
@@ -788,6 +803,26 @@ def test_a_session_that_defers_residency_has_a_lifetime_of_at_least_two() -> Non
     for bad in (1, "yes", None):
         with pytest.raises(ValueError, match="deferred is a bool"):
             Params(blocks=N, deadline_ns=1, windows=1, deferred=bad)
+
+
+def test_the_lifetime_cap_is_the_whole_windows_of_t_in_30_seconds() -> None:
+    """L is a duration's (`LIFETIME_NS`, 30 s) whole windows, at least 1, or 2 deferred: a carrier's life stays about
+    30 s whatever T is, where a count of windows was an hour at 60 s and a minute at 1 s.  A paced session's default
+    counts its groups as stated windows, the fewest the life allows (the verifier states the groups of their nominal
+    length); a stated L stays."""
+    assert audit.LIFETIME_NS == 30 * 10**9
+    assert [audit.lifetime_windows(t * 10**9) for t in (60, 30, 20, 7, 1)] == [1, 1, 1, 4, 30]
+    assert [audit.lifetime_windows(t * 10**9, deferred=True) for t in (60, 20, 15, 1)] == [2, 2, 2, 30]
+    assert audit.lifetime_windows(85 * 10**6) == 352 and audit.lifetime_windows(10**9, life_ns=120 * 10**9) == 120
+    assert Params(blocks=N, deadline_ns=1, windows=1).lifetime == 1
+    assert Params(blocks=N, deadline_ns=1, windows=1, deferred=True).lifetime == 2
+    assert Params(blocks=N, deadline_ns=1, windows=1, window_ns=10**9).lifetime == 30
+    assert Params(blocks=N, deadline_ns=1, windows=1, window_ns=10**9, lifetime=7).lifetime == 7
+    assert Params(blocks=N, deadline_ns=1, windows=2, window_ns=1, pace=audit.Pace(1)).lifetime == 1
+    assert Params(blocks=N, deadline_ns=1, windows=2, window_ns=1, pace=audit.Pace(1, 10**9)).lifetime == 30
+    for bad in (0, -1, 1.0, None):
+        with pytest.raises(ValueError, match="lifetime's window_ns"):
+            audit.lifetime_windows(bad)
 
 
 def withdrawing() -> Run:

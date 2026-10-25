@@ -56,7 +56,7 @@ step that reached it until a later write, and the writer records no free of it. 
 the verifier checks that no plan held it, so it was never written.
 
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
-an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
+the windows in 30 s), so every block written leaves the credited store within L.  A block the writer keeps
 longer (a prefix cache's) is re-keyed: its payload appended again, the same `d_j` at the store's next fresh index
 under a fresh coin, so the device encodes it anew under a fresh bound key.  A re-key's free is the one exception to a
 free at its values' last structural reader: the re-key's step frees the slot, releasing the old index, and the new

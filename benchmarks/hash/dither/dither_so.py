@@ -203,7 +203,8 @@ SPILL_MAX_ENV = "DITHER_SPILL_MAX_GB"   # the pool's bound, past which a window'
 SPILL_MAX_GB = 128
 # "1": a step's GEMMs and y commits write a row past m's z/y records only where an earlier step left something else
 # (a live row, a captured step's poison, a control's unwritten records, a new window): the same bytes in every record,
-# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written)
+# without the dead rows' ~350 MB of stores a step at m = 32 of T = 64 (`dead_from`, S[2], dither_a._rows_written); and
+# `after` clears the A slots' and scales' rows past m only below that row (the quantizer writes rows below m alone)
 DEAD_ONCE_ENV = "DITHER_DEAD_ONCE"
 # "1": a step's inputs written from pinned host memory without a wait (`_put`): the serving stream orders them after
 # step s - 1's trees, lm_head and sampler, so the host launches forward s while the sampler runs
@@ -308,6 +309,7 @@ class SoWindow(DO.Window):
         if self.dead_once and self.overlap:
             raise RuntimeError(f"{DEAD_ONCE_ENV}=1 serves an -so arm without -ov")
         self.clean_from: int | None = None
+        self.dead_c: int | None = None
         self.put_async = os.environ.get(PUT_ASYNC_ENV) == "1"
         super().__init__(*args, **kwargs)
         if self.a_step:
@@ -351,14 +353,16 @@ class SoWindow(DO.Window):
         self.t_b0 = self.t_after_end = 0.0
 
     def _a_step_set(self) -> None:
-        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows and its scales' run of
-        `scale_all`; `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
+        """DO.A_STEP_ENV's tables, pre["ak"]: a K's table over its slot group's rows, c = `DO.a_chunks` (K) leaves a
+        row (the group read K / c bytes a leaf), and its scales' run of `scale_all` (a scale every c leaves);
+        `a_leaves` the a-step table's leaves, call w's its K's root (`a_gidx`)."""
         ks, t, tabs, at = sorted(self.a_calls), self.t, [], 0
         for k in ks:
-            n = len(self.a_calls[k])
-            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), n * t, {"step": (1, 0)}), n * t,
-                            data=self.slot_groups[k].view(torch.uint8), stride=k, body=k, length=k + 4,
-                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, lab=(f"a/{k}@", "")))
+            n, c = len(self.a_calls[k]), DO.a_chunks(k)
+            tabs.append(Tab(Dom("a-table", DO.a_step_fields(self, k, 0), c * n * t, {"step": (1, 0)}), c * n * t,
+                            data=self.slot_groups[k].view(torch.uint8), stride=k // c, body=k // c, length=k // c + 4,
+                            tail=self.scale_all[at:at + n].view(torch.uint8), tail_stride=4, chunks=c,
+                            lab=(f"a/{k}@", "")))
             at += n
         v = os.environ.get(A_LVF_ENV)
         lvf = max(0, max(H1CM.merkle_depth(t.count) for t in tabs) - A_LVF_TOP) if v is None else int(v) if v else None
@@ -366,6 +370,7 @@ class SoWindow(DO.Window):
         self.a_gidx = torch.tensor([ks.index(k) for _, k in self.nk], dtype=torch.long, device=self.dev)
         o = self.pre["mid"].level_off[0]
         self.a_leaves = self.pre["mid"].level[o:o + 8 * self.L].view(self.L, 8)
+        self.ev_a = [torch.cuda.Event(enable_timing=True) for _ in range(2)]
 
     def _put(self, dst: torch.Tensor, src: torch.Tensor) -> None:
         if self.put_async:
@@ -374,9 +379,12 @@ class SoWindow(DO.Window):
             super()._put(dst, src)
 
     def a_step_build(self) -> None:
-        """On the current stream, after the forward: the step's K tables and each call's a-step leaf."""
+        """On the current stream, after the forward: the step's K tables and each call's a-step leaf (between `ev_a`,
+        the step's a_tables_ms)."""
+        self.ev_a[0].record()
         self.c.build(self.pre["ak"], self.stepv[0:1])
         self.a_leaves.copy_(self.pre["ak"].roots.view(-1, 8).index_select(0, self.a_gidx))
+        self.ev_a[1].record()
 
     def _epoch(self) -> None:
         self._start()
@@ -729,6 +737,7 @@ class SoWindow(DO.Window):
             return 0
         c = self.t if self.cap is not None or self.clean_from is None else self.clean_from
         self.clean_from = self.t if self.flags & DO.F_NW_TILES else m
+        self.dead_c = c
         return c
 
     def before(self, m: int) -> None:
@@ -794,10 +803,11 @@ class SoWindow(DO.Window):
                 self.ev_z[1].record(zs)
         if self.a_once or self.a_step:
             self.phase("a_tables")
-            if not self.flags & DO.F_NW_TILES:
+            top = self.t if self.dead_c is None else self.dead_c
+            if not self.flags & DO.F_NW_TILES and top > m:
                 for x in self.slot_groups.values():
-                    x[:, m:].zero_()
-                self.scale_all[:, m:].zero_()
+                    x[:, m:top].zero_()
+                self.scale_all[:, m:top].zero_()
             if self.a_step:
                 self.a_step_build()
             else:
@@ -964,10 +974,15 @@ class SoWindow(DO.Window):
               "coin_wait_ms": 1e3 * (t_coin - t_wait),
               "dispatch_ms": 1e3 * (t_disp - t_coin), "between_ms": 1e3 * (t_end - t_fwd),
               "coin_late_ms": 1e3 * t_late}
+        if self.a_step:
+            ph["a_tables_ms"] = self.ev_a[0].elapsed_time(self.ev_a[1])
         if units_wait is not None:
             ph["units_wait_ms"] = units_wait
-            ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
-            ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
+            # under TAIL=2 the root came from the tail's own word, which the host can read before the stream is past
+            # ev_w[2] and ev_w[3]: a step whose stream isn't there yet has no tail times
+            if not zc or self.ev_w[3].query():
+                ph["tail_mid_ms"] = self.ev_w[1].elapsed_time(self.ev_w[2])
+                ph["tail_round_ms"] = self.ev_w[2].elapsed_time(self.ev_w[3])
             if self.hmark:
                 ph["h_tail_ms"] = self.ev_w[1].elapsed_time(self.ev_h[0])
                 ph["h_read_ms"] = self.ev_w[3].elapsed_time(self.ev_h[1])

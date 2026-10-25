@@ -448,6 +448,256 @@ def test_runs_entry_duplicated_into_two_locks_is_refused(tmp_path):
     assert any("locks at HEAD" in f["reason"] for f in r["refusals"])
 
 
+WORD_MAP = ('[words]\n"Models/Core" = "Definitions/Core"\n"Models.Core" = "Definitions.Core"\n"Trusted" = "Checked"\n'
+            '"S/Models/" = "S/Definitions/"\n\'"Models" / "Core"\' = \'"Definitions" / "Core"\'\n'
+            "'Models\\.Core' = 'Definitions\\.Core'\n'\"Models\" / \"Hash\"' = '\"Definitions\" / \"Hash\"'\n"
+            '\n[rewrite]\nexclude = []\n')
+WORD_BASE = {
+    "tools/move/demo_map.toml": WORD_MAP,
+    "S/lakefile.toml": 'name = "s"\n\n[[lean_lib]]\nname = "Models"\n',
+    "S/Models/Core/A.lean": "import Models.Core.B\n\n/-! Trusted: `Models/Core/B.lean` states `Models.Core.B`. -/\n",
+    "S/Models/Core/B.lean": "def x := 1\n",
+    "S/lean-audit.json": _lock(roots=["Models"], layers={"Models.Core": {"imports": ["Models.Core"]}},
+                               reads={"Models.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}}, dependencies={"m": "1"}),
+    "notes.md": "The core's statements are `S/Models/Core/` (`Models.Core`). Trusted.\n",
+    "more.md": "`S/Models/` states them.\n",
+    "t.py": 'CORE = ROOT / "S" / "Models" / "Core"\nHASH = ROOT / "S" / "Models" / "Hash"\nB = r"Models\\.Core\\.B"\n',
+    "p/TRUSTED.sha256": "",
+    "tools/research/src/research/store/moves.json": json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}]},
+                                                               indent=2) + "\n",
+}
+
+
+def _sha(text: str) -> str:
+    import hashlib
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def _worded(tmp_path: Path, base_pins: str | None = None, base_extra: dict | None = None, **over: str) -> dict:
+    """`Models/Core/` moved to `Definitions/Core/` with the map's words applied, as `tools/move/rename.py` does it."""
+    base_files = {**WORD_BASE, **(base_extra or {}),
+                  "p/TRUSTED.sha256": base_pins or f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"}
+    repo, base = _repo(tmp_path, base_files)
+    for m in ("A", "B"):
+        _move(repo, f"S/Models/Core/{m}.lean", f"S/Definitions/Core/{m}.lean")
+    a = "import Definitions.Core.B\n\n/-! Trusted: `Definitions/Core/B.lean` states `Definitions.Core.B`. -/\n"
+    head = {
+        "S/Definitions/Core/A.lean": a,
+        "S/lean-audit.json": _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
+                                   reads={"Definitions.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}},
+                                   dependencies={"m": "2"}),
+        "notes.md": "The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Trusted.\n",
+        "more.md": "`S/Definitions/` states them.\n",
+        "t.py": 'CORE = ROOT / "S" / "Definitions" / "Core"\nHASH = ROOT / "S" / "Models" / "Hash"\nB = r"Definitions\\.Core\\.B"\n',
+        "p/TRUSTED.sha256": f"{_sha(a)}  ../S/Definitions/Core/A.lean\n",
+        "tools/research/src/research/store/moves.json": json.dumps(
+            {"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/Models/": "S/Definitions/"}}]},
+            indent=2) + "\n",
+    }
+    _write(repo, {**head, **over})
+    return _check(repo, base)
+
+
+def test_a_word_map_move_is_certified(tmp_path):
+    """What `tools/move/rename.py` writes: the map's words in any text file, a pin's digest following its file, the record of
+    the move appended to `moves.json`, a lock's `reads` keyed by the moved module and its `dependencies` record."""
+    r = _worded(tmp_path)
+    assert r["certified"], r["refusals"]
+    kinds = {e["path"]: e["kind"] for e in r["edits"]}
+    assert kinds["notes.md"] == kinds["more.md"] == kinds["S/Definitions/Core/A.lean"] == kinds["t.py"] == "words"
+    assert kinds["p/TRUSTED.sha256"] == "text"
+
+
+def test_a_list_entry_the_words_repeat_may_go(tmp_path):
+    """Two directories the range merged, both listed: the words list the one twice, and the repeat may go; any other entry
+    stays."""
+    old = '{\n  "owns": [\n    "S/Definitions/Core/",\n    "S/Models/Core/",\n    "S/Proofs/"\n  ]\n}\n'
+    once = '{\n  "owns": [\n    "S/Definitions/Core/",\n    "S/Proofs/"\n  ]\n}\n'
+    (tmp_path / "ok").mkdir()
+    r = _worded(tmp_path / "ok", base_extra={"owners.json": old}, **{"owners.json": once})
+    assert r["certified"], r["refusals"]
+    (tmp_path / "dropped").mkdir()
+    dropped = '{\n  "owns": [\n    "S/Definitions/Core/",\n    "S/Definitions/Core/"\n  ]\n}\n'
+    assert not _worded(tmp_path / "dropped", base_extra={"owners.json": old}, **{"owners.json": dropped})["certified"]
+
+
+def test_a_chain_or_regex_spelling_is_kept_only_with_the_word_it_spells(tmp_path):
+    """`"Models" / "Hash"` spells `Models/Hash`, which no kept word renames (nothing under `Models/Hash` moved), so the map
+    doesn't explain renaming it."""
+    base = {"t.py": 'CORE = S / "Models" / "Core"\nHASH = S / "Models" / "Hash"\nB = r"Models\\.Core\\.B"\n'}
+    kept = 'CORE = S / "Definitions" / "Core"\nHASH = S / "Models" / "Hash"\nB = r"Definitions\\.Core\\.B"\n'
+    (tmp_path / "kept").mkdir()
+    r = _worded(tmp_path / "kept", base_extra=base, **{"t.py": kept})
+    assert r["certified"], r["refusals"]
+    (tmp_path / "hash").mkdir()
+    [f] = _worded(tmp_path / "hash", base_extra=base, **{"t.py": kept.replace('"Models" / "Hash"', '"Definitions" / "Hash"')})["refusals"]
+    assert f["path"] == "t.py"
+
+
+def test_a_word_that_renames_nothing_the_range_moved_is_refused(tmp_path):
+    """`Trusted` is in the map, but no path or module the range moved has it, so the map doesn't explain renaming it."""
+    [f] = _worded(tmp_path, **{"notes.md": "The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked.\n"})["refusals"]
+    assert f["path"] == "notes.md" and "+The core's statements are `S/Definitions/Core/` (`Definitions.Core`). Checked." in f["hunk"]
+
+
+AREAS = {
+    "tools/move/areas_map.toml": '[words]\n"S/Area" = "S/Area/Check"\n"S.Area" = "S.Area.Check"\n',
+    "P/lakefile.toml": 'name = "p"\n',
+    "P/S/Area.lean": "import S.Area.Check\n",
+    "P/S/Area/Check.lean": "import S.Area.Grid\n\ntheorem t : True := trivial\n",
+    "P/S/Area/Grid.lean": "def g := 1\n",
+    MC.MOVES: json.dumps({"about": "x", "moves": []}, indent=2) + "\n",
+}
+AREAS_MOVED = {"P/S/Area.lean": "P/S/Area/Check.lean", "P/S/Area/Check.lean": "P/S/Area/Check/Check.lean",
+               "P/S/Area/Grid.lean": "P/S/Area/Check/Grid.lean"}
+
+
+def _areas(tmp_path: Path, **over: str) -> dict:
+    """`S.Area` becomes `S.Area.Check` and its `Check` `S.Area.Check.Check`: a file lands where another left, and an
+    aggregator whose every line the words rename goes where the map sends it, as `tools/move/rename.py` writes them."""
+    repo, base = _repo(tmp_path, AREAS)
+    _move(repo, "P/S/Area/Grid.lean", "P/S/Area/Check/Grid.lean")
+    _move(repo, "P/S/Area/Check.lean", "P/S/Area/Check/Check.lean")
+    _move(repo, "P/S/Area.lean", "P/S/Area/Check.lean")
+    _write(repo, {"P/S/Area/Check.lean": "import S.Area.Check.Check\n",
+                  "P/S/Area/Check/Check.lean": "import S.Area.Check.Grid\n\ntheorem t : True := trivial\n",
+                  MC.MOVES: json.dumps({"about": "x", "moves": [{"paths": AREAS_MOVED}]}, indent=2) + "\n", **over})
+    return _check(repo, base)
+
+
+def test_a_file_landing_where_another_left_is_a_move(tmp_path):
+    r = _areas(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert r["lean_modules"] == {"S.Area": "S.Area.Check", "S.Area.Check": "S.Area.Check.Check",
+                                 "S.Area.Grid": "S.Area.Check.Grid"}
+
+
+def test_a_file_landing_where_another_left_is_recorded_where_it_went(tmp_path):
+    swapped = {**AREAS_MOVED, "P/S/Area/Check.lean": "P/S/Area/Grid.lean"}
+    [f] = _areas(tmp_path, **{MC.MOVES: json.dumps({"about": "x", "moves": [{"paths": swapped}]}, indent=2) + "\n"})["refusals"]
+    assert f["path"] == MC.MOVES
+
+
+def test_a_file_landing_where_another_left_is_judged_like_any_edit(tmp_path):
+    [f] = _areas(tmp_path, **{"P/S/Area/Check.lean": "import S.Area.Check.Check\ntheorem u : True := trivial\n"})["refusals"]
+    assert f["path"] == "P/S/Area/Check.lean" and f.get("old") == "P/S/Area.lean"
+
+
+def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
+    [f] = _worded(tmp_path, **{"p/TRUSTED.sha256": f"{'0' * 64}  ../S/Definitions/Core/A.lean\n"})["refusals"]
+    assert f["path"] == "p/TRUSTED.sha256"
+
+
+def test_pins_sorted_anew_after_their_paths_moved_are_a_move(tmp_path):
+    """The command that writes a pin file sorts its paths, so a regeneration after the move may order them anew."""
+    a, b = "import Definitions.Core.B\n\n/-! Trusted: `Definitions/Core/B.lean` states `Definitions.Core.B`. -/\n", "def x := 1\n"
+    base_pins = (f"{_sha(WORD_BASE['S/Models/Core/A.lean'])}  ../S/Models/Core/A.lean\n"
+                 f"{_sha(b)}  ../S/Models/Core/B.lean\n")
+    swapped = f"{_sha(b)}  ../S/Definitions/Core/B.lean\n{_sha(a)}  ../S/Definitions/Core/A.lean\n"
+    (tmp_path / "ok").mkdir()
+    r = _worded(tmp_path / "ok", base_pins, **{"p/TRUSTED.sha256": swapped})
+    assert r["certified"], r["refusals"]
+    (tmp_path / "dropped").mkdir()
+    dropped = f"{_sha(a)}  ../S/Definitions/Core/A.lean\n"
+    assert not _worded(tmp_path / "dropped", base_pins, **{"p/TRUSTED.sha256": dropped})["certified"]
+
+
+def test_a_moves_record_of_a_path_that_did_not_move_whole_is_refused(tmp_path):
+    moves = json.dumps({"about": "x", "moves": [{"paths": {"S/Specs/": "S/Models/"}}, {"paths": {"S/": "T/"}}]}, indent=2) + "\n"
+    [f] = _worded(tmp_path, **{"tools/research/src/research/store/moves.json": moves})["refusals"]
+    assert f["path"] == "tools/research/src/research/store/moves.json" and "T/Models/Core/A.lean" in f["reason"]
+
+
+def test_a_lock_field_the_writer_wraps_anew_is_still_a_move(tmp_path):
+    """`check.py --update` wraps a list a renamed module lengthened past its line: the same value, laid out anew."""
+    lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
+                 reads={"Definitions.Core.B": {"digest": "dd", "definitions": {"x": "ee"}}}, dependencies={"m": "2"})
+    wrapped = lock.replace('[\n        "Definitions.Core"\n      ]', '["Definitions.Core"]')
+    assert wrapped != lock
+    r = _worded(tmp_path, **{"S/lean-audit.json": wrapped})
+    assert r["certified"], r["refusals"]
+
+
+def test_a_reads_record_that_changes_with_its_key_is_refused(tmp_path):
+    lock = _lock(roots=["Models"], layers={"Definitions.Core": {"imports": ["Definitions.Core"]}},
+                 reads={"Definitions.Core.B": {"digest": "de", "definitions": {"x": "ee"}}}, dependencies={"m": "2"})
+    [f] = _worded(tmp_path, **{"S/lean-audit.json": lock})["refusals"]
+    assert f["reason"].startswith("`reads` changed")
+
+
+PROPS = 'name = "props"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Props"\nroots = ["Props.A", "Props.Proofs.A"]\n'
+PROPS_PATH = {"type": "path", "scope": "", "name": "props", "manifestFile": "lake-manifest.json", "inherited": False,
+              "dir": "../Sec/Props", "configFile": "lakefile.toml"}
+PP_PATH = {**PROPS_PATH, "name": "pp", "dir": "../Sec/Proofs/Props"}
+
+
+def _in_place(tmp_path: Path, **over: str) -> dict:
+    """`Props.Proofs` split out of package `props` into a new package `pp` inside `Sec/Proofs/`: `props` drops its roots,
+    `q`, which imports the proof, requires `pp`, and a suite's inputs name `pp`'s Lake files."""
+    repo, base = _repo(tmp_path, {
+        "Sec/Props/lakefile.toml": PROPS, "Sec/Props/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+        "Sec/Props/lake-manifest.json": _manifest("props"), "Sec/Props/lean-audit.json": _lock(roots=["Props.A", "Props.Proofs.A"]),
+        "Sec/Props/A.lean": "def a := 1\n", "Sec/Props/Proofs/A.lean": "import Props.A\n\ntheorem t : a = 1 := rfl\n",
+        "q/lakefile.toml": 'name = "q"\n\n[[require]]\nname = "props"\npath = "../Sec/Props"\n',
+        "q/lake-manifest.json": _manifest("q", PROPS_PATH), "q/Q.lean": "import Props.Proofs.A\n",
+        "x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n]\n'})
+    _move(repo, "Sec/Props/Proofs/A.lean", "Sec/Proofs/Props/A.lean")
+    _write(repo, {
+        "Sec/Proofs/Props/lakefile.toml": ('name = "pp"\nsrcDir = "../.."\n\n[[require]]\nname = "props"\npath = "../../Props"\n'
+                                           '\n[[lean_lib]]\nname = "PP"\nroots = ["Proofs.Props.A"]\n'),
+        "Sec/Proofs/Props/lean-toolchain": "leanprover/lean4:v4.99.0\n",
+        "Sec/Proofs/Props/lake-manifest.json": _manifest("pp", {**PROPS_PATH, "dir": "../../Props"}),
+        "Sec/Proofs/Props/lean-audit.json": _lock(roots=["Proofs.Props.A"], guarantees={}),
+        "Sec/Props/lakefile.toml": PROPS.replace(', "Props.Proofs.A"', ""),
+        "Sec/Props/lean-audit.json": _lock(roots=["Props.A"], proved_in=["../Proofs/Props"]),
+        "q/lakefile.toml": ('name = "q"\n\n[[require]]\nname = "props"\npath = "../Sec/Props"\n\n# the proofs\n[[require]]\n'
+                            'name = "pp"\npath = "../Sec/Proofs/Props"\n'),
+        "q/lake-manifest.json": _manifest("q", PROPS_PATH, PP_PATH), "q/Q.lean": "import Proofs.Props.A\n",
+        "x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n    "Sec/Proofs/Props/lakefile.toml", "Sec/Proofs/Props/lean-toolchain",\n]\n',
+        **over})
+    return _check(repo, base)
+
+
+def test_a_split_into_a_package_inside_another_tree_is_certified(tmp_path):
+    r = _in_place(tmp_path)
+    assert r["certified"], r["refusals"]
+    assert r["lean_modules"] == {"Props.Proofs.A": "Proofs.Props.A"}
+
+
+def test_an_in_place_lakefile_that_drops_a_root_that_did_not_move_is_refused(tmp_path):
+    [f] = _in_place(tmp_path, **{"Sec/Props/lakefile.toml": PROPS.replace('"Props.A", ', "").replace(', "Props.Proofs.A"', "")})["refusals"]
+    assert f["path"] == "Sec/Props/lakefile.toml"
+
+
+def test_an_in_place_require_of_an_existing_package_is_refused(tmp_path):
+    lakefile = 'name = "q"\n\n[[require]]\nname = "props"\npath = "../Sec/Props"\n\n[[require]]\nname = "q2"\npath = "../Sec"\n'
+    r = _in_place(tmp_path, **{"q/lakefile.toml": lakefile})
+    assert [f["path"] for f in r["refusals"]] == ["q/lakefile.toml"]
+
+
+def test_an_inputs_line_naming_an_existing_package_is_refused(tmp_path):
+    r = _in_place(tmp_path, **{"x/pyproject.toml": 'inputs = [\n    "Sec/Props/lakefile.toml",\n    "Sec/Props/lean-toolchain",\n]\n'})
+    assert [f["path"] for f in r["refusals"]] == ["x/pyproject.toml"]
+
+
+def test_a_fold_into_an_existing_package_moves_its_roots(tmp_path):
+    """`Props.Proofs` folded into `Sec/Proofs`'s existing package (srcDir `..`): `props` drops the roots and `proofs` gains them."""
+    proofs = 'name = "proofs"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\nroots = ["Proofs.B"]\n'
+    repo, base = _repo(tmp_path, {
+        "Sec/Props/lakefile.toml": PROPS, "Sec/Props/A.lean": "def a := 1\n",
+        "Sec/Props/Proofs/A.lean": "import Props.A\n\ntheorem t : a = 1 := rfl\n",
+        "Sec/Proofs/lakefile.toml": proofs, "Sec/Proofs/B.lean": "import Props.Proofs.A\n"})
+    _move(repo, "Sec/Props/Proofs/A.lean", "Sec/Proofs/Props/A.lean")
+    _write(repo, {"Sec/Props/lakefile.toml": PROPS.replace(', "Props.Proofs.A"', ""),
+                  "Sec/Proofs/lakefile.toml": proofs.replace('"Proofs.B"]', '"Proofs.B", "Proofs.Props.A"]'),
+                  "Sec/Proofs/B.lean": "import Proofs.Props.A\n"})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    _write(repo, {"Sec/Proofs/lakefile.toml": proofs.replace('"Proofs.B"]', '"Proofs.B", "Proofs.Props.A", "Proofs.C"]')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "Sec/Proofs/lakefile.toml"
+
+
 #: a package below `pkg/` that moves deeper, the shape of the vLLM integration's first move
 APP = {"pkg/app/__init__.py": "", "pkg/app/store/__init__.py": "", "pkg/app/store/remote.py": "class Session:\n    pass\n",
        "pkg/app/store/host.py": "x = 1\n", "pkg/app/linear/__init__.py": "", "pkg/app/linear/api.py": "y = 2\n",

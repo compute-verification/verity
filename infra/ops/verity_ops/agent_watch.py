@@ -32,8 +32,15 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   not a stall. A followed background wait is stalled the same way after `STUCK` (2 h) with nothing streamed and the agent's
   `updatedAt` still: cancelling a wait may take its local subagents, but a suspended VM has lost them already (compute-accounting's
   research lane sat in one from 05:26 to 23:40Z on 23 Oct, INF-192);
+- **held unread** when the agent is any holder a registry handle's `holder` names (its lanes that post as it included,
+  `all_holders`), its run RUNNING or waiting on background work, and it has done nothing itself for `UNREAD_S` (1 h) while a
+  worker it waits on streamed within `WORKER_LIVE_S`: a resumed worker streaming in the foreground hides it from every rule
+  above, and its follow-ups sit unread (compute-accounting's research lane 17:25-21:45Z, network-accounting 11:30-13:36Z, 24
+  Oct). For the handle's inbox holder a doorbell must have rung after its last own event an hour ago, or its timer lapsed; a
+  lane's subscriptions the watch can't see, so the hour alone. It is cancelled and continued as a held run is (the worker, a
+  cloud agent, runs on), owner top, under the same once-an-hour limit (top, 24 Oct 21:50Z);
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
-  build or a wait may be legitimate);
+  build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as
   **erroring**, for a person. Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before
@@ -168,6 +175,8 @@ HELD_S = 15 * 60
 HELD_BG_S = 60 * 60         # held while WAITING_FOR_BACKGROUND_WORK: cancelling it may take its local background workers with it
 LONG_CALL_S = 45 * 60
 STALL_S = 30 * 60           # RUNNING with nothing streamed, subagents' progress included, and the agent's updatedAt still
+UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a worker it waits on streamed: held (unread)
+WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
@@ -193,6 +202,9 @@ CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothi
 AFTER = {"tool_done": "a finished tool call", "turn_ended": "the end of your turn"}
 AFTER_ERROR = ("continue: your last run ended in ERROR (the agent watch restarted you). Read your inbox and carry on from where "
                "you stopped.")
+UNREAD = ("continue: your run did nothing itself for {mins} min from {since} while a worker it waits on streamed, so your "
+          "follow-ups sat unread ({why}; the agent watch cancelled it). The worker runs on: check it by its id, read your inbox "
+          "and carry on from where you stopped, without waiting on a worker in the foreground.")
 STALLED = ("continue: your run streamed nothing for {mins} min from {since} while it read {status} (a hung tool call or a "
            "suspended VM; the agent watch cancelled it). Check what that step was doing, read your inbox and carry on from where "
            "you stopped.")
@@ -234,7 +246,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -298,6 +310,16 @@ def holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
         if m := m or AGENT_RE.search(str(h.get("holder", ""))):
             out[m[0]] = h["handle"]
     return out
+
+
+def all_holders(registry: Path | None, routes: Path | None) -> dict[str, str]:
+    """agent id -> handle for every agent id in each registry handle's `holder` (its lanes that post as it included) and each
+    open inbox's holder: the agents a held run of which leaves a handle's follow-ups unread (`unread`)."""
+    out = {}
+    for h in read_json(registry).get("handles") or []:
+        for m in AGENT_RE.finditer(str(h.get("holder", ""))):
+            out.setdefault(m[0], h["handle"])
+    return {**out, **holders(registry, routes)}
 
 
 def lineage(registry: Path | None, coords: dict[str, str], agent: str) -> str | None:
@@ -726,6 +748,7 @@ class Watch:
         self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
         self.launch_env, self.launcher, self.launch, self.launch_api = log.with_name("launch.env"), launcher, launch, launch_api
         self.coords: dict[str, str] = {}            # coordinator -> its handle, as this sweep read them
+        self.holders_all: dict[str, str] = {}       # every agent a registry holder names (its lanes too) -> the handle
         self.heads_path, self.ends_path = log.with_name("heads.json"), log.with_name("run_ends.json")
         self.heads = read_json(self.heads_path)     # {"t0", "t", "heads": {branch: [sha, when the watch first saw it]}}
         self.ends = read_json(self.ends_path)       # {"since", "nodes": {node: last read}, "seen": {node/run: when}}
@@ -783,7 +806,8 @@ class Watch:
     def owned(self, agent: str) -> dict[str, str]:
         """`{"owner": handle}` for a failure record: whose inbox the relay rings. A coordinator's owner is top; an agent a
         coordinator launched (a worker, or one the list has) is that coordinator's handle's."""
-        owner = "top" if agent in self.coords else self.owners.get(agent) or (self.workers.get(agent) or {}).get("handle")
+        owner = ("top" if agent in self.coords or agent in self.holders_all else
+                 self.owners.get(agent) or (self.workers.get(agent) or {}).get("handle"))
         return {"owner": owner} if owner else {}
 
     def launch_key(self) -> str | None:
@@ -1034,10 +1058,30 @@ class Watch:
             return "stuck"
         return None
 
-    def free(self, r: Run, t: float, kind: str = "held") -> None:
-        """Cancel a held or stalled run and start a continue run on its agent, at most once per agent an hour."""
-        quiet = r.last_t if kind == "held" else max(r.last_t, r.bg_t)
+    def unread(self, r: Run, t: float, bell: float | None, every: float | None) -> str | None:
+        """Why a holder's run (`holders_all`) is held while a worker streams: RUNNING or waiting on background work, it has done
+        nothing itself for `UNREAD_S` while a worker it waits on streamed within `WORKER_LIVE_S`, so it reads no follow-ups
+        (compute-accounting's research lane 17:25-21:45Z, network-accounting 11:30-13:36Z, 24 Oct: a resumed worker streamed
+        in the foreground, no rule fired). For the handle's inbox holder, a doorbell rang after its last own event `UNREAD_S`
+        ago or its timer lapsed; a lane that posts as the handle has subscriptions the watch can't see, so the hour alone."""
+        if r.ended or r.status not in FOLLOW or r.agent not in self.holders_all:
+            return None
+        if t - r.last_t < UNREAD_S or t - r.bg_t >= WORKER_LIVE_S:
+            return None
+        if r.agent not in self.coords:
+            return f"a lane of @{self.holders_all[r.agent]}: nothing of its own for {int((t - r.last_t) // 60)} min"
+        if bell is not None and bell > r.last_t and t - bell >= UNREAD_S:
+            return f"a doorbell rang at {iso(bell)}"
+        if every and t - r.last_t >= max(UNREAD_S, 2 * every):
+            return f"its {int(every // 60)}-min timer lapsed"
+        return None
+
+    def free(self, r: Run, t: float, kind: str = "held", why: str = "") -> None:
+        """Cancel a held, stalled or held-unread run and start a continue run on its agent, at most once per agent an hour."""
+        quiet = r.last_t if kind in ("held", "held_unread") else max(r.last_t, r.bg_t)
         since, mins, owner = iso(quiet), int((t - quiet) // 60), self.owned(r.agent)
+        if why:
+            owner = {**owner, "handle": self.holders_all.get(r.agent), "reason": why}
         if t - self.freed.get(r.agent, -RECANCEL_S) < RECANCEL_S:
             if "held-again" not in r.told:
                 r.told.add("held-again")
@@ -1075,6 +1119,7 @@ class Watch:
         self.freed[r.agent] = t
         r.ended = "CANCELLED"
         text = (CONTINUE.format(since=since, mins=mins, after=AFTER.get(r.last_kind, "a finished tool call")) if kind == "held"
+                else UNREAD.format(since=since, mins=mins, why=why) if kind == "held_unread"
                 else STALLED.format(since=since, mins=mins, status=r.status))
         new, err = self.cont(r.agent, text)
         if new is not None:
@@ -1676,6 +1721,7 @@ class Watch:
         # only Verity's are followed, restarted or woken, and only they are status rows
         listed, agents = {a["id"] for a in agents}, [a for a in agents if verity(a)]
         self.coords = coords = holders(self.registry, self.routes)
+        self.holders_all = all_holders(self.registry, self.routes)
         for a in agents:
             recent = t - (epoch(a.get("updatedAt")) or 0) < IDLE_RECENT_S
             if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
@@ -1767,8 +1813,11 @@ class Watch:
         for r in runs:
             with self.lock:
                 kind = self.classify(r, t)
+                handle = self.holders_all.get(r.agent)
                 if kind in ("held", "stalled"):
                     self.free(r, t, kind)
+                elif why := self.unread(r, t, bells.get(handle or ""), every.get(handle or "")):
+                    self.free(r, t, "held_unread", why)
                 elif kind in ("long_call", "stuck") and kind not in r.told:
                     r.told.add(kind)
                     if kind == "long_call":

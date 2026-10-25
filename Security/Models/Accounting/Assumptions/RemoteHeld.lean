@@ -6,8 +6,10 @@ import Definitions.Accounting.Remote.Held
 The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, each a named `Prop` on a trace
 (`Accounting.Remote.Held.Trace`) taken as a hypothesis:
 
-* `Identity` (statement C): no block comes back into the node over its boundary links. The link-charged forms take
-  `Links` instead, the links' ceiling.
+* `Identity` (statement C's links clause): no block comes back into the node over its boundary links. The link-charged
+  forms take `Links` instead, the links' ceiling. Statement C in full, no device outside the node computing on a
+  registered block or a receipt, is `NoOutsideCompute` (`Models.Accounting.Assumptions.RemoteOutside`), with which the
+  memory line of record splits `SketchBound`.
 * `SquaringCeiling s E B`: the node's compute re-encodes at most `s / E` blocks a tick and a burst of `B`: `s` squarings
   a tick at the codec's width over every GPU and the host (`Accounting.Assumptions.SquaringCeiling`,
   `timing.SQUARINGS_PER_S`), a block costing at least `E` of them (`Codec.encode_squarings`, `WorkHardness(p, k)`), and
@@ -37,7 +39,7 @@ completing.
   bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
   every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsDrawn`), under the draw's own
   premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
-  advantage.
+  advantage plus the coin commitment's hiding terms (`Accounting.Remote.Draw.Committed.hide`, hm96's).
 -/
 
 namespace Accounting.Remote.Held.Assumptions
@@ -46,7 +48,8 @@ open Finset Accounting.Remote.Held
 
 variable {Ω : Type}
 
-/-- **Identity** (statement C): on every outcome, no block comes into the node over its boundary links. -/
+/-- **Identity** (statement C's links clause): on every outcome, no block comes into the node over its boundary
+links. -/
 def Identity (T : Trace Ω) : Prop := ∀ ω t, T.link ω t = 0
 
 /-- **The links' ceiling**: on every outcome, over every interval `[u, v)`, the node's boundary links bring in at most

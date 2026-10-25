@@ -69,6 +69,8 @@ class Ledger:
     prompt_ids: list[int]
     ingress: dict[str, Any] = field(default_factory=dict)
     user: str | None = None                      # the body's `user`, the id the advice names the request by
+    release: Any = None                          # (the warden's run, its place in the release order), under --admit release-order
+    admitted: int = -1                           # its place in the order requests were added to the engine
     streamed: list[int] = field(default_factory=list)
     finish: dict[str, Any] | None = None
     finished: bool = False
@@ -103,7 +105,7 @@ class CommitWindows:
         """``adm`` a `verity_vllm.pipeline.serve_openai.Admission`."""
         self.known[adm.engine_id] = adm.http_id
         self.ledgers[adm.engine_id] = Ledger(adm.http_id, adm.engine_id, list(adm.prompt_ids), dict(adm.ingress),
-                                             getattr(adm, "user", None))
+                                             getattr(adm, "user", None), getattr(adm, "release", None), len(self.known) - 1)
         self.names[adm.engine_id] = self.ledgers[adm.engine_id].user or adm.http_id
 
     def streamed(self, engine_id: str, token_ids: list[int], finish_reason: str | None, stop_reason: Any) -> None:
@@ -225,11 +227,13 @@ class CommitWindows:
             for eid in done:
                 led = self.ledgers.pop(eid)
                 rr = self.record.requests.get(eid)
-                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "runner_ids": rr.runner_ids if rr else [],
+                rec = {"http_id": led.http_id, "engine_id": led.engine_id, "user": led.user, "release": led.release,
+                       "admitted": led.admitted, "runner_ids": rr.runner_ids if rr else [],
                        "prompt_ids": led.prompt_ids, "streamed_ids": led.streamed, "ingress": led.ingress, "finish": led.finish,
                        "windows": sorted({r[0] for r in rr.rows}) if rr else [], "rows": rr.rows if rr else [],
                        "committed_seeds": sorted(rr.seeds) if rr else [], "check": self.check(led)}
-                self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"]})
+                self.checked.append({"http_id": led.http_id, "engine_id": led.engine_id, "passed": rec["check"]["passed"],
+                                     "cache_hit": int(rec["check"].get("cache_hit") or 0)})
                 fh.write(json.dumps(rec) + "\n")
 
     def summary(self) -> dict[str, Any]:
@@ -237,4 +241,6 @@ class CommitWindows:
         bad_win = [r["window"] for r in self.records if not r["passed"]]
         return {"windows": len(self.records), "windows_failed": bad_win, "steps": sum(r["steps"] for r in self.records),
                 "requests_checked": len(self.checked), "requests_failed": [c["http_id"] for c in bad_req][:20],
+                "cache_hits": sum(1 for c in self.checked if c.get("cache_hit")),
+                "cached_positions": sum(int(c.get("cache_hit") or 0) for c in self.checked),
                 "unchecked": sorted(self.ledgers), "passed": bool(self.checked) and not bad_req and not bad_win and not self.ledgers}

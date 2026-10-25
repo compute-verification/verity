@@ -3,6 +3,7 @@ import RemoteAudit.Line
 import RemoteAudit.Registry
 import RemoteAudit.Schedule
 import RemoteAudit.Store
+import RemoteAudit.Wire
 
 /-!
 # The difftest's Lean half
@@ -81,6 +82,8 @@ def openingOf (j : Json) : V Opening := do
       tile := ← hex j "tile"
       digest := ← hex j "digest" }
 
+/-- An event as JSON gives it. A `verify`'s openings are either decoded (`openings`) or the window's frames as the wire
+carried them (`frames`, lowercase hex, read as the verifier's process reads them: `Wire.openingsOf`). -/
 def eventOf (j : Json) : V Session.Event := do
   match ← J.str j "kind" "event" with
   | "start" => pure (.start (← nat j "now"))
@@ -102,7 +105,9 @@ def eventOf (j : Json) : V Session.Event := do
       | v => some <$> J.asInt v "step"
     pure (.receive (← int j "t") (← int j "i") (← hex j "root") runs change step (← nat j "now"))
   | "close" => pure (.close (← int j "t") (← nat j "now"))
-  | "verify" => pure (.verify (← int j "t") (← (← J.arr j "openings" "event").mapM openingOf))
+  | "verify" =>
+    if J.has j "frames" then pure (.verify (← int j "t") (Wire.openingsOf (← hexes j "frames")))
+    else pure (.verify (← int j "t") (← (← J.arr j "openings" "event").mapM openingOf))
   | k => throw s!"no event kind {k}"
 
 def resultJ : Session.Result → Json
@@ -115,11 +120,13 @@ def resultJ : Session.Result → Json
   | .drew ds => Json.mkObj [("draws", .arr (ds.map pairJ))]
   | .accepted t => Json.mkObj [("accepted", toJson t)]
 
-def summaryJ (registration : ByteArray) (x : Session.Summary) : Json :=
+/-- The record `Session.record` makes; its pace names `in_flight` only at one window in flight (`Flight`). -/
+def summaryJ (registration : ByteArray) (x : Session.Summary) (inFlight : Nat := 2) : Json :=
   Json.mkObj [("registration", hexJ registration), ("blocks", toJson x.blocks), ("appended", toJson x.appended),
     ("released", toJson x.released), ("lifetime", toJson x.lifetime),
     ("pace", match x.pace with
-      | some p => Json.mkObj [("k", toJson p.k), ("window_ns", toJson p.windowNs)]
+      | some p => Json.mkObj ([("k", toJson p.k), ("window_ns", toJson p.windowNs)] ++
+          if inFlight == 1 then [("in_flight", toJson inFlight)] else [])
       | none => .null),
     ("appends", match x.appends with | some h => hexJ h | none => .null),
     ("windows", .arr (x.windows.map fun w => Json.mkObj [("lengths", toJson w.lengths), ("steps", toJson w.steps),
@@ -132,15 +139,34 @@ private def positive (p : Json) (k : String) : V Nat := do
   if n = 0 then throw s!"{k} is a positive integer"
   pure n
 
+/-- A session's `groups_per_coin` (`Shared`): 1 when its parameters don't name it. -/
+def perCoinOf (j : Json) : V Nat := do
+  let p ← J.get j "params" "input"
+  if J.has p "groups_per_coin" then positive p "groups_per_coin" else pure 1
+
+/-- A paced session's `in_flight` (`Flight`), 1 or 2: 2 when its pace doesn't name it or it is unpaced. -/
+def flightOf (j : Json) : V Nat := do
+  match ← J.get (← J.get j "params" "input") "pace" "params" with
+  | .null => pure 2
+  | q =>
+    if !J.has q "in_flight" then pure 2
+    else do
+      let f ← J.nat q "in_flight" "pace"
+      if f == 1 || f == 2 then pure f else throw "a pace's in_flight is 1 or 2"
+
 /-- A session's `{"params", "coins", "append_coins", "not_before_ns"}`. The parameters name whether the prover defers
 an appended block's residency to its encode (`deferred`), which `audit.Params` refuses at a lifetime of one window: a
-block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; and its pace (`null`, or
-`{"k", "window_ns"}`), which `audit.Params` takes only with at least two windows. -/
-def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
+block appended in window w is resident from w or w + 1, so its re-key falls at age L − 1; its pace (`null`, or
+`{"k", "window_ns"}`, with `"in_flight"` if it names it, `flightOf`), which `audit.Params` takes only with at least
+two windows; and, if they name it, the windows a
+draw's openings coin covers (`groups_per_coin`, `perCoinOf`), refused above 1 unless `shared`: only `sessionFn` runs
+them (`Shared.run`). The coins are W challenges and ⌈W/g⌉ openings coins. -/
+def sessionOf (j : Json) (shared : Bool := false) : V (Session.Params × Array ByteArray × Array ByteArray × Nat) := do
   let p ← J.get j "params" "input"
   let pace ← match ← J.get p "pace" "params" with
     | .null => pure none
     | q => do pure (some ({ k := ← positive q "k", windowNs := ← positive q "window_ns" } : Session.Pace))
+  let _ ← flightOf j
   let params : Session.Params :=
     { deadlineNs := ← positive p "deadline_ns"
       windows := ← positive p "windows"
@@ -153,22 +179,31 @@ def sessionOf (j : Json) : V (Session.Params × Array ByteArray × Array ByteArr
     throw "a session that defers residency has a lifetime of at least 2 windows"
   if pace.isSome && params.windows < 2 then
     throw "a paced session has at least one window and the closing window"
+  let g ← perCoinOf j
+  if g ≠ 1 && !shared then throw "the registry draws a window an openings coin: groups_per_coin is 1"
   let coins ← hexes j "coins"
-  if coins.size ≠ 2 * params.windows || coins.any (·.size ≠ Codec.COIN_BYTES) then throw "2W coins of 32 bytes"
+  if coins.size ≠ params.windows + (params.windows + g - 1) / g || coins.any (·.size ≠ Codec.COIN_BYTES) then
+    throw "W + ⌈W/g⌉ coins of 32 bytes"
   let appendCoins ← hexes j "append_coins"
   if appendCoins.any (·.size ≠ Codec.COIN_BYTES) then throw "append coins are 32 bytes"
   pure (params, coins, appendCoins, ← nat j "not_before_ns")
 
 /-- A session's events through the verifier: `{"registration", "params", "not_before_ns", "coins", "append_coins",
-"events"}` to every event's result, the outcome and the record. -/
+"events"}` to every event's result, the outcome and the record, which names `groups_per_coin` when it isn't 1
+and its pace `in_flight` at 1 (`Flight.run f g`: `Shared.run g` at f = 2, which is `Session.run` at g = 1). -/
 def sessionFn (j : Json) : V Json := do
   let reg ← registrationOf (← J.get j "registration" "input")
-  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
+  let (params, coins, appendCoins, notBeforeNs) ← sessionOf j (shared := true)
+  let g ← perCoinOf j
+  let f ← flightOf j
   let events ← (← J.arr j "events" "input").mapM eventOf
-  let (results, s) ← Session.run (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let (results, s) ← Flight.run f g (Session.State.init params reg coins appendCoins notBeforeNs) events
+  let record := match s.summary with
+    | some x =>
+      if g == 1 then summaryJ s.digest x f else (summaryJ s.digest x f).setObjVal! "groups_per_coin" (toJson g)
+    | none => .null
   pure (Json.mkObj [("results", .arr (results.map resultJ)),
-    ("outcome", match s.outcome with | some o => .str o | none => .null),
-    ("record", match s.summary with | some x => summaryJ s.digest x | none => .null)])
+    ("outcome", match s.outcome with | some o => .str o | none => .null), ("record", record)])
 
 def registrationDigestFn (j : Json) : V Json := do pure (hexJ (← registrationOf j).digest)
 
@@ -186,7 +221,7 @@ inductive Op
   | register (node : ByteArray) (blocks : Nat) (payloadRoot : ByteArray) (codec : Codec.Codec) (receipt : Kind)
       (bind : Bool) (layout : String) (rows : Nat) (nonce : ByteArray)
   | session (registration : Nat ⊕ Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
-      (notBeforeNs : Nat) (index : Option Int)
+      (notBeforeNs : Nat) (index : Option Int) (inFlight : Nat)
   | event (node : ByteArray) (k : Nat) (e : Session.Event)
   | close (node : ByteArray)
   | live (node : ByteArray)
@@ -207,7 +242,7 @@ def opOf (j : Json) : V Op := do
     let index ← match ← J.get j "index" "op" with
       | .null => pure none
       | v => some <$> J.asInt v "index"
-    pure (.session which params coins appendCoins notBeforeNs index)
+    pure (.session which params coins appendCoins notBeforeNs index (← flightOf j))
   | "event" => pure (.event (← hex j "node") (← nat j "session") (← eventOf (← J.get j "event" "op")))
   | "close" => pure (.close (← hex j "node"))
   | "live" => pure (.live (← hex j "node"))
@@ -237,13 +272,13 @@ def registryFn (j : Json) : V Json := do
         drawn := drawn.push reg
         out := out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)])
       | none => out := out.push refusedJ
-    | .session which params coins appendCoins notBeforeNs index =>
+    | .session which params coins appendCoins notBeforeNs index f =>
       let reg ← match which with
         | .inl i => match drawn[i]? with
           | some reg => pure reg
           | none => throw s!"no registration drawn at {i}"
         | .inr reg => pure reg
-      match r.session reg params coins appendCoins notBeforeNs index with
+      match r.session reg params coins appendCoins notBeforeNs index f with
       | some (k, r') =>
         r := r'
         out := out.push (Json.mkObj [("session", toJson k)])

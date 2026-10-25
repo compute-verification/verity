@@ -321,7 +321,8 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
                        schemas={"A": G.SCHEMA_V2})
     port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
             "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
-    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2]}, "a1": {**port, "reads": [1, 3]}}}
+    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2], "param": "a[0]"},
+                                                "a1": {**port, "reads": [1, 3], "param": "a[1]"}}}
     for p, reads in (("a0", [0, 2]), ("a1", [1, 3])):
         for u, r in enumerate(reads):
             assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), G.SCHEMA_V2)
