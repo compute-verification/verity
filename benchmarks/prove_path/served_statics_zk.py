@@ -15,8 +15,8 @@ the cost.
   checked against each step's committed positions (``statics_held``). The Programs are a stand-in: the honest rows' (start,
   n) in batch order (`served_statics.program_of`), as compile(advice) lays out a step whose advice's rows they are. One
   served-rows registration (`served_rows.register`, a row each block of G steps, fresh salts) holds the honest window as
-  window 0 and each case as a window of its own, all under the run root; every unit reads its leaf. Statements of one
-  template:
+  window 0 and each case as a window of its own, all under the run root; every unit reads its leaf, and a record whose G
+  isn't the statics' is refused (`same_g`). Statements of one template:
   - ``window-i``: the honest window's P / G blocks, each once, the idle ones too (Selection All), at most ``--per`` a
     statement;
   - ``cases``: the block holding each case's edit against the Programs the honest window ran (``KINDS``): a prefill's
@@ -107,13 +107,24 @@ def table(window: list) -> tuple[dict[str, list], dict]:
     return {n: wins[n] for n in KINDS}, {**edits, "steps": step}
 
 
+def same_g(S, St: SimpleNamespace, record: dict) -> int:
+    """The served-rows record's G, as `served_rows.leaf` reads it (P when absent), refused unless it is the G of the
+    statics the unit is built with: its leaves are blocks of the record's G steps, and the unit reads St.G of them."""
+    if (g := record.get("G", S.P)) != St.G:
+        raise SystemExit(f"the served-rows record's G is {g} but the unit's statics' is {St.G}: a leaf would be a block of "
+                         f"{g} steps read as {St.G}; register the window at the unit's G (served_rows.register(..., "
+                         f"G={St.G}))")
+    return g
+
+
 def plan(S, window: list, programs: list, run_root: bytes, g: int, ids=None) -> SimpleNamespace:
     """The registration (``KINDS``' windows in turn, a row each block of g steps) and the units: the honest window's every
     block, then each case's block holding its edit, each its leaf, the block's served rows and the Programs' statics."""
     St = SimpleNamespace(**SS.statics(S, G=g))
     wins, edits = table(window)
     served = SR.register(S, list(wins.values()), run_root, G=g)
-    rec, U = served.record(), S.P // g
+    rec = served.record()
+    U = S.P // same_g(S, St, rec)
     units = {"window": [], "cases": []}
     for c, (name, win) in enumerate(wins.items()):
         for j in range(U) if name == "honest" else [edits["steps"][name] // g]:
@@ -125,7 +136,7 @@ def plan(S, window: list, programs: list, run_root: bytes, g: int, ids=None) -> 
             units["window" if name == "honest" else "cases"].append(SimpleNamespace(
                 kind=name, j=j, leaf=leaf, rows=x.rows, flags=x.flags, verdict=x.verdict,
                 ids=None if ids is None else ids(win), words={r: STZ._words(v) for r, v in x.rows.items()}))
-    return SimpleNamespace(St=St, st=SS.statics(S, G=g), served=served, record=rec, units=units, edits=edits)
+    return SimpleNamespace(S=S, St=St, st=SS.statics(S, G=g), served=served, record=rec, units=units, edits=edits)
 
 
 def units_of(a) -> SimpleNamespace:
@@ -139,7 +150,7 @@ def units_of(a) -> SimpleNamespace:
     ok["statics_held"] = STW.statics_held(window, steps)
     seqs = {int(r["arrival"]): list(r["prompt_ids"]) + list(r["streamed_ids"]) for r in x.reqs if r.get("arrival") is not None}
     d = plan(S, window, SS.program_of(window), x.run.run_root, a.g, ids=lambda w: STW.ids_ok(StR, w, steps, seqs))
-    return SimpleNamespace(**vars(d), x=x, S=S, ok=ok, native=native, steps=steps, window=window, run_root=x.run.run_root)
+    return SimpleNamespace(**vars(d), x=x, ok=ok, native=native, steps=steps, window=window, run_root=x.run.run_root)
 
 
 # --- the statement -----------------------------------------------------------------------------------------------------
@@ -180,7 +191,9 @@ def stager(M, defn, St, n: int, out: Path) -> SimpleNamespace:
 
 def stage(M, sg: SimpleNamespace, name: str, units: list, d: SimpleNamespace, salt_key: bytes, registered: bool) -> dict:
     """A statement: each unit its own table row of both ports; ``srb``'s rows its leaves', under the registration's salts
-    (``registered``) or fresh ones, each with its leaf's position and path; and the verifier's own reads file."""
+    (``registered``) or fresh ones, each with its leaf's position and path; and the verifier's own reads file, of a
+    record at the unit's G (`same_g`)."""
+    same_g(d.S, d.St, d.record)
     t0 = time.time()
     st, n, out = sg.st, len(units), sg.out / "stage"
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
