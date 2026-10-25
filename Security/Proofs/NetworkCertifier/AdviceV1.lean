@@ -19,6 +19,13 @@ Over the decisions (`sum_decisions_le`), n_arrived's bins and offsets (`sum_owt_
 (`sum_session_le`), the weights `2^(−charge)` of the streams no window refuses sum to at most 1, so at most `2^c` are
 charged `c` or less (`encard_le_of_kraft`). That is `BitsCount` for advice v1's charge (`bitsCount`), and the leak
 bounds follow from `AdviceString`'s, with that premise discharged.
+
+Windows with counts: a window's weight with counts is its decisions' weight times its counts' (`stepWt_windowCounted`),
+so over any finite set of decision streams and counts the weights sum to at most 1 (`sum_windowCounted_le`). Any run
+whose windows each meet Kraft does too (`sum_runWt_le`, `encard_runOf_le`), which gives the count with counts
+(`encard_chargedCounted_le`) and `BitsCount` (`bitsCount_counted`). Prefix-free codes meet Kraft
+(`kraft_of_prefixFree`, `CountCode.ofPrefixFree`); the unary code is one for nonzero counts (`CountCode.unary`), and
+under the code charging nothing for `Unit` the charges are advice v1's (`chargesCounted_zero`).
 -/
 
 namespace NetTiming.AdviceV1
@@ -599,6 +606,284 @@ theorem bitsCount (bk : Book) (N W : ℕ) : BitsCount (bits bk N (W := W)) := by
         exact ha
     _ ≤ _ := encard_charged_le bk N W c
 
+/-! ### Any run of windows each meeting Kraft -/
+
+/-- A run of an abstract window charge `step`: each window's charge from a carry, the carry passed along. -/
+def runOf {σ α : Type*} (step : σ → α → Option (ℕ × σ)) : σ → List α → Option (List ℕ)
+  | _, [] => some []
+  | s, x :: xs => (step s x).bind fun p => (runOf step p.2 xs).map fun ls => p.1 :: ls
+
+/-- A window's weight under `step`: `2^(−charge)`, or nothing when refused. -/
+noncomputable def stepWt {σ α : Type*} (step : σ → α → Option (ℕ × σ)) (s : σ) (x : α) : ℝ :=
+  ((step s x).map fun p => (2⁻¹ : ℝ) ^ p.1).getD 0
+
+/-- A run's weight under `step`: `2^(−Σ charges)`, or nothing when a window is refused. -/
+noncomputable def runWt {σ α : Type*} (step : σ → α → Option (ℕ × σ)) (s : σ) (xs : List α) : ℝ :=
+  ((runOf step s xs).map fun ls => (2⁻¹ : ℝ) ^ ls.sum).getD 0
+
+theorem runWt_cons {σ α : Type*} (step : σ → α → Option (ℕ × σ)) (s : σ) (x : α) (xs : List α) :
+    runWt step s (x :: xs) = ((step s x).map fun p => (2⁻¹ : ℝ) ^ p.1 * runWt step p.2 xs).getD 0 := by
+  unfold runWt
+  simp only [runOf]
+  cases step s x with
+  | none => simp
+  | some p =>
+    simp only [Option.bind_some, Option.map_some, Option.getD_some]
+    cases runOf step p.2 xs <;> simp [pow_add, mul_comm]
+
+/-- **A run (Kraft)**: when every window's weights sum to at most 1 from any carry, so do a run's over any finite set
+of `W` windows' advice. -/
+theorem sum_runWt_le {σ α : Type*} (step : σ → α → Option (ℕ × σ))
+    (hstep : ∀ (s : σ) (A : Finset α), ∑ x ∈ A, stepWt step s x ≤ 1) :
+    ∀ (W : ℕ) (s : σ) (A : Finset (Fin W → α)), ∑ a ∈ A, runWt step s (List.ofFn a) ≤ 1
+  | 0, s, A => by
+    have hc : A.card ≤ 1 := (card_le_univ A).trans (by simp)
+    have : ∀ a ∈ A, runWt step s (List.ofFn a) = 1 := fun a _ => by simp [runWt, runOf]
+    rw [sum_congr rfl this, sum_const, nsmul_eq_mul, mul_one]
+    exact_mod_cast hc
+  | W + 1, s, A => by
+    classical
+    rw [← sum_fiberwise_of_maps_to (g := fun a => a 0) (t := A.image fun a => a 0)
+      (fun a ha => mem_image_of_mem _ ha)]
+    refine le_trans (sum_le_sum fun x _ => ?_) (hstep s (A.image fun a => a 0))
+    have hcons : ∀ a ∈ A.filter (fun a => a 0 = x), runWt step s (List.ofFn a) =
+        ((step s x).map fun p => (2⁻¹ : ℝ) ^ p.1 * runWt step p.2 (List.ofFn (Fin.tail a))).getD 0 := by
+      intro a ha
+      simp only [mem_filter] at ha
+      rw [List.ofFn_succ, ha.2, runWt_cons]
+      rfl
+    rw [sum_congr rfl hcons]
+    unfold stepWt
+    cases step s x with
+    | none => simp
+    | some p =>
+      simp only [Option.map_some, Option.getD_some]
+      rw [← mul_sum]
+      calc (2⁻¹ : ℝ) ^ p.1 * ∑ a ∈ A with a 0 = x, runWt step p.2 (List.ofFn (Fin.tail a))
+          ≤ (2⁻¹ : ℝ) ^ p.1 * 1 := by
+            gcongr
+            rw [← sum_image (f := fun v => runWt step p.2 (List.ofFn v)) (fun a ha b hb h => by
+              simp only [coe_filter, Set.mem_ofPred_eq] at ha hb
+              rw [← Fin.cons_self_tail a, ← Fin.cons_self_tail b, ha.2, hb.2]
+              exact congrArg _ h)]
+            exact sum_runWt_le step hstep W p.2 _
+        _ = (2⁻¹ : ℝ) ^ p.1 := mul_one _
+
+theorem length_runOf {σ α : Type*} (step : σ → α → Option (ℕ × σ)) :
+    ∀ (s : σ) (xs : List α) {ls : List ℕ}, runOf step s xs = some ls → ls.length = xs.length
+  | _, [], ls, h => by simp [runOf] at h; simp [← h]
+  | s, x :: xs, ls, h => by
+    simp only [runOf, Option.bind_eq_some_iff, Option.map_eq_some_iff] at h
+    obtain ⟨p, _, ls', h2, rfl⟩ := h
+    simp [length_runOf step p.2 xs h2]
+
+/-- **A run's count**: at most `2^c` advice values of `W` windows are charged `c` or less in all by a run whose
+windows each meet Kraft. -/
+theorem encard_runOf_le {σ α : Type*} (step : σ → α → Option (ℕ × σ))
+    (hstep : ∀ (s : σ) (A : Finset α), ∑ x ∈ A, stepWt step s x ≤ 1) (s₀ : σ) (W c : ℕ) :
+    {a : Fin W → α | ∃ ls, runOf step s₀ (List.ofFn a) = some ls ∧ ls.sum ≤ c}.encard ≤ ((2 ^ c : ℕ) : ℕ∞) := by
+  have hset : {a : Fin W → α | ∃ ls, runOf step s₀ (List.ofFn a) = some ls ∧ ls.sum ≤ c} =
+      {a | (runOf step s₀ (List.ofFn a)).isSome ∧ ((runOf step s₀ (List.ofFn a)).getD []).sum ≤ c} := by
+    ext a
+    simp only [Set.mem_ofPred_eq]
+    cases runOf step s₀ (List.ofFn a) <;> simp
+  rw [hset]
+  apply encard_le_of_kraft
+  intro A hA
+  refine le_trans (le_of_eq (sum_congr rfl fun a ha => ?_)) (sum_runWt_le step hstep W s₀ A)
+  obtain ⟨ls, hls⟩ := Option.isSome_iff_exists.1 (hA a ha)
+  simp only [runWt, hls, Option.map_some, Option.getD_some]
+
+/-! ### Windows that send counts -/
+
+/-- **Prefix-free codes meet Kraft**: if no codeword is a prefix of another's, the weights `2^(−length)` of the
+codewords of any finite set of counts sum to at most 1. Each codeword's extensions to the longest one's length are
+`2^(M − length)` strings of length `M`, and prefix-freeness keeps them apart. -/
+theorem kraft_of_prefixFree {C : Type} (enc : C → Option (List Bool))
+    (hpf : ∀ κ κ' w w', enc κ = some w → enc κ' = some w' → w <+: w' → κ = κ') (A : Finset C) :
+    ∑ κ ∈ A, ((enc κ).map fun w => (2⁻¹ : ℝ) ^ w.length).getD 0 ≤ 1 := by
+  classical
+  set B := A.filter fun κ => (enc κ).isSome with hB
+  let cw : C → List Bool := fun κ => (enc κ).getD []
+  have hcw : ∀ κ ∈ B, enc κ = some (cw κ) := by
+    intro κ hκ
+    simp only [B, mem_filter] at hκ
+    obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hκ.2
+    simp [cw, hw]
+  let M := B.sup fun κ => (cw κ).length
+  have hM : ∀ κ ∈ B, (cw κ).length ≤ M := fun κ hκ => le_sup (f := fun κ => (cw κ).length) hκ
+  let E : C → Finset (List Bool) := fun κ =>
+    (univ : Finset (Fin (M - (cw κ).length) → Bool)).image fun v => cw κ ++ List.ofFn v
+  have hEcard : ∀ κ, (E κ).card = 2 ^ (M - (cw κ).length) := by
+    intro κ
+    rw [card_image_of_injective _ (fun v v' h => List.ofFn_injective (List.append_cancel_left h))]
+    simp
+  have hlen : ∀ l ∈ B.biUnion E, l.length = M := by
+    intro l hl
+    simp only [mem_biUnion, E, mem_image, mem_univ, true_and] at hl
+    obtain ⟨κ, hκ, v, rfl⟩ := hl
+    simp only [List.length_append, List.length_ofFn]
+    have := hM κ hκ
+    omega
+  have hpd : (B : Set C).PairwiseDisjoint E := by
+    intro κ hκ κ' hκ' hne
+    simp only [Function.onFun]
+    rw [Finset.disjoint_left]
+    intro l h1 h2
+    simp only [E, mem_image, mem_univ, true_and] at h1 h2
+    obtain ⟨v, rfl⟩ := h1
+    obtain ⟨v', hv'⟩ := h2
+    have p1 : cw κ <+: cw κ ++ List.ofFn v := List.prefix_append _ _
+    have p2 : cw κ' <+: cw κ ++ List.ofFn v := hv' ▸ List.prefix_append _ _
+    rcases le_total (cw κ).length (cw κ').length with hl | hl
+    · exact hne (hpf κ κ' _ _ (hcw κ hκ) (hcw κ' hκ') (List.prefix_of_prefix_length_le p1 p2 hl))
+    · exact hne (hpf κ' κ _ _ (hcw κ' hκ') (hcw κ hκ) (List.prefix_of_prefix_length_le p2 p1 hl)).symm
+  have hle : ∑ κ ∈ B, (2 : ℝ) ^ (M - (cw κ).length) ≤ 2 ^ M := by
+    have h1 : (B.biUnion E).card ≤ 2 ^ M := by
+      calc (B.biUnion E).card ≤ (univ : Finset (Fin M → Bool)).card := by
+            refine card_le_card_of_injOn (fun l (i : Fin M) => l.getD i false) (by intro a _; exact mem_univ _) ?_
+            intro l hl l' hl' h
+            apply List.ext_getElem (by rw [hlen l hl, hlen l' hl'])
+            intro i h1 h2
+            have := congrFun h ⟨i, by rw [← hlen l hl]; exact h1⟩
+            simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h1, List.getElem?_eq_getElem h2] using this
+        _ = 2 ^ M := by simp
+    rw [card_biUnion hpd] at h1
+    simp only [hEcard] at h1
+    exact_mod_cast h1
+  have key : ∀ l, l ≤ M → (2⁻¹ : ℝ) ^ l = 2 ^ (M - l) * (2⁻¹ : ℝ) ^ M := by
+    intro l hl
+    obtain ⟨k, hk⟩ := Nat.exists_eq_add_of_le hl
+    rw [hk, Nat.add_sub_cancel_left, pow_add, ← mul_assoc, mul_comm ((2 : ℝ) ^ k), mul_assoc, two_pow_mul_inv_pow,
+      mul_one]
+  have hsum : ∑ κ ∈ A, ((enc κ).map fun w => (2⁻¹ : ℝ) ^ w.length).getD 0 = ∑ κ ∈ B, (2⁻¹ : ℝ) ^ (cw κ).length := by
+    rw [hB, sum_filter]
+    refine sum_congr rfl fun κ _ => ?_
+    cases h : enc κ <;> simp [h, cw]
+  rw [hsum]
+  calc ∑ κ ∈ B, (2⁻¹ : ℝ) ^ (cw κ).length = (∑ κ ∈ B, (2 : ℝ) ^ (M - (cw κ).length)) * (2⁻¹ : ℝ) ^ M := by
+        rw [sum_mul]
+        exact sum_congr rfl fun κ hκ => key _ (hM κ hκ)
+    _ ≤ 2 ^ M * (2⁻¹ : ℝ) ^ M := by gcongr
+    _ = 1 := two_pow_mul_inv_pow M
+
+/-- **A prefix-free code is a count code**, charging each counts its codeword's length. -/
+def CountCode.ofPrefixFree {C : Type} (enc : C → Option (List Bool))
+    (hpf : ∀ κ κ' w w', enc κ = some w → enc κ' = some w' → w <+: w' → κ = κ') : CountCode C where
+  len κ := (enc κ).map List.length
+  kraft A := le_trans (le_of_eq (sum_congr rfl fun κ _ => by cases enc κ <;> rfl)) (kraft_of_prefixFree enc hpf A)
+
+/-- **A count code for nonzero counts**: the unary code, `n` as `n` zeros and a one, prefix-free, charging `n + 1`. -/
+def CountCode.unary : CountCode ℕ :=
+  CountCode.ofPrefixFree (fun n => some (List.replicate n false ++ [true])) fun a b w w' ha hb h => by
+    cases ha
+    cases hb
+    have hl := h.length_le
+    simp only [List.length_append, List.length_replicate, List.length_singleton] at hl
+    rcases Nat.lt_or_ge a b with hab | hab
+    · exfalso
+      rw [List.prefix_iff_eq_take, List.length_append, List.length_replicate, List.length_singleton,
+        List.take_append_of_le_length (by simp; omega), List.take_replicate, min_eq_left (by omega),
+        List.replicate_succ'] at h
+      simpa using List.append_cancel_left h
+    · omega
+
+/-- **Advice v1 is the case of no counts**: under the code that charges nothing for `Unit`, the charges with counts
+are advice v1's. -/
+def CountCode.zero : CountCode Unit where
+  len _ := some 0
+  kraft A := by
+    have : A.card ≤ 1 := (card_le_univ A).trans (by simp)
+    simpa using (show (A.card : ℝ) ≤ 1 by exact_mod_cast this)
+
+theorem chargesCounted_zero (bk : Book) (N : ℕ) {W : ℕ} (a : Fin W → List Bool) :
+    chargesCounted bk N CountCode.zero (fun w => (a w, ())) = charges bk N a := by
+  suffices h : ∀ (cy : Carry) (ws : List (List Bool)),
+      sessionCounted bk N CountCode.zero cy (ws.map fun ds => (ds, ())) = session bk N cy ws by
+    simpa [chargesCounted, charges, List.map_ofFn, Function.comp_def] using h ⟨bk.priors, 0⟩ (List.ofFn a)
+  intro cy ws
+  induction ws generalizing cy with
+  | nil => rfl
+  | cons ds ws ih =>
+    simp only [List.map_cons, sessionCounted, session, windowCounted, ih]
+    cases window bk N cy ds <;> simp [CountCode.zero]
+
+variable {C : Type}
+
+/-- The counts' weight under the count code: `2^(−len)`, or nothing when refused. -/
+noncomputable def kw (cc : CountCode C) (κ : C) : ℝ := ((cc.len κ).map fun l => (2⁻¹ : ℝ) ^ l).getD 0
+
+theorem kw_nonneg (cc : CountCode C) (κ : C) : 0 ≤ kw cc κ := by
+  unfold kw
+  cases cc.len κ <;> simp [pow_nonneg]
+
+theorem stepWt_windowCounted (bk : Book) (N : ℕ) (cc : CountCode C) (cy : Carry) (x : List Bool × C) :
+    stepWt (windowCounted bk N cc) cy x = lw bk N cy x.1 * kw cc x.2 := by
+  unfold stepWt windowCounted lw kw
+  cases window bk N cy x.1 with
+  | none => simp
+  | some p =>
+    cases cc.len x.2 with
+    | none => simp
+    | some l => simp [pow_add, mul_comm]
+
+/-- **One window with counts (Kraft)**: the decisions' weights and the counts' multiply, and each sum is at most 1. -/
+theorem sum_windowCounted_le (bk : Book) (N : ℕ) (cc : CountCode C) (cy : Carry) (A : Finset (List Bool × C)) :
+    ∑ x ∈ A, stepWt (windowCounted bk N cc) cy x ≤ 1 := by
+  classical
+  calc ∑ x ∈ A, stepWt (windowCounted bk N cc) cy x = ∑ x ∈ A, lw bk N cy x.1 * kw cc x.2 :=
+        sum_congr rfl fun x _ => stepWt_windowCounted bk N cc cy x
+    _ ≤ ∑ x ∈ A.image Prod.fst ×ˢ A.image Prod.snd, lw bk N cy x.1 * kw cc x.2 := by
+        apply sum_le_sum_of_subset_of_nonneg
+        · intro x hx
+          exact mem_product.2 ⟨mem_image_of_mem _ hx, mem_image_of_mem _ hx⟩
+        · exact fun x _ _ => mul_nonneg (lw_nonneg bk N cy x.1) (kw_nonneg cc x.2)
+    _ = (∑ ds ∈ A.image Prod.fst, lw bk N cy ds) * ∑ κ ∈ A.image Prod.snd, kw cc κ := by
+        rw [sum_product, sum_mul]
+        exact sum_congr rfl fun ds _ => by rw [mul_sum]
+    _ ≤ 1 * 1 :=
+        mul_le_mul (sum_window_le bk N cy _) (cc.kraft _) (sum_nonneg fun κ _ => kw_nonneg cc κ) zero_le_one
+    _ = 1 := one_mul 1
+
+theorem sessionCounted_eq (bk : Book) (N : ℕ) (cc : CountCode C) (cy : Carry) (ws : List (List Bool × C)) :
+    sessionCounted bk N cc cy ws = runOf (windowCounted bk N cc) cy ws := by
+  induction ws generalizing cy with
+  | nil => rfl
+  | cons x ws ih => simp only [sessionCounted, runOf, ih]
+
+/-- **The charge with counts counts (Kraft).** -/
+theorem encard_chargedCounted_le (bk : Book) (N W c : ℕ) (cc : CountCode C) :
+    {a : Fin W → List Bool × C | ∃ ls, chargesCounted bk N cc a = some ls ∧ ls.sum ≤ c}.encard ≤
+      ((2 ^ c : ℕ) : ℕ∞) := by
+  simpa only [chargesCounted, sessionCounted_eq] using
+    encard_runOf_le (windowCounted bk N cc) (sum_windowCounted_le bk N cc) ⟨bk.priors, 0⟩ W c
+
+theorem sum_bitsCounted (bk : Book) (N : ℕ) (cc : CountCode C) {W : ℕ} (a : StreamsCounted bk N cc W) :
+    ∑ w, bitsCounted bk N cc a w = ((chargesCounted bk N cc a.1).getD []).sum := by
+  obtain ⟨ls, hls⟩ := Option.isSome_iff_exists.1 a.2
+  simp only [bitsCounted, hls, Option.getD_some]
+  have h : runOf (windowCounted bk N cc) ⟨bk.priors, 0⟩ (List.ofFn a.1) = some ls := by
+    rw [← sessionCounted_eq]
+    exact hls
+  exact sum_getD_eq_sum ls W (by rw [length_runOf _ _ _ h, List.length_ofFn])
+
+/-- **`BitsCount` holds for the charge with counts**, under any registered book and any count code. -/
+theorem bitsCount_counted (bk : Book) (N W : ℕ) (cc : CountCode C) : BitsCount (bitsCounted bk N cc (W := W)) := by
+  intro c
+  calc {a : StreamsCounted bk N cc W | ∑ w, bitsCounted bk N cc a w ≤ c}.encard
+      = (Subtype.val '' {a : StreamsCounted bk N cc W | ∑ w, bitsCounted bk N cc a w ≤ c}).encard :=
+        (Subtype.val_injective.encard_image _).symm
+    _ ≤ {a : Fin W → List Bool × C | ∃ ls, chargesCounted bk N cc a = some ls ∧ ls.sum ≤ c}.encard := by
+        apply Set.encard_le_encard
+        rintro _ ⟨a, ha, rfl⟩
+        obtain ⟨ls, hls⟩ := Option.isSome_iff_exists.1 a.2
+        refine ⟨ls, hls, ?_⟩
+        have := sum_bitsCounted bk N cc a
+        rw [hls, Option.getD_some] at this
+        rw [← this]
+        exact ha
+    _ ≤ _ := encard_chargedCounted_le bk N W c cc
+
 end NetTiming.AdviceV1
 
 namespace NetTiming
@@ -647,5 +932,49 @@ theorem encard_decodableWithin_le_compiled_perWindow_v1 {Ω : Type} {W : ℕ} (I
     Zs.encard ≤ ((∏ w : Fin W, (2 ^ b w * ss.size * D ^ T) : ℕ) : ℕ∞) :=
   encard_decodableWithin_le_compiled_perWindow I T ss (AdviceV1.bits bk N) (AdviceV1.bitsCount bk N W) b compilerOf
     env hpre hdet D view hW2 hJ Zs hacc dec hdec
+
+/-- **The leak bound with the charge with counts**: `encard_accSeqsWithin_le_constantRate`, its `BitsCount` premise
+discharged by `AdviceV1.bitsCount_counted`. -/
+theorem encard_accSeqsWithin_le_constantRate_v1Counted {W : ℕ} {C : Type} (bk : AdviceV1.Book) (N : ℕ)
+    (cc : AdviceV1.CountCode C) (b : Fin W → ℕ) (T : ℕ) (ss : SyncSet)
+    (frames : List In → AdviceV1.StreamsCounted bk N cc W → Fin L → List LogicalFrame)
+    (op : ℕ → List (Obs L K S) → In) (n D m : ℕ) (hm : n ≤ m * T) :
+    (AccSeqsWithin (AdviceV1.bitsCounted bk N cc) b (constantRate (S := S) T W ss frames) op n D).encard ≤
+      ((2 ^ (∑ w, b w) * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞) :=
+  encard_accSeqsWithin_le_constantRate (AdviceV1.bitsCounted bk N cc) (AdviceV1.bitsCount_counted bk N W cc) b T ss
+    frames op n D m hm
+
+/-- **The leak bound through the wire, with the charge with counts**: `encard_decodableWithin_le_compiled`, its
+`BitsCount` premise discharged by `AdviceV1.bitsCount_counted`. -/
+theorem encard_decodableWithin_le_compiled_v1Counted {Ω C : Type} {W : ℕ} (I : Interaction L K S Z In Act Wire)
+    (T : ℕ) (ss : SyncSet) (bk : AdviceV1.Book) (N : ℕ) (cc : AdviceV1.CountCode C) (b : Fin W → ℕ)
+    (compilerOf : Z → Compiler L In (AdviceV1.StreamsCounted bk N cc W) Ω) (env : Z → Ω)
+    (hpre : CompilerPrecommitted compilerOf) (hdet : ∀ z, CompilerDeterministic (compilerOf z))
+    (n D m : ℕ) (hm : n ≤ m * T)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
+    (Zs : Set Z)
+    (hacc : ∀ z ∈ Zs,
+      AcceptedWithin (AdviceV1.bitsCounted bk N cc) b (compiledProgram (S := S) T W ss (compilerOf z) (env z)) I.op n
+        (I.obsRun z n))
+    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z n) = z) :
+    Zs.encard ≤ ((2 ^ (∑ w, b w) * ss.size ^ min W m * D ^ n : ℕ) : ℕ∞) :=
+  encard_decodableWithin_le_compiled I T ss (AdviceV1.bitsCounted bk N cc) (AdviceV1.bitsCount_counted bk N W cc) b
+    compilerOf env hpre hdet n D m hm view hW2 hJ Zs hacc dec hdec
+
+/-- **The leak bound per window, with the charge with counts**: `encard_decodableWithin_le_compiled_perWindow`, its
+`BitsCount` premise discharged by `AdviceV1.bitsCount_counted`. -/
+theorem encard_decodableWithin_le_compiled_perWindow_v1Counted {Ω C : Type} {W : ℕ}
+    (I : Interaction L K S Z In Act Wire) (T : ℕ) (ss : SyncSet) (bk : AdviceV1.Book) (N : ℕ)
+    (cc : AdviceV1.CountCode C) (b : Fin W → ℕ)
+    (compilerOf : Z → Compiler L In (AdviceV1.StreamsCounted bk N cc W) Ω) (env : Z → Ω)
+    (hpre : CompilerPrecommitted compilerOf) (hdet : ∀ z, CompilerDeterministic (compilerOf z)) (D : ℕ)
+    (view : ℕ → Obs L K S → Wire) (hW2 : Regenerates I.certifier view) (hJ : JitterBounded I.certifier D)
+    (Zs : Set Z)
+    (hacc : ∀ z ∈ Zs, AcceptedWithin (AdviceV1.bitsCounted bk N cc) b
+      (compiledProgram (S := S) T W ss (compilerOf z) (env z)) I.op (W * T) (I.obsRun z (W * T)))
+    (dec : List Wire → Z) (hdec : ∀ z ∈ Zs, dec (I.wireRun z (W * T)) = z) :
+    Zs.encard ≤ ((∏ w : Fin W, (2 ^ b w * ss.size * D ^ T) : ℕ) : ℕ∞) :=
+  encard_decodableWithin_le_compiled_perWindow I T ss (AdviceV1.bitsCounted bk N cc)
+    (AdviceV1.bitsCount_counted bk N W cc) b compilerOf env hpre hdet D view hW2 hJ Zs hacc dec hdec
 
 end NetTiming
