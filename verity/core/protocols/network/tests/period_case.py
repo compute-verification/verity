@@ -516,11 +516,32 @@ EXPECT = {
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT,
-    "undecided-and-reject": REJECT,
+    "undecided-and-reject": REJECT, "form": REJECT,
     "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
+    "rows-honest": ACCEPT,
+    "rows-program": REJECT,
+    "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
+    "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
+    "rows-cert-key": REJECT,
+    "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
+    "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
+    "rows-schedule": REJECT,
+    "rows-answer-protocol": REJECT, "rows-answer-other": REJECT, "rows-answer-window": REJECT,
+    "rows-answer-reject": REJECT, "rows-answer-undecided": UNDECIDED, "rows-answer-profile": REJECT,
+    "rows-answer-bound": REJECT,
+    "rows-audit-other": REJECT, "rows-audit-reject": REJECT, "rows-audit-undecided": UNDECIDED,
+    "rows-audit-profile": REJECT, "rows-audit-bound": REJECT,
+    "rows-undecided-and-reject": REJECT, "rows-form": REJECT,
+    "rows-first": REJECT, "rows-count-windows": REJECT, "rows-count-audits": REJECT, "rows-evidence-count": REJECT,
+    "rows-params": REJECT, "rows-commitment": REJECT, "rows-evidence": REJECT,
 }
 MUTATIONS = list(EXPECT)
+
+
+def form_of(m: str) -> str:
+    """The form a change's period is in: the rows form's changes are named `rows-…`."""
+    return "rows" if m.startswith("rows-") else "clock"
 
 
 def _flip(b: bytes, i: int) -> bytes:
@@ -539,12 +560,15 @@ def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
     return certificate_digest(salt, clock_digest(sync))
 
 
-def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int) -> dict:
-    """One-stage's answer accepting `k` of `size` units drawn `subset:k` (`OneStage.check`'s public and profile)."""
+def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int,
+              strata: list[dict] | None = None) -> dict:
+    """One-stage's answer accepting `k` of `size` units drawn `subset:k`, or drawn stratified over `strata` (each
+    `{k, name, size}`, k and size their sums), as `OneStage.check`'s public and profile have it."""
     units = list(range(k))
+    draw = {"subset": k} if strata is None else {"law": "stratified", "strata": strata}
     return {"commitment": digest.hex(),
             "profile": {"covered": [], "delta": delta, "drawn": {UNIT: k},
-                        "levels": [{"draw": {"subset": k}, "name": UNIT, "query": query, "size": size}],
+                        "levels": [{"draw": draw, "name": UNIT, "query": query, "size": size}],
                         "linked": False, "prescribed": [], "programs": [program]},
             "protocol": ONE_STAGE, "public": {"bound": bound, "drawn": units, "per_template": None, "proved": units},
             "reason": None, "verdict": ACCEPT}
@@ -554,10 +578,30 @@ def _refused(answer: dict, verdict: str) -> dict:
     return answer | {"profile": None, "public": None, "reason": f"the audit is {verdict}", "verdict": verdict}
 
 
+#: The schedule's fields that leave its rows' shape (B, S, T) as it is: a change to one changes only its digest.
+SAME_SHAPE = ("bucket_ms", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "queue")
+#: The orders of a link-window's three records' certificates other than their own.
+SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
+
+
+def schedule_json(s: WardenParams) -> dict:
+    return {k: getattr(s, k) for k in SCHEDULE_KEYS}
+
+
+def _small_schedule(r: random.Random, small: bool) -> WardenParams:
+    """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if `small`)."""
+    return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
+                        delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8),
+                        window=r.randint(1, 2 if small else 3), ingress_cells=r.randint(1, 8),
+                        ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16))
+
+
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, every choice drawn from `seed`; `small`: the toy key, as few link-windows
-    and audits as `m` needs."""
+    """A period's case with the change `m`, in the form `m` names (`form_of`), every choice drawn from `seed`; `small`:
+    the toy key, as few link-windows and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
+    rows = form_of(m) == "rows"
+    m = m.removeprefix("rows-")
     ki = 0 if small else r.randrange(len(KEYS))
     key = _key(ki)
     N, W, H, toy = KEYS[ki]
@@ -569,8 +613,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
     first = r.choice([0, 0, r.randrange(1, 6)])
-    deltas = r.sample(range(4), r.randint(1, 3))
-    rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
+    if rows:
+        sched = bound = _small_schedule(r, small)
+    else:
+        deltas = r.sample(range(4), r.randint(1, 3))
+        rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
     t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
     a = r.randrange(max(n_audits, 1))
     signed = iter(range(1 << 30))
@@ -579,8 +626,126 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         c = Certificate(k.I, link, d, w, digest, b"")
         return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
 
+    def registrations(w: int, s: WardenParams | None = None, on: str = link, ses: bytes = session) -> list[dict]:
+        """Link `on`'s ingress and egress rows at window `w`, committed under schedule `s` (the period's) in session
+        `ses` and registered, each head signed there."""
+        s = s or sched
+        out = []
+        for d in (INGRESS, EGRESS):
+            cells = WR.Cells.commit(on, d, w, [r.randbytes(WR.row_bytes(s)) for _ in range(s.window)],
+                                    WR.Wiring((), r.randbytes(WR.WIRING_SALT_BYTES)), s, ses,
+                                    [r.randbytes(WR.SALT_BYTES) for _ in range(s.window)])
+            out.append(WR.registration(cells.head, sign(on, d, w, cells.head.digest(), s=ses), s))
+        return out
+
+    def resigned(doc: dict, **kw) -> dict:
+        c = sign(doc["link"], Direction(doc["direction"]), doc["window"], bytes.fromhex(doc["certificate"]["digest"]),
+                 **kw)
+        return doc | {"certificate": {"digest": c.digest.hex(), "key": c.key_id.hex(), "signature": c.signature.hex()}}
+
     window_regs, windows, clocks = [], [], []
-    for w in range(first, first + n_windows):
+    for w in range(first, first + n_windows) if rows else ():
+        aimed = w == first + t
+        i, j = r.randrange(2), r.randrange(3)
+        regs = registrations(w)
+        named = regs
+        if aimed and m == "answer-window":
+            there = registrations(w + r.choice([1, -1] if w else [1]))
+            named = r.choice([there, [regs[0], there[1]], [there[0], regs[1]],
+                              [x | {"domain": y["domain"]} for x, y in zip(regs, there)]])
+        elif aimed and m == "schedule":
+            other = dataclasses.replace(sched, **{f: getattr(sched, f) + 1 for f in [r.choice(SAME_SHAPE)]})
+            if r.random() < 0.5:
+                bound = other
+            else:
+                under = registrations(w, other)
+                regs = r.choice([under, [under[0], regs[1]], [regs[0], under[1]]])
+        elif aimed and m == "reg-count":
+            regs = r.choice([regs[:1], regs[1:], [], regs + regs[1:]])
+        elif aimed and m == "reg-swap":
+            regs = regs[::-1]
+        elif aimed and m in ("reg-forged", "reg-window", "reg-link", "reg-session", "reg-key", "reg-field"):
+            doc, c = regs[i], regs[i]["certificate"]
+            sig, dig = bytes.fromhex(c["signature"]), bytes.fromhex(c["digest"])
+            if m == "reg-forged":
+                doc = r.choice([doc | {"certificate": c | {"signature": s.hex()}} for s in (_flip(sig, seed), sig[:-1], b"")]
+                               + [doc | {"certificate": c | {"digest": _flip(dig, seed).hex()}}]
+                               + [doc | {k: r.randbytes(n).hex()} for k in ("root", "wiring") for n in (64, 63)])
+            elif m == "reg-window":
+                doc = registrations(w + r.choice([1, -1] if w else [1]))[i]
+            elif m == "reg-link":
+                doc = registrations(w, on=link + "x")[i]
+            elif m == "reg-session":
+                ses = _flip(session, seed)
+                doc = resigned(doc, s=ses) if r.random() < 0.5 else registrations(w, ses=ses)[i]
+            elif m == "reg-key":
+                doc = resigned(doc, k=_key(ki, 1, r.random() < 0.5))
+            else:
+                lay = doc["layout"]
+                f = r.choice(LAYOUT_KEYS)
+                doc = doc | r.choice([
+                    {"cell_bytes": doc["cell_bytes"] + 1}, {"rows": doc["rows"] + 1}, {"words": doc["words"] + 1},
+                    {"word_bits": 8}, {"row_schema": "hm96-sha512/row/v1"},
+                    {"format": "verity-network-warden/registration/v1"}, {"value": doc["value"] + "x"},
+                    {"domain": r.randbytes(64).hex()}, {"parameters": r.randbytes(64).hex()},
+                    {"direction": (EGRESS if i == 0 else INGRESS).value}, {"layout": lay | {f: lay[f] + 1}}])
+            regs = regs[:i] + [doc] + regs[i + 1:]
+        recs = [sign(on, d, w, r.randbytes(64)) for on, d in records(link)]
+        if aimed and m.startswith("cert-"):
+            on, d = records(link)[j]
+            if m == "cert-missing":
+                recs = r.choice([recs[:j] + recs[j + 1:], []])
+            elif m == "cert-swap":
+                recs = [recs[x] for x in r.choice(SWAPS)]
+            elif m == "cert-fails-link":
+                recs[2] = sign(r.choice([link, f"{link}-fail", f"{link}x-fails"]), EGRESS, w, recs[2].digest)
+            elif m == "cert-direction":
+                recs[j] = sign(on, INGRESS if d is EGRESS else EGRESS, w, recs[j].digest)
+            elif m == "cert-forged":
+                sig = recs[j].signature
+                recs[j] = dataclasses.replace(recs[j], signature=r.choice([_flip(sig, seed), sig[:-1], b""]))
+            elif m == "cert-window":
+                recs[j] = sign(on, d, w + 1, recs[j].digest)
+            elif m == "cert-session":
+                recs[j] = sign(on, d, w, recs[j].digest, s=_flip(session, seed))
+            elif m == "cert-key":
+                recs[j] = sign(on, d, w, recs[j].digest, k=_key(ki, 1, r.random() < 0.5))
+        entries = [{"domain": x["domain"], "root": x["root"], "value": x["value"]} for x in named]
+        entries.insert(r.randrange(len(entries) + 1),
+                       {"domain": r.randbytes(64).hex(), "root": r.randbytes(64).hex(), "value": "decoy"})
+        T = sched.window
+        strata = [{"k": r.randint(1, T), "name": d.value, "size": T} for d in (INGRESS, EGRESS)] \
+            if r.random() < 0.5 else None
+        k = sum(s["k"] for s in strata) if strata else r.randint(1, 2 * T)
+        rec = {"format": r.choice(FORMATS), "law": {"k": k, "law": "subset" if strata is None else "stratified"},
+               "partition": f"{link}/scan/{w}", "population": 2 * T, "program": program, "protocol": ONE_STAGE,
+               r.choice(["roots", "registered"]): entries, "window": {"kind": "stand-in", "window": w}}
+        if aimed and m == "program":
+            rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
+        digest = registration_digest(rec)
+        answer = _accepted(digest, program, rec["partition"], 2 * T, k, r.choice(["1/100", "1/1000000", "1/7"]),
+                           r.randint(0, 2 * T), strata)
+        if aimed:
+            if m == "answer-protocol":
+                answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
+            elif m == "answer-other":
+                answer["commitment"] = r.choice([r.randbytes(64), registration_digest(rec | {"population": 1})]).hex()
+            elif m == "answer-reject":
+                answer = _refused(answer, REJECT)
+            elif m in ("answer-undecided", "undecided-and-reject"):
+                answer = _refused(answer, UNDECIDED)
+            elif m == "answer-profile":
+                lv = answer["profile"]["levels"][0]
+                answer["profile"]["levels"] = r.choice([
+                    [lv, lv | {"name": "token", "size": 3}], [lv | {"draw": {"bernoulli": "1/2"}}], [lv | {"draw": None}],
+                    []])
+            elif m == "answer-bound":
+                answer["public"] = r.choice([{"drawn": []}, answer["public"] | {"bound": -1},
+                                             answer["public"] | {"bound": "3"}, []])
+        window_regs.append(rec)
+        shown = {"clock": _cert_json(recs[1])} if aimed and m == "form" else {"registrations": regs}
+        windows.append({"answer": answer, "certificates": [_cert_json(c) for c in recs]} | shown)
+    for w in range(first, first + n_windows) if not rows else ():
         rec = {"format": r.choice(FORMATS), "law": {"k": 1, "law": "subset"}, "partition": f"{link}/{w}",
                "population": 1, "program": program, "protocol": ONE_STAGE, "window": served(w)}
         sync = ClockSync(r.choice(deltas), r.choice(rhos))
@@ -642,8 +807,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
             certificates = r.choice([[egress], [egress, ingress, ingress], []])
         window_regs.append(rec)
         clocks.append(clock)
-        windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates],
-                        "clock": _cert_json(clock)})
+        shown = {"registrations": []} if aimed and m == "form" else {"clock": _cert_json(clock)}
+        windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates]} | shown)
 
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
@@ -677,8 +842,11 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
                    "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
-                   "sync_set": {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]},
                    "windows": n_windows}
+    if rows:
+        case_params |= {"scan": {"free": r.randint(0, 5), "steps": r.randint(0, 4)}, "schedule": schedule_json(bound)}
+    else:
+        case_params["sync_set"] = {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]}
     c_json = {"audits": audit_regs, "windows": window_regs}
     e_json = {"audits": audits, "windows": windows}
     if m == "first":
@@ -713,12 +881,22 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"program": p["program"].upper()}, p | {"program": 0},
            p | {"lms": p["lms"] | {"W": 3}}, p | {"lms": p["lms"] | {"H": 0}}, p | {"lms": p["lms"] | {"toy": 0}},
            p | {"lms": p["lms"] | {"x": 0}}, p | {"lms": {k: v for k, v in p["lms"].items() if k != "toy"}},
-           p | {"sync_set": p["sync_set"] | {"deltas": []}}, p | {"sync_set": p["sync_set"] | {"rhos": [[0, 1]]}},
-           p | {"sync_set": p["sync_set"] | {"rhos": [[1, 0]]}}, p | {"sync_set": p["sync_set"] | {"deltas": [1, 1]}},
-           p | {"sync_set": p["sync_set"] | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": p["sync_set"] | {"x": 0}},
            p | {"audits": [{"free": 0}]}, p | {"audits": [{"free": -1, "steps": 0}]}, p | {"audits": "x"},
            p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"}]
-    return out
+    if "sync_set" in p:
+        ss = p["sync_set"]
+        return out + [p | {"sync_set": ss | {"deltas": []}}, p | {"sync_set": ss | {"rhos": [[0, 1]]}},
+                      p | {"sync_set": ss | {"rhos": [[1, 0]]}}, p | {"sync_set": ss | {"deltas": [1, 1]}},
+                      p | {"sync_set": ss | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": ss | {"x": 0}}]
+    s = p["schedule"]
+    return out + [p | {"schedule": {k: v for k, v in s.items() if k != SCHEDULE_KEYS[n % len(s)]}},
+                  p | {"schedule": s | {"x": 1}}, p | {"schedule": [s]}, p | {"schedule": s | {"delay": 0}},
+                  p | {"schedule": s | {"lanes": True}}, p | {"schedule": s | {"window": -1}},
+                  p | {"schedule": s | {"queue": "1"}}, p | {"schedule": s | {"cell_bytes": 10}},
+                  p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
+                  p | {"schedule": s | {"window": U32}}, p | {"scan": {"free": 0}},
+                  p | {"scan": {"free": 0, "steps": -1}}, p | {"scan": "x"},
+                  p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}}]
 
 
 def _bad_commitments(c: dict, b: bytes) -> list[bytes]:
@@ -733,14 +911,29 @@ def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
     """Evidence that doesn't decode, each one change to `e`."""
     enc = lambda j: D.canonical(j).encode()  # noqa: E731
     x, rest = e["windows"][0], e["windows"][1:]
-    cert, clock = x["certificates"][0] if x["certificates"] else x["clock"], x["clock"]
-    bad_windows = [{k: v for k, v in x.items() if k != "clock"},
-                   x | {"clock": {"certificate": clock, "sync": [0, 1, 1]}}, x | {"clock": clock | {"x": 0}}, x | {"clock": {k: v for k, v in clock.items() if k != "signature"}},
-                   x | {"clock": clock | {"direction": "up"}}, x | {"clock": [clock]},
-                   x | {"certificates": [cert | {"direction": "up"}]}, x | {"certificates": [cert | {"key_id": "abc"}]},
+    cert = x["certificates"][0]
+    bad_windows = [x | {"certificates": [cert | {"direction": "up"}]}, x | {"certificates": [cert | {"key_id": "abc"}]},
                    x | {"certificates": [cert | {"window": -1}]}, x | {"certificates": [cert | {"x": 0}]},
                    x | {"certificates": "x"}, x | {"answer": {k: v for k, v in x["answer"].items() if k != "reason"}},
                    x | {"answer": x["answer"] | {"verdict": "maybe"}}, x | {"answer": x["answer"] | {"reason": "r"}}]
+    if "clock" in x:
+        clock = x["clock"]
+        bad_windows += [{k: v for k, v in x.items() if k != "clock"}, x | {"clock": {"certificate": clock, "sync": [0, 1, 1]}},
+                        x | {"clock": clock | {"x": 0}}, x | {"clock": {k: v for k, v in clock.items() if k != "signature"}},
+                        x | {"clock": clock | {"direction": "up"}}, x | {"clock": [clock]}]
+    else:
+        doc = x["registrations"][0]
+        lay, c = doc["layout"], doc["certificate"]
+        bad_rows = [{k: v for k, v in doc.items() if k != "root"}, doc | {"x": 0}, doc | {"layout": lay | {"x": 0}},
+                    doc | {"layout": {k: v for k, v in lay.items() if k != "slots"}}, doc | {"layout": [lay]},
+                    doc | {"layout": lay | {"buckets": -1}}, doc | {"certificate": {k: v for k, v in c.items() if k != "key"}},
+                    doc | {"certificate": c | {"signature": c["signature"] + "0"}}, doc | {"certificate": "x"},
+                    doc | {"root": doc["root"][:-1]}, doc | {"root": "g" + doc["root"][1:]}, doc | {"wiring": 0},
+                    doc | {"window": "0"}, doc | {"window": -1}, doc | {"cell_bytes": True}, doc | {"format": 1},
+                    doc | {"domain": 0}, "x"]
+        bad_windows += [{k: v for k, v in x.items() if k != "registrations"}, x | {"clock": cert},
+                        x | {"registrations": "x"}, x | {"registrations": [1]}] + \
+            [x | {"registrations": [d, *x["registrations"][1:]]} for d in bad_rows]
     return [b[:-1], b"\xff" + b, json.dumps(e).encode(), enc(e | {"x": 1}), enc({"windows": e["windows"]}),
             enc(e | {"audits": [1]})] + [enc(e | {"windows": [w, *rest]}) for w in bad_windows]
 
@@ -750,14 +943,17 @@ answer = reference
 
 #: What a case can be aimed at: each verdict, and a case that fails to decode (its params, commitment or evidence).
 KINDS = (ACCEPT, REJECT, UNDECIDED, "broken-params", "broken-commitment", "broken-evidence")
-#: Each kind's changes (`build`'s `m`): a rejection by the check itself, not by decoding, for `reject`; `case` breaks
-#: the line `serve` reads rather than the period, so no kind uses it.
-AIMS: dict[str, tuple[str, ...]] = {
-    ACCEPT: ("honest",),
-    REJECT: tuple(m for m, v in EXPECT.items()
-                  if v == REJECT and m not in ("params", "commitment", "evidence", "case")),
-    UNDECIDED: tuple(m for m, v in EXPECT.items() if v == UNDECIDED),
-    "broken-params": ("params",), "broken-commitment": ("commitment",), "broken-evidence": ("evidence",),
+#: Each form's changes (`build`'s `m`) by the kind they aim at: a rejection by the check itself, not by decoding, for
+#: `reject`; `case` breaks the line `serve` reads rather than the period, so no kind uses it.
+AIMS: dict[str, dict[str, tuple[str, ...]]] = {
+    form: {
+        ACCEPT: tuple(m for m in ms if m.removeprefix("rows-") == "honest"),
+        REJECT: tuple(m for m in ms if EXPECT[m] == REJECT
+                      and m.removeprefix("rows-") not in ("params", "commitment", "evidence", "case")),
+        UNDECIDED: tuple(m for m in ms if EXPECT[m] == UNDECIDED),
+        **{f"broken-{x}": tuple(m for m in ms if m.removeprefix("rows-") == x)
+           for x in ("params", "commitment", "evidence")},
+    } for form in FORMS for ms in [[m for m in EXPECT if form_of(m) == form]]
 }
 
 
@@ -766,13 +962,13 @@ def verdict_of(kind: str) -> str:
     return kind if kind in (ACCEPT, REJECT, UNDECIDED) else REJECT
 
 
-def case(kind: str, seed: int = 0) -> dict:
-    """A small period (`build(..., small=True)`: the toy key, as few link-windows and audits as its change needs) aimed
-    at `kind`, its change and every choice drawn from `seed`."""
-    ms = AIMS[kind]
+def case(kind: str, seed: int = 0, form: str = "clock") -> dict:
+    """A small period of the form (`build(..., small=True)`: the toy key, as few link-windows and audits as its change
+    needs) aimed at `kind`, its change and every choice drawn from `seed`."""
+    ms = AIMS[form][kind]
     return build(ms[random.Random(f"network-period {kind} {seed}").randrange(len(ms))], seed, small=True)
 
 
-def cases(seed: int = 0) -> dict[str, tuple[dict, dict]]:
-    """One small period of each kind with its answer, `{kind: (case, answer)}`."""
-    return {k: (c, answer(c)) for k in KINDS for c in [case(k, seed)]}
+def cases(seed: int = 0, form: str = "clock") -> dict[str, tuple[dict, dict]]:
+    """One small period of the form of each kind with its answer, `{kind: (case, answer)}`."""
+    return {k: (c, answer(c)) for k in KINDS for c in [case(k, seed, form)]}
