@@ -108,7 +108,7 @@ expected and runs `chat open` again, which reuses the channel and may post the w
 Production is `verity-slack-events` (https://verity-slack-events.vercel.app), deployed from main by console with
 `vercel deploy --prod` (Git deploys are off), behind the docs site's rewrite of `/api/slack/*`. The setup, as done:
 
-1. A Vercel project on this repository with Root Directory `integrations/slack-events/service`, and "Include files
+1. A Vercel project on this repository with Root Directory `infra/slack-events/service`, and "Include files
    outside the root directory in the Build Step" on (`build.py` reads the repository around it, and fails without it).
 2. Vercel Queues on the team (beta, every plan). The topics need nothing: `slack-events` and `slack-events-dead` exist
    once published to, and the drain's consumer group once it polls. Runtime Cache needs nothing either: Vercel gives every
