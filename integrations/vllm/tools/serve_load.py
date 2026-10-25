@@ -3,7 +3,7 @@ as network-accounting's varied traffic.
 
     python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B [--bursts 8] [--per-burst 4] [--seed 0] --out FILE
     python tools/serve_load.py --port 18084 --model unsloth/Llama-3.2-1B --varied 120 [--rate 2] [--prompt-range 16:1024]
-        [--max-tokens 64] [--release RUN] [--jitter-ms 0] [--seed 0] --out FILE
+        [--max-tokens 64] [--exact-tokens] [--timeout 600] [--release RUN] [--jitter-ms 0] [--seed 0] --out FILE
 
 Each burst is ``--per-burst`` concurrent ``/v1/completions`` requests, each with its own ``user`` (``b<burst>-<i>``), a prompt of
 distinct token ids (BOS, then 16 to 200 ids, so no two share a cached block), top_p 1, a temperature of 0, 0.7 or 1.0 (half of
@@ -50,10 +50,10 @@ def body(rng: random.Random, model: str, user: str) -> dict:
     return b
 
 
-def post(port: int, b: dict, headers: dict | None = None) -> dict:
+def post(port: int, b: dict, headers: dict | None = None, timeout: float = 600) -> dict:
     req = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", data=json.dumps(b).encode(),
                                  headers={"content-type": "application/json", **(headers or {})})
-    with urllib.request.urlopen(req, timeout=600) as r:  # noqa: S310  (the local endpoint)
+    with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310  (the local endpoint)
         raw = r.read()
     if not b.get("stream"):
         return json.loads(raw)
@@ -98,19 +98,27 @@ def varied(port: int, model: str, n: int, *, rate: float, prompt_tokens: tuple[i
 def run_varied(a: argparse.Namespace) -> int:
     lo, _, hi = a.prompt_range.partition(":")
     reqs = varied(a.port, a.model, a.varied, rate=a.rate, prompt_tokens=(int(lo), int(hi)), max_tokens=a.max_tokens, seed=a.seed)
+    if a.exact_tokens:
+        for q in reqs:
+            q["body"].update(max_tokens=a.max_tokens, min_tokens=a.max_tokens, ignore_eos=True)
     jitter = random.Random(f"{a.seed}/jitter")
     delays = [jitter.uniform(0, a.jitter_ms / 1000) if a.release else 0.0 for _ in reqs]
     got: list = [None] * len(reqs)
+    took: list = [None] * len(reqs)
     t0 = time.monotonic()
 
     def go(j: int) -> None:
         if (wait := t0 + reqs[j]["at_s"] + delays[j] - time.monotonic()) > 0:
             time.sleep(wait)
         headers = {"x-verity-release": str(j), "x-verity-release-run": a.release} if a.release else {}
+        t = time.monotonic()
         try:
-            got[j] = post(a.port, reqs[j]["body"], headers)
+            got[j] = post(a.port, reqs[j]["body"], headers, a.timeout)
+            if a.exact_tokens and len(got[j].get("token_ids") or []) != a.max_tokens:
+                got[j] = {**got[j], "error": f"cut: {len(got[j].get('token_ids') or [])} of {a.max_tokens} tokens"}
         except Exception as e:  # noqa: BLE001  (recorded with the request)
             got[j] = {"error": f"{type(e).__name__}: {e}"}
+        took[j] = round(time.monotonic() - t, 3)
 
     ts = [threading.Thread(target=go, args=(j,)) for j in range(len(reqs))]
     for t in ts:
@@ -120,9 +128,11 @@ def run_varied(a: argparse.Namespace) -> int:
     with open(a.out, "a") as fh:
         for j, (q, r) in enumerate(zip(reqs, got)):
             fh.write(json.dumps({"user": q["user"], "release": j if a.release else None, "at_s": q["at_s"], "delay_s": delays[j],
-                                 "prompt": len(q["body"]["prompt"]), "max_tokens": q["body"]["max_tokens"], "response": r}) + "\n")
+                                 "prompt": len(q["body"]["prompt"]), "max_tokens": q["body"]["max_tokens"], "latency_s": took[j],
+                                 "response": r}) + "\n")
     print(f"[serve-load] varied: {sum('error' not in (r or {}) for r in got)}/{len(got)} ok, prompts "
-          f"{min(len(q['body']['prompt']) for q in reqs)}…{max(len(q['body']['prompt']) for q in reqs)} tokens", flush=True)
+          f"{min(len(q['body']['prompt']) for q in reqs)}…{max(len(q['body']['prompt']) for q in reqs)} tokens, latency max "
+          f"{max(t for t in took if t is not None):.1f} s", flush=True)
     return 0 if all("error" not in (r or {}) for r in got) else 1
 
 
@@ -140,6 +150,10 @@ def main() -> int:
     ap.add_argument("--max-tokens", type=int, default=64, help="varied: the largest max_tokens drawn")
     ap.add_argument("--release", default=None, help="varied: number the requests in arrival order under this release run id")
     ap.add_argument("--jitter-ms", type=float, default=0.0, help="varied, with --release: send each up to this late")
+    ap.add_argument("--exact-tokens", action="store_true",
+                    help="varied: every request asks for exactly --max-tokens (min_tokens, ignore_eos), as certifier-rehearse's do; "
+                         "a response with fewer is cut")
+    ap.add_argument("--timeout", type=float, default=600, help="the client's socket timeout, seconds")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     if a.varied:

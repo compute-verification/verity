@@ -41,13 +41,15 @@ Commit window (`verity_vllm.pipeline.serve_commit.CommitWindows`) opens at the f
 and closes when the engine is idle again (once it holds ``--idle-close-steps``), or after ``--window-steps`` steps (it
 reopens before the next step): each window is one Commit, with its own run root. At each close the server reads the
 window back from the committed bytes into the served record (`commit.served_record.Record`, COMMIT-ARB's): each request's
-committed input ids (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on the eager one), sampled ids and
+committed input ids (the step-input port's ``step.input/ids``, `served_record.IDS_NAMES`), sampled ids and
 seeds, by position. Once a request has finished, `Record.check` holds them to what was served: its prompt ids and
 streamed ids, the seed it carried, and where its finish says the stream ends. ``--prefix-caching``: vLLM's prefix cache
 (off otherwise); a hit's check names the requests that committed its prefix (`RequestRecord.prefix_cover`).
 
 Under ``--out`` the server writes ``serve.json`` (the engine, the protocol in use, the address), ``windows.jsonl`` (one
-line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds), ``requests.jsonl``
+line a Commit: its run root, step roots, the committer's errors and identity check, the requests it holds, and the public
+record of the step rows it ran, committed at its close under its run root for the compile slice, `serve_commit.commit_served`,
+whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
 (one line a request: the HTTP id, the engine id, the body's ``user``, its release and its place among the engine's adds,
 the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
 and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
@@ -80,7 +82,8 @@ from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
-from verity_vllm.pipeline.serve_commit import CommitWindows, Mirror, advice_trace, ingress_of, param_of, user_of
+from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
+                                               served_statics, user_of)
 from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
                                                  error_body, framing_agrees, http_chunk, sse, usage_of)
 
@@ -154,6 +157,10 @@ class Options:
     hidden_ns: str | None = option("--hidden-ns", default=None, help="its op namespace (default: the .so's stem)")
     tap_cap_mb: int | None = option("--tap-cap-mb", type=int, default=None, help="the hidden tap's bounded device buffer, MiB (as the Commit's)")
     norm_tap_so: str | None = option("--norm-tap-so", default=None, help="rows-sha512: the norm-scale tap (as the Commit's --norm-tap-so)")
+    served_rows_class: str | None = option("--served-rows-class", default=None,
+                                           help="the compile slice's size class the served rows are committed under, as JSON "
+                                                "{R, W, A, IW, Q, D, P, K} (serve_commit.SERVED_CLASS; default R --max-num-seqs, "
+                                                "P --window-steps, IW 16, the rest 1: only R, P and IW shape the rows)")
     force_include_usage: bool = option("--force-include-usage", action="boolean_optional", default=True,
                                        help="vLLM's --enable-force-include-usage: the usage chunk on every stream, and usage on each "
                                             "chunk (default on)")
@@ -510,6 +517,15 @@ def register_int8(precision: str, register: Callable[[Sequence[str]], Any] | Non
     return scope
 
 
+def served_class(opts: Options) -> dict[str, int]:
+    """The served rows' size class: ``--served-rows-class`` over its defaults."""
+    given = json.loads(opts.served_rows_class) if opts.served_rows_class else {}
+    if not isinstance(given, dict) or set(given) - set(SERVED_CLASS):
+        raise UsageError(f"--served-rows-class {opts.served_rows_class}: a JSON object of {', '.join(SERVED_CLASS)}")
+    return {**dict.fromkeys(SERVED_CLASS, 1), "R": opts.max_num_seqs, "P": opts.window_steps, "IW": 16,
+            **{k: int(v) for k, v in given.items()}}
+
+
 def disk_floor_of(opts: Options, usage: Callable[[Any], Any] = shutil.disk_usage) -> SS.DiskFloor | None:
     """``--seal``'s `serve_seal.DiskFloor` over the filesystem ``--out`` is on (its nearest existing directory), None without
     a floor."""
@@ -526,6 +542,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1 or opts.admit_hold_ms < 1:
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
+    if (c := served_class(opts))["R"] < opts.max_num_seqs:
+        raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if min(opts.window_gb, opts.seal_hold_gb, opts.disk_floor_gb) < 0:
         raise UsageError("--window-gb, --seal-hold-gb and --disk-floor-gb are at least 0")
     if opts.seal and not opts.commit:
@@ -579,11 +597,14 @@ def main(opts: Options) -> int:
     mirror = records_mirror(out, opts.copy_records_to)
     windows = sealer = None
     if com is not None:
+        from verity_vllm.engine.step_trace import scheduler_config
+
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
                                 eos_ids=[int(tok.eos_token_id)] if tok.eos_token_id is not None else [],
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
-                                seal=SS.seal_of(opts) if opts.seal else None, sealer=sealer,
+                                seal=SS.seal_of(opts) if opts.seal else None,
+                                served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror)
     loop = EngineLoop(engine, windows)
     if windows is not None:
@@ -614,6 +635,7 @@ def main(opts: Options) -> int:
               "step_rows": "scheduler" if rows is not None else "runner",
               "commit": opts.commit, "scheme": getattr(com, "commit_scheme", "vllm-v1") if com is not None else None,
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
+              "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,

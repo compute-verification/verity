@@ -1164,6 +1164,9 @@ class NativeHostCommitter(NativeRangeOpenings, hiding.LeafSchemeRule):
                 self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
         for name, m in self._input_only_modules():                                # [R19 int-20] a promoted member's consumer of no acquire class
             self._handles.append(m.register_forward_pre_hook(self._make_pre_hook(name)))
+        pre = sorted({n for n, m in self._modules if self._acquires_input(n, m)} | {n for n, _m in self._input_only_modules()})
+        print(f"[committer] input pre-hooks on {len(pre)} modules; embedding input hook installed: "
+              f"{[n for n in pre if n.endswith('embed_tokens')] or 'none'}", flush=True)
         runner = self.runner
         for nm in ("execute_model", "sample"):
             if hasattr(runner, nm):
