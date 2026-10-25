@@ -117,7 +117,8 @@ theorem driveExtras_get (st : _root_.Flock.Stmt) (p0 p1 : Array _root_.Flock.F12
   intro i hi
   have h := pairs_get (fun reg (q : Array _root_.Flock.F128) => (st.regionPoint reg q).extract 6
     (st.regionPoint reg q).size) p0 p1 st.regions.toList i (by rw [Array.length_toList]; exact hi)
-  rw [Array.getElem!_toList] at h
+  have e : st.regions.toList[i / 2]! = st.regions[i / 2]! := Array.getElem!_toList
+  rw [e] at h
   have hl : (_root_.Flock.Firewall.Drive.extras st #[p0, p1]).toList = st.regions.toList.flatMap fun reg =>
       [(st.regionPoint reg p0).extract 6 (st.regionPoint reg p0).size,
         (st.regionPoint reg p1).extract 6 (st.regionPoint reg p1).size] := by
