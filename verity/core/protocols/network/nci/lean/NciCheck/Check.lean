@@ -43,7 +43,7 @@ entry (`theta-unknown`: not a gate id, `theta-not-input`, `theta-not-registered`
 `theta-duplicate`), then the owners (`owner-length`: not one per gate, so an id outside the circuit or a gate left out;
 then gate by gate `owner-entry`: neither `"input"` nor a natural, `input-in-iu`, `gate-in-no-iu`), then `empty-iu`.
 `check` writes a refusal as `{"error": code}`, with a `message` giving the fix where one is the declaration's to make
-(`fixOf`).
+(`fixOf`), or for a `program` refusal of a reinterpretation, where (`refusalOf`).
 -/
 
 namespace NciCheck
@@ -475,17 +475,15 @@ def reinterpretation (P : Prog) : Option String :=
 
 end Widths
 
-/-- A `program` refusal with its reason as the `message`. -/
-def PROGRAM : String := "program: "
-
 /-- The instance's Program as C-Flock's decoder reads it, refused (`program`) where the decoder refuses it, and where a
-reference names a leaf of another width (`Widths.reinterpretation`, with its message). -/
-def decodeProgram (text : String) : Except String Flock.Program.Prog := do
-  let P ← match Flock.Program.decode text.toUTF8 with
-    | .ok P => pure P
-    | .error _ => throw "program"
-  if let some m := Widths.reinterpretation P then throw (PROGRAM ++ m)
-  return P
+reference reads a leaf at another width than it was committed with (`Widths.reinterpretation`; `refusalOf` gives its
+message). -/
+def decodeProgram (text : String) : Except String Flock.Program.Prog :=
+  match Flock.Program.decode text.toUTF8 with
+  | .ok P => match Widths.reinterpretation P with
+    | some _ => .error "program"
+    | none => .ok P
+  | .error _ => .error "program"
 
 /-- The check on one instance: its verdict, or the first failing code of a malformed instance. -/
 def evaluate (j : Json) : Except String Json := do
@@ -503,19 +501,35 @@ def fixOf : String → Option String
       "`registered`) or drop it from theta")
   | _ => none
 
-/-- A refusal as JSON: `{"error": code}`, with its `message` where `fixOf` has one, or where `decodeProgram` gave one. -/
-def refusal (code : String) : Json :=
-  if code.startsWith PROGRAM then
-    Json.mkObj [("error", Json.str "program"), ("message", Json.str (code.drop PROGRAM.length).toString)]
-  else
-  Json.mkObj (("error", Json.str code) :: match fixOf code with
+/-- A refusal as JSON: `{"error": code}`, with `message` where there is one. -/
+def refusalWith (code : String) (message : Option String) : Json :=
+  Json.mkObj (("error", Json.str code) :: match message with
     | some m => [("message", Json.str m)]
     | none => [])
 
-/-- `evaluate`, with a refusal as `refusal` writes it. -/
+/-- A refusal as JSON, with its `message` where `fixOf` has one. -/
+def refusal (code : String) : Json :=
+  refusalWith code (fixOf code)
+
+/-- Where `j`'s Program decodes and a reference of it reads a leaf at another width, `Widths.reinterpretation`'s
+message. -/
+def reinterpretationOf (j : Json) : Option String :=
+  match parse j with
+  | .ok i => match Flock.Program.decode i.program.toUTF8 with
+    | .ok P => Widths.reinterpretation P
+    | .error _ => none
+  | .error _ => none
+
+/-- `refusal`, a `program` refusal of `j` with the reinterpretation that `decodeProgram` refused as its `message`. -/
+def refusalOf (j : Json) (code : String) : Json :=
+  match (if code == "program" then reinterpretationOf j else none) with
+  | some m => refusalWith code (some m)
+  | none => refusal code
+
+/-- `evaluate`, with a refusal as `refusalOf` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusalOf j code
 
 end NciCheck

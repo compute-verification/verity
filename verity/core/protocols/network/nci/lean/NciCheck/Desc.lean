@@ -782,10 +782,10 @@ def evaluate (j : Json) : Except String Json := do
   let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- `evaluate`, with a refusal as `NciCheck.refusal` writes it. -/
+/-- `evaluate`, with a refusal as `NciCheck.refusalOf` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusalOf j code
 
 end NciCheck.Desc
