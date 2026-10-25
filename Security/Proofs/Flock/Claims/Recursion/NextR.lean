@@ -19,8 +19,8 @@ the transcript never absorbs (the openings, `params`, `zerocheck.finalC`, `liger
   rows are its committed tops' nodes, then, where it absorbs, one row of the element values its squeeze answers (`vals`
   of the `j`-th chunk of `repFrames`, `T` among them). The proof's cap is round 0's nodes for its table, its recursive
   caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
-  (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, keeping the last
-  message's proof only where no frame reads (`absorbedFrom`, `repFrames_absorbedFrom`): what it reads of the last
+  (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit,
+  keeping the last message's proof only where no frame reads (`absorbedFrom`, `repFrames_absorbedFrom`): what it reads of the last
   message changes no absorbed value (`readRep_last`). The nonces are absorbed (`.bytes (le64 n)`) but no opened row
   carries one, so the fit fixes them at `0`, the only nonce a deployed prover sends: every grinder ignores its bits
   (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the firewall device's is `0`), and the
