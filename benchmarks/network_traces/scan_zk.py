@@ -31,7 +31,9 @@ t. A link-window's buckets are chained in one registration, every row of every u
   ``prog`` (leaf t), ``sout`` (state leaf t + 1) and ``view`` (leaf t), and outputs ``o0``, its ok bit. Egress unit t
   reads ``state`` (view leaf t) and ``row`` (the warden's egress row t), and outputs ``o0``, its verdict word. So S_t is
   the one leaf unit t writes and unit t + 1 reads, and the view the one leaf ingress t writes and egress t reads: the
-  chain is the registered roots', not the prover's word. Accepted: every ok and every verdict opens to 1.
+  chain is the registered roots', not the prover's word. Accepted: every ok and every verdict opens to 1. The
+  registration's roots also name, as ``warden/ingress`` and ``warden/egress``, the root and domain of each warden row
+  registration the ``row`` reads open, so a period check (`NetworkCheck.Period`'s rows form) holds the answer to them.
 * **Negatives.** ``chain``: the same Program, its ingress units on a state tree with S_a and S_{a+1} swapped (the
   state rows of two buckets): the proofs hold and units a … a + 2's ok bits open to 0, so the window is refused.
   ``forged``: an egress-only Program, one egress row's `DATA` id changed, a row the warden never signed: refused by
@@ -483,13 +485,22 @@ def shared_bcs(path: Path, ports: list) -> list[dict[str, bytes]]:
 
 # --- the audit ----------------------------------------------------------------------------------------------------------
 
+def warden_roots(at: SimpleNamespace) -> list[dict]:
+    """The registration's ``warden/<side>`` roots: each side's warden row registration's root and domain as the
+    verifier read it (`warden_rows.check_registration`), its T rows the leaves."""
+    return [{"port": f"warden/{side}", "root": s.head.root.hex(), "leaves": s.head.rows,
+             "domain": s.dom.domain_id.hex()} for side, s in at.sides.items()]
+
+
 def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: list[dict], trees: dict, out: Path,
           port: int, k: int | None = None) -> dict:
-    """One round registered (its members' ports and the scan's registrations' roots, before any coin), its units drawn
-    by the verifier's Lean (`draw --stratified k` on its own coins; every unit when `k` is None), each member's drawn
-    units proved --zk behind the firewall and held by Lean with the verifier's own registered reads; then each held
-    unit's ``o0`` opened under the salt the prover sends. Writes what the verifier received under ``out / "verifier"``.
-    An accepted audit carries its charge terms (`charge_terms`) and each member's cost per drawn unit."""
+    """One round registered before any coin (its members' ports, the scan's registrations' roots, and as
+    ``warden/<side>`` the root and domain of the warden's row registration its row ports read, which a period check
+    holds the rows to), its units drawn by the verifier's Lean (`draw --stratified k` on its own coins; every unit when
+    `k` is None), each member's drawn units proved --zk behind the firewall and held by Lean with the verifier's own
+    registered reads; then each held unit's ``o0`` opened under the salt the prover sends. Writes what the verifier
+    received under ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's
+    cost per drawn unit."""
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
     out.mkdir(parents=True, exist_ok=True)
     want, roots, publics = {}, [], {}
@@ -504,6 +515,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         d = ADV.domain(reg.binding, len(reg.rows)).domain_id.hex()
         want[f"scan/{kind}"] = {"leaves": len(reg.rows), "domain": d}
         roots.append({"port": f"scan/{kind}", "root": reg.root.hex(), "leaves": len(reg.rows), "domain": d})
+    for r in warden_roots(at):
+        want[r["port"]] = {"leaves": r["leaves"], "domain": r["domain"]}
+        roots.append(r)
     leaf_layer = hashlib.sha512(M.canonical_json(publics)).hexdigest()
     k = sum(m["n"] for m in members) if k is None else k
     law = M.D.parse_law(f"stratified:{k}")
