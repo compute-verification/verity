@@ -40,7 +40,7 @@ each step's events in four passes; the k-th event of a name in the step is occur
    rows of a tensor the module returns) are no tuple slot: only a label binds them.
 
 A row whose Values are rows r0.. of the runtime tensor (`runtime_rows`) binds like any other; the binding map starts each request's
-entry at its row r0 (`runtime_row`).
+entry at row r0 of its share (`runtime_place`).
 
 An event no pass binds is an extra: a source label keeps itself as its identity (no manifest row has it), a tuple slot binds member
 `""`, which no row has.  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
@@ -49,13 +49,14 @@ Call's port it reads) and the encodings above (identity format).
 """
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity_vllm.query.manifest.format import batch_launch_shortfall, promoted_observation
 
-__all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "source_ports", "split_name"]
+__all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "runtime_place", "source_ports", "split_name"]
 
 HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 
@@ -197,10 +198,6 @@ class Binder:
         sizes = {len(v) for v in each.values()}
         return dict(sorted(each.items())) if "*" not in each and len(sizes) == 1 and n in (None, *sizes) else {}
 
-    def runtime_row(self, step: int, key: tuple[str, str, int], request: str) -> int:
-        """The row of the runtime tensor where `request`'s Values of `key` at `step` start: its row's `runtime_rows[0]`, else 0."""
-        return self.offsets.get(int(step), {}).get(key, {}).get(str(request), 0)
-
     def spellings(self, step: int, key: tuple[str, str, int]) -> dict[str, tuple[str, str, int]]:
         """Each request's own spelling of the call boundary `key` at `step` (module docstring, pass 2): {request: its key at the same place
         in its Program order}, {} for a key no call-boundary port declares."""
@@ -270,6 +267,23 @@ class Binder:
                 if out[sl[slot]] is None:
                     out[sl[slot]] = (op, "", k, "unbound")
         return out  # type: ignore[return-value]
+
+
+def runtime_place(binder: Binder | None, step: int, key: tuple[str, str, int], request: str, lo: int, hi: int, goff: int,
+                  meta: Any) -> tuple[tuple[str, str, int], int, int, str | None]:
+    """A request's binding-map entry of `key` at `step`: its share [`lo`, `hi`) of `meta`'s runtime tensor at element `goff`, started at
+    row r0 of the share when the request's Values start there (`runtime_rows`).  -> (key, hi, goff, None), the range ending at the
+    share's end; unmoved, with why, when the share is not whole rows of the tensor or has no row r0; as it is without a binder."""
+    r0 = binder.offsets.get(int(step), {}).get(key, {}).get(str(request), 0) if binder is not None else 0
+    if not r0:
+        return key, hi, goff, None
+    rows = int(meta.shape[0]) if meta.shape else 0
+    per_row = math.prod(int(s) for s in meta.shape) // rows if rows else 0
+    n = (hi - lo) // per_row if per_row and (hi - lo) % per_row == 0 else None
+    if n is not None and r0 < n:
+        return key, hi - r0 * per_row, goff + r0 * per_row, None
+    return key, hi, goff, (f"{meta.name}: {request}'s values start at its row {r0}; its share is "
+                           + (f"rows [0, {n})" if n is not None else "not whole rows") + ": bound to no row")
 
 
 def _request_share_shortfall(numel: int, rows: int | None, tokens: int, rows_r: int | None, hi: int) -> str | None:

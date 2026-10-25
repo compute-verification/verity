@@ -48,13 +48,13 @@ import re
 from collections import Counter
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Mapping, Sequence
 
 from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, RuntimeCorrespondence, correspondence_digest, read_program_document
 
 from verity_vllm.query.program_view import ProgramView, param_reads
 
-__all__ = ["CallName", "parse_call_name", "row_place", "call_place", "recorded_names", "Correspondence", "implementation_prefix",
+__all__ = ["CallName", "parse_call_name", "row_place", "call_place", "runtime_rows", "recorded_names", "Correspondence", "implementation_prefix",
            "held_module_paths", "SOURCES"]
 
 SOURCES = ("correspondence", "v1_annotations")
@@ -114,6 +114,15 @@ def call_place(slots: Iterable[tuple[Any, Any]]) -> tuple[int | None, tuple[int,
         return None, None
     r, c0, c1, w = places[0]
     return r, ((c0, c1) if len(places) == 1 and c1 - c0 < w else None)
+
+
+def runtime_rows(at: Sequence[int | None]) -> list[int] | None:
+    """`[r0, r0 + n)`: the rows of their runtime tensor n Calls' Values are, when the Calls' rows (`call_place`) are r0, r0 + 1, ... in
+    Program order with r0 > 0 (the last layer's prompt step, whose rows before the last `dead_free` removed); None when they start at
+    row 0, are not consecutive or one is not placed."""
+    if not at or at[0] is None or at[0] <= 0 or any(r != at[0] + i for i, r in enumerate(at)):
+        return None
+    return [at[0], at[0] + len(at)]
 
 
 def call_name_of(rec: CallCorrespondence) -> CallName:
