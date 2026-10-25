@@ -20660,13 +20660,6 @@
     "NetTiming.SecurityProofs.EncardWardenDecodableLe"
    ]
   },
-  "Definitions.NetworkCertifier.Assumptions.Period": {
-   "digest": "388b9a5ba18883b96d91abf2ce53f8e5ad2704c15133db65e5fc7b48d528e3b3",
-   "definitions": {
-    "NetTiming.WardenCertifierEgress": "956b59ef88939b5b4d797ae1fbb1c0dd823826ac572d4245b4106dec31b9022f"
-   },
-   "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted", "NetTiming.SecurityProofs.PeriodLeakAccepted"]
-  },
   "Definitions.NetworkCertifier.Grid": {
    "digest": "c7ed6edeeae9117352e16647ec33b99c24c886b9fb8833bad5989949fd0516fc",
    "definitions": {
@@ -20832,9 +20825,9 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "b84efcd4873ffd09b4997383b6cb2c69c7698bcc1b117c2cf3e8acf420c8ca92",
+   "digest": "8cce9a0b0973bc76b255525e1e98734a6c4076ff051047e7a26a81c853953b7c",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "89fb3afd31bddfd41ad481842bdd8b667b4378f95f662a76086d64a296c97579"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "b408b9d4d9f6503f87c391e4ca5734863bf5a934b7827f33eef291ce9e594108"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -21086,6 +21079,15 @@
     "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole",
     "NetTiming.SecurityProofs.ExpectedRowCausal"
    ]
+  },
+  "Definitions.NetworkCertifier.Tap": {
+   "digest": "676f6c792c2a4062eb135ff930509cda2c78ac0321a01c1a20603e2e39e81181",
+   "definitions": {
+    "NetTiming.TapRecord": "c5cddcdc452c903011fe46b319759549d0c439321722db0e2596e960f904d02f",
+    "NetTiming.TapRecord.record": "a89a64449e10fb21db550c50134329e7153d12fff8381c7f12ea84af14d24b32",
+    "NetTiming.tapCode": "e7fe36224fc6527ffca6264f8c5174f7242c48e3acd1586ce3c7b1cb5bcbbc0f"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Warden": {
    "digest": "44483d6d7b90ee894c8893c859b277c18696789fc671a62a68405cfb2d0a9a17",
