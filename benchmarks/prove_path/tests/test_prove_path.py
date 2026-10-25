@@ -186,7 +186,7 @@ class Listing:
 def test_the_transfer_gates_are_in_the_compilers_registered_digest(monkeypatch):
     """I2's digest covers the templates it lists as holding transfer gates, and `Capped` passes the list and its digest on, so a
     registration under a compiler proving other units whole names another compiler."""
-    monkeypatch.setattr("verity_vllm.predict.score.code_version", lambda: "c0de")
+    monkeypatch.setattr("verity_vllm.program.predict.score.code_version", lambda: "c0de")
     r = SimpleNamespace(phi=SimpleNamespace(to_json=lambda: {"model": "m"}), default_seed=0, cap_bits=PP.CAP_BITS)
     bare, listing = (PP.I2Compiler(r, {}, "/nonexistent", transfer_gates=tg) for tg in ((), ("RoPEHead_v1{D=64}",)))
     assert bare.digest != listing.digest and len(listing.digest) == 128
@@ -446,8 +446,8 @@ def test_the_charge_terms_are_the_accepted_profiles_location_and_committed_bits_
 
 
 def test_i2s_requests_are_its_compiled_units_once_per_advice_and_its_refusal_is_named(monkeypatch):
-    from verity_vllm.predict import steps as ST
-    from verity_vllm.predict.common import Unexpressible
+    from verity_vllm.program.predict import steps as ST
+    from verity_vllm.program.predict.common import Unexpressible
 
     calls = []
 
@@ -481,7 +481,7 @@ def test_i2_loads_only_a_single_gpu_session_and_only_programs_a_build_dir_holds(
         i2.load(0, 1, [{"request_id": "r1", "arrive_step": 0, "digest": "d1" * 64}])
 
 
-#: integrations/vllm's `tests.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
+#: integrations/vllm's `tests.program.predict.test_predict.TINY`: a two-layer Llama whose request Programs are I2's in a second
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128,
         "num_attention_heads": 4, "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5,
         "tie_word_embeddings": True, "max_position_embeddings": 64, "hidden_act": "silu"}
@@ -489,8 +489,8 @@ STOCHASTIC = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 
 
 
 def _request_program(sampling: dict | None = None, **shape):
-    from verity_vllm.predict.build import build_program
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.build import build_program
+    from verity_vllm.program.predict.phi import Phi
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": TINY}, workload={"requests": []},
               target={"compute_capability": [12, 0], "num_sms": 188})
@@ -696,7 +696,7 @@ def _serve_request(i: int, prompt: list[int], cap: int, windows: list[int], user
 
 
 #: the server's registered compiler in these tests (`served_identity`'s, from `verity-vllm advice` on the server's tree)
-SERVER = ("verity_vllm.predict.steps.compile_steps", "5e" * 64)
+SERVER = ("verity_vllm.program.predict.steps.compile_steps", "5e" * 64)
 
 
 def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str = SRT.ROWS_SCHEME, published: str | None = None,
@@ -706,7 +706,7 @@ def _served(tmp_path: Path, monkeypatch, *, root: str = "aa" * 64, scheme: str =
     the inner compiler alone; ``gates``, under the server's listing those instead of the model's of record), and its row dir's
     request Programs as vllm's advice compiler writes them (``manifest.json``);
     the server's compiler identity, I2's compile and the row dir's record stubbed."""
-    from verity_vllm.predict import steps as ST
+    from verity_vllm.program.predict import steps as ST
 
     monkeypatch.setattr(PP, "served_identity", lambda: SERVER)
     run, rows = tmp_path / "serve", tmp_path / "rows"

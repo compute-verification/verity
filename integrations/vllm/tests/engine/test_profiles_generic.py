@@ -18,7 +18,7 @@ from verity_vllm.engine.profiles import generic as G
 from verity_vllm.engine.profiles import profile_for_case, profile_module_for_case
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as BASE
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
-from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
+from verity_vllm.engine.collectives.embedding_shard import EmbeddingShardCuda
 
 SHIPPED = sorted(p.name[: -len(".config.json")] for p in dg.HF_CONFIG_DIR.glob("*.config.json"))
 #: the tensor-parallel worlds with recorded runs (the retired `*_tp2rank` hand modules and the Qwen3-MoE TP2 half)
