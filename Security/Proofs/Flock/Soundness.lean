@@ -117,6 +117,7 @@ import Proofs.Flock.Soundness.Audit.FlockBatched
 import Proofs.Flock.Soundness.Audit.Stratified
 import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Soundness.ExecStratified
+import Proofs.Flock.Soundness.ExecStrataOf
 import Proofs.Flock.Soundness.ExecDrawOS
 import Randomness
 import Proofs.Flock.Soundness.PlanDraw

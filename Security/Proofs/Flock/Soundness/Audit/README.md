@@ -53,7 +53,9 @@ $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its `HashMap` Fi
 `stratified_exec_escape_le` (`ExecStratified.lean`): the executable `Flock.Draw.stratified`, on strata that describe
 $\sigma$'s (`ExecStrata`), misses $B$ with probability at most `Law.stratified`'s acceptance probability, the product
 over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
-(`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `drawOS_subset_escape_le`,
+(`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_strataProblem`
+(`ExecStrataOf.lean`): strata the verifier accepts (`strataProblem` finds nothing, and `stratumOfJson`'s ranges are
+non-empty) describe some assignment's (`ExecStrata`), each stratum's `k` at most its size. `drawOS_subset_escape_le`,
 `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live draw**: `Flock.Draw.drawOS`,
 which is `drawWith` on `IO.getRandomBytes` (`drawOS_def`), extending a stream that runs out and rerunning, misses $B$
 with probability at most the same acceptance probabilities, on a byte source that A3 makes uniform
