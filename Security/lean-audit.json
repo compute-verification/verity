@@ -2419,17 +2419,17 @@
    "sealed": true
   },
   "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Claims"],
+   "imports": ["Mathlib", "Definitions.Hash.Basic", "Definitions.Claims"],
    "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof; messages and collisions are the hash area's (Definitions.Hash.Basic)"
   },
   "Definitions.Hash": {
-   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
+   "imports": ["Mathlib", "Definitions.Core.Digest", "Definitions.Hash"],
    "except": [],
-   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+   "why": "the hash area's definitions are trusted text: messages, collisions and the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and core's digests (Definitions.Core.Digest); they import no assumption, guarantee or proof"
   },
   "Definitions.Hash.Guarantees": {
-   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Definitions.Hash.Guarantees"],
+   "imports": ["Mathlib", "Definitions.Hash", "Definitions.Hash.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
@@ -2452,9 +2452,9 @@
    "why": "the fit bound on a run is stated over NCI's window premises and the actual circuit's windows (Definitions.Accounting), never over a proof"
   },
   "Definitions.Flock": {
-   "imports": ["Mathlib", "Definitions.Flock"],
+   "imports": ["Mathlib", "Definitions.Hash.Basic", "Definitions.Flock"],
    "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof; a Merkle collision is the hash area's (Definitions.Hash.Basic)"
   }
  },
  "reads_exempt": {

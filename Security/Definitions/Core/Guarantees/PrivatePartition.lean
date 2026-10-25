@@ -27,9 +27,9 @@ registrations hash, so for an `H` injective on them there is none, and then `r`'
 format facts, not properties of `H`: the frame-v3 messages are separated (`Advice.Framing.Separated`), and the rows
 decode to their partition (`Advice.Rows.Decodes`). -/
 def RegisteredMeets : Prop :=
-  ∀ (C : Circuit) (H : List UInt8 → Advice.Digest) (F : Advice.Framing), F.Separated →
+  ∀ (C : Circuit) (H : List UInt8 → Digest) (F : Advice.Framing), F.Separated →
     ∀ (A : Advice.Rows C), A.Decodes →
-      ∀ (Q : Predicates) (root : Advice.Digest) (r₀ : Advice.Registration C), Registered H F A Q r₀ root →
+      ∀ (Q : Predicates) (root : Digest) (r₀ : Advice.Registration C), Registered H F A Q r₀ root →
         ∀ r : Advice.Registration C, r.root H F A = root →
           (r.n ≤ Q.units ∧ r.P.Fits Q.X ∧ ∀ T : Finset (Fin r.n), ∑ u ∈ T, r.P.outBits u ≤ T.card * Q.X) ∨
             ∃ x ∈ r₀.hashInputs H F A, ∃ y ∈ r.hashInputs H F A, x ≠ y ∧ H x = H y  -- a collision of `H`
