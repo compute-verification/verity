@@ -164,10 +164,13 @@ A spec-level reference for network accounting's timing channel:
   `prog_fits`, `Layout.Fits` itself on a flattened program. `Fits` stays structural: a served window fits in the
   step-indexed scan's form, and a window in any other form is refused;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row and the slot state the bucket before carries (registered reads), computes the next state (each
-  block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a slot
-  held until its Program's anchor) and outputs one ok bit; `Class.serves` names the warden parameters it takes every
-  run of, and `benchmarks/network_traces/ingress_scan_zk.py` proves its units at w63's class;
+  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the
+  next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids
+  appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its last
+  egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket, then
+  per slot live, q, admitted, n and the output ids), as a row of its own, and outputs one ok bit; `Class.serves` names
+  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides at w63's class
+  in one registration: ingress unit t writes the state and view egress unit t reads, chained by registered reads;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
