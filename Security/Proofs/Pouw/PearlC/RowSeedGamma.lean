@@ -530,7 +530,11 @@ theorem actOf_split {L : Layout} (τ : Transcript) {u i : ℕ} (hu : u < L.N) (h
     actOf (splitTranscript L τ) (rowIdx L u i) = rowCodes (actOf τ u) i := by
   unfold actOf
   rw [splitTranscript_rowIdx τ hu hi]
-  rcases τ u with _ | c <;> rfl
+  rcases τ u with _ | c
+  · funext i' l
+    show 0 = (if i' = 0 then 0 else 0)
+    exact (ite_self 0).symm
+  · rfl
 
 /-! ## The credit, row by row, and the reduction -/
 
