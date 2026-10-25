@@ -14,15 +14,15 @@ increasing from `kd` on (`choose_lt_of_lt`). A faulty input slot is outside this
 every input slot, and the design draws none.
 
 Scope: `designOf kd` is well formed on `partOf P` at `1 ≤ kd ≤ n` (`designOf_wellFormed`), and every gate of
-`progOf C`, its input gates included, is in a proof unit of `partOf P` (`mem_gates_partOf`, `input_mem_partOf`), which
-is `Partitions`' covering clause (`partOf_covers`).
+`progOf C κ`, its input gates and constants included, is in a proof unit of `partOf P` (`mem_gates_partOf`,
+`input_mem_partOf`), which is `Partitions`' covering clause (`partOf_covers`).
 -/
 
 namespace Flock.Bridge
 
 open FlockSoundness.Audit
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ}
+variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} {κ : Fin C.N → Option Bool}
 
 theorem designOf_rules (kd : ℕ) :
     (designOf kd).rules = [⟨.subset kd, none⟩, ⟨.bernoulli 0 1, none⟩] := rfl
@@ -65,15 +65,15 @@ theorem choose_lt_of_lt {a b k : ℕ} (hk : 1 ≤ k) (hab : a < b) (hkb : k ≤ 
 
 theorem count : CountTarget := by
   classical
-  intro C n P kd K₀ hkd hkdn H Cm desc q roots w h
-  have hle : (designOf kd).Pa (partOf P) (Claims.Sampling.faulty H Cm (stmtOf P kd desc q roots) (partOf P) w) ≤
+  intro C n P kd K₀ hkd hkdn H Cm κ desc q roots w h
+  have hle : (designOf kd).Pa (partOf P) (Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w) ≤
       ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := not_lt.1 h
   rw [pa_partOf_window, window_zero_filter] at hle
-  have hFn : ((Claims.Sampling.faulty H Cm (stmtOf P kd desc q roots) (partOf P) w).filter (· < n)).card ≤ n := by
+  have hFn : ((Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n)).card ≤ n := by
     calc _ ≤ (Finset.range n).card :=
           Finset.card_le_card fun v hv => Finset.mem_range.2 (Finset.mem_filter.1 hv).2
       _ = n := Finset.card_range n
-  generalize (Claims.Sampling.faulty H Cm (stmtOf P kd desc q roots) (partOf P) w).filter (· < n) = F at hle hFn ⊢
+  generalize (Claims.Sampling.faulty H Cm (stmtOf P κ kd desc q roots) (partOf P) w).filter (· < n) = F at hle hFn ⊢
   have hpos : (0 : ℝ) < (n.choose kd : ℝ) := by exact_mod_cast Nat.choose_pos hkdn
   have hc : (n - F.card).choose kd ≤ (n - K₀).choose kd := by
     exact_mod_cast (div_le_div_iff_of_pos_right hpos).1 hle
@@ -96,9 +96,9 @@ theorem designOf_wellFormed (P : FlockSoundness.Audit.Partition C n) {kd : ℕ} 
   · exact ⟨⟨hkd, by simpa [Claims.Sampling.strataSizes] using hkdn⟩, fun k hk => by simp at hk⟩
   · exact ⟨⟨Nat.one_pos, Nat.zero_le _⟩, fun k hk => by simp at hk⟩
 
-/-- **Every gate of `progOf C` is in a proof unit of `partOf P`**: a computed wire's lowered gates are in its unit's
+/-- **Every gate of `progOf C κ` is in a proof unit of `partOf P`**: a computed wire's lowered gates are in its unit's
 (`mem_unitGates`), an input wire's one gate is its input slot's. -/
-theorem mem_gates_partOf (P : FlockSoundness.Audit.Partition C n) {i : ℕ} (hi : i < (progOf C).gates.length) :
+theorem mem_gates_partOf (P : FlockSoundness.Audit.Partition C n) {i : ℕ} (hi : i < (progOf C κ).gates.length) :
     i ∈ (partOf P).gates := by
   obtain ⟨g, j, hj, rfl, -⟩ := exists_block (List.getElem?_eq_getElem hi)
   unfold Claims.Sampling.Partition.gates
@@ -119,16 +119,16 @@ theorem mem_gates_partOf (P : FlockSoundness.Audit.Partition C n) {i : ℕ} (hi 
       List.mem_append_left _ (List.mem_map.2 ⟨u, List.mem_finRange u, rfl⟩), List.mem_singleton_self _⟩,
       mem_unitGates.2 ⟨g, hu, j, hj, rfl⟩⟩
 
-/-- **The input clause of `InScope`**: every input gate of `progOf C` is in a proof unit of `partOf P`. -/
+/-- **The input clause of `InScope`**: every input gate of `progOf C κ` is in a proof unit of `partOf P`. -/
 theorem input_mem_partOf (P : FlockSoundness.Audit.Partition C n) {i : ℕ}
-    (hi : (progOf C).gates[i]? = some .input) : i ∈ (partOf P).gates :=
+    (hi : (progOf C κ).gates[i]? = some .input) : i ∈ (partOf P).gates :=
   mem_gates_partOf P (List.getElem?_eq_some_iff.1 hi).1
 
 /-- `Partitions`' covering clause at `stmtOf`'s program and `partOf P`. -/
-theorem partOf_covers (P : FlockSoundness.Audit.Partition C n) (kd : ℕ) (desc : Claims.Msg)
-    (q : Claims.Sampling.Query) (roots : List Claims.Msg) :
-    ∀ i < (stmtOf P kd desc q roots).prog.gates.length,
-      (∀ b, (stmtOf P kd desc q roots).prog.gates[i]? ≠ some (.const b)) → i ∈ (partOf P).gates :=
+theorem partOf_covers (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ)
+    (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) :
+    ∀ i < (stmtOf P κ kd desc q roots).prog.gates.length,
+      (∀ b, (stmtOf P κ kd desc q roots).prog.gates[i]? ≠ some (.const b)) → i ∈ (partOf P).gates :=
   fun _ hi _ => mem_gates_partOf P hi
 
 end Flock.Bridge

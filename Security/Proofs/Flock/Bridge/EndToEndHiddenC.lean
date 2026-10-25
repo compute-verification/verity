@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
 * `zk_session_soundHJ_custody_regC`: `zk_session_soundHJ_custody_reg` at `zk_flock_countC_regC`, for any `canon`
   under `OpeningsCanon`, at the same bound;
 * `Flock.Bridge.endToEndHiddenC_of`: `OpeningsCanonTarget` gives `EndToEndHiddenC`. It is
-  `zk_session_soundHJ_custody_regC` at `Bridge.canonOpen` with its first and last terms in closed form, as
+  `zk_session_soundHJ_custody_regC` at `Bridge.canonAt` with its first and last terms in closed form, as
   `EndToEndHidden` is `zk_session_soundHJ_custody_reg`'s (`Audit.Law.subset_miss`, and `linkBoundZC` at A2);
 * `Flock.Bridge.endToEndHidden_of_c`: `EndToEndHiddenC` gives `EndToEndHidden` (`wrongRegZ_subset_wrongRegZc`).
 -/
@@ -93,10 +93,11 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 /-- **`OpeningsCanonTarget` gives `EndToEndHiddenC`.** -/
 theorem endToEndHiddenC_of (hOC : OpeningsCanonTarget) : EndToEndHiddenC := by
   intro n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags hCust k Rw M hk
-    hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ Cc rows hCR hA2
+    hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS L P vb σ Cc rows κ hCR hA2
   have h := Discharge.ZkHidden.zk_session_soundHJ_custody_regC I ht (Flock.Desc.parse_flat hD) hU hpub hpt hscope kd
     hkd hdiv dj y₀ wr dg N Lb src hA3 hTags hCust hk hRw hM hρ hr ht' K₀
-    (fun g o => canonOpen rows g (vb.val o) o.2.2) (hOC n Reg I ht D hD hU pub hpub hpt hscope kd dj S₀ d₀ y₀) τ
+    (fun g o => canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
+    (hOC n Reg I ht D hD hU pub hpub hpt hscope kd dj S₀ d₀ y₀) τ
     (qF := qF) (qS := qS) hCR
   rw [Law.subset_miss hkd hK₀, Discharge.ZkLink.linkBoundZC, ite_eq_left hA2] at h
   exact h

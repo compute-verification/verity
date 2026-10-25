@@ -65,12 +65,15 @@ theorem rowShaped_rowOf {W K k : ℕ} (hK : K = 16 * k) (hKW : K ≤ W) (b : Fin
 /-- **M1's core, with canonical openings**: a unit whose committed wires each carry, in some canonical opening of their
 registered commit string, their value in `C`'s evaluation on `Xr`'s inputs, and each of whose canonical registered
 openings at a wire the constants `κ` don't fix opens its wire's position under `Cm` and `roots`, and whose evaluation is
-`κ`'s constant at each constant wire it reads, is not faulty in `witDep C Cm H roots Xr` at the statement at `κ`. -/
+`κ`'s constant at each constant wire it reads, is not faulty in `witDep C Cm H roots Xr` at the statement at `κ`, at
+constants that fix only input gates (`progOf` lowers only an input to `.const`; a fixed computed wire would be neither a
+constant nor transported). -/
 def FaultyRightTargetC : Prop :=
   ∀ {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val Opn Com : Type}
     (pos : Fin C.N → Pos) (bit : Val → Fin C.N → Bool) (val : Opn → Val) (com : Opn → Com) (cs : Pos → Com)
     (canon : Fin C.N → Val → Prop) (H : Claims.Msg → Claims.Msg) (Cm : Claims.Sampling.Commitment Bool)
     (roots : List Claims.Msg) (Xr : Fin C.N → Bool) (κ : Fin C.N → Option Bool) (u : Fin n),
+    (∀ g b, κ g = some b → (C.op g).isInput = true) →
     (∃ op : Pos → Opn, ∀ g ∈ P.io u, com (op (pos g)) = cs (pos g) ∧ bit (val (op (pos g))) g = C.eval Xr g ∧
       canon g (val (op (pos g)))) →
     (∀ g ∈ P.io u, κ g = none → ∀ o : Opn, com o = cs (pos g) → canon g (val o) →
