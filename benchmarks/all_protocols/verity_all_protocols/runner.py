@@ -125,10 +125,22 @@ def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
     public files in ``out/window``. -> the period's directory and what the loop printed."""
     shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
              f"{run}/p{index}"]
-    circuit = serve([*shape, "--circuit-only"])["circuit"]
+    h1 = ["--pouw", "h1"] if os.environ.get("ALLP_POUW") == "h1" else []
+    registered = serve([*shape, "--circuit-only", *h1])
+    circuit = registered["circuit"]
     window = scratch / f"p{index}"
     tampered = index in a.tamper
-    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else [])])
+    got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []), *h1])
+    if h1:
+        t = a.tools
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(LOOP), os.environ.get("PYTHONPATH")]))}
+        audit = subprocess.run(
+            [sys.executable, "-m", "verity_torch_loop.pouw_audit", "--window", str(window / "pouw"), "--circuit",
+             registered["pouw"], "--run", got["run"], "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"],
+             "--lean", t["flock-verify"], "--firewall", t["flock-firewall"], "--out", str(out / "pouw-audit")],
+            cwd=ROOT, env=env, capture_output=True, text=True, check=False)
+        (out / "pouw-audit").mkdir(parents=True, exist_ok=True)
+        (out / "pouw-audit" / "log.txt").write_text(audit.stdout[-20000:] + "\n--- stderr\n" + audit.stderr[-20000:])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "period": index, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law, "cap": a.cap,

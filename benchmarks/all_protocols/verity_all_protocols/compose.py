@@ -39,6 +39,10 @@ ONSITE = ROOT / "verity" / "core" / "protocols" / "onsite" / "CoreOnsite.lean"
 PROTOCOL = "verity/onsite/v0"
 #: a month, the horizon `horizon` projects to
 MONTH_S = 30 * 86400
+#: the network certifier's period check, whose public carries K and eps
+CERTIFIER = "verity/certifier/v0"
+#: the spans `communication` pools the network certifier's K over
+SPANS_S = {"week": 7 * 86400, "month": MONTH_S, "year": 365 * 86400}
 
 
 def onsite_components(source: str | None = None) -> list[str]:
@@ -197,8 +201,34 @@ def horizon(reports: Sequence[Mapping[str, Any]], period_s: float, month_s: floa
     worst = "reject" if any(r["composed"]["verdict"] == "reject" for r in reports) else \
         "accept" if reports and all(r["composed"]["verdict"] == "accept" for r in reports) else "pending-ports"
     return {"rule": "union bound over periods, each audited on its own live coins", "integrity": so_far, "month": month,
-            "composed": worst}
+            "communication": communication(reports, period_s), "composed": worst}
 
 
-__all__ = ["MONTH_S", "NO_CASE", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "component_of", "composed", "horizon",
+def communication(reports: Sequence[Mapping[str, Any]], period_s: float,
+                  spans: Mapping[str, float] = SPANS_S) -> dict[str, Any]:
+    """The network certifier's leak bound over the periods so far and pooled over each of ``spans`` of ``period_s``
+    periods: a covert sender in the server moves at most an accepted period's ``K`` bits over its link, except with
+    probability its ``eps`` (`NetTiming.Guarantees.PeriodLeakAccepted`), so over periods the bits add and, by a union
+    bound, the eps too, ``vacuous`` once they reach 1. ``K_per_window`` is K over the periods' link-windows. A period
+    that didn't accept certifies nothing, and counts in ``refused``, as does another protocol's answer."""
+    rows = [r["protocols"].get("communication") or {} for r in reports]
+    got = [r["quantity"] for r in rows if r.get("verdict") == "accept" and r.get("protocol") == CERTIFIER]
+    K, eps, windows = sum(q["K"] for q in got), sum((Fraction(q["eps"]) for q in got), Fraction(0)), \
+        sum(q["windows"] for q in got)
+    out: dict[str, Any] = {
+        "periods": len(rows), "accepted": len(got), "refused": len(rows) - len(got), "K": K,
+        "eps": str(min(eps, Fraction(1))), "vacuous": eps >= 1, "windows": windows,
+        "K_per_window": str(Fraction(K, windows)) if windows else None, "period_s": period_s}
+    for name, span in spans.items():
+        n = max(1, math.floor(span / period_s)) if period_s > 0 else None
+        row: dict[str, Any] = {"periods": n}
+        if n is not None and got:
+            pooled = n * eps / len(got)
+            row.update(K=math.ceil(Fraction(n * K, len(got))), eps=str(min(pooled, Fraction(1))), vacuous=pooled >= 1)
+        out[name] = row
+    return out
+
+
+
+__all__ = ["CERTIFIER", "MONTH_S", "SPANS_S", "communication", "NO_CASE", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "component_of", "composed", "horizon",
            "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs", "stub_component"]
