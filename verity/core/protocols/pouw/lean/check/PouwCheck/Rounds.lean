@@ -49,11 +49,15 @@ def NOT_RECEIVED : String :=
 session S and open root R the ones the auditor's signed reserve and open entries name and its coins and log the
 challenger's session's, else the refusal. -/
 def saltCheck (key ledger pins main window session weights requests opening : Json) : R Unit := do
-  let (c, received, reserve, opened) ← saltSession key ledger pins main window session
+  let (a, c, received) ← saltSession key ledger pins main window session
+  if let some why := PouwWindow.liveEpochReason c then coin why
+  let named := sessionEntries ledger a.session
+  let (some _, some opened) := (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"))
+    | throw ("salt", NO_RESERVE)
   let some r := hex? (get (get opened.body "window") "root") | throw ("salt", NO_RESERVE)
   let digest := fun (j : Json) => if (str? j).any isHexDigest then hex? j else none
   let (some w, some t) := (digest weights, digest requests) | throw ("salt", SALT_FORM)
-  if windowOpenRoot w t reserve.session != r then throw ("salt", OTHER_WINDOW)
+  if windowOpenRoot w t a.session != r then throw ("salt", OTHER_WINDOW)
   unless (received.lookup PouwWindow.SALT).getD [] == [r] do throw ("salt", NOT_RECEIVED)
   let o ← (LiveOpening.ofJson opening).mapError fun e => ("coin", s!"the salt's {e}")
   if let some why ← port (SampledProofs.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"
