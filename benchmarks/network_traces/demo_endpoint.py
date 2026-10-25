@@ -354,7 +354,8 @@ class Server:
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         head = await reader.readuntil(b"\r\n\r\n")
         n = re.search(rb"content-length: *(\d+)", head, re.IGNORECASE)
-        body = json.loads(await reader.readexactly(int(n.group(1)))) if n else {}
+        raw = await reader.readexactly(int(n.group(1))) if n else b""
+        body = json.loads(raw) if raw else {}
         name = self.sched.engine.name
         if head.startswith(b"GET /v1/models "):
             return await self.json(writer, 200, {"object": "list", "data": [{"id": name, "object": "model",

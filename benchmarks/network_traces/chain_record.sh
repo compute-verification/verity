@@ -33,6 +33,7 @@
 #      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
 #      or required, and the report names what that path stubs, chain_record.STUBBED)
+#      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive or a signer's
@@ -167,7 +168,8 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
 EOF
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   --n2 "$OUT/n2/summary.json" --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") --out "$OUT/report" | tee -a "$OUT/job.log"
+  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
+  --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 cat "$OUT/report/report.md" | tee -a "$OUT/job.log" | cut -c1-600
 log "chain: done, rc $rc"
