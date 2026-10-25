@@ -202,6 +202,9 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   circuit-check's (the circuit against `arith_encode.py`'s reference), not proved here.
 - **The warden's channel bound** (`NetTiming.SecurityProofs.Warden`): `WardenViewEqClientView`, `EncardWardenViewsLe`,
   `EncardWardenDecodableLe`, under `trusted-nebius-host` (`Verity.Assumptions.TrustedNebiusHost`).
+- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
+  `RAcc δ` on the statements whose layout fits the program: no faulty unit is drawn `all`, and the advice holding the
+  faulty units' committed gates at the trace's values makes `Accepted` every run the trace carries.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
   `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible faulty set: the inputs other than the
   ingress, the faulty units' committed bits and the choice of faulty set. `SampledLeakAccepted` is what an accepted

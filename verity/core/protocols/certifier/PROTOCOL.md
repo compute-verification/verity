@@ -1456,7 +1456,7 @@ of the wrong units (step 3 below), I_ε = log2 #Φ, and δ_audit = δ + ε_ks + 
    counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by sampled proofs
    is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
    recorded row is the Program's. Today's audit gets it by recomputing the grid, and a sampled audit does not.
-   For the circuit's Program, `SampledAuditAccepted` (PRF-144) states that bridge with φ the faulty units' committed
+   For the circuit's Program, `SampledAuditAccepted` (PRF-144, proved) is that bridge with φ the faulty units' committed
    gates, and `SecurityProofs.EncardAccSeqsSampledLe` is its count: φ costs those gates' bits plus log2 of the number
    of possible faulty sets. `SecurityProofs.SampledLeakAccepted` composes the two, with a any value of the free inputs.
 5. **The advice set.** `#𝒜_c ≤ 2^(c+1) − 1`. `encode` is injective (A5), so distinct advice values are distinct bit

@@ -8,6 +8,7 @@ import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
 import Proofs.NetworkCertifier.SampledAudit
+import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.Schedule
@@ -33,6 +34,7 @@ PRF-144 proves it (`NetTiming.sampledLeak`). `Sanity` shows every named assumpti
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
+`SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection.
 -/
 
 namespace NetTiming.SecurityProofs
