@@ -92,7 +92,8 @@ held to its request's slot through ``map``.
 proved by C-Flock `prove --zk` behind the Lean firewall and held by Lean `verify --zk`. The verifier opens only ``pub``
 and the verdict, and runs the bindings, the carry chain's among them, on the units' b‖c. What the verifier received
 holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the ``cin`` and ``cout`` rows whole.
-- The scan's rule is PROVE-PATH's field-aligned one (`served_tie_zk.classify` in #3933 at b3a3fee76a). It replaces REDTEAM's phase-18 rule (note:network-accounting/20261024T0558Z-finding-redteam-v3).
+- The scan's rule is PROVE-PATH's field-aligned one, which every zero-knowledge driver's scan follows (`leak_scan.scan`,
+  `benchmarks/network_traces/leak_scan.py`). It replaces REDTEAM's phase-18 rule (note:network-accounting/20261024T0558Z-finding-redteam-v3).
   - A find of a witness piece or carry row counts only if it lies inside one field: one read C-Flock's proof format
     makes of a repetition's stream (`circuit.rep*.bin`, `redigest.layout`), or one record of a round message
     (`rounds[*].msg`, as `transcript_check.T` frames them). A match across two fields doesn't count, and neither does
@@ -103,9 +104,9 @@ holds no witness piece: the ``wit`` and ``srv`` rows, every row's salt, and the 
   - No piece is excused for its byte count or its witness class. A differential against a proof of a different witness
     is evidence for a manual analysis only.
   - The rule misses a leak written at a byte shift across fields.
-- The driver still leaves out, by byte count, the pieces with at most one nonzero byte (`sparse_pieces`) and a carry row
-  with at most one (`carry_rows.sparse`), until the shared scan module (PROVE-PATH's, stacked on #3933) puts the rule in
-  their place. A run's left-out pieces are checked under the rule after it, by `classify`.
+- The driver scans the witness pieces and the carry rows under it, and a ``leaked`` one fails the run. Runs before
+  this left out, by byte count, the pieces and carry rows with at most one nonzero byte, and checked those under the
+  rule after the run.
 
 **The proof of record is run r20261024-232954-639e** (7546f4249f: #3922 at d70e44292b, which carries #3886's
 6e29d34e7c, with #3972's record; the w212 slice at the class).

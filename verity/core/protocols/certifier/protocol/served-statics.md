@@ -14,7 +14,8 @@ as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha5
 is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``. At G < P the
 slice is `compile_slice.CompileSliceBlocks_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: unit w's
 row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and step u is checked against row u // G. Its ANDs are the
-G = P unit's.
+G = P unit's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P (run
+r20261025-004442-ebac, each built in about 21 s at 3.0 GB).
 
 **The unit** reads two rows:
 - ``pub``, opened: the block's G steps' statics. For each step, R slots of (valid, start, n), in the Programs' batch
