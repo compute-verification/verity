@@ -34,8 +34,9 @@ ledger opens and ends for the window, then one mutation each aimed at every refu
 Its `salt` against `core_check.salt` likewise, over the live windows' salt coins the same module generates, read through
 the same session, reserved before it opened (opened after the session's open root, `salt.window_open_root`). Its
 `live-salt` against `core_check.live_salt` likewise, over the live Pearl-C passes `pouw_pass_cases` generates (a
-salt-only session the auditor's ledger reserves, opens on the pass's weights' root and ends complete, its commitment read
-from the session's own files), compared output for output: the salt, or the same refusal.
+salt-only session the auditor's ledger reserves, opens on the pass's salt epoch's root and ends complete, its commitment
+read from the session's own files, a drawn `pass_index` and call indices offset within the epoch), compared output for
+output: the salt, or the same refusal.
 
 Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk rows a table at K commits a row as): every
 multiple of 32 below 2^17, then drawn integers and non-integers, compared output for output: the count, or the same refusal.
@@ -235,7 +236,7 @@ def test_pass_and_draw(pass_server):
     print(f"pouw-check-difftest pass: {stats['pass']}; draw: {stats['draw']}; and {sum(swept.values())} swept "
           f"({dict(swept)}); by outcome: {dict(sorted(PASSED.items()))}")
     assert {k for k in PASSED if not k.startswith("draw ")} >= {"coin", "recorded beacon", "certifier", "live coin"}
-    for part in (CC.LIVE_UNHELD, CC.LIVE_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.INCOMPLETE,
+    for part in (CC.LIVE_UNHELD, CC.LIVE_FORM, CC.LIVE_NOT_SIGNED, CC.LIVE_SESSION, CC.INCOMPLETE, CC.PASS_FORM,
                  "the pass's salt coin opens against the epoch's published coin commitment",
                  "the coin commitment's coins are not a Pearl-C salt session's",
                  "the auditor's ledger opens no challenger session for this window"):
@@ -617,8 +618,9 @@ LIVE_SALT = D.Port("pouw-check-difftest", "live-salt", live_salt, package=LEAN, 
 
 def test_live_salt(pass_server):
     """Generated live Pearl-C passes, salted by a salt-only session the auditor's signed ledger reserves, opens on the
-    pass's weights' root and ends complete, read through the session's own files, then each mutation over a few seeds
-    (`replay`): a session opened on another root, #3868's H1 layout, a session reserved for another layout or ended
+    pass's salt epoch's root and ends complete, read through the session's own files, then each mutation over a few
+    seeds (`replay`): a `pass_index` that isn't an integer in [0, 2^64), a call index of 2^32 or more, a session opened
+    on another root (W itself, another epoch's, or one the manifest doesn't name), #3868's H1 layout, a session reserved for another layout or ended
     incomplete, a log showing another root, coins other than the session's, a session the manifest misnames, and every
     other refusal of `core_check.live_salt`."""
     LIVE_SALTED.clear()
@@ -630,7 +632,7 @@ def test_live_salt(pass_server):
           f"{dict(sorted(LIVE_SALTED.items()))}")
     assert "accept" in LIVE_SALTED
     for part in (CC.NO_RESERVE, CC.RESERVE_LAYOUT, CC.INCOMPLETE, CC.LIVE_NOT_RECEIVED, CC.LIVE_NOT_SIGNED, CC.LIVE_SALT,
-                 CC.LIVE_SESSION, "the pass's manifest is not a JSON object", "the pass's manifest names no schema",
+                 CC.LIVE_SESSION, CC.PASS_FORM, CC.CALL_RANGE, "the pass's manifest is not a JSON object", "the pass's manifest names no schema",
                  "the pass's matmuls are not", "every weight of the workload is committed, and only those",
                  "not trusted: the auditor's ledger opens no challenger session for this window",
                  "the verifier's challenger key is malformed", "not trusted: no auditor's ledger",
