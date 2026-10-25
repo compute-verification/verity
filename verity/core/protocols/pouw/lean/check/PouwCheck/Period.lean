@@ -182,7 +182,7 @@ def freshCalls (nm : String) (i : Nat) (e : Json) (seen : List (Nat × Json × L
   | [] => pure ()
   | u :: us =>
     if 0 ≤ u ∧ u < CALL_BOUND then
-      match seen.find? (fun p => sameEpoch p.2.1 e && p.2.2.contains u) with
+      match seen.find? (fun p => sameEpoch p.2.1 e && decide (u ∈ p.2.2)) with
       | some (q, _, _) => throw (REPEATED_CALL, s!"passes {q} and {i} of period {nm} both hold call index {u} of " ++
           s!"epoch {((str? e).getD "").take 16}...: {REPEATED}")
       | none => freshCalls nm i e seen us
