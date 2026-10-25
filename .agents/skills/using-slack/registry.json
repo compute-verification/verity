@@ -231,6 +231,7 @@
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_h200/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocol_options/pouw.py",
         "integrations/vllm/verity_vllm/protocol_options/pouw_circuit.py",

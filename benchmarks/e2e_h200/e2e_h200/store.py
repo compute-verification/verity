@@ -185,5 +185,5 @@ def _into(codes: np.ndarray, dst: Any | None) -> Any:
         dst[...] = codes
     else:
         import torch
-        dst.copy_(torch.from_numpy(np.ascontiguousarray(codes)))
+        dst.copy_(torch.from_numpy(np.require(codes, requirements=["C", "W"])))
     return dst
