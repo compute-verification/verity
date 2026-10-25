@@ -90,7 +90,7 @@ theorem refIn_of (params : Array (String × Ty)) (outs : Array Ty) (retType : Ty
 def NodesOk (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ → Option ℕ) (nodes : Array Node) : Prop :=
   ∀ k < nodes.size, (nodes[k]!).fn < defs.size ∧ NodeOk defs[(nodes[k]!).fn]! (nodes[k]!) ∧
     (nodes[k]!).out = outs[k]! ∧ ∀ a < (nodes[k]!).args.size, ∃ ps : Array Part,
-      ((nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ ∀ q ∈ ps, Walk.PartValid leaves q
+      ((nodes[k]!).args[a]!).seq = Seq.ofParts ps ∧ (∀ q ∈ ps, Walk.PartValid leaves q) ∧ ∀ q ∈ ps, PartNonneg q
 
 theorem nodesOk_mono {a b : Array Defn} {outs : Array Ty} {leaves : Bool → ℕ → Option ℕ} {nodes : Array Node}
     (hp : Pre a b) (h : NodesOk a outs leaves nodes) : NodesOk b outs leaves nodes := fun k hk => by
@@ -107,7 +107,7 @@ theorem earlier_ok (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ 
   obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 hnd
   obtain ⟨hx, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
   obtain ⟨-, -, -, h4⟩ := hn k hk
-  obtain ⟨ps, hps, hv⟩ := h4 x (by rw [getElem!_pos nodes k hk]; exact hx)
+  obtain ⟨ps, hps, hv, -⟩ := h4 x (by rw [getElem!_pos nodes k hk]; exact hx)
   rw [getElem!_pos nodes k hk, getElem!_pos _ x hx] at hps
   rw [hps, (Walk.ofParts_spec ps).1] at hq
   exact hv q hq
@@ -121,6 +121,37 @@ theorem earlier_ok' (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ
   · rename_i hk
     exact earlier_ok defs outs leaves nodes hn k x s (by rw [Array.getElem?_eq_getElem hk, ← getElem!_pos nodes k hk]; exact h)
   · exact absurd h (by simp)
+
+theorem earlier_nonneg (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ → Option ℕ) (nodes : Array Node)
+    (hn : NodesOk defs outs leaves nodes) :
+    ∀ (k x : ℕ) (s : Seq), (if k < nodes.size then (nodes[k]!.args[x]?).map (fun (a : Arg) => a.seq) else none) = some s →
+      ∀ q ∈ s.parts, PartNonneg q := by
+  intro k x s h q hq
+  split at h
+  swap; · exact absurd h (by simp)
+  rename_i hk
+  simp only [Option.map_eq_some_iff] at h
+  obtain ⟨a, ha, rfl⟩ := h
+  obtain ⟨hx, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
+  obtain ⟨-, -, -, h4⟩ := hn k hk
+  obtain ⟨ps, hps, -, hv⟩ := h4 x hx
+  rw [← getElem!_pos _ x hx, hps, (Walk.ofParts_spec ps).1] at hq
+  exact hv q hq
+
+theorem earlier_nonneg_bind (defs : Array Defn) (outs : Array Ty) (leaves : Bool → ℕ → Option ℕ)
+    (nodes : Array Node) (hn : NodesOk defs outs leaves nodes) :
+    ∀ (k x : ℕ) (s : Seq), (nodes[k]?.bind fun (nd : Node) => (nd.args[x]?).map (fun (a : Arg) => a.seq)) = some s →
+      ∀ q ∈ s.parts, PartNonneg q := by
+  intro k x s h q hq
+  simp only [Option.bind_eq_some_iff, Option.map_eq_some_iff] at h
+  obtain ⟨nd, hnd, a, ha, rfl⟩ := h
+  obtain ⟨hk, rfl⟩ := Array.getElem?_eq_some_iff.1 hnd
+  obtain ⟨hx, rfl⟩ := Array.getElem?_eq_some_iff.1 ha
+  obtain ⟨-, -, -, h4⟩ := hn k hk
+  obtain ⟨ps, hps, -, hv⟩ := h4 x (by rw [getElem!_pos nodes k hk]; exact hx)
+  rw [getElem!_pos nodes k hk, getElem!_pos _ x hx] at hps
+  rw [hps, (Walk.ofParts_spec ps).1] at hq
+  exact hv q hq
 
 theorem st_ite {α : Type} {c : Prop} [Decidable c] {A B : DM α} {s : DecState} {r : Except String (α × DecState)}
     (h : (if c then A else B) s = r) : (c ∧ A s = r) ∨ (¬ c ∧ B s = r) := by
@@ -315,7 +346,8 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
     clear jpK jpP jpC jpAx jpN jpX
     have hasz : args.size = ajs.size := array_mapM_size _ _ _ hmap
     have hel : ∀ a < args.size, ∃ ty ps, args[a]! = ({ ty, seq := Seq.ofParts ps } : Arg) ∧
-        (∀ q ∈ ps, Walk.PartValid (leavesOf params outs) q) ∧ (Seq.ofParts ps).count = ty.leaves := by
+        (∀ q ∈ ps, Walk.PartValid (leavesOf params outs) q) ∧ (∀ q ∈ ps, PartNonneg q) ∧
+        (Seq.ofParts ps).count = ty.leaves := by
       intro a ha
       have h1 := array_mapM_get _ _ _ hmap a (by omega) ha
       beta_reduce at h1
@@ -330,11 +362,12 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
           exact absurd h3 (by intro h; injection h)
         rename_i hc
         injection h2 with h2
-        refine ⟨ty, ps, by rw [getElem!_pos args a ha, ← h2], ?_, by simpa using hc⟩
-        exact Walk.parsePartsIn_valid _ _ (earlier_ok' _ _ _ _ hn1) _ _ _ hps
+        refine ⟨ty, ps, by rw [getElem!_pos args a ha, ← h2], ?_, ?_, by simpa using hc⟩
+        · exact Walk.parsePartsIn_valid _ _ (earlier_ok' _ _ _ _ hn1) _ _ _ hps
+        · exact parsePartsIn_nonneg _ _ (earlier_nonneg _ _ _ _ hn1) _ _ _ hps
       · obtain ⟨u, h3, -⟩ := Walk.except_bind_ok h2
         exact absurd h3 (by intro h; injection h)
-    obtain ⟨b1, b2, b3, b4⟩ := buildNode_spec _ _ _ _ _ _ _ _ _ _ hbn
+    obtain ⟨b1, b2, b3, b5, b4⟩ := buildNode_spec _ _ _ _ _ _ _ _ _ _ hbn
       (fun e => by have := hnxs e; omega)
       (fun a ha => by obtain ⟨ty, ps, e, -⟩ := hel a ha; rw [e])
     dsimp only
@@ -344,11 +377,11 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
     · rw [getElem!_push_lt _ _ (by omega)]
       exact nodesOk_mono hp4 hn1 k (by omega)
     · rw [getElem!_push_eq]
-      refine ⟨hci, ⟨?_, fun a ha => ?_, fun e => ?_, fun e => ?_, b4⟩, ?_, fun a ha => ?_⟩
+      refine ⟨hci, ⟨?_, fun a ha => ?_, fun e => ?_, fun e => ?_, b4, b5⟩, ?_, fun a ha => ?_⟩
       · exact b1.trans b3
       · dsimp only at ha ⊢
         obtain ⟨c1, c2⟩ := b2 a (by omega)
-        obtain ⟨ty, ps, e, -, hc⟩ := hel a (by omega)
+        obtain ⟨ty, ps, e, -, -, hc⟩ := hel a (by omega)
         rw [c1, c2, e]; exact hc
       · dsimp only at e; subst e
         revert hprim; cases (DecState.defs s4)[ci]!.prim <;> simp
@@ -358,8 +391,8 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
       · rw [hsz1]; exact ty_not_beq (by simpa using hout)
       · dsimp only at ha ⊢
         obtain ⟨c1, c2⟩ := b2 a (by omega)
-        obtain ⟨ty, ps, e, hv, -⟩ := hel a (by omega)
-        refine ⟨ps, ?_, hv⟩
+        obtain ⟨ty, ps, e, hv, hnn, -⟩ := hel a (by omega)
+        refine ⟨ps, ?_, hv, hnn⟩
         rw [c2, e]
   simp only [List.length_range', Std.Legacy.Range.size] at hL
   rcases hL with ⟨hs5, hp5, hsz5, hn5⟩ | hL
@@ -383,17 +416,18 @@ theorem composite_succ (n : ℕ) (hg : GetSpec n) (hst : StatSpec n) : CompSpec 
   have hv := Walk.parsePartsIn_valid _ _ (earlier_ok _ _ _ _ hn5) _ _ _ hret
   have hsz : nodes.size = outs.size := by omega
   have hout : ∀ k < nodes.size, (nodes[k]!).out = outs[k]! := fun k hk => (hn5 k hk).2.2.1
-  refine ⟨hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_⟩⟩
+  refine ⟨hs5, pre_trans hp3 hp5, ⟨⟨fun h => absurd h (by simp), fun _ => ⟨rfl, ?_, rfl⟩⟩, ?_, ?_, ?_⟩⟩
   · simpa using hcnt
   · intro k hk
     obtain ⟨h1, h2, -, h4⟩ := hn5 k hk
     refine ⟨h1, h2, fun a ha => ?_⟩
-    obtain ⟨ps', hps', hv'⟩ := h4 a ha
-    refine ⟨⟨ps', hps'⟩, fun t ht => ?_⟩
+    obtain ⟨ps', hps', hv', hnn'⟩ := h4 a ha
+    refine ⟨⟨ps', hps', hnn'⟩, fun t ht => ?_⟩
     rw [hps'] at ht ⊢
     exact refIn_of params outs retType nodes _ offsets hsz hout ps' hv' t ht
   · intro t ht
     exact refIn_of params outs retType nodes _ offsets hsz hout ps hv t ht
+  · exact ⟨ps, rfl, parsePartsIn_nonneg _ _ (earlier_nonneg_bind _ _ _ _ hn5) _ _ _ hret⟩
 
 theorem getSpec_zero : GetSpec 0 := by
   intro desc fid s i s' h
