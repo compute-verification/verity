@@ -374,7 +374,7 @@ class PearlC:
 
     def __init__(self, kernel, W: Weights, act: Act, epoch: int, coins_out: Path | None):
         import torch
-        from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+        from verity_vllm.protocols.pouw import pearl_c as PPD
 
         from verity.core.protocols.pouw.audit import weights_root
         from verity.core.protocols.pouw import verifier
@@ -411,7 +411,7 @@ class PearlC:
     def mode(self, arm: str, batch: int) -> str:
         """How `arm`'s calls of `batch` rows run: ``whole`` (the chain one CUDA graph), ``per-call`` (each call its own),
         ``eager``, or ``deferred`` (eager under the deferred schedule, which graphs don't run)."""
-        from verity_vllm.protocol_options.pouw_pearl_c_graphs import GRAPH_ROWS
+        from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
         base = "eager" if batch > GRAPH_ROWS else "whole" if batch % self.PPD.ROW_ALIGN == 0 else "per-call"
         return "deferred" if arm == "pearl-c-deferred" and base != "whole" else base
 
@@ -1079,7 +1079,7 @@ def main(argv: list[str] | None = None) -> int:
         save(a.out, doc)
         kernel = None
         if a.kernel and any(x in S.POUW for x in arms):
-            from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+            from verity_vllm.protocols.pouw import pearl_c as PPD
             kernel = PPD.Kernel.load(a.kernel, a.cubin)
             doc["kernel"] = {"cubin_sha256": kernel.cubin_sha256, "source_sha256": kernel.source_sha256}
         vshape, vbatch = a.verify_at.split(":")
