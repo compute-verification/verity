@@ -304,7 +304,7 @@ theorem sum_filter_map {α : Type} (l : List α) (p : α → Bool) (f : α → �
   | nil => rfl
   | cons a l ih => by_cases hp : p a <;> simp [hp, ih]
 
-theorem off_eq_sum (C : FlockSoundness.Audit.Circuit) (g : ℕ) :
+theorem off_eq_sum_ite (C : FlockSoundness.Audit.Circuit) (g : ℕ) :
     off C g = ∑ h : Fin C.N, if h.val < g then gateSize (C.op h) else 0 := by
   rw [Fin.sum_univ_def, off, sum_filter_map]
   simp
@@ -312,9 +312,9 @@ theorem off_eq_sum (C : FlockSoundness.Audit.Circuit) (g : ℕ) :
 theorem gateSize_pos {N : ℕ} (o : FlockSoundness.Audit.Op N) : 0 < gateSize o := by
   cases o <;> simp [gateSize]
 
-theorem off_add_le (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) :
+theorem off_add_le_val (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) :
     off C g.val + gateSize (C.op g) ≤ off C g'.val := by
-  rw [off_eq_sum, off_eq_sum]
+  rw [off_eq_sum_ite, off_eq_sum_ite]
   calc (∑ h : Fin C.N, if h.val < g.val then gateSize (C.op h) else 0) + gateSize (C.op g)
       = ∑ h : Fin C.N, ((if h.val < g.val then gateSize (C.op h) else 0) +
           if h = g then gateSize (C.op g) else 0) := by
@@ -328,7 +328,7 @@ theorem off_add_le (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.va
           split_ifs <;> omega
 
 theorem posOf_lt (C : FlockSoundness.Audit.Circuit) {g g' : Fin C.N} (h : g.val < g'.val) : posOf C g < posOf C g' := by
-  have h1 := off_add_le C h
+  have h1 := off_add_le_val C h
   have h2 := gateSize_pos (C.op g)
   have h3 := gateSize_pos (C.op g')
   unfold posOf
