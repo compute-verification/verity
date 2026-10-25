@@ -2183,6 +2183,107 @@
    "except": [],
    "why": "the relation (relation.py) imports no proofs and nothing of the semantics: the two transcriptions are independent"
   },
+  "Definitions.Nci": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
+   "except": [],
+   "why": "the policy is stated over core's model and imports no proofs"
+  },
+  "Definitions.Pouw": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
+   "except": ["Definitions.Pouw.PearlC.Defs"],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
+  },
+  "Definitions.Pouw.Basic": {
+   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
+   "except": [],
+   "why": "probability, integer matrices and oracle programs"
+  },
+  "Definitions.Pouw.PearlC.Defs": {
+   "imports": [
+    "Mathlib",
+    "Batteries",
+    "Definitions.Pouw.Fp8Atom.E4M3",
+    "Definitions.Pouw.Fp8Atom.Atom",
+    "Definitions.Pouw.Fp8Atom.Fp32"
+   ],
+   "except": [],
+   "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
+  },
+  "Definitions.Pous": {
+   "imports": ["Mathlib", "Definitions.Pous"],
+   "except": [],
+   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Pous.Game": {
+   "imports": ["Mathlib", "Definitions.Pous.Game"],
+   "except": [],
+   "why": "the probability and oracle model"
+  },
+  "Definitions.Pous.Model": {
+   "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],
+   "except": [],
+   "why": "the models import the game and each other, not the parameters or a proof"
+  },
+  "Definitions.Pous.P2": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game",
+    "Definitions.Pous.Model",
+    "Definitions.Pous.Accounting",
+    "Definitions.Pous.P2"
+   ],
+   "except": [],
+   "why": "P2's pins and its cost model read only the game, the models and the parameters"
+  },
+  "Definitions.NetworkCertifier": {
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
+   "except": [],
+   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
+  },
+  "Definitions.Accounting": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Core",
+    "Definitions.Pouw",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Pous.Model.Audit",
+    "Definitions.Pous.Model.SampledAudit",
+    "Definitions.Pous",
+    "Definitions.Accounting"
+   ],
+   "except": ["Definitions.Accounting.Bandwidth.Game"],
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
+  },
+  "Definitions.Accounting.Bandwidth": {
+   "imports": [
+    "Mathlib",
+    "Definitions.Pous.Game.Prob",
+    "Definitions.Accounting.Confidence",
+    "Definitions.Accounting.Bandwidth"
+   ],
+   "except": [],
+   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
+  },
+  "Definitions.Claims": {
+   "imports": ["Mathlib", "Definitions.Claims"],
+   "except": [],
+   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Hash": {
+   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
+   "except": [],
+   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
+  },
+  "Definitions.Flock": {
+   "imports": ["Mathlib", "Definitions.Flock"],
+   "except": [],
+   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
+  },
+  "Definitions.Population": {
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
+   "except": [],
+   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
+  },
   "Definitions.Core.Assumptions": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions"],
    "except": [],
@@ -2194,11 +2295,6 @@
    "except": [],
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
-  },
-  "Definitions.Nci": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Nci"],
-   "except": [],
-   "why": "the policy is stated over core's model and imports no proofs"
   },
   "Definitions.Nci.Assumptions": {
    "imports": [
@@ -2244,27 +2340,6 @@
    "why": "a guarantee is stated over the protocol's definitions with named assumptions as hypotheses, never over a proof",
    "sealed": true
   },
-  "Definitions.Pouw": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Claims", "Definitions.Pouw"],
-   "except": ["Definitions.Pouw.PearlC.Defs"],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share"
-  },
-  "Definitions.Pouw.Basic": {
-   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
-   "except": [],
-   "why": "probability, integer matrices and oracle programs"
-  },
-  "Definitions.Pouw.PearlC.Defs": {
-   "imports": [
-    "Mathlib",
-    "Batteries",
-    "Definitions.Pouw.Fp8Atom.E4M3",
-    "Definitions.Pouw.Fp8Atom.Atom",
-    "Definitions.Pouw.Fp8Atom.Fp32"
-   ],
-   "except": [],
-   "why": "Pearl-C's Π, definitions only, over Fp8Atom's definitions: the game and the named assumption read it"
-  },
   "Definitions.Pous.Assumptions": {
    "imports": ["Mathlib", "Definitions.Pous", "Definitions.Pous.Assumptions"],
    "except": [],
@@ -2302,37 +2377,6 @@
    "except": [],
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
-  "Definitions.Pous": {
-   "imports": ["Mathlib", "Definitions.Pous"],
-   "except": [],
-   "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Pous.Game": {
-   "imports": ["Mathlib", "Definitions.Pous.Game"],
-   "except": [],
-   "why": "the probability and oracle model"
-  },
-  "Definitions.Pous.Model": {
-   "imports": ["Mathlib", "Definitions.Pous.Game", "Definitions.Pous.Model"],
-   "except": [],
-   "why": "the models import the game and each other, not the parameters or a proof"
-  },
-  "Definitions.Pous.P2": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous.Game",
-    "Definitions.Pous.Model",
-    "Definitions.Pous.Accounting",
-    "Definitions.Pous.P2"
-   ],
-   "except": [],
-   "why": "P2's pins and its cost model read only the game, the models and the parameters"
-  },
-  "Definitions.NetworkCertifier": {
-   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
-   "except": [],
-   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
-  },
   "Definitions.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.NetworkCertifier.Assumptions"],
    "except": [],
@@ -2357,20 +2401,6 @@
    "why": "a guarantee is a Prop over Mathlib, never over a proof",
    "sealed": true
   },
-  "Definitions.Accounting": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core",
-    "Definitions.Pouw",
-    "Definitions.Pous.Game.Prob",
-    "Definitions.Pous.Model.Audit",
-    "Definitions.Pous.Model.SampledAudit",
-    "Definitions.Pous",
-    "Definitions.Accounting"
-   ],
-   "except": ["Definitions.Accounting.Bandwidth.Game"],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
-  },
   "Definitions.Accounting.Guarantees": {
    "imports": [
     "Mathlib",
@@ -2392,16 +2422,6 @@
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Definitions.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Definitions.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Definitions.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it",
    "sealed": true
   },
-  "Definitions.Accounting.Bandwidth": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Pous.Game.Prob",
-    "Definitions.Accounting.Confidence",
-    "Definitions.Accounting.Bandwidth"
-   ],
-   "except": [],
-   "why": "the bandwidth audit's game is trusted text: it reads only PoUS's bit strings and uniform probability, and imports no assumption, guarantee or proof; the chip's ports on a strategy's runs (Definitions.Accounting.Bandwidth.Causal) read the actual-circuit model's runs, links and ports (Definitions.Accounting.Confidence)"
-  },
   "Definitions.Accounting.Guarantees.Bandwidth": {
    "imports": [
     "Mathlib",
@@ -2418,31 +2438,11 @@
    "why": "a named assumption of resource accounting (the remote audit's W at the rebuild pricing, Identity, PoUW's conjecture for the bound z) is a Prop over its definitions, never over a guarantee or a proof",
    "sealed": true
   },
-  "Definitions.Claims": {
-   "imports": ["Mathlib", "Definitions.Claims"],
-   "except": [],
-   "why": "the claims and the definitions they read are trusted text: they import no assumption, guarantee or proof"
-  },
-  "Definitions.Hash": {
-   "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash"],
-   "except": [],
-   "why": "the hash area's definitions are trusted text: the served row leaf's formats (frame-v3 trees, sha512/row-seg/v1 and sha512/row/v2, hm96-sha512/v1) over a hash, on Mathlib and the claims' messages and collisions (Definitions.Claims); they import no assumption, guarantee or proof"
-  },
-  "Definitions.Flock": {
-   "imports": ["Mathlib", "Definitions.Flock"],
-   "except": [],
-   "why": "C-Flock's definitions, extracted from Proofs/Flock, are trusted text: they import no assumption, guarantee or proof"
-  },
   "Definitions.Hash.Guarantees": {
    "imports": ["Mathlib", "Definitions.Claims", "Definitions.Hash", "Definitions.Hash.Guarantees"],
    "except": [],
    "why": "a guarantee is stated over the hash area's definitions, never over a proof",
    "sealed": true
-  },
-  "Definitions.Population": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Population"],
-   "except": [],
-   "why": "populations' definitions are trusted text: they import no assumption, guarantee or proof; a partition of a core circuit is a population"
   },
   "Definitions.Nci.Guarantees.FitRate": {
    "imports": [
@@ -2459,6 +2459,46 @@
  },
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+ },
+ "trees": {
+  "definitions": ["Definitions", "Models"],
+  "properties": ["Properties"],
+  "proofs": ["Proofs", "Proofs.Properties"],
+  "except": {
+   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
@@ -43243,45 +43283,5 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
- },
- "trees": {
-  "definitions": ["Definitions", "Models"],
-  "properties": ["Properties"],
-  "proofs": ["Proofs", "Proofs.Properties"],
-  "except": {
-   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
-   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
-  }
  }
 }
