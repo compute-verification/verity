@@ -16,23 +16,28 @@ run's and those entries are the run's level-`ℓ` rows (`rawLevelCols_plain`), w
 `PlainSimForkLe` alone.
 
 The draw-layer lemmas are proved once, at `VK keep` over any transcript recording the outcome (`RecordsLiveAtDK`), and
-their `wrPD` forms are them at `keep := id`; `PlainClashLaterK` has them at `wrPDK keep`. The entries are
-`plainLevelColsOf` at the decoded rep stream's rounds, which reads their coins only.
+their `wrPD` forms are them at `keep := id`; `PlainClashLaterK` has them at `wrPDK keep`. The hidden-output lemmas are
+proved once more, at a model leaf or a leaf form (`PlainClash0`): hm96 here and plain SHA-512 leaves in
+`PlainLeafClash` are instances. The entries are `plainLevelColsOf` at the decoded rep stream's rounds, which reads their
+coins only.
 
 * `plainLevelColsOf_ok`, `plainLevelColsOf_ge`: the reader's level-`ℓ` rows at a proof that decodes, and none past the
   schedule.
 * `slotOpensL_entriesAt`, `slotOpensL_level`: a rep's level-`ℓ` openings are the reader's level-`ℓ` entries.
-* `accepts_reqsDK`, `accepts_opensLDK`: at flock-verify's acceptance through `keep` at a draw value, each rep's
-  recorded caps and request at level `ℓ ≥ 1`, and each table's recorded caps and level-`ℓ` openings as its reps'
-  proofs' recursive caps and `plainLevelColsOf` entries; `accepts_reqsD`, `accepts_opensLD` at `keep := id`.
-* `LaterEntriesAt`, `LaterEntriesAtK`, `laterEntries_wrK_of`, `laterEntries_wrKH_of`: at the deployed plain decoders,
-  each rep's recorded caps and later openings are the deployed rep's, at public and at hidden outputs;
-  `laterEntries_wrPD`, `laterEntries_wrPDH` at `wrPD`.
-* `LaterEntriesClash`, `LaterEntriesClashK`, `laterEntriesClashK_of`, `laterEntriesClash_of`, `laterClash_wrPD`,
+* `accepts_reqsDK`, `accepts_opensLDLfK`: at flock-verify's acceptance through `keep` at a draw value, each rep's
+  recorded caps and request at level `ℓ ≥ 1`, and each table's recorded caps and level-`ℓ` openings at a model leaf as
+  its reps' proofs' recursive caps and `plainLevelColsOf` entries; `accepts_opensLDK` at `leaf512`; `accepts_reqsD`,
+  `accepts_opensLD` at `keep := id`.
+* `LaterEntriesAt`, `LaterEntriesAtK`, `laterEntries_wrK_of`, `laterEntries_wrKHLf_of`: at the deployed plain
+  decoders, each rep's recorded caps and later openings are the deployed rep's, at public outputs and at hidden outputs
+  under a leaf form; `laterEntries_wrKH_of` at hm96; `laterEntries_wrPD`, `laterEntries_wrPDH` at `wrPD`.
+* `LaterEntriesClash`, `LaterEntriesClashK`, `laterEntriesClashKLf_of`, `laterEntriesClash_of`, `laterClash_wrPD`,
   `laterClash_wrPDH`: so the self-clash past level 0 there is two of one rep's level-`ℓ` entries at one position with
-  different columns. `laterEntriesAt_iff_K_id`, `laterEntriesClash_iff_K_id`: the `K` forms at `keep := id`.
-* `plain_laterEntriesAtK_of`, `plain_laterEntriesHAtK_of`: those at the statement's draw, at `plainTab`;
-  `plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterClashAt`, `plain_laterClashHAt` at `wrPD`.
+  different columns; `laterEntriesClashK_of` at `leaf512`. `laterEntriesAt_iff_K_id`, `laterEntriesClash_iff_K_id`:
+  the `K` forms at `keep := id`.
+* `plain_laterEntriesAtK_of`, `plain_laterEntriesHLfAtK_of`: those at the statement's draw, at `plainTab`;
+  `plain_laterEntriesHAtK_of` at hm96; `plain_laterEntriesAt`, `plain_laterEntriesHAt`, `plain_laterClashAt`,
+  `plain_laterClashHAt` at `wrPD`.
 * `rawLevelCols_plain`: an accepted plain run's level-`ℓ` rows are its reps' `plainLevelColsOf` entries.
 * `plainClashQL`, `plainSimLaterClashAt`: so a self-clash past level 0 at the concrete simulator's outcome gives
   `P`'s accepting run a raw clash, at every statement.
@@ -199,9 +204,70 @@ theorem accepts_reqsD {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript}
           ∀ R ∈ pend.reqs, R.level < sch.levels.size := by
   simpa only [decodeWithK_id_std] using accepts_reqsDK id ((acceptsAtD_iff_acceptsAtDK_id I dr t).1 h)
 
+/-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings at the
+model leaf `lf` are its reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and
+its level-`ℓ` openings its `plainLevelColsOf` entries (`accepts_reqsDK`). -/
+theorem accepts_opensLDLfK (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
+    {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+      Record.decodeWithK keep With.std spec t.record = .ok sess ∧
+      ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
+        ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
+          (pend₀ pend₁ : PendL 𝔽 Dig) (cap : Cap Dig) (out : OutCL 𝔽 Dig (List UInt8)),
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 0) =
+            some s₀ →
+          sess.streams.find? (fun x => x.name == toString spec.tables[j]! ++ toString "/rep" ++ toString 1) =
+            some s₁ →
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j]! = .ok p₀ →
+          decodeProof (shapeOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+            PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) t.proofs[2 * j + 1]! = .ok p₁ →
+          Plays fOf (Model.repC execArith 0 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₀ capDig)
+            (s₀.rounds.toList.map (·.coins)) pend₀ →
+          Plays fOf (Model.repC execArith 1 (stmtOf sts[j] hwf (regionsOf sts[j])) (schedOf sch) hm
+              (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                (ptsOf sts[j].mPts sess.points)))
+            (repMsgs (Setup.ofCircuit sts[j]) sch (2 + (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j]))
+              PT_LOCAL sts[j].mPts (ptsOf sts[j].mPts sess.points)).length) p₁ capDig)
+            (s₁.rounds.toList.map (·.coins)) pend₁ →
+          out = tableOutL H512 enc512 lf cap (pend₀, pend₁)
+            (opnOf (Setup.ofCircuit sts[j]) sch (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL
+              sts[j].mPts (ptsOf sts[j].mPts sess.points)).length #[t.proofs[2 * j]!, t.proofs[2 * j + 1]!]) →
+          pend₀.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p₀.ligerito.recursiveCaps[j]!) ∧
+          pend₁.caps = (List.range (sch.levels.size - 1)).map (fun j => capDig p₁.ligerito.recursiveCaps[j]!) ∧
+          ∀ ℓ, 1 ≤ ℓ →
+            (slotOpensL out 0 ℓ (lvOf (schedOf sch) ℓ).queries).map (fun x => (x.1, x.2.1)) =
+              FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
+                (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                  (ptsOf sts[j].mPts sess.points)).length) s₀.rounds t.proofs[2 * j]! ℓ ∧
+            (slotOpensL out 1 ℓ (lvOf (schedOf sch) ℓ).queries).map (fun x => (x.1, x.2.1)) =
+              FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
+                (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
+                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ := by
+  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_reqsDK keep h
+  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
+  obtain ⟨sch, hf, hk⟩ := hall j hj
+  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout => ?_⟩
+  subst hout
+  obtain ⟨hc₀, hf₀, hlt₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
+  obtain ⟨hc₁, hf₁, hlt₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
+  refine ⟨hc₀, hc₁, fun ℓ h1 => ?_⟩
+  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
+    fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
+  have hQ : ℓ < sch.levels.size → (lvOf (schedOf sch) ℓ).queries = (sch.levels.getD ℓ default).q := fun hℓ => by
+    rw [lvOf_schedOf hℓ]
+    rfl
+  rw [opnOf_pair hp₀ hp₁]
+  exact ⟨slotOpensL_level _ 0 ℓ _ _ _ _ p₀ pend₀ hp₀ rfl (fun _ => rfl) hlv hQ hlt₀ (fun hℓ => hf₀ ℓ h1 hℓ) h1,
+    slotOpensL_level _ 1 ℓ _ _ _ _ p₁ pend₁ hp₁ rfl (fun _ => rfl) hlv hQ hlt₁ (fun hℓ => hf₁ ℓ h1 hℓ) h1⟩
+
 /-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
-reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and its level-`ℓ` openings
-its `plainLevelColsOf` entries (`accepts_reqsDK`). -/
+reps' deployed ones**, at every level `ℓ ≥ 1`: each rep's caps its proof's recursive caps and its level-`ℓ` openings its
+`plainLevelColsOf` entries (`accepts_reqsDK`); `accepts_opensLDLfK` at `leaf512`. -/
 theorem accepts_opensLDK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
@@ -242,23 +308,8 @@ theorem accepts_opensLDK (keep : Bool → Bool)
             (slotOpensL out 1 ℓ (lvOf (schedOf sch) ℓ).queries).map (fun x => (x.1, x.2.1)) =
               FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
                 (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ := by
-  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_reqsDK keep h
-  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
-  obtain ⟨sch, hf, hk⟩ := hall j hj
-  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout => ?_⟩
-  subst hout
-  obtain ⟨hc₀, hf₀, hlt₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
-  obtain ⟨hc₁, hf₁, hlt₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
-  refine ⟨hc₀, hc₁, fun ℓ h1 => ?_⟩
-  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
-    fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
-  have hQ : ℓ < sch.levels.size → (lvOf (schedOf sch) ℓ).queries = (sch.levels.getD ℓ default).q := fun hℓ => by
-    rw [lvOf_schedOf hℓ]
-    rfl
-  rw [opnOf_pair hp₀ hp₁]
-  exact ⟨slotOpensL_level _ 0 ℓ _ _ _ _ p₀ pend₀ hp₀ rfl (fun _ => rfl) hlv hQ hlt₀ (fun hℓ => hf₀ ℓ h1 hℓ) h1,
-    slotOpensL_level _ 1 ℓ _ _ _ _ p₁ pend₁ hp₁ rfl (fun _ => rfl) hlv hQ hlt₁ (fun hℓ => hf₁ ℓ h1 hℓ) h1⟩
+                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ :=
+  accepts_opensLDLfK keep leaf512 h
 
 /-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
 ones**, at every level `ℓ ≥ 1`: `accepts_opensLDK` at `keep := id`. -/
@@ -385,11 +436,12 @@ theorem laterEntriesAt_iff_K_id (sch : Accounting.Schedule) (I : Exec.Inputs) (d
   unfold LaterEntriesAt LaterEntriesAtK
   simp only [decodeWithK_id_std]
 
-/-- **A self-clash past level 0 in an output whose reps' later openings are the deployed reps' is a clash of one rep's
-level-`ℓ` entries**, through `keep` (`laterEntriesClash_of`). -/
-theorem laterEntriesClashK_of (keep : Bool → Bool) {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json}
+/-- **A self-clash past level 0 at the model leaf `lf` in an output whose reps' later openings are the deployed reps'
+is a clash of one rep's level-`ℓ` entries**, through `keep` (`laterEntriesClash_of`); the proof reads no leaf. -/
+theorem laterEntriesClashKLf_of (keep : Bool → Bool) (lf : Merkle.Leaf (List 𝔽) (List UInt8) Dig H512)
+    {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json}
     {t : Exec.Transcript} {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
-    (hcl : FlockDeploy.KS.LaterClashL sch out) : LaterEntriesClashK keep I d t := by
+    (hcl : FlockDeploy.KS.LaterClashLLf lf sch out) : LaterEntriesClashK keep I d t := by
   obtain ⟨r, hr2, ℓ, h1, -, -, u, hu, v, hv, huv, -, -, hne⟩ := hcl
   obtain ⟨spec, st, sess, sch', hsu, hdec, hf, -, s, -, hs, -, -, hent⟩ := he r hr2
   have hmem : ∀ z ∈ slotOpensL out r ℓ (lvOf sch ℓ).queries, (z.1, z.2.1) ∈
@@ -397,6 +449,13 @@ theorem laterEntriesClashK_of (keep : Bool → Bool) {sch : Accounting.Schedule}
         t.proofs[r]! ℓ :=
     fun z hz => hent ℓ h1 ▸ List.mem_map_of_mem hz
   exact ⟨spec, st, sess, sch', hsu, hdec, hf, r, hr2, s, hs, ℓ, u.1, u.2.1, v.2.1, hmem u hu, huv ▸ hmem v hv, hne⟩
+
+/-- **A self-clash past level 0 in an output whose reps' later openings are the deployed reps' is a clash of one rep's
+level-`ℓ` entries**, through `keep` (`laterEntriesClash_of`); `laterEntriesClashKLf_of` at `leaf512`. -/
+theorem laterEntriesClashK_of (keep : Bool → Bool) {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json}
+    {t : Exec.Transcript} {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
+    (hcl : FlockDeploy.KS.LaterClashL sch out) : LaterEntriesClashK keep I d t :=
+  laterEntriesClashKLf_of keep leaf512 he hcl
 
 /-- **A self-clash past level 0 in an output whose reps' later openings are the deployed reps' is a clash of one rep's
 level-`ℓ` entries**: `laterEntriesClashK_of` at `keep := id`. -/
@@ -551,13 +610,13 @@ theorem laterClash_wrPD {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (
   laterEntriesClash_of (laterEntries_wrPD ht hc ho dj x₀ hT hS R o hacc pend' hp) hcl
 
 open DecodeZL HiddenExec HiddenDec in
-/-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
-reps'**: `laterEntries_wrK_of` at the hidden tables and their openings `opnAtH`. -/
-theorem laterEntries_wrKH_of (keep : Bool → Bool)
+/-- **At the deployed plain decoders at hidden outputs, at a leaf form `F`, the reps' recorded caps and later openings
+are the deployed reps'**: `laterEntries_wrK_of` at the hidden tables and their openings `opnAtH`. -/
+theorem laterEntries_wrKHLf_of (keep : Bool → Bool) (F : LeafForm)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
     (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
-    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (hT : F.TagsOk I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
     (o : Tables.LiveOutJ 1 mPts) {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep I (dj S) o t)
     (hacc : AcceptsAtDK keep I (some (dj S)) t)
     (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
@@ -565,19 +624,20 @@ theorem laterEntries_wrKH_of (keep : Bool → Bool)
       (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
         (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r)) :
     ∀ r < 2, LaterEntriesAtK keep (tablesAtH (Reg := Reg) dj x₀ S R).sch I (dj S) t
-      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)) r := by
+      (tableOutL H512 enc512 F.lf (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)) r := by
   obtain ⟨hh, hrr, hl, hc1⟩ := hT
   obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o hrl hacc
   obtain ⟨hSD, hmPts⟩ := hS
   obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsDK keep ht hc hh hc1 dj x₀ hacc hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneDK keep hrr hl hc1 hacc
+  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ :=
+    accepts_repsOneDLfK keep F.lf hrr hc1 (F.verdicts keep hh hl hacc) hacc
   rw [setupOne_hidden hh] at hst
   obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
   obtain ⟨-, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
   have hmP : st.mPts = mPts := hmPts st hst
   obtain ⟨-, hr⟩ := setupHidden_wf hst
   have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
-  have hms : st.merkle = MerkleScheme.hm96Sha512 := setupHidden_hm96 hl hst
+  have hms : st.merkle.digestLen = 64 := F.digestLen hst hl
   obtain ⟨pend, hreps, -⟩ := hk hwf hr hm
   have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
       (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
@@ -586,7 +646,7 @@ theorem laterEntries_wrKH_of (keep : Bool → Bool)
     simp [stmtOf, regionsOf]
   obtain ⟨s₀, p₀, -, hs₀, hp₀, hpl₀, -⟩ := hreps 0
   obtain ⟨s₁, p₁, -, hs₁, hp₁, hpl₁, -⟩ := hreps 1
-  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opensLDK keep hacc
+  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opensLDLfK keep F.lf hacc
   rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
   obtain ⟨rfl, rfl⟩ := hsu'
   rw [hdec, Except.ok.injEq] at hdec'
@@ -597,7 +657,7 @@ theorem laterEntries_wrKH_of (keep : Bool → Bool)
       (Model.extraClaims (stmtOf #[st][0] hwf (regionsOf #[st][0])) PT_LOCAL q pts).length = 2 * st.regions.size :=
     hn
   have hent := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot o.rootB[0]!)
-    (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) (pend 0, pend 1)
+    (tableOutL H512 enc512 F.lf (capOfRoot o.rootB[0]!) (pend 0, pend 1)
       (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
         #[t.proofs[0]!, t.proofs[1]!]))
     hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl)
@@ -618,7 +678,7 @@ theorem laterEntries_wrKH_of (keep : Bool → Bool)
     obtain ⟨s', hs', hrs⟩ := hstreams r
     obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
     exact PlaysCoin.repRun_of_erase hrs <| repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf
-      (by rw [hms]; rfl) hS' hsch hpl
+      hms hS' hsch hpl
       (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decodeWithK_roundsWF keep With.std hdec s'
         (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
   have hpe : ∀ r : Fin 2, Tables.sel pend' r = pend r := fun r =>
@@ -650,6 +710,24 @@ theorem laterEntries_wrKH_of (keep : Bool → Bool)
   · exact ⟨s₀, p₀, hs₀, hp₀, hent.1, fun ℓ h1 => (hent.2.2 ℓ h1).1⟩
   · exact ⟨s₁, p₁, hs₁, hp₁, hent.2.1, fun ℓ h1 => (hent.2.2 ℓ h1).2⟩
   · omega
+
+open DecodeZL HiddenExec HiddenDec in
+/-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
+reps'**: `laterEntries_wrK_of` at the hidden tables and their openings `opnAtH`; `laterEntries_wrKHLf_of` at `hm96`. -/
+theorem laterEntries_wrKH_of (keep : Bool → Bool)
+    {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
+    (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
+    (dj : Finset (Fin n) → Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+    (hT : TagsOkH I) {S : Finset (Fin n)} (hS : DrawOkH I dj mPts S) (R : Reg)
+    (o : Tables.LiveOutJ 1 mPts) {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep I (dj S) o t)
+    (hacc : AcceptsAtDK keep I (some (dj S)) t)
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R) o.pts r)
+      (Tables.repTapeJ (fun _ => DecodeZL.decAt (tablesAtH dj x₀) DecodeZL.wOP DecodeZL.wLIG S R)
+        (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r)) :
+    ∀ r < 2, LaterEntriesAtK keep (tablesAtH (Reg := Reg) dj x₀ S R).sch I (dj S) t
+      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)) r :=
+  laterEntries_wrKHLf_of keep LeafForm.hm96 ht hc dj x₀ hT hS R o hrl hacc pend' hp
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
@@ -741,13 +819,13 @@ theorem plain_laterEntriesAtK_of (keep : Bool → Bool)
   rw [e] at he
   exact he
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
-`laterEntries_wrKH_of` at the statement's draw `d` and no drawn unit. -/
-theorem plain_laterEntriesHAtK_of (keep : Bool → Bool)
+/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under a leaf form
+`F`**: `laterEntries_wrKHLf_of` at the statement's draw `d` and no drawn unit. -/
+theorem plain_laterEntriesHLfAtK_of (keep : Bool → Bool) (F : AtDraw.LeafForm)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
-    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = F.tag) {d : Json}
     (hd : ins.read.draw = some d) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
@@ -758,9 +836,9 @@ theorem plain_laterEntriesHAtK_of (keep : Bool → Bool)
       o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
         (fun _ _ _ => []) o 0 r) (sel pend' r)) :
     ∀ r < 2, LaterEntriesAtK keep ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ins.read.I d t
-      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+      (tableOutL H512 enc512 F.lf (capOfRoot o.rootB[0]!) pend'
         (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r := by
-  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHidden hs hin hset h hh hl hd
+  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHiddenT hs hin hset h hh hl hd
   obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
     have e := fast100_schedOf st.m
     rw [hsch] at e
@@ -781,10 +859,32 @@ theorem plain_laterEntriesHAtK_of (keep : Bool → Bool)
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩
-  have he := laterEntries_wrKH_of keep ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hrl hacc pend'
-    (by rw [e]; exact hp)
+  have he := laterEntries_wrKHLf_of keep F ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hrl hacc
+    pend' (by rw [e]; exact hp)
   rw [e] at he
   exact he
+
+/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under hm96 leaves**:
+`laterEntries_wrKH_of` at the statement's draw `d` and no drawn unit; `plain_laterEntriesHLfAtK_of` at `hm96`. -/
+theorem plain_laterEntriesHAtK_of (keep : Bool → Bool)
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
+    (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)])
+    (hh : ins.read.I.tags.hiddenOutputs = true) (hl : ins.read.I.tags.merkleLeaf = "hm96-sha512/v1") {d : Json}
+    (hd : ins.read.draw = some d) (L : Layout st)
+    (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hm : 13 ≤ (L.model (regionsOf st)).m)
+    (hlay : (L.model (regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (o : LiveOutJ 1 spec.mPts)
+    {t : Exec.Transcript} (hrl : RecordsLiveAtDK keep ins.read.I d o t) (hacc : AcceptsAtDK keep ins.read.I (some d) t)
+    (pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig)
+    (hp : ∀ r : Fin 2, PlaysT (repsOf (D := Dig) execArith (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)
+      o.pts r) (repTapeJ (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+        (fun _ _ _ => []) o 0 r) (sel pend' r)) :
+    ∀ r < 2, LaterEntriesAtK keep ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ins.read.I d t
+      (tableOutL H512 enc512 leaf512 (capOfRoot o.rootB[0]!) pend'
+        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r :=
+  plain_laterEntriesHLfAtK_of keep AtDraw.LeafForm.hm96 hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl
+    hacc pend' hp
 
 /-- **The deployed plain decoders' later entries at `plainTab`, at the draw**: `plain_laterEntriesAtK_of` at
 `keep := id` and what `wrPD` writes for `o`. -/

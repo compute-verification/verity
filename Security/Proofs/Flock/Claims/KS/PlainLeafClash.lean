@@ -12,13 +12,15 @@ the accepting run (`EntriesClash`, `LaterEntriesClash`); the raw clash's collisi
 The draw-layer lemmas are proved once, at `VK keep` over any transcript recording the outcome (`RecordsLiveAtDK`), and
 their `wrPD` forms are them at `keep := id`; `PlainLeafClashK` has them at `wrPDK keep`.
 
-* `accepts_opensLDUK`, `laterEntriesClashK_ofU`, `clash₀_wrKHU_of`, `laterEntries_wrKHU_of`: `accepts_opensLDK`,
-  `laterEntriesClashK_of`, `clash₀_wrKH_of`, `laterEntries_wrKH_of` at `leafPlain`; `accepts_opensLDU`,
-  `laterEntriesClash_ofU`, `clash₀_wrPDHU`, `laterEntries_wrPDHU`, `laterClash_wrPDHU` at `keep := id` and `wrPD`.
+* `accepts_opensLDUK`, `laterEntriesClashK_ofU`, `clash₀_wrKHU_of`, `laterEntries_wrKHU_of`: `accepts_opensLDLfK`,
+  `laterEntriesClashKLf_of` at `leafPlain`, `clash₀_wrKHLf_of`, `laterEntries_wrKHLf_of` at `LeafForm.plain`;
+  `accepts_opensLDU`, `laterEntriesClash_ofU`, `clash₀_wrPDHU`, `laterEntries_wrPDHU`, `laterClash_wrPDHU` at
+  `keep := id` and `wrPD`.
 * `Clash₀LU`, `LaterClashLU`, `plainDecQU`, `PlainClashQU`: `Clash₀L`, `LaterClashL`, `plainDecQ`, `PlainClashQ` at
   `leafPlain`.
-* `plain_clash₀HUAtK_of`, `plain_laterEntriesHUAtK_of`: those at the statement's draw; `plain_clash₀HUAt`,
-  `plain_laterEntriesHUAt`, `plain_laterClashHUAt` at `wrPD`, and `plainClashQ₀U`, `plainClashQ_orU`, `plainClashQLU`:
+* `plain_clash₀HUAtK_of`, `plain_laterEntriesHUAtK_of`: those at the statement's draw (`plain_clash₀HLfAtK_of`,
+  `plain_laterEntriesHLfAtK_of` at `LeafForm.plain`); `plain_clash₀HUAt`, `plain_laterEntriesHUAt`,
+  `plain_laterClashHUAt` at `wrPD`, and `plainClashQ₀U`, `plainClashQ_orU`, `plainClashQLU`:
   their hm96 counterparts at the statement's draw.
 * `plainSimClashHU`: so a live self-clash at `leafPlain` gives `P`'s accepting runs a raw clash.
 -/
@@ -33,7 +35,8 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **At flock-verify's acceptance at `dr` through `keep`, each table's recorded caps and level-`ℓ` openings are its
 reps' deployed ones**, at every level `ℓ ≥ 1`: `accepts_opensLDK` at `leafPlain`, `accepts_opens₀LDUK` past level 0,
-each rep's caps its proof's recursive caps and its level-`ℓ` openings its `plainLevelColsOf` entries. -/
+each rep's caps its proof's recursive caps and its level-`ℓ` openings its `plainLevelColsOf` entries;
+`accepts_opensLDLfK` at `leafPlain`. -/
 theorem accepts_opensLDUK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
     ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
@@ -74,23 +77,8 @@ theorem accepts_opensLDUK (keep : Bool → Bool)
             (slotOpensL out 1 ℓ (lvOf (schedOf sch) ℓ).queries).map (fun x => (x.1, x.2.1)) =
               FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit sts[j]) sch
                 (Model.extraClaims (stmtOf sts[j] hwf (regionsOf sts[j])) PT_LOCAL sts[j].mPts
-                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ := by
-  obtain ⟨spec, sts, sess, hs, hsess, hall⟩ := accepts_reqsDK keep h
-  refine ⟨spec, sts, sess, hs, hsess, fun j hj => ?_⟩
-  obtain ⟨sch, hf, hk⟩ := hall j hj
-  refine ⟨sch, hf, fun hwf hr hm p₀ p₁ s₀ s₁ pend₀ pend₁ cap out hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ hout => ?_⟩
-  subst hout
-  obtain ⟨hc₀, hf₀, hlt₀⟩ := hk hwf hr hm 0 (by norm_num) s₀ p₀ pend₀ hs₀ hp₀ hpl₀
-  obtain ⟨hc₁, hf₁, hlt₁⟩ := hk hwf hr hm 1 (by norm_num) s₁ p₁ pend₁ hs₁ hp₁ hpl₁
-  refine ⟨hc₀, hc₁, fun ℓ h1 => ?_⟩
-  have hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default) := fun i hi =>
-    fast100_level _ sch hf _ (by unfold Array.getD; rw [dite_eq_left hi]; exact Array.getElem_mem hi)
-  have hQ : ℓ < sch.levels.size → (lvOf (schedOf sch) ℓ).queries = (sch.levels.getD ℓ default).q := fun hℓ => by
-    rw [lvOf_schedOf hℓ]
-    rfl
-  rw [opnOf_pair hp₀ hp₁]
-  exact ⟨slotOpensL_level _ 0 ℓ _ _ _ _ p₀ pend₀ hp₀ rfl (fun _ => rfl) hlv hQ hlt₀ (fun hℓ => hf₀ ℓ h1 hℓ) h1,
-    slotOpensL_level _ 1 ℓ _ _ _ _ p₁ pend₁ hp₁ rfl (fun _ => rfl) hlv hQ hlt₁ (fun hℓ => hf₁ ℓ h1 hℓ) h1⟩
+                  (ptsOf sts[j].mPts sess.points)).length) s₁.rounds t.proofs[2 * j + 1]! ℓ :=
+  accepts_opensLDLfK keep leafPlain h
 
 /-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
 ones**, at every level `ℓ ≥ 1`: `accepts_opensLDUK` at `keep := id`. -/
@@ -169,18 +157,13 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A self-clash past level 0 at `leafPlain` in an output whose reps' later openings are the deployed reps' is a clash
-of one rep's level-`ℓ` entries**, through `keep`: `laterEntriesClashK_of`'s proof, which reads no leaf. -/
+of one rep's level-`ℓ` entries**, through `keep`: `laterEntriesClashK_of`'s proof, which reads no leaf;
+`laterEntriesClashKLf_of` at `leafPlain`. -/
 theorem laterEntriesClashK_ofU (keep : Bool → Bool)
     {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
-    (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClashK keep I d t := by
-  obtain ⟨r, hr2, ℓ, h1, -, -, u, hu, v, hv, huv, -, -, hne⟩ := hcl
-  obtain ⟨spec, st, sess, sch', hsu, hdec, hf, -, s, -, hs, -, -, hent⟩ := he r hr2
-  have hmem : ∀ z ∈ slotOpensL out r ℓ (lvOf sch ℓ).queries, (z.1, z.2.1) ∈
-      FlockDeploy.KS.plainLevelColsOf (shapeOf (Setup.ofCircuit st) sch' (2 * st.regions.size)) s.rounds
-        t.proofs[r]! ℓ :=
-    fun z hz => hent ℓ h1 ▸ List.mem_map_of_mem hz
-  exact ⟨spec, st, sess, sch', hsu, hdec, hf, r, hr2, s, hs, ℓ, u.1, u.2.1, v.2.1, hmem u hu, huv ▸ hmem v hv, hne⟩
+    (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClashK keep I d t :=
+  laterEntriesClashKLf_of keep leafPlain he hcl
 
 /-- **A self-clash past level 0 at `leafPlain` in an output whose reps' later openings are the deployed reps' is a
 clash of one rep's level-`ℓ` entries**: `laterEntriesClashK_ofU` at `keep := id`. -/
@@ -192,7 +175,7 @@ theorem laterEntriesClash_ofU {sch : Accounting.Schedule} {I : Exec.Inputs} {d :
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**, at `keep`
-over any transcript recording `o`: `clash₀_wrKH_of` at `leafPlain`. -/
+over any transcript recording `o`: `clash₀_wrKH_of` at `leafPlain`; `clash₀_wrKHLf_of` at `plain`. -/
 theorem clash₀_wrKHU_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -209,101 +192,8 @@ theorem clash₀_wrKHU_of (keep : Bool → Bool)
       (Model.pathLen (lvOf (tablesAtH (Reg := Reg) dj x₀ S R).sch 0))
       (opens₀L (tablesAtH (Reg := Reg) dj x₀ S R).sch (tableOutL H512 enc512 leafPlain
         (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs)))) :
-    EntriesClashK keep I (dj S) t := by
-  obtain ⟨hh, hrr, hl, hc1⟩ := hT
-  obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o hrl hacc
-  obtain ⟨hSD, hmPts⟩ := hS
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsDK keep ht hc hh hc1 dj x₀ hacc hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneDUK keep hrr hh hl hc1 hacc
-  rw [setupOne_hidden hh] at hst
-  obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
-  obtain ⟨hroot, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
-  have hmP : st.mPts = mPts := hmPts st hst
-  obtain ⟨-, hr⟩ := setupHidden_wf hst
-  have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
-  have hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := setupHidden_plain hl hst
-  obtain ⟨pend, hreps, hv⟩ := hk hwf hr hm
-  have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
-      (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
-    intro q pts
-    rw [extraClaims_length]
-    simp [stmtOf, regionsOf]
-  obtain ⟨s₀, p₀, -, hs₀, hp₀, hpl₀, -⟩ := hreps 0
-  obtain ⟨s₁, p₁, -, hs₁, hp₁, hpl₁, -⟩ := hreps 1
-  have hcap : sess.rootB[0]! = o.rootB[0]! := hroot
-  have hv' := hv
-  rw [hn, hcap] at hv'
-  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opens₀LDUK keep hacc
-  rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
-  obtain ⟨rfl, rfl⟩ := hsu'
-  rw [hdec, Except.ok.injEq] at hdec'
-  subst hdec'
-  obtain ⟨sch', hf', hk'⟩ := hall 0 (by simp)
-  obtain rfl : sch = sch' := Option.some.inj (hf.symm.trans hf')
-  have hn' : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
-      (Model.extraClaims (stmtOf #[st][0] hwf (regionsOf #[st][0])) PT_LOCAL q pts).length = 2 * st.regions.size :=
-    hn
-  obtain ⟨-, hent⟩ := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot o.rootB[0]!)
-    (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) (pend 0, pend 1)
-      (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[t.proofs[0]!, t.proofs[1]!]))
-    hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl) hv'
-  rw [hn'] at hent
-  rw [hmP, hpts] at hreps
-  have hS' : (tablesAtH (Reg := Reg) dj x₀ S R).S = stmtOf st hwf (regionsOf st) := hTS
-  have hpl : (tablesAtH (Reg := Reg) dj x₀ S R).ptLocal = PT_LOCAL := tableAtH_ptLocal dj x₀ _
-  have hsch : (tablesAtH (Reg := Reg) dj x₀ S R).sch = schedOf sch := by
-    have h1 : Accounting.fast100 st.m = some (schedOf sch) := by rw [← fast100_schedOf, hf]; rfl
-    have h2 := (tablesAtH (Reg := Reg) dj x₀ S R).hsch
-    rw [hS'] at h2
-    exact Option.some.inj (h2.symm.trans h1)
-  have hrep : ∀ r : Fin 2, PlaysCoin.RepRun (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R)
-      (oneOf o).pts r) (PlaysCoin.repSpine Dig (tablesAtH (Reg := Reg) dj x₀ S R) (oneOf o).pts)
-      (decAt (tablesAtH dj x₀) wOP wLIG S R) (pick ((oneOf o).rep0, (oneOf o).rep1) r) [] (pend r) := by
-    intro r
-    obtain ⟨s, p, Tv, hs, hp, hplay, hlen, hret⟩ := hreps r
-    obtain ⟨s', hs', hrs⟩ := hstreams r
-    obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
-    exact PlaysCoin.repRun_of_erase hrs <| repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf
-      (by rw [hms]; rfl) hS' hsch hpl
-      (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decodeWithK_roundsWF keep With.std hdec s'
-        (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
-  have hpe : ∀ r : Fin 2, Tables.sel pend' r = pend r := fun r =>
-    playsT_det (hp r) (by
-      have := PlaysCoin.playsT_of_repRun (PlaysCoin.repsOf_spine Dig (tablesAtH (Reg := Reg) dj x₀ S R)
-        (oneOf o).pts r) (hrep r)
-      fin_cases r <;> exact this)
-  have hpe' : pend' = (pend 0, pend 1) := Prod.ext (hpe 0) (hpe 1)
-  subst hpe'
-  have hprf' : t.proofs = o.proofs := hprf
-  have hopn : opnAtH (tablesAtH (Reg := Reg) dj x₀) I dj S R o.proofs =
-      opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[t.proofs[0]!, t.proofs[1]!] := by
-    rw [hprf']
-    unfold opnAtH
-    rw [hst]
-    dsimp only
-    rw [hf]
-    dsimp only
-    congr 1
-    unfold nX
-    rw [extraClaims_length, hS']
-    simp [stmtOf, regionsOf]
-  rw [hopn, hsch] at hcl
-  obtain ⟨u, hu, v, hv, huv, -, -, hne⟩ := hcl
-  have hmem : ∀ z ∈ opens₀L (schedOf sch) (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) (pend 0, pend 1)
-      (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[t.proofs[0]!, t.proofs[1]!])),
-      (z.1, z.2.1) ∈ Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₀.rounds
-          t.proofs[0]! ++
-        Claims.Flock.plainRepColsOf (shapeOf (Setup.ofCircuit st) sch (2 * st.regions.size)) s₁.rounds
-          t.proofs[1]! := fun z hz => by
-    have h' := List.mem_map_of_mem (f := fun x : ℕ × List 𝔽 × List UInt8 × List Dig => (x.1, x.2.1)) hz
-    rw [hent] at h'
-    exact h'
-  refine ⟨spec, st, sess, sch, s₀, s₁, hsu, hdec, hf, hs₀, hs₁, u.1, u.2.1, v.2.1, hmem u hu, ?_, hne⟩
-  rw [huv]
-  exact hmem v hv
+    EntriesClashK keep I (dj S) t :=
+  clash₀_wrKHLf_of keep LeafForm.plain ht hc dj x₀ hT hS R o hrl hacc pend' hp hcl
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **A level-0 self-clash at the deployed plain decoders at hidden outputs is a clash of the reps' entries**:
@@ -328,8 +218,8 @@ theorem clash₀_wrPDHU {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
-reps'**, at `keep` over
-any transcript recording `o`: `laterEntries_wrKH_of` at `leafPlain`. -/
+reps'**, at `keep` over any transcript recording `o`: `laterEntries_wrKH_of` at `leafPlain`; `laterEntries_wrKHLf_of` at
+`plain`. -/
 theorem laterEntries_wrKHU_of (keep : Bool → Bool)
     {c : _root_.Flock.Circuit} {n : ℕ} {I : Exec.Inputs} (ht : I.tags.typed = false)
     (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ}
@@ -343,91 +233,8 @@ theorem laterEntries_wrKHU_of (keep : Bool → Bool)
         (fun _ _ => true) (fun _ _ _ => []) o 0 r) (Tables.sel pend' r)) :
     ∀ r < 2, LaterEntriesAtK keep (tablesAtH (Reg := Reg) dj x₀ S R).sch I (dj S) t
       (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) pend' (opnAtH (tablesAtH dj x₀) I dj S R o.proofs))
-      r := by
-  obtain ⟨hh, hrr, hl, hc1⟩ := hT
-  obtain ⟨hprf, hrec⟩ := recordsLive_wrK1_of keep I (dj S) o hrl hacc
-  obtain ⟨hSD, hmPts⟩ := hS
-  obtain ⟨st₁, hst₁, hwf, hTS⟩ := tableAtH_of_acceptsDK keep ht hc hh hc1 dj x₀ hacc hSD hmPts
-  obtain ⟨st, spec, sess, sch, hst, hsu, hdec, hf, hk⟩ := accepts_repsOneDUK keep hrr hh hl hc1 hacc
-  rw [setupOne_hidden hh] at hst
-  obtain rfl : st = st₁ := Except.ok.inj (hst.symm.trans hst₁)
-  obtain ⟨-, hpts, hstreams⟩ := hrec spec #[st] sess hsu hdec
-  have hmP : st.mPts = mPts := hmPts st hst
-  obtain ⟨-, hr⟩ := setupHidden_wf hst
-  have hm : 13 ≤ st.m := by have := exec_fast100_ge hf; omega
-  have hms : st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := setupHidden_plain hl hst
-  obtain ⟨pend, hreps, -⟩ := hk hwf hr hm
-  have hn : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
-      (Model.extraClaims (stmtOf st hwf (regionsOf st)) PT_LOCAL q pts).length = 2 * st.regions.size := by
-    intro q pts
-    rw [extraClaims_length]
-    simp [stmtOf, regionsOf]
-  obtain ⟨s₀, p₀, -, hs₀, hp₀, hpl₀, -⟩ := hreps 0
-  obtain ⟨s₁, p₁, -, hs₁, hp₁, hpl₁, -⟩ := hreps 1
-  obtain ⟨spec', sts', sess', hsu', hdec', hall⟩ := accepts_opensLDUK keep hacc
-  rw [hsu, Except.ok.injEq, Prod.mk.injEq] at hsu'
-  obtain ⟨rfl, rfl⟩ := hsu'
-  rw [hdec, Except.ok.injEq] at hdec'
-  subst hdec'
-  obtain ⟨sch', hf', hk'⟩ := hall 0 (by simp)
-  obtain rfl : sch = sch' := Option.some.inj (hf.symm.trans hf')
-  have hn' : ∀ (q : ℕ) (pts : Fin 2 → Fin q → 𝔽),
-      (Model.extraClaims (stmtOf #[st][0] hwf (regionsOf #[st][0])) PT_LOCAL q pts).length = 2 * st.regions.size :=
-    hn
-  have hent := hk' hwf hr hm p₀ p₁ s₀ s₁ (pend 0) (pend 1) (capOfRoot o.rootB[0]!)
-    (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) (pend 0, pend 1)
-      (opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[t.proofs[0]!, t.proofs[1]!]))
-    hs₀ hs₁ hp₀ hp₁ hpl₀ hpl₁ (by rw [hn']; rfl)
-  rw [hn'] at hent
-  rw [hmP, hpts] at hreps
-  have hS' : (tablesAtH (Reg := Reg) dj x₀ S R).S = stmtOf st hwf (regionsOf st) := hTS
-  have hpl : (tablesAtH (Reg := Reg) dj x₀ S R).ptLocal = PT_LOCAL := tableAtH_ptLocal dj x₀ _
-  have hsch : (tablesAtH (Reg := Reg) dj x₀ S R).sch = schedOf sch := by
-    have h1 : Accounting.fast100 st.m = some (schedOf sch) := by rw [← fast100_schedOf, hf]; rfl
-    have h2 := (tablesAtH (Reg := Reg) dj x₀ S R).hsch
-    rw [hS'] at h2
-    exact Option.some.inj (h2.symm.trans h1)
-  have hrep : ∀ r : Fin 2, PlaysCoin.RepRun (repsOf (D := Dig) execArith (tablesAtH (Reg := Reg) dj x₀ S R)
-      (oneOf o).pts r) (PlaysCoin.repSpine Dig (tablesAtH (Reg := Reg) dj x₀ S R) (oneOf o).pts)
-      (decAt (tablesAtH dj x₀) wOP wLIG S R) (pick ((oneOf o).rep0, (oneOf o).rep1) r) [] (pend r) := by
-    intro r
-    obtain ⟨s, p, Tv, hs, hp, hplay, hlen, hret⟩ := hreps r
-    obtain ⟨s', hs', hrs⟩ := hstreams r
-    obtain rfl : s' = s := Option.some.inj (hs'.symm.trans hs)
-    exact PlaysCoin.repRun_of_erase hrs <| repRun_at op_carries lig_carries decodeProof_sizes _ st hwf sch hf
-      (by rw [hms]; rfl) hS' hsch hpl
-      (oneOf o).pts r hm rfl _ p hp s'.rounds (PlaysCoin.roundsWF_mem (decodeWithK_roundsWF keep With.std hdec s'
-        (Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hs')))) _ hplay _ Tv hlen hret
-  have hpe : ∀ r : Fin 2, Tables.sel pend' r = pend r := fun r =>
-    playsT_det (hp r) (by
-      have := PlaysCoin.playsT_of_repRun (PlaysCoin.repsOf_spine Dig (tablesAtH (Reg := Reg) dj x₀ S R)
-        (oneOf o).pts r) (hrep r)
-      fin_cases r <;> exact this)
-  have hpe' : pend' = (pend 0, pend 1) := Prod.ext (hpe 0) (hpe 1)
-  subst hpe'
-  have hprf' : t.proofs = o.proofs := hprf
-  have hopn : opnAtH (tablesAtH (Reg := Reg) dj x₀) I dj S R o.proofs =
-      opnOf (Setup.ofCircuit st) sch (2 * st.regions.size)
-        #[t.proofs[0]!, t.proofs[1]!] := by
-    rw [hprf']
-    unfold opnAtH
-    rw [hst]
-    dsimp only
-    rw [hf]
-    dsimp only
-    congr 1
-    unfold nX
-    rw [extraClaims_length, hS']
-    simp [stmtOf, regionsOf]
-  rw [hopn, hsch]
-  rw [hn] at hp₀ hp₁
-  intro r hr2
-  refine ⟨spec, st, sess, sch, hsu, hdec, hf, rfl, ?_⟩
-  rcases r with _ | _ | r
-  · exact ⟨s₀, p₀, hs₀, hp₀, hent.1, fun ℓ h1 => (hent.2.2 ℓ h1).1⟩
-  · exact ⟨s₁, p₁, hs₁, hp₁, hent.2.1, fun ℓ h1 => (hent.2.2 ℓ h1).2⟩
-  · omega
+      r :=
+  laterEntries_wrKHLf_of keep LeafForm.plain ht hc dj x₀ hT hS R o hrl hacc pend' hp
 
 open DecodeZL HiddenExec HiddenDec in
 /-- **At the deployed plain decoders at hidden outputs, the reps' recorded caps and later openings are the deployed
@@ -477,7 +284,8 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under plain SHA-512
-leaves**, at `keep`: `clash₀_wrKHU_of` at the statement's draw `d` and no drawn unit. -/
+leaves**, at `keep`: `clash₀_wrKHU_of` at the statement's draw `d` and no drawn unit; `plain_clash₀HLfAtK_of` at
+`plain`. -/
 theorem plain_clash₀HUAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -495,32 +303,9 @@ theorem plain_clash₀HUAtK_of (keep : Bool → Bool)
         (fun _ _ _ => []) o 0 r) (sel pend' r))
     (hcl : Clash₀LU ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) pend'
       (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0))) :
-    EntriesClashK keep ins.read.I d t := by
-  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHiddenU hs hin hset h hh hl hd
-  obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
-    have e := fast100_schedOf st.m
-    rw [hsch] at e
-    cases hf : Flock.fast100 st.m with
-    | none => rw [hf] at e; cases e
-    | some sch => exact ⟨sch, rfl⟩
-  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
-    hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
-  have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
-      fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
-    funext S R
-    obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
-      rest ext hsch hm hlay
-  have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
-    ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
-      obtain rfl := Except.ok.inj (hst.symm.trans hst')
-      rfl⟩
-  refine clash₀_wrKHU_of keep ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hrl hacc pend' ?_ ?_ <;>
-    rw [e]
-  · exact hp
-  · exact hcl
+    EntriesClashK keep ins.read.I d t :=
+  plain_clash₀HLfAtK_of keep AtDraw.LeafForm.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl hacc
+    pend' hp hcl
 
 /-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under plain SHA-512
 leaves**: `plain_clash₀HUAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
@@ -543,7 +328,8 @@ theorem plain_clash₀HUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
     o (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
 /-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under plain SHA-512
-leaves**, at `keep`: `laterEntries_wrKHU_of` at the statement's draw `d` and no drawn unit. -/
+leaves**, at `keep`: `laterEntries_wrKHU_of` at the statement's draw `d` and no drawn unit;
+`plain_laterEntriesHLfAtK_of` at `plain`. -/
 theorem plain_laterEntriesHUAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s)
@@ -561,32 +347,9 @@ theorem plain_laterEntriesHUAtK_of (keep : Bool → Bool)
         (fun _ _ _ => []) o 0 r) (sel pend' r)) :
     ∀ r < 2, LaterEntriesAtK keep ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ins.read.I d t
       (tableOutL H512 enc512 leafPlain (capOfRoot o.rootB[0]!) pend'
-        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r := by
-  obtain ⟨ht, hc, hT, hst, rfl, -, -⟩ := plain_setupHiddenU hs hin hset h hh hl hd
-  obtain ⟨sch, hf⟩ : ∃ sch, Flock.fast100 st.m = some sch := by
-    have e := fast100_schedOf st.m
-    rw [hsch] at e
-    cases hf : Flock.fast100 st.m with
-    | none => rw [hf] at e; cases e
-    | some sch => exact ⟨sch, rfl⟩
-  obtain ⟨pop, -, hdr⟩ := HiddenExec.setupHidden_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
-  obtain ⟨x₀, hx₀⟩ := HiddenExec.drawSetupH_of_setupHiddenI (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc
-    hst hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
-  have e : HiddenExec.tablesAtH (Reg := Unit) (fun _ : Finset (Fin 0) => d) x₀ =
-      fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
-    funext S R
-    obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
-    exact tableAtH_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁
-      rest ext hsch hm hlay
-  have hS : HiddenDec.DrawOkH ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
-    ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
-      obtain rfl := Except.ok.inj (hst.symm.trans hst')
-      rfl⟩
-  have he := laterEntries_wrKHU_of keep ht hc (fun _ : Finset (Fin 0) => d) x₀ (Reg := Unit) hT hS () o hrl hacc pend'
-    (by rw [e]; exact hp)
-  rw [e] at he
-  exact he
+        (plainOpnH (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) ins.read.I d o.proofs 0)) r :=
+  plain_laterEntriesHLfAtK_of keep AtDraw.LeafForm.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl
+    hacc pend' hp
 
 /-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under plain SHA-512
 leaves**: `plain_laterEntriesHUAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
