@@ -372,10 +372,15 @@ def commit_cmd(a: argparse.Namespace) -> dict[str, Any]:
         if {k: old.get(k) for k in doc if k != "generator"} != {k: v for k, v in doc.items() if k != "generator"}:
             raise SystemExit(f"{path} is another W's or another layout's setup: use a fresh --store")
         if old.get("commitment"):
+            if getattr(a, "commitment", None) not in (None, old["commitment"]):
+                raise SystemExit(f"{path} has another commitment than --commitment")
             print(f"commit: reusing {path}'s commitment", file=sys.stderr)
             return old
     t0 = time.perf_counter()
-    doc["commitment"] = setup.commit(params, segments_of(weights, params, a.workers)).hex()
+    if getattr(a, "commitment", None):
+        doc["commitment"], doc["commitment_given"] = a.commitment, True
+    else:
+        doc["commitment"] = setup.commit(params, segments_of(weights, params, a.workers)).hex()
     doc["commit_s"] = time.perf_counter() - t0
     dump(path, doc)
     print(json.dumps({"commitment": doc["commitment"], "segments": params.segments, "commit_s": doc["commit_s"]}))
@@ -672,6 +677,8 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("--gpus", type=int, default=None)
     e.add_argument("--cpu-encoders", type=int, default=1)
     e.add_argument("--registration", default=None, help="the weights' registration digest, hex")
+    e.add_argument("--commitment", default=None,
+                   help="W's commitment from an earlier `commit` (hex), in place of the commit pass; `verify --decode` checks it")
     e.add_argument("--order", choices=("up", "down"), default="up", help="segments in ascending or descending order")
     e.add_argument("--segments", type=lambda t: tuple(int(x) for x in t.split(":")), default=None,
                    help="LO:HI, only segments LO .. HI-1 (a part of the store; `finish` joins the parts)")
