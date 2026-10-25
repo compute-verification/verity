@@ -1152,7 +1152,7 @@ private noncomputable abbrev layL (x : Msg) (j : Fin (jOf x)) : _root_.Flock.Zk.
   _root_.Flock.Zk.PadLayout.new (stAt x j).m (stAt x j).c.kLog (zkTab x j).sch.k0
 
 /-- Table `j`'s witness as the cut's view reads it: `w`'s share with the tape's mask words (`Composed.zWith`). -/
-private noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
+noncomputable abbrev zwL (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     FlockSoundness.Model.Witness (tabC PE x j).S.m :=
   Composed.zWith (stAt x j) (wtOf PE x w j) ((UE.tape x τ).1 j).1
 
@@ -1219,7 +1219,7 @@ private theorem eqAt_congr_fin {a b : ℕ} (h : a = b) (p : Fin a → FlockLevel
 
 /-- **The deployed witness's bits are its trace's**: table `j`'s share with the tape's mask words (`zwL`) at address `a`
 is the bit the session's trace holds there. -/
-private theorem zwL_trace {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
+theorem zwL_trace {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (j : Fin (jOf x)) :
     ∀ a : Fin (2 ^ (zkTab x j).table.S.m),
       zwL x w τ j a = _root_.Flock.Readable.toZ ((trsE x w (UE.tapeZk τ))[j.val]!).z[a.val]! := by
   obtain ⟨t, rfl⟩ : ∃ t' : Fin Claims.Flock.zkTableCap → ExeCell, t' = τ := ⟨τ, rfl⟩
@@ -1352,20 +1352,20 @@ private theorem gOf_foldl_smul (E : Array _root_.Flock.F256) (lp : ℕ → _root
     rw [List.foldl_cons, gOf_foldl_smul E lp L, FlockSoundness.Refine.gOf_add, FlockSoundness.Refine.gOf_smul,
       List.map_cons, List.sum_cons, add_assoc]
 
-private theorem sum_fin_range {M : Type} [AddCommMonoid M] {a b : ℕ} (h : a = b) (f : Fin a → M) (g : ℕ → M)
+theorem sum_fin_range {M : Type} [AddCommMonoid M] {a b : ℕ} (h : a = b) (f : Fin a → M) (g : ℕ → M)
     (hfg : ∀ l (hl : l < a), f ⟨l, hl⟩ = g l) : ∑ l, f l = ∑ l ∈ Finset.range b, g l := by
   subst h
   rw [← Fin.sum_univ_eq_sum_range]
   exact Finset.sum_congr rfl fun l _ => hfg l l.isLt
 
-private theorem prod_fin_range {M : Type} [CommMonoid M] {a b : ℕ} (h : a = b) (f : Fin a → M) (g : ℕ → M)
+theorem prod_fin_range {M : Type} [CommMonoid M] {a b : ℕ} (h : a = b) (f : Fin a → M) (g : ℕ → M)
     (hfg : ∀ l (hl : l < a), f ⟨l, hl⟩ = g l) : ∏ l, f l = ∏ l ∈ Finset.range b, g l := by
   subst h
   rw [← Fin.prod_univ_eq_prod_range]
   exact Finset.prod_congr rfl fun l _ => hfg l l.isLt
 
 /-- Table `j`'s rep `r`'s rounds past its PIOP, from `p₀`. -/
-private theorem repSlot_p0 {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+theorem repSlot_p0 {x : Msg} {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (f : _root_.Flock.Schedule → ℕ) :
     repSlot x (2 * j.val + r.val) f = ligP0 x j r + f (zkTab x j).sch := by
   have hz' : _root_.Flock.Zk.schedule (stsOf x)[(2 * j.val + r.val) / 2]!.m = .ok ((zkTab x j).sch, (zkTab x j).tPad) := by
@@ -1455,7 +1455,7 @@ private theorem srcE_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   rw [e]
 
 /-- **The table's `y₁'`**: the witness lanes under `eq(r̄)` plus the pair's coins times the extra lanes. -/
-private theorem tab_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
+theorem tab_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (j : Fin (jOf x)) (r : Fin 2) (i : Fin (tabC PE x j).z.L) :
     ((tabC PE x j).T (czExe PE x c j)).tab.y1' (wtOf PE x w j) ((UE.tape x τ).1 j).1 ((UE.tape x τ).1 j).2.1.2.1 r i =
       ∑ l, Composed.eqLane ((czExe PE x c j).rest.lane r) l.val *
@@ -1464,7 +1464,7 @@ private theorem tab_y1_L (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : 
           FlockLevel3.GF256.of (rhoAt c j.val r.val).2 * FlockLevel3.embed (((UE.tape x τ).1 j).2.1.2.1 r 1 i)) := rfl
 
 /-- **`tabS` is the executable's iterated fold**: the table after `k` lane challenges, lowest variable first. -/
-private theorem tabS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (t : Array _root_.Flock.F128) :
+theorem tabS_foldKs (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (t : Array _root_.Flock.F128) :
     ∀ k, FlockComplete.LigLock.tabS coin p0 t k =
       FlockComplete.Replay.Lg.foldKs ((List.range k).map (FlockComplete.LigLock.chS coin p0)) (FlockComplete.embedF t)
   | 0 => rfl
@@ -1729,20 +1729,21 @@ private theorem eqAt_congr_fin' {a b : ℕ} (h : a = b) (p : Fin a → FlockLeve
   subst this
   rfl
 
-theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
+/-- **The opening's basis is the deployed basis** at any extra claims two per region, at the region points of the link
+(`hpt`, as `extras_pt` reads the statement's). -/
+theorem openB_basisOf {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
-    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
+    (hesz : extras.size = (stAt x j).regions.size * 2)
+    (hpt : ∀ (i : ℕ) (hi : i < 2 * (stAt x j).regions.size), (extras[i]!).x.size = (stAt x j).m - 6 ∧
+      ((extras[i]!).x.extract 1).toList = Composed.regionPtOf (stAt x j)
+        ((czExe PE x c j).rest : Composed.RestOf (zkTab x j).table (stAt x j)).link ⟨i, hi⟩)
     (y : ℕ) (hy : y < 2 ^ ((stAt x j).m - 7)) :
     Composed.openB (zkTab x j).table (stAt x j) (czExe PE x c j) r y =
       FlockSoundness.Refine.fOf (ligBasis x c w τ j r extras)[y]! := by
   have hst := tabsOf_stAt x j
   have hj : j.val < (stsOf x).size := lt_of_jOf j
-  obtain ⟨hpts, hmp⟩ := HiddenExec.setupTables_pointsAny (FlockComplete.ZkTables.setupTables_of hx.1 hs)
-  have hpsz : (ptsE c spec).size = 2 := by unfold ptsE; simp [hpts]
-  have hesz : extras.size = (stAt x j).regions.size * 2 := by
-    rw [hst] at he
-    rw [FlockComplete.JsonRT.extraClaims_size he, hpsz]
+  obtain ⟨hpts, -⟩ := HiddenExec.setupTables_pointsAny (FlockComplete.ZkTables.setupTables_of hx.1 hs)
   set tr := (trsE x w (UE.tapeZk τ))[j.val]! with htr
   set zc := FlockComplete.Replay.Zc.out (stAt x j).m (zcE c j r) tr with hzc
   set lc := FlockComplete.Replay.Lc.out (stAt x j).circuitFold (stAt x j).m tr zc (lcE c j r) with hlc
@@ -1787,9 +1788,6 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
   have hm14 : 14 ≤ (stAt x j).m := le_trans (by norm_num) (hall j.val hj).1
   have hk6 : 6 ≤ (stAt x j).c.kLog := (zkTab x j).wf.1.hk6
   have hkm : (stAt x j).c.kLog ≤ (stAt x j).m := (zkTab x j).wf.1.hk
-  have he' : (stAt x j).extraClaims (ptsE c spec) = .ok extras := by
-    rw [hst] at he
-    exact he
   have hA0 : (A[0]!).x.size = (stAt x j).m - 6 := by
     show ((FlockComplete.Replay.pushes (lcE c j r).τ ((stAt x j).circuitFold.kLog - 6)).reverse ++
       (FlockComplete.Replay.pushes (zcE c j r).ρ ((stAt x j).m - 6)).extract ((stAt x j).c.kLog - 6)
@@ -1807,7 +1805,7 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
       · exact hA0
       · exact hA1
     · rw [FlockComplete.Replay.get_right (show A.size ≤ k by rw [hA2]; omega), hA2]
-      exact (extras_pt hx c hs j he' (k - 2) (by rw [hcl, hesz] at hk; omega)).1
+      exact (hpt (k - 2) (by rw [hcl, hesz] at hk; omega)).1
   have hmL : (ligSt x j).m = (stAt x j).m := by
     unfold ligSt
     rw [hst]
@@ -1887,7 +1885,7 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
       have hkr : k.val - 2 < 2 * (stAt x j).regions.size := by
         have := lt_of_lt_of_eq k.isLt hsize
         omega
-      obtain ⟨hsz, hpt⟩ := extras_pt hx c hs j he' (k.val - 2) hkr
+      obtain ⟨hsz, hpt⟩ := hpt (k.val - 2) hkr
       unfold Composed.claimX
       rw [ite_eq_right (by omega), ite_eq_right (by omega), dite_eq_left hkr, ← hpt]
       refine congrArg FlockSoundness.Refine.fOf ?_
@@ -1896,6 +1894,22 @@ theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape
         Array.getElem_toList, Array.getElem_extract, getElem!_pos _ (i + 1) (by omega)]
       congr 1
       omega
+
+theorem openB_basis {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
+    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras)
+    (y : ℕ) (hy : y < 2 ^ ((stAt x j).m - 7)) :
+    Composed.openB (zkTab x j).table (stAt x j) (czExe PE x c j) r y =
+      FlockSoundness.Refine.fOf (ligBasis x c w τ j r extras)[y]! := by
+  have hst := tabsOf_stAt x j
+  obtain ⟨hpts, -⟩ := HiddenExec.setupTables_pointsAny (FlockComplete.ZkTables.setupTables_of hx.1 hs)
+  have hpsz : (ptsE c spec).size = 2 := by unfold ptsE; simp [hpts]
+  have he' : (stAt x j).extraClaims (ptsE c spec) = .ok extras := by
+    rw [hst] at he
+    exact he
+  refine openB_basisOf hx w τ c hs j r extras ?_ (fun i hi => extras_pt hx c hs j he' i hi) y hy
+  rw [FlockComplete.JsonRT.extraClaims_size he', hpsz]
 
 end Basis
 
@@ -1979,11 +1993,13 @@ private theorem laneF_tabS {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape) (c : 
   rw [hmL]
   exact FlockComplete.wordOf_packed _ _ (zwL_trace w τ j) hy hM7
 
-/-- **The model's lane bases `B` are the executable's weights** (`wS`, from the basis plus the out-of-domain term). -/
-private theorem laneB_wS {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
+/-- **The model's lane bases `B` are the executable's weights** (`wS`, from the basis plus the out-of-domain term),
+wherever the opening's basis is the deployed one (`hob`). -/
+theorem laneB_wSOf {x : Msg} (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
     (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
-    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras) :
+    (hob : ∀ y < 2 ^ ((stAt x j).m - 7), Composed.openB (zkTab x j).table (stAt x j) (czExe PE x c j) r y =
+      FlockSoundness.Refine.fOf (ligBasis x c w τ j r extras)[y]!) :
     ∀ i ≤ (zkTab x j).sch.k0,
       (FlockComplete.LigLock.wS (ligCoin c) (ligP0 x j r) (ligBasis x c w τ j r extras) (zkTab x j).sch.n i).size =
         2 ^ ((stAt x j).m - 7 - i) ∧
@@ -2018,7 +2034,7 @@ private theorem laneB_wS {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE
       (ligCoin c (ligP0 x j r + 1) 0)) y
   rw [FlockComplete.Replay.Lg.gv_addScaled _ _ _ (by rw [FlockComplete.Replay.Lg.embedF_size, hbsz]; exact hy),
     FlockComplete.Replay.Lg.gv_embedF _ (by rw [hbsz]; exact hy),
-    FlockComplete.Replay.Lg.gv_embedF _ (by rw [hesz]; exact hy), ← openB_basis hx w τ c hs j r extras he y hy]
+    FlockComplete.Replay.Lg.gv_embedF _ (by rw [hesz]; exact hy), ← hob y hy]
   unfold Composed.laneB0
   refine congrArg₂ (· + ·) rfl ?_
   have hn1 : (Composed.layOf (zkTab x j).table (stAt x j)).nOod0 = 1 := rfl
@@ -2038,6 +2054,18 @@ private theorem mk_val_eq {a b : FlockLevel3.GF128} {R : _root_.Flock.F256}
     rw [FlockLevel3.ofLimbs, ← h, FlockSoundness.Discharge.ZkExec.ofLimbs_eq]
     rfl
   exact congrArg kVal e
+
+private theorem laneB_wS {x : Msg} (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (c : Fin (refK x) → FlockDeploy.Coin) {s spec} (hs : FlockDeploy.setupOf true x = some (s, spec, stsOf x))
+    (j : Fin (jOf x)) (r : Fin 2) (extras : Array _root_.Flock.Claim)
+    (he : (FlockDeploy.tabsOf (stsOf x))[j.val]!.extra (ptsE c spec) = .ok extras) :
+    ∀ i ≤ (zkTab x j).sch.k0,
+      (FlockComplete.LigLock.wS (ligCoin c) (ligP0 x j r) (ligBasis x c w τ j r extras) (zkTab x j).sch.n i).size =
+        2 ^ ((stAt x j).m - 7 - i) ∧
+      ∀ y < 2 ^ ((stAt x j).m - 7 - i), Composed.laneB (zkTab x j).table (stAt x j) (czExe PE x c j) r i y =
+        FlockComplete.Replay.Lg.gv
+          (FlockComplete.LigLock.wS (ligCoin c) (ligP0 x j r) (ligBasis x c w τ j r extras) (zkTab x j).sch.n i) y :=
+  laneB_wSOf w τ c hs j r extras fun y hy => openB_basis hx w τ c hs j r extras he y hy
 
 /-- **Lane round `i`'s message at the coins**: the model's (`Composed.laneMsg`) is the round polynomial of the
 executable's table and weight after the first `i` lane challenges. -/
