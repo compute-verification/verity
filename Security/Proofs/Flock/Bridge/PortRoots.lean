@@ -117,10 +117,8 @@ theorem root_top (c : Flock.Circuit) (pub : Flock.Public) (nl q : ℕ) :
   rw [TopRoot.root_eq, leaves_size]
   rcases Nat.lt_or_ge nl 2 with hlt | h2
   · interval_cases nl
-    · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.hash_frame,
-        getElem!_def]
-    · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.leafAs_eq,
-        getElem!_def]
+    · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.hash_frame]
+    · simp [TopRoot.lev, TopRoot.base, leaves, topIn, Flock.nextPow2, Flock.log2ceil, Registered.leafAs_eq]
   · obtain ⟨k, hk⟩ : ∃ k, Flock.log2ceil nl = k + 1 := ⟨Flock.log2ceil nl - 1, by have := one_le_log2ceil h2; omega⟩
     have hk' : Flock.log2ceil nl - 1 = k := by omega
     have hsz : 0 < (TopRoot.lev (domOf c q) (leaves c pub nl q) k).size / 2 := by
