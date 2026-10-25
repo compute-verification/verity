@@ -61,6 +61,13 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                as a window's (SameRegistration) and a window's good event (WindowGood)
 ../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the network certifier over a
                                monitoring period of sampled audits (PeriodLeakAccepted)
+../../Definitions/NetworkCertifier/Guarantees/Horizon.lean  trusted: the wrong units over a horizon of sampled audits on
+                               independent live coins (HorizonWrongUnitsLe)
+../../Definitions/NetworkCertifier/HorizonLeak.lean  trusted: a window's leak relation at one faulty set (LeakAt) and a
+                               monitoring period's good event (HorizonGood)
+../../Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean  trusted: the leak through the network certifier over a
+                               monitoring period of sampled audits, conditional on two per-window inputs
+                               (HorizonLeakAccepted)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -103,6 +110,17 @@ Period.lean     the leak through the network certifier over a monitoring period:
                                          (mem_accSeqsSampled_of_windowGood), and the secrets the network certifier's
                                          cells decode to, read back from those observations and counted over the
                                          windows (encard_periodGood_le, periodLeak)
+PeriodSum.lean  the period sum: per-window leak bounds `Pr[acc w ∧ b w < moved w] ≤ ε w` summed over a
+                                         period's windows by a union bound (Pr_exists_mem_le_sum, periodLeak_le_sum)
+Horizon.lean    the wrong units over a horizon: a uniform draw misses `f` units with probability at most
+                                         `(1 - k/n)^f` (pr_disjoint_le), the escapes multiply over windows on
+                                         independent coins (pr_adaptive_le), and with each window's soundness error
+                                         added, the horizon's bound (horizonWrongUnits)
+HorizonLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
+                                         each window's error added (pr_adaptive_add_le), the families of faulty sets
+                                         under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
+                                         decode to at each draw, read back from the certifier's record
+                                         (encard_horizonGood_le, horizonLeak)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
@@ -204,9 +222,11 @@ The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarante
 (`Guarantees/AdviceString.lean`), advice v1's eight, four for decision-only windows and four with a separate count
 code (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean` and `Guarantees/AdviceV1.lean`), the whole window's
 four (`../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean` and `Guarantees/WindowCharge.lean`), the warden's three (`Guarantees/Warden.lean`), the sampled audit's charge
-(`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`) and the period's leak through the wardens
-(`Guarantees/Period.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
-by the lemma of the same statement whose name it spells in UpperCamelCase. All 42 are under `shape.frozen` as
+(`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
+(`Guarantees/Period.lean`), the horizon's wrong units (`../../Definitions/NetworkCertifier/Guarantees/Horizon.lean`)
+and the leak over a monitoring period (`../../Definitions/NetworkCertifier/Guarantees/HorizonLeak.lean`), each listed as
+`NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
+last two by `horizonWrongUnits` and `horizonLeak`). All 44 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the leak bound also over an abstract charge and compiler; advice v1's over its
 charge as `Definitions` states it, the mirror of `ChargeCount_v1{N}`'s or `ChargeCount_v2{N, H, O}`'s Python reference,
@@ -289,6 +309,28 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
   `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
   locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
+- **The wrong units over a horizon** (`Horizon.lean`): `HorizonWrongUnitsLe` is the bound over many periods, cumulative
+  rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent live
+  coins (the horizon's coins are the product `Fin m → Ω`), window `i` drawing a uniform `k_i`-subset of its `n_i` units,
+  with the units wrong at its registration fixed by the earlier windows' coins and its audit accepting while its draw
+  meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the horizon
+  holds at least `F` wrong units with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
+  `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The draw's law and each window's error are hypotheses, which A3 and
+  `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
+- **The leak through the network certifier over a monitoring period** (`HorizonLeak.lean`): `HorizonLeakAccepted` is
+  the count `K_horizon`, conditional on two per-window inputs taken as plain hypotheses, at the faulty set `W_i` of the
+  witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
+  `hesc`, `Pr[acc_i | earlier coins] ≤ C(n_i − |W_i|, kd_i)/C(n_i, kd_i) + e_i`, and the leak relation at that set
+  `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
+  outside the monitoring period's good event (`HorizonGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units and
+  every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
+  meeting it number at most
+  `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
+  faulty units cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof
+  unit's output limit. The network certifier is one device, as in the period's bound: the cells the client receives
+  read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
+  inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
+  neither discharged, so it is not the deployed system's bound over a monitoring period until they are.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
