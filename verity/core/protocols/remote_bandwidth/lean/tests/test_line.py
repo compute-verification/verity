@@ -2,7 +2,8 @@
 as outputs so that both sides' reasons are compared word for word: sessions of zero, one and many groups at every
 stretch length, with bursts, the host tier, filler, wrong receipts (the pooled bound of drawn windows, `pooled`) that
 fill one group or spill into the next, ties between stretches, and each refusal (the windows', the node's inputs, a
-group's, a stretch's empty span), with malformed inputs rejected by both. `auditor_line.py` runs the Python (`README.md`), so the Python is of record here."""
+group's, a stretch's empty span), with malformed inputs rejected by both. The line of record is the Lean's
+(`auditor_line.py` runs the verifier process's `line` and holds it exactly to the Python's), so the Lean is of record here."""
 
 from __future__ import annotations
 
@@ -23,7 +24,7 @@ N, B = 1000, 4096
 
 
 def port(inputs=st.nothing(), reference=line.run_json) -> D.Port:
-    return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="python", rejects=M.REFUSALS)
+    return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
 server = D.server_fixture(port())
@@ -205,3 +206,11 @@ def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why
             x["released_ns"], x["last_ns"] = 40, 40
     assert line.run_json(v) == {"refused": why}
     assert D.replay(port(), v, server) == refused(why)
+
+
+def test_both_lines_charge_the_chips_in_whole_blocks_rounded_up(server) -> None:
+    """One byte over 5 blocks of chip is charged as 6 blocks, in the Python and the Lean alike."""
+    over, six = session(1, n=8, chip_bytes=5 * B + 1), session(1, n=8, chip_bytes=6 * B)
+    assert line.run_json(over) == line.run_json(six) != line.run_json(session(1, n=8, chip_bytes=5 * B))
+    six_blocks = ("output", D.canonical(line.run_json(six)))
+    assert D.replay(port(), over, server) == D.replay(port(), six, server) == six_blocks

@@ -213,6 +213,27 @@ def test_dispatch_forwards_the_point_venv_and_the_launcher_runs_the_point_in_it(
     assert argv == "-m verity_bench _vllm-point --point p"
 
 
+def test_the_launcher_finds_a_nodes_jobs_environment_without_verity_bench_venv(tmp_path):
+    """vy-nebius-2's pinned-vLLM Python is $WORK/jobs/venv312, not pod_bootstrap.sh's $WORK/venv312: with no
+    VERITY_BENCH_VENV the launcher takes the first that exists, and refuses naming every path it tried."""
+
+    root = Path(__file__).resolve().parents[3]
+    launcher = root / "benchmarks/harness/run_point.sh"
+    env = {"PATH": "/usr/bin:/bin", "WORK": str(tmp_path), "CUDA_HOME": str(tmp_path)}
+    missing = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert missing.returncode == 2 and f"{tmp_path}/jobs/venv312" in missing.stderr
+    python = tmp_path / "jobs" / "venv312" / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text('#!/bin/sh\necho "$0"\n')
+    python.chmod(0o755)
+    ran = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root, env=env, capture_output=True, text=True)
+    assert ran.returncode == 0, ran.stderr
+    assert ran.stdout.strip() == str(python)
+    unset = subprocess.run(["bash", str(launcher), "--point", "p"], cwd=root,
+                           env={**env, "VERITY_BENCH_VENV": str(tmp_path / "nope")}, capture_output=True, text=True)
+    assert unset.returncode == 2 and f"{tmp_path}/nope" in unset.stderr
+
+
 def _spec_with(tmp_path, extra: str) -> Path:
     base = (SPEC_ROOT / "llama31-8b-fp8-1gpu.toml").read_text()
     head, sep, tail = base.partition("\n[preset]\n")
@@ -1141,7 +1162,7 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
                                            "cudagraph_capture_sizes": list(spec.preset.engine_settings["capture_sizes"])}
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
-    assert whole.run_options == {"graphs": True, "whole_defer": True} and whole.schedule == "serial"
+    assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True} and whole.schedule == "serial"
 
 
 def test_a_sweep_crosses_samplings_and_greedy_points_keep_their_ids():

@@ -609,6 +609,38 @@ def test_node_ops_quiet_never_pauses_a_timing_job_for_a_timed_window(tmp_path, m
             p.wait()
 
 
+def test_node_ops_quiet_spares_a_gpu_leases_jobs_and_their_own_groups(tmp_path, monkeypatch):
+    """A GPU lease's JIT build (ninja gives each compile a group of its own) paused by a timed window held flashinfer's lock, and
+    the timed lease's own job then waited on it until its lease ran out (n2, 24 Oct 07:0xZ). Quiet now leaves a lease's processes
+    and every group they start running, and still pauses an ordinary CPU-heavy group."""
+    token = f"quiet-lease-test-{os.getpid()}"
+    busy = f"import signal; print('ready', flush=True); signal.pause()  # -m research.telemetry sample {token}"
+    child = ("import os, subprocess, sys; p = subprocess.Popen([sys.executable, '-c', sys.argv[1]], start_new_session=True); "
+             "print(p.pid, flush=True); p.wait()")
+    lease = subprocess.Popen([sys.executable, "-c", child, busy], stdout=subprocess.PIPE, text=True, start_new_session=True)
+    other = subprocess.Popen([sys.executable, "-c", busy], stdout=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        grandchild = int(lease.stdout.readline())
+        assert lease.stdout.readline().strip() == "ready" and other.stdout.readline().strip() == "ready"
+        ops = node_ops(tmp_path, monkeypatch, {lease.pid: "0::/user.slice/user-1001.slice/user@1001.service/app.slice/gpu-lease-7.scope\n"})
+        monkeypatch.setattr(ops, "QUIET_MATCH", re.compile(re.escape(token)))
+        monkeypatch.setattr(ops.Quiet, "window", lambda self: 1 << 22)
+        q = ops.Quiet()
+        q.tick()
+        assert set(q.paused) == {other.pid}
+        assert grandchild not in q.paused and os.getpgid(grandchild) == grandchild
+    finally:
+        for p in (lease, other):
+            os.killpg(p.pid, signal.SIGCONT)
+        for pg in (grandchild, lease.pid, other.pid):
+            try:
+                os.killpg(pg, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        lease.wait()
+        other.wait()
+
+
 def pool(node2, monkeypatch, slots: int = 6):
     """The Verity pool open, its disk empty, and a start that records (job, its cores, the claim's descriptor) and keeps the
     descriptor open, as the job it stands for does."""

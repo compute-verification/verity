@@ -180,11 +180,12 @@ def declared_draw_k(layers: int = 32) -> int:
 def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str | None,
                      circuit_files: dict[str, str]) -> list[str]:
     """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its draw K,
-    its model when it serves the registered weights (``--model``, whose registration's weights' root the open signs;
-    never a ``--weights-root`` of the prover's), and each stratum's circuit file's SHA-512 (``--circuit-files``,
-    `pouw_h1_circuits.build`'s ``files``)."""
+    the served tables' rows T (``--rows``, `pouw_h1.FILL`'s), its model when it serves the registered weights
+    (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), and
+    each stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``)."""
+    from verity_vllm.protocol_options import pouw_h1 as PH
     return ["period-open", "--name", name, "--cap", str(cap), "--circuit", circuit, "--draw-k", str(draw_k),
-            *(["--model", model] if model else []),
+            "--rows", str(PH.FILL.rows), *(["--model", model] if model else []),
             "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":"))]
 
 

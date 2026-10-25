@@ -26,6 +26,7 @@
   "Flock.Test.SharedRows",
   "Flock.Test.RegFormats",
   "Flock.Test.RegComplete",
+  "Flock.Test.RegProgram",
   "Flock.Test.RegKnown",
   "Flock.Test.KnownRead",
   "Flock.Test.RegRows",
@@ -50,6 +51,7 @@
   "Flock.Test.NetAt",
   "Flock.Test.MaskLog",
   "Flock.Test.FrameStep",
+  "Flock.Test.RegionBytes",
   "VStar"
  ],
  "exempt": {
