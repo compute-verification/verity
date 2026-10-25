@@ -12,13 +12,15 @@ from pathlib import Path
 import pytest
 
 from verity_vllm.check.replay.stoch_recompute import draw_accounting, record_lag_rows
+from verity_vllm.records.workload import SCHEMA
 
 EVID = Path(__file__).resolve().parents[2] / "out" / "gen" / "sweep" / "evidence" / "stoch"
 
 
 def _wl(tmp_path: Path, reqs: list[tuple[str, int, int]]) -> Path:
     p = tmp_path / "wl.json"
-    p.write_text(json.dumps({"requests": [{"request_id": r, "prompt_len": L, "max_tokens": T} for r, L, T in reqs]}))
+    p.write_text(json.dumps({"schema": SCHEMA, "model": "m", "engine": {}, "variants": {},
+                             "requests": [{"request_id": r, "prompt_len": L, "max_tokens": T} for r, L, T in reqs]}))
     return p
 
 

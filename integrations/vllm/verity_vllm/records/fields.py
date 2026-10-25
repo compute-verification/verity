@@ -2,7 +2,7 @@
 by its dotted path in the record (`name`, default the key)."""
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping
 from typing import Any
 
 
@@ -19,6 +19,20 @@ class MissingField(RecordError):
 
     def __init__(self, where: str, field: str):
         super().__init__(where, field, "is missing: every writer of the record writes it")
+
+
+class UnknownField(RecordError):
+    """A field no writer of the record writes (a newer writer than this reader, or a hand edit)."""
+
+    def __init__(self, where: str, field: str):
+        super().__init__(where, field, "is not a field of the record: no writer this reader knows writes it")
+
+
+def only(doc: Mapping[str, Any], keys: Collection[str], where: str, prefix: str = "") -> None:
+    """Refuse a field of `doc` not in `keys` (the first, sorted), named `prefix` + its key."""
+    extra = sorted(set(doc) - set(keys))
+    if extra:
+        raise UnknownField(where, prefix + str(extra[0]))
 
 
 def _kinds(kind: type | tuple[type, ...]) -> str:
