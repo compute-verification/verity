@@ -17,6 +17,8 @@ unit's reads (`hpr`) and the wires' order (`hw`).
   parse, and `BcSiteH` at every satisfiable site (`HiddenExec.tableH_bcSiteI` at table `j`'s inputs).
 * `ppPHJI`, `layPHJI`, `rsPHJI`, `rsPHJI_computes`: `SitesH.progPlaces_instProg`, `instLayoutH` and `instRowsH` at those
   sites, `InstKeysRow` from the parse at the reference setup's statement (`instKeysRowPHJ`).
+* `ppPHJ`, `layPHJ`, `rsPHJ`, `rsPHJ_computes`: where the wires feed neither the unit nor the outputs, the same sites at
+  the rows' fit `scopeOkH` gives, with `keyLayoutH` and `keyRowsH` at the unit's key program `Placed.keyProg c hU n`.
 -/
 
 namespace FlockSoundness.Discharge.PlainHJ
@@ -132,5 +134,45 @@ noncomputable abbrev rsPHJI : Binding.HmRowsX (layPHJI dj x₀ ht hc hrf (pub :=
 theorem rsPHJI_computes : (rsPHJI dj x₀ ht hc hrf hpub hU hpr hw (Reg := Reg)).Computes :=
   instRowsH_computes (sitesPHJI_parse dj x₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (checkFactsH ht hc).upv_pos (sitesPHJI_bcSite dj x₀ ht hc hrf hpub) (instKeysRowPHJ x₀ ht hc hU hpr hw)
+
+/-! ## Where the wires feed neither the unit nor the outputs: the unit's key program
+
+`HiddenExec.HeadlineExec`'s `ppH`, `layAtH`, `rsAtH` at the plan of `J` tables: the sites `sitesPHJI` at the rows' fit
+`scopeOkH` gives (`rowsFit_of_scopeH`), `keyLayoutH` and `keyRowsH` at the key program `Placed.keyProg c hU n`, its
+circuit conditions from `scopeOkH`. -/
+
+variable (hscope : Layout.scopeOkH c = true)
+
+/-- **`pp` at the plan, at `keyProg`** (`SitesH.progPlaces_keyProg` at `sitesPHJI`). -/
+noncomputable abbrev ppPHJ :
+    ProgPlaces (Placed.keyProg c hU n) (Layout.outsOf c hU n) (planPHJ (Reg := Reg) dj x₀) (tabPHJ dj x₀) :=
+  SitesH.progPlaces_keyProg hU (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
+
+/-- **`lay` at the plan, at `keyProg`**: `keyLayoutH` at `sitesPHJI`, the program's outputs the returned outputs' bits,
+the registration the population's public file. -/
+noncomputable abbrev layPHJ :
+    Binding.Layout ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) (planPHJ (Reg := Reg) dj x₀)
+      (tabPHJ dj x₀)
+      (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).placeDecoder (planPHJ dj x₀) (tabPHJ dj x₀)
+        (ppPHJ dj x₀ ht hc hU hscope).derived.place) :=
+  keyLayoutH (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n) (fun _ => pub)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope) (Layout.outsOut_outsOf c hU n)
+
+/-- **`rs` at the plan, at `keyProg`**: `keyRowsH` at `sitesPHJI`, with `hsite` from `sitesPHJI_bcSite` and the rows'
+keys from the parse (`Layout.keysRow_of_parse`). -/
+noncomputable abbrev rsPHJ : Binding.HmRowsX (layPHJ dj x₀ ht hc hU hscope (pub := pub) (Reg := Reg)) :=
+  keyRowsH (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n) (fun _ => pub)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope) (Layout.outsOut_outsOf c hU n)
+    (sitesPHJI_bcSite dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope) hpub)
+    (Layout.keysRow_of_parse (HiddenExec.parse_untyped ht hc).1 (Layout.scopeOkH_spec hU hscope).1
+      (Layout.scopeOkH_spec hU hscope).2.2)
+
+/-- **`hHm` at the plan's rows, at `keyProg`** (`keyRowsH_computes`). -/
+theorem rsPHJ_computes : (rsPHJ dj x₀ ht hc hpub hU hscope (Reg := Reg)).Computes :=
+  keyRowsH_computes (sitesPHJI_parse dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope)) (Layout.outsOf c hU n)
+    (fun _ => pub) (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH ht hc hscope)
+    (Layout.outsOut_outsOf c hU n) (sitesPHJI_bcSite dj x₀ ht hc (rowsFit_of_scopeH ht hc hscope) hpub)
+    (Layout.keysRow_of_parse (HiddenExec.parse_untyped ht hc).1 (Layout.scopeOkH_spec hU hscope).1
+      (Layout.scopeOkH_spec hU hscope).2.2)
 
 end FlockSoundness.Discharge.PlainHJ
