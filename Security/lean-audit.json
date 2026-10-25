@@ -446,6 +446,14 @@
    "owner": "@lean",
    "digest": "96822ce429b2fa6114048640d01228d12b1cfb6ff66fbb3af883ef7fc773eb15"
   },
+  "Accounting.Placed.Faithful": {
+   "owner": "@lean",
+   "digest": "dd1c3dc448a9eec6faab34e7ee7b67c139aa2282fd3d8aa4667febba871c3bb4"
+  },
+  "Accounting.Placed.Holding": {
+   "owner": "@lean",
+   "digest": "3518954773e68e4f3e14e2c6ddd6635884d611c8e5da4db11ad8bfa846774bab"
+  },
   "Accounting.Placed.LatencyAtMost": {
    "owner": "@memory-accounting",
    "digest": "4a835db3935ea4ef4c6278765c992ee1ffbca80874a7ba6d848b5ce45d455eb1"
