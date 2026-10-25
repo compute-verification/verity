@@ -23,9 +23,9 @@ import pytest
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.registry import dsa as D
-from verity_vllm.program.registry import dsv4_indexer as I
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import dsa as D
+from verity.ml.definitions.registry import dsv4_indexer as I
+from verity.ml.definitions.registry import prims as P
 from tests.program import test_dsa as G
 
 SIGN, INF, M32, NAN_PTX = G.SIGN, G.INF, G.M32, G.NAN_PTX

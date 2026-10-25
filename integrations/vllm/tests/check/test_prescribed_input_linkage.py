@@ -19,8 +19,8 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import index as IX, linkage as LK
-from verity_vllm.program.kernels import rows as RK
-from verity_vllm.program.registry.topp_geometry import splits_for_v1
+from verity.ml.definitions.numerics import rows as RK
+from verity.ml.definitions.registry.topp_geometry import splits_for_v1
 
 EMB = "model.embed_tokens"
 NSM = 142

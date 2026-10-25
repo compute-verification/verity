@@ -21,9 +21,9 @@ from verity.ml.circuits.layout import Scope, GateSelection
 from verity.ml.circuits.parts import Part, Unsupported, n_members
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import tuple_of
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import prims as P
+from verity.ml.definitions.registry.prims import BF16, F32
 from verity.ml.circuits.types import Array, Tuple, Value
 
 

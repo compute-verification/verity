@@ -1,4 +1,4 @@
-"""`TargetProfile.ir = "boolean"` (`verity_vllm.program.boolean`): a derived Program on bits.
+"""`TargetProfile.ir = "boolean"` (`verity.ml.definitions.boolean`): a derived Program on bits.
 
 * the table: each word Definition's Boolean version is the registered Boolean Definition whose `word` names it, a function-valued
   static bound to its own Boolean version (`DotBf16_v2{K, DOT}` -> `DotBf16_v3{K, DOT=HopperBF16WgmmaDot16_v2}`), and a static
@@ -25,9 +25,9 @@ from verity.ml.circuits.types import Array, Record, Tuple as TupleT, Value
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops import prims as MP
-from verity_vllm.program import boolean as BB
+from verity.ml.definitions import boolean as BB
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity_vllm.program.replay import replayer
+from verity.ml.definitions.replay import replayer
 
 F32, BF16 = Value(32), Value(16)
 PARAMS = (("x", Array(4, F32)), ("y", Array(2, Array(4, F32))), ("weights", Record(("s", F32), ("t", Array(3, BF16)), ("u", Array(2, F32)))))
@@ -114,7 +114,7 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
 @pytest.mark.slow
 def test_the_served_norms_bind_their_mufu_statics_to_mufus_boolean_versions():
     from verity.ml.circuits.ops.boolean import mufu as BM
-    from verity_vllm.program.registry import b1, boolean_norms as BN
+    from verity.ml.definitions.registry import b1, boolean_norms as BN
     cuda = BB.boolean_version(bind(b1.RMSNormFusedCuda, N=16, EPS=1e-5))
     triton = BB.boolean_version(bind(b1.RMSNormTriton, N=16, EPS=1e-5))
     assert _spec_id(cuda) == _spec_id(bind(BN.RMSNormFusedCuda, N=16, EPS=1e-5, RSQRT=bind(BM.RsqrtApprox)))

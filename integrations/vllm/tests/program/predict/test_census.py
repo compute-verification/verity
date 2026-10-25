@@ -29,8 +29,8 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.program.predict.build import build_program, model_shape
-from verity_vllm.program.boolean import boolean_version, lift
-from verity_vllm.program.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
+from verity.ml.definitions.boolean import boolean_version, lift
+from verity.ml.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())

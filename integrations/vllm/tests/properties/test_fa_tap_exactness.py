@@ -111,7 +111,7 @@ def _guarded_stream(rows, row_max):
     """A stream whose ROW entries carry `row_max` (per visited block, kernel visit order) and the guarded max in word 3."""
     import numpy as np
 
-    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero
+    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero
 
     layout = StreamLayout(1, len(rows), 2, 128, 64)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)
@@ -174,7 +174,7 @@ def _ms_stream(rows, row_max, scale_log2):
     """A stream with the MS class: ROW word 0 = `row_max` per visited block (kernel visit order), MS = the IR's max_scaled of it."""
     import numpy as np
 
-    from verity_vllm.program.kernels.derived_rows import guard_neg_inf_zero, mul_ftz
+    from verity.ml.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 
     layout = StreamLayout(1, len(rows), 2, 128, 64, ms=True)
     w = np.full(layout.padded_words(), X.FILL, dtype=np.uint32)

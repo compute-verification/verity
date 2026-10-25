@@ -30,8 +30,8 @@ from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHea
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Transparent, Unsupported, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.registry import moe as MOE
-from verity_vllm.program.registry.prims import BF16, F32
+from verity.ml.definitions.registry import moe as MOE
+from verity.ml.definitions.registry.prims import BF16, F32
 
 Q3 = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN3_30B_A3B_tp2")
 H, I, SI, E, TOPK, G, RSF = 6144, 256, 256, 256, 8, 128, 2.5

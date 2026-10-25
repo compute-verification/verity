@@ -17,9 +17,9 @@ from collections import Counter
 from functools import lru_cache
 from typing import Any, Callable, Mapping
 
-from verity_vllm.program.registry import fp8
-from verity_vllm.program.registry import fp8_vocab
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import fp8
+from verity.ml.definitions.registry import fp8_vocab
+from verity.ml.definitions.registry import prims as P
 
 FAMILY = "scale_products"
 MEMBER = "scale_products"
@@ -49,7 +49,7 @@ def slots(K: int, N: int, G: int) -> tuple[int, ...]:
     """The shared-scale Call's committed interior gates under `Q_word_v1{16,32}` (offsets in its canonical layout, in gate order): word i
     of a row is the value of gate `slots(...)[i]`.  Refuses a partition whose cut fails, that recomputes a gate, or that commits other values."""
     from verity.ml.circuits.defs import bind
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     g = W.Graph(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     R = W.units(g, 16, 32)

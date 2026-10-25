@@ -11,8 +11,8 @@ import pytest
 
 from tests.properties import glm53_multimem_replay as R
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity_vllm.program.registry import tp_allreduce as T
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce as T
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 H = 512
 TREE = T.GLM53_H200_TREE

@@ -13,7 +13,7 @@ from verity_vllm.program.frontend.rules.common import from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (active_allreduce_settings, active_target_profile,
                                                                            launch_tokens_of)
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
-from verity_vllm.program.registry import tp_allreduce
+from verity.ml.definitions.registry import tp_allreduce
 
 
 # -- [R13 lane tp, P4] tensor-parallel collectives: `verity_tp::*` ops emitted by the construction's CollectiveBus (cb_a/tp_ops.py) ----------
