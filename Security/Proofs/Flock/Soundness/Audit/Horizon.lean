@@ -12,8 +12,8 @@ independent of the past. An adaptive adversary (`Horizon`) fixes period `t`'s wr
 
 * `horizon_escape_prod`: when period `t`'s set has at least `w_t` units whatever the history, the adversary escapes
   with at most `∏_t C(N − w_t, kd)/C(N, kd)`, each period's own `subset_escape`.
-* `choose_div_le_pow`, `prod_choose_div_le_pow`: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`, so the product is at most
-  `(1 − kd/N)^M` once `Σ_t w_t ≥ M`.
+* `choose_div_le_one_sub_pow`, `prod_choose_div_le_pow`: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`, so the product is
+  at most `(1 − kd/N)^M` once `Σ_t w_t ≥ M`.
 * `horizon_escape`: with the set sizes adaptive too, `Pr[escape ∧ Σ_t |W_t| ≥ M] ≤ (1 − kd/N)^M`.
 * `horizon_escape_Pr`, `horizon_escape_log`: the same in `Claims.Pr`, and at `δ`: with `q = kd/N`, the total reaches
   `ln(1/δ)/q` on an escape with probability at most `δ`.
@@ -25,8 +25,8 @@ Proof: sequential conditioning on the first period's draw. Given draw 0, the rem
 may be adaptive because `W_t` is fixed before draw `t`.
 
 network-accounting composes `horizon_escape_log` with the per-period D1 into
-`K_horizon = (ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per window, so
-the second term grows with the number of windows in the horizon. That composition is `HorizonLeakAccepted`'s, not this
+`K_horizon = (ln(1/δ)/q)·(16 + log2 unit index) + Σ_windows (ε_ks + δ_link)`: each window's error adds once per
+window, so the second term grows with the number of windows in the horizon. That composition is `HorizonLeakAccepted`'s, not this
 file's.
 -/
 
@@ -120,7 +120,7 @@ theorem Horizon.wrong_ofAdapted {hk : kd ≤ N} {T : ℕ}
   refine hW t _ _ fun i hi => ?_
   have hi' : i.val < t.val := hi
   show (if h : i.val < t.val then past ω t ⟨i.val, h⟩ else _) = ω i
-  rw [dif_pos hi']
+  rw [dite_eq_left hi']
   rfl
 
 private theorem prCoin_le_one₀ {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) : prCoin p ≤ 1 := by
@@ -142,7 +142,7 @@ theorem prCoin_fin_cons {Ω : Type} [Fintype Ω] [Nonempty Ω] {T : ℕ} (P : (F
   rw [pow_succ', ENNReal.mul_inv (Or.inr (by simp)) (Or.inl (by simp))]
 
 /-- **One period's escape against the Bernoulli rate**: `C(N − w, kd)/C(N, kd) ≤ (1 − kd/N)^w`. -/
-theorem choose_div_le_pow (hk : kd ≤ N) {w : ℕ} (hw : w ≤ N) :
+theorem choose_div_le_one_sub_pow (hk : kd ≤ N) {w : ℕ} (hw : w ≤ N) :
     ((N - w).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞) ≤ (1 - (kd : ℝ≥0∞) / N) ^ w := by
   rcases Nat.eq_zero_or_pos N with rfl | hN
   · obtain rfl : w = 0 := by omega
@@ -165,7 +165,7 @@ theorem prod_choose_div_le_pow (hk : kd ≤ N) {T : ℕ} (w : Fin T → ℕ) (hw
     (hM : M ≤ ∑ t, w t) :
     ∏ t, ((N - w t).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞) ≤ (1 - (kd : ℝ≥0∞) / N) ^ M :=
   calc ∏ t, ((N - w t).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞)
-      ≤ ∏ t, (1 - (kd : ℝ≥0∞) / N) ^ w t := Finset.prod_le_prod fun t _ => choose_div_le_pow hk (hw t)
+      ≤ ∏ t, (1 - (kd : ℝ≥0∞) / N) ^ w t := Finset.prod_le_prod fun t _ => choose_div_le_one_sub_pow hk (hw t)
     _ = (1 - (kd : ℝ≥0∞) / N) ^ ∑ t, w t := Finset.prod_pow_eq_pow_sum _ _ _
     _ ≤ (1 - (kd : ℝ≥0∞) / N) ^ M := pow_le_pow_of_le_one zero_le one_sub_div_le_one hM
 
@@ -181,14 +181,15 @@ theorem horizon_escape_prod {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (w
   | succ T ih =>
       rw [prCoin_fin_cons, Fin.prod_univ_succ]
       set c : ℝ≥0∞ := ∏ s : Fin T, ((N - w s.succ).choose kd : ℝ≥0∞) / (N.choose kd : ℝ≥0∞)
-      have hstep : ∀ a : (subset N kd hk).Ω, prCoin (fun ρ : Fin T → (subset N kd hk).Ω => A.Escapes (Fin.cons a ρ)) ≤
-          (if Disjoint a.1 A.first then 1 else 0) * c := by
+      have hstep : ∀ a : (subset N kd hk).Ω,
+          prCoin (fun ρ : Fin T → (subset N kd hk).Ω => A.Escapes (Fin.cons a ρ)) ≤
+            (if Disjoint a.1 A.first then 1 else 0) * c := by
         intro a
         by_cases ha : Disjoint a.1 A.first
-        · rw [if_pos ha, one_mul]
+        · rw [ite_eq_left ha, one_mul]
           exact (prCoin_mono fun ρ h => ((Horizon.escapes_cons A a ρ).1 h).2).trans
             (ih (A.tail a) (fun s => w s.succ) fun s h => hw s.succ _)
-        · rw [if_neg ha, zero_mul]
+        · rw [ite_eq_right ha, zero_mul]
           exact (prCoin_mono (q := fun _ => False) fun ρ h => ha ((Horizon.escapes_cons A a ρ).1 h).1).trans_eq
             prCoin_false
       have h0 : w 0 ≤ A.first.card := hw 0 _
@@ -219,16 +220,17 @@ theorem horizon_escape {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (M : �
       rw [prCoin_fin_cons]
       set ρq : ℝ≥0∞ := 1 - (kd : ℝ≥0∞) / N
       have hstep : ∀ a : (subset N kd hk).Ω,
-          prCoin (fun ρ : Fin T → (subset N kd hk).Ω => A.Escapes (Fin.cons a ρ) ∧ M ≤ A.total (Fin.cons a ρ)) ≤
+          prCoin (fun ρ : Fin T → (subset N kd hk).Ω =>
+              A.Escapes (Fin.cons a ρ) ∧ M ≤ A.total (Fin.cons a ρ)) ≤
             (if Disjoint a.1 A.first then 1 else 0) * ρq ^ (M - A.first.card) := by
         intro a
         by_cases ha : Disjoint a.1 A.first
-        · rw [if_pos ha, one_mul]
+        · rw [ite_eq_left ha, one_mul]
           refine (prCoin_mono fun ρ h => ?_).trans (ih (A.tail a) (M - A.first.card))
           simp only [Horizon.escapes_cons, Horizon.total_cons] at h
           have h2 := h.2
           exact ⟨h.1.2, by omega⟩
-        · rw [if_neg ha, zero_mul]
+        · rw [ite_eq_right ha, zero_mul]
           refine (prCoin_mono (q := fun _ => False) fun ρ h => ?_).trans_eq prCoin_false
           simp only [Horizon.escapes_cons] at h
           exact ha h.1.1
@@ -242,7 +244,7 @@ theorem horizon_escape {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (M : �
             rfl
         _ ≤ ρq ^ A.first.card * ρq ^ (M - A.first.card) := by
             rw [subset_escape]
-            exact mul_le_mul_of_nonneg_right (choose_div_le_pow hk hfirst) zero_le
+            exact mul_le_mul_of_nonneg_right (choose_div_le_one_sub_pow hk hfirst) zero_le
         _ = ρq ^ (A.first.card + (M - A.first.card)) := (pow_add _ _ _).symm
         _ ≤ ρq ^ M := pow_le_pow_of_le_one zero_le one_sub_div_le_one (by omega)
 
@@ -279,9 +281,10 @@ theorem horizon_escape_log {hk : kd ≤ N} {T : ℕ} (A : Horizon N kd hk T) (hq
         rw [hx, neg_mul, mul_div_cancel₀ _ hq0.ne', one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
 
 /-- `horizon_escape` for a wrong-set map on whole runs that doesn't look ahead. -/
-theorem horizon_escape_adapted {hk : kd ≤ N} {T : ℕ} (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N))
-    (hW : NonAnticipating W) (M : ℕ) :
-    prCoin (fun ω => (∀ t, Disjoint (ω t).1 (W t ω)) ∧ M ≤ ∑ t, (W t ω).card) ≤ (1 - (kd : ℝ≥0∞) / N) ^ M := by
+theorem horizon_escape_adapted {hk : kd ≤ N} {T : ℕ}
+    (W : Fin T → (Fin T → (subset N kd hk).Ω) → Finset (Fin N)) (hW : NonAnticipating W) (M : ℕ) :
+    prCoin (fun ω => (∀ t, Disjoint (ω t).1 (W t ω)) ∧ M ≤ ∑ t, (W t ω).card) ≤
+      (1 - (kd : ℝ≥0∞) / N) ^ M := by
   have h := horizon_escape (Horizon.ofAdapted W) M
   simp only [Horizon.Escapes, Horizon.total, Horizon.wrong_ofAdapted hW] at h
   exact h
