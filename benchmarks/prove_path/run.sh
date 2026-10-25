@@ -33,6 +33,13 @@
 #     (records_audit.py --circuit), and once with its schedule committed
 #     as advice under its compiler (verity_torch_loop.compile, run by the audit as a command: --opening, --compilers); each
 #     tampered window must be refused by Lean. PP_TORCH_LOOP_SHAPE: more serve.py flags (--requests, --steps).
+#   PP_TORCH_FROZEN=1: the torch loop's decode step at the frozen H200 shape (verity_torch_loop.serve_frozen: width 16,384, MQA,
+#     MLP 65,536, every matmul coordinate a unit), one window per template, each audited from its records alone against the
+#     circuit registered before it ran, under PP_LAW (default subset:64, per window) in members of PP_TORCH_LOOP_CAP units
+#     (default 16384), committed by PP_TORCH_FROZEN_WORKERS processes (default 16); then the tampered step (every output's
+#     bit 0 flipped), whose drawn units Lean must refuse, on PP_TORCH_FROZEN_TAMPERED tags (default all; "none" skips it);
+#     W per block and pooled (frozen_w) into $O/w.json. PP_TORCH_LOOP_SHAPE: more serve_frozen.py flags (--layers,
+#     --position, --tags, --keep).
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
@@ -262,6 +269,38 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-tampered --tamper || rc=1
   loop torch-loop-compiled --compiled || rc=1
   [ "${PP_ONLY:-}" = honest ] || loop torch-loop-compiled-tampered --compiled --tamper || rc=1
+elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
+  TLAW=${PP_LAW:-subset:64} TCAP=${PP_TORCH_LOOP_CAP:-16384}
+  TF="$PY -m verity_torch_loop.serve_frozen --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
+  export PYTHONPATH=$REPO/integrations/torch_loop
+  frozen() {  # NAME [--tamper [--tags T,...]]: the step's windows, each audited from its records alone against the circuit
+              # registered before it ran; the arm is a run (and its windows roots) of its own
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 rc=0 tag c run; shift
+    [ "${1:-}" = --tamper ] && forged=--forged
+    mkdir -p $O/$name
+    $TF --run-id $id --circuit-only "$@" > $O/$name/circuit-before.json || return 1
+    $TIME $TF --run-id $id --out $W/$name --workers ${PP_TORCH_FROZEN_WORKERS:-16} "$@" > $O/$name/serve.json 2> $O/$name/serve.err \
+      || { tail -30 $O/$name/serve.err; return 1; }
+    cut -c1-3000 $O/$name/serve.json
+    for tag in $($PY -c 'import json, sys; print(" ".join(json.load(open(sys.argv[1]))["windows"]))' $O/$name/serve.json); do
+      c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))[sys.argv[2]])' $O/$name/circuit-before.json $tag) || return 1
+      run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"][sys.argv[2]]["run"])' $O/$name/serve.json $tag) || return 1
+      mkdir -p $O/$name/$tag/window && cp $W/$name/$tag/{registration,window,index,circuit}.json $O/$name/$tag/window/
+      $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name/$tag --law $TLAW --circuit $c --run $run \
+        ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+        --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name-$tag > $O/$name/$tag/audit.log 2> $O/$name/$tag/audit.err \
+        || rc=1
+      grep '^RECORDS' $O/$name/$tag/audit.log | cut -c1-6000; tail -25 $O/$name/$tag/audit.err
+      keep $name-$tag
+    done
+    return $rc
+  }
+  frozen torch-frozen || rc=1
+  $PY -m verity_torch_loop.frozen_w --serve $O/torch-frozen/serve.json --law $TLAW > $O/w.json && cat $O/w.json || rc=1
+  TT=${PP_TORCH_FROZEN_TAMPERED:-}
+  if [ "${PP_ONLY:-}" != honest ] && [ "$TT" != none ]; then
+    frozen torch-frozen-tampered --tamper ${TT:+--tags $TT} || rc=1
+  fi
 else
   S=$W/served
   (cd integrations/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \
