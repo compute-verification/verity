@@ -1,4 +1,4 @@
-import Models.NetworkCertifier.Guarantees.Warden
+import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.SampledCharge
 import Definitions.NetworkCertifier.Period
 

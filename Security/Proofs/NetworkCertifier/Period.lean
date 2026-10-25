@@ -1,4 +1,4 @@
-import Models.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.Period
 import Proofs.NetworkCertifier.SampledLeak
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.Warden

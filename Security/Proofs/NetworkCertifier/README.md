@@ -53,7 +53,7 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                an accepted one establishes (SampledLeakAccepted)
 ../../Definitions/NetworkCertifier/Period.lean  trusted: a period of sampled audits: a statement registered as a
                                window's (SameRegistration) and a window's good event (WindowGood)
-../../Models/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the wardens over a period of sampled
+../../Definitions/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the wardens over a period of sampled
                                audits (PeriodLeakAccepted)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)

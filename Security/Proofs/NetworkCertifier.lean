@@ -3,7 +3,7 @@ import Definitions.NetworkCertifier.Guarantees.AdviceString
 import Definitions.NetworkCertifier.Guarantees.AdviceV1
 import Definitions.NetworkCertifier.Guarantees.WindowCharge
 import Definitions.NetworkCertifier.Guarantees.Warden
-import Models.NetworkCertifier.Guarantees.Period
+import Definitions.NetworkCertifier.Guarantees.Period
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
