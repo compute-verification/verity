@@ -10,6 +10,7 @@
   "Properties.Proofs.Pouw.LiveSalt",
   "Properties.Proofs.Pouw.LiveSalt.Ledger",
   "Properties.Proofs.Pouw.LiveSalt.Canon",
+  "Properties.Proofs.Pouw.LiveSalt.Coin",
   "Properties.Pouw.Strata",
   "Properties.Proofs.Pouw.Strata",
   "Properties.Pouw.Credit",
