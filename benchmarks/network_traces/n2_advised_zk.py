@@ -25,8 +25,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   (``report.json``, the honest rehearsal's records under ``rehearsal/honest``, the endpoint's advice under
   ``endpoint/advice``), N2's link of its honest rehearsal (``served``: T = 60 on both ends, the egress allocation the
   calibration chose, R_in = 1, the certifier's salt heading every window) under the run's own certifier key, syncs and
-  id-request framing (`active.id_request_frames`). Its advice is the Commit windows' I1 advice that the report bound to
-  the run and rebuilt from its certified I/O, joined into one (`joined`), its requests in the certified arrival order,
+  id-request framing (`active.id_request_frames`). Its advice is the Commit windows' window advice that the report
+  bound to the run and rebuilt from its certified I/O, joined into one I1 v0 advice (`joined`: a request a window
+  carries in is the earlier window's, charged once), its requests in the certified arrival order,
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
   ingress heads' request frames; the tie the same stand-in, on the certified prompts. Its clock source
   (`served_clocks`) is the run's certifier's salted clock certificates with their openings (the certifier's
@@ -94,7 +95,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -105,6 +106,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import n2_zk as Z  # noqa: E402
+import window_chain as WC  # noqa: E402
 from n2_zk import ENDS  # noqa: E402
 from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
@@ -115,6 +117,7 @@ from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
 
 def _traffic():
@@ -337,20 +340,12 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
                            clocks=clocks_label(lw, AT.SYNCS[:shape.windows]))
 
 
-def joined(advices: list[ADV.Advice], frames: dict[str, list[int]]) -> ADV.Advice:
-    """One advice of the link from its Commit windows' (`advices`, in order): their requests and steps in turn, each
-    window's request indices after the windows' before it, and kept output λ of the request with id i released in
-    bucket ``frames[i][λ]``."""
-    requests, steps = [], []
-    for a in advices:
-        off = len(requests)
-        requests += a.requests
-        steps += [ADV.StepAdvice(tuple(replace(r, request=r.request + off,
-                                               sources=tuple(replace(s, request=s.request + off) for s in r.sources))
-                                       for r in st.rows)) for st in a.steps]
-    probe = ADV.Advice(tuple(requests), tuple(steps), (0,) * sum(q.output_len for q in requests))
-    release = tuple(frames[requests[o.request].id][o.index] for o in ADV.outputs(probe))
-    return ADV.Advice(tuple(requests), tuple(steps), release)
+def joined(advices: list[tuple[int, WA.Advice]], frames: dict[str, list[int]]) -> ADV.Advice:
+    """One advice of the link from its Commit windows' (`advices`, each its number and window advice, in order):
+    `window_chain.join`'s, their requests and steps in turn, each window's admitted requests after the windows' before
+    it and a request it carries in the earlier window's, and kept output λ of the request with id i released in bucket
+    ``frames[i][λ]``."""
+    return WC.join(advices, lambda k, rid, index, bucket: frames[rid][index])
 
 
 def from_io(io: list[dict]) -> ADV.Advice:
@@ -367,7 +362,9 @@ def from_io(io: list[dict]) -> ADV.Advice:
         steps.append(ADV.StepAdvice(tuple(ADV.Row(i, "decode", q.prompt_len + k - 1, 1)
                                           for i, q in enumerate(requests) if q.output_len > k)))
     frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
-    return joined([ADV.Advice(requests, tuple(steps), (0,) * sum(q.output_len for q in requests))], frames)
+    probe = ADV.Advice(requests, tuple(steps), (0,) * sum(q.output_len for q in requests))
+    release = tuple(frames[requests[o.request].id][o.index] for o in ADV.outputs(probe))
+    return ADV.Advice(requests, tuple(steps), release)
 
 
 def every_count(lw: LinkWindows, w: int, pair):
@@ -396,11 +393,14 @@ def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False, advice_from_i
         bound, advice = None, from_io(io)
     else:
         bits = json.loads((run / "report.json").read_text())["chain"]["bits"]
-        bound = [c["window"] for c in bits["commit_windows"] if c["bound"] and c["rebuilt"]]
+        bound = [c["window"] for c in bits["commit_windows"] if c.get("bound") and c.get("rebuilt")]
         if not bound or not bits["bound"] or not bits["rebuilt"]:
             raise SystemExit(f"{run}: the report binds no advice to the run and rebuilds none from its certified I/O")
-        advice = joined([ADV.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" / "advice.json")
-                                                  .read_text())) for w in bound], frames)
+        try:
+            advice = joined([(w, WA.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" /
+                                                           "advice.json").read_text()))) for w in bound], frames)
+        except ADV.MalformedAdvice as err:
+            raise SystemExit(f"{run}: the bound Commit windows' advice doesn't join into one: {err}") from None
     if [q.id for q in advice.requests] != [r["user"] for r in io] or \
             any(q.output_len != len(frames[q.id]) for q in advice.requests):
         raise SystemExit("the bound advice's requests aren't the certified ones in arrival order, each its outputs")
