@@ -8578,7 +8578,7 @@
    ]
   },
   "Properties.Pouw.LiveSalt": {
-   "digest": "5d16c6de543788d79c6ec2a53bc17bded9da25cabeed0c29c6f3ea8ffa4e4702",
+   "digest": "5b97a09325e9360f9671a228ada9b61e52e74ae99c1c4a9225db98a14f27ee6f",
    "definitions": {
     "Properties.Pouw.LiveSalt.AcceptMeans": "7bd676e53caf1f68324c10f6f0e4b1d8ccd43c406e5bd079b0ab5b0e21813b87",
     "Properties.Pouw.LiveSalt.Accepted": "7c40a7fa110222406791f3f0d9987ffeedce52cdf07ac79254d84ba355b902e2",
@@ -8590,9 +8590,9 @@
     "Properties.Pouw.LiveSalt.EpochRoot": "734e96412b6a31fe7473602101921299262ef9f0d105913acf57be6f58537e80",
     "Properties.Pouw.LiveSalt.EpochRootBinding": "223271095723180eef90305c421f74b74004f14f8ddb8e1f98ff2c6698fe9ed9",
     "Properties.Pouw.LiveSalt.LedgerShows": "b928ec88a3da91dbc538d49d9ac011907841c5e70c92225f7750d32cd1828dc6",
-    "Properties.Pouw.LiveSalt.LiveCoinBinding": "4e44f7ab2719a0bb322cc0cf33ac467cbe32b725ca7e19e7be98e0b2716a88cb",
+    "Properties.Pouw.LiveSalt.LiveCoinBinding": "fd67526b67f71b2b3d383cd542022244b70d77067518f390b2d0703a218b6c31",
     "Properties.Pouw.LiveSalt.ManifestNames": "3c525356d02186ed6c0e09c3c993602bf990d17a270d9ab6ab6eaab346f6e9d1",
-    "Properties.Pouw.LiveSalt.OnePair": "4a2a175cec76b36765d6274b9d016b1ab1122caeba3db9b38d9cdc45b51695f8",
+    "Properties.Pouw.LiveSalt.OnePair": "5705dc859b01b132beda782a519362c90ee749ba8dfa7a43b2c48ec633c9dbf7",
     "Properties.Pouw.LiveSalt.OneRoot": "50264f5bba5ebc226c8e032781f0b46e8d3b82d6264b8b40809c78e4c879b93a",
     "Properties.Pouw.LiveSalt.RowSeedBinding": "791f9621227f680a3da6a09d0d6cf5ec0232e8d194c18d483257d17338a67ca6",
     "Properties.Pouw.LiveSalt.SALT_FAMILIES": "f4f50cc08308230b6f381406f2a1499abb1d336ba4afe830cfe753047988c967",
