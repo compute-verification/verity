@@ -257,9 +257,9 @@ class IngressTie:
         return S.Stream(self.spec, self.unit, **kwargs)
 
     def domain(self, window: int) -> CommitmentDomain:
-        """One-stage's window domain (`registration.window_domain`) for the ingress link-window, T leaves: run
+        """One-stage's served domain (`registration.served_domain`) for the ingress link-window, T leaves: run
         `<run>/<link>/<window>`."""
-        binding = identity_digest_sha512(R.WINDOW_DOMAIN, {
+        binding = identity_digest_sha512(R.SERVED_DOMAIN, {
             "program": self._partition["program"], "partition": P.digest(self._partition), "port": VALUE,
             "schema": SCHEMA, "leaves": self.shape.T, "run": f"{self.run}/{self.link}/{window}"})
         return IT.domain(binding, self.shape.T)
