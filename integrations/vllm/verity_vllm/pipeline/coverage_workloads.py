@@ -35,6 +35,7 @@ from pathlib import Path
 
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, option
+from verity_vllm.engine.profiles.coverage_roles import ROLE_REPOS
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"
 SCHEMA = WORKLOAD_SCHEMA
@@ -338,7 +339,7 @@ def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, see
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    case: str = option("--case", help="checkpoint role (B0, B1, LLAMA32_1B, ...)")
+    case: str = option("--case", help="checkpoint role (B0, B1, ...: a role of checkpoints.json)")
     model: str | None = option("--model", default=None,
                                help="HF repo of the served model (default: from checkpoints.json by role)")
     tokenizer: str = option("--tokenizer", help="HF snapshot dir or tokenizer.json of the served model")
@@ -386,7 +387,7 @@ def main(a: Options) -> int:
     if model is None:
         model = checkpoint_repo(a.checkpoints, a.case)
     if model is None:
-        model = {"B0": "HuggingFaceTB/SmolLM2-135M", "B1": "Qwen/Qwen2.5-1.5B"}.get(a.case)
+        model = ROLE_REPOS.get(a.case)
     if a.dry_run:
         for prof in a.profiles.split(","):
             for ctx in a.ctx.split(","):

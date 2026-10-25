@@ -88,3 +88,18 @@ def test_checkpoint_repo_is_none_for_a_file_not_of_the_form(tmp_path: Path, doc)
 def test_checkpoint_repo_is_none_without_the_file(tmp_path: Path):
     assert gw.checkpoint_repo(tmp_path / "missing.json", "B0") is None
     assert gw.checkpoint_repo(tmp_path, "B0") is None
+
+
+@pytest.mark.parametrize(("case", "manifest", "model", "served"), [
+    ("B0", {"checkpoints": [{"role": "B0", "repo": "org/b0"}]}, None, "org/b0"),
+    ("B1", {"checkpoints": [{"role": "B1-B4,R*", "repo": "org/b1"}]}, None, "Qwen/Qwen2.5-1.5B"),
+    ("B0", None, None, "HuggingFaceTB/SmolLM2-135M"),
+    ("X9", None, None, "unknown"),
+    ("B1", None, "org/given", "org/given")])
+def test_main_serves_the_manifest_s_model_else_the_role_s(tmp_path: Path, monkeypatch, case, manifest, model, served):
+    seen = []
+    monkeypatch.setattr(gw, "Tok", lambda path: None)
+    monkeypatch.setattr(gw, "workload_doc", lambda **kw: seen.append(kw["model"]) or {"note": ""})
+    ck = _checkpoints(tmp_path, manifest) if manifest is not None else tmp_path / "missing.json"
+    a = gw.Options(case=case, model=model, tokenizer="t", profiles="P", ctx="C", out_dir=str(tmp_path / "out"), checkpoints=str(ck))
+    assert gw.main(a) == 0 and seen == [served]
