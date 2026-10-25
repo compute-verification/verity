@@ -245,7 +245,7 @@ def noInnerDraw : String :=
     "is drawn (the coin server's full draw, rec_live.full_draw), the only inner session the recursion's proof covers"
 
 /-- **The recursion's inner session is drawn**: where the verifier holds the inner session's record (`src`, check 5's
-source: `--rec-inner-session` with the inner statement's files or with `--rec-inner-coins`), the record holds a draw
+source: `--rec-inner-session` with the inner statement's files), the record holds a draw
 (`RecCoins.recordDraw`: a `unit_draw` neither absent nor null), which check 5 decodes the record at
 (`RecCoins.drawnSpec`); a session over a record without one is refused (`noInnerDraw`). Without the record it passes. -/
 def innerDrawn (src : Option RecCoins.Source) : V Unit := do

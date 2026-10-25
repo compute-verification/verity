@@ -166,7 +166,7 @@ def _parser() -> argparse.ArgumentParser:
     table.add_argument("--out", type=Path, default=None, help="also write the merged result here")
     table.set_defaults(run=_table, command_parser=table)
 
-    served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's newest results")
+    served = commands.add_parser("served-table", help="every protocol's served overhead, from the store's runs of record")
     served.add_argument("--json", action="store_true", help="the rows as JSON, not markdown")
     served.add_argument("--local-only", action="store_true",
                         help="read this machine's catalog alone, not the store's remote")
