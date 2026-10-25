@@ -3,7 +3,7 @@
 # M1's family census sizing split units and candidates (`m1_families.py --estimate`, on stand-ins: nothing is lowered),
 # R2's other population (`r2_population.py`) and A8's scan of what the verifier received (`a8.received`), on toy files,
 # a5_warden's transfer-gate window over a warden run's cells, and a5_tp_gates' two TP2 ranks' windows over each other's
-# registered partials (nothing is lowered or proved).
+# registered partials, and the proof leg's served shapes (`prove_leg.served`) (nothing is lowered or proved).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

@@ -49,7 +49,10 @@
   "Proofs.Properties.Accounting.Served",
   "Proofs.Properties.RemoteAudit.Line",
   "Proofs.Properties.RemoteAudit.Schedule",
-  "Proofs.Properties.RemoteAudit.Live"
+  "Proofs.Properties.RemoteAudit.Live",
+  "Proofs.Properties.Pouw.LiveSalt.Ledger",
+  "Proofs.Properties.Nci.ReadsExact",
+  "Proofs.Properties.Nci.BodiesOk.ReadsDecoded"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

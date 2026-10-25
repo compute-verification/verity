@@ -138,6 +138,30 @@ def test_an_aborted_request_is_a_commit_windows_finish_and_a_whole_sessions_refu
         ADV.from_trace(recs, io, carry=())
 
 
+@pytest.mark.parametrize("abort_at,gone", [({1: "e0"}, "e0"), ({1: "e1"}, "e1")], ids=["mid-prefill", "never-scheduled"])
+def test_an_abort_before_the_first_output_is_refused_by_name(tmp_path, abort_at, gone):
+    """e0's 40-token prompt takes the 16-token budget for three steps: aborted after the first, it is mid-prefill; e1, waiting
+    behind it, has never run."""
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 40, [6] * 3, 3), FakeRequest("e1", [5] * 4, [6] * 3, 3)]}, abort_at=abort_at)
+    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+    assert len(io[gone]["output_ids"]) == 0
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == (f"request {gone} was aborted before its first output, which the advice refuses: an aborted request's "
+                            "Program ends at its last kept output, and it kept none")
+
+
+def test_an_abort_of_a_request_waiting_after_a_preemption_is_refused_by_name(tmp_path):
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 6, 6), FakeRequest("e1", [5] * 4, [6] * 6, 6)]}, preempt_at={2: "e0"},
+         abort_at={3: "e0"})
+    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+    assert len(io["e0"]["output_ids"]) == 2 and "e0" in next(r for r in recs if r["kind"] == "step" and r["step"] == 2)["preempted"]
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == ("request e0 was aborted after step 2 while it waited after a preemption, which the advice refuses: it "
+                            "has no row in the step it is freed at")
+
+
 def test_a_commit_record_whose_output_disagrees_with_the_trace_is_refused(tmp_path):
     _served(tmp_path, n=4)
     lines = (tmp_path / "requests.jsonl").read_text().splitlines()

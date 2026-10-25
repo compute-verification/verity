@@ -79,8 +79,8 @@ from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
 #: a lane's own test run, which no landing needs (a PR lands on an eyeball review; Daniel, 24 Oct 06:05Z)
-LANE_RUN = ("`research run --on vy-nebius-cpu-K --cwd source -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && "
-            "uv run tools/verity/check/suites.py --changed origin/main --quick'`")
+LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 LINE = "check-line"
 POLL_S = 20
 #: the exit of a waiter that gave up (`--wait-max`): CMD never ran
@@ -389,14 +389,17 @@ def started(pid: int, proc: Path = Path("/proc")) -> datetime | None:
 
 
 def asker(by: str | None = None, twin: str | None = None) -> dict:
-    """Who asked for a slot: this process, the run it belongs to, the tree it checks and who (--by, else RESEARCH_AGENT_URL),
+    """Who asked for a slot: this process, the run it belongs to, the tree it checks and its commit (RESEARCH_SOURCE_SHA, the
+    shipped tree's: a run's clone of it is <root>/scratch/<run id>/tree, which names none), who (--by, else RESEARCH_AGENT_URL),
     and its pair when it is a twin."""
     return {"pid": os.getpid(), "run": os.environ.get("RESEARCH_RUN_ID"), "tree": os.getcwd(),
+            **({"commit": c} if (c := os.environ.get("RESEARCH_SOURCE_SHA")) else {}),
             "by": by or os.environ.get("RESEARCH_AGENT_URL"), **({"twin": twin} if twin else {})}
 
 
 def describe(who: dict) -> str:
-    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {Path(who['tree']).name}" if who.get("tree") else "",
+    tree = who.get("commit") or (Path(who["tree"]).name if who.get("tree") else "")
+    parts = [f"run {who['run']}" if who.get("run") else "", f"tree {tree}" if tree else "",
              f"by {who['by']}" if who.get("by") else "", f"twin {who['twin']}" if who.get("twin") else "",
              f"slot taken {who['took']}" if who.get("took") else ""]
     return ", ".join(p for p in parts if p)
@@ -513,7 +516,7 @@ def holding(lock: Path, who_file: Path, now: datetime, proc: Path = Path("/proc"
            "minutes": round((now - t).total_seconds() / 60) if t else None, "cmd": cmd[:200]}
     who = _read(who_file)
     if who.get("pid") == pid:
-        out.update({k: who[k] for k in ("run", "tree", "by", "twin", "took") if who.get(k)})
+        out.update({k: who[k] for k in ("run", "tree", "commit", "by", "twin", "took") if who.get(k)})
     return out
 
 
@@ -559,7 +562,7 @@ def waiting(line: Path, now: datetime, before: str | None = None) -> list[dict]:
         who = _read(p)
         out.append({"since": f"{t:%Y-%m-%dT%H:%MZ}", "minutes": round((now - t).total_seconds() / 60),
                     "priority": p.name.startswith(PRIORITY), "pid": who.get("pid", int(p.name.split("-")[-1])),
-                    **{k: who[k] for k in ("run", "tree", "by", "twin") if who.get(k)}})
+                    **{k: who[k] for k in ("run", "tree", "commit", "by", "twin") if who.get(k)}})
     return out
 
 

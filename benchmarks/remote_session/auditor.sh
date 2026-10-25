@@ -26,12 +26,19 @@ trap 'rm -rf "$S"' EXIT
 cp -a "${RUN:?}/out" "$S/" && chmod -R u+w "$S"
 [ ! -f "$RUN/request.json" ] || cp "$RUN/request.json" "$S/"
 : > "$OUT/fetch.log"
-if [ -f "$RUN/run-files.evicted.json" ]; then
+# the eviction record is RUN's own, or its run's when RUN is a host dir inside one (a fire's out/host/V), with paths
+# under that run's dir
+R=$(cd "$RUN" && pwd)
+EV=$R
+until [ -f "$EV/run-files.evicted.json" ] || [ -f "$EV/job.json" ] || [ "$EV" = / ]; do EV=$(dirname "$EV"); done
+if [ -f "$EV/run-files.evicted.json" ]; then
+  P=${R#"$EV"}; P=${P#/}; P=${P:+$P/}
   art=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['artifact'])" \
-    "$RUN/run-files.evicted.json")
-  uv run research data fetch "$art" --to "$S" --path 'out/verifier.json' --path 'out/challenger/*' \
+    "$EV/run-files.evicted.json")
+  uv run research data fetch "$art" --to "$S/restore" --path "${P}out/verifier.json" --path "${P}out/challenger/*" \
     > "$OUT/restore.log" 2>&1
-  echo "restore $art rc $?" >> "$OUT/fetch.log"
+  echo "restore $art ${P:-./} rc $?" >> "$OUT/fetch.log"
+  [ ! -d "$S/restore/${P}out" ] || cp -a "$S/restore/${P}out/." "$S/out/"
 fi
 gate() { ssh -o BatchMode=yes -o IdentitiesOnly=yes -i "$KEY" "$GATE" "$@"; }
 gate ledger > "$OUT/ledger.jsonl"
