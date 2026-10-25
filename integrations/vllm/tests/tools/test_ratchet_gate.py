@@ -244,7 +244,15 @@ def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):
     linted.commit("drops b.py's entry with b.py unchanged", {P01: _allowlist()})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", ["p01_core: verity_vllm/b.py [k]"])
-    assert "the base's lint code" in c["why"] and "finds 1 violation(s)" in c["why"]
+    assert "the base's lint code" in c["why"] and "finds 1 violation(s)" in c["why"] and G.MOVE_CHECK not in c["why"]
+
+
+def test_a_move_the_base_lint_refuses_is_pointed_at_move_check(linted):
+    linted.git("mv", "integrations/vllm/verity_vllm/b.py", "integrations/vllm/verity_vllm/c.py")
+    linted.commit("moves b.py, and its entry with it, but not as a pure move", {P01: _allowlist(_entry("verity_vllm/a.py", "A"))})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", ["p01_core: verity_vllm/c.py [k]"])
+    assert f"is exempt once `python3 {G.MOVE_CHECK} " in c["why"]
 
 
 @pytest.mark.parametrize("loosen", [
