@@ -4,8 +4,9 @@
         [--tamper] [--opening FILE]
     python -m verity_torch_loop.serve --circuit-only [the same shape and --run-id]
 
-The first serves the requests (`loop.TorchLoop`), commits every unit and writes the window (``circuit.json``, the
-registration under core's ``one_stage.registration``, the value files) to ``--out``, and prints the circuit record's
+The first serves the requests (`loop.TorchLoop`), commits every unit and its activations (`TorchLoop.commit_activations`,
+their entries in the registration's window and their salts in `ACTIVATIONS_PRIVATE`) and writes the window
+(``circuit.json``, the registration under core's ``one_stage.registration``, the value files) to ``--out``, and prints the circuit record's
 SHA-512, the run root, the population and the units whose outputs are not their Definition's (`Window.mismatches`: none
 unless ``--tamper``). With ``--opening FILE`` the circuit is its compiler's (`compile`): the loop's schedule is committed as
 advice under that compiler, the registration binds both, and the advice's opening (the prover's private file) goes to
@@ -23,12 +24,16 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
 from verity.ml.windows import interface as IF
 
 from . import compile as C, loop as L
+
+#: the run's committed activations' salts (`loop.activations_opening`), the prover's, beside the members' private bodies
+ACTIVATIONS_PRIVATE = "activations-private.json"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -78,11 +83,16 @@ def main(argv: list[str] | None = None) -> int:
     weights = L.opened(loop.model, json.loads(Path(a.weights).read_text())) if a.registered else None
     win = loop.window(law, a.cap, advice, weights)
     bad = win.mismatches()
-    win.write(win.close(), a.out, {"loop": "torch-loop"}, registrar=R)
+    acts = loop.commit_activations()
+    win.write(win.close(), a.out, {"loop": "torch-loop", "activations": L.activations(loop.model, acts)}, registrar=R)
+    fd = os.open(Path(a.out) / ACTIVATIONS_PRIVATE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(L.activations_opening(loop.model, acts), f)
     rec = json.loads((Path(a.out) / "registration.json").read_text())
     print(json.dumps({"circuit": rec["window"]["circuit"], "run": loop.run_root, "population": win.window.population,
                       "members": len(win.window.members), "mismatched": {t: len(v) for t, v in bad.items()},
-                      "compiler": rec["window"].get("compiler"), "registration": R.digest(rec), "out": str(Path(a.out))}))
+                      "compiler": rec["window"].get("compiler"), "registration": R.digest(rec), "out": str(Path(a.out)),
+                      "activations": {v: e["root"] for v, e in rec["window"]["activations"]["values"].items()}}))
     return 0
 
 
