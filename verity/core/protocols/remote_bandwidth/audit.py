@@ -677,7 +677,9 @@ class Record:
     them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
-    (`RequirementLink.mapped`).  `public` is what acceptance makes public;
+    (`RequirementLink.mapped`).  `samples` is the session's draw cap s (`Params.samples`) and `append_coins` the
+    append coins its coin commitment reserved, which bound every window of the session, whatever its outcome
+    (`ledger.binding`); both are None in a record no session made.  `public` is what acceptance makes public;
     `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
     capacities: `ledger`)."""
 
@@ -696,6 +698,8 @@ class Record:
     lifetime: int | None = None
     appends: bytes | None = None
     pace: Pace | None = None
+    samples: int | None = None
+    append_coins: int | None = None
 
     @property
     def start_ns(self) -> int:
@@ -1160,7 +1164,8 @@ class Session:
         return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
-                      self.params.lifetime, self._head, self.params.pace)
+                      self.params.lifetime, self._head, self.params.pace, self.params.samples,
+                      self.coins.commitment.family(coins.APPEND) or 0)
 
 
 REGISTRY_SCHEMA = "verity/remote-bandwidth/registry/v0"

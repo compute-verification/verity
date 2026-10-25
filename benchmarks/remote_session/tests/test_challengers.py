@@ -424,9 +424,11 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
             "credited "
             "sessions, "
             "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
-        assert doc["conditional_on"] == al.CONDITIONAL_ON and list(doc["conditional_on"]) == ["NoOutsideCompute"]
+        assert doc["conditional_on"] == al.CONDITIONAL_ON
+        assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
         assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
-        assert f"conditional on NoOutsideCompute: {al.CONDITIONAL_ON['NoOutsideCompute']}" in al.table(doc).splitlines()
+        lines = set(al.table(doc).splitlines())
+        assert {f"conditional on {n}: {what}" for n, what in al.CONDITIONAL_ON.items()} <= lines
         by = al.lv.Lean(al.lv.build(), lambda _: None)
         try:
             assert doc["line_by"] == "python" and analysed(out, host, sessions, reg, desc, line_by=by) == {

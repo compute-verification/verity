@@ -919,7 +919,8 @@ class Pair:
         if self.lean is None:
             return self.s.record()
         return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
-                            self.s.params.delta)
+                            self.s.params.delta, samples=self.s.params.samples,
+                            append_coins=self.s.commitment.family(coins.APPEND) or 0)
 
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]
@@ -1403,7 +1404,8 @@ class Verifier:
             if head["k"] == k:
                 break
         out = {"k": k, "accepted": accepted, "failure": failure, "allowance_ns": allowance_ns,
-               "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
+               "samples": samples, "append_coins": appends, "delta": self.delta, "window_ns": window_ns, "windows": W,
+               "pace": pace,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
                "appended": session.extent - reg.blocks, "released": session.released,
                "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,

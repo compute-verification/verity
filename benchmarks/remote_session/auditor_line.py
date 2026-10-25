@@ -77,18 +77,18 @@ and `sketch_outside` every F the run's sessions were charged at.
 `error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its five
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
-commitment's hiding terms n·2^-191, the receipts' binding term, δs, the sketch's, and the draw's rejection
-Σ_t k_t/2^64 (the hiding, the binding and the rejection added to the total of a record whose ledger didn't charge
-them), plus
-the windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no number and are in no total. The
-line at each T, and the line of record over every T (`credit`'s `error`), fail with at most the sum of their credited
-sessions' totals: the least share is read off whichever session the run made least, so the union bound holds where a
-maximum wouldn't.
+commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
+draw's rejection Σ_t k_t/2^64 (the hiding, the binding and the rejection added to the total of a record whose ledger
+didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no
+number and are in no total. The line at each T, and the line of record over every T (`credit`'s `error`), fail with at
+most the sum of their credited sessions' totals: the least share is read off whichever session the run made least, so
+the union bound holds where a maximum wouldn't.
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
 statement C in full, as a premise that no record of the run discharges, so every line says it is conditional on it,
 until certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
-the store and computes the receipts, breaks that premise alone.
+the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
+as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too.
 
 **The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check
 refuses a session's credit when the network certifiers' records of the gate node's boundary links over its credited
@@ -113,7 +113,6 @@ import argparse
 import copy
 import hashlib
 import json
-import math
 import statistics
 import subprocess
 import sys
@@ -127,6 +126,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 import challengers as CH  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
+import wire  # noqa: E402
 from verity.core.protocols.certifier import audit as caudit  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
@@ -163,10 +163,16 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
     "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
     "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span")}
-"""The premises of the line's statement that no record of the run discharges, each with what it says: every line
-(`auditor_line.json`'s `conditional_on`, `credit.md`) is conditional on them, and the `memory-line-of-record` label
-requires the field."""
+    "the credited span"),
+    "binding-split": (
+    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
+    "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
+    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
+    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
+    "(PROTOCOL.md §8)")}
+"""What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
+statement and the gaps in its charge. Every line (`auditor_line.json`'s `conditional_on`, `credit.md`) is conditional
+on them, and the `memory-line-of-record` label requires the field."""
 BOUNDARY = "boundary"
 """The check `--boundary` adds to `CHECKS` (`boundary_check`)."""
 
@@ -422,18 +428,32 @@ def session_error(session: dict) -> dict:
             "log2_total": timing.log2(exact["total"]), "named_terms": NAMED_TERMS}
 
 
+def recorded_append_coins(session: dict) -> int | None:
+    """The append coins an accepted session's coin commitment reserved: its record's (`append_coins`), or, before the
+    record kept them, what its challenger released when it released every coin it committed to (`complete`); None
+    when neither says."""
+    if "append_coins" in session:
+        return session["append_coins"]
+    end = (session.get("challenger") or {}).get("end") or {}
+    return end["released"].get(coins.APPEND, 0) if end.get("complete") and "released" in end else None
+
+
 def recorded_binding(session: dict) -> Fraction:
-    """`ledger.binding` from an accepted session's record: Σ_t √(U_t·s'_t)·(2·F·C + 2·s'_t·`OPENING_HASHES`)/2^256.5
-    over its windows (`recorded_windows`), F·C the queries its sketch term (`sketch_failure`) charged; 0 for a record
-    with no sketch term, which states no C."""
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its
+    windows, the most receipts a window of it can have (`ledger.window_receipts`, at its pace's k, its registered
+    blocks and, when its append coins aren't recorded (`recorded_append_coins`), the codec's `max_blocks`) and its
+    draw cap `samples`, F·C the queries its sketch term (`sketch_failure`) charged; 0 for a record with no sketch
+    term, which states no C."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
         return Fraction(0)
-    fc = sf.get("outside", 1) * sf["compressions"]
-    total = 0.0
-    for u, s in V.recorded_windows(session)[0]:
-        total += math.sqrt(u * s) * (2 * fc + 2 * s * ledger.OPENING_HASHES)
-    return Fraction(total / 2 ** 256.5)
+    public = session["record"]["public"]
+    pace = public["pace"]
+    appends = recorded_append_coins(session)
+    L = ledger.window_receipts(None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), public["blocks"],
+                               1 if appends is None else appends, wire.codec_named(public["codec"]).max_blocks)
+    return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), L, session["samples"],
+                                        sf.get("outside", 1) * sf["compressions"]))
 
 
 def union_error(rows: list[dict]) -> dict:
