@@ -251,7 +251,7 @@ def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int
 def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str] | set[str]") -> bool:
     """v1's in-place HAZARD decision for one acquired tensor name (`<module path>/<slot>`, a tap plane or a TP partial): snapshot at the hook
     (True) or batch at step end (False).  Encodes vLLM's aliasing by leaf name (`NativeHostCommitter.HAZARD_LEAVES` + the two name rules) --
-    a by-name lifetime table (F-r19-int-20, Draft 3 §11.3.1), owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
+    a by-name lifetime table (Draft 3 §11.3.1), owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
     function rather than restating it."""
     if TP_PARTIAL_RE.search(name) or CALL_DEPENDENT_RE.search(name):
         return True          # [R14 TP-03] a collective's input partial (or a value overwritten or freed right after): snapshot now
@@ -375,7 +375,7 @@ def _cfg(model: Any, *names: str, default: int | None = None) -> int | None:
 
 
 def moe_bytes_per_token(model: Any, moe_layers: int) -> int:
-    """[R13 MOE-03] bytes per token per step the MoE block source binds: per MoE layer TOPK x (f32 weight + i32 id) + TOPK x (2I + I + H) bf16
+    """Bytes per token per step the MoE block source binds: per MoE layer TOPK x (f32 weight + i32 id) + TOPK x (2I + I + H) bf16
     pair rows + the H bf16 sum (`moe_source.MoeBlockSource`)."""
     if not moe_layers:
         return 0
@@ -386,7 +386,7 @@ def moe_bytes_per_token(model: Any, moe_layers: int) -> int:
 
 
 def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampling: dict[str, Any] | None = None) -> dict[str, Any]:
-    """[R17 fp8, F-dA-15 bounded admission] The bytes the collector binds over the WHOLE RUN under the workload's DECLARED schedule (each
+    """The bytes the collector binds over the WHOLE RUN under the workload's DECLARED schedule (each
     request prefills at its `arrive_step` in one step, then decodes one token per step for `max_tokens`), with the same per-token / per-
     sequence / per-step widths and the same FA2/FA3 hidden-m1 launch geometry as `step_bound_bytes` (`asz` = its record).  The envelope
     bound `retained_bytes_bound` is a worst case over any packing (B x max_prompt tokens of prefill, every sequence padded to the longest);
@@ -455,7 +455,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                        host_cap_bytes: int | None, hidden_factor: float = 1.05, other_factor: float = 2.0, slack_bytes: int = 6 << 30,
                        pairs: int = 1, c2_programs_bytes: int = 0, c2_freed_before_replay: bool = True, pool_exact: bool = PINNED_EXACT,
                        replay_cache: bool = False, fork_children_bytes: int = 0, c2_residual_bytes: int = 0, pool_carry_bytes: int = 0) -> dict[str, Any]:
-    """[R17 fp8, F-dA-15 / R17-7.3] the host peak bound of a `--bounded-staging` Commit, TERM BY TERM, from the declared-schedule stream
+    """The host peak bound of a `--bounded-staging` Commit, TERM BY TERM, from the declared-schedule stream
     (`schedule_stream_bound`).  Every term is a measured quantity on the B1 1024/128 row (cp-h100, FP8-STAGING.md §3) or a budget the run
     enforces by name:
       raw     = hidden x f_hidden + other x f_other        hidden (the FA3 slab, padded to the step's longest query) sized exact to 1.2 MB on
@@ -471,7 +471,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                                                            per-step RSS, try 4 pairs3) 16.7 -> 25.6 (pair 0 + replay) -> 29.6 (pair 1 run)
                                                            -> 30.2 (pair 1 replay) -> 30.2 flat through pair 2: +4.6 GiB = 41 % of one
                                                            frozen pool, ONCE; the term takes the whole pool (bounded, converged after pair 1)
-    [R17 fp8 F-fp8-C2PROG / F-fp8-POW2 (FP8-STAGING §6; B8 attempt 1, VmHWM 223,776 vs bound 193,827)] two more named terms, and the
+    [F-fp8-C2PROG / F-fp8-POW2 (FP8-STAGING §6; B8 attempt 1, VmHWM 223,776 vs bound 193,827)] two more named terms, and the
     bound is the MAX over the process's PHASES (each a sum of the terms live in it), not one sum:
       c2_programs   the Programs of record loaded for the C2 sampled replay (`RM._programs_for`: 8 Programs / 7.85 M instances = 70,300 MiB
                     of Python objects at B8; ~6.6 GB at B1) -- an EMPIRICAL FORECAST the caller derives from the instance files (json
@@ -491,7 +491,7 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
                     and freed when the openings-after-release view dies; the replay pool becomes the next pair's and grows to the run's size)
                     and levels + kept + learn (once) for the torch pool; with `replay_cache` pairs >= 2 reuse pair 0's C2 record and the
                     c2 phase happens once (its term stays in the max either way).
-    [R17 fp8 F-fp8-C2RESID / F-fp8-POOLCARRY (B8 attempt 3, VmHWM 150,935 vs bound 156,654: under, but the peak was pair 2's replay phase
+    [F-fp8-C2RESID / F-fp8-POOLCARRY (B8 attempt 3, VmHWM 150,935 vs bound 156,654: under, but the peak was pair 2's replay phase
     151,097, not the predicted c2 phase -- the replay phase was predicted 118,303 and observed 130,895 (pair 0) / 151,097 (pair 2))] two more
     EMPIRICAL terms the caller passes, both measured by the run's footprint (`rss_bytes` - `pinned_pool_bytes` per phase):
       c2_residual   what the freed Programs leave resident: 7.85 M dead small objects die into pymalloc arenas / glibc's heap, which return
@@ -1062,14 +1062,14 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
 
     def _acquires_input(self, name: str, m: Any) -> bool:
         """Whether module `name`'s first positional tensor argument is acquired as `<name>/in`: by class (the embedding's ids,
-        ACQUIRE_INPUT_CLASSES) or [R19 int-20] because the required manifest names it as a promoted member's consumer (`acquire_inputs`).
+        ACQUIRE_INPUT_CLASSES) or because the required manifest names it as a promoted member's consumer (`acquire_inputs`).
         [v2 acquire] under a plan (`plan_inputs` set) the plan's consumer-input sites decide, the class table is not consulted."""
         if self.plan_inputs is not None:
             return name in self.plan_inputs
         return bool(_mro_names(m) & ACQUIRE_INPUT_CLASSES) or name in self.acquire_inputs
 
     def _input_only_modules(self) -> list[tuple[str, Any]]:
-        """[R19 int-20] the manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
+        """The manifest's consumer modules the committer did NOT select (no acquire class): their input is acquired, their
         output is not (it is no identity of the Program).  Sorted by name; a consumer that is not a module of the built model is skipped
         here and left unbound (coverage names it).  [v2 acquire] under a plan: the plan's consumer-input sites not among the selected modules."""
         if getattr(self, "model", None) is None:
@@ -1145,7 +1145,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self.name = f"{self.name}+{getattr(src, 'short_name', 'hidden_m1')}"
 
     def flush_after_plane(self, what: str) -> bool:  # noqa: ARG002
-        """[R16 moe FLUSH-03] hook for acquisition sources whose tensor is overwritten before the next module hook: the arena committer
+        """Hook for acquisition sources whose tensor is overwritten before the next module hook: the arena committer
         snapshots at `_acquire` (D2D on the compute stream), so nothing is staged and nothing needs to leave early -> False.  The gather
         collector (`native_collect.NativeCollectCommitter`) overrides this with the flush."""
         return False
@@ -1490,7 +1490,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         return n
 
     def release_staging(self, *, levels_to_host: bool = True) -> dict[str, int]:
-        """R13 P0: drop every RAW retained copy that still lives on the device (mode `device`) and, optionally, move the tree levels to host.
+        """Drop every RAW retained copy that still lives on the device (mode `device`) and, optionally, move the tree levels to host.
         After this the device holds only the arena blocks; openings need `open(..., values_from=)` (replay) or a host copy.  Returns bytes."""
         freed = {"raw_device_bytes": 0, "levels_device_bytes": 0}
         for step, (blk, used) in list(self._gpu_blocks.items()):
@@ -2072,8 +2072,8 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         """X-03 on IDENTITIES.  For every committed step: (1) every module of the expected manifest produced >= 1 committed tensor and no
         tensor came from a module outside it; (2) the FA2/FA3 hidden source produced, per attention layer, exactly the plane inventory the
         layer's class implies -- DERIVED per layer from the Program's attention Call statics x the step's active sequences when the driver
-        handed `attention_layer_decls` (fa2_plane_classes; F-r19-int-22: a windowed layer and a global GQA layer of one step legitimately
-        differ), else the R13 rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
+        handed `attention_layer_decls` (fa2_plane_classes: a windowed layer and a global GQA layer of one step legitimately
+        differ), else the uniform rule "every layer the same positive count"; (3) exactly one sampled-ids tensor; (4) the multiset of
         module-tensor NAMES (with multiplicity: a shared RotaryEmbedding is legitimately called once per layer) is the same in every step of
         the run -- the per-step call structure of the model does not depend on the token count.  A step that drops one tensor and
         duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
@@ -2210,7 +2210,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
                 "violations": violations[:5], "violations_n": len(violations)}
 
     def _plane_policy(self):
-        """[F-r19-int-22] the collector's hidden-plane staging rule (`fa2_plane_classes.LayoutPolicy`): the explicit override, else read from
+        """The collector's hidden-plane staging rule (`fa2_plane_classes.LayoutPolicy`): the explicit override, else read from
         the installed hidden source -- the native FA2 source's `Fa2Wrap.compact` (per-sequence compaction), the Python source stages whole
         buffers, the FA3 sources stage whole PackGQA launches."""
         from verity_vllm.acquire import fa2_plane_classes as FP
@@ -2228,10 +2228,10 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         return FP.LayoutPolicy()
 
     def _step_sequences(self, step: int, metas: list) -> Any:
-        """[F-r19-int-22] the step's active-sequence set (`fa2_plane_classes.StepSequences`): the collector's row record `step_rows[step]`
+        """The step's active-sequence set (`fa2_plane_classes.StepSequences`): the collector's row record `step_rows[step]`
         (BIND-01: [(request, row_lo, row_hi)] in launch order) when present; else (n_seq, tokens) read from the executed layout -- the
         sampled-ids member has one slot per co-scheduled sequence, the integer ids input one row per token; None when neither is known
-        (the caller then runs the R13 uniform rule for the step).  Never read from the hidden planes themselves."""
+        (the caller then runs the uniform rule for the step).  Never read from the hidden planes themselves."""
         from verity_vllm.acquire import fa2_plane_classes as FP
 
         rows = (getattr(self, "step_rows", None) or {}).get(int(step))
@@ -2249,7 +2249,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         return FP.StepSequences.from_counts(n_seq, tokens)
 
     def layouts_dump(self) -> dict[int, list[dict[str, Any]]]:
-        """R14: the published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --
+        """The published per-step layouts as plain dicts ({step: [{name, dtype, shape, nbytes, numel, first_leaf, n_leaves, stream_off}]}) --
         the collector's CLAIM that lane manifest's `required_manifest.coverage_check` and bind's binding map are checked against."""
         out: dict[int, list[dict[str, Any]]] = {}
         for step in sorted(self._layouts):
@@ -2296,7 +2296,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         return True if holds is None else bool(holds(lo, hi))
 
     def leaf_retained(self, step: int, index: int) -> bool:
-        """[R17 fp8] True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
+        """True when leaf `index` of `step` opens from THIS committer's retained raw bytes; False when it must open by replay
         (raw bytes released / never kept / an excluded family's interior chunk)."""
         if self._padding_leaf(step, index) is not None:
             return True                                   # [B9.1] a padding leaf's bytes are the synthesized block's, always held
@@ -2311,7 +2311,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         """Openings for (step, leaf) positions.  The value bytes come from this committer's retained copy (device or host), or -- when the raw
         copy was released / never kept (`retain=none`), or the leaf lies in a range that was not retained (retain=sample; retain=host with
         excluded families) -- from `values_from`: a committer that REPLAYED the same committed inputs (same layouts, same bytes under BI
-        determinism).  The sibling path comes from THIS committer's levels, or -- `paths_from_replay` (R17-5: regenerated values AND
+        determinism).  The sibling path comes from THIS committer's levels, or -- `paths_from_replay` (regenerated values AND
         authentication-path material) -- from the replay's levels; either way `verify()` checks the result against THIS run's original
         roots, so a replay that differs in any byte (value or tree) fails to open."""
         out = []
