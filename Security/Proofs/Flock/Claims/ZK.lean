@@ -181,6 +181,8 @@ import Proofs.Flock.Claims.ZK.CutPrefix
 import Proofs.Flock.Claims.ZK.PiopFree
 import Proofs.Flock.Claims.ZK.RepFree
 import Proofs.Flock.Claims.ZK.RepReplay
+import Proofs.Flock.Claims.ZK.RepInner
+import Proofs.Flock.Claims.ZK.RepCutFw
 
 /-!
 # Flock's zero knowledge against a malicious verifier
@@ -723,6 +725,13 @@ import Proofs.Flock.Claims.ZK.RepReplay
 * `RepFree`: the cut opening returns on its coins alone. Two runs of the opening, the firewall's `ligeritoPZk` and the
   cut's `ligeritoCut` from any source, at logs of one size, both return with equal message, challenge and OOD counts
   and equal log sizes, or the firewall's doesn't return (**`ligeritoPZk_cut_fw`**).
+* `RepReplay`: the cut rep's replay returns on its own rounds, its fold at the coins (**`replay_cut_ok`**), and a
+  returned replay folds at the coins it read (**`replay_fold_coins`**).
+* `RepInner`: the cut's inner proof returns where the firewall's does, from any commitment, value and source
+  (**`innerP_cut_fw`**).
+* `RepCutFw`: the cut rep returns on its coins alone. Where the firewall's rep returned and the cut's rank check passes,
+  the cut rep from any hash, commitments and source returns, with a log of the firewall's size
+  (**`CutFree.repCut_of_repFwC`**).
 * `L0PinFrame`: the firewall's scheduled opening, fed the stream's coins, is the cut run. Fed coins one round at a
   time (`Fed.feedR`), a run over `Drive.OpenM` is the cut run over `PS` at those coins (`Fed.feedSim`), so the opening
   is (`Fed.asksRel_feed`, `Fed.repOpening_feed`), and past its ring switch it sends level 0's bodies
