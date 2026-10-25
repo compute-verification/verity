@@ -467,7 +467,7 @@ setting, commitment, roots and hash, when the registration's port roots are dist
 wire `g` of `u` whose row `r` sits at a `sha512/row/v2` port, every opening `o` of `g`'s registered commit string at the
 prover's registration whose value is canonical at `g` (`canonRow`) and whose salt has `saltLen` bytes opens `g`'s claims
 position under `Cd` to `o`'s bit there, at SHA-512. The deployed check passes no other openings but by a SHA-512
-collision (`SamplingDeploy.row_ne_misshaped`, `SamplingDeploy.leaf_misshaped`, `leaf_salt`). -/
+collision (`leaf_misshaped_dep`, `leaf_salt`). -/
 def TransportsLiveCS : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
