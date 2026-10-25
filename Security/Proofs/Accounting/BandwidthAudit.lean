@@ -25,7 +25,7 @@ theorem pr_short_le_error {N b h s G k lam : ℕ} {ι α ΩW ΩS : Type} [Fintyp
       (((k - 1 : ℕ) : ℝ) / N) ^ s + (s : ℝ) / 2 ^ h +
         (((d.rate .oracle * (r.win .bandwidth).len).choose k : ℕ) : ℝ) / 2 ^ lam := by
   set c := ∑ i, d.cap i * (r.win .bandwidth).len
-  set q := d.rate .oracle * (r.win .bandwidth).len
+  set q := d.rate .oracle * (r.win .bandwidth).len with hq
   have hN0 : (N : ℝ≥0∞) ≠ 0 := by exact_mod_cast hN.ne'
   have h2 : ∀ n : ℕ, (2 : ℝ≥0∞) ^ n ≠ 0 := fun n => pow_ne_zero _ two_ne_zero
   have hfin : (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam ≠ ⊤ :=
@@ -39,7 +39,7 @@ theorem pr_short_le_error {N b h s G k lam : ℕ} {ι α ΩW ΩS : Type} [Fintyp
         rw [ENNReal.toReal_add (ENNReal.add_ne_top.1 hfin).1 (ENNReal.add_ne_top.1 hfin).2,
           ENNReal.toReal_add (ENNReal.add_ne_top.1 (ENNReal.add_ne_top.1 hfin).1).1
             (ENNReal.add_ne_top.1 (ENNReal.add_ne_top.1 hfin).1).2]
-        simp only [ENNReal.toReal_div, ENNReal.toReal_pow, ENNReal.toReal_natCast, ENNReal.toReal_ofNat]
+        simp only [ENNReal.toReal_div, ENNReal.toReal_pow, ENNReal.toReal_natCast, ENNReal.toReal_ofNat, hq]
 
 theorem BandwidthOfAudit : Accounting.Guarantees.BandwidthOfAudit := by
   intro N b h s G k lam ι α ΩW ΩS _ _ _ _ d r hN real x s' B _ hread

@@ -64,7 +64,7 @@ theorem periodHeld : PeriodHeld := by
       calc Pouw.pr (Passes P.sid (P.pub o).root (P.W o) A)
           = (Pous.pr (Passes P.sid (P.pub o).root (P.W o) A)).toReal := Accounting.pr_eq_toReal _
         _ ≤ (ENNReal.ofReal (Params.δ : ℝ) + Params.εMax).toReal :=
-          ENNReal.toReal_mono hfin (endToEndRing hH D Q L hP _ _ _ A)
+          ENNReal.toReal_mono hfin (Pous.EndToEnd.SecurityProofs.endToEndRing hH D Q L hP _ _ _ A)
         _ = _ := by rw [ENNReal.toReal_add ENNReal.ofReal_ne_top εMax_ne_top, ENNReal.toReal_ofReal δ_nonneg]
   · rw [Pouw.pr_eq_zero fun x hx => hpos (lt_of_le_of_lt (Nat.cast_nonneg _) hx.2.2)]
     exact add_nonneg δ_nonneg ENNReal.toReal_nonneg
