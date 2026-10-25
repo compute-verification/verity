@@ -17,7 +17,7 @@ from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
-from verity_vllm.commit import serving_rows as CS, tables as TB
+from verity.ml.windows import rows as CS, tables as TB
 
 from .test_row_tables import DEFN, UNITS, committed
 

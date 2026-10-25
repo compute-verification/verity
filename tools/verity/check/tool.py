@@ -1,6 +1,6 @@
 """Store declaration for the repository's check (research.store README §6.1; `tools/verity/check/check.py`).
 
-    research run --tool check --project verity --cwd source -- uv run --locked --all-packages --extra torch-cpu python tools/verity/check/check.py
+    research run --tool check --project verity --cwd clone -- uv run --locked --all-packages --extra torch-cpu python tools/verity/check/check.py
 
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by
 that commit.  A merge that changes verity/ml/flock/ or the Lean verifier's package verity/core/service/flock/, other than a

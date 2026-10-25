@@ -547,7 +547,7 @@ def NovelExact : Prop :=
   ∀ (bytes : ByteArray) (P : Prog) (reads : Array (Array Desc.Seg)) (mask : Array Bool) (own : Array (Option ℕ))
     (c : Circuit) (dv : Division),
     Flock.Program.decode bytes = .ok P → P.orderViolation = none → Desc.rootLaidOut P = true →
-    Desc.inputsAtRoot P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
+    Desc.inputsAtRoot P = true → Desc.walkable P = true → Desc.analyze P = .ok reads → circuitOf P = .ok c →
     mask.size = nodeCount P → own.size = nodeCount P → dv.owner.size = gates P →
     (∀ k < nodeCount P, mask[k]! = true → (inputs P)[k]! = true) →
     (∀ k < nodeCount P, own[k]! ≠ none → (inputs P)[k]! = false ∧ nodeGates P k ≠ []) →
@@ -707,7 +707,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
           cases hku
         have hg' : (rootOffs P)[k]! ∈ nodeGates P k := (hng k _).2 ⟨Nat.le_refl _, by omega⟩
         exact ⟨_, by rw [hdsz]; exact (hcls k hk _ hg').1, by rw [hdvo k hk _ hg']; exact hku⟩
-    have hnov := hN _ P reads mask own c dv hdec hov hlo hin han hc hms hown_s hdsz
+    have hnov := hN _ P reads mask own c dv hdec hov hlo hin hwk han hc hms hown_s hdsz
       (fun k hk hm => by
         obtain ⟨t, ht, htk⟩ := (hθm k hk).1 hm
         obtain ⟨k', h1, -, h3, -⟩ := hθt t ht

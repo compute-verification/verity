@@ -80,7 +80,7 @@ FILES = {
         '{\n  "entries": [\n'
         '    {"file": "verity_vllm/program/registry/quarantine/ln/norm.py", "kind": "module", "count": 900},\n'
         '    {"file": "verity_vllm/program/registry/quarantine/ln/gelu.py", "kind": "module", "count": 801}\n  ]\n}\n'),
-    "integrations/vllm/tests/dead_code_keep.json": (f'{{\n "modules": {{\n  "verity_vllm.linear": "kept",\n  "{Q}.ln.norm": "promoted",\n'
+    "integrations/vllm/tests/dead_code_keep.json": (f'{{\n "modules": {{\n  "verity_vllm.protocols.linear": "kept",\n  "{Q}.ln.norm": "promoted",\n'
                                                     f'  "{Q}.act.silu_mul": "moves"\n }}\n}}\n'),
     "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json": f'{{"adapter": "{Q}.act.silu_mul_difftest"}}\n',
     "tools/verity/circuit_check/src/circuit_check/targets.py": ('def _model_roots():\n    from verity_vllm.program.registry import b1\n'
@@ -128,7 +128,7 @@ def test_promote_only_promotes_and_moves_no_lane(tmp_path, capsys):
     entries = json.loads((root / "integrations/vllm/tests/lint/allowlists/p11_names.json").read_text())["entries"]
     assert entries == [{"file": "verity_vllm/program/registry/quarantine/act/silu_mul.py", "kind": "doc-round"}]
     assert json.loads((root / "integrations/vllm/tests/dead_code_keep.json").read_text())["modules"] == {
-        "verity_vllm.linear": "kept", f"{Q}.act.silu_mul": "moves"}
+        "verity_vllm.protocols.linear": "kept", f"{Q}.act.silu_mul": "moves"}
 
     before = _contents(root)
     capsys.readouterr()
@@ -176,7 +176,7 @@ def test_apply_promotes_and_moves_the_lanes_and_rewrites_what_names_them(tmp_pat
     assert sizes == [{"file": "verity_vllm/program/registry/norm.py", "kind": "module", "count": 900}]
     entries = json.loads((root / "integrations/vllm/tests/lint/allowlists/p11_names.json").read_text())["entries"]
     assert entries == []
-    assert json.loads((root / "integrations/vllm/tests/dead_code_keep.json").read_text())["modules"] == {"verity_vllm.linear": "kept"}
+    assert json.loads((root / "integrations/vllm/tests/dead_code_keep.json").read_text())["modules"] == {"verity_vllm.protocols.linear": "kept"}
     assert (root / "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json").read_text() == FILES[
         "integrations/vllm/verity_vllm/engine/profiles/quarantine/REC.json"]
 

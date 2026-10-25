@@ -113,4 +113,56 @@ theorem defComputes_of_rows {t : Tmpl} {d : Nat} {outs : List Nat} {spec : (Nat 
   rw [hf]
   exact hz
 
+/-! ## A copy's inputs number its Definition's -/
+
+theorem length_flatMap_const {α β : Type} {f : α → List β} {k : Nat} :
+    ∀ {l : List α}, (∀ a ∈ l, (f a).length = k) → (l.flatMap f).length = l.length * k
+  | [], _ => by simp
+  | a :: l, h => by
+    rw [List.flatMap_cons, List.length_append, h a (List.mem_cons_self ..),
+      length_flatMap_const fun b hb => h b (List.mem_cons_of_mem a hb), List.length_cons, Nat.succ_mul, Nat.add_comm]
+
+/-- A copy's bound inputs number its segments' bits. -/
+theorem bound_length (c : Call) (g : Nat → Nat) (j : Nat) :
+    (c.bound g j).length = c.segs.foldl (fun n s => n + s.reps * s.len) 0 := by
+  have inner : ∀ s : Seg, ((List.range s.reps).flatMap fun r =>
+      (List.range s.len).map fun t => g (s.at_ + r * s.rstride + j * s.step + t)).length = s.reps * s.len := fun s => by
+    rw [length_flatMap_const (k := s.len) (fun r _ => by simp), List.length_range]
+  unfold Call.bound
+  rw [← Array.foldl_toList]
+  suffices h : ∀ (l : List Seg) (n : Nat), n + (l.flatMap fun s => (List.range s.reps).flatMap fun r =>
+      (List.range s.len).map fun t => g (s.at_ + r * s.rstride + j * s.step + t)).length =
+      l.foldl (fun n s => n + s.reps * s.len) n by simpa using h c.segs.toList 0
+  intro l
+  induction l with
+  | nil => intro n; simp
+  | cons s l ih => intro n; rw [List.flatMap_cons, List.length_append, inner, List.foldl_cons, ← ih, Nat.add_assoc]
+
+/-- Every Definition of a well-formed template is well formed, and so is the default past its last. -/
+theorem wf_getD {t : Tmpl} (hwf : t.wellFormed = true) : ∀ d, (t.defs.getD d default).wellFormed t.defs d = true := by
+  unfold Tmpl.wellFormed at hwf
+  simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hwf
+  intro d
+  by_cases hd : d < t.defs.size
+  · exact hwf.2 d hd
+  · rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_none (by omega)]
+    rfl
+
+/-- A call's copy, in a well-formed Definition, is bound to as many inputs as its callee has. -/
+theorem call_bound_length {defs : Array Def} {d : Nat} (hwf : (defs.getD d default).wellFormed defs d = true) {c : Call}
+    (hc : c ∈ (defs.getD d default).calls.toList) (g : Nat → Nat) (j : Nat) :
+    (c.bound g j).length = (defs.getD c.def_ default).ins := by
+  unfold Def.wellFormed at hwf
+  simp only [Bool.and_eq_true, List.all_eq_true, decide_eq_true_eq, beq_iff_eq] at hwf
+  rw [bound_length]
+  exact (hwf.2 c hc).2
+
+/-- **A copy placed inside a copy is bound to as many inputs as its Definition has**, when the outer one is. -/
+theorem within_ins {defs : Array Def} {k : Nat} (hwf : ∀ d, (defs.getD d default).wellFormed defs d = true)
+    {f d o : Nat} {inp : List Nat} {f' e o' : Nat} {inp' : List Nat} (hw : Within defs k f d o inp f' e o' inp') :
+    inp.length = (defs.getD d default).ins → inp'.length = (defs.getD e default).ins := by
+  induction hw with
+  | refl => exact id
+  | call c j hc hj h ih => exact fun _ => ih (call_bound_length (hwf _) hc _ j)
+
 end Flock.TmplValue

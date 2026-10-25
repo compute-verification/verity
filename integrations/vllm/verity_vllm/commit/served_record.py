@@ -24,7 +24,8 @@ request's first row by a request whose committed ids agree with t up to there (`
 prefix can be its first turn's prompt and its previous turn's suffix). Rows past the finish
 (positions from P + K - 1 on) are ``overrun``: computed and committed, never streamed, each input there the previous
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
-cut short can't pass with its missing ids taken for an overrun.
+cut short can't pass with its missing ids taken for an overrun; a client's abort ends it anywhere short of ``max_tokens``,
+and then at most one committed sample runs past it (the step in flight when the abort was applied, under async scheduling).
 
 Stdlib only, but `committed_ints`, which reads a committer's retained bytes with numpy (and torch for a GPU block).
 """
@@ -295,6 +296,9 @@ class RequestRecord:
             problems.append(f"samples: an output sampled inside the prompt, at position {early[0]}")
         over_in = sorted(p for p in self.inputs if p >= last)
         over_s = sorted(p for p in self.sampled if p >= last)
+        if finish is not None and finish.get("reason") == "abort" and len(over_s) > 1:
+            problems.append(f"finish: aborted after {K} ids, and {len(over_s)} committed samples run past them, more than the one "
+                            "of the step in flight")
         for p in over_in:
             want = t[p] if p == last else self.sampled.get(p - 1)
             if self.inputs[p] != want:
@@ -422,15 +426,20 @@ class Record:
 def finish_problems(out: Sequence[int], finish: Mapping[str, Any], decode: Callable[[Sequence[int]], str] | None = None) -> list[str]:
     """Whether the stream ``out`` ends where its finish says, so that a stream cut short can't pass as a finished one whose
     committed rows past the cut are an async overrun. ``finish``: ``reason`` (vLLM's ``finish_reason``), ``stop_reason``,
-    ``max_tokens`` and ``eos_ids``. A ``length`` finish streamed ``max_tokens`` ids; a ``stop`` on the model's EOS
+    ``max_tokens`` and ``eos_ids``. A ``length`` finish streamed ``max_tokens`` ids; a client's ``abort`` streamed the ``k``
+    it records, fewer than ``max_tokens`` (at its cap vLLM has finished it on length); a ``stop`` on the model's EOS
     (``stop_reason`` None) ends on one of ``eos_ids``, on a stop token (an int) ends on it, and on a stop string ends on
     the id whose text first holds it (with ``decode``; vLLM keeps every id of a stop-string finish and cuts the text)."""
-    reason, why = finish.get("reason"), finish.get("stop_reason")
+    reason, why, cap = finish.get("reason"), finish.get("stop_reason"), finish.get("max_tokens")
     if reason == "length":
-        cap = finish.get("max_tokens")
         return [] if cap is None or len(out) == int(cap) else [f"finish: length after {len(out)} ids, max_tokens {cap}"]
+    if reason == "abort":
+        k = finish.get("k")
+        if k is not None and len(out) != int(k):
+            return [f"finish: aborted after {k} ids, {len(out)} streamed"]
+        return [] if cap is None or len(out) < int(cap) else [f"finish: aborted after {len(out)} ids, at its max_tokens {cap}"]
     if reason != "stop":
-        return [f"finish: {reason!r}, neither stop nor length"]
+        return [f"finish: {reason!r}, neither stop, length nor abort"]
     if why is None:
         eos = {int(x) for x in finish.get("eos_ids") or ()}
         return [] if not eos or out[-1] in eos else [f"finish: stopped on EOS, the last streamed id {out[-1]} is none of {sorted(eos)}"]
