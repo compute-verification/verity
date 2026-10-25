@@ -11777,6 +11777,153 @@ theorem widths (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hB :
       calleeW_succ c fuel hR hRW hL hLF hTW (throughReps c), throughW_succ c hB hA hAP hL0 fuel hD hK,
       carryW_succ c sc hd fuel hR (fun k node hn hf => (hCP k node hn).2 (Or.inr hf)) hC hTW⟩
 
+/-- A scan's ys iterations `[lo / yl, (hi - 1) / yl]`, each through `fromCallee`, of a composite step: segments naming
+the body's gates with their widths. -/
+theorem ys_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel)
+    {k cl yl lo hi : Nat} (hm : (hi - 1) / yl < (c.body.nodes[k]!).members)
+    (hsp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false)
+    {out0 segs : Array Seg}
+    (h : forIn (List.range' (lo / yl) ((hi - 1) / yl + 1 - lo / yl)) out0 (fun m (s : Array Seg) => do
+        let v ← Desc.fromCallee c fuel k m (cl + max lo (m * yl) - m * yl) (cl + min hi ((m + 1) * yl) - m * yl)
+        pure (ForInStep.yield (s ++ v))) = .ok segs) :
+    ∃ segs2, segs = out0 ++ segs2 ∧ ∀ s ∈ segs2.toList, GateW c.P c.d s :=
+  forIn_app (GateW c.P c.d) _ _ (fun m hmm r y hy => by
+      rw [List.mem_range'_1] at hmm
+      obtain ⟨v, hv, hy⟩ := Walk.except_bind_ok hy
+      simp only [pure, Except.pure, Except.ok.injEq] at hy
+      exact ⟨v, hy.symm, hCW k m _ _ v (by omega) hsp hv⟩) out0 segs h
+
+/-- A scan's piece of stride 1: its ys past the carry's `cl` leaves, as `scanOne` reads them, of a composite step, give
+segments naming the body's gates with their widths. -/
+theorem scanYs_w (c : Desc.Ctx) (fuel : Nat) (hCW : CalleeW c fuel)
+    {k cl yl a b : Nat} (hm : cl < b → (b - 1 - cl) / yl < (c.body.nodes[k]!).members)
+    (hsp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false)
+    {out0 segs : Array Seg}
+    (h : (if (decide (cl < b) && decide (yl > 0)) = true then do
+        Desc.walkAtMost "iterations of a scan whose ys are read one by one" ((b - cl - 1) / yl + 1 - (max a cl - cl) / yl)
+        (forIn [(max a cl - cl) / yl:(b - cl - 1) / yl + 1] out0 fun m s => do
+          let v ← Desc.fromCallee c fuel k m (cl + max (max a cl - cl) (m * yl) - m * yl)
+            (cl + min (b - cl) ((m + 1) * yl) - m * yl)
+          pure (ForInStep.yield (s ++ v))) >>= fun s => pure s
+      else pure out0) = .ok segs) :
+    ∃ s2, segs = out0 ++ s2 ∧ ∀ s ∈ s2.toList, GateW c.P c.d s := by
+  split at h
+  · rename_i hc
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hc
+    have h := walkAtMost_bind _ _ _ h
+    obtain ⟨v, hv, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, Nat.add_sub_cancel,
+      Nat.div_one] at hv
+    exact ys_w c fuel hCW (k := k) (cl := cl) (yl := yl) (lo := max a cl - cl) (hi := b - cl)
+      (by rw [show b - cl - 1 = b - 1 - cl by omega]; exact hm hc.1) hsp hv
+  · simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    exact ⟨#[], by simp, fun s hs => by simp at hs⟩
+
+/-- **A scan's piece of one row**, one step up: what `carry` and `fromCallee` give of its final carry's leaves and its
+ys names the body's gates with their widths wherever their segments one step down do (`scanShape_of`'s argument). -/
+theorem scanW_of (c : Desc.Ctx) (hB : Resolve.BodyOk c.P c.d) (fuel : Nat)
+    (hCW : CalleeW c fuel) (hK : CarryW c fuel) : ScanW c fuel := by
+  intro q segs k node carry y ht hn hform hn0 h0 hff hr hret hq hf h
+  have hdo := downOk_of hB hn
+  have h1 := rows_one h0 hr
+  have hnode : c.body.nodes[k]! = node := node_get hn
+  let M : Nat → Nat × Nat := fun j => if j < carry.leaves then (node.n - 1, j)
+    else ((j - carry.leaves) / y.leaves, carry.leaves + (j - carry.leaves) % y.leaves)
+  have hbd : ∀ j, j < node.out.leaves →
+      (M j).1 < node.n ∧ (M j).2 < (c.P.defs[node.fn]!).body.ret.count := by
+    intro j hj
+    have hdk := hdo j hj
+    simp only [hform] at hdk
+    obtain ⟨carry', y', hr', hmn, hj'⟩ := hdk.2 hn0
+    rw [hret] at hr'
+    injection hr' with e
+    obtain ⟨rfl, rfl⟩ : carry = carry' ∧ y = y' := by simpa using e
+    by_cases hlt : j < carry.leaves
+    · simp only [M, hlt, ↓reduceIte]; simp only [hlt, ↓reduceIte] at hmn hj'; exact ⟨hmn, hj'⟩
+    · simp only [M, hlt, ↓reduceIte]; simp only [hlt, ↓reduceIte] at hmn hj'; exact ⟨hmn, hj'⟩
+  have hpt : ∀ t < q.len, 0 ≤ q.at t ∧ (q.at t).toNat < node.out.leaves := by
+    intro t ht'
+    have hm := at_mem_pos h1 ht'
+    have hb := hq _ hm
+    have hfl := hf _ hm k ht
+    simp only [hnode] at hb hfl
+    exact ⟨hb, by omega⟩
+  have hlen : 0 < q.len := by rw [← count_one h1]; omega
+  have hsp : (c.P.defs[(c.body.nodes[k]!).fn]!).prim = false := by
+    have := hdo _ (hpt 0 hlen).2
+    simp only [hform] at this
+    rw [hnode]
+    exact this.1
+  rw [down_scan_head c fuel q ht hff hn hform hn0 h0 hr hret] at h
+  split at h
+  · rename_i hs
+    unfold scanOne at h
+    dsimp only at h
+    have hat : ∀ t, (q.at t).toNat = q.base.toNat + t := fun t => by
+      have := (hpt 0 hlen).1
+      simp only [Desc.Piece.at, hs] at this ⊢
+      omega
+    have hbl : q.base.toNat + q.len ≤ node.out.leaves := by
+      have := (hpt (q.len - 1) (by omega)).2
+      rw [hat] at this
+      omega
+    have hmB : carry.leaves < q.base.toNat + q.len →
+        (q.base.toNat + q.len - 1 - carry.leaves) / y.leaves < (c.body.nodes[k]!).members := by
+      intro hcb
+      have := (hbd (q.base.toNat + q.len - 1) (by omega)).1
+      simp only [M, show ¬ (q.base.toNat + q.len - 1 < carry.leaves) by omega, ↓reduceIte] at this
+      rw [hnode, members_scan hform]
+      exact this
+    split at h
+    · obtain ⟨v1, hv1, h⟩ := Walk.except_bind_ok h
+      obtain ⟨s2, rfl, hA2⟩ := scanYs_w c fuel hCW hmB hsp h
+      have hA1 := hK k (node.n - 1) _ _ v1 (by rw [hnode]; exact hform)
+        (by rw [hnode, members_scan hform]; omega) (fun hlt => by
+          have := (hbd (min (q.base.toNat + q.len) carry.leaves - 1) (by omega)).2
+          simp only [M, show min (q.base.toNat + q.len) carry.leaves - 1 < carry.leaves by omega,
+            ↓reduceIte] at this
+          rw [hnode]
+          omega) hv1
+      intro s hs
+      rw [Array.empty_append, Array.toList_append, List.mem_append] at hs
+      exact hs.elim (hA1 s) (hA2 s)
+    · obtain ⟨s2, rfl, hA2⟩ := scanYs_w c fuel hCW hmB hsp h
+      rw [Array.empty_append]
+      exact hA2
+  · unfold scanPts at h
+    dsimp only at h
+    have h := walkAtMost_bind _ _ _ h
+    obtain ⟨v, hv, h⟩ := Walk.except_bind_ok h
+    simp only [pure, Except.pure, Except.ok.injEq] at h
+    subst h
+    simp only [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size] at hv
+    rw [range'_size] at hv
+    obtain ⟨segs', hsegs, hA⟩ := forIn_app (GateW c.P c.d) _ (List.range q.len)
+      (fun t htm r y' hy => by
+        obtain ⟨-, hlt⟩ := hpt t (List.mem_range.1 htm)
+        obtain ⟨hmn, hjr⟩ := hbd _ hlt
+        split at hy
+        · rename_i hc
+          obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v', hy.symm, ?_⟩
+          simp only [M, hc, ↓reduceIte] at hmn hjr
+          have := hK k (node.n - 1) (q.at t).toNat ((q.at t).toNat + 1) v' (by rw [hnode]; exact hform)
+            (by rw [hnode, members_scan hform]; exact hmn) (fun _ => by rw [hnode]; omega) hv'
+          simpa using this
+        · rename_i hc
+          obtain ⟨v', hv', hy⟩ := Walk.except_bind_ok hy
+          simp only [pure, Except.pure, Except.ok.injEq] at hy
+          refine ⟨v', hy.symm, ?_⟩
+          simp only [M, hc, ↓reduceIte] at hmn
+          have := hCW k _ _ _ v' (by rw [hnode, members_scan hform]; exact hmn) hsp hv'
+          simpa using this) #[] v hv
+    rw [hsegs, Array.empty_append]
+    exact hA
+
 /-- A root gate of width `w` (`LocW`) has width `w` in `circuitOf`'s circuit. -/
 theorem w_of_locW {P : Prog} {c : Circuit} (hc : circuitOf P = .ok c) {g w : Nat} (hg : g < gates P)
     (h : LocW P P.root g w) : w = c.w[g]! :=
