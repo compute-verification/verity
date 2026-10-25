@@ -1,7 +1,7 @@
 {
  "digests": {
-  "IngressScanBucket_v1{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=3,WITHIN=3}": {
-   "sha512": "0d01a32d67e0b7c04cc5f4b180057a8970e97091205a9d37334606d74313a48ddd39c5447384c91b4c2184dc9f513f48919d4d24835b74d8b2935d4402fb36cb"
+  "IngressScanBucket_v1{B=512,r=2,lanes=2,C=4,IDB=17,EVERY=3,WITHIN=3,D=5,KO=8}": {
+   "sha512": "1eadbdc66c55673a5d1ff8bec8e4472a5a35c93fcf3803b19fa85b98ee2b42167b48a073d5b64bc3dfc56e1cc3640588876fe24ebd5cfed79bf97bc2568882c9"
   }
  }
 }

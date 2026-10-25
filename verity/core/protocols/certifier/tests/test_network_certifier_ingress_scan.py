@@ -225,7 +225,7 @@ def test_each_negative_is_refused_by_the_reference(run):
 
 @pytest.mark.slow
 def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_random_flips(run):
-    """Slow (about 20 s: 230,000-odd ANDs traced, then evaluated on about 100 cases, and the egress unit on 48)."""
+    """Slow (about 13 s: 224,436 ANDs traced, then evaluated on about 110 cases, and the egress unit on 47)."""
     ch = run.chain
     honest = [ch.unit(t) for t in range(len(run.rows))]
     negs = _negatives(run)
