@@ -37,8 +37,10 @@ computed in the decoder's order (callees first) and shared by every activation:
 
 A body's references are resolved through its nodes' outputs with the callees' `ret`: a batch whose members' returns
 make one run maps any piece by one affine map, whole members of any other batch become one segment of copies, and a
-pass-through goes back through the node's arguments. Per IU, its reads are those segments with the IU's own nodes and θ's
-taken out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
+pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
+one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
+are one copy of pieces of as many nodes (`Seg.split`). Per IU, its reads are those with the IU's own nodes and θ's taken
+out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
 Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
@@ -209,6 +211,13 @@ def Seg.count (s : Seg) : Nat := s.reps * s.len
 
 /-- `s` as a set of gates and leaves: copies all alike (`shift = 0`) as one. -/
 def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with reps := 1 } else s
+
+/-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
+pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
+read is kept, and its IU found, by its first piece. -/
+def Seg.split (s : Seg) : Array Seg :=
+  let s := s.alike
+  if s.reps == 1 then s.ps.map .one else #[s]
 
 def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
   ps.map fun q => match q.tgt with
@@ -743,7 +752,8 @@ def carriesRead (c : Ctx) (k : Nat) (used : Ivs) : Except String (Array Seg) := 
 /-- What node `k`'s gates read outside the node, resolved in the body: every argument of a primitive (or of a batch of one
 with members); for a composite callee, the positions its `used` names, all members at once (`memberRows`, else member by
 member) unless every member reads its whole argument; and for a scan, an iteration's carry read from the one before it,
-through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read. -/
+through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read, and one
+copy's pieces each a read (`Seg.split`). -/
 def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   let node ← c.node k
   let callee := c.P.defs[node.fn]!
@@ -759,7 +769,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   if callee.prim then
     if node.form == .batch && node.n == 0 then return #[]
     for i in [0:node.args.size] do out := out ++ (← resolve i (whole i))
-    return out.map Seg.alike
+    return out.flatMap Seg.split
   if node.members == 0 then return #[]
   let used := (c.memo[node.fn]!).used
   for i in [0:node.args.size] do
@@ -782,12 +792,12 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   if node.form == .scan && node.n ≥ 2 then out := out ++ (← carriesRead c k (used[0]?.getD #[]))
   let lo : Int := c.body.offsets[k]!
   let hi : Int := c.body.offsets[k + 1]!
-  -- a segment's gates are one node's
-  return (out.filter fun s => match s.ps[0]? with
+  -- a read's gates are one node's
+  return (out.flatMap Seg.split).filter fun s => match s.ps[0]? with
     | some q => match q.tgt with
       | .gate _ => !(lo ≤ q.base && q.base < hi)
       | _ => true
-    | none => false).map Seg.alike
+    | none => false
 
 /-- Definition `d`'s summary, its callees' in `memo`. -/
 def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do

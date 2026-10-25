@@ -9,17 +9,17 @@
  },
  "runs": {
   "NciCheck.DescDifftestMain": {
-   "why": "3,662 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, and 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
+   "why": "3,674 declarations divided into IUs of root nodes (3,000 random, a quarter of them read across their arrays' rows, 24 on each distinct descriptor of the circuits fixtures, 6 on a composite keyed with an input id, which is no input node, 2 on a gate reading a nested scan's carry, one of them past NciCheck.Desc.walkBound's limit, 4 on a scan of no iterations, the 3 whose carry is a value (read or not) refused by NciCheck.Desc.resolvable, and 12 on whole members of a batch returning leaves of two arguments they share, each another node's, then the unrolled difftest's two pinned ones) on which NciCheck.Desc.check gives what scripts/nci_reference.py's check_desc computes, and, on each one it gives a verdict on, what NciCheck.check gives on the instance expanded gate by gate: the description-sized check against the unrolled one",
    "args": [
     "{desc_difftest/instances.jsonl}",
     "{desc_difftest/expanded.jsonl}",
     "{desc_difftest/python.jsonl}",
-    "3662"
+    "3674"
    ],
    "data": {
-    "desc_difftest/expanded.jsonl": "aa11163f65c699fcd2bcf4e74a95c8fd4f445ac516785cd5aa01913b6dbea6a7",
-    "desc_difftest/instances.jsonl": "0efd4eb4082eb758ec011e8d400e4d7b65d7258802d33a78a9c913279be906fa",
-    "desc_difftest/python.jsonl": "116bb781429cd20ab8dafb04d81e3176ee36af47047990ad08cb8cdcce8c8096"
+    "desc_difftest/expanded.jsonl": "8767df90f46dc004cd9f458fa803947120652af1911dbc32757281ee2aa97a24",
+    "desc_difftest/instances.jsonl": "d15a0598339db8c12d2cb8a1cc4736f6295fea4c1224128df35cde1d70ba3d8d",
+    "desc_difftest/python.jsonl": "df2efea8c33770811195be28f6a5f409405e485208c1f007bec4431404c8056a"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
