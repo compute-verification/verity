@@ -38,7 +38,7 @@ theorem rLeak_of_rAcc {H : Msg → Msg} {Cm : Commitment Bool} {parse : Msg → 
     {As : Stmt → (ℕ → Bool) → Set (ℕ → Bool)} {Dj : ℕ}
     (hin : ∀ s P, partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) (x : Msg)
     (w : Wit) (h : RAcc H Cm parse partition L K S lay k δ x w) : RLeak H Cm parse partition L K S lay k δ As Dj x w := by
-  obtain ⟨s, P, hs, hP, hRel, hdisj, free, hfree, hacc⟩ := h
+  obtain ⟨s, P, hs, hP, hRel, hdisj, free, hfree, -, hacc⟩ := h
   have hF := faulty_mem_faultySets hRel hdisj
   exact ⟨s, P, hs, hP, fun op o hC hCov hl hD =>
     ⟨hl, hD, _, hF, hin s P hP (traceVal s.prog (w.val H Cm s)) _ hF op o
