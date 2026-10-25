@@ -11,11 +11,22 @@
 #      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)  LEG_LOWER_REFUSED=1 (with LEG_DEFS: lower a shape the census
 #      refuses, for C-Flock's own refusal)
 # Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
-# prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts.
+# prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
+# kept however the job ends, a timeout or a cancel included.
 set -uo pipefail
 export HZ_CONFIGS=prove-leg HZ_MEM_GB=${LEG_MEM_GB:-32}
 if [ -n "${LEG_CACHE:-}" ] && mkdir -p "$LEG_CACHE" 2>/dev/null && [ -w "$LEG_CACHE" ]; then export HZ_CACHE=$LEG_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
+keep_leg() {
+  [ -d "$W/leg" ] || return 0
+  mkdir -p "$OUT/leg"
+  (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
+  [ -f "$W/leg/summary.json" ] && cp "$W/leg/summary.json" "$OUT/summary.json"
+  return 0
+}
+# job.sh's EXIT trap removes $W: a timeout's or a cancel's TERM must reach it with the records kept first
+trap 'keep_leg; rm -rf "$W"' EXIT
+trap 'exit 143' TERM INT HUP
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 # PRF-141: the prover's worker threads overflow the default stack on wide units
@@ -46,8 +57,5 @@ else
     --n "${LEG_N:-4}" --ks "${LEG_KS:-128,256}" $NEG $REG 2>&1 | tee -a "$OUT/leg.log" | cut -c1-4000
   rc=${PIPESTATUS[0]}
 fi
-mkdir -p "$OUT/leg"
-(cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
-[ -f "$W/leg/summary.json" ] && cp "$W/leg/summary.json" "$OUT/summary.json"
 log "leg: done, rc $rc"
 exit "$rc"
