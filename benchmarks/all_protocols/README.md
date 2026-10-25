@@ -44,7 +44,9 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
   --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
   the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
-  `$OUT/warden-session/`. It stops short of a verdict until certifier/v0 has a form for those windows.
+  `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a
+  period whose every link-window has a scan answer is decided in certifier/v0's rows form; a later period waits on
+  `scan_zk --window W`, and the stub's `byte` and `extra` pass the scan, so only the in-the-clear tie refuses them.
 - `verity_all_protocols/runner.py`: the periods, each report in `$OUT/p<P>/report.json` and `$OUT/reports.jsonl`, and one
   `ALLP` line per period. `--tamper P,...` makes those periods' loop record outputs that aren't its model's.
 

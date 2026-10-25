@@ -34,7 +34,8 @@ holding the tampered link-window (`TAMPERED_WINDOW`) must reject there, which th
 periods may accept.
 
 **The warden path** (``CERTIFIER_PATH=warden``, `warden_leg`; the default ``certifier`` is the path above, whose
-verdict the table keeps until this one decides): the records are the network certifier's own cells as one device.
+verdict the table keeps until this one decides every period): the records are the network certifier's own cells as one
+device.
 `warden_session` serves the same prompts through `warden_serve.py rehearse --ids --prompts --window-per-group` at the
 scan's schedule (`warden_argv`, the gate's scan rehearsal), the stub answering id-form, a group of a period's requests
 at a time, once honest and once for each of the stub's tampers (`WARDEN_TAMPER`, `WARDEN_TAMPERS`: its first id request
@@ -45,8 +46,16 @@ clear (`warden_io`), and the scan's chain over link-window 0 in the clear (`scan
 tampered period must be refused, ``late`` by the scan (the network certifier failed its connection), ``byte`` and
 ``extra`` by the output tie alone (the scan reads its outputs off the egress). Only the gate's public files reach the
 runner's ``--out/warden-session/`` (`warden_publish`, `WARDEN_PUBLIC`, the certificates without what they sign). The
-salts, the records, the client's log, the traffic and the prompts stay in the scratch. Then the leg stops at
-`WARDEN_PENDING`: certifier/v0's form for these windows, and the scan's answer for every window.
+salts, the records, the client's log, the traffic and the prompts stay in the scratch. Each run the dry scan accepts
+is then proved on link-window 0 (`scan_prove`: `scan_zk.py prove --warden-run --draw` `SCAN_DRAW`, its units ``--zk``
+behind the Lean firewall; a round not as expected or witness in what its verifier received refuses the session), and
+its audit record is one-stage's answer for its registration, re-decided at the leg's δ (`scan_window`). A period whose
+every link-window has a scan answer is decided in certifier/v0's rows form (`rows_case_of`, ``network-period check``):
+per link-window the scan's registration in the commitment and, in the evidence, its answer, the three records'
+certificates and the two rows' registrations, under the deployment's key and its one schedule; the scan's layout terms
+its free inputs (`scan_free`, every scan row but the network certifier's own cells, an overcount) over a link-window's
+buckets. A period with a link-window the scan didn't answer raises (`WARDEN_PENDING`: link-window 0 alone is proved
+yet, and a ``late`` run's is refused before the scan registers it).
 
 Layout terms (`layout`): the audit's free inputs (`free_inputs`, from the window's ``circuit.json``: every unit's
 input-row bits, less the rows wires feed or ``external`` names), the observation horizon the link's (its link-windows'
@@ -103,9 +112,14 @@ _TIE_GAP = {
            "the registered ones (io, warden_io)",
     "fix": "NET-68's advised tie: the certified ids proved to be the registered outputs' (io_tie) inside the period's "
            "proofs"}
+_SCAN_GAP = {
+    "gap": "the scan's layout terms are the leg's overcount (its free inputs every scan row but the network certifier's "
+           "own cells, `scan_free`), and its draw the verifier's own Lean coins on link-window 0 alone",
+    "fix": "LEAK-LEAN's exact K terms against the Lean, and IO-TIE's scan_zk --window W on the challenger's coins "
+           "(#4387)"}
 #: what each path's verdict still stands on that isn't the network certifier's own, each with its fix (``stubbed`` in
 #: ``summary.json``)
-STUBBED = {"certifier": (_PROXY_GAP, _OFF_HOST_GAP, _TIE_GAP), "warden": (_OFF_HOST_GAP, _TIE_GAP)}
+STUBBED = {"certifier": (_PROXY_GAP, _OFF_HOST_GAP, _TIE_GAP), "warden": (_OFF_HOST_GAP, _TIE_GAP, _SCAN_GAP)}
 #: a canonical event's most bytes (`active.TOKEN_BYTES`)
 TOKEN_BYTES = 64
 #: what `publish` copies of each run of the session into the runner's ``--out``: nothing the prover holds as witness
@@ -126,10 +140,12 @@ WARDEN_TAMPERED_PERIOD = 0
 #: a warden rehearsal's traffic flags as the gate's (`auditor.WARDEN_RATE`, ``WARDEN_SEED``, ``WARDEN_TAIL_S``), at the
 #: greedy sampling the stub's id requests need (`torch_loop_stub.id_refusal`)
 WARDEN_TRAFFIC = ("--rate", "0.5", "--seed", "0", "--tail", "60", "--temperature", "0", "--top-p", "1")
-#: why the warden path's case isn't decided yet
-WARDEN_PENDING = ("verity/certifier/v0 has no form for the network certifier's own cells yet (per link-window its two "
-                  "row registrations, its three records' certificates and the scan's one-stage answer, the schedule's "
-                  "digest for the clock syncs), and scan_zk.py proves link-window 0 alone (no --window W)")
+#: why a warden period past link-window 0 isn't decided yet
+WARDEN_PENDING = "scan_zk.py proves link-window 0 alone (no --window W), so no later link-window has a scan answer"
+#: the scan's sampled draw (``SCAN_DRAW``): Lean ``draw --stratified K`` of the window's 2T units
+SCAN_DRAW = 16
+#: what `scan_prove` keeps of a scan's ``--out``: its summary and its honest round's registration, draw and audit record
+SCAN_KEEP = ("summary.json", "honest/registration.json", "honest/draw.json", "honest/audit.json")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -427,6 +443,76 @@ def warden_rehearse(s: Path, prompts: Sequence[int], steps: int, h: int, periods
             "scan": scans, "dir": str(s)}
 
 
+def _free_ports(n: int) -> int:
+    """A base port with the ``n`` ports from it free now (`scan_zk.py prove --port`: its sessions' ports)."""
+    import socket
+
+    for _ in range(64):
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            base = s.getsockname()[1]
+        if base + n >= 65536:
+            continue
+        try:
+            for p in range(base, base + n):
+                with socket.socket() as s:
+                    s.bind(("127.0.0.1", p))
+            return base
+        except OSError:
+            continue
+    raise RuntimeError(f"no {n} free ports in a row")
+
+
+def scan_prove(run: Path, s: Path, strategy: str, tools: Mapping[str, str], draw: int) -> dict[str, Any]:
+    """The scan's proof of a warden run's link-window 0 (`scan_zk.py prove --warden-run --draw`, its units ``--zk``
+    behind the Lean firewall, the draw the verifier's Lean's): its exit, and `SCAN_KEEP` of its ``--out`` in
+    ``s/scan/<strategy>`` (the rest, provers' files and sessions, in a scratch removed after)."""
+    env = {**os.environ, "FC_FIREWALL_LEAN": tools["flock-firewall"],
+           "PYTHONPATH": os.pathsep.join(filter(None, [tools["m0-pythonpath"], str(TRACES),
+                                                       str(ROOT / "tools" / "verity" / "circuit_check" / "src"),
+                                                       os.environ.get("PYTHONPATH")]))}
+    keep = s / "scan" / strategy
+    keep.mkdir(parents=True, exist_ok=True)
+    scratch = Path(tempfile.mkdtemp(prefix="certifier-leg-scan-"))
+    try:
+        rc = _run([sys.executable, str(TRACES / "scan_zk.py"), "prove", "--warden-run", str(run), "--draw", str(draw),
+                   "--bin", tools["flock-circuit"], "--lean", tools["flock-verify"], "--out", str(scratch),
+                   "--port", str(_free_ports(16))], s / f"scan-prove-{strategy}.log", env)
+        for f in SCAN_KEEP:
+            if (scratch / f).is_file():
+                (keep / f).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(scratch / f, keep / f)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    summary = json.loads((keep / "summary.json").read_text()) if (keep / "summary.json").exists() else {}
+    return {"exit": rc, "ok": summary.get("ok"), "dir": str(keep), "draw": draw}
+
+
+def scan_free(summary: Mapping[str, Any]) -> int:
+    """The scan's free inputs a link-window, the leg's overcount: each of its T buckets' ingress and egress units' rows
+    (``summary.json``'s ``bits``) but the network certifier's own cells (``row``), which its rows' registrations bind."""
+    return summary["T"] * sum(b for k, b in summary["bits"].items() if k.rsplit("/", 1)[-1] != "row")
+
+
+def scan_window(sess: Mapping[str, Any], strategy: str, delta: Fraction) -> tuple[dict, dict, int] | None:
+    """Link-window 0's scan registration, its one-stage answer re-decided at ``delta`` (`audit_answer`; a refused
+    audit is a reject for that registration), and its free inputs (`scan_free`); None when the run's scan proved
+    nothing (refused before it registered, or not run)."""
+    sp = (sess.get("scan_prove") or {}).get(strategy)
+    if not sp or not (Path(sp["dir"]) / "honest" / "registration.json").exists():
+        return None
+    d = Path(sp["dir"])
+    reg = json.loads((d / "honest" / "registration.json").read_text())
+    record = json.loads((d / "honest" / "audit.json").read_text()) if (d / "honest" / "audit.json").exists() else None
+    if record is not None and record.get("accepted") is True:
+        answer = audit_answer(reg, {"verdict": "accept"}, record, delta)
+    else:
+        answer = {"commitment": R.digest(reg), "profile": None, "protocol": ONE_STAGE, "public": None,
+                  "reason": f"the scan's audit of link-window 0 refused (scan_zk.py exited {sp['exit']})",
+                  "verdict": "reject"}
+    return reg, answer, scan_free(json.loads((d / "summary.json").read_text()))
+
+
 def warden_tampers() -> list[str]:
     """``WARDEN_TAMPER``'s tampered runs, comma-separated (empty: none), `WARDEN_TAMPERS` when it is unset."""
     sys.path.insert(0, str(TRACES))
@@ -446,9 +532,14 @@ def warden_session(period_dir: Path) -> dict[str, Any]:
     if (s / "session.json").exists():
         return json.loads((s / "session.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
+    tools, exes = _tools(period_dir), lean_exes()
     prompts, steps, h = requests_of(period_dir)
     rec = warden_rehearse(s, prompts, steps, h, _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10),
                           ["honest", *warden_tampers()])
+    draw = _env_int("SCAN_DRAW", SCAN_DRAW)
+    rec["scan_prove"] = {st: scan_prove(s / "rehearsal" / st, s, st, tools, draw) for st in rec["strategies"]
+                         if rec["scan"][st]["accepted"]}
+    rec["exes"] = exes
     (s / "session.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     return rec
 
@@ -692,6 +783,37 @@ def case_of(rw: Mapping[str, Any], windows: Sequence[int], audits: Sequence[tupl
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
+def rows_case_of(rw: Mapping[str, Any], windows: Sequence[int], scans: Mapping[int, tuple[dict, dict, int]],
+                 audits: Sequence[tuple[dict, dict]], first: int, free: Sequence[int]) -> dict[str, Any]:
+    """``verity/certifier/v0``'s case in the rows form (`NetworkCheck.Period`'s) of a warden run's link-windows
+    ``windows`` (`warden_windows`), each with its scan's registration and answer (``scans[w]``, `scan_window`), and
+    the compute ``audits`` with their ``free`` inputs: the network certifier's one schedule and key from the run's
+    deployment, the scan's layout terms its free inputs over one link-window's buckets, and the audits' horizon the
+    link-windows' buckets."""
+    sys.path.insert(0, str(TRACES))
+    import warden_serve as WS
+
+    if len(free) != len(audits):
+        raise ValueError(f"{len(free)} free-input counts for {len(audits)} audits")
+    dep = rw["deployment"]
+    key, T = WS.cs.read_public(dep["key"]), dep["params"]["window"]
+    N, W, H = dep["key"]["params"]
+    xs, sc = [rw["windows"][w] for w in windows], [scans[w] for w in windows]
+    program, scan_free_bits = {r["program"] for r, _, _ in sc}, {f for _, _, f in sc}
+    if len(program) != 1 or len(scan_free_bits) != 1:
+        raise RuntimeError(f"the link-windows' scans register {len(program)} Programs and {len(scan_free_bits)} "
+                           "layouts, not the scan's one")
+    params = {**layout(free, len(xs) * T), "key": key.public.hex(), "link": WS.LINK,
+              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": program.pop(),
+              "scan": {"free": scan_free_bits.pop(), "steps": T}, "schedule": dict(dep["params"]),
+              "session": dep["session"], "windows": len(xs), "first": first}
+    commitment = canonical_json({"audits": [r for r, _ in audits], "windows": [r for r, _, _ in sc]})
+    evidence = canonical_json({"audits": [a for _, a in audits], "windows": [
+        {"answer": a, "certificates": [x["certificates"][n] for n in (WS.INGRESS, WS.EGRESS, WS.FAILS)],
+         "registrations": [x["registrations"][d] for d in ("ingress", "egress")]} for x, (_, a, _) in zip(xs, sc)]})
+    return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
+
+
 def check(exe: str, case: Mapping[str, Any]) -> dict[str, Any]:
     """``network-period check`` on the case: its answer."""
     with tempfile.TemporaryDirectory() as d:
@@ -793,8 +915,10 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
 def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The period on the network certifier's own cells (module docstring, "The warden path"): its link-windows, their
-    registrations and certificates, the certified ids against the registered outputs, and the scan's dry chain; the
-    tampered runs' tampered period must be refused. Then `WARDEN_PENDING`: certifier/v0 has no form to decide it."""
+    registrations and certificates, the certified ids against the registered outputs, the scan's dry chain, and where
+    every link-window has a scan answer the rows form's case decided by ``network-period check``; the tampered runs'
+    tampered period must be refused. Its answer at δ = 1/100; a period with a link-window the scan didn't answer
+    raises (`WARDEN_PENDING`)."""
     index = json.loads((period_dir / "period.json").read_text())["period"]
     sess = warden_session(period_dir)
     warden_publish(sess, out.parent.parent / WARDEN_SESSION)
@@ -811,6 +935,12 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         return RuntimeError(why)
 
+    summary["scan_prove"] = sess.get("scan_prove") or {}
+    for name, sp in summary["scan_prove"].items():
+        if sp["exit"] != 0:
+            raise fail(f"scan_zk.py prove of the {name} run's link-window 0 exited {sp['exit']}: a round not as "
+                       f"expected, or witness in what the verifier received ({sp['dir']})")
+    exe, answer = sess["exes"]["network-period"], None
     for strategy in sess["strategies"]:
         rw = warden_windows(sess, strategy)
         ws = warden_period_windows(rw["groups"], index, per)
@@ -821,6 +951,24 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                             for w in ws if None in (*rw["windows"][w]["registrations"].values(),
                                                     *rw["windows"][w]["certificates"].values())}}
         summary[strategy] = row
+        unanswered = [w for w in ws if w != 0 or scan_window(sess, strategy, DELTAS[0]) is None]
+        if unanswered:
+            row["pending"] = (f"link-windows {unanswered}: {WARDEN_PENDING}" if unanswered != [0] else
+                              "the scan refused link-window 0 before it registered it: no scan answer to decide on")
+        else:
+            for k, delta in enumerate(DELTAS):
+                case = rows_case_of(rw, ws, {0: scan_window(sess, strategy, delta)}, _audits(period_dir, out, delta),
+                                    ws[0], [summary["free_inputs"]["bits"]])
+                a = check(exe, case)
+                name = ("" if strategy == "honest" else f"{strategy}.") + "certifier" + (
+                    "" if k == 0 else f".delta-{delta.denominator}")
+                (out / f"{name}.case.json").write_text(json.dumps(case, sort_keys=True))
+                (out / f"{name}.answer.json").write_text(json.dumps(a, sort_keys=True))
+                pub = a.get("public") or {}
+                row[str(delta)] = {"verdict": a["verdict"], "reason": a.get("reason"), "K": pub.get("K"),
+                                   "eps": pub.get("eps"), "scans": pub.get("scans")}
+                if strategy == "honest" and k == 0:
+                    answer = a
         if strategy == "honest":
             if row["unsigned"]:
                 raise fail(f"period {index}: the honest run's link-windows {sorted(row['unsigned'])} lack a "
@@ -834,7 +982,9 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                 row["io"]["refused"] = (f"the certified ids are not the period's registered outputs'; the integrity "
                                         f"leg answered {integrity}")
         elif index == WARDEN_TAMPERED_PERIOD:
-            refused = [*(["scan"] if scan is not None and not scan["accepted"] else []),
+            port = [row[str(d)]["verdict"] for d in DELTAS if str(d) in row]
+            refused = [*(["period check"] if port and "accept" not in port else []),
+                       *(["scan"] if scan is not None and not scan["accepted"] else []),
                        *(["tie"] if not row["io"]["equal"] else [])]
             row["refused_by"] = refused
             if not refused or (strategy == "late" and "scan" not in refused):
@@ -842,7 +992,10 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
                            f", not {'the scan' if strategy == 'late' else 'the output tie'}")
     (out / "io.json").write_text(json.dumps(summary["honest"]["io"], indent=1, sort_keys=True))
     (out / "runs.json").write_text(json.dumps([]))
-    raise fail(WARDEN_PENDING)
+    if answer is None:
+        raise fail(f"period {index}: {summary['honest']['pending']}")
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+    return answer
 
 
 def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
@@ -907,6 +1060,7 @@ __all__ = ["DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED", "TAMPERED
            "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS", "answer_of_outcome", "audit_answer", "case_of",
            "certified_events", "certifier_leg", "check", "clock_evidence", "free_inputs", "io", "layout", "leg",
            "loop_units", "match_ids", "match_outputs", "n2_refusal", "n2_report", "period_windows", "publish",
-           "registered_outputs", "requests_of", "scan_dry", "scan_schedule", "session", "warden_argv", "warden_ids",
+           "registered_outputs", "requests_of", "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free",
+           "scan_prove", "scan_schedule", "scan_window", "session", "warden_argv", "warden_ids",
            "warden_io", "warden_leg", "warden_period_windows", "warden_publish", "warden_rehearse", "warden_session",
            "warden_tampers", "warden_windows"]

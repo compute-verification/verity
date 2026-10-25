@@ -272,7 +272,7 @@ def test_the_path_is_certifier_paths_and_the_certifier_only_one_by_default(monke
     monkeypatch.setenv("CERTIFIER_PATH", "proxy")
     with pytest.raises(RuntimeError, match="CERTIFIER_PATH"):
         L.leg(Path("p"), "node", Path("o"))
-    assert L.STUBBED["warden"] == L.STUBBED["certifier"][1:]
+    assert L.STUBBED["warden"][:2] == L.STUBBED["certifier"][1:]
 
 
 def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
@@ -351,6 +351,74 @@ def test_only_the_warden_sessions_public_files_are_published(tmp_path):
     assert got == sorted(f"{st}/{f}" for st in ("honest", "late") for f in (*L.WARDEN_PUBLIC, "certificates.jsonl"))
     assert [json.loads(x) for x in (out / "late" / "certificates.jsonl").read_text().splitlines()] == [
         {"certificate": cert}, {"refused": "signer"}]
+
+
+SCAN_SUMMARY = {"T": 32, "bits": {"ingress/row": 16384, "ingress/sin": 3, "ingress/prog": 5, "ingress/view": 11,
+                                  "egress/state": 7, "egress/row": 65536}}
+
+
+def test_the_scans_free_inputs_are_every_scan_row_but_the_cells():
+    assert L.scan_free(SCAN_SUMMARY) == 32 * (3 + 5 + 11 + 7)
+
+
+def test_a_scan_window_is_its_audit_records_answer_and_a_refused_one_a_reject(tmp_path):
+    d = tmp_path / "scan" / "honest"
+    (d / "honest").mkdir(parents=True)
+    (d / "summary.json").write_text(json.dumps(SCAN_SUMMARY))
+    (d / "honest" / "registration.json").write_text(json.dumps(LOOP))
+    sess = {"scan_prove": {"honest": {"dir": str(d), "exit": 0}}}
+    for record, verdict in ((ACCEPTED, "accept"), (ACCEPTED | {"accepted": False}, "reject"), (None, "reject")):
+        (d / "honest" / "audit.json").unlink(missing_ok=True)
+        if record is not None:
+            (d / "honest" / "audit.json").write_text(json.dumps(record))
+        reg, a, free = L.scan_window(sess, "honest", Fraction(1, 100))
+        assert reg == LOOP and free == L.scan_free(SCAN_SUMMARY)
+        assert check_answer(a) == a and a["verdict"] == verdict and a["commitment"] == R.digest(LOOP)
+        assert verdict == "reject" or a["public"]["bound"] == 921
+    assert L.scan_window(sess, "late", Fraction(1, 100)) is None
+    assert L.scan_window({}, "honest", Fraction(1, 100)) is None
+
+
+def test_a_rows_case_is_the_rows_forms():
+    import warden_serve as WS
+
+    schedule = {"bucket_ms": 100, "cell_bytes": 512, "delay": 21, "egress_cells": 65, "ingress_buckets": 12,
+                "ingress_cells": 47, "lanes": 4, "queue": 4, "slots": 4, "window": 32}
+    dep = {"key": {"params": [64, 1, 6], "public": "ab" * 24, "key_id": "ab" * 16}, "params": schedule,
+           "session": "cd" * 32}
+
+    def rows(d: str, w: int) -> dict:
+        return {"direction": d, "window": w, "root": f"{d}{w}"}
+
+    def cert(link: str, d: str, w: int) -> dict:
+        return {"digest": f"{link}{d}{w}", "direction": d, "key_id": "ab" * 16, "link": link, "signature": "ee",
+                "window": w}
+
+    rw = {"deployment": dep, "windows": {w: {
+        "registrations": {d: rows(d, w) for d in ("egress", "ingress")},
+        "certificates": {n: cert(link, d.value, w) for n, (link, d) in WS.CERTIFIED.items()}} for w in (3, 4)}}
+    scan = {**LOOP, "program": "dd" * 64}
+    scans = {w: (scan | {"partition": f"scan/{w}"}, {"verdict": "accept", "w": w}, 26 * 32) for w in (3, 4)}
+    audits = [(LOOP, {"verdict": "accept"})]
+    case = L.rows_case_of(rw, [3, 4], scans, audits, 3, [FREE])
+    p = case["params"]
+    assert sorted(p) == ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
+                         "session", "windows"]
+    assert (p["first"], p["windows"], p["link"], p["program"], p["key"]) == (3, 2, WS.LINK, "dd" * 64, "ab" * 24)
+    assert p["audits"] == [{"free": FREE, "steps": 64}] and p["scan"] == {"free": 26 * 32, "steps": 32}
+    assert p["schedule"] == schedule and p["lms"] == {"H": 6, "N": 64, "W": 1, "toy": False}
+    c, e = (json.loads(bytes.fromhex(case[k])) for k in ("commitment", "evidence"))
+    assert c == {"audits": [LOOP], "windows": [scans[3][0], scans[4][0]]}
+    assert e["audits"] == [{"verdict": "accept"}] and [x["answer"]["w"] for x in e["windows"]] == [3, 4]
+    for w, x in zip((3, 4), e["windows"]):
+        assert sorted(x) == ["answer", "certificates", "registrations"]
+        assert [(r["direction"], r["window"]) for r in x["registrations"]] == [("ingress", w), ("egress", w)]
+        assert [(c["link"], c["direction"]) for c in x["certificates"]] == [
+            (WS.LINK, "ingress"), (WS.LINK, "egress"), (f"{WS.LINK}-fails", "egress")]
+    with pytest.raises(ValueError, match="free-input counts"):
+        L.rows_case_of(rw, [3, 4], scans, audits, 3, [])
+    with pytest.raises(RuntimeError, match="2 Programs"):
+        L.rows_case_of(rw, [3, 4], scans | {4: (LOOP, {}, 26 * 32)}, audits, 3, [FREE])
 
 
 @pytest.mark.slow
