@@ -380,9 +380,9 @@
    "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
-   "imports": ["Definitions.Accounting", "Models.Accounting.Assumptions", "PouwCheck"],
+   "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
    "except": [],
-   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Models.Accounting.Assumptions`), never a proof"
+   "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   }
  },
  "reads_exempt": {
@@ -6709,7 +6709,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts"
    ]
   },
-  "Models.Accounting.Assumptions.Compose": {
+  "Definitions.Accounting.Assumptions.Compose": {
    "digest": "4147348f4bb13c83c3ef1984bd78be5a0aeed4c7a2dd9012054e219915ed9ae6",
    "definitions": {
     "Accounting.Assumptions.Compose.GuessLuckAt": "0793432daba184ac1d9937071bc9342335f5fc5d700b8a6ec6f21e1f51cbf5ae"
@@ -6720,7 +6720,7 @@
     "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod"
    ]
   },
-  "Models.Accounting.Assumptions.TS": {
+  "Definitions.Accounting.Assumptions.TS": {
    "digest": "24930e88103be1ff9183987e67aefff79a0b0624d2f016528771aeb4da4c4140",
    "definitions": {
     "Accounting.Assumptions.TS.OperandHMu": "c286bfdcb1c3bc358b47cad5625850ef2de3501375d23e554515e939a4fe47dc",

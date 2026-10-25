@@ -1,5 +1,5 @@
 import Definitions.Accounting.ComposePeriod
-import Models.Accounting.Assumptions.Compose
+import Definitions.Accounting.Assumptions.Compose
 import PouwCheck
 
 /-!
