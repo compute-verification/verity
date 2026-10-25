@@ -1511,6 +1511,55 @@ def _salt_epoch(key: Any, ledger: Any, pins: Any, main: Any, session: Any, r: by
     return None, (a, c, opened)
 
 
+def window_salt(p: dict, root_w: Any, s: Any, verify: Ch.Verify = lms_verify) -> str | None:
+    """Why the salt `s` an accepted window's service answer carries (``public.salt``, None when it carries none) is not
+    its live salt, or None.  A seeded window's answer carries none (`SEEDED_SALT`).  A live window's carries
+    ``{coins, epoch, opening, salt, session}`` (`WINDOW_SALT_FORM`): its salt epoch's number k among its weights' root
+    W's epochs, an integer in [0, 2^64), and its salt coin's commitment, opening, salt and session as `live_salt` reads
+    a live Pearl-C pass's.  W is the window's registered ``W`` root, a SHA-512 digest (`WINDOW_NO_W`), so R =
+    `salt.epoch_open_root(W, k)` binds the weights registered before the coin, and R and the session are read only
+    from the verifier's `p["live"]` inputs (`LIVE`), never the answer: the session opened on ``{root: R}`` counts as
+    `live_salt`'s does (`_salt_epoch`), ``coins`` is the commitment it signed, ``opening`` its ``pouw/salt`` coin 0
+    opened after R (`challenger.live_reason`), ``salt`` that coin's round-0 unit salt after R
+    (`h1tile.live_salt`: `window.round_key`'s stream 0, `salt.SALT_BYTES`), and ``session`` the gate's open answer for
+    the session without its secret (`_carries`)."""
+    if Wd.mode(p["check"]) != "live":
+        return None if s is None else SEEDED_SALT
+    if s is None:
+        return NO_WINDOW_SALT
+    if not (isinstance(s, dict) and sorted(s) == list(WINDOW_SALT_KEYS)):
+        return WINDOW_SALT_FORM
+    if not (_str(root_w) and _DIGEST.fullmatch(root_w)):
+        return WINDOW_NO_W
+    k = s["epoch"]
+    if not (_int(k) and 0 <= k < U64):
+        return WINDOW_EPOCH
+    r = PS.epoch_open_root(bytes.fromhex(root_w), k)
+    live = p["live"]
+    refused, got = _salt_epoch(live["key"], live["ledger"], live["pins"], live["main"], live["session"], r, verify)
+    if refused is not None:
+        return refused[1]
+    a, c, opened = got
+    try:
+        claimed = Ch.LiveCommitment.from_json(s["coins"])
+    except Ch.CoinError as e:
+        return f"the salt's coins are malformed: {e}"
+    if claimed != c:
+        return WINDOW_NOT_SIGNED
+    try:
+        o = Ch.LiveOpening.from_json(s["opening"])
+    except Ch.CoinError as e:
+        return f"the salt's {e}"
+    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
+    if why is not None:
+        return f"the salt's {why}"
+    if s["salt"] != Wd.round_key(c, o.coin, 0, r).stream(0, PS.SALT_BYTES).hex():
+        return WINDOW_SALT
+    if not _carries(s["session"], a.session, opened["seq"], r, a.commitment):
+        return WINDOW_SESSION
+    return None
+
+
 def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifest: Any, verify: Ch.Verify
               ) -> tuple[bytes | None, tuple[str, str] | None]:
     """A live Pearl-C pass's salt and None, or None and the refusal (``manifest``, ``coin`` or ``salt``, and why): `salt`'s
@@ -1576,55 +1625,6 @@ def live_salt(key: Any, ledger: Any, pins: Any, main: Any, session: Any, manifes
     if not _carries(m.get("session"), a.session, opened["seq"], r, a.commitment):
         return None, ("coin", LIVE_SESSION)
     return salt, None
-
-
-def window_salt(p: dict, root_w: Any, s: Any, verify: Ch.Verify = lms_verify) -> str | None:
-    """Why the salt `s` an accepted window's service answer carries (``public.salt``, None when it carries none) is not
-    its live salt, or None.  A seeded window's answer carries none (`SEEDED_SALT`).  A live window's carries
-    ``{coins, epoch, opening, salt, session}`` (`WINDOW_SALT_FORM`): its salt epoch's number k among its weights' root
-    W's epochs, an integer in [0, 2^64), and its salt coin's commitment, opening, salt and session as `live_salt` reads
-    a live Pearl-C pass's.  W is the window's registered ``W`` root, a SHA-512 digest (`WINDOW_NO_W`), so R =
-    `salt.epoch_open_root(W, k)` binds the weights registered before the coin, and R and the session are read only
-    from the verifier's `p["live"]` inputs (`LIVE`), never the answer: the session opened on ``{root: R}`` counts as
-    `live_salt`'s does (`_salt_epoch`), ``coins`` is the commitment it signed, ``opening`` its ``pouw/salt`` coin 0
-    opened after R (`challenger.live_reason`), ``salt`` that coin's round-0 unit salt after R
-    (`h1tile.live_salt`: `window.round_key`'s stream 0, `salt.SALT_BYTES`), and ``session`` the gate's open answer for
-    the session without its secret (`_carries`)."""
-    if Wd.mode(p["check"]) != "live":
-        return None if s is None else SEEDED_SALT
-    if s is None:
-        return NO_WINDOW_SALT
-    if not (isinstance(s, dict) and sorted(s) == list(WINDOW_SALT_KEYS)):
-        return WINDOW_SALT_FORM
-    if not (_str(root_w) and _DIGEST.fullmatch(root_w)):
-        return WINDOW_NO_W
-    k = s["epoch"]
-    if not (_int(k) and 0 <= k < U64):
-        return WINDOW_EPOCH
-    r = PS.epoch_open_root(bytes.fromhex(root_w), k)
-    live = p["live"]
-    refused, got = _salt_epoch(live["key"], live["ledger"], live["pins"], live["main"], live["session"], r, verify)
-    if refused is not None:
-        return refused[1]
-    a, c, opened = got
-    try:
-        claimed = Ch.LiveCommitment.from_json(s["coins"])
-    except Ch.CoinError as e:
-        return f"the salt's coins are malformed: {e}"
-    if claimed != c:
-        return WINDOW_NOT_SIGNED
-    try:
-        o = Ch.LiveOpening.from_json(s["opening"])
-    except Ch.CoinError as e:
-        return f"the salt's {e}"
-    why = Ch.live_reason(c, o, Wd.SALT, 0, r)
-    if why is not None:
-        return f"the salt's {why}"
-    if s["salt"] != Wd.round_key(c, o.coin, 0, r).stream(0, PS.SALT_BYTES).hex():
-        return WINDOW_SALT
-    if not _carries(s["session"], a.session, opened["seq"], r, a.commitment):
-        return WINDOW_SESSION
-    return None
 
 
 def salt(key: Any, ledger: Any, pins: Any, main: Any, window: Any, session: Any, weights_root: Any, requests_root: Any,
