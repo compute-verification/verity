@@ -4676,6 +4676,7 @@
      }
     ],
     "lean_statement": "verity/flock-circuit",
+    "agreement": "ci.py --live --sets 6 on vy-nebius-cpu-2 (r20261025-033213-b071, Lean at 1cec4f455): 3/3, 1 accepted",
     "sessions_note": "honest: the session with the verifier's own reads (accepted); root: its registered.json with the tree's root zeroed; none: registered.json null (no --registered). Upstream's verdicts are the live server's (each case.json, from serve's record), which reads no registered roots"
    }
   ]
