@@ -674,8 +674,9 @@ unit outputs 1 exactly when, in each lane of ordinal q:
     1,978,368 (D2 = 12) and 10,174,464 (D2 = 14). With the port opened in the unit they were 20,569,541 and
     38,169,048: `IoTiePort{512, 6, 10}` adds 17,868,101 ANDs and a join, as it does to `IoTieBucket{256, 16, 512, 6,
     10}` (20,009,029, against 2,140,927). Building them takes 1.3 GB and 4.7 GB (29 s and 88 s,
-    r20261025-005959-9e62). `IoTieRoute`'s flat trace took 15.1 GB and 84.7 GB (204 s and 1,241 s). A bucket reads the steps that compute its own fields, so a step whose tokens'
-    fields are in k buckets is read k times, and each bucket's sort is over its NK + E members.
+    r20261025-005959-9e62). `IoTieRoute`'s flat trace took 15.1 GB and 84.7 GB (204 s and 1,241 s). A bucket reads
+    the steps that compute its own fields, so a step whose tokens' fields are in k buckets is read k times, and each
+    bucket's sort is over its NK + E members.
     A cheaper split has PROVE-PATH also register the session's prompt stream, the requests' prompt ids in arrival
     order, and hold every computation and cache hit to it in the Commit's units; the tie would then read the
     bucket's stream entries in order with no map or sort.
