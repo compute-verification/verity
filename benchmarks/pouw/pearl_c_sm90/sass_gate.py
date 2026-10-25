@@ -1,7 +1,7 @@
 """build.sh's gate on pearl_c_sm90.cubin: ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the reasons on stderr) on a
 ptxas warning or serialized wgmma, a stack frame, a spill or local memory, and on any kernel whose tensor-core instructions
-aren't the intended ones: the FP8 atom as QGMMA.64xNx32.F32.E4M3.E4M3 at the kernel's N in the counts `WANT` states, the peel
-as HGMMA.64xNx16.F32.BF16, no other MMA.  (The .FTZ and FP32 MUFU gate is the harness's, benchmarks/pouw/harness/sass_gate.py.)
+aren't the intended ones: the FP8 atom as QGMMA.64xNx32.F32.E4M3.E4M3 at the kernel's N in the counts `WANT` states (and
+`WINDOW_ATOMS`' A'F_B atoms at N = 32), the peel as HGMMA.64xNx16.F32.BF16, no other MMA.  (The .FTZ and FP32 MUFU gate is the harness's, benchmarks/pouw/harness/sass_gate.py.)
 
   python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
 """
@@ -25,12 +25,16 @@ def hgmma(n: int) -> str:
 
 #: kernel: (N, QGMMA multiple, HGMMA count).  Each GEMM's stage is four k32 atoms (BK = 128) on its warpgroup's 64 x N tile,
 #: so its QGMMA count is a multiple of 4 (the compiler may unroll the stage loop); the peel is four k16 steps; form_s5 and
-#: form_s5_scalar one atom.  N is the tile's columns: 128, 64 (_n64, _d) or 32 (gemm_words).  The grouped calls' kernels
-#: (_g) are their ungrouped ones' at the same tile
-WANT = {**{f"{g}{t}": (n, 4, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct") for t, n in (("", 128), ("_n64", 64), ("_d", 64))},
-        **{f"{g}{t}": (n, 4, 4) for g in ("gemm_pearlc", "gemm_pearlc_s") for t, n in (("", 128), ("_n64", 64), ("_d", 64))},
+#: form_s5_scalar one atom.  N is the tile's columns: 128, 64 (_n64, _d) or 32 (_d32, gemm_words).  The grouped calls'
+#: kernels (_g) are their ungrouped ones' at the same tile
+TILE_N = (("", 128), ("_n64", 64), ("_d", 64), ("_d32", 32))
+WANT = {**{f"{g}{t}": (n, 4, 0) for g in ("gemm_plain", "gemm_fast", "gemm_ct") for t, n in TILE_N},
+        **{f"{g}{t}": (n, 4, 4) for g in ("gemm_pearlc", "gemm_pearlc_s") for t, n in TILE_N},
         "gemm_words": (32, 4, 0), "gemm_words_d": (32, 4, 0), "gemm_words_win_d": (32, 4, 0), "form_s5": (128, 1, 0), "form_s5_scalar": (128, 1, 0),
-        "gemm_pearlc_g_d": (64, 4, 4), "gemm_words_g_d": (32, 4, 0), "form_s5_g": (128, 1, 0), "form_s5_ep": (128, 1, 0)}
+        "gemm_pearlc_g_d": (64, 4, 4), "gemm_words_g_d": (32, 4, 0), "form_s5_g": (128, 1, 0), "form_s5_ep": (128, 1, 0),
+        "form_s5_epw": (128, 1, 0)}
+#: kernels that also make one of A'F_B's windows (gemm_words_win_d's tile): exactly this many QGMMA.64x32x32 atoms
+WINDOW_ATOMS = {"form_s5_epw": 4}
 #: kernels that may use a little local memory, each with at most these bytes of stack and of spills, and why: none of
 #: them is on the served path or the GEMMs'
 LOCAL_OK = {"s512_rows": (16, "hash_h3.cuh's reference row digest (PEARLC_SHA=ref, or a caller without segdig_<tree>; the served "
@@ -53,7 +57,7 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
         fm = re.search(r"Function : (\w+)", line)
         if fm:
             cur = fm.group(1)
-            funcs.setdefault(cur, {}).update({op: 0 for op in ops} | {"QGMMA": 0, "HGMMA": 0, "other_mma": []})
+            funcs.setdefault(cur, {}).update({op: 0 for op in ops} | {"QGMMA": 0, "HGMMA": 0, "QGMMA_window": 0, "other_mma": []})
             continue
         if not cur:
             continue
@@ -67,6 +71,8 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
                 funcs[cur]["QGMMA"] += 1
             elif n and form == hgmma(n):
                 funcs[cur]["HGMMA"] += 1
+            elif cur in WINDOW_ATOMS and form == qgmma(32):
+                funcs[cur]["QGMMA_window"] += 1
             else:
                 funcs[cur]["other_mma"].append(form)
     for name, r in funcs.items():
@@ -80,6 +86,8 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
         got = r.get("QGMMA", 0)
         if (got < q or (q and got % q) or (not q and got)) or r.get("HGMMA", 0) != h:
             problems.append(f"{name}: {got} {qgmma(n)}, {r.get('HGMMA')} {hgmma(n)} (want a multiple of {q}, and {h})")
+        if r.get("QGMMA_window", 0) != WINDOW_ATOMS.get(name, 0):
+            problems.append(f"{name}: {r.get('QGMMA_window', 0)} {qgmma(32)} for A'F_B's window (want {WINDOW_ATOMS.get(name, 0)})")
     missing = sorted(set(WANT) - set(funcs))
     if missing:
         problems.append(f"kernels missing from the cubin: {missing}")

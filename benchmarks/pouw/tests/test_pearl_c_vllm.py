@@ -2405,6 +2405,13 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     run.driver = Driver()
     pipe, *_ = run._pipe(0, run._shape(32, 256, 1024))
     assert pipe.main_names == ("rows_a", "stats_a", "form_ep_a", "af", "pa", "gemm_pearlc")
+    # from a cubin with form_s5_epw, A'F_B's windows are in the forming launch (run.WORDS_FORM)
+    monkeypatch.setattr(kernel.dev, "has", lambda name: name == "form_s5_epw", raising=False)
+    other = make()
+    other.driver = Driver()
+    words, *_ = other._pipe(0, other._shape(32, 256, 1024))
+    assert words.main_names == ("rows_a", "stats_a", "form_epw_a", "pa", "gemm_pearlc")
+    monkeypatch.delattr(kernel.dev, "has")
 
     def step(name):
         return lambda: calls.append((name, kernel.dev.stream))

@@ -755,6 +755,13 @@ def test_a_fused_step_takes_its_parts_place_and_an_omitted_part_drops_it():
                            FUSED={"form_ep_a": ep})
     assert run._call_names(pipe) == ("stats_a", "form_ep_a", "af", "pa", "gemm_pearlc")
     assert PPD.STEP_GROUPS["form_ep_a"] == "forming"
+    # with A'F_B's windows in the forming launch too, that step takes the words' place as well; a pipeline with both entries
+    # in FUSED runs one of them
+    epw = (*ep, "af")
+    pipe = SimpleNamespace(steps=lambda: [(x, None, None) for x in ("form_epw_a", *PPD.CALL_STEPS) if x not in epw],
+                           FUSED={"form_ep_a": ep, "form_epw_a": epw})
+    assert run._call_names(pipe) == ("stats_a", "form_epw_a", "pa", "gemm_pearlc")
+    assert PPD.STEP_GROUPS["form_epw_a"] == "forming"
 
 
 def test_a_split_commitments_tree_forks_from_the_step_before_the_first_cut():
@@ -804,6 +811,25 @@ def test_an_end_aside_needs_lagged_ends():
     k = SimpleNamespace(run=SimpleNamespace(Pipeline=SimpleNamespace(FUSED={"tree_seed_a": ()})))
     with pytest.raises(ValueError, match="aside_ends"):
         PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, aside_ends=True)
+
+
+def test_a_calls_a_words_are_one_widen_a_where_the_kernel_has_it_else_torchs_copy_and_fill(monkeypatch):
+    """`LaneCalls._stage_a`: on the card, with a cubin that has widen_a and x contiguous BF16, one launch on the current
+    stream over the call's rows and the padding up to `filled`; with an older cubin, torch's copy and fill, the same words."""
+    torch = pytest.importorskip("torch")
+    from verity_vllm.protocol_options import pouw_pearl_c_lanes as L
+    monkeypatch.setattr(L, "_stream", lambda device: 77)
+    x, launched = torch.arange(24, dtype=torch.float32).reshape(3, 8).to(torch.bfloat16), []
+    for has in (True, False):
+        xa = torch.full((5, 8), 7.0)
+        run = SimpleNamespace(widen_a=lambda *a, **kw: launched.append((a[1:], kw)))
+        dev = SimpleNamespace(has=lambda name, has=has: has and name == "widen_a")
+        L.LaneCalls._stage_a(SimpleNamespace(device=SimpleNamespace(type="cuda"), kernel=SimpleNamespace(dev=dev, run=run)),
+                             SimpleNamespace(xa=xa), x, 3, 4)
+        if has:
+            assert launched == [((x.data_ptr(), xa.data_ptr(), 3, 4, 8), {"stream": 77})] and (xa == 7).all()
+        else:
+            assert torch.equal(xa[:3], x.float()) and (xa[3] == 0).all() and (xa[4] == 7).all() and len(launched) == 1
 
 
 def test_a_lagged_end_gets_its_commitment_in_place_at_the_next_end_and_only_an_engine_steps_end_lags():
