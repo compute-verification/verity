@@ -16,7 +16,7 @@ import pytest
 from verity.ml.circuits.program import Program
 from verity.ml.commitments import row_table as RT
 from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 from verity_vllm.commit import row_tables as RTB, serving_rows as CS
 
 from .test_row_tables import DEFN, UNITS, committed
@@ -67,7 +67,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
         return S.Stream(spec, [DEFN], budget=1, delta=DELTA, challenger="challenger-test", coins=coins, clock=Clock())
 
     def register(coins, i, window_root):
-        rec = CS.registration(c, {"row": 101 + i})
+        rec = CS.registration(c, {"row": 101 + i}, registrar=R)
         roots = {r["port"]: r["root"] for r in rec["roots"]}
         held.append(RTB.check_row_tables(mine, publics, roots, live))
         s = stream(spec, coins)
@@ -81,7 +81,7 @@ def test_a_row_table_window_runs_through_the_stream_on_the_challengers_coins(tmp
     assert out.accepted and honest._entries[0].read and (audit["draw"]["population"], len(units)) == (UNITS, 2)
     assert all(m.links for m in mine.members for u in units if m.base <= u < m.base + m.n)
     bare = stream(_spec(mine, table=False), lambda n: b"\x07" * n)
-    rec = CS.registration(c, {"row": 100})
+    rec = CS.registration(c, {"row": 100}, registrar=R)
     assert "roots" in _refused(lambda: bare.register(rec, ports, leaf_layer=layer, counts={TEMPLATE: UNITS}))
     with pytest.raises(ValueError, match="over"):
         S.Value(CS.TABLE_PORT, S.ROOTS, "serve")

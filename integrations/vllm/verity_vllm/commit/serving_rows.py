@@ -4,11 +4,13 @@ one-stage audit reads (``verity.core.protocols.sampled_proofs.one_stage``).  Off
 (``rows-sha512`` by default, ``vllm-v1`` by name), and this commits beside it without touching any root of record.
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
-counts (``population_program``, core's ``partition.population_program`` / ``mixed_population_program``), its query the template
-query over them, so the partition (``verity/partition/v1``) and its digest are core's over that program, and the registration is
-core's ``verity/registration/v1`` record (``registration.record``) with ``window = {"kind": "served" | "stand-in", "run": <the
-record's run root>, ...provenance}`` (``registration``).  The served Programs' digests are provenance in the window: no query of core's selects
-template instances inside a served Program (the template queries need every root node to be an instance).
+counts (``verity.ml.windows.population``, over the builders core's ``one_stage.partition`` names too), its
+query the template query over them, so the partition (``verity/partition/v1``, ``partition_object``) and its digest are core's
+over that program, and the registration is core's ``verity/registration/v1`` record with ``window = {"kind": "served" |
+"stand-in", "run": <the record's run root>, ...provenance}`` (``registration``), made by the ``registrar`` the caller passes
+(core's ``one_stage.registration``): this module imports no core.  The served Programs' digests are provenance in the window:
+no query of core's selects template instances inside a served Program (the template queries need every root node to be an
+instance).
 
 A population is a sequence of members (:class:`Member`), one per template in the partition's order, or a template's units in
 consecutive chunks, one member per statement (a circuit's spec shape caps its instances), each with its row ports and output
@@ -27,7 +29,7 @@ blocks, committed under its own salt like an input row (an output is a value: no
   leaf    the ``frame-v3-sha512`` row leaf, schema ``hm96-sha512/row/v1``, over ``hm96.SHA512.tree_leaf(default_key, b || c)``
 
 Each port ``<member>/<port>`` is one tree under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``, with core's
-served-domain rule (``registration.window_domain``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
+window-domain rule (``verity.ml.commitments.window``): ``binding = identity_digest_sha512(DOMAIN_TAG, {program, partition, port,
 schema, leaves, run})``, every field a registration field and ``run`` the record's run root, so the verifier recomputes every domain
 from the registration and the Commit's record (``expected_ports``).  The leaf layer is the SHA-512 of the canonical map from each
 member (its template, or its chunk's name) to the SHA-512 of its public body (``leaf_layer``).  ``write`` puts into a window
@@ -63,14 +65,16 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.ml.circuits import partition_object as PO
 from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
                                            sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
+from verity.ml.windows.population import population_program, template_partition
 
 from . import wiring as WI
 from .hiding import HidingLeaves
@@ -80,7 +84,7 @@ ROW_SCHEMA = SCHEMA_HM96_SHA512_ROW
 BIT_ROW_SCHEMAS = (SCHEMA_HM96_SHA512_ROW_V2, SCHEMA_HM96_SHA512_ROW_SEG)
 UNITS_SCHEMA = "verity-vllm/serving-rows/units/v0"
 WORD_SCHEMA = "u16"
-DOMAIN_TAG = R.WINDOW_DOMAIN
+DOMAIN_TAG = WINDOW_DOMAIN
 OWNER = -1
 ORDER = "verity-vllm/serving-rows/order/v0"
 LEAF_LAYER = "SHA-512 of canon({template: SHA-512 of m<k>-public.bin}) over the window's members"
@@ -303,16 +307,6 @@ class Member:
         return f"{self.key}/{name}"
 
 
-def population_program(templates: Sequence[tuple[Any, int]], several: bool = False) -> tuple[Any, dict[str, Any]]:
-    """The verifier's population program and query over ``(template Definition, instances)`` in order: ``TemplateInstances`` and
-    ``Q_template_instance`` for one template, ``TemplatePopulations`` and ``Q_template_instances`` for several (or, ``several``,
-    for one)."""
-    if len(templates) == 1 and not several:
-        (t, n), = templates
-        return P.population_program(t, n), P.template_instance_query(t)
-    return P.mixed_population_program(list(templates)), P.template_instances_query([t for t, _ in templates])
-
-
 @dataclass(frozen=True)
 class RowTable:
     """One int8 quantize output: the token rows of one linear (``op_path``) at one engine step, as its ``ScaledMmS8_v1`` rows read
@@ -373,7 +367,8 @@ class Window:
     work_table: dict[str, Any] | None = None
 
     def __post_init__(self) -> None:
-        mine, want = [(m.template, m.base, m.n) for m in self.members], P.ranges(self.program, self.query)
+        mine = [(m.template, m.base, m.n) for m in self.members]
+        want = [(tid, lo, n) for _k, tid, lo, n in template_partition(self.program, self.query).ranges]
         tiled, it = [], iter(mine)
         for t, base, n in want:
             at = base
@@ -435,15 +430,15 @@ class Window:
 
     @cached_property
     def partition(self) -> dict[str, Any]:
-        return P.partition(self.program, self.query)
+        return PO.build(self.program, self.query)
 
     @cached_property
     def partition_digest(self) -> str:
-        return P.digest(self.partition)
+        return PO.digest(self.partition)
 
     @cached_property
     def population(self) -> int:
-        return P.units(self.program, self.query)
+        return template_partition(self.program, self.query).population
 
     def binding(self, port: str, schema: str, leaves: int) -> bytes:
         return identity_digest_sha512(DOMAIN_TAG, {"program": self.partition["program"], "partition": self.partition_digest,
@@ -656,11 +651,11 @@ def port_leaves(m: Member) -> dict[str, int]:
 
 def expected_ports(window: Window) -> dict[str, dict[str, Any]]:
     """The ports the verifier's own window derives, as ``registration.check`` takes them: ``{<member>/<port>: {leaves,
-    domain}}``, each domain ``registration.window_domain`` over the window's program, partition and run."""
+    domain}}``, each domain ``window_domain`` (core's ``registration.window_domain``) over the window's program, partition and run."""
     prog, part, steps = window.partition["program"], window.partition_digest, len(window.steps)
-    return {m.port(p): {"leaves": n, "domain": R.window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
+    return {m.port(p): {"leaves": n, "domain": window_domain(prog, part, m.port(p), m.schema(p), n, window.run)}
             for m in window.members for p, n in port_leaves(m).items()} | \
-        ({TABLE_PORT: {"leaves": steps, "domain": R.window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
+        ({TABLE_PORT: {"leaves": steps, "domain": window_domain(prog, part, TABLE_PORT, ROOTS_SCHEMA, steps, window.run)}}
          if steps else {})
 
 
@@ -696,18 +691,20 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
     return hashlib.sha512(canonical_json({t: hashlib.sha512(b).hexdigest() for t, b in publics.items()})).hexdigest()
 
 
-def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served") -> dict[str, Any]:
-    """Core's ``verity/registration/v1`` record of the window: its program, query and law, the scheme, every port's root, leaves and
-    served domain, the leaf layer, and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these
-    roots are serving's own commitment, made before any draw (the in-Commit hook); ``stand-in``: a fresh commitment to values
-    opened from serving's record afterwards, whose link to the record's roots is provenance (``pipeline.deferred_rows``)."""
-    if kind not in R.KINDS:
-        raise ValueError(f"window kind {kind!r} is not one of {R.KINDS}")
+def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
+                 registrar: Any) -> dict[str, Any]:
+    """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
+    ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and served domain, the leaf layer, and
+    ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these roots are serving's own
+    commitment, made before any draw (the in-Commit hook); ``stand-in``: a fresh commitment to values opened from serving's record
+    afterwards, whose link to the record's roots is provenance (``pipeline.deferred_rows``)."""
+    if kind not in registrar.KINDS:
+        raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
-    return R.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                    leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
+    return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
+                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
 
 
 def index_doc(members: Sequence[Member], entries: Sequence[Sequence[list[Any]]], run: str) -> dict[str, Any]:
@@ -744,14 +741,15 @@ def registered_entry(c: Committed, m: Member, trees: dict[int, RT.RowTable] | No
 
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
-          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None) -> dict[str, Any]:
-    """The window's files, its registration's window of ``kind`` (`registration`); the window's provenance gets the index's SHA-512
-    (so the registration binds the unit -> identity map).  ``registered``: by member key, an outside value's reads (``salts_of``)."""
+          kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any) -> dict[str, Any]:
+    """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
+    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's SHA-512 (so the registration binds the unit ->
+    identity map).  ``registered``: by member key, an outside value's reads (``salts_of``)."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
     (d / "index.json").write_bytes(ib)
-    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind)
+    rec = registration(c, {**provenance, "index": hashlib.sha512(ib).hexdigest(), "order": ORDER}, kind=kind, registrar=registrar)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members = []
@@ -791,7 +789,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     win = {"schema": "verity-vllm/serving-rows/v2", "scheme": SCHEME, "population": c.window.population, "members": members,
            **({"row_tables": tables, "row_table_steps": steps} if tables else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
-           "domain_tag": DOMAIN_TAG, "registration": R.FORMAT, "registration_digest": R.digest(rec), "leaf_layer": rec["leaf_layer"],
+           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT, "registration_digest": registrar.digest(rec),
+           "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_sha512": hashlib.sha512(ib).hexdigest(),
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "
            "(12 bytes le), row i at stream offset 192 i; the key is dropped after expansion", "seconds": c.seconds, **(extra or {})}

@@ -170,6 +170,7 @@ from verity_numerical.bench.input_sets import InputSet  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registered as REG  # noqa: E402
 from verity_vllm.commit import flock_inputs as FI, row_tables as RTB, serving_rows as CS  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
@@ -561,7 +562,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
     # a member reading an outside registered value, against the root its owner signed
-    reads = {**(RTB.registered_reads(mine, publics) if mine.row_tables else {}), **(registered or {})}
+    reads = {**(RTB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"

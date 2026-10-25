@@ -117,7 +117,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P
+from verity.core.protocols.sampled_proofs.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -758,7 +758,8 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     c.seconds["read_s"] = round(t_read - t0, 3)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     (Path(out_dir) / "partition.json").write_text(json.dumps(partition_doc(window, pf), indent=1) + "\n")
-    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served")
+    res = CS.write(c, out_dir, prov, CS.index_doc(ms, [g[1] for g in got], window.run), kind="stand-in" if stand_in else "served",
+                   registrar=R)
     res["seconds"]["hook_s"] = round(time.perf_counter() - t0, 3)
     (Path(out_dir) / "window.json").write_text(json.dumps(res, indent=1, default=str) + "\n")
     print(f"[serving-rows] {window.population} units in {len(ms)} members committed ({CS.SCHEME}): "

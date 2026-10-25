@@ -29,7 +29,6 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.merkle import CommitmentDomain
 
@@ -172,8 +171,9 @@ def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Map
     return bad
 
 
-def registered_reads(window: CS.Window, publics: Mapping[str, bytes]) -> dict[str, dict[str, Any]]:
-    """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, by member key): its ``x``
+def registered_reads(window: CS.Window, publics: Mapping[str, bytes], *, registered: Any) -> dict[str, dict[str, Any]]:
+    """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, in the format of ``registered``,
+    core's ``one_stage.registered``, by member key): its ``x``
     port reads its one row table, under the table's root recomputed from the members' public strings (the root
     ``check_row_tables`` ties to the registration and serving's step roots, so call it after that passes) and its serve-time
     domain, and unit ``m.base + i`` reads the table row its ``i``-th unit links; a member linking rows of two tables is refused,
@@ -191,9 +191,10 @@ def registered_reads(window: CS.Window, publics: Mapping[str, bytes]) -> dict[st
         if m.key in bad or t.port in bad or any(s is None for s in ss):
             raise ValueError(f"{m.key}: {t.port}'s rows do not hold among the members' strings: {bad}")
         port = {"value": t.port, "root": RT.RowTable(window.table_domain(k), ss).root.hex(), "leaves": t.n, "words": t.words,
-                "word_bits": REG.WORD_BITS, "domain": window.table_domain(k).domain_id.hex(), REG.SCHEMA_KEY: REG.SCHEMA_SEG,
-                "reads": [m.links[j][1] for j in m.link_refs], REG.READS_FROM: m.base}
-        out[m.key] = {"format": REG.READS_V1, "ports": {CS.LINKED: port}}
+                "word_bits": registered.WORD_BITS, "domain": window.table_domain(k).domain_id.hex(),
+                registered.SCHEMA_KEY: registered.SCHEMA_SEG, "reads": [m.links[j][1] for j in m.link_refs],
+                registered.READS_FROM: m.base}
+        out[m.key] = {"format": registered.READS_V1, "ports": {CS.LINKED: port}}
     return out
 
 

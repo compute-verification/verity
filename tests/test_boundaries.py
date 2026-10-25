@@ -49,6 +49,10 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
+    # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
+    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
+    # records come from the caller.
+    "ml.windows": {"ml.circuits", "ml.commitments"},
     "core.claims": set(),
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger

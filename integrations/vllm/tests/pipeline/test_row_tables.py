@@ -218,7 +218,7 @@ def test_the_s8_coordinate_replay_reads_each_units_x_row_from_the_table(monkeypa
 
 def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ties_it_to_the_chunks(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
-    win = CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    win = CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     ports = CS.expected_ports(mine)
@@ -238,7 +238,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
     assert win["members"][2]["registered"][CS.LINKED]["value"] == mine.row_tables[0].port
     assert win["members"][2]["registered"][CS.LINKED]["positions"] == [0, 1]
     # each linked chunk's --registered file: its x rows open its one table's root at the positions its units read
-    reads = RTB.registered_reads(mine, publics)
+    reads = RTB.registered_reads(mine, publics, registered=REG)
     assert set(reads) == {m.key for m in mine.members if m.links}
     for k, m in enumerate(mine.members):
         t, port, head = m.links[0][0], reads[m.key]["ports"][CS.LINKED], win["members"][k]["registered"][CS.LINKED]
@@ -258,7 +258,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
             assert not REG.verify_read(dom, root, pos ^ 1, bc, path, REG.SCHEMA_SEG)
             assert not REG.verify_read(dom, root, pos, bc, path, REG.SCHEMA)
     with pytest.raises(ValueError, match="do not hold"):
-        RTB.registered_reads(mine, {k: v for k, v in publics.items() if k != mine.members[0].key})
+        RTB.registered_reads(mine, {k: v for k, v in publics.items() if k != mine.members[0].key}, registered=REG)
     # a chunk whose x string is the only copy of a table row and is not that row: step 0's root, against the recorded one
     k0, t0, t1 = mine.members[0].key, mine.row_tables[0].port, mine.row_tables[1].port
     flip = lambda body, at: body[:at] + bytes([body[at] ^ 1]) + body[at + 1:]  # noqa: E731
@@ -283,9 +283,10 @@ def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_
     """`reported_reads`: each drawn chunk's table and root from the verifier's own reads file beside Lean's `registered`
     finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
     c, _s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
     mine, _, _ = window()
-    reads = RTB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)})
+    reads = RTB.registered_reads(mine, {m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(mine.members)},
+                                 registered=REG)
     k0, k4 = mine.members[0].key, mine.members[4].key
     lean = lambda key: {"accepted": True, "of_record": True,  # noqa: E731
                         "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in reads[key]["ports"].items()}}
@@ -308,7 +309,7 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
     runs the executable verifier on such a table). `registered_reads` writes no file for a member linking two tables, whatever
     built it."""
     c, _s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
     w = c.window
     bc = lambda t, r: c.bc[w.row_tables[t].port][r * CS.BC_BYTES:(r + 1) * CS.BC_BYTES]  # noqa: E731
     trees = {t: RT.RowTable(w.table_domain(t), [bc(t, r) for r in range(w.row_tables[t].n)]) for t in range(len(w.row_tables))}
@@ -326,12 +327,12 @@ def test_a_chunk_spanning_two_row_tables_is_refused_on_the_verifier_side(monkeyp
     spanned = copy.copy(mine)
     object.__setattr__(spanned, "members", (mine.members[0], old, *mine.members[2:]))
     with pytest.raises(ValueError, match="several row tables"):
-        RTB.registered_reads(spanned, publics)
+        RTB.registered_reads(spanned, publics, registered=REG)
 
 
 def test_pouws_interface_finds_a_table_and_its_step_openings_verify_and_tampered_rows_fail(monkeypatch, tmp_path):
     c, s, got = committed(monkeypatch)
-    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
     mine, _, _ = window()
     live = dict(c.step_roots)
@@ -407,7 +408,7 @@ def test_a_window_or_commit_whose_links_do_not_hold_is_refused(monkeypatch):
 @pytest.mark.parametrize("row_tables", [False, True])
 def test_window_bytes_are_the_bytes_the_window_writes(monkeypatch, tmp_path, row_tables):
     c, _s, got = committed(monkeypatch, row_tables)
-    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN))
+    CS.write(c, tmp_path, {"row": 101}, CS.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)
     size = lambda pat: sum(p.stat().st_size for p in Path(tmp_path).glob(pat))  # noqa: E731
     b = CS.window_bytes(c.window.members, c.window.row_tables)
     assert (b["public"], b["private"]) == (size("[mt]*-public.bin"), size("[mt]*-private.bin"))
