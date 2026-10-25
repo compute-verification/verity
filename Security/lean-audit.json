@@ -2708,9 +2708,6 @@
    "assumptions": [],
    "type_hash": "7bfcaf861d98451805b9a88b5568f8a05b715c8cc82215a6f38723f5419b0c19"
   },
-  "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": {
-   "owner": "@lean"
-  },
   "Accounting.SecurityProofs.BoundReceiptLink": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.BoundReceiptLink : Accounting.Guarantees.BoundReceiptLink"],
@@ -2736,6 +2733,15 @@
    "signature": ["Accounting.SecurityProofs.BoundSketchRelay : Accounting.Guarantees.BoundSketchRelay"],
    "assumptions": [],
    "type_hash": "21c560aa53d87b8de413f4642976ab01db69dcac363f25a19d88b4b732d30987"
+  },
+  "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :",
+    "  Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod"
+   ],
+   "assumptions": [],
+   "type_hash": "8c3dda6ff4ca31c818104a37896b5af0666c53ff846e2ccaf90aa792e29a6820"
   },
   "Accounting.SecurityProofs.CapacityOfStateBound": {
    "owner": "@memory-accounting",
@@ -12046,6 +12052,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -12134,7 +12141,11 @@
     "Accounting.BandwidthCoins": "c3bb41c05837c55489d3f73243f4280cbdb8336332389cf2c224c1e49c149b17",
     "Accounting.RealizesBandwidth": "77354a4cb9b40ce1fbb04b20b43f916dc96c419d4cc94233aa8adefcfafe9c89"
    },
-   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit", "Accounting.SecurityProofs.BandwidthOfAuditPerRun"]
+   "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"
+   ]
   },
   "Definitions.Accounting.BoundReceipt": {
    "digest": "53ed45e11502dd358ad97759eaa6c04a2cb7c1faca874618a8597f6dc4d70c27",
@@ -12644,6 +12655,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
@@ -13451,6 +13463,13 @@
     "Accounting.Guarantees.Joint": "994a9f616574f737ac1bb98ceeb5051f135976d5bf3d90328dece5cffa401887"
    },
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
+  },
+  "Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod": {
+   "digest": "92bbb6a198220d610653da2cc982f5ce463b117d9823a5548efd4fd04aaf38ff",
+   "definitions": {
+    "Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod": "2e2b525eded3e46566b8b1b26ee5a168da7e81167dc6cd285dcab61e0cf32914"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointPeriod": {
    "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
@@ -14369,6 +14388,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
@@ -14389,6 +14409,13 @@
     "Accounting.SecurityProofs.RateOfAuditPartial",
     "Accounting.SecurityProofs.RateOfAuditPartialPasses"
    ]
+  },
+  "Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod": {
+   "digest": "14292553c86b96d68d79da7719972e449bf4300354039c2c2af7f3d9eac2f93c",
+   "definitions": {
+    "Accounting.RealizesBandwidthOfAuditPerRunPeriod": "791ddd03a495c1a38f95db79fd73bc9fc518abee0e5320ceff094ed79a3a0629"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.JointPeriod": {
    "digest": "1bd7aa7b193bcd9a8591295185d5bfac76487671f52e32c46d11e0c8f0a011f5",
@@ -14426,7 +14453,11 @@
     "Accounting.instDecidableEqAudit": "551d5bbb9d5a40c37cbcc687b93b265d4cb0120365b1f1fc79580bc9478d7e60",
     "Accounting.instFintypeAudit": "dc9e117e0e88e8b554ce66dc5272159cd8ee10f8ae1184a3bfe1034a0b87a87d"
    },
-   "guarantees": ["Accounting.SecurityProofs.JointHorizon", "Accounting.SecurityProofs.JointPeriod"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
+    "Accounting.SecurityProofs.JointHorizon",
+    "Accounting.SecurityProofs.JointPeriod"
+   ]
   },
   "Definitions.Accounting.Memory": {
    "digest": "6611399160c026f613e5e66208c6725847cddb1f299db2addf06baedfcf3efef",
@@ -17235,6 +17266,7 @@
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.JointHorizon",
@@ -17591,6 +17623,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointPeriod",
     "Nci.Cover.SecurityProofs.CoverTraining",
@@ -21402,6 +21435,7 @@
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
@@ -22937,6 +22971,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
