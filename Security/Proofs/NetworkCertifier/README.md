@@ -14,23 +14,23 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
 ../../Definitions/NetworkCertifier/Schedule.lean trusted: the Program's logical schedule as `schedule.py` defines it (ClockSync, SyncSet,
                                LogicalFrame, eligible, handingBuckets, enqueued, expectedRow) and the constant-rate
                                Program it gives (constantRate)
-../../Models/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
+../../Definitions/NetworkCertifier/Assumptions.lean     trusted: the named hypotheses W2–W6 (W4's allocation among them), J, and Theorem 3's two
                                dataflow conditions
-../../Models/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
+../../Definitions/NetworkCertifier/Guarantees.lean      trusted: each guarantee as a `def G : Prop` (Proposition 2, Theorem 3, Theorem 3 for
                                the constant-rate Program, the ingress bound)
 ../../Definitions/NetworkCertifier/AdviceString.lean  trusted: the per-window caps on the advice string's charge (WithinCaps),
                                the compiler and the compiled Program, and acceptance within the caps (AcceptedWithin,
                                AccSeqsWithin)
-../../Models/NetworkCertifier/Assumptions/AdviceString.lean  trusted: the charge's named assumption (BitsCount) and the
+../../Definitions/NetworkCertifier/Assumptions/AdviceString.lean  trusted: the charge's named assumption (BitsCount) and the
                                compiler's two (CompilerDeterministic, CompilerPrecommitted)
-../../Models/NetworkCertifier/Guarantees/AdviceString.lean   trusted: the leak bound, the advice string's charge in the accepted-runs bound
+../../Definitions/NetworkCertifier/Guarantees/AdviceString.lean   trusted: the leak bound, the advice string's charge in the accepted-runs bound
 ../../Definitions/NetworkCertifier/AdviceV1.lean  trusted: advice v1's charge, `ChargeCount_v1{N}`'s reference one for one: the
                                counting arithmetic coder (Tally, countStep), the book's KT estimate at min(run, 2),
                                a window's charge (window) and a run's (charges), the streams no window refuses (Streams)
 ../../Definitions/NetworkCertifier/AdviceV1Counted.lean  trusted: advice v1's charge with a separate count code
                                (CountCode, lengths meeting Kraft): a window's charge (windowCounted) and a run's
 ../../Definitions/NetworkCertifier/Guarantees/AdviceV1Kraft.lean  trusted: advice v1's charge counts (Kraft), and the leak bound with it
-../../Models/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: the leak bound through the wire with advice v1's charge
+../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean  trusted: the leak bound through the wire with advice v1's charge
 ../../Definitions/NetworkCertifier/WindowCharge.lean  trusted: advice v1's whole window charged, `ChargeCount_v2{N, H, O}`'s
                                reference one for one: the window's symbols in `code_v1`'s order (syms: n_arrived, the
                                decisions, n_hits, the hits, n_resumes, n_order, the order entries, n_lag), each integer
@@ -38,12 +38,12 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                the decisions' and the last order entry's position and rank, a run's charges (charges)
 ../../Definitions/NetworkCertifier/Guarantees/WindowChargeKraft.lean  trusted: the whole-window charge counts (Kraft), and the
                                leak bound with it
-../../Models/NetworkCertifier/Guarantees/WindowCharge.lean  trusted: the leak bound through the wire with the whole-window
+../../Definitions/NetworkCertifier/Guarantees/WindowCharge.lean  trusted: the leak bound through the wire with the whole-window
                                charge
 ../../Definitions/NetworkCertifier/Warden.lean  trusted: the warden (design v3): its cells (CellView), its public schedule
                                (WardenSchedule), what reaches it from the server (Arrivals), its code (wardenLane,
                                wardenCode), the fail cell (failCell) and the client's view (clientView)
-../../Models/NetworkCertifier/Guarantees/Warden.lean  trusted: the warden's channel bound (the client's view factors through
+../../Definitions/NetworkCertifier/Guarantees/Warden.lean  trusted: the warden's channel bound (the client's view factors through
                                the fail cells, its count, and the whole run's bound with the advice string and content)
 ../../Definitions/NetworkCertifier/SampledCharge.lean  trusted: what the faulty units add under a sampled audit: their
                                committed bits (faultyBits), the possible faulty sets at δ (faultySets), the
@@ -99,9 +99,9 @@ python3 ../../../tools/verity/lean/check.py .                      # Verity's Le
 # the difftest is the certifier program's: see its package, ../../../verity/core/protocols/certifier/lean/
 ~~~
 
-**Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Models/NetworkCertifier/Assumptions.lean`,
-`../../Models/NetworkCertifier/Guarantees.lean` and their `AdviceString`, `AdviceV1` and `Warden` modules under `../../Models/NetworkCertifier/Assumptions/` and
-`../../Models/NetworkCertifier/Guarantees/`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
+**Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`, `../../Definitions/NetworkCertifier/Assumptions.lean`,
+`../../Definitions/NetworkCertifier/Guarantees.lean` and their `AdviceString`, `AdviceV1` and `Warden` modules under `../../Definitions/NetworkCertifier/Assumptions/` and
+`../../Definitions/NetworkCertifier/Guarantees/`; Lean's kernel; the Mathlib pin. Everything else is checked by machine. Docstring paths such
 as `docs/…` and `internal/…` name network accounting's project store, where the covert-capacity note
 (`docs/network-transparency/timing-channel.md`) and the reviews live.
 

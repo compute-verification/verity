@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.CoveringPriced
+import Definitions.Nci.Guarantees.CoveringPriced
 import Proofs.Nci.CoveringTwoCosts
 import Mathlib.Tactic.FieldSimp
 
