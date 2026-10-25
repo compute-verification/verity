@@ -592,10 +592,10 @@ whose clock the times seen are on: `record` (the default), the record's own, and
 hold.
 
 With `session`, the session's transcript (`sessionFn`'s input: its registration, parameters, `not_before_ns`, events
-and coins), the line is of the record `Shared.run g` makes of it at its parameters' g (`Line.lineOfRun`; at g = 1
-`Session.run`, `LineHeld`'s `lineOf`, its run shared with the record's check), at its parameters' `samples`. Refused
-unless the transcript has two windows in flight, `samples` is its parameters', and `record`, if given, is the run's
-(`recordJ`'s form). -/
+and coins), the line is of the record `Shared.run g` makes of it at its parameters' g (`Line.lineOfRun`, `LineHeld`'s
+`lineOf` at a node of g windows a draw, `Session.run` at g = 1, its run shared with the record's check), at its
+parameters' `samples`. Refused unless the transcript has two windows in flight, `samples` is its parameters', and
+`record`, if given, is the run's (`recordJ`'s form). -/
 def lineRecordFn (j : Json) : V Json := do
   let onRecord ← if !J.has j "clock" then pure true else match ← J.str j "clock" "input" with
     | "record" => pure true

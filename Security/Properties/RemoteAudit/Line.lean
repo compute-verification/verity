@@ -6,37 +6,40 @@ import Properties.RemoteAudit.Line.Record
 import Properties.RemoteAudit.Line.Premises
 
 /-!
-# The memory line of record, over what the Lean verifier accepts (`RemoteAudit.Line.lineOfRecord`)
+# The memory line of record, over what the Lean verifier accepts (`RemoteAudit.Line.lineOfRecordAt`)
 
-The line a gate run publishes (`RemoteAudit.Line.lineOfRecord`, `line.py`'s `line_of_record`) reads each stretch of a
+The line a gate run publishes (`RemoteAudit.Line.lineOfRecordAt`, `line.py`'s `line_of_record`) reads each stretch of a
 paced session's groups off the Lean verifier's record of it and credits it `span · (N − lost)` registered blocks held
 over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights blocks its passes read on average.
-`LineHeld` is the one statement that this is true of the trace that produced the record:
+`LineHeld` is the one statement that this is true of the trace that produced the record, at any windows a draw
+(`Node.groupsPerCoin` g, `groups_per_coin`: one openings coin over windows `c·g … (c + 1)·g − 1`, the session run by
+`Shared.run g`, which at g = 1 is `Session.run`):
 
-* **LineHeld** (link-charged, `forms[1]`): on any node, trace and opening draw of `min(s, U_t)` receipts a window at
-  the session's `samples` s, whose trace of record (`ofRecord`, the trace with the Lean verifier's verdict on the
+* **LineHeld** (link-charged, `forms[1]`): on any node, trace and opening draw of `min(s, U_c)` receipts a draw at
+  the session's `samples` s (a draw a window at g = 1), whose trace of record (`ofRecord`, the trace with the Lean verifier's verdict on the
   record as its own) meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`,
   `ChipCeiling`, `Routed`, `Paced` at the record's groups `recordPace`, `Covers`, `SketchBoundAt` at `δs` and
   `NoOutsideCompute`, statement C in full: no device outside the node computes on a registered block or a receipt
   during the session, and the draw's `Live` at every fixed coin commitment, `Refused`, `Counted`, of the session the
   prover plays holding the commitment `com`, `F.play com`) and the record's code-to-model premises (`Registered`,
   `SizesOfRecord`, `DrawFits`, `Properties.RemoteAudit.Line.Premises`), the probability that the Lean verifier accepts
-  the record's session and the line it reads off the Lean verifier's record (`lineOf`: its groups, windows and
+  the record's session and the line it reads off the Lean verifier's record (`lineOf`: its groups, draws and
   registered blocks the record's) credits a stretch more than the trace held over its span (`Credits`) is at most
-  `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a
-  nonnegative rational; the line computes at none outside `(0, 1)`), `adv_t` the advantage on `prf t` of window `t`'s
-  distinguisher at that `δ` (`Session.distinguisher`) with openings coin `t`'s commitment leaf committing zeros
-  (`Committed.junk`), and `hide_t` window `t`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
-  session's `n` windows in all). The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` …
+  `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c)`, `δ` the one the line reads its pooled bound at (`Node.delta`, a
+  nonnegative rational; the line computes at none outside `(0, 1)`), `adv_c` the advantage on `prf c` of draw `c`'s
+  distinguisher at that `δ` (`Session.distinguisher`) with openings coin `c`'s commitment leaf committing zeros
+  (`Committed.junk`), and `hide_c` draw `c`'s hiding term (`Committed.hide`, hm96's, at most `n·2^-191` over the
+  session's `n` draws in all). The rates are the node's in the model's units, a tick a nanosecond (`Node.squarings` …
   `Node.chipBlocks`), and the openings are the deployed draw's (`Accounting.Remote.Draw`: `Key.subset` on the first
-  blocks `prf t` gives window `t`'s coin, at most `m < 2^448` receipts a window (`DrawFits`), the sampler's fallbacks
+  blocks `prf c` gives draw `c`'s coin, at most `m < 2^448` receipts a draw (`DrawFits`), the sampler's fallbacks
   `rest` free), at the error `Accounting.Guarantees.Remote.PooledDraw` states.
 * **LineHeldIdentity** (time-held, `forms[0]`): the same under Identity, no block coming in over the links.
 
 They follow from the model's argument for `Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`, the line's W covering
-the session's pooled bound (`Properties.RemoteAudit.LineCoversSession`, at the record's windows, whose draws the line
-holds to `min(s, U_t)`), the line's groups being one for each of the session's windows on an accepted record
-(`Properties.RemoteAudit.AcceptedMinPasses`), and two properties of the line's code, proved of it:
+the session's pooled bound (`Properties.RemoteAudit.LineCoversSession`, at the record's draws, whose draws the line
+holds to `min(s, U_c)`), the line's groups being one for each of the session's windows on an accepted record
+(`Properties.RemoteAudit.AcceptedMinPasses`, and at every g the invariant `Shared.step` keeps), and two properties of
+the line's code, proved of it:
 
 * **LineChecked**: a line the code computes had a block of one or more bytes, a block's encode of one or more squarings,
   nonnegative rates and a nonnegative wrong receipts' bound (`check`).
@@ -116,12 +119,13 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
     Credits T ω (r.groups node) node.per node.blockBytes x
 
 /-- **The memory line of record, link-charged.** On a trace over a session's coins and the session's opening draw at
-its `samples` s, whose trace of record (`ofRecord`: its verdict the Lean verifier's on the record) meets the memory
-model's premises at the node's rates and the record's groups and the record's code-to-model premises, the probability
-that the Lean verifier accepts the record's session and a stretch of the record's link-charged line credits more than
-the trace held over its span is at most `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t)`, `δ` the line's, `adv_t`
-the advantage on `prf t` of window `t`'s distinguisher at it with leaf `t` of the coin commitment committing zeros, and
-`hide_t` window `t`'s hiding term. -/
+its `samples` s, one draw for each of the node's `groupsPerCoin` windows (one a window at g = 1), whose trace of
+record (`ofRecord`: its verdict the Lean verifier's on the record) meets the memory model's premises at the node's
+rates and the record's groups and the record's code-to-model premises, the probability that the Lean verifier accepts
+the record's session and a stretch of the record's link-charged line credits more than the trace held over its span
+is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c)`, `δ` the line's, `adv_c` the advantage on `prf c` of
+draw `c`'s distinguisher at it with leaf `c` of the coin commitment committing zeros, and `hide_c` draw `c`'s hiding
+term. -/
 def LineHeld : Prop :=
   ∀ (node : Node) (n m κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m (fun _ => node.params.samples) κ X Cm)

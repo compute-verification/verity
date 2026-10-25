@@ -304,8 +304,8 @@ def lineOfRecordOn (onRecord : Bool) (g : Nat) (sm : Session.Summary) (samples :
   | _, _ => lineOfRecordAt g sm samples seen per blockBytes chipBytes nodeBytes δ rates
 
 /-- The record `Shared.run g` makes of a session drawn `g` windows a coin from `s` over `events`, none where the run
-fails or doesn't accept (`Session.State.summary`); at g = 1 `Session.run`'s (`Shared.run_one`), `LineHeld`'s
-`Record.summary`. -/
+fails or doesn't accept (`Session.State.summary`): `LineHeld`'s `Record.summary` at a node of `g` windows a draw
+(`Node.groupsPerCoin`), at g = 1 `Session.run`'s (`Shared.run_one`). -/
 def summaryOfRun (g : Nat) (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=
   match Shared.run g s events with
   | .ok (_, s') => s'.summary
@@ -319,7 +319,7 @@ def lineOfSummary? (onRecord : Bool) (g : Nat) (sm? : Option Session.Summary) (s
   | none => .error "the Lean verifier gave the session no record"
 
 /-- The line of a session drawn `g` windows a coin run from `s` over `events`, as `LineHeld`'s `lineOf` reads a record
-at g = 1: `lineOfRecordOn` of the run's own record (`summaryOfRun`), or why it has none. -/
+at a node of `g` windows a draw: `lineOfRecordOn` of the run's own record (`summaryOfRun`), or why it has none. -/
 def lineOfRun (onRecord : Bool) (g : Nat) (s : Session.State) (events : Array Session.Event) (samples : Nat)
     (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) : Except String Line :=
   lineOfSummary? onRecord g (summaryOfRun g s events) samples seen per blockBytes chipBytes nodeBytes δ rates

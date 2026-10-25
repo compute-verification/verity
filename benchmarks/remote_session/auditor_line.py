@@ -103,8 +103,9 @@ with none credited) is conditional on `ProviderLockdown` in its place; any other
 `NoOutsideCompute`, as without the file. It changes no credit.
 
 **From the transcript** (`line_of`). Where the run's out/ keeps a session's transcript (`transcripts/`, a host run
-fetched with `--transcripts`), the Lean makes the session's record itself, `Session.run` on the transcript
-(`Line.lineOfRun`, `LineHeld`'s `lineOf`), and refuses a kept record that isn't it; elsewhere it reads the kept
+fetched with `--transcripts`), the Lean makes the session's record itself, `Shared.run` at the session's
+`groups_per_coin` on the transcript (`Session.run` at one; `Line.lineOfRun`, `LineHeld`'s `lineOf`), and refuses a kept
+record that isn't it; elsewhere it reads the kept
 record. The verifier's clock's reading holds the times seen to the record's; the challenger's clock's doesn't.
 
 **The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check

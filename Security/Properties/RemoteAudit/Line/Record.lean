@@ -1,27 +1,29 @@
 import Definitions.Accounting.Remote.Held
 import RemoteAudit.Session
+import RemoteAudit.Shared
 import RemoteAudit.Line
 
 /-!
 # The line of record's inputs, read as the memory model's (`Properties.RemoteAudit.Line`)
 
-What a gate run's memory line (`RemoteAudit.Line.lineOfRecord`) reads of one session, and the paced session
+What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one session, and the paced session
 (`Accounting.Remote.Held.Pace`) the memory model reads it as:
 
-* `Node`: what is fixed before the coins: the session's parameters and the registration it runs on (so its windows,
-  one group each, `Node.windows`, and its registered blocks, `Node.blocks`), the groups a stretch, a block's bytes, the
-  node's on-chip storage and memory in bytes, its rates (`RemoteAudit.Line.Rates`) and the δ the line reads its pooled
-  bound at. `Node.squarings` … `Node.chipBlocks` are those rates in the model's units: a tick is a nanosecond on the
-  record's clock and a block is `blockBytes`. Its δ is a nonnegative rational (`ℚ≥0`): the line computes at no δ
-  outside `(0, 1)`.
+* `Node`: what is fixed before the coins: the session's parameters, the windows a draw (`groups_per_coin`, g) and the
+  registration it runs on (so its windows, one group each, `Node.windows`, and its registered blocks, `Node.blocks`),
+  the groups a stretch, a block's bytes, the node's on-chip storage and memory in bytes, its rates
+  (`RemoteAudit.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks` are
+  those rates in the model's units: a tick is a nanosecond on the record's clock and a block is `blockBytes`. Its δ is
+  a nonnegative rational (`ℚ≥0`): the line computes at no δ outside `(0, 1)`.
 * `Record`: what one outcome gives: the verifier's inputs (its coins, the earliest coin release and the session's
   events in order) and what the auditor saw of each window (`RemoteAudit.Line.Seen`: its coin's release and last root,
   and its passes' reads by kind).
-* `Verified`: the Lean verifier accepts the record's session (`Session.run` from `State.init` at the node's
-  parameters and registration, then `outcome`).
+* `Verified`: the Lean verifier accepts the record's session (`Shared.run` at the node's g from `State.init` at its
+  parameters and registration, then `outcome`; at g = 1 `Session.run`, `RemoteAudit.Shared.run_one`).
 * `Record.summary`: the Lean verifier's record of the session (`Session.State.summary`), which is some summary
-  exactly where it accepts. The line reads it (`lineOf`, `lineOfRecord`): each window's passes, its receipts and draws,
-  and the registered blocks; `Record.groups` and `Record.receipts` are its groups and its windows' receipts.
+  exactly where it accepts. The line reads it (`lineOf`, `lineOfRecordAt`): each window's passes, each draw's receipts
+  and draws (`drawReceipts`: draw `c` is windows `c·g … (c + 1)·g − 1`, a window at g = 1), and the registered blocks;
+  `Record.groups` and `Record.receipts` are its groups, one a window, and its draws' receipts.
 * `ofRecord`: a trace with the Lean verifier's verdict on the record as its own, the trace the line's premises read.
 * `recordPace`: the record's groups as the model's paced session, group `g`'s first pass the passes before it, its coin
   and its end `e_g` the record's as `stretches` reads them (`ended`); past the last group its coin stands, so the coins
@@ -37,8 +39,11 @@ open Accounting.Remote.Held _root_.RemoteAudit.Line
 
 /-- The node and the session's structure the line reads, fixed before the coins. -/
 structure Node where
-  /-- the session's parameters: its windows, one group each, and the receipts each draws -/
+  /-- the session's parameters: its windows, one group each, and the receipts each draw draws -/
   params : RemoteAudit.Session.Params
+  /-- the windows a draw, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are drawn from one openings coin; at most 1,
+  one a window -/
+  groupsPerCoin : ℕ
   /-- the registration the session runs on, its registered blocks among it -/
   reg : RemoteAudit.Registration
   /-- the groups a stretch -/
@@ -65,10 +70,10 @@ structure Record where
   events : Array RemoteAudit.Session.Event
   seen : Array Seen
 
-/-- The record's session through the Lean verifier, at the node's parameters and registration. -/
+/-- The record's session through the Lean verifier, at the node's parameters, windows a draw and registration. -/
 def Record.run (node : Node) (r : Record) :
     Except String (Array RemoteAudit.Session.Result × RemoteAudit.Session.State) :=
-  RemoteAudit.Session.run
+  _root_.RemoteAudit.Shared.run node.groupsPerCoin
     (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) r.events
 
 /-- The Lean verifier accepts the record's session: every event runs and the session ends accepted. -/
@@ -86,26 +91,32 @@ def Record.summary (node : Node) (r : Record) : Option RemoteAudit.Session.Summa
 def ofRecord {Ω : Type} (T : Trace Ω) (node : Node) (rec : Ω → Record) : Trace Ω :=
   { T with accepts := fun ω => Verified node (rec ω) }
 
-/-- The record's line on the node: `lineOfRecord` at the Lean verifier's record of the session and the node's
-`samples`, or refused where it gives none. -/
+/-- The record's line on the node: `lineOfRecordAt` at the node's windows a draw, the Lean verifier's record of the
+session and the node's `samples`, or refused where it gives none. -/
 def lineOf (node : Node) (r : Record) : Except String Line :=
   match r.summary node with
-  | some sm => lineOfRecord sm node.params.samples r.seen node.per node.blockBytes node.chipBytes node.nodeBytes
-      node.delta node.rates
+  | some sm => lineOfRecordAt node.groupsPerCoin sm node.params.samples r.seen node.per node.blockBytes node.chipBytes
+      node.nodeBytes node.delta node.rates
   | none => .error "the Lean verifier gave the session no record"
 
-/-- The groups the record's line reads (`RemoteAudit.Line.ofSummary`), none where it reads none. -/
+/-- The groups the record's line reads (`RemoteAudit.Line.ofSummaryAt`), none where it reads none. -/
 def Record.groups (node : Node) (r : Record) : Array Group :=
   match r.summary node with
-  | some sm => match _root_.RemoteAudit.Line.ofSummary sm node.params.samples r.seen with
+  | some sm => match _root_.RemoteAudit.Line.ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen with
     | .ok (gs, _) => gs
     | .error _ => #[]
   | none => #[]
 
-/-- `U_t`, each window's receipts in the Lean verifier's record of the session, none where it has none. -/
+/-- Each draw's receipts among windows `ws` drawn `g` windows a coin: each window's `Σ lengths_t` at g ≤ 1, and above
+it draw `c`'s windows' summed (`RemoteAudit.Line.drawsOf`). -/
+def drawReceipts (g : ℕ) (ws : Array RemoteAudit.Session.WindowSummary) : Array ℕ :=
+  if g ≤ 1 then ws.map _root_.RemoteAudit.Line.receipts else (_root_.RemoteAudit.Line.drawsOf g ws).map (·.1)
+
+/-- `U_c`, each draw's receipts in the Lean verifier's record of the session (a window's at one window a coin), none
+where it has none. -/
 def Record.receipts (node : Node) (r : Record) : Array ℕ :=
   match r.summary node with
-  | some sm => sm.windows.map _root_.RemoteAudit.Line.receipts
+  | some sm => drawReceipts node.groupsPerCoin sm.windows
   | none => #[]
 
 /-- `s`, the node's squarings a tick. -/
