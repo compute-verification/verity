@@ -23,32 +23,24 @@ theorem digit_bounds (d r : Nat) (s : Int) (hd : d < r) :
     · exact Int.le_trans (Int.min_le_right _ _) a
     · exact Int.le_trans b (Int.le_max_left _ _)
 
-theorem accum_bounds : ∀ (ps : List (Nat × Int)) (i : Nat), (∀ p ∈ ps, 1 ≤ p.1) → i < prodR ps →
+theorem accum_bounds : ∀ (ps : List (Nat × Int)) (i : Nat), i < prodR ps →
     lowOf ps ≤ accum ps i ∧ accum ps i ≤ highOf ps
-  | [], _, _, _ => by simp [accum, lowOf, highOf]
-  | (r, s) :: ps, i, hr, hi => by
-    have h1 : 1 ≤ r := hr (r, s) (List.mem_cons_self ..)
-    have hq : i / r < prodR ps := by
-      have : i < r * prodR ps := hi
-      exact (Nat.div_lt_iff_lt_mul (by omega)).2 (by rw [Nat.mul_comm]; exact this)
-    have ih := accum_bounds ps (i / r) (fun p hp => hr p (List.mem_cons_of_mem _ hp)) hq
+  | [], _, _ => by simp [accum, lowOf, highOf]
+  | (r, s) :: ps, i, hi => by
+    have hi' : i < r * prodR ps := hi
+    have h1 : 1 ≤ r := Nat.pos_of_ne_zero fun h => by simp [h] at hi'
+    have hq : i / r < prodR ps :=
+      (Nat.div_lt_iff_lt_mul (by omega)).2 (by rw [Nat.mul_comm]; exact hi')
+    have ih := accum_bounds ps (i / r) hq
     have hb := digit_bounds (i % r) r s (Nat.mod_lt _ (by omega))
     simp only [accum, lowOf, highOf]
     omega
 
-/-- A wire's digits are radices of 1 or more, one step each. -/
-def Wire.WF (w : Wire) : Prop := w.radix.length = w.step.length ∧ ∀ r ∈ w.radix, 1 ≤ r
-
-theorem Wire.pairs_pos (w : Wire) (h : ∀ r ∈ w.radix, 1 ≤ r) : ∀ p ∈ w.pairs, 1 ≤ p.1 := by
-  intro p hp
-  have := List.of_mem_zip (List.mem_reverse.1 hp)
-  exact h _ this.1
-
 /-- **Every writer a wire reads lies in its span**: `check`'s bounds in closed form bound the writer of every reader row
 the wire covers. -/
-theorem Wire.writerAt_mem_span (w : Wire) (h : ∀ r ∈ w.radix, 1 ≤ r) (i : Nat) (hi : i < w.units) :
+theorem Wire.writerAt_mem_span (w : Wire) (i : Nat) (hi : i < w.units) :
     w.span.1 ≤ w.writerAt i ∧ w.writerAt i ≤ w.span.2 := by
-  have := accum_bounds w.pairs i (w.pairs_pos h) hi
+  have := accum_bounds w.pairs i hi
   simp only [Wire.span, Wire.writerAt]
   omega
 
