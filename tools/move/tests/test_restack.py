@@ -357,6 +357,19 @@ def test_a_restacked_result_gets_its_stale_pins_regenerated_by_its_own_list(repo
     assert RS.restack("pr", "move", cwd=str(repo), pins=False)["steps"][-1]["step"] == "moved"
 
 
+def test_a_conflict_only_in_a_pinned_digest_list_is_regenerated_by_the_pins_step(repo):
+    pins = TOY_PINS.replace('pathlib.Path("PIN")', 'pathlib.Path("pkg/TRUSTED.sha256")')
+    on(repo, "pr", ("a pinned list", {RS.PINS: pins, "pkg/TRUSTED.sha256": "branch\n",
+                                      "app/util.py": edit(UTIL, "return 1", "return 10")}))
+    moved = RS.rev("move", str(repo))
+    git(repo, "checkout", "-q", "main")
+    onto = commit(repo, "main pins too", {"pkg/TRUSTED.sha256": "main\n"})
+    r = RS.restack("pr", moved, onto=onto, cwd=str(repo))
+    assert r["status"] == "clean", r
+    assert [s["step"] for s in r["steps"]] == ["base", "script", "moved", "pins"]
+    assert show(repo, r["result"], "pkg/TRUSTED.sha256") == "pin of     return 10\n"
+
+
 def test_a_pin_whose_command_fails_leaves_the_restack_pins_stale(repo, capsys):
     on(repo, "pr", ("a pin", {RS.PINS: TOY_PINS, "PIN": "x\n", "BROKEN": ""}))
     r = RS.restack("pr", "move", cwd=str(repo))
