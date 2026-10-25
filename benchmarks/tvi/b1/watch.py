@@ -2,7 +2,8 @@
 under CLAIM, so parallel watchers never repeat one), run counted.analyze against the checkpoint's base model on its task's
 eval text, and write counted_NAME.json to $OUT. Exits after IDLE_MIN minutes with nothing new, or at DEADLINE (UTC ISO).
 
-  python watch.py      Env: OUT, CLAIM (/workspace/jobs/tvi/b1/claimed), DEADLINE, IDLE_MIN (20), TEXTS (dir of *.txt)
+  python watch.py      Env: OUT, CLAIM (/workspace/jobs/tvi/b1/claimed), DEADLINE, IDLE_MIN (20), TEXTS (dir of *.txt),
+                       WATCH_ROOTS, WATCH_STEPS (glob of step dirs, default step*), TEXT_OVERRIDE
 """
 import datetime, glob, json, os, sys, time, traceback
 import torch
@@ -10,12 +11,13 @@ import counted
 from ckpts import text_for
 
 ROOTS = os.environ.get("WATCH_ROOTS", "/workspace/jobs/tvi/ckpt/A2 /workspace/jobs/tvi/ckpt/A3").split()
+STEPS = os.environ.get("WATCH_STEPS", "step*")
 
 
 def scan(claim):
     out = []
     for root in ROOTS:
-        for d in sorted(glob.glob(os.path.join(root, "*", "step*"))):
+        for d in sorted(glob.glob(os.path.join(root, "*", STEPS))):
             if not os.path.exists(os.path.join(d, "DONE")):
                 continue
             fam = "A2" if "/A2/" in d else "A3"
