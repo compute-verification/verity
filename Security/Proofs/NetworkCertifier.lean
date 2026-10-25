@@ -7,7 +7,6 @@ import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
 import Proofs.NetworkCertifier.Advice
 import Proofs.NetworkCertifier.Ingress
-import Proofs.NetworkCertifier.SampledAudit
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Proofs.NetworkCertifier.SampledCharge
 import Proofs.NetworkCertifier.SampledLeak
