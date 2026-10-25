@@ -150,7 +150,8 @@ verifier of record takes the delivered advice (`verify(advice=…)`) and the tie
 naming the link and its ingress registrations), never beside the advice; nothing in this package is a source until
 IoTieRequest runs in the proof service, so every advised link is refused until then. Every floor is under the sync the
 certifier ran, which the verifier takes only from its own clock source (`LinkWindows.clock_source`: the certifier's
-clock certificates verified under the link's key and session, `advised.SignedClocks`), since a δ below the traffic's
+salted clock certificates, each opened under the link's key and session, `advised.SignedClocks`; the openings are
+witness, the verifier's own read, never a public answer), since a δ below the traffic's
 loosens the floor (REDTEAM phase 11), and a window whose declared sync is another, or outside Σ_sync, is refused alone;
 without a clock source, every advised link is refused too. It refuses a window without an advice or one whose view
 `advised.view` refuses, and reports the advice it read as a third public output, `advice` (`advised.digest`); the
@@ -173,8 +174,10 @@ accept bit (`reference`), never a violation's kind.
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered unit whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
 sync is declared; the outcome record binds the registered root, the draw and the delivered sessions. The verifier of
-record reads no witness. The proof opens the head leaves (2, 3) only, so the record leaves (0, 1), which hold each
-certified record whole, are committed but read by nothing in the verdict, and the certificates' signatures are checked
+record reads no witness but an advised link's clock openings (`certified_clocks`), on the host until N2's advised
+unit opens them (PROTOCOL.md's named gap, "The clock's opening"). The proof opens the head leaves (2, 3) only, so the
+record leaves (0, 1), which hold each certified record whole, are committed but read by nothing in the verdict, and
+the certificates' signatures are checked
 on the host from their public fields, not in the proof. One clock per spatial unit across links (`Audit.syncs`) is
 not checked here: each registration is one link-window, checked alone. The frames, their content and their order
 within the counts, are left to N3: an accepted outcome says nothing of them, so the claim is counts only (timing at
@@ -203,7 +206,7 @@ from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
 from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
-from verity.core.protocols.certifier.certificate import Certificate, CertifiedRecord, ClockCertificate, PublicKey, \
+from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, PublicKey, \
     parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync, LogicalFrame, SyncSet
@@ -547,11 +550,13 @@ class LinkWindows:
     link (`served`, FIXLEN) or an advised one (`advised`, arbitrary traffic under the advice) has no egress profile.
     `ties` is no public field but the verifier's own source of an advised link's tie (`advised.TieSource`), the only
     place `_view` takes IoTieRequest's verdict from (`tie_service.Ties`, on the ingress tie's stream of record): None
-    refuses every advised link. `clock_certificates` are the certifier's clock certificates of the link's egress
-    windows (`certificate.ClockCertificate`), public, whoever delivers them: `clock_source` holds them to the link's
-    key and session (`advised.SignedClocks`) and gives the sync the certifier signed for each window, which every floor
-    reads and an advised window's declared sync must be. `clocks` is a stand-in clock source in their place (a test's,
-    or a run's log, labelled as one), never both; with neither, every advised link is refused."""
+    refuses every advised link. `certified_clocks` is no public field either: the certifier's salted clock
+    certificates of the link's egress windows with their openings (`certificate.CertifiedClock`: the sync and salt
+    are witness, the certificate public), the verifier's own read of the certifier's output, never a public answer.
+    `clock_source` opens each against the salted digest its certificate signs, under the link's key and session
+    (`advised.SignedClocks`), and gives the sync the certifier signed for each window, which every floor reads and an
+    advised window's declared sync must be. `clocks` is a stand-in clock source in their place (a test's, or a run's
+    log, labelled as one), never both; with neither, every advised link is refused."""
 
     link: str
     params: GridParams
@@ -566,12 +571,12 @@ class LinkWindows:
     advised: AD.AdvisedProfile | None = None
     ties: AD.TieSource | None = field(default=None, compare=False, repr=False)
     clocks: AD.ClockSource | None = field(default=None, compare=False, repr=False)
-    clock_certificates: Sequence[ClockCertificate] | None = field(default=None, compare=False, repr=False)
+    certified_clocks: Sequence[CertifiedClock] | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
         if len(self.occupancy) != 2:
             raise ValueError("the occupancy profile has one entry per end: (egress, ingress)")
-        if self.clocks is not None and self.clock_certificates is not None:
+        if self.clocks is not None and self.certified_clocks is not None:
             raise ValueError("a link's syncs come from the certifier's clock certificates or a stand-in clock source "
                              "(clocks), not both")
         if self.served is not None and self.advised is not None:
@@ -601,11 +606,11 @@ class LinkWindows:
 
     @cached_property
     def clock_source(self) -> AD.ClockSource | None:
-        """The syncs `_view` holds an advised window's declared sync to: the certifier's clock certificates under this
-        link's key and session (`advised.SignedClocks`), the verifier of record's; else the stand-in `clocks`; else
-        None, which refuses every advised link."""
-        if self.clock_certificates is not None:
-            return AD.SignedClocks(self.key, self.certifier_session, tuple(self.clock_certificates))
+        """The syncs `_view` holds an advised window's declared sync to: the certifier's salted clock certificates,
+        each opened under this link's key and session (`advised.SignedClocks`), the verifier of record's; else the
+        stand-in `clocks`; else None, which refuses every advised link."""
+        if self.certified_clocks is not None:
+            return AD.SignedClocks(self.key, self.certifier_session, tuple(self.certified_clocks))
         return self.clocks
 
     def declares(self, direction: int, window: int, counts: Sequence[int]) -> bool:
