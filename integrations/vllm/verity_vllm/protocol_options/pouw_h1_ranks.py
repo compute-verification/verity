@@ -43,8 +43,8 @@ MRV2 = "vllm.v1.worker.gpu.model_runner"
 
 class RankRun(PH.H1Run):
     """One rank's side of the window: the calls of its linears [lo, hi) of the window's L, each at its global index
-    s·L + w with its tables, under the salt the holder pushes (`RankExtension.h1rank_open`). Its first linear starts the
-    rank's next step; rounds, admission and coins are the holder's."""
+    s·L + w with its tables, under the salt the holder pushes (`RankExtension.h1rank_open`). A linear the rank's step
+    already holds starts its next step (`H1Run.record`); rounds, admission and coins are the holder's."""
 
     def __init__(self, entry: str, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int, steps: int,
                  lo: int, hi: int, key: bytes) -> None:
@@ -54,17 +54,8 @@ class RankRun(PH.H1Run):
     def _unpushed(self, _root: bytes) -> Any:
         raise RuntimeError(f"{self.entry}: rank [{self.lo}, {self.hi}) used the window's salt before its holder pushed it")
 
-    def _index(self, s: int, w: int) -> int:
-        return s * len(self.shapes_) + w
-
     def _close_rounds(self, through: int) -> None:
         return None
-
-    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> PH.Call | None:
-        if w == self.lo and self.lo:
-            self.step += 1
-            self.last = w - 1
-        return super().record(w, a, s_a, weight, weight_scale, z)
 
     def rows_since(self, sent: int) -> list[dict[str, Any]]:
         """The calls from the `sent`-th on, each with its tables, its credit verdict and what its listeners bound."""
@@ -123,7 +114,8 @@ class RankExtension:
         self._h1rank["run"]._salt = bytes(salt)
 
     def h1rank_rows(self) -> dict[str, Any]:
-        """The rank's calls since the last pull, its refusals so far and whether its calls came in layer order."""
+        """The rank's calls since the last pull, its refusals so far and whether each step's calls came in its first step's
+        order."""
         st = self._h1rank
         run: RankRun = st["run"]
         out = run.rows_since(st["sent"])
@@ -223,7 +215,7 @@ def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
         for into, key in ((run.tables, "tables"), (run.verdicts, "verdict"), (run.bound, "bound")):
             if r.get(key):
                 into[c.index] = dict(r[key])
-        run.step, run.last = c.step, c.layer
+        run.step = c.step
         run.details["calls"] = run.commits["calls"] = len(run.calls)
         if c.layer == last:
             run._close_rounds(c.step)

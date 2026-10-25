@@ -307,6 +307,7 @@ def test_struct_parser_declaration_order_and_counts():
     assert [(n, c, s) for n, c, s, _b in fs] == [("a", 6, [3, 2]), ("b", 4, [4]), ("c", 1, [])]
 
 
+@pytest.mark.slow
 def test_honest_program_replays_bit_exactly_across_all_strata(world):
     bmap, committed = world.bmap_and_reader()
     rep = SR.sampled_replay(_programs(world), bmap, committed, _weights(world), per_stratum=2, seed=3)
@@ -610,8 +611,13 @@ def test_partial_replay_with_named_gaps_is_covered_by_a_complete_form_b_coord_m0
 def test_token_select_first_max_tie_rule():
     logits = np.asarray([0x3F80, 0x4000, 0x4000, 0x3F00], dtype=np.uint16)   # 1.0, 2.0, 2.0, 0.5 -> index 1
     assert RK.token_select_first_max(logits) == 1
-    nan = np.asarray([0x7FC0, 0x3F80], dtype=np.uint16)                         # NaN never wins
-    assert RK.token_select_first_max(nan) == 1
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity_vllm.program.registry import b1
+
+    nan = [[0x7FC0, 0x3F80], [0x3F80, 0x7FC0, 0x4000], [0xFF80, 0x7FC0]]   # NaN never wins a comparison, so a NaN logits[0] is the token
+    assert [RK.token_select_first_max(np.asarray(r, dtype=np.uint16)) for r in nan] == [0, 2, 0]
+    assert [evaluate(bind(b1.TokenSelect, V=len(r)), r)[0] for r in nan] == [0, 2, 0]
 
 
 def test_catch_probability_is_evaluated_over_population_per_stratum(world):
@@ -630,6 +636,7 @@ def test_catch_probability_is_evaluated_over_population_per_stratum(world):
     assert "seed_source" in rep["catch_probability"]["note"]
 
 
+@pytest.mark.slow
 def test_module_strata_cap_floor_and_targets(world):
     """(1) the stratum key carries the module op_path: one stratum per (spec, request, rank, phase, module) so every module of every
     request/phase is sampled; (2) the cap never truncates below one VU per stratum (round-robin order); (3) `--replay-target` pins every VU
@@ -1244,6 +1251,7 @@ def test_attention_v3_flipped_value_word_of_the_prefill_is_named_at_every_row_th
     assert {("Attention_v3", 0), ("Attention_v3", 1), ("Attention_v3", 2)} <= fams, fams
 
 
+@pytest.mark.slow
 def test_attention_v3_program_naming_the_wrong_position_for_a_key_is_a_mismatch_and_a_short_history_is_refused_by_name(attn_world):
     """[rev M-0136 sign condition] the history is the Program's refs, never inferred: a Program whose last attention row names the key of
     position 2 in position 1's slot (a duplicated ref) evaluates F over THAT history != the committed output -> mismatch at exactly that

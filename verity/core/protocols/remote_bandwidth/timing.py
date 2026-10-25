@@ -96,9 +96,15 @@ GPU_CHIP_BYTES = 263_163_904
 """One RTX PRO 6000's on-chip storage at most: 188 SMs' registers, L1 and shared memory, L1.5, instruction caches,
 uniform registers and warp state, its L2, TLB and 1 MiB of buffers (ra-pcie-exhaust #1852, `chip.cu`, runs
 art:2b6cac05 to art:90de6479)."""
-HOST_CHIP_BYTES = 940_435_456
-"""The host's on-chip storage, its two Xeon 6776P sockets' caches: an estimate (M1-v2's `sm120_schip`,
-note:20261015T0553Z-draft-gpu-model-m1-v2)."""
+HOST_CHIP_BYTES = 1_000_341_504
+"""The host's on-chip storage at most, bounded for the whole host, two Xeon 6776P sockets of 64 cores each, whatever
+share of them its VM gets (vy-nebius-2's guest sees 2 × 48): each socket's 336 MiB of L3 and 2 MiB of uncore queues, and
+each core's 2 MiB of L2, 48 KiB of L1d, 64 KiB of L1i and 64 KiB of registers and buffers. The cache sizes are the
+guest's CPUID topology on that host type (r20261020-212232-6ba5's lscpu), and the 128 cores the host's
+(`benchmarks/rate_squaring/gamma.py`). The 64 KiB a core and 2 MiB a socket are allowances, not an enumeration: two
+threads' architectural state with AMX tiles (about 11 KiB each), the physical register files and the load, store and
+fill buffers; and the memory controllers', UPI's and PCIe's queues (red team, note:20261024T0330Z-report-redteam-night
+(f)4)."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches (the red team's R6 F1,
 note:20261015T0705Z-draft-bandwidth-core-redteam)."""
@@ -256,15 +262,19 @@ def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
     return min(((r, sketch_rate(rows, r)) for r in range(1, min(rows, SECTOR_BYTES) + 1)), key=lambda x: x[1])
 
 
-def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None) -> Fraction:
+def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None,
+                   blocks: int = 0) -> Fraction:
     """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
-    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes.  Every key the
-    prover sees is a seed it computed or one of the session's, so it sees at most `compressions + passes`, ground or
-    not, and every guess is a compression: `C · 2^-8r + (C + P) · SECTORS · sign_rank_at_most(rows, r − 1)`."""
+    default), against a prover of `compressions` SHA-512 compressions over a session of `passes` passes of `blocks`
+    blocks.  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
+    `compressions + passes`, ground or not, and every guess is a compression:
+    `C · 2^-8r + (C + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512)`, the last term a key's 512-bit
+    receipt of a block right without its hash.  At 16 rows and r = 12 it is the δ at which
+    `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
     if r is None:
         r = sketch_reading(rows)[0]
     return (compressions * Fraction(1, 2 ** (8 * r))
-            + (compressions + passes) * SECTORS * sign_rank_at_most(rows, r - 1))
+            + (compressions + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** 512)))
 
 
 def grind_compressions(leaves: int) -> int:

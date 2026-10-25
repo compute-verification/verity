@@ -374,7 +374,6 @@ def test_each_case_has_its_own_verdict() -> None:
     assert X._verdict(quick)
 
 
-@pytest.mark.slow
 def test_main_end_to_end_on_stubbed_launches(padded, short, tmp_path, monkeypatch, capsys) -> None:
     """`main --quick` with the GPU's launches stood in for (the insert `padded` case's twin-made words as `decode`, the same with q
     flipped as `reduced`, the indexer `short` case's as `decode`) and vLLM's config module stubbed: the jobs through the spawned

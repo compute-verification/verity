@@ -105,7 +105,7 @@ def main():
         name = f"fuzz-{a.seed}-{k:03d}-{kind}"
         d = a.out / name
         d.mkdir(parents=True, exist_ok=True)
-        (d / "session.json").write_text(json.dumps(rec))
+        (d / "session.json").write_text(rd.session_text(rec))
         for r in (0, 1):
             (d / f"{table}.rep{r}.bin").write_bytes(pf[r])
         (d / "what.txt").write_text(what + "\n")

@@ -2,7 +2,7 @@
 word-sized primitives, so a partition query (`Q_word`) cuts it into ordinary 16- and 32-bit units.
 
 `TopPMaskWordx{V}_v1` is the same function as ONE primitive (a `Value<V>`, every split count, `splits` an operand): about 10^11
-ANDs at V = 128256, a single word gate no query can cut. With `splits` a constant (a single-request workload, #197) the pipeline
+ANDs at V = 128256, a single word gate no query can cut. With `splits` a constant (the registered S, #197, CIR-87) the pipeline
 is fixed, and this module restates it at that S:
 
 * `topp_keep_builder.keep_word` is the pipeline written once over vectors of words, each step an operation on whole vectors that an

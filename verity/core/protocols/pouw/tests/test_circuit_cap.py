@@ -7,9 +7,12 @@ the replay.  A row's salt-dead counts are its elements whose code has one value 
 scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
 h0 is `PearlTileDigest`'s on honest and edge tiles, its units' rows are their ports' words, it computes every value in
 one unit, no unit of a deployed tile has more rows than C-Flock's block holds, a drawn tile's closure holds its strip,
-every word, its rows' digests and sums and its tally, and a short last tile row is refused."""
+every word, its rows' digests and sums and its tally, and a short last tile row is refused.  The per-row cap (v2,
+``row_rho``) is v1's verdict and each admitted row's own capOK at ρr, in one unit and split, and `cap.served` binds the
+scheme's ρr (`benchmarks/pouw/tests/test_pearlc_cap_agreement.py` holds it to the clear path's)."""
 from __future__ import annotations
 
+import itertools
 import random
 import struct
 from collections import Counter
@@ -231,15 +234,16 @@ def _peel_rows(k: int, tile):
     return pa, [[rng.getrandbits(16) & 0x3FFF for _ in range(pc8.PEEL)] for _ in range(tn)]
 
 
-def _tile(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120"):
-    """(C̃, U, verdict) of `Pc8TileCap`, and `Pc8Tile`'s (C̃, U) on the same rows (P_A, P_B random BF16 words)."""
+def _tile(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120", row_rho: int | None = None):
+    """(C̃, U, verdict) of `Pc8TileCap` (v2 with ``row_rho``), and `Pc8Tile`'s (C̃, U) on the same rows (P_A, P_B random
+    BF16 words)."""
     tm, tn = tile
     pa, pb = _peel_rows(k, tile)
     if cert is None:
         cert = [[cap.certificates(ac[i], bc[j], dev) for j in range(tn)] for i in range(tm)]
     flat = lambda rows: [x for r in rows for x in r]  # noqa: E731
-    out = evaluate(cap.templates(k, dev, tile, n, rho)["tile"], flat(ac), flat(bc), flat(pa), flat(pb), [int(o) for o in ok],
-                   flat(sd), [w for r in cert for c in r for w in c])
+    out = evaluate(cap.templates(k, dev, tile, n, rho, row_rho)["tile"], flat(ac), flat(bc), flat(pa), flat(pb),
+                   [int(o) for o in ok], flat(sd), [w for r in cert for c in r for w in c])
     plain = evaluate(pc8.templates(k, tile, dev)["tile"], flat(ac), flat(bc), flat(pa), flat(pb))
     return out[:-1], plain, out[-1]
 
@@ -338,11 +342,12 @@ def test_the_deployed_shape_fits_and_a_larger_one_is_refused():
 SPLIT = pc8.Shape(4, 256, 4, tile=(2, 2), dev="sm120", hidden=True, cap=True)
 
 
-def _split(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120"):
+def _split(k: int, tile, n: int, rho: int, ac, bc, ok, sd, cert=None, dev: str = "sm120", row_rho: int | None = None):
     """The split's units on one tile, composed as `Pc8CallCap` composes them: (each word unit's outputs by row and column,
-    the strip's, each tile row's digests and sums, the tile digest, the tally's verdict); P_A and P_B are `_tile`'s."""
+    the strip's, each tile row's digests and sums, the tile digest, the tally's verdict); P_A and P_B are `_tile`'s.  With
+    ``row_rho`` the tally is v2's, with the per-row cap."""
     tm, tn = tile
-    tp, (pa, pb) = cap.unit_templates(k, dev, tile, n, rho), _peel_rows(k, tile)
+    tp, (pa, pb) = cap.unit_templates(k, dev, tile, n, rho, row_rho), _peel_rows(k, tile)
     if cert is None:
         cert = [[cap.certificates(ac[i], bc[j], dev) for j in range(tn)] for i in range(tm)]
     words = [[evaluate(tp["word"], ac[i], pa[i], bc[j], pb[j], cert[i][j]) for j in range(tn)] for i in range(tm)]
@@ -405,6 +410,120 @@ def test_the_split_tally_leaves_a_refused_row_out_and_fails_a_wrong_certificate(
     cert = [[cap.certificates(ac[i], bc[j]) for j in range(2)] for i in range(2)]
     cert[1][0] = [_keyed(cert[1][0][0], 1), cert[1][0][1]]
     assert _split(k, tile, n, rho, ac, bc, [True, True], sd, cert=cert)[-1] == 0
+
+
+# ---- the per-row cap (v2) -------------------------------------------------------------------------------------------------
+
+def _row_reference(dev: str, k: int, n: int, rho: int, row_rho: int, ac, bc, ok, sd) -> bool:
+    """`_reference`, and every admitted row's own debit over the tile's columns at most ρr = 1/row_rho times its cells'
+    share of the credit (`pearlCTilesDevRev1RowCapAt`): rev1's cap on that row alone."""
+    return _reference(dev, k, n, rho, ac, bc, ok, sd) and all(
+        _reference(dev, k, n, row_rho, [ac[i]], bc, [True], [sd[i]]) for i, o in enumerate(ok) if o)
+
+
+def flag_words(ac, bc, at) -> None:
+    """For each (i, j, t) of ``at``, zero A row i's elements 16..31 of atom block t and B row j's 0..15, so word (i, j)'s
+    atom t is a zero product, which the debit flags; distinct t keep the words apart."""
+    for i, j, t in at:
+        for e in range(32):
+            if e < 16:
+                bc[j][32 * t + e] = 0
+            else:
+                ac[i][32 * t + e] = 0
+
+
+def _row_flags(dev: str, ac, bc) -> list[int]:
+    return [sum(sum(D.word_flags(a, b, DEVICES[dev])) for b in bc) for a in ac]
+
+
+def _unflagged_tile(dev: str, seed: str, k: int, tm: int, tn: int):
+    """The first of ``seed``'s random tiles with no word flagged, so `flag_words` sets every flag."""
+    for s in itertools.count():
+        ac, bc = _random_tile(random.Random(f"{seed}-{s}"), k, tm, tn)
+        if not any(_row_flags(dev, ac, bc)):
+            return ac, bc
+
+
+@pytest.mark.parametrize("k, tile, n, rho, row_rho", [(256, (2, 2), 2, 1000, 250), (256, (3, 1), 4, 40, 10),
+                                                      (256, (2, 2), 6, 3, 2)])
+def test_the_row_capped_tile_is_v1_and_each_admitted_rows_cap(k, tile, n, rho, row_rho):
+    """`test_the_tile_is_pc8s_and_its_verdict_rev1s_cap`'s tiles under `Pc8TileCap` v2 and its split (`Pc8CapTally` v2):
+    C̃ and U are `Pc8Tile`'s, and the verdict is rev1's capOK on the replay and every admitted row's own debit within ρr
+    = 1/row_rho of its cells' credit; both verdicts occur."""
+    rng = random.Random(f"cap-row-tile-{k}-{tile}-{n}-{rho}-{row_rho}")
+    tm, tn = tile
+    seen = set()
+    for trial in range(10):
+        ac, bc = _random_tile(rng, k, tm, tn, (FINITE, SMALL)[trial % 2])
+        if trial % 3 == 2:
+            ac[0] = [0] * k
+        ok = [rng.random() < 0.8 for _ in range(tm)]
+        sd = [[rng.choice([0] * 30 + [1, 32]) if trial % 4 == 3 else 0 for _ in range(k // 32)] for _ in range(tm)]
+        cu, plain, verdict = _tile(k, tile, n, rho, ac, bc, ok, sd, row_rho=row_rho)
+        assert cu == plain
+        want = _row_reference("sm120", k, n, rho, row_rho, ac, bc, ok, sd)
+        assert verdict == want == _split(k, tile, n, rho, ac, bc, ok, sd, row_rho=row_rho)[-1], trial
+        seen.add(want)
+    assert seen == {True, False}
+
+
+#: GLM-5.3's down projection's k on the H100 record, at its n, in tiles of 8 rows and 16 columns: a cell's credit is 420
+#: units and a flagged atom 40, so a row's cap is 16.8 units at ρ = 1/400 and 67.2 at 4ρ, and the tile's 134.4 at ρ
+ROW_CAP = dict(k=256, tile=(8, 16), n=6144, rho=400, dev="h100")
+
+
+@pytest.mark.parametrize("split", [False, True])
+def test_the_per_row_cap_refuses_an_admitted_row_over_its_cap_alone(split):
+    """At ROW_CAP, rows with words flagged by construction (`flag_words`): one flag in a row (40 units) is within 4ρ and
+    over ρ, so `Pc8TileCap` v2 at ρr = 4ρ accepts it and at ρr = ρ refuses it; two flags in a row (80) are over 4ρ and
+    within the tile's ρ, so v1 accepts the tile and v2 refuses it, and accepts it once that row is refused; one flag in
+    each of four rows (160) is over the tile's ρ, which v1 and v2 both refuse.  Each verdict is the replay's."""
+    k, tile, n, rho, dev = ROW_CAP["k"], ROW_CAP["tile"], ROW_CAP["n"], ROW_CAP["rho"], ROW_CAP["dev"]
+    tm, tn = tile
+    sd = [[0] * (k // 32) for _ in range(tm)]
+    run = _split if split else lambda *a, **kw: (_tile(*a, **kw)[2],)
+    cases = {"one": ([(2, 5, 1)], [1 if i == 2 else 0 for i in range(tm)]),
+             "two": ([(5, 3, 2), (5, 9, 4)], [2 if i == 5 else 0 for i in range(tm)]),
+             "four": ([(i, 2 * i, i + 1) for i in range(4)], [1] * 4 + [0] * 4)}
+    want = {("one", 100): 1, ("one", 400): 0, ("two", 100): 0, ("two", 400): 0, ("four", 100): 0, ("four", 400): 0}
+    for name, (at, flags) in cases.items():
+        ac, bc = _unflagged_tile(dev, f"cap-row-{name}", k, tm, tn)
+        flag_words(ac, bc, at)
+        assert _row_flags(dev, ac, bc) == flags, name
+        ok = [True] * tm
+        v1 = run(k, tile, n, rho, ac, bc, ok, sd, dev=dev)[-1]
+        assert v1 == _reference(dev, k, n, rho, ac, bc, ok, sd) == (name != "four"), name
+        for row_rho in (100, 400):
+            got = run(k, tile, n, rho, ac, bc, ok, sd, dev=dev, row_rho=row_rho)[-1]
+            assert got == want[name, row_rho] == _row_reference(dev, k, n, rho, row_rho, ac, bc, ok, sd), (name, row_rho)
+        if name == "two":
+            ok[5] = False
+            assert run(k, tile, n, rho, ac, bc, ok, sd, dev=dev, row_rho=100)[-1] == 1
+
+
+def test_the_served_shape_takes_the_schemes_row_cap():
+    """`cap.served`: `pearl-c-h100-v1-h3` at its census k = 256 is `Pc8CallCap` v2 at ρr = 4ρ (RHOR = 100) and at k =
+    1,024 at ρr = ρ (400), as `PearlC.row_cap_at`; `pearl-c-sm120-v1-h3` at ρ (1,000); -h0, which caps the tile alone,
+    is v1 and refuses k = 256.  A per-row cap without the cap, or not 1/RHOR, is refused; v1's Programs are unchanged."""
+    h100, sm120 = DEVICES["h100"], DEVICES["sm120"]
+    h3, h0 = C.PearlC(forming="v1", device=h100, hashing="h3"), C.PearlC(forming="v1", device=h100)
+    for scheme, k, rr in ((h3, 256, 100), (h3, 1024, 400), (C.PearlC(forming="v1", device=sm120, hashing="h3"), 1024, 1000),
+                          (h0, 1024, None)):
+        shape = cap.served(scheme, Shape(64, k, 6144))
+        assert (shape.row_rho, shape.tile, shape.dev, shape.hidden, shape.cap) == (rr, (64, 64), scheme.device.name, True, True)
+        for build, v1, v2 in ((pc8.call, cap.Pc8CallCapDef, cap.Pc8CallCapDefV2),
+                              (pc8.check, cap.Pc8CheckCapDef, cap.Pc8CheckCapDefV2)):
+            t = build(shape)
+            assert t.defn is (v1 if rr is None else v2) and t.bindings.get("RHOR") == rr, (scheme.name, k)
+        assert pc8.call(replace(shape, row_rho=None)).id == pc8.call(shape).id.replace("_v2", "_v1").replace(f",RHOR={rr}", "")
+    with pytest.raises(DomainError):
+        cap.served(h0, Shape(64, 256, 6144))
+    with pytest.raises(DomainError):
+        cap.served(C.PearlC(forming="v1", device=h100, hashing="h3", prices=sm120.prices), Shape(64, 256, 6144))
+    with pytest.raises(DomainError):
+        replace(SPLIT, cap=False, row_rho=250).check()
+    with pytest.raises(DomainError):
+        cap.templates(256, "sm120", row_rho=0)
 
 
 #: FP32 words at the edges of the digest's input: ±0, ±inf, NaNs, subnormals, the largest finite, one, all ones
@@ -471,12 +590,13 @@ def test_the_split_units_rows_are_their_ports_words():
     assert L.ROW_WORDS["cap-chunks"](k) == L.ROW_WORDS["cap-rows"](k) == 64
 
 
+@pytest.mark.parametrize("row_rho", [None, 250])
 @pytest.mark.parametrize("role", ["row_b", "row_a", "strip", "word", "row_digest", "row_tally", "tile", "tally"])
-def test_the_ports_are_each_split_units_committed_rows(role):
-    """`PORTS` lists every parameter and output of each split unit once: its rows, the anchored inputs' regions, the word
-    unit's certificates as advice and the tally's verdict as its one public output, in no row; its statement rows are
-    its rows, inputs as many as it reads, outputs once each."""
-    tp = cap.unit_templates(SPLIT.k, SPLIT.dev, SPLIT.tile, SPLIT.n)
+def test_the_ports_are_each_split_units_committed_rows(role, row_rho):
+    """`PORTS` lists every parameter and output of each split unit once (with the per-row cap too, whose tally is v2's):
+    its rows, the anchored inputs' regions, the word unit's certificates as advice and the tally's verdict as its one
+    public output, in no row; its statement rows are its rows, inputs as many as it reads, outputs once each."""
+    tp = cap.unit_templates(SPLIT.k, SPLIT.dev, SPLIT.tile, SPLIT.n, row_rho=row_rho)
     ports, reads = cap.PORTS[role], cap.reads(SPLIT.tile)[role]
     CF.check_ports(tp[role], ports, pc8.DERIVATIONS, SPLIT.k, reads)
     rows = L.statement_rows(ports, SPLIT.k, reads)
@@ -486,20 +606,22 @@ def test_the_ports_are_each_split_units_committed_rows(role):
     assert ports.get("public", ()) == ((0,) if role == "tally" else ())
 
 
+@pytest.mark.parametrize("row_rho", [None, 250])
 @pytest.mark.parametrize("side", ["check", "weight", "call"])
-def test_the_split_computes_every_value_in_exactly_one_unit(side):
-    """Under ``cap`` the call is one unit per row of A, per strip, per word, per tile row (its digests and its sums), per
-    tile and per tally (and the check adds a unit per row of B); `validate_unit_cut` certifies every gate once with no
-    recompute, and the partition object over the split's templates verifies.  Each strip's admission bits and bound are
-    its own unit's, since a strip's tallies all read them."""
-    fn = {"check": pc8.check, "weight": pc8.weight, "call": pc8.call}[side](SPLIT)
-    prog, q = Program(fn), pc8.query(SPLIT, side)
+def test_the_split_computes_every_value_in_exactly_one_unit(side, row_rho):
+    """Under ``cap`` (with or without the per-row cap) the call is one unit per row of A, per strip, per word, per tile row
+    (its digests and its sums), per tile and per tally (and the check adds a unit per row of B); `validate_unit_cut`
+    certifies every gate once with no recompute, and the partition object over the split's templates verifies.  Each
+    strip's admission bits and bound are its own unit's, since a strip's tallies all read them."""
+    shape = replace(SPLIT, row_rho=row_rho)
+    fn = {"check": pc8.check, "weight": pc8.weight, "call": pc8.call}[side](shape)
+    prog, q = Program(fn), pc8.query(shape, side)
     us = pc8.units(fn)
-    m, n, (tm, tn) = SPLIT.m, SPLIT.n, SPLIT.tile
+    m, n, (tm, tn) = shape.m, shape.n, shape.tile
     full = {"row_b": n, "row_a": m, "strip": m // tm, "word": m * n, "row_digest": m * n // tn, "row_tally": m * n // tn,
             "tile": m * n // (tm * tn), "tally": m * n // (tm * tn)}
     assert Counter(u.role for u in us) == {r: full[r] for r in cap.ROLES[side]}
-    tp = cap.unit_templates(SPLIT.k, SPLIT.dev, SPLIT.tile, SPLIT.n)
+    tp = cap.unit_templates(shape.k, shape.dev, shape.tile, shape.n, row_rho=row_rho)
     assert [u.template for u in us] == [PO.template_id(tp[u.role]) for u in us]
     assert PO.verify(PO.build(prog, q), prog).ok
     _g, _owner, verdict = pc8.unit_cut(fn)
