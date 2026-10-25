@@ -51,6 +51,10 @@ content and order. Conventions follow POUS's package (`verity/core/protocols/pou
                                audit gives that count (AdviceIn, freeInputs, AsReg, RLeak)
 ../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean  trusted: the leak bound under a sampled audit, and what
                                an accepted one establishes (SampledLeakAccepted)
+../../Definitions/NetworkCertifier/Period.lean  trusted: a period of sampled audits: a statement registered as a
+                               window's (SameRegistration) and a window's good event (WindowGood)
+../../Models/NetworkCertifier/Guarantees/Period.lean  trusted: the leak through the wardens over a period of sampled
+                               audits (PeriodLeakAccepted)
 Lemmas.lean     the statements that are only steps of the guarantees' proofs, Theorem 1(b) among them,
                                each a `def G : Prop` under the same namespace (`Guarantees.G`)
 ../NetworkCertifier.lean  proved: `SecurityProofs.G : Guarantees.G` for each guarantee and lemma, from the modules below
@@ -81,6 +85,10 @@ SampledCharge.lean  the leak bound under a sampled audit: by the layout's causal
 SampledLeak.lean  the leak bound under an accepted sampled audit: its relation (RAcc) gives the leak
                                          relation (rLeak_of_rAcc), composed with SampledAuditAccepted as a
                                          hypothesis (sampledLeak; sampledLeak_reg at the registered inputs pinned)
+Period.lean     the leak through the wardens over a period: each good window's observations are among
+                                         AccSeqsSampled at its registration (mem_accSeqsSampled_of_windowGood), and the
+                                         secrets the wardens' views decode to, counted over the windows
+                                         (encard_periodGood_le, periodLeak)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
@@ -181,15 +189,16 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 The lock (`lean-audit.json`'s `guarantees`) holds the 22 statements of `Guarantees.lean`, the leak bound's three
 (`Guarantees/AdviceString.lean`), advice v1's eight, four for decision-only windows and four with a separate count
 code (`../../Definitions/NetworkCertifier/Guarantees/AdviceV1.lean` and `Guarantees/AdviceV1.lean`), the whole window's
-four (`../../Definitions/NetworkCertifier/Guarantees/WindowCharge.lean` and `Guarantees/WindowCharge.lean`), the warden's three (`Guarantees/Warden.lean`) and the sampled audit's charge
-(`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
-by the lemma of the same statement whose name it spells in UpperCamelCase. All 41 are under `shape.frozen` as
+four (`../../Definitions/NetworkCertifier/Guarantees/WindowCharge.lean` and `Guarantees/WindowCharge.lean`), the warden's three (`Guarantees/Warden.lean`), the sampled audit's charge
+(`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`) and the period's leak through the wardens
+(`Guarantees/Period.lean`), each listed as `NetTiming.SecurityProofs.G` and proved
+by the lemma of the same statement whose name it spells in UpperCamelCase. All 42 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `Program`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the leak bound also over an abstract charge and compiler; advice v1's over its
 charge as `Definitions` states it, the mirror of `ChargeCount_v1{N}`'s or `ChargeCount_v2{N, H, O}`'s Python reference,
 and an abstract compiler; the
 warden's over the warden's code as `Definitions` states it, which no compiled program implements yet; the sampled charge
-over the sequences the circuit's Program accepts with a possible faulty set), not over the network check's code, and an
+over the sequences the circuit's Program accepts with a possible faulty set, and the period's over both), not over the network check's code, and an
 accepted run reaches the first 25 and advice v1's nine leak bounds through `AcceptedRunsAreProgramRuns`. Four are the
 theorems whose bounds the calibration reports (`verity.core.protocols.certifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
@@ -246,6 +255,13 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
   registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
   `Claims.Sampling.KS` are named assumptions in the lock.
+- **The leak through the wardens over a period** (`Period.lean`): `PeriodLeakAccepted` composes
+  `SampledLeakAccepted`, at `SampledAuditAccepted`'s proof, with `EncardWardenViewsLe`, so the warden bound's content
+  term comes from the audits: over a period's windows, each registered as a statement, the secrets of a covert sender
+  whose every window meets its good event (`WindowGood`) number at most
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, and each window's audit
+  fails `RLeak` with at most `KSLinOn`'s probability. Its hypotheses are `Claims.Sampling.KS`, `Claims.Flock.ListWithin`
+  and `trusted-nebius-host`; the union over the period's live coins and the registration's binding are not yet stated.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
