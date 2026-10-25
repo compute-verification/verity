@@ -227,7 +227,7 @@ class _Pass:
     tiles: int = 0
     poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
     stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
-    base: int = 0                    # the epoch's calls before the pass: its call at position p has index base + p (`call_index`)
+    base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
 
 
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
@@ -743,7 +743,7 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
     def finish(self) -> None:
         if self.cur is not None and self.cur.matmuls:
             self.end()
-            self.cur = _Pass(None, base=self.epoch_calls())
+            self.cur = _Pass(None)
 
 
 class PearlCExecutor:

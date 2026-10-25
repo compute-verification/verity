@@ -53,26 +53,30 @@ def room(run: Any, tiles: int, rows: int, calls: int) -> Any:
 def call_index(run: Any, calls: int = 1) -> int:
     """The index of ``run``'s next call, numbered across the whole epoch (the install's salt), never per pass: -h3's row
     seed binds the salt and the index but no pass, so two passes of one salt sharing an index would repeat their seeds and
-    tickets (CMP-84).  The pass's own buffers stay positional (``index - run.cur.base``).  ``RuntimeError`` where ``calls``
-    more calls would reach `pearl_c.CALL_RANGE`, which the verifier refuses."""
+    tickets (CMP-84).  The pass's own buffers stay positional (``index - run.cur.base``); a pass begun without a base
+    (`finish`'s) takes `EpochCalls.epoch_calls`.  ``RuntimeError`` where ``calls`` more calls would reach
+    `pearl_c.CALL_RANGE`, which the verifier refuses."""
     p = run.cur
+    if p.base is None:
+        p.base = run.epoch_calls()
     index = p.base + len(p.matmuls)
     if index + calls > CALL_RANGE:
         raise RuntimeError(f"{run.entry}: the epoch is at call {index}, and {calls} more would reach 2^32 calls, the range of "
                            "-h3's row seed (`pearl_c.CALL_RANGE`); end the epoch: reinstall under a new salt")
+    run._used = max(run._used, index + calls)
     return index
 
 
 class EpochCalls:
     """A device run's call numbering across its epoch (`call_index`): where each pass's first call is numbered from."""
-    _used = 0                         # `epoch_calls` as of the last pass it saw
+    _used = 0                         # one past the highest index `call_index` has given out
     repeat_at: int | None = None      # the next pass's first index, once (`pass_base`'s ``at``)
 
     def epoch_calls(self) -> int:
         """One past the highest call index any pass of the epoch has used (0 before the first call): where the next pass
         numbers from."""
         cur = self.cur
-        if cur is not None:
+        if cur is not None and cur.base is not None:
             self._used = max(self._used, cur.base + len(cur.matmuls))
         return self._used
 

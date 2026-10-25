@@ -271,7 +271,8 @@ def test_nohash_forms_and_multiplies_without_hashing(device_run):
 def test_passes_number_their_calls_across_the_epoch(device_run):
     """Each pass's calls continue the epoch's indices (`pouw_pass.call_index`), its buffers positional: three calls, then
     two in the next pass take 3 and 4.  A check that repeats a pass from its index (`begin`'s ``at``) shares its indices,
-    and the pass after continues past every index the epoch has used, never from the repeat's end."""
+    and the pass after continues past every index the epoch has used, never from the repeat's end; so does a call after
+    `finish`."""
     make, _, weights, *_ = device_run
     run = make()
     x = torch.randn(16, 1024).to(torch.bfloat16)
@@ -291,8 +292,11 @@ def test_passes_number_their_calls_across_the_epoch(device_run):
     assert run.cur.base == 3 and run.repeat_at is None
     run.end_pass()
     assert run.cur.base == 5
+    run.gemm(1, x, weights[1], None)
     run.finish()
-    assert run.cur.base == 5
+    assert run.cur.base is None and run.epoch_calls() == 6
+    run.gemm(0, x, weights[0], None)
+    assert run.cur.base == 6 and [u.index for u in run.cur.matmuls] == [6]
 
 
 def test_the_epochs_call_at_2_to_the_32_is_refused_on_the_device(device_run):
