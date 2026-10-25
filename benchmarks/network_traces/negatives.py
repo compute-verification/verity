@@ -91,6 +91,7 @@ import tarfile
 import tempfile
 import time
 from collections import defaultdict
+from collections.abc import Collection
 from dataclasses import dataclass, field, replace
 from fractions import Fraction
 from pathlib import Path
@@ -1010,12 +1011,29 @@ def io_tie_module():
         return None
 
 
+def _commit_rows(path: Path) -> list[dict]:
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
 def read_ids(path: Path) -> dict[str, list[int]]:
     """Each request's sampled ids by the advice's request id: ADVICE-SRC's `requests.jsonl` (`user`, `output_ids`), or
     serve-openai's (`user`, `streamed_ids`; a request without a `user` by its `http_id`, as its advice names it)."""
-    rows = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     return {r.get("user") or r["http_id"]: list(r["output_ids"] if "output_ids" in r else r["streamed_ids"])
-            for r in rows}
+            for r in _commit_rows(path)}
+
+
+def commit_aborted(row: dict) -> bool:
+    """Whether a Commit record's request (a `read_ids` row) finished by its client's abort: ADVICE-SRC's
+    `finish_reason` ``abort``, or serve-openai's `finish` null (the endpoint writes an aborted request with none) or of
+    reason ``abort``. A row with no finish field isn't an abort."""
+    if "output_ids" in row:
+        return row.get("finish_reason") == "abort"
+    return "finish" in row and (row["finish"] is None or row["finish"].get("reason") == "abort")
+
+
+def read_aborted(path: Path) -> set[str]:
+    """The requests of `read_ids`' record that their clients aborted (`commit_aborted`), by the same ids."""
+    return {r.get("user") or r["http_id"] for r in _commit_rows(path) if commit_aborted(r)}
 
 
 def tie_outputs(IT, advice, ids: dict[str, list[int]]):
@@ -1349,13 +1367,15 @@ def frames_held(certified: CertifiedRecord | None, record, params, key, session:
             and h.root == frames_root(frames, params))
 
 
-def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run") -> dict:
+def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run",
+            aborted: Collection[str] = ()) -> dict:
     """The I/O tie on each egress window of the certifier-serve run `run`, `ids` the endpoint's sampled ids by request
     user (`read_ids`; None when not given), with `TIE_STAND_INS` for what the run doesn't keep. `verdict`: refused
     when a window's parts fail (`failing`, by window, in `TIE_ORDER`; window -1 the committed outputs no cell carries;
     `codes` their ``IoTieWindow.PART``) or the finish doesn't hold (`finish`), accepted when neither,
     `NOT_APPLICABLE` when the run lacks what the tie opens (`missing`, by `TIE_MISSING`'s keys). `finish`: whether
-    each response's length and finish are the Commit's; on a compact plan the link's records held to the sampled ids
+    each response's length and finish are the Commit's; on a compact plan the link's records held to the sampled ids,
+    the users the endpoint says their clients `aborted` (`read_aborted`) and each request's `max_tokens`
     (`active.compact_finish_violations`, each (ordinal, why) in `finish_violations`), on id events true, their finish
     being their ids'; None without the ids or the events. The windows whose frames are `held` to their certified
     heads, at each end; the run's `id_events` (a compact plan's records), its certified requests' committed
@@ -1379,10 +1399,12 @@ def tie_run(run: Path, ids: dict[str, list[int]] | None, seed: bytes = b"tie-run
     events = sum((compact_record_data(s) is not None) if compact else _is_id_event(s) for s in real)
     missing = {k: TIE_MISSING[k] for k, lacks in (("io-tie", IT is None), ("id-events", not events),
                                                   ("commit", ids is None)) if lacks}
-    users = ({r["stream"]: r["user"] for r in cs.certified_io(plan, setup, ins, outs)["records"]}
-             if events and ids is not None else None)
+    records = cs.certified_io(plan, setup, ins, outs)["records"] if events and ids is not None else None
+    users = None if records is None else {r["stream"]: r["user"] for r in records}
     finish = compact_finish_violations({q: ids.get(u, ()) for q, u in users.items()}, plan["varied"]["eos_token_ids"],
-                                       real) if compact and users is not None else []
+                                       real, max_tokens={r["stream"]: r["max_tokens"] for r in records},
+                                       aborted={q for q, u in users.items() if u in aborted}
+                                       ) if compact and users is not None else []
     out = {"verdict": NOT_APPLICABLE, "codes": [], "failing": {}, "windows": windows,
            "held": {end: len(ws) for end, ws in held.items()}, "id_events": events, "missing": missing,
            "finish": None if users is None else not finish, "finish_violations": [list(v) for v in finish]}
@@ -1471,14 +1493,16 @@ def tie_ok(name: str, row: dict) -> bool | None:
 
 
 def tie_runs(src: Path, ids: Path | None = None) -> dict:
-    """`tie-run`'s document (`TIE_RUN`): the tie's row on each run in `src` (`run_dirs`, `tie_run`), by name, with
+    """`tie-run`'s document (`TIE_RUN`): the tie's row on each run in `src` (`run_dirs`, `tie_run`, the Commit's ids and
+    aborts `ids`' own, `read_ids` and `read_aborted`), by name, with
     `ok` (`tie_ok`), and what it stands in for (`TIE_STAND_INS`)."""
     sampled = read_ids(ids) if ids is not None else None
+    gone = read_aborted(ids) if ids is not None else set()
     with tempfile.TemporaryDirectory() as scratch:
         runs = run_dirs(src, Path(scratch))
         if not runs:
             raise NotApplicable(f"{src}: no certifier-serve run (no certified.jsonl in it)")
-        rows = {name: tie_run(run, sampled) for name, run in runs.items()}
+        rows = {name: tie_run(run, sampled, aborted=gone) for name, run in runs.items()}
     return {"format": TIE_RUN, "check": TIE, "source": str(src), "ids": None if ids is None else str(ids),
             "stand_ins": TIE_STAND_INS,
             "runs": {name: {"verdict": r["verdict"], "ok": tie_ok(name, r)} | r for name, r in rows.items()}}

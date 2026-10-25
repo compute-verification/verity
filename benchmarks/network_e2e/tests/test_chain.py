@@ -650,7 +650,7 @@ def test_on_the_advice_profile_the_endpoints_own_advice_for_the_runs_commit_wind
     for o in ("out", "out0"):
         shutil.copytree(EP / "advice", tmp_path / o / "endpoint" / "advice")
     monkeypatch.setattr(chain.NG, "io_tie_module", lambda: object())
-    monkeypatch.setattr(chain.NG, "tie_run", lambda run, ids: _ties()[run.name])
+    monkeypatch.setattr(chain.NG, "tie_run", lambda run, ids, aborted=(): _ties()[run.name])
     # the endpoint recorded its first request, which its Commit window's advice holds, with no user: the endpoint's
     # records give it no sampled ids, so the tie gives the honest run no verdict, and --ids stands in for them below
     r = e2e.run(_args(runs, tmp_path / "out0", endpoint_run=str(EP)), [], clock=lambda: 0.0)
@@ -732,6 +732,33 @@ def test_each_runs_sampled_ids_are_the_endpoints_for_the_requests_that_arrived_i
         chain.served_ids(ep, {"origin_unix": t0, "windows": 2, "window_s": 6.0})
 
 
+def test_the_tie_takes_each_runs_client_aborts_from_the_same_record_as_its_ids(tmp_path, monkeypatch):
+    """The endpoint writes a request its client aborted with ``finish`` null: the tie hands `negatives.tie_run` a run's
+    aborts (`negatives.commit_aborted`) from the rows it takes the run's ids from, the endpoint's for the run's own
+    link-windows (`served_rows`) or the --ids file's (`negatives.read_aborted`)."""
+    ep = _endpoint(tmp_path)
+    rows = [json.loads(x) for x in (ep / "requests.jsonl").read_text().splitlines()]
+    (ep / "requests.jsonl").write_text("".join(json.dumps(r | {"finish": None} if r["user"] == "drive-1" else r) + "\n"
+                                               for r in rows))
+    arrive = {r["request"]: r["t"] for r in chain._jsonl(EP / "advice_trace.jsonl") if r["kind"] == "arrive"}
+    span = {"origin_unix": arrive[rows[1]["engine_id"]], "windows": 2, "window_s": 6.0}
+    run = tmp_path / "honest"
+    run.mkdir()
+    (run / "deployment.json").write_text(json.dumps(span))
+    seen = []
+    monkeypatch.setattr(chain.NG, "io_tie_module", lambda: object())
+    monkeypatch.setattr(chain, "uncovered", lambda d, got: None)
+    monkeypatch.setattr(chain.NG, "tie_run",
+                        lambda d, ids, aborted=(): seen.append((ids, aborted)) or _ties()["honest"])
+    assert chain.tie({"honest": run}, ep, None)["runs"]["honest"]["verdict"] == "accepted"
+    assert seen == [(chain.served_ids(ep, span), {"drive-1"})]
+    ids = tmp_path / "ids.jsonl"
+    ids.write_text("".join(json.dumps({"user": u, "output_ids": [5], "finish_reason": f}) + "\n"
+                           for u, f in (("q0", "length"), ("q1", "abort"))))
+    chain.tie({"honest": run}, ep, ids)
+    assert seen[1] == ({"q0": [5], "q1": [5]}, {"q1"})
+
+
 TOKEN = HERE / "tests" / "data" / "token"
 
 
@@ -781,7 +808,7 @@ def test_on_the_advice_profile_the_ties_verdict_refuses_token_where_it_changed_i
                                                 for x in _io()))
     ties, seen = _ties(), []
     monkeypatch.setattr(NG, "io_tie_module", lambda: object())
-    monkeypatch.setattr(NG, "tie_run", lambda run, ids: seen.append(ids) or ties[run.name])
+    monkeypatch.setattr(NG, "tie_run", lambda run, ids, aborted=(): seen.append(ids) or ties[run.name])
     monkeypatch.setattr(chain, "changed_windows", lambda run: [1] if run.name == "token" else None)
     r = e2e.run(_args(runs, tmp_path / "out", ids=str(tmp_path / "ids.jsonl")), [], clock=lambda: 0.0)
     assert r["ok"] is True, r["why_not"]

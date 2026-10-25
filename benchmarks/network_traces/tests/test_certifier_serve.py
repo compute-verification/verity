@@ -1509,7 +1509,8 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
                       key=lambda r: r.window)
         cells = [s for r in outs for row in r.grid for s in row[:active.row_count(row)]]
         sampled = {r["stream"]: recorded[u] for u, r in g["io"].items()}
-        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells)
+        bad = active.compact_finish_violations(sampled, g["plan"]["varied"]["eos_token_ids"], cells,
+                                               max_tokens={r["stream"]: r["max_tokens"] for r in g["io"].values()})
         assert {o for o, _ in bad} == {g["io"][u]["stream"] for u in differs}, bad
     plain = cs.parser().parse_args(A.certifier_command(
         {"run": "c20261024T120000Z-ab12", "requests": 16, "tamper": None, "traffic": "varied"}, Path("o"), "u")[2:])
@@ -1521,8 +1522,9 @@ def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and
     """`negatives.tie_run` on the gate's compact runs, the endpoint's `requests.jsonl` the Commit's ids: each compact
     record is the data cell of its id, so neither run lacks id events, and the tie holds the link's records to the
     ids (`finish`, `active.compact_finish_violations`). Honest's finish holds; token's fails on exactly window 0's
-    responses, which refuses it. With IO-TIE in the tree honest is accepted and token refused by content too, at
-    window 0; without it neither has a verdict, only IO-TIE missing."""
+    responses, which refuses it. Honest's fails too, at that request's ordinal alone, where the Commit says a user's
+    client aborted it (`aborted`) and its records end on `COMPACT_LAST`. With IO-TIE in the tree honest is accepted
+    and token refused by content too, at window 0; without it neither has a verdict, only IO-TIE missing."""
     got, endpoint = gate_compact
     path = tmp_path / "requests.jsonl"
     path.write_text("".join(json.dumps(r) + "\n" for r in endpoint.served))
@@ -1536,6 +1538,12 @@ def test_tie_run_on_the_gates_compact_runs_reads_their_records_as_data_cells_and
         assert list(row["missing"]) == ([] if IT else ["io-tie"])
         assert {o for o, _ in row["finish_violations"]} == (window0 if strategy == "token" else set()) and window0
         assert row["finish"] is (strategy != "token")
+    gone = {u: r for u, r in got["honest"]["io"].items() if r["finish"] == "length"}
+    u = min(gone)
+    marked = negatives.tie_run(got["honest"]["dir"], ids, aborted={u})
+    assert marked["finish"] is False and marked["verdict"] == ("refused" if IT else negatives.NOT_APPLICABLE)
+    assert marked["finish_violations"] == [
+        [gone[u]["stream"], f"finish length on output {len(gone[u]['output']) - 1} where the Commit's is none"]]
     if IT is None:
         assert {s: r["verdict"] for s, r in rows.items()} == {s: negatives.NOT_APPLICABLE for s in got}
         return
