@@ -1555,7 +1555,7 @@ def _run_configuration(plan: dict, report: dict, out: Path, nice: int | None, cp
 
 def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] | None = None,
                 stalls: Sequence[tuple[int, float]] = (), salt: bool = False, proxy_args: dict | None = None,
-                publish=None, after=None) -> dict:
+                publish=None, after=None, proxy_class: type | None = None) -> dict:
     """One configuration on an injected clock: the same sockets, proxy, server and peer in one event loop, the clock
     moved to each instant something is due (a tick, a server batch, a send) once everything due before it is done.
     With `upstream`, the server is `LiveServer` in front of an endpoint that answers without the clock moving. A stall
@@ -1563,10 +1563,12 @@ def run_virtual(plan: dict, report: dict, out: Path, upstream: tuple[str, int] |
     salt is on, and `salts.json` holds what `reveal` gives once the run is over. Under an outage plan the first
     proxy's link is closed with its last window, and at the outage window's first instant the proxy back from
     maintenance takes the peer's second connection. `proxy_args` override the proxy's arguments, `publish` replaces
-    `Publisher`, and `after(proxies, clock)` runs on the loop once the logs are written (a caller's reveal endpoint, say);
-    a proxy with a challenger key takes no in-process `reveal`, so it writes no `salts.json`."""
+    `Publisher`, `proxy_class` replaces `ReleaseProxy` (certifier-serve's `ServedProxy`, which hands `publish` each
+    egress record's sync), and `after(proxies, clock)` runs on the loop once the logs are written (a caller's reveal
+    endpoint, say); a proxy with a challenger key takes no in-process `reveal`, so it writes no `salts.json`."""
     out.mkdir(parents=True, exist_ok=True)
-    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls, salt, proxy_args or {}, publish, after))
+    asyncio.run(_virtual(plan, Setup(report), out, upstream, stalls, salt, proxy_args or {}, publish, after,
+                         proxy_class))
     (out / "processes.json").write_text(json.dumps({"exit": {"server": 0, "proxy": 0, "peer": 0}, "origin": 0.0,
                                                     "clock": "virtual"}))
     return {"server": 0, "proxy": 0, "peer": 0}
@@ -1579,8 +1581,9 @@ def virtual_process(plan: dict, report: dict, out: Path, stalls: Sequence[tuple[
 
 async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int] | None = None,
                    stalls: Sequence[tuple[int, float]] = (), salt: bool = False, proxy_args: dict | None = None,
-                   publish=None, after=None) -> None:
+                   publish=None, after=None, proxy_class: type | None = None) -> None:
     e, i = setup.egress_params, setup.ingress_params
+    make = proxy_class or ReleaseProxy
     params = wire_params(setup) | ({"upstream": list(upstream)} if upstream else {})
     clock = VirtualClock(-1.0)
     proxies: list[Proxy] = []
@@ -1603,9 +1606,9 @@ async def _virtual(plan: dict, setup: Setup, out: Path, upstream: tuple[str, int
         args = {"salt": fresh_salt if salt else None, "ordinals": bool(plan.get("token_ids")),
                 "compact": bool(plan.get("compact")),
                 "reveal_deadline": reveal_deadline(plan, e.buckets * e.bucket_ms / 1000)} | proxy_args
-        proxy = ReleaseProxy(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0,
-                             clock=clock, sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
-                             ingress_link=setup.ingress_link, **args, **advice, **phase_args(plan, start, end))
+        proxy = make(listening.sockets[0].getsockname()[:2], e, i, setup.sync_set, syncs, origin=0.0,
+                     clock=clock, sleep=clock.sleep, publish=publish, egress_link=setup.egress_link,
+                     ingress_link=setup.ingress_link, **args, **advice, **phase_args(plan, start, end))
         if stalls and k == 0:
             proxy._changed = Stalls(proxy, stalls, lambda seconds: clock.advance(clock.now + seconds))
         proxies.append(proxy)

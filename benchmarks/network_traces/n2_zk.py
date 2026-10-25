@@ -12,7 +12,9 @@ decides nothing.
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
-  against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
+  against a stub endpoint that answers at once (certifier-serve's tests' run), or a caller's, honest, extra and late,
+  with fresh keys, and the certifier's clock certificate of each egress window's sync (`clocks.jsonl`, as `serve`
+  writes it).
 * **Members.** One stream each, over all of the run's link-windows: ``honest``; ``tampered``, the honest records with
   window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates still
   the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the certifier
@@ -254,22 +256,25 @@ def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple,
 
     publish = cs.CertifyingPublisher(run, setup, Issuer(certifier, session), cs.N2_LINK, threaded=False)
     cs.ar.run_virtual(shim, report, run, upstream, salt=True, publish=publish, after=after,
-                      proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
+                      proxy_args={"challenger_key": challenger.public_key(), "signer": certifier},
+                      proxy_class=cs.ServedProxy)
 
 
 def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra", "late"),
-            height: int = 6) -> dict:
-    """certifier-serve's run on an injected clock against `_endpoint`, one per strategy under `out`, with fresh LMS keys
-    of `height` in a scratch directory that is removed. Returns the plan."""
+            height: int = 6, endpoint=_endpoint, body: dict | None = None) -> dict:
+    """certifier-serve's run on an injected clock against `endpoint` (an `asyncio.start_server` handler, `_endpoint` by
+    default), one per strategy under `out`, each request `body` (`certifier_serve.request_body("stub", tokens)` by
+    default), with fresh LMS keys of `height` in a scratch directory that is removed. Returns the plan."""
     keys = Path(tempfile.mkdtemp(prefix="n2-zk-keys-"))
     challenger = cs.signer(keys / "challenger", height)
     session = secrets.token_bytes(32)
+    body = cs.request_body("stub", tokens) if body is None else body
 
     async def go():
-        endpoint = await asyncio.start_server(_endpoint, "127.0.0.1", 0)
-        upstream = endpoint.sockets[0].getsockname()[:2]
+        server = await asyncio.start_server(endpoint, "127.0.0.1", 0)
+        upstream = server.sockets[0].getsockname()[:2]
         url = "http://%s:%d" % upstream
-        probed = await asyncio.to_thread(cs.probe, url, cs.request_body("stub", tokens), 2, clock=lambda: 0.0)
+        probed = await asyncio.to_thread(cs.probe, url, body, 2, clock=lambda: 0.0)
         report, plan = cs.served_plan(probed, requests)
         for strategy in strategies:
             certifier = cs.signer(keys / strategy, height)
@@ -278,7 +283,7 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
                                         session, strategy)
             finally:
                 certifier.close()
-        endpoint.close()
+        server.close()
         return plan
 
     try:

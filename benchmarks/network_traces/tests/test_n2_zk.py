@@ -2,8 +2,8 @@
 link-window's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the prover,
 fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late run's on
 their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the prover's,
-in whole u16 words. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's
-own gates. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
+in whole u16 words. The certifier signs each egress window's clock sync (`clocks.jsonl`). Each builder `n2_zk.builders`
+attaches, called as C-Flock's lowering calls it, traces to its part's own gates. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
 Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.core.protocols.certifier.certificate import Direction, clock_digest
 from verity.ml.circuits.boolean import trace as TR
 
 HERE = Path(__file__).resolve().parents[1]
@@ -34,7 +35,7 @@ n2 = _load()
 def runs(tmp_path_factory):
     out = tmp_path_factory.mktemp("n2zk")
     plan = n2.virtual(out, requests=8, tokens=4)
-    return {"plan": plan, "honest": n2.link_windows(out / "honest"),
+    return {"out": out, "plan": plan, "honest": n2.link_windows(out / "honest"),
             "tampered": n2.link_windows(out / "honest", edit=n2.one_count),
             "extra": n2.link_windows(out / "extra"), "late": n2.link_windows(out / "late")}
 
@@ -50,6 +51,15 @@ def test_each_round_refuses_what_its_references_say(runs):
     e0, t0 = honest.windows[0].opening.records[0].head, runs["tampered"].windows[0].opening.records[0].head
     assert sum(a != b for a, b in zip(e0.counts, t0.counts)) == 1 and sum(t0.counts) == sum(e0.counts) + 1
     assert runs["tampered"].windows[0].certificates == honest.windows[0].certificates
+
+
+def test_the_certifier_signs_each_egress_windows_clock(runs):
+    rd = runs["honest"]
+    clocks = n2.cs.read_clocks(runs["out"] / "honest" / "clocks.jsonl")
+    assert [c.certificate.window for c in clocks] == list(range(runs["plan"]["windows"]))
+    for c, sync in zip(clocks, rd.syncs):
+        assert c.sync == sync and c.certificate.direction is Direction.EGRESS and c.certificate.link == rd.lw.link
+        assert c.certificate.digest == clock_digest(sync) and c.certificate.verify(rd.lw.key, rd.lw.certifier_session)
 
 
 def test_the_verifier_derives_the_provers_public_row(runs):
