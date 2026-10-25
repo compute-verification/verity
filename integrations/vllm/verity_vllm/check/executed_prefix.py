@@ -52,6 +52,7 @@ from __future__ import annotations
 from typing import Any, Iterable
 
 from verity_vllm.program.sampling_event import circuit_token_id
+from verity_vllm.records.global_match import GlobalMatch
 
 ACTIVE_REFERENCE_ONLY = ("NOT-EXECUTED-BY-RULE is an active-reference implementation classification only. In the lifted fixed Program the "
                          "corresponding positions are REQUIRED logical values assigned the canonical inactive representation tau(e) = bot; "
@@ -142,7 +143,8 @@ def request_steps_of_record(epr: dict[str, Any], arrivals: dict[str, int]) -> di
 def load_match_account(match_dir: str | None) -> dict[str, Any]:
     """The Match attempt's serving transcript + account beside the Commit: `<match_dir>/capture/tokens.json` (the driver's served tokens,
     per-request two lengths, the document-level lag attestation -- bench.m1_capture) and `<match_dir>/../global_match.json` (GM-01's
-    verdict, G6's lag block and lengths_by_request).  Missing files are reported, never invented."""
+    verdict, G6's lag block and lengths_by_request, as `records.global_match.GlobalMatch`).  Missing or unreadable files are reported,
+    never invented."""
     import json
     import os
     out: dict[str, Any] = {"match_dir": match_dir, "tokens": None, "tokens_path": None, "global_match": None, "global_match_path": None, "notes": []}
@@ -159,7 +161,7 @@ def load_match_account(match_dir: str | None) -> dict[str, Any]:
         try:
             import hashlib
             raw = open(path, "rb").read()
-            out[key] = json.loads(raw)
+            out[key] = GlobalMatch.of(json.loads(raw), path) if key == "global_match" else json.loads(raw)
             out[f"{key}_sha256"] = hashlib.sha256(raw).hexdigest()
         except Exception as e:  # noqa: BLE001
             out["notes"].append(f"{os.path.relpath(path, match_dir)} unreadable: {e!r}"[:200])
@@ -250,14 +252,15 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             problems.append(f"executed prefix reduced from the cap for {reduced}: GM-01's account (global_match.json) is not beside the Match record -- the "
                             f"Commit's count is linked to the served output only, not to the Match account (R17-27 (a))")
     else:
-        g6 = next((c for c in (gm.get("checks") or []) if isinstance(c, dict) and c.get("id") == "G6"), None)
-        lens = (g6 or {}).get("lengths_by_request") or {}
-        gl = (g6 or {}).get("lag") or gm.get("lag") or {}
-        res["global_match"] = {"path": account.get("global_match_path"), "sha256": account.get("global_match_sha256"), "verdict": gm.get("verdict"),
-                               "failed_checks": gm.get("failed_checks"), "g6_status": (g6 or {}).get("status"),
+        g6 = gm.check("G6")
+        lens = g6.lengths_by_request if g6 is not None and g6.lengths_by_request is not None else {}
+        gl = (None if g6 is None else g6.lag) or gm.lag or {}
+        failed = None if gm.failed_checks is None else list(gm.failed_checks)
+        res["global_match"] = {"path": account.get("global_match_path"), "sha256": account.get("global_match_sha256"), "verdict": gm.verdict,
+                               "failed_checks": failed, "g6_status": None if g6 is None else g6.status,
                                "lag": {k: gl.get(k) for k in ("declared", "record_attests", "tokens_json_lag", "exercised", "variable_lag")}}
-        if gm.get("verdict") != "PASS":
-            problems.append(f"GM-01 verdict {gm.get('verdict')!r} (failed {gm.get('failed_checks')}): the Match account this prefix must be linked to did not pass (R17-27 (a))")
+        if gm.verdict != "PASS":
+            problems.append(f"GM-01 verdict {gm.verdict!r} (failed {failed}): the Match account this prefix must be linked to did not pass (R17-27 (a))")
         if g6 is None:
             problems.append("global_match.json has no G6 check: no chronology account to link the executed prefix to (R17-27 (a))")
         else:
@@ -270,10 +273,10 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             # recorder request id -> r<i> by the workload request id (G6's lengths are keyed by the recorder's id)
             g6_by_r: dict[str, dict[str, Any]] = {}
             for rec_rid, L in lens.items():
-                e = next((x for x in (gm.get("requests") or []) if isinstance(x, dict) and str(x.get("request_id")) == str(rec_rid)), None)
-                r = order.get(str((e or {}).get("workload_request_id"))) if e else None
-                if r is None and e is not None and e.get("index") is not None:
-                    r = f"r{int(e['index'])}"
+                e = next((x for x in gm.requests if x.request_id == str(rec_rid)), None)
+                r = order.get(str(e.workload_request_id)) if e else None
+                if r is None and e is not None and e.index is not None:
+                    r = f"r{e.index}"
                 if r is not None:
                     g6_by_r[r] = L
             for rid, rec in (epr.get("requests") or {}).items():

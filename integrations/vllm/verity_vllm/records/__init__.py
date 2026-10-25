@@ -11,4 +11,6 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `declared_stop` -- the workload Program's declared stop rule and LAG (`stop_rule`, `lag`), as the same two read them.
 * `workload` -- the workload (`verity-vllm/workload/v2`, and the v1 layout older runs hold), as the stochastic replay reads it;
   its `load` also refuses a field no writer writes (`fields.UnknownField`), and `dump` writes it back.
+* `global_match` -- GM-01's Match result (`cb-a/global-match/v1`), as the executed prefix's link to the Match account reads it;
+  `load` refuses an unknown field and `dump` writes it back, as `workload`'s do.
 """
