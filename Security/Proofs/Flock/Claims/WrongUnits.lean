@@ -134,7 +134,7 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
   refine ⟨[l], hQ, fun _ => false, ?_⟩
   intro u' hu'
   rw [List.mem_singleton] at hu'
-  subst hu'
+  subst u'
   have hgates : _root_.Claims.Sampling.RU.gates [l] = l := by simp [_root_.Claims.Sampling.RU.gates]
   have href : ∀ i, i ∉ l →
       _root_.Claims.Sampling.RU.ref s.prog [l] (w.val H Cm s) (fun _ => false) i = w.val H Cm s i := by
@@ -160,7 +160,7 @@ theorem not_faulty_of_correct {H : _root_.Claims.Msg → _root_.Claims.Msg} {Cm 
       · have hg'N : g' < C.N := hG.1 ▸ hg'
         have hx : s.prog.gates[g']? = some s.prog.gates[g'] := List.getElem?_eq_getElem hg'
         rw [hx] at hrd
-        simp only [Option.map_some, Option.getD_some, List.contains_iff_mem] at hrd
+        simp only [Option.map_some, Option.getD_some] at hrd
         rw [ofOp_reads ((hG.2.1 ⟨g', hg'N⟩).symm.trans hx)] at hrd
         obtain ⟨a, ha, hag⟩ := List.mem_map.1 hrd
         have hae : a = ⟨g, hgN⟩ := Fin.ext hag
