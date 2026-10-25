@@ -151,6 +151,9 @@ DISK_BYTES_PER_S = 4.4e9
 how much of a paced line's ingress charge is its disks (`ingress_bursts`)."""
 KINDS = ("weights", "kv", "filler", "activations")
 TIERS = ("hbm", "host")
+UNRECORDED_SLACK_LOG2 = 41
+"""The AuditRO slack a ledger whose `inputs` carry no `slack_log2` was charged at, bits a pass: every record written
+before they carried it, gate runs 8 and 9's among them."""
 
 
 def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
@@ -369,11 +372,13 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
-    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`); `delta` alone
-    understates it by the passes' slack.  None when no reading has a ledger."""
+    horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the draw's
+    rejection (`ledger.rejection`, the ledger's `delta` part); `delta` alone understates it by the passes' slack.
+    None when no reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
-            return ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+            return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
+                    + ledgers.get("delta", {}).get("rejection", 0.0))
     return None
 
 
@@ -1502,9 +1507,10 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
+        `delta` is the memory line's δ in its four parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
-        (`slack_log2`); a record without it was charged 41 bits a pass."""
+        (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
         stated = ledger.Node.stated(reported_read_bytes_per_s=reported, disk_bytes_per_s=self.disk_bytes_per_s,
@@ -1552,6 +1558,7 @@ class Verifier:
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
                 out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+        out["delta"] = ledger.delta_parts(record, stated)
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
                            if len(readings) == 2 else {"refused": next(out[n]["refused"] for n in ("spec", "measured")
