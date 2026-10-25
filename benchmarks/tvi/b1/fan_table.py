@@ -1,4 +1,5 @@
-"""The fan-out block's readout: `python fan_table.py block_fp8t.json [block_nvfp4.json ...] > fan.md` (block.py's outputs).
+"""The fan-out block's readout: `python fan_table.py block_fp8t.json [block_nvfp4.json ...] [counted_*.json] > fan.md`
+(block.py's outputs; counted.py's analysis of the same checkpoint, for the substituted rates).
 
 Per block: l_w (the held layers' weights, real code), l_in (tokens at log2 V bits, the sent scales, the entering residual),
 l_fix (the repairs that make every counted activation equal theta''s), n_I (counted activations, once per distinct cone),
@@ -12,24 +13,36 @@ D = 1536
 
 
 def main():
-    print("| format | boundary l | held layers | entering residual at | Q fill | Q tokens (rollouts) | l_w (Mbit) | "
-          "l_in: tokens + scales + residual (Mbit) | l_fix (Mbit) | n_I (M) | mismatched before repair | after repair | "
-          "beta_x bound, substituted (no repair) | beta_x bound, exact | exact, Q unbounded | (17 + F)/d here | "
+    paths = [p for p in sys.argv[1:] if "counted_" not in p]
+    for p in sys.argv[1:]:
+        if "counted_" in p:
+            c = json.load(open(p))
+            for f in ("fp8t", "nvfp4"):
+                F = c["summary"][f]["F_fwd_per_layer"]
+                i = min(range(len(F)), key=F.__getitem__)
+                print(f"{c['name']} at {f} (counted.py, theta and theta' in plain fp32): (17 + F)/d at the cheapest boundary "
+                      f"{i} {(17 + F[i]) / D:.3f}, at boundary 1 {(17 + F[1]) / D:.3f}, at 13 {(17 + F[13]) / D:.3f}, "
+                      f"at the mean over {len(F)} boundaries {(17 + sum(F) / len(F)) / D:.3f}; beta_w {c['summary'][f]['beta_w']:.4f}")
+            print()
+    print("| format | boundary l | held layers | entering residual at | Q fill | Q tokens (rollouts + prefix) | l_w (Mbit) | "
+          "l_in: tokens + scales + residual (Mbit) | l_fix (Mbit) | total (Mbit) | n_I (M) | mismatched before repair | "
+          "after repair | beta_x bound, substituted (no repair) | beta_x bound, exact | exact, Q unbounded | (17 + F)/d here | "
           "decode FLOPs / c | products per entering coordinate |")
-    print("|" + "---|" * 18)
-    for path in sys.argv[1:]:
+    print("|" + "---|" * 19)
+    for path in paths:
         r = json.load(open(path))
         for b, B in r["boundaries"].items():
             for k in B["blocks"]:
                 lin = k["l_tok"] + k["l_scales"] + k["l_bnd"]
                 print(f"| {r['fmt']} | {b} | {k['held'][0]}–{k['held'][-1]} | {k['bfmt']} | {k['fill']} | "
-                      f"{k['tokens']} ({k['rollouts']}) | {k['l_w'] / 1e6:.2f} | {lin / 1e6:.2f} | {k['l_fix'] / 1e6:.2f} | "
-                      f"{k['n_I'] / 1e6:.1f} | {k['mismatch_naive_frac']:.3f} | {k['mismatch_after_repair']} | "
+                      f"{k['tokens']} ({k['rollouts']} + {k.get('prefix', 0)}) | {k['l_w'] / 1e6:.2f} | {lin / 1e6:.2f} | "
+                      f"{k['l_fix'] / 1e6:.2f} | {k['l_total_exact'] / 1e6:.2f} | {k['n_I'] / 1e6:.1f} | "
+                      f"{k['mismatch_naive_frac']:.3f} | {k['mismatch_after_repair']} | "
                       f"{k['beta_x_bound_substituted']:.3f} | {k['beta_x_bound_exact']:.3f} | "
                       f"{(lin + k['l_fix']) / k['n_I']:.3f} | {(17 + k['F_per_token']) / D:.2f} | "
                       f"{k['decode_flops_over_c']:.1e} | {k['products_per_entering_coord_with_attn']:,.0f} |")
     print()
-    for path in sys.argv[1:]:
+    for path in paths:
         r = json.load(open(path))
         print(f"{r['fmt']}: a_dec {r['a_dec_bits']:,} bits; tokens coded by theta instead of uniformly "
               f"{sum(r['nll_token_bits']) / sum(r['lens']):.2f} bits per token; weights per held layer: "
