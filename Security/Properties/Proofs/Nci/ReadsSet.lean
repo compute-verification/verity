@@ -22,7 +22,9 @@ At a root node calling a primitive, `RootSet` holds outright (`rootSet_prim`): i
 references, resolving before the node.
 
 At a composite node, what its gates read outside it is what its members' parameter leaves that the callee's `used`
-names resolve to (`compReads`), each member's activation located as its caller's is (`located_child`).
+names resolve to (`compReads`), each member's activation located as its caller's is (`located_child`). One argument's node read reads, outside the
+node, what the members' reads of its parameter leaves resolve to, when its positions are those leaves' `upIdx`
+(`readSet`, through `branch_iff`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs.ReadsExact
@@ -730,5 +732,91 @@ theorem compReads (P : Prog) (memo : Array Desc.Summary) {sc : Flock.Program.Sco
     have hc := (locR_child P hL hk hp hm (by omega)).2 hgl
     rw [← e] at hc
     exact ⟨g, ⟨by omega, by omega⟩, ops, hc, ha'⟩
+
+/-! ## An argument's positions against its members' reads -/
+
+theorem mem_spansPos (xs : Array (Nat × Nat)) (t : Nat) : t ∈ spansPos xs ↔ Width.inIvs xs.toList t := by
+  unfold spansPos Width.inIvs
+  simp only [List.mem_flatMap, List.mem_range'_1]
+  constructor
+  · rintro ⟨p, hp, h1, h2⟩; exact ⟨p, hp, h1, by omega⟩
+  · rintro ⟨p, hp, h1, h2⟩; exact ⟨p, hp, h1, by omega⟩
+
+/-- **Positions agreeing with references `L` name exactly what the members' reads `B` resolve to**, when `L` holds
+exactly the references those reads go up to (`idx`), each read going up to its reference's gate (`hup`) and each
+succeeding (`hsucc`). -/
+theorem branch_iff {P : Prog} {sc : Flock.Program.Scope} {xs : List (Tgt × Int)} {L : List Nat}
+    (R : Nat → Except String Nat) (S : Nat → Nat → Except String Nat) (B : Nat → Nat → Prop) (idx : Nat → Nat → Nat)
+    (hag : Agree P sc xs (L.map R)) (hcov : ∀ t, t ∈ L ↔ ∃ m j, B m j ∧ t = idx m j)
+    (hup : ∀ m j a, B m j → S m j = .ok a → R (idx m j) = .ok a)
+    (hsucc : ∀ m j, B m j → ∃ a, S m j = .ok a) (a : Nat) :
+    (∃ x ∈ xs, den P sc x = .ok a) ↔ ∃ m j, B m j ∧ S m j = .ok a := by
+  constructor
+  · rintro ⟨x, hx, hxa⟩
+    obtain ⟨v, hv, hxv⟩ := agree_src hag hx
+    obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hv
+    obtain ⟨m, j, hB, rfl⟩ := (hcov t).1 ht
+    obtain ⟨a', ha'⟩ := hsucc m j hB
+    have := hxv a' (hup m j a' hB ha')
+    rw [hxa] at this
+    obtain rfl := Except.ok.inj this
+    exact ⟨m, j, hB, ha'⟩
+  · rintro ⟨m, j, hB, hS⟩
+    exact agree_tgt hag (List.mem_map.2 ⟨idx m j, (hcov _).2 ⟨m, j, hB, rfl⟩, rfl⟩) (hup m j a hB hS)
+
+/-- The index into argument `i` of node `node` that member `m`'s parameter leaf `j` reads (a scan's carry past the
+first iteration aside): a batch member's `memberIdx`, a scan iteration's `xs` slice, else `j`. -/
+def upIdx (node : Flock.Program.Node) (i m j : Nat) : Nat :=
+  match node.form with
+  | .batch => Resolve.memberIdx (node.args[i]!) m j
+  | .scan => if i ≠ 0 ∧ i ≤ node.nxs then m * ((node.args[i]!).dims.map (·.2)).getD 0 + j else j
+  | _ => j
+
+/-- **Up through a member's parameter leaf**: what it resolves to, its node's reference `upIdx` resolves to in the
+parent (a scan's carry past the first iteration aside). -/
+theorem up_idx (P : Prog) (sc : Flock.Program.Scope) {k m i j a : Nat} {node : Flock.Program.Node}
+    (hnode : (P.defs[sc.d]!).body.nodes[k]! = node) (hnc : node.form = .scan → i = 0 → m = 0)
+    (h : Flock.Program.resolve P (P.child sc k m) ⟨true, i, j⟩ = .ok a) :
+    Flock.Program.resolve P sc ((node.args[i]!).seq.get (upIdx node i m j)) = .ok a := by
+  unfold Flock.Program.Prog.child at h
+  dsimp only at h
+  unfold upIdx
+  rcases hf : node.form with _ | _ | _ | _
+  · exact den_up P sc hnode (Or.inl hf) h
+  · exact den_up P sc hnode (Or.inr hf) h
+  · have := den_up_batch P sc hnode hf h
+    rwa [Resolve.memberRef_eq] at this
+  · by_cases hi : i = 0
+    · subst hi
+      have hm := hnc hf rfl
+      subst hm
+      have := den_up_scan0 P sc hnode hf h
+      simp only [↓reduceIte] at this
+      simpa using this
+    · have := den_up_scan P sc hnode hf hi h
+      by_cases hx : i ≤ node.nxs
+      · simp only [hx, ↓reduceIte] at this
+        simpa [hi, hx] using this
+      · simp only [hx, ↓reduceIte] at this
+        simpa [hi, hx] using this
+
+/-- **A read of argument `i` over `spans` names exactly what the members' reads `B` resolve to**, where the spans'
+indices are exactly the references those reads go up to (`upIdx`). -/
+theorem readSet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d) (hD : DownSpec c sc Flock.Steps.FUEL)
+    {k i : Nat} {node : Flock.Program.Node} (hn : c.node k = .ok node) (hA : ArgOk c k i)
+    (hR : ∀ t < (node.args[i]!).seq.count, Resolve.RefOk c.P c.d k ((node.args[i]!).seq.get t))
+    {spans : Array (Nat × Nat)} (hsp : ∀ x ∈ spans.toList, x.1 < x.2 → x.2 ≤ (node.args[i]!).seq.count)
+    (hok : ReadsOk c k i spans) (B : Nat → Nat → Prop)
+    (hcov : ∀ t, t ∈ spansPos spans ↔ ∃ m j, B m j ∧ t = upIdx node i m j)
+    (hB : ∀ m j, B m j → node.form = .scan → i = 0 → m = 0)
+    (hsucc : ∀ m j, B m j → ∃ a, Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a) (a : Nat) :
+    (∃ x ∈ readPos c k i spans, den c.P sc x = .ok a) ↔
+      ∃ m j, B m j ∧ Flock.Program.resolve c.P (c.P.child sc k m) ⟨true, i, j⟩ = .ok a := by
+  have hg : c.body.nodes[k]! = node := node_get hn
+  have hnode : (c.P.defs[sc.d]!).body.nodes[k]! = node := by rw [hd]; exact hg
+  have hag := readPos_agree c sc hD hA (by rw [hg]; exact hR) (by rw [hg]; exact hsp) hok
+  rw [hg] at hag
+  exact branch_iff _ _ B (upIdx node i) hag hcov
+    (fun m j a hb h => up_idx c.P sc hnode (hB m j hb) h) hsucc a
 
 end NciCheck.Properties.SecurityProofs.ReadsExact
