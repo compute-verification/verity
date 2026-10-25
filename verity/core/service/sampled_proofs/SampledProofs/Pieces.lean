@@ -46,6 +46,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `challenger_read`, `challenger_draw_coins`: a draw's coins from one challenger family (`ChallengerCoins`):
   `read_reason`, the bytes a draw read against its segment, and `coins_reason`, against the segment and the session the
   auditor's ledger opens for the verifier's window (`trusted_session_of`).
+* `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
+  the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and drawn rows' writers.
 
 `sampled-proofs-verifier` serves those the verifier of record runs (`verifier`): `registration`, `matches_public`,
 `select` (the draw of record: `Stream.select` hands it the bytes of the challenger's coins), `check_draw`,
@@ -65,6 +67,7 @@ import SampledProofs.ChallengerCoins
 import SampledProofs.Produced
 import SampledProofs.HiddenDraw
 import SampledProofs.PartitionRef
+import SampledProofs.Wires
 
 namespace SampledProofs.Pieces
 
@@ -527,7 +530,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
-   ("challenger_draw_coins", Challenger.drawCoinsPiece)]
+   ("challenger_draw_coins", Challenger.drawCoinsPiece),
+   ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef)]
 
 def verifier : List (String × (Json → V Json)) :=
   [("registration", registration), ("matches_public", matchesPublic), ("select", select), ("check_draw", checkDraw),
