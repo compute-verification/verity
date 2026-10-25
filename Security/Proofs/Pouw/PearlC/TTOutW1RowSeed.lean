@@ -1,5 +1,5 @@
 import Definitions.Pouw.PearlC.W1
-import Models.Pouw.Assumptions.PearlC.TTOutRowSeed
+import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 import Proofs.Pouw.PearlC.Rows
 
 /-!
