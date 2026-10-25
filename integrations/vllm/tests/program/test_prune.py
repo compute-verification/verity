@@ -8,8 +8,8 @@ from collections import Counter
 
 import numpy as np
 
-from verity_vllm.predict import build as PB
-from verity_vllm.predict.phi import Phi
+from verity_vllm.program.predict import build as PB
+from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program import prune as PR
 from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, kept_records, narrowed, swapped, without_dead_units
 from verity_vllm.program.registry import b1, gemm_bias, topp_words as TW
@@ -38,7 +38,7 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
     the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`)."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
-    monkeypatch.setattr(PB, "dead_free", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
     body = full.program.fn.body
     dead = dead_units(body)

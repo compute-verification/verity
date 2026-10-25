@@ -32,7 +32,7 @@ from the evidence dir into `$RESEARCH_RUN_DIR/outputs/<name>/` and declared in `
 
 A tensor-parallel row (tp_stage.sh; build_summary.json carries `tp.world` and `ranks`) keeps its Build per rank under build/rank<r>/:
 the build entry takes each rank's build_step/, build_request*/ and build_workload/{workload_program.json, descriptor.json.gz} (every
-Program a rank serves, so `verity_vllm.records.programs` decodes the row from this artifact alone), the match entry tp.match's
+Program a rank serves, so `pipeline.circuit_db.programs` decodes the row from this artifact alone), the match entry tp.match's
 match/tp2_match.json (+ the fold Match's), the verdict entry tp.commit's commit/ (its decision document is commit/summary.json: a TP
 Commit writes no verdict.json), and `program_digest` is the TP manifest's key digest -- the `tp-ranks` fold of the rank workload
 digests (the manifest's rank merge), with `rank_workload_digests` beside it.  A Commit stage that reported PASS without its decision
