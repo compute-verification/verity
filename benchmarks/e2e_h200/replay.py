@@ -183,7 +183,8 @@ def _s8(w: np.ndarray) -> np.ndarray:
 
 @dataclass(frozen=True)
 class Template:
-    """One template at one binding: its circuits id ``name`` and statics, its parameters ``(name, width, count)`` and output
+    """One template at one binding: its circuits id ``name`` and statics, its parameters ``(name, width, count)`` (count 0: one
+    word, passed to ``fn`` as ``(n,)``; else ``(n, count)``) and output
     ``(width, count)`` in words, ``fn`` its batched replay (one array per parameter, a leading batch axis -> ``(n, count)``
     output words), ``status`` (module docstring), ``source`` where its semantics are stated, and ``definition`` a callable
     returning main's Definition at this binding, or None while it isn't importable."""
@@ -232,7 +233,7 @@ def _as_param(a: Any, p: tuple[str, int, int]) -> np.ndarray:
     if a.dtype.kind == "i":
         a = a.view(f"u{a.dtype.itemsize}")
     a = a.astype(dt)
-    return a.reshape(len(a)) if c == 1 else a.reshape(len(a), c)
+    return a.reshape(len(a)) if c == 0 else a.reshape(len(a), c)
 
 
 def key_of(name: str, statics: Mapping[str, Any]) -> str:
@@ -319,7 +320,7 @@ def rms_out(x: np.ndarray, rs: np.ndarray, w: np.ndarray) -> np.ndarray:
 
 @_template("RmsNormOut_v1")
 def rms_norm_out() -> Template:
-    return Template("RmsNormOut_v1", (), (("x", 16, 1), ("rs", 32, 1), ("w", 16, 1)), (16, 1), rms_out,
+    return Template("RmsNormOut_v1", (), (("x", 16, 0), ("rs", 32, 0), ("w", 16, 0)), (16, 1), rms_out,
                     f"{PLAN}: h = bf16(RN(x rs)), out = bf16(RN(w h))", _circuits_def("RmsNormOut"))
 
 
@@ -362,13 +363,13 @@ def to_s8_rni_sat(w: np.ndarray) -> np.ndarray:
 def quant_s8_pair(RELU: bool) -> Template:
     def fn(x, amax):
         return to_s8_rni_sat(div(widen(relu16(x, RELU)), quant_scale(amax)[:, None]))
-    return Template("QuantS8Pair_v1", (("RELU", RELU),), (("x", 16, 2), ("amax", 16, 1)), (8, 2), fn,
+    return Template("QuantS8Pair_v1", (("RELU", RELU),), (("x", 16, 2), ("amax", 16, 0)), (8, 2), fn,
                     "CIR-100, #4433's ops.quant.QuantS8Pair_v1", _quant_def("QuantS8Pair", RELU=RELU))
 
 
 @_template("QuantS8Scale_v1")
 def quant_s8_scale(HALF: int) -> Template:
-    return Template("QuantS8Scale_v1", (("HALF", HALF),), (("amax", 16, 1),), (16, 1), lambda a: half(quant_scale(a), HALF),
+    return Template("QuantS8Scale_v1", (("HALF", HALF),), (("amax", 16, 0),), (16, 1), lambda a: half(quant_scale(a), HALF),
                     "CIR-100, #4433's ops.quant.QuantS8Scale_v1", _quant_def("QuantS8Scale", HALF=HALF))
 
 
@@ -401,7 +402,7 @@ def epilogue(parts: np.ndarray, sx: np.ndarray, sw: np.ndarray) -> np.ndarray:
 
 @_template("ScaledMmS8Epilogue_v1")
 def scaled_mm_s8_epilogue(P: int) -> Template:
-    return Template("ScaledMmS8Epilogue_v1", (("P", P),), (("parts", 32, P), ("sx", 32, 1), ("sw", 32, 1)), (16, 1), epilogue,
+    return Template("ScaledMmS8Epilogue_v1", (("P", P),), (("parts", 32, P), ("sx", 32, 0), ("sw", 32, 0)), (16, 1), epilogue,
                     f"{PLAN}: cvt.rn.bf16.f32((cvt.rn.f32.s32(sum) * sx) * sw), ScaledMmS8Coordinate_v1's epilogue",
                     _circuits_def("ScaledMmS8Epilogue", P=P))
 
@@ -411,7 +412,7 @@ def scaled_mm_s8_coordinate(K: int, DOT: Any = G.GEMM_SM90_S8["DOT"]) -> Templat
     def fn(x, sx, w, sw):
         acc = (_s8(x) * _s8(w)).sum(axis=1).astype(np.int32).astype(np.float32).view(np.uint32)
         return bf16(mul(mul(acc, sx), sw))
-    return Template("ScaledMmS8Coordinate_v1", (("K", K), ("DOT", DOT)), (("x", 8, K), ("sx", 32, 1), ("wrow", 8, K), ("sw", 32, 1)),
+    return Template("ScaledMmS8Coordinate_v1", (("K", K), ("DOT", DOT)), (("x", 8, K), ("sx", 32, 0), ("wrow", 8, K), ("sw", 32, 0)),
                     (16, 1), fn, "verity.ml.circuits.ops.gemm.ScaledMmS8Coordinate_v1",
                     lambda: bind(G.ScaledMmS8Coordinate, K=K, DOT=DOT))
 
@@ -464,14 +465,14 @@ def softmax_max_t(N: int) -> Template:
 
 @_template("SoftmaxRecip_v1")
 def softmax_recip_t(N: int, HALF: int) -> Template:
-    return Template("SoftmaxRecip_v1", (("N", N), ("HALF", HALF)), (("x", 16, N), ("m", 16, 1)), (16, 1),
+    return Template("SoftmaxRecip_v1", (("N", N), ("HALF", HALF)), (("x", 16, N), ("m", 16, 0)), (16, 1),
                     lambda x, m: half(softmax_recip(x, m), HALF), f"{PLAN} section 1: r = RN(1 / sum_j e_j) from +0",
                     _circuits_def("SoftmaxRecip", N=N, HALF=HALF))
 
 
 @_template("SoftmaxOut_v1")
 def softmax_out_t() -> Template:
-    return Template("SoftmaxOut_v1", (), (("x", 16, 1), ("m", 16, 1), ("r", 32, 1)), (16, 1),
+    return Template("SoftmaxOut_v1", (), (("x", 16, 0), ("m", 16, 0), ("r", 32, 0)), (16, 1),
                     lambda x, m, r: bf16(mul(softmax_exp(x, m), r)), f"{PLAN} section 1: p_j = bf16(RN(e_j r))",
                     _circuits_def("SoftmaxOut"))
 
@@ -487,10 +488,10 @@ def bf16_add(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 @_template("Bf16Add_v2")
 def bf16_add_t() -> Template:
     def get() -> Any:
-        from verity.ml.circuits.ops.boolean import elementwise as E
-        return E.Bf16Add
-    return Template("Bf16Add_v2", (), (("a", 16, 1), ("b", 16, 1)), (16, 1), bf16_add,
-                    "verity.ml.circuits.ops.boolean.elementwise.Bf16Add_v2", get)
+        from verity.ml.circuits.ops import fp32
+        return fp32.Bf16Add
+    return Template("Bf16Add_v2", (), (("a", 16, 0), ("b", 16, 0)), (16, 1), bf16_add,
+                    "verity.ml.circuits.ops.boolean.elementwise.Bf16Add_v2, evaluated by its word view fp32.Bf16Add_v1", get)
 
 
 @_template("EmbeddingCoordinate_v1")
@@ -498,7 +499,7 @@ def embedding_coordinate(V: int) -> Template:
     def fn(tok, col, pos):
         t = np.asarray(tok).astype(np.int64)
         return bf16_add(np.asarray(col)[np.arange(len(col)), np.clip(t, 0, V - 1)], pos)
-    return Template("EmbeddingCoordinate_v1", (("V", V),), (("tok", 16, 1), ("col", 16, V), ("pos", 16, 1)), (16, 1), fn,
+    return Template("EmbeddingCoordinate_v1", (("V", V),), (("tok", 16, 0), ("col", 16, V), ("pos", 16, 0)), (16, 1), fn,
                     f"{PLAN} section 1: col[tok] + pos, Bf16Add's rounding (tok < V)", _circuits_def("EmbeddingCoordinate", V=V))
 
 
@@ -538,7 +539,7 @@ def argmax_combine(x0: np.ndarray, best: np.ndarray, idx: np.ndarray, C: int) ->
 @_template("ArgmaxCombine_v1")
 def argmax_combine_t(V: int, C: int) -> Template:
     n = -(-V // C)
-    return Template("ArgmaxCombine_v1", (("V", V), ("C", C)), (("x0", 16, 1), ("best", 16, n), ("idx", 16, n)), (16, 1),
+    return Template("ArgmaxCombine_v1", (("V", V), ("C", C)), (("x0", 16, 0), ("best", 16, n), ("idx", 16, n)), (16, 1),
                     lambda x0, b, i: argmax_combine(x0, b, i, C), f"{PLAN} section 1: TokenSelectCombine_v1",
                     _circuits_def("ArgmaxCombine", V=V, C=C))
 
@@ -578,8 +579,8 @@ def templates() -> list[str]:
 
 def _row(words: Any, p: tuple[str, int, int]) -> np.ndarray:
     a = np.asarray(words, dtype=np.uint64).reshape(-1)
-    if a.size != p[2] or (a.size and int(a.max()) >> p[1]):
-        raise ValueError(f"parameter {p[0]}: {a.size} words of {p[1]} bits, not {p[2]}")
+    if a.size != max(p[2], 1) or (a.size and int(a.max()) >> p[1]):
+        raise ValueError(f"parameter {p[0]}: {a.size} words of {p[1]} bits, not {max(p[2], 1)}")
     return a
 
 
