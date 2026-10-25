@@ -25,6 +25,12 @@ Its served RMSNorms (vLLM's width-8 CUDA kernels, ``registry.cuda_rmsnorm``) are
 ``RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-fused-cuda``'s ports, and ``rmsnorm-cuda-vec8``,
 ``RMSNormCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-triton``'s; BLOCK is the launch's block, which the token count picks.
 
+The registered compiler's dead-free Definitions (``registry.dead_free``) have templates of their own: ``rmsnorm-triton-v5``,
+``RMSNormTriton_v5{N, EPS}`` on ``rmsnorm-triton``'s ports, and ``attention-head-v18``, ``AttentionHead_v18{T, D, BN, DOT, INV,
+MASKED_FROM}`` on ``attention-head``'s, evaluated as ``Attention_v18{NH=1, KVH=1}``: sm120's FA2 steps at a decode-only launch,
+whose MASKED_FROM is T's (``ceil(T/BN) - 1``).  ``TokenSelect_v4``'s two calls are ``token-select-chunk`` and
+``token-select-combine``.
+
 All but ``gemm-coordinate`` are Definitions of the vLLM integration's registry (``verity_vllm.program.registry``), imported
 lazily: this module and the GEMM template need only ``verity``.  Two templates are evaluated through an equal Definition
 that has a kernel: ``AttentionHead_v3`` as ``Attention_v3{NH=1, KVH=1}`` (a batch of that head) and ``RoPEHead_v1`` as
@@ -570,6 +576,62 @@ def _attn_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
     return None
 
 
+# --- attention-head-v18 (the registered compiler's FA2 head) -------------------------------------------------------------------
+
+ATTN_V18_SEMANTICS = "sm120.fa2.bf16.decode"
+ATTN_V18_PRIMS = ("HopperBF16WgmmaDot16_v1", "Fa2InvSum_v1")
+ATTN_V18_MASKED = "MASKED_FROM = ceil(T/BN) - 1, the guard of FA2's decode-only launch (one query row, non-causal)"
+
+
+def attention_head_v18(D: int, BN: int, T: Any = "1:512", semantics: str = ATTN_V18_SEMANTICS) -> Subcircuit:
+    """``dead_free.AttentionHead_v18{T, D, BN, DOT, INV, MASKED_FROM}`` on sm120's FA2 steps (``HopperBF16WgmmaDot16``,
+    ``Fa2InvSum``), evaluated as ``Attention_v18{NH=1, KVH=1}``.  Its query row is a decode-only launch's, so MASKED_FROM is a
+    function of T (:data:`ATTN_V18_MASKED`, ``attention_vocab.fa2_masked_from``); ``T`` is per instance as in ``attention-head``."""
+    D, BN = int(D), int(BN)
+    if semantics != ATTN_V18_SEMANTICS:
+        raise ValueError(f"attention-head-v18: semantics {semantics!r} (only {ATTN_V18_SEMANTICS!r})")
+    lo, hi = _parse_range(T)
+    if not 1 <= lo <= hi:
+        raise ValueError(f"attention-head-v18: T range {T!r}")
+
+    def statics(T: int) -> dict[str, Any]:
+        from verity_vllm.program.registry import b1, hopper
+        from verity_vllm.program.registry.attention_vocab import fa2_masked_from
+
+        return {"T": int(T), "D": D, "BN": BN, "DOT": hopper.HopperBF16WgmmaDot16, "INV": b1.P.Fa2InvSum,
+                "MASKED_FROM": fa2_masked_from(int(T), 1, 0, BN, False)}
+
+    def target(T: int) -> Any:
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import dead_free
+
+        import verity_vllm.program.kernels.rows  # noqa: F401  (registers Attention_v18's self-checked row kernel)
+        return bind(dead_free.AttentionV18, NH=1, KVH=1, **statics(T))
+
+    def definition(T: int) -> Any:
+        from verity.ml.circuits.defs import bind
+        from verity_vllm.program.registry import dead_free
+
+        return bind(dead_free.AttentionHeadV18, **statics(T))
+
+    rel = {"subcircuit": f"AttentionHead<T,{D}>", "definition": "Attention_v18", "dot": ATTN_V18_PRIMS[0], "inv": ATTN_V18_PRIMS[1],
+           "masked_from": "decode", "statics": {"D": D, "BN": BN}, "rule": f"{ATTN_RULE}; {ATTN_V18_MASKED}"}
+    return Subcircuit(TEMPLATES["attention-head-v18"], {"D": D, "BN": BN, "semantics": semantics},
+                      f"attention-head-v18/d{D}-bn{BN}/sm120-fa2-bf16-decode", f"AttentionHead_v18<T,{D}> · FA2 BN={BN} · decode · sm120 mma · BF16",
+                      f"attention-head-v18-decode-d{D}-bn{BN}", rel,
+                      (Port("q", "u16", D), Port("k", "u16", None), Port("v", "u16", None)), (Port("out", "u16", D),),
+                      target, definition, sampler=_attn_sample,
+                      instance_statics_of=lambda p: {"T": int(np.asarray(p["k"]).size) // D},
+                      recipe={"T": f"{lo}:{hi}", "T_rule": "T = lo + key.uniform(hi - lo + 1, ('T', j))", "MASKED_FROM": ATTN_V18_MASKED,
+                              "qkv": ATTN_QKV.describe() + "; one h per draw for q, k and v"})
+
+
+def _attn_v18_identify(rel: Mapping[str, Any]) -> Subcircuit | None:
+    if rel.get("definition") != "Attention_v18" or rel.get("masked_from") != "decode" or (rel.get("dot"), rel.get("inv")) != ATTN_V18_PRIMS:
+        return None
+    return attention_head_v18(int(rel["statics"]["D"]), int(rel["statics"]["BN"]))
+
+
 # --- rope-head ------------------------------------------------------------------------------------------------------------------
 
 ROPE_RULE = ("out[i] = bf16_rn(RN32(x[i]*c[i] - x[i+R]*s[i])), out[i+R] = bf16_rn(RN32(x[i+R]*c[i] + x[i]*s[i])), cs = [c | s], "
@@ -758,6 +820,10 @@ ROWS: dict[str, _Row] = {r.template: r for r in (
     _Row("rmsnorm-triton", "RMSNormTriton_v1", "verity_vllm.program.registry.b1:RMSNormTriton", ("N", "EPS"),
          lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
          lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormTriton_v1<{s['N']}> · eps {s['EPS']:g} · BF16",
+         {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}, pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
+    _Row("rmsnorm-triton-v5", "RMSNormTriton_v5", "verity_vllm.program.registry.dead_free:RMSNormTritonV5", ("N", "EPS"),
+         lambda s: _u16(s["N"], "in0", "in1"), lambda s: _u16(s["N"], "out.out"), _rms_triton_sample,
+         lambda s: f"n{s['N']}-eps{_slug_float(s['EPS'])}/bf16", lambda s: f"RMSNormTriton_v5<{s['N']}> · eps {s['EPS']:g} · BF16",
          {"in0 (x)": RMS_X.describe(), "in1 (w)": RMS_W.describe()}, pattern=r"n(?P<N>\d+)-eps(?P<EPS>.+)", example={"N": 2048, "EPS": 1e-5}),
     _Row("silu-mul", "SiluMul_v1", "verity_vllm.program.registry.b1:SiluMul", ("I",),
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
@@ -1101,6 +1167,11 @@ _add(Template("attention-head", "AttentionHead<T,D>",
               "(AttentionHead_v2); T varies per instance",
               {"D": "int, head dim", "BN": "int, the kernel's kBlockN", "T": "synthetic key-count range lo:hi (per draw)",
                "semantics": "sm80.fa2.bf16 or sm90.fa3.bf16"}, attention_head, _attn_identify, {"D": 64, "BN": 128, "T": "1:512"}))
+_add(Template("attention-head-v18", "AttentionHead_v18<T,D>",
+              "the registered compiler's FA2 head (dead_free.AttentionHead_v18) on sm120's steps, one query head of a decode-only launch "
+              "(MASKED_FROM = ceil(T/BN) - 1); T varies per instance",
+              {"D": "int, head dim", "BN": "int, the kernel's kBlockN", "T": "synthetic key-count range lo:hi (per draw)",
+               "semantics": ATTN_V18_SEMANTICS}, attention_head_v18, _attn_v18_identify, {"D": 64, "BN": 128, "T": "1:512"}))
 _add(Template("rope-head", "RoPEHead<D>", "NeoX rotary embedding of one head with its bf16 cos/sin row (RoPEHead_v1)", {"D": "int, even"},
               rope_head, _rope_identify, {"D": 64}))
 for _r in ROWS.values():
@@ -1168,6 +1239,8 @@ def parse_subcircuit_id(sid: str) -> Subcircuit:
         for s, (*_head, tail, _kind, _step) in ATTN_SEMANTICS.items():
             if tail == sem:
                 return attention_head(int(d.lstrip("d")), int(bn.lstrip("bn")), semantics=s)
+    elif tid == "attention-head-v18" and (m := re.fullmatch(r"d(\d+)-bn(\d+)", params)) and sem == "sm120-fa2-bf16-decode":
+        return attention_head_v18(int(m[1]), int(m[2]))
     elif tid == "rope-head":
         return rope_head(int(params.lstrip("d")))
     elif tid in ROWS:

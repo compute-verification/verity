@@ -1,5 +1,5 @@
 import Definitions.Flock.Ligerito
-import Proofs.Flock.Soundness.Game.Interleave
+import Definitions.Flock.Game.Interleave
 
 /-!
 # One rep, and one table's session

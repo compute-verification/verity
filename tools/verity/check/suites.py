@@ -674,6 +674,38 @@ def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
     return _under(path, [p for p in paths if not inner or _under(p, inner)])
 
 
+class Unresolved(Exception):
+    """`--changed REV` names no commit here, even after fetching it; the message names the fix."""
+
+
+def _commit(rev: str) -> str:
+    return subprocess.run(["git", "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def changed_base(rev: str) -> str:
+    """The commit `--changed REV` names: a SHA, a branch, or REMOTE/BRANCH, which a tree `research run` ships may lack (proofs, 25
+    Oct: `git diff origin/main` exited 128 and no suite ran). A shipped tree's `origin` is the machine's repository
+    (<root>/git/verity.git, whose `main` launchers push), and a `--cwd clone` of it has the shipped tree as its `origin`, where
+    `origin/main` is itself a remote-tracking ref; so REMOTE/BRANCH is fetched as either into this tree's REMOTE/BRANCH. The
+    run's RESEARCH_SOURCE_SHA is no base: it is HEAD's own commit, from which the change is empty."""
+    if sha := _commit(rev):
+        return sha
+    remote, _, branch = rev.partition("/")
+    remotes = subprocess.run(["git", "remote"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    if branch and remote in remotes:
+        env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+        for src in (f"refs/heads/{branch}", f"refs/remotes/{remote}/{branch}"):
+            subprocess.run(["git", "fetch", "-q", "--no-tags", remote, f"+{src}:refs/remotes/{remote}/{branch}"], cwd=ROOT,
+                           capture_output=True, env=env)
+            if sha := _commit(rev):                 # a concurrent run of this tree may have written the ref, whatever this fetch did
+                return sha
+    tried = f", nor could it be fetched from {remote}" if branch and remote in remotes else ""
+    raise Unresolved(f"--changed {rev}: {ROOT} has no commit {rev}{tried} (a tree `research run` ships may hold no {rev}). "
+                     f"Pass main's SHA: `--changed $(git rev-parse origin/main)`, expanded in your own checkout, outside the job's "
+                     f"quotes")
+
+
 def merge_base(rev: str) -> str:
     """Where HEAD left ``rev``'s history, so `--changed origin/main` on a branch behind main is the branch's own change, not
     everything main gained since; ``rev`` itself when HEAD descends from it or the two share no history."""
@@ -1913,9 +1945,14 @@ def main(argv: list[str] | None = None) -> int:
     args = (QUICK if a.quick else []) + extra
     tree = worktree()
     if a.changed:
-        base = merge_base(a.changed)
+        try:
+            rev = changed_base(a.changed)
+        except Unresolved as e:
+            print(f"suites: {e}", file=sys.stderr)
+            return 2
+        base = merge_base(rev)
         chosen = touched(chosen, pkgs, base, tree, locked())
-        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != a.changed else "")
+        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != rev else "")
         print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())

@@ -408,6 +408,58 @@ def test_changed_from_a_main_the_branch_is_behind_is_the_branchs_own_change(tmp_
     assert [s.name for s in S.touched(S.discover(), pkgs, main, S.worktree(), S.locked())] == ["a", "b"], "the two-point diff"
 
 
+def _shipped(tmp_path: Path) -> tuple[Path, Path, str, str]:
+    """(machine repository, shipped tree, main, HEAD) as `research run` ships a commit (remote._git_ship_script): a `clone --shared`
+    of the machine's bare repository detached at the commit, here one whose repository had no `main` when it was shipped."""
+    work = tmp_path / "work"
+    work.mkdir()
+    _workspace(work)
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "main")
+    main = _git(work, "rev-parse", "HEAD")
+    (work / "a" / "tests" / "test_a.py").write_text("def test_a():\n    assert 1\n")
+    _git(work, "add", "-A")
+    _git(work, "commit", "-q", "-m", "the branch moves a")
+    head = _git(work, "rev-parse", "HEAD")
+    bare = tmp_path / "verity.git"
+    _git(tmp_path, "init", "-q", "--bare", str(bare))
+    _git(work, "push", "-q", str(bare), f"{head}:refs/research/ship")
+    tree = tmp_path / "src" / head
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(bare), str(tree))
+    _git(tree, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    return bare, tree, main, head
+
+
+def test_changed_origin_main_in_a_shipped_tree_without_it_fetches_it_or_names_the_fix(tmp_path, monkeypatch, capsys):
+    """proofs, 25 Oct (NCILIVE, WIRES): the pre-mark `--changed origin/main` in a shipped tree with no origin/main exited 128 in
+    `git diff` and ran no suite, ~50 min each. It fetches main from the tree's origin (the machine's repository, or for a `--cwd
+    clone` the shipped tree, whose origin/main is a remote-tracking ref), takes a SHA as given, and otherwise names the fix."""
+    bare, tree, main, head = _shipped(tmp_path)
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved, match=r"nor could it be fetched from origin .*--changed \$\(git rev-parse origin/main\)"):
+        S.changed_base("origin/main")
+    assert S.main(["--list", "--changed", "origin/main"]) == 2 and "Pass main's SHA" in capsys.readouterr().err
+    assert S.changed_base(main) == S.changed_base(main[:12]) == main
+    assert S.main(["--list", "--changed", main]) == 0
+    assert f"the change from {main[:12]} touches 1: a" in capsys.readouterr().out
+
+    _git(tmp_path / "work", "push", "-q", str(bare), f"{main}:refs/heads/main")     # a later launcher pushed its origin/main
+    assert S.changed_base("origin/main") == main and _git(tree, "rev-parse", "origin/main") == main
+    assert S.main(["--list", "--changed", "origin/main"]) == 0 and "touches 1: a" in capsys.readouterr().out
+
+    clone = tmp_path / "scratch" / "r1" / "tree"                                    # `research run --cwd clone`
+    _git(tmp_path, "clone", "-q", "--shared", "--no-checkout", str(tree), str(clone))
+    _git(clone, "-c", "advice.detachedHead=false", "checkout", "-q", "--detach", head)
+    S = _suites(monkeypatch, clone)
+    assert S.changed_base("origin/main") == main
+
+    _git(tree, "remote", "remove", "origin")                     # no remote (its tracking refs go with it): only the named fix
+    S = _suites(monkeypatch, tree)
+    with pytest.raises(S.Unresolved, match=r"has no commit origin/main \(a tree"):
+        S.changed_base("origin/main")
+    assert S.changed_base(main) == main
+
+
 def test_markdown_rekeys_and_selects_only_the_suites_that_list_markdown(tmp_path, monkeypatch):
     """#1594's 13 `.md` files picked 35 suites. A directory keys without its `*.md` unless its suite lists a `.md`, whose guard
     then lets it read Markdown (test_guard.py holds the others to reading none)."""
