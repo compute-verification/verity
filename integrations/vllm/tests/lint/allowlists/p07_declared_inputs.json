@@ -91,7 +91,6 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "seed-default", "symbol": "engine_kwargs", "detail": "seed"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
     {"file": "verity_vllm/observe/observer.py", "kind": "broad-except", "symbol": "encode_arg", "detail": "except Exception", "count": 2},
-    {"file": "verity_vllm/engine/profiles/dense_generic.py", "kind": "environ", "symbol": "hf_snapshot", "detail": "HF_HOME"},
     {"file": "verity_vllm/observe/storage.py", "kind": "broad-except", "symbol": "_probe_weakrefs", "detail": "except Exception", "count": 2},
     {"file": "verity_vllm/engine/build.py", "kind": "broad-except", "symbol": "vllm_has_flashinfer", "detail": "except Exception"},
     {"file": "verity_vllm/engine/build.py", "kind": "environ", "symbol": "compilation_facts", "detail": "VLLM_DISABLE_COMPILE_CACHE"},
