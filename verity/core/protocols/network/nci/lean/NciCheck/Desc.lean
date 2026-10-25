@@ -771,7 +771,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   if callee.prim then
     if node.form == .batch && node.n == 0 then return #[]
     for i in [0:node.args.size] do out := out ++ (← resolve i (whole i))
-    return out.flatMap Seg.split
+    return out.map Seg.alike
   if node.members == 0 then return #[]
   let used := (c.memo[node.fn]!).used
   for i in [0:node.args.size] do
@@ -795,11 +795,11 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   let lo : Int := c.body.offsets[k]!
   let hi : Int := c.body.offsets[k + 1]!
   -- a read's gates are one node's
-  return (out.flatMap Seg.split).filter fun s => match s.ps[0]? with
+  return (out.filter fun s => match s.ps[0]? with
     | some q => match q.tgt with
       | .gate _ => !(lo ≤ q.base && q.base < hi)
       | _ => true
-    | none => false
+    | none => false).map Seg.alike
 
 /-- Definition `d`'s summary, its callees' in `memo`. -/
 def summarize (P : Prog) (memo : Array Summary) (d : Nat) : Except String Summary := do
