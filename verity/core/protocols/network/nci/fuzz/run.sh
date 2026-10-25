@@ -11,7 +11,8 @@
 # checks them, and writes to $OUT `summary.json` (`gen/summarize.py`), `failures.jsonl.gz` (each result where a statement
 # fails, with its Program) and every result, gzipped, per family. With EXTRA negative, no hand family and no vectors: a
 # run beside one that has them, on other seeds. With FUZZ_EXES="NAME=PATH ...", no build: each prebuilt `nci-desc-fuzz`
-# (`build.sh`'s, against another commit's NciCheck) checks the same Programs, into $OUT/NAME.
+# (`build.sh`'s, against another commit's NciCheck; PATH a file, or one sent to the run with `research run --send`)
+# checks the same Programs, into $OUT/NAME.
 set -euo pipefail
 FUZZ=verity/core/protocols/network/nci/fuzz
 RANDOM_N=${1:-100000}
@@ -69,8 +70,12 @@ wait
 for e in $EXES; do
   name=${e%%=*}
   exe=${e#*=}
+  [[ -f $exe ]] || exe=${RESEARCH_RUN_DIR:?}/inputs/$exe
   O=$OUT/$name
   mkdir -p "$O" "$S/$name"
+  cp "$exe" "$S/$name/nci-desc-fuzz" && chmod +x "$S/$name/nci-desc-fuzz"
+  exe=$S/$name/nci-desc-fuzz
+  sha256sum "$exe" > "$O/exe.sha256"
   : > "$O/failures.jsonl"
   for f in $FAMILIES; do
     echo "== $name $f: $(wc -l < "$S/$f.jsonl") programs"
