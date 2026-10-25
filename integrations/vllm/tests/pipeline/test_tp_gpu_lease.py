@@ -248,8 +248,8 @@ def lease(tmp_path, monkeypatch):
     ranks = [_Rank(r, ev, locks) for r in (0, 1)]
     yield SimpleNamespace(ev=ev, watched=watched, smi=smi, locks=locks, started=started, holder=holder, ranks=ranks, llm=_LLM(ranks, ev),
                           cuda=GL.DRIVER, note=lambda: json.loads((tmp_path / "gpu_lease.released").read_text()))
-    for p in hooks.live():
-        if p.owner is _WorkerProc:
+    for p in reversed(hooks.live()):                  # ranks share this process, so their patches stack; release them newest first,
+        if p.owner is _WorkerProc:                    # which separate processes never need
             p.uninstall()
     for fd in fds if held else []:                    # a release closed them, and their numbers may be another file's by now
         os.close(fd)

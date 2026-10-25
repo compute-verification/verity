@@ -35,6 +35,7 @@ import Models.NetworkCertifier.Guarantees
 import Models.NetworkCertifier.Assumptions.AdviceString
 import Models.NetworkCertifier.Guarantees.AdviceString
 import Models.NetworkCertifier.Guarantees.AdviceV1
+import Models.NetworkCertifier.Guarantees.WindowCharge
 import Models.NetworkCertifier.Guarantees.Warden
 import Models.Flock.Guarantees
 import Models.Accounting.Assumptions.Remote

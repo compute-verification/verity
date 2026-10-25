@@ -6,7 +6,8 @@ import Batteries.Lean.Except
 /-!
 # The schedule check fixes each credited pass's plan (`ScheduleChecked`, `ScheduleFixesLayout`)
 
-`check` throws unless `malformed`, `appendsDiffer` and `passesDiffer` each find nothing (`check_ok`). `appendsDiffer`
+`check` throws unless `malformed`, `appendsDiffer` and `passesDiffer` each find nothing and the schedule's bits are at
+most the cap (`check_ok`). `appendsDiffer`
 finding nothing makes the appends the schedule's, entry by entry (`appends_of`), and `passesDiffer` finding nothing puts
 each pass at the schedule's step with the schedule's plan there (`passes_of`). Two sessions accepted on one schedule
 then have the same appends and, pass by pass, the same steps and so the same plans (`scheduleFixesLayout`).
@@ -17,8 +18,10 @@ to the schedule (each list after its length, a block's tag before its write's st
 two facts off `malformed` finding nothing (`wf_of_malformed`): a freed block's free comes after its write, so its tag
 `f − w + 1` is at least 2, and the steps increase, so their rises give them back.
 
-From the code to the model, under `ScheduleLayoutGap`: a layout the check accepted at `b ≤ a` bits is the verifier's
-plan of a well-formed schedule of at most `a` bits (`scheduleDeterministic_of_checked`), and a layout that is
+From the code to the model, under `ScheduleLayoutGap`: a layout the check accepted at the cap `a` the session committed
+before its coins is the verifier's plan of a well-formed schedule of at most `a` bits
+(`scheduleDeterministic_of_checked`; the cap is one `a` at every coin, where the bits of each coin's own schedule
+would not be), and a layout that is
 `ScheduleDeterministic` at `a` is `SteeredLayout` at `a + 1`: its summary is the schedule's bits padded to `a + 1` with
 a one and zeros (`pad`, one-to-one on strings of at most `a` bits), read back by the schedule they pad
 (`steered_of_scheduleDeterministic`).
@@ -27,21 +30,26 @@ The collapse it rules out: `coinLayout` puts a pass's one block where a coin bit
 (`coinLayout_steered`), as every layout is at `a = |Y|`, and `ScheduleDeterministic` at no `a` under a schedule that
 fixes the layout (`coinLayout_not_scheduled`). In the code: the published schedule `honest` keeps block 12 resident
 from step 3, so a session whose third pass's plan drops it, as a coin might say, is refused, and the honest one passes
-at 200 bits (the examples at the end; `test_schedule.py` plays the same session in Python).
+at 200 bits under a cap of 200 and is refused under 199 (the examples at the end; `test_schedule.py` plays the same
+session in Python).
 -/
 
 open RemoteAudit
 
 namespace Properties.RemoteAudit
 
-theorem check_ok {sc : Schedule.Schedule} {blocks : Nat} {passes : Array (Nat × Array (Nat × Nat))}
-    {appends : Array (Nat × Nat)} {b : Nat} (h : Schedule.check sc blocks passes appends = .ok b) :
+theorem check_ok {sc : Schedule.Schedule} {blocks cap : Nat} {passes : Array (Nat × Array (Nat × Nat))}
+    {appends : Array (Nat × Nat)} {b : Nat} (h : Schedule.check sc blocks cap passes appends = .ok b) :
     Schedule.malformed sc blocks = none ∧ Schedule.appendsDiffer sc blocks appends = none ∧
-      Schedule.passesDiffer sc blocks passes = none ∧ b = Schedule.bits sc := by
+      Schedule.passesDiffer sc blocks passes = none ∧ b = Schedule.bits sc ∧ b ≤ cap := by
   unfold Schedule.check at h
-  cases hm : Schedule.malformed sc blocks <;> cases ha : Schedule.appendsDiffer sc blocks appends <;>
-    cases hp : Schedule.passesDiffer sc blocks passes <;>
-    simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
+  by_cases hc : cap < Schedule.bits sc
+  · cases hm : Schedule.malformed sc blocks <;>
+      simp_all [bind, Except.bind, throw, throwThe, MonadExceptOf.throw]
+  · have hle : Schedule.bits sc ≤ cap := Nat.le_of_not_lt hc
+    cases hm : Schedule.malformed sc blocks <;> cases ha : Schedule.appendsDiffer sc blocks appends <;>
+      cases hp : Schedule.passesDiffer sc blocks passes <;>
+      simp_all [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw]
 
 theorem appends_of {sc : Schedule.Schedule} {blocks : Nat} {appends : Array (Nat × Nat)}
     (h : Schedule.appendsDiffer sc blocks appends = none) : appends = Schedule.appendRuns sc blocks := by
@@ -87,13 +95,13 @@ theorem passes_of {sc : Schedule.Schedule} {blocks : Nat} {passes : Array (Nat �
       exact (each k hk).2
 
 theorem scheduleChecked : ScheduleChecked := by
-  intro sc blocks passes appends b h
-  obtain ⟨hm, ha, hp, hb⟩ := check_ok h
+  intro sc blocks cap passes appends b h
+  obtain ⟨hm, ha, hp, hb, hcap⟩ := check_ok h
   obtain ⟨h1, h2⟩ := passes_of hp
-  exact ⟨hm, h1, h2, appends_of ha, hb⟩
+  exact ⟨hm, h1, h2, appends_of ha, hb, hcap⟩
 
 theorem scheduleFixesLayout : ScheduleFixesLayout := by
-  intro sc blocks passes passes' appends appends' b b' h h'
+  intro sc blocks cap cap' passes passes' appends appends' b b' h h'
   obtain ⟨_, ha, hp, _⟩ := check_ok h
   obtain ⟨_, ha', hp', _⟩ := check_ok h'
   refine ⟨?_, (appends_of ha).trans (appends_of ha').symm⟩
@@ -386,21 +394,22 @@ theorem steered_of_scheduleDeterministic {Pfx Y S : Type} [Nonempty S] {N T M : 
   simp only [hex, ↓reduceDIte]
   rw [(hs c y).2, inj (pad_injective hex.choose_spec.1 (hs c y).1 hex.choose_spec.2)]
 
-/-- **The check's acceptance gives `ScheduleDeterministic`, under `ScheduleLayoutGap`.** If at every prefix `c` and
-coins `y` the check accepts some schedule at `b ≤ a` bits for a session whose appends are `appended c y` and whose pass
-`idx c` sent the runs `sent c y`, the layout is the verifier's plan of a well-formed schedule (its appends, and its
-plan at its own step `idx c`) whose bits are at most `a`. -/
+/-- **The check's acceptance at the committed cap gives `ScheduleDeterministic`, under `ScheduleLayoutGap`.** If at
+every prefix `c` and coins `y` the check at the cap `a` the session committed before its coins accepts some schedule
+for a session whose appends are `appended c y` and whose pass `idx c` sent the runs `sent c y`, the layout is the
+verifier's plan of a well-formed schedule (its appends, and its plan at its own step `idx c`) whose bits are at most
+`a`. The cap is the check's argument, one `a` at every coin, not the bits of each coin's own schedule. -/
 theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
-    (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks passes (appended c y) = .ok b ∧ b ≤ a ∧
+    (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     Accounting.ScheduleDeterministic (S := {sc : Schedule.Schedule // Schedule.malformed sc blocks = none})
       (fun c sc => pos c (Schedule.appendRuns sc.1 blocks) (Schedule.plan sc.1 blocks sc.1.steps[idx c]!))
       (fun sc => scheduleBits sc.1) a layout := by
   refine ⟨fun s s' h => Subtype.ext (ScheduleCode.scheduleBits_injective s.2 s'.2 h), fun c y => ?_⟩
-  obtain ⟨sc, passes, b, h, hb, hsent⟩ := checked c y
-  obtain ⟨hm, hsteps, hplan, happ, rfl⟩ := scheduleChecked sc blocks passes (appended c y) b h
+  obtain ⟨sc, passes, b, h, hsent⟩ := checked c y
+  obtain ⟨hm, hsteps, hplan, happ, rfl, hb⟩ := scheduleChecked sc blocks a passes (appended c y) b h
   obtain ⟨p, hp, hp2⟩ : ∃ p, passes[idx c]? = some p ∧ p.2 = sent c y := by
     cases e : passes[idx c]? with
     | none => simp [e] at hsent
@@ -414,11 +423,13 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
   dsimp only
   rw [hstep]
 
-/-- **The check's acceptance gives `SteeredLayout` at `a + 1` bits, under `ScheduleLayoutGap`.** -/
+/-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, under
+`ScheduleLayoutGap`.** `a` is the cap the session's parameters committed before its first coin
+(`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it is the same at every prefix and coin. -/
 theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
     {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
     {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
-    (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks passes (appended c y) = .ok b ∧ b ≤ a ∧
+    (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ steer : Pfx → Y → Pous.Bits (a + 1), Accounting.Assumptions.SteeredLayout layout steer :=
   have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
@@ -458,11 +469,15 @@ def coinPasses (keep12 : Bool) : Array (ℕ × Array (ℕ × ℕ)) :=
     (3, if keep12 then #[(0, 2), (3, 6), (10, 4)] else #[(0, 2), (3, 6), (10, 2), (13, 1)]),
     (4, #[(0, 2), (3, 6), (10, 4)])]
 
-example : Schedule.check honest 8 (coinPasses false) #[(8, 4), (12, 2)] =
+example : Schedule.check honest 8 200 (coinPasses false) #[(8, 4), (12, 2)] =
     .error "pass 3's plan is not the schedule's at step 3" := by
   decide +kernel
 
-example : Schedule.check honest 8 (coinPasses true) #[(8, 4), (12, 2)] = .ok 200 := by
+example : Schedule.check honest 8 200 (coinPasses true) #[(8, 4), (12, 2)] = .ok 200 := by
+  decide +kernel
+
+example : Schedule.check honest 8 199 (coinPasses true) #[(8, 4), (12, 2)] =
+    .error "the schedule is 200 bits, over the cap of 199 committed before the coins" := by
   decide +kernel
 
 end Properties.RemoteAudit
