@@ -15,8 +15,8 @@ Per model, set and M:
                (`row_tables.step_roots`) agree
     commit     the kernels' time on the side stream (`Pending.kernel_ms`) and the host's in `step_roots` (plan, domain ids,
                staging); bytes/s of the rows' values (B (K + 4) summed over tables); the roots equal rep to rep
-    linears    the layer's exact linears (`int8_fused.scaled_mm` at `run.cfg_for`, each gated against `run.reference` on its
-               first call) as one CUDA graph
+    linears    the layer's exact linears (run.py's exact kernel at its picked config, each gated against `run.reference` on
+               its first call) as one CUDA graph
     overlap    the serving order: a layer's tables hash while the next layer's linears run. Replays of the linears hide
                `step_roots`' host work; from their end the commit and one more replay run together: their joint time against
                the replay alone, and the gap before that replay starts; on the committer's side stream (default priority)
@@ -127,16 +127,16 @@ class Linears:
     """A layer's exact linears at M (weights without special scales), one CUDA graph."""
 
     def __init__(self, md: FX.Model, m: int):
-        self.work = X.Workspace("cuda")
+        self.kern = R.kernel()
         self.calls, self.gate = [], {}
         for i, (name, n, k, _q) in enumerate(md.linears):
             wt = R.Weights(n, k, seed=3000 + i, special=False)
             x = R.codes(m, k, 41 + i, {})
             sa = torch.from_numpy(FX.act_scales(m, 41 + i, special=False)).cuda()
             y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
-            cfg = R.cfg_for(m, n, k)
+            cfg = self.kern.pick(m, n, k)
             R.poison(y)
-            X.scaled_mm(x, sa, wt.w, wt.sw, y, cfg, self.work)
+            self.kern.call(x, sa, wt.w, wt.sw, y, cfg)
             torch.cuda.synchronize()
             self.gate[name] = {"cfg": str(cfg), "mismatches": R.diff(y, R.reference(E.int_mm(x, wt.w), sa, wt.sw))}
             self.calls.append((x, sa, wt, y, cfg))
@@ -154,7 +154,7 @@ class Linears:
 
     def _f(self):
         for x, sa, wt, y, cfg in self.calls:
-            X.scaled_mm(x, sa, wt.w, wt.sw, y, cfg, self.work)
+            self.kern.call(x, sa, wt.w, wt.sw, y, cfg)
 
     @property
     def ok(self) -> bool:
@@ -366,7 +366,8 @@ def main() -> int:
     ms = tuple(sorted(set(ints(a.ms)) | set(a.check_ms)))
     clock = kbench.nvml()
     meta = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__,
-            "configs": {f"{n},{k}": v for (n, k), v in R.CONFIGS.items()}, "step_s": STEP_S, "tiny": tiny_check()}
+            "configs": {key: {f"{n},{k}": v for (n, k), v in t.items()} for key, t in R.CONFIGS.items()}, "step_s": STEP_S,
+            "tiny": tiny_check()}
     print(json.dumps({"tiny": meta["tiny"]}), flush=True)
     failed = [s for s, v in meta["tiny"].items() if not (v["device_is_twin"] and v["twin_is_reference"])]
     rows, step = [], 1

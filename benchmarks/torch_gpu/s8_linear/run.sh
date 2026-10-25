@@ -5,7 +5,8 @@
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
 #     --env GPU_LEASE_WHO=kernels-kp2s8 --send /tmp/s8-ship.tar -- bash benchmarks/torch_gpu/s8_linear/run.sh STEP...
 # A STEP is a script and its arguments in one word, e.g. "run.py --ms 1,7,257 --no-swap" (the canary) then "run.py" (the
-# gate); each writes into $OUT/<i>-<script>. A step that fails ends the run (S8_KEEP_GOING=1: the rest still run).
+# gate); each writes into $OUT/<i>-<script>, and @OUT@ in a step is $OUT ("bench.py --configs @OUT@/1-tune/best.json"). A
+# step that fails ends the run (S8_KEEP_GOING=1: the rest still run).
 # Outside any lease: the ship unpacked and held to its MANIFEST.sha256 (s8_wgmma.cubin, its sass.json; row_table/ seeds
 # ~/.cache/verity/row_table), the card and Python recorded. VERITY_BENCH_VENV names the Python with torch and vLLM.
 set -uo pipefail
@@ -31,7 +32,7 @@ nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit 
 MAX_MIN=${S8_MAX_MIN:-30}
 rc_all=0; i=0
 for step in "$@"; do
-  i=$((i + 1)); read -r -a argv <<< "$step"; script=${argv[0]}; dir=$OUT/$i-${script%.py}; mkdir -p "$dir"
+  i=$((i + 1)); read -r -a argv <<< "${step//@OUT@/$OUT}"; script=${argv[0]}; dir=$OUT/$i-${script%.py}; mkdir -p "$dir"
   echo "s8_linear: step $i ($step) asking for one GPU at $(date -u +%H:%M:%SZ)"
   nvidia-smi --query-gpu=index,uuid,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu --format=csv -l 1 \
     > "$dir/smi.csv" 2>/dev/null &

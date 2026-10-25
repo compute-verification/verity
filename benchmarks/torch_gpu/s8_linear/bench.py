@@ -4,8 +4,10 @@ kernel and the fastest plain int8 GEMMs, interleaved rep by rep on one GPU.
 Per linear (N, K) of `fixture.shapes(models)` and M, the arms (`kbench.timed`: one CUDA graph per arm over weight copies past 3x
 the L2, so the weights stream from DRAM; items of about 10 ms alternating arm by arm, order rotated each rep; the SM clock read
 around every item), each gated in this run before it is timed:
-    exact         int8_fused.scaled_mm at `run.cfg_for` (bf16 out, the Definition's epilogue): y into 0xA5 equal to
-                  `run.reference` (run.py's gate holds that to the Definition's twin on every cell)
+    exact         the exact kernel (run.py's `--kernel`: wgmma on sm_90, int8_fused elsewhere) at its picked config
+                  (`configs.CONFIGS` or --configs, else its default; bf16 out, the Definition's epilogue): y into 0xA5 equal
+                  to `run.reference` (run.py's gate holds that to the Definition's twin on every cell)
+    exact_triton  on sm_90, int8_fused (Triton) the same way: the second exact kernel
     lt            cuBLASLt int8, s32 out, autotuned: its top 32 heuristic algorithms (`lt.Plan`), each gated (z equal to
                   torch._int_mm's) and timed in a pre-pass of 3 interleaved items, the fastest kept
     cutlass       vLLM's CUTLASS int8 GEMM (`torch.ops._C.cutlass_scaled_mm`, bf16 out; its epilogue applies s_w first,
@@ -13,8 +15,10 @@ around every item), each gated in this run before it is timed:
     cutlass_swap  the same kernel on the transposed product (y^T = W X^T, scale_b = s_a first: the Definition's order),
                   M a multiple of 16, its words counted against the Definition's
 DRAM read bandwidth is measured in the run, before and after (a streaming read of 4 GiB, `read_kernel`, interleaved with a
-copy), and the s8 tensor-core peak is the card's recorded mma.sync rate, `--peak-tops` (807.5 at locked 2100 MHz,
-r20260930-062850-de8e, kb/sm120/gotchas.md). A model's layer set is its linears (`fixture.MODELS`) at the same M.
+copy), and the s8 tensor-core peak is the card's, `--peak-tops`, by default PEAKS' measured reading for the arch: sm_90's
+1,942.7 TOPS (the H200's best second of dense s8 wgmma, r20261019-053910-d2c9) beside its data sheet's 1,979 at 1,830 MHz,
+sm_120's 807.5 (mma.sync at locked 2100 MHz, r20260930-062850-de8e). crossing.json records every reading (`peak_readings`); a
+fraction of peak scales by their ratio. A model's layer set is its linears (`fixture.MODELS`) at the same M.
 
 crossing.json, per arm and model (layer set) and per linear:
     tops, frac_peak       2 M N K / t, and over the peak
@@ -24,7 +28,8 @@ crossing.json, per arm and model (layer set) and per linear:
                           flat in M and starts growing with it
     at_ridge              the arm's time, TOPS and fraction of peak at the card's ridge and at its own (log-log interpolation)
 
-    python bench.py --out OUT [--models mqa16k,mha8k] [--ms 1,8,...] [--reps 9] [--arms exact,lt,cutlass,cutlass_swap] [--no-head]
+    python bench.py --out OUT [--models mqa16k52] [--ms 1,8,...] [--reps 9] [--arms exact,exact_triton,lt,cutlass,cutlass_swap]
+                    [--kernel wgmma|triton] [--configs BEST_JSON] [--no-head]
 """
 from __future__ import annotations
 
@@ -49,10 +54,11 @@ import run as R  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
-SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192)
-ARMS = ("exact", "lt", "cutlass", "cutlass_swap")
-PEAK_TOPS = 807.5
-OUT_BYTES = {"exact": 2, "lt": 4, "cutlass": 2, "cutlass_swap": 2}
+SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192, 16384,
+            20480)
+ARMS = ("exact", "exact_triton", "lt", "cutlass", "cutlass_swap")
+PEAKS = {"sm_90": {"measured": 1942.7, "datasheet_1830mhz": 1979.0}, "sm_120": {"measured": 807.5}}
+OUT_BYTES = {"exact": 2, "exact_triton": 2, "lt": 4, "cutlass": 2, "cutlass_swap": 2}
 BW_BYTES = 4 << 30
 
 
@@ -88,8 +94,8 @@ def bandwidth(clock, reps: int) -> dict:
 class Linear:
     """One (N, K, M): weight copies, X, scales, the outputs, and the arms' gated callables."""
 
-    def __init__(self, n: int, k: int, m: int):
-        self.n, self.k, self.m = n, k, m
+    def __init__(self, n: int, k: int, m: int, kerns: dict):
+        self.n, self.k, self.m, self.kerns = n, k, m, kerns
         self.copies = kbench.copies_for(n, k)
         self.ws = [R.Weights(n, k, seed=2000 + i, special=False) for i in range(self.copies)]
         self.x = R.codes(m, k, 11 + m, FX.STRUCT_ROWS)
@@ -99,21 +105,22 @@ class Linear:
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
         self.yt = torch.empty((n, m), dtype=torch.bfloat16, device="cuda")
         self.z = torch.empty((m, n), dtype=torch.int32, device="cuda")
-        self.cfg = R.cfg_for(m, n, k)
-        self.work = X.Workspace("cuda")
         self.gates: dict = {}
 
-    def exact(self):
+    def exact(self, arm: str):
+        kern = self.kerns[arm]
+        cfg = kern.pick(self.m, self.n, self.k)
         R.poison(self.y)
-        X.scaled_mm(self.x, self.sa, self.ws[0].w, self.ws[0].sw, self.y, self.cfg, self.work)
+        h = kern.call(self.x, self.sa, self.ws[0].w, self.ws[0].sw, self.y, cfg)
         torch.cuda.synchronize()
-        self.gates["exact"] = {"cfg": str(self.cfg), "mismatches": R.diff(self.y, self.ref_first)}
-        if self.gates["exact"]["mismatches"]:
+        self.gates[arm] = {"kernel": kern.name, "cfg": str(cfg), "mismatches": R.diff(self.y, self.ref_first),
+                           "checks_ok": kern.checks(h)["ok"]}
+        if self.gates[arm]["mismatches"] or not self.gates[arm]["checks_ok"]:
             return None
 
         def f():
             for wt in self.ws:
-                X.scaled_mm(self.x, self.sa, wt.w, wt.sw, self.y, self.cfg, self.work)
+                kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return f
 
     def lt(self, clock) -> object:
@@ -184,28 +191,38 @@ def main() -> int:
     ap.add_argument("--ms", default=",".join(map(str, SWEEP_MS)))
     ap.add_argument("--reps", type=int, default=9)
     ap.add_argument("--arms", default=",".join(ARMS))
-    ap.add_argument("--peak-tops", type=float, default=PEAK_TOPS)
+    ap.add_argument("--peak-tops", type=float, default=None, help="default: PEAKS' measured reading for the arch")
+    ap.add_argument("--kernel", choices=sorted(R.KERNELS), default=None)
+    ap.add_argument("--configs", default=None, help="a tune.py best.json for the exact kernel")
     ap.add_argument("--no-head", action="store_true")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     models = tuple(a.models.split(","))
     ms = tuple(int(v) for v in a.ms.split(","))
-    arms = tuple(a.arms.split(","))
+    kerns = {"exact": R.kernel(a.kernel)}
+    if a.configs:
+        R.load_configs(a.configs, kerns["exact"])
+    arms = tuple(arm for arm in a.arms.split(",") if arm != "exact_triton" or kerns["exact"].name != "triton")
+    if "exact_triton" in arms:
+        kerns["exact_triton"] = R.kernel("triton")
+    readings = PEAKS.get(X.arch(), {})
+    peak = a.peak_tops or readings["measured"]
     clock = kbench.nvml()
     meta = {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__, "triton": triton.__version__,
-            "cublaslt": LT.version(), "configs": {f"{n},{k}": v for (n, k), v in R.CONFIGS.items()},
-            "l2_bytes": torch.cuda.get_device_properties(0).L2_cache_size, "peak_tops": a.peak_tops}
+            "cublaslt": LT.version(), "exact": kerns["exact"].meta(),
+            "configs": {key: {f"{n},{k}": v for (n, k), v in t.items()} for key, t in R.CONFIGS.items()},
+            "l2_bytes": torch.cuda.get_device_properties(0).L2_cache_size, "peak_tops": peak, "peak_readings": readings}
     meta["bw_before"] = bandwidth(clock, a.reps)
     print(json.dumps({"bw_before": {k: meta["bw_before"][k] for k in ("read_gbs", "copy_gbs")}}), flush=True)
     rows = []
     for name, n, k in FX.shapes(models, with_head=not a.no_head):
         for m in ms:
             t0 = time.time()
-            lin = Linear(n, k, m)
+            lin = Linear(n, k, m, kerns)
             fns = {}
             for arm in arms:
-                f = (lin.exact() if arm == "exact" else lin.lt(clock) if arm == "lt" else
+                f = (lin.exact(arm) if arm in kerns else lin.lt(clock) if arm == "lt" else
                      lin.cutlass(swap=arm == "cutlass_swap"))
                 if f is not None:
                     fns[arm] = f
@@ -217,12 +234,13 @@ def main() -> int:
             with open(out / "bench.jsonl", "a") as f:
                 f.write(json.dumps(row) + "\n")
             print(json.dumps({"name": name, "m": m, "us": {k_: round(v, 2) for k_, v in med.items()},
+                              "frac_peak": {k_: round(2 * m * n * k / v / 1e6 / peak, 3) for k_, v in med.items()},
                               "lt": lin.gates.get("lt", {}).get("best"), "s": row["s"]}), flush=True)
             del lin, fns
             torch.cuda.empty_cache()
     meta["bw_after"] = bandwidth(clock, a.reps)
     bw = max(meta["bw_before"]["read_gbs"], meta["bw_after"]["read_gbs"])
-    doc = {**meta, **RF.summarize(rows, models, a.peak_tops, bw, OUT_BYTES)}
+    doc = {**meta, **RF.summarize(rows, models, peak, bw, OUT_BYTES)}
     (out / "crossing.json").write_text(json.dumps(doc, indent=1) + "\n")
     for name in models:
         for arm, c in doc["layers"].get(name, {}).items():

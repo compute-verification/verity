@@ -1,13 +1,14 @@
-"""int8_fused's GEMM configs swept at the large model's linears on one GPU, ksweep.py's method (benchmarks/hash/exactlin) at
-these shapes. Per (N, K, M): a coarse grid by M (pointer, TMA and warp-specialized TMA kernels), then the best `--top`
-across warps x stages, then the best `--top` again with vLLM's tiles over `--reps` interleaved items (`kbench.timed`: one
-CUDA graph per config, items of about 10 ms alternating config by config, the SM clock read around each). Weight copies past
-3x the L2 (`kbench.copies_for`), so the weights stream from DRAM. A config is timed only after its gate passed: y written
-into 0xA5 equal to `run.reference` (torch's epilogue, which run.py's gate holds to the Definition's twin on every cell), and
-the last copy's y equal after the timing's replays. Writes sweep.jsonl (every config's record) and best.json after each
-shape ({"table": {"n,k": [[m, cfg, us, vllm_tiles_us], ...]}}, what configs.CONFIGS takes).
+"""An exact kernel's GEMM configs (run.py's `--kernel`: wgmma on sm_90, triton elsewhere) swept at the large model's linears on
+one GPU, ksweep.py's method (benchmarks/hash/exactlin) at these shapes. Per (N, K, M): a coarse grid by M, then the best
+`--top` refined (wgmma: the raster group; triton: warps x stages), then the best `--top` again with the kernel's default
+config over `--reps` interleaved items (`kbench.timed`: one CUDA graph per config, items of about 10 ms alternating config by
+config, the SM clock read around each). Weight copies past 3x the L2 (`kbench.copies_for`), so the weights stream from DRAM.
+A config is timed only after its gate passed: y written into 0xA5 equal to `run.reference` (torch's epilogue, which run.py's
+gate holds to the Definition's twin on every cell), the kernel's checks, and the last copy's y equal after the timing's
+replays. Writes sweep.jsonl (every config's record) and best.json after each shape ({"table": {"n,k": [[m, cfg, us,
+default_us], ...]}}, what configs.CONFIGS and run.py's --configs take).
 
-    python tune.py --out OUT [--models mqa16k,mha8k] [--ms 1,16,32,...] [--top 3] [--reps 7] [--no-head]
+    python tune.py --out OUT [--kernel wgmma|triton] [--models mqa16k52] [--ms 1,16,32,...] [--top 3] [--reps 7] [--no-head]
 """
 from __future__ import annotations
 
@@ -25,14 +26,29 @@ sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
 import fixture as FX  # noqa: E402
 import kbench  # noqa: E402
 import run as R  # noqa: E402
+import wgmma as W  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
-TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192)
+TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192, 16384, 20480)
 WARPS, STAGES = (4, 8), (2, 3, 4, 5)
+GROUPS = (1, 2, 4, 8, 16, 32)
 
 
-def coarse(m: int) -> list[X.Cfg]:
+def coarse(m: int, kern) -> list:
+    if kern.name == "wgmma":
+        tms = (64,) if m <= 64 else (64, 128) if m <= 256 else (128,)
+        return [W.Cfg(tm, bn) for tm in tms for bn in (64, 128, 256)]
+    return coarse_triton(m)
+
+
+def refine(cfgs: list, kern) -> list:
+    if kern.name == "wgmma":
+        return [W.Cfg(c[0], c[1], c[2], g) for c in cfgs for g in GROUPS]
+    return [X.Cfg(*c[:3], w, s, *c[5:]) for c in cfgs for w in WARPS for s in STAGES]
+
+
+def coarse_triton(m: int) -> list[X.Cfg]:
     """BLOCK_M by M, BLOCK_N and BLOCK_K around exactlin's sm_120 winners, each tile on the pointer kernel and (BLOCK_K <= 256,
     a TMA box's side) the TMA kernel, plain and warp-specialized; split-K only at M <= 64."""
     if m <= 16:
@@ -69,40 +85,40 @@ class Shape:
         self.ref_last = R.reference(E.int_mm(self.x, self.ws[-1].w), self.sa, self.ws[-1].sw)
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
 
-    def fn(self, cfg: X.Cfg, work: X.Workspace):
+    def fn(self, cfg, kern):
         def f():
             for wt in self.ws:
-                X.scaled_mm(self.x, self.sa, wt.w, wt.sw, self.y, cfg, work)
+                kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return f
 
-    def gate(self, cfg: X.Cfg, work: X.Workspace) -> dict:
+    def gate(self, cfg, kern) -> dict:
         wt = self.ws[0]
         rec: dict = {}
         for i in range(2):
             R.poison(self.y)
-            km = X.scaled_mm(self.x, self.sa, wt.w, wt.sw, self.y, cfg, work)
+            h = kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
             torch.cuda.synchronize()
             rec[f"y_diff_{i}"] = R.diff(self.y, self.ref_first)
-        rec["workspace_nonzero"] = int((work.ws != 0).sum()) + int((work.cnt != 0).sum())
-        rec["ptx_ok"] = X.ptx_check(km)["ok"]
-        rec["ok"] = rec["y_diff_0"] == 0 and rec["y_diff_1"] == 0 and rec["workspace_nonzero"] == 0 and rec["ptx_ok"]
+        rec["residue"] = kern.residue()
+        rec["checks_ok"] = kern.checks(h)["ok"]
+        rec["ok"] = rec["y_diff_0"] == 0 and rec["y_diff_1"] == 0 and rec["residue"] == 0 and rec["checks_ok"]
         return rec
 
 
-def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: str, work: X.Workspace) -> dict:
+def stage(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, kern) -> dict:
     fns, recs = {}, {}
     for cfg in dict.fromkeys(cfgs):
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "cfg": str(cfg)}
-        if cfg[5] > 1 and shape.m * shape.n > work.ws.numel():
+        if kern.skip(cfg, shape.m, shape.n):
             continue
         try:
-            rec.update(shape.gate(cfg, work))
+            rec.update(shape.gate(cfg, kern))
         except Exception as ex:  # noqa: BLE001 - a config that doesn't compile or launch is a record
             rec.update({"ok": False, "error": f"{type(ex).__name__}: {str(ex)[:200]}"})
             torch.cuda.synchronize()
         recs[str(cfg)] = rec
         if rec["ok"]:
-            fns[str(cfg)] = shape.fn(cfg, work)
+            fns[str(cfg)] = shape.fn(cfg, kern)
     med = {}
     if fns:
         med, _, meta = kbench.timed(fns, reps, clock, shape.copies)
@@ -113,6 +129,7 @@ def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: s
             recs[name]["y_diff_after_timing"] = R.diff(shape.y, shape.ref_last)
             recs[name]["ok"] = recs[name]["ok"] and recs[name]["y_diff_after_timing"] == 0
             recs[name]["us"] = us
+            recs[name]["tops"] = 2 * shape.m * shape.n * shape.k / us / 1e6
             recs[name]["sm_clock_mhz"] = meta["clocks"][name]
     with open(out / "sweep.jsonl", "a") as f:
         for rec in recs.values():
@@ -120,13 +137,14 @@ def stage(out: Path, shape: Shape, cfgs: list[X.Cfg], reps: int, clock, phase: s
     return {name: us for name, us in med.items() if recs[name]["ok"]}
 
 
-def best(med: dict, top: int) -> list[X.Cfg]:
-    return [X.Cfg.parse(c) for c, _ in sorted(med.items(), key=lambda cu: cu[1])[:top]]
+def best(med: dict, top: int, kern) -> list:
+    return [kern.Cfg.parse(c) for c, _ in sorted(med.items(), key=lambda cu: cu[1])[:top]]
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", required=True)
+    ap.add_argument("--kernel", choices=sorted(R.KERNELS), default=None)
     ap.add_argument("--models", default=",".join(FX.DEFAULT_MODELS))
     ap.add_argument("--ms", default=",".join(map(str, TUNE_MS)))
     ap.add_argument("--top", type=int, default=3)
@@ -135,27 +153,28 @@ def main() -> int:
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
+    kern = R.kernel(a.kernel)
     models = tuple(a.models.split(","))
     ms = tuple(int(v) for v in a.ms.split(","))
     clock = kbench.nvml()
-    work = X.Workspace("cuda")
     table: dict = {}
     for name, n, k in FX.shapes(models, with_head=not a.no_head):
         for m in ms:
             t0 = time.time()
             shape = Shape(n, k, m)
-            med = stage(out, shape, coarse(m), 3, clock, "coarse", work)
-            refine = [X.Cfg(*c[:3], w, s, *c[5:]) for c in best(med, a.top) for w in WARPS for s in STAGES]
-            med = stage(out, shape, refine, 3, clock, "refine", work)
-            vt = X.default_cfg(m, n, k)
-            med = stage(out, shape, best(med, a.top) + [vt], a.reps, clock, "final", work)
-            win = best(med, 1)
-            row = [m, str(win[0]) if win else None, med.get(str(win[0])) if win else None, med.get(str(vt))]
+            med = stage(out, shape, coarse(m, kern), 3, clock, "coarse", kern)
+            med = stage(out, shape, refine(best(med, a.top, kern), kern), 3, clock, "refine", kern)
+            base = kern.baseline(m, n, k)
+            med = stage(out, shape, best(med, a.top, kern) + [base], a.reps, clock, "final", kern)
+            win = best(med, 1, kern)
+            row = [m, str(win[0]) if win else None, med.get(str(win[0])) if win else None, med.get(str(base))]
             table.setdefault(f"{n},{k}", []).append(row)
-            print(json.dumps({"name": name, "n": n, "k": k, "m": m, "best": row, "s": round(time.time() - t0, 1)}), flush=True)
+            tops = 2 * m * n * k / row[2] / 1e6 if row[2] else None
+            print(json.dumps({"name": name, "n": n, "k": k, "m": m, "best": row, "tops": tops, "s": round(time.time() - t0, 1)}),
+                  flush=True)
             del shape
             torch.cuda.empty_cache()
-            (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(),
+            (out / "best.json").write_text(json.dumps({"device": torch.cuda.get_device_name(), "arch": X.arch(), **kern.meta(),
                                                        "models": models, "ms": ms, "table": table}, indent=1) + "\n")
     return 0
 
