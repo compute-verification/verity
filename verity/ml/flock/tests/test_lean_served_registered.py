@@ -51,7 +51,7 @@ def fx(request, built, tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURES[request.param], tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURES[request.param], tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     return request.param, root
