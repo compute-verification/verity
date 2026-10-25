@@ -11,10 +11,13 @@ import types
 
 import pytest
 
-torch = pytest.importorskip("torch")
+try:
+    import torch
+except ModuleNotFoundError:
+    pytest.skip("could not import 'torch'", allow_module_level=True)
 
-from verity_vllm.acquire.sources import narrowed_source as NS  # noqa: E402
-from verity_vllm.acquire.sources import taps as TAPS  # noqa: E402
+from verity_vllm.acquire.sources import narrowed_source as NS
+from verity_vllm.acquire.sources import taps as TAPS
 
 OP = "model.layers.1.self_attn.qkv_proj"
 T, QKV = 5, 12
