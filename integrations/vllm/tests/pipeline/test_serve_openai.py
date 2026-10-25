@@ -102,6 +102,9 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifi
     assert so.engine_options(opts)["quantization"] == "verity_int8" and "attention_backend" not in so.engine_options(opts)
     exact = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--precision", "int8_exact", "--no-gpu-tree"], environ={})
     assert so.engine_options(exact)["attention_backend"] == "CUSTOM" and not exact.gpu_tree
+    assert "enable_prefix_caching" not in so.engine_options(opts)
+    cached = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--prefix-caching"], environ={})
+    assert so.engine_options(cached)["enable_prefix_caching"] is True
     env = cli.parse("serve-openai", ["--model", "m", "--revision", "r"], environ={"RESEARCH_RUN_ID": "r1", "HF_HOME": "/h"})
     assert (env.run_id, env.hf_home) == ("r1", "/h")
     with pytest.raises(SystemExit):
@@ -148,17 +151,26 @@ class Engine:
     """vLLM's ``LLMEngine`` as the loop drives it: each ``step`` is one forward over every live request (its whole prompt
     at its first step, else its last sampled token), whose sample is a function of its inputs; outputs are DELTA, one
     token each, under the engine id, while the runner sees vLLM's internal id ``<id>-<8 hex>``. Each request's seed goes to
-    its state slot (``seed_override``: a seed other than the one admitted)."""
+    its state slot (``seed_override``: a seed other than the one admitted). With ``block``, a prefix cache: a request's first
+    row starts after the longest whole-block prefix (at most its prompt but one) of the ids a finished request computed."""
 
-    def __init__(self, runner: Runner, seed_override: int | None = None) -> None:
-        self.runner, self.reqs, self.n, self.seed_override = runner, {}, 0, seed_override
+    def __init__(self, runner: Runner, seed_override: int | None = None, block: int | None = None) -> None:
+        self.runner, self.reqs, self.n, self.seed_override, self.block, self.computed = runner, {}, 0, seed_override, block, []
+
+    def cached(self, prompt: list[int]) -> int:
+        if not self.block:
+            return 0
+        common = max((next((k for k, (a, b) in enumerate(zip(c, prompt)) if a != b), min(len(c), len(prompt))) for c in self.computed),
+                     default=0)
+        return min(common, len(prompt) - 1) // self.block * self.block
 
     def add_request(self, request_id: str, prompt: dict, params: Any) -> None:
         self.n += 1
         slot = self.n % 64
         self.runner.sampler.sampling_states.seeds.gpu[slot] = params["seed"] if self.seed_override is None else self.seed_override
-        self.reqs[request_id] = {"internal": f"{request_id}-{self.n:08x}", "prompt": list(prompt["prompt_token_ids"]), "out": [],
-                                 "max": params["max_tokens"], "slot": slot}
+        ids = list(prompt["prompt_token_ids"])
+        self.reqs[request_id] = {"internal": f"{request_id}-{self.n:08x}", "prompt": ids, "out": [],
+                                 "max": params["max_tokens"], "slot": slot, "hit": self.cached(ids)}
 
     def abort_request(self, ids: list[str]) -> None:
         for i in ids:
@@ -172,7 +184,7 @@ class Engine:
         ids, qsl, pos, starts = [], [0], [], []
         for _, r in live:
             P = len(r["prompt"])
-            rows, start = (r["prompt"], 0) if not r["out"] else (r["out"][-1:], P + len(r["out"]) - 1)
+            rows, start = (r["prompt"][r["hit"]:], r["hit"]) if not r["out"] else (r["out"][-1:], P + len(r["out"]) - 1)
             ids += rows
             qsl.append(len(ids))
             pos += range(start, start + len(rows))
@@ -192,6 +204,7 @@ class Engine:
                                         outputs=[SimpleNamespace(token_ids=[t], text=f" w{t}", finish_reason="length" if done else None,
                                                                  stop_reason=None)]))
             if done:
+                self.computed.append(r["prompt"] + r["out"][:-1])
                 del self.reqs[eid]
         return outs
 
@@ -264,7 +277,7 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 served: dict | None = None, marks: Any = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
@@ -273,6 +286,7 @@ class Serving:
         self.server = so.Server(proto=proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512, tokenizer=Tokenizer(),
                                 defaults={"temperature": 1.0}, submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
+        self.loop.engine.block = block
 
     def __enter__(self) -> Serving:
         self.engine_thread = threading.Thread(target=self.loop.run, daemon=True)
@@ -392,6 +406,37 @@ def test_commit_record_maps_and_checks_every_request(tmp_path, window_steps):
     assert s.windows.summary()["passed"]
 
 
+def test_a_later_turn_read_from_the_prefix_cache_is_checked_against_the_turns_that_committed_it(tmp_path):
+    def turn(s: Serving, prompt: list[int]) -> list[int]:
+        body = dict(CERTIFIER_BODY, prompt=prompt, max_tokens=3, min_tokens=3, stream=False, return_token_ids=True)
+        return prompt + json.loads(s.post("/v1/completions", body)[1])["choices"][0]["token_ids"]
+
+    with Serving(tmp_path, block=4) as s:
+        turn(s, turn(s, turn(s, [128000] + list(range(10, 19))) + [40, 41]) + [50])
+    a, b, c = records(tmp_path, "requests.jsonl")
+    assert a["check"]["passed"] and a["check"]["cache_hit"] == 0
+    assert b["check"]["passed"] and b["check"]["cache_hit"] == 12 and b["check"]["prefix_spans"] == [[a["engine_id"], 0, 12]], b["check"]
+    assert c["check"]["passed"] and c["check"]["cache_hit"] == 16, c["check"]
+    assert c["check"]["prefix_spans"] == [[a["engine_id"], 0, 12], [b["engine_id"], 12, 16]]
+    got = s.windows.summary()
+    assert got["passed"] and (got["cache_hits"], got["cached_positions"]) == (2, 28), got
+
+
+def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(tmp_path):
+    from tests.pipeline import serve_prefix_gpu as client
+
+    sent = tmp_path / "client.jsonl"
+    with Serving(tmp_path, block=4) as s:
+        assert client.main(["--url", s.url, "--out", str(sent), "--requests", "6", "--prompt-range", "8:32", "--tokens", "4",
+                            "--system-prompts", "2", "--system-tokens", "24", "--turns", "2", "--max-model-len", "512"]) == 0
+    got = client.compare(records(tmp_path, "client.jsonl"), records(tmp_path, "requests.jsonl"))
+    assert got["passed"] and got["later_turns"] > 0 and got["cache_hits"] >= got["later_turns"], got
+    assert s.windows.summary()["passed"]
+    bad = records(tmp_path, "client.jsonl")
+    bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
+    assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
+
+
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
 def test_a_window_closes_at_idle_once_it_holds_idle_close_steps(tmp_path, idle_close_steps, windows):
     with Serving(tmp_path, idle_close_steps=idle_close_steps) as s:
@@ -464,8 +509,7 @@ def private(out: Path, w: int) -> dict:
 
 
 def recommit(statics: dict, by_step: dict, ids: dict, steps: int, run_root: str, priv: dict):
-    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]],
-                            digest_salts=[bytes.fromhex(s) for s in priv["digest_salts"]])
+    return sc.commit_served(statics, by_step, ids, steps, bytes.fromhex(run_root), salts=[bytes.fromhex(s) for s in priv["salts"]])
 
 
 def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict], list[dict], list[dict]]:
@@ -479,8 +523,8 @@ def served_run(out: Path, statics: dict, marks: Any = None) -> tuple[list[dict],
 def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp_path):
     """At each close, before the close is announced (and so before anything can draw over the window), its windows.jsonl
     line holds the public record of the rows it ran, bound to its run root: exactly step_trace.jsonl's rows under the
-    requests' arrival ids, as `served_rows.register` commits them, each slice window's digest the slice's own. The record
-    holds no row or salt."""
+    requests' arrival ids, as `served_rows.register` commits them, each slice window's registered row the slice's ``srv``
+    row, its b‖c a leaf of the published root. The record holds no row or salt."""
     statics = served_statics()
     closed: list[dict] = []
 
@@ -500,16 +544,17 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
     for w in full:
         rec, priv = w["served_rows"], private(tmp_path, w["window"])
         assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
-        assert rec["count"] == -(-w["steps"] // S.P) == len(rec["digests"])
+        assert rec["count"] == -(-w["steps"] // S.P)
         by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
         ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}
         assert priv["ids"] == ids
         served, session = recommit(statics, by_step, ids, w["steps"], w["run_root"], priv)
         assert {k: v for k, v in rec.items() if k != "statics"} == served.record()
         for k, win in enumerate(session):
-            assert served.digests[k] == CS.rows_digest(S, win, served.digest_salts[k])
+            assert served.registration.rows[k] == SRW._row(CS.srv_row(S, win))[0]
+            assert SRW.leaf_ok(rec, bytes.fromhex(w["run_root"]), k, served.bc(k), served.registration.open(k).path)
         text = json.dumps(w)
-        assert not any(s in text for s in priv["salts"] + priv["digest_salts"])
+        assert not any(s in text for s in priv["salts"])
 
 
 def test_rows_it_cant_commit_fail_their_window_by_name(tmp_path):
