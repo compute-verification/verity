@@ -75,8 +75,9 @@ leaving requests leave it; and the next state.
 
 **Not modeled.** The prefix-hash state (which blocks hold which tokens, the free queue's order, eviction):
 ENC-DERIVED's canonical source and hit rules carry it and supply h, the evictable count and the returns, which this
-circuit bounds but doesn't derive. Also priority scheduling, speculative decoding, LoRA, structured output, encoder
-inputs and KV connectors.
+circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
+`_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
+and KV connectors.
 
 **Composition** (the compile unit, all inside one ZK proof under the advice's hiding root; the certifier's PROTOCOL.md,
 "Advice v1"):
