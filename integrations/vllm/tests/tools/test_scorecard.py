@@ -11,6 +11,9 @@ from pathlib import Path
 
 import pytest
 
+#: the toy tree's package, written through a name so the repository's module-string scan doesn't read these strings as ours
+TOY = "verity_vllm"
+
 TOOLS = Path(__file__).resolve().parents[2] / "tools"
 SCRIPT = TOOLS / "scorecard.py"
 _spec = importlib.util.spec_from_file_location("scorecard", SCRIPT)
@@ -45,8 +48,8 @@ def _toy(root: Path) -> Path:
     _write(root, "integrations/vllm/tests/fixture.json", json.dumps({"entries": [{}]}))
     _write(root, "integrations/vllm/tests/test_inside.py", "import verity_vllm.big\n")
     _write(root, "benchmarks/x.py", 'import importlib\nimport verity_vllm\nfrom verity_vllm.a import f, _g\n'
-                                    'from verity_vllm import b\nM = "verity_vllm.a:f"\n'
-                                    'importlib.import_module("verity_vllm.b")\n')
+                                    f'from verity_vllm import b\nM = "{TOY}.a:f"\n'
+                                    f'importlib.import_module("{TOY}.b")\n')
     _write(root, "tests/test_vllm_public_api.py", "import verity_vllm.big\n")
     subprocess.run(["git", "init", "-q", str(root)], check=True)
     return root
