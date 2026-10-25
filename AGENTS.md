@@ -41,7 +41,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
     - `definitions`: the served workloads' kernel Definitions (`registry`, with their twins and row evaluators in
-      `kernels`), their Boolean versions, the word replay, the proof-unit cut (`word`) and a Definition's encoding and
+      `numerics`), their Boolean versions, the word replay, the proof-unit cut (`word`) and a Definition's encoding and
       digest (`encoding`), which the vLLM integration builds each served Program from.
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
