@@ -10,10 +10,8 @@ clock by a small LMS key in a drawn certifier session, and answered by one-stage
 compute audits, each answered with a subset draw and its bound on wrong units. Then one change (`EXPECT`), each aimed at
 one path of the check, or malformed parameters, commitments, evidence and cases.
 
-`FIXTURE` is a few of these cases with the mirror's answers: the composition's difftest answers onsite's certifier with
-them (`verity/core/protocols/composition/tests/reference.py`, `Recorded`), since its suite runs neither this mirror nor
-LMS. `test_the_composition_fixture_is_current` holds it to the mirror and to Lean; `python
-test_network_period_protocol.py` writes it."""
+The composition's difftest draws onsite's certifier cases from `build` and answers them with `reference`
+(`verity/core/protocols/composition/tests/reference.py`)."""
 
 from __future__ import annotations
 
@@ -43,7 +41,6 @@ from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
 
 LEAN = Path(__file__).resolve().parents[1] / "lean"
-FIXTURE = Path(__file__).resolve().parents[2] / "composition" / "tests" / "fixtures" / "certifier.json"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
 ID = "verity/certifier/v0"
@@ -389,11 +386,6 @@ EXPECT = {
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
 }
 MUTATIONS = list(EXPECT)
-#: Each fixture case for the composition's difftest, by how `build` makes it: accepted, rejected, undecided and refused
-#: periods (no `case` break: the composition re-encodes a component's case from its bytes).
-FIXTURE_CASES = [("honest", s) for s in range(4)] + [
-    ("answer-undecided", 0), ("audit-undecided", 0), ("cert-forged", 0), ("advice", 0), ("audit-reject", 0),
-    ("params", 0), ("commitment", 0), ("evidence", 0)]
 
 
 def _flip(b: bytes, i: int) -> bytes:
@@ -426,8 +418,8 @@ def _refused(answer: dict, verdict: str) -> dict:
 
 
 def build(m: str, seed: int, small: bool = False) -> dict:
-    """A period's case with the change `m`, every choice drawn from `seed`; `small`: the toy key, one link-window and at
-    most one audit."""
+    """A period's case with the change `m`, every choice drawn from `seed`; `small`: the toy key, as few link-windows
+    and audits as `m` needs."""
     r = random.Random(f"network-period {m} {seed}")
     ki = 0 if small else r.randrange(len(KEYS))
     key = _key(ki)
@@ -435,9 +427,10 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     session = r.randbytes(lms.SESSION_BYTES)
     link = r.choice(["eth0", "a", "dé"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
-    n_windows = r.randint(2 if m == "undecided-and-reject" else 1, 1 if small else 3)
-    n_audits = r.randint(1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0,
-                         1 if small else 2)
+    least_windows = 2 if m == "undecided-and-reject" else 1
+    least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
+    n_windows = r.randint(least_windows, least_windows if small else 3)
+    n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
     deltas = r.sample(range(4), r.randint(1, 3))
     rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
     t, a = r.randrange(n_windows), r.randrange(max(n_audits, 1))
@@ -626,12 +619,6 @@ PORT = D.ProtocolPort("network-period", counted, cases(), package=LEAN)
 server = D.server_fixture(PORT)
 
 
-def fixture() -> dict:
-    """The composition's fixture: each `FIXTURE_CASES` case with the mirror's answer."""
-    return {"cases": [{"answer": reference(case), "case": case, "made": [m, n]}
-                      for m, n in FIXTURE_CASES for case in [build(m, n, small=True)]]}
-
-
 @pytest.mark.slow
 def test_the_period_check_agrees_with_its_mirror(server):
     """Lean and the mirror agree on every case, and each change reaches its verdict at least once."""
@@ -661,15 +648,12 @@ def test_a_mirror_that_skips_the_ingress_certificate_is_caught(server, monkeypat
     assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
 
 
-def test_the_composition_fixture_is_current(server):
-    """`FIXTURE` is the mirror's answers on its cases, and Lean gives them too (`python
-    test_network_period_protocol.py` writes it)."""
-    recorded = json.loads(FIXTURE.read_text())
-    assert recorded == fixture(), f"{FIXTURE} is stale: run `python {Path(__file__).name}` to write it"
-    kinds = {e["answer"]["verdict"] for e in recorded["cases"]}
-    assert kinds == {ACCEPT, REJECT, UNDECIDED}, kinds
-    port = dataclasses.replace(PORT, inputs=st.sampled_from([e["case"] for e in recorded["cases"]]))
-    D.run(port, examples=3 * len(FIXTURE_CASES), server=server)
+def test_a_small_period_reaches_its_verdict(server):
+    """Each change's small period (`build(..., small=True)`, which the composition's difftest draws) gets the change's
+    verdict from the mirror, and Lean agrees."""
+    small = [build(m, n, small=True) for m in MUTATIONS if m != "case" for n in range(2)]
+    assert [reference(c)["verdict"] for c in small] == [EXPECT[m] for m in MUTATIONS if m != "case" for _ in range(2)]
+    D.run(dataclasses.replace(PORT, inputs=st.sampled_from(small)), examples=2 * len(small), server=server)
 
 
 def test_the_bound_counts_what_it_says():
@@ -681,9 +665,3 @@ def test_the_bound_counts_what_it_says():
             out["audits"][0]["jitter"], out["K"]) == (3, 3, 9, 64, 3, 3 + 3 + 9 + 64 + 3)
     assert [clog2(x) for x in range(6)] == [0, 0, 1, 2, 2, 3]
     assert [at_most(10, 0), at_most(10, 1), at_most(10, 2), at_most(4, 9), at_most(0, 3)] == [1, 11, 56, 16, 1]
-
-
-if __name__ == "__main__":
-    FIXTURE.parent.mkdir(parents=True, exist_ok=True)
-    FIXTURE.write_text(json.dumps(fixture(), indent=1, sort_keys=True, ensure_ascii=False) + "\n")
-    print(f"wrote {FIXTURE} ({FIXTURE.stat().st_size} bytes)", file=sys.stderr)

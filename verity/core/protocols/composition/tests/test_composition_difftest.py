@@ -2,9 +2,10 @@
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
 core interface, mirrors of the stub components and the ported components' own Python). Hypothesis draws each component's
 case to accept, reject, be undecided or fail to decode (a ported component's from its own difftest's generator: PoUW's
-`pouw_check_cases`, sampled proofs' `changed_audits`), then often breaks the composition's own inputs (a component dropped, unknown, repeated or
-out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case
-itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly."""
+`pouw_check_cases`, sampled proofs' `changed_audits`, the network certifier's period `build`), then often breaks the
+composition's own inputs (a component dropped, unknown, repeated or out of order, a case under other params, a wrong or
+short commitment, non-canonical or malformed evidence) or the case itself (a field missing or not hex, not an object),
+and every field of the outcome but its reason must agree exactly."""
 
 from __future__ import annotations
 
@@ -69,10 +70,10 @@ OS = R.ONE_STAGE
 ONE_STAGE_CASES = {R.ACCEPT: OS.changed_audits(most=0), R.UNDECIDED: OS.changed_audits([OS.VERDICTS_OF], most=1, least=1),
                    R.REJECT: OS.changed_audits(most=2, least=1)}
 
-NC = R.NETWORK
-#: The network check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
-NETWORK_CASES = {R.ACCEPT: ("honest", "shuffled", "extra"), R.UNDECIDED: ("missing", "refused", "deadline")}
-NETWORK_CASES[R.REJECT] = tuple(m for m in NC.MUTATIONS if m != "case" and not any(m in v for v in NETWORK_CASES.values()))
+NP = R.PERIOD
+#: The period check's changes by the verdict they aim at (`case` breaks the line `serve` reads, as PoUW's `case-*`).
+PERIOD_CASES = {v: tuple(m for m, x in NP.EXPECT.items() if x == v and m != "case")
+                for v in (R.ACCEPT, R.REJECT, R.UNDECIDED)}
 
 
 @st.composite
@@ -82,8 +83,8 @@ def ported_case(draw, C: R.Ported, kind: str) -> dict:
     if C is R.POUW:
         name = {R.ACCEPT: "honest", R.UNDECIDED: "answer-undecided"}.get(kind) or draw(st.sampled_from(POUW_REFUSALS))
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
-    elif C is R.NETWORK_CHECK:
-        case = draw(NC.cases(NETWORK_CASES[kind]))
+    elif C is R.CERTIFIER:
+        case = NP.build(draw(st.sampled_from(PERIOD_CASES[kind])), draw(st.integers(0, 1 << 16)), small=True)
     else:
         case = OS._case(draw(ONE_STAGE_CASES[kind]))
     root = bytes.fromhex(case["commitment"])
