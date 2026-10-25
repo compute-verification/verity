@@ -349,6 +349,8 @@ def test_at_serve_time_is_before_its_draw_and_no_later_than_the_next_windows_clo
               "window closed")
     assert registered("after-the-draw", 1, closed[1] + 0.5, True, False) == (
         False, "after serving, by vllm, 0.5 s after its Commit window closed, after its draw")
+    assert registered("after-the-draw-one-missing", 1, closed[1] + 0.5, False, None) == (
+        False, "after serving, by vllm, 0.5 s after its Commit window closed, after its draw")
     assert registered("after-the-next", 1, closed[2] + 3.0, True) == (
         False, "after serving, by vllm, 3.7 s after its Commit window closed, 3.0 s after the next window closed")
     assert registered("just-after-the-next", 1, closed[2] + 0.01, True)[0] is False
