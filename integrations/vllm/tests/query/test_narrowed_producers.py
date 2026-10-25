@@ -18,18 +18,21 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+try:
+    import torch
+except ModuleNotFoundError:
+    pytest.skip("could not import 'torch'", allow_module_level=True)
 
-from verity_vllm.acquire.sources import narrowed_source as NS  # noqa: E402
-from verity_vllm.check.replay import coverage as COV, index as IX, population as RP  # noqa: E402
-from verity_vllm.check.replay.evaluate import evaluate  # noqa: E402
-from verity_vllm.commit.binding import build_binding_map  # noqa: E402
-from verity_vllm.correspondence.reader_for_query import Correspondence  # noqa: E402
-from verity_vllm.program.registry import b1  # noqa: E402
-from verity_vllm.query.manifest.bind import Binder, coverage_check  # noqa: E402
-from verity_vllm.query.program_view import from_instances  # noqa: E402
-from verity_vllm.query.required import request_manifest  # noqa: E402
-from tests.query.test_boolean_manifest import _write  # noqa: E402
+from verity_vllm.acquire.sources import narrowed_source as NS
+from verity_vllm.check.replay import coverage as COV, index as IX, population as RP
+from verity_vllm.check.replay.evaluate import evaluate
+from verity_vllm.commit.binding import build_binding_map
+from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.program.registry import b1
+from verity_vllm.query.manifest.bind import Binder, coverage_check
+from verity_vllm.query.program_view import from_instances
+from verity_vllm.query.required import request_manifest
+from tests.query.test_boolean_manifest import _write
 
 C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 2, "V": 32, "MAX_POS": 64}
 LP = 4
