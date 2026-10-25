@@ -87,10 +87,10 @@ theorem inputOf_restrict {L S : ℕ} (C : Prog) (lay : Layout L S) (k : ℕ) (in
   rcases _hR : (List.range ins.length).findSome? (fun i => ((lay.ingress i).findIdx? (· == g)).map (i, ·)) with _ | ⟨i, j⟩
   · simp only
     by_cases hany : (List.range k).any (fun i => (lay.ingress i).contains g) = true
-    · rw [if_pos hany, if_pos hany]
+    · rw [ite_eq_left hany, ite_eq_left hany]
     · have hmem : g ∈ freeInputs C lay k :=
         Finset.mem_filter.mpr ⟨Finset.mem_range.mpr (List.getElem?_eq_some_iff.mp hg).1, hg, Bool.eq_false_iff.mpr hany⟩
-      rw [if_neg hany, if_neg hany, if_pos hmem]
+      rw [ite_eq_right hany, ite_eq_right hany, ite_eq_left hmem]
   · rfl
 
 theorem adviceIn_asFree {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : Design) (lay : Layout L S) (k : ℕ)
@@ -99,7 +99,7 @@ theorem adviceIn_asFree {L S : ℕ} (K : ℕ) (C : Prog) (P : Partition) (d : De
   refine ⟨fun g => if g ∈ freeInputs C lay k then a g else false, ?_, free, hfree, ?_⟩
   · show ∀ g, g ∉ freeInputs C lay k → _
     intro g hg
-    exact if_neg hg
+    exact ite_eq_right hg
   · intro t ht
     obtain ⟨h, hr, hs⟩ := hacc t ht
     refine ⟨h, ?_, hs⟩
