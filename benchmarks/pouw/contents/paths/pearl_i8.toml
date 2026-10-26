@@ -1,0 +1,4 @@
+order = 100
+path = "`pearl_i8/`"
+runs_on = "CPU"
+what = "BET-PEARL-I8 (CMP-121): Pearl-C's noise inside an INT8 quantization, X̃ = clamp((a·x + E·Fᵀ + 2^(s-1)) >> s), as an exact CPU reference: honest prover (s32 prefix words, a per-cell fold, the exact rank-2r integer peel and the pinned P16 peel, SHA-512 tile leaves) and a verifier that recomputes a drawn cell (`pearl_i8.py`)"
