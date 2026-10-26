@@ -195,10 +195,6 @@
    "owner": "@compute-accounting",
    "digest": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1"
   },
-  "Properties.RemoteAudit.Line.Registered": {
-   "owner": "@memory-accounting",
-   "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
-  },
   "Properties.RemoteAudit.ScheduleLayoutGap": {
    "owner": "@memory-accounting",
    "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
@@ -1747,6 +1743,9 @@
    "assumptions": [],
    "type_hash": "32103c4822a99f98eae5a5aec862a2c834114c156876ace2daa1b364bb187a9f"
   },
+  "Properties.RemoteAudit.Line.lineRegistered": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.Line.lineChecked": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.Line.lineChecked : Properties.RemoteAudit.Line.LineChecked"],
@@ -3112,6 +3111,10 @@
    },
    "Properties.RemoteAudit.Line.lineChecked": {
     "function": "RemoteAudit.Line.line",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Line.lineRegistered": {
+    "function": "RemoteAudit.Line.lineOfRegistered",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Line.stretchBound": {
