@@ -19,6 +19,7 @@ import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityBlock
+import Proofs.Accounting.JointBridge.JointHorizonBlocksDeployed
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.PouwWork
 import Proofs.Accounting.BandwidthAudit
