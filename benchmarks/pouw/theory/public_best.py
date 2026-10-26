@@ -1061,7 +1061,8 @@ def comps_per_mac(L: int) -> float:
     return 1 / (16 * L) + A_COMMIT * H200.sha / (ETA * H200.mac_rate)
 
 
-def job_items(card: Card, L: int, K: int, honest: bool, beside: bool, schedules: list) -> tuple:
+def job_items(card: Card, L: int, K: int, honest: bool, beside: bool, schedules: list,
+              hash_scale: float = 1.0) -> tuple:
     tens = 1 / card.s8
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
     wraps = {"alu": dict(alu=HYB_P / 2, issue=HYB_P / 2, vec=HYB_P / 2)}
@@ -1075,29 +1076,41 @@ def job_items(card: Card, L: int, K: int, honest: bool, beside: bool, schedules:
         if beside:
             peel["dp4a"] = dict(fma=0.5, issue=0.25 + 1 / 64, smem=0.25, rf=0.75, vec=0.25)
     sha = {s: sha_loads(card, s) for s in schedules}
-    return (("wraps", 1.0, wraps), ("peels", HYB_RHO * L / K, peel), ("sha", comps_per_mac(L), sha))
+    return (("wraps", 1.0, wraps), ("peels", HYB_RHO * L / K, peel), ("sha", hash_scale * comps_per_mac(L), sha))
 
 
-def job(card: Card, L: int, K: int, n: int, eX, eW, menu: dict, lookups: bool) -> dict:
+LANES = ("issue", "alu", "fma", "smem", "rf")
+
+
+def lane_load(p: Priced) -> float:
+    """The honest kernel's lane load: its busiest non-tensor resource over its tensor time."""
+    return max(p.loads.get(r, 0.0) for r in LANES) / p.loads["tensor"]
+
+
+def job(card: Card, L: int, K: int, n: int, eX, eW, menu: dict, lookups: bool, hash_scale: float = 1.0) -> dict:
     """nofold's additive γ at θ (the default build's hash) and four overlapped prices (θ's max with facets): the
     deployed kernel (dense s8, wraps on the ALU, the default build's hash), the same with the best SHA-512 schedule
     (c_sha = 1), the dense kernel with every non-matmul choice at its best (wraps on any route), and the best public
-    method of the menu (OPT*)."""
+    method of the menu (OPT*). hash_scale scales the hashing a MAC (a design that hashes less)."""
     hs = sha_menu(card)
-    add = (1 + HYB_RHO * L / K + comps_per_mac(L) * sha_clocks(card, "default build")[0] * card.s8
-           + HYB_P / 2 / card.alu * card.s8)
+    comps = hash_scale * comps_per_mac(L)
+    add = 1 + HYB_RHO * L / K + comps * sha_clocks(card, "default build")[0] * card.s8 + HYB_P / 2 / card.alu * card.s8
     naive = leaves_of(None, 0, eX, eW)
-    deployed = price(card, naive, L, n, TOKENS, beside=False, items=job_items(card, L, K, True, False, hs[:1]))
-    hon = price(card, naive, L, n, TOKENS, beside=False, items=job_items(card, L, K, True, False, hs))
-    dense = price(card, naive, L, n, TOKENS, beside=False, items=job_items(card, L, K, False, False, hs))
+
+    def items(honest, beside, sch):
+        return job_items(card, L, K, honest, beside, sch, hash_scale)
+
+    deployed = price(card, naive, L, n, TOKENS, beside=False, items=items(True, False, hs[:1]))
+    hon = price(card, naive, L, n, TOKENS, beside=False, items=items(True, False, hs))
+    dense = price(card, naive, L, n, TOKENS, beside=False, items=items(False, False, hs))
     best = None
     for mname, (schemes, d) in menu.items():
         r = best_scheme(card, d, eX, eW, L, n, TOKENS, schemes, beside=True, lookups=lookups,
-                        items=job_items(card, L, K, False, True, hs))
+                        items=items(False, True, hs))
         if best is None or r[0].c < best[1].c:
             best = (mname, r[0])
     return dict(additive=add, deployed=deployed, honest=hon, dense=dense, best=best,
-                hash_share=comps_per_mac(L) * sha_clocks(card, "default build")[0] * card.s8 / add)
+                hash_share=comps * sha_clocks(card, "default build")[0] * card.s8 / add)
 
 
 def job_report(menu: dict, case: str = "A=B=0, v1 (V ±64, U ±80)") -> dict:
@@ -1146,12 +1159,37 @@ def sweep_report(menu: dict, Ls=(1280, 2688, 4096, 8192, 16384)) -> dict:
     return out
 
 
+def lane_report(menu: dict, scales=(0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0)) -> dict:
+    """ALGO-COST A8/A10: c_mm of the job against the honest kernel's lane load. The job's hashing is scaled by s (a
+    design that hashes less a MAC: larger L, narrower words, fewer committed words); for each s, the dense kernel at
+    its best gives the lane load (busiest lane resource over tensor time) and OPT* over it gives c_mm. The plain
+    product and the 2x2 orbit at depth 1 and 2 (the catalogue never wins)."""
+    sub = {k: v for k, v in menu.items() if k in ("naive", "2x2 orbit d1", "2x2 orbit d2")}
+    out = {}
+    print("\n== c_mm of the job against the honest kernel's lane load (lane time / tensor time), hashing scaled by s")
+    for case in ("A=B=0, v1 (V ±64, U ±80)", "A=B=0, ±80 both (v2's likely)"):
+        eX, eW, lk = operand_cases()[case]
+        print(f"  operands {case}")
+        for card in CARDS:
+            for nm, K, N, L in (classes(card)[0], classes(card)[3]):
+                cells = []
+                for s in scales:
+                    j = job(card, L, K, N, eX, eW, sub, lk, hash_scale=s)
+                    lab, b = j["best"]
+                    out[case, card.name, nm, s] = (lane_load(j["dense"]), b.c / j["dense"].c, lab)
+                    cells.append(f"s {s:g}: lane {lane_load(j['dense']):.2f} c {b.c / j['dense'].c:.3f} "
+                                 f"{lab.replace('2x2 orbit ', '')}")
+                print(f"    {card.name:12} {nm:5} L {L:5} | " + "; ".join(cells))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="exact CPU checks of the words at small sizes")
     ap.add_argument("--job-only", action="store_true")
     ap.add_argument("--sha-only", action="store_true")
     ap.add_argument("--sweep", action="store_true", help="only the job's c_mm as L grows")
+    ap.add_argument("--lanes", action="store_true", help="only the job's c_mm against the honest lane load")
     args = ap.parse_args()
     cat = catalogue()
     if args.check:
@@ -1178,10 +1216,14 @@ def main() -> None:
     if args.sweep:
         sweep_report(menu)
         return
+    if args.lanes:
+        lane_report(menu)
+        return
     if not args.job_only:
         report(menu)
     job_report(menu)
     sweep_report(menu)
+    lane_report(menu)
 
 
 if __name__ == "__main__":
