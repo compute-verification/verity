@@ -163,9 +163,9 @@ theorem linkCost_le (τ : Strategy A.G) (c : A.vb.Pos)
   expect_cT_leZC execArith hs512 A.P (planZHJ A.dj A.y₀) (tabZHJ A.dj A.y₀) A.vb (reg (A.sim τ)) (cont (A.sim τ)) c
     A.k A.Rw (A.ht' τ)
 
+set_option maxHeartbeats 1000000 in
 /-- **`SampledKSLivePub` at the session**: at a strategy where the premises hold, flock-verify accepts with the
 extracted witness outside the sampling relation with probability at most `deltaPub`. -/
-set_option maxHeartbeats 1000000 in
 theorem ks (q : Claims.Sampling.Query) (τ : Strategy A.G) (hCR : A.CR τ) :
     prob (fun o => LiveAcceptsZK A.I o ∧
         ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg A.Cd
@@ -227,7 +227,7 @@ theorem sound_nontrivial (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A
   intro h
   have h2 := (prob_true A.G τ).symm.le.trans
     ((prob_mono (p := fun _ => True) (q := fun _ => True ∧ ¬ A.Holds q ε τ) (fun _ _ => ⟨trivial, hbad⟩) A.G τ).trans h)
-  rw [bound, if_pos hCR] at h2
+  rw [bound, ite_eq_left hCR] at h2
   exact not_le.2 (ENNReal.ofReal_lt_one.2 h1) h2
 
 end LiveAt
