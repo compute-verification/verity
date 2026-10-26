@@ -66,12 +66,14 @@ def _widened(B: Any, S: Any, x: Any) -> Any:
 
 
 def _amax(B: Any, S: Any, f: Any) -> Any:
-    """max |f_k| as an f32 word: the unsigned max of the magnitudes' encodings."""
+    """max |f_k| as an f32 word: the unsigned max of the magnitudes' encodings, pairwise, so that each word is a max of at most
+    log2(N) selections (a chain's k-th would carry k into the Boolean lowering's linear forms)."""
     a = B.batch(SC.F32Fabs, f, axes=(0,))
-    amax = a[0]
-    for k in range(1, S.N):
-        amax = B.call(SC.SelectI32, B.call(SC.I32Le, amax, a[k]), a[k], amax)
-    return amax
+    level = [a[k] for k in range(S.N)]
+    while len(level) > 1:
+        odd = level[len(level) & ~1:]
+        level = [B.call(SC.SelectI32, B.call(SC.I32Le, p, q), q, p) for p, q in zip(level[0::2], level[1::2])] + odd
+    return level[0]
 
 
 def _scale(B: Any, a: Any) -> Any:
