@@ -181,7 +181,14 @@ A spec-level reference for network accounting's timing channel:
   under the network certifier's own salts at the reading port's leaf width and row format, its root in a head the
   certifier signs for the link-window (`TransferHead`, `registration`). `check_registration` is the verifier's read of
   it for the transfer it expects, and `port` the verifier's own `--registered` port of the value at the signed root
-  (the load relayed and committed as it crosses: `benchmarks/network_traces/load_relay.py`);
+  (`benchmarks/network_traces/transfer_zk.py`; the load relayed and committed as it crosses,
+  `benchmarks/network_traces/load_relay.py`);
+- the blocks (`blocks`): the server blocks, the server-time block and the transfer gates of a circuit, schema
+  `verity/blocks/v1`, kept in this module until the window interface carries it in ``circuit.json``. `check` refuses
+  blocks whose servers don't partition the units, a boundary row that is no transfer's (an ``ingress``, a registered
+  read no transfer brings in, a wire between servers, an external port's row no transfer covers), and a transfer's
+  read or write that isn't whole rows of its value. `pins` gives the verifier's pinned roots from the certificates
+  alone, so the interface's ``input_count`` under them has no free input;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the
   next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids
