@@ -303,8 +303,8 @@ def pin_arg(s: str) -> tuple[str, str]:
     return name, root
 
 
-#: the groups of committed values a window's registration names, each ``{program, values: {param: entry}}``: one-stage's
-#: per-window values and PoUW's (``activations``), and PoUW's pinned weights (``registered``, `core_check.WINDOW_VALUES`)
+#: the groups of committed values a window's registration may name, each ``{program, values: {param: entry}}``: its
+#: per-window values (``activations``, `TorchLoop.commit_activations`) and values pinned for it (``registered``)
 ENTRY_GROUPS = ("activations", "registered")
 
 

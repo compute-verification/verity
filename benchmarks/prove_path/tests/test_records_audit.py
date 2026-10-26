@@ -269,8 +269,8 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
     inputs are the advice's bits, the charge; a port left free adds its rows and the bound is vacuous, and so does every
     registered read when the verifier pins no root, or when the window's root is another than the pin or none.
     ``records_audit.py count`` prints the same from the record's and the registration's files (core's, its window's
-    ``registered_roots`` or its committed values' entries, PoUW's operands and weights among them, or an integration's own,
-    whose ``window`` is its index), and refuses a pin with no root."""
+    ``registered_roots`` or its committed values' entries, or an integration's own, whose ``window`` is its index), and
+    refuses a pin with no root."""
     doc, inputs = _registered_circuit().description(), 2 * sum(16 * w for _p, w in IF.layout(COORD).rows)
     assert RA.declared_count(doc, 1687, pins=PIN_A, roots=PIN_A) == {
         "units": 2, "inputs": inputs, "wired": 0, "registered": inputs, "ingress": 0, "free": 0, "other_inputs": 1687,
@@ -290,14 +290,14 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
     pouw = {"context": RUN, "kind": "served", "public": {}}
     regs = {"core": {"window": {"run": RUN, "registered_roots": PIN_A}}, "own": {"window": 63, "registered_roots": PIN_A},
             "other": {"window": {"run": RUN, "registered_roots": {"a": "cd" * 64}}}, "none": {"window": 63},
-            "operands": {"window": {**pouw, "activations": group("ab" * 64)}},
-            "weights": {"window": {**pouw, "activations": group("AB" * 64), "registered": group("ab" * 64)}}}
+            "activations": {"window": {**pouw, "activations": group("ab" * 64)}},
+            "registered": {"window": {**pouw, "activations": group("AB" * 64), "registered": group("ab" * 64)}}}
     for name, reg in regs.items():
         (tmp_path / f"{name}.json").write_text(json.dumps(reg))
     for pins, reg, roots in [((), None, {}), ((), "core", PIN_A), (("a=" + "ab" * 64,), "core", PIN_A),
                              (("a=" + "AB" * 64,), "own", PIN_A), (("a=" + "ab" * 64,), "other", {"a": "cd" * 64}),
                              (("a=" + "ab" * 64,), "none", {}), (("a=" + "ab" * 64,), None, {}),
-                             (("a=" + "ab" * 64,), "operands", PIN_A), (("a=" + "ab" * 64,), "weights", PIN_A)]:
+                             (("a=" + "ab" * 64,), "activations", PIN_A), (("a=" + "ab" * 64,), "registered", PIN_A)]:
         capsys.readouterr()
         argv = ["count", "--circuit", str(tmp_path / "c.json"), "--bits", "1687", *(f"--pin={p}" for p in pins),
                 *(["--registration", str(tmp_path / f"{reg}.json")] if reg else [])]
@@ -314,21 +314,17 @@ def test_a_declared_records_count_is_its_free_inputs_and_the_advice_against_the_
 
 def test_a_windows_roots_are_its_registered_roots_and_its_committed_values_entries_roots():
     """`window_roots`: the roots a window's registration records for its parameters are its ``registered_roots`` and each
-    entry's root of the committed values it names, ``{program, values}`` (one-stage's and PoUW's ``activations``, PoUW's
-    ``registered`` weights), one root a parameter; a group that isn't one, an entry with no root of hex digits, or two
+    entry's root of the committed values it names, ``{program, values}`` (`ENTRY_GROUPS`: per-window ``activations``,
+    pinned ``registered``), one root a parameter; a group that isn't one, an entry with no root of hex digits, or two
     roots for one parameter are refused."""
     def group(**roots: str) -> dict:
         return {"program": "p", "values": {v: {"value": v, "root": r} for v, r in roots.items()}}
 
-    from verity.core.protocols.pouw import operands as OP
-
     w = {"context": RUN, "registered_roots": {"e": "01" * 64}, "activations": group(x="ab" * 64, e="01" * 64),
          "registered": group(w="cd" * 64)}
     assert RA.window_roots(w) == {"e": "01" * 64, "x": "ab" * 64, "w": "cd" * 64}
-    a, b = (REG.Registered.commit("test/model", v, [[i] * 4], schema=REG.SCHEMA_V2) for i, v in enumerate("ab"))
-    pouw = {"context": RUN, "kind": "served", "public": {}, OP.KEY: OP.block("test/h1", {"a": a}),
-            "registered": OP.block("test/model", {"b": b})}
-    assert RA.window_roots(pouw) == {"a": a.root.hex(), "b": b.root.hex()}
+    a = REG.Registered.commit("test/model", "a", [[1] * 4], schema=REG.SCHEMA_V2).entry()
+    assert RA.window_roots({"context": RUN, "activations": {"program": "p", "values": {"a": a}}}) == {"a": a["root"]}
     assert RA.window_roots({"run": RUN, "registered": None}) == {} == RA.registration_roots({"window": 63})
     assert RA.registration_roots({"window": w}) == RA.window_roots(w)
     for bad, why in [({"registered": {"w": "cd" * 64}}, r"is \{program, values"), ({"activations": group(x=7)}, "hex digits"),
