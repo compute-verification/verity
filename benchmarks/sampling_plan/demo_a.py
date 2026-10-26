@@ -17,8 +17,9 @@ two bounds from its one draw, `free_compute` and `leak`, at delta = 1% and 1e-6,
 (`Bf16AddRow_v2{128}` x 128 an add, RMSNorm as `RmsSumSqPart_v1` and `RmsNormOutSums_v1` a chunk, the quantizer as
 `RowAbsMax_v1` and `QuantChunkS8_v1`), the gathers as `AllGather_v1` (the O projection's input `{2,64}`), attention as
 `QkSoftmaxRow_v1` and `PvRow_v1` a head and position, and the embedding and argmax a coordinate and a token. PoUW's tiles
-are `PouwH1Tile_v1`'s measured lane (4x8 outputs at K = 4,096, `benchmarks/pouw/period_cost.py`), one lane a 131,072 of
-the block's s8 multiply-accumulates: v5/v6 are not measured, so v1's size stands in.
+are the served `PouwH1Tile_v6`'s proof units, its v5 lane chunks (4x8 outputs over K_c = 4,096, 131,072 of the block's
+s8 multiply-accumulates each), at compute-accounting's ESTIMATE (CMP-126 a02dc893, 06:20Z: `TILE_ANDS_RANGE`, its high
+end standing, `--tile-ands` the other) until they are traced: one output bit, and about 257 bits of receipt committed.
 
 **Budget.** Daniel (6:05 PM PDT): proving within 1% of the block's compute. Serving's overhead is beside it, never in it
 (Daniel, 6:36 PM PDT): the commits (HASH-20's 1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
@@ -29,11 +30,11 @@ block's units, given as its cost against the block's GPU time and what it certif
 
 **Certificate.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
-the exact `count_bound` (`certificate`). `stratified_isHarmBound_exact` (Security/Proofs/Flock/Soundness/Audit/HarmBound.lean)
-proves the knapsack's value an `IsHarmBound` of the stratified law; the locked `Partition.audit_influence` and
-`Partition.audit_exfiltration` turn such a bound into the accepted audit's bound under the backend's open obligations
-(KnowledgeSound, LinkSound), for the abstract one-stage audit, not a Lean function; and no difftest holds core's Python
-`harm_bound` to the Lean.
+the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
+(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean, #4560, proved in #4590): per sampling block, one detection budget
+`sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's wrong
+units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
+delta, from one draw at one delta. #4600's difftest holds `certify`'s fields to that supremum.
 
 **Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit a sampling block,
 `ceil(k / cap)` statements of drawn units), its feature a unit's ANDs with its rows' openings, every unit's outputs
@@ -79,25 +80,32 @@ BUDGET_SHARE = 0.01
 #: the budgets swept, in multiples of one serving block's GPU time, past the cheapest plan's
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
-TILE = "PouwH1Tile_v1"
+TILE = "PouwH1LaneZyChunk_v1"
 #: C-Flock's largest statement (r20261026-004208-a28d refused k_log 28)
 K_LOG_MAX = 27
 #: M3's live draw (PRF-171): a uniform subset of this many of one block's units
 M3_UNITS = 8
-#: PouwH1Tile_v1's measured lane (`benchmarks/pouw/period_cost.py`): 4x8 outputs at K = 4,096
+#: PoUW's proof unit, a lane chunk of the served `PouwH1Tile_v6` proved over v5 (CMP-126 a02dc893, 06:20Z): 4x8 outputs
+#: over K_c = 4,096. Its ANDs are an ESTIMATE until it is traced (~18:00Z): v1's traced chunks at the served K,
+#: 42,913,275 to 44,044,805, plus J10-R's own at most 97,708, the high end standing; its output the one bit `ok`; and
+#: serving commits only the receipt, about 257 bits a chunk. Its rows are PouwH1Tile_v1's measured lane's.
 TILE_MACS = 4 * 8 * 4096
-TILE_ANDS = 46_744_981
+TILE_ANDS_RANGE = (42_913_275, 44_044_805 + 97_708)
+TILE_ANDS = TILE_ANDS_RANGE[1]
 TILE_ROWS = (4096,) * 12 + (64,) * 3
-TILE_OUT_BITS = 1024 + 2 * (128 + 3) * 32
+TILE_OUT_BITS = 1
+TILE_COMMIT_BITS = 257
 #: `PvRow_v1{T}`'s staged ANDs (DSV4V2 r20261026-023338-0808, FAMILIES r20261026-040304-8200), linear between
 PV_ANDS = ((1, 111_104), (8, 321_024), (31, 1_009_152), (32, 1_039_168))
 
 
 @dataclass(frozen=True)
 class Unit(H.Template):
-    """A subcircuit of the block at C-Flock's staged `k_log`."""
+    """A subcircuit of the block at C-Flock's staged `k_log`, serving committing `commit` bits a unit (its `out_bits`
+    when None)."""
 
     k_log: int = 0
+    commit: int | None = None
 
     @property
     def cap(self) -> int:
@@ -128,8 +136,9 @@ def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
     q, kv, heads = m.heads * m.head_dim, m.kv_heads * m.head_dim, m.heads
     out: list[Unit] = []
 
-    def put(tid: str, token: int, gen: int, ands: int, rows: tuple[int, ...], out_bits: int, k: int) -> None:
-        out.append(Unit(tid, R * (T * token + Gn * gen), ands, rows, out_bits, True, k))
+    def put(tid: str, token: int, gen: int, ands: int, rows: tuple[int, ...], out_bits: int, k: int,
+            commit: int | None = None) -> None:
+        out.append(Unit(tid, R * (T * token + Gn * gen), ands, rows, out_bits, True, k, commit))
 
     chunks = (256,) * (d // 128)
     for k, r, token, gen, ands, kl in ((d, 2, L * (q + 2 * kv + d + f), V, 2_150_483, 25),
@@ -157,8 +166,8 @@ def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
     put("EmbeddingCoordinate_v1{V=256}", d, 0, 4_820, (1, 2 * V, 2, 2), 16, 22)
     put("Argmax_v2{V=256}", 0, 1, 15_557, (2 * 128, 2 * 128, 2), 16, 22)
     if tiles:
-        put(f"{TILE}{{4x8,K=4096}}", L * ((q + 2 * kv + d + f) * d + d * f) // TILE_MACS, V * d // TILE_MACS,
-            TILE_ANDS, TILE_ROWS, TILE_OUT_BITS, 27)
+        put(f"{TILE}{{H1=v5,4x8,Kc=4096}}", L * ((q + 2 * kv + d + f) * d + d * f) // TILE_MACS, V * d // TILE_MACS,
+            TILE_ANDS, TILE_ROWS, TILE_OUT_BITS, 27, TILE_COMMIT_BITS)
     return out
 
 
@@ -166,7 +175,8 @@ def candidates(m: H.Shape = SHAPE, *, blocks: int = 1, tiles: bool = True) -> li
     """One candidate a subcircuit over a sampling block of `blocks` serving blocks, its unit's work its own ANDs, its
     output bits committed, and its statement cap its staged k_log's."""
     return [Candidate(t.id, t.id, t.units * blocks, t.ands, t.out_bits, ands=t.ands, rows=t.rows,
-                      commit_bits=t.out_bits, cap=t.cap, replay="request", per_replay=t.units // m.batch)
+                      commit_bits=t.out_bits if t.commit is None else t.commit, cap=t.cap, replay="request",
+                      per_replay=t.units // m.batch)
             for t in families(m, tiles=tiles)]
 
 
@@ -486,11 +496,14 @@ def render_record(rows: list[dict], share: float = BUDGET_SHARE) -> str:
 
 
 def main(argv=None) -> None:
+    global TILE_ANDS
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--spans", nargs="*", help="only these sampling blocks (`spans`' names)")
     ap.add_argument("--no-frontier", action="store_true")
+    ap.add_argument("--tile-ands", type=int, default=TILE_ANDS, help="a tile unit's ANDs (TILE_ANDS_RANGE's estimate)")
     a = ap.parse_args(argv)
+    TILE_ANDS = a.tile_ands
     a.out.mkdir(parents=True, exist_ok=True)
     tag = "-".join(s.replace(" ", "_") for s in a.spans) if a.spans else "all"
     rows = []

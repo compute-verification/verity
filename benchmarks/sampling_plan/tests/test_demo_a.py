@@ -49,7 +49,9 @@ def test_the_partition_is_families_table_within_the_cap():
     assert max(t.k_log for t in fs) <= D.K_LOG_MAX and all(t.cap == min(2 ** (35 - t.k_log), 2 ** 20) for t in fs)
     one, week = D.candidates(), D.candidates(blocks=7)
     for c, w in zip(one, week):
-        assert c.work == c.ands and c.influence == 0 and c.commit_bits == c.out_bits > 0 and w.units == 7 * c.units
+        commit = D.TILE_COMMIT_BITS if c.template.startswith(D.TILE) else c.out_bits
+        assert c.work == c.ands and c.influence == 0 and c.commit_bits == commit and c.out_bits > 0 \
+            and w.units == 7 * c.units
     cm, rates = D.costs(), replace(D.costs(), templates={})
     assert cm.shared and cm.commit_per_bit == pytest.approx(1 / (8 * 225e9))
     assert all(cm.statement(c) == rates.statement(c) and cm.unit(c) == rates.unit(c) for c in one)
