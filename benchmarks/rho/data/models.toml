@@ -1,0 +1,15 @@
+# Model architectures and training runs (rho/instances.py).
+
+[model.kimi-k2]
+n_total = { value = 1.04e12, unit = "param", source = "benchmarks/nci/models.json kimi-k2", status = "datasheet" }
+n_active = { value = 3.2e10, unit = "param", source = "benchmarks/nci/models.json kimi-k2", status = "datasheet" }
+d_model = { value = 7168, source = "benchmarks/nci/models.json kimi-k2", status = "datasheet" }
+layers = { value = 61, source = "Kimi K2 config", status = "datasheet" }
+vocab = { value = 163840, source = "Nci.Cover.Guarantees.FanOutIntensity docstring (V)", status = "datasheet" }
+legs = { value = 512, source = "Nci.Cover.Guarantees.FanOutIntensity docstring (Keyed d)", status = "derived" }
+fanout = { value = 37248, low = 37248, high = 49152, source = "Nci.Cover.Guarantees.FanOutIntensity docstring (aOut, the MoE input); high: dq_rope kept", status = "derived" }
+
+[run.kimi-k2-pretrain]
+model = "kimi-k2"
+kind = "pretrain"
+tokens = { value = 1.55e13, unit = "token", source = "Kimi K2 technical report: 15.5T tokens", status = "datasheet" }

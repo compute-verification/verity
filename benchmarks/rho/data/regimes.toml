@@ -1,0 +1,30 @@
+# Monitoring regimes and the NCI policy (rho/regimes.py).
+
+[policy.kimi-k2-1m-raw]
+gamma = { value = 6.4e16, unit = "FLOP", source = "benchmarks/nci/calibrations.json kimi-k2-1m-raw: 1M tokens x 2 x 32B active", status = "declared" }
+k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "benchmarks/nci/calibrations.json kimi-k2-1m-raw (2.5 MB); low: kimi-k2-1m-coded; high: kimi-k2-11mb-raw", status = "declared" }
+
+[regime.unmonitored]
+kind = "unmonitored"
+
+[regime.remote]
+kind = "remote"
+residual = { value = 0.505, low = 0.01, high = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS: residual 0.323 + host_share 0.118 + clock_share 0.064", status = "measured" }
+eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
+eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
+identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
+lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s", status = "assumed" }
+cheat = { value = 0, low = 0, high = 0.01, source = "sampled proofs at q = 1 (tiers T1-T4)", status = "assumed" }
+
+[regime.onsite]
+kind = "onsite"
+residual = { value = 0.505, low = 0.01, high = 0.6, source = "as regime.remote", status = "measured" }
+eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "as regime.remote", status = "derived" }
+eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "as regime.remote", status = "derived" }
+identities = { value = 1, unit = "identity", source = "as regime.remote", status = "assumed" }
+lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "as regime.remote", status = "assumed" }
+cheat = { value = 0, low = 0, high = 0.01, source = "as regime.remote", status = "assumed" }
+wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, 24 h wipes", status = "ruled" }
+residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "memory-accounting r20261026-003454-bfd2: 10 GB per H200 today (7.8 fill floor + 2.3 driver reserve + 0.1 chip); low: Daniel's 5 GB target", status = "measured" }
+ingress = { value = 1e6, unit = "bit/s", low = 1e4, high = 1e7, source = "certified prompt ingress of one served 8-GPU location: about 5e4 tokens/s x 17.3 bits", status = "assumed" }
+side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e6, source = "benchmarks/datacenter account.py DEDICATED_RACKS (sigma, per server)", status = "declared" }

@@ -1,0 +1,22 @@
+# Algorithm families (rho/families.py). efficiency.<run kind>: compute to reach that target, in multiples of the
+# reference algorithm's; a kind left out can't be reached.
+
+[family.full]
+kind = "full"
+kappa = { value = 0.602, low = 0.294, high = 0.667, source = "Nci.Cover.Guarantees.FanOutIntensity docstring: alpha0 = 0.301 with Dgrad on the forward's tokens (c = 2); low: forward only (0.147)", status = "derived" }
+state_bits_per_param = { value = 2.5, low = 0.8, high = 4.5, source = "benchmarks/nci/parameters.json b_w.pretrained/frontier-lossy", status = "measured" }
+b = { value = 2.5, low = 0.8, high = 4.5, source = "UpdateHardness at Kimi K2 (FanOutIntensity docstring); range: b_w.pretrained/frontier-lossy", status = "conjecture" }
+b_w = { value = 2.5, low = 0.8, high = 4.5, source = "benchmarks/nci/parameters.json b_w.pretrained/frontier-lossy", status = "measured" }
+b_a = { value = 4, low = 1, high = 16, source = "benchmarks/nci/parameters.json b_a.activation", status = "assumed" }
+f = { value = 4, low = 1, high = 8, source = "FanOutReadIntensity docstring (Kimi K2 at f = 4)", status = "conjecture" }
+width = { value = 390, low = 48, high = 512, source = "PartialSumCoverBound docstring (a = 390)", status = "derived" }
+per_param = { value = 2, low = 1, high = 2, source = "Dgrad on the forward's tokens (FanOutIntensity docstring)", status = "derived" }
+bcol = { value = 1, low = 1, high = 2.5, source = "ColumnsIncompressible at Kimi K2 (FanOutIntensity docstring)", status = "conjecture" }
+beta_x = { value = 0.87, low = 0.39, high = 0.94, source = "note:training-20261024T2336Z-report-tvi-findings: replay-consistent, exact block on Qwen2.5-1.5B (art:ff2237e531a9)", status = "measured" }
+thread_d = { value = 10, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
+thread_e = { value = 37248, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
+thread_c = { value = 2, source = "benchmarks/nci/rows.json pretrain-full", status = "derived" }
+
+[family.full.efficiency]
+pretrain = { value = 1.0, source = "the reference algorithm", status = "declared" }
+post-train = { value = 1.0, source = "the reference algorithm", status = "declared" }
