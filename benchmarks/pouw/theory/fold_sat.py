@@ -483,13 +483,13 @@ def main(argv=None) -> int:
         print(json.dumps(r, indent=1))
         return 0
     cells = [(t, int(k)) for t, k in (x.split(":") for x in a.cells.split(","))]
-    from concurrent.futures import ProcessPoolExecutor
+    from concurrent.futures import ProcessPoolExecutor, as_completed
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     results = []
     with ProcessPoolExecutor(a.procs) as ex:
-        futs = {ex.submit(_cell, t, k, a.vectors, a.timeout): (t, k) for t, k in cells}
-        for f in futs:
+        futs = [ex.submit(_cell, t, k, a.vectors, a.timeout) for t, k in cells]
+        for f in as_completed(futs):
             r = f.result()
             results.append(r)
             print(json.dumps(r), flush=True)
