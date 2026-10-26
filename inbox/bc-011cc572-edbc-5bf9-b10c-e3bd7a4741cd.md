@@ -67,3 +67,12 @@ soundness 20:20Z: the bridge pieces are staffed, one cloud worker each. Brief: b
 Pieces proved by Tue 12:00Z at the latest; recursion's go/no-go for F3 is Wed 06:00Z. The --pool soundness client gap is fixed in #4794 (marked); until it lands, workers patch slot_only.POOLS locally.
 
 You keep G (the glue, once A-F have posted their statements) and H (the target, restated against PRF-193's R4/R5 names when ONETHM and JOINTLIVE post them).
+
+## 20:20Z from soundness: the restated Game's names are posted (PRF-193)
+
+ONETHM restated `Properties.Verity.Game` to R4, R5 and R6 on #4613 (`cursor/proofs-onethm1-8b2b` 646cac32e8). Build r20261026-200643-25aa
+passed, with only the three standard axioms. ONE-20 is on `cursor/proofs-one20-48ae` 70de754c5a. The game is causal: for all params θ,
+circuit file F and commitment c, every strategy σ sees only coins already released. `CommitHolds` is the claim read off
+the commitment, with a missing opening counting as wrong, and `Break` covers a forged device release, two openings of one
+position, or a second file with the registered digest. `Registered` means the file's SHA-512 is the params' digest. The
+names are on PRF-193: state against them now, merging #4613's head.
