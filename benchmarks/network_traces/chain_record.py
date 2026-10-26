@@ -4,7 +4,8 @@
     python benchmarks/network_traces/chain_record.py custody --gates DIR --out FILE
     python benchmarks/network_traces/chain_record.py certs --run DIR [--client DIR] [--deployed] --out FILE
     python benchmarks/network_traces/chain_record.py report --custody FILE --certs FILE [--endpoint REPORT]
-      [--n2 SUMMARY ...] [--scan SUMMARY] [--job FILE] [--audit WINDOW ...] --out DIR
+      [--n2 SUMMARY ...] [--scan SUMMARY] [--job FILE] [--audit WINDOW ...] [--period-answer FILE --server NODE]
+      --out DIR
     python benchmarks/network_traces/chain_record.py leak --warden-run DIR [--scan SUMMARY] --out FILE
 
 * **custody**: each gate run under ``--gates`` (a directory holding the gate's ``end.json``, as `vy-challenger-gate
@@ -30,7 +31,10 @@
   isn't run or required, and the report's ``stubbed`` says what the path stands on (`STUBBED`, `stubbed`). Its
   negatives are N2's members, the rehearsal's own check on each run it must refuse, and the I/O tie's verdict on each
   tampered run that check lets through. d1's K (`horizon_k`) counts the served units' compute audits (``--audit``: each
-  window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ.
+  window's draw and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With
+  ``--period-answer`` (certifier/v0's ``network-period check`` answer on the period, #4404's ``certifier.answer.json``)
+  and ``--server``, an accepted report also writes ``block.json``: the block record's certifier entry
+  (``legs.certifier`` of ``verity/block-record/v1``), #4404's `block_leg` of that answer (`block_entry`).
 * **leak**: K per monitoring period (week, month, year; one machine and 1,000) on the warden gate run, pooled at
   δ = 1% and 10⁻⁶ and in the per-period form, each beside its share of Llama-3.2-1B's BF16 weights (`leak`).
 """
@@ -38,6 +42,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import sys
@@ -82,6 +87,11 @@ OUT_BITS = 16
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "
                      "(proofs' SampledKSLive) and hleak (the live SampledLeakAccepted) are not discharged")
+#: the all-protocols runner's network accounting, whose `block_leg` is the block record's one certifier entry
+ALLP_CERTIFIER = HERE.parent / "all_protocols" / "legs" / "certifier.py"
+#: why a report without ``--period-answer`` writes no block entry
+NO_PERIOD_ANSWER = ("no --period-answer: certifier/v0's case needs the period's compute audit (its registration and "
+                    "answer) beside each link-window's N2 registration, and this report has neither")
 
 
 def _json(path) -> dict | None:
@@ -593,6 +603,30 @@ def stubbed(job: dict, custody_doc: dict) -> list[str]:
     return out
 
 
+def _block_leg():
+    name = "network_traces_allp_certifier"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, ALLP_CERTIFIER)
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name].block_leg
+
+
+def block_entry(answer: dict | None, verdict: str, *, server: str | None, runs: list[str]) -> dict:
+    """The block record's certifier entry: #4404's `block_leg` of the period's ``network-period check`` answer (clock
+    or rows form) on ``server``, from ``runs``, written only when the chain itself is accepted, so a refused chain
+    never carries a K; else why not, `block_leg`'s refusal included."""
+    why = (NO_PERIOD_ANSWER if answer is None else
+           f"the chain is {verdict}: a refused chain carries no K" if verdict != "accepted" else
+           "no --server: the node the block ran on" if not server else None)
+    if why:
+        return {"written": False, "why": why}
+    try:
+        return {"written": True, "entry": _block_leg()(answer, server=server, runs=runs, source="real")}
+    except ValueError as e:
+        return {"written": False, "why": f"block_leg: {e}"}
+
+
 def report(a) -> dict:
     cust, cert = _json(a.custody) or {}, _json(a.certs) or {}
     job = _json(a.job) or {}
@@ -618,9 +652,15 @@ def report(a) -> dict:
                  **{f"n2/{k}": v for k, v in n2.get("negatives", {}).items()},
                  **{f"scan/{k}": v for k, v in scan.get("negatives", {}).items()}}
     audits = [audit_of(Path(d)) for d in getattr(a, "audit", None) or []]
-    return {"schema": SCHEMA, "job": job, "verdict": "accepted" if accepted else "refused", "path": job.get("path"),
+    verdict = "accepted" if accepted else "refused"
+    runs = list(dict.fromkeys(r for r in (job.get("run"), *(g.get("gate_run") for g in cust.get("gate_runs") or []))
+                              if r))
+    pa = getattr(a, "period_answer", None)
+    block = ({"written": False, "why": f"--period-answer {pa}: not a file"} if pa and not Path(pa).is_file() else
+             block_entry(_json(pa), verdict, server=getattr(a, "server", None), runs=runs))
+    return {"schema": SCHEMA, "job": job, "verdict": verdict, "path": job.get("path"),
             "stubbed": stubbed(job, cust), "negatives_refused": negatives, "steps": steps,
-            "d1": d1_terms(cert, n2, scan, cust, endpoint, audits)}
+            "d1": d1_terms(cert, n2, scan, cust, endpoint, audits), "block": block}
 
 
 def markdown(r: dict) -> str:
@@ -652,6 +692,15 @@ def markdown(r: dict) -> str:
                          f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}; "
                          f"{h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
+    b = r.get("block") or {}
+    if b.get("written"):
+        e, q = b["entry"], b["entry"]["quantity"]
+        at = "; ".join(f"at δ = {delta}: " + (f"K = {x['value']}" if x["holds"] else "not established")
+                       for delta, x in e["at"].items())
+        lines += ["", "## Block record", "", f"- certifier entry on {e['server']}: K = {q['value']} bits over "
+                  f"{q['windows']} link-windows, error {e['error']} ({e['error_from']}); {at}; runs {', '.join(e['runs'])}"]
+    else:
+        lines += ["", "## Block record", "", f"- no certifier entry: {b.get('why')}"]
     return "\n".join(lines) + "\n"
 
 
@@ -673,6 +722,9 @@ def main(argv=None) -> int:
     r.add_argument("--warden-run")
     r.add_argument("--audit", nargs="*", help="the served units' compute audit windows (registration.json and "
                                               "circuit.json each), whose draw and free inputs d1's K counts")
+    r.add_argument("--period-answer", help="certifier/v0's network-period check answer on the period "
+                                           "(certifier.answer.json), the block record's certifier entry's")
+    r.add_argument("--server", help="the node the block ran on (the block record's server)")
     r.add_argument("--out", required=True, type=Path)
     k = sub.add_parser("leak", help="K per monitoring period on the warden run, for the scan's class and draw")
     k.add_argument("--warden-run", required=True, type=Path, help="the fetched warden gate run (its end.json)")
@@ -693,6 +745,8 @@ def main(argv=None) -> int:
         doc = report(a)
         a.out.mkdir(parents=True, exist_ok=True)
         (a.out / "report.md").write_text(markdown(doc))
+        if doc["block"]["written"]:
+            (a.out / "block.json").write_text(json.dumps(doc["block"]["entry"], indent=1, sort_keys=True))
         a.out = a.out / "report.json"
     a.out.write_text(json.dumps(doc, indent=1, sort_keys=True, default=str))
     print(json.dumps({k: doc.get(k) for k in ("verdict", "why", "negatives_refused") if k in doc}))

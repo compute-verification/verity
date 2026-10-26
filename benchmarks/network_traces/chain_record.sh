@@ -34,6 +34,9 @@
 #      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
 #      or required, and the report names what that path stubs, chain_record.STUBBED)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
+#      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, a path or a name under inputs/)
+#      and CR_SERVER (the node the block ran on): an accepted report also writes $OUT/report/block.json, the block
+#      record's certifier entry (chain_record.block_entry)
 #      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
 # file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive or a signer's
@@ -166,10 +169,11 @@ json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_
            "rc": {"n2": text("n2.rc"), "scan": text("scan.rc")}, "why": {"n2": text("n2.why"), "scan": text("scan.why")},
            "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)
 EOF
+PA=${CR_PERIOD_ANSWER:-}; [ -z "$PA" ] || [ -e "$PA" ] || PA=${RESEARCH_RUN_DIR:?}/inputs/$PA
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
   --n2 "$OUT/n2/summary.json" --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
   $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
-  --out "$OUT/report" | tee -a "$OUT/job.log"
+  ${PA:+--period-answer "$PA"} ${CR_SERVER:+--server "$CR_SERVER"} --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 cat "$OUT/report/report.md" | tee -a "$OUT/job.log" | cut -c1-600
 log "chain: done, rc $rc"
