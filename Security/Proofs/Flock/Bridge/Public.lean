@@ -56,7 +56,7 @@ def SampledKSLivePub : Prop :=
     (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
     (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
-    (_hv2 : Bridge.RowsV2 D.unroll)
+    (_hrows : Bridge.RowsOk D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none)
     -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
     (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
@@ -114,11 +114,11 @@ def SampledKSLivePub : Prop :=
 /-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its draw term is `deltaPub`'s first, its knowledge term at most
 the second (`ksAvgStrictZ_planZHJ_le_closed`), and its link term at most the third (`qs_le_io`). -/
 theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
-  intro n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
+  intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
     hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' ht' K₀ hK₀ τ qF qS q L P vb σ Xr δ Cc rows roots Cd κ hCR hLink
   have hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ := fun S R j =>
     (rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) k).trans hρk
-  refine (h n Reg I ht D hD hU pub hpub hpt hscope hv2 hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
+  refine (h n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
     src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q hCR hLink).trans ?_
   have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
   have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) := by

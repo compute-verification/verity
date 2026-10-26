@@ -5903,10 +5903,7 @@
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779"
   },
   "Flock.SecurityProofs.SampledKSLivePub": {
-   "owner": "@proofs",
-   "signature": ["Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub"],
-   "assumptions": [],
-   "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268"
+   "owner": "@proofs"
   },
   "Flock.SecurityProofs.SampledKSLiveStated": {
    "owner": "@proofs",
@@ -5919,6 +5916,12 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2"],
    "assumptions": [],
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5"
+  },
+  "Flock.SecurityProofs.SampledKSLiveV3": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3"],
+   "assumptions": [],
+   "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "owner": "@proofs",
@@ -11687,13 +11690,14 @@
    "Flock.SecurityProofs.SampledKSLiveStated": "frozen (no-function): It states no property of the verifier: it reads SampledKSLive (Security/Proofs/Flock/Bridge/Statement.lean), so the lock records its text, and it leaves when a guarantee proves SampledKSLive at the deployed sampled verifier.",
    "NetTiming.SecurityProofs.SampledLeakRegistered": "frozen (no-function): It is stated over the sampled audit's statement as Definitions.NetworkCertifier states it (SampledAuditAccepted, taken as a hypothesis, with Claims.Sampling.KS and Commitment.Binds at each deployment, and the registration's openings RegOpens), and bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts, not runs of the network check's code; it is NetTiming.sampledLeak_registered's statement with sampledLeak_reg's count, at the registered inputs' registration values (AsReg at regVal) rather than the trace's, a disagreement being a collision Breg finds.",
    "Flock.SecurityProofs.SampledKSLivePub": "frozen (no-function): SampledKSLiveV2 at a public error, proved from it; it reads SampledKSLivePub (Security/Proofs/Flock/Bridge/Public.lean), SampledKSLiveV2's statement with its error deltaPub read off public parameters, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the row/v2 sampled statement at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV2": "frozen (no-function): the network certifier chain's theorem, proved; it reads SampledKSLiveV2 (Security/Proofs/Flock/Bridge/Canon.lean), the sampled statement at RowsOk circuit files (row/v1, row/v2 and row-seg/v1 ports) at the constants and canonAt, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocks": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks and the wipes that open them, on one coin space: each block's five per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close)."
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
+   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16843,9 +16847,9 @@
     "Flock.SecurityProofs.MaskedKS",
     "Flock.SecurityProofs.MaskedZK",
     "Flock.SecurityProofs.RecursionClaimsStated",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.EmbeddingReadBinding",
     "Hash.SecurityProofs.RowBinding",
@@ -17432,9 +17436,9 @@
     "Claims.Sampling.masked_meets_zk",
     "Claims.Sampling.scope_meets",
     "Claims.Sampling.universal_meets",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.SamplingClaimsStated",
     "NetTiming.SecurityProofs.EncardAccSeqsSampledLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
@@ -18380,9 +18384,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -18447,9 +18451,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -18521,9 +18525,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -18602,9 +18606,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -18680,9 +18684,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -18754,9 +18758,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SoundAtBridge.soundAtBridge_nonvacuous",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -18838,9 +18842,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -18903,9 +18907,9 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Audit.Adaptive.harm_budget",
@@ -19004,9 +19008,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -19042,9 +19046,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -19079,9 +19083,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
@@ -19140,9 +19144,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -19177,9 +19181,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Partition.Refines.twoStage_influence",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
@@ -19225,9 +19229,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -19361,9 +19365,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
@@ -19405,9 +19409,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -19463,9 +19467,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -19522,9 +19526,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -19562,9 +19566,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -19603,9 +19607,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.table_sound",
@@ -19709,9 +19713,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -28785,9 +28789,9 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -28868,9 +28872,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29032,9 +29036,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29161,9 +29165,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29249,9 +29253,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29348,9 +29352,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29421,9 +29425,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29568,9 +29572,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29682,9 +29686,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29740,9 +29744,9 @@
     "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
-    "Flock.SecurityProofs.SampledKSLiveV2"
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Flock.Draw": {
@@ -29857,9 +29861,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -29943,9 +29947,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -30098,9 +30102,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -30288,9 +30292,9 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -30397,9 +30401,9 @@
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
     "Flock.SecurityProofs.RecursiveZK",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
@@ -30565,9 +30569,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -30608,7 +30612,7 @@
    ]
   },
   "Flock.HmRow": {
-   "digest": "c49728773d82e6281f7e113fa3872e8ad39df6e4dabcd738f84bafda96c16755",
+   "digest": "2c82c701bbcc5c14d22d21bcfe6c5da1d9926d20cc7b7842a460e1ce73ce59d4",
    "definitions": {
     "Flock.HmIn.FORMAT": "d170c17911f12935b7c639f768d2a51f2df2f502c139d50dafcd92acca7de79a",
     "Flock.HmIn.Ports": "215bbcb52a5c9b82ffa0c34ab9a1e63f466d28f12cb80b3227186587ecca5d72",
@@ -30678,6 +30682,7 @@
     "Flock.HmRow.SHA_NET": "d6cc8a3e6204022191aa6fdbb9affbe4808839f820937440326d27debf8112fe",
     "Flock.HmRow.TEMPLATE_DERIVED": "7f1981fe3d0928ced7bdb0b48557197a5924a5366dd34ef534735dcb9667da6c",
     "Flock.HmRow.be64": "d3f7363814c6e91245371e33a66487c248ed14b63c14fb3b8f45a1a801526fa8",
+    "Flock.HmRow.bitsVal": "af5b283ab33e68c04984ceed9d59541c5164e86fffc841a7ebe85305fdb79848",
     "Flock.HmRow.blockBit": "b33f32364ea7490185494bd06df408747cd3c9f376f02f6a713a2ddb4d436070",
     "Flock.HmRow.blockOf": "5e9adba547534bbaa8880d9206130ff006023463594d7f29a353cd8828f08b86",
     "Flock.HmRow.byteAt": "3b0ba8461df47ca21577ce257993cef4d340cf3c08d9d97411c098953632a4f8",
@@ -30710,6 +30715,7 @@
     "Flock.HmRow.msgBit": "a2bd5f0110a4eadb3df19b396c2925fe5e75e3eccda5bbb6027bd3953df7cdf7",
     "Flock.HmRow.outNetEntries": "d9f547d31374da40d2594f9f05073fa6d30711d2d64d83bf8e087a080a1ce1a2",
     "Flock.HmRow.outNetEntries._sparseCasesOn_1": "35da03d8a1bb75b7e6b390210173398895e73133f9dbb6db96f2758b4b6a0415",
+    "Flock.HmRow.packBits": "53ee503568c7b8e225cb76ae7f3553ae09bc50d0f042ec6f5467f26fb76afff8",
     "Flock.HmRow.padBlock": "8e70252faaf687b1bebbd47bac5a7f624ae6aee50beb7310c91a096baf33670c",
     "Flock.HmRow.padTail": "8d2d799650b1a3f99e3df85f298fc56c9aa1599e97da96c6eeb019bd4cfaa1df",
     "Flock.HmRow.parse": "16918469ea486b775a6d04d6e9f769b1a8f3e85cdf46b87939242922041b6385",
@@ -30786,9 +30792,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -30967,9 +30973,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31047,9 +31053,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31162,9 +31168,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31251,9 +31257,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31339,9 +31345,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31466,9 +31472,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31560,9 +31566,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31634,9 +31640,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -31700,9 +31706,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31808,9 +31814,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31910,9 +31916,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -31939,6 +31945,25 @@
     "FlockVBridge.chainAcc_level",
     "FlockVBridge.keyProg_parse"
    ]
+  },
+  "Flock.PortRoots": {
+   "digest": "e36c73174f17f1c2576de5e64d4a64505ae70213e1f23feb711633ec114f36e7",
+   "definitions": {
+    "Flock.PortRoots.NAMES_WHY": "6aaf457a7880441d938314364c3f3ca87f4342073e26d2c907a07a7111ffba80",
+    "Flock.PortRoots.ROOTS_WHY": "68c15031a3b3f44d0157c340a026c088b327d5cb28eea69769202fecf19d16c6",
+    "Flock.PortRoots.ROWS_WHY": "7c63f9365757ec24304194ffb59600236f5e6150d1c12ed12042ce8661659379",
+    "Flock.PortRoots.check": "4a4ed2e8d9188e0510e0b092c9f558620bb3ca98a9c667d82f2af65eadebe137",
+    "Flock.PortRoots.checkOf": "50baa5c6c71a34b5e83defe4481091af4ec489f4924477e93782c6372abbc3f9",
+    "Flock.PortRoots.checkWith": "8f55c20d73f6458bc625f04905dd4de084d3eda99d08d02197f293f17a5b9be8",
+    "Flock.PortRoots.collidesIn": "6891a9982c13c3049219f319c2cdd8b2559712f86a70afc761a808d33f7a1adc",
+    "Flock.PortRoots.collidesWith": "1a07ea9f74cec680d6725c0afaffcb287e20765c84d6e24c42e7b092ece008b9",
+    "Flock.PortRoots.domOf": "5ca143b6cfc2c20f9e30f86c8ec4695b6d6e06a88ffad5f113b26bfd7c924875",
+    "Flock.PortRoots.leafOf": "cc0ef1339bcae75c52e0473b3e47691f41dffa8b81b826d10c07424f2c8b3c89",
+    "Flock.PortRoots.rootWith": "d77c4f61a55826f51543b23fe2e2de430033ff2b3245bbf593d07ace41742a53",
+    "Flock.PortRoots.rowsOk": "3d3a52e731016d448e70cbcf042052d98770ef768eae2c95ad8c23ac6ea22ed6",
+    "Flock.PortRoots.schemaOf": "5bb081a5f53e3f2fe1eaf4abcf3b1bee9b668a170c8d61407076e0172c6b07aa"
+   },
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV3"]
   },
   "Flock.Program": {
    "digest": "96d81b40af6e3bb0a63674823291fe5d19a6aa8b1d68c8a7d4531ee11f291fc7",
@@ -32158,9 +32183,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -32305,9 +32330,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -32376,6 +32401,7 @@
     "Accounting.SecurityProofs.TS.LeafLanesSound",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -32444,9 +32470,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -32578,9 +32604,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -32663,9 +32689,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -32968,9 +32994,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -33213,9 +33239,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -33315,9 +33341,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -33427,9 +33453,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -33544,9 +33570,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -33810,9 +33836,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -33923,9 +33949,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -33985,9 +34011,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34073,9 +34099,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34203,9 +34229,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34270,9 +34296,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34419,9 +34445,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34520,9 +34546,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34641,9 +34667,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34717,9 +34743,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34798,9 +34824,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -34880,9 +34906,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -34979,9 +35005,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -35059,9 +35085,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -35159,9 +35185,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -35221,9 +35247,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -35317,9 +35343,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -35423,9 +35449,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -35507,9 +35533,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -35636,9 +35662,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -35715,9 +35741,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -35804,9 +35830,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
     "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous",
@@ -36169,9 +36195,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Flock.Bridge.Canon": {
-   "digest": "cd63afaa70ec98c4d7ee92f4e7c97ebe5579fa25c334331393b7658912a98200",
+   "digest": "531e37121c0c4cd185a5cef36aa85f33fcaa10a00d26d982593139ed23015657",
    "definitions": {
-    "Flock.Guarantees.SampledKSLiveV2": "15c4c24a8250596cac3f85dd7be874f4931174a48b4753bbadf1998a19b3a6f7"
+    "Flock.Guarantees.SampledKSLiveV2": "9865ddc2bfbc7c9cc45098848eb6b71e32b8f140de328536c25f634e417ba40a"
    },
    "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
@@ -36192,39 +36218,44 @@
     "Flock.Bridge.unitGates": "bd8a7b512af60ef14bfca33a08699df1646d2dc6ee5d8cbe739892b1af88de5f"
    },
    "guarantees": [
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
-    "Flock.SecurityProofs.SampledKSLiveV2"
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.Bridge.Deployed": {
-   "digest": "57c8a74d1fca245843ccc4f0d3e7bdacd7d527515b29fc865430412bd3bb5839",
+   "digest": "3d7753ba398a146beff843cbfd3898eac28fdb5c162995f6d78f7a0514544e8f",
    "definitions": {
     "Flock.Bridge.RowAt": "4fb2fcca817cbd8deb1dc9f305ec57503452a264f75b8369c38f454c20c8815b",
     "Flock.Bridge.RowAt.leaf": "b0c32691e7c1abc1f63fcedf0ab362b7d25293581922239489bd83a0283fc0b8",
     "Flock.Bridge.RowAt.place": "8fe6efdc85f12cffc3a35a24519fc131c354a1412294bfab9ad02223b49bf573",
     "Flock.Bridge.RowAt.port": "82df09dd1266a7f83a13fc94dc90d1f6420c4bc7c90ad07332a14c35749eb4be",
     "Flock.Bridge.RowAt.width": "96c204cf4d2c48a84685a936ff2c514141d9e46e4fd686dd08e00de249caf256",
+    "Flock.Bridge.RowsOk": "73d059cdf29a58a85a8c9e5dac643368ece11b779d2b44045481d6f0fd02ae21",
     "Flock.Bridge.RowsV2": "51af5f0c92ca46afcd27076480f4297f95a3d0433304ebfd6ee7d22e67171e1f",
     "Flock.Bridge.atOf": "56c2c766cec48b6c51c24a31d1e784231d19cf664cd163046e63ffb8f98fd8cc",
     "Flock.Bridge.bitsOf": "a2a1b25a668da5e228012dd0add46eb8d7764c3533478294dafa9882ca89f20f",
-    "Flock.Bridge.commitDep": "7e14330ca8f303f74bbffda2c3a61b1a908c8024aa9b9fea6708df1dc8776e32",
+    "Flock.Bridge.commitDep": "6cce83597758ad552c7d470323793200d0b42cdb7ace569b36da0657be330c5d",
     "Flock.Bridge.domOf": "1731736d1ba9a89126d6ebefdded3d9230be0e514db8190e7aa451122f515dc4",
     "Flock.Bridge.pathOf": "3820a7e769f5052578bed6b819dce88dff798627d63e7d45ae20c70ba1497a6f",
     "Flock.Bridge.placeOf": "198ea60ed6f120c55028c3032b409bc28c13f218bb29b690df0af645351d397d",
-    "Flock.Bridge.portsOf": "22771b5595df247f67bf5433ff1771660e2696360f814aab2e1a8e6f50d8db2f",
+    "Flock.Bridge.portOfPos": "687bfb8bd022c7572c6cb2c089e6838e791edfa4f9f0b5b31bbf1e91041f5b1e",
+    "Flock.Bridge.portsOf": "63b267bf5e1b0e0794d2fba7f7d07087ed0317e830017ddddf33e5d2c755573d",
     "Flock.Bridge.regLeafOf": "8f1ae2a52238ab01485ad3ef8349242ad0cddce4a677770e9da7255ad9d98814",
-    "Flock.Bridge.rootsOf": "3f013f802b2f5a78c465470ef5d6842c37a1f535d8dd159a6f9e6a0804011545",
+    "Flock.Bridge.rootsOf": "462ed07ad5407c9a5fb962b84bc6e44907e574f739d8889a5f9d2666e1ec8db5",
+    "Flock.Bridge.rowDep": "f52f31264abb9adea847611cd94dd9adc40c8a3a05ee114015e1100213f85026",
+    "Flock.Bridge.rowMsg": "14830a2c7058e042551e1be471e6d81fa598f1658f0ee898f41858b39254cb3b",
     "Flock.Bridge.rowOfPos": "b584d26b333d01f3cdb269a890a4f7c3388c2d541d47129c67b8b83ecdcb9619",
     "Flock.Bridge.saltLen": "7eb339acaab37647b9a130998fca32c78d8ec69789fc8c996cb8dc77472cda2a",
     "Flock.Bridge.saltOf": "e5652ebf1b5b97c3ae8bcb3f1e30491579d4cfd882bf13df259c36f0d28b1f66",
+    "Flock.Bridge.schemaOf": "2a3ca359f688d161fe924d8ed2359fd7f9b5f4a2623a2f05be31c86596652b6f",
     "Flock.Bridge.wireOf": "4bc6856285ba9be707489a4a3c4268276bb2401bdb4d27078b4dc4cc848d1ee7",
     "Flock.Bridge.witDep": "fc34958eb5cde17a4595cc9a971bf2fd2e6d20ce85b801297882fb26f555f213"
    },
    "guarantees": [
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
-    "Flock.SecurityProofs.SampledKSLiveV2"
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.Bridge.PopMatches": {
@@ -36234,27 +36265,27 @@
     "Flock.Bridge.popCheck": "d28fce474786d8f9d838ba7cc72097ac5c6dc81ff8d2b7270e8108d986a78139",
     "Flock.Bridge.popOf": "ea8342405316b099d3a00cc9e63b2455c82b81381348aafc9432abee278160a1"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
   "Proofs.Flock.Bridge.PortRoots": {
-   "digest": "d55c0e7d934db0d3f0f4a8215f131d72e6cb0d7d1dca76de43ffb34338078ce5",
+   "digest": "f19e564dfaab583d2feca933ea1886a904a91319cfe63ee1242526312b11dbe6",
    "definitions": {
     "Flock.Bridge.PortRoots.collPair": "f0d146d7a7e1c138679669f632abfc1e153c89ec4ba7c55aebdf075af57a94ed",
-    "Flock.Bridge.PortRoots.leaves": "85cdd7d2ea92ff41bcec4a9398645d301dd77e563d8d5a6fc9500b196dbaad4d",
+    "Flock.Bridge.PortRoots.leaves": "4c3ce69fa6d1f08981f4d17fb612a7adc6fa6984396f47a6615b00a572358b33",
     "Flock.Bridge.PortRoots.pairs": "893263e1c78b8905195858fbe704f8bb311473770b1c0c6c87952f179904d96d",
     "Flock.Bridge.PortRoots.rootsColl": "6a7800371537b3602f7c42f616518740b1b861e815b5f2754fe5bf9bc4e63b9b",
-    "Flock.Bridge.PortRoots.topIn": "4f7b523d077afc0e980fe099c810e26ce5e3d83256e2b5169478e180e3b0b259"
+    "Flock.Bridge.PortRoots.topIn": "3721aafee6400d48c8ccd9abc0325cf91001aad7e88f5f66729245ff193b6f76"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
-  "Proofs.Flock.Bridge.Public": {
-   "digest": "225da325b23ad839399a9c7e3ea1d1b75066c7969a02f1e0cff93b6612b6627c",
+  "Proofs.Flock.Bridge.Refused": {
+   "digest": "03c8629c14e93927bf2373c5847707d8f319b1d89607fb258f7a9d3d16944469",
    "definitions": {
-    "Flock.Bridge.deltaPub": "f7328b16312ac1aaa5d79be966c13bea34c51842c6a59d08d4a497c4e71812f9",
-    "Flock.Bridge.ioSum": "25bc1c0dfed0bfd9db998718ea04ee1c6bc793146382d3b4182ce86025fcec2a",
-    "Flock.Guarantees.SampledKSLivePub": "8944c71a5b13d844a805cd75fb83c54a2d53f6abdf94c59aff8e0b1854cddb35"
+    "Flock.Bridge.LiveAcceptsKS": "ff1729b1b2b29a48f0e3c4f42af32de19e8d6788d41de2e6974ce1ca0f50394a",
+    "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10",
+    "Flock.Guarantees.SampledKSLiveV3": "928115ffefe6bf50166850b67db1bc4ae0230fca5d418de9629ee39588455351"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV3"]
   },
   "Proofs.Flock.Bridge.Statement": {
    "digest": "63243dd3389122f9e3a8848bb22f2c3eb8a6c882d0bd249aabfade16551e4874",
@@ -36264,9 +36295,9 @@
     "Flock.Guarantees.SampledKSLiveStated": "31e4ef3dcdad15cc66cbbeaf9662a6446d28713b0c33995c48a799a43f55ac3d"
    },
    "guarantees": [
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
-    "Flock.SecurityProofs.SampledKSLiveV2"
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.EndToEnd.Blocks.Statement": {
@@ -36480,9 +36511,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -36541,9 +36572,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -36585,9 +36616,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -36629,9 +36660,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -36712,9 +36743,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -36777,9 +36808,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -36827,9 +36858,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -36870,9 +36901,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -36913,9 +36944,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -36962,11 +36993,22 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
+  },
+  "Proofs.Flock.Level3.RowV2": {
+   "digest": "833d0970d2d09ce12457506c3c063a7862eae4975d1346fa094c48204807f4ef",
+   "definitions": {
+    "FlockLevel3.RowV2.enc": "21f076dccb57bb3668c1758c8cdbbf66a023c49098d2849f05164bc05e5ef8b9"
+   },
+   "guarantees": [
+    "Flock.SecurityProofs.SampledKSLiveStated",
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.Level3.Seam": {
@@ -37006,9 +37048,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -37741,7 +37783,7 @@
     "Flock.SecurityProofs.TopRoot.lev": "f53b9c92e465e91784009abb672cc6cab5749547653f1d1f0bd0906cb5f17e76",
     "Flock.SecurityProofs.TopRoot.next": "9783ef6fa5a0263077c862934c773660d6e3c738de350e9745b1319dec8222a9"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2"]
   },
   "Proofs.Flock.Recursive.Transfer": {
    "digest": "e786bb54d4d444e8755f5483c6002dd06c18e57c442e442daf19eb6d60031121",
@@ -37924,9 +37966,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.recursiveZK_os_gap",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -38044,9 +38086,9 @@
     "Flock.SecurityProofs.IntegrityPeriodLog",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
-    "Flock.SecurityProofs.SampledKSLiveV2"
+    "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3"
    ]
   },
   "Proofs.Flock.Soundness.Audit.Closure": {
@@ -38097,9 +38139,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38163,9 +38205,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38294,9 +38336,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Audit.Adaptive.harm_budget",
     "FlockSoundness.Audit.Adaptive.harm_count",
     "FlockSoundness.Audit.Adaptive.harm_count_kstar",
@@ -38377,9 +38419,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Audit.Adaptive.life_harm_budget",
     "FlockSoundness.Audit.Partition.audit_exfiltration",
     "FlockSoundness.Audit.Partition.audit_influence",
@@ -38605,9 +38647,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38657,9 +38699,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38704,9 +38746,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38777,9 +38819,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38852,9 +38894,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38890,9 +38932,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -38959,9 +39001,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -39035,9 +39077,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -39219,9 +39261,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -39417,9 +39459,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -39456,9 +39498,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -39492,9 +39534,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -39561,9 +39603,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -39606,9 +39648,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -39664,9 +39706,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -39700,9 +39742,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -39762,9 +39804,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -39879,9 +39921,9 @@
     "Flock.SecurityProofs.IntegrityHorizonBlocks",
     "Flock.SecurityProofs.IntegrityPeriod",
     "Flock.SecurityProofs.IntegrityPeriodLog",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -39983,9 +40025,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -40174,14 +40216,6 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
   },
-  "Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1": {
-   "digest": "1841e07c5822bac7c49ae4bc3a664411160be17c47ae760e79462774bef410f4",
-   "definitions": {
-    "FlockSoundness.Discharge.ZkLink.ksClosedM1": "7c15d0f99d5d1410d07f04db7c4641abfb062e0106f6de11c87d5538801dc20a",
-    "FlockSoundness.Discharge.ZkLink.rateM1": "f5dd0e040b4db220db97929c7a4504a5573b97c7335d216000a0212eea49f545"
-   },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub"]
-  },
   "Proofs.Flock.Soundness.Discharge.FailClosed.ZkRegistered": {
    "digest": "5f05d9c0d438af3248be184b3f3c16ff38a4f45bf9e78cdbbd38ee44776978d8",
    "definitions": {
@@ -40238,9 +40272,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40276,9 +40310,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40314,9 +40348,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40353,9 +40387,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40393,9 +40427,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40432,9 +40466,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40470,9 +40504,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40519,9 +40553,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40617,9 +40651,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40675,9 +40709,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40713,9 +40747,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40752,9 +40786,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40791,9 +40825,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -40853,9 +40887,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -40971,9 +41005,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41139,9 +41173,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -41190,9 +41224,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41245,9 +41279,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41301,9 +41335,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41342,9 +41376,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41387,9 +41421,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41427,9 +41461,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41489,9 +41523,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41529,9 +41563,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41572,9 +41606,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41619,9 +41653,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -41667,9 +41701,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
@@ -41729,9 +41763,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -41793,9 +41827,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -41839,9 +41873,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -42011,9 +42045,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42052,9 +42086,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
     "FlockSoundness.Discharge.Composed.y0_binder_16_2_1",
@@ -42127,9 +42161,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42219,9 +42253,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42262,9 +42296,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42317,9 +42351,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42371,9 +42405,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -42452,9 +42486,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42493,9 +42527,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -42554,9 +42588,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -42658,9 +42692,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK",
@@ -42714,9 +42748,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42770,9 +42804,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42860,9 +42894,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42912,9 +42946,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -42946,9 +42980,9 @@
     "Flock.SecurityProofs.IntegrityPeriodLog",
     "Flock.SecurityProofs.PublicAudit",
     "Flock.SecurityProofs.RecursiveAuditC3",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
     "FlockSoundness.Discharge.Composed.e2e_forces_mPts",
@@ -43020,9 +43054,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43066,9 +43100,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43122,9 +43156,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43163,9 +43197,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43236,9 +43270,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43272,9 +43306,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43315,9 +43349,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -43374,9 +43408,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -43548,9 +43582,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -43605,9 +43639,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -43661,9 +43695,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -43722,9 +43756,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
@@ -43858,9 +43892,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -43894,9 +43928,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -43934,9 +43968,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -43976,9 +44010,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
@@ -44035,9 +44069,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44085,9 +44119,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1",
@@ -44147,9 +44181,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
@@ -44184,9 +44218,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44221,9 +44255,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44261,9 +44295,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
@@ -44302,9 +44336,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -44344,9 +44378,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -44416,9 +44450,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44456,9 +44490,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -44538,9 +44572,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse",
@@ -44578,9 +44612,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -44614,9 +44648,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -44649,9 +44683,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44700,9 +44734,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44736,9 +44770,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44803,9 +44837,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44874,9 +44908,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44924,9 +44958,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -44969,9 +45003,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -45027,9 +45061,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -45073,9 +45107,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -45116,9 +45150,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_empty_16_2_1",
     "FlockSoundness.Discharge.Composed.drawSetupZK_whole_mPts",
@@ -45187,9 +45221,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -45235,9 +45269,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -45277,9 +45311,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "Flock.SecurityProofs.ZeroKnowledgeHidden",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
@@ -45387,9 +45421,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -45434,9 +45468,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound"
    ]
   },
@@ -45482,9 +45516,9 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveStated",
     "Flock.SecurityProofs.SampledKSLiveV2",
+    "Flock.SecurityProofs.SampledKSLiveV3",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
    ]
@@ -45811,7 +45845,6 @@
     "Flock.SecurityProofs.RecursiveRanRegisteredExec",
     "Flock.SecurityProofs.RecursiveSound",
     "Flock.SecurityProofs.RecursiveSoundExec",
-    "Flock.SecurityProofs.SampledKSLivePub",
     "Flock.SecurityProofs.SampledKSLiveV2"
    ]
   },
@@ -45870,7 +45903,7 @@
     "SampledProofs.nat?": "9ec60004020227f25f1827bd5002d740f81ded9156d6f123ae99d13eef8d50fc",
     "SampledProofs.sortStrings": "eafeb4424c88e596bb6f173558cbe70ed56327a1830957c875e0fbeb7b475f11"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2", "Flock.SecurityProofs.SampledKSLiveV3"]
   },
   "SampledProofs.Partition": {
    "digest": "6338deb918b52d09edb60396a1f2fb0a73f52a04e338d5d2d500fd602d0a7c36",
@@ -45895,7 +45928,7 @@
     "SampledProofs.Partition.wordCalls._sparseCasesOn_1": "b0d0533f163f75abf598e6c834d79304f08d808d713ca8602c49042446c53311",
     "SampledProofs.Partition.wordGates": "64e3812ea357c5a1549cdf809dc510de09c8460aff90ae6baa36052a64f4062b"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2", "Flock.SecurityProofs.SampledKSLiveV3"]
   },
   "SampledProofs.Program": {
    "digest": "9c804bce004b30f8fcb0b8e912b37d4f9863d17582b4114a9fc125a2fc5b2e99",
@@ -45906,10 +45939,10 @@
     "SampledProofs.Program.prog": "30b217f2e8294faa98af57e78bf9a4da7f30f24a55ca0788d3dd9139aa27e459",
     "SampledProofs.Program.sha512": "73c772f6726f33b5783f916f1af4ffb2af65e234c4f674b30b08af6ac583b25e"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2", "Flock.SecurityProofs.SampledKSLiveV3"]
   },
   "SampledProofs.Slots": {
-   "digest": "361562a2139c4b0ed12f63d65a71db4614ce62aefd21260ae30afa04d4e246c2",
+   "digest": "80e96b62e48cc8552e2ac39e0592f306a5a6c5cb53261efba091aa2cde04d560",
    "definitions": {
     "SampledProofs.Slots.Layout": "e4464849ac8450e8e262957a86d6841b216299ffbf1b9c17208c0837e050b74c",
     "SampledProofs.Slots.Layout.classes": "15a9d6b1a3eb0398a8b920ad9911e3539079bfa574119e2862d56abda8141f17",
@@ -45917,9 +45950,11 @@
     "SampledProofs.Slots.RU.unit": "5c33aab15c5f83a9ef1283021b80b22307e630efb13c9f6c3d55e53f1096b038",
     "SampledProofs.Slots.inputGates": "8a99e94f2b8d9d527299307bc0ee392fcf864afbe6de11bdc7262ba95cf3d561",
     "SampledProofs.Slots.inputGates._sparseCasesOn_1": "fd7b8c9205a9b4d0d3b02a394c1e1396254b1a3813b52b413e44feaf609e17c1",
-    "SampledProofs.Slots.layout": "a07bfa2aeec403354186196313f1cca3077903cb42255212c27aa27eb09a2571"
+    "SampledProofs.Slots.layout": "a07bfa2aeec403354186196313f1cca3077903cb42255212c27aa27eb09a2571",
+    "SampledProofs.Slots.popOf": "3234a4c450c1250d13c4d6ef4d375919d761d5ca3c4e6ad0d96c2fd30211a455",
+    "SampledProofs.Slots.popOk": "5a39fd192ba35b2197cb5c87ba193e569e83f6a5e472f84997ed1ff40f98982c"
    },
-   "guarantees": ["Flock.SecurityProofs.SampledKSLivePub", "Flock.SecurityProofs.SampledKSLiveV2"]
+   "guarantees": ["Flock.SecurityProofs.SampledKSLiveV2", "Flock.SecurityProofs.SampledKSLiveV3"]
   },
   "VStar.Algebra": {
    "digest": "995e51293963cf541360583dc41048791c2590f3059bcff259f9e0bbc6091434",

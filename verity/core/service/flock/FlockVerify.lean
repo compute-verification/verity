@@ -723,7 +723,12 @@ so is a session without a draw, under `--rec-inner` a session whose draw is not 
 session with `--rec-part`, `--rec-bindings` or `--rec-rows` but no `--rec-inner` (`RecSetup.fullDraw`), and a session
 over an inner session whose record (`--rec-inner-session`) holds no draw (`RecSetup.innerDrawn`), and a session
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies), and last a record not in its canonical text (`RecordText.check`, S0), all after every
+cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
+`--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
+`sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
+ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
+different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
+is accepted under `--zk` and changes nothing), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -738,7 +743,7 @@ verifier's own `--program` the one META's `program_sha512` names (`ProvedScope.p
 plain multi-table claims cover; the check is the one without `--registered F` (`FailClosed.ScopeP`), so a shared-row
 public file is refused. Without it a plain session has at most one table. Not with `--zk`. -/
 def verifyCmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
+  let usage := "usage: flock-verify verify [--statement ID] [--archive DIR] --circuit F [--comp F] --public F [--public-inputs F] [--partition F] [--program F] [--work K --work-table F] [--stratified K] [--closure F] [--registered F] [--identifier F] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] [--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F [--rec-inner-statement ID [--rec-inner-statement-coins os|seed] [--rec-inner-tables DIR] [--rec-inner-draw F]]] [--rec-inner-session DIR [--rec-inner-transcript F [--rec-inner-registration F]]] [--coins seed|os | --zk [--ks-form]] [--session-tables J] [--plain-tables] [--upstream-plain] --session DIR..."
   let (some _, some _) := (argOf args "--circuit", argOf args "--public") | IO.eprintln usage; return 2
   let stmtName := (argOf args "--statement").getD Tags.circuit.name
   let templated := Tags.templated.any (·.name == stmtName)
@@ -750,6 +755,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
   let some count := ((argOf args "--session-tables").getD "1").toNat? | IO.eprintln usage; return 2
   let dirs := (args.dropWhile (· != "--session")).drop 1
   let zk := args.contains "--zk"
+  let ksForm := args.contains "--ks-form"
+  if ksForm && !zk then
+    IO.eprintln "verify --ks-form: the sampled audit's knowledge soundness is over --zk sessions, so --ks-form goes with --zk"; return 2
   let plainTables := args.contains "--plain-tables"
   if zk && plainTables then
     IO.eprintln "verify --zk: --plain-tables is the plain path's (without --zk)"; return 2
@@ -860,6 +868,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
+  let ksFiles := if zk then
+      PortRoots.checkOf (if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables) tags pubB
+    else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
   let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
@@ -902,7 +913,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- last, so a session that fails a check keeps that check's reason: the form's refusal (its statement's, then its
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
-      -- then a record not in its canonical text (S0)
+      -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
+      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -910,6 +922,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
       RecordText.check record
+      ksFiles
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
