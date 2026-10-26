@@ -202,6 +202,7 @@ import Proofs.Flock.Claims.Recursion.RestRead
 import Proofs.Flock.Claims.Recursion.RestReadR
 import Proofs.Flock.Claims.Recursion.RestLens
 import Proofs.Flock.Claims.Recursion.DecompBDeployed
+import Proofs.Flock.Claims.Recursion.VerdictRowRDep
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
