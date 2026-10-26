@@ -70,9 +70,10 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 | the same | c20261025T234322Z-0420 | r20261025-233025-9995 (:18098, `--window-requests 8`) | void: lateness |
 | the same, `--tokens 16` | c20261026T000242Z-89bf | 9995 | void: lateness |
 | the same, light traffic (`--requests 40 --tokens 16`) | c20261026T010321Z-d951 | r20261026-000932-b50b (:18099) | accepted |
-| the same, full traffic (`--requests 100 --tokens 16`) | c20261026T034045Z-6cd9 | r20261026-034055-bbee (:18100) | running |
+| the same, full traffic (`--requests 100 --tokens 16`) | c20261026T034045Z-6cd9 | r20261026-034055-bbee (:18100) | accepted |
 | N2 on 2982 | r20261025-231253-ebf6, r20261025-231301-6b61, r20261025-231310-20da | | accepted |
 | the scan on d951 | r20261026-011909-f489 | | accepted: honest 64 of 64, forged refused |
+| the scan on 6cd9 | r20261026-035637-a739 | | running |
 
 - The network certifier leg ran `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
   profile and an LMS key of H = 20. It is stored as art:fc8d4f61ebb0a45ecd47456d818bebcfeb0723ab1a8f00dd98f7983064eed76b.
@@ -83,6 +84,10 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 - The network certifier's light-traffic active-warden run d951 ran `warden-rehearse --scan --minutes 20 --requests 40
   --tokens 16`: 40 of 40 requests ended, 129 of 129 link-window certificates, a peak tick lateness of 2.19 ms. Its
   public files are stored as art:763f549840c9882cfa3cadceb80187d974babefcd5570a4909e81d6aa0d269ab.
+- The network certifier's full-traffic active-warden run 6cd9 sent 89bf's request (`--scan --minutes 20 --requests 100
+  --tokens 16`) to bbee: 100 of 100 requests ended, 225 of 225 link-window certificates over 75 link-windows, a peak
+  tick lateness of 2.18 ms and none past the slack. Its public files are stored as
+  art:0afe9ca3ed8fa6e8941bdc07cc8f283700ef2e54545c142071b9a8f62beb8cc9.
 
 **The steps on 2982.**
 
@@ -134,9 +139,9 @@ and is labelled `do-not-cite`.
   - egress: 2.07 s of proving (2.56 s), 1,556,020 proof bytes, a Lean verify of 0.70 s.
 - `chain_record.py report` over the certificates, the endpoint, N2 on 2982 and this scan: accepted. Every negative is
   refused, or escaped N2's draw within its bound.
-- d951 is light traffic: 40 requests of at most 16 tokens over 43 link-windows. Full traffic is run
-  c20261026T034045Z-6cd9, running on vllm's endpoint with `finalize` off the engine loop, r20261026-034055-bbee
-  (:18100, 1a3ffe4a88). bbee replaced r20261026-021253-83ee, which stopped with n1's 03:30Z restart.
+- d951 is light traffic: 40 requests of at most 16 tokens over 43 link-windows. Full traffic is run 6cd9 on vllm's
+  endpoint with `finalize` off the engine loop, r20261026-034055-bbee (:18100, 1a3ffe4a88), accepted; its scan,
+  r20261026-035637-a739, is running. bbee replaced r20261026-021253-83ee, which stopped with n1's 03:30Z restart.
 
 **Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
 every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
@@ -173,7 +178,8 @@ The third leg, 89bf, capped every output at 16 tokens (`--tokens 16`, the least 
 vllm traced the lateness to the endpoint's window close. While a window closes, its `finalize` (the committer
 draining) runs on the engine loop, so no step runs, nothing new is submitted and in-flight streams pause. Around the
 burst windows a close took 0.4–1.9 s, longer under seal load; the seal queue's depth alone doesn't predict lateness.
-r20261026-021253-83ee runs `finalize` off the loop: a close of 0.012 s at p90.
+r20261026-021253-83ee runs `finalize` off the loop: a close of 0.012 s at p90. On its successor bbee, 89bf's request,
+the same seeded schedule, is accepted (6cd9: 100 of 100 requests ended).
 
 **K per monitoring period** (`chain_record.py leak`). These are d951's files with its scan, every unit drawn and
 accepted. K uses:
@@ -240,8 +246,9 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
-- At full traffic (0420's 1.33 requests a link-window, a void run) the anchored table's machine-week is 1.44% of the
-  weights and its machine-year 74.8%; as registered today it is 1.37× a machine-week either way.
+- At full traffic (6cd9, accepted: 100 requests over 75 link-windows, 1.33 a link-window, every unit drawn) the
+  anchored table's machine-week is 1.44% of the weights and its machine-year 74.8%; as registered today it is 1.37×
+  a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriod's sum.
 
 **`stubbed`.**
