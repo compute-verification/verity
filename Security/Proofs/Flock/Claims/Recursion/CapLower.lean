@@ -209,11 +209,7 @@ theorem out_top_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
       readForms w' (((rowHidden c' "top" m).getD []).map HmNets.Lin.var) := by
   have hL : ∀ p ∈ DeployedR.outCalls c q i,
       (p.1 ++ readForms w p.2.1, readForms w p.2.2) ∈ (DeployedR.layR elem).allCalls x ws := fun p hp =>
-    mem_allCalls hw (by
-      rw [DeployedR.layR_calls]
-      refine List.mem_append_right _ ?_
-      rw [hr, Option.map_some, Option.getD_some]
-      exact List.mem_map.2 ⟨p, mem_outsCalls_recOpen hsv hc hq hi hp, rfl⟩)
+    mem_allCalls hw (DeployedR.outsCalls_sub_layR elem hr s w p (mem_outsCalls_recOpen hsv hc hq hi hp))
   have hC : ∀ p ∈ hmCalls c' "top" q' m,
       (p.1 ++ readForms w' p.2.1, readForms w' p.2.2) ∈ (DeployedR.layR elem).allCalls x ws := fun p hp =>
     mem_allCalls hw' (by
