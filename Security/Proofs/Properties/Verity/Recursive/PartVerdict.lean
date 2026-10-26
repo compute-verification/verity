@@ -74,16 +74,20 @@ private theorem throw_ne {α : Type} {e : String} {a : α} : (throw e : V α) �
 theorem get_what {bs : Core.Blobs} {d w w' : String} {b : ByteArray} (h : bs.get d w = .ok b) :
     bs.get d w' = .ok b := by
   unfold Core.Blobs.get at h ⊢
-  cases hu : Flock.unhex d with
-  | error e => simp [hu, bind, Except.bind] at h
-  | ok a =>
-    simp only [hu, bind, Except.bind] at h ⊢
-    by_cases hc : (a.size != 64 || Flock.hexOf a != d) = true
-    · simp [hc, throw, throwThe, MonadExceptOf.throw] at h
-    · simp only [hc] at h ⊢
-      split at h
-      · exact h
-      · simp [throw, throwThe, MonadExceptOf.throw] at h
+  obtain ⟨a, hd, h⟩ := bind_ok h
+  refine ok_bind hd ?_
+  try dsimp only at h ⊢
+  by_cases hc : (a.size != 64 || Flock.hexOf a != d) = true
+  · rw [if_pos hc] at h
+    first | cases h | simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+  · rw [if_neg hc] at h ⊢
+    cases hf : bs.entries.find? (·.1 == a) with
+    | none =>
+      rw [hf] at h
+      first | cases h | simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
+    | some e =>
+      rw [hf] at h ⊢
+      exact h
 
 private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
     ∀ (l : List α) (l' : List β), l.length = l'.length →
@@ -94,7 +98,9 @@ private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
   | a :: l, b :: l', hl, hg => by
     have h0 : g a = .ok b := hg 0 (by simp) (by simp)
     have ht : l.mapM g = .ok l' := mapM_ok_of_getElem g l l' (by simpa using hl)
-      (fun i hi hi' => by simpa using hg (i + 1) (by simpa using hi) (by simpa using hi'))
+      (fun i hi hi' => by
+        have h := hg (i + 1) (by simp [hi]) (by simp [hi'])
+        rwa [List.getElem_cons_succ, List.getElem_cons_succ] at h)
     simp [List.mapM_cons, h0, ht, bind, Except.bind, pure, Except.pure]
 
 /-- **The part's rep files are the last message's proof files** where each stream's file is that proof file and there
@@ -171,73 +177,81 @@ theorem partVerdict_ok {h : InnerHeld} {j : Nat} {p : PartOwn} {s : PartProof} {
   simp only [hT] at hpart
   obtain ⟨circuitB, hc, hpart⟩ := bind_ok hpart
   obtain ⟨pubB, hp, hpart⟩ := bind_ok hpart
-  obtain ⟨⟨registered, complete, known, regParams⟩, hr, hpart⟩ := bind_ok hpart
-  try dsimp only at hpart
-  obtain ⟨rows, -, hpart⟩ := bind_ok hpart
-  obtain ⟨bindings, -, hpart⟩ := bind_ok hpart
-  obtain ⟨rB, hrB, hpart⟩ := bind_ok hpart
-  rcases hu : String.fromUTF8? rB with _ | record
-  · simp only [hu] at hpart
-    try exact absurd hpart throw_ne
-  simp only [hu] at hpart
-  have hv := Except.ok.inj hpart
-  clear hpart
-  obtain ⟨proofs, hfiles, hv⟩ := bind_ok hv
-  obtain ⟨⟨spec, tabs⟩, hst, hv⟩ := bind_ok hv
-  obtain ⟨⟨spec2, tabs2⟩, hst2, hf⟩ := bind_ok hfiles
-  rw [hst] at hst2
-  cases hst2
-  try dsimp only at hv hf
-  obtain ⟨⟨⟩, hzv, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, hsc, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, hdl, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, hfd, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, hid, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, -, hrt⟩ := bind_ok hv
-  split at hdl
-  rotate_left
-  · simp [Flock.ProvedScope.drawLaw] at hdl
-  rename_i hm
-  rw [if_pos hm] at hst hfd
-  have hds : (Flock.Witness.recordDraw record).isSome = true := by
-    cases hd : Flock.Witness.recordDraw record with
-    | none =>
-      rw [hd] at hdl
-      simp [Flock.ProvedScope.drawLaw] at hdl
-    | some d => rfl
-  have hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = registered := by
-    cases hpr : p.registered with
-    | none =>
-      rw [hpr] at hr
-      have hr := Except.ok.inj hr
-      simp only [Prod.mk.injEq] at hr
-      obtain ⟨rfl, -⟩ := hr
+  rcases hpr : p.registered with _ | rj <;> simp only [hpr] at hpart
+  all_goals obtain ⟨⟨registered, complete, known, regParams⟩, hr, hpart⟩ := bind_ok hpart
+  all_goals have hreg : p.registered.bind (fun r => (registeredOf r).toOption.map (·.1)) = registered := by
+    first
+      | (rw [hpr]
+         have hr := Except.ok.inj hr
+         simp only [Prod.mk.injEq] at hr
+         exact hr.1)
+      | (obtain ⟨⟨own, c, k, ps⟩, hro, hr⟩ := map_ok hr
+         simp only [Prod.mk.injEq] at hr
+         rw [hpr, ← hr.1]
+         change (registeredOf rj).toOption.map (·.1) = some own
+         rw [hro]
+         all_goals rfl)
+  all_goals rw [hpr] at hreg
+  all_goals clear hr
+  all_goals
+    try dsimp only at hpart
+    obtain ⟨rows, -, hpart⟩ := bind_ok hpart
+    obtain ⟨bindings, -, hpart⟩ := bind_ok hpart
+    obtain ⟨rB, hrB, hpart⟩ := bind_ok hpart
+    rcases hu : String.fromUTF8? rB with _ | record
+    · simp only [hu] at hpart
+      try exact absurd hpart throw_ne
+    simp only [hu] at hpart
+    generalize hT' : Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
+      (Flock.Zk.maskLogOf circuitB) 1 = T at hpart
+    generalize hD : (if T.hm96Rows = true then Flock.Witness.recordDraw record else none) = D at hpart
+    have hv := Except.ok.inj hpart
+    clear hpart
+    obtain ⟨proofs, hfiles, hv⟩ := bind_ok hv
+    obtain ⟨⟨spec, tabs⟩, hst, hv⟩ := bind_ok hv
+    obtain ⟨⟨spec2, tabs2⟩, hst2, hf⟩ := bind_ok hfiles
+    rw [hst] at hst2
+    have hst2 := Except.ok.inj hst2
+    simp only [Prod.mk.injEq] at hst2
+    obtain ⟨rfl, rfl⟩ := hst2
+    try dsimp only at hv hf
+    obtain ⟨⟨⟩, hzv, hv⟩ := bind_ok hv
+    obtain ⟨⟨⟩, hsc, hv⟩ := bind_ok hv
+    obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
+    rcases D with _ | d
+    · simp only [Option.isNone_none, eq_self_iff_true, ↓reduceIte] at hv
+      obtain ⟨⟨⟩, hdl, -⟩ := bind_ok hv
+      first | cases hdl | simp [Flock.ProvedScope.drawLaw] at hdl
+    simp only [Option.isNone_some, Bool.false_eq_true, ↓reduceIte] at hv
+    obtain ⟨⟨⟩, hfd, hv⟩ := bind_ok hv
+    obtain ⟨⟨⟩, hid, hv⟩ := bind_ok hv
+    obtain ⟨⟨⟩, -, hrt⟩ := bind_ok hv
+    have hm : T.hm96Rows = true := by
+      cases hh : T.hm96Rows
+      · simp [hh] at hD
+      · rfl
+    rw [if_pos hm] at hD
+    have hds : (Flock.Witness.recordDraw record).isSome = true := by
+      rw [hD]
       rfl
-    | some r =>
-      rw [hpr] at hr
-      obtain ⟨⟨own, c, k, ps⟩, hro, hr⟩ := map_ok hr
-      simp only [Prod.mk.injEq] at hr
-      obtain ⟨rfl, -⟩ := hr
-      change (registeredOf r).toOption.map (·.1) = some own
-      rw [hro]
-      all_goals rfl
-  split at hst
-  rotate_left
-  · cases hst
-  rename_i spec' sts' hsu
-  obtain ⟨⟨⟩, -, hpair⟩ := map_ok hst
-  simp only [Prod.mk.injEq] at hpair
-  obtain ⟨rfl, rfl⟩ := hpair
-  obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
-  obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
-  obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
-  have hr' : r = (spec', sts') := by
-    repeat (obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu)
-    exact Except.ok.inj hsu
-  subst hr'
-  exact ⟨tags0, circuitB, pubB, registered, rB, record, spec', sts', proofs, hT, hc, hp, hreg, hrB, hu, hds, hbs, hf,
-    hzv, hsc, hfd, hid, hrt⟩
+    split at hst
+    rotate_left
+    · cases hst
+    rename_i spec' sts' hsu
+    obtain ⟨⟨⟩, -, hpair⟩ := map_ok hst
+    simp only [Prod.mk.injEq] at hpair
+    obtain ⟨rfl, rfl⟩ := hpair
+    obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
+    obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu
+    obtain ⟨r, hbs, hsu⟩ := bind_ok hsu
+    have hr' : r = (spec', sts') := by
+      try dsimp only at hsu
+      split at hsu <;> (repeat (obtain ⟨⟨⟩, -, hsu⟩ := bind_ok hsu)) <;> exact Except.ok.inj hsu
+    subst hr'
+    rw [← hD] at hbs hfd
+    subst hT'
+    exact ⟨tags0, circuitB, pubB, registered, rB, record, spec', sts', proofs, hT, hc, hp, hreg, hrB, hu, hds, hbs,
+      hf, hzv, hsc, hfd, hid, hrt⟩
 
 /-- **Piece E: a V\* part's compiled verdict is the model's decision at its session.** Where part `j`'s compiled
 verdict is `.ok ()` and the model decides at `xO` on the last message `f` with `xO`'s reading `s` and session
@@ -311,6 +325,7 @@ theorem decide_of_partVerdict {h : InnerHeld} {j : Nat} {p : PartOwn} {q : PartP
     unfold FlockDeploy.checks
     refine ok_bind (a := ()) ?_ ?_
     · simp [Flock.Record.check, hstmt]
+      all_goals rfl
     refine ok_bind (a := ()) ?_ ?_
     · rw [recordDraw_eq, hdraw, FlockDeploy.drawEq_refl]
       all_goals rfl
