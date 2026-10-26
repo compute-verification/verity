@@ -13,6 +13,7 @@ holding them (`commit.Committer.unit_of`, `slots.open_unit`'s construction from 
 from __future__ import annotations
 
 import hashlib
+import itertools
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -68,11 +69,48 @@ def replay_slot(shape: Shape, params: Params, committer: Committer, results: lis
     return op
 
 
+_FORKED: tuple | None = None
+
+
+def _commit_range(span: tuple[int, int]) -> tuple[list[bytes], list[bytes]]:
+    S, context, layout, salts, rows = _FORKED
+    lo, hi = span
+    first, last = layout.row_base[lo], layout.row_base[hi - 1] + len(layout.units[hi - 1])
+    strings = S._strings(rows[first:last], salts[S.SALT_BYTES * first:S.SALT_BYTES * last])
+    roots = [S._unit_tree(S.unit_domain(context, layout, u),
+                          strings[layout.row_base[u] - first:layout.row_base[u] - first + len(layout.units[u])]).commitment.root
+             for u in range(lo, hi)]
+    return strings, roots
+
+
+def commit_slot_parallel(S: Any, context: bytes, layout: Any, salt_key: bytes, slot: int, rows: list[bytes],
+                         workers: int) -> Any:
+    """`slots.commit_slot`'s strings and slot tree, its unit ranges hashed in forked workers that touch no device. The unit
+    trees aren't kept: an opening needs only the strings and the slot tree."""
+    global _FORKED
+    import multiprocessing as mp
+    flat = [r for u in layout.units for r in u]
+    if len(rows) != len(flat) or any(len(r) != row.nbytes for r, row in zip(rows, flat, strict=True)):
+        raise ValueError("a slot's rows are the layout's, in order")
+    n = layout.unit_count
+    cuts = [n * i // (4 * workers) for i in range(4 * workers + 1)]
+    spans = [(a, b) for a, b in itertools.pairwise(cuts) if b > a]
+    _FORKED = (S, context, layout, S.row_salts(salt_key, slot, 0, len(rows)), rows)
+    try:
+        with mp.get_context("fork").Pool(workers) as pool:
+            parts = pool.map(_commit_range, spans, chunksize=1)
+    finally:
+        _FORKED = None
+    strings = tuple(s for p, _ in parts for s in p)
+    roots = [r for _, p in parts for r in p]
+    return S.SlotCommit(strings, (), S.RootTree(S.slot_domain(context, layout), roots))
+
+
 class Openings:
     """Drawn units' openings against their steps' roots, from replayed slots."""
 
-    def __init__(self, committer: Committer, results: list[StepResult]) -> None:
-        self.c, self.results = committer, results
+    def __init__(self, committer: Committer, results: list[StepResult], workers: int = 1) -> None:
+        self.c, self.results, self.workers = committer, results, workers
         self.S = committer.S
         self._slots: dict[tuple[int, int], tuple[Any, list[bytes]]] = {}
         self._trees: dict[int, Any] = {}
@@ -82,7 +120,9 @@ class Openings:
         if key not in self._slots:
             r = self.results[step]
             rows = self.c.slot_rows(opened.driver.steps[step], 0)
-            self._slots[key] = (self.S.commit_slot(self.c.context, self.c.layout, r.salt_key, _row(r, opened.slot), rows), rows)
+            args = (self.c.context, self.c.layout, r.salt_key, _row(r, opened.slot), rows)
+            sc = (commit_slot_parallel(self.S, *args, self.workers) if self.workers > 1 else self.S.commit_slot(*args))
+            self._slots[key] = (sc, rows)
         return self._slots[key]
 
     def reference_equal(self, opened: Opened, step: int) -> bool:

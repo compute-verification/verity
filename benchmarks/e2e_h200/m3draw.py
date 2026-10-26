@@ -188,7 +188,7 @@ def open_drawn(a, shape, weights, params, committer, results, prompts, registere
         if not 0 <= b < batch:
             raise ValueError(f"unit {i} is outside step {step}'s partition of {batch * U}")
         targets.append((int(i), b, u, *locate(fams, u)))
-    opn, pay, docs, replays = Openings(committer, results), Payload(), [], {}
+    opn, pay, docs, replays = Openings(committer, results, a.workers), Payload(), [], {}
     r = results[step]
     for i, b, u, fam, idx in targets:
         slot = int(r.slots[b])
