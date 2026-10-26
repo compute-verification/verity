@@ -276,6 +276,7 @@ import Proofs.Flock.Claims.Recursion.VStarTraceAt
 import Proofs.Flock.Claims.Recursion.HpEarlyStaged
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
+import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.VerdictRowECommit
@@ -329,6 +330,10 @@ import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Claims.Recursion.SideCapPos
 import Proofs.Flock.Claims.Recursion.ResLowJD
 import Proofs.Flock.Claims.Recursion.ResLowerD
+import Proofs.Flock.Claims.Recursion.LabelsFull
+import Proofs.Flock.Claims.Recursion.ResSiteD
+import Proofs.Flock.Claims.Recursion.ResLowerDD
+import Proofs.Flock.Claims.Recursion.KSDec
 import Proofs.Flock.Claims.Recursion.ResAccPorts
 import Proofs.Flock.Claims.Recursion.ResChainW
 import Proofs.Flock.Claims.Recursion.OpenCoefTie
