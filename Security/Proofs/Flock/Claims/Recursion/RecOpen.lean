@@ -16,7 +16,7 @@ writes `rec_live.record_bytes`' bytes up to the link points, and the rounds `rec
 and the recorded rounds, each message the schedule's count of commit strings (`nAtSched`), one fewer than the inner
 verifier's rounds. What stays open at the dense form is `PartChecksBV` and `PartOpensB` at
 `showsPart recRead`/`cmtTr recRead` (the staged V\* statements), `DecompB`, and the readers' `ReadersTrue`
-(`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
+(the inner verifier's own calls are searched at each draw's coins, `callsLogCollAt_deployRec`).
 
 The reader is not vacuous: `recRead_honest` reads an honest three-round run back, and `Flock.Test.RecRecord`'s
 `#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no

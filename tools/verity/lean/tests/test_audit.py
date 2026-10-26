@@ -593,6 +593,10 @@ structure World where
 def Accepts (s : Sess) : Prop := verify s.x = true
 def reads (s : Sess) : Nat := s.x + 1
 def prob (_ : Nat → Prop) (n : Nat) : Nat := n
+structure Commit where
+  scheme : Nat
+  root : Nat
+def Opens (c : Commit) (o : Nat) : Prop := verify (c.root + o) = true
 end Control
 """
 SHAPE_THMS = """import Control.ShapeSpec
@@ -607,6 +611,18 @@ theorem event (zs : Nat → Sess) (_hA : ∀ j, Uniform j) (_hq : reads (zs 0) >
     prob (fun o => Accepts (zs o) ∧ reads (zs o) = 0) 1 ≤ 1 ∨ ∃ k : Nat, prob (fun o => Accepts (zs (o + k)) ∧ True) k ≤ k :=
   Or.inl (Nat.le_refl 1)
 theorem eventLate (zs : Nat → Sess) : prob (fun o => reads (zs o) = 0 ∧ Accepts (zs o)) 1 ≤ 1 := Nat.le_refl 1
+theorem shared (c c' : Commit) (o o' : Nat) (hr : c.root = c'.root) (_h : Opens c o) (_h' : Opens c' o') :
+    c.root = c'.root := hr
+theorem sharedUsed (c c' : Commit) (o o' : Nat) (hr : c.root = c'.root) (_h : Opens c o) (_h' : Opens c' o') :
+    hr = hr := rfl
+theorem sharedOther (c c' : Commit) (o o' : Nat) (_hr : c.root = c'.scheme) (_h : Opens c o) (_h' : Opens c' o') :
+    True := trivial
+theorem sharedUnread (c c' : Commit) (o : Nat) (_hr : c.root = c'.root) (_h : Opens c o) : True := trivial
+theorem late (c : Commit) (w : Nat) (_h : Opens c 0) (_hw : c.root = w) : w = w := rfl
+theorem early (c : Commit) (w : Nat) (_hw : c.root = w) (_h : Opens c 0) : w = w := rfl
+theorem lateUnused (c : Commit) (w : Nat) (_h : Opens c 0) (_hw : c.root = w) : True := trivial
+theorem closed (c : Commit) (w : Nat) (_hq : c.root = 2) (_h : Opens c 0) : w = w := rfl
+theorem written (c : Commit) (_h : Opens c 0) (_hq : c.root = 2) : True := trivial
 end Control
 """
 
@@ -626,7 +642,8 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
     (pkg / "Control" / "ShapeThms.lean").write_text(SHAPE_THMS)
     (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.ShapeThms\n")
     subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    names = ["guarded", "mentions", "underForall", "family", "world", "event", "eventLate"]
+    names = ["guarded", "mentions", "underForall", "family", "world", "event", "eventLate", "shared", "sharedUsed",
+             "sharedOther", "sharedUnread", "late", "early", "lateUnused", "closed", "written"]
     f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": {f"Control.{n}": {} for n in names}}, tmp_path)
     entry = {"function": "Control.verify", "outcome": "accept"}
     got = {n: [w.split(" : ")[0].split(" whose")[0] for w in A.refusals(entry, f["pins"][f"Control.{n}"]["shape"],
@@ -634,7 +651,13 @@ def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(
            for n in names}
     assert got == {"guarded": ["takes _hop"], "mentions": ["takes _hm"], "underForall": [], "family": ["takes _Vs.hscope"],
                    "world": ["takes _W.nonempty"], "event": ["takes zs.hown", "takes _hq"],
-                   "eventLate": ["bounds an event of Control.prob"]}, got
+                   "eventLate": ["bounds an event of Control.prob"], "shared": [], "sharedUsed": ["takes hr"],
+                   "sharedOther": ["takes _hr"], "sharedUnread": ["takes _hr"], "late": [], "early": [],
+                   "lateUnused": ["takes _hw"], "closed": ["takes _hq"], "written": ["takes _hq"]}, got
+    shared = f["pins"]["Control.shared"]["shape"][0]
+    assert [h.get("shares") for h in shared["hypotheses"]] == [
+        {"inputs": [0, 1], "path": ["Control.Commit.root"]}, None, None], "`c.root = c'.root`, one field of two inputs"
+    assert [i["uses"] for i in shared["inputs"]] == [[], [], [], []] and shared["uses"] == [0, 1]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -2376,6 +2399,50 @@ def test_a_property_takes_one_acceptance_its_inputs_and_premises_and_concludes_w
     assert A.refusals({"function": "P.check", "outcome": "reject"},
                       [part([hyp("h", 1, ["P.check", "P.reject"])], inputs=[("x", 0)])], []) == []
     assert A.refusals(None, [fits], [])[0].startswith("has no entry under shape.properties")
+
+
+def test_a_statement_in_another_order_or_with_a_shared_field_fits_as_its_restatement_would():
+    """LEAN-47: `OnePair` bound `w k` before its two acceptances and `LiveCoinBinding` took `c.root = c'.root`, each
+    equivalent to a form that fits. Binders reorder with the acceptances, the premises and what they mention first, so a
+    hypothesis on a binder the acceptance doesn't read is the conclusion's, when the conclusion reads that binder too; an
+    equation of one field of two inputs the acceptance reads is the field bound once. Nothing else moves: a hypothesis on
+    what the acceptance reads, one whose proof a kept binder mentions, a structure's fields, a probability statement's
+    hypotheses, and any statement whose facts don't say what each binder mentions are judged as written."""
+    entry = {"function": "P.check", "outcome": "accept"}
+    acc = lambda name, at, uses: hyp(name, at, ["P.check"]) | {"uses": uses}
+    q = lambda name, at, uses, **kw: hyp(name, at, ["P.Q"]) | {"uses": uses} | kw
+    inputs = lambda *ns: [{"name": n, "at": a, "head": None, "uses": []} for n, a in ns]
+    names = lambda got: [w.split(" : ")[0] for w in A.refusals(entry, [got], [])]
+    # ∀ m m' w k, check m → check m' → EpochRoot m w k → EpochRoot m' w k → ∃ …, P m w k
+    one_pair = {"inputs": inputs(("m", 0), ("m'", 1), ("w", 2), ("k", 3)), "conclusion": ["P.Good"], "uses": [0, 1, 2, 3],
+                "hypotheses": [acc("h", 4, [0]), acc("h'", 5, [1]), q("e", 6, [0, 2, 3]), q("e'", 7, [1, 2, 3])]}
+    assert names(one_pair) == []
+    assert names(one_pair | {"uses": [0, 1]}) == ["takes e", "takes e'"], "`∀ w k, E w k → C`, C without w or k, is a hypothesis"
+    assert names({k: v for k, v in one_pair.items() if k != "uses"}) == ["takes e", "takes e'"], "facts without `uses`"
+    reads = one_pair | {"hypotheses": [acc("h", 4, [0, 2]), *one_pair["hypotheses"][1:]]}
+    assert names(reads) == [], "the acceptance reads w, and E m w k still picks out the conclusion's k"
+    reads = one_pair | {"hypotheses": [acc("h", 4, [0, 2, 3]), *one_pair["hypotheses"][1:]]}
+    assert names(reads) == ["takes e", "takes e'"], "the acceptance reads w and k: E m w k is a hypothesis on what it reads"
+    proof = one_pair | {"hypotheses": [q("e", 4, [0, 2, 3]), acc("h", 5, [0, 4]), acc("h'", 6, [1])]}
+    assert names(proof) == ["takes e"], "the acceptance mentions e's proof"
+    fields = one_pair | {"hypotheses": [*one_pair["hypotheses"], hyp("w.ok", 2, ["P.Ok"], source="field")]}
+    assert names(fields) == ["takes w.ok", "takes e", "takes e'"], "a structure's field stays a hypothesis"
+    event = {"head": "G.prob", "conjuncts": [{"applies": ["P.check"], "guarded": False}, {"applies": ["P.Bad"], "guarded": False}]}
+    late = one_pair | {"hypotheses": one_pair["hypotheses"][2:], "events": [event]}
+    assert [w.split(" : ")[0] for w in A.refusals(entry, [late], [], events=["G.prob"])] == ["takes e", "takes e'"]
+    # ∀ c c' o o', c.root = c'.root → accepts c o → accepts c' o' → …
+    root = {"inputs": inputs(("c", 0), ("c'", 1), ("o", 2), ("o'", 3)), "conclusion": ["P.Good"], "uses": [0, 1, 2, 3],
+            "hypotheses": [q("r", 4, [0, 1], shares={"inputs": [0, 1], "path": ["P.C.root"]}),
+                           acc("h", 5, [0, 2]), acc("h'", 6, [1, 3])]}
+    assert names(root) == []
+    for bad, why in ((root | {"uses": [0, 1, 4]}, "the conclusion mentions its proof"),
+                     (root | {"hypotheses": [root["hypotheses"][0], acc("h", 5, [0, 2])], "uses": [0, 2]},
+                      "the acceptance doesn't read c', nor the conclusion"),
+                     (root | {"hypotheses": [root["hypotheses"][0] | {"shares": {"inputs": [0, 1], "path": []}},
+                                             *root["hypotheses"][1:]]}, "`c = c'` binds no field"),
+                     (root | {"hypotheses": [root["hypotheses"][0] | {"shares": {"inputs": [0, 0], "path": ["P.C.root"]}},
+                                             *root["hypotheses"][1:]]}, "one input")):
+        assert names(bad) == ["takes r"], why
 
 
 def test_a_function_that_always_returns_takes_no_acceptance_and_each_conjunct_must_be_about_it():
