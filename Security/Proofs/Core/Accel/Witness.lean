@@ -400,7 +400,7 @@ theorem kernel_rate (n : ℕ) (hn : n ≤ 2048) (hs : 1 ≤ x.slack) (σ : (mach
   · calc ∑ t ∈ w.ticks, Machine.usage (m := machine x cap oracle) ((kernel n).map (List.map Ins.instr)) t r
         ≤ ∑ _t ∈ w.ticks, ρ r :=
           Finset.sum_le_sum fun t _ => by rw [usage_plan]; exact kernel_tick_use n hn t r hr
-      _ = ρ r * (w.len : ℚ≥0) := by simp [Window.ticks, mul_comm]
+      _ = ρ r * (w.len : ℚ≥0) := by simp [Accounting.Window.ticks, mul_comm]
       _ ≤ ρ r * ((w.len + x.slack : ℕ) : ℚ≥0) :=
           mul_le_mul_of_nonneg_left (by exact_mod_cast Nat.le_add_right _ _) zero_le
 
