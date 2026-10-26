@@ -3,9 +3,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 /-!
 # What `Stmt.setupHiddenOf` checked and produced (`SpecOf`)
 
-`Spec` on the circuit the caller parsed (`parsed`), which `Stmt.setupHiddenOf` reads: `HmOut.parse`'s for
-`Stmt.setupHidden` (`Stmt.setupHidden_eq`), `HmOut.parseTmpl`'s for a templated session. `SpecOf.spec` is `Spec` at
-`HmOut.parse`.
+`Spec` on the circuit the caller parsed (`parsed`), which `Stmt.setupHiddenOf` reads: `HmOut.parseCommit`'s for
+`Stmt.setupHidden` (`Stmt.setupHidden_eq`). `SpecOf.spec` is `Spec` at `HmOut.parseCommit`.
 -/
 
 open Flock FlockLevel3
@@ -81,19 +80,19 @@ theorem setupHiddenOf_spec (h : Stmt.setupHiddenOf parsed tags pf coins draw par
       sigma := rfl
       hello := by assumption }
 
-/-- `SpecOf` at `HmOut.parse` is `Spec`. -/
-theorem SpecOf.spec (s : SpecOf (HmOut.parse tags cf tables) tags pf coins draw st) : Spec tags cf pf coins tables draw st :=
+/-- `SpecOf` at `HmOut.parseCommit` is `Spec`. -/
+theorem SpecOf.spec (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) : Spec tags cf pf coins tables draw st :=
   ⟨s.tagsEq, s.leaf, s.parse, s.merkle, s.pub, s.checkPublic, s.n, s.blocksReal, s.nbl, s.m, s.kLog, s.m35, s.mPts,
     s.pin, s.da, s.db, s.regions, s.inRange, s.sigma, s.hello⟩
 
-/-- `Spec` is `SpecOf` at `HmOut.parse`. -/
-theorem Spec.specOf (s : Spec tags cf pf coins tables draw st) : SpecOf (HmOut.parse tags cf tables) tags pf coins draw st :=
+/-- `Spec` is `SpecOf` at `HmOut.parseCommit`. -/
+theorem Spec.specOf (s : Spec tags cf pf coins tables draw st) : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st :=
   ⟨s.tagsEq, s.leaf, s.parse, s.merkle, s.pub, s.checkPublic, s.n, s.blocksReal, s.nbl, s.m, s.kLog, s.m35, s.mPts,
     s.pin, s.da, s.db, s.regions, s.inRange, s.sigma, s.hello⟩
 
-/-- **What `Stmt.setupHidden` accepted**, as `SpecOf` at `HmOut.parse`. -/
+/-- **What `Stmt.setupHidden` accepted**, as `SpecOf` at `HmOut.parseCommit`. -/
 theorem setupHidden_specOf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    SpecOf (HmOut.parse tags cf tables) tags pf coins draw st :=
+    SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st :=
   (setupHidden_spec' h).specOf
 
 end FlockSoundness.Discharge.Hidden

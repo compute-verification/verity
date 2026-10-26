@@ -70,20 +70,15 @@ theorem parseCommit_slots (h : HmOut.parseCommit tags cf tables = .ok c) :
 
 /-! ## The session -/
 
-/-- **A flat session commits `HmOut.parseCommit`'s circuit**: `Stmt.setupHidden` reads `HmOut.parse`, which is
-`HmOut.parseCommit` when the tags are not templated. -/
-theorem setupHidden_parseCommit (hi : tags.isTmpl = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    HmOut.parseCommit tags cf tables = .ok st.c := by
-  rw [parseCommit_flat hi]
-  exact (setupHidden_spec' h).parse
+/-- **A session commits `HmOut.parseCommit`'s circuit** (`Spec.parse`). -/
+theorem setupHidden_parseCommit (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    HmOut.parseCommit tags cf tables = .ok st.c :=
+  (setupHidden_spec' h).parse
 
-/-- **A flat session's `SpecOf` at `HmOut.parseCommit`.** -/
-theorem setupHidden_specC (hi : tags.isTmpl = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st := by
-  rw [parseCommit_flat hi]
-  exact setupHidden_specOf h
+/-- **A session's `SpecOf` at `HmOut.parseCommit`.** -/
+theorem setupHidden_specC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st :=
+  setupHidden_specOf h
 
 /-- **A templated session's `SpecOf` at `HmOut.parseCommit`**: `Stmt.setupHiddenOf` on `HmOut.parseTmpl`'s circuit. -/
 theorem setupHiddenOf_specC (hi : tags.isTmpl = true)
@@ -188,9 +183,27 @@ theorem hidden_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit 
     exact hidden_layout_of (layout_of_tmpl hT s.pin rfl rfl s.m s.kLog) hty s.da s.db
       (outPairs_inBit_of (fun n => (hok n).1.2.2) hun hsh hhm C hc)
 
-/-- **`hidden_layout'` on a flat session, through `hidden_layoutC`.** -/
-theorem hidden_layout_flat (ht : tags.typed = false) (hi : tags.isTmpl = false)
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : Layout st :=
-  hidden_layoutC ht (setupHidden_specC hi h)
+theorem hidden_layout' : HiddenLayout := fun ht h => hidden_layoutC ht (setupHidden_specC h)
+
+/-! ## The facts read off `Spec` on the committed circuit -/
+
+/-- **The leaf scheme**: under `hm96-sha512/v1` tags, a statement `Stmt.setupHidden` accepts commits its rows with
+`hm96Sha512`. -/
+theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.merkle = MerkleScheme.hm96Sha512 :=
+  specC_hm96 hl (setupHidden_specC h)
+
+/-- **The leaf scheme, plain**: under tags with plain SHA-512 leaves, a statement `Stmt.setupHidden` accepts commits its
+rows with `MerkleScheme.sha512 "flock-leaf/sha512-unsalted"`. -/
+theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
+    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" :=
+  specC_plain hl (setupHidden_specC h)
+
+/-- **The statement is well formed** (`StmtWF`, `RegionsWF`), as `setupH_wf` for `Stmt.setupH`. -/
+theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    StmtWF st ∧ RegionsWF st :=
+  specC_wf (setupHidden_specC h)
 
 end FlockSoundness.Discharge.Hidden

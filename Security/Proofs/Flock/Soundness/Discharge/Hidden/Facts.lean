@@ -3,9 +3,10 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 /-!
 # The facts read off `Spec`
 
-What [wave2-hidden-exec] reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags, its leaf scheme
-(`setupHidden_hm96`), its well-formedness (`setupHidden_wf`: `StmtWF`, `RegionsWF`) and the drawn public file; and of
-`HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows` (`parse_untyped`).
+What [wave2-hidden-exec] reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the drawn public file (its
+leaf scheme and well-formedness, `setupHidden_hm96` and `setupHidden_wf`, are `Hidden.Commit`'s, on the committed
+circuit); and of `HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows`
+(`parse_untyped`).
 -/
 
 open Flock FlockLevel3
@@ -106,32 +107,6 @@ theorem regions_wf {c : Circuit} {pub : Public} {regs : Array Region} (h : HmOut
 theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     st.tags = tags :=
   (setupHidden_spec' h).tagsEq
-
-/-- **The leaf scheme**: under `hm96-sha512/v1` tags, a statement `Stmt.setupHidden` accepts commits its rows with
-`hm96Sha512`. -/
-theorem setupHidden_hm96 (hl : tags.merkleLeaf = "hm96-sha512/v1")
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    st.merkle = MerkleScheme.hm96Sha512 := by
-  have s := setupHidden_spec' h
-  have hf := s.merkle
-  rw [parse_leafScheme s.parse, hl, Exec.find_hm96] at hf
-  exact (Option.some.inj hf).symm
-
-/-- **The leaf scheme, plain**: under tags with plain SHA-512 leaves, a statement `Stmt.setupHidden` accepts commits its
-rows with `MerkleScheme.sha512 "flock-leaf/sha512-unsalted"`. -/
-theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
-    (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    st.merkle = MerkleScheme.sha512 "flock-leaf/sha512-unsalted" := by
-  have s := setupHidden_spec' h
-  have hf := s.merkle
-  rw [parse_leafScheme s.parse, hl, Exec.find_plain] at hf
-  exact (Option.some.inj hf).symm
-
-/-- **The statement is well formed** (`StmtWF`, `RegionsWF`), as `setupH_wf` for `Stmt.setupH`. -/
-theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
-    StmtWF st ∧ RegionsWF st := by
-  have s := setupHidden_spec' h
-  exact ⟨wf_of_facts (parse_slots s.parse) (hm_pin_ok s.pin) s.m, s.m, s.mPts, regions_wf s.regions⟩
 
 /-- `Spec.pub`, at a draw. -/
 theorem setupHidden_drawn {d : Json}

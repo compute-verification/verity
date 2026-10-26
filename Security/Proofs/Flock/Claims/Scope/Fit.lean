@@ -1,3 +1,4 @@
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Claims.Scope.InScope
 import Proofs.Flock.Claims.Scope.Tables
 import Proofs.Flock.Soundness.Refine.Setup

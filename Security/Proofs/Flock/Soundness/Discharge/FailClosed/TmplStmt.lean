@@ -3,6 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.Aliased.Rows
 import Proofs.Flock.Soundness.SparseRows
 import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.ExecCircuit
 import Flock.TmplOrder
 import Flock.ProvedScope
 
@@ -20,6 +21,35 @@ as at the committed circuit (`publicOf_unrolled`).
 namespace FlockSoundness.Discharge.FailClosed
 
 open Flock Flock.Tmpl
+
+private theorem foldl_mask (x : ℕ) : ∀ (l : List ℕ) (m : Array Bool), x < m.size →
+    (l.foldl (fun m y => m.setIfInBounds y true) m).getD x false = (m.getD x false || decide (x ∈ l)) := by
+  intro l
+  induction l with
+  | nil => intro m _; simp
+  | cons y l ih =>
+    intro m hm
+    rw [List.foldl_cons, ih _ (by simpa using hm)]
+    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds, List.mem_cons]
+    by_cases hxy : y = x
+    · subst hxy; simp [hm]
+    · simp [hxy, Ne.symm hxy]
+
+/-- **The port mask is `portBits`'s membership** below its size. -/
+theorem portMask_getD (gs : Array Group) {n x : ℕ} (hx : x < n) :
+    (ProvedScope.portMask gs n).getD x false = decide (x ∈ portBits gs) := by
+  unfold ProvedScope.portMask
+  rw [foldl_mask x _ _ (by simpa using hx)]
+  have h0 : (Array.replicate n false).getD x false = false := by simp [Array.getD_eq_getD_getElem?, hx]
+  rw [h0, Bool.false_or]
+  exact decide_eq_decide.2 Iff.rfl
+
+theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portReadsB net := by
+  simp only [ProvedScope.portReadsB, Layout.portReadsB]
+  congr 1; funext i; congr 1; funext x
+  apply decide_eq_decide.2
+  refine imp_congr_right fun hx => ?_
+  rw [portMask_getD _ hx, decide_eq_true_iff]
 
 private theorem portSpan_mem {t : Tmpl} {c : ℕ} (h : t.portSpan c (c + 1) = true) : c ∈ portBits t.inGroups := by
   unfold Tmpl.portSpan at h
@@ -70,20 +100,25 @@ theorem publicOf_unrolled (t : Tags) (c : Circuit) (f : ByteArray) :
     · rfl
   · rfl
 
-/-- **A templated circuit the check passes, unrolled, is a statement the hidden-output headlines cover**: the check's
-form (hidden outputs, `--zk`, no registered reads of the verifier's own, at most one table) and a templated statement's
-tags; `HmOut.parseStmt` reads the statement circuit, which carries no template, has a `Built` unit, is in
-`Layout.scopeOkI`, and whose wires feed neither the unit nor the outputs. -/
-theorem unrolled_scope {t : Tags} {zk reg : Bool} {count : ℕ} {cf : ByteArray} {tables : List (String × ByteArray)}
-    {c : Circuit} {tu : TmplUnit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c)
-    (ht : c.tmpl = some tu) (hs : ProvedScope.scopeOkT t.hiddenOutputs zk reg count c tu = true) :
-    t.hiddenOutputs = true ∧ zk = true ∧ reg = false ∧ count ≤ 1 ∧ t.isTmpl = true ∧
-      HmOut.parseStmt t cf tables = .ok (HmOut.unrolled c) ∧ (HmOut.unrolled c).tmpl = none ∧
-      Built (HmOut.unrolled c).unit ∧ Layout.scopeOkI (HmOut.unrolled c) = true ∧
-      ProvedScope.wiresFeed (HmOut.unrolled c) = false := by
-  unfold ProvedScope.scopeOkT at hs
-  simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at hs
-  obtain ⟨⟨⟨⟨⟨⟨⟨hh, hz⟩, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩ := hs
+/-- **A templated circuit the check parses, unrolled**: only at hidden outputs and a templated statement's tags; its
+unit is `Tmpl.unroll`'s net, which reads the template's input groups, has the root's columns' size and, ordered, reads
+only port bits among its inputs; it returns the outputs where the committed circuit does, and its rows are the committed
+circuit's. -/
+theorem tmpl_facts {t : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit} {tu : TmplUnit}
+    (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c) (ht : c.tmpl = some tu) :
+    t.hiddenOutputs = true ∧ t.isTmpl = true ∧ HmOut.parseTmpl t cf tables = .ok c ∧
+      (HmOut.unrolled c).unit.inGroups = tu.t.inGroups ∧
+      (HmOut.unrolled c).unit.unitLog = max 7 (log2ceil (tu.t.defs.getD tu.t.root default).cols) ∧
+      ((HmOut.unrolled c).unit.unitLog ≤ 32 → Layout.portReadsB (HmOut.unrolled c).unit = true) ∧
+      (HmOut.unrolled c).outNet = c.outNet ∧ (HmOut.unrolled c).unitNet = c.unitNet ∧
+      Layout.v1Ports (HmOut.unrolled c) = ProvedScope.v1Ports c ∧
+      Layout.bitRows (HmOut.unrolled c) = ProvedScope.bitRows c := by
+  have hh : t.hiddenOutputs = true := by
+    cases hh : t.hiddenOutputs
+    · simp only [ProvedScope.circuitOf, hh, Bool.false_eq_true, ↓reduceIte] at hc
+      rw [(parse_facts hc).tmpl] at ht
+      cases ht
+    · rfl
   rw [ProvedScope.circuitOf_hidden hh] at hc
   have hi : t.isTmpl = true := by
     cases hi : t.isTmpl
@@ -104,17 +139,33 @@ theorem unrolled_scope {t : Tags} {zk reg : Bool} {count : ℕ} {cf : ByteArray}
     have := tu.ok
     simp only [Tmpl.unrollOk, Bool.and_eq_true] at this
     exact this.1.1.1.1.1.2
-  have hlog' : n.unitLog ≤ 32 := by rw [hul]; exact hlog
-  have e1 : Layout.v1Ports (HmOut.unrolled c) = ProvedScope.v1Ports c := by rw [he]; rfl
-  have e2 : Layout.bitRows (HmOut.unrolled c) = ProvedScope.bitRows c := by rw [he]; rfl
-  have e3 : (HmOut.unrolled c).outNet = c.outNet ∧ (HmOut.unrolled c).unitNet = c.unitNet := by
-    rw [he]; exact ⟨rfl, rfl⟩
-  refine ⟨hh, hz, hr, hn, hi, parseStmt_of_tmpl hi hc, unrolled_tmpl hc, unrolled_built hc, ?_, ?_⟩
+  refine ⟨hh, hi, hc, by rw [hu, hig], by rw [hu, hul], fun hlog => ?_, congrArg Circuit.outNet he,
+    congrArg Circuit.unitNet he, by rw [he]; rfl, by rw [he]; rfl⟩
+  rw [hu] at hlog ⊢
+  exact portReadsB_unroll ho hun hlog
+
+/-- **A templated circuit the check passes, unrolled, is a statement the hidden-output headlines cover**: the check's
+form (hidden outputs, `--zk`, no registered reads of the verifier's own, at most one table) and a templated statement's
+tags; `HmOut.parseStmt` reads the statement circuit, which carries no template, has a `Built` unit, is in
+`Layout.scopeOkI`, and whose wires feed neither the unit nor the outputs. -/
+theorem unrolled_scope {t : Tags} {zk reg : Bool} {count : ℕ} {cf : ByteArray} {tables : List (String × ByteArray)}
+    {c : Circuit} {tu : TmplUnit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c)
+    (ht : c.tmpl = some tu) (hs : ProvedScope.scopeOkT t.hiddenOutputs zk reg count c tu = true) :
+    t.hiddenOutputs = true ∧ zk = true ∧ reg = false ∧ count ≤ 1 ∧ t.isTmpl = true ∧
+      HmOut.parseStmt t cf tables = .ok (HmOut.unrolled c) ∧ (HmOut.unrolled c).tmpl = none ∧
+      Built (HmOut.unrolled c).unit ∧ Layout.scopeOkI (HmOut.unrolled c) = true ∧
+      ProvedScope.wiresFeed (HmOut.unrolled c) = false := by
+  obtain ⟨-, hi, hp, hig, hul, hpr, eo, eu, e1, e2⟩ := tmpl_facts hty hc ht
+  unfold ProvedScope.scopeOkT at hs
+  simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq] at hs
+  obtain ⟨⟨⟨⟨⟨⟨⟨hh, hz⟩, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩ := hs
+  have hlog' : (HmOut.unrolled c).unit.unitLog ≤ 32 := by rw [hul]; exact hlog
+  refine ⟨hh, hz, hr, hn, hi, parseStmt_of_tmpl hi hp, unrolled_tmpl hp, unrolled_built hp, ?_, ?_⟩
   · unfold Layout.scopeOkI
-    rw [hu, e1, e2, hrows, portReadsB_unroll ho hun hlog']
+    rw [e1, e2, hrows, hpr hlog']
     simp [hlog']
   · unfold ProvedScope.wiresFeed
-    rw [hu, hig, hig1, e3.1, e3.2, hout]
+    rw [hig, hig1, eo, eu, hout]
     simp
 
 end FlockSoundness.Discharge.FailClosed

@@ -56,35 +56,6 @@ open Flock Exec ZkExec
 
 /-! ## The executable's `scopeOk` is `Layout.scopeOk` -/
 
-private theorem foldl_mask (x : ℕ) : ∀ (l : List ℕ) (m : Array Bool), x < m.size →
-    (l.foldl (fun m y => m.setIfInBounds y true) m).getD x false = (m.getD x false || decide (x ∈ l)) := by
-  intro l
-  induction l with
-  | nil => intro m _; simp
-  | cons y l ih =>
-    intro m hm
-    rw [List.foldl_cons, ih _ (by simpa using hm)]
-    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_setIfInBounds, List.mem_cons]
-    by_cases hxy : y = x
-    · subst hxy; simp [hm]
-    · simp [hxy, Ne.symm hxy]
-
-/-- **The port mask is `portBits`'s membership** below its size. -/
-theorem portMask_getD (gs : Array Group) {n x : ℕ} (hx : x < n) :
-    (ProvedScope.portMask gs n).getD x false = decide (x ∈ portBits gs) := by
-  unfold ProvedScope.portMask
-  rw [foldl_mask x _ _ (by simpa using hx)]
-  have h0 : (Array.replicate n false).getD x false = false := by simp [Array.getD_eq_getD_getElem?, hx]
-  rw [h0, Bool.false_or]
-  exact decide_eq_decide.2 Iff.rfl
-
-theorem portReadsB_eq (net : Net) : ProvedScope.portReadsB net = Layout.portReadsB net := by
-  simp only [ProvedScope.portReadsB, Layout.portReadsB]
-  congr 1; funext i; congr 1; funext x
-  apply decide_eq_decide.2
-  refine imp_congr_right fun hx => ?_
-  rw [portMask_getD _ hx, decide_eq_true_iff]
-
 /-- **The executable's `scopeOk` is `Layout.scopeOk`.** -/
 theorem scopeOk_eq (c : Circuit) : ProvedScope.scopeOk c = Layout.scopeOk c := by
   simp only [ProvedScope.scopeOk, Layout.scopeOk, portReadsB_eq, ProvedScope.v1Ports, Layout.v1Ports]
@@ -384,6 +355,17 @@ theorem load (hh : t.hiddenOutputs = false) : HmRow.loadPublic t (circ t I) I.pu
 
 theorem loadH (hh : t.hiddenOutputs = true) : HmOut.loadPublic t (circ t I) I.publicFile = .ok (pubOf t I) := by
   have := h.public_ok
+  simpa [ProvedScope.publicOf, hh] using this
+
+/-- At hidden outputs, the circuit the check parses is the one the session commits (`HmOut.parseCommit`). -/
+theorem parseC (hh : t.hiddenOutputs = true) : HmOut.parseCommit t I.circuitFile I.tables = .ok (circC t I) := by
+  have hc := h.circuit_ok
+  rwa [ProvedScope.circuitOf_hidden hh] at hc
+
+theorem loadHC (hh : t.hiddenOutputs = true) :
+    HmOut.loadPublic t (circC t I) I.publicFile = .ok (pubOf t I) := by
+  have := h.public_ok
+  rw [show circ t I = HmOut.unrolled (circC t I) from rfl, publicOf_unrolled] at this
   simpa [ProvedScope.publicOf, hh] using this
 
 /-- A flat statement's circuit parses as `HmRow.parse` reads it, with or without hidden outputs (`HmOut.parse` of an
