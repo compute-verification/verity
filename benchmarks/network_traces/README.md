@@ -70,6 +70,7 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 | the same | c20261025T234322Z-0420 | r20261025-233025-9995 (:18098, `--window-requests 8`) | void: lateness |
 | the same, `--tokens 16` | c20261026T000242Z-89bf | 9995 | void: lateness |
 | the same, light traffic (`--requests 40 --tokens 16`) | c20261026T010321Z-d951 | r20261026-000932-b50b (:18099) | accepted |
+| the same, full traffic (`--requests 100 --tokens 16`) | c20261026T034045Z-6cd9 | r20261026-034055-bbee (:18100) | running |
 | N2 on 2982 | r20261025-231253-ebf6, r20261025-231301-6b61, r20261025-231310-20da | | accepted |
 | the scan on d951 | r20261026-011909-f489 | | accepted: honest 64 of 64, forged refused |
 
@@ -117,7 +118,9 @@ probability 37/49 ≈ 0.76.
   fields.
 
 **The scan on d951** (r20261026-011909-f489, one 8-core n1 slot, the gate's coins in challenger session
-s20261026T012652Z-6165).
+s20261026T012652Z-6165). Its files, without any gate run's witness, are stored as
+art:b6a6013d2f37a00709e45261370f61b9d02ef5b62870d9781b830a970c40e323. The run's own record carries d951's witness
+and is labelled `do-not-cite`.
 - Its sampling block is link-window 0 (T = 32 buckets), 64 units of two subcircuits:
   - 32 of `IngressScanBucket_v1{B=512,r=4,lanes=4,C=47,IDB=17,EVERY=10,WITHIN=12,D=21,KO=64}`: 1,395,428 ANDs, k_log
     26;
@@ -131,8 +134,9 @@ s20261026T012652Z-6165).
   - egress: 2.07 s of proving (2.56 s), 1,556,020 proof bytes, a Lean verify of 0.70 s.
 - `chain_record.py report` over the certificates, the endpoint, N2 on 2982 and this scan: accepted. Every negative is
   refused, or escaped N2's draw within its bound.
-- d951 is light traffic: 40 requests of at most 16 tokens over 43 link-windows. Full traffic waits on vllm's endpoint
-  with `finalize` off the engine loop, r20261026-021253-83ee (:18100).
+- d951 is light traffic: 40 requests of at most 16 tokens over 43 link-windows. Full traffic is run
+  c20261026T034045Z-6cd9, running on vllm's endpoint with `finalize` off the engine loop, r20261026-034055-bbee
+  (:18100, 1a3ffe4a88). bbee replaced r20261026-021253-83ee, which stopped with n1's 03:30Z restart.
 
 **Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
 every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
