@@ -1,0 +1,4 @@
+order = 289
+path = "`accel_score/d6.py`"
+runs_on = "CPU"
+what = "D6, ACCEL PROTO-DESIGN's number table for protocol v3 and v3.1 (CMP-118): ε in model units (η measured, P15/P20's draw, P16's replica groups, ε_net), γ at measured and paper hashing, coverage, the credited share at served-period duals from one period-level LP with every public route, the 07:04Z L′ rule, streaming b, decode, the world model"
