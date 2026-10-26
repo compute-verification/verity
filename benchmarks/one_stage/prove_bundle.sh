@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
-# The drawn-unit replay bundle's fixture proved (prove_bundle.py; PRF-171's M1): the torch loop's window that
-# benchmarks/e2e_demo's fixture was built from, written again under the fixture's test key and held to the checked-in
-# bundle byte for byte. Then each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall and decided
-# by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the tampered loop's
-# member, stopped by the firewall and refused by Lean without it.
-#   research run --on vy-nebius-cpu-3 --pool proofs --as proofs --project verity --source . --cwd clone \
-#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_BUNDLE=benchmarks/e2e_demo/tests/fixtures/drawn-unit-bundle.json]
-# Kept in $OUT: the summary, the logs and the session records; never a window's private file or the bundle's payload.
+# The drawn-unit replay bundle proved (prove_bundle.py; PRF-171's M1, and with PB_K M3's rehearsal): the torch loop's window
+# and its tampered twin written under the fixture's test key, and the bundle made from the window (`prove_bundle.py make`).
+# Without PB_K the draw is the fixture's FIXTURE_DRAW; with PB_K=K the challenger logs its receipt of the window's
+# registration and Lean `flock-verify draw` draws K units uniformly over the window's whole partition on its own coins.
+# Then each drawn member is proved by C-Flock `prove --zk` (CPU) behind the Lean firewall, one outer proof at a time, and
+# decided by Lean `verify --zk`. The negatives are the first session's one-bit proof edits, refused by Lean, and the tampered
+# loop's member, stopped by the firewall and refused by Lean without it.
+#   research run --on vy-nebius-cpu-4 --pool proofs --as proofs --project verity --source . --cwd clone \
+#     -- bash benchmarks/one_stage/prove_bundle.sh [PB_K=8] [PB_MEMBERS=N]
+# Kept in $OUT: the summary, the logs, the session records and a live draw's receipt and record; never a window's private
+# file or the bundle's payload.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
@@ -18,9 +21,8 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
-BUNDLE=${PB_BUNDLE:-benchmarks/e2e_demo/tests/fixtures/drawn-unit-bundle.json}
 
-log "prove-bundle: source $(git rev-parse HEAD), bundle $BUNDLE, builds in $W"
+log "prove-bundle: source $(git rev-parse HEAD), draw ${PB_K:+live, k }${PB_K:-FIXTURE_DRAW}, builds in $W"
 (cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
@@ -37,25 +39,16 @@ export RAYON_NUM_THREADS=$(nproc)
 # (prove_path/run.sh)
 export RUST_MIN_STACK=$((64 << 20))
 
-log "windows: the fixture's (honest) and the tampered loop's, under the fixture's test key"
-"$PY" - "$W" "$BUNDLE" <<'EOF' 2>&1 | tee -a "$O/job.log"
-import json, sys
-from verity_e2e_demo import replay_bundle as RB
-w, bundle = sys.argv[1], sys.argv[2]
-_, weights = RB.torch_loop_window(f"{w}/window")
-RB.torch_loop_window(f"{w}/tampered", tamper=True)
-doc, pay = RB.build(f"{w}/window", RB.FIXTURE_DRAW, reads=RB.torch_loop_reads, weights=weights,
-                    draw={"source": "fixture", "law": {"law": "subset", "k": len(RB.FIXTURE_DRAW)}})
-ref, ref_pay = RB.read(bundle)
-same = json.loads(json.dumps(doc)) == ref and pay == ref_pay
-print("WINDOW " + json.dumps({"bundle_is_the_windows": same, "payload_sha512": ref["payload"]["sha512"]}))
-sys.exit(0 if same else 3)
-EOF
-[ "${PIPESTATUS[0]}" = 0 ] || { log "the regenerated window is not the bundle's"; exit 8; }
+log "windows: the torch loop's (honest) and the tampered loop's, under the fixture's test key; then the bundle"
+"$PY" benchmarks/one_stage/prove_bundle.py make --scratch "$W" --out "$W/bundle" ${PB_K:+--k "$PB_K" --lean "$LEAN"} \
+  > "$O/make.log" 2>&1 || { tail -30 "$O/make.log"; exit 8; }
+grep '^MAKE' "$O/make.log" | tee -a "$O/job.log"
+cp "$W/bundle/receipt.json" "$W/bundle/draw.json" "$W/bundle/draw.log" "$O/" 2>/dev/null
+BUNDLE=$W/bundle/bundle.json
 
 log "prove: the bundle's drawn members, then the negatives"
 "$PY" benchmarks/one_stage/prove_bundle.py --bundle "$BUNDLE" --window "$W/window" --tampered "$W/tampered" \
-  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} \
+  --bin "$BIN" --lean "$LEAN" --firewall "$FWL" --out "$W/pb" ${PB_MEMBERS:+--members $PB_MEMBERS} ${PB_K:+--live} \
   > "$O/prove_bundle.log" 2> "$O/prove_bundle.err"
 rc=$?
 grep '^PROVEBUNDLE' "$O/prove_bundle.log" | tee -a "$O/job.log"
