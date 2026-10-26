@@ -18,7 +18,8 @@ V' quantized at every read: `Int8KvQuant` over the window) or at write (int8 cod
 a token). One logical program: tensor and expert parallelism change who computes a term, not the terms.
 
 The serving model (`serve`) is a roofline: a decode step reads the weights (the experts a batch touches) and every request's
-dynamic memory, at eta_memory of the node's bandwidth, or computes its products at eta_compute of its int8 rate, whichever
+dynamic memory (a DSA latent only at its top-k rows), at eta_memory of the node's bandwidth, or computes its products at
+eta_compute of its int8 rate, whichever
 is slower; the pool holds as many requests at context S as fit; a prefill is compute-bound. R_cap is the larger of the two
 phases' unit rates, and
 
@@ -314,6 +315,7 @@ def attention_mla(b: Build, m: Mapping[str, Any], phase: str, kv: str, S: int, P
     stored = kl + rope
     dyn.append({"kind": "MLA latent c_KV and the RoPE key", "layers": int(b.mult), "values_per_token_layer": stored,
                 "bytes_per_token_layer": {"as built": 2 * stored, "at write": stored}, "state_bytes_per_request_layer": 0,
+                **({"read_tokens": m["dsa"]["topk"]} if dsa else {}),
                 "write_path": (f"residual ({H}) -> RMSNorm -> kv_a ({H} -> {kl} + {rope}, fused with q_a) -> c_KV RMSNorm ({kl}); "
                                f"k_rope RoPE ({rope}) -> {stored} values -> bf16 (as built) / Int8StaticQuant (at write); "
                                f"upstream of the latent: the {H}-wide residual and W_DKV"),
@@ -643,11 +645,13 @@ def params(m: Mapping[str, Any]) -> dict[str, int]:
 
 def dynamic_bytes(dyn: Sequence[Mapping[str, Any]], kv: str, S: int) -> dict[str, int]:
     """A request's dynamic memory at context S: ``per_token`` (bytes a token, every layer), ``state`` (fixed, a request),
-    ``request``, and the state a step rewrites (``rewritten``)."""
+    ``request``, the state a step rewrites (``rewritten``), and the per-token bytes a decode step reads (``read``: an entry's
+    tokens up to its ``read_tokens``, DSA's latent its top-k rows)."""
     tok = sum(d["bytes_per_token_layer"][kv] * d["layers"] for d in dyn)
     state = sum(d["state_bytes_per_request_layer"] * d["layers"] for d in dyn)
     rew = sum(d.get("state_rewritten_bytes_per_step", 0) * d["layers"] for d in dyn)
-    return {"per_token": tok, "state": state, "request": tok * S + state, "rewritten": rew}
+    read = sum(d["bytes_per_token_layer"][kv] * d["layers"] * min(S, d.get("read_tokens", S)) for d in dyn)
+    return {"per_token": tok, "state": state, "request": tok * S + state, "rewritten": rew, "read": read}
 
 
 def serve(m: Mapping[str, Any], node: Mapping[str, Any], dec: Mapping[str, Any], pre: Mapping[str, Any], kv: str, S: int,
@@ -669,7 +673,7 @@ def serve(m: Mapping[str, Any], node: Mapping[str, Any], dec: Mapping[str, Any],
     if "experts" in m["mlp"]:
         touched = 1 - (1 - m["mlp"]["topk"] / m["mlp"]["experts"]) ** Be
     W_read = engines * ((W - pw["experts"]) + pw["experts"] * touched)
-    kv_read = B * (db["per_token"] * S + db["rewritten"] * 2 + (db["state"] - db["rewritten"]))
+    kv_read = B * (db["read"] + db["rewritten"] * 2 + (db["state"] - db["rewritten"]))
     t_mem = (W_read + kv_read) / (node["eta_memory"] * node["hbm_bytes_per_s"] * gpus)
     rate = node["eta_compute"] * node["int8_ops_per_s"] * gpus
     flops_dec = 2 * float(dec["macs"] + sum(dec["dd"].values()))

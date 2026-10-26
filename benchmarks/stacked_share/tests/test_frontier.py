@@ -97,9 +97,12 @@ def test_sparse_attention():
     assert sum(t.n for t in c["terms"] if t.role == "DSA indexer" and t.atom == F.CS) == 61 * 64 * S
     assert role(c, "DSA top-k") == 61 * 2 * S
     assert c["dd"]["QK^T"] == 61 * 128 * 576 * 2048 and c["dd"]["indexer q k^T"] == 61 * 64 * 128 * S
-    assert F.dynamic_bytes(c["dyn"], "at write", S)["per_token"] == 61 * 576 + 61 * (128 + 4)
+    db = F.dynamic_bytes(c["dyn"], "at write", S)
+    assert db["per_token"] == 61 * 576 + 61 * (128 + 4) and db["read"] == 61 * 576 * 2048 + 61 * (128 + 4) * S
+    assert F.dynamic_bytes(c["dyn"], "at write", 1024)["read"] == db["per_token"] * 1024
     g = F.compose(glm, "decode", "at write", S, P)
     assert {d["kind"]: d["layers"] for d in g["dyn"]} == {"MLA latent c_KV and the RoPE key": 78, "DSA indexer key": 21}
+    assert F.dynamic_bytes(g["dyn"], "as built", S)["read"] == 78 * 2 * 576 * 2048 + 21 * 132 * S
     assert sum(t.n for t in g["terms"] if t.role == "DSA indexer" and t.atom == F.CS) == 21 * 32 * S
     k = F.dsa_keys(glm, "prefill", S, P)
     assert k["soft"] == Fraction(2048 * 2049 // 2 + (P - 2048) * 2048, P) and k["rows"] == Fraction((P - 2048) * 2048, P)
@@ -132,6 +135,7 @@ def test_the_table_on_synthetic_atoms():
             sv = r[kv]["serving"]
             db = sv["request_bytes"]
             assert sv["B"] == int(sv["M_dyn"] // db["request"]) and sv["B"] > 0, name
+            assert (db["read"] < db["per_token"] * S) == bool(SPEC["models"][name].get("dsa")), name
             write = sv["tokens_per_s_decode"] * db["per_token"] + sv["B"] * db["rewritten"] / sv["t_step_s"]
             assert sv["T_turn_s"] == pytest.approx(sv["M_dyn"] / write)
             assert sv["R_cap"] == max(sv["R_decode"], sv["R_prefill"])
