@@ -86,7 +86,7 @@ from verity_e2e_demo import commit_slots as S
 
 FORMAT = "verity/drawn-unit-bundle/v2"
 COMMITMENT = "verity/commit-slots/v1"
-REFERENCE = {"path": "benchmarks/torch_gpu/commit_slots", "commit": "05038d5ab4d481218df7443d3ff9fe661a9f5256", "pr": 4469}
+REFERENCE = {"path": "benchmarks/torch_gpu/commit_slots", "commit": "8819d294f8e6ade1614b8997d8cf846826f63bc1", "pr": 4469}
 BLOCK_TAG = "verity/drawn-unit-bundle/block/v1"
 PAYLOAD_LAYOUT = "each drawn unit in bundle order, each row in its member's port order: the row's u16 words little-endian, then its 192-byte salt"
 INST = hm96.SHA512
