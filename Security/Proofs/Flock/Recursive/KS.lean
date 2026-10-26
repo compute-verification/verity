@@ -2,6 +2,7 @@ import Proofs.Flock.Recursive.KSStatement
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainAccPrR
+import Proofs.Flock.Claims.KS.PlainRCapPrefix
 import Proofs.Flock.Claims.Recursion.LastCallsR
 
 /-!
@@ -9,9 +10,8 @@ import Proofs.Flock.Claims.Recursion.LastCallsR
 
 `recursiveKSAt_of` is `ksLin2_deployedR_partAccepts` at the deployed join (`FlockDeploy.joinR`). At the plain record at
 the deployed reader, conflicts are tied to collisions (`plainR_conflictTied`) and the table bound at the abort law is
-`tableBoundAbortLin_VR`, from the reader's accepting last (`accLast_VR`), its free decision (`decideFree_VR`) and its
-three column facts: every read row inside the reader's columns (`rdAllAt_R` from `PlainRdInR`, `hIn`), none past the
-schedule's top level (`htopL`), and `CapHitAt` (`hcap`). Its last-message binding is `rColsBind_sha512` and
+`plainR_tableBoundAbortLin_R`, from `PlainRdInR` alone (`hIn`; the cap prefix is `capPrefixR`, proved with no
+hypotheses). Its last-message binding is `rColsBind_sha512` and
 `rCallsBind_sha512`. It also takes `StepsLogFree` at its bound record (`hLog`), and `DecompB` at what each
 part's circuit accepts (`hD`). `recursiveKSAt_of_decomp` takes that last one as `RecKSDecompR`, and
 `recursiveKSAt_of_targets` proves it from the verdict's targets (`recKSDecompR_of_targets`).
@@ -28,8 +28,6 @@ theorem recursiveKSAt_of (rd : Msg → Option FinalP)
     (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (htopL : FlockDeploy.KS.LevelTopAt (FlockDeploy.VR rd) fun _ => FlockDeploy.KS.plainRawLevelColsRV rd)
-    (hcap : FlockDeploy.KS.CapHitAt (FlockDeploy.VR rd) fun _ => FlockDeploy.KS.plainRawLevelColsRV rd)
     (hLog : (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
       (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
       RecDeploy.rowInDeployed final w).StepsLogFree FlockDeploy.sha512)
@@ -56,9 +54,7 @@ theorem recursiveKSAt_of (rd : Msg → Option FinalP)
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
   RecDeploy.ksLin2_deployedR_partAccepts rd b aux nOf hd recRest rest wE FlockDeploy.joinR final w
     (FlockDeploy.KS.plainR_conflictTied _ rd)
-    (FlockDeploy.KS.tableBoundAbortLin_VR rd _ rfl (fun x => FlockDeploy.KS.εtable_nonneg false x)
-      (fun _ => FlockDeploy.KS.plainRawLevelColsRV rd) (FlockDeploy.KS.accLast_VR rd) (FlockDeploy.KS.decideFree_VR rd)
-      (FlockDeploy.KS.rdAllAt_R rd hIn) htopL hcap)
+    (FlockDeploy.KS.plainR_tableBoundAbortLin_R rd hIn)
     (RecDeploy.rColsBind_sha512 rd) (RecDeploy.rCallsBind_sha512 rd) hLog hD
 
 /-- **`RecursiveKSAt` from `RecKSDecompR`**: `recursiveKSAt_of` with `DecompB` at the dense form as
@@ -70,12 +66,10 @@ theorem recursiveKSAt_of_decomp (rd : Msg → Option FinalP)
     (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (htopL : FlockDeploy.KS.LevelTopAt (FlockDeploy.VR rd) fun _ => FlockDeploy.KS.plainRawLevelColsRV rd)
-    (hcap : FlockDeploy.KS.CapHitAt (FlockDeploy.VR rd) fun _ => FlockDeploy.KS.plainRawLevelColsRV rd)
     (hLog : (RecDeploy.bdR rd wE final w).StepsLogFree FlockDeploy.sha512)
     (hD : RecDeploy.RecKSDecompR rd b aux nOf hd recRest rest wE final w) :
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
-  recursiveKSAt_of rd final rest wE w b aux nOf hd recRest hIn htopL hcap hLog fun shape hs => by
+  recursiveKSAt_of rd final rest wE w b aux nOf hd recRest hIn hLog fun shape hs => by
     obtain rfl := List.mem_singleton.1 hs
     exact hD
 
@@ -94,8 +88,6 @@ theorem recursiveKSAt_of_targets (rd : Msg → Option FinalP)
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (htopL : FlockDeploy.KS.LevelTopAt (FlockDeploy.VR rd) fun _ => FlockDeploy.KS.plainRawLevelColsRV rd)
-    (hcap : FlockDeploy.KS.CapHitAt (FlockDeploy.VR rd) fun _ => FlockDeploy.KS.plainRawLevelColsRV rd)
     (hLog : (bdR rd wE final w).StepsLogFree FlockDeploy.sha512)
     {Q : Type} (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
     (acc : Msg → List Msg → List Coin → ℕ → Array F128) (h : Top.Targets rd rows holds acc)
@@ -130,7 +122,7 @@ theorem recursiveKSAt_of_targets (rd : Msg → Option FinalP)
       PiecesComputes (bdR rd wE final w) (recR rd b aux nOf hd recRest rest wE final w) (Top.pieces rows)
         (Top.pholds holds) ownQ s x c ms) :
     Flock.Guarantees.RecursiveKSAt rd final rest wE w b aux nOf hd recRest :=
-  recursiveKSAt_of_decomp rd final rest wE w b aux nOf hd recRest hIn htopL hcap hLog
+  recursiveKSAt_of_decomp rd final rest wE w b aux nOf hd recRest hIn hLog
     (recKSDecompR_of_targets rd rows holds acc b aux nOf hd recRest rest wE final w h ownB ownQ hR hrest hlowR hlowP)
 
 end Targets
