@@ -1,9 +1,11 @@
 """The driver serving requests through `slots.SlotKV` by continuous batching, at the tiny shape on the CPU: slots are reused and
-steps mix positions, every row a request commits equals its row when it runs alone, the KV rows attention reads are K's and V's
-committed rows at the steps that wrote them (and a stale read is caught by replay), and every family replays."""
+steps mix positions, every row a request commits equals its row when it runs alone, micro-batches change no root, the KV rows
+attention reads are K's and V's committed rows at the steps that wrote them (and a stale read is caught by replay), every
+family replays, and `run.py --requests` serves under the by-table and the per-slot commit."""
 from __future__ import annotations
 
 import json
+import shutil
 
 import numpy as np
 import pytest
@@ -30,8 +32,9 @@ class RecordingKV(SlotKV):
         self.reads: dict[tuple[int, int], tuple[np.ndarray, np.ndarray]] = {}
         self.stale_at = stale_at
 
-    def read(self, layer: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        k, v, mask = super().read(layer)
+    def read(self, layer: int, rows: slice = slice(None)) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        assert rows.indices(self._current().n)[:2] == (0, self._current().n), "one read a layer (no micro-batches)"
+        k, v, mask = super().read(layer, rows)
         if self.step == self.stale_at:
             k = k.roll(1, dims=0)
         self.reads[self.step, layer] = (words(k), words(v))
@@ -46,10 +49,10 @@ def prompts() -> np.ndarray:
     return RUN.prompts_for("serve", N, P)
 
 
-def serve(weights: Weights, stale_at: int | None = None) -> tuple[Driver, RecordingKV]:
-    d = Driver(TINY, GeneratorStore(weights), SLOTS, committer(), clock=lambda: 0.0)
-    kv = RecordingKV(SlotShape(SLOTS, TINY.layers, TINY.context, TINY.head_dim, prompt=P, generate=G), "cpu", admit=ADMIT,
-                     stale_at=stale_at)
+def serve(weights: Weights, stale_at: int | None = None, micro_batch: int | None = None) -> tuple[Driver, SlotKV]:
+    d = Driver(TINY, GeneratorStore(weights), SLOTS, committer(), clock=lambda: 0.0, micro_batch=micro_batch)
+    shape = SlotShape(SLOTS, TINY.layers, TINY.context, TINY.head_dim, prompt=P, generate=G)
+    kv = SlotKV(shape, "cpu", admit=ADMIT) if micro_batch else RecordingKV(shape, "cpu", admit=ADMIT, stale_at=stale_at)
     ps = prompts()
     d.serve(kv, [Request(i, bytes(ps[i].astype(np.uint8))) for i in range(N)])
     return d, kv
@@ -100,6 +103,14 @@ def test_each_request_commits_what_it_commits_alone(weights, served):
                 assert np.array_equal(batched.tables[op][1][b], word[0]), (f.seq, j, op)
 
 
+def test_micro_batches_change_no_served_root(weights, served):
+    """K and V written and read a micro-batch of rows at a time (`SlotKV.write`/`read` over row slices) commit what one
+    micro-batch does."""
+    d, _ = serve(weights, micro_batch=2)
+    assert [r.root for r in d.results] == [r.root for r in served[0].results]
+    assert [(f.seq, f.generated) for f in d.finished] == [(f.seq, f.generated) for f in served[0].finished]
+
+
 def test_attention_reads_the_committed_kv(weights, served):
     """At every step and layer, the keys and values each slot's attention read are K's and V's committed rows at the steps
     that wrote them (`Replayer.kv`), and +0 past the slot's position, a reused slot included; the scores and probabilities
@@ -141,11 +152,14 @@ def test_a_stale_kv_read_fails_replay(weights, served):
     assert [r.root for r in d.results[:step]] == [r.root for r in served[0].results[:step]]
 
 
-def test_run_serves_requests(tmp_path):
+@pytest.mark.parametrize("commit", ["reference", pytest.param("slots", marks=pytest.mark.skipif(
+    not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="the slots commit's host twin needs a C++ compiler"))])
+def test_run_serves_requests(tmp_path, commit):
     rc = RUN.main(["--out", str(tmp_path), "--shape", "tiny", "--batch", "3", "--requests", "5", "--prompt-bytes", "2",
-                   "--generate", "2", "--admit", "2", "--commit", "reference", "--draw", "1"])
+                   "--generate", "2", "--admit", "2", "--commit", commit, "--draw", "1"])
     assert rc == 0
     rec = json.loads((tmp_path / "record.json").read_text())
+    assert rec["commit"]["backend"] == commit and rec["replay"]["opening"] is None
     assert rec["serving"]["finished"] == 5 and rec["serving"]["slot_reuses"] == 2
     assert rec["replay"]["mismatches"] == 0 and rec["requests"]["n"] == 5
     bundle = json.loads((tmp_path / "bundle.json").read_text())

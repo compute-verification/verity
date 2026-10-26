@@ -1,12 +1,12 @@
-"""The H200 demo's sequence slots and KV cache (``slots.py``): admission, finish and reuse, rows bit for bit against a
-per-request reference, and the rows the replay opens through the stand-in commit call."""
+"""The H200 demo's sequence slots and KV cache (``slots.py``): admission, finish and reuse, and rows bit for bit against a
+per-request reference, written a step at once or a micro-batch of rows at a time."""
 from __future__ import annotations
 
 import pytest
 import torch
 
-from check_slots import reference, requests, run
-from e2e_h200.slots import K, V, Request, SlotKV, SlotShape, StepPlan, StepRows, commit_step, verify_row
+from check_slots import mix, reference, requests, run
+from e2e_h200.slots import K, V, Request, SlotKV, SlotShape, StepPlan, StepRows
 
 SHAPE = SlotShape(slots=4, layers=3, ctx=8, head_dim=4, prompt=3, generate=4)
 
@@ -45,10 +45,9 @@ def test_kv_rows_and_outputs_equal_each_request_run_alone():
                 assert torch.equal(v[i, :p].view(torch.int16), rows[:p, layer, V])
                 assert not k[i, p:].view(torch.int16).any() and not v[i, p:].view(torch.int16).any()
 
-    def on_step(plan: StepPlan, rows: StepRows) -> int:
+    def on_step(plan: StepPlan, rows: StepRows) -> None:
         for i, (seq, p) in enumerate(zip(rows.seqs, rows.positions.tolist())):
-            got[seq, p] = rows.words[i].reshape(SHAPE.layers, 2, SHAPE.head_dim)
-        return 0
+            got[seq, p] = rows.words[i]
 
     done = run(kv, reqs, on_step, on_begin)
     for r in reqs:
@@ -58,50 +57,37 @@ def test_kv_rows_and_outputs_equal_each_request_run_alone():
     assert len({done[r.seq].slot for r in reqs}) < len(reqs)
 
 
-def test_refs_open_every_row_the_attention_read_from_the_steps_that_committed_it():
-    shape = SlotShape(slots=4, layers=3, ctx=8, head_dim=4, prompt=3, generate=4, row_words=2)
-    reqs = requests(shape, 9, seed=2)
-    kv = SlotKV(shape, admit=2)
-    commits = {}
-    base = 5
-
-    def on_step(plan: StepPlan, rows: StepRows) -> int:
-        other = torch.full((plan.n, base, shape.row_words), 7, dtype=torch.int16)
-        words = torch.cat([other, rows.words], dim=1)
-        commits[plan.step] = commit_step(plan.step, (rows.slots, words), slots=shape.slots, salt_key=bytes([plan.step]) * 32)
-        return base
-
-    done = run(kv, reqs, on_step)
-    assert len(done) == len(reqs)
-    for r in reqs:
-        rows, _ = reference(shape, r)
-        for layer in range(shape.layers):
-            for p in (0, shape.steps // 2, shape.steps - 1):
-                refs = kv.refs(r.seq, layer, p)
-                assert [(x.position, x.kind) for x in refs] == [(j, kind) for j in range(p + 1) for kind in (K, V)]
-                for x in refs:
-                    assert x.step == done[r.seq].admitted + x.position and x.slot == done[r.seq].slot
-                    c = commits[x.step]
-                    for q in range(x.rows):
-                        o = c.open(x.slot, x.index + q)
-                        assert verify_row(o, c.root, slots=shape.slots, row_bits=c.row_bits)
-                        span = slice(q * shape.row_words, (q + 1) * shape.row_words)
-                        assert o.words.tolist() == rows[x.position, layer, x.kind, span].tolist()
-
-
-def test_a_tampered_opening_fails():
-    words = torch.arange(12, dtype=torch.int16).reshape(2, 3, 2)
-    c = commit_step(4, (torch.tensor([1, 3]), words), slots=4, salt_key=bytes(32))
-    o = c.open(3, 2)
-    assert verify_row(o, c.root, slots=4, row_bits=32) and o.words.tolist() == [10, 11]
-    flipped = bytes([o.row[0] ^ 1]) + o.row[1:]
-    assert not verify_row(type(o)(**{**o.__dict__, "row": flipped}), c.root, slots=4, row_bits=32)
-    assert not verify_row(type(o)(**{**o.__dict__, "slot": 1}), c.root, slots=4, row_bits=32)
-    assert not verify_row(type(o)(**{**o.__dict__, "step": 5}), c.root, slots=4, row_bits=32)
-    assert not verify_row(o, c.slot_roots[3], slots=4, row_bits=32)
-    other = commit_step(4, (torch.tensor([1, 3]), words), slots=4, salt_key=bytes(32))
-    assert other.root == c.root
-    assert commit_step(4, (torch.tensor([1, 3]), words), slots=4, salt_key=bytes([1]) * 32).root != c.root
+def test_micro_batches_of_rows_write_and_read_what_the_whole_step_does():
+    """The driver writes and reads a step's rows a micro-batch at a time (``rows``): the cache ends each step as a whole-step
+    write leaves it, and a layer written for only some rows is refused."""
+    reqs = requests(SHAPE, 7, seed=3)
+    whole, parts = SlotKV(SHAPE, admit=2), SlotKV(SHAPE, admit=2)
+    whole.submit(reqs)
+    parts.submit(reqs)
+    while not whole.idle:
+        plan, same = whole.begin(), parts.begin()
+        assert plan.slots.tolist() == same.slots.tolist()
+        h = plan.tokens * 1000003 + plan.positions * 7919 + 1
+        for layer in range(SHAPE.layers):
+            k, v = (mix(h, layer, kind, SHAPE.head_dim).view(torch.bfloat16) for kind in (K, V))
+            whole.write(layer, k, v)
+            for rows in (slice(0, 1), slice(1, None)):
+                parts.write(layer, k[rows], v[rows], rows)
+                pk, pv, pm = parts.read(layer, rows)
+                wk, wv, wm = whole.read(layer)
+                assert torch.equal(pk.view(torch.int16), wk[rows].view(torch.int16))
+                assert torch.equal(pv.view(torch.int16), wv[rows].view(torch.int16)) and torch.equal(pm, wm[rows])
+        assert torch.equal(parts.rows().words, whole.rows().words)
+        out = h % 256
+        assert whole.end(out) == parts.end(out)
+    kv = SlotKV(SHAPE, admit=2)
+    kv.submit(reqs[:2])
+    kv.begin()
+    z = torch.zeros(1, SHAPE.head_dim, dtype=torch.bfloat16)
+    for layer in range(SHAPE.layers):
+        kv.write(layer, z, z, slice(0, 1))
+    with pytest.raises(RuntimeError, match=r"wrote no KV rows for layers \[0, 1, 2\]"):
+        kv.end([0, 0])
 
 
 def test_rows_keep_every_bf16_bit_pattern():
@@ -141,5 +127,3 @@ def test_refusals():
     with pytest.raises(ValueError, match="takes 1 output bytes"):
         kv.end([0, 0])
     assert kv.end([0]) == []
-    with pytest.raises(KeyError, match="hasn't been committed"):
-        kv.refs(1, 0, 1)
