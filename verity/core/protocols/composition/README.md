@@ -7,7 +7,7 @@ their ported components' packages, with no Mathlib:
   `Core.Protocol` of a composition, with its verdict rule, its formats and the commitment's binding (`Product.lean`); the
   stub components (`Stubs.lean`); and the `#guard`s that pin the rule (`Guards.lean`).
 - `core_onsite` (`../onsite`, `Core.Onsite.protocol`, `verity/onsite/v0`): integrity, work, space, bandwidth and
-  communication (the network certificate check and NCI).
+  communication (the network certifier over the period, and NCI).
 - `core_remote` (`../remote`, `Core.Remote.protocol`, `verity/remote/v0`): integrity and work.
 
 The rule and the formats are written once, over any list of components, and the two products are values
@@ -45,32 +45,37 @@ component accepts its own case, and the commitment is `bind` of the components' 
 
 | component | onsite | remote | `Core.Protocol` | id |
 | --- | --- | --- | --- | --- |
+| communication (the network certifier over the period: its link-windows certified and proved, and the bound `K` on what left the site) | yes | | `NetworkCheck.Period.protocol` (`network_check`, `../network/lean`) | `verity/certifier/v0` |
 | communication (NCI: the declaration's isolation units each read at most `α` novel bits per gate) | yes | | `NciCheck.Protocol.protocol` (`nci_check`, `../network/nci/lean`) | `verity/nci/v1` |
-| communication (the network certificate check) | yes | | `NetworkCheck.Check.protocol` (`network_check`, `../network/lean`) | `verity/network-certificate/v4` |
 | work (PoUW's window check) | yes | yes | `PouwCheck.protocol` (`pouw_check`, `../pouw/lean/check`) | `verity/pouw/v1` |
 | integrity (sampled proofs' one-stage audit) | yes | yes | `SampledProofs.OneStage.protocol` (`core_sampled_proofs`, `../../service/sampled_proofs`) | `verity/sampled-proofs/one-stage/v1` |
-| bandwidth | yes | | stub | `verity/stub/bandwidth/v0` |
-| space (PoUS) | yes | | stub | `verity/stub/pous/v0` |
+| space (PoUS's check of a run) | yes | | `PousCheck.RunProtocol.protocol` (`pous_check`, `../pous/check`) | `verity/pous/p2/v4/run` |
+| bandwidth (the remote bandwidth session) | yes | | `RemoteAudit.Protocol.protocol` (`remote_audit`, `../remote_bandwidth/lean`) | `verity/remote-bandwidth/v0` |
 
 Until its port lands, a component is a stub, `Core.Example.protocol` under an id that says so (`Stubs.lean`). A port
 replaces its stub in `Core.Onsite.components` and `Core.Remote.components` with its own `Core.Protocol` value, its package
 a `[[require]]` of each product, keeping each list in the order of its ids (`ordered`, which each product's `#guard`
 checks), and deletes the stub. The difftest's reference (`tests/reference.py`) replaces the stub's mirror with the port's
-own Python (`Ported`), and its cases come from the port's own difftest. The trial's reconciling is not a component
-yet.
+own Python (`Ported`), or its Python's answers on cases made once (`Recorded`), and its cases come from the port's
+own difftest or its period hook. Every component of both products is ported, NCI among onsite's; the trial's
+reconciling is not a component yet.
 
 ## The difftest
 
 `uv run tools/verity/check/suites.py verity-core-composition` builds `onsite` and `remote` and drives each one's `serve`
 through the harness's `ProtocolPort` (`../../difftest`), holding every field of each outcome but its reason to
 `tests/reference.py`: the trial's composition rule from #1036 (`cursor/protocol-interfaces-c3b2` at 46820ebcb, vendored,
-with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), a
-mirror of the stub, and each ported component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage
-difftest's `answer`, `one_stage` behind the protocol's decoders; the network check's difftest's `reference`, the
-certifier's `Audit`; the NCI protocol's difftest's `reference`, `nci_reference.check_baseline` behind the protocol's
-decoders), which that component's own difftest holds its Lean to.
-Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode (a
-ported component's from its own difftest's generator, every one aimed at acceptance a third of the time), and the
+with its source files named), over the harness's framing of the core interface (`verity_difftest.protocol.answer`), and
+each component's own Python (PoUW's `core_check.case`; sampled proofs' one-stage difftest's `answer`, `one_stage` behind
+the protocol's decoders; the network certifier's period difftest's `reference`, its Python mirror over the certifier's
+certificates and one-stage's answers, on small signed periods from its `build`; the NCI protocol's difftest's
+`reference`, `nci_reference.check_baseline` behind the protocol's decoders), which that component's own difftest holds
+its Lean to; for space and bandwidth, their Python verifiers' answers on small periods of their hooks
+(`tests/periods.py`: `pous.period.run` signed at S1's deployed parameters, honest and cheating, and
+`remote_bandwidth.period.run`, honest, cheating and unverified), whose Lean their packages' difftests hold to those
+verifiers (`../pous/check/tests/test_run_protocol.py`, `../remote_bandwidth/lean/tests/test_protocol.py`).
+Hypothesis draws 1000 cases a product (seed 0): each component's case accepts, rejects, is undecided or fails to decode
+(one draw in six every one aimed at acceptance, one in six all but one, which is aimed at undecided), and the
 composition's inputs or the case itself are often broken. The port follows top's rule where the
 trial's differs, and the reference is changed to match (`verdict`; the trial's, reduced to answers, is `trial_verdict`):
 
