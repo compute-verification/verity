@@ -8,8 +8,8 @@ import Proofs.Pouw.Dither
 * `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open
   parameter: an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's
   verdict, with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`.
-  The rounds' work fits the period from the deadline: the certifier's clock bounds each round's work to `Δ` of wall
-  time, G2 bounds its use by `ρ_r Δ`, and `k Δ ≤ T`.
+  The rounds fit the period from the deadlines: the certifier's clock bounds each round's work to `Δ` of wall time
+  and its answer to `τ_ans`, G2 bounds their use by `ρ_r Δ` and `ρ_r τ_ans`, and `k (Δ + τ_ans) ≤ T`.
 * `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting the floors, and at the `x`
   `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
   `Proofs.Pouw.Dither.WorkSound`.
@@ -32,15 +32,16 @@ open scoped NNRat
 theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : WorkSoundAtX c pb hr x := by
   intro D P L G e _ _ _ k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho macs comps η δ nmax Hmac Ein Eout κS Δ Q κdmm κdsha
-    Badv ξ κx κsha t cin cout arrive hreg hdual hinst hH hη hδ hδ1 hn hHmac hEi hEo hkΔ hξ hκd hcap g1 g2 g3 p1 p2 sak
-    sha out svc sees clock ext
+    Badv ξ κx κsha t cin cout arrive τans tc ansAt hreg hdual hinst hH hη hδ hδ1 hn hHmac hEi hEo hkΔ hξ hκd hcap g1 g2
+    g3 p1 p2 sak sha out svc sees clock aclock ext
   have hinst' : ∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubCost e μ pb.mm (macs a) ≤ Hmm a ∧
       pubCost e μ pb.sha (comps a) ≤ Hsha a := fun a ha =>
     ⟨(hinst a ha).1, (hinst a ha).2.1, (hinst a ha).2.2.1, (hinst a ha).2.2.2.1, (hinst a ha).2.2.2.2.1⟩
-  have svc' : ServiceSound G P k reg (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) dev κS := fun A =>
+  have svc' : ServiceSound G P k reg (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt) dev
+      κS := fun A =>
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
-  have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) dev
-      (Ein + Eout) :=
+  have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt)
+      dev (Ein + Eout) :=
     fun A o x hv => (sees A o x).trans (add_le_add hv.1.2.1 hv.1.2.2)
   refine ⟨h G P k Reg reg Obs _ dev Pd μ Hmm Hsha Ho (fun a => pubCost e μ pb.mm (macs a))
     (fun a => pubCost e μ pb.sha (comps a)) η δ (nmax * Hmac) (Ein + Eout) κS Q κdmm κdsha Badv ξ κx κsha hreg hdual
@@ -52,13 +53,21 @@ theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ve
     have h1 := ((g2.2 (A.work w) (A.workIn o x w)).2 r).2
     have h2 : G.wall (A.work w) (A.workIn o x w) ≤ Δ := by
       have := clock A o x w
-      have := hv.2.2 w
+      have := (hv.2.2 w).1
       linarith
     exact h1.trans (mul_le_mul_of_nonneg_left h2 hrate)
-  show _ ≤ G.rate r * Pd.T
-  calc ∑ w, G.use (A.work w) (A.workIn o x w) r ≤ ∑ _w : Fin k, G.rate r * Δ :=
-        Finset.sum_le_sum fun w _ => hw w
-    _ = G.rate r * (k * Δ) := by
+  have ha : ∀ w, G.use (A.answer w) (A.answerIn o x w) r ≤ G.rate r * τans := fun w => by
+    have h1 := ((g2.2 (A.answer w) (A.answerIn o x w)).2 r).2
+    have h2 : G.wall (A.answer w) (A.answerIn o x w) ≤ τans := by
+      have := aclock A o x w
+      have := (hv.2.2 w).2
+      linarith
+    exact h1.trans (mul_le_mul_of_nonneg_left h2 hrate)
+  show ∑ w, (G.use (A.work w) (A.workIn o x w) r + G.use (A.answer w) (A.answerIn o x w) r) ≤ G.rate r * Pd.T
+  calc ∑ w, (G.use (A.work w) (A.workIn o x w) r + G.use (A.answer w) (A.answerIn o x w) r)
+        ≤ ∑ _w : Fin k, (G.rate r * Δ + G.rate r * τans) :=
+        Finset.sum_le_sum fun w _ => add_le_add (hw w) (ha w)
+    _ = G.rate r * (k * (Δ + τans)) := by
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]; ring
     _ ≤ G.rate r * Pd.T := mul_le_mul_of_nonneg_left hkΔ hrate
 

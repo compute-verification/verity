@@ -44,16 +44,18 @@ and every period `Pd` with its dual price `μ` at the registered rounds' honest 
   streams the dither bits `b` (RT-PROTO P2, the coordinator's 06:20Z decision; `n_max = N` for a static call, `d_v` for
   PV). The counts exclude the certifier's own coin stream, and the caps are set at served traffic (P18). Without a
   streamed side, about 1 kbit carries a whole round, and `OutsourceWithinEgress` at this `β` is false;
-* the deadline from the auditor's clocks: every round's coin drawn at least `Δ` before the period's end on the
-  challenger's schedule `t`, the period refused if the network certifier saw a commitment arrive later than `Δ` after
-  its coin (`Timed`, RT-PROTO P5), a commitment arriving no sooner than its work (`RootAfterCoin`), and the period's
-  boundary `k Δ ≤ T`,
+* the deadlines from the auditor's clocks: every round's dither coin drawn at `t w` and its check coins at `tc w`, at
+  least `Δ` and `τ_ans` before the period's end, the period refused if the network certifier saw a commitment arrive
+  later than `Δ` after its dither coin or an answer later than `τ_ans` after its check coins (`Timed`, RT-PROTO P5,
+  RT-LEAN-2 I1), a commitment and an answer arriving no sooner than their programs (`RootAfterCoin`,
+  `AnswerAfterCoin`), and the period's boundary `k (Δ + τ_ans) ≤ T`,
 
 for every prover `A`, the probability over the oracle and the verifier's coins that the verdict accepts its period and
-other work `z` fits on the devices beside its rounds' work with `rv + W_other(z) > OPT_honest + ε_A C` is at most
+other work `z` fits on the devices beside its rounds' timed work and answers with `rv + W_other(z) > OPT_honest + ε_A C` is at most
 `δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, at `C = μ · hon = Σ_w H(reg w)` and
 `ε_A = (Σ_w (H − pub_mm − pub_sha)(reg w) + ln(1/δ)/η + n_max H_mac (E_in + E_out))/C + μ · ξ_A/C`; and every period
-the verdict accepts did its rounds' work within the period's capacity (`TimedWorkFits`), which is what the deadline buys.
+the verdict accepts did its rounds' work and answers within the period's capacity (`TimedWorkFits`), which is what
+the deadlines buy.
 
 The other devices are resources of `G` at their θ rates (RT-PROTO P9): the honest optimum and the capacity count them,
 and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the cards
@@ -66,28 +68,30 @@ def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Ve
     (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ) (Hmm Hsha Ho macs comps : P.Inst → ℝ)
     (η δ nmax Hmac Ein Eout κS Δ Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P k → ℕ)
     (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ) (t : Fin k → ℝ) (cin cout : Obs → ℝ)
-    (arrive : Obs → Fin k → ℝ),
+    (arrive : Obs → Fin k → ℝ) (τans : ℝ) (tc : Fin k → ℝ) (ansAt : Obs → Fin k → ℝ),
     (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
     (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubCost e μ pb.mm (macs a) ≤ Hmm a ∧
       pubCost e μ pb.sha (comps a) ≤ Hsha a ∧ Hmm a + Hsha a + Ho a ≤ Hmac * macs a) →
     ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
-    0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 ≤ Hmac → 0 ≤ Ein → 0 ≤ Eout → k * Δ ≤ Pd.T → (∀ A r, 0 ≤ ξ A r) →
-    (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
+    0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 ≤ Hmac → 0 ≤ Ein → 0 ≤ Eout → k * (Δ + τans) ≤ Pd.T →
+    (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
+    (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     SAKMatmul G P μ Reg (fun a => pubCost e μ pb.mm (macs a)) (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a)
       κdmm →
     ShaSpeed G P k reg μ (fun a => pubCost e μ pb.sha (comps a)) (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a)
       κdsha κsha →
     OutsourceWithinEgress G μ (nmax * Hmac) → ServiceSound G P k reg verdict dev κS →
-    CertifierSeesImports G P k dev cin cout → RootAfterCoin G P k dev t arrive → ExtractAdv G P k reg Q Badv ξ κx →
-    FreedSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) dev Pd 1
+    CertifierSeesImports G P k dev cin cout → RootAfterCoin G P k dev t arrive → AnswerAfterCoin G P k dev tc ansAt →
+    ExtractAdv G P k reg Q Badv ξ κx →
+    FreedSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt) dev Pd 1
       (fun A => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w))
           (fun w => pubCost e μ pb.mm (macs (reg w))) (fun w => pubCost e μ pb.sha (comps (reg w))) η δ
           (nmax * Hmac) (Ein + Eout) +
         (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
       (∑ r, μ r * (1 * Pd.hon r))
       (fun A => δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A))) ∧
-    TimedWorkFits G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) dev Pd
+    TimedWorkFits G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt) dev Pd
 
 /-- **The headline on the card table `c` at θ**: `WorkSoundAtX` at every open parameter `x` meeting the table's floors
 (`c.floors`) with the product form (`AccelProductForm`). -/

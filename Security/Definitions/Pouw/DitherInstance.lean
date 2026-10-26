@@ -24,9 +24,10 @@ import Definitions.Core.Accel.Principles
 * **the card's runs at `x`** (`CardRunsAt`): `Assumptions.CardWithinAccel`'s refinement at the open parameters it gives;
 * **the network certifier's counts** (`Counted`, RT-PROTO P2): the verifier refuses a period whose signed counts into
   or out of the devices, read from the devices' readings (`Readings`), pass the caps `E_in`, `E_out`;
-* **the auditor's clocks** (`Timed`, RT-PROTO P5): the verifier refuses a period in which the network certifier saw
-  some round's commitment arrive more than `Δ` after the challenger's coin, and draws every round's coin at least `Δ`
-  before the period's end; `TimedWorkFits` is what that buys, the rounds' work within the period's capacity.
+* **the auditor's clocks** (`Timed`, RT-PROTO P5, RT-LEAN-2 I1): the verifier refuses a period in which the network
+  certifier saw some round's commitment arrive more than `Δ` after its dither coin or its answer more than `τ_ans`
+  after its check coins, and the challenger draws every round's coins at least that long before the period's end;
+  `TimedWorkFits` is what that buys, the rounds' work and answers within the period's capacity.
 
 The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
 H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`, `slack ≥ 1`; on sm_120 `madHi ≥ 2` and no native `b1`, RT-MODEL M12, M13) with the
@@ -311,23 +312,26 @@ end Certifier
 
 section Clock
 
-/-- **The verdict with the auditor's clocks** (RT-PROTO P5, O-REDTEAM NF5, RT-LEAN L33): the service's verdict, the
-challenger's schedule `t` draws every round's dither coin at least `Δ` before the period's end, and the period is
-refused if the network certifier saw some round's commitment arrive more than `Δ` after that round's coin (`arrive`,
-the certifier's signed arrival times as the verdict reads them from the devices' readings). Both clocks are the
+/-- **The verdict with the auditor's clocks** (RT-PROTO P5, O-REDTEAM NF5, RT-LEAN L33, RT-LEAN-2 I1): the service's
+verdict; the challenger's schedules draw every round's dither coin at `t w` and its check coins at `tc w`, at least `Δ`
+and `τans` before the period's end; and the period is refused if the network certifier saw some round's commitment
+arrive more than `Δ` after its dither coin (`arrive`), or its answer more than `τans` after its check coins (`ansAt`),
+the certifier's signed arrival times as the verdict reads them from the devices' readings. The clocks are the
 auditor's; nothing here reads a time the prover reports. -/
 def Timed {G : Accel} {P : RoundProto} {k : ℕ} {Obs : Type} (verdict : Verdict P k Obs) (Pd : Period G) (Δ : ℝ)
-    (t : Fin k → ℝ) (arrive : Obs → Fin k → ℝ) : Verdict P k Obs :=
-  fun o x tr ob => verdict o x tr ob ∧ (∀ w, 0 ≤ t w ∧ t w + Δ ≤ Pd.T) ∧ ∀ w, arrive ob w ≤ t w + Δ
+    (t : Fin k → ℝ) (arrive : Obs → Fin k → ℝ) (τans : ℝ) (tc : Fin k → ℝ) (ansAt : Obs → Fin k → ℝ) :
+    Verdict P k Obs :=
+  fun o x tr ob => verdict o x tr ob ∧ (∀ w, 0 ≤ t w ∧ t w + Δ ≤ Pd.T ∧ 0 ≤ tc w ∧ tc w + τans ≤ Pd.T) ∧
+    ∀ w, arrive ob w ≤ t w + Δ ∧ ansAt ob w ≤ tc w + τans
 
-/-- **An accepted period's rounds' work fits the period**: for every prover whose period the verdict accepts, its
-rounds' credited use (`Prover.workUse`, the work from each coin to its commitment) is, resource by resource, at most the
-period's capacity `Period.cap`. This is what lets the headline count that work against the period's devices: it was
-done on them, inside the period. -/
+/-- **An accepted period's rounds fit the period**: for every prover whose period the verdict accepts, its rounds'
+timed use (`Prover.timedUse`: the work from each dither coin to its commitment and the answer from its check coins to
+the answer) is, resource by resource, at most the period's capacity `Period.cap`. This is what lets the headline count
+that use against the period's devices: it was done on them, inside the period. -/
 def TimedWorkFits (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (verdict : Verdict P k Obs)
     (dev : Readings G P k Obs) (Pd : Period G) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x →
-    ∀ r, A.workUse o x r ≤ Pd.cap r
+    ∀ r, A.timedUse o x r ≤ Pd.cap r
 
 end Clock
 

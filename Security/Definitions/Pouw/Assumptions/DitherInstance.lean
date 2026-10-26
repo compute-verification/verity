@@ -5,10 +5,10 @@ import Definitions.Pouw.DitherInstance
 
 * `CertifierSeesImports`: the network certifier's counts take in every exchanged bit, class L (the auditor's devices,
   trust base item 3: the certifier runs on a machine the prover doesn't control).
-* `RootAfterCoin`: a commitment arrives no sooner than the work that computed it, physical causality (PHYS-INVENTORY's
-  minimal-set item A3, `NodeWithinModel`).
+* `RootAfterCoin`, `AnswerAfterCoin`: a commitment arrives no sooner than the work that computed it, and an answer no
+  sooner than its program, physical causality (PHYS-INVENTORY's minimal-set item A3, `NodeWithinModel`).
 
-  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads both.
+  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three.
 * `PeriodInventory`, the period's devices are its inventory (RT-PROTO P9). It is stated and held: no guarantee reads it
   until Daniel decides whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
   protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
@@ -38,6 +38,15 @@ def RootAfterCoin (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Rea
     (arrive : Obs → Fin k → ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k),
     t w + G.wall (A.work w) (A.workIn o x w) ≤ arrive (dev A o x) w
+
+/-- `pouw-answer-after-coin` (proposed; physical causality, A3 `NodeWithinModel`, as `RootAfterCoin`; RT-LEAN-2 I1).
+**An answer arrives no sooner than the program that computed it**: round `w`'s answer reads the check coins the
+challenger draws at `tc w`, so the network certifier can't see it arrive (`ansAt`) before `tc w` plus the answer's
+wall time in the model. -/
+def AnswerAfterCoin (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs) (tc : Fin k → ℝ)
+    (ansAt : Obs → Fin k → ℝ) : Prop :=
+  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k),
+    tc w + G.wall (A.answer w) (A.answerIn o x w) ≤ ansAt (dev A o x) w
 
 /-- `pouw-period-inventory` (proposed, held pending Daniel; RT-PROTO P9, RT-UNITS U9, O-REDTEAM NF4; class 1, the
 accelerator model at θ, extended to the period's other processors). **The period's devices are its inventory**: every
