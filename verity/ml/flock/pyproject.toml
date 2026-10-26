@@ -45,6 +45,8 @@ inputs = [
     "verity/core/protocols/sampled_proofs", "verity/core/primitives/randomness", "verity/ml/randomness/tests",
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's
     "verity/core/service/flock/Flock/Zk.lean",
+    # test_rec_cap.py builds Flock.Test.RecCap, which no binary under `artifacts` holds
+    "verity/core/service/flock/Flock/Test/RecCap.lean", "verity/core/service/flock/Flock/Test/RecCapSmall.lean",
 ]
 parallel = true
 # an xdist worker peaked at 15.6 GB (16 Oct, vy-nebius-cpu-1: 38 of them OOM'd a 600 GiB check); `--mem-gb` divides by this

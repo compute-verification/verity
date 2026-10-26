@@ -1911,8 +1911,9 @@ expectation):
   `RecVStar.checkShared`, `checkTopRows`); a session whose port reads a `rec-top-L<l>` without that shared row is
   refused, at every level. Upstream reads no inner shape
   and verifies such a session as any flock-circuit; the spec refuses at setup. No vector exercises it;
-  `Flock.Test.RecCap` runs the list's and `checkCap`'s refusals, and `test_lean_rec_coins`' RecCap tests the honest cap
-  and its refusals on the Lean verifier.
+  `Flock.Test.RecCapSmall` runs the list's and `checkCap`'s refusals (`Flock.Test.RecCap`, V*'s whole list at the
+  deployed shape, after landing), and `test_lean_rec_coins`' RecCap tests the honest cap and its refusals on the Lean
+  verifier.
 - **D21:** a nonzero proof-of-work nonce (R4, §8.1). Upstream absorbs every nonce as a message and checks none at the
   pinned schedules' zero grinding bits; the spec refuses any nonce but `0` at decode (`Reader.nonce0`: `grinding_nonce ≠ 0
   (R4)`, `claim_batch_grinding_nonce ≠ 0 (R4)`, `consistency_batch_grinding_nonce ≠ 0 (R4)`; the ring switch's
