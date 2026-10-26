@@ -37472,14 +37472,14 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Guarantees": {
-   "digest": "79edbe33575570a4c2d954c55e31259adbc94c1d634a931095db4f2d49959981",
+   "digest": "45522da973ac323b5f52e52b7f40066def98eb937eea72d4f2667b059ceabc53",
    "definitions": {
-    "Accounting.Guarantees.TS.TileSessionSound": "f755e55bca780f4599472bd1326ff400ae14ae8d639a6f86889fc3e40d461839"
+    "Accounting.Guarantees.TS.TileSessionSound": "385ffbec5a686e982927347ad291176234af7f1da8b0bed17938e0450ee8a103"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Layer": {
-   "digest": "0e6446453e4c0e452d28a4715bd1afd7e72e838d40a12fe4d0b17d59f62717e5",
+   "digest": "90c94419ff7f438fbf414d862d69afc754b63fd35ee35c8c44ea48491085dd18",
    "definitions": {
     "Accounting.TS.Tile.TileOk": "ff944d08030968d87e9cbdac193cb79a81b81ce1eda073a1ddff2bff43a34d30",
     "Accounting.TS.Tile.TileRel": "974332624e2c08ea376324387a2f3deeea8bfb761225be71b17e46af81ce4fb2",
@@ -37490,7 +37490,7 @@
     "Accounting.TS.Tile.TileView.sb": "622d3726bbb10cdbbd47ed822853296250ea16b4243a5f4f55519ab911fee8ab",
     "Accounting.TS.Tile.TileView.y": "bb3e2087ff344dd24dc2b48653d23e0190e3f76ad78d12fecc44fa00c0ece4d1",
     "Accounting.TS.Tile.TileView.z": "bd322207ab93520c46c265e415e7b4ce97a5321abc20185802865252a0d62ba0",
-    "Accounting.TS.Tile.tileLayer": "39508d9a948a1deb411f41a3d6e865cb6dc73b13bf8dcda0f9c3bc05690af82e"
+    "Accounting.TS.Tile.tileLayer": "c44fff1e55ad330c129c71373a94f47e4b7dfad7433700a4291a99a05338e27a"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
