@@ -2439,7 +2439,9 @@
     "Definitions.Accounting.Guarantees",
     "Definitions.Claims"
    ],
-   "except": [],
+   "except": [
+    "Definitions.Accounting.Guarantees.JointBridge.PeriodClaim"
+   ],
    "why": "the runtime corollary divides the developer's region as NCI does (Definitions.Core.Partition, Definitions.Nci) and takes NCI's named incompressibility assumptions (Definitions.Nci.Assumptions) as hypotheses; B1 is TT at the cost model of the actual circuit's provers; B2 and lemma M compose with PoUS's audit game (Definitions.Pous) and take P2's named assumption P2RingAuditSecure (Definitions.Pous.Assumptions.P2) as a hypothesis; a guarantee is stated over resource accounting's definitions and the device model, with the per-resource guarantees and the named assumptions (PoUW's TT, resource accounting's own) as hypotheses, never over a proof; lemma M's P2 forms read P2's cost model (Definitions.Pous.P2.Cost) and its named assumption (Definitions.Pous.Assumptions.P2); the composed credit's binding lemma (Compose.BindingOfECR) prices a fork by the claims' expected-cost collision resistance (Definitions.Claims' ExpectedCR, Finder), as the claims state it",
    "sealed": true
   },
@@ -2516,6 +2518,14 @@
    ],
    "except": [],
    "why": "the network certifier's bridge to the joint period reads the period run (Definitions.Accounting.JointPeriod), the network certifier's window good event (Definitions.NetworkCertifier.Period), and the deployed network certifier's code and record format (Definitions.NetworkCertifier.Tap) with its trust, trusted-host (Definitions.Core.Assumptions), which the run carries as a field; it imports no guarantee or proof"
+  },
+  "Definitions.Accounting.Guarantees.JointBridge.PeriodClaim": {
+   "imports": [
+    "Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted",
+    "Definitions.NetworkCertifier.PeriodClaim"
+   ],
+   "except": [],
+   "why": "the network audit's guarantee on a run whose claim is its monitoring period's is stated over the joint period's run and its bridge to the network certifier (Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted) and over the network certifier's monitoring period of sampled audits (Definitions.NetworkCertifier.PeriodClaim), never over a proof"
   }
  },
  "reads_exempt": {

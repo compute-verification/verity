@@ -6,7 +6,7 @@ import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.Horizon
 import Definitions.NetworkCertifier.Guarantees.Period
 import Definitions.NetworkCertifier.Guarantees.HorizonLeak
-import Definitions.NetworkCertifier.Guarantees.PeriodClaim
+import Definitions.Accounting.Guarantees.JointBridge.PeriodClaim
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting

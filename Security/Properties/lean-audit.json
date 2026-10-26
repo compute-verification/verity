@@ -774,6 +774,9 @@
    "assumptions": [],
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320"
   },
+  "Properties.Composition.acceptRegistration": {
+   "owner": "@network-accounting"
+  },
   "Properties.Composition.answerAccepts": {
    "owner": "@proofs",
    "signature": ["Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"],
@@ -2271,6 +2274,10 @@
    },
    "Properties.Composition.acceptMeans": {
     "function": "Core.Composition.check",
+    "outcome": "accept"
+   },
+   "Properties.Composition.acceptRegistration": {
+    "function": "Core.Composition.checkRegistered",
     "outcome": "accept"
    },
    "Properties.Composition.answerAccepts": {
