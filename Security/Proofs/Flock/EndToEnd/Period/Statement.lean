@@ -22,9 +22,8 @@ unit is one of them.
 `ε_ks,w` is the window's knowledge term at the worst registration (`HiddenWindow.ks`), since the registration is the
 prover's; `miss_w` and `δ_link,w` are `EndToEndHidden`'s. The named assumptions are `EndToEndHidden`'s, at every window:
 A3 (`uniform/io-getrandombytes`) for the window's draw bytes, `live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512`
-and `ecr/sha-512` (`TableCRZ` and `LinkCRZC`) at every strategy the period's prover plays the window with on some run
-(`Period.Plays`), stated flat as `EndToEndHidden` states them. The proofs are `Flock.SecurityProofs.IntegrityPeriod`,
-`IntegrityPeriodLog` and `IntegrityHorizon`.
+and `ecr/sha-512` (`HiddenWindow.CR`) at the strategy the period's prover plays the window with, on every run
+(`Period.CR`). The proofs are `Flock.SecurityProofs.IntegrityPeriod`, `IntegrityPeriodLog` and `IntegrityHorizon`.
 
 C-Flock's definitions are still in its proofs package, so, like `EndToEndHidden`, this module imports them.
 -/
@@ -176,9 +175,9 @@ noncomputable def game (W : ℕ → HiddenWindow) (T : ℕ) : Game Unit := perio
 noncomputable def run (W : ℕ → HiddenWindow) (T : ℕ) (s : Strategy (game W T)) : Game (List WindowRec) :=
   periodRun (fun t => (W t).game) (fun t => (W t).record t) 0 T s
 
-/-- **The strategies the period plays window `t` with**: `τ` plays window `t` on some run of the period at `s`. -/
-def Plays (W : ℕ → HiddenWindow) (T : ℕ) (s : Strategy (game W T)) (t : ℕ) (τ : Strategy (W t).game) : Prop :=
-  PeriodPlays (fun t => (W t).game) 0 T s t τ
+/-- `cr/sha-512` and `ecr/sha-512` (`HiddenWindow.CR`) at every window's strategy, on every run of the period. -/
+def CR (W : ℕ → HiddenWindow) (T : ℕ) (s : Strategy (game W T)) : Prop :=
+  PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s
 
 end Period
 
@@ -188,18 +187,12 @@ accepted by flock-verify with at least its `K₀` units wrong is at most the sum
 $$\Pr[\exists t,\ \text{window } t \text{ accepted} \wedge K_{0,t} \le \text{wrong}_t] \le
   \sum_t \left(\frac{\binom{n_t-K_{0,t}}{kd_t}}{\binom{n_t}{kd_t}} + \varepsilon_{ks,t} + \delta_{link,t}\right).$$
 Its named assumptions, at every window: A3 (`Assumptions.UniformRandomBytes`) for the window's draw bytes,
-`live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`), `EndToEndHidden`'s
-hypotheses, at every strategy a window is played with on some run (`Period.Plays`). -/
+`live-verifier` (`HiddenWindow.hCust`), and `cr/sha-512` and `ecr/sha-512` at the strategy each window is played with
+on every run (`Period.CR`). -/
 def IntegrityPeriod : Prop :=
   ∀ (W : ℕ → HiddenWindow) (T : ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T),
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
+    ∀ s : Strategy (Period.game W T), Period.CR W T s →
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, ((W t).miss + (W t).ks + (W t).link)
 
@@ -214,13 +207,7 @@ def IntegrityPeriodLog : Prop :=
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, Real.log (1 / δ) / q ≤ (W t).K₀) →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T),
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
+    ∀ s : Strategy (Period.game W T), Period.CR W T s →
     value (fun l => ∃ r ∈ l, r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (Period.run W T s) ≤
       ∑ t ∈ Finset.range T, (ENNReal.ofReal δ + (W t).ks + (W t).link)
 
@@ -233,13 +220,7 @@ def IntegrityHorizon : Prop :=
   ∀ (W : ℕ → HiddenWindow) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
-    ∀ s : Strategy (Period.game W T),
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ → ∀ ω j,
-      TableCRZ execArith hs512 (planZHJ (W t).dj (W t).y₀ ((W t).L.draw ω) (reg ((W t).sim τ))) j
-        (zcStrat execArith hs512 (planZHJ (W t).dj (W t).y₀) (cont ((W t).sim τ) ω)) (W t).qF (W t).qS) →
-    (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
-      LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
-        (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
+    ∀ s : Strategy (Period.game W T), Period.CR W T s →
     value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ))
         (Period.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)

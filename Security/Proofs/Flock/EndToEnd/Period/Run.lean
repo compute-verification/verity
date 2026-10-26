@@ -16,8 +16,7 @@ exact probability over the verifier's coins.
 
 `PeriodGood G good i T s` says every window's strategy, on every run of the period, satisfies `good`: it is how a
 per-session hypothesis about the prover (such as `cr/sha-512` for its knowledge finders) is taken at exactly the
-strategies the period's prover plays. `PeriodPlays G i T s j τ` says `τ` is one of them, the strategy window `j` is
-played with on some run, so a statement takes such a hypothesis flat, `∀ j τ, PeriodPlays G i T s j τ → good j τ`.
+strategies the period's prover plays.
 -/
 
 namespace FlockSoundness.Game
@@ -60,20 +59,5 @@ def PeriodGood (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G
   | _, 0, _ => True
   | i, T + 1, s => good i (Strategy.ofBind _ (G i) s) ∧
       AtEnds (fun _ => periodG G (i + 1) T) (fun _ s' => PeriodGood G good (i + 1) T s') (G i) s
-
-/-- `Q a s'` holds at some end `a` of `g` played by `s`, with `s'` the strategy `s` leaves for `f a`. -/
-def AtSomeEnd (f : α → Game δ) (Q : (a : α) → Strategy (f a) → Prop) :
-    (g : Game α) → Strategy (g.bind f) → Prop
-  | .ret a, s => Q a s
-  | .send _ kk, s => AtSomeEnd f Q (kk s.1) s.2
-  | @Game.coin _ C _ _ kk, s => ∃ c : C, AtSomeEnd f Q (kk c) (s c)
-
-/-- **The strategies a period plays window `j` with**: `τ` is the strategy window `j` is played with on some run of
-the period's windows `i, …, i + T − 1` at `s`. A hypothesis at every such `τ` is `PeriodGood`'s, stated flat. -/
-def PeriodPlays (G : (i : ℕ) → Game (β i)) :
-    (i T : ℕ) → Strategy (periodG G i T) → (j : ℕ) → Strategy (G j) → Prop
-  | _, 0, _, _, _ => False
-  | i, T + 1, s, j, τ => (i = j ∧ HEq (Strategy.ofBind _ (G i) s) τ) ∨
-      AtSomeEnd (fun _ => periodG G (i + 1) T) (fun _ s' => PeriodPlays G (i + 1) T s' j τ) (G i) s
 
 end FlockSoundness.Game

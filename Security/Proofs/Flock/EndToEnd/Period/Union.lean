@@ -109,25 +109,6 @@ theorem periodGood_mono (G : (i : ℕ) → Game (β i)) {good good' : (i : ℕ) 
         atEnds_mono (fun _ s' hb => periodGood_mono G T (i + 1) s'
           (fun j τ h1 h2 => h j τ (by omega) (by omega)) hb) (G i) s hs.2⟩
 
-theorem atEnds_of_atSomeEnd {ι : Type} {f : α → Game δ} {P : ι → (a : α) → Strategy (f a) → Prop}
-    {Q : (a : α) → Strategy (f a) → Prop} {good : ι → Prop} (hQ : ∀ a s', (∀ x, P x a s' → good x) → Q a s') :
-    ∀ (g : Game α) (s : Strategy (g.bind f)), (∀ x, AtSomeEnd f (P x) g s → good x) → AtEnds f Q g s
-  | .ret a, s, h => hQ a s h
-  | .send _ kk, s, h => atEnds_of_atSomeEnd hQ (kk s.1) s.2 h
-  | @Game.coin _ _ _ _ kk, s, h => fun c => atEnds_of_atSomeEnd hQ (kk c) (s c) fun x hx => h x ⟨c, hx⟩
-
-/-- **`PeriodGood` from its flat form**: `good` at every strategy the period plays a window with (`PeriodPlays`). -/
-theorem periodGood_of_plays (G : (i : ℕ) → Game (β i)) (good : (i : ℕ) → Strategy (G i) → Prop) :
-    ∀ (T i : ℕ) (s : Strategy (periodG G i T)), (∀ j τ, PeriodPlays G i T s j τ → good j τ) →
-      PeriodGood G good i T s
-  | 0, _, _, _ => trivial
-  | T + 1, i, s, h =>
-      ⟨h i _ (Or.inl ⟨rfl, HEq.rfl⟩),
-        atEnds_of_atSomeEnd (ι := (j : ℕ) × Strategy (G j))
-          (P := fun x _ s' => PeriodPlays G (i + 1) T s' x.1 x.2) (good := fun x => good x.1 x.2)
-          (fun _ s' h' => periodGood_of_plays G good T (i + 1) s' fun j τ hp => h' ⟨j, τ⟩ hp) (G i) s
-          fun x hx => h x.1 x.2 (Or.inr hx)⟩
-
 /-- **The union bound over a period's windows.** -/
 theorem period_union {ρ : Type} (G : (i : ℕ) → Game (β i)) (rec : (i : ℕ) → Strategy (G i) → β i → ρ)
     (bad : ρ → Prop) (good : (i : ℕ) → Strategy (G i) → Prop) (ε : ℕ → ℝ≥0∞)
