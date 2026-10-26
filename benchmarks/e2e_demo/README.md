@@ -1,7 +1,7 @@
 # E2E demo interfaces
 
 The interfaces between the legs of the one-H200 E2E demo (P-CMP-1, CMP-95 items 5 and 6). Not a package: run the
-modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it, with `integrations/torch_loop`).
+modules with this directory on `PYTHONPATH` (the suite's `pyproject.toml` sets it, with `examples/toy`).
 
 ## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
 

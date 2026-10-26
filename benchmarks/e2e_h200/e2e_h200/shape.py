@@ -7,7 +7,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "integrations" / "torch_loop"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "examples" / "toy"))
 from verity_torch_loop.weights import H200, TINY as IFACE_TINY, Shape  # noqa: E402
 
 #: RMSNorm's epsilon, 1e-5 as the nearest f32 (circuits' plan, `EPS_1E5`)

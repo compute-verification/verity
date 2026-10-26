@@ -1431,6 +1431,12 @@
         "integrations/vllm/tests/predict/": "integrations/vllm/tests/program/predict/",
         "integrations/vllm/tests/collectives/": "integrations/vllm/tests/engine/collectives/"
       }
+    },
+    {
+      "paths": {
+        "integrations/torch_loop/": "examples/toy/",
+        "benchmarks/all_protocols/run.sh": "examples/toy/run.sh"
+      }
     }
   ]
 }

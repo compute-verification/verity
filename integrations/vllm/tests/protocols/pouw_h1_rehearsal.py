@@ -56,7 +56,7 @@ tree must be one with the model registry, #3204, on main from dbf3a75e31, archiv
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
     git archive --format=tar.gz -o gate-tree.tgz COMMIT verity benchmarks/live_challenger \\
-      integrations/vllm/manifests/checkpoints-int8.json integrations/torch_loop/manifests/checkpoints-int8.json
+      integrations/vllm/manifests/checkpoints-int8.json examples/toy/manifests/checkpoints-int8.json
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\

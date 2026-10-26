@@ -8,7 +8,7 @@ result over each monitoring period of a datacenter.
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
 registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
-(`integrations/torch_loop`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
+(`examples/toy`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
 with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
 (`decide`), up to ``--jobs`` windows at once, each audit on ports of its own and with up to ``--session-jobs`` of its
 drawn members' proof sessions at once; and ``DIR/wW/report.json`` holds the window's
@@ -63,7 +63,7 @@ from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-window/v1"
 ROOT = Path(__file__).resolve().parents[3]
-LOOP = ROOT / "integrations" / "torch_loop"
+LOOP = ROOT / "examples" / "toy"
 PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "serve.json", PERIOD)
 #: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
 #: of their roots in ``DIR``

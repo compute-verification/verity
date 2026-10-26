@@ -8,7 +8,7 @@ loads them.
     python realw.py --out OUT --weights DIR --gen [--layer 0] [--seed text:verity/cmp92/h200/weights/v1] [--workers N]
     python realw.py --out OUT --weights DIR [--layer 0] [--ms 1,7,64,...] [--kernel wgmma|triton] [--configs BEST_JSON]
 
-The generator's module is on the path from integrations/torch_loop (cursor/allp-iface-1de3 until it lands).
+The generator's module is on the path from examples/toy (cursor/allp-iface-1de3 until it lands).
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parents[2] / "integrations" / "torch_loop"))
+sys.path.insert(0, str(HERE.parents[2] / "examples" / "toy"))
 from verity_torch_loop import weights as WG  # noqa: E402
 
 SEED = "text:verity/cmp92/h200/weights/v1"

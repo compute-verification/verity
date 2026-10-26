@@ -3,7 +3,7 @@
 # torch-cpu extra), and `run.py` puts this directory on its path.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = [".", "../../integrations/torch_loop"]
+pythonpath = [".", "../../examples/toy"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
@@ -11,7 +11,7 @@ inputs = [
     # the Definitions replay evaluates, P2's keys, and the commitments the commit call builds on
     "verity",
     # the torch loop replay reads, and ALLP-IFACE's seeded weights the tiny decode step runs on (`verity_torch_loop.weights`)
-    "integrations/torch_loop",
+    "examples/toy",
     # the per-step commit call (`row_tables.step_roots`, and `host_step`'s C++ twin with the sources it builds)
     "integrations/vllm/verity_vllm/__init__.py",
     "integrations/vllm/verity_vllm/commit/__init__.py",

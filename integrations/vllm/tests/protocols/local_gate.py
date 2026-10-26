@@ -41,7 +41,7 @@ CONFIG = "gate.json"
 #: what the tree's archive holds: infra's code and core, and every checkpoint manifest `models.MANIFESTS` reads, so a role
 #: of either registers
 ARCHIVE = ("verity", "benchmarks/live_challenger", "integrations/vllm/manifests/checkpoints-int8.json",
-           "integrations/torch_loop/manifests/checkpoints-int8.json")
+           "examples/toy/manifests/checkpoints-int8.json")
 
 
 def _config(d: Path) -> dict:

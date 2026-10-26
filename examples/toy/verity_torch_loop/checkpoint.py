@@ -88,7 +88,7 @@ def entry(model: L.Model, blobs: dict[str, bytes]) -> dict[str, Any]:
             "files": {n: {"size": len(b), "sha256": hashlib.sha256(b).hexdigest()} for n, b in sorted(blobs.items())},
             "linears": [model.op_path(i) for i in range(len(model.layers))],
             "recipe": {"id": RECIPE, "h": model.h, "vocab": int(model.embed.shape[0]), "seed": model.seed},
-            "note": "the torch loop's served weights (integrations/torch_loop, `loop.Model()`), written by "
+            "note": "the torch loop's served weights (examples/toy, `loop.Model()`), written by "
                     "`python -m verity_torch_loop.checkpoint`; no hub repo holds them"}
 
 
