@@ -192,7 +192,8 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
     assert (d / A.WITNESS).stat().st_mode & 0o777 == 0o700
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-24T11:20:00Z" and "runs" not in end
-    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS}}
+    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
+                                                                   if k != "load"}} and "load" not in end
     assert end["registrations"] == {"warden/egress/0": "ab" * 64}
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
         "deployment.json", "cells.jsonl", "certified.jsonl", "cells.salts", "requests.records", "client.json",
