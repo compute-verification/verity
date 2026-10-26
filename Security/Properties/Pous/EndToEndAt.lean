@@ -95,8 +95,9 @@ def AcceptedAt (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Co
     (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check pt.params c C = .accept pub () ∧ Run.checkAt SCHEMES pt trusted pub digests r sid = .ok ()
 
-/-- **An accepted run certifies `C*` at every point**: `RunCertifies` with `pt` in place of `Run.DEPLOYED`. It rests
-on the setup check's `AcceptsDecodes` and `PublishesRoot`, which quantify over every parameter set and are open. -/
+/-- **An accepted run certifies `C*` at every point**: `RunCertifies` with `pt` in place of `Run.DEPLOYED`. It follows
+from `RunCheckAcceptsAt` and the setup check's `AcceptsDecodes` and `PublishesRoot`, which quantify over every parameter
+set, all proved. -/
 def RunCertifiesAt : Prop :=
   ∀ (pt : Run.Point) (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
     (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Device),
