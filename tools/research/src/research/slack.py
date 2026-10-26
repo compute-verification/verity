@@ -863,6 +863,26 @@ def _footer(tags: tuple[str, ...] = ()) -> str:
     return f"\n\n_{TAG_SEP.join(tags)}_" if tags else ""
 
 
+HEADER_TIME_RE = re.compile(r"^\W{0,4}((?:(?:<[^>\s]+>|[@*_\w().,-]+) ){0,4}?)\*?([01]?\d|2[0-3]):([0-5]\d)Z\*?(?=[:,)]| \(| [-\u2014])")
+DEADLINE_WORDS = {"by", "until", "till", "before", "after", "at", "from", "eta", "since", "to"}
+STAMP_SLACK_S = 120                                              # a hand-typed time this close to the send time is left alone
+
+
+def stamp_time(text: str, now: datetime) -> str:
+    """A post whose first line gives a UTC time (`compute-research 13:07Z: ...`) more than STAMP_SLACK_S from when it is
+    sent gets the real time beside it, `13:07Z (sent 13:22Z)`: hand-typed times ran up to 15 min off, which misordered
+    MEM-69's salts (top, 26 Oct).  The typed time stays, since it may name a checkpoint rather than the moment."""
+    m = HEADER_TIME_RE.match(text or "")
+    if not m or any(w.strip("*_,()").lower() in DEADLINE_WORDS for w in m[1].split()):
+        return text                                              # no header time, or a deadline (`... by 20:00Z:`)
+    typed = int(m[2]) * 60 + int(m[3])
+    real = now.astimezone(timezone.utc)
+    off = abs(typed - (real.hour * 60 + real.minute)) % (24 * 60)
+    if min(off, 24 * 60 - off) * 60 <= STAMP_SLACK_S:
+        return text
+    return f"{text[:m.end()]} (sent {real:%H:%M}Z){text[m.end():]}"
+
+
 def plain(text: str) -> str:
     """A post as an agent should read it: no footer, Slack's markup undone (names, dates, links, escapes)."""
     text = OLD_FOOTER_RE.sub("", FOOTER_RE.sub("", text or ""))
@@ -893,7 +913,7 @@ def _post(api: Slack, ch: str, handle: str, text: str, thread: str | None = None
           route: tuple[dict, Routes | None] | None = None, urgent: bool = False, tags: tuple[str, ...] = ()) -> str:
     """Post, print `<ts> <permalink>`, and with `route` (the registry and the routes) deliver it to whoever it reaches."""
     tags = tuple(tags) + (("urgent",) if urgent and "urgent" not in tags else ())
-    head, *rest = _pieces(slack_dates(text))
+    head, *rest = _pieces(slack_dates(stamp_time(text, _now())))
     text = f"{head}{_footer(tags)}"
     if thread and not api.dry_run:                       # a reply's ts (a doorbell's `reply R`): its thread
         try:
@@ -2118,7 +2138,8 @@ def cmd_read(ns: argparse.Namespace, reg: dict) -> int:
         thread = f" in {m['thread_ts']}" if m.get("thread_ts") and m.get("thread_ts") != m.get("ts") and not ns.thread else ""
         who = "@" + m["username"] if m.get("username") else poster(m, reg) or m.get("user") or m.get("bot_id") or "?"
         tags = [t for t in tags_of(m.get("text") or "") if t != "ask"]
-        print(f"{m.get('ts')}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
+        at = datetime.fromtimestamp(float(m["ts"]), timezone.utc).strftime("%H:%M:%SZ") if m.get("ts") else "?"
+        print(f"{m.get('ts')} {at}{thread} {who}{' (' + ', '.join(tags) + ')' if tags else ''}: {plain(m.get('text', ''))}")
     return 0
 
 
