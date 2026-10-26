@@ -44,9 +44,12 @@ request's first cell, K in each later one), and its head (lp, max_tokens). `OutC
 outputs from position to position, (w, m, ids[0], …, ids[KO − 1]): w counts down from lp − 1, one a position, and while
 1 − KO ≤ w ≤ 0 (the KO positions from the prompt's last on) the position's output is shifted in at the end, so after the
 last position ids[i] is output i; m is ``max_tokens``. The first position's starts from the head. `SlotEntry_v1{KO, IDB,
-STOP}` is the slot's entry of the Programs' row from the last position's state and the slot's occupancy word: n, the
-outputs served (up to ``max_tokens``, KO and the first of the model's stop ids ``STOP``, that one included), as a u32,
-then output i's low IDB bits for i < n and zeros past it, all zero for an empty slot, zero-padded to whole words.
+NP, STOP}` is the slot's entry of the Programs' row from the last position's state and the slot's occupancy word: n, the
+outputs served (up to ``max_tokens``, unsigned, and the first of the model's stop ids ``STOP``, that one included), as a
+u32, then output i's low IDB bits for i < n and zeros past it, all zero for an empty slot, zero-padded to whole words. An
+occupied slot whose request the class can't hold has n = KO + 1 and no ids: its prompt not 1 to NP ids (after a Program's
+NP + KO − 1 positions the state's w is lp − NP − KO) or its outputs not ending within KO (``max_tokens`` past KO and no
+stop id among them). The egress renders no output past KO − 1 (`egress.computed`), so such a record fails visibly.
 
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
@@ -55,7 +58,7 @@ Registered functions:
   SlotMask                   (occ: i32, tok: i32) -> i32
   ScanSlots{NS,NP,...}       (state: NS u16 bits) -> (row: NP + 2 i32 bits, head: 2 i32 bits) a lane
   OutCollect{KO,FIRST}       (head: 2 i32 | state: KO + 2 i32, tok: i32) -> KO + 2 i32
-  SlotEntry{KO,IDB,STOP}     (occ: i32, state: KO + 2 i32) -> ⌈(32 + KO·IDB) / 16⌉ u16 bits
+  SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(32 + KO·IDB) / 16⌉ u16 bits
 """
 from __future__ import annotations
 
@@ -410,10 +413,12 @@ def entry_words(KO: int, IDB: int) -> int:
 
 
 def entry_refuse(S: dict) -> str | None:
-    ko, idb, stop = S.get("KO", 1), S.get("IDB", 1), S.get("STOP", ())
-    if not (type(ko) is int and 1 <= ko < 1 << 16 and type(idb) is int and 1 <= idb <= 32 and isinstance(stop, tuple)
-            and all(type(s) is int and 0 <= s <= M32 for s in stop) and len(set(stop)) == len(stop)):
-        return f"KO in [1, 2^16), IDB in [1, 32] and STOP distinct u32 ids (got KO={ko!r}, IDB={idb!r}, STOP={stop!r})"
+    ko, idb, np_, stop = S.get("KO", 1), S.get("IDB", 1), S.get("NP", 1), S.get("STOP", ())
+    if not (type(ko) is int and 1 <= ko < 1 << 16 and type(idb) is int and 1 <= idb <= 32 and type(np_) is int
+            and 1 <= np_ < 1 << 16 and isinstance(stop, tuple) and all(type(s) is int and 0 <= s <= M32 for s in stop)
+            and len(set(stop)) == len(stop)):
+        return (f"KO and NP in [1, 2^16), IDB in [1, 32] and STOP distinct u32 ids (got KO={ko!r}, IDB={idb!r}, NP={np_!r}, "
+                f"STOP={stop!r})")
     return None
 
 
@@ -421,41 +426,52 @@ def entry_sig(S):
     return (("occ", WORDS.I32), ("state", Array(S.KO + 2, WORDS.I32))), Array(entry_words(S.KO, S.IDB), Array(16, BIT))
 
 
-def entry_reference(occ: int, state: list[int], KO: int, IDB: int, STOP: tuple[int, ...]) -> list[int]:
+def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP: tuple[int, ...]) -> list[int]:
     """`SlotEntry_v1`'s function: the entry's u16 words from the occupancy word and the last position's state."""
-    m, ids = state[1] - (1 << 32) if state[1] >> 31 else state[1], state[2:]
-    n = 0
-    if occ & 1:
-        for i, x in enumerate(ids):
-            if i + 1 > m:
-                break
-            n = i + 1
-            if x in STOP:
-                break
-    bits = n | sum((x & (1 << IDB) - 1) << 32 + IDB * i for i, x in enumerate(ids[:n]))
+    w, m, ids = state[0] - (1 << 32) if state[0] >> 31 else state[0], state[1], state[2:]
+    fits = 1 - NP - KO <= w <= -KO
+    alive, n, keep = bool(occ & 1) and fits, 0, []
+    for i, x in enumerate(ids):
+        k = alive and m >= i + 1
+        keep.append(k)
+        n = i + 1 if k else n
+        alive = k and x not in STOP
+    if occ & 1 and not fits or alive and m >= KO + 1:
+        n, keep = KO + 1, [False] * KO
+    bits = n | sum((x & (1 << IDB) - 1) << 32 + IDB * i for i, (x, k) in enumerate(zip(ids, keep)) if k)
     return [bits >> 16 * k & 0xFFFF for k in range(entry_words(KO, IDB))]
 
 
-@composite("SlotEntry", 1, ["KO", "IDB", "STOP"], entry_sig, refuse=entry_refuse,
-           conformance="a request's output count and ids as vLLM served them: up to max_tokens, KO and its first stop id")
+@composite("SlotEntry", 1, ["KO", "IDB", "NP", "STOP"], entry_sig, refuse=entry_refuse,
+           conformance="a request's output count and ids as vLLM served them: up to max_tokens and its first stop id, "
+                       "KO + 1 where the class can't hold it")
 def SlotEntry(B, S, occ, state):
     """A slot's entry of the network certifier's Programs' row (the module docstring): output i is kept while the slot is
-    occupied, i < ``max_tokens`` and no earlier output is a stop id; n the kept outputs."""
+    occupied, its prompt 1 to NP ids, i < ``max_tokens`` (unsigned) and no earlier output is a stop id; n the kept outputs,
+    or KO + 1 and none kept where the prompt doesn't fit or the outputs don't end within KO."""
     o, (_, ret) = word_ops(B), entry_sig(S)
-    m, ids = state[1], [state[2 + i] for i in range(S.KO)]
-    alive, n, keep = B.call(bit_at(32), occ, o.word(0)), o.word(0), []
+
+    def either(a, b):
+        return o.bnot(o.band(o.bnot(a), o.bnot(b)))
+
+    w, m, ids = state[0], state[1], [state[2 + i] for i in range(S.KO)]
+    occupied, big = B.call(bit_at(32), occ, o.word(0)), B.call(bit_at(32), m, o.word(31))
+    fits = o.band(o.ile(o.word((1 - S.NP - S.KO) & M32), w), o.ile(w, o.word(-S.KO & M32)))
+    alive, n, keep = o.band(occupied, fits), o.word(0), []
     for i, x in enumerate(ids):
-        k = o.band(alive, o.ile(o.word(i + 1), m))
+        k = o.band(alive, either(big, o.ile(o.word(i + 1), m)))
         keep.append(k)
         n = o.isel(k, o.word(i + 1), n)
         stops = [B.call(I32Eq, x, o.word(s)) for s in S.STOP]
         if stops:
             hit = stops[0]
             for s in stops[1:]:
-                hit = o.bnot(o.band(o.bnot(hit), o.bnot(s)))
+                hit = either(hit, s)
             alive = o.band(k, o.bnot(hit))
         else:
             alive = k
+    over = either(o.band(occupied, o.bnot(fits)), o.band(alive, either(big, o.ile(o.word(S.KO + 1), m))))
+    n, keep = o.isel(over, o.word(S.KO + 1), n), [o.band(k, o.bnot(over)) for k in keep]
     bits = [B.call(bit_at(32), n, o.word(b)) for b in range(32)]
     bits += [o.band(k, B.call(bit_at(32), x, o.word(b))) for x, k in zip(ids, keep) for b in range(S.IDB)]
     pad = 16 * entry_words(S.KO, S.IDB) - len(bits)

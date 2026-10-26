@@ -18,8 +18,10 @@ p is below the class's prompt cap (the prompt's id below its length, else the pr
 carries starts as the row's), and past it the previous position's select. Each position's select is masked by the slot's
 occupancy word (`io_shell.SlotMask_v1`, so an empty slot's are `io_shell.EMPTY`) and collected (`io_shell.OutCollect_v1`:
 the ``outputs`` from the prompt's last position on). The slot's last position makes its entry of the scan's Programs' row
-(`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens``, ``outputs`` and the registered model's first stop id,
-that one kept, `stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot. The scan's state
+(`io_shell.SlotEntry_v1`): its output count (up to ``max_tokens`` and the registered model's first stop id, that one kept,
+`stop_ids`) as a u32, then its ids cut to the scan's 17 bits, all zero for an empty slot; a request the class can't hold
+(a prompt past ``prompt`` ids, or outputs that don't end within ``outputs``) has ``outputs`` + 1 and no ids, which the
+egress refuses. The scan's state
 rows and the entries are the circuit's external ports. A slot's Program hands all its outputs to the scan at its anchor,
 which carries them across windows (`SC_GROUP`), so no Program runs into the next window.
 `window_circuit(registered, compiled, cls, grain, placed=...)` refuses a window the class's slots don't take and emits the
@@ -647,7 +649,7 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int | None = None
         scan = SS.bridge(cls.scan, cls.prompt)
     except ValueError as e:
         raise Unexpressible(f"{cls}: its slots aren't a scan state row's lanes ({e})") from None
-    entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, STOP=stop_ids(registered))
+    entry = bind(IO.SlotEntry, KO=cls.outputs, IDB=cls.scan.IDB, NP=cls.prompt, STOP=stop_ids(registered))
     b, fn = _Builder(grain, programs), class_program(registered, cls).program.fn
     progs = [_Program(b, fn, cls, f"class Program {k}", k, scan, entry) for k in range(programs)]
     for j, node in enumerate(fn.body.nodes):

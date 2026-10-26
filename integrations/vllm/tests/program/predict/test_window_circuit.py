@@ -45,7 +45,7 @@ EMB, COMBINE = "EmbeddingRead_v1{V=256,H=64}", "TokenSelectCombine_v2{V=256,C=64
 FIRST, FEED = "TokenFeed_v1{NP=4,FIRST=true}", "TokenFeed_v1{NP=4,FIRST=false}"
 ROW, MASK = "SlotRow_v1{NP=4}", "SlotMask_v1{}"
 #: the scan state read at TINY's 2 lanes (4,548 words a row), each position's collector and a slot's entry
-SCAN, ENTRY = "ScanSlots_v1{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SlotEntry_v1{KO=2,IDB=17}"
+SCAN, ENTRY = "ScanSlots_v1{NS=4548,NP=4,IDB=17,K0=12,K=45}", "SlotEntry_v1{KO=2,IDB=17,NP=4}"
 COLLECT0, COLLECT = "OutCollect_v1{KO=2,FIRST=true}", "OutCollect_v1{KO=2,FIRST=false}"
 #: the verifier's pins: the weights record's root and the scan state's
 PINS = {WC.WEIGHTS, SS.SCAN_STATE}

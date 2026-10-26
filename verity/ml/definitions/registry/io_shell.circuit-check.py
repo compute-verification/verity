@@ -9,8 +9,8 @@ from typing import Any
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`TokenFeed_v1` at a small class (4 prompt ids) and at the class of record's (1,024), each the first position's and
     every other's; `SlotRow_v1` at both; `SlotMask_v1`; `ScanSlots_v1` at both classes' scan state rows; `OutCollect_v1` at
-    KO 2 and 64, the first position's and every other's; and `SlotEntry_v1` at KO 2 with no stop id (TINY's) and at KO 64
-    with Llama-3.2-1B's (128001)."""
+    KO 2 and 64, the first position's and every other's; and `SlotEntry_v1` at the small class (KO 2, 4 prompt ids) with no
+    stop id (TINY's) and at the class of record's (KO 64, 1,024) with Llama-3.2-1B's (128001)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import io_shell as X
 
@@ -31,5 +31,5 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
             *[(f"ScanSlots_v1:{k[0]}:{k[1]}:{k[2]}", lambda k=k: slots(*k)) for k in scan],
             *[(f"OutCollect_v1:{ko}:{int(first)}", lambda ko=ko, first=first: bind(X.OutCollect, KO=ko, FIRST=first))
               for ko in (2, 64) for first in (True, False)],
-            ("SlotEntry_v1:2", lambda: bind(X.SlotEntry, KO=2, IDB=17, STOP=())),
-            ("SlotEntry_v1:64", lambda: bind(X.SlotEntry, KO=64, IDB=17, STOP=(128001,)))]
+            ("SlotEntry_v1:2", lambda: bind(X.SlotEntry, KO=2, IDB=17, NP=4, STOP=())),
+            ("SlotEntry_v1:64", lambda: bind(X.SlotEntry, KO=64, IDB=17, NP=1024, STOP=(128001,)))]
