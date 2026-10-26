@@ -1,14 +1,15 @@
 import Proofs.Flock.Claims.Recursion.RegSetup
+import Proofs.Flock.Claims.Recursion.OpensReads
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The setup's registered openings open (`regOpenings_opens`)
 
 Wherever the recursive setup accepts a V\* statement (`setupO`), it ran `checkRegistered` on each of its statements
-(`RecIns.setup_registered`), so `checkPort` accepted each of the verifier's registered ports there, and every row of its
-table opens the registered root at its position through its path (`checkPort_rows`). So every opening `regOpenings`
-lists opens (`regOpenings_opens`), and `bc_eq_of_setup` is `bc_eq_of_regOpenings` with nothing about the openings
-assumed.
+(`OpensReads`' `RecIns.setup_registered`), so `checkPort` accepted each of the verifier's registered ports there, and
+every row of its table opens the registered root at its position through its path (`checkPort_rows`). So every
+opening `regOpenings` lists opens (`regOpenings_opens`), and `bc_eq_of_setup` is `bc_eq_of_regOpenings` with nothing
+about the openings assumed.
 -/
 
 namespace Flock.Registered
@@ -45,46 +46,6 @@ end Flock.Registered
 
 namespace RecDeploy
 
-/-- A loop whose every step passes `P a` and continues: every element passed. -/
-theorem list_forIn_each_ok {ε α σ : Type} {f : α → σ → Except ε (ForInStep σ)} (P : α → Prop)
-    (hf : ∀ a s s', f a s = .ok s' → P a ∧ ∃ t, s' = .yield t) :
-    ∀ (L : List α) (s v : σ), forIn L s f = .ok v → ∀ a ∈ L, P a
-  | [], _, _, _, a, ha => absurd ha List.not_mem_nil
-  | b :: L, s, v, h, a, ha => by
-    rw [List.forIn_cons] at h
-    obtain ⟨s', h1, h2⟩ := _root_.Flock.Registered.except_bind_ok h
-    obtain ⟨hb, t, rfl⟩ := hf b s s' h1
-    rcases List.mem_cons.1 ha with rfl | ha
-    · exact hb
-    · exact list_forIn_each_ok P hf L t v h2 a ha
-
-theorem array_forIn_each_ok {ε α σ : Type} {f : α → σ → Except ε (ForInStep σ)} (P : α → Prop)
-    (hf : ∀ a s s', f a s = .ok s' → P a ∧ ∃ t, s' = .yield t) {A : Array α} {s v : σ}
-    (h : forIn A s f = .ok v) : ∀ a ∈ A.toList, P a := by
-  rw [← Array.forIn_toList] at h
-  exact list_forIn_each_ok P hf _ s v h
-
-/-- **The recursive setup runs `checkRegistered` on each of its statements**, at the verifier's own registered reads. -/
-theorem RecIns.setup_registered {s : RecIns} {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
-    (h : s.setup = .ok (spec, sts)) :
-    ∀ st ∈ sts.toList, _root_.Flock.checkRegistered st s.base.registered = .ok () := by
-  have hr := RecIns.setup_read h
-  unfold RecIns.setup at h
-  simp only at h
-  split at h
-  · obtain ⟨_, h1, -⟩ := _root_.Flock.Registered.except_bind_ok h
-    cases h1
-  obtain ⟨_, -, h⟩ := _root_.Flock.Registered.except_bind_ok h
-  obtain ⟨⟨spec', sts'⟩, hs, h⟩ := _root_.Flock.Registered.except_bind_ok h
-  obtain ⟨_, hf, -⟩ := _root_.Flock.Registered.except_bind_ok h
-  obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj (hs.symm.trans hr))
-  refine array_forIn_each_ok (fun st => _root_.Flock.checkRegistered st s.base.registered = .ok ())
-    (fun a _ _ h => ?_) hf
-  obtain ⟨u, h1, h2⟩ := _root_.Flock.Registered.except_bind_ok h
-  obtain ⟨_, -, h3⟩ := _root_.Flock.Registered.except_bind_ok h2
-  cases u
-  exact ⟨h1, _, (Except.ok.inj h3).symm⟩
-
 /-- **A statement `checkRegistered` accepts at the verifier's `own` opens every row `portOpenings` lists.** -/
 theorem portOpenings_opens {st : _root_.Flock.Stmt} {own : Array _root_.Flock.Registered.Port}
     (h : _root_.Flock.checkRegistered st (some own) = .ok ()) {reg : _root_.Flock.Registered.Port}
@@ -111,7 +72,7 @@ theorem regOpenings_opens {xO : Claims.Msg} {reg : _root_.Flock.Registered.Port}
       simp only [regOpenings, hS, hown, List.mem_flatMap, List.mem_map] at ho
       obtain ⟨st, hst, reg', hreg', o, hoo, he⟩ := ho
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj he
-      have hcr := RecIns.setup_registered (setupO_some hS).2 st hst
+      have hcr := RecIns.setup_registered (setupO_some hS).2 st (by simpa using hst)
       rw [hown] at hcr
       exact portOpenings_opens hcr hreg' _ hoo
 

@@ -361,7 +361,8 @@ theorem ksLin2_stepsC_layRV (nextE : Msg → List Msg → List Coin → Claims.O
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hB : StepsBaseC nextE colsE wE join final w)
-    (hM : MoreSlotsTrue (deployZkRec _root_.Flock.Readable.relation) b.st) :
+    (hM : MoreSlotsTrue (deployZkRec _root_.Flock.Readable.relation)
+      ({ b with tr := recTr aux nOf hd recRest } : Brings).st) :
     let bR : Brings := { b with tr := recTr aux nOf hd recRest }
     let L := DeployedR.layR elem
     let Bd := bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w
@@ -384,7 +385,8 @@ theorem ksLin2_deployedR_layRV (rd : Msg → Option FinalP) (b : Brings)
     (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
     (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (hM : MoreSlotsTrue (deployZkRec _root_.Flock.Readable.relation) b.st) :
+    (hM : MoreSlotsTrue (deployZkRec _root_.Flock.Readable.relation)
+      ({ b with tr := recTr aux nOf hd recRest } : Brings).st) :
     let bR : Brings := { b with tr := recTr aux nOf hd recRest }
     let L := DeployedR.layR elem
     let Bd := bdDeployed _root_.Flock.Readable.relation (nextR rd)
