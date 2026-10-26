@@ -247,7 +247,7 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
 
 def test_the_registration_records_the_weights_root_of_record_it_is_given_and_refuses_one_not_of_record(tmp_path):
     """``--weights-of-record``: the registration records the record's root of record as the window circuit's ``weights``
-    root (``registered``, what `interface.input_count` holds the verifier's pin to); without it, none. A record not of
+    root (``registered_roots``, what `interface.input_count` holds the verifier's pin to); without it, none. A record not of
     record, or of another model than the run's ``serve.json`` names, is a usage error."""
     from verity.ml.windows import interface as IF
     from verity_vllm.check import weights_of_record as WR
@@ -259,9 +259,9 @@ def test_the_registration_records_the_weights_root_of_record_it_is_given_and_ref
     assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "a"), compiler_digest="ab" * 64,
                                 weights_of_record=str(tmp_path / "wr.json"))) == 0
     reg = json.loads((tmp_path / "a" / "registration.json").read_text())
-    assert reg["registered"] == IF.registered_roots(reg) == {"weights": "cd" * 32}
+    assert reg["registered_roots"] == IF.registered_roots(reg) == {"weights": "cd" * 32}
     assert ADV.main(ADV.Options(run=str(tmp_path), out=str(tmp_path / "b"), compiler_digest="ab" * 64)) == 0
-    assert "registered" not in json.loads((tmp_path / "b" / "registration.json").read_text())
+    assert "registered_roots" not in json.loads((tmp_path / "b" / "registration.json").read_text())
     for bad, serve, why in [({**record, "of_record": False}, None, "of record False"),
                             (record, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
         (tmp_path / "wr.json").write_text(json.dumps(bad))

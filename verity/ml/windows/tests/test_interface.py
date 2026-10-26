@@ -411,9 +411,9 @@ def test_a_registered_read_is_registered_only_where_the_windows_root_is_the_one_
                         ({"weights": bytes(64)}, PIN), (PIN, {"weights": None})]:
         with pytest.raises(ValueError, match=r"\{param: root\}"):
             I.input_count(rec, pins=pins, roots=roots)
-    assert I.registered_roots({"run": RUN, "registered": PIN}) == PIN and I.registered_roots({"run": RUN}) == {}
+    assert I.registered_roots({"run": RUN, "registered_roots": PIN}) == PIN and I.registered_roots({"run": RUN}) == {}
     with pytest.raises(ValueError, match=r"\{param: root\}"):
-        I.registered_roots({"registered": {"weights": {"root": PIN["weights"]}}})
+        I.registered_roots({"registered_roots": {"weights": {"root": PIN["weights"]}}})
 
 
 def test_coalesce_merges_runs_of_like_patterns():

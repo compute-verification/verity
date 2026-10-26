@@ -33,8 +33,8 @@ member's ``--registered`` file comes from the record and those entries alone (`i
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
 of a pinned parameter leave the free inputs where the window's root for it is the pinned root: `declared_count` counts
-them registered, its pins the ``--registered`` file's roots and the window's roots its registration's (``registered``,
-`interface.Window.write`).
+them registered, its pins the ``--registered`` file's roots and the window's roots those its registration records
+(`window_roots`: its ``registered_roots``, `interface.Window.write`, and its committed values' entries).
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
 loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
@@ -54,7 +54,7 @@ too, but the prover chose its rows: its reads count free, and the count names it
 ``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
 from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
 registered only at a parameter ``--pin`` names with the root the verifier fixed before the run, and only where the window's
-registration (``--registration``) records that root for it (`registration_roots`); any other is free. For vLLM's window
+registration (``--registration``) records that root for it (`registration_roots`), any other free. For vLLM's window
 circuit that is ``weights``, the served model's weights record, whose root of record the checkpoint's pinned shards fix
 before the run (`verity_vllm.check.weights_of_record`), and which `verity-vllm advice --weights-of-record` records in each
 window's registration.
@@ -280,8 +280,8 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
                    pins: Mapping[str, str] | str | None = None, roots: Mapping[str, str] | None = None,
                    untied: Iterable[str] = ()) -> dict[str, Any]:
     """The leak bound's count of a stated record that declares its inputs (`interface.input_count`, from its description
-    alone): its input rows less those its wires, registered reads of a parameter whose window root (``roots``, the
-    registration's: `interface.registered_roots`) is the verifier's pin (``pins``, ``{param: root}``) and ingress fill
+    alone): its input rows less those its wires, registered reads of a parameter whose window root (``roots``, those the
+    registration records: `window_roots`) is the verifier's pin (``pins``, ``{param: root}``) and ingress fill
     leave ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of
     its own. So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value
     (`window_pins`: a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here,
@@ -303,12 +303,36 @@ def pin_arg(s: str) -> tuple[str, str]:
     return name, root
 
 
+#: the groups of committed values a window's registration names, each ``{program, values: {param: entry}}``: one-stage's
+#: per-window values and PoUW's (``activations``), and PoUW's pinned weights (``registered``, `core_check.WINDOW_VALUES`)
+ENTRY_GROUPS = ("activations", "registered")
+
+
+def window_roots(w: Mapping[str, Any]) -> dict[str, str]:
+    """The roots a window's registration records for its parameters, by parameter: its registered roots
+    (``registered_roots``, `interface.registered_roots`) and each committed value's entry's root (`ENTRY_GROUPS`). Refused
+    (ValueError) where an entry names no root of hex digits or two of them give one parameter two roots."""
+    roots = IF.registered_roots(w)
+    for g in ENTRY_GROUPS:
+        if w.get(g) is None:
+            continue
+        try:
+            got = {str(v): e["root"] for v, e in w[g]["values"].items()}
+        except (KeyError, TypeError, AttributeError) as e:
+            raise ValueError(f"the window's {g} is {{program, values: {{param: entry}}}}, each entry with its root: "
+                             f"{type(e).__name__}: {e}") from e
+        IF.held_params({}, got)
+        if two := sorted(v for v, r in got.items() if roots.setdefault(v, r).lower() != r.lower()):
+            raise ValueError(f"the window's registration records two roots for {two}")
+    return roots
+
+
 def registration_roots(rec: Mapping[str, Any]) -> dict[str, str]:
-    """The registered roots a window's registration records (`interface.registered_roots`): core's registration's
-    window's (`interface.Window.write`), or an integration's own window registration's, whose ``window`` is no mapping
-    (vLLM's advice registration names the window's index there)."""
+    """The roots a window's registration records for its parameters (`window_roots`): core's registration's window's, or
+    an integration's own window registration's, whose ``window`` is no mapping (vLLM's advice registration names the
+    window's index there)."""
     w = rec.get("window")
-    return IF.registered_roots(w if isinstance(w, Mapping) else rec)
+    return window_roots(w if isinstance(w, Mapping) else rec)
 
 
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
@@ -586,7 +610,7 @@ def audit(a: argparse.Namespace) -> int:
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
-        roots = {**IF.registered_roots(own), **{v: e["root"] for v, e in (ties | untied).items()}}
+        roots = window_roots(own)
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -739,7 +763,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--pin", action="append", default=[], type=pin_arg, metavar="NAME=ROOT", help="a registered parameter, by "
                    "the record's name for it, and the root the verifier fixed for it before the run (repeatable; none: every "
                    "registered read is free)")
-    p.add_argument("--registration", help="the window's registration, whose registered roots (`registration_roots`) are held "
+    p.add_argument("--registration", help="the window's registration, whose roots for its parameters (`registration_roots`) are held "
                    "to the pins (none: no root is the window's, and every registered read is free)")
     a = ap.parse_args(argv)
     if a.cmd == "count":
