@@ -2,30 +2,30 @@
 the plans on the Pareto frontier of expected cost against certified harm, over every budget
 (note:proofs/20261018T0335Z-draft-sampling-optimizer-design).
 
-Nothing trusts it.  A plan is a stratified law, `k_s` units of each template, which registers as `work:1` over a work
+Nothing trusts it.  A plan is a stratified law, `k_s` units of each subcircuit, which registers as `work:1` over a work
 table carrying the credited work and floors equal to the sizes (`work_law`: `one_stage.draw.work_k(1, w, n, W, f)` is
 `min(n, f)`).  Its certificate is recomputed from the sizes alone (`certify`): core's `Stratified.harm_bound` for the
 objective's harm and for credited work, and `density_bound`, the closed form that `work_escape_le`'s proof extends to any
 sizes (the note's gap G1).
 
-**Cuts.**  An op type is cut into units one of several ways, each a set of templates (`Candidate.cut`): one template per
-op is a partition of it; a shared subcircuit is either its own template, committed once and read by the others, or
+**Cuts.**  An op type is cut into units one of several ways, each a set of subcircuits (`Candidate.cut`): one subcircuit per
+op is a partition of it; a shared piece is either its own subcircuit, committed once and read by the others, or
 recomputed inside each reader (a covering, `recomputed_across` in `Q_word` v2), and the planner picks per density.  A unit
 whose wrong output can forfeit downstream work (a noise or form unit every dot of its row reads) carries that work as
 `influence`, which its harm counts.
 
-**Cost.**  Per touched statement plus per proved unit, as C-Flock does: template `s` cut into statements of `c` units costs
+**Cost.**  Per touched statement plus per proved unit, as C-Flock does: subcircuit `s` cut into statements of `c` units costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
 committed at serve time whatever the draw (Daniel, 18 Oct, ASK-25): every unit's outputs (`commit_bits`, `commit_rows`),
 and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A drawn unit's
 witness is built by re-executing its replay unit from the last committed state (`ReplayDomain`), which commits nothing.
-A template's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
+A subcircuit's costs are measured (`TemplateCost`) or derived from the model's rates and its features: ANDs, and the hm96
 rows a proved unit opens (`row_ands`).
 
-**Sweep.**  The note's Lagrangian: one density `lam` on every template (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
-weight of the template's block kind, 1 unless the plan weighs kinds), some templates at their floor only, some proved
+**Sweep.**  The note's Lagrangian: one density `lam` on every subcircuit (`k_s = ceil(min(1, lam w_b v_s) n_s)`, `w_b` the
+weight of the subcircuit's weight class, 1 unless the plan weighs classes), some subcircuits at their floor only, some proved
 whole, and the cut per op type and the statement size each the cheapest at that `lam`.  With no statement cost and a unit
 cost proportional to work, the cheapest plan certifying `C` is `Achievability`'s rates, `q_s = min(1, ln(1/delta) w_s / C)`.
 `weigh` chooses the kinds' weights at a target, under the same stratified certificate.
@@ -36,9 +36,9 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from math import ceil, exp, expm1, fsum, inf, lgamma, log, log1p
 
-from verity.ml.circuits.cut import fits
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound
+from verity.core.protocols.sampled_proofs.one_stage.partition import UNIT_CLASS_MAX, unit_class
 
 #: ANDs of one SHA-512 compression in Boolean form (hm96 PROTOCOL §5)
 SHA512_ANDS = 58_120
@@ -54,13 +54,14 @@ def row_ands(nbytes: int) -> int:
 
 @dataclass(frozen=True)
 class Candidate:
-    """One template of one way (`cut`, default the template alone) to cut one op type into units, derived from the IR,
+    """One subcircuit of one way (`cut`, default the subcircuit alone) to cut one op type into units, derived from the IR,
     never from the prover: `units` instances, each credited `work` (the verifier's work table), with `out_bits` over
-    `out_gates` boundary gates (the width rule, `cut.fits`), and `influence`, the credited work a wrong one can forfeit
-    downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits `commit_bits` in
-    `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units (m = k_log + nbl <= 35);
-    `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its block kind for the draw's
-    weights (served proof units of one template, PoUW's tiles), the template itself when empty."""
+    `out_gates` boundary gates, its committed bits, which fit a public size class (`one_stage.partition.unit_class`, at
+    most `UNIT_CLASS_MAX`, as the one-stage partition refuses a wider unit), and `influence`, the credited work a wrong
+    one can forfeit downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
+    `commit_bits` in `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units
+    (m = k_log + nbl <= 35); `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its weight
+    class for the draw's weights (served proof units of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
 
     op: str
     template: str
@@ -82,10 +83,10 @@ class Candidate:
     def __post_init__(self) -> None:
         if not self.op or not self.template or self.units < 1 or self.cap < 1 or self.out_bits < 0 or self.out_gates < 0 \
                 or min(self.work, self.influence, self.ands, self.commit_bits, self.commit_rows, *self.rows, 0) < 0 \
-                or not fits(self.out_bits, self.out_gates) or (bool(self.replay) != (self.per_replay > 0)) \
+                or unit_class(self.out_bits) is None or (bool(self.replay) != (self.per_replay > 0)) \
                 or self.per_replay > self.units:
-            raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs within "
-                             f"the width rule (<= 16 bits, or one gate of <= 32), and per_replay in [1, units] with a replay")
+            raise ValueError(f"candidate {self.template!r}: needs units >= 1, cap >= 1, non-negative sizes, outputs in a "
+                             f"size class (<= {UNIT_CLASS_MAX} bits), and per_replay in [1, units] with a replay")
 
     @property
     def alternative(self) -> str:
@@ -98,7 +99,7 @@ class Candidate:
 
 @dataclass(frozen=True)
 class TemplateCost:
-    """One template's measured costs under one proof-system version, in the caller's currency: `statement_fixed` (a0) and
+    """One subcircuit's measured costs under one proof-system version, in the caller's currency: `statement_fixed` (a0) and
     `statement_per_unit` (a1, per staged unit) per touched statement, `unit` (b) per proved unit, `replay` per drawn unit,
     and `sigma`, their relative uncertainty.  A field left None is derived from the model's rates."""
 
@@ -144,7 +145,7 @@ class Commitment:
 
 @dataclass(frozen=True)
 class CostModel:
-    """Measured templates, and the rates that derive the rest from their features, `ands` being a unit's ANDs with its
+    """Measured subcircuits, and the rates that derive the rest from their features, `ands` being a unit's ANDs with its
     rows' openings (`row_ands`), as `costfit` measures them: per touched statement `statement_fixed + statement_per_and *
     ands` (the session and the verifier's parse), per staged unit `staged_per_and * ands + staged_per_unit`, and per
     proved unit `per_and * ands`.  Serving commits each unit's outputs at `commit_per_bit` and `commit_per_row`, and
@@ -206,7 +207,7 @@ class CostModel:
 @dataclass(frozen=True)
 class Objective:
     """The harm a wrong unit does: `work` times its credited work and influence plus `bits` times its output bits.  No
-    target: targets and budgets are queries on the frontier.  Every template draws at least `floor` units."""
+    target: targets and budgets are queries on the frontier.  Every subcircuit draws at least `floor` units."""
 
     delta: float
     work: float = 1.0
@@ -238,9 +239,9 @@ class Certificate:
 
 @dataclass(frozen=True)
 class Plan:
-    """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per template, the templates
+    """A cut per op type (`choice`: op -> its alternative), a statement size and a draw size per subcircuit, the subcircuits
     held at their floor and those proved whole, the expected cost by part (`serve` the fixed serve-time commitments,
-    `total` everything), each block kind's weight on the density (1 when absent), and the certificate once certified."""
+    `total` everything), each weight class's weight on the density (1 when absent), and the certificate once certified."""
 
     lam: float
     choice: Mapping[str, str]
@@ -312,7 +313,7 @@ def template_cost(c: Candidate, costs: CostModel, k: int) -> tuple[float, int, d
 
 def replay_cost(sizes: Mapping[str, int], chosen: Sequence[Candidate], costs: CostModel) -> float:
     """The expected cost of building the drawn units' witnesses, by replaying each replay unit the draw meets: a domain's
-    replay unit escapes when every template's draw misses its share of it, independently across strata."""
+    replay unit escapes when every subcircuit's draw misses its share of it, independently across strata."""
     total = 0.0
     for name in sorted({c.replay for c in chosen if c.replay}):
         if name not in costs.replay:
@@ -407,8 +408,8 @@ def _by_op(candidates: Sequence[Candidate]) -> dict[str, dict[str, list[Candidat
 
 def _plans_at(ops: Mapping[str, Mapping[str, list[Candidate]]], costs: CostModel, objective: Objective, lam: float,
               promote: float, weights: Mapping[str, float]) -> list[Plan]:
-    """The plans the Lagrangian allows at one density: per op type its cheapest cut, then each prefix of the templates
-    ranked by cost saved per unit of harm conceded at their floor, each with and without promoting to full the templates
+    """The plans the Lagrangian allows at one density: per op type its cheapest cut, then each prefix of the subcircuits
+    ranked by cost saved per unit of harm conceded at their floor, each with and without promoting to full the subcircuits
     whose whole proof costs at most `promote` of the plan more."""
     def k(c: Candidate) -> int:
         return _k(c, objective, lam, weights.get(c.block, 1.0))
@@ -454,12 +455,12 @@ def _pareto(plans: Iterable[Plan], key) -> list[Plan]:
 def frontier(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, *, by: str = "harm",
              grid: int = 121, promote: float = 0.05, exact: bool = True,
              weights: Mapping[str, float] | None = None) -> list[Plan]:
-    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field, each block
-    kind's density scaled by its weight (`weights`, 1 when absent).  The sweep's plans are screened by `density_bound`
+    """The certified Pareto frontier of (expected cost, `by`), cheapest first, `by` a `Certificate` field, each weight
+    class's density scaled by its weight (`weights`, 1 when absent).  The sweep's plans are screened by `density_bound`
     (cheap) before the survivors are certified (`certify`, `exact` or not)."""
     weights = dict(weights or {})
     if any(not w > 0 for w in weights.values()):
-        raise ValueError("a block kind's weight is positive: hold a kind at its floor by its density, not a zero weight")
+        raise ValueError("a weight class's weight is positive: hold a class at its floor by its density, not a zero weight")
     ops = _by_op(candidates)
     harms = [objective.harm(c) * c.units for c in candidates if objective.harm(c) > 0]
     if not harms:
@@ -487,7 +488,7 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
                exact: bool = True) -> Plan | None:
     """The frontier's least-harm plan within `budget`: its costliest affordable plan.  Given the candidates, costs and
     objective, the plans either side of the budget are moved to it by bisection on the density, each holding its cuts,
-    floor-only and full templates and weights, and the one certifying less is taken, so the answer doesn't hang on the
+    floor-only and full subcircuits and weights, and the one certifying less is taken, so the answer doesn't hang on the
     sweep's grid.  The budget is the total, the serve-time commitments included."""
     affordable = [p for p in plans if p.cost["total"] <= budget]
     if not affordable:
@@ -528,7 +529,7 @@ def for_budget(plans: Sequence[Plan], budget: float, *, candidates: Sequence[Can
 def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *,
                by: str = "harm", plans: Sequence[Plan] | None = None, exact: bool = True, **kw) -> Plan | None:
     """The cheapest plan certifying at most `target`: the frontier's cheapest such plan (of `plans`, a frontier by `by`,
-    when given), its density then lowered by bisection, the cuts, floor-only and full templates and weights held, to
+    when given), its density then lowered by bisection, the cuts, floor-only and full subcircuits and weights held, to
     where its certificate just meets the target."""
     if plans is None:
         plans = frontier(candidates, costs, objective, by=by, exact=exact, **kw)
@@ -557,10 +558,10 @@ def for_target(candidates: Sequence[Candidate], costs: CostModel, objective: Obj
 
 def weigh(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, target: float, *, by: str = "harm",
           factors: Sequence[float] = (0.25, 0.5, 2.0, 4.0), rounds: int = 3, exact: bool = True, **kw) -> Plan | None:
-    """The cheapest plan certifying at most `target` when each block kind (`Candidate.block`) is drawn at its own weight
+    """The cheapest plan certifying at most `target` when each weight class (`Candidate.block`) is drawn at its own weight
     on the density: from equal weights, a coordinate search, each kind of the current plan in turn (costliest first) taking
     the factor of `factors` on its weight that makes `for_target` cheapest, for at most `rounds` passes.  The certificate
-    is the same stratified one over every template, so the weights are parameters of the draw, chosen at the target, and
+    is the same stratified one over every subcircuit, so the weights are parameters of the draw, chosen at the target, and
     never of the guarantee; the plan carries them, and registers by its sizes (`work_law`) as any plan does."""
     def at(weights: Mapping[str, float]) -> Plan | None:
         return for_target(candidates, costs, objective, target, by=by, exact=exact, weights=weights, **kw)
@@ -612,7 +613,7 @@ def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
 
 
 def structure(p: Plan) -> tuple:
-    """A plan's discrete shape: its cuts, statement sizes, and floor-only and whole templates."""
+    """A plan's discrete shape: its cuts, statement sizes, and floor-only and whole subcircuits."""
     return (tuple(sorted(p.choice.items())), tuple(sorted(p.statement_size.items())), tuple(sorted(p.floor_only)),
             tuple(sorted(p.full)))
 
@@ -620,7 +621,7 @@ def structure(p: Plan) -> tuple:
 def perturb(costs: CostModel, what: str, factor: float, candidates: Sequence[Candidate] = ()) -> CostModel:
     """The model with one group of costs scaled by `factor`: "prove" (per proved unit), "statement" (per touched
     statement), "commit" (serving's, the units' and the fixed serve-time commitments'), "replay" (the domains' and per
-    drawn unit), or one template's (its derived costs pinned from `candidates` first)."""
+    drawn unit), or one subcircuit's (its derived costs pinned from `candidates` first)."""
     t = dict(costs.templates)
     if what == "prove":
         t = {k: replace(v, unit=None if v.unit is None else v.unit * factor) for k, v in t.items()}
@@ -677,7 +678,7 @@ def sensitivity(candidates: Sequence[Candidate], costs: CostModel, objective: Ob
 
 def needs_benchmark(candidates: Sequence[Candidate], costs: CostModel, objective: Objective, budget: float, *,
                     by: str = "harm", **kw) -> list[str]:
-    """The templates worth benchmarking at `budget`: those whose cost, moved by its own uncertainty either way (a
+    """The subcircuits worth benchmarking at `budget`: those whose cost, moved by its own uncertainty either way (a
     measurement's `sigma`, or the model's for a derived cost), changes the plan's structure."""
     factors = {c.template: (1 / (1 + costs.sigma_of(c)), 1 + costs.sigma_of(c)) for c in candidates
                if costs.sigma_of(c) > 0}
