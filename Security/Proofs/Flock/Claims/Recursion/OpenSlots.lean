@@ -224,7 +224,7 @@ theorem readSegs_cmts (w : Claims.Flock.Wit) (σs : List Slot) :
   unfold readSegs
   rw [List.flatMap_map]
   refine flatMap_congr_mem _ fun σ _ => ?_
-  simp only [Function.comp_apply, Slot.cmt, Slot.commit, List.nil_append]
+  simp only [Slot.cmt, Slot.commit, List.nil_append]
 
 theorem readSegs_cmt (w : Claims.Flock.Wit) (σ : Slot) : readSegs w [σ.cmt] = σ.commit w := by
   simp only [readSegs, Slot.cmt, Slot.commit, List.flatMap_cons, List.flatMap_nil, List.nil_append, List.append_nil]
@@ -412,7 +412,7 @@ theorem msgs_slots (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
     unfold readSegs
     rw [List.flatMap_map]
     refine flatMap_congr_mem _ fun n _ => ?_
-    simp only [Function.comp_apply, Slot.commit, List.nil_append, hgw _ hk']
+    simp only [Slot.commit, List.nil_append, hgw _ hk']
   | succ i =>
     simp only [List.getElem?_cons_succ, List.getElem?_map] at hj
     have hi2 : i < 2 * rs.size := by omega
@@ -588,7 +588,7 @@ theorem opensSlots_layR (elem : (r : XR) → List (Fin r.w.parts.length × List 
         exact List.mem_map.2 ⟨p, hC p hp, rfl⟩
       · rw [hpfx, readForms_length]
         try rfl
-      · simp only [Slot.opening, Slot.row, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hs, Option.getD_some]
+      · simp only [Slot.opening, Slot.row, List.getElem?_eq_getElem hs, Option.getD_some]
       · rw [msgs_slots elem hx hl d hr hj, List.flatMap_def]
         have hi' : i < l.length := (List.getElem?_eq_some_iff.1 hi).1
         rw [CutOpens.commitAt_flatten _ (fun m hm => by
