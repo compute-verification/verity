@@ -51,6 +51,9 @@ import Proofs.Pous.Rebuild.Exclusion
 import Proofs.Pous.EndToEnd
 import Proofs.Pous.Period
 import Proofs.Pous.Pooled
+import Proofs.Pous.Obligation
+import Proofs.Pous.EndToEndAt
+import Proofs.Pous.PeriodAt
 
 /-!
 # The proved guarantees
