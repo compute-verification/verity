@@ -865,7 +865,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind programDigest
-  let files := if ksForm then
+  let ksFiles := if ksForm then
       PortRoots.checkOf (if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables) tags pubB
     else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
@@ -919,7 +919,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       RecSetup.innerDrawn recCoins
       ProvedScope.programHeld program
       RecordText.check record
-      files
+      ksFiles
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

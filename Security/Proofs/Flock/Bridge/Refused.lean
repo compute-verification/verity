@@ -164,6 +164,6 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
         (Bridge.popMatches_of_popOk hp hpo) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM
         ρ hρ hr t' ht' K₀ hK₀ τ qF qS q hT hL)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨ho.1.1.2, ho.1.2⟩) _ τ).trans
-      ((prob_false _ τ).le.trans (zero_le _))
+      ((prob_false _ τ).le.trans zero_le)
 
 end Flock.Guarantees
