@@ -17,7 +17,8 @@ v3's own picks stay as adopted (measured schedules).
 --from PKL prints the report from a build's pickle (--pickle) without rebuilding. --census JSON [--census-ref REF]
 adds the RTX PRO 6000's beside-load rows with emulated b1 from ALGO-COST-3's census routes (`algo_cost3/b1alu_check.py
 --census` run at this build's picks; keys "design | card | model | x", or "card | model | x" for v3.1, with
-leak_served and c_inc).
+leak_served and c_inc). --census-vector JSON [--census-vector-ref REF] adds the same rows with the RTX PRO 6000's joint
+issue rows from a machine-model vector (ALGO-COST-3's A36; {"vector": name, "rows": rows keyed as --census's}).
 """
 import contextlib
 import io
@@ -907,8 +908,23 @@ def report(D: dict) -> str:
             L.append(f"| {name}, {card} | " + " | ".join(
                 " / ".join(pct(B[name, card, m, x]["share"], 1) for m in models) + " ("
                 + " / ".join(pct(B[name, card, m, x]["leak"], 1) for m in models) + ")" for x in BESIDE) + " |")
+    def census_rows(rows, label):
+        cz = {k if k.count(" | ") == 3 else f"{HEADLINE} | {k}": v for k, v in rows.items()}
+        L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
+        L.append("|---|" + "---|" * len(BESIDE))
+        card = "RTX PRO 6000"
+        for name in dict.fromkeys(k.split(" | ")[0] for k in cz):
+            def cen(m, x, name=name):
+                return cz[f"{name} | {card} | {m} | {x}"]
+
+            L.append(f"| {name}, {card}, {label} | " + " | ".join(
+                " / ".join(pct(B[name, card, m, x]["share0"] * (1 - cen(m, x)["leak_served"])
+                               / (1 - B[name, card, m, x]["leak0"]), 1) for m in models) + " ("
+                + " / ".join(pct(cen(m, x)["leak_served"], 1) for m in models) + ")" for x in BESIDE) + " |")
+            L.append(f"| {name}, {card}, {label}: 1 − c_inc | " + " | ".join(
+                " / ".join(pct(1 - cen(m, x)["c_inc"], 1) for m in models) for x in BESIDE) + " |")
+
     if "census" in D:
-        cz = {k if k.count(" | ") == 3 else f"{HEADLINE} | {k}": v for k, v in D["census"]["rows"].items()}
         L.append("\nD5 v2's job LPs leave out A7's b cᵀ with b1 emulated on the lanes (ALGO-COST-3's A34, route iii). "
                  "Priced as A35's census routes (`algo_cost3/b1alu_check.py --census` at b4830ae7b1: LOP3 and IADD3 on "
                  "the ALU, POPC on a 16-lane XU row, IMAD and IDP.4A on the FMA pipe, each instruction on issue, vec "
@@ -917,19 +933,15 @@ def report(D: dict) -> str:
                  f"routes save 1 − c_inc of the makespan increment, 8B / 70B / V4 ({D['census']['ref']}). So the RTX "
                  "PRO 6000's cells above from x = 0.25 are upper bounds on its share until D5's menu carries the "
                  "route. On the H200 b1 is native.\n")
-        L.append("| picks, card | " + " | ".join(f"x = {x:g}" for x in BESIDE) + " |")
-        L.append("|---|" + "---|" * len(BESIDE))
-        card = "RTX PRO 6000"
-        for name in dict.fromkeys(k.split(" | ")[0] for k in cz):
-            def cen(m, x, name=name):
-                return cz[f"{name} | {card} | {m} | {x}"]
-
-            L.append(f"| {name}, {card}, with emulated b1 | " + " | ".join(
-                " / ".join(pct(B[name, card, m, x]["share0"] * (1 - cen(m, x)["leak_served"])
-                               / (1 - B[name, card, m, x]["leak0"]), 1) for m in models) + " ("
-                + " / ".join(pct(cen(m, x)["leak_served"], 1) for m in models) + ")" for x in BESIDE) + " |")
-            L.append(f"| {name}, {card}, with emulated b1: 1 − c_inc | " + " | ".join(
-                " / ".join(pct(1 - cen(m, x)["c_inc"], 1) for m in models) for x in BESIDE) + " |")
+        census_rows(D["census"]["rows"], "with emulated b1")
+    if "census_vector" in D:
+        cv = D["census_vector"]
+        L.append(f"\nThe same with the RTX PRO 6000's joint issue rows (MMA beside lane work) from {cv['vector']}, the "
+                 "machine model's vector, at IMMA16832's coefficient in D5's form, instead of θ's JI3e_0–2, which "
+                 "D5's card prices and which the machine model closed at VF3n-16 (ALGO-COST-3's A36, "
+                 f"`algo_cost3/theta_facets.py` at a68f6b5ed2; {cv['ref']}). A sensitivity: D5 v2's card is the "
+                 "hull of record (08:24Z).\n")
+        census_rows(cv["rows"], f"{cv['vector']}, with emulated b1")
     L.append("\nPB4: the same periods by makespan, which needs no duals. Cells: 1 − c_inc, the share of the credited "
              "rounds' honest makespan increment over the period's fixed load alone that pub's period saves, 8B / 70B / "
              "V4, beside the dual-price figure above. Credit stays at the duals (P12); c_inc shows how much of that "
@@ -1087,11 +1099,15 @@ def jsonable(x):
 
 
 if __name__ == "__main__":
-    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from", "--census", "--census-ref")
-           if k in sys.argv}
+    arg = {k: sys.argv[sys.argv.index(k) + 1] for k in ("--json", "--pickle", "--from", "--census", "--census-ref",
+                                                         "--census-vector", "--census-vector-ref") if k in sys.argv}
     D = pickle.loads(Path(arg["--from"]).read_bytes()) if "--from" in arg else build()
     if "--census" in arg:
         D["census"] = dict(rows=json.loads(Path(arg["--census"]).read_text()), ref=arg.get("--census-ref", "unpublished"))
+    if "--census-vector" in arg:
+        cv = json.loads(Path(arg["--census-vector"]).read_text())
+        D["census_vector"] = dict(rows=cv["rows"], vector=cv["vector"],
+                                  ref=arg.get("--census-vector-ref", "unpublished"))
     if "--pickle" in arg:
         Path(arg["--pickle"]).write_bytes(pickle.dumps(D))
     if "--json" in arg:
