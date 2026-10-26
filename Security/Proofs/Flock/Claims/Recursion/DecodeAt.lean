@@ -144,8 +144,8 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
   have hdl := FlockComplete.JsonRT.Ins.setup_drawLaw hsu hds
   rw [hdd, hz] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy false s.read.tags D = none := by
-    cases e : ProvedScope.lawWhy false s.read.tags D with
+  have hlw : ProvedScope.lawWhy false s.read.tags false D = none := by
+    cases e : ProvedScope.lawWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   obtain ⟨t, ht⟩ := FlockComplete.JsonRT.draw_parse hdraw hdd
