@@ -23,7 +23,7 @@ FA2_OP_NAMES = frozenset({"varlen_fwd", "flash_attn_varlen_func", "fwd"})
 
 
 def flash_attn_op_version(op: str) -> int | None:
-    """[R13 hopper] The FA library a dispatcher op belongs to, from its namespace: `_vllm_fa2_C.varlen_fwd` -> 2, `_vllm_fa3_C.fwd` -> 3
+    """The FA library a dispatcher op belongs to, from its namespace: `_vllm_fa2_C.varlen_fwd` -> 2, `_vllm_fa3_C.fwd` -> 3
     (vllm.vllm_flash_attn.flash_attn_varlen_func dispatches on `fa_version`); None when the namespace names neither."""
     ns = op_parts(op)[0] or ""
     if "_vllm_fa3_C" in ns or "fa3" in ns:

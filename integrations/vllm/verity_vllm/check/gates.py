@@ -45,7 +45,7 @@ Gates:
     G6 canonicality+regression two independent folds -> one digest; golden.json pass
     G7 holdout generalization  holdouts.json present, >= 1 holdout, G1..G6 pass in every holdout
 
-    G8 VU partition            STRUCTURAL, outside the frozen set (window 2026-09-17, query track): `query_use.json`
+    G8 VU partition            STRUCTURAL, outside the frozen set (query track): `query_use.json`
                                (`verity-ir/query-use/v1`, the partition track's use configuration + verdict document);
                                `skipped` ("no query-use document") when absent, pass iff verdict.partition.status == "exact"
                                and verdict.width.status == "ok" (no violators, no unsupported) and verdict.status == "ok";
@@ -54,7 +54,7 @@ Gates:
                                could not decide -- neither pass nor fail, the run verdict INCOMPLETE, never REJECTED.
                                A run without the document keeps today's verdict: G8 `skipped` never makes it INCOMPLETE.
 
-    R1 reference integrity     FAIL-CLOSED (R9 ref lane, 2026-09-18, `REF_INTEGRITY_RULE`; explicitly authorised checker
+    R1 reference integrity     FAIL-CLOSED (R9 ref lane, `REF_INTEGRITY_RULE`; explicitly authorised checker
                                addition, outside the frozen set): `fold/construction errors > 0 ⇒ the Program is ineligible
                                as an accepted reference`.  Evidence = `fold_summary.json` (`errors`, `unresolved`,
                                `unsupported`; `error_classes` / `per_step` must agree with `errors`), `fold_summary_2.json`
@@ -978,8 +978,8 @@ def gate_G8(run: RunArtifacts) -> GateResult:
     """VU partition: `query_use.json` (`verity-ir/query-use/v1`, written by the partition track: use configuration + `VuVerdict`).
     Pass iff `verdict.partition.status == "exact"` and `verdict.width.status == "ok"` (no violators, no unsupported); fail with
     the partition codes / width violators otherwise.  Absent document -> `skipped` ("no query-use document"); a document that
-    is not this schema, or lacks the verdict fields, -> `error`.  Reads only fields of the frozen document shape (freeze doc,
-    2026-09-17); never touches G1..G7."""
+    is not this schema, or lacks the verdict fields, -> `error`.  Reads only fields of the frozen document shape (the freeze
+    doc); never touches G1..G7."""
     doc = run.json("query_use")
     ev = [run.rel("query_use")]
     if doc is None:
@@ -1173,7 +1173,7 @@ def evaluate_gates(run_dir: str | Path, *, manifest: dict | None = None) -> list
 def verdict(results: list[GateResult]) -> str:
     """ACCEPTED iff all seven frozen gates pass; REJECTED if any gate fails; INCOMPLETE otherwise (skipped / error / missing).  Gates outside the frozen set (G8, R1)
     contribute only `fail` -> REJECTED and `error` / `unsupported` / `unverified` -> INCOMPLETE: a run without a query-use document (G8 `skipped`) or a record that
-    predates G8 / R1 keeps the verdict of G1..G7.  [R9 ref 2026-09-18] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
+    predates G8 / R1 keeps the verdict of G1..G7.  [R9 ref] R1 `unverified` (no fold error evidence) is INCOMPLETE, never ACCEPTED — the fail-closed rule."""
     return match_verdict([r.result() for r in results], GATES)
 
 

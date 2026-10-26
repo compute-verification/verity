@@ -250,6 +250,23 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
         G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
 
 
+def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
+    """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
+    ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
+    registration's root and domain id, and at no other token's."""
+    from verity.ml.commitments.gates import embedding as E
+
+    V, H = 5, 3
+    rows = [[(7919 * t + 31 * j) & 0xFFFF for j in range(H)] for t in range(V)]
+    salts = [bytes([t + 1]) * 192 for t in range(V)]
+    reg = G.Registered.commit(P.program_digest(_program()), "W", rows, salts, schema=G.SCHEMA_SEG)
+    dom, D = reg.domain.domain_id, merkle_depth(V)
+    for t in range(V):
+        path = [reg.path(t)[64 * k:64 * (k + 1)] for k in range(D)]
+        assert E.reference(V, t, reg.root, dom, rows[t], salts[t], path) == (rows[t], 1)
+        assert E.reference(V, (t + 1) % V, reg.root, dom, rows[t], salts[t], path)[1] == 0
+
+
 def test_the_verifiers_reads_file_names_a_bit_row_values_format():
     """`row_schema` is the reads file's key for a value read by a bit-row port (`schemas`), absent for `row/v1`, so a v1
     file is the bytes it was. A bit row is its leaves' bits: W's two 8-bit leaves are one u16 word of a `row/v2` row, where

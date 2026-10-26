@@ -1057,18 +1057,21 @@ def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_re
 
 def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(monkeypatch):
     """Pearl-C's tokens carry the epoch's live salt, so no stock arm is a protocol arm's token control; its own gate is
-    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control."""
+    the experimental arm's call check on the installed run: y against x·Wᵀ, the commitment twice, the negative control.
+    A live run's coins name its session, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
+    from verity.core.protocols.pouw.salt import epoch_open_root
 
     from verity_bench.vllm import runner
 
     monkeypatch.syspath_prepend(str(Path(__file__).resolve().parents[3]))
 
     class Run:
-        def __init__(self, y):
+        def __init__(self, y, **commits):
             self.y, self.omit, self.details = y, frozenset(), {"passes": [{}]}
             self.scheme, self.schedule = SimpleNamespace(name="pearl-c-sm120-v1-h3"), SimpleNamespace(name="deferred")
+            self.commits = {"weights_root": "ab" * 64, **commits}
             g = torch.Generator().manual_seed(0)
             self.weights = {w: SimpleNamespace(tensor=torch.randn(n, 32, generator=g).to(torch.bfloat16))
                             for w, n in ((0, 64), (1, 64), (2, 128))}
@@ -1088,13 +1091,22 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
         def end(self):
             return {"transcript_root": "omitted" if self.omit else "root", "activation_roots": "a", "units": 1}
 
-    run = Run(lambda x, W: (x.float() @ W.float().T).to(torch.bfloat16))
+    def exact_y(x, W):
+        return (x.float() @ W.float().T).to(torch.bfloat16)
+
+    run = Run(exact_y)
     exact = runner._pearl_c_gate(run)
     assert exact["passed"] and exact["provided"] and exact["schedule"] == "deferred"
+    assert exact["coins"] == {"source": "in-process"}
     assert run.stepped and set(run.ats[:-1]) == {7} and run.ats[-1] is None    # the compared passes share one index
     assert sorted({(c["n"], c["m"]) for c in exact["checks"]}) == [(64, 16), (64, 64), (128, 16), (128, 64)]
     wrong = runner._pearl_c_gate(Run(lambda x, W: torch.zeros(x.shape[0], W.shape[0], dtype=torch.bfloat16)))
     assert not wrong["passed"] and wrong["provided"]
+    session = {"session": "s1", "root": "ab" * 64, "commitment": "cd" * 64}
+    live = runner._pearl_c_gate(Run(exact_y, coin_source="challenger", session=session, pass_index=0))
+    after = epoch_open_root(bytes.fromhex("ab" * 64), 0).hex()
+    assert live["passed"] and live["coins"] == {"source": "challenger", "session": session, "pass_index": 0,
+                                                "salt_after": after}
 
 
 def test_pearl_cs_served_row_is_its_protocol_row_beside_the_compiled_engine():
@@ -1271,7 +1283,14 @@ def test_pearl_cs_whole_step_arm_builds_vllms_full_decode_graphs_beside_the_serv
     opts = resolve_options(built)
     assert opts["enforce_eager"] is False and opts["execution"] == "compiled"
     assert whole.run_options == {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True,
-                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True} and whole.schedule == "serial"
+                                 "lag_ends": True, "whole_tree_sm": True, "aside_ends": True, "whole_prefetch_b": True,
+                                 "whole_eager": "deferred-a"} and whole.schedule == "serial"
+    monkeypatch.setenv("PEARLC_WHOLE_PREFETCH_B", "0")
+    assert "whole_prefetch_b" not in type(whole)().run_options
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "deferred")
+    assert type(whole)().run_options["whole_eager"] == "deferred"
+    monkeypatch.setenv("PEARLC_WHOLE_EAGER", "0")
+    assert "whole_eager" not in type(whole)().run_options
 
 
 def test_pearl_cs_whole_step_arm_on_an_h200_runs_pearl_c_sm90s_kernels_under_the_h100_record(monkeypatch):

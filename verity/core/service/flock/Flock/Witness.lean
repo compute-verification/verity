@@ -1,4 +1,5 @@
 import Flock.Zk
+import Flock.Norm
 import Flock.ProvedScope
 import Flock.RecVStar
 import Flock.RecCoins
@@ -48,12 +49,12 @@ structure Inputs where
   partition : Option Json
   program : Option ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null): `Main.recordDraw`. -/
+/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`): `Main.recordDraw`. -/
 def recordDraw (record : String) : Option Json :=
   match Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 

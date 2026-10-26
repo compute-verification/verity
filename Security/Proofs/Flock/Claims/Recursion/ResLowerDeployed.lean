@@ -707,6 +707,147 @@ theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   rw [hel, formBit_var, hvb, Claims.Recursion.VStar.copyOf_eq (by omega), hdiv, hmod]
   simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
 
+/-! ## Where `v`'s port starts -/
+
+/-- **The part check's counts**: at an algebra part's statement, V\*'s row ports' elements and `v`'s are those of the
+verifier's part at the unit's name, shape and META. -/
+theorem checkPart_ns {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit}
+    (h : RecVStar.checkPart (.inner j nm pt) c = .ok ()) {m k cl jj : ℕ} {sh : Flock.Shape} {holo : Bool}
+    {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (h1 : RecResiduals.params c.unit.name = some (m, k, cl, jj)) (h2 : RecResiduals.shape? m k cl = some sh)
+    (h3 : RecResiduals.holoOf c = .ok holo) (h4 : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv)) :
+    pt.S.ports.map (·.2) = ns ∧ pt.S.gf.nv = nv := by
+  unfold RecVStar.checkPart at h
+  dsimp only at h
+  rw [h1] at h
+  dsimp only at h
+  rw [h2] at h
+  dsimp only at h
+  rw [h3] at h
+  dsimp only at h
+  rw [h4] at h
+  dsimp only at h
+  by_cases hc : (pt.S.ports.map (·.2) != ns || pt.S.gf.nv != nv) = true
+  · rw [if_pos hc] at h
+    cases h
+  · simpa only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, Classical.not_not] using hc
+
+/-- V\*'s `InnerRepCheck` unit has no row port named `v` (`checkRepS`). -/
+theorem noV_of_innerUnit {S : VStar.RepS} {nm : String} {u : VStar.UnitC} (h : VStar.innerUnit S nm = .ok u) :
+    "v" ∉ S.ports.map (·.1) := by
+  unfold VStar.innerUnit at h
+  cases hc : VStar.checkRepS S with
+  | error e => simp [hc, bind, Except.bind] at h
+  | ok _ =>
+    intro hv
+    unfold VStar.checkRepS at hc
+    have h1 : ((S.ports.map (·.1)).eraseDups.length != (S.ports.map (·.1)).length ||
+        (S.ports.map (·.1)).contains "v" || S.ports.any (·.2 < 1)) = true := by
+      simp [hv]
+    simp only [h1, ↓reduceIte] at hc
+    contradiction
+
+/-- The words of the rows before a run `A` of a circuit's row ports. -/
+theorem take_words {c : Circuit} {A B : List (String × ℕ × ℕ)}
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) = A ++ B) :
+    (c.ports.extract 0 A.length).foldl (· + ·.words) 0 = (A.map (·.2.1)).sum := by
+  have he : (c.ports.extract 0 A.length).foldl (· + ·.words) 0 =
+      ((c.ports.toList.take A.length).map (·.words)).sum := extract_words (·.words) c.ports A.length
+  rw [he]
+  have h := congrArg (fun l => (l.take A.length).map (fun r : String × ℕ × ℕ => r.2.1)) hr
+  simp only [List.take_left] at h
+  rw [← h, ← List.map_take, List.map_map]
+  rfl
+
+/-- **`v`'s port starts past the row ports' words**: at an algebra part's statement, `checkParsed`'s row ports are
+V\*'s (`vstarRows`): the row ports, `v`, then `out`. `checkRepS` names no row port `v`, so `v` is the port after them. -/
+theorem v_words {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VStar.UnitC}
+    (hu : (VStar.Stmt.inner j nm pt).unit = .ok u)
+    (hr : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      RecVStar.vstarRows (VStar.Stmt.inner j nm pt).sub u)
+    {qv : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv) :
+    (c.ports.extract 0 qv).foldl (· + ·.words) 0 = (pt.S.ports.map fun p => VStar.portWordsOf p.2).sum := by
+  have hu' : VStar.innerUnit pt.S nm = .ok u := hu
+  have hnv := noV_of_innerUnit hu'
+  obtain ⟨-, -, hin, -⟩ := FlockVBridge.OfVStar.innerUnit_ok hu'
+  have hlen : (pt.S.ports.map (·.1)).length = (pt.S.ports.map fun p => VStar.portWordsOf p.2).length := by simp
+  have hr' : c.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
+      ((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map
+        (fun p => (p.1, p.2, 16 * p.2)) ++
+      (("v", VStar.portWordsOf pt.S.gf.nv, 16 * VStar.portWordsOf pt.S.gf.nv) ::
+        (["out"].zip u.outPorts).map fun p => (p.1, (p.2 + 63) / 64 * 64, 16 * ((p.2 + 63) / 64 * 64))) := by
+    rw [hr]
+    have e1 : (VStar.Stmt.inner j nm pt).sub.inputs = pt.S.ports.map (·.1) ++ ["v"] := rfl
+    have e2 : (VStar.Stmt.inner j nm pt).sub.outputs = ["out"] := rfl
+    unfold RecVStar.vstarRows
+    rw [e1, e2, hin, FlockVBridge.OfVStar.repPorts, List.zip_append hlen, List.map_append, List.append_assoc]
+    rfl
+  have hAl : (((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map
+      (fun p => (p.1, p.2, 16 * p.2))).length = pt.S.ports.length := by simp
+  have hfind : (c.ports.toList.map (fun p => (p.name, p.words, p.bits))).findIdx? (fun r => r.1 == "v") =
+      some pt.S.ports.length := by
+    rw [hr', List.findIdx?_append, List.findIdx?_cons, hAl]
+    have hnone : (((pt.S.ports.map (·.1)).zip (pt.S.ports.map fun p => VStar.portWordsOf p.2)).map
+        (fun p => (p.1, p.2, 16 * p.2))).findIdx? (fun r => r.1 == "v") = none := by
+      refine List.findIdx?_eq_none_iff.2 fun x hx => ?_
+      obtain ⟨⟨a, b⟩, hy, rfl⟩ := List.mem_map.1 hx
+      have hne : a ≠ "v" := fun he => hnv (he ▸ (List.of_mem_zip hy).1)
+      simpa using hne
+    rw [hnone]
+    simp
+  rw [List.findIdx?_map] at hfind
+  have hq : c.ports.findIdx? (·.name == "v") = some pt.S.ports.length := by
+    rw [← List.findIdx?_toArray, Array.toArray_toList]
+    exact hfind
+  rw [hqv] at hq
+  cases hq
+  have hw := take_words hr'
+  rw [hAl] at hw
+  rw [hw, List.map_map]
+  congr 1
+  exact List.map_snd_zip (le_of_eq hlen.symm)
+
+/-- The verifier's `rec-residuals` unit's first input group starts at column 0 (`layout`'s). -/
+theorem inCol_unitLaid {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ} {name : String} {net : Flock.Net}
+    (hn : HmNets.netOf name (RecResiduals.unitLaid S ns nv) = .ok net) : (net.inGroups.getD 0 default).col = 0 := by
+  obtain ⟨-, -, -, -, -, hi, -⟩ := Flock.Net.ofRows_ok hn
+  rw [hi]
+  simp [RecResiduals.unitLaid, FlockSoundness.Discharge.Hm.layout_inGroups]
+
+/-- **VBridge's `vBase` is the `v` port's column** (`resTie_copyOf`'s `hvb`, from the verifier's checks): at a staged
+algebra part whose unit the verifier accepted as part `jj` of its shape, the unit is the verifier's `unitLaid`
+(`check_part_at`), whose first input group starts at column 0 (`inCol_unitLaid`), and `v`'s port starts past the row
+ports' words (`v_words`), which the part check holds to the verifier's part (`checkPart_ns`). -/
+theorem vBase_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO)
+    {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
+    {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {qv : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv)
+    {m k cl jj : ℕ} {sh : Flock.Shape} {holo : Bool} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
+    (hres : RecResiduals.params c.unit.name = some (m, k, cl, jj)) (hshp : RecResiduals.shape? m k cl = some sh)
+    (hholo : RecResiduals.holoOf c = .ok holo) (hpart : RecResiduals.part { sh with holo } jj = .ok (S, ns, nv)) :
+    FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) =
+      (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (c.ports.extract 0 qv).foldl (· + ·.words) 0 := by
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
+  obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0
+  obtain ⟨-, hpk, hpa⟩ := htab 0 h0
+  subst hc0
+  obtain ⟨S', ns', nv', hpart', hn⟩ := FlockVBridge.OfVStar.check_part_at P.recResiduals hres hshp hholo
+  rw [hpart] at hpart'
+  simp only [Except.ok.injEq, Prod.mk.injEq] at hpart'
+  obtain ⟨rfl, rfl, rfl⟩ := hpart'
+  obtain ⟨hns, -⟩ := checkPart_ns hpk hres hshp hholo hpart
+  obtain ⟨u, hu, -, -, -, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok hpa
+  rw [inCol_unitLaid hn, Nat.zero_mul, Nat.zero_add, v_words hu hrows hqv, FlockVBridge.OfVStar.vBase_partRep, ← hns,
+    List.map_map]
+  rfl
+
 /-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layVR` with check 5's public rows from
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
 (`residualsCheck_of_check`, `residualsBoth_of_check`), whose `v` and `out` rows the slots read (`check5_bytes`), and
@@ -875,9 +1016,9 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
 
 /-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at copy
 `(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give there and the
-copy's columns. `resTie_staged` at `n`, with the copy's `v` columns where its slot reads (`vCols_of_base`, wherever
-VBridge's `vBase` is the port's column, `hvb`), its residual columns where the `out` slot reads (`hOc`), and the coins'
-values check 5's row (`VVTie`). -/
+copy's columns. `resTie_staged` at `n`, with the copy's `v` columns where its slot reads (`vCols_of_base`, VBridge's
+`vBase` being the port's column by `vBase_staged`), its residual columns where the `out` slot reads (`hOc`), and the
+coins' values check 5's row (`VVTie`). -/
 theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} {cs : ℕ → Coin} {untr : TrReader}
@@ -914,8 +1055,6 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
         8 * nv ≤ rows[n]!.size)
     (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
       (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size)
-    (hvb : FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) =
-      (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (c.ports.extract 0 qv).foldl (· + ·.words) 0)
     (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
       Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.partBase S ns nv + q) =
         formBit w (rowForms c "out" qo n)[q]) :
@@ -932,6 +1071,8 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
     subst hp
     exact e
+  have hvb := vBase_staged hsh.2 hr hss hsv hpc hqv (by rw [← hc0]; exact hres) hshp (by rw [← hc0]; exact hholo)
+    hpart
   have hVc := vCols_of_base (w := w) hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
     (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg)
     (show o * c.g + g = n by rw [← hc0]; exact hn) hvb
