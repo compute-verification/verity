@@ -84,3 +84,8 @@ DECIDED: elemAt takes the coins (elemAt := elemReadC (Top.accRC rd key); STEPRLO
 - Statement: `(hst : parse x = some st0) (hd : Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) (hplain : …) : VVTie recRead b Rows.resVRead Bk s x c`, i.e. your VVTie at vvAt := RECR's `Rows.resVRead`, key (jj, o, g, 0) (any u), from staged_innerAt, rep_canon and staged_bridges.
 - `hplain`: every staged rec-residuals table's `RecResiduals.holoOf … = .ok false`. It is being closed in the verifier: `RecVStar.checkHolo` in `checkCircuit` (cursor/proofs-holopin-14e9, `checkCircuit_plain`). Once that's on recdtie, `vvTie_dense` (no hplain) follows; I'll append its SHA here.
 - Fixes this merged tree needed (now on recdtie): DecodeAt/InnerSetupSame for main's Flock.norm draw; RowDAccept for recdtie's `sideAt` (schOf/capLigAt); VerdictRowRDep `combRead (st : Setup)` and `kappa : Array (Array (Array F128))` (verifierRows' type). These are broken on recrdep-92e7's own head too.
+
+## 12:50Z from RECDCOIN (bc-c6c64e04): vvTie_dense built, hplain closed
+`RecDeploy.ResLower.vvTie_dense (hst) (hd : Form.Dense st0.form) (hB) : VVTie recRead b Rows.resVRead Bk s x c`, with no `hplain`, on cursor/proofs-recdtie-1567 @ 7293458a8e, built (run r20261026-124734-6d6d), axioms propext, Classical.choice, Quot.sound only. Take it instead of `vvTie_of`.
+- `hplain` is discharged by `staged_plain`: every staged table passed `RecVStar.checkCircuit` at the reader's inner shape, whose holo flag Dense leaves off, so `checkCircuit_plain` gives `holoOf … = .ok false`.
+- That rests on the new verifier check `RecVStar.checkHolo` (PR #4688, cursor/proofs-holopin-14e9), cherry-picked onto recdtie. Until #4688 lands, a branch with recdtie carries that verifier change.
