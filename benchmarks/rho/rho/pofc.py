@@ -18,7 +18,8 @@ PoFC enters ρ beside the layers it touches, never in them:
 
 * `Pofc` wraps any regime: every cut with declared blocks gains a copy whose declared work runs as episodes
   (`episode`), and so does the layout. With `link`, the physical instantiation (forward-only links, each GPU reading only
-  its own static memory), every other block gets the link's bits over its time as its forward cut.
+  its own static memory), every other block of those copies gets the link's bits over its time as its forward cut.
+  `apply` wraps a scenario's regime and adds PoFC's bounds and attacks to its own.
 * `Backprop` is the training class `pofc-backprop` (draft): what a block under a forward cut finishes of exact backprop
   that must reach depth `L`.
 * `LastLayers`, `Palindrome`, `WeightsAsActivations` and `JunkEpisodes` are the page's constructions (attacks b to e);
