@@ -39,8 +39,10 @@ def own_ramlock(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def outside_a_run(monkeypatch):
-    """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
+    """A check runs these tests inside its own `research run`: main() must not write that run's slot record, nor raise these
+    tests' mem= to that run's --mem-gb (RUN_MEM_ENV)."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -874,8 +876,11 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert SLOT.main(["--twin", "p2", "--", "check"], now=lambda: NOW, sleep=lambda s: None) == SLOT.NOT_STARTED
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
-    monkeypatch.undo()                                                             # undoes any_core's pin too
+    monkeypatch.undo()                                                             # undoes the autouse fixtures too
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
+    monkeypatch.setattr(SLOT, "RAMLOCK", tmp_path / "ramlock")
+    for name in ("RESEARCH_RUN_DIR", "CHECK_SLOT", SLOT.RUN_MEM_ENV):
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
     assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
