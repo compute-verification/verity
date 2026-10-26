@@ -23,10 +23,13 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
 
 - one step with each phase marked (the row digests, the leaves, the multi-row units, the fold, the slot trees, the step
   tree), with each phase's compressions counted from the layout as the engine hashes them, and its G compressions/s;
-- ``--reps`` unmarked steps at each ``--temps`` pass size and ``--leaf-minb`` leaf kernel (the first of each is the marked
-  step's and the profile's), with the peak memory and how long the host took to enqueue the step;
+- ``--reps`` unmarked steps at each ``--temps`` pass size, ``--leaf-minb`` leaf kernel and ``--graphs`` mode (the first of
+  each is the marked step's and the profile's), with the peak memory and how long the host took to enqueue the step (an
+  NVTX range, ``enqueue``, for ``launches.py``); on graphs, after a step that captures them, and each step's roots held to
+  the marked step's, then one more pair under another salt key;
 - the leaf kernel alone over the widest group's first pass, at 1 and 2 blocks an SM;
-- one step under torch's profiler: each kernel's launches and time, and the side stream's time with no kernel running;
+- one step under torch's profiler (on graphs if they were timed): each kernel's launches and time, and the side stream's
+  time with no kernel running;
 - ``--samples`` random slots plus the first and the last, rebuilt by the CPU reference (``slots.commit_slot``) and checked
   against the device's slot roots, and the step root against the reference's step tree over the device's slot roots.
 
@@ -247,16 +250,24 @@ def run(a: argparse.Namespace) -> int:
     return 0 if ok else 1
 
 
-def best_s(doc: dict[str, Any]) -> float:
-    return min(s["best"]["gpu_s"] for s in doc["steps"])
+def best_s(doc: dict[str, Any], graphs: bool | None = None) -> float:
+    return min(s["best"]["gpu_s"] for s in doc["steps"] if graphs is None or s["graphs"] == graphs)
+
+
+def best_enqueue_s(doc: dict[str, Any], graphs: bool) -> float:
+    return min(s["best"]["enqueue_s"] for s in doc["steps"] if s["graphs"] == graphs)
 
 
 def verdict(name: str, doc: dict[str, Any]) -> str:
     s, slots, ref = best_s(doc), doc["slots"], doc["reference"]
     against = f", {s / TARGET_S:.2f}x the <={TARGET_S} s target (CMP-149)" if slots == TARGET_SLOTS else ""
+    modes = {st["graphs"] for st in doc["steps"]}
+    host = "; ".join(f"{'on graphs' if g else 'eager'} {best_s(doc, g):.3f} s with the host enqueueing {best_enqueue_s(doc, g):.3f} s"
+                     for g in sorted(modes))
     roots = "equal" if doc["ok"] else "DIFFER from"
-    return (f"{name} ({doc['layout']['rows']:,} rows a slot) at {slots:,} slots: step {s:.3f} s{against}; roots {roots} the CPU "
-            f"reference on {len(ref['sampled_slots'])} sampled slots and the step tree")
+    also = ", and every step on graphs equals the eager step's roots under two salt keys" if True in modes else ""
+    return (f"{name} ({doc['layout']['rows']:,} rows a slot) at {slots:,} slots: step {s:.3f} s{against} ({host}); roots "
+            f"{roots} the CPU reference on {len(ref['sampled_slots'])} sampled slots and the step tree{also}")
 
 
 def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, line: str) -> None:
@@ -266,6 +277,8 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
     ms = []
     for k, d in docs.items():
         ms.append({"name": f"{k}.step_gpu_s", "value": best_s(d), "unit": "s"})
+        for g in sorted({st["graphs"] for st in d["steps"]}):
+            ms.append({"name": f"{k}.{'graphs' if g else 'eager'}.enqueue_s", "value": best_enqueue_s(d, g), "unit": "s"})
         ms.append({"name": f"{k}.rows_a_slot", "value": d["layout"]["rows"], "unit": "rows"})
         if "count" in d:
             ms.append({"name": f"{k}.compressions_a_row_slot", "value": d["count"]["compressions_a_row_slot"],
@@ -318,7 +331,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
                                                                      for grp in plan.groups})}}
     save("plan")
 
-    def step(marks: list | None = None) -> tuple[S.StepCommit, dict[str, Any]]:
+    def step(marks: list | None = None, graphs: bool = False, key: bytes = KEY) -> tuple[S.StepCommit, dict[str, Any]]:
         torch.cuda.synchronize()
         base = torch.cuda.memory_allocated()
         torch.cuda.reset_peak_memory_stats()
@@ -327,15 +340,18 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
         start.record(plan.stream)
         if marks is not None:
             marks.append(("start", start))
-        sc = G.StepCommitter(plan, STEP, slots, KEY, marks=marks)
+        torch.cuda.nvtx.range_push("enqueue")
+        sc = G.StepCommitter(plan, STEP, slots, key, marks=marks, graphs=graphs)
         for g in layout.groups:
             sc.add(bufs[id(g)])
         enq = time.perf_counter() - t0
+        torch.cuda.nvtx.range_pop()
         pend = sc.finish()
         end.record(plan.stream)
         res = pend.result()
         end.synchronize()
-        return res, {"temp_bytes": plan.temp_bytes, "leaf_minb": plan.leaf_minb, "gpu_s": round(start.elapsed_time(end) / 1e3, 4),
+        return res, {"graphs": graphs, "temp_bytes": plan.temp_bytes, "leaf_minb": plan.leaf_minb,
+                     "gpu_s": round(start.elapsed_time(end) / 1e3, 4),
                      "wall_s": round(time.perf_counter() - t0, 4), "enqueue_s": round(enq, 4),
                      "peak_gib": gib(torch.cuda.max_memory_allocated() - base),
                      "peak_total_gib": gib(torch.cuda.max_memory_allocated()),
@@ -385,22 +401,35 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
     doc["leaf_probe"] = leaf_probe()
     save("leaf_probe")
 
-    doc["steps"] = []
+    doc["steps"], same = [], []
     for temp in a.temps:
         for minb in a.leaf_minb:
-            plan.temp_bytes, plan.leaf_minb = temp, minb
-            rs = [step()[1] for _ in range(a.reps)]
-            best = min(rs, key=lambda r: r["gpu_s"])
-            doc["steps"].append({"temp_bytes": temp, "leaf_minb": minb,
-                                 "passes_a_group": sorted({-(-slots // plan.per_pass(grp.shape, slots)) for grp in plan.groups}),
-                                 "gpu_s": [r["gpu_s"] for r in rs], "best": best})
-            save("steps")
+            for graphs in map(bool, a.graphs):
+                plan.temp_bytes, plan.leaf_minb = temp, minb
+                t = time.perf_counter()
+                if graphs:
+                    same.append(step(graphs=True)[0] == res)   # captures this pass size's and leaf kernel's graphs
+                capture_s = round(time.perf_counter() - t, 3)
+                runs = [step(graphs=graphs) for _ in range(a.reps)]
+                same += [r == res for r, _ in runs if graphs]
+                rs = [i for _, i in runs]
+                best = min(rs, key=lambda r: r["gpu_s"])
+                doc["steps"].append({"graphs": graphs, "temp_bytes": temp, "leaf_minb": minb,
+                                     "passes_a_group": sorted({-(-slots // plan.per_pass(grp.shape, slots)) for grp in plan.groups}),
+                                     "gpu_s": [r["gpu_s"] for r in rs], "enqueue_s": [r["enqueue_s"] for r in rs],
+                                     **({"first_step_with_capture_s": capture_s} if graphs else {}), "best": best})
+                save("steps")
     plan.temp_bytes, plan.leaf_minb = a.temps[0], a.leaf_minb[0]
+    if True in map(bool, a.graphs):
+        other = bytes(range(32))
+        doc["graphs_check"] = {"steps_equal_eager": sum(same), "of": len(same),
+                               "other_key_equal_eager": step(graphs=True, key=other)[0] == step(key=other)[0]}
+        save("graphs_check")
 
     try:
         from torch.profiler import ProfilerActivity, profile
         with profile(activities=[ProfilerActivity.CUDA]) as prof:
-            _, r = step()
+            _, r = step(graphs=bool(max(a.graphs)))
         kernels = []
         for e in prof.key_averages():
             us = getattr(e, "device_time_total", None)
@@ -409,7 +438,7 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
                 kernels.append({"kernel": e.key[:120], "launches": e.count, "s": round(us / 1e6, 4)})
         kernels.sort(key=lambda k: -k["s"])
         busy = sum(k["s"] for k in kernels)
-        doc["profile"] = {"gpu_s": r["gpu_s"], "enqueue_s": r["enqueue_s"], "kernels_s": round(busy, 4),
+        doc["profile"] = {"graphs": r["graphs"], "gpu_s": r["gpu_s"], "enqueue_s": r["enqueue_s"], "kernels_s": round(busy, 4),
                           "idle_s": round(r["gpu_s"] - busy, 4), "launches": sum(k["launches"] for k in kernels),
                           "pageable_uploads": sum(k["launches"] for k in kernels if "Pageable -> Device" in k["kernel"]),
                           "kernels": kernels[:25]}
@@ -429,7 +458,8 @@ def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
     doc["reference"] = {"sampled_slots": sampled, "differ": differ, "step_root_from_slot_roots": step_root,
                         "s": round(time.perf_counter() - t, 1)}
     doc["host_max_rss_gib"] = gib(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024)
-    doc["ok"] = not differ and step_root
+    gc_ = doc.get("graphs_check")
+    doc["ok"] = not differ and step_root and (gc_ is None or (gc_["steps_equal_eager"] == gc_["of"] and gc_["other_key_equal_eager"]))
     save("reference")
     return doc
 
@@ -456,6 +486,9 @@ def main(argv: list[str] | None = None) -> int:
     tm.add_argument("--temps", type=int, nargs="+", default=[1 << 30, 4 << 30], help="pass sizes (Plan.temp_bytes)")
     tm.add_argument("--leaf-minb", type=int, nargs="+", choices=(0, 1, 2), default=[0],
                     help="the leaf kernel's blocks an SM (Plan.leaf_minb; 0, the build's default)")
+    tm.add_argument("--graphs", type=int, nargs="+", choices=(0, 1), default=[0],
+                    help="1: steps whose adds are CUDA graph launches (StepCommitter(graphs=True)), their roots held to the eager "
+                         "step's")
     tm.add_argument("--samples", type=int, default=4, help="random slots the reference rebuilds, beside the first and last")
     a = ap.parse_args(argv)
     if a.cmd == "count" and (a.layout is None) == (a.uniform is None):
