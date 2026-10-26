@@ -31,7 +31,7 @@ import json
 from collections import Counter
 from typing import Any, Collection, Iterable, Iterator
 
-from verity_vllm.commit import challenge as CH
+from verity_vllm.commit import challenge as CH, json_chunks as JC
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported (R19 int-20)
@@ -182,9 +182,9 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
     if weight_registration:
         entries.append({"identity": identity_dict(identity(program_digest, "*", -1, 0, "weights", "registered", 0, 0, rank)), "kind": "registered-input",
                         "digest": weight_registration.get("root") or weight_registration.get("digest") or json.dumps(weight_registration, sort_keys=True, default=str)[:128]})
-    canon = json.dumps(entries, sort_keys=True, separators=(",", ":"), default=str).encode()
+    digest = JC.sha256_hex(JC.list_pieces(entries, sort_keys=True, separators=(",", ":"), default=str))   # sha256 of json.dumps(entries, <same>)
     return {"schema": MAP_SCHEMA, "rules_version": RULES_VERSION, "program_digest": program_digest, "run_root": run_root.hex(), "rank": rank,
-            "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": hashlib.sha256(canon).hexdigest(), "entries": entries}
+            "layout": layout_version, "collector": collector or {}, "entries_n": len(entries), "digest": digest, "entries": entries}
 
 
 def member_matches(required: str, got: str) -> bool:

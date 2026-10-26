@@ -4,6 +4,7 @@ Exact mode (the default; `VERITY_PINNED_EXACT=0` for torch's allocator) maps sha
 registers it with `cudaHostRegister`, so the process RSS is the pool's accounting and `release()` returns it to the OS (`_pinned_block`).
 A fresh block's pages are faulted in by `populate_threads` helper threads before the caller registers it, and `reserve` makes a burst
 of blocks together.  torch is imported where a block is made: the offline core builds a pool and never allocates from it.
+`lend` takes a run's blocks out of the pool for a reader on another thread (a served window's seal) and `restore` brings them back.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import ctypes
 import errno
 import os
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -143,6 +145,7 @@ class PinnedPool:
         self._ready: list[Any] = []           # blocks `reserve` made, in the order the takes after it allocate them
         self.reserved_bytes = 0
         self.reserve_unused = 0               # reserved blocks no take asked for (folded into the free list by `reset`): 0 when exact
+        self._returned: deque = deque()       # lent blocks back from their reader (`restore`, any thread), free from the next `reset`
 
     def fresh(self) -> PinnedPool:
         """An empty pool with this one's settings (block size, mode, helper threads)."""
@@ -211,6 +214,7 @@ class PinnedPool:
         owners = self._owners
         self.free, self.all, self._owners, self.in_use, self.cur, self.off, self.mode = [], [], [], [], None, 0, None
         self._ready = []
+        self._returned.clear()
         self.deferred_unmaps = 0
         import sys
 
@@ -257,10 +261,23 @@ class PinnedPool:
         self.free.extend(self.in_use)
         self.reserve_unused += len(self._ready)
         self.free.extend(self._ready)
+        while self._returned:
+            self.free.extend(self._returned.popleft())
         self._ready = []
         self.in_use = []
         self.cur = None
         self.off = 0
+
+    def lend(self) -> list[Any]:
+        """The blocks this run took, out of the pool until `restore` brings them back: the retained values of a closed run stay
+        intact while the next run takes blocks of its own, so the pool grows by what is out.  `release` unmaps lent blocks too:
+        restore them first."""
+        lent, self.in_use, self.cur, self.off = self.in_use, [], None, 0
+        return lent
+
+    def restore(self, blocks: list[Any]) -> None:
+        """`lend`'s blocks back, from any thread: free for the takes after the next `reset`."""
+        self._returned.append(list(blocks))
 
     def take_block(self, nbytes: int) -> Any:
         """A whole block for a SHORT-LIVED buffer (returned with `give_back`, unlike `take` slices which live until `reset`)."""
