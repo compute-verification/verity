@@ -32,8 +32,8 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
     refine List.Forall₂.imp (fun t p h hnull => ?_) (Claims.Bridge.Custody.mapM_forall₂ (by assumption))
     beta_reduce at h
     try dsimp only at h
+    first | rw [if_pos hnull] at h | simp only [hnull, if_true] at h
     obtain ⟨p', hp', h⟩ := ebind_ok h
-    rw [if_pos hnull] at hp'
     simp only [pure, Except.pure, Except.ok.injEq] at hp'
     subst hp'
     repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
