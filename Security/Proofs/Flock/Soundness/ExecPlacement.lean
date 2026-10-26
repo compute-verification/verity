@@ -413,8 +413,8 @@ theorem UnitAt.flat {c : Circuit} (ht : c.tmpl = none) (hU : Built c.unit)
       comp := fun x h1 h2 => (by rw [e2]; rw [e1] at h2; exact ⟨h1, h2⟩)
       row_a := fun x _ _ j => ?_
       row_b := fun x _ _ j => ?_ }
-  · simpa [e1, e2] using sparseEntry_built_a hU x j
-  · simpa [e1, e2] using sparseEntry_built_b hU x j
+  · simpa [e1, show upos c = id from funext e2] using sparseEntry_built_a hU x j
+  · simpa [e1, show upos c = id from funext e2] using sparseEntry_built_b hU x j
 
 /-- **The layout facts** the placement reads off an accepted statement (`ExecSetup.lean` derives them from
 `Stmt.setupH`). -/
@@ -730,7 +730,7 @@ theorem col_val_in (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {g 
       st.c.unitRange.slot (g * st.c.upv + x.val / (unitRows st L.unit_built).nIn) +
         x.val % (unitRows st L.unit_built).nIn := by
   unfold col
-  obtain ⟨-, -, e⟩ := stackPlaceAt_val_in (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) x hx
+  obtain ⟨_, _, e⟩ := stackPlaceAt_val_in (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) x hx
   rw [e]
   congr 1
   have hn : 0 < (unitRows st L.unit_built).nIn := Nat.pos_of_ne_zero fun h0 => by simp [h0] at hx
@@ -745,7 +745,7 @@ theorem col_val_comp (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) {
       (u' * ((unitRows st L.unit_built).nComp + 1) + (1 + (c0 - (unitRows st L.unit_built).nIn)))) :
     (L.col regs hg x).val = st.c.unitRange.slot (g * st.c.upv + u') + upos st.c c0 := by
   unfold col
-  obtain ⟨-, e⟩ := stackPlaceAt_val_comp (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) hu' h1 h2 x hx
+  obtain ⟨_, e⟩ := stackPlaceAt_val_comp (L.model regs) (unitRows st L.unit_built) st.c.upv _ _ (L.hbM regs hg) hu' h1 h2 x hx
   exact e
 
 /-- A flat unit (no template) is `Built`. -/
