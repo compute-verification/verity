@@ -1892,6 +1892,14 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
+  },
+  "Accounting.Assumptions.HelpWithinCertifier": {
+   "owner": "@lean",
+   "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab"
+  },
+  "Accounting.Assumptions.WordCostsMacs": {
+   "owner": "@lean",
+   "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
   }
  },
  "meaning": [
@@ -12068,6 +12076,17 @@
     "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
    ]
   },
+  "Definitions.Accounting.Assumptions.CreditedWords": {
+   "digest": "a25f4c1c49005044b2dd56f19dab51ba0e411b9c4f3620cd11b1807e52485ecb",
+   "definitions": {
+    "Accounting.Assumptions.HelpWithinCertifier": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab",
+    "Accounting.Assumptions.WordCostsMacs": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocksDeployed",
+    "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
+   ]
+  },
   "Definitions.Accounting.Assumptions.EncodeChain": {
    "digest": "2764268caa8c3e80b64150a1707d7f1154462405457c0ff274fb6f2dab23f21b",
    "definitions": {
@@ -14887,22 +14906,25 @@
     "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
    ]
   },
+  "Definitions.Accounting.JointBridge.CreditedWords": {
+   "digest": "5f4962b7c4b43a5325562b9025f916c537e21439c93e21479ef6ea2e384aafd2",
+   "definitions": {
+    "Accounting.Certificates.helpUnits": "c2978d0581af901f4228bf512b479443221f324b3833cd4bcf44d9e581121165",
+    "Accounting.Compose.minWordMacs": "c1f2018ca09c2aeab805566f47f6aacbce4bee4f86c7f3597489c24bd1ccc183",
+    "Accounting.RealizesCreditedWords": "21940806e2abd9be34beb89fde5ac387bd78ee39e97954c3e8015a97fd5bddf6",
+    "Accounting.RealizesCreditedWords.coin": "212259de447d68b59105491fcb4f1cbacd803c9fa68375e4c5dee28be8110463"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocksDeployed",
+    "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
+   ]
+  },
   "Definitions.Accounting.JointBridge.SpaceOfPeriodHeld": {
    "digest": "b84f3fb3d8ba9016fe0ef5d330d43a2e3ec2fc607e325e9a327a31b5ca4ea856",
    "definitions": {
     "Accounting.RealizesSpaceOfPeriodHeld": "168d7c814d2dc214206e5591492054724d84a180759a4ce91a693e1df31fe7d0"
    },
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksDeployed"]
-  },
-  "Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "digest": "6805273d6b6792ae282bef0922788d3d8ae78e64fc91c1b284dfae17cb9a6373",
-   "definitions": {
-    "Accounting.RealizesWorkOfH1CheckedCreditPeriod": "e9e8f8c962219d49450458d19dc5861702987b69a39240c12f28092e5637cf67"
-   },
-   "guarantees": [
-    "Accounting.SecurityProofs.JointHorizonBlocksDeployed",
-    "Accounting.SecurityProofs.JointHorizonBlocksDeployedA"
-   ]
   },
   "Definitions.Accounting.JointPeriod": {
    "digest": "1bd7aa7b193bcd9a8591295185d5bfac76487671f52e32c46d11e0c8f0a011f5",
@@ -36983,10 +37005,10 @@
    "guarantees": ["Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod"]
   },
   "Proofs.Accounting.JointBridge.Guarantees.JointHorizonBlocksDeployed": {
-   "digest": "29667e621eb6dd67e5008767668e95ba68917778e8a6c1990267d9d36acd192b",
+   "digest": "6faab49dbfa260830af1755e8bf3e666766227695ce94e1465876619946fc8ab",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocksDeployed": "15424fd6a93331726b0023d2cf498295edc150340380153f84edabff391e2b2d",
-    "Accounting.Guarantees.JointHorizonBlocksDeployedA": "1e2b7cc7fc1c588b158799fb4ad664303285b5538865555f2e3c488f1352432f"
+    "Accounting.Guarantees.JointHorizonBlocksDeployed": "e95c361deadc35e71d88e98052aab2b29e13905faffd95818b665d3034ee8786",
+    "Accounting.Guarantees.JointHorizonBlocksDeployedA": "c5906ee49d6bb985439b17967b9bd77e6b34d11adc4d6792fee174925ff3c52b"
    },
    "guarantees": [
     "Accounting.SecurityProofs.JointHorizonBlocksDeployed",
