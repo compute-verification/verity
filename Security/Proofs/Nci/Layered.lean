@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.Layered
+import Definitions.Nci.Guarantees.Layered
 import Proofs.Nci.Threads
 
 /-!

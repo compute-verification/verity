@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.CoverFanOut
+import Definitions.Nci.Guarantees.CoverFanOut
 
 /-!
 # The fan-out proof's plan: the statements of its pieces

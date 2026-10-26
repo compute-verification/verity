@@ -1,4 +1,4 @@
-"""[P6, 2026-09-23] The configuration-derived κ profile of ANY checkpoint role: `build_profile(role, world=1)`.
+"""The configuration-derived κ profile of ANY checkpoint role: `build_profile(role, world=1)`.
 
 One constructor per ARCHITECTURE class, selected by the family facts table (`family_facts.FAMILY_FACTS[model_type]["arch"]`):
   * `dense`     -- the Llama-architecture vocabulary (`LlamaForCausalLM`, Qwen2, Mistral, Qwen3, Phi-3, Gemma-2): the base κ module's
@@ -47,7 +47,7 @@ from verity_vllm.observe.fold.patterns import (Embedding, LogitsGather, TokenSel
                                                TransparentAten, TransparentTritonMetadata, dsa_patterns, dsv4_patterns)
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.observe.fold.patterns.collectives import TpCollective
-from verity_vllm.collectives.embedding_shard import EmbeddingShardCuda
+from verity_vllm.engine.collectives.embedding_shard import EmbeddingShardCuda
 from verity_vllm.engine.profiles import dense_generic as _dg
 from verity_vllm.engine.profiles import family_facts as FF
 from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager as base

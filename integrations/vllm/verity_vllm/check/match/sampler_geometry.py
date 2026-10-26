@@ -28,7 +28,7 @@ def top_p_split_count(spec: str, B=None, inst: dict | None = None) -> int | None
             if len(run) == 4 and run[0] == "n" and (run[2], run[3]) == (0, 1):
                 j = (getattr(B, "k2i", None) or {}).get(run[1])
                 if j is not None:
-                    from verity_vllm.check.match.program_compare import const_value
+                    from verity_vllm.check.match.instance_sequence import const_value
                     cv = const_value(B.inst[j]["spec"])
                     if cv is not None and cv[0] == 32:
                         return int(cv[1])

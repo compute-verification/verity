@@ -1,7 +1,7 @@
 import Mathlib.Analysis.Real.Sqrt
 import Mathlib.Tactic.Linarith
 import Mathlib.Tactic.Positivity
-import Models.Nci.Guarantees.CoverPartialSum
+import Definitions.Nci.Guarantees.CoverPartialSum
 
 /-!
 # The partial-sum bounds: the rate, one block at a time

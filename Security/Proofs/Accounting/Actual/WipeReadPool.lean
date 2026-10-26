@@ -1,5 +1,5 @@
 import Mathlib
-import Models.Accounting.Guarantees.Actual.WipeBridge
+import Definitions.Accounting.Guarantees.Actual.WipeBridge
 
 /-!
 # The lifetime pool per read, on the challenger's verdicts

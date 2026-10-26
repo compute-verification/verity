@@ -3,7 +3,7 @@ import Definitions.Accounting.Compose
 /-!
 # PoUW's work over an accounting period of `n` windows (trusted)
 
-The vocabulary of `Models.Accounting.Guarantees.ComposePeriod` (INT-PERIOD,
+The vocabulary of `Definitions.Accounting.Guarantees.ComposePeriod` (INT-PERIOD,
 note:compute-accounting/20261019T0739Z-draft-int-period), answering RT-INT-1
 (note:compute-accounting/20261019T0528Z-draft-rt-int): `CircuitWork`'s one window reaches `ε < 1%` only at about
 10,552 equal live rounds, and a served window has 18. A period is up to `n` windows of one declared circuit, run in

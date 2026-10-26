@@ -1,5 +1,5 @@
 import Proofs.NetworkCertifier.AdviceV1
-import Definitions.NetworkCertifier.Guarantees.WindowCharge
+import Definitions.NetworkCertifier.Guarantees.WindowChargeKraft
 
 /-!
 # Advice v1's whole-window charge counts (Kraft), and the leak bound with it

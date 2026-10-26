@@ -1,6 +1,6 @@
 import Mathlib
 import Definitions.Pouw.RelativeSecurityJ10R
-import Models.Pouw.Guarantees.RelativeSecurity
+import Definitions.Pouw.Guarantees.RelativeSecurity
 import Proofs.Pouw.RelativeSecurity
 
 /-!

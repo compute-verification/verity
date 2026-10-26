@@ -105,9 +105,9 @@ def main() -> int:
     from verity_vllm.config import checkpoint_entries
     from verity_vllm.engine import step_trace as ST
     from verity_vllm.pipeline import window_advice as WA
-    from verity_vllm.predict.build import Unexpressible
-    from verity_vllm.predict.phi import Phi
-    from verity_vllm.predict.steps import (
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.steps import (
         CAP_BITS,
         Registered,
         compare,
@@ -165,7 +165,7 @@ def main() -> int:
     (out / "comparison.json").write_text(json.dumps(cmp, indent=1) + "\n")
     print(f"[advice-compile] equal {cmp['equal']}, different {cmp['different']}, no trace {cmp['no_trace']}", flush=True)
     if a.window is not None:
-        from verity_vllm.predict.steps import trace_dir
+        from verity_vllm.program.predict.steps import trace_dir
         man = {"schema": MANIFEST, "run": str(run), "window": a.window, "registration": reg_doc, "cap_bits": cap,
                "compiler": summary["compiler"], "workload_digest": summary["workload_digest"],
                "requests": {u["id"]: {"digest": u["digest"], "build_dir": trace_dir(u), "LP": u["LP"], "T": u["T"], "first_step": u["first_step"]}

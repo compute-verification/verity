@@ -823,7 +823,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
 
 def _pd():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PD
+    from verity_vllm.protocols.pouw import pearl_c as PD
     return PD
 
 

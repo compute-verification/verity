@@ -174,7 +174,7 @@ def device_run(shapes: list[tuple[int, int]], scheme: str = glm53.SCHEME, cubin:
     from verity.core.protocols.pouw.audit import weights_root
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     dev = torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261023)
@@ -367,7 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--whole", action="store_true", help="decode's forward captured whole, serial and deferred (whole.json)")
     a = p.parse_args(argv)
     import torch
-    from verity_vllm.protocol_options.pouw_pearl_c_graphs import GRAPH_ROWS
+    from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS
 
     out, dev = Path(a.out), torch.device("cuda")
     table = glm53.in_domain(a.scheme)
