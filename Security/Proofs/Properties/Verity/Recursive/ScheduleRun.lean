@@ -33,7 +33,9 @@ theorem run_acc_last (hO : OuterAtEnd H) (hn : 0 < nS x)
         ((session IV st x (nS x - 1) (run H P (V IV st) x ω r).seen).msgs.map fun m => outCoin m.2)).eval H).1 =
       .acc) :
     (run H P (V IV st) x ω r).out = .acc := by
-  sorry
+  obtain ⟨-, ⟨a, ha⟩, -⟩ := session_end H IV st x P ω r hO (s := nS x - 1) (by omega) hnum hacc
+  rw [show (nS x - 1 + 1 == nS x) = true from beq_iff_eq.2 (by omega)] at ha
+  exact run_acc_out H IV st x P ω r ha
 
 /-- **F3: the run accepts** where its statement has a V* part and every V* session passes F2's hypotheses. -/
 theorem run_acc (hO : OuterAtEnd H) (hn : 0 < nS x)
@@ -42,8 +44,8 @@ theorem run_acc (hO : OuterAtEnd H) (hn : 0 < nS x)
     (hacc : ∀ s < nS x, ((nextO (vstarAt st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s)
         ((session IV st x s (run H P (V IV st) x ω r).seen).msgs.map Prod.fst)
         ((session IV st x s (run H P (V IV st) x ω r).seen).msgs.map fun m => outCoin m.2)).eval H).1 = .acc) :
-    (run H P (V IV st) x ω r).out = .acc := by
-  sorry
+    (run H P (V IV st) x ω r).out = .acc :=
+  run_acc_last H IV st x P ω r hO hn (hnum _ (by omega)) (hacc _ (by omega))
 
 end Run
 
@@ -57,7 +59,7 @@ theorem run_acc_sha512 (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {Ω : 
         ((session IV st x s (run FlockDeploy.sha512 P (V IV st) x ω r).seen).msgs.map Prod.fst)
         ((session IV st x s (run FlockDeploy.sha512 P (V IV st) x ω r).seen).msgs.map fun m => outCoin m.2)).eval
           FlockDeploy.sha512).1 = .acc) :
-    (run FlockDeploy.sha512 P (V IV st) x ω r).out = .acc := by
-  sorry
+    (run FlockDeploy.sha512 P (V IV st) x ω r).out = .acc :=
+  run_acc FlockDeploy.sha512 IV st x P ω r outerAtEnd_sha512 hn hnum hacc
 
 end Verity.Recursive.Schedule
