@@ -12,7 +12,9 @@ import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.JointPeriod
+import Proofs.Accounting.JointBridge.WorkOfCreditedWords
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+import Proofs.Accounting.JointBridge.HonestH200
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.PouwWork
 import Proofs.Accounting.BandwidthAudit
