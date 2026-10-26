@@ -97,12 +97,11 @@ theorem deltaMsgCol_ne_unit (L : Layout st) (P : ParseFacts tags st.c) (C : Chec
 
 /-- **No output pair of Δ is at a unit slot's row**, at unsegmented output rows: every output row's data bit is an input bit of
 its compression's `sha512x3` slot or of its `hm96` slot (`Hidden.Any.msg_at`), another net's slot. -/
-theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows : Hidden.Any.OutRowsS st.c)
+theorem outPairs_ne_unitP (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows : Hidden.Any.OutRowsP st.c)
     {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
     (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  rw [hrows.size] at hj
   obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
   have R := Hm.RowRanges.ofL L F.parse F.check
   obtain ⟨n, s, off, hn, hat, -⟩ := Hidden.Any.msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
@@ -114,6 +113,12 @@ theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows 
   have hb' : b < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact hb
   exact Hm.atSlot_ne L F (R.rowNet_lt hn) F.parse.unitNet hun hat
     (show AtSlot st.c st.c.unitNet s₀ b _ from ⟨hs₀, hb', he⟩)
+
+/-- `outPairs_ne_unitP` at one output row per output port. -/
+theorem outPairs_ne_unit (L : Layout st) (F : Aliased.UnitFacts tags st) (hrows : Hidden.Any.OutRowsS st.c)
+    {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {s₀ b : ℕ} (hs₀ : s₀ < st.c.unitRange.count)
+    (hb : b < 2 ^ st.c.unit.unitLog) : q.1 ≠ st.c.unitRange.slot s₀ + b :=
+  outPairs_ne_unitP L F hrows.toP hq hs₀ hb
 
 /-- **An untyped hidden statement reads its flat twin's rows at every unit slot's row**, at unsegmented output rows, its Δ being
 `HmRow.delta`'s, then `outPairs` (`Hidden.hidden_delta_unpinned`: one output row per output port pins none). -/
@@ -143,12 +148,12 @@ theorem unitRowsFlat (ht : tags.typed = false)
 not: its Δ is `HmRow.delta`'s, then `outPairs`, by definition (`Hidden.unpin`). -/
 theorem unitRowsFlat_unpin (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hrows : Hidden.Any.OutRowsS st.c) : UnitRowsFlat (Hidden.unpin st) := by
+    (hrows : Hidden.Any.OutRowsP st.c) : UnitRowsFlat (Hidden.unpin st) := by
   have L := flat_layout ht h
   have F := flat_unitFacts ht h
   intro s₀ hs₀ b hb r j hr
   have hout : ∀ q ∈ Hidden.outPairs st.c, q.1 ≠ r.val := fun q hq => by
-    rw [hr]; exact outPairs_ne_unit L F hrows hq hs₀ hb
+    rw [hr]; exact outPairs_ne_unitP L F hrows hq hs₀ hb
   refine ⟨?_, ?_⟩
   · show rangesEntry st (slotEntryA st) r.val j.val +
         deltaEntry ((HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray) r.val j.val =
@@ -202,5 +207,31 @@ theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String �
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
     Hidden.Any.RowsFitS c :=
   rowsFit_of_rows hp hc (Layout.scopeOkH_rowsB h)
+
+/-- **`rowsFit_of_rows` with pinned outputs**: at `bitRowsU`, which `bitRows` is without `unpinned`, each output row is
+a `v2Row` of one output port, and the output ports past the rows (META `pinned_outputs`') have none (`RowsFitP`). -/
+theorem rowsFitP_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : (Layout.v1Ports c || Layout.bitRowsU c) = true) : Hidden.Any.RowsFitP c := by
+  simp only [Bool.or_eq_true] at h
+  rcases h with h1 | h2
+  · exact (rowsFit_of_rows hp hc (by rw [h1]; rfl)).toP
+  · unfold Layout.bitRowsU at h2
+    simp only [Bool.and_eq_true, Array.all_eq_true', Bool.or_eq_true, beq_iff_eq, List.all_eq_true,
+      List.mem_range] at h2
+    obtain ⟨⟨hpr, hr⟩, ho⟩ := h2
+    have hrep : c.outRowPorts = Array.replicate c.outRowPorts.size 1 := by
+      refine Array.ext (by simp) fun i hi _ => ?_
+      have := hr _ (Array.getElem_mem hi)
+      simp [this]
+    refine ⟨⟨hrep, fun j hj => ⟨(Hidden.checkRows_out hc hj).1, ?_⟩⟩, fun p hm => ?_⟩
+    · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec (ho j hj)
+      rw [Hidden.getElem!_eq_getD']
+      exact ⟨hs, hb, h1', h2'⟩
+    · rcases hpr p (Array.mem_toList_iff.1 hm) with hv | hs
+      · obtain ⟨-, hs, hb, h1', h2'⟩ := Layout.v2Row_spec hv
+        exact Or.inl ⟨hs, hb, h1', h2'⟩
+      · obtain ⟨hs, hb, hn, hf⟩ := Layout.segRow_spec hs
+        exact Or.inr ⟨hs, hb, hn, hf⟩
 
 end FlockSoundness.Discharge.HiddenExec

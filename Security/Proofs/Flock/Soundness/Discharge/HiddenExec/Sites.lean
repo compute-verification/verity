@@ -87,7 +87,7 @@ noncomputable def acc : AcceptedH (twin x.T.S x.twinA x.twinB) where
   ht := ht
   h := x.h
   L := Hidden.unpin_layout ht x.h
-  hR := unitRowsFlat_unpin ht x.h (by rw [x.c_eq hc]; exact hv1.1)
+  hR := unitRowsFlat_unpin ht x.h (by rw [x.c_eq hc]; exact hv1.1.toP)
   regs := x.regs
   hT := (Integrate.model_eq (parse_facts (parse_untyped ht (setupHidden_parseC x.h)).1) (Hidden.unpin_layout ht x.h)
     (Hidden.setupHidden_spec x.h).leaf (Hidden.unpin_wf x.hwf) x.regs).trans (twin_of_eq x.hT)

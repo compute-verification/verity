@@ -37,12 +37,11 @@ open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt)
 /-- **No output pair of Δ is at another net's slot**, at output rows that fit: every output row's message bit is an
 input bit of a `sha512x3` or `hm96` slot (`Hidden.Any.msg_at`). -/
 theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.UnitFacts tags st)
-    (hrows : Hidden.Any.OutRowsS st.c) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {n s₀ b : ℕ}
+    (hrows : Hidden.Any.OutRowsP st.c) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {n s₀ b : ℕ}
     (hn : n < st.c.nets.size) (hsha : n ≠ st.c.shaNet) (hhm : n ≠ st.c.hmNet) (hs₀ : s₀ < (st.c.rangeOf n).count)
     (hb : b < 2 ^ (st.c.rangeOf n).slotLog) : q.1 ≠ (st.c.rangeOf n).slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  rw [hrows.size] at hj
   obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
   have R := Hm.RowRanges.ofL L F.parse F.check
   obtain ⟨n', s, off, hn', hat, -⟩ := Hidden.Any.msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
@@ -53,7 +52,7 @@ theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st)
 /-- **Δ at the input bits a wire fills** (`WiredDelta`), at a Δ that is `HmRow.delta`'s, then `outPairs`: its flat
 twin's (`delta_wired`), at output rows that fit. -/
 theorem wiredDelta_out {tags : Tags} {st : Stmt} (Lf : FlockSoundness.Layout (Hidden.flatTwin st))
-    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hrows : Hidden.Any.OutRowsS st.c)
+    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hrows : Hidden.Any.OutRowsP st.c)
     (hda : st.da = (HmRow.delta st.c st.pin).1 ++ (Hidden.outPairs st.c).toArray) : WiredDelta st := by
   intro n g i o s hn hsha hhm hg hi hf j
   have P : ParseFacts tags st.c := F.parse
@@ -80,7 +79,7 @@ theorem wiredDelta_out {tags : Tags} {st : Stmt} (Lf : FlockSoundness.Layout (Hi
 theorem wiredDeltaH {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt} (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st)
-    (hrows : Hidden.Any.OutRowsS st.c) : WiredDelta (Hidden.unpin st) :=
+    (hrows : Hidden.Any.OutRowsP st.c) : WiredDelta (Hidden.unpin st) :=
   wiredDelta_out (st := Hidden.unpin st) (flat_layout ht h) (flat_unitFacts ht h) hrows rfl
 
 /-! ## A composite input's value -/
@@ -146,7 +145,7 @@ theorem instCol_val {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) 
 
 /-- **The accepted statement places the template instance's rows at every template instance**, at output rows that
 fit (`placement_instOf`, `wiredDeltaH`). -/
-theorem placement_inst (hrows : Hidden.Any.OutRowsS a.st.c) {g : ℕ} (hg : g < a.st.c.g) :
+theorem placement_inst (hrows : Hidden.Any.OutRowsP a.st.c) {g : ℕ} (hg : g < a.st.c.g) :
     Placement T (instRows a.st.c) (a.instCol hg) :=
   Placed.Accepted.placement_cast a.hT
     (placement_instOf a.L a.regs a.unitFacts.parse a.unitFacts.check (wiredDeltaH a.ht a.h hrows) hg)
@@ -250,7 +249,7 @@ noncomputable def SitesH.progPlaces_instProg : ProgPlaces (instProg c n) outs pl
   o := si.o
   col := SitesH.instCol hparse
   placed S R u h := ⟨si.A S R u h, si.B S R u h, placement_rows (SitesH.rows_instProg hparse S R u h)
-    ((si.acc S R u h).placement_inst (by rw [(si.acc S R u h).c_eq (hparse S R u h)]; exact hrows) (si.hvu S R u h)),
+    ((si.acc S R u h).placement_inst (by rw [(si.acc S R u h).c_eq (hparse S R u h)]; exact hrows.toP) (si.hvu S R u h)),
     si.sat S R u h⟩
   aliased S R u h x x' hw hx hx' z hz := by
     have hc := (si.acc S R u h).c_eq (hparse S R u h)
