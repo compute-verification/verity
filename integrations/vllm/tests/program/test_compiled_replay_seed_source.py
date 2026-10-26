@@ -34,7 +34,7 @@ def test_the_constant_names_the_form_and_the_call_site_uses_both() -> None:
 
 def test_compiled_kernel_check_records_seed_source() -> None:
     src = CKC.read_text()
-    assert "seed_source: str | None = None" in src
+    assert re.search(r"^\s+seed_source: str \| None,$", src, re.M), "seed_source is a required keyword: every caller names the seed's form"
     assert '"seed": self.seed, "seed_source": self.seed_source' in src
 
 

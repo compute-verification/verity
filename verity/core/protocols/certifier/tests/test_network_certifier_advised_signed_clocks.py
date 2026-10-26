@@ -4,8 +4,8 @@
 window declaring a sync other than the one signed for it is refused, REDTEAM phase 11's δ below the certified one among
 them; and a window whose opening doesn't hold has no sync, which refuses it and every window after, each refused
 opening named with why: a forged signature, an altered digest, a reused salt, a wrong window, another key, session or
-link, an ingress or a record certificate, the unsalted form, and two syncs for one window. The issuer signs no clock
-under a salt it drew for an earlier one."""
+link, an ingress or a record certificate, a record's opening, and two syncs for one window. The issuer signs no clock
+under a salt an earlier signed one took."""
 
 import hashlib
 from dataclasses import replace
@@ -16,7 +16,7 @@ import pytest
 from verity.ml.commitments.identity import tagged_sha512
 from verity.core.protocols.certifier import advice as A, advised as AD, service as SVC
 from verity.core.protocols.certifier.certificate import CLOCK_TAG, SALT_BYTES, CertifiedClock, Direction, Issuer, \
-    clock_commitment, clock_digest, parameters_digest
+    SignerRefused, clock_commitment, clock_digest, parameters_digest
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.certifier.service import LinkWindows
 
@@ -51,6 +51,19 @@ class SignedRun(Run):
 
 def _signed(syncs, link=LINK):
     return lambda issuer: [issuer.salted_clock(link, w, s) for w, s in enumerate(syncs)]
+
+
+class Refusing:
+    """A signer whose leaf state refuses the session's start and every leaf."""
+
+    def __init__(self, signer) -> None:
+        self.key_id = signer.key_id
+
+    def start(self, session: bytes) -> None:
+        raise SignerRefused("the session's start is refused")
+
+    def sign(self, message: bytes) -> bytes:
+        raise SignerRefused("the leaf is refused")
 
 
 def test_the_clock_commitment_is_the_syncs_clock_digest_salted_as_a_record_digest_is():
@@ -196,8 +209,8 @@ def test_each_refused_opening_is_named_with_why_and_gives_no_sync(signed, make, 
 
 def test_another_key_session_link_or_form_is_refused_by_name(signed, tmp_path):
     """An opening signed by another certifier, in another session, for another link, an ingress certificate, a record
-    certificate opened as a clock, the unsalted form (`ClockCertificate`) and two syncs signed for one window: each
-    refused with why."""
+    certificate opened as a clock, a record's opening itself (`CertifiedRecord`) and two syncs signed for one window:
+    each refused with why."""
     issuer, key, honest = signed
     (tmp_path / "other").mkdir()
     other = Issuer(signers.signer(tmp_path / "other", seed=b"stranger"), signers.SESSION)
@@ -207,14 +220,13 @@ def test_another_key_session_link_or_form_is_refused_by_name(signed, tmp_path):
     ingress = CertifiedClock(SYNCS[0], salt, issuer.sign(LINK, Direction.INGRESS, 0, clock_commitment(salt, SYNCS[0])))
     record = issuer.certify(serve(1).egress[0], Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
     as_clock = CertifiedClock(SYNCS[0], record.salt, record.certificate)
-    unsalted = issuer.clock(LINK, 0, SYNCS[0])
     second = issuer.salted_clock(LINK, 0, SYNCS[1])
-    source = _source(key, [foreign, ingress, as_clock, unsalted, *honest, second])
+    source = _source(key, [foreign, ingress, as_clock, record, *honest, second])
     assert source.refused == (
         f"{_name(foreign)}: another key's, not {key.key_id.hex()[:16]}…",
         f"{_name(ingress)}: it isn't an egress certificate, and a clock is an egress window's",
         f"{_name(as_clock)}: its sync and salt don't open the salted digest it signs",
-        "a ClockCertificate: not a salted clock certificate's opening (certificate.CertifiedClock), so it gives no sync",
+        "a CertifiedRecord: not a salted clock certificate's opening (certificate.CertifiedClock), so it gives no sync",
         f"{LINK} window 0: 2 signed syncs, so it has none",
     )
     assert source.syncs(LINK) == ()
@@ -226,15 +238,19 @@ def test_another_key_session_link_or_form_is_refused_by_name(signed, tmp_path):
 
 
 def test_the_issuer_signs_no_clock_under_a_salt_it_drew_for_one_before(tmp_path):
-    """Coins that repeat give the first clock its salt and refuse the second, which signs nothing; a record's salt
-    isn't a clock's, so the record certificates of those coins are signed as before."""
+    """Coins that repeat give the first signed clock its salt and refuse the second, which signs nothing; a clock the
+    signer refused signed nothing, so its salt isn't taken; a record's salt isn't a clock's, so the record certificates
+    of those coins are signed as before."""
     issuer = Issuer(signers.signer(tmp_path), signers.SESSION, coins=lambda n: b"\x5a" * n)
+    signer, issuer.signer = issuer.signer, Refusing(issuer.signer)
+    assert issuer.salted_clock(LINK, 0, SYNCS[0]) is None and issuer.clock_salts == set()
+    issuer.signer = signer
     first = issuer.salted_clock(LINK, 0, SYNCS[0])
     assert first.salt == b"\x5a" * SALT_BYTES and first.verify(issuer.signer.public_key(), signers.SESSION)
     leaves = len(signers.used(issuer.signer))
     with pytest.raises(ValueError, match="gave an earlier clock certificate's salt again"):
         issuer.salted_clock(LINK, 1, SYNCS[0])
-    assert len(signers.used(issuer.signer)) == leaves and issuer.refused == []
+    assert len(signers.used(issuer.signer)) == leaves and issuer.refused == [(LINK, Direction.EGRESS, 0)]
     record = issuer.certify(serve(1).egress[0], Direction.EGRESS, P, parameters_digest(P, SYNC_SET))
     assert record.salt == first.salt and record.verify(issuer.signer.public_key(), signers.SESSION)
     with pytest.raises(ValueError, match="gave 63 bytes for a 64-byte salt"):

@@ -9,6 +9,7 @@ import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
+import Proofs.Flock.Claims.Sampling.InputSlot
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Live
