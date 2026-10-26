@@ -178,7 +178,11 @@ challenger issues them inside the boundary the certifier counts, and trust in th
 So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
 other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through
 its own programs, in the challenger's order, as `Prover` has them. A machine outside the boundary that read a coin
-early could serve the block's words, work no extraction sees. -/
+early could serve the block's words, work no extraction sees.
+
+Placement discharges it (Daniel, 26 Oct, 4:41 PM PDT): for now private messages travel only on private links, a named
+placement premise (proposed `WitnessPathPrivate`), and a replica's coins reach it only on its certifier device's coin
+link. The rigorous version, over a secure transport, is the secure-transport workstream's (due Wed 28 Oct 18:00Z). -/
 def CoinsConfidential {G : Accel} {P : RoundProto} {k N : ℕ} {Ω : Type} (coin : Ω → Fin N → Fin k → P.Draw × P.Chk)
     (A : Fin N → Ω → Prover G P k) : Prop :=
   ∀ u ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A u ω = A u ω'
