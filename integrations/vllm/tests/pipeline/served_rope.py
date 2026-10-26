@@ -7,7 +7,7 @@ committed by the production CPU committer and sealed into a replay bundle with i
 
 writes ``OUT/commit``, ``OUT/row`` and ``OUT/partition.json`` (every RoPE head, ``subset:1``) and prints them with the run root as
 one JSON line.  ``--served`` also writes ``OUT/hook``, the in-Commit hook's window over the same members (`hook`);
-``--commit-scheme`` is the members' (`commit`)."""
+``--commit-scheme`` is the members' (`commit`): rows-sha512 by default, vllm-v1 by name."""
 from __future__ import annotations
 
 import argparse
@@ -115,7 +115,7 @@ def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("out")
     ap.add_argument("--served", action="store_true")
-    ap.add_argument("--commit-scheme", default="vllm-v1", choices=("rows-sha512", "vllm-v1"))
+    ap.add_argument("--commit-scheme", default="rows-sha512", choices=("rows-sha512", "vllm-v1"))
     a = ap.parse_args(argv)
     root = Path(a.out)
     root.mkdir(parents=True, exist_ok=True)

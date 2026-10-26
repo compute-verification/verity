@@ -481,6 +481,8 @@ def test_every_record_difference_code_is_one_update_settles():
         "guarantees.readers": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"guarantees": ["P.t", "P.u"]}}}, facts()),
         "guarantees.reads-digest": (pol | {"reads": pol["reads"] | {"P.Defs": group | {"digest": "0" * 64}}}, facts()),
         "assumptions.digest": (pol, facts(pins={"P.t": fact(reads=hyp)})),
+        "assumptions.unread": (pol | {"assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}},
+                               facts()),
     }
     assert set(cases) == A.RECORD_DIFFERENCE
     for code, (policy, now) in cases.items():

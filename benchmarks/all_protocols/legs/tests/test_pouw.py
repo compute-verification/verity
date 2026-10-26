@@ -172,3 +172,12 @@ def test_a_window_with_the_loops_salt_has_live_coins_and_its_salt_sessions_input
     assert CC.params(h1)[pouw.LIVE_PARAM] == live
     with pytest.raises(CC.Refused, match="live is exactly when"):
         CC.params({k: v for k, v in h1.items() if k != pouw.LIVE_PARAM})
+
+
+def test_a_wired_window_serves_its_linears_macs_and_each_requests_steps(tmp_path):
+    d = tmp_path / "wired"
+    assert serve.main(["--out", str(d), "--requests", "3,7", "--steps", "2", "--cap", "2", "--law", "stratified:3",
+                       "--run-id", "allp-pouw-wired", "--wired"]) == 0
+    work = pouw.served(d)
+    assert work["template"].startswith("ScaledMmS8_v1{K=128,N=128,") and work["k"] == 128
+    assert work["units"] == 14 and work["macs"] == 8 * 128 * 128 and work["max_tokens"] == [2, 2]
