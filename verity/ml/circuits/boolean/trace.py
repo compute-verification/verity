@@ -38,7 +38,7 @@ from .forms import ONE, Circuit, L
 __all__ = ["TL", "Traced", "TracingCircuit", "definition", "emit", "trace", "word_of"]
 
 #: a form of more bits than this keeps them as a `_Set`, of at most this many as a frozenset (one of each per set)
-_SMALL = 64
+_SMALL = 8
 
 
 class _Set:
