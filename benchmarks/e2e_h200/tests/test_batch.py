@@ -61,25 +61,39 @@ def test_micro_batches_and_dropped_tables_change_no_root(params, kept):
 
 
 def _slow_commit(monkeypatch, c, lag):
-    """``c`` with the slowest side stream: it reads a group's tables only when the forward waits on that group's event.
-    Returns what it saw: the most groups added and unread when the forward hands in the next, the most bytes of tables
-    held, and each group's bytes."""
+    """``c`` with the slowest side stream: it reads a group's tables only when the forward waits on that group's event, or
+    when the step's roots are taken. Returns what it saw: the most groups added and unread when the forward hands in the
+    next, the most bytes of tables held, each group's bytes in the order added, and the order of the adds (``("add",
+    step)``), finishes and roots taken."""
     held: dict[int, int] = {}
-    seen = {"lead": 0, "bytes": 0, "sizes": []}
+    seen = {"lead": 0, "bytes": 0, "sizes": [], "order": []}
 
     class Slow(c.G.StepCommitter):
+        def __init__(self, plan, step, *args, **kw):
+            super().__init__(plan, step, *args, **kw)
+            self.step = step
+
         def add(self, tensors):
             seen["lead"] = max(seen["lead"], len(held))
             super().add(tensors)
             k = len(seen["sizes"])
             seen["sizes"].append(sum(np.asarray(t).nbytes for t in tensors))
+            seen["order"].append(("add", self.step))
             held[k] = seen["sizes"][k]
             seen["bytes"] = max(seen["bytes"], sum(held.values()))
             return k
 
         def finish(self):
-            held.clear()
-            return super().finish()
+            last, step, pending = len(seen["sizes"]) - 1, self.step, super().finish()
+            seen["order"].append(("finish", step))
+            result = pending.result
+
+            def taken():
+                seen["order"].append(("taken", step))
+                wait(last)
+                return result()
+            pending.result = taken
+            return pending
 
     def wait(k):
         for j in [j for j in held if j <= k]:
@@ -103,14 +117,31 @@ def deep():
 
 @pytest.mark.parametrize("lag", [1, 2])
 def test_the_forward_stays_at_most_lag_groups_ahead_of_a_slow_commit(deep, monkeypatch, lag):
+    """Across the step boundary too: step 0's last groups are still unread while step 1's are added."""
     params, roots = deep
     c = committer(DEEP)
     seen = _slow_commit(monkeypatch, c, lag)
     assert [r.root for r in Driver(DEEP, params, 3, c, keep=False).run(PROMPTS, 2)] == roots
-    groups = len(c.groups)
-    sizes = seen["sizes"][:groups]
+    groups, sizes = len(c.groups), seen["sizes"]
     assert seen["lead"] == lag < groups - 1
-    assert seen["bytes"] <= max(sum(sizes[i:i + lag + 1]) for i in range(groups)) < sum(sizes)
+    assert seen["bytes"] <= max(sum(sizes[i:i + lag + 1]) for i in range(len(sizes))) < sum(sizes[:groups])
+
+
+def test_a_steps_roots_are_taken_once_the_next_steps_forward_ends(deep, monkeypatch):
+    """The step returns with its close in flight; the next step takes its roots after its own groups are in, and a root
+    read before then is taken where it is read."""
+    params, roots = deep
+    c = committer(DEEP)
+    seen = _slow_commit(monkeypatch, c, 2)
+    d = Driver(DEEP, params, 3, c, keep=False)
+    assert [r.root for r in d.run(PROMPTS, 3)][:2] == roots
+    adds = [("add", t) for t in range(3) for _ in c.groups]
+    order = [e for e in seen["order"] if e[0] != "add"]
+    assert [e for e in seen["order"] if e[0] == "add"] == adds
+    assert order == [("finish", 0), ("finish", 1), ("taken", 0), ("finish", 2), ("taken", 1), ("taken", 2)]
+    res = d.step(3, PROMPTS[:, 0])
+    assert seen["order"][-1] == ("finish", 3)
+    assert len(res.root) == 64 and seen["order"][-1] == ("taken", 3)
 
 
 def test_without_the_bound_a_slow_commit_holds_the_whole_step(deep, monkeypatch):

@@ -10,9 +10,10 @@ order the step writes them); a quantizer's table also has the f32 scale as each 
                 one commit unit a proof unit, its rows that unit's output rows (`plan.Units`: a coordinate's 16-bit row, a
                 chunk row, a quantizer chunk's codes row and the scale), so a gather's rows are its parts' bytes again.
                 The commit unit of a family's unit i is ``bases[family] + i`` (`Committer.unit_of`). Streamed: each group goes to
-                `slots_gpu.StepCommitter.add` (a side stream on CUDA, the engine's host twin on the CPU) as it is written,
-                so a group's tables can be dropped once added; the forward runs at most `LAG` groups ahead of the side
-                stream's reads, and `Roots.seconds` is the side stream's time a step. The salt key is fresh each step
+                `slots_gpu.StepCommitter.add` (a side stream on CUDA at priority 0, the engine's host twin on the CPU) as it
+                is written, so a group's tables can be dropped once added; the forward runs at most `LAG` groups ahead of
+                the side stream's reads, across steps too, and ``finish`` leaves the step's close in flight: its roots are
+                taken when called (`Roots.seconds` is the side stream's time a step). The salt key is fresh each step
                 (`slots.fresh_salt_key`) unless the committer is given a ``salt`` function (tests and fixture runs, which
                 say so).
     reference   the by-table step tree (`verity_vllm.commit.row_tables.step_roots`, Python), the one the small tests and
@@ -39,6 +40,8 @@ BACKENDS = ("slots", "reference", "host", "device")
 #: groups the forward may run ahead of the side stream's row reads: an added group's tables stay allocated until the side
 #: stream has read them, so without a bound a commit slower than the forward holds the whole step's values
 LAG = 2
+#: `slots_gpu.Plan`'s ``leaf_minb``, the leaf kernel's blocks an SM (0: the build's default, 1)
+LEAF_MINB = 2
 
 
 def tables(shape: Shape) -> list[list[Table]]:
@@ -185,13 +188,14 @@ class Committer:
     """``begin`` a step, ``group`` each of its groups as its tables are written (in `tables` order), ``finish`` it."""
 
     def __init__(self, backend: str, context: bytes, key: bytes, shape: Shape | None = None, device: Any = "cpu",
-                 salt: Callable[[int], bytes] | None = None) -> None:
+                 salt: Callable[[int], bytes] | None = None, leaf_minb: int = LEAF_MINB) -> None:
         if backend not in BACKENDS:
             raise ValueError(f"the commit backend is one of {BACKENDS}, not {backend!r}")
         if len(context) != 64 or len(key) != 32:
             raise ValueError("the context is 64 bytes (the live coin commitment's root) and the row key 32")
         self.backend, self.context, self.key, self.salt = backend, context, key, salt
         self.streams = backend == "slots"
+        self._read: list[Any] = []
         if self.streams:
             if shape is None:
                 raise ValueError("the slots backend lays out a shape's tables")
@@ -200,7 +204,7 @@ class Committer:
             self.groups = tables(shape)
             self.layout, self.bases = _layout(shape)
             dev = torch.device(device)
-            self.plan = G.Plan(context, self.layout, device=dev if dev.type == "cuda" else "host")
+            self.plan = G.Plan(context, self.layout, device=dev if dev.type == "cuda" else "host", leaf_minb=leaf_minb)
 
     def describe(self) -> dict:
         if not self.streams:
@@ -210,17 +214,17 @@ class Committer:
                 "units_a_slot": self.layout.unit_count, "rows_a_slot": self.layout.row_count,
                 "bytes_a_slot": self.layout.slot_bytes, "row_schema": S.ROW_SCHEMA,
                 "salt_key": "fixture (the run id's)" if self.salt else "fresh a step (os.urandom)",
-                "engine": "host twin" if self.plan.host else "CUDA side stream"}
+                "engine": "host twin" if self.plan.host else "CUDA side stream", "leaf_minb": self.plan.leaf_minb}
 
     def begin(self, st: StepTables, salt_key: bytes | None = None, nonce0: int = 0) -> None:
         """``nonce0``: slot b's salts use nonce ``nonce0 + b`` (a replay of slot s alone passes s)."""
         if not self.streams:
             return
         st.salt_key = salt_key or (self.salt(st.step) if self.salt else self.S.fresh_salt_key())
-        self._marks: list[tuple[str, Any]] | None = None if self.plan.host else []
-        self._start, self._read = None, []
-        st.pending = self.G.StepCommitter(self.plan, st.step, st.batch, st.salt_key, marks=self._marks)
+        st.pending = self.G.StepCommitter(self.plan, st.step, st.batch, st.salt_key,
+                                          marks=None if self.plan.host else [])
         st.pending.salts = self.E.SaltKey(st.salt_key, nonce0)
+        st.pending.start = None
 
     def group(self, st: StepTables, i: int) -> None:
         if not self.streams:
@@ -233,8 +237,8 @@ class Committer:
             tensors = [x if isinstance(x, np.ndarray) else x.contiguous().numpy() for x in tensors]
         elif i == 0:
             self.plan.stream.wait_stream(torch.cuda.current_stream(self.plan.device))
-            self._start = torch.cuda.Event(enable_timing=True)
-            self._start.record(self.plan.stream)
+            st.pending.start = torch.cuda.Event(enable_timing=True)
+            st.pending.start.record(self.plan.stream)
         done = st.pending.add(tensors)
         if done is not None:
             self._read.append(done)
@@ -245,14 +249,20 @@ class Committer:
         """The forward's stream waits until the side stream has read a group's tables."""
         torch.cuda.current_stream(self.plan.device).wait_event(read)
 
-    def finish(self, st: StepTables) -> Roots:
-        if self.streams:
-            res = st.pending.finish().result()
-            st.pending = None
-            sec = self._start.elapsed_time(self._marks[-1][1]) / 1000 if self._marks and self._start else None
-            self._read = []
+    def finish(self, st: StepTables) -> Callable[[], Roots]:
+        """The step's roots, taken when called. On the side stream the step's close is left in flight, and the call waits
+        for it; the by-table backends commit here."""
+        if not self.streams:
+            roots = self.commit(st)
+            return lambda: roots
+        sc, st.pending = st.pending, None
+        pending = sc.finish()
+
+        def take() -> Roots:
+            res = pending.result()
+            sec = sc.start.elapsed_time(sc.marks[-1][1]) / 1000 if sc.marks and sc.start else None
             return Roots(res.root, (), res.slot_roots, sec)
-        return self.commit(st)
+        return take
 
     def commit(self, st: StepTables) -> Roots:
         """A whole step's tables at once (the by-table backends)."""

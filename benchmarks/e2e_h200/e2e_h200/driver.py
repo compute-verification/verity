@@ -25,9 +25,16 @@ rest +0), ``pv``, ``o_amax``, ``o_quant``, ``wo``, ``attn_residual``, ``mlp_sums
 sums in chunks and groups (`shape.Forms`), which changes its words from one sequential sum wherever a row is more than one
 chunk. With ``keep=False`` a group's tables are dropped once committed (a run of record keeps no step's tables: a drawn slot
 is opened by replaying its request, `opening`).
+
+On CUDA the forward runs on a stream of its own at the device's highest priority, the commit on its side stream at 0 (CMP-149).
+A step returns once its forward ends, with its last groups and its close still on the side stream; the next step's forward
+runs beside them, and takes their roots once its own forward ends. A step's roots (`StepResult.roots`) are taken when first
+read, so nothing reads a root before the side stream has committed it; `run` and `serve` take every step's before they
+return. The driver's timing ticks synchronize the forward's stream only.
 """
 from __future__ import annotations
 
+import contextlib
 import time
 from dataclasses import dataclass, field
 from collections.abc import Sequence
@@ -38,7 +45,7 @@ import torch
 
 from . import attention as A
 from . import ops as O
-from .commit import Committer, StepTables, tables
+from .commit import Committer, Roots, StepTables, tables
 from .shape import EPS, PV_K, Shape, check, forms
 from .slots import Finished, Request, SlotKV
 from .store import Store
@@ -106,16 +113,36 @@ class StepResult:
     position: int
     tokens_in: np.ndarray
     tokens_out: np.ndarray
-    root: bytes
-    table_roots: tuple[tuple[str, bytes], ...]
+    take: Callable[[], Roots] = field(repr=False)              # the commit's `Committer.finish`
     value_bytes: int
     seconds: dict[str, float] = field(default_factory=dict)
     slots: np.ndarray | None = None
     positions: np.ndarray | None = None
-    slot_roots: tuple[bytes, ...] = ()
     salt_key: bytes | None = field(default=None, repr=False)
     seqs: tuple[int, ...] = ()                                  # served: row b's request
     finished: list[Finished] = field(default_factory=list)      # served: the requests whose last position this was
+    _roots: Roots | None = field(default=None, repr=False)
+
+    @property
+    def roots(self) -> Roots:
+        """The step's roots, waiting for the commit's close if it is still in flight."""
+        if self._roots is None:
+            self._roots = self.take()
+            if self._roots.seconds is not None:
+                self.seconds["commit_gpu"] = self._roots.seconds
+        return self._roots
+
+    @property
+    def root(self) -> bytes:
+        return self.roots.root
+
+    @property
+    def table_roots(self) -> tuple[tuple[str, bytes], ...]:
+        return self.roots.tables
+
+    @property
+    def slot_roots(self) -> tuple[bytes, ...]:
+        return self.roots.slot_roots
 
 
 class Driver:
@@ -144,14 +171,36 @@ class Driver:
         self.steps: list[StepTables] = []
         self.results: list[StepResult] = []
         self.finished: list[Finished] = []
+        self.open: list[StepResult] = []        # the steps whose roots are still in flight on the commit's side stream
+        # the forward's stream, at the device's highest priority (CUDA clamps the number to it); the commit's is 0
+        self.stream = torch.cuda.Stream(self.device, priority=-(1 << 20)) if self.device.type == "cuda" else None
 
     @property
     def tok(self) -> torch.Tensor:
         return self.params.tok
 
+    @contextlib.contextmanager
+    def forward(self) -> Any:
+        """The forward's stream as the current stream, after what the caller's stream has enqueued and before what it
+        enqueues next (nothing on the CPU)."""
+        if self.stream is None:
+            yield
+            return
+        caller = torch.cuda.current_stream(self.device)
+        self.stream.wait_stream(caller)
+        with torch.cuda.stream(self.stream):
+            yield
+        caller.wait_stream(self.stream)
+
+    def settle(self) -> None:
+        """Takes the roots of every step still in flight."""
+        for r in self.open:
+            r.roots
+        self.open = []
+
     def _sync(self) -> None:
-        if self.device.type == "cuda":
-            torch.cuda.synchronize(self.device)
+        if self.stream is not None:
+            self.stream.synchronize()
 
     def _tick(self, sec: dict[str, float], key: str, t0: float) -> float:
         self._sync()
@@ -214,7 +263,14 @@ class Driver:
     def step_slots(self, slots: np.ndarray, positions: np.ndarray, tokens: np.ndarray, salt_key: bytes | None = None,
                    nonce0: int = 0) -> StepResult:
         """Rows b of slots ``slots[b]`` (of the KV pool, distinct) at positions ``positions[b]`` on bytes ``tokens[b]``: commits
-        the step (row b its slot ``nonce0 + b`` of the commit, under ``salt_key`` if given) and returns its argmax bytes."""
+        the step (row b its slot ``nonce0 + b`` of the commit, under ``salt_key`` if given) and returns its argmax bytes. The
+        step returns with its commit's close in flight, and takes the roots of the steps before it; its own are taken when
+        read, or by the next step."""
+        with self.forward():
+            return self._step_slots(slots, positions, tokens, salt_key, nonce0)
+
+    def _step_slots(self, slots: np.ndarray, positions: np.ndarray, tokens: np.ndarray, salt_key: bytes | None,
+                    nonce0: int) -> StepResult:
         sh, dev = self.shape, self.device
         slots, positions = np.asarray(slots, np.int64), np.asarray(positions, np.int64)
         n = len(slots)
@@ -306,16 +362,16 @@ class Driver:
         T["argmax"][0].view(torch.int16)[:, 0] = nxt.to(torch.int16)
         self._close(st, g)
         c0 = self._tick(sec, "forward", c0)
-        roots = self.committer.finish(st)
+        take = self.committer.finish(st)
+        self.settle()
         self._tick(sec, "commit_wait" if self.committer.streams else "commit", c0)
-        if roots.seconds is not None:
-            sec["commit_gpu"] = roots.seconds
         out = nxt.cpu().numpy().astype(np.int64)
-        res = StepResult(st.step, int(positions[0]), np.asarray(tokens).copy(), out, roots.root, roots.tables,
-                         self.value_bytes(n), sec, slots, positions, roots.slot_roots, st.salt_key)
+        res = StepResult(st.step, int(positions[0]), np.asarray(tokens).copy(), out, take, self.value_bytes(n), sec, slots,
+                         positions, st.salt_key)
         if self.keep:
             self.steps.append(StepTables(st.step, positions, n, st.host(), slots=slots, salt_key=st.salt_key))
         self.results.append(res)
+        self.open.append(res)
         for sub in self.subcircuits:
             sub.serve(self, res)
         return res
@@ -333,12 +389,14 @@ class Driver:
             raise ValueError(f"the slots' {kv.shape} aren't {self.batch} slots of {sh.name}'s KV (layers, context, head_dim)")
         self.kv = kv
         kv.submit(requests)
-        while not kv.idle and (steps is None or len(self.results) < steps):
-            plan = kv.begin()
-            res = self.step_slots(plan.slots.cpu().numpy(), plan.positions.cpu().numpy(), plan.tokens.cpu().numpy(),
-                                  salt_key=salt_keys[plan.step] if salt_keys else None)
-            res.seqs, res.finished = plan.seqs, kv.end(res.tokens_out)
-            self.finished += res.finished
+        with self.forward():
+            while not kv.idle and (steps is None or len(self.results) < steps):
+                plan = kv.begin()
+                res = self.step_slots(plan.slots.cpu().numpy(), plan.positions.cpu().numpy(), plan.tokens.cpu().numpy(),
+                                      salt_key=salt_keys[plan.step] if salt_keys else None)
+                res.seqs, res.finished = plan.seqs, kv.end(res.tokens_out)
+                self.finished += res.finished
+        self.settle()
         return self.results
 
     def run(self, prompts: np.ndarray, steps: int, salt_keys: list[bytes] | None = None) -> list[StepResult]:
@@ -349,4 +407,5 @@ class Driver:
         for t in range(steps):
             res = self.step(t, toks, salt_key=salt_keys[t] if salt_keys else None)
             toks = prompts[:, t + 1].astype(np.int64) if t + 1 < prompts.shape[1] else res.tokens_out
+        self.settle()
         return self.results
