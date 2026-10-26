@@ -2004,7 +2004,8 @@
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
   "Definitions.Population",
-  "Proofs.Accounting.TS.Session"
+  "Proofs.Accounting.TS.Session",
+  "Proofs.Pouw.DitherWitness"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
@@ -2606,7 +2607,8 @@
    "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
    "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.DitherWitness": "the honest and nontrivial witnesses (LEAN-66) of WorkMoment and FleetSound state their premises and the accept-everything break at RT-LEAN L7's toy instance (`tw`, `twRound`, `twPd`, `twVerdict`, `honest`), which is proof-only; CMP-152"
   }
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
@@ -9153,6 +9155,12 @@
    "assumptions": [],
    "type_hash": "ab24e976179aff326064b8727a349ad48b6ca03b2b50b1f256741e51063b6891"
   },
+  "Pouw.SecurityProofs.Dither.FleetSound_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Dither.FleetSound_nontrivial": {
+   "owner": "@compute-research"
+  },
   "Pouw.SecurityProofs.Dither.FreedOfFloor": {
    "owner": "@compute-research",
    "signature": ["Pouw.SecurityProofs.Dither.FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor"],
@@ -9164,6 +9172,12 @@
    "signature": ["Pouw.SecurityProofs.Dither.WorkMoment : Pouw.Guarantees.Dither.WorkMoment"],
    "assumptions": [],
    "type_hash": "7725090eea4c29a06f682107c30cdaff94aa3c5500b65579b5cce4660ff61675"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment_honest": {
+   "owner": "@compute-research"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial": {
+   "owner": "@compute-research"
   },
   "Pouw.SecurityProofs.Dither.WorkSound": {
    "owner": "@compute-research",
@@ -11734,7 +11748,11 @@
    "Accounting.SecurityProofs.JointHorizon": "frozen (no-function): Like JointPeriod, over a horizon of periods on one coin space: each period's five per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksAbstract": "frozen (no-function): Like JointHorizon, over a horizon of blocks on one coin space with extra events: each block's five per-period guarantees and each extra event's bound are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here."
+   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here.",
+   "Pouw.SecurityProofs.Dither.WorkMoment_honest": "completeness: WorkMoment's honest witness (LEAN-66): every premise outside the named assumptions, and the named assumptions, hold at RT-LEAN L7's toy instance, and its verdict accepts the honest prover there, so WorkMoment is not vacuous (CMP-152).",
+   "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial": "lemma: WorkMoment's nontrivial witness (LEAN-66): its conclusion at the toy instance is false at the verifier that accepts everything; a counterexample about no protocol function (CMP-152).",
+   "Pouw.SecurityProofs.Dither.FleetSound_honest": "completeness: FleetSound's honest witness (LEAN-66): at a fleet of the toy instance's replicas, each replica's moment, OwnDither and CoinsConfidential hold, and the verdict accepts the honest fleet, so FleetSound is not vacuous (CMP-152).",
+   "Pouw.SecurityProofs.Dither.FleetSound_nontrivial": "lemma: FleetSound's nontrivial witness (LEAN-66): at that fleet some prover's event has probability 1 at the verifier that accepts everything, past delta_coin + sum kappa_max; a counterexample about no protocol function (CMP-152)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -45801,5 +45819,15 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "witnesses": {
+  "Pouw.SecurityProofs.Dither.FleetSound": {
+   "honest": ["Pouw.SecurityProofs.Dither.FleetSound_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.FleetSound_nontrivial"
+  },
+  "Pouw.SecurityProofs.Dither.WorkMoment": {
+   "honest": ["Pouw.SecurityProofs.Dither.WorkMoment_honest"],
+   "nontrivial": "Pouw.SecurityProofs.Dither.WorkMoment_nontrivial"
+  }
  }
 }
