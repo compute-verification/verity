@@ -51,12 +51,13 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
     research queue baseline SHA --by ci             record `main` at SHA as green for the review landing, which otherwise first
                                                    runs the after-landing run on `main` itself, and lands nothing until it ends
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
-    research queue lean-check COMMIT [--on MACHINES] [--by LANE]
+    research queue lean-check COMMIT [--on MACHINES] [--by LANE] [--again]
                                                    a hand Lean check (`train.sh COMMIT MACHINES --deferred lean-audit`, MACHINES
                                                    default drive.toml's `on`) of a member's commit on `next`, recorded in drive's
                                                    state at its launch, so it holds `next` and lands what it covers as drive's own
-                                                   (`Driver.hand_lean`); refused off `next` or under a running check at or above
-                                                   it (on the control pod: `/data/infra/drive.sh queue lean-check COMMIT`)
+                                                   (`Driver.hand_lean`); refused off `next`, under a running check at or above
+                                                   it, or where drive records a passed one at it (--again reruns it)
+                                                   (on the control pod: `/data/infra/drive.sh queue lean-check COMMIT`)
     research queue report --on MACHINE [--max-running N] [--dry-run]
                                                    one tick of the reporter for GitHub's merge queue (`research.mergequeue`): check
                                                    each merge group's head, post its `verity/check` status
@@ -1331,9 +1332,18 @@ def reruns_suites(files: Iterable[str]) -> bool:
 
 def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     """The files a merge of ``head`` onto ``base`` would leave conflicted, from `git merge-tree` (no worktree touched), so
-    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
-    r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
-    return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
+    `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly.  It
+    merges as `Queue._merge` does: with ``base``'s merge drivers (`--attr-source`, where the clone has them installed), and
+    a conflict only in pins counts as none, since the sync rebuilds them (`repinned`; 26 Oct: the preflight refused #4491
+    over PoUS's TRUSTED.sha256, which the sync merges)."""
+    r = _git(repo, f"--attr-source={base}", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head,
+             check=False)
+    if r.returncode == 129 and "attr-source" in r.stderr:
+        r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
+    if r.returncode != 1:
+        return []
+    files = sorted({f for f in r.stdout.splitlines()[1:] if f})
+    return [] if repinned(repo, r.stdout.split()[0], base, head, files) else files
 
 
 def pins_at(repo: Path, ref: str) -> dict[str, tuple[str | None, str]]:
@@ -2662,7 +2672,8 @@ def main(argv: list[str]) -> int:
                                                     "(default drive.toml's `on` at `main`)")
     ap.add_argument("--local", action="store_true", help="ready: run the quick tier here")
     ap.add_argument("--mark", action="store_true", help="ready: mark it with no quick tier (the train's full check tests it)")
-    ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong)")
+    ap.add_argument("--again", action="store_true", help="ready: mark a head that was ejected (only when the ejection was wrong); "
+                                                          "lean-check: rerun a commit whose recorded Lean check passed")
     ap.add_argument("--no-preflight", action="store_true",
                     help="ready: skip the preflight (the lander's): the head merged onto a fresh `next` must merge cleanly, contain "
                          "no open PR that isn't admitted, and pass `pins.py --stale`, the invariant tests (module strings, pins, "
@@ -2852,7 +2863,7 @@ def main(argv: list[str]) -> int:
                 q.fetch()
             if not (on := a.on or drive_flags(DRIVE_FLAGS, q.workdir)[0].on):
                 raise QueueError(f"lean-check: {DRIVE_FLAGS} at `main` names no machines (`on`): pass --on MACHINES")
-            rec = Driver(q, on=on).hand_lean(a.pr, a.by)
+            rec = Driver(q, on=on).hand_lean(a.pr, a.by, again=a.again)
             print(f"research queue: the Lean check of {a.pr} on {on} is drive's, by {a.by}: "
                   f"{' '.join(rec['ids']) or 'launching (log ' + rec['launch']['dir'] + '/log)'}")
             return 0

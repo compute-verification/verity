@@ -2931,14 +2931,14 @@ class Driver:
         q.log(f"research queue drive: the Lean check of {top.commit[:12]} for {what}: {_ids(rec)}")
         q.save_state({**q.load_state(), "drive": drive})
 
-    def hand_lean(self, commit: str, by: str) -> dict:
+    def hand_lean(self, commit: str, by: str, again: bool = False) -> dict:
         """`research queue lean-check COMMIT`: a Lean check of a commit of `next` that ``by`` chose, launched as drive's own
         (`_launch_lean`, detached) and in `drive["lean"]` from its launch, marked `hand`, so the hold on `next`,
         `max_lean_checks`, the cut points, `_follow_lean` and `_cover` take it as drive's own before its train.sh registers a
         run (26 Oct 10:36Z: a tick in those minutes reordered `next`, non-Lean first, and threw away S1's hand check at
-        19a382ca).  Refused for a commit that isn't a member's merge on `next`, or one a running Lean check at or above it
-        holds.  Run between ticks, under drive's tick lock (`/data/infra/drive.sh queue lean-check COMMIT`); returns the
-        record."""
+        19a382ca).  Refused for a commit that isn't a member's merge on `next`, one a running Lean check at or above it
+        holds, or, unless ``again`` (a deliberate rerun, which replaces the record), one whose recorded check passed.  Run
+        between ticks, under drive's tick lock (`/data/infra/drive.sh queue lean-check COMMIT`); returns the record."""
         q = self.q
         if q.shadow:
             raise QueueError("lean-check: the shadow launches nothing")
@@ -2957,6 +2957,9 @@ class Driver:
         if c := next((c for c, rec in lean.items() if rec.get("state") is None and pos.get(c, -1) >= pos[full]), None):
             raise QueueError(f"lean-check: the running Lean check {_ids(lean[c])} of {c[:12]} (#{chain[pos[c]].pr}) already "
                              f"holds {full[:12]} (#{chain[pos[full]].pr}): its pass covers it")
+        if (rec := lean.get(full)) and rec.get("state") == "passed" and not again:
+            raise QueueError(f"lean-check: the Lean check of {full[:12]} (#{chain[pos[full]].pr}) already passed: run "
+                             f"{rec.get('run')} (run ids {_ids(rec)}); a deliberate rerun takes --again")
         self._launch_lean(drive, chain, pos[full], f"{by}'s hand check", False, by=by)
         return lean[full]
 
