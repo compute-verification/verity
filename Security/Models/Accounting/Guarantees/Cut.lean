@@ -58,8 +58,6 @@ def Whole : Prop :=
 /-- **The cut circuit's units.** At most `D`'s units in `C`, and each gather's index bits in `D` again. -/
 def Units : Prop :=
   ∀ {ι : Type} (C : Dag ι) (D : Finset ℕ),
-    budgeted (cut C D) ≤
-      ∑ i ∈ (Finset.range C.length).filter (· ∈ D),
-        (units C i + (C[i]?.map fun g => match g.op with | .gather .. => g.indexBits | _ => 0).getD 0)
+    budgeted (cut C D) ≤ ∑ i ∈ (Finset.range C.length).filter (· ∈ D), (units C i + (C[i]?.map Gate.gatherBits).getD 0)
 
 end Accounting.Guarantees.Cut

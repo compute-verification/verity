@@ -60,6 +60,12 @@ def cutInput (C : Dag ι) (x : ι → ℤ) : ι ⊕ ℕ → ℤ
   | .inl i => x i
   | .inr j => val C x j
 
+/-- A gather's index bits, and `0` for any other gate: what a gather in `D` may pay again in the cut circuit. -/
+def Gate.gatherBits (g : Gate ι) : ℕ :=
+  match g.op with
+  | .gather .. => g.indexBits
+  | _ => 0
+
 /-- An interval's bits: `⌈log₂⌉` of the number of values it holds, as `Gate.bits` reads a declared one. -/
 def Iv.bits (a : Iv) : ℕ := Nat.clog 2 (a.2 + 1 - a.1).toNat
 

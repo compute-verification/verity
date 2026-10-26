@@ -379,6 +379,166 @@ theorem cut_runBits (C : Dag ι) (D : Finset ℕ) : runBits (cut C D) = boundary
     rw [← Finset.sum_filter, hbd, boundaryBits]
   rw [Finset.sum_congr rfl hpt, Finset.sum_add_distrib, h1, runBitsIn, Finset.sum_filter]
 
+/-! ## The cut circuit's units -/
+
+lemma any_congr' {l : List ℕ} {f g : ℕ → Bool} (h : ∀ j ∈ l, f j = g j) : l.any f = l.any g := by
+  induction l with
+  | nil => rfl
+  | cons a l ih =>
+    simp only [List.any_cons]
+    rw [h a (by simp), ih fun j hj => h j (by simp [hj])]
+
+lemma map_dynStep (e : ι → κ) (g : Gate ι) (ds : List Bool) : dynStep ds (g.map e) = dynStep ds g := by
+  obtain ⟨op, args, lo, hi, step, prim, site, commit⟩ := g
+  cases op <;> rfl
+
+lemma dynStep_congr (g : Gate ι) (ds ds' : List Bool) (h : ∀ j ∈ g.args, ds.getD j false = ds'.getD j false) :
+    dynStep ds g = dynStep ds' g := by
+  obtain ⟨op, args, lo, hi, step, prim, site, commit⟩ := g
+  cases op <;> first | rfl | exact any_congr' h
+
+lemma map_gatherKind (e : ι → κ) (op : Op ι) : (op.map e).gatherKind = op.gatherKind := by
+  cases op <;> rfl
+
+lemma map_indexBits (e : ι → κ) (g : Gate ι) : (g.map e).indexBits = g.indexBits := by
+  obtain ⟨op, args, lo, hi, step, prim, site, commit⟩ := g
+  cases op with
+  | gather low d => cases low <;> rfl
+  | _ => rfl
+
+lemma dynAt_of_le (C : Dag ι) (j : ℕ) (h : C.length ≤ j) : dynAt C j = false :=
+  List.getD_eq_default _ _ (by rw [dynamic_length]; exact h)
+
+/-- The cut circuit's gates in `D` and on its boundary are dynamic exactly when `C`'s are. -/
+theorem cut_dyn (C : Dag ι) (D : Finset ℕ) :
+    ∀ i, (i ∈ D ∨ i ∈ boundary C D) → dynAt (cut C D) i = dynAt C i := by
+  intro i
+  induction i using Nat.strong_induction_on with
+  | _ i ih =>
+  intro hi
+  by_cases hlt : i < C.length
+  swap
+  · rw [dynAt_of_le _ i (by rw [cut_length]; omega), dynAt_of_le C i (by omega)]
+  have hlt' : i < (cut C D).length := by rw [cut_length]; exact hlt
+  rw [dynAt_eq (cut C D) i hlt', cut_getElem]
+  rcases hi with hD | hb
+  · rw [cutGate, ite_eq_left hD, map_dynStep, dynAt_eq C i hlt]
+    refine dynStep_congr _ _ _ fun j hj => ?_
+    rw [getD_dynamic_take (cut C D) i j hlt'.le, getD_dynamic_take C i j hlt.le]
+    split_ifs with hji
+    · exact ih j hji (arg_cases hD hlt hj (by omega))
+    · rfl
+  · rw [cutGate, ite_eq_right (boundary_not_mem hb), ite_eq_left hb]
+    show _ = (dynamic C).getD i false
+    cases (dynamic C).getD i false <;> rfl
+
+/-- A gate renamed in place has its units, but that a gather may pay its index bits again. -/
+lemma units_map_le (C : Dag ι) (C' : Dag κ) (e : ι → κ) (i : ℕ) (g : Gate ι) (h : C[i]? = some g)
+    (h' : C'[i]? = some (g.map e)) (hd : ∀ j ∈ g.args, (dynamic C').getD j false = (dynamic C).getD j false) :
+    units C' i ≤ units C i + g.gatherBits := by
+  unfold units
+  rw [h, h']
+  obtain ⟨op, args, lo, hi, step, prim, site, commit⟩ := g
+  cases op with
+  | budgeted cls f =>
+    have hany := any_congr' hd
+    simp only [Gate.map, Op.map, Gate.gatherBits] at hany ⊢
+    simp only [hany]
+    omega
+  | gather low fill =>
+    cases args with
+    | nil => simp [Gate.map, Op.map]
+    | cons j col =>
+      have hj := hd j (by simp)
+      have hcol : (col.any fun j => (dynamic C').getD j false) = col.any fun j => (dynamic C).getD j false :=
+        any_congr' fun j' hj' => hd j' (by simp [hj'])
+      have hib := map_indexBits e ⟨Op.gather low fill, j :: col, lo, hi, step, prim, site, commit⟩
+      simp only [Gate.map, Op.map] at hib ⊢
+      simp only [hj, hcol, hib, Gate.gatherBits]
+      split_ifs <;> omega
+  | _ => simp [Gate.map, Op.map]
+
+theorem Units : Accounting.Guarantees.Cut.Units := by
+  intro ι C D
+  unfold budgeted
+  rw [cut_length, Finset.sum_filter]
+  refine Finset.sum_le_sum fun i hi => ?_
+  have hlt := Finset.mem_range.mp hi
+  have hlt' : i < (cut C D).length := by rw [cut_length]; exact hlt
+  by_cases hD : i ∈ D
+  · rw [ite_eq_left hD, List.getElem?_eq_getElem hlt, Option.map_some, Option.getD_some]
+    refine units_map_le C (cut C D) Sum.inl i C[i] (List.getElem?_eq_getElem hlt) ?_ fun j hj => ?_
+    · rw [List.getElem?_eq_getElem hlt', cut_getElem, cutGate, ite_eq_left hD]
+    · by_cases hj' : j < C.length
+      · exact cut_dyn C D j (arg_cases hD hlt hj hj')
+      · exact (dynAt_of_le _ j (by rw [cut_length]; omega)).trans (dynAt_of_le C j (by omega)).symm
+  · rw [ite_eq_right hD]
+    unfold units
+    rw [List.getElem?_eq_getElem hlt', cut_getElem, cutGate, ite_eq_right hD]
+    by_cases hb : i ∈ boundary C D
+    · rw [ite_eq_left hb]
+    · rw [ite_eq_right hb]
+
+/-! ## The trivial cut -/
+
+lemma dynamic_map (e : ι → κ) (C : Dag ι) : dynamic (C.map (Gate.map e)) = dynamic C := by
+  rw [dynamic_eq, dynamic_eq]
+  suffices h : ∀ ds, (C.map (Gate.map e)).foldl (fun ds g => ds ++ [dynStep ds g]) ds =
+      C.foldl (fun ds g => ds ++ [dynStep ds g]) ds from h []
+  induction C with
+  | nil => intro ds; rfl
+  | cons g C ih =>
+    intro ds
+    rw [List.map_cons, List.foldl_cons, List.foldl_cons, map_dynStep, ih]
+
+lemma filter_map_indexBits (e : ι → κ) (L : List (Gate ι)) (b : Bool) (j : ℕ) :
+    (((L.map (Gate.map e)).filter fun h => h.op.gatherKind == some b && h.args.head? == some j).map
+        Gate.indexBits) =
+      ((L.filter fun h => h.op.gatherKind == some b && h.args.head? == some j).map Gate.indexBits) := by
+  induction L with
+  | nil => rfl
+  | cons g L ih =>
+    rw [List.map_cons, List.filter_cons, List.filter_cons, map_args, Gate.map, map_gatherKind]
+    split_ifs
+    · rw [List.map_cons, List.map_cons, ih]
+      exact congrArg (· :: _) (map_indexBits e g)
+    · exact ih
+
+lemma units_map (e : ι → κ) (C : Dag ι) (i : ℕ) : units (C.map (Gate.map e)) i = units C i := by
+  unfold units
+  rw [dynamic_map, List.getElem?_map, ← List.map_take]
+  cases C[i]? with
+  | none => rfl
+  | some g =>
+    simp only [Option.map_some]
+    obtain ⟨op, args, lo, hi, step, prim, site, commit⟩ := g
+    cases op with
+    | gather low fill =>
+      cases args with
+      | nil => rfl
+      | cons j col =>
+        simp only [Gate.map, Op.map]
+        rw [filter_map_indexBits]
+        cases low <;> rfl
+    | _ => rfl
+
+lemma cut_univ (C : Dag ι) : cut C (Finset.range C.length) = C.map (Gate.map Sum.inl) := by
+  refine List.ext_getElem (by rw [cut_length, List.length_map]) fun i h₁ h₂ => ?_
+  rw [cut_getElem, List.getElem_map, cutGate,
+    ite_eq_left (Finset.mem_range.mpr (by rwa [cut_length] at h₁))]
+
+theorem Whole : Accounting.Guarantees.Cut.Whole := by
+  intro ι C
+  have hbd : boundary C (Finset.range C.length) = ∅ := by
+    ext j
+    simp only [boundary, Finset.mem_filter, Finset.mem_range, Finset.notMem_empty, iff_false, not_and]
+    intro hj hn
+    exact absurd hj hn
+  refine ⟨by rw [boundaryBits, hbd, Finset.sum_empty], ?_, ?_⟩
+  · rw [cut_univ, budgeted, budgeted, List.length_map]
+    exact Finset.sum_congr rfl fun i _ => units_map Sum.inl C i
+  · rw [runBitsIn, runBits, sum_map_eq_range, Finset.filter_true_of_mem fun i hi => hi]
+
 /-! ## The min-cut bound -/
 
 theorem MinCut : Accounting.Guarantees.Cut.MinCut := by
