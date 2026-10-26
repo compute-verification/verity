@@ -306,7 +306,7 @@ theorem resSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
   unfold ResLower.resSetupSt
   repeat' split
   all_goals first
-    | exact Nat.zero_le _
+    | (simp; done)
     | (rw [List.length_append]
        refine le_trans (Nat.add_le_add (commitIns_length_le _ _) (commitIns_length_le _ _)) ?_
        have hr := residualRows_size ‹_›
@@ -318,7 +318,7 @@ theorem openSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
   unfold ResLower.openSetupSt
   repeat' split
   all_goals first
-    | exact Nat.zero_le _
+    | (simp; done)
     | (refine le_trans (commitIns_length_le _ _) ?_
        have hd := openRows_dirs_le ‹_›
        omega)
