@@ -281,21 +281,21 @@ theorem specHolo_names {vsh : _root_.VStar.Algebra.Shape} {sp : _root_.VStar.Rep
   obtain ⟨S, hS, h⟩ := ebind_ok h
   refine ⟨S, hS, ?_⟩
   dsimp only at h
-  repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (dsimp only at h))
-  simp only [pure, Except.pure, Except.ok.injEq] at h
-  subst h
-  intro n hn
-  rw [List.map_append, List.mem_append] at hn
-  rcases hn with hn | hn
-  · left
-    rw [List.map_map, List.mem_map] at hn
-    obtain ⟨⟨a, i⟩, hai, rfl⟩ := hn
-    refine ⟨i, ?_, rfl⟩
-    have := (List.mem_zipIdx hai).2.1
-    simp only [List.length_append, List.length_map, List.length_take, List.length_drop, List.length_singleton,
-      Nat.zero_add] at this
-    omega
-  · exact .inr hn
+  repeat' (first | (obtain ⟨_, _, h⟩ := ebind_ok h) | (split at h))
+  all_goals
+    cases h <;>
+    · intro n hn
+      rw [List.map_append, List.mem_append] at hn
+      rcases hn with hn | hn
+      · left
+        rw [List.map_map, List.mem_map] at hn
+        obtain ⟨⟨a, i⟩, hai, rfl⟩ := hn
+        refine ⟨i, ?_, rfl⟩
+        have := (List.mem_zipIdx hai).2.1
+        simp only [List.length_append, List.length_map, List.length_take, List.length_drop, List.length_singleton,
+          Nat.zero_add] at this
+        omega
+      · exact .inr hn
 
 /-- **`specOf`'s port names**: `acc0`, `acc1`, and `m<i>` below `rounds`' size, one more over a holo session. -/
 theorem specOf_names {vsh : _root_.VStar.Algebra.Shape} {holo : Bool} {sp : _root_.VStar.RepS}
@@ -311,9 +311,8 @@ theorem specOf_names {vsh : _root_.VStar.Algebra.Shape} {holo : Bool} {sp : _roo
     rcases List.mem_append.1 hn' with h1 | h1
     · obtain ⟨i, hi, rfl⟩ := List.mem_map.1 h1
       refine .inr (.inr ⟨i, rfl, ?_⟩)
-      rw [← hr]
+      rw [← hr, show (if false = true then 1 else 0) = 0 from rfl]
       simp only [List.mem_range'_1] at hi
-      simp only [Bool.false_eq_true, ↓reduceIte]
       omega
     · simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at h1
       rcases h1 with h1 | h1
@@ -329,10 +328,9 @@ theorem specOf_names {vsh : _root_.VStar.Algebra.Shape} {holo : Bool} {sp : _roo
     refine ⟨s, hs, fun n hn' => ?_⟩
     rcases hn n hn' with ⟨i, hi, rfl⟩ | h1
     · refine .inr (.inr ⟨i, rfl, ?_⟩)
-      rw [← hr]
-      simp only [↓reduceIte]
+      rw [← hr, show (if true = true then 1 else 0) = 1 from rfl]
       omega
-    · rw [← List.map_drop, hSn, hlen,
+    · rw [List.map_drop, hSn, hlen,
         show cx.rounds.size + 2 - 2 = ((List.range' 0 cx.rounds.size).map fun i => s!"m{i}").length by simp,
         List.drop_left] at h1
       simp only [List.mem_cons, List.mem_singleton, List.not_mem_nil, or_false] at h1
@@ -360,7 +358,7 @@ theorem forIn_pushes_all {ε α β : Type} (P : β → Prop) (f : α → Array �
 
 /-- **Each part's ports are its S's** (`parts`, `Parts.lean:100`): part `(R, P, V)`'s are `S.ports[p]!` for `p ∈ P`. -/
 theorem parts_ports {S : _root_.VStar.RepS} {ps : Array _root_.VStar.Part} (h : _root_.VStar.parts S = .ok ps) :
-    ∀ pt ∈ ps, ∀ q ∈ pt.S.ports, ∃ p, q = S.ports.toArray[p]! := by
+    ∀ pt ∈ ps, ∀ q ∈ pt.S.ports, ∃ p : ℕ, q = S.ports.toArray[p]! := by
   unfold _root_.VStar.parts at h
   dsimp only at h
   obtain ⟨_, -, h⟩ := ebind_ok h
@@ -371,7 +369,7 @@ theorem parts_ports {S : _root_.VStar.RepS} {ps : Array _root_.VStar.Part} (h : 
   simp only [pure, Except.pure, Except.ok.injEq] at h
   subst h
   rw [← Array.forIn_toList] at hout
-  refine forIn_pushes_all (fun pt : _root_.VStar.Part => ∀ q ∈ pt.S.ports, ∃ p, q = S.ports.toArray[p]!) _
+  refine forIn_pushes_all (fun pt : _root_.VStar.Part => ∀ q ∈ pt.S.ports, ∃ p : ℕ, q = S.ports.toArray[p]!) _
     (fun a r y hy => ?_) _ _ _ (by simp) hout
   repeat' (first | (obtain ⟨_, _, hy⟩ := ebind_ok hy) | (split at hy))
   all_goals
@@ -387,8 +385,11 @@ theorem checkRepS_sizes {S : _root_.VStar.RepS} {whole : Bool} {u : Unit}
   have hany : S.ports.any (fun p => decide (p.2 < 1)) = true := List.any_eq_true.2 ⟨q, hq, by simpa using hlt⟩
   unfold _root_.VStar.checkRepS at h
   dsimp only at h
-  obtain ⟨_, h1, -⟩ := ebind_ok h
-  simp [hany] at h1 <;> cases h1
+  split at h
+  · obtain ⟨_, h1, -⟩ := ebind_ok h
+    first | cases h1 | simp [throw, throwThe, MonadExceptOf.throw] at h1
+  · rename_i hc
+    simp [hany] at hc
 
 theorem innerUnit_sizes {S : _root_.VStar.RepS} {name : String} {u} (h : _root_.VStar.innerUnit S name = .ok u) :
     ∀ q ∈ S.ports, 1 ≤ q.2 := by
@@ -483,10 +484,14 @@ theorem innerPorts_named {x : Msg} {s j : ℕ} {nm : String} {pt : _root_.VStar.
     rw [commitRounds_length]
     unfold repSched at hrs
     cases hh : r.shape.holo
-    · simp only [hh, Bool.false_eq_true, ↓reduceIte] at hrs hi
+    · rw [hh, show (if false = true then 1 else 0) = 0 from rfl] at hi
+      rw [hh] at hrs
+      change RecVStar.repRounds _ _ _ = some rs at hrs
       rw [repRounds_countP hf hrs]
       omega
-    · simp only [hh, ↓reduceIte] at hrs hi
+    · rw [hh, show (if true = true then 1 else 0) = 1 from rfl] at hi
+      rw [hh] at hrs
+      change RecVStar.holoRepRounds _ _ _ = some rs at hrs
       obtain ⟨out, hout, hc⟩ := holoRepRounds_countP hrs
       rw [hc, repRounds_countP hf hout]
       omega
