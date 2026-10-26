@@ -225,23 +225,29 @@ theorem out_top_rows (elem : (r : XR) → List (Fin r.w.parts.length × List (Ms
       readForms w ((hmCommit c q i).drop 512)) ∈ (DeployedR.layR elem).allCalls x ws := by
     have h := hL (Hm96.Default512.saltPrefix.data.toList, hmSalt c q i, (hmCommit c q i).drop 512)
       (by unfold DeployedR.outCalls; exact List.mem_cons_self)
+    dsimp only at h ⊢
     exact h
   have h2 : (rowPfx c q ++ readForms w (DeployedR.outRowForms c q i), readForms w (hmDigest c q i)) ∈
       (DeployedR.layR elem).allCalls x ws := by
     have h := hL ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
       DeployedR.outRowForms c q i, hmDigest c q i)
       (by unfold DeployedR.outCalls; exact List.mem_cons_of_mem _ List.mem_cons_self)
+    unfold rowPfx
+    dsimp only at h ⊢
     exact h
   have h3 : (Hm96.Default512.saltPrefix.data.toList ++ readForms w' (hmSalt c' q' m),
       readForms w' ((hmCommit c' q' m).drop 512)) ∈ (DeployedR.layR elem).allCalls x ws := by
     have h := hC (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' m, (hmCommit c' q' m).drop 512)
       (by unfold hmCalls; exact List.mem_cons_self)
+    dsimp only at h ⊢
     exact h
   have h4 : (rowPfx c' q' ++ readForms w' (((rowHidden c' "top" m).getD []).map HmNets.Lin.var),
       readForms w' (hmDigest c' q' m)) ∈ (DeployedR.layR elem).allCalls x ws := by
     have h := hC ((c'.ports[q']?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [],
       ((rowHidden c' "top" m).getD []).map HmNets.Lin.var, hmDigest c' q' m)
       (by unfold hmCalls; exact List.mem_cons_of_mem _ List.mem_cons_self)
+    unfold rowPfx
+    dsimp only at h ⊢
     exact h
   exact rows_eq_of_calls hT hnc h1 h2 h3 h4 hpfx hcm
 
