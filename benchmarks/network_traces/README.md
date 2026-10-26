@@ -3,7 +3,8 @@
 The network certifier's measured runs and their zero-knowledge proofs: the certifier in front of a served endpoint
 (`certifier_serve.py`), the network certifier functioning as an active warden (`warden_serve.py`), N2's units proved by C-Flock `--zk` (`n2_zk.py`,
 `n2_advised_zk.py`), the scan's chained units (`scan_zk.py`), and the chain's run of record (`chain_record.sh`). Each
-driver's docstring says what it runs and what its verifier receives.
+driver's docstring says what it runs and what its verifier receives. `n2_lean_replay.py` replays the recorded N2 proving
+runs' link-window verdicts through the Lean verdict of record beside the Python, against what each run recorded.
 
 ## The demo's load
 
@@ -21,8 +22,19 @@ The H200 demo serves CMP-95 interface 1's plain INT8 weights, generated from the
   reading program's domain as it crosses. The serving session's one signer then signs the load's 733 heads before its
   first window, so one LMS key and one session carry the load and the windows. `load.json` (the registrations the
   block record pins) and `load-relay.json` are public in the run's `out/`.
-- The witness, every row's salts (106.4 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
+- The witness, every row's salts (4.85 GB at H200), is the sink's `--witness` file (0600) on the prover's host,
   vy-dc-h200-2. The certifier's host never writes a salt.
+
+## The wipe's egress
+
+Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over its
+session [t0, t1) comes after, from a warden session that spans it: `wipe_gate.sh` runs that session through the gate
+(`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the card's loopback), at a given UTC time
+when asked, and fetches the run's bundle. `wipe_egress.py BUNDLE --t0-ns T0 --t1-ns T1` then writes the
+`wipe-egress/v1` record from what the gate published. Each link-window meeting [t0 − 1 s, t1 + 1 s) counts at the
+schedule's capacity, 2,621,440 bits a link-window, with K that count and δ 0. The record is covered only when every one
+of those windows is certified. The wipe's reader takes `wipe_period.certify(p, egress_mib)` from a covered record and
+keeps the wipe uncounted otherwise.
 
 ## The chain's run of record
 
@@ -38,7 +50,11 @@ The run of record takes the network chain end to end on the gate's machines:
 
 **How it runs.** vy-admin runs the gate on vy-challenger-1: `sudo vy-challenger-gate certifier-rehearse --peer
 vy-nebius-1 --port PORT --minutes 30 --traffic varied --requests 100 --tokens 64 --seed 1 --eos-ids 128001 --height 20`
-(and `warden-rehearse --scan`, where it functions as an active warden), then `status` and `fetch`. The fetched tarballs go to one job, `chain_record.sh`, with the
+(and `warden-rehearse --scan`, where it functions as an active warden), then `status` and `fetch`. A prompt range shorter
+than the chat turn's tail (`CHAT_TAIL`, as the toy's 8-byte prompts are) makes every chat turn one prompt, so such an
+endpoint takes its prompts on stdin and a wider margin: `demo_stub.py prompts --count 100 | sudo vy-challenger-gate
+certifier-rehearse … --traffic varied --requests 100 --rate 0.2 --tokens 24 --eos-ids 0 --prompts --margin 4`
+(`--prompts`: request j sends the (j mod n)-th; `--margin`: the plan's over the probes, 1 to 8, 2 otherwise). The fetched tarballs go to one job, `chain_record.sh`, with the
 endpoint's records (`benchmarks/network_e2e/chain.py`'s `ENDPOINT`: `advice_trace.jsonl`, `requests.jsonl`, `windows.jsonl` and
 `serve.json` from the endpoint's serve directory, `CR_ENDPOINT`). The job runs `chain_record.py`'s steps,
 network-e2e's binding and the two provers, and writes `out/report/report.json` and `report.md`:

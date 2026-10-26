@@ -199,8 +199,9 @@ def test_registered_weights_leave_half_the_inputs_free_and_open_the_pinned_root(
     win, c, written = registered(tmp_path)
     assert win.mismatches() == {}
     doc = json.loads((tmp_path / "circuit.json").read_text())
-    assert IF.input_count(doc) == {"units": 1024, "inputs": 2_162_688, "wired": 0, "registered": 1_081_344, "ingress": 0,
-                                   "free": 1_081_344}
+    assert IF.input_count(doc, pins=set(WEIGHTS)) == {"units": 1024, "inputs": 2_162_688, "wired": 0, "registered": 1_081_344,
+                                                      "ingress": 0, "free": 1_081_344}
+    assert IF.input_count(doc)["free"] == 2_162_688
     rec = json.loads((tmp_path / "registration.json").read_text())
     w = win.window
     layer = CS.leaf_layer({m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(w.members)})
@@ -331,8 +332,9 @@ def test_the_wired_loop_is_its_definitions_each_quantize_unit_reading_its_linear
     """Each linear one unit and each ReLU and quantize one, every activation a tie: the loop's ``quantize`` is
     ``QuantRowS8_v1``'s, core accepts the window, the verifier's members from the records are the loop's, every unit's tied
     rows (its writer's output row, its reader's input row) open their tie's root at the rows the verifier derives, the
-    registration names each tie under a domain bound to the run root, and only the requests' own rows (and the weights,
-    unregistered) are free."""
+    registration names each tie under a domain bound to the run root, and with the ties pinned (as the audit pins them from
+    the registration, `records_audit.window_pins`) only the requests' own rows (and the weights, unregistered) are free;
+    with no pins, every read is."""
     loop, win, c = wired(tmp_path)
     h, rs = L.H, 2 * 2
     assert [(descriptor_id(fn), n) for fn, n in win.circuit.templates] == [
@@ -351,10 +353,12 @@ def test_the_wired_loop_is_its_definitions_each_quantize_unit_reading_its_linear
         "x": (2, h // 2), "sx": (2, 2), "up": (rs, h), "up_codes": (rs, h // 2), "up_scale": (rs, 2), "down": (2, h),
         "down_codes": (2, h // 2), "down_scale": (2, 2)}
     assert all(values[v]["root"] == r.root.hex() for v, r in loop.ties.items())
-    n = IF.input_count(json.loads((tmp_path / "circuit.json").read_text()))
+    doc = json.loads((tmp_path / "circuit.json").read_text())
+    n = IF.input_count(doc, pins=set(loop.ties))
     request_rows = 2 * 16 * (h // 2 + 2)
     assert n["wired"] == 0 and n["registered"] == 16 * (6 * h + 6 * (h // 2 + 2))
     assert n["free"] == request_rows + 8 * 16 * (h * h // 2 + 2 * h)
+    assert IF.input_count(doc) == {**n, "registered": 0, "free": n["free"] + n["registered"]}
     coordinates, _ = served()
     assert loop.outputs.keys() == coordinates.outputs.keys()
     assert all(torch.equal(loop.outputs[k], coordinates.outputs[k]) for k in loop.outputs)
@@ -393,7 +397,7 @@ def test_registered_weights_in_the_wired_loop_leave_only_the_requests_rows_free_
     loop, win, c = wired(tmp_path, registered=True)
     assert win.mismatches() == {} and {v: (r.leaves, r.words) for v, r in WIRED_WEIGHTS.items()} == {
         "w": (2, L.H * L.H // 2), "sw": (2, 2 * L.H)}
-    n = IF.input_count(json.loads((tmp_path / "circuit.json").read_text()))
+    n = IF.input_count(json.loads((tmp_path / "circuit.json").read_text()), pins={*loop.ties, *WIRED_WEIGHTS})
     assert n["free"] == 2 * 16 * (L.H // 2 + 2) == 2112
     assert n["registered"] == 8 * 16 * (L.H * L.H // 2 + 2 * L.H) + 16 * (6 * L.H + 6 * (L.H // 2 + 2))
     assert tie_reads(loop, win, c, tmp_path, WIRED_WEIGHTS) == {}
