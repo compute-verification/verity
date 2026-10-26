@@ -27,7 +27,7 @@ theorem recursiveKSAt_of_leaves_deployed (wE w : Msg → ℝ)
     (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
-    (hres : ResLower.ResLowered DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
+    (hres : ResLower.ResLoweredP DeployedR.rdR wE DeployedR.finalR w (bB (deployedB b) aux nOf hd recRest)
       OpenRows.elemR Claims.Recursion.Form.Dense recRead (cmtTr recRead) resPD ownRD
       (Rows.elemReadC (Top.accRC DeployedR.rdR key)) Rows.resVRead) :
     Flock.Guarantees.RecursiveKSAt DeployedR.rdR DeployedR.finalR OpenRows.elemR wE w (deployedB b) aux nOf hd
