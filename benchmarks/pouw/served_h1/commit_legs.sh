@@ -8,15 +8,18 @@
 # that core's credit holds the window to, and --circuit-files from CIRCUITS: a pouw_h1_circuits --live 32,4 directory
 # of the declared Program, sent with the run), closed once that window's session has ended; it refuses to start while the
 # key's lane (GATE_LANE, default vllm) has a period open, and saves each live leg's Commit session tree (GATE fetch,
-# $OUT/<leg>/commit-session.tgz) for pouw_h1_gpu.py --check-challenger.
+# $OUT/<leg>/commit-session.tgz) for pouw_h1_gpu.py --check-challenger. The units kernel is built for the node's card
+# (arch.sh: ARCH, 120a or 90a); LEG_ARGS are more pouw_h1_gpu.py flags for every leg (another int8 pin: --base-role
+# LLAMA32_1B --role LLAMA32_1B_INT8 --repo verity-int8/Llama-3.2-1B-INT8).
 #
 #   research run --on NODE --project verity --source . --cwd source --mem-gb 128 --timeout 4h --declared-output 'out/*' \
 #     --env LEGS=j10r-live [--env GATE=... --env CHALLENGER=127.0.0.1:7811 --env PEER=NODE --env CIRCUITS=DIR] \
 #     -- env CHECK_SLOTS=/workspace/research/locks/gpu/slots python3 tools/verity/check/slot.py --by LANE \
 #     --run-max 12600 -- bash benchmarks/pouw/served_h1/commit_legs.sh
 set -u
+. "$(dirname "$0")/arch.sh"
 S=$(mktemp -d); trap 'rm -rf "$S" || true' EXIT
-/usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode arch=compute_120a,code=sm_120a -Xcompiler -fPIC \
+/usr/local/cuda-13.0/bin/nvcc -O3 -std=c++17 --expt-relaxed-constexpr -gencode "$GENCODE" -Xcompiler -fPIC \
   -shared -DH1U_KSPLIT=4 -DH1K_AUTO=1 -DH1K_RONLY=1 -o "$S/h1u_hbc.so" benchmarks/hash/dither/h1u.cu > "$OUT/build-hbc.log" 2>&1 || exit 1
 sha256sum "$S/h1u_hbc.so" | tee "$OUT/builds.txt"
 [ -n "${GATE:-}" ] && $GATE pubkey > "$OUT/gate-pubkey.json"
@@ -38,7 +41,7 @@ cd integrations/vllm
 rc_all=0
 for leg in ${LEGS:-v1}; do
   mkdir -p "$OUT/$leg"
-  extra=()
+  read -r -a extra <<< "${LEG_ARGS:-}"
   case "$leg" in j10r*) extra+=(--j10r) ;; esac
   case "$leg" in *-live) extra+=(--challenger "${CHALLENGER:?}" --gate "${GATE:?}" --peer "${PEER:?}"
                                  --period "${PERIOD:-commit-$(date -u +%Y%m%dT%H%M%SZ)-$leg}" --circuits "${CIRCUITS:?}") ;; esac
