@@ -495,6 +495,9 @@
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
+  "Pous.EndToEnd.SecurityProofs.drawAtMost": {
+   "owner": "@memory-accounting"
+  },
   "Pous.EndToEnd.SecurityProofs.drawExact": {
    "owner": "@memory-accounting",
    "signature": ["Pous.EndToEnd.SecurityProofs.drawExact : Pous.EndToEnd.DrawExact"],
@@ -558,17 +561,17 @@
    "assumptions": [],
    "type_hash": "1bf5978e0d2b8c3a3c1e28748c6edab67a042d18704f5bb0764ff33ac555606c"
   },
-  "Pous.Period.SecurityProofs.periodHeldAt": {
-   "owner": "@memory-accounting"
-  },
-  "Pous.Period.SecurityProofs.periodHeldDemo": {
-   "owner": "@memory-accounting"
-  },
   "Pous.Period.SecurityProofs.periodHeld": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Period.SecurityProofs.periodHeld : Pous.Period.PeriodHeld"],
    "assumptions": [],
    "type_hash": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309"
+  },
+  "Pous.Period.SecurityProofs.periodHeldAt": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Period.SecurityProofs.periodHeldDemo": {
+   "owner": "@memory-accounting"
   },
   "PousCheck.Properties.SecurityProofs.deployed": {
    "owner": "@memory-accounting",
