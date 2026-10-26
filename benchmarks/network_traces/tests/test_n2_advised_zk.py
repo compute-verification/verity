@@ -6,8 +6,9 @@ the certificates and its own view of the public advice, is the prover's, in whol
 (`joined`) numbers each Commit window's requests after the windows' before it. At the tests' T = 8 the
 proof unit (`LinkWindows.proof_unit`), evaluated on the rows the prover stages, gives the output words the gates'
 references do (`LinkWindows.outputs`) in every window of every member and on a head the prover changed. Each builder
-`n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. Nothing here
-lowers or proves (`n2_advised_zk.prove` does, on a node)."""
+`n2_advised_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's own gates. ``--jobs`` is 1
+unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
+(`n2_advised_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -15,6 +16,7 @@ import gzip
 import importlib.util
 import json
 import sys
+from dataclasses import replace
 from functools import cache
 from pathlib import Path
 from types import SimpleNamespace
@@ -114,37 +116,51 @@ def test_a_served_run_without_clocks_jsonl_is_refused_unless_the_stand_in_is_ask
     _proxy_log(tmp_path)
     with pytest.raises(SystemExit, match="no clocks.jsonl.*--clock-stand-in"):
         n2.served_clocks(tmp_path, lw.link)
-    logged = n2.replace(lw, clock_certificates=None, **n2.served_clocks(tmp_path, lw.link, stand_in=True))
+    logged = replace(lw, certified_clocks=None, **n2.served_clocks(tmp_path, lw.link, stand_in=True))
     assert isinstance(logged.clocks, n2.CertifierClocks) and logged.clocks.syncs("another") == ()
     label = n2.clocks_label(logged, AT.SYNCS)
     assert label["source"] == "stand-in" and "--clock-stand-in" in label["by"] and label["as_declared"]
     assert not n2.clocks_label(logged, AT.SYNCS[::-1])["as_declared"]
     assert None not in n2.advised_refs(logged, link, egress, ingress)
-    off = n2.CertifierClocks(lw.link, (n2.replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
-    refs = n2.advised_refs(n2.replace(lw, clock_certificates=None, clocks=off), link, egress, ingress)
+    off = n2.CertifierClocks(lw.link, (replace(AT.SYNCS[0], delta=AT.SYNCS[0].delta + 1), *AT.SYNCS[1:]))
+    refs = n2.advised_refs(replace(lw, certified_clocks=None, clocks=off), link, egress, ingress)
     assert refs[0] is None and None not in refs[1:]
 
 
 def test_a_served_runs_clock_source_is_its_certifiers_signed_syncs_even_beside_a_log(tmp_path):
-    """`served_clocks`, the --e2e link's clock source: the run's ``clocks.jsonl`` (the certifier's clock certificates,
-    `LinkWindows.clock_certificates`), even beside a proxy log and with the stand-in asked for. On the simulated link at
-    T = 8, whose certifier signed every window's sync, every window has its view under them, and a window whose sync is
-    wrongly signed (here window 0's, swapped after signing) has no sync, nor has any window after it."""
+    """`served_clocks`, the --e2e link's clock source: the run's ``clocks.jsonl`` (the certifier's salted clock
+    certificates with their openings, `LinkWindows.certified_clocks`), even beside a proxy log and with the stand-in
+    asked for. On the simulated link at T = 8, whose certifier signed every window's sync, every window has its view
+    under them, and a window whose opening fails (here window 0's sync, swapped after signing) has no sync, nor has any
+    window after it, which the summary's label names without showing a sync. A ``clocks.jsonl`` of unsalted lines, or
+    the client's public copy, is no source: the run is refused, the stand-in asked for or not."""
     sim, _ = _link(AT.T)
     lw, (link, pairs, _) = sim.lw, sim.members["honest"]
     egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
-    signed = tuple(lw.clock_certificates)
+    signed = tuple(lw.certified_clocks)
     assert sim.clocks["source"] == "signed" and sim.clocks["as_declared"] and len(signed) == len(pairs)
+    assert sim.clocks["windows"] == len(pairs) and sim.clocks["refused"] == [] and "syncs" not in sim.clocks
     _proxy_log(tmp_path)
     (tmp_path / "clocks.jsonl").write_text("".join(json.dumps(n2.cs.clock_json(c)) + "\n" for c in signed))
     for stand_in in (False, True):
         read = n2.served_clocks(tmp_path, lw.link, stand_in)
-        assert list(read) == ["clock_certificates"] and read["clock_certificates"] == signed
-    again = n2.replace(lw, clock_certificates=read["clock_certificates"])
+        assert list(read) == ["certified_clocks"] and read["certified_clocks"] == signed
+    again = replace(lw, certified_clocks=read["certified_clocks"])
     assert n2.clocks_label(again, AT.SYNCS)["source"] == "signed"
     assert None not in n2.advised_refs(again, link, egress, ingress)
-    forged = (n2.replace(signed[0], sync=AT.SYNCS[1]), *signed[1:])
-    assert n2.advised_refs(n2.replace(lw, clock_certificates=forged), link, egress, ingress) == [None] * len(pairs)
+    forged = (replace(signed[0], sync=AT.SYNCS[1]), *signed[1:])
+    off = replace(lw, certified_clocks=forged)
+    assert n2.advised_refs(off, link, egress, ingress) == [None] * len(pairs)
+    label = n2.clocks_label(off, AT.SYNCS)
+    assert label["windows"] == 0 and not label["as_declared"] and \
+        label["refused"] == [f"{AT.LINK} window 0's egress clock (key {lw.key.key_id.hex()[:16]}…): its sync and salt "
+                             "don't open the salted digest it signs"]
+    for doc in ({"sync": [1, "2"], "certificate": n2.cs.certificate_json(signed[0].certificate)},
+                n2.cs.certificate_json(signed[0].certificate)):
+        (tmp_path / "clocks.jsonl").write_text(json.dumps(doc) + "\n")
+        for stand_in in (False, True):
+            with pytest.raises(SystemExit, match="without its opening's salt.*so the run is refused"):
+                n2.served_clocks(tmp_path, lw.link, stand_in)
 
 
 def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_without_one(tmp_path):
@@ -152,7 +168,7 @@ def test_a_clocks_jsonl_that_isnt_a_regular_file_is_the_signed_source_not_a_run_
     certifier's clock certificates, which can't be read, so the run is refused, the stand-in asked for or not; it is
     never taken for a run without them, whose unsigned proxy log beside it could hold phase 11's δ = 0 (REDTEAM
     phase 18)."""
-    _proxy_log(tmp_path, [n2.replace(s, delta=0) for s in AT.SYNCS])
+    _proxy_log(tmp_path, [replace(s, delta=0) for s in AT.SYNCS])
     (tmp_path / "clocks.jsonl").symlink_to(tmp_path / "gone" / "clocks.jsonl")
     for stand_in in (False, True):
         with pytest.raises(SystemExit, match="not a file of clock certificates"):
@@ -168,16 +184,33 @@ def test_joined_advice_numbers_each_windows_requests_after_the_windows_before_an
     """`joined` (the --e2e link's advice from its Commit windows'): the second window's rows and hit sources name its
     requests after the first's, and each kept output is released where the certified frames of its request say."""
     a = _link(n2.T)[0].session.link.advice
-    b = ADV.Advice(tuple(n2.replace(q, id=f"b{q.id}") for q in a.requests), a.steps, a.release)
+    b = ADV.Advice(tuple(replace(q, id=f"b{q.id}") for q in a.requests), a.steps, a.release)
     frames = {q.id: [1000 * k + 10 * j + i for i in range(q.output_len)]
               for k, x in enumerate((a, b)) for j, q in enumerate(x.requests)}
-    got, n = n2.joined([a, b], frames), len(a.requests)
+    got, n = n2.joined([(w, n2.WA.Advice(x.requests, x.steps, x.release)) for w, x in enumerate((a, b))], frames), \
+        len(a.requests)
     assert got.requests == a.requests + b.requests and got.steps[:len(a.steps)] == a.steps
     rows = [r for st in got.steps[len(a.steps):] for r in st.rows]
     assert [(r.request, [s.request for s in r.sources]) for r in rows] == \
         [(r.request + n, [s.request + n for s in r.sources]) for st in a.steps for r in st.rows]
     assert any(r.sources for r in rows)
     assert all(b_ == frames[got.requests[o.request].id][o.index] for o, b_ in zip(ADV.outputs(got), got.release))
+
+
+def test_advice_from_io_is_the_certified_requests_each_kept_output_released_at_its_frame():
+    """`from_io` (--advice-from-io, a gate rehearsal's advice): the certified requests in arrival order, and each kept
+    output of each released in the bucket its certified frame went out."""
+    a = _link(n2.T)[0].session.link.advice
+    frames = {q.id: [] for q in a.requests}
+    for o, b in zip(ADV.outputs(a), a.release):
+        frames[a.requests[o.request].id].append(b)
+    io = [{"user": q.id, "prompt": [0] * q.prompt_len, "output": [0] * q.output_len, "finish": q.finish,
+           "frames": [[i, b] for i, b in enumerate(frames[q.id])]} for q in a.requests]
+    got = n2.from_io(io)
+    assert got.requests == a.requests
+    assert sorted((o.request, o.index) for o in ADV.outputs(got)) == \
+        sorted((r, i) for r, q in enumerate(a.requests) for i in range(q.output_len))
+    assert all(b == frames[got.requests[o.request].id][o.index] for o, b in zip(ADV.outputs(got), got.release))
 
 
 def test_the_verifier_derives_the_provers_public_row():
@@ -257,3 +290,56 @@ def test_the_scan_names_both_ends_pieces_and_leaves_out_what_the_public_rows_hol
     secret = {b[o:o + 16].hex() for k, b in blobs.items() if "salt" in k or "sibling" in k
               for o in range(0, len(b) - 15, 16)}
     assert not secret & set(out)
+
+
+def test_the_prover_s_other_subset_is_another_k_subset_of_the_period():
+    """`n2_zk.other_subset`, the ``other_subset`` member's windows: K of the period's, ascending, not the draw's units
+    (the undrawn windows first), and the draw's own at K = n, where no other subset exists."""
+    for n, k, units in ((26, 8, [3, 8, 10, 11, 15, 18, 19, 23]), (4, 3, [0, 1, 3]), (5, 1, [0]), (3, 2, [1, 2])):
+        got = n2.Z.other_subset({"population": n, "k": k, "units": units})
+        assert len(got) == len(set(got)) == k and got == sorted(got) and got != units and set(got) <= set(range(n))
+    assert n2.Z.other_subset({"population": 26, "k": 8, "units": [3, 8, 10, 11, 15, 18, 19, 23]}) == [0, 1, 2, 4, 5,
+                                                                                                    6, 7, 9]
+    assert n2.Z.other_subset({"population": 4, "k": 4, "units": [0, 1, 2, 3]}) == [0, 1, 2, 3]
+
+
+def test_a_sampled_period_adds_the_other_subset_member_and_an_unsampled_one_refuses_it(tmp_path):
+    """``--draw K`` (K < n) adds ``other_subset``, the honest records, whose expected window verdicts are honest's; a
+    period with every window proved has no other K-subset to prove, so asking for it is refused."""
+    assert n2.main(["prove", "--dry", "--draw", "2", "--members", "honest,other_subset", "--out", str(tmp_path)]) == 0
+    s = json.loads((tmp_path / "summary.json").read_text())
+    assert set(s["members"]) == {"honest", n2.OTHER} and "draw" in s["changed"][n2.OTHER]
+    assert s["members"][n2.OTHER]["reference"] == s["members"]["honest"]["reference"]
+    assert s["draw"]["law"] == "subset:2" and s["draw"]["population"] == n2.WINDOWS
+    with pytest.raises(SystemExit, match="needs --draw"):
+        n2.main(["prove", "--dry", "--members", "honest,other_subset", "--out", str(tmp_path / "all")])
+
+
+def test_the_provers_instance_holds_every_piece_the_control_expects_of_a_head_but_its_zero_padded_tail():
+    """The control (`a8.received` on the prover's own instance files) expects every held piece of each head, but not its
+    zero-padded last chunk: the advised unit's head is 157 + L + 4T bytes, 2214 at T = 512, so its last 6 bytes end
+    off a 16-byte boundary, and the wit row holds the head followed by its salt's field, never by zeros. Run
+    r20261025-183805-7c27's control failed on exactly those 8 pieces (``head egress 0 @2208`` …), holding the other 57
+    of the scan's 337. Here the windows' wit rows, the rows the instance files hold as they are, stand in for them."""
+    _, rounds = _link(n2.T)
+    rd = rounds["honest"]
+    blobs, held = n2.Z.blobs_of(rd)
+    scan = SimpleNamespace(PIECE=16, needles=lambda pieces: {v: n for n, v in pieces.items()},
+                           find=lambda data, table: {n: 1 for v, n in table.items() if v in data})
+    kept, held_kept, _ = n2.Z.public_pieces(scan, blobs, held, b"")
+    wit = b"".join(rd.lw.row(x.args, "wit") for x in rd.windows)
+    head = blobs["head egress 0"]
+    tail = f"head egress 0 @{len(head) - len(head) % 16}"
+    assert len(head) == 2214 and tail == "head egress 0 @2208" and tail in kept and tail not in held_kept
+    assert kept[tail] not in wit and wit.startswith(head) and wit[len(head):len(head) + 10] != bytes(10)
+    assert held_kept and all(kept[k] in wit for k in held_kept)
+    assert {k for k in kept if k.rsplit(" @", 1)[0] in held} - held_kept == {
+        f"head {end} {w} @2208" for end in n2.ENDS for w in range(n2.WINDOWS)}
+
+
+def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+    monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
+    argv = ["prove", "--out", "o", "--dry"]
+    assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
+    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+        n2.main([*argv, "--jobs", "2"])

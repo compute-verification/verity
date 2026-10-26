@@ -100,8 +100,10 @@ salt needs authenticity, not confidentiality: after t_d the block's server alrea
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
 `run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
 certifier's key and run id from the deployment record and returns the value it verified, as a keyless proxy does in
-process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. What the keys
-leave on `trusted-nebius-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
+process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
+`certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
+signs a salted digest of its record's head, a hiding commitment, and verifies on its own signature. What the keys
+leave on `trusted-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
 it signs) and the deployment record's custody (the keys and the run id it gives each side). Without the keys,
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
 hold only on the auditor's side.
@@ -1110,7 +1112,7 @@ class Proxy:
       (`reveal_request_message`) and answer a `Revealed` that `signer`, the network certifier's own key, signed
       (`reveal_response_message`), which `serve_reveals` serves to a `RemoteCertifier`; without them they are the
       in-process calls, which take no request and return the value. `challenger_key` comes from the auditor's
-      deployment record, never from the prover's configuration, and `trusted-nebius-host` covers that record's custody.
+      deployment record, never from the prover's configuration, and `trusted-host` covers that record's custody.
       Both messages bind the signer's `key_id` and `run_id`, 32 bytes (`RUN_ID_BYTES`) the proxy draws from
       `run_nonce` at construction (the certifier's own randomness by default), so a request or an answer of one run,
       or of another proxy on the same link name, is never taken in another;
@@ -1600,22 +1602,32 @@ class Proxy:
 
 _KINDS = {"salt": SALT_KIND, "weights": WEIGHTS_KIND}
 _MALFORMED = ("a request is a JSON object of window, kind (salt or weights), registration (record, receipt, digest) "
-              "and request (the challenger's signature, hex)")
+              "and request (the challenger's signature, hex), or of window and kind certificates")
 
 
 def _line(answer: Mapping) -> bytes:
     return json.dumps(answer).encode() + b"\n"
 
 
-def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
+def _reveal_answer(proxy: Proxy, line: bytes, certificates: Callable[[int], Mapping | None] | None = None) -> dict:
     """`serve_reveals`' answer to one request line."""
     try:
         req = json.loads(line)
-        what, reg = _KINDS[req["kind"]], req["registration"]
-        registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
-        window, request = req["window"], bytes.fromhex(req["request"])
+        window, what = req["window"], req["kind"]
+        if what != "certificates":
+            what, reg = _KINDS[what], req["registration"]
+            registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
+            request = bytes.fromhex(req["request"])
     except (ValueError, KeyError, TypeError):
         return {"refused": _MALFORMED}
+    if what == "certificates":
+        if certificates is None:
+            return {"refused": "this certifier serves no certificates"}
+        if not (type(window) is int and window >= 0):
+            return {"refused": _MALFORMED}
+        if (public := certificates(window)) is None:
+            return {"refused": f"window {window}'s records aren't all certified, so its certificates aren't served"}
+        return dict(public) | {"window": window}
     try:
         out = (proxy.reveal if what == SALT_KIND else proxy.committed)(window, registration, request)
     except (RuntimeError, ValueError) as e:
@@ -1624,14 +1636,18 @@ def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
             "key_id": out.key_id.hex(), "run_id": out.run_id.hex()}
 
 
-async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
+async def serve_reveals(proxy: Proxy, host: str, port: int, *,
+                        certificates: Callable[[int], Mapping | None] | None = None) -> asyncio.Server:
     """The certifier's reveal endpoint, on `run`'s loop: it answers each JSON line a connection sends, `{"window",
     "kind": "salt" | "weights", "registration": {"record", "receipt", "digest"}, "request"}` (the challenger's signature
     in hex), with one JSON line, `{"window", "value", "signature", "key_id", "run_id"}` (hex), the `Revealed` of
     `proxy.reveal` or `proxy.committed`, or `{"refused": reason}` for whatever they refuse and for a line that isn't a
     request. The registration's `order` isn't sent: the certifier reads its record, receipt and digest. It serves only
     a proxy with a challenger key and a signer, and each call runs off the loop, since verifying and signing hash for
-    milliseconds and the ticks have `slack`. Returns the listening server: `close()` stops it."""
+    milliseconds and the ticks have `slack`. With `certificates`, `{"window", "kind": "certificates"}`, which needs no
+    signature, is answered `certificates(window)` with its `window`: the public part of the window's certificates, the
+    caller's to keep (the module docstring's "The reveal over the network"), refused while it gives None, before every
+    record of the window is certified. Returns the listening server: `close()` stops it."""
     if proxy.challenger_key is None:
         raise ValueError("a proxy serves reveals only with a challenger key and a signer")
 
@@ -1647,7 +1663,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
                     break
                 if not line:
                     break
-                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line)))
+                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line, certificates)))
                 await writer.drain()
         except ConnectionError:
             pass

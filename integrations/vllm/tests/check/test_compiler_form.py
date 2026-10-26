@@ -13,8 +13,8 @@ from verity.ml.circuits.codec import encode_program
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match.instance_sequence import Prog
 from verity_vllm.check.match.program_compare import compare_steps
-from verity_vllm.predict import build as PB
-from verity_vllm.predict.phi import Phi
+from verity_vllm.program.predict import build as PB
+from verity_vllm.program.predict.phi import Phi
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,

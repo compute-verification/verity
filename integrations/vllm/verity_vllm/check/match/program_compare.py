@@ -41,8 +41,8 @@ from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.compact import expand_mixed as _expand_mixed, hash_operand as _hash_operand, n_crosses_step as _n_crosses_step  # [R17 mfast]
-# Imported from here by modules open PRs edit (sampler_geometry, tests/program/test_compact.py, tests/check/test_glm53_rank_rehearsal.py) and
-# by correspondence/resolve_decomp.py, slated for deletion; they move to instance_sequence / program_loaders after those land.
+# Imported from here by modules open PRs edit (tests/program/test_compact.py, tests/check/test_glm53_rank_rehearsal.py) and
+# by check/match/resolve_decomp.py, slated for deletion; they move to instance_sequence / program_loaders after those land.
 from verity_vllm.check.match.instance_sequence import const_value  # noqa: F401
 from verity_vllm.check.match.program_loaders import LOAD_NOTES  # noqa: F401
 

@@ -55,10 +55,10 @@ def fold_in_form(fold, dirs: Iterable[str]) -> dict:
 
 def _in_form(d: str) -> bool:
     try:
-        dg = json.load(open(os.path.join(d, "derive-report.json"))).get("dead_gates") or {}
+        dg = json.load(open(os.path.join(d, "derive-report.json"))).get("dead_gates")
     except (OSError, ValueError):
         return False
-    return dg.get("dead_computed_gates") == 0 and dg.get("approximate") is False
+    return isinstance(dg, dict) and dg.get("dead_computed_gates") == 0 and dg.get("approximate") is False
 
 
 def _base(spec: str) -> tuple[str, str, str]:

@@ -1,4 +1,4 @@
-"""Batch decomposition (M-BATCH-DECOMP, R13 X-09): Match at B>1 by projecting the batched eager fold onto its requests.
+"""Batch decomposition (M-BATCH-DECOMP, X-09): Match at B>1 by projecting the batched eager fold onto its requests.
 
 Under batch invariance a batched kernel launch (one GEMM with M = Σ tokens of the co-scheduled requests, one fused norm over
 the step's token rows, ...) is the token-row-wise union of the per-request Calls the padded per-request Programs describe. The
@@ -52,13 +52,14 @@ import os
 import time
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.capture_log import read_steps, request_params
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.check.match.dag_form import dag_hashes, live_cone
-from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _fast_stats, _install_profile_counters, _n_runs_of, _NoPhase,
+from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _memo_stats, _install_profile_counters, _n_runs_of, _NoPhase,
                                                     _Phase, _profile_on)
 from verity_vllm.check.match.derived_index import derived_shape
 from verity_vllm.check.match.input_layout import request_inputs, weights_input_nodes  # noqa: F401  (weights_input_nodes re-exported: tests)
@@ -91,7 +92,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     ops = ops or record_ops()
     t0 = time.time()
     profiling = _profile_on()
-    force_dag = os.environ.get(FORCE_DAG_ENV, "").strip() == "1"
+    force_dag = (settings.get(FORCE_DAG_ENV) or "").strip() == "1"
     run_prof: dict = {"schema": "cb-a/x09-profile/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
                       "force_dag": force_dag, "pid": os.getpid(), "phases": {}, "requests": []}
     if profiling:
@@ -248,7 +249,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         return PP.shape(LP, n_ts - chunks, PX.cached_rows(header, steps, rid))
 
     def leg(item) -> tuple:
-        """[R17 mfast] X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
+        """X-09 for ONE request: its Projection of the fold, the comparison with its component (sequence + DAG criteria),
         its cross-request reads.  Reads the shared fold / components / attribution, writes nothing shared: the record's loop body,
         returning (entry, missing shape | None) instead of appending.  Runs in this process, or on a forked worker (fast path)."""
         rid, idxs = item
@@ -410,15 +411,15 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
         run_prof["seconds"] = res["seconds"]
         run_prof["verdict"] = res["verdict"]
         run_prof["x09_legs"] = "forked" if ops.legs is not None else "inline"
-        st = _fast_stats()
+        st = _memo_stats()
         if st is not None:
             run_prof["fast_stats_final"] = {k: int(v) for k, v in sorted(st.items())}
         try:
             import resource
             run_prof["max_rss_mib_parent"] = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024)
             run_prof["max_rss_mib_children"] = int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
-        except Exception:   # noqa: BLE001 - telemetry only
-            pass
+        except Exception as e:   # noqa: BLE001 - telemetry only
+            run_prof["max_rss_error"] = repr(e)[:200]
         out = os.environ[PROFILE_ENV]
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         json.dump(run_prof, open(out, "w"), indent=1, default=str)

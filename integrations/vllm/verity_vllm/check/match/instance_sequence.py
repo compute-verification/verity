@@ -127,7 +127,7 @@ class Prog(PeerReads, PX.PrefixInput):
         return codec.descriptor_id, refs.runs
 
     def _bind_splits(self) -> None:
-        """[R16 stoch/global, COORD M-0169 (4)] Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
+        """Bind the derived split count S of every top-p TokenSelect (its operand SPLITS_OPERAND).
         Fold side: the `Const32[S]` emitted right before the select is REMOVED from the sequence (a prescribed input's value), kept in
         `splits_values[select node]`, and the operand canonicalises as ("SPLITS", e, e+1), e the select's event ordinal.  Program side:
         the request-owned `splits` Input (neither prompt, seed nor weight; `splits_nodes`) read as ("SPLITS", s, s+1) for event s.  Both
@@ -264,7 +264,7 @@ class Prog(PeerReads, PX.PrefixInput):
         return out
 
     def _srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """[R17 mfast] canonical source(s) of one run PROGRESSION `(space, (idx0, lo0, hi0), (dI, dL, dH), count)`: ONE tuple when the
+        """Canonical source(s) of one run PROGRESSION `(space, (idx0, lo0, hi0), (dI, dL, dH), count)`: ONE tuple when the
         record's per-run mapping is provably affine over the progression (the same producer node; producers consecutive inside one
         step; one producer per step across equal-sized steps; a weights window inside one field), else the record's mapping run by run
         (re-normalised by the caller).  Heads and semantics are `_src`'s: the expansion of the result is the record's per-run list."""
