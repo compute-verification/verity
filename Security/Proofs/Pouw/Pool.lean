@@ -26,6 +26,7 @@ union bound, at `ln(G/δ)` a replica.
   every other replica's coins) bounds the fleet's total shortfall at `ln(1/δ)` rather than `ln(G/δ)`: the weights
   `1/η` put the total's exponential below the replicas' mixture, which needs no independence between them. The bound
   is on the total, and its rate is a replica's: the total's share stays `ln(1/δ)/(η q)`, not `ln(1/δ)/(η G q)`.
+  That is the best per-replica moments give (`convex_pool_tight`): replicas that cheat on one shared coin attain it.
 -/
 
 namespace Pouw.SecurityProofs.Pool
@@ -499,5 +500,29 @@ theorem fleet_convex_luck {Ω Adv : Type} [Fintype Ω] {N k : ℕ} [NeZero N]
     (F u) (h0 u) (h1 u)
   simp only [hu] at hr ⊢
   exact hr
+
+/-- **Convexity pooling is tight against per-replica premises**: `N` replicas that all cheat on one shared coin of
+`n` values each meet `prob_convex_pool`'s premises at `η = 1`, and their total shortfall reaches `N · ln n` with
+probability exactly `e^{-ln n}`, whatever `N` is. So no bound from per-replica moments alone falls with the number of
+replicas. -/
+theorem convex_pool_tight (N n : ℕ) [NeZero n] :
+    (∀ (_ : Fin N) (ω : Fin n), 0 ≤ (if ω = 0 then (n : ℝ) else 0)) ∧
+    (∀ (_ : Fin N), Pouw.RelativeSecurity.expect (fun ω : Fin n => if ω = 0 then (n : ℝ) else 0) ≤ 1) ∧
+    (∀ (_ : Fin N) (ω : Fin n), ω = 0 → Real.exp (1 * Real.log n) ≤ (if ω = 0 then (n : ℝ) else 0)) ∧
+    prob (fun ω : Fin n => ω = 0 ∧ Real.log n * ∑ _u : Fin N, 1 / (1 : ℝ) ≤ ∑ _u : Fin N, Real.log n) =
+      Real.exp (-Real.log n) := by
+  have hn : (0 : ℝ) < n := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne n)
+  refine ⟨fun _ ω => by split_ifs <;> positivity, fun _ => ?_, fun _ ω h => ?_, ?_⟩
+  · unfold Pouw.RelativeSecurity.expect
+    rw [Finset.sum_ite_eq' Finset.univ (0 : Fin n) (fun _ => (n : ℝ))]
+    simp [Fintype.card_fin]
+  · rw [one_mul, Real.exp_log hn]
+    simp [h]
+  · unfold prob
+    have key : ∀ ω : Fin n,
+        (ω = 0 ∧ Real.log n * ∑ _u : Fin N, 1 / (1 : ℝ) ≤ ∑ _u : Fin N, Real.log n) ↔ ω = 0 :=
+      fun ω => by simp [Finset.sum_const, mul_comm]
+    simp_rw [key]
+    simp [Finset.filter_eq', Fintype.card_fin, Real.exp_neg, Real.exp_log hn]
 
 end Pouw.SecurityProofs.Pool
