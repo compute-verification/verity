@@ -681,7 +681,7 @@
     {
       "handle": "soundness",
       "holder": "the soundness coordinator (bc-d2745108-9b89-5c53-8137-de8e75809c4d), a new slice launched from top's charter, split from proofs to own the Full proofs project",
-      "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every leg it rests on, and their composition.",
+      "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
       "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
       "owns": [
         "verity/core/protocols/onsite/",
@@ -692,9 +692,9 @@
       ],
       "examples": [
         "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
-        "Which legs of the soundness theorem are proved, and which are still premises?",
+        "Which subprotocols of the soundness theorem are proved, and which are still premises?",
         "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
-        "When will Verity.Soundness be on main with no leg left as a hypothesis?",
+        "When will Verity.Soundness be on main with no subprotocol left as a hypothesis?",
         "Does the theorem cover the code that actually runs, or a model of it?"
       ],
       "usergroup": "S0CBTDSL95M"
