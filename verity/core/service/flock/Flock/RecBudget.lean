@@ -8,7 +8,9 @@ these refusals that count is the prover's to inflate. The caps sit far above eve
 holds its `2 q` openings (`q < 256`, `fast100`), a later level's RecCap both reps' `2 · 2^cap ≤ 256` tops and RecCap
 `2^cap ≤ 128`, a part its two reps; a part registers its row ports (at most `RecResiduals.MAX_REGIONS = 64`) with `v` and
 `out`; and the deepest registered tree is `rec-acc`'s, the chain of every opening of both reps and R's, fewer than `2^12`
-rows. `verity_flock.rec_budget` is the stager's mirror.
+rows. It also refuses an inner shape at which V\*'s list (`RecVStar.statements`) holds more than `MAX_STATEMENTS`
+statements (`statements`), so the recursion's V\* parts, one a statement, are at most that many; a deployed shape's list
+holds about ten (`fast100`'s levels, the algebra's parts, then RecCap). `verity_flock.rec_budget` is the stager's mirror.
 -/
 import Flock.RecVStar
 
@@ -21,6 +23,8 @@ def MAX_INSTANCES : Nat := 65536
 def MAX_PORTS : Nat := 4096
 /-- The deepest registered tree a V\* session reads: `log2ceil leaves` levels. -/
 def MAX_DEPTH : Nat := 64
+/-- The most statements V\*'s list holds at the verifier's inner shape: the recursion's V\* parts. -/
+def MAX_STATEMENTS : Nat := 4096
 
 def tail : String := "the recursion's call bound covers no more"
 
@@ -46,6 +50,21 @@ def table (inner : Option RecVStar.Inner) (sts : Array Stmt) : V Unit :=
     if MAX_INSTANCES < st.pub.n then
       throw s!"{st.c.unit.name}: refused: a V* session's table of {st.pub.n} instances, more than {MAX_INSTANCES}: {tail}"
     else pure ()
+
+/-- **V\*'s list of `n` statements is within the cap.** -/
+def count (n : Nat) : V Unit :=
+  if MAX_STATEMENTS < n then
+    throw s!"refused: V*'s list at the verifier's inner shape holds {n} statements, more than {MAX_STATEMENTS}: {tail}"
+  else pure ()
+
+/-- **V\*'s list at the verifier's inner shape holds at most `MAX_STATEMENTS` statements.** Under no inner shape nothing
+is refused, and a shape at which `RecVStar.statements` itself refuses is left to the checks that run it. -/
+def statements (inner : Option RecVStar.Inner) : V Unit :=
+  match inner with
+  | none => pure ()
+  | some i => match RecVStar.statements i with
+    | .ok ss => count ss.size
+    | .error _ => pure ()
 
 end RecBudget
 end Flock
