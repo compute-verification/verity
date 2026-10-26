@@ -4,19 +4,27 @@ accepting the view its ingress bucket wrote, request 5 in request 1's slot past 
 with every output 1, the ingress units' view leaves the egress units' state leaves; chain's swapped buckets' ok bits 0
 on reads that hold; forged's egress row refused ("does not open"). A warden_serve run's directory (`--warden-run`,
 here the synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key,
-and refused by name where a row, the key or the schedule isn't the warden's. Nothing here lowers or proves
-(`scan_zk.prove` does, on a node)."""
+and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the challenger's coins
+(``--challenger``): its flags refused by name where they can't draw, the window's root bound to the warden's signed
+link-window, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
+takes. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import json
+import re
 import sys
 from dataclasses import asdict, replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+
+from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.types import Array, Value as Bits
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -118,3 +126,71 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     (other / "deployment.json").write_text(json.dumps(dep))
     with pytest.raises(SystemExit, match="warden_serve.py rehearse at scan_zk's schedule"):
         sz.host(tmp_path / "h3", other)
+
+
+@pytest.mark.parametrize("flags,why", [
+    (["--challenger", "local", "--main", "m.txt"], "give --draw"),
+    (["--challenger", "remote", "--draw", "16", "--main", "m.txt"], "local or gate:USER@HOST, not 'remote'"),
+    (["--challenger", "gate:research@h", "--draw", "16", "--main", "m.txt", "--peer", "p"],
+     "needs --peer and --challenger-key"),
+    (["--challenger", "local", "--draw", "16"], "needs --main"),
+])
+def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
+    with pytest.raises(SystemExit):
+        sz.main(["prove", "--dry", "--out", str(tmp_path / "out"), *flags])
+    assert re.search(why, capsys.readouterr().err) and not (tmp_path / "out").exists()
+
+
+def test_the_window_root_is_the_wardens_signed_link_window(tmp_path):
+    """Each run's root is its own (the synthetic run's registrations carry fresh salts), and a warden run's is read
+    from its published registrations alone."""
+    syn = sz.link(tmp_path / "syn")
+    root = sz.window_root(syn)
+    assert re.fullmatch("[0-9a-f]{128}", root) and root != sz.window_root(sz.link(tmp_path / "again"))
+    w = published(tmp_path / "w")
+    run = sz.window_root(sz.link(tmp_path / "run", w))
+    assert run == sz.window_root(sz.link(tmp_path / "rerun", w)) != root
+    assert sz.window_root(SimpleNamespace(session=bytes(32), sides=syn.sides)) != root
+    other = {**syn.sides, "egress": SimpleNamespace(registration={**syn.sides["egress"].registration, "root": "00"})}
+    assert sz.window_root(SimpleNamespace(session=syn.session, sides=other)) != root
+
+
+XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
+                           register=False)
+ING = bind(CompositeDefinition("ScanZkTestIngress", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                               lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
+EG = bind(CompositeDefinition("ScanZkTestEgress", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                              lambda B, S_, x: B.call(XOR8, x[1], x[0]), register=False))
+
+
+def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_its_stream_takes():
+    """`spec_of` on a round of two stand-in templates (the scan's own take a minute to build; `spec_of` reads only the
+    round's program, query, templates and counts), its ports a member's and the scan's trees as `audit` names them."""
+    T, k, root = 32, 16, "dd" * 64
+    defs = {"ingress": ING, "egress": EG}
+    sides = ("ingress", "egress")
+    program = sz.PA.mixed_population_program([(defs[s], T) for s in sides])
+    query = sz.PA.template_instances_query([defs[s] for s in sides])
+    pg = SimpleNamespace(program=program, query=query, sides=sides,
+                         stagers={s: SimpleNamespace(defn=defs[s]) for s in sides})
+    members = [{"name": s, "n": T, "defn": defs[s]} for s in sides]
+    want = {"ingress/row": {"leaves": T, "domain": "aa" * 64}, "egress/o0": {"leaves": T, "domain": "bb" * 64},
+            "scan/state": {"leaves": T + 1, "domain": "cc" * 64}}
+    schemas = {p: sz.BitRowLeaf.hiding_schema for p in want}
+    spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root)
+    assert units == [ING, EG] and counts == {sz.PA.template_id(ING): T, sz.PA.template_id(EG): T}
+    assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": f"stratified:{k}"}
+    assert spec.check.proof_deadline == 2 * sz.MEMBER_DEADLINE_S
+
+    def record(ports: dict) -> dict:
+        roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
+        return R.record(program, query, sz.DR.parse_law(f"stratified:{k}"), sz.S.SCHEME, roots,
+                        {"kind": "stand-in"}, leaf_layer="ee" * 64)
+
+    assert sz.S.check_public(spec, record(want)).ok
+    v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
+    assert not v.ok and "roots" in v.codes
+    stream = sz.S.Stream(spec, units, budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER, coins=lambda n: bytes(n))
+    assert stream.coin_source == "verifier"
+    with pytest.raises(ValueError, match="not the check's program"):
+        sz.S.Stream(spec, units[::-1], budget=1, delta=2.0 ** -20, challenger=sz.CHALLENGER)
