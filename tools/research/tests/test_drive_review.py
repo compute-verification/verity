@@ -700,7 +700,7 @@ def test_an_after_landing_failure_rings_its_culprit_and_the_suites_owner_and_rev
     assert post.startswith("@ci @lane-2 queue: #2 reverted on `main`") and "no fix was marked within 60 min" in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.run_state[f"r-post-{len(h.posted) - 1}"] = ("done", 0, None)
-    h.evidence = [_steps_run(world.tmp, f"r-post-{len(h.posted) - 1}", EVERY)]
+    h.evidence = [_steps_run(world.tmp, f"r-post-{len(h.posted) - 1}", {s: "passed" for s in h.posted[-1][1].split(",")})]
     (h.evidence[0] / "suites-lean.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "passed"}]))
     h.tick()
     assert h.postland()["verified"] == main and not h.postland()["red"] and h.postland()["green"]["suite pkg"] == main
@@ -755,6 +755,69 @@ def test_a_red_after_landing_run_runs_on_and_is_cancelled_only_with_its_circuit_
     h.tick()
     assert h.cancelled == ["r-post-0"] and h.postland()["run"] is None and h.postland()["green"]["step lean-audit"] == _main(world)
     assert "step lean-agreement" not in h.postland()["red"] and "step lean-suites" not in h.postland()["red"]
+
+
+def test_a_read_guard_failure_rings_the_pr_that_added_the_reading_test(world, monkeypatch, tmp_path):
+    """A suite the read guard failed names no failing test: its record's `outside` (path -> the test module that read it) is what
+    implicates the PR that added the reading test."""
+    _owning(world, {"lane-1": [], "lane-2": [], "pkg-owner": ["pkg/"]})
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/tests/test_reads.py": "def test_r():\n    open('data/x.json')\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #2")
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "steps.jsonl").write_text(json.dumps({"step": "pytest", "status": "failed"}) + "\n")
+    (run / "suites.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "failed",
+                                                  "outside": {"data/x.json": "pkg/tests/test_reads.py"}}]))
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [run]
+    h.tick()
+    (ring,) = [p for p in h.posts if "is red on" in p]
+    assert ring.startswith("@ci @pkg-owner @lane-1 queue: suite pkg is red"), ring
+    assert "read outside its declared inputs: data/x.json" in ring and "Culprit: #1" in ring, ring
+
+
+def test_main_far_behind_its_last_verified_commit_rings_ci_and_top_every_hour(world, monkeypatch, tmp_path):
+    """25-26 Oct: `main` went 30 h without a verified commit and nobody was told.  Once its oldest unverified landing is
+    `BEHIND_S` old, drive rings @ci and @top, again every `BEHIND_EVERY_S` while it stays behind."""
+    from research.drive import BEHIND_EVERY_S, BEHIND_S
+
+    h, tip = _red_landing(world, monkeypatch, tmp_path)
+    world.gh.put(9, world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}), body="Lane `lane-9`. Fixes pkg.")
+    h.clock += BEHIND_S - 10
+    h.tick()
+    assert not [p for p in h.posts if "behind its tip" in p] and _main(world) == tip
+    h.clock += 20
+    h.tick()
+    (alarm,) = [p for p in h.posts if "behind its tip" in p]
+    assert alarm.startswith("@ci @top queue: `main`'s last verified commit") and "red: suite pkg (culprit #2)" in alarm, alarm
+    h.clock += BEHIND_EVERY_S - 30
+    h.tick()
+    assert len([p for p in h.posts if "behind its tip" in p]) == 1
+    h.clock += 60
+    h.tick()
+    assert len([p for p in h.posts if "behind its tip" in p]) == 2
+
+
+def test_a_healthy_after_landing_run_under_way_is_not_an_alarm(world, monkeypatch):
+    """A cold after-landing run takes ~4 h, so `main` is routinely more than `BEHIND_S` behind while its run is green so far:
+    drive rings only once that run has gone `POSTLAND_RUN_S`."""
+    from research.drive import BEHIND_S, POSTLAND_RUN_S
+
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1")
+    h.clock += BEHIND_S + 60
+    h.tick()
+    assert not [p for p in h.posts if "behind its tip" in p] and h.postland()["run"]["ids"] == ["r-post-0"]
+    h.clock += POSTLAND_RUN_S
+    h.tick()
+    (alarm,) = [p for p in h.posts if "behind its tip" in p]
+    assert "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
 
 
 def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_broke_it(world, monkeypatch, tmp_path):

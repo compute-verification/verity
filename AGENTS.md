@@ -309,9 +309,14 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - After each landing one run checks `main`'s tip with every check step (`train.sh MAIN MACHINES --deferred JOBS
   --no-regenerate`, with `--no-cache` while `after_landing_no_cache = true`), and nothing lands before one such run of `main`
   itself has ended, its baseline (or ci records `main` green on the control pod: `/data/infra/drive.sh queue baseline SHA
-  --by ci`). A failure of a step that passed on the last verified `main` reverts the one PR it implicates (`git revert -m
-  1`), bisecting among several, and its owner relands with the fix; anything else reverts nothing and goes to ci. Citations
-  and tables read only commits whose after-landing run passed.
+  --by ci`). A red run runs on (drive cancels it only once circuit-check and flock-rust-tests are all it has left), and
+  for each failed suite or step drive names its culprit among the landings since that suite or step last passed: the one
+  whose diff touches the failing test, its log's failures, the read guard's `outside` paths or else its declared inputs,
+  bisecting by landing where several do. It rings the suite's owner and the culprit's (`research msg owners`) with the
+  run id and the first error line (a step a cancel stopped reads "not run"), and reverts the culprit (`git revert -m 1`)
+  60 min later unless a fix is marked: a ready PR whose body names the suite or the culprit PR, or a new head of the
+  culprit. While `main`'s oldest unverified landing is over 3 h old, drive's tick rings @ci and @top every hour (not while
+  a run under 5 h old has nothing red). Citations and tables read only commits whose after-landing run passed.
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`

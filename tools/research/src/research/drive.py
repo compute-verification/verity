@@ -78,9 +78,16 @@ from its first second and counts, is followed and covers as drive's own.  Each
 landing awaits the after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
 `after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
-by hand).  A failure reverts what it implicates only when each failed step passed on the last verified `main` under the same
-flags; with several PRs implicated and no revert among their landings it bisects them, each step a run of one landing's commit
-with the failed steps alone, and nothing lands meanwhile.  A run with no readable state `LOST_AFTER_S` after its launch is lost.
+by hand).  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (25-26 Oct:
+cancels 1-63 min into ~4 h runs left the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
+among the landings since it last passed (`postland["green"]`, per suite or step, so a `main` never verified whole still names
+one): the landing whose own diff touches what the failure names (`suite_paths`: failing tests, its log's failures, the read
+guard's `outside`), else its declared inputs (`_input_rule`); several are bisected by landing, each step a run of one landing's
+commit judged by that suite alone, while landing goes on.  The ring (`_ring`) quotes the run, the first error line
+(`first_error`) and what a cancel stopped (`not_run`, "not run"), to @ci, the suite's owner and the culprit's; the culprit is
+reverted `FIX_WINDOW_S` after it (`_red_clock`) unless a fix is marked (`_fix`).  While the oldest landing no run verified is
+`BEHIND_S` old, @ci and @top are rung every `BEHIND_EVERY_S` (`_behind`).  A run with no readable state `LOST_AFTER_S` after its
+launch is lost.
 
 The Lean checks and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no tick
 waits on train.sh, which took 9-12 min to print a Lean check's run ids (26 Oct: a tick that launched two took 15-26 min).  A later
@@ -900,8 +907,8 @@ class Driver:
         #: commit the locks a train's Lean check regenerated onto it as it lands (CI-64: Daniel through top, 18 Oct)
         self.regenerate_locks = regenerate_locks
         #: steps a train lands without (Daniel through top, 17 Oct; CI-30): the post-landing run checks them on `main`
-        #: (`postland`), and one that fails reverts the PR it implicates, else every landing since the last verified tip (none
-        #: when no landing touches what failed).  The Lean check's steps are never deferred; lean-suites, the pytest suites that use
+        #: (`postland`), and one that fails reverts the PR it implicates (in review landing: `_red`, the culprit of each red
+        #: suite or step, reverted `FIX_WINDOW_S` after its ring unless a fix is marked).  The Lean check's steps are never deferred; lean-suites, the pytest suites that use
         #: its build, may be (Daniel, 11 Oct: a part whose cold run is over ~10 min; lean-suites takes 28-65 min, top 24 Oct 04:46Z).
         defer = {x for x in defer if not x.startswith("lean") or x == "lean-suites"}
         self.defer = frozenset(defer | ({"flock-rust-tests"} if "circuit-check" in defer else set()))  # it runs after it
