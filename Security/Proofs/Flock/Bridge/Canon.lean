@@ -1,5 +1,6 @@
 import Proofs.Flock.Bridge.Targets
 import Proofs.Flock.Bridge.PortRoots
+import Proofs.Flock.Bridge.PopMatches
 import Proofs.Flock.Bridge.RightRegZc
 import Proofs.Flock.Soundness.Discharge.Layout.RowEnc
 
@@ -25,7 +26,8 @@ targets read them:
   `canon` reads a value, so at `vb` it is taken with `Val := vb.Opening`, `val := id` and `bit := vb.bit ∘ vb.val`;
 * `SampledKSLiveV2`: `SampledKSLive` at circuit files whose ports are all unsegmented row/v2 rows (`Bridge.RowsV2`)
   and at registrations whose ports each have one name (`Registered.dupName`) and whose equal roots have one domain
-  (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes;
+  (`PortRoots.RootFixesDomain`), which `TransportsLiveC` also takes, and whose descriptor and query evaluate to a
+  population of the game's `n` units in order (`Bridge.PopMatches`);
 * `Bridge.AssemblyTargetC`: those, `PartRusTarget`, `CountTarget` and `EndToEndHiddenC` give `SampledKSLiveV2`.
 -/
 
@@ -220,7 +222,9 @@ def _root_.Flock.Bridge.TransportsLiveC : Prop :=
 open Classical in
 /-- **`SampledKSLive` at row/v2 circuit files**: `SampledKSLive`'s statement at a circuit file whose ports are all
 unsegmented row/v2 rows (`Bridge.RowsV2`), the rows the deployed sampling commitment's leaves hash
-(`SamplingDeploy.row`). `SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
+(`SamplingDeploy.row`), with the registration's ports and roots distinct (`dupName`, `PortRoots.RootFixesDomain`) and
+its descriptor `desc` and query `qr` evaluating to a population of `n` units in order (`Bridge.PopMatches`).
+`SampledKSLive` implies it (`sampledKSLiveV2_of`). -/
 def SampledKSLiveV2 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -229,6 +233,8 @@ def SampledKSLiveV2 : Prop :=
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hv2 : Bridge.RowsV2 D.unroll)
     (_hdup : Flock.Registered.dupName D.unroll = none) (_hroots : Bridge.PortRoots.RootFixesDomain D.unroll pub n)
+    -- the statement's descriptor, and the registration's query, whose population is the game's n units in order
+    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
@@ -246,7 +252,7 @@ def SampledKSLiveV2 : Prop :=
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     (qF qS : ℝ)
     -- what the sampling statement carries and `RelS` doesn't read
-    (desc : Claims.Msg) (q : Claims.Sampling.Query),
+    (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
@@ -284,9 +290,12 @@ def SampledKSLiveV2 : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- `SampledKSLiveV2` is `SampledKSLive` with three more hypotheses. -/
-theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 :=
-  fun n Reg I ht D hD hU pub hpub hpt hscope _ _ _ => h n Reg I ht D hD hU pub hpub hpt hscope
+/-- `SampledKSLiveV2` is `SampledKSLive` with four more hypotheses. -/
+theorem sampledKSLiveV2_of (h : SampledKSLive) : SampledKSLiveV2 := by
+  intro n Reg I ht D hD hU pub hpub hpt hscope _ _ _ desc _ _ kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
+    hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS q
+  exact h n Reg I ht D hD hU pub hpub hpt hscope kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
+    hM ρ hρ hr t' ht' K₀ hK₀ τ qF qS desc q
 
 /-- **The assembly, with canonical openings**: canonical transport, M1's core over `RightRegZc`, the slot count and the
 count lemma turn `EndToEndHiddenC` into `SampledKSLive` at row/v2 circuit files (`SampledKSLiveV2`). -/
