@@ -12,9 +12,10 @@ of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's
 
 The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
 Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
-expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it.
-It is not yet a guarantee: `DescAgrees` rests on one open statement, `Novel.ReadsExact` (`descAgrees_of_readsExact`),
-and `checkedCoverTraining_of` proves `CheckedCoverTraining` from it.
+expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
+and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`. It is not listed: its statement reads the
+cover theorem's premises `UpdateHardness` and `MulBlocks.Upstream`, which `security_properties`' lock doesn't list
+(`shape.frozen`).
 -/
 
 namespace NciCheck.Properties.SecurityProofs
@@ -42,8 +43,9 @@ theorem baseline_desc {j tr out : Json} (h : Baseline.evaluate j tr = .ok out) :
 theorem checkedCoverTraining_of_descAgrees (h : Properties.DescAgrees) : Properties.CheckedCoverTraining :=
   fun _ _ _ hev => onExpansions_of h (fun _ _ => coverTrained) (baseline_desc hev)
 
-/-- **A verdict of compliance of the check of record carries the cover theorem's factor, given `ReadsExact`.** -/
-theorem checkedCoverTraining_of (hR : Novel.ReadsExact) : Properties.CheckedCoverTraining :=
-  checkedCoverTraining_of_descAgrees (Novel.descAgrees_of_readsExact hR)
+/-- **A verdict of compliance of the check of record carries the cover theorem's factor**, for every reference training
+circuit the declaration contains, under the cover theorem's premises on its bit view and its baseline registered. -/
+theorem CheckedCoverTraining : Properties.CheckedCoverTraining :=
+  checkedCoverTraining_of_descAgrees DescAgrees
 
 end NciCheck.Properties.SecurityProofs

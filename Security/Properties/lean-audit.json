@@ -275,6 +275,7 @@
   "Definitions.Claims",
   "Definitions.Hash",
   "Definitions.Pouw.Basic",
+  "Properties.NciDesc",
   "Definitions.Pouw.Window"
  ],
  "layers": {
@@ -539,6 +540,48 @@
    "signature": ["NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"],
    "assumptions": [],
    "type_hash": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd"
+  },
+  "NciCheck.Properties.SecurityProofs.DescAgrees": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescAgrees : NciCheck.Properties.DescAgrees"],
+   "assumptions": [],
+   "type_hash": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21"
+  },
+  "NciCheck.Properties.SecurityProofs.DescReports": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescReports : NciCheck.Properties.DescReports"],
+   "assumptions": [],
+   "type_hash": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b"
+  },
+  "NciCheck.Properties.SecurityProofs.DescThrottles": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottles : NciCheck.Properties.DescThrottles"],
+   "assumptions": [],
+   "type_hash": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e"
+  },
+  "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottlesDark : NciCheck.Properties.DescThrottlesDark"],
+   "assumptions": [],
+   "type_hash": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2"
+  },
+  "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots : NciCheck.Properties.DescThrottlesDarkSlots"],
+   "assumptions": [],
+   "type_hash": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda"
+  },
+  "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescThrottlesSlots : NciCheck.Properties.DescThrottlesSlots"],
+   "assumptions": [],
+   "type_hash": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397"
+  },
+  "NciCheck.Properties.SecurityProofs.DescWitnesses": {
+   "owner": "@training",
+   "signature": ["NciCheck.Properties.SecurityProofs.DescWitnesses : NciCheck.Properties.DescWitnesses"],
+   "assumptions": [],
+   "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
@@ -3124,6 +3167,34 @@
    "Properties.Pouw.LiveSalt.acceptMeans": {
     "function": "PouwCheck.liveSaltCheck",
     "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescAgrees": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescReports": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.DescThrottles": {
+    "function": "NciCheck.Desc.evaluate",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3133,18 +3204,11 @@
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
-   "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_readsExact (Proofs.Properties.Nci.Agrees) proves it from ReadsExact (Proofs.Properties.Nci.Novel: Desc.analyze's reads per root node are the unrolled operands outside it), the one open statement: descAgrees_of_open (Proofs.Properties.Nci.Novel) proves it from OperandsResolve (Proofs.Properties.Nci.Walk), BodiesOk and ReadsExact, bodiesOk (Proofs.Properties.Nci.BodiesOk) proves BodiesOk (Proofs.Properties.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), operandsResolve_of (Proofs.Properties.Nci.OperandsResolve) proves OperandsResolve from it, and novelExact_of proves NovelExact from ReadsExact with novelWidthExact (Proofs.Properties.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
    "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "NciCheck.Properties.DescReports": "unstated: descReports_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and Reports, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.DescWitnesses": "unstated: descWitnesses_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and Witnesses, and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.DescThrottles": "unstated: descThrottles_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and Throttles (Proofs.Nci.Verdict, so descThrottles_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.DescThrottlesDark": "unstated: descThrottlesDark_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDark (Proofs.Nci.Verdict, so descThrottlesDark_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.DescThrottlesSlots": "unstated: descThrottlesSlots_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and ThrottlesSlots (Proofs.Nci.Verdict, so descThrottlesSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.DescThrottlesDarkSlots": "unstated: descThrottlesDarkSlots_of (Proofs.Properties.Nci.DescVerdict) proves it from DescAgrees and ThrottlesDarkSlots (Proofs.Nci.Verdict, so descThrottlesDarkSlots_of_descAgrees in Proofs.Nci.DescVerdict), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
-   "NciCheck.Properties.CheckedCoverTraining": "unstated: checkedCoverTraining_of_descAgrees (Proofs.Nci.Cover.Checked) proves it from DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), and DescAgrees is unstated until ReadsExact, its one open statement, is proved (its entry)",
+   "NciCheck.Properties.CheckedCoverTraining": "unstated: SecurityProofs.CheckedCoverTraining (Proofs.Nci.Cover.Checked) proves it from SecurityProofs.DescAgrees and the cover theorem (Nci.Cover.SecurityProofs.CoverTraining), but its statement takes the cover theorem's premises Nci.Cover.Assumptions.UpdateHardness and Nci.Cover.MulBlocks.Upstream as hypotheses, named assumptions of Security's lock that this lock doesn't list: listing it rests a guarantee of this lock on them, a claims change for Daniel",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
@@ -4966,6 +5030,12 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
@@ -4982,6 +5052,12 @@
     "Verity.Declaration.θ": "43a3241a0c3f2e225e2f4f79d255976bb8b070b83138bf76635d94cf0505393f"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
@@ -5096,6 +5172,8 @@
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses"
    ]
@@ -5375,6 +5453,12 @@
     "Nci.novelReads": "f9a643aedf8a9ffa1542961e8c8a249e4e9954abe74c705a91d60d6565a6cf79"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
@@ -5389,6 +5473,10 @@
     "Nci.Assumptions.BaselineRegistered": "1e726c0b0d96e66c67519b7726cfdb3ca6faf901f7773d1faa4283870690966c"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
@@ -5402,6 +5490,10 @@
     "Nci.Assumptions.WeightsIncompressibleSlots": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
@@ -5418,6 +5510,10 @@
     "Nci.PartialContainment.ofContainment": "2e91539becc0e328a1a887f73ed5b299cae0961f0cd52600a7cd44117426024a"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
@@ -5433,6 +5529,8 @@
     "Nci.Threading.Slots.slotsUsed": "4eddbdd7df4eb71f8dbeebd953eb93dc16415ea0c41b1fdab103e3b9552ffda6"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
    ]
@@ -5456,6 +5554,10 @@
     "Nci.Threading.weightsUsed": "6b55dd915ad83320fed02e493fe4dfa6cdc7c037c83c6694d4d55f79ab9f54ec"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
@@ -6129,6 +6231,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -6244,6 +6353,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -6414,6 +6530,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -6881,6 +7004,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -7055,6 +7185,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -7628,6 +7765,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -7786,7 +7930,16 @@
     "NciCheck.Desc.walkable": "9844cfcf9a4ddbc632a2e48a7e44db1b807af2ef16261284921b8ac233e4f9a1",
     "NciCheck.Desc.widthIn": "b1ad339e819a283eb749f0740c582df78ecc2d18a2827bd3fbf4dde78c5b9948"
    },
-   "guarantees": ["NciCheck.Properties.SecurityProofs.BaselineProvenance"]
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.BaselineProvenance",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses"
+   ]
   },
   "NetworkCertifier.Grid": {
    "digest": "2820ed149c9f5c25aab1a13fe34e16774250801c8bbaaca88b61e263b417b53c",
@@ -9645,6 +9798,13 @@
     "NciCheck.Properties.SecurityProofs.CheckAccepts",
     "NciCheck.Properties.SecurityProofs.CheckRefuses",
     "NciCheck.Properties.SecurityProofs.Decodes",
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses",
     "NciCheck.Properties.SecurityProofs.RejectsExactly",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Throttles",
@@ -9679,10 +9839,54 @@
     "NciCheck.Properties.ThrottlesSlots": "415217abac8a7a411210d6086d7a8b00b598c35210f4a251cf35f157a1db10a6"
    },
    "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Throttles",
     "NciCheck.Properties.SecurityProofs.ThrottlesDark",
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots"
+   ]
+  },
+  "Properties.NciDesc": {
+   "digest": "af071a975df2a0aaf1cfbf25c4db9fea66d5957a5b34e6a9c032c371bf2747c8",
+   "definitions": {
+    "NciCheck.Properties.DescAgreed": "5459dac68243ffe4cd9718ceebf6f0a6bf2dfbdfe625ebaf7cbe2f3533429dbd",
+    "NciCheck.Properties.DescAgrees": "2529a9595f221030e50f5ad2e43cef7c4a87d76c14c8ce17b516f43458952255",
+    "NciCheck.Properties.Expands": "b35f7ede4fa7db5a774bf5e1341c953492e4c76811a983165e12315b5adedcff",
+    "NciCheck.Properties.ExpandsOwner": "6a89c0c962111ae19fc73a2c381a7ecd4108339048f989e893ef946ac9feb7a2",
+    "NciCheck.Properties.ExpandsTheta": "1c5b4ce78c5a2bb977b37fb21eb2d8bca5928432d870a99f9bb53a1d653bdad1",
+    "NciCheck.Properties.nodeGates": "067c1c04572496c2671ef2814c67d0f1ea30c7532c877b2345af3baefad3da18"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescAgrees",
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses"
+   ]
+  },
+  "Properties.NciDesc.Verdict": {
+   "digest": "66e3e08ed49aaa533c41ba832cd5e7584e2798eea61c410309a21c729d439cd1",
+   "definitions": {
+    "NciCheck.Properties.DescReports": "6bd38b374239db3a9d1acde1329d8c7e497e9b1ffda5279030dcc2cf5073ab62",
+    "NciCheck.Properties.DescThrottles": "a6507aea3e9f89640143dba3659c0ae52df9e4a197e764252d6780e0e38fb199",
+    "NciCheck.Properties.DescThrottlesDark": "2d7410069915a01163f592a4bb1350823aa035bbd03375ddc2a974ba71ae3de6",
+    "NciCheck.Properties.DescThrottlesDarkSlots": "b5fbb00e590496291e57b4bfdf0de2dacbfc089b7a93355bf7903504b302036e",
+    "NciCheck.Properties.DescThrottlesSlots": "7d263311b47cc96df4fbef56ed6cf144ee9ae76fa8f31cf44ef08b531f10e628",
+    "NciCheck.Properties.DescWitnesses": "721bef5dd7411b7dc147401fe8266160133e962ff00285832009d1f18037bdbd",
+    "NciCheck.Properties.OnExpansions": "cd2f7fbf9f0547338d7dd695570749a306ddef5832bc715211c37a9d2fc35535"
+   },
+   "guarantees": [
+    "NciCheck.Properties.SecurityProofs.DescReports",
+    "NciCheck.Properties.SecurityProofs.DescThrottles",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDark",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots",
+    "NciCheck.Properties.SecurityProofs.DescThrottlesSlots",
+    "NciCheck.Properties.SecurityProofs.DescWitnesses"
    ]
   },
   "Properties.NetworkCertifier": {
