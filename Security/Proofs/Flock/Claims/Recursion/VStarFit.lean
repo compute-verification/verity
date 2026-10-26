@@ -1,4 +1,5 @@
 import Proofs.Flock.Claims.Recursion.VStarDeployed
+import Proofs.Flock.Claims.Recursion.SeqPrefix
 
 /-!
 # The inner prover's rows fitted to the compiled statement (`InnerRec.fit`)
@@ -82,7 +83,7 @@ def strs (I : InnerRec) (w : Claims.Flock.Wit) (ρ : I.Tape) (h : List (Msg × M
 /-- **The inner prover's message is its round's commit strings, concatenated.** -/
 theorem P_eval (I : InnerRec) (w : Claims.Flock.Wit) (xI : Msg) (h : List (Msg × Msg)) (ρ : I.Tape) :
     (((I.P w).next xI h ρ).eval FlockDeploy.sha512).1 = (strs I w ρ h).flatten := by
-  simp [InnerRec.P, commitThen_eval, Claims.OC.eval, strs]
+  simp [InnerRec.P, commitThen_eval, strs]
 
 theorem fit_rows_length (I : InnerRec) (x : Msg) (w : Claims.Flock.Wit) (r : I.R) (h : List (Msg × Msg)) :
     ((I.fit x).rows w r h).length = (slotsAt x h.length).length := by
