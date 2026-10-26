@@ -40,14 +40,15 @@ the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, a
 The rows form has, in place of `sync_set`,
 
     "scan": descriptor,
-    "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "lanes",
-                 "queue", "slots", "window"}
+    "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
+                 "lanes", "queue", "slots", "window"}
 
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
-header, and B, S = `lanes` · `slots` and T = `window` u32s), whose digest `WardenParams.digest` every registration
-binds; its `program` is the scan's registered Program, the descriptor's SHA-512 (`partition_object.program_sha512`),
-and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
+header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a timestep's buckets, dividing T, so each
+link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
+whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
+descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
 its root batches one instance of a template whose parameters are `row` and `prog` (`IngressScanFirst`, bucket 0), T − 1
 of one whose are `row`, `sin` and `prog` (`IngressScanBucket`; none when T = 1), each `row` the schedule's (S · B
@@ -105,7 +106,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
   (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
-  certificate is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
+  certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
+  connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
   the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
   refused), the schedule's rows, words, word bits, row format and layout, the link-window's domain in the session
   (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
@@ -182,7 +184,7 @@ def formats : List String := ["verity/registration/v1", "verity/registration/v2"
 /-- A proof unit's public outputs are at most 16 bits (the values it commits can be wider). -/
 def outBits : Nat := 16
 def unitLevel : String := "unit"
-def scheduleTag : String := "verity-network-warden/parameters/v2"
+def scheduleTag : String := "verity-network-warden/parameters/v3"
 def domainTag : String := "verity-network-warden/cells-domain/v2"
 def cellsTag : String := "verity-network-warden/cells/v2"
 def rowsFormat : String := "verity-network-warden/registration/v2"
@@ -208,6 +210,7 @@ structure Schedule where
   cellBytes : Nat
   delay : Nat
   egressCells : Nat
+  every : Nat
   ingressBuckets : Nat
   ingressCells : Nat
   lanes : Nat
@@ -217,6 +220,12 @@ structure Schedule where
 
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
+
+/-- A timestep's Program slots, one a lane (`WardenParams.program_slots`). -/
+def Schedule.programSlots (s : Schedule) : Nat := s.lanes
+
+/-- A window's Program slots: T / `every` timesteps of `programSlots` (`WardenParams.window_programs`). -/
+def Schedule.windowPrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its free inputs (`T`
 ingress instances' `prog`), and the bits one ingress and one egress instance commit (its return: the outputs other
@@ -339,27 +348,28 @@ def rowsParamsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
 
 def scheduleOf (j : Json) : V Schedule := do
-  exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "ingress_buckets", "ingress_cells", "lanes", "queue",
-    "slots", "window"] "schedule"
+  exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
+    "queue", "slots", "window"] "schedule"
   let pos : String → V Nat := fun k => do
     let x ← Flock.J.nat j k "schedule"
     unless 1 ≤ x do throw s!"schedule: {k} is a positive integer"
     pure x
   let s : Schedule :=
     { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
-      egressCells := ← pos "egress_cells", ingressBuckets := ← pos "ingress_buckets",
+      egressCells := ← pos "egress_cells", every := ← pos "every", ingressBuckets := ← pos "ingress_buckets",
       ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
       window := ← pos "window" }
   unless cellHeader + 1 < s.cellBytes do throw s!"schedule: a cell holds its {cellHeader}-byte header and a byte"
   unless s.cellBytes < 2 ^ 32 ∧ s.allocation < 2 ^ 32 ∧ s.window < 2 ^ 32 do
     throw "schedule: B, S = lanes · slots and T = window are u32s"
+  unless s.window % s.every == 0 do throw "schedule: every divides the window: a window is whole timesteps"
   pure s
 
 /-- `WardenParams.digest`: the schedule's canonical JSON, with the cell kinds and the fail reasons, tagged. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
   Identity.identityDigestSha512 scheduleTag (Json.mkObj [
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
-    ("egress_cells", toJson s.egressCells), ("ingress_buckets", toJson s.ingressBuckets),
+    ("egress_cells", toJson s.egressCells), ("every", toJson s.every), ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
     ("reasons", toJson failReasons)])
@@ -675,7 +685,8 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg 
   unless reg.record.getObjValD "program" == .str p.program do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
-    refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's"
+    refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
+      certifier certifies none of a window in which it refused a connection: traffic past the Program slots)"
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
   unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"

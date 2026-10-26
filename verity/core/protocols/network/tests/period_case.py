@@ -19,7 +19,8 @@ parameters, commitments, evidence and cases). In the clock form: the link-window
 drawn network certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and
 the salt in no case), and answered by one-stage with its one unit proved. In the rows form (a change named `rows-…`):
 each link-window's ingress and egress rows committed and registered under a small drawn schedule
-(`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified, and the scan's
+(`warden_rows.Cells.commit` and `registration`, signed by the same key), its three records certified (`past-slots`:
+none of them and neither registration, as the warden leaves a window in which it refused a connection), and the scan's
 registration holding both rows' roots and domains, answered by one-stage with a stratified or subset draw at the
 period's δ; the scan's Program is its generator form, stand-ins of its three templates at small widths
 (`scan_descriptor`), and a Program in the checker form is a bad scan (`bad_scans`). Beside them, the compute audits,
@@ -500,7 +501,8 @@ def _rows_window_check(p: Params, w: int, reg: Registration, x: Window) -> Facts
         raise Finding(REJECT, f"{what}: registration")
     if not (len(x.certificates) == 3
             and all(_certifies_on(p, link, d, w, c) for c, (link, d) in zip(x.certificates, records(p.link)))):
-        raise Finding(REJECT, f"{what}: certificates")
+        raise Finding(REJECT, f"{what}: certificates (none of a window in which the network certifier refused a "
+                              "connection)")
     if len(x.registrations) != 2:
         raise Finding(REJECT, f"{what}: registrations")
     for doc, d in zip(x.registrations, (INGRESS, EGRESS)):
@@ -658,7 +660,7 @@ EXPECT = {
     "rows-program": REJECT,
     "rows-cert-missing": REJECT, "rows-cert-swap": REJECT, "rows-cert-fails-link": REJECT,
     "rows-cert-direction": REJECT, "rows-cert-forged": REJECT, "rows-cert-window": REJECT, "rows-cert-session": REJECT,
-    "rows-cert-key": REJECT,
+    "rows-cert-key": REJECT, "rows-past-slots": REJECT,
     "rows-reg-count": REJECT, "rows-reg-swap": REJECT, "rows-reg-forged": REJECT, "rows-reg-window": REJECT,
     "rows-reg-link": REJECT, "rows-reg-session": REJECT, "rows-reg-key": REJECT, "rows-reg-field": REJECT,
     "rows-schedule": REJECT,
@@ -725,11 +727,12 @@ def schedule_json(s: WardenParams) -> dict:
 
 def _small_schedule(r: random.Random, small: bool) -> WardenParams:
     """A schedule of small rows: B just past a cell's header, S = lanes · slots at most 4, T at most 3 (2 if
-    `small`)."""
+    `small`), and a timestep `every` that divides T."""
+    T = r.randint(1, 2 if small else 3)
     return WardenParams(cell_bytes=r.choice([11, 12, 16]), slots=r.randint(1, 2), bucket_ms=r.randint(1, 200),
-                        delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8),
-                        window=r.randint(1, 2 if small else 3), ingress_cells=r.randint(1, 8),
-                        ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16))
+                        delay=r.randint(1, 4), lanes=r.randint(1, 2), queue=r.randint(1, 8), window=T,
+                        ingress_cells=r.randint(1, 8), ingress_buckets=r.randint(1, 4), egress_cells=r.randint(1, 16),
+                        every=r.choice([d for d in range(1, T + 1) if T % d == 0]))
 
 
 BIT, BYTE, U16 = Value(1), Value(8), Value(16)
@@ -946,6 +949,8 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                     {"direction": (EGRESS if i == 0 else INGRESS).value}, {"layout": lay | {f: lay[f] + 1}}])
             regs = regs[:i] + [doc] + regs[i + 1:]
         recs = [sign(on, d, w, r.randbytes(64)) for on, d in records(link)]
+        if aimed and m == "past-slots":
+            recs, regs = [], []
         if aimed and m.startswith("cert-"):
             on, d = records(link)[j]
             if m == "cert-missing":
@@ -1173,7 +1178,8 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"lanes": True}}, p | {"schedule": s | {"window": -1}},
                   p | {"schedule": s | {"queue": "1"}}, p | {"schedule": s | {"cell_bytes": 10}},
                   p | {"schedule": s | {"cell_bytes": U32}}, p | {"schedule": s | {"lanes": U32}},
-                  p | {"schedule": s | {"window": U32}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
+                  p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
+                  p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
                   *bad_scans(p)]
 
 
