@@ -673,9 +673,7 @@ def build() -> dict:
                 # 08:24Z's gap: the peels and the zero-high-digit peel on the MMA only, as `tile_job` has them.
                 h = period(card, model, static, pv, peel_lanes=False)["hull"]
                 e["mma_peels"] = dict(at_served=h["at_served"], at_tensor=h["at_tensor"],
-                                      share=e["share"]["share"] * h["at_served"] / e["period"]["hull"]["at_served"],
-                                      share_t=e["share"]["tensor"]["share"] * h["at_tensor"]
-                                      / e["period"]["hull"]["at_tensor"])
+                                      share=e["share"]["share"] * h["at_served"] / e["period"]["hull"]["at_served"])
             out["rows"][design, card, rate, mname] = e
     out["beside"] = beside_sweep(P, tau_picks)
     out["decode"] = decode(P[HEADLINE][0])
@@ -694,6 +692,9 @@ def report(D: dict) -> str:
     models = [m["name"] for m in nf.WORLD]
     short = {"Llama-3.1-8B": "8B", "Llama-3.1-70B": "70B", "DeepSeek-V4-Pro": "V4"}
     w = lambda f, design, card, rate: " / ".join(f(rows[design, card, rate, m]) for m in models)  # noqa: E731
+
+    def mma_t(r):
+        return r["share"]["share"] * r["mma_peels"]["at_tensor"] / r["period"]["hull"]["at_served"]
 
     L.append("## D6: protocol v3 (D1) and v3.1 (v3's L′ by the 07:04Z rule), printed by "
              "`benchmarks/pouw/accel_score/d6.py`\n")
@@ -746,7 +747,7 @@ def report(D: dict) -> str:
                 ec = (f"{a['eps'][0.01] * t['share'] * F:.1e} / {a['eps'][1e-6] * t['share'] * F:.1e}" if a
                       else "0 / 0")
                 L.append(f"| {card}, {short[m]} | {win} | {t['share'] * F:.2e} | {ec} | "
-                         f"{r['mma_peels']['share_t'] * F:.2e} | "
+                         f"{mma_t(r) * F:.2e} | "
                          + " | ".join(f"{t['bounded'][s] * F:.2e}" for s in sl) + f" | {t['honest'] * F:.2e} |")
     L.append("")
     L.append("The same as shares of C, beside the model-unit share, with ε at each μ (8-GPU groups, δ 1e-6; in brackets "
@@ -764,7 +765,7 @@ def report(D: dict) -> str:
             t, a = r["share"]["tensor"], r["eps"]["at"]
             L.append(f"| {card}, {short[m]} | {pct(r['share']['share'], 1)} | {eps_at(a['served'])} | "
                      f"{pct(t['share'], 1)} | {pct(t['opt'], 1)} | {eps_at(a['tensor'])} | "
-                     f"{pct(r['mma_peels']['share_t'], 1)} | " + " | ".join(pct(t["bounded"][s], 1) for s in sl)
+                     f"{pct(mma_t(r), 1)} | " + " | ".join(pct(t["bounded"][s], 1) for s in sl)
                      + f" | {pct(t['honest'], 1)} |")
     L.append("")
     L.append("### ε (goal ≤ 1% at δ = 1e-6)\n")
