@@ -196,6 +196,12 @@
    "owner": "@compute-accounting",
    "digest": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1"
   },
+  "Properties.RemoteAudit.Line.CoinsHidden": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Line.OpeningsPrf": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.Line.Registered": {
    "owner": "@memory-accounting",
    "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
