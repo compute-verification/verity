@@ -3,6 +3,7 @@ import Proofs.Flock.Soundness.Discharge.Zero.Stack
 import Proofs.Flock.Soundness.Discharge.Layout.OutShape
 import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Layout.KeysRow
 
 /-!
 # The committed circuit's keys from the statement circuit's (PRF-133, ASK-112 option A)
@@ -231,6 +232,10 @@ theorem atUnit_id (u : ℕ) (s : Src) : s.atUnit u id = s := by
 theorem atUnit_zero {u : ℕ} {f : ℕ → ℕ} {s : Src} : s.atUnit u f = .zero ↔ s = .zero := by
   cases s <;> simp [Src.atUnit]
 
+theorem atUnit_msg {u : ℕ} {f : ℕ → ℕ} {s : Src} {q byte bit : ℕ} :
+    s.atUnit u f = .msg q byte bit ↔ s = .msg q byte bit := by
+  cases s <;> simp [Src.atUnit]
+
 theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
     (hsz : cs.unitNet < cs.nets.size) (hg : n.inGroups = cs.unit.inGroups)
     (hog : cs.unit.outGroups = n.outGroups.map (Group.at pos))
@@ -318,6 +323,55 @@ theorem zeroIn_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   unfold ZeroIn Zero.InPort Zero.ZeroAt Zero.ZeroPort
   rw [hU, hg, hw]
   exact Iff.rfl
+
+theorem srcKey_withTmpl (c : Circuit) (t : Option TmplUnit) (x : ℕ) : srcKey { c with tmpl := t } x = srcKey c x :=
+  rfl
+
+/-- **`KeysRow` at a templated session's statement circuit**: its unit has only its leaf group, and every input a unit
+row reads is a port bit (`PortReads`). A row key is the zero or a message bit, which the committed circuit's key is too
+(`Layout.rowKey_of_cutsPre`), and `srcKey_tmpl` moves only wire keys. -/
+theorem keysRow_of_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hty : tags.typed = false) (hT : HmOut.parseTmpl tags cf tables = .ok cs) (h1 : cs.unit.inGroups.size = 1)
+    {hU : Built (HmOut.unrolled cs).unit} (hpr : Layout.PortReads (HmOut.unrolled cs) hU) :
+    Layout.KeysRow (HmOut.unrolled cs) hU (Layout.portRowW (HmOut.unrolled cs)) := by
+  have C : CheckFacts cs := by
+    obtain ⟨hty', ⟨ls, hls⟩, -⟩ := Committed.check hty (Or.inr hT)
+    exact check_facts hty' hls
+  obtain ⟨n, pos, hsz, heu, -, hg, hw, hB, -⟩ := tmpl_unit_at hT
+  have hU' : (HmOut.unrolled cs).unit = n := by
+    rw [heu]
+    show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2 = n
+    rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl]
+  refine Layout.keysRow_of_rowKey hpr fun x hm hu => ?_
+  rw [hU', hg, hw] at hm
+  rw [hU', hw, heu] at hu
+  have hkc := srcKey_tmpl hT C x
+  unfold Layout.RowKey
+  rw [heu] at hkc ⊢
+  obtain ⟨tu, c₀, hp0, -, -, he⟩ := TmplValue.parseTmpl_cases hT
+  subst he
+  rw [srcKey_withTmpl c₀ (some tu) x] at hkc
+  have hnd : (portBits c₀.unit.inGroups).Nodup := by
+    have := Aliased.portBits_nodup hB
+    rw [hg] at this
+    exact this
+  rcases Layout.rowKey_of_cutsPre hp0 (Layout.cutsFromRows_of_singlePre hp0 h1) hnd hm hu with
+    h0 | ⟨q, byte, bit, hq0, hq, hlt, hb⟩
+  · exact Or.inl (atUnit_zero.1 (hkc.symm.trans h0))
+  · exact Or.inr ⟨q, byte, bit, atUnit_msg.1 (hkc.symm.trans hq0), hq, hlt, hb⟩
+
+/-- **`KeysRow` at a session's statement circuit**, flat (`Layout.keysRow_of_parse`) or templated (`keysRow_of_tmpl`). -/
+theorem keysRow_commit {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hty : tags.typed = false) (h : Committed tags cf tables cs) (h1 : cs.unit.inGroups.size = 1)
+    {hU : Built (HmOut.unrolled cs).unit} (hpr : Layout.PortReads (HmOut.unrolled cs) hU) :
+    Layout.KeysRow (HmOut.unrolled cs) hU (Layout.portRowW (HmOut.unrolled cs)) := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    revert hU
+    rw [unrolled_flat hf]
+    intro hU hpr
+    exact Layout.keysRow_of_parse (parse_untyped hty h).1 h1 hpr
+  · exact keysRow_of_tmpl hty h h1 hpr
 
 /-! ## On the committed circuit, flat or templated -/
 
