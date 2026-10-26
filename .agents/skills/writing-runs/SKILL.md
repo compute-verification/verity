@@ -50,8 +50,9 @@ rule keep working. Once lanes declare their outputs it drops to 0, and undeclare
    `$RESEARCH_RUN_DIR/out`), and custody always sends all of it to the store, so the launch declares nothing. A result that must
    live elsewhere in the run dir needs `--declared-output GLOB`; quote the glob so your shell doesn't expand it.
 3. **Keep outputs small:** the numbers, JSON, logs and the digests of big things. An artifact that must survive but is
-   large (a model, a proof, a trace over about 100 MiB) goes into the store with `research data put --kind K --file P
-   --preserve` from inside the job, and you record its `art:` id in `$OUT`.
+   large (a model, a proof, a trace over about 100 MiB) goes in `$OUT` too: custody is the only way a node run's bytes reach
+   the store (a node holds no store write key, so `research data put` inside a job fails; TOP-90 row 51), and the run's
+   attempt cites them as its `run_files`. Cite it as the run id and its path under `out/`.
 4. **Put scratch in a `mktemp -d` directory that you delete,** as in the example, or elsewhere outside the run dir. A job's
    `$TMPDIR` may be unset (queued jobs on vy-nebius-1 have none), so `$TMPDIR/x` can become `/x`. Caches, build trees
    (`target/`, `.lake/`, `node_modules/`), downloaded datasets and checkpoints never go in the run dir.

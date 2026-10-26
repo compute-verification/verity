@@ -142,7 +142,7 @@ def AttnBlock(q: Arr["D", BF16], k: Arr[BN, "D", BF16], v: Arr[BN, "D", BF16], m
         bmax = ops.F32Max(bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else ops.F32Max(m_prev, bmax)
     m_use = ops.GuardNegInfZero(m_new)
-    scale_log2 = _c32(b1._scale_log2_bits(D))
+    scale_log2 = _c32(b1.scale_log2_bits(D))
     if not FIRST:  # B2: rescale factor
         scores_scale = ops.MufuEx2Ftz(ops.F32MulFtz(ops.F32SubFtz(m_prev, m_use), scale_log2))
     max_scaled = ops.F32MulFtz(m_use, scale_log2)
@@ -334,7 +334,7 @@ def AttnBlockV3(q: Arr["D", BF16], k: Arr["BN", "D", BF16], v: Arr["BN", "D", BF
         bmax = ops.F32Max(bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else ops.F32Max(m_prev, bmax)
     m_use = ops.GuardNegInfZero(m_new)
-    scale_log2 = _c32(b1._scale_log2_bits(D))
+    scale_log2 = _c32(b1.scale_log2_bits(D))
     if not FIRST:  # B2: rescale factor
         scores_scale = ops.MufuEx2Ftz(ops.F32MulFtz(ops.F32SubFtz(m_prev, m_use), scale_log2))
     max_scaled = ops.F32MulFtz(m_use, scale_log2)
@@ -497,7 +497,7 @@ def AttnBlockV2(q: Arr["D", BF16], k: Arr["BN", "D", BF16], v: Arr["BN", "D", BF
         bmax = ops.F32Max(bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else ops.F32Max(m_prev, bmax)
     m_use = ops.GuardNegInfZero(m_new)
-    scale_log2 = _c32(b1._scale_log2_bits(D))
+    scale_log2 = _c32(b1.scale_log2_bits(D))
     if not FIRST:  # B2: rescale factor
         scores_scale = ops.MufuEx2Ftz(ops.F32MulFtz(ops.F32SubFtz(m_prev, m_use), scale_log2))
     max_scaled = ops.F32MulFtz(m_use, scale_log2)

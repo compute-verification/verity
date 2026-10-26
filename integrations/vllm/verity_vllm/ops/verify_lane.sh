@@ -110,8 +110,10 @@ print("[verify_lane] quarantine negative_matcher_tests:", q["negative_matcher_te
 EOF
 fi
 
-# 2b. quarantine purity/identity lint (from the CORE checkout's lint over the LANE's quarantine tree)
-( cd "$REPO" && "${PY%/*}/verity-vllm" quarantine-lint --root "$WT/verity_vllm/program/registry/quarantine" --out "$RUN_DIR/quarantine_lint.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "quarantine lint failed"
+# 2b. quarantine purity/identity lint (from the CORE checkout's lint over the LANE's quarantine tree); the path from the
+# worktree's root on a line of its own, where a layout move rewrites it and move_check reads it
+QUARANTINE=integrations/vllm/verity_vllm/program/registry/quarantine
+( cd "$REPO" && "${PY%/*}/verity-vllm" quarantine-lint --root "$WT/$QUARANTINE" --out "$RUN_DIR/quarantine_lint.json" ) 2>&1 | tee -a "$RUN_DIR/verify_lane.log" || log "quarantine lint failed"
 
 # 3. holdouts (orchestrator-run) -> holdouts.json
 if [ -n "$HOLDOUTS" ]; then
