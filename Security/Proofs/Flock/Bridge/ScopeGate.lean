@@ -45,15 +45,17 @@ structure KsScoped (I : Inputs) (D : Flock.Desc) (pub : Flock.Public) (kd : ℕ)
 /-- **`verify --zk` accepts one session's transcript**: `AcceptsZK`, the files' rows, names and roots
 (`Flock.PortRoots.check`), and the tags, files and the record's draw (`Flock.KsScope.check`, the last refusal of
 `verify --zk`'s verdict outside `--rec-inner`). -/
-def AcceptsScoped (I : Inputs) (t : Transcript) : Prop :=
+def AcceptsScoped (I : Inputs) (t : FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   AcceptsZK I t ∧ Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
     Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables I.count (recordDraw t.record) = .ok ()
 
 /-- **`verify --zk` accepts the live audit's transcript** (`AcceptsScoped` at it). -/
-def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop :=
+def LiveAcceptsScoped {n : ℕ} {Reg : Type} (I : Inputs)
+    (o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript) : Prop :=
   AcceptsScoped I o.2.2
 
-theorem LiveAcceptsScoped.ks {n : ℕ} {Reg : Type} {I : Inputs} {o : Reg × Finset (Fin n) × Transcript}
+theorem LiveAcceptsScoped.ks {n : ℕ} {Reg : Type} {I : Inputs}
+    {o : Reg × Finset (Fin n) × FlockSoundness.Discharge.Exec.Transcript}
     (h : LiveAcceptsScoped I o) : LiveAcceptsKS I o :=
   ⟨h.1, h.2.1⟩
 
@@ -98,7 +100,8 @@ theorem ksScoped_files {I : Inputs} {D : Flock.Desc} {pub : Flock.Public} {draw 
 /-- **The record's draw passing `drawWhy` gives the draw's `k` a multiple of the tables**: custody makes an accepted
 record's draw `dj S`, and a `dj S` that parses the verifier's own subset draw of `kd` units. -/
 theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json}
-    {Jf : Finset (Fin n) → Reg → ℕ} {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Transcript}
+    {Jf : Finset (Fin n) → Reg → ℕ}
+    {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript}
     {kd : ℕ} (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ I dj Jf wr kd) {S : Finset (Fin n)} {R : Reg}
     {lo : LiveOutJ (Jf S R) mPts} (hacc : AcceptsZK I (wr S R lo))
     (hd : Flock.KsScope.drawWhy I.count (recordDraw (wr S R lo).record) = none) : kd % nTab I = 0 := by
@@ -116,7 +119,7 @@ theorem div_of_drawWhy {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fi
 (`ksScoped_files`), and custody makes its record's draw the verifier's (`div_of_drawWhy`). -/
 theorem ksScoped_of_accepts {n mPts : ℕ} {Reg : Type} {I : Inputs} {D : Flock.Desc} {pub : Flock.Public}
     {dj : Finset (Fin n) → Lean.Json} {Jf : Finset (Fin n) → Reg → ℕ}
-    {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Transcript} {kd : ℕ}
+    {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → FlockSoundness.Discharge.Exec.Transcript} {kd : ℕ}
     (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D)
     (hpub : Flock.HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub)
     (hCust : FlockSoundness.Assumptions.Zk.RecordCustodyZKJ I dj Jf wr kd) {S : Finset (Fin n)} {R : Reg}
