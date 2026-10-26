@@ -504,5 +504,3 @@ theorem lineHeldIdentity : LineHeldIdentity := by
     hS hr hp hcov hN ha hω.1 h.1 (wrong_le_line (correct := fun t ω => correct (com ω) t ω) hω.1 h.2)
 
 end Properties.RemoteAudit.Line.SecurityProofs
-
-theorem Properties.RemoteAudit.Line.SecurityProofs.ciLeanCheckProbe : True := trivial
