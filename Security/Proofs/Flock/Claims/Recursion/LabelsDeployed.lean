@@ -115,10 +115,10 @@ theorem proved_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson
       NciCheck.Properties.SecurityProofs.ReadsExact.qsort_sorted id (D.units ++ D.closure)
     have hnd : (D.units ++ D.closure).toList.Nodup := by
       rw [Array.toList_append]
+      show List.Pairwise (fun a b => a ≠ b) (D.units.toList ++ D.closure.toList)
       refine List.pairwise_append.2 ⟨(pairwise_of_asc hu).imp Nat.ne_of_lt, (pairwise_of_asc hc).imp Nat.ne_of_lt,
         fun a ha b hb hab => ?_⟩
-      subst hab
-      exact hdis a (by simpa using hb) (by simpa using ha)
+      exact hdis b (by simpa using hb) (by simpa [hab] using ha)
     have hnd' : ((D.units ++ D.closure).qsort (· < ·)).toList.Nodup :=
       (Array.perm_iff_toList_perm.1 (RecDeploy.CoinPos.qsort_perm (D.units ++ D.closure) (· < ·))).nodup_iff.2 hnd
     exact (hs.and hnd').imp fun ⟨h1, h2⟩ => Nat.lt_of_le_of_ne h1 h2
@@ -153,7 +153,7 @@ theorem loadPublic_asc {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Pub
     refine ⟨_, ?_, hs, ha⟩
     unfold Registered.unitIndices
     simp only [‹J.get _ "units" _ = _›, ‹J.arr _ "indices" _ = _›, bind, Except.bind]
-    exact ‹Array.mapM _ _ = _›
+    assumption
 
 /-! ## The staged table's public file -/
 
@@ -208,8 +208,7 @@ theorem checkLabel_idx {dj : Lean.Json} {pub : Public} {j : ℕ} (h : RecVStar.c
     ∃ idx, Registered.unitIndices pub = .ok idx ∧ idx = D.proved := by
   cases hidx : Registered.unitIndices pub with
   | error e =>
-    simp only [RecVStar.checkLabel, hD, hidx, Bind.bind, Except.bind] at h
-    cases h
+    simp [RecVStar.checkLabel, hD, hidx, Bind.bind, Except.bind] at h
   | ok idx => exact ⟨idx, rfl, FlockC3.PubRows.checkLabel_ok h hD hidx⟩
 
 /-! ## At a staged table -/
