@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 pytest.importorskip("verity_vllm.acquire.sources.partial_source")
-from verity_vllm.acquire.sources import partial_source as tps  # noqa: E402
+from verity_vllm.acquire.sources import partial_source as tps
 
 
 class _Dev:

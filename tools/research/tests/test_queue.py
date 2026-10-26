@@ -226,6 +226,43 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
     assert [m.commit for m in again] == [m.commit for m in members]
 
 
+def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_then_admission_order(world):
+    """26 Oct (Daniel: "CI runs at breakneck speed"): a member above a Lean change waits for that change's Lean check, ~1 h, though
+    it changes no Lean itself.  What a sync merges goes non-Lean first, `--first`'s order then admission's within each part; a PR
+    that contains a Lean change stays above it, and one stacked on a member already on `next` is judged by its own change."""
+    world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, h2 := world.change({"a.txt": "2\n"}))
+    world.gh.put(3, h3 := world.change({"pkg/B.lean": "-- 3\n"}))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    world.gh.put(5, world.change({"c.txt": "5\n"}, base=h1))                 # changes no Lean, but contains #1
+    world.gh.put(6, world.change({"d.txt": "6\n"}, base=h2))
+    members, _ = world.queue(first=(3, 4)).sync()
+    assert [m.pr for m in members] == [4, 2, 6, 3, 1, 5]
+    world.gh.put(9, world.change({"pkg/C.lean": "-- 9\n"}))
+    world.gh.put(10, world.change({"e.txt": "10\n"}, base=h3))               # its own change, against #3's head, is no Lean
+    world.gh.put(11, world.change({"f.txt": "11\n"}))
+    again, _ = world.queue().sync()
+    assert [m.pr for m in again] == [4, 2, 6, 3, 1, 5, 10, 11, 9]
+    assert [m.commit for m in again[:6]] == [m.commit for m in members]      # what the sync keeps never moves for it
+    world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # off the bottom: everything is merged again
+    rebuilt, _ = world.queue().sync()
+    assert [m.pr for m in rebuilt] == [2, 6, 11, 4, 3, 1, 5, 10, 9]
+
+
+def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_it_on_rebuilds_nothing(world):
+    """drive.toml's `nonlean_first` at `main` decides a sync that isn't given it.  Turned on, it reorders only what a sync merges
+    anyway: a rebuild just to reorder would take a running Lean check's commit off `next`."""
+    _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
+    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    members, _ = world.queue(first=(3,)).sync()
+    assert [m.pr for m in members] == [3, 1, 2]
+    assert [m.commit for m in world.queue(nonlean_first=True).sync()[0]] == [m.commit for m in members]
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'x.txt': 'x\n'})}:refs/heads/main")      # `next` is rebuilt
+    assert [m.pr for m in world.queue(nonlean_first=True).sync()[0]] == [2, 3, 1]
+
+
 def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world):
     """`.gitattributes` names `lean-audit` for every lean-audit.json; the queue's own clone must define it, or two PRs that each
     add a record conflict as text (12 Oct: #1806)."""

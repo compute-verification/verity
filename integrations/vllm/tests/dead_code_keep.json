@@ -23,6 +23,8 @@
   "verity_vllm.program.registry.quarantine.act": "re-exports registry.act's SiluMul_v2 (promoted) for the properties-admission adapter",
   "verity_vllm.program.registry.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
   "verity_vllm.program.registry.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
-  "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py"
+  "verity_vllm.program.registry.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
+  "verity_vllm.program.kernels.relations": "W2's relation registry, filled by the fa2/gemm/rms relations when it loads; tests/commit/synthetic.py and tests/check/test_challenge_seeds.py drive it. Live before only through those relations' lazy import of it, which the Definitions' move to verity.ml.definitions inverts (they import nothing of the integration)",
+  "verity_vllm.check.poc_description": "the Description that relations' checks bind nodes against (contract section 6); reached only through relations"
  }
 }

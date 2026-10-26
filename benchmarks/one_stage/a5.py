@@ -154,8 +154,9 @@ import shutil
 import sys
 import time
 from collections.abc import Iterator, Sequence
-from concurrent.futures import Future, ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
+from fractions import Fraction
 from pathlib import Path
 from typing import Callable
 
@@ -592,68 +593,96 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
+    drawn = []
+    for mm in members:
+        m = mm["m"]
+        local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
+        counts[m.template] = counts.get(m.template, 0) + len(local)
+        if local:
+            drawn.append((mm, local))
+    jobs = max(1, min(session_jobs(a), len(drawn) or 1))
     archived: dict = {}     # the members' circuit, archived once for every Lean verify (`a0.lean_verify`)
     for mm in members:
         mm["st"]["archived"] = archived
-    # each member's Lean verify runs while the next member is proved; the proofs stay one at a time
-    pending: list[tuple[dict, Path, Future, str]] = []
-    with ThreadPoolExecutor(max_workers=1) as lean_pool:
-        for mm in members:
-            m, k = mm["m"], mm["k"]
-            local = sorted(u - m.base for u in union_draw["units"] if m.base <= u < m.base + m.n)
-            counts[m.template] = counts.get(m.template, 0) + len(local)
-            if not local:
-                continue
-            sdir = out / f"session-m{k}"
-            sdir.mkdir(parents=True, exist_ok=True)
-            # a plain session is served the stream's stratified draw itself, its one member the whole window (`plain_refusal`)
-            session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
-                                         ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
-            (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
-            t = time.time()
-            stage(served, mm, files)
-            summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + time.time() - t, 1)
-            summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
-            t = time.time()
-            env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
-            record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + len(statement), sdir, draw_file=sdir / "draw.json",
-                                      zk=not plain(a), env=env, prove_timeout=a.session_timeout)
-            session_s = round(time.time() - t, 1)
-            draw_t = (record or {}).get("unit_draw") or {}
-            v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
-            served_units += [m.base + u for u in draw_t.get("units", [])]
-            session_roots.update({m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()})
-            proved += a0.proved_units(mm["header"], live or {})
-            instances += (live or {}).get("instances", 0)
-            lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
-                                                 "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
-            verdicts[f"m0-verifier/m{k}"] = {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
-                                             and (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"] and v.ok,
-                                             "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
-            verdicts[f"lean-draw/m{k}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-            if plain(a):
-                flags = ("--coins", "os", "--stratified", str(drawn_law["k"]))
-                job = lean_pool.submit(a0.lean_verify, a.lean, mm["st"], m.n, sdir, flags=flags)
-                pending.append((mm, sdir, job, f"flock-verify verify {' '.join(flags)} --archive"))
-            else:
-                pending.append((mm, sdir, lean_pool.submit(a0.lean_verify, a.lean, mm["st"], m.n, sdir, zk=True),
-                                "flock-verify verify --zk --archive"))
-            statement[m.key] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
-                                "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
-                                "verify_s": ((record or {}).get("verdict") or {}).get("verify_s")}
-            sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
-    for mm, sdir, job, tool in pending:
+    cores = int(os.environ.get("RAYON_NUM_THREADS") or os.cpu_count() or 1)
+    threads = {} if jobs == 1 else {"RAYON_NUM_THREADS": str(max(1, cores // jobs))}
+
+    def member_session(i: int, mm: dict, local: list[int], lean_pool: ThreadPoolExecutor) -> dict:
+        """Member ``mm``'s session on its drawn units ``local``, on port ``port + i`` (``i`` its place among the drawn
+        members), and Lean's verdicts on it; the members' sessions are independent, so `session_jobs` run at once. Its Lean
+        verify goes to ``lean_pool`` (``lean_job``), so it runs while the next member is proved."""
         m, k = mm["m"], mm["k"]
-        verdicts[f"lean-verify/m{k}"] = {**job.result(), "tool": tool}
-        if m.key in reads:
-            row_verdicts[m.key] = verdicts[f"lean-verify/m{k}"]
-            linked = linked or (mm, sdir)
-        statement[m.key].update(lean_verify_s=verdicts[f"lean-verify/m{k}"].get("verify_s"),
-                                lean_partition=verdicts[f"lean-verify/m{k}"].get("partition"))
+        sdir = out / f"session-m{k}"
+        sdir.mkdir(parents=True, exist_ok=True)
+        # a plain session is served the stream's stratified draw itself, its one member the whole window (`plain_refusal`)
+        session_draw, session_law = ((union_draw, drawn_law) if plain(a) else
+                                     ({"law": "subset", "population": m.n, "k": len(local), "units": local}, {"law": "subset", "k": len(local)}))
+        (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
+        t = time.time()
+        stage(served, mm, files)
+        staged_s = time.time() - t
+        t = time.time()
+        env = {"FC_COINS": "os"} if plain(a) else {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])}
+        record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
+                                  zk=not plain(a), env={**env, **threads}, prove_timeout=a.session_timeout)
+        session_s = round(time.time() - t, 1)
+        draw_t = (record or {}).get("unit_draw") or {}
+        v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
+        lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
+                                             "instances": (live or {}).get("instances", 0)}], sdir, "u1-u3")
+        got = {f"m0-verifier/m{k}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
+                                     and (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"] and v.ok,
+                                     "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()},
+               f"lean-draw/m{k}": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}}
+        if plain(a):
+            flags = ("--coins", "os", "--stratified", str(drawn_law["k"]))
+            lean_job = (lean_pool.submit(a0.lean_verify, a.lean, mm["st"], m.n, sdir, flags=flags),
+                        f"flock-verify verify {' '.join(flags)} --archive")
+        else:
+            lean_job = (lean_pool.submit(a0.lean_verify, a.lean, mm["st"], m.n, sdir, zk=True), "flock-verify verify --zk --archive")
+        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "verdicts": got, "lean_job": lean_job,
+                "served": [m.base + u for u in draw_t.get("units", [])],
+                "roots": {m.port(p_name): r for p_name, r in ((live or {}).get("roots") or {}).items()},
+                "proved": a0.proved_units(mm["header"], live or {}), "instances": (live or {}).get("instances", 0),
+                "statement": {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
+                              "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
+                              "verify_s": ((record or {}).get("verdict") or {}).get("verify_s")},
+                "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]}
+
+    with ThreadPoolExecutor(jobs) as lean_pool:
+        if jobs == 1:
+            done = [member_session(i, mm, local, lean_pool) for i, (mm, local) in enumerate(drawn)]
+        else:
+            with ThreadPoolExecutor(jobs) as pool:
+                done = list(pool.map(lambda x: member_session(x[0], *x[1], lean_pool), enumerate(drawn)))
+        for got in done:
+            job, tool = got.pop("lean_job")
+            k = got["mm"]["k"]
+            got["lean_verify"] = got["verdicts"][f"lean-verify/m{k}"] = {**job.result(), "tool": tool}
+            got["statement"].update(lean_verify_s=got["lean_verify"].get("verify_s"), lean_partition=got["lean_verify"].get("partition"))
+    summary["sessions_at_once"] = jobs
+    for got in done:        # in the members' order, as one session after another would have left them
+        mm = got["mm"]
+        summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
+        summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
+        served_units += got["served"]
+        session_roots.update(got["roots"])
+        proved += got["proved"]
+        instances += got["instances"]
+        verdicts.update(got["verdicts"])
+        if mm["m"].key in reads:
+            row_verdicts[mm["m"].key] = got["lean_verify"]
+            linked = linked or (mm, got["sdir"])
+        statement[mm["m"].key] = got["statement"]
+        sessions += got["sessions"]
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
                                 sessions=sessions, served=sorted(served_units), session_roots=session_roots)
+        write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
+                   {"draw": union_draw, "proved_units": sorted(proved), "receipt": receipt, "statement": statement,
+                    "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
+                   served=sorted(served_units))
     else:  # every verdict of record names the sessions delivered (`service.check_verdicts`)
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
@@ -673,6 +702,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
             return summary, False
         result["coins"] = {"source": stream.coin_source, "segment": segment, "read": read.hex(),
                            "outcome": summary["coins"]["outcome"]}
+        write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
+                   {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
+                    "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
+                   served=given["served"])
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -760,10 +793,36 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.W
     return neg
 
 
+def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
+               work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
+               session_roots: dict, served: list[int]) -> None:
+    """The audit as `SampledProofs.OneStage`'s case, what onsite's evidence carries for sampled proofs
+    (`replay.Case.case`: the registration record, the evidence `audit_record` was handed and the verifier's params, δ the
+    audit's as an exact ratio), in ``out/case.json``, and today's Python on it (`replay.python`) in
+    ``out/case-python.json``."""
+    try:
+        import replay as RP
+
+        d = str(Fraction(delta).limit_denominator(10**12))
+        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table)
+        e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
+        c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
+        (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
+        (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
+    except Exception as x:  # noqa: BLE001: the case is a copy of the audit for onsite; its failure leaves the audit's verdict
+        (out / "case-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
 def streamed(a: argparse.Namespace) -> bool:
     """Each rank draws through its own `service.Stream`: on the auditor's challenger's coins (``--challenger``) or on the
     verifier's own (``--coins verifier``)."""
     return a.coins is not None or a.verifier_coins
+
+
+def session_jobs(a: argparse.Namespace) -> int:
+    """How many drawn members' sessions run at once (``--session-jobs``, default one after another), each on its own port and
+    with its share of ``RAYON_NUM_THREADS``."""
+    return max(1, int(getattr(a, "session_jobs", None) or 1))
 
 
 def plain(a: argparse.Namespace) -> bool:
@@ -995,6 +1054,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--port", type=int, default=7551)
+    ap.add_argument("--session-jobs", type=int, default=1, help="run up to this many drawn members' sessions at once (session_jobs)")
     ap.add_argument("--session-timeout", type=float, default=14400,
                     help="each drawn member's prover limit in seconds, and each template's compose: one firewalled session of a MoE "
                          "w2 coordinate chunk (MoeExpertFp8GemmW_v2{N=1}, k_log 26) takes ~8 min, and over an hour on a loaded "

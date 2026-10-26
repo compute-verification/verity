@@ -25,8 +25,6 @@ is over circuit-check's partition budget.
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.census import silicon_step
 from verity.ml.circuits.refs import Coll, concat

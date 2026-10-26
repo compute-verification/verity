@@ -13,8 +13,6 @@ whose NaN is 0x7FFF.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 
 from verity_vllm.program.kernels import derived_rows as DR

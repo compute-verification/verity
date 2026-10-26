@@ -47,7 +47,7 @@ def scale_words(rng: np.random.Generator, n: int, **statics: Any) -> np.ndarray:
     """The attention scale: D^-0.5 * log2(e) of the row's D on half the rows, else drawn over [0.02, 0.5]."""
     from verity_vllm.program.registry import b1
     s = np.asarray(rng.uniform(0.02, 0.5, n), dtype=np.float32).view(np.uint32)
-    return np.where(rng.random(n) < 0.5, np.uint32(b1._scale_log2_bits(int(statics["D"]))), s).astype(np.uint32)
+    return np.where(rng.random(n) < 0.5, np.uint32(b1.scale_log2_bits(int(statics["D"]))), s).astype(np.uint32)
 
 
 def sample_value(rest: Callable[..., list[np.ndarray]], value: Callable[..., np.ndarray]) -> Callable[..., list[np.ndarray]]:
