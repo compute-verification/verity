@@ -100,7 +100,7 @@ def checksJ (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : 
     "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j) link c₁ mids
   s.read.check
-  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags none else pure ())
+  (if s.read.draw.isNone then ProvedScope.drawLaw zk s.read.tags false none else pure ())
   RecordText.check f.record
 
 theorem checks_of_parse (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg)
