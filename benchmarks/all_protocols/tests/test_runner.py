@@ -1,4 +1,4 @@
-"""The runner's decisions on one period with fake legs, and the table every lane plugs into:
+"""The runner's decisions on one window with fake legs, and the table every lane plugs into:
 
 * a leg whose protocol rejects rejects the composed verdict, whatever the others answer (onsite's reject dominance);
 * nothing composes to accept while onsite's components are stubs or a leg is missing, even when every leg accepts;
@@ -8,8 +8,9 @@
 * each leg reads the answers of the legs before it, and its port's case reaches onsite;
 * `TABLE` names every onsite component once, a leg is its file in `legs/`, and onsite's components are read from
   `CoreOnsite.lean` as written;
-* the horizon's union bound over periods, vacuous at the sum of δ reaching 1;
-* the loop's period keeps only the window's public files, and its circuit is the one registered before it ran (slow).
+* windows audited at once each get their report, and the monitoring-period report over all of them leads the line;
+* under ``--pouw h1`` PoUW's audit of the H1 window runs before the legs, on the window's own PoUW circuit;
+* the loop's window keeps only its public files, and its circuit is the one registered before it ran (slow).
 """
 from __future__ import annotations
 
@@ -49,16 +50,16 @@ COMPONENT = {e.name: e.component for e in T.TABLE}
 
 
 def period(tmp_path: Path, tampered: bool = False) -> Path:
-    d = tmp_path / "p0"
+    d = tmp_path / "w0"
     d.mkdir()
-    (d / "period.json").write_text(json.dumps({"period": 0, "node": "test-node", "circuit": "cd" * 64,
+    (d / "period.json").write_text(json.dumps({"window": 0, "period": 0, "node": "test-node", "circuit": "cd" * 64,
                                                "run_root": "ef" * 64, "law": "subset:2", "cap": 8, "tools": {},
                                                "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}))
     return d
 
 
 def decide(tmp_path: Path, **legs) -> dict:
-    """`decide` on one period with the legs given by name and every other protocol missing."""
+    """`decide` on one window with the legs given by name and every other protocol missing."""
     kw = {k: legs.pop(k) for k in ("onsite", "exe") if k in legs}
     by_component = {COMPONENT[n]: f for n, f in legs.items()}
     return RN.decide(period(tmp_path), "test-node", tmp_path / "out", legs=by_component.get, **kw)
@@ -71,7 +72,6 @@ def test_a_rejecting_leg_rejects_the_composition(tmp_path):
     assert r["protocols"]["work"] == {"verdict": "missing", "owner": "compute-accounting"}
     assert r["composed"]["verdict"] == "reject"
     assert "space" in r["composed"]["reason"]
-    assert r["horizon"]["composed"] == "reject"
 
 
 def test_a_rejecting_bandwidth_audit_rejects_though_it_is_no_onsite_component(tmp_path):
@@ -99,7 +99,6 @@ def test_missing_legs_are_never_verdicts(tmp_path):
     assert r["protocols"]["integrity"]["quantity"] == {"bound": 1}
     assert r["protocols"]["integrity"]["delta"] == "1/2"
     assert r["protocols"]["integrity"]["epsilon"] == "1/4"
-    assert r["horizon"]["integrity"]["wrong_units_bound"] == 1 and r["horizon"]["integrity"]["units"] == 4
     assert json.loads((tmp_path / "out" / "answers" / "sampled-proofs.json").read_text())["verdict"] == "accept"
 
 
@@ -188,30 +187,63 @@ def test_onsite_components_are_read_as_written():
         C.onsite_components("def other := []")
 
 
-def _report(verdict: str, composed: str = "pending-ports") -> dict:
-    a = {"profile": {"levels": [{"size": 1024}]}}
-    row = {"verdict": verdict, "quantity": {"bound": 3}, "delta": "1/2", "answer": a} if verdict == "accept" else \
-        {"verdict": verdict, "quantity": None}
-    return {"protocols": {"integrity": row}, "composed": {"verdict": composed}}
+def test_windows_audited_at_once_each_report_and_the_monitoring_period_leads(tmp_path, monkeypatch, capsys):
+    def loop(index, run, a, scratch, out):
+        d = scratch / f"w{index}"
+        d.mkdir(parents=True)
+        (d / "period.json").write_text(json.dumps({"window": index, "circuit": "cd" * 64, "run_root": "ef" * 64,
+                                                   "law": a.law, "cap": 8, "delta": a.delta, "prover_env": {}}))
+        return d, {"population": 4}
+
+    monkeypatch.setattr(RN, "loop_window", loop)
+    decide_ = RN.decide
+    monkeypatch.setattr(RN, "decide", lambda d, node, out, exe=None: decide_(d, node, out,
+                                                                             legs={"sampled-proofs": fake("accept")}.get))
+    tools = tmp_path / "tools.json"
+    tools.write_text("{}")
+    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", str(tools), "--windows", "3", "--start", "5", "--jobs", "2"])
+    assert rc == 0
+    reports = [json.loads(x) for x in (tmp_path / "out" / "reports.jsonl").read_text().splitlines()]
+    assert sorted(r["window"] for r in reports) == [5, 6, 7]
+    assert all((tmp_path / "out" / f"w{w}" / "report.json").exists() for w in (5, 6, 7))
+    m = json.loads((tmp_path / "out" / "monitoring-period.json").read_text())
+    assert m["integrity"]["observed"]["windows"] == 3 and m["integrity"]["observed"]["verdict"] == "accept"
+    lines = [json.loads(x.split(" ", 1)[1]) for x in capsys.readouterr().out.splitlines() if x.startswith("ALLP ")]
+    assert len(lines) == 3 and list(lines[-1]) == ["monitoring_period", "window"]
+    assert set(lines[-1]["monitoring_period"]) >= {"week", "month", "year", "observed"}
 
 
-def test_the_horizon_is_a_union_bound_over_periods():
-    h = C.horizon([_report("accept")], period_s=3600)
-    assert h["integrity"] == {"periods": 1, "accepted": 1, "refused": 0, "wrong_units_bound": 3, "units": 1024,
-                              "delta": "1/2", "vacuous": False}
-    assert h["month"] == {"periods": 720, "period_s": 3600, "delta": "1", "vacuous": True, "wrong_units_bound": 2160,
-                          "units": 737280}
-    h = C.horizon([_report("accept"), _report("reject", "reject"), _report("accept")], period_s=0)
-    assert h["integrity"]["accepted"] == 2 and h["integrity"]["refused"] == 1
-    assert h["integrity"]["delta"] == "1" and h["integrity"]["vacuous"]
-    assert h["month"] == {"periods": None, "period_s": 0}
-    assert h["composed"] == "reject"
+def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
+    calls = []
+
+    def python(module, argv, log=None):
+        calls.append((module, list(argv)))
+        log.with_suffix(".log").write_text('POUW {"verdict": "accept", "W": 262144}\n')
+        return Namespace(returncode=0)
+
+    d = period(tmp_path)
+    p = json.loads((d / "period.json").read_text())
+    (d / "period.json").write_text(json.dumps({**p, "pouw": {"mode": "h1", "circuit": "77" * 64},
+                                               "tools": {"m0-pythonpath": "m", "flock-circuit": "b",
+                                                         "flock-verify": "l", "flock-firewall": "f"}}))
+    monkeypatch.setattr(RN, "_python", python)
+    order = []
+    monkeypatch.setattr(RN, "decide", lambda *x, **k: order.append(len(calls)) or {
+        "loop": {}, "seconds": {}, "protocols": {}, "composed": {}})
+    a = Namespace(node="n", pouw="h1", onsite=None)
+    r = RN.window(0, "run", a, tmp_path, tmp_path / "out", (d, {}))
+    assert order == [1] and calls[0][0] == "verity_torch_loop.pouw_audit"
+    argv = calls[0][1]
+    assert argv[argv.index("--circuit") + 1] == "77" * 64 and argv[argv.index("--window") + 1] == str(d / "pouw")
+    assert "--forged" not in argv
+    assert r["pouw_audit"] == {"rc": 0, "line": {"verdict": "accept", "W": 262144}}
 
 
 @pytest.mark.slow
-def test_the_loop_period_keeps_only_public_files(tmp_path):
-    a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"})
-    d, loop = RN.loop_period(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+def test_the_loop_window_keeps_only_public_files(tmp_path):
+    a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"},
+                  pouw=None, delta="1/100")
+    d, loop = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
     assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept
     assert not [f for f in kept if "private" in f]
@@ -220,5 +252,5 @@ def test_the_loop_period_keeps_only_public_files(tmp_path):
     reg = json.loads((d / "registration.json").read_text())
     assert reg["window"]["circuit"] == p["circuit"] == loop["circuit_before"]
     assert p["run_root"] == loop["run"] and p["tools"] == {"x": "y"} and p["node"] == "test-node"
-    assert p["prover_env"] == {"FC_ZK_SELF_CHECK": "skip"}
+    assert p["prover_env"] == {"FC_ZK_SELF_CHECK": "skip"} and p["window"] == 0 and p["delta"] == "1/100"
     assert loop["mismatched"]
