@@ -152,11 +152,19 @@ def bench(dev: torch.device) -> dict:
     y_s = timed(partial(K.receipts, seed, sigma, 0, tree.y))
     salts = tree.salts(torch.randint(0, 256, (tree.G * R.SALT_BYTES,), dtype=torch.uint8, device=dev))
     root_s = timed(partial(tree.root, seed, salts), 3)
+    E, did = tree.E, R.domain(seed, tree.plan).domain_id
+    x, lt = E.row_digests(tree.table), tree.leaf_table(did)
+    leaves = E.leaves(lt, x, salts).reshape(1, tree.G, 8)
+    parts = {"domain_s": timed(partial(R.domain, seed, tree.plan), 3), "leaf_table_s": timed(partial(tree.leaf_table, did), 3),
+             "row_digests_s": timed(partial(E.row_digests, tree.table), 3), "leaves_s": timed(partial(E.leaves, lt, x, salts), 3),
+             "tree_s": timed(partial(E.root, leaves, [did]), 3)}
+    del x, lt, leaves
     chunks = STORE_UNITS * p2.UNIT_BLOCKS / CHUNK
     step = unit_s * chunks + y_s + root_s
     return {"chunk_blocks": CHUNK, "sigma_unit_gemm_s": round(unit_s, 6), "sigma_block_partials_s": round(block_s, 6),
             "chunk_gb_s": round(CHUNK * L.ROW / unit_s / 1e9, 1), "units": STORE_UNITS, "y_s": round(y_s, 6),
-            "root_s": round(root_s, 6), "leaves": tree.G, "step_sigma_s": round(unit_s * chunks, 4),
+            "root_s": round(root_s, 6), "root_parts_s": {k: round(v, 6) for k, v in parts.items()}, "leaves": tree.G,
+            "step_sigma_s": round(unit_s * chunks, 4),
             "step_receipts_s": round(step, 4), "vs_decode_4.883s": round(step / 4.883, 4)}
 
 

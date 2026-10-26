@@ -188,15 +188,19 @@ class Tree:
         t = raw.reshape(self.G, 1, R.SALT_BYTES).to(self.device)
         return self._arr(t)
 
+    def leaf_table(self, did: bytes) -> SE.LeafTable:
+        """Leaf c's frame leaf: rank and position c in the domain `did`, under its salt c."""
+        G = self.G
+        return self.E.leaf_table([did], np.zeros(G, dtype=np.uint32), np.arange(G, dtype=np.uint64), None,
+                                 np.arange(G, dtype=np.uint32), R.SCHEMA)
+
     def root(self, seed: bytes, salts: Any) -> bytes:
         """The root of the pass with seed `seed` over the receipts in `y`, leaf c hidden under salts[c]."""
-        E, G = self.E, self.G
+        E = self.E
         did = R.domain(seed, self.plan).domain_id
         x = E.row_digests(self.table)
-        lt = E.leaf_table([did], np.zeros(G, dtype=np.uint32), np.arange(G, dtype=np.uint64), None,
-                          np.arange(G, dtype=np.uint32), R.SCHEMA)
-        leaves = E.leaves(lt, x, salts)
-        return SE.digests(E.root(leaves.reshape(1, G, 8), [did]))[0]
+        leaves = E.leaves(self.leaf_table(did), x, salts)
+        return SE.digests(E.root(leaves.reshape(1, self.G, 8), [did]))[0]
 
 
 class Pass:
