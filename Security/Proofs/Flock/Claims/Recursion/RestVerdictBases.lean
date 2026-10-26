@@ -152,7 +152,7 @@ theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (ro
     drawOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) = drawOfU spec.unitDraw := by
   unfold drawOfJ FlockComplete.JsonRT.recordObj
   rw [FlockComplete.JsonRT.getObjVal?_mkObj (FlockComplete.JsonRT.recordList_distinct spec h rootB points streams
-    proofs) (by simp [FlockComplete.JsonRT.recordList])]
+    proofs) (k := "unit_draw") (v := spec.unitDraw.getD Json.null) (by simp [FlockComplete.JsonRT.recordList])]
   cases spec.unitDraw with
   | none => rfl
   | some d => cases d <;> rfl
@@ -175,7 +175,7 @@ theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs 
     obtain ⟨hq, hn⟩ := hck _ _ _ hx
     obtain ⟨lv, hL, hC⟩ := hcu x as cs _ hlen hd hq
     have hD : drawEq (drawOfJ f.j) s.read.draw = true := by
-      obtain ⟨v, -, -, -, -, -, -, -, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
+      obtain ⟨v, c₁', r₀, rss, fl, link', pf, -, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
       obtain ⟨-, hspec, -, -, -, -, hf⟩ := DecR.mk.inj he
       rw [hf]
       dsimp only
