@@ -1,11 +1,15 @@
 import Definitions.Accounting.Gates.Codec
 
 /-!
-# The encode bound's named conjecture: a word's encoding costs budgeted units per squaring (trusted)
+# The encode bound's former conjecture, falsified: a word's encoding costs budgeted units per squaring (trusted)
 
-What the encode bound (`Definitions/Accounting/Guarantees/Gates.lean`, `EncodeBudget`) assumes, a named `Prop` taken as a
-hypothesis, never an `axiom`. It is genuine math, a conjecture (Daniel, 8 Oct): it sits under `shape.conjectures` with
-a falsification test that runs, and every claim resting on it is conditional.
+**Falsified.** `Accounting.SecurityProofs.Gates.EncodeChainRefuted` (`Security/Proofs/Accounting/Gates/Bitwise.lean`)
+proves it false inside its floor at every `E ≥ 1` and every `B`, p1024 at `k = 3` among the fields: an AND of two bits
+is a free s8-family step, so a circuit of bits computes any number of words for the key's gather units
+(`benchmarks/property_redteam/bitwise_codec.py` builds it, its test runs it). It stays listed, marked `falsified` under
+`shape.conjectures`, so that anything that takes it as a hypothesis is refused by the Lean check; no guarantee does. The
+encode bound now rests on its two parts in the repriced model (`Gates.capped`, a thin lane a compare-select unit):
+`SquaringFloor` and `ChainSum` (`Definitions/Accounting/Assumptions/SquaringChain.lean`).
 
 * `EncodeChainHardness F k B E ε`: in the circuit model, computing `q` distinct words of the codec's encoding (less
   parity) on more than `ε` of the draws costs `E` budgeted units a word, less `E/(n−1)` for each bit of run input, at
@@ -16,7 +20,8 @@ namespace Accounting.Assumptions
 
 open Accounting.Gates
 
-/-- **`encode-chain-hardness`: computing a word of the codec's encoding costs `E` budgeted units.** For every circuit
+/-- **`encode-chain-hardness`: computing a word of the codec's encoding costs `E` budgeted units (falsified:
+`Accounting.SecurityProofs.Gates.EncodeChainRefuted`; superseded by `SquaringFloor` and `ChainSum`).** For every circuit
 `C` of the model whose window is proven and whose budgeted gates each read at most `B` operand bits (`Restricted B C`),
 whose registered inputs are fixed before the draw and whose coin inputs are bytes of the draw or fixed
 (`CodecInputs`), and that computes the `q` distinct words `words` (each below `p`) of the masked `k`-round codec over

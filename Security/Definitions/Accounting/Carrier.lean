@@ -37,8 +37,8 @@ sources at odd addresses, which cost it no link: `PIChip.linkBitsEven` counts th
 
 **A carrier of a declared circuit's.** A credited KV page's payload is a declared circuit `W`'s values. Its
 carrier's provenance is `W`'s computation from the chain's first write to the pass. So its inputs are `W`'s run inputs
-in those windows of the audit, and its encodes are `W`'s budgeted gates there (`Provenance.OfCircuit`), which `W`'s
-census counts per window (`Gates.census`).
+in those windows of the audit, and its encodes are `W`'s capped units there, its budgeted units and its thin lanes
+(`Provenance.OfCircuit`), which `W`'s census and `Gates.thinAt` count per window.
 
 **The tiles a pass read.** `readsIn` is `readsOn` restricted to the tiles `I j` of each pass `j`: the distinct
 device-memory sectors read from those tiles. With `I j` the tiles of a declared circuit's blocks, it is what a pass
@@ -148,12 +148,13 @@ def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → 
   | encode t x _ f k => (k (f fun u => E (t, u))).gates cost E + cost x
 
 /-- **A provenance that is `W`'s over the windows `I`** of the audit `A`: at every store its inputs are at most the
-bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s budgeted units
-there (`Gates.census`, property/v1's units). -/
+bits of `W`'s run inputs in those windows, and its encodes, at `cost x` for `x` bits, cost at most `W`'s capped units
+there: its budgeted units (`Gates.census`, property/v1's units) and its thin lanes (`Gates.thinAt`). -/
 def OfCircuit {ι : Type} (K : Provenance N m α) (cost : ℕ → ℕ∞) (W : Gates.Dag ι) (A : Gates.Audit)
     (I : Finset ℕ) : Prop :=
   ∀ E, K.inputs E ≤ ∑ v ∈ I, (Gates.census W fun t => A.win t = v).runBits ∧
-    K.gates cost E ≤ ((∑ v ∈ I, (Gates.census W fun t => A.win t = v).budgeted : ℕ) : ℕ∞)
+    K.gates cost E ≤
+      ((∑ v ∈ I, ((Gates.census W fun t => A.win t = v).budgeted + Gates.thinAt W fun t => A.win t = v) : ℕ) : ℕ∞)
 
 end Provenance
 
@@ -344,12 +345,12 @@ end Accounting.Rate
 
 namespace Accounting
 
-/-- **The encode cost of `x` bits of a block's encoding**, in budgeted units: `Gates.encodeCost` (the fewest budgeted
-units of a restricted circuit with no run input, at most `B` operand bits a budgeted gate, that computes that many codec
-words over `F` at `k` rounds on more than `εnum/εden` of the draws, `⊤` when there is none) of the `⌈x / (8·bytes)⌉`
-words that `x` bits fill. A function of a block's encoding is charged as the whole words its bits would fill; one a
-circuit gets without computing those words (a word's parity, the Legendre symbol of its last round's input, which is
-why the words' targets leave it out) enters a provenance as an input. -/
+/-- **The encode cost of `x` bits of a block's encoding**, in capped units: `Gates.encodeCost` (the fewest capped
+units, budgeted units and thin lanes, of a restricted circuit with no run input, at most `B` operand bits a budgeted
+gate, that computes that many codec words over `F` at `k` rounds on more than `εnum/εden` of the draws, `⊤` when there
+is none) of the `⌈x / (8·bytes)⌉` words that `x` bits fill. A function of a block's encoding is charged as the whole
+words its bits would fill; one a circuit gets without computing those words (a word's parity, the Legendre symbol of
+its last round's input, which is why the words' targets leave it out) enters a provenance as an input. -/
 noncomputable def encodeBitsCost (F : Gates.Field) (k B εnum εden x : ℕ) : ℕ∞ :=
   Gates.encodeCost F k B εnum εden ((x + 8 * F.bytes - 1) / (8 * F.bytes))
 
