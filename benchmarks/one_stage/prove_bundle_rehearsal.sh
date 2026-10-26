@@ -8,9 +8,11 @@
 #    (slot, layout unit) by Lean's coin, a one-unit bundle a drawn block, delivered as a tree (PB_IN) and proved;
 # 3. that tree with one block's step path tampered and another block's bundle under a third's index, the other blocks
 #    removed: prove_bundle.py --step must refuse both before any proof (rc 1, nothing proved);
+# 3b. 2 and 3 again in the H200's form (make --step --kv): two steps, the registration naming both step roots, each
+#    drawn step-1 block's x read half from step 0; the negative tampers a step-0 read's path;
 # 4. the single-bundle delivery (window/, bundle.{json,bin}, tampered/), K units drawn live over the window.
 #   research run --on vy-nebius-cpu-4 --as proofs --project verity --source . --cwd clone -- \
-#     env CHECK_SLOTS=/workspace/research/locks/m3/slots python3 tools/verity/check/slot.py --by proofs -- \
+#     env CHECK_SLOTS=/workspace/research/locks/proofs/slots python3 tools/verity/check/slot.py --by proofs -- \
 #     bash benchmarks/one_stage/prove_bundle_rehearsal.sh [PB_BINARIES=DIR] [PB_K=8]
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
@@ -33,54 +35,66 @@ else
 fi
 run_pb() { OUT=$O/$1 bash benchmarks/one_stage/prove_bundle.sh "${@:2}" PB_BINARIES="$B" PB_FLIPS=1 PB_LEAN_JOBS=2; }
 
-log "step: make (k $K, live over the step registration)"
-"$PY" benchmarks/one_stage/prove_bundle.py make --step --k "$K" --lean "$B/flock-verify" --scratch "$T/s" --out "$T/step" \
-  > "$O/step-make.log" 2>&1 || { tail -20 "$O/step-make.log"; exit 8; }
-grep '^MAKE' "$O/step-make.log" | tee -a "$O/rehearsal.log"
-art=$(research data put --kind m3-rehearsal-fetch-check/v1 --file "$T/step/step-registration.json" 2> "$O/fetch-check.log" | tail -1)
-if [ -n "$art" ] && research data fetch "$art" --to "$T/f" >> "$O/fetch-check.log" 2>&1 \
-    && cmp -s "$T/step/step-registration.json" "$(find "$T/f" -type f | head -1)"; then
-  log "fetch ok: $art (put then fetched in the node's store, the same bytes)"
-else
-  log "fetch FAILED: $(tail -1 "$O/fetch-check.log")"
-fi
-t0=$(date +%s)
-run_pb step PB_IN="$T/step"; rc_step=$?
-log "step: the drawn blocks proved and verified in $(( $(date +%s) - t0 )) s wall (sessions one at a time, 2 Lean verifies beside)"
-log "step: prove_bundle.sh rc $rc_step"
-
-log "step negatives: a tampered step path, a block under another index"
-cp -rL "$T/step" "$T/neg"
-"$PY" - "$T/neg" > "$O/step-negatives-make.log" 2>&1 <<'EOF'
+step_part() {  # NAME [--kv]: make the step tree, prove it, then its negatives; sets rc_NAME and neg_NAME
+  local n=$1 kv=${2:-} rc mk rc_neg=x proved=x ok=0
+  log "$n: make (k $K, live over the step registration${kv:+; two steps, x read across both})"
+  "$PY" benchmarks/one_stage/prove_bundle.py make --step $kv --k "$K" --lean "$B/flock-verify" --scratch "$T/$n-s" \
+    --out "$T/$n" > "$O/$n-make.log" 2>&1 || { tail -20 "$O/$n-make.log"; exit 8; }
+  grep '^MAKE' "$O/$n-make.log" | tee -a "$O/rehearsal.log"
+  if [ "$n" = step ]; then
+    art=$(research data put --kind m3-rehearsal-fetch-check/v1 --file "$T/step/step-registration.json" 2> "$O/fetch-check.log" | tail -1)
+    if [ -n "$art" ] && research data fetch "$art" --to "$T/f" >> "$O/fetch-check.log" 2>&1 \
+        && cmp -s "$T/step/step-registration.json" "$(find "$T/f" -type f | head -1)"; then
+      log "fetch ok: $art (put then fetched in the node's store, the same bytes)"
+    else
+      log "fetch FAILED: $(tail -1 "$O/fetch-check.log")"
+    fi
+  fi
+  local t0; t0=$(date +%s)
+  run_pb "$n" PB_IN="$T/$n"; rc=$?
+  log "$n: the drawn blocks proved and verified in $(( $(date +%s) - t0 )) s wall (sessions one at a time, 2 Lean verifies beside)"
+  log "$n: prove_bundle.sh rc $rc"
+  log "$n negatives: a tampered ${kv:+step-0 read: its }step path, a block under another index"
+  cp -rL "$T/$n" "$T/$n-neg"
+  "$PY" - "$T/$n-neg" "$kv" > "$O/$n-negatives-make.log" 2>&1 <<'EOF'
 import json, shutil, sys
 from pathlib import Path
-d = Path(sys.argv[1]) / "blocks"
+d, kv = Path(sys.argv[1]) / "blocks", sys.argv[2] == "--kv"
 gs = sorted(int(p.name) for p in d.iterdir())
 assert len(gs) >= 3, f"{gs}: fewer than 3 drawn blocks to tamper"
 a, b, c = gs[:3]
 doc = json.loads((d / str(a) / "bundle.json").read_text())
-next(r for r in doc["units"][0]["rows"] if r["slot"] is not None)["slot"]["step_path"]["proof"][0] = "00" * 64
+rows = doc["units"][0]["rows"]
+if kv:
+    q = next(r for r in rows if r["port"] == "x")["reads"][0]
+    assert q["slot"]["step"] == 0, q["slot"]["step"]
+    q["slot"]["step_path"]["proof"][0] = "00" * 64
+else:
+    next(r for r in rows if r["slot"] is not None)["slot"]["step_path"]["proof"][0] = "00" * 64
 (d / str(a) / "bundle.json").write_text(json.dumps(doc))
 for f in ("bundle.json", "bundle.bin"):
     shutil.copy(d / str(c) / f, d / str(b) / f)
 for g in gs[3:] + [c]:
     shutil.rmtree(d / str(g))
-print(f"REHEARSAL negatives: block {a} step path tampered, block {b} holds block {c}'s bundle, the rest removed")
+print(f"REHEARSAL negatives: block {a} {'step-0 read' if kv else 'step'} path tampered, block {b} holds block {c}'s bundle, the rest removed")
 EOF
-mk=$?; tee -a "$O/rehearsal.log" < "$O/step-negatives-make.log"
-rc_neg=x proved=x
-if [ "$mk" = 0 ]; then
-  "$PY" benchmarks/one_stage/prove_bundle.py --step "$T/neg" --bin "$B/flock-circuit" --lean "$B/flock-verify" \
-    --firewall "$B/flock-firewall" --out "$T/neg-pb" > "$O/step-negatives.log" 2>&1; rc_neg=$?
-  grep '^PROVEBUNDLE' "$O/step-negatives.log" | tee -a "$O/rehearsal.log"
-  cp "$T/neg-pb/summary.json" "$O/step-negatives-summary.json" 2>/dev/null
-  proved=$(find "$T/neg-pb" -name session.json 2>/dev/null | wc -l)
-fi
-if [ "$rc_neg" = 1 ] && [ "$proved" = 0 ] && grep -q '"refused before proving' "$O/step-negatives.log"; then
-  log "step negatives: refused before proving (rc 1, 0 sessions)"; neg_ok=1
-else
-  log "step negatives: NOT refused as required (rc $rc_neg, $proved sessions)"; neg_ok=0
-fi
+  mk=$?; tee -a "$O/rehearsal.log" < "$O/$n-negatives-make.log"
+  if [ "$mk" = 0 ]; then
+    "$PY" benchmarks/one_stage/prove_bundle.py --step "$T/$n-neg" --bin "$B/flock-circuit" --lean "$B/flock-verify" \
+      --firewall "$B/flock-firewall" --out "$T/$n-neg-pb" > "$O/$n-negatives.log" 2>&1; rc_neg=$?
+    grep '^PROVEBUNDLE' "$O/$n-negatives.log" | tee -a "$O/rehearsal.log"
+    cp "$T/$n-neg-pb/summary.json" "$O/$n-negatives-summary.json" 2>/dev/null
+    proved=$(find "$T/$n-neg-pb" -name session.json 2>/dev/null | wc -l)
+  fi
+  if [ "$rc_neg" = 1 ] && [ "$proved" = 0 ] && grep -q '"refused before proving' "$O/$n-negatives.log"; then
+    log "$n negatives: refused before proving (rc 1, 0 sessions)"; ok=1
+  else
+    log "$n negatives: NOT refused as required (rc $rc_neg, $proved sessions)"
+  fi
+  printf -v "rc_$n" %s "$rc"; printf -v "neg_$n" %s "$ok"
+}
+step_part step
+step_part kv --kv
 
 log "single bundle: make (k $K, live over the window), delivered as window/ bundle.{json,bin} tampered/"
 "$PY" benchmarks/one_stage/prove_bundle.py make --scratch "$T/w" --out "$T/w/b" --k "$K" --lean "$B/flock-verify" \
@@ -97,5 +111,5 @@ print("REHEARSAL drawn members", sorted(keep), "private files removed", len(gone
 EOF
 run_pb bundle PB_IN="$T/in"; rc_bundle=$?
 log "single bundle: prove_bundle.sh rc $rc_bundle"
-log "done: step rc $rc_step, step negatives ok $neg_ok, single bundle rc $rc_bundle"
-[ "$rc_step" = 0 ] && [ "$neg_ok" = 1 ] && [ "$rc_bundle" = 0 ]
+log "done: step rc $rc_step, step negatives ok $neg_step, kv step rc $rc_kv, kv negatives ok $neg_kv, single bundle rc $rc_bundle"
+[ "$rc_step" = 0 ] && [ "$neg_step" = 1 ] && [ "$rc_kv" = 0 ] && [ "$neg_kv" = 1 ] && [ "$rc_bundle" = 0 ]

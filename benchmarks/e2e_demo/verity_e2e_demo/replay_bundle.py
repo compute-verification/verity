@@ -1214,12 +1214,14 @@ def _step_key(salt_key: bytes, block: int, step: int) -> bytes:
 
 
 def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: int = 1, cap: int = 8, tamper: bool = False,
-                      salt_key: bytes = FIXTURE_SALT_KEY, law: str | None = None
+                      salt_key: bytes = FIXTURE_SALT_KEY, law: str | None = None,
+                      restate: Callable[[Commitment], Commitment] | None = None
                       ) -> tuple[Any, dict[str, REG.Registered], Commitment]:
     """The torch loop's window written to ``out`` with its step commitments (a test salt key a step, from ``salt_key``): every
     row a unit commits or reads in the step commitment carries that commitment's salt, and every weight row its registered
     value's, so each window string is the one its opening reaches: -> (the loop, its registered weights, its commitment).
-    ``law``: the law it registers (`draw.parse_law`; default the fixture's, ``subset:len(FIXTURE_DRAW)``). Needs torch and
+    ``law``: the law it registers (`draw.parse_law`; default the fixture's, ``subset:len(FIXTURE_DRAW)``). ``restate``: the
+    step commitments the window registers and returns, from the loop's (`torch_loop_kv`). Needs torch and
     `integrations/torch_loop` on the path."""
     from verity.core.protocols.sampled_proofs.one_stage import registration as R
     from verity_torch_loop import loop as L
@@ -1279,8 +1281,39 @@ def torch_loop_window(out: str | Path, requests: Sequence[int] = (3, 7), steps: 
                     ys += weights[value].salts[pos]
             salts_of[m.port(p)] = ys
     committed = CS.commit(win.window, data, salt_key=salt_key, salts_of=salts_of)
+    com = restate(com) if restate else com
     win.write(committed, out, {"loop": "torch-loop", **steps_provenance(com)}, registrar=R)
     return loop, weights, com
+
+
+def torch_loop_kv(com: Commitment) -> Commitment:
+    """The loop's commitment over two steps restated so that step 0 holds, in each slot's layer-l quantizer codes row, the
+    codes step 1's layer l reads (as a K row written at step 0 is read at step 1): with `torch_loop_kv_locate`, step 1's
+    units read their ``x`` half from step 0 and half from step 1."""
+    lay, h = com.layout, (com.layout.unit_count // len(com.layout.groups)) - 1
+    rows0 = [list(r) for r in com.steps[0, 0].rows]
+    for j, rows1 in enumerate(com.steps[0, 1].rows):
+        for layer in range(len(lay.groups)):
+            g = lay.row_base[layer * (h + 1)]
+            rows0[j][g] = rows1[g]
+    return Commitment(com.context, lay, com.slots,
+                      {(0, 0): StepRecord(com.steps[0, 0].salt_key, tuple(map(tuple, rows0))), (0, 1): com.steps[0, 1]})
+
+
+def torch_loop_kv_locate(h: int, at_step0: int = 32, slot_of: Callable[[dict], int] = lambda c: c["slot"],
+                         step_of: Callable[[dict], int] = lambda c: c["step"] - 1) -> Locate:
+    """`torch_loop_locate` with a step-s unit's ``x`` (s > 0) read in two pieces: its first ``at_step0`` words from step
+    ``step_of(c)``'s quantizer codes row, the rest from its own step's (`torch_loop_kv`)."""
+    base_locate = torch_loop_locate(h)
+
+    def locate(c, template, port):
+        if port != "x" or c["step"] == 0:
+            return base_locate(c, template, port)
+        base = c["layer"] * (h + 1)
+        producer = {"layer": c["layer"], "op": f"{c['op']}.input_quant", "unit": base}
+        return [Read(step_of(c), slot_of(c), base, 0, at=0, nbytes=2 * at_step0, producer=producer),
+                Read(c["step"], c["slot"], base, 0, at=at_step0, start=2 * at_step0, producer=producer)]
+    return locate
 
 
 FIXTURE_DRAW = (5, 200, 300, 511)

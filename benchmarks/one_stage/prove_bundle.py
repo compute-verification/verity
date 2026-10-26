@@ -207,17 +207,22 @@ TIES = {"lean": "each drawn block's one-member window: its C-Flock --zk session 
                   "(draw.check_draw)"}
 
 
-def make_step(s: Path, out: Path, k: int, lean: str) -> int:
+def make_step(s: Path, out: Path, k: int, lean: str, kv: bool = False) -> int:
     """The torch loop's step as a step tree (`--step`): its registration from the fixture's commitment, its proof blocks the
     ScaledMm coordinate units (`proof_units`; the layers' quantizer units are committed, not proved), the live draw over
-    it (`step_draw`), and per drawn block a one-unit bundle of the window, registered `subset:1`, with the step's receipt."""
-    _, weights, com = RB.torch_loop_window(s / "window", law="subset:1")
-    RB.torch_loop_window(s / "tampered", tamper=True, law="subset:1")
-    (b, st), = com.steps
+    it (`step_draw`), and per drawn block a one-unit bundle of the window, registered `subset:1`, with the step's receipt.
+    ``kv``: the H200's form, two steps, the drawn step the last, its registration naming every step's root (`steps`) and
+    each block's ``x`` read half from the step before (`replay_bundle.torch_loop_kv`)."""
+    two = {"steps": 2, "restate": RB.torch_loop_kv} if kv else {}
+    _, weights, com = RB.torch_loop_window(s / "window", law="subset:1", **two)
+    RB.torch_loop_window(s / "tampered", tamper=True, law="subset:1", **two)
+    b, st = max(com.steps)
+    locate = RB.torch_loop_kv_locate(128) if kv else RB.torch_loop_locate(128)
     # the proof blocks are the ScaledMm coordinate units; each layer's quantizer unit (its first) is committed, not proved
     pu = [u for u in range(com.layout.unit_count) if u % 129 != 0]
     reg = RB.step_registration(com, weights, D.parse_law(f"subset:{k}"), run=RB.RUN_ID,
-                               program=next(iter(weights.values())).program, block=b, step=st, proof_units=pu)
+                               program=next(iter(weights.values())).program, block=b, step=st, proof_units=pu,
+                               read_steps=kv)
     out.mkdir(parents=True, exist_ok=True)
     (out / "step-registration.json").write_text(json.dumps(reg, indent=1, sort_keys=True))
     receipt, draw = step_draw(lean, out)
@@ -225,13 +230,15 @@ def make_step(s: Path, out: Path, k: int, lean: str) -> int:
     at = {}
     for u in range(w.win["population"]):
         c = RB.torch_loop_coords(*w.label(u))
+        if (c["block"], c["step"]) != (b, st):
+            continue
         at[c["slot"] * len(pu) + pu.index(c["layer"] * 129 + 1 + c["unit"])] = u
     made = {}
     for g in draw["units"]:
         if g not in at:
             continue
         d = out / "blocks" / str(g)
-        doc, pay = RB.build(s / "window", [at[g]], commitment=com, locate=RB.torch_loop_locate(128), binding=BINDING,
+        doc, pay = RB.build(s / "window", [at[g]], commitment=com, locate=locate, binding=BINDING,
                             reads=RB.torch_loop_reads, weights=weights,
                             draw={"source": "live", "law": D.parse_law("subset:1"), "receipt": receipt, "coins": CHALLENGER})
         RB.write(doc, pay, d, "bundle")
@@ -253,12 +260,13 @@ def make(argv) -> int:
                     help="the windows register subset:K and the draw is live, K units over the whole partition (else FIXTURE_DRAW)")
     ap.add_argument("--lean", help="flock-verify, for a live draw")
     ap.add_argument("--step", action="store_true", help="a step tree (`--step`) of K blocks drawn over the step's registration")
+    ap.add_argument("--kv", action="store_true", help="with --step: two steps, the drawn one's x read across both (H200's form)")
     a = ap.parse_args(argv)
     s, out = Path(a.scratch), Path(a.out)
     if a.step:
         if not (a.k and a.lean):
             raise SystemExit("a step tree is drawn live: --k K --lean flock-verify")
-        return make_step(s, out, a.k, a.lean)
+        return make_step(s, out, a.k, a.lean, kv=a.kv)
     law = f"subset:{a.k}" if a.k else None
     _, weights, com = RB.torch_loop_window(s / "window", law=law)
     RB.torch_loop_window(s / "tampered", tamper=True, law=law)
