@@ -89,22 +89,30 @@ theorem decR_frames {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : L
 
 /-! ## The substitutions keep the streams' names, counts and messages -/
 
+theorem forall₂_getElem {α β : Type _} {R : α → β → Prop} {l₁ : List α} {l₂ : List β} :
+    List.Forall₂ R l₁ l₂ ↔ l₁.length = l₂.length ∧ ∀ i (h₁ : i < l₁.length) (h₂ : i < l₂.length), R l₁[i] l₂[i] := by
+  rw [List.forall₂_iff_get]
+  simp only [List.get_eq_getElem]
+
 /-- `b` reads as `a` at a round's count and message. -/
-def KeptR (a b : Json) : Prop := b.getObjVal? "n" = a.getObjVal? "n" ∧ b.getObjVal? "msg" = a.getObjVal? "msg"
+structure KeptR (a b : Json) : Prop where
+  n : b.getObjVal? "n" = a.getObjVal? "n"
+  msg : b.getObjVal? "msg" = a.getObjVal? "msg"
 
 /-- `b` reads as `a` at a stream's name, and its rounds as `a`'s at their counts and messages. -/
-def KeptS (a b : Json) : Prop :=
-  b.getObjVal? "stream" = a.getObjVal? "stream" ∧
-    ∀ rs, Record.arr a "rounds" = .ok rs → ∃ rs', Record.arr b "rounds" = .ok rs' ∧ List.Forall₂ KeptR rs.toList rs'.toList
+structure KeptS (a b : Json) : Prop where
+  stream : b.getObjVal? "stream" = a.getObjVal? "stream"
+  rounds : ∀ rs, Record.arr a "rounds" = .ok rs →
+    ∃ rs', Record.arr b "rounds" = .ok rs' ∧ List.Forall₂ KeptR rs.toList rs'.toList
 
-theorem KeptR.trans {a b c : Json} (h : KeptR a b) (h' : KeptR b c) : KeptR a c := ⟨h'.1.trans h.1, h'.2.trans h.2⟩
+theorem KeptR.trans {a b c : Json} (h : KeptR a b) (h' : KeptR b c) : KeptR a c := ⟨h'.n.trans h.n, h'.msg.trans h.msg⟩
 
 theorem KeptS.trans {a b c : Json} (h : KeptS a b) (h' : KeptS b c) : KeptS a c := by
-  refine ⟨h'.1.trans h.1, fun rs hrs => ?_⟩
-  obtain ⟨rs', h1, h2⟩ := h.2 rs hrs
-  obtain ⟨rs'', h3, h4⟩ := h'.2 rs' h1
+  refine ⟨h'.stream.trans h.stream, fun rs hrs => ?_⟩
+  obtain ⟨rs', h1, h2⟩ := h.rounds rs hrs
+  obtain ⟨rs'', h3, h4⟩ := h'.rounds rs' h1
   refine ⟨rs'', h3, ?_⟩
-  rw [List.forall₂_iff_getElem] at h2 h4 ⊢
+  rw [forall₂_getElem] at h2 h4 ⊢
   exact ⟨h2.1.trans h4.1, fun i h₁ h₂ => KeptR.trans (h2.2 i h₁ (by omega)) (h4.2 i (by omega) h₂)⟩
 
 theorem keptR_coins (f : Json → Json) (r : Json) : KeptR r (mapKey "coins" f r) :=
@@ -115,7 +123,7 @@ theorem keptS_mapStream (g : String → ℕ → Json → Json) (hg : ∀ n k r, 
   refine ⟨getObjVal?_mapKey_ne _ _ (by decide), fun rs hrs => ⟨rs.mapIdx (g (nameOf s)), ?_, ?_⟩⟩
   · rw [mapStream, arr_mapKey_mapArrIdx, hrs]
     rfl
-  · rw [List.forall₂_iff_getElem]
+  · rw [forall₂_getElem]
     refine ⟨by simp, fun i h₁ h₂ => ?_⟩
     simp only [Array.getElem_toList, Array.getElem_mapIdx]
     exact hg _ _ _
@@ -142,7 +150,7 @@ theorem arr_streams_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {st
     rw [ha] at h
     cases h
     refine ⟨a, rfl, ?_⟩
-    rw [List.forall₂_iff_getElem]
+    rw [forall₂_getElem]
     refine ⟨by simp, fun i h₁ h₂ => ?_⟩
     simp only [Array.getElem_toList, Array.getElem_map]
     refine (keptS_mapStream _ (fun _ _ r => keptR_coins _ r) _).trans (keptS_mapStream _ (fun n k r => ?_) _)
@@ -192,15 +200,15 @@ theorem roundFields_roundObj {spec : SessionSpec} {h : ByteArray → ByteArray} 
   obtain ⟨hn, -, -, hm⟩ := hf
   have h1 : Record.nat x "n" = .ok r.n := by
     unfold Record.nat Record.fld
-    rw [hx.1, roundObj_n]
+    rw [hx.n, roundObj_n]
     rfl
   have h2 : Record.isNull x "msg" = false := by
     unfold Record.isNull
-    rw [hx.2, roundObj_msg]
+    rw [hx.msg, roundObj_msg]
     rfl
   have h3 : Record.str x "msg" = .ok (hexOf (r.bytes.getD ByteArray.empty)) := by
     unfold Record.str Record.fld
-    rw [hx.2, roundObj_msg]
+    rw [hx.msg, roundObj_msg]
     rfl
   obtain ⟨s, b, hs, hb, hbytes⟩ := hm h2
   rw [h3] at hs
