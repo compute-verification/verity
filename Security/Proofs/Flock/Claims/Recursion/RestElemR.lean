@@ -4,6 +4,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.NextRTables
 import Proofs.Flock.Claims.Complete.Shaped
 import Proofs.Flock.Claims.Recursion.NextRFits
+import Proofs.Flock.Claims.Recursion.RestFitsLift
 
 /-!
 # `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`
@@ -24,8 +25,8 @@ hypothesis, at every witness and every decision `rdR` reads:
 
 `readsAt_elemR` is `RestRead.readsAt` at `elemR` with only `OpenedFit` left. `OpenedFit` follows from the rows'
 sizes (`openedFit_of`): the honest proof fits its own rows (`repFits`), and a fit lifts to any rows of the same byte
-sizes (`RestRead.FitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
-`readsAt_elemR'` takes those two.
+sizes (`RestRead.fitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
+`readsAt_elemR'` takes that one.
 -/
 
 namespace RecDeploy.RestElem
@@ -431,16 +432,16 @@ def OpenedSized (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × 
                 ((List.range (RestRead.kI x)).map c).tail.dropLast k) p T).map (·.map ByteArray.size)
 
 /-- **Every rep's opened rounds fit where they have an honest rep's sizes**: the honest proof fits its own rows
-(`repFits`), and a fit lifts to rows of the same byte sizes (`FitsLift`). -/
+(`repFits`), and a fit lifts to rows of the same byte sizes (`fitsLift`). -/
 theorem openedFit_of (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
-    (hL : RestRead.FitsLift) (hS : OpenedSized elem) : RestRead.OpenedFit elem := by
+    (hS : OpenedSized elem) : RestRead.OpenedFit elem := by
   intro x hx c ws hl hT os last hf hos v hv k hk
   obtain ⟨hsc, p, T, hp, hcap, hsz⟩ := hS x hx c ws hl hT os last hf hos v hv k hk
-  exact hL _ _ _ p T (FlockDeploy.repFits _ p T hsc hp hcap) hsz
+  exact RestRead.fitsLift _ hsc.2.1 _ _ p T (FlockDeploy.repFits _ p T hsc hp hcap) hsz
 
-/-- **The last step reads at the deployed readers at `elemR`** wherever fits lift across byte sizes and the opened
-rounds have an honest rep's sizes. -/
-theorem readsAt_elemR' (hL : RestRead.FitsLift) (hS : OpenedSized elemR) : RestRead.ReadsAt rdR finalR (restR elemR) :=
-  readsAt_elemR (openedFit_of elemR hL hS)
+/-- **The last step reads at the deployed readers at `elemR`** wherever the opened rounds have an honest rep's
+sizes. -/
+theorem readsAt_elemR' (hS : OpenedSized elemR) : RestRead.ReadsAt rdR finalR (restR elemR) :=
+  readsAt_elemR (openedFit_of elemR hS)
 
 end RecDeploy.RestElem
