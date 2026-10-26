@@ -14,8 +14,8 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.ml.pouw import window as Wd  # noqa: E402
+from verity.ml.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveRecord  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine.hooks import Hooks  # noqa: E402

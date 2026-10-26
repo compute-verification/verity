@@ -9,7 +9,7 @@ import json
 import struct
 from pathlib import Path
 
-from verity.core.protocols.pouw import weights as Wt
+from verity.ml.pouw import weights as Wt
 from verity_torch_loop import checkpoint as K, loop as L
 
 GATE = Path(__file__).resolve().parents[3] / "benchmarks" / "live_challenger" / "models.py"

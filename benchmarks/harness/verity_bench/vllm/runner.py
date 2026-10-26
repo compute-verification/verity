@@ -709,7 +709,7 @@ def _pearl_c_gate(run: Any) -> dict[str, Any]:
     ``in-process``."""
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
-    from verity.core.protocols.pouw.salt import epoch_open_root
+    from verity.ml.pouw.salt import epoch_open_root
 
     check = PearlCArm()
     check.run, check.schedule = run, run.schedule.name

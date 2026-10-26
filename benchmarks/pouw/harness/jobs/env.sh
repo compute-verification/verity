@@ -5,7 +5,7 @@
 # BUILD is a build.sh output directory (libpouw_harness.so and build.json), or art:<id> of one in the evidence store. The library
 # is built elsewhere: build.sh needs nvcc, and NVIDIA's nvcc wheel ships only ptxas. This makes (once, under a lock) a venv with
 # numpy and the cuBLASLt and CUDA runtime wheels of the versions build.sh links against, puts their libraries on
-# LD_LIBRARY_PATH, and exports PY and POUW_HARNESS_LIB. It puts this tree's `verity` and `verity.core.protocols.pouw` sources (numpy and
+# LD_LIBRARY_PATH, and exports PY and POUW_HARNESS_LIB. It puts this tree's `verity` and `verity.ml.pouw` sources (numpy and
 # stdlib only) on PYTHONPATH, so an arm imports its scheme from the tree it ships in. env: POUW_HARNESS_ENV (default
 # /workspace/cache/pouw-harness-env).
 

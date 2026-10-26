@@ -38,7 +38,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.pouw.audit import hm96_salt
+from verity.ml.pouw.audit import hm96_salt
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments import hm96
 from verity.ml.commitments.hm96 import batch

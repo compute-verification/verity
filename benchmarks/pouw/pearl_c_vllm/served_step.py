@@ -172,7 +172,7 @@ def coins_of(option, reserved) -> dict:
     the weights' root, `salt.epoch_open_root`; the weights' root for a coin held in-process), its salt, and how its
     session closed (``details.challenger``, once the engine has closed), and the session head a retained pass's manifest
     names (``manifest_head``, `pouw_pearl_c_manifest.session_head`); `reserved` the gate's reserve answer `_live` took."""
-    from verity.core.protocols.pouw import salt as PS
+    from verity.ml.pouw import salt as PS
     from verity_vllm.protocols.pouw.pearl_c.manifest import session_head
     c = option.commitment()
     k, w = c.get("pass_index"), c.get("weights_root")

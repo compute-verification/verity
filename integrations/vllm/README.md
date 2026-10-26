@@ -335,13 +335,13 @@ alone, the Commit as it has always run), `run_row` refuses a set it cannot run b
 the others once its committers registered the weights of record (the replay reads live weights through what an option
 released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
-`engine/hooks.py` tagged with its option.  The protocol logic is `verity.core.protocols.pouw`, `verity.core.protocols.pous` and `verity.core.protocols.sampled_proofs`';
+`engine/hooks.py` tagged with its option.  The protocol logic is `verity.ml.pouw`, `verity.core.protocols.pous` and `verity.core.protocols.sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
 bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
 `traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
-`verity.core.protocols.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
+`verity.ml.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
 after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
 `pouw.challenged`), `retain_steps` and `transcript_dir`. Under `ncp-v2` and Pearl-C, `challenger` (the auditor host's,
 `HOST:PORT`) and `session` replace `coins`: ncp-v2's session is the gate's open answer, and Pearl-C's the gate's reserve

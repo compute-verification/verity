@@ -62,17 +62,17 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE / "clear"))
-sys.path.insert(0, str(ROOT / "verity" / "core" / "protocols" / "pouw" / "tests"))
+sys.path.insert(0, str(ROOT / "verity" / "ml" / "pouw" / "tests"))
 import clear_work as CW  # noqa: E402
 import epoch_coins as EC  # noqa: E402
 import run_result  # noqa: E402
 
-from verity.core.protocols.pouw import registration as REG  # noqa: E402
-from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root  # noqa: E402
-from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
+from verity.ml.pouw import registration as REG  # noqa: E402
+from verity.ml.pouw.audit import Epoch, Workload, weights_root  # noqa: E402
+from verity.ml.pouw.protocol import DomainError, Matmul, Shape  # noqa: E402
+from verity.ml.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.pouw.schemes.pearl_c_device import SM120  # noqa: E402
+from verity.ml.pouw.schemes.pearl_c_work import Split, UnitRecord, pad_weight  # noqa: E402
 
 SNAP = "/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42"
 TP = 8

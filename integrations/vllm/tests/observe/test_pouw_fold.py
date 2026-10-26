@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 import torch
 
-from verity.core.protocols.pouw.coins import Challenger
+from verity.ml.pouw.coins import Challenger
 from verity_vllm import protocols as PO
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepEnd, StepStart
 from verity_vllm.observe.fold.patterns.pouw import OP, PouwLinear, with_protocols

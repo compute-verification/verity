@@ -1,7 +1,7 @@
 """The Pearl-C device path's schedule (`pouw_pearl_c_device.PearlCDeviceRun`'s lanes): the lane each call step runs on, the
 per-call buffers a side lane touches, and a call's eager launches on those lanes.
 
-The schedule (`verity.core.protocols.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
+The schedule (`verity.ml.pouw.serving.Schedule`, by name from `SCHEDULES`; the decode plan's step 2,
 bc-b139c29c's) places each call's step groups (`STEP_GROUPS`) on lanes.  Under ``deferred``, the measured one, the call's tile
 hashing (`SIDE_IO`: the tile leaves) runs on a side lane at the least priority behind an event after the GEMM, while the next
 calls go on, and the rest of the call runs on a main lane of the run's own at the greatest priority, joined to the caller's
@@ -39,12 +39,12 @@ import struct
 from contextlib import nullcontext
 from typing import Any
 
-from verity.core.protocols.pouw.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
+from verity.ml.pouw.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
 
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
 from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream
 
-#: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
+#: each call step's group (`verity.ml.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
 #: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``;
@@ -113,7 +113,7 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
 
 
 def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedule:
-    """`name`'s schedule (`verity.core.protocols.pouw.serving.SCHEDULES`), refused where the scheme's format, this path or (when
+    """`name`'s schedule (`verity.ml.pouw.serving.SCHEDULES`), refused where the scheme's format, this path or (when
     given) `kernel` can't run it: A's tree leaves the main lane only on a kernel whose pipeline splits A's commitment."""
     s = SCHEDULES[name] if isinstance(name, str) else name
     bad = schedule_refusals(hash_format(scheme), s)

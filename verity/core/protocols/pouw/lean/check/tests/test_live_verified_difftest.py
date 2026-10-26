@@ -18,7 +18,7 @@ from hypothesis import strategies as st
 
 import pouw_live_verified_cases as cases
 from pouw_verified_cases import replay
-from verity.core.protocols.pouw import credit as Cr
+from verity.ml.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
 
 if shutil.which("lake") is None:

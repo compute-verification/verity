@@ -263,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--cubin")
     p.add_argument("--reps", type=int, default=10)
     p.add_argument("--schedule", nargs="+", default=list(SCHEDULES),
-                   help="the grouped call's schedules, each its own arm (verity.core.protocols.pouw.serving.SCHEDULES)")
+                   help="the grouped call's schedules, each its own arm (verity.ml.pouw.serving.SCHEDULES)")
     p.add_argument("--graphs", action=argparse.BooleanOptionalAction, default=True,
                    help="each schedule's grouped arm a second time with the run's graphs (its layout's lane graphs replayed)")
     a = p.parse_args(argv)

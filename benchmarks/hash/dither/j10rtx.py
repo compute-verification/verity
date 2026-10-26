@@ -53,8 +53,8 @@ import h1ogate as HG  # noqa: E402
 import j10b_ref as JB  # noqa: E402
 from h1r import H1R  # noqa: E402
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.pouw.circuit import seeds as SD  # noqa: E402
 
 FORM_ID = {"block2": 0, "split": 1, "split2": 2, "block": 3}  # h1o_band_launch's forms: block rows read in the loop
 FORM_STAGED = {"block2": 4, "split": 1, "split2": 2, "block": 5}  # every form's rows staged in its noise buffers

@@ -27,7 +27,7 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.pouw.circuit import h1tile as HT  # noqa: E402
 
 SERVED_H1 = Path(__file__).resolve().parents[1] / "served_h1"
 SALT, RA, RB = hashlib.sha512(b"salt").digest(), hashlib.sha512(b"A").digest(), hashlib.sha512(b"B").digest()
@@ -77,7 +77,7 @@ class _At(PR.Receipts):
         return self.u0, (self.served.m // 32) * (call.n // 32)
 
     def public(self, call):
-        from verity.core.protocols.pouw import core_check as CC
+        from verity.ml.pouw import core_check as CC
         (u0, n), ncb = self.start(call), call.n // 32
         return [CC.public_words(self.run.salt, u0 + t, self.roots(call),
                                 (u0, CC.j10r_blocks(self.served.m, call.k, (32, 32), t // ncb, t % ncb)) if self.j10r
@@ -142,7 +142,7 @@ def test_skipping_dead_tiles_is_off_unless_h1_skip_dead_is_1(monkeypatch):
 
 def test_a_public_row_gives_back_the_salt_position_and_roots_it_carries():
     """`public_fields` inverts `core_check.public_words`, the verifier's public row; a row of another width is refused."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.ml.pouw import core_check as CC
     assert PR.public_fields(CC.public_words(SALT, 2**40 + 7, (RA, RB))) == (SALT, 2**40 + 7, (RA, RB))
     with pytest.raises(ValueError, match="public row is"):
         PR.public_fields(CC.public_words(SALT, 7, (RA, RB))[:-1])
@@ -208,7 +208,7 @@ def _window(producer, shapes, modules, blocks, rows: list[int], steps: int, seed
 def _registered_receipts(run, made_by, c) -> np.ndarray:
     """Call c's receipt table's words: `receipt_words` of the receipts the producer returned for it, which the registered
     ``receipt@<c>`` is the native commit of (its root, under its nonce and the window's open root)."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.pouw.circuit import h1window as HW
     from verity_vllm.protocols.pouw.h1 import registered as NR
     from verity_vllm.protocols.pouw.h1 import served as SV
     served, rc = run.served, run.served.receipt_table(c.index)
@@ -224,8 +224,8 @@ def _held_to_reference(run, codes, weights, made_by, units_of):
     weight, each seeded from its unit's public row as the verifier builds it (`credit.public_table`: the run's salt, its
     Program position and the registered roots), whose table is the ``pub@<c>`` `Served` registered; returns the units
     checked, live and dead."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.pouw import credit as CR
+    from verity.ml.pouw.circuit import h1window as HW
     from verity_vllm.protocols.pouw.h1 import served as SV
     served, pre, seen = run.served, run.served.program.fn.bindings["PREFIX"], {"live": 0, "dead": 0}
     assert not served.refused, served.refused
@@ -284,7 +284,7 @@ def test_the_units_kernel_is_h1tile_reference_at_llama_8b_shapes_through_served(
     unit of every call equal to receipts.py's torch chain, and the first and last unit of each row block equal to
     `h1tile.reference`, word for word. The z/y records are zeros: no receipt reads them."""
     units = _kernel()
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.pouw.circuit import h1window as HW
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
@@ -419,7 +419,7 @@ def test_a_j10r_units_counters_are_its_rows_and_columns_blocks_of_its_calls_one_
 def test_a_j10r_public_row_gives_back_its_call_and_blocks():
     """`j10r_fields` inverts the J10-R part of `core_check.public_words` (the call's first position and the unit's
     blocks), `public_fields` still reads its salt, position and roots, and a v1 row has no J10-R fields."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.ml.pouw import core_check as CC
     row = CC.public_words(SALT, 2**40 + 7, (RA, RB), (2**40, (9 * 64, 64 * 9 + 9 * 32)))
     assert PR.public_fields(row) == (SALT, 2**40 + 7, (RA, RB))
     assert PR.j10r_fields(row) == (2**40, (9 * 64, 64 * 9 + 9 * 32))
@@ -474,7 +474,7 @@ def test_each_calls_j10r_receipt_table_is_h1tile_j10r_reference_through_served()
     chain, the producer taking J10-R from the Program (`h1window.is_j10r`): every call's ``pub@<c>`` is the verifier's
     J10-R public table (`credit.public_table` with `h1window.call_blocks`), and every unit of every call's
     ``receipt@<c>`` is `h1tile.j10r_reference` seeded from its row, word for word; `check` of every kept call agrees."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.pouw.circuit import h1window as HW
     from verity_vllm.engine import int8_ops as OPS
     shapes, blocks = [(64, 64), (32, 64), (32, 128)], (0, 0, 1)
     run, codes, ws, made_by, made = _window(lambda s: PR.Receipts(s, keep=lambda c: True), shapes,
@@ -501,7 +501,7 @@ def test_noise_cus_j10r_call_streams_are_seed_cs_noise_blocks():
     """On the GPU, noise.cu's `h1_noise_calls` over calls of 1, 37, 0 and 600 blocks and Llama-3.1-8B's gate_up stream
     (64 rows, N = 28672, K = 4096: 258,624 blocks) in one launch gives each call's stream block for block as hashlib does
     (`seeds.noise_block` of its seed_c), and its J10-R receipts are the torch chain's over hashlib's stream."""
-    from verity.core.protocols.pouw.circuit import seeds as SD
+    from verity.ml.pouw.circuit import seeds as SD
     cubin, RC = _cubin(), PR.RC
     seeds = [SD.call_seed(SALT, c, RA, RB) for c in (0, 1, 2, 3, 2**33)]
     counts = [1, 37, 0, 600, RC.stream_blocks(64, 28672, 4096)]

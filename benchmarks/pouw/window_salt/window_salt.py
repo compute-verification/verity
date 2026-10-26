@@ -21,10 +21,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.circuit import h1tile as HT
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 

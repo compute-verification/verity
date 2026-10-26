@@ -42,8 +42,8 @@ from typing import Any, Callable, Iterator
 
 import numpy as np
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
+from verity.ml.pouw import credit as CR
+from verity.ml.pouw import weights as Wt
 from verity.ml.circuits.codec import canonical_json
 
 MANIFEST = Path("integrations/vllm/manifests/checkpoints-int8.json")

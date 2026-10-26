@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.protocol import CALL_RANGE
+from verity.ml.pouw.protocol import CALL_RANGE
 
 #: vLLM's GPU model runner modules (V1's and Model Runner V2's), each with its ``GPUModelRunner`` (as `store.binder.RUNNERS`)
 MODEL_RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")

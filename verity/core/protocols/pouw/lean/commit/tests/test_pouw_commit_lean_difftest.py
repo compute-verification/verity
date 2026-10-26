@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 import verity_difftest as D
 
-from verity.core.protocols.pouw.protocol import tagged
+from verity.ml.pouw.protocol import tagged
 
 PACKAGE = Path(__file__).resolve().parents[1]
 SCRIPT = PACKAGE / "tests" / "difftest_vectors.py"

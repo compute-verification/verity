@@ -16,8 +16,8 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.pouw import credit as CR  # noqa: E402
+from verity.ml.pouw.circuit import h1window as HW  # noqa: E402
 from verity.ml.circuits import partition_object as PO  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
 

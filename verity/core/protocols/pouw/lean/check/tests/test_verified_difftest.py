@@ -16,7 +16,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 import pouw_verified_cases as cases
-from verity.core.protocols.pouw import credit as Cr
+from verity.ml.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
 
 if shutil.which("lake") is None:

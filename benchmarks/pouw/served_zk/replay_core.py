@@ -52,10 +52,10 @@ from typing import Any
 
 import verity_difftest as D
 
-from verity.core.protocols.pouw import coins as Co
-from verity.core.protocols.pouw import core_check as CC
+from verity.ml.pouw import coins as Co
+from verity.ml.pouw import core_check as CC
 from verity.core.protocols.pouw import verifier as PV
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import window as Wd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import of_record as OR  # noqa: E402

@@ -1455,6 +1455,31 @@
         "integrations/vllm/verity_vllm/program/kernels/compiled_relations.py": "integrations/vllm/verity_vllm/program/compiled_relations.py",
         "integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py": "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"
       }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pouw/circuit/": "verity/ml/pouw/circuit/",
+        "verity/core/protocols/pouw/schemes/": "verity/ml/pouw/schemes/",
+        "verity/core/protocols/pouw/tests/": "verity/ml/pouw/tests/",
+        "verity/core/protocols/pouw/__init__.py": "verity/ml/pouw/__init__.py",
+        "verity/core/protocols/pouw/PROTOCOL.md": "verity/ml/pouw/PROTOCOL.md",
+        "verity/core/protocols/pouw/pyproject.toml": "verity/ml/pouw/pyproject.toml",
+        "verity/core/protocols/pouw/audit.py": "verity/ml/pouw/audit.py",
+        "verity/core/protocols/pouw/coins.py": "verity/ml/pouw/coins.py",
+        "verity/core/protocols/pouw/core_check.py": "verity/ml/pouw/core_check.py",
+        "verity/core/protocols/pouw/credit.py": "verity/ml/pouw/credit.py",
+        "verity/core/protocols/pouw/grind.py": "verity/ml/pouw/grind.py",
+        "verity/core/protocols/pouw/identifier.py": "verity/ml/pouw/identifier.py",
+        "verity/core/protocols/pouw/leaf_lanes.py": "verity/ml/pouw/leaf_lanes.py",
+        "verity/core/protocols/pouw/protocol.py": "verity/ml/pouw/protocol.py",
+        "verity/core/protocols/pouw/registration.py": "verity/ml/pouw/registration.py",
+        "verity/core/protocols/pouw/salt.py": "verity/ml/pouw/salt.py",
+        "verity/core/protocols/pouw/serving.py": "verity/ml/pouw/serving.py",
+        "verity/core/protocols/pouw/weights.py": "verity/ml/pouw/weights.py",
+        "verity/core/protocols/pouw/window.py": "verity/ml/pouw/window.py",
+        "verity/core/protocols/pouw/lean/": "verity/core/protocols/pouw/lean/",
+        "verity/core/protocols/pouw/verifier.py": "verity/core/protocols/pouw/verifier.py"
+      }
     }
   ]
 }

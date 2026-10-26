@@ -23,7 +23,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import core_check as CC
+from verity.ml.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity_all_protocols import runner as RN, table as T
 from verity_all_protocols.table import check_answer

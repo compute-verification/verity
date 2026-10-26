@@ -14,7 +14,7 @@ Pearl-C pass's manifest and its verifier's inputs, then one mutation (`LIVE_SALT
 `live_salt`.  A draw case is an honest draw (the draw coin of seeded coins, or of a live epoch's as a certified
 window's, opened after a registration's digest, the units `stream_subset` of its key's stream), then one mutation
 (`DRAW_NAMES`).
-`tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py`
+`tests/test_difftest.py` draws them for the harness, and `verity/ml/pouw/tests/test_pouw_core_check.py`
 holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
@@ -26,12 +26,12 @@ import random
 
 import pouw_rounds_cases as RC
 from verity.ml.crypto import lms
-from verity.core.protocols.pouw import coins as Co
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
-from verity.core.protocols.pouw.protocol import tagged
+from verity.ml.pouw import coins as Co
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.audit import EPOCH_SALT_DOMAIN, SALT_DOMAIN
+from verity.ml.pouw.protocol import tagged
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments import CommitmentDomain, MerkleTree, RangeIndexedDomain
 from verity.ml.randomness import derive

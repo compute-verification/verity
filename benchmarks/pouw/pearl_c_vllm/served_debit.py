@@ -81,12 +81,12 @@ import verify_run as VR  # noqa: E402
 from verity.ml.commitments import Commitment  # noqa: E402
 from verity.ml.commitments import verify_opening  # noqa: E402
 from verity.ml.randomness import derive  # noqa: E402
-from verity.core.protocols.pouw.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
+from verity.ml.pouw.audit import (ROW_SCHEMA, activation_binding, opened_value, rows_domain,  # noqa: E402
                                               weight_binding)
 from clear_audit import Transcript, Verifier, commitment_hash  # noqa: E402
-from verity.core.protocols.pouw.coins import CoinCommitment  # noqa: E402
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: E402
+from verity.ml.pouw.coins import CoinCommitment  # noqa: E402
+from verity.ml.pouw.protocol import Context, Matmul, Shape  # noqa: E402
+from verity.ml.pouw.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
 

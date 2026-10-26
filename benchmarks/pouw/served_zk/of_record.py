@@ -30,7 +30,7 @@ from typing import Any, Callable, Mapping
 
 import verity_difftest as D
 
-from verity.core.protocols.pouw import core_check as CC
+from verity.ml.pouw import core_check as CC
 from verity.core.protocols.pouw import verifier as V
 from verity.ml.circuits import codec
 

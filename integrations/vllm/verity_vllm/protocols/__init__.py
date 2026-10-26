@@ -5,7 +5,7 @@ A run enables a set of ``name:scheme`` entries (`config.parse_protocols`), off b
 reads it as the target's ``protocols`` (`TargetProfile.protocols`), so the Build, the Commit and the Check read one copy.
 A row refuses a set it cannot run before any stage starts (`at_row`); the Commit checks it again before its engine exists
 (`commit_guard`).  Each protocol has one adapter module here (`interface`), imported only when it is enabled.  The
-protocol logic is its package's (`verity.core.protocols.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), never this package's.
+protocol logic is its package's (`verity.ml.pouw`, `verity.core.protocols.pous`, `verity.core.protocols.sampled_proofs`), never this package's.
 
 **Order.**  The nesting at each site is stated in `SITES`.  Adapters install in `config.PROTOCOLS` order, innermost
 first, and uninstall in reverse:
@@ -39,7 +39,7 @@ Program describes: POUS's decode is bit-identical and leaves the circuit untouch
 protocol package has a circuit for its scheme (``traced_as``).
 
 **Circuits.**  What sampled proofs traces an executor's computation as is its protocol package's (`CIRCUITS`: for PoUW,
-`verity.core.protocols.pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
+`verity.ml.pouw.circuit`, whose ``SCHEMES`` have a circuit and whose ``traced_as(scheme, m, k, n)`` is the circuit of one
 executed call).  The selector admits an executor beside sampled proofs only for a scheme with a circuit, and `traced_as`
 gives the Commit the circuit of each executed call.
 """
@@ -74,7 +74,7 @@ ADAPTERS = {"pouw": "pouw", "pous": "pous", "sampled-proofs": "sampled_proofs"}
 SITES = {"LinearBase.quant_method.apply": ("pous", "pouw")}
 #: protocol -> the module of its protocol package that says what sampled proofs traces its executed computation as:
 #: ``SCHEMES`` (the schemes with a circuit) and ``traced_as(scheme, m, k, n)`` (one executed call's circuit, None without one)
-CIRCUITS = {"pouw": "verity.core.protocols.pouw.circuit"}
+CIRCUITS = {"pouw": "verity.ml.pouw.circuit"}
 RECORD_SCHEMA = "verity-vllm/protocol-composition/v0"
 
 parse = config.parse_protocols

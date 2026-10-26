@@ -29,10 +29,10 @@ import json
 import time
 from typing import Any, Callable, Iterable, Iterator, Mapping
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import salt_of
+from verity.ml.pouw import credit as CR
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.audit import salt_of
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
 

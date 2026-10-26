@@ -1,7 +1,7 @@
 # `pouw_check`: PoUW's window check as a core protocol
 
 One `Core.Protocol` (`verity/core/protocols/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`, Lean core only:
-PoUW's verifier of record (`verity/core/protocols/pouw/verifier.py`), with `verity/core/protocols/pouw/core_check.py` the
+PoUW's verifier of record (`verity/core/protocols/pouw/verifier.py`), with `verity/ml/pouw/core_check.py` the
 Python reference held to it.
 
 | field | here |
@@ -152,7 +152,7 @@ its release log, and the auditor's signed ledger opening and ending it for the w
 in-process challenger's coins, an unsigned or tampered log, a ledger signed under another key or cut before the session's
 end, a second session for the window, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded epoch's commitment or another
-layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
+layout's). `verity/ml/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
 and `credit.period_credit` on proof outcomes, which they derive from a window's proof files by running the verifier of
 record; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
@@ -164,7 +164,7 @@ descriptor whose record names another layout than its nodes, a round log the cha
 drawn unit's proof of another registration than the window's, an entry whose root is not its sessions', a window of a
 period whose B rows, one row's s_w or every code, are not the ones the period's open signed, a period whose open signs
 no weights' root, a window whose request runs past its public max_tokens or stops before it, a period whose open
-commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/core/protocols/pouw/tests/test_pouw_credit.py`
+commits no fixed length or an EOS-keyed one, and one mutation per other refusal), and `verity/ml/pouw/tests/test_pouw_credit.py`
 holds each mutation to its refusal.
 
 `tests/test_verified_difftest.py` puts `credit-verified` against `credit._asks` and `credit._verified` with the Lean

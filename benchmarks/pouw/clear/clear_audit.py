@@ -5,7 +5,7 @@ replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/r
 end-to-end vectors through it, and the Lean's draws (`PouwCommit.Draws`) are difftested against `Sampled.select` and
 `draw_coin`.  This directory is not a package: callers put it on ``sys.path``.
 
-0.-2. **Coins, weights and the salt** are core's (`verity.core.protocols.pouw.audit`: `weights_root`, `Epoch.start`).
+0.-2. **Coins, weights and the salt** are core's (`verity.ml.pouw.audit`: `weights_root`, `Epoch.start`).
 3. **Units.**  For each matmul the prover commits the activation rows (bound to the salt and the index); the scheme
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
@@ -35,11 +35,11 @@ from fractions import Fraction
 from itertools import accumulate
 from math import lcm
 
-from verity.core.protocols.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA, Epoch, TileRef,
+from verity.ml.pouw.audit import (HM96, HM96_TRANSCRIPT, HM96_WEIGHTS, ROW_SCHEMA, TILE_SCHEMA, Epoch, TileRef,
                                               Workload, activation_binding, commit_rows, hm96_salt, opened_value, rows_domain,
                                               tile_refs, transcript_domain, weight_binding)
-from verity.core.protocols.pouw.coins import Challenger, coin_reason
-from verity.core.protocols.pouw.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
+from verity.ml.pouw.coins import Challenger, coin_reason
+from verity.ml.pouw.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
 from verity.errors import ProtocolError
 from verity.ml.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, VerificationLimits, verify_opening
 from verity.ml.randomness import derive

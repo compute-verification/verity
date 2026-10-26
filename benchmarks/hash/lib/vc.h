@@ -63,7 +63,7 @@ int vc_init(void);
 int vc_sha512_launch(const uint8_t* msgs, uint64_t stride, uint64_t len, uint64_t n, uint8_t* out, cudaStream_t st);
 // n compressions: out[i] = compress(states[i], blocks[i]); a state is 64 bytes (eight big-endian words), a block 128.
 int vc_compress_launch(const uint8_t* states, const uint8_t* blocks, uint64_t n, uint8_t* out, cudaStream_t st);
-// An H1 table's chunk leaves (SPLITK; the caller's chunks = verity.core.protocols.pouw.weights.chunks(k)): n_rows rows of
+// An H1 table's chunk leaves (SPLITK; the caller's chunks = verity.ml.pouw.weights.chunks(k)): n_rows rows of
 // k int8 codes at codes + codes_stride i, each with its f32 scale at scales + 4 i, as n_rows chunks leaves, leaf
 // chunks i + c at out + out_stride (chunks i + c): row i's codes [c k / chunks, (c + 1) k / chunks), its scale's 4 bytes,
 // zeros to out_stride. Those are row/v2 rows of 8 (k / chunks + 4) bits for vc_commit_rows_launch at out_stride. k / chunks

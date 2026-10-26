@@ -55,8 +55,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     declared window Program whose descriptor is `descriptor` (the period's ``--circuit`` its SHA-512) and whose layout
     is `layout`. ValueError when K's template is not one of the descriptor's definitions, or (with #3143's credit) the
     partition is not the one core's credit verifies statements under."""
-    from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.pouw import credit as CR
+    from verity.ml.pouw.circuit import h1window as HW
     from verity.ml.circuits import partition_object as PO
     from verity.ml.circuits.codec import descriptor_id
     program, desc = hashlib.sha512(descriptor).hexdigest(), json.loads(descriptor)
@@ -98,7 +98,7 @@ def _lower(k: int, r: int, c: int, bind: dict, path: Path) -> None:
 
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on."""
-    from verity.core.protocols.pouw.circuit import live as L
+    from verity.ml.pouw.circuit import live as L
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     return P.partition(L.program_v2(T, S, prefix), L.query_v2(T))
 
@@ -130,7 +130,7 @@ def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, i
         kept = {}
     files, extra = {}, {}
     if live is not None:
-        from verity.core.protocols.pouw import credit as CR
+        from verity.ml.pouw import credit as CR
         from verity.core.protocols.sampled_proofs.one_stage import partition as P
         T, S = live
         part = live_part(T, S, CR._prefix(descriptor))

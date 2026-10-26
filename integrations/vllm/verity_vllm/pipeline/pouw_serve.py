@@ -8,7 +8,7 @@ The engine is `verity_vllm.LLM` on the workload's pinned model, with ``pouw:ncp-
 committed natively as it is served (`protocol_options.pouw_native`), under an epoch whose salt is the salt coin of the
 auditor host's challenger at ``--challenger``, in the session infra's gate opened for the window (``--session``, the
 gate's answer, `protocol_options.pouw_h1_challenger`), opened after the weights' root. Without ``--challenger`` the salt
-is the command's own challenger's (`verity.core.protocols.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of
+is the command's own challenger's (`verity.ml.pouw.coins.Challenger`, epoch 0, its coins the Lean verifier of
 record's, `pouw.verifier.coins`): the command is then its run's auditor, and the run is a measurement, not a window any
 verifier credits. Once the engine closes, the circuit replay (`check.replay.pouw_circuit.replay`) runs twice, the run's
 calls as one window under the work law at a budget of K = ``--draws``:
@@ -17,7 +17,7 @@ calls as one window under the work law at a budget of K = ``--draws``:
 - **tampered**: the same calls, except that credited word 7 of every tile of the first call is flipped by its prover,
   committed and opened that way (`check.replay.pouw_circuit.tamper_tiles`), with the calls root recomputed over it.
 
-Each replay's window draws under a fresh source (`verity.core.protocols.pouw.circuit.anchors.Ledger.open`), which its report records.
+Each replay's window draws under a fresh source (`verity.ml.pouw.circuit.anchors.Ledger.open`), which its report records.
 
 The command writes ``pouw_serve.json`` under ``--out`` (default ``$RESEARCH_RUN_DIR``), and ``result.json`` beside it
 under a research run (``$RESEARCH_RUN_ID``). They hold
@@ -61,7 +61,7 @@ def protocols_config(a: Options) -> dict[str, Any]:
         if a.session is not None:
             raise ValueError("--session is the session of the challenger at --challenger")
         from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw.coins import Challenger
+        from verity.ml.pouw.coins import Challenger
         return {"pouw": {"coins": Challenger(0, verifier.coins), "draws": a.draws}}
     if a.session is None:
         raise ValueError("--challenger needs --session, the challenger gate's open answer for the window's Commit")

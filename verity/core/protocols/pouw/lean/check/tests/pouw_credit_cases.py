@@ -115,7 +115,7 @@ s_w), open the window on another request table's root or session or another root
 of a K the layout lacks or under another prefix, give its entry other rows, words, domain (another circuit's, a
 window's, other rows') or keys, and break the forms.
 
-`tests/test_difftest.py` draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_credit.py` holds each
+`tests/test_difftest.py` draws them for the harness, and `verity/ml/pouw/tests/test_pouw_credit.py` holds each
 mutation to the refusal it aims at.
 """
 from __future__ import annotations
@@ -129,11 +129,11 @@ import struct
 from collections.abc import Callable
 
 import pouw_rounds_cases as rc
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.ml.pouw import credit as Cr
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import weights as Wt
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.circuit import live_reads as LR
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.commitments.indexed import RangeIndexedDomain

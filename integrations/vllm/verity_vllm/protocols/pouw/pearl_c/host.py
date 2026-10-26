@@ -16,9 +16,9 @@ from typing import Any, ClassVar
 
 from verity.ml.commitments import RangeIndexedDomain
 from verity.ml.commitments.merkle import domain_message
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import (
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.audit import (
     HM96,
     Epoch,
     Workload,
@@ -28,8 +28,8 @@ from verity.core.protocols.pouw.audit import (
     salt_of,
     weights_root,
 )
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
-from verity.core.protocols.pouw.protocol import DomainError
+from verity.ml.pouw.coins import CoinCommitment, CoinOpening
+from verity.ml.pouw.protocol import DomainError
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 

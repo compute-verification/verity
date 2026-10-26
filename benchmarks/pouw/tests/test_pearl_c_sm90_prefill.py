@@ -21,9 +21,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw import audit
-from verity.core.protocols.pouw.audit import ROW_SCHEMA, activation_binding, rows_domain
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.pouw import audit
+from verity.ml.pouw.audit import ROW_SCHEMA, activation_binding, rows_domain
+from verity.ml.pouw.schemes import pearl_c as C
 
 HERE = Path(__file__).resolve().parent
 KERNEL = HERE.parents[0] / "pearl_c_sm90"

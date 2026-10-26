@@ -45,13 +45,13 @@ class _Coins:
 
     def __init__(self, epoch: int) -> None:
         from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw.coins import Challenger
+        from verity.ml.pouw.coins import Challenger
 
         self.challenger, self.opened = Challenger(epoch, verifier.coins), {}
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes) -> Any:
-        from verity.core.protocols.pouw.protocol import DomainError
+        from verity.ml.pouw.protocol import DomainError
 
         if label in self.opened:
             if self.opened[label].after != after:
@@ -146,8 +146,8 @@ class PearlCArm:
         return max(leaf_default, pow2(tiles)), max(rows_default, pow2(rows))
 
     def ready(self, target: Any) -> None:
-        from verity.core.protocols.pouw.audit import weights_root
-        from verity.core.protocols.pouw.salt import epoch_open_root
+        from verity.ml.pouw.audit import weights_root
+        from verity.ml.pouw.salt import epoch_open_root
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack

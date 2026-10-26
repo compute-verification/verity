@@ -26,9 +26,9 @@ from collections.abc import Callable, Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import credit as CR
+from verity.ml.pouw import weights as Wt
+from verity.ml.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.crypto import lms

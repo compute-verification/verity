@@ -27,13 +27,13 @@ from pathlib import Path
 
 import numpy as np
 from verity.ml.kernels.tc import group_sum_total_batch
-from verity.core.protocols.pouw.audit import ROW_SCHEMA, Epoch, Workload, activation_binding, rows_domain, transcript_domain
-from verity.core.protocols.pouw.protocol import Matmul
-from verity.core.protocols.pouw.protocol import Shape as MShape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_u as U
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import H100, Device
+from verity.ml.pouw.audit import ROW_SCHEMA, Epoch, Workload, activation_binding, rows_domain, transcript_domain
+from verity.ml.pouw.protocol import Matmul
+from verity.ml.pouw.protocol import Shape as MShape
+from verity.ml.pouw.schemes import pearl_c as C
+from verity.ml.pouw.schemes import pearl_c_u as U
+from verity.ml.pouw.schemes import pearl_kw as P
+from verity.ml.pouw.schemes.pearl_c_device import H100, Device
 
 SCHEMA = "verity-pouw/pearl-c-bench/v2"
 T = C.TILE                        # the leaf's tile, 64 x 64
@@ -263,7 +263,7 @@ def tile(jb: Job, r0: int, c0: int, a_rows: np.ndarray | None = None, b_rows: np
 
 
 def a_domain(shape: Shape, sd: dict):
-    """The domain of A's rows (`verity.core.protocols.pouw.audit`, frame-b3): unit 0 under the shape's salt, all m rows filler included."""
+    """The domain of A's rows (`verity.ml.pouw.audit`, frame-b3): unit 0 under the shape's salt, all m rows filler included."""
     return rows_domain(activation_binding(sd["salt"], 0), 0, shape.m, "blake3")
 
 

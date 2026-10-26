@@ -27,11 +27,11 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import Workload, salt_of, weights_root
-from verity.core.protocols.pouw.coins import Challenger
-from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.audit import Workload, salt_of, weights_root
+from verity.ml.pouw.coins import Challenger
+from verity.ml.pouw.protocol import DomainError, Matmul, Shape
 from verity.core.protocols.sampled_proofs import challenger as LC
 from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.crypto import lms

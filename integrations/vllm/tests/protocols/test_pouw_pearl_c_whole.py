@@ -14,8 +14,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.serving import SERIAL
+from verity.ml.pouw.protocol import Matmul, Shape
+from verity.ml.pouw.serving import SERIAL
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.linear.api import Arm, PassSpec, Stack
 from verity_vllm.protocols.pouw.pearl_c import passes as PP

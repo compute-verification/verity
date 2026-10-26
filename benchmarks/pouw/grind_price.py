@@ -35,7 +35,7 @@ p = ¾'s log₂(4/3).
 (one seed a matmul, a head) lose a unit's floor when one operand row's noise is matched. That is visible after the seed,
 so the cheater picks the matched rows: each of N rows of b bits read by u units has moment 1 − 2^{-b} + 2^{-b}e^{θu},
 and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 with `PrivateMoment`; `visible_premium`,
-`verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). ATTN-NOISE's own form,
+`verity.ml.pouw.grind`'s, which compile's seed-group check reads too). ATTN-NOISE's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
 the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
@@ -59,7 +59,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from verity.core.protocols.pouw.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
+from verity.ml.pouw.grind import DELTA_BITS, FLAG, LN2, ln_t_over_delta, visible_premium
 
 sys.path.insert(0, str(Path(__file__).parent))
 import budget as BU

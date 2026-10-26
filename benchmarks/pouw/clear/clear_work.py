@@ -1,7 +1,7 @@
 """Pearl-C's work law and its clear audit: what the verifier credits, draws and checks, all recomputed by the verifier
 (statement review item 5; red team F1, F2 and F5–F8).  It is a reference tool, not a verifier: PoUW's served path is the
 served-ZK window, and its verifier of record is the Lean (`verity/core/protocols/pouw/lean/check`).  It runs the records
-core keeps (`verity.core.protocols.pouw.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
+core keeps (`verity.ml.pouw.schemes.pearl_c_work`: `Split`, `UnitRecord`, `records_root`), which vLLM's
 Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory is not a package: callers put it on
 ``sys.path``.
 
@@ -40,7 +40,7 @@ Pearl-C prover writes, through the clear audit (`clear_audit`).  This directory 
   lowers that tile's weight to its credited cells, which is exactly the bound claimed.
 * **The draws (F8)** are keyed by the epoch's draw coin, through `verity.ml.randomness.derive`.
   - `audit` asks the challenger for the coin once the verifier has recorded the prover's commitment (the transcript root
-    and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.core.protocols.pouw.coins`).
+    and the records root, `draw_after`), and checks it against the epoch's coin commitment (`verity.ml.pouw.coins`).
     A coin that doesn't open against it, or that was opened after anything else, is refused.
   - `audit_replay` keeps the unverified draw of a recorded run (`RecordedDraw`), for replays whose draws are Fiat–Shamir
     on the commitment. It supports no claim about the draw.
@@ -63,15 +63,15 @@ from itertools import accumulate
 from math import lcm
 
 from clear_audit import Audit, Prover, TileOpening, Transcript, Verdict, Verifier, WorkProfile, commitment_hash, draw_coin
-from verity.core.protocols.pouw.audit import Epoch, opened_value
-from verity.core.protocols.pouw.coins import Challenger
-from verity.core.protocols.pouw.protocol import Context, Shape, Tile, tagged
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, Prices
-from verity.core.protocols.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
-from verity.core.protocols.pouw.serving import HASH_FORMATS
+from verity.ml.pouw.audit import Epoch, opened_value
+from verity.ml.pouw.coins import Challenger
+from verity.ml.pouw.protocol import Context, Shape, Tile, tagged
+from verity.ml.pouw.schemes import pearl_c as C
+from verity.ml.pouw.schemes import pearl_c_debit as D
+from verity.ml.pouw.schemes import pearl_kw as P
+from verity.ml.pouw.schemes.pearl_c_device import SM120, Prices
+from verity.ml.pouw.schemes.pearl_c_work import ALIGN, Split, UnitRecord, records_root
+from verity.ml.pouw.serving import HASH_FORMATS
 from verity.ml.randomness import Key, derive
 
 DRAW_DOMAIN = "verity/pouw/pearl-c-draw/v1"

@@ -54,7 +54,7 @@ import pytest
 
 from verity.core.protocols.certifier.certificate import SALT_BYTES, Certificate, Direction, clock_commitment
 from verity.core.protocols.certifier.schedule import ClockSync
-from verity.core.protocols.pouw import core_check as CC
+from verity.ml.pouw import core_check as CC
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.ml.crypto import lms
 from verity_all_protocols import runner as RN, table as T

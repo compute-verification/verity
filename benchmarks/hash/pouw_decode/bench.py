@@ -188,7 +188,7 @@ def timed_interleaved(dev: R.Dev, lanes: Lanes, nv: R.Nvml, graphs: dict[str, vp
 def real_keys(m16: int) -> dict[str, bytes]:
     """The A side's keys as the served path derives them for call INDEX of m16 rows (`pouw_pearl_c_host.call_keys`), the
     prover's salt key and the hm96 constants; line_b, dom_b, dom_t stand-ins (no A-side byte reads them)."""
-    from verity.core.protocols.pouw.audit import HM96, activation_binding, hm96_kernel_constants, rows_domain
+    from verity.ml.pouw.audit import HM96, activation_binding, hm96_kernel_constants, rows_domain
     shake = lambda tag, n: hashlib.shake_256(f"pouw-decode/{tag}".encode()).digest(n)  # noqa: E731
     salt, root_b = shake("salt", 32), shake("root_b", 64)
     return {"salt": salt, "root_b": root_b, "salt_key_raw": shake("salt-key", 32),

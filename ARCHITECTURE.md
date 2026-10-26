@@ -12,7 +12,7 @@ The developer represents its computations as Boolean circuits, which capture the
 To verify *faithfulness*, it currently implements a composition of the following protocols:
 
 1. [Sampled proofs](verity/core/protocols/sampled_proofs/README.md)
-2. [Proofs of useful work](verity/core/protocols/pouw/PROTOCOL.md)
+2. [Proofs of useful work](verity/ml/pouw/PROTOCOL.md)
 3. [Proofs of useful space](verity/core/protocols/pous/README.md)
 
 To verify *inference-only*, it checks that the developer's committed circuits exhibit *bounded cross-episode novel communication intensity*: that is, that each can be partitioned into subcircuits, each of which has a bounded size and reads a bounded amount of novel information, defined as any information other than the models, code and data the developer committed up front. This exploits a fundamental asymmetry between inference and training: each inference episode (e.g., a chat session) depends on only a small amount of novel information (e.g., 100 KB worth of prompt tokens), whereas each training episode (e.g., an RL rollout) depends on an enormous amount of novel information (e.g., 1 TB of new parameters). It is conjectured that circuits with low cross-episode novel communication intensity are unable to advance frontier capabilities on relevant timescales (e.g., years).
@@ -111,7 +111,7 @@ The vLLM integration (`integrations/vllm/`), the only one so far, builds each se
 
 ## Documentation
 
-- Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline ([sampled proofs](verity/core/protocols/sampled_proofs/README.md), [proofs of useful space](verity/core/protocols/pous/README.md), [proofs of useful work](verity/core/protocols/pouw/PROTOCOL.md), [the network certifier](verity/core/protocols/certifier/README.md); a protocol's `PROTOCOL.md` remains only until its Lean covers it) and [C-Flock's verifier](verity/ml/flock/verifier/PROTOCOL.md)
+- Specifications: the [program format](verity/ml/circuits/PROTOCOL.md), the commitment schemes ([frame-v3](verity/ml/commitments/frame_v3/PROTOCOL.md), [vllm-v1](verity/ml/commitments/vllm_v1/PROTOCOL.md)), the protocols, stated in Lean (`Security/`) with each one's README as its outline ([sampled proofs](verity/core/protocols/sampled_proofs/README.md), [proofs of useful space](verity/core/protocols/pous/README.md), [proofs of useful work](verity/ml/pouw/PROTOCOL.md), [the network certifier](verity/core/protocols/certifier/README.md); a protocol's `PROTOCOL.md` remains only until its Lean covers it) and [C-Flock's verifier](verity/ml/flock/verifier/PROTOCOL.md)
 - Each component's README, and [AGENTS.md](AGENTS.md) for contributors and agents: the repository map, the commands, the dependency rules, and how a change is checked and lands; the skills under [`.agents/skills/`](.agents/skills/) for recurring workflows such as Lean proofs
 
 ## Glossary

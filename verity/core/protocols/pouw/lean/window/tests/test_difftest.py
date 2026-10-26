@@ -1,4 +1,4 @@
-"""`verity.core.protocols.pouw.window` held to the window's Lean, PoUW's verifier of record (`pouw.verifier`), on the
+"""`verity.ml.pouw.window` held to the window's Lean, PoUW's verifier of record (`pouw.verifier`), on the
 shared harness (`verity_difftest`, `of_record="lean"`): one `Port` per function of `window.py` the Lean states, served by
 `pouw-window-difftest` (`PouwWindow/Difftest.lean`).
 
@@ -30,7 +30,7 @@ import verity_difftest as D
 from hypothesis import strategies as st
 
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain

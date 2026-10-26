@@ -98,7 +98,7 @@ def serve(args: argparse.Namespace) -> int:
 
 
 def verify(args: argparse.Namespace) -> int:
-    from verity.core.protocols.pouw import credit as CR
+    from verity.ml.pouw import credit as CR
     passes = Path(args.passes)
     served = json.loads((passes / "served.json").read_text())
     held = [p for p in served["passes"] if p["units"]]

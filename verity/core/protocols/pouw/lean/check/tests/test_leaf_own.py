@@ -21,7 +21,7 @@ import pouw_credit_cases as cc
 import pytest
 import verity_difftest as D
 
-from verity.core.protocols.pouw import leaf_lanes as LL
+from verity.ml.pouw import leaf_lanes as LL
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

@@ -35,8 +35,8 @@ import hashlib
 import json
 from pathlib import Path
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import credit as CR
+from verity.ml.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import remote
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveOpening, ledger_head, pinned_session
 from verity_vllm.protocols.pouw.h1 import challenger as PHC

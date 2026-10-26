@@ -18,11 +18,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import live as L  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.ml.pouw import core_check as CC  # noqa: E402
+from verity.ml.pouw import credit as CR  # noqa: E402
+from verity.ml.pouw import window as Wd  # noqa: E402
+from verity.ml.pouw.circuit import live as L  # noqa: E402
+from verity.ml.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import LiveOpening, LiveRecord  # noqa: E402
@@ -653,7 +653,7 @@ def test_an_honest_served_windows_weights_are_its_periods_and_its_evidence_carri
     (`window_evidence`) is core's `credit.WINDOW_KEYS`, its registered ``entries`` and its drawn calls' statements
     (proof files, never verdicts), round 0's ``requests`` the request table's root its open root binds. Core's credit
     (`credit.window`) passes its weights and refuses it only for want of its drawn calls' proof files."""
-    from verity.core.protocols.pouw import salt as PS
+    from verity.ml.pouw import salt as PS
     k = PHC.draw_k(LAYOUT)
     assert k == 2
     auditor = periodic(k, files=FILES)

@@ -22,7 +22,7 @@ torch = pytest.importorskip("torch")
 
 from verity.ml.commitments import MerkleTree
 from verity.ml.commitments.merkle import tree_levels
-from verity.core.protocols.pouw.audit import (
+from verity.ml.pouw.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -41,15 +41,15 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
-from verity.core.protocols.pouw.credit import passes_distinct
-from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.serving import SchemeId
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.coins import Challenger, CoinCommitment
+from verity.ml.pouw.credit import passes_distinct
+from verity.ml.pouw.protocol import Context, DomainError, Matmul, Shape
+from verity.ml.pouw.schemes import pearl_c as C
+from verity.ml.pouw.schemes import pearl_c_work as PW
+from verity.ml.pouw.schemes import pearl_kw as P
+from verity.ml.pouw.serving import SchemeId
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
@@ -2277,9 +2277,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
-    """Every tree's hash is the scheme's format's (`verity.core.protocols.pouw.serving.HASH_FORMATS`), not a
+    """Every tree's hash is the scheme's format's (`verity.ml.pouw.serving.HASH_FORMATS`), not a
     literal: -h3's hm96-sha512, keyed by the prover's salt key; and the path runs only its own schemes."""
-    from verity.core.protocols.pouw.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.ml.pouw.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -2342,7 +2342,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
     tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's and
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
-    from verity.core.protocols.pouw.serving import Schedule
+    from verity.ml.pouw.serving import Schedule
     make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)

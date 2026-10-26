@@ -14,7 +14,7 @@ from math import floor, fsum, log1p
 import pytest
 
 import demo_a as D
-from verity.core.protocols.pouw.window import k_prime
+from verity.ml.pouw.window import k_prime
 from verity.core.protocols.profile import IntegrityProfile, Stratified, Stratum
 from verity.core.protocols.sampled_proofs.consumers import location_bits
 from verity.core.protocols.sampled_proofs.optimize import Objective, certify

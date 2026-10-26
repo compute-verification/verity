@@ -49,7 +49,7 @@ compiled kernel launched directly after the first launch; `screen` where Triton 
 buffer by one driver copy; filler rows zeroed only where an earlier call wrote them; the stream from torch's raw accessor.
 The filler bookkeeping holds while no call has run under graphs (`eager_only`).
 
-The schedule (`verity.core.protocols.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
+The schedule (`verity.ml.pouw.serving.Schedule`) places each call's step groups on lanes (`pouw_pearl_c_lanes`):
 ``deferred`` hashes tiles on a side lane beside the next calls, ``deferred-a`` A's tree too where the kernel splits A's
 commitment; the commitments are the serial schedule's.  With ``hashing`` off (``pearlc-nohash``) a call skips A's tree, E_A's
 lines, the leaves and the records, for the time split.  ``hashing`` may change between passes, never within.
@@ -61,12 +61,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.audit import Workload, rows_domain
-from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
-from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
-from verity.core.protocols.pouw.serving import (
+from verity.ml.pouw.audit import Workload, rows_domain
+from verity.ml.pouw.protocol import Matmul, Shape
+from verity.ml.pouw.schemes import pearl_c as C
+from verity.ml.pouw.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
+from verity.ml.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
+from verity.ml.pouw.serving import (
     SERIAL,
     Schedule,
     SchemeId,
@@ -126,12 +126,12 @@ from verity_vllm.protocols.pouw.pearl_c.screen import (
     screen_into,
 )
 
-#: the Pearl-C schemes this device path runs, by name (`verity.core.protocols.pouw.serving.SchemeId`: forming, device record, hashing format);
+#: the Pearl-C schemes this device path runs, by name (`verity.ml.pouw.serving.SchemeId`: forming, device record, hashing format);
 #: the device record is GPU 1's pipeline variant too.  v1 is ``sm120`` (G = 4, the panel's ``pearl-c-sm120`` v1); v2 is
 #: ``sm120-unpromoted`` (no promotion, the panel's v2, counted once the theory and Lean lanes restate it); ``h100`` (G = 4,
 #: GLM-5.3's FP8 form on the H200, Daniel 22 Oct) is pearl_c_sm90's.  The format is -h3, SHA-512 throughout (its seeds, lines,
 #: tile leaves and HM96 trees; Daniel's 2026-10-06 ruling), each row's E_A line from its own seed (the work law capping each
-#: credited row too); its tree hash comes from `verity.core.protocols.pouw.serving.HASH_FORMATS` through the scheme.
+#: credited row too); its tree hash comes from `verity.ml.pouw.serving.HASH_FORMATS` through the scheme.
 SCHEMES = tuple(C.PearlC(forming="v1", device=d, hashing="h3").name for d in (SM120, SM120_UNPROMOTED, H100))
 #: each record's kernels' (k, n) grain past its domain: pearl_c_sm120's (1,024, 128); pearl_c_sm90's (256, 64), 1 KiB row segments, 64-wide tiles
 KERNEL_GRAIN = {SM120.name: (1024, 128), SM120_UNPROMOTED.name: (1024, 128), H100.name: (256, 64)}
@@ -159,7 +159,7 @@ HASH_STEPS = frozenset({"pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", 
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
     """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
-    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+    from verity.ml.pouw.schemes.pearl_c_device import DEVICES
     if name not in SCHEMES:
         raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
     sid = SchemeId.parse(name)
@@ -253,7 +253,7 @@ def new_salt_key(scheme: str) -> bytes:
 
 
 def _weight_binding(w: int) -> bytes:
-    from verity.core.protocols.pouw.audit import weight_binding
+    from verity.ml.pouw.audit import weight_binding
     return weight_binding(w)
 
 

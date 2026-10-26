@@ -28,8 +28,8 @@ from functools import cache
 from typing import Any
 
 import numpy as np
-from verity.core.protocols.pouw.audit import HM96, rows_domain
-from verity.core.protocols.pouw.protocol import tagged
+from verity.ml.pouw.audit import HM96, rows_domain
+from verity.ml.pouw.protocol import tagged
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1 import prover as PV

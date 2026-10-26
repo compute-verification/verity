@@ -41,8 +41,8 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import window as Wd
 
 LEAN_ENV = "VERITY_POUW_CHECK"
 H1_DIR = "pouw"

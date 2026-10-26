@@ -86,9 +86,9 @@ def expert_rows(m: int, c: dict = CONFIG) -> Fraction:
 
 def scheme(fadd: Fraction | None = None, name: str = SCHEME):
     """The registered record's scheme, with the FP32 add's price at `fadd` when given."""
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
-    from verity.core.protocols.pouw.serving import SchemeId
+    from verity.ml.pouw.schemes import pearl_c as C
+    from verity.ml.pouw.schemes.pearl_c_device import DEVICES
+    from verity.ml.pouw.serving import SchemeId
 
     sid = SchemeId.parse(name)
     dev = DEVICES[sid.device]
@@ -99,7 +99,7 @@ def scheme(fadd: Fraction | None = None, name: str = SCHEME):
 def gamma(s, n: int, k: int, cast: Fraction = Fraction(0)) -> Fraction:
     """One unit's γ at scheme `s` (module docstring), W_ref with `cast` more per activation element (the kernel's cast over
     the credited one)."""
-    from verity.core.protocols.pouw.protocol import Shape
+    from verity.ml.pouw.protocol import Shape
 
     sh = Shape(16, k, n)
     rho = s.device.cap

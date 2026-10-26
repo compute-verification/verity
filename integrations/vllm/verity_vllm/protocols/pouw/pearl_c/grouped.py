@@ -47,7 +47,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.protocol import Matmul, Shape
+from verity.ml.pouw.protocol import Matmul, Shape
 
 from verity_vllm.protocols.pouw.pearl_c.passes import call_index
 from verity_vllm.protocols.pouw.pearl_c.host import _Driver, _event, _put, _zeros

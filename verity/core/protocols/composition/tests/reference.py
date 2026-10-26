@@ -45,7 +45,7 @@ from typing import Any, Callable
 from verity_difftest import Reject, canonical
 from verity_difftest import protocol as P
 
-from verity.core.protocols.pouw import core_check
+from verity.ml.pouw import core_check
 
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
 

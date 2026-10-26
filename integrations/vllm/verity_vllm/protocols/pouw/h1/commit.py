@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 import numpy as np
-from verity.core.protocols.pouw import credit as CR
+from verity.ml.pouw import credit as CR
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity.ml.circuits.codec import canonical_json
 

@@ -1,4 +1,4 @@
-"""`verity.core.protocols.pouw.core_check` held to `pouw-check serve`, PoUW's verifier of record (`pouw.verifier`), on
+"""`verity.ml.pouw.core_check` held to `pouw-check serve`, PoUW's verifier of record (`pouw.verifier`), on
 the shared harness (`verity_difftest`, `of_record="lean"`): one `ProtocolPort`, over the cases `pouw_check_cases`
 generates from a Hypothesis-controlled `random.Random` (honest windows, and one mutation each aimed at every refusal, the
 case's framing included), so a run is deterministic and shrinks. Every port here holds the Python to the Lean.
@@ -60,10 +60,10 @@ import pouw_credit_cases as credit_cases
 import pouw_opening_cases as openings
 import pouw_pass_cases as passes
 import pouw_rounds_cases as rounds_cases
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as Cr
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.pouw import weights as W
+from verity.ml.pouw import weights as W
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

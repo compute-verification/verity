@@ -14,8 +14,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
+from verity.ml.pouw import credit as CR
+from verity.ml.pouw import weights as Wt
 from verity.ml.circuits import codec
 
 HERE = Path(__file__).resolve().parent
@@ -25,7 +25,7 @@ import models as M  # noqa: E402
 from test_auditor_periods import CIRCUIT, PIN, T0, admin, checked, host, hooks, ok, refused, signer, ssh  # noqa: E402,F401
 
 _spec = importlib.util.spec_from_file_location(
-    "h1window_case", HERE.parents[2] / "verity/core/protocols/pouw/tests/test_circuit_h1window.py")
+    "h1window_case", HERE.parents[2] / "verity/ml/pouw/tests/test_circuit_h1window.py")
 H1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(H1)
 

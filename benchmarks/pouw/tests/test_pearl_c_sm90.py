@@ -20,8 +20,8 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import weights_root
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
+from verity.ml.pouw.audit import weights_root
+from verity.ml.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 
 HERE = Path(__file__).resolve().parents[1] / "pearl_c_sm90"
 SM120_DIR = HERE.parent / "pearl_c_sm120"
@@ -162,9 +162,9 @@ def test_descriptors_are_the_layouts_staged():
 
 
 def test_kernel_constants_match_the_reference():
-    from verity.core.protocols.pouw.schemes import pearl_c as C
-    from verity.core.protocols.pouw.schemes import pearl_kw as P
-    from verity.core.protocols.pouw.schemes.pearl_c_device import H100
+    from verity.ml.pouw.schemes import pearl_c as C
+    from verity.ml.pouw.schemes import pearl_kw as P
+    from verity.ml.pouw.schemes.pearl_c_device import H100
 
     assert int(re.search(r"S5_LINE = (0x[0-9A-Fa-f]+);", SOURCE).group(1), 16) == C.S5_LINE
     assert "0x1p-32f" in SOURCE and C.S5_FLOOR == P.f32_bits(2.0 ** -32)

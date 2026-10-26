@@ -1,5 +1,5 @@
 """The PoUW adapter (`protocol_options.pouw`): refusals, weights committed before any wrapper, the int7 linear served
-exactly, the executor's tiles equal to `verity.core.protocols.pouw`'s reference bit for bit, the weight read from the layer it is handed
+exactly, the executor's tiles equal to `verity.ml.pouw`'s reference bit for bit, the weight read from the layer it is handed
 (so POUS's decoded weight is what the GEMM uses), and an uninstall that leaves the model as it was.
 
 CPU only, on numpy stand-ins for a linear layer; the hook site is the same ``quant_method.apply`` vLLM's ``LinearBase``
@@ -14,11 +14,11 @@ import types
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
-from verity.core.protocols.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
-from verity.core.protocols.pouw.protocol import Context as UnitContext
-from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.pouw.audit import Epoch, Workload, activation_binding, commit_rows, weight_binding, weights_root
+from verity.ml.pouw.coins import Challenger, CoinCommitment, CoinOpening, coin_reason
+from verity.ml.pouw.protocol import Context as UnitContext
+from verity.ml.pouw.protocol import DomainError, Matmul, Shape, Tile
+from verity.ml.pouw.schemes import SCHEMES, get
 from verity_vllm import protocols as PO
 from verity_vllm.engine import hooks
 from verity_vllm.protocols import pouw
@@ -77,7 +77,7 @@ def _int7_linear(x, w, bias=None):
 # --- what the adapter refuses ------------------------------------------------------------------------------------------------
 
 def test_schemes_are_the_protocol_packages_and_only_ncp_pearl_c_sm120_and_h1_are_executed():
-    from verity.core.protocols.pouw import circuit
+    from verity.ml.pouw import circuit
     from verity_vllm.protocols.pouw import h1 as pouw_h1
     assert pouw.schemes() == tuple(sorted({*SCHEMES, *circuit.SCHEMES, *PPD.SCHEMES, pouw_h1.SCHEME})) and "ncp-v1" in pouw.schemes()
     assert pouw.refusals("ncp-v1", _serve("pouw:ncp-v1")) == () and pouw.refusals("ncp-v2", _serve("pouw:ncp-v2")) == ()
@@ -345,8 +345,8 @@ def test_under_pous_the_gemm_reads_the_weight_it_is_handed(monkeypatch):
 def test_served_fp8_claims_registered_weights_only_under_the_shared_rule(monkeypatch):
     """Served FP8 applies no keyed rotation, so its weights register only from the curated list, through the one
     registered-weights rule Pearl-C4 reads too; refused, the claim says it is about nothing and names why."""
-    from verity.core.protocols.pouw import registration
-    from verity.core.protocols.pouw.schemes import pearl_c
+    from verity.ml.pouw import registration
+    from verity.ml.pouw.schemes import pearl_c
     s, seen = PPD.scheme_of("pearl-c-sm120-v1-h3"), []
     assert pouw.SERVED_TRANSFORMS == () and pearl_c.check_registration is registration.check_registration
     monkeypatch.setattr(pearl_c, "check_registration", lambda *a: seen.append(a) or registration.check_registration(*a))

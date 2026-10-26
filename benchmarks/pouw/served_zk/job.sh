@@ -151,7 +151,7 @@ if [ "$V1" != True ]; then
     "$OUT/challenger/coins.json" "$PASSES/coins.json" 2>/dev/null)
   expect coins-pass SAME "${v:-ERROR}"
 fi
-WR=$("$PY" -c "import json, sys; from verity.core.protocols.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
+WR=$("$PY" -c "import json, sys; from verity.ml.pouw.audit import weights_root; m = json.load(open(sys.argv[1])); \
 print(weights_root({int(w): bytes.fromhex(v['root']) for w, v in m['weights'].items()}).hex())" "$MAN")
 ask coin-salt "$(req op salt after "$WR" out "$OUT/salt-opening.json")"
 expect coin-salt OPENED "$REPLY"

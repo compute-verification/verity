@@ -42,7 +42,7 @@ from pathlib import Path
 
 import numpy as np
 from verity.ml.commitments import Commitment, Opening
-from verity.core.protocols.pouw.audit import (
+from verity.ml.pouw.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -51,10 +51,10 @@ from verity.core.protocols.pouw.audit import (
     opened_value,
 )
 from verity.core.protocols.pouw import verifier as PV
-from verity.core.protocols.pouw.coins import CoinCommitment
-from verity.core.protocols.pouw.credit import passes_distinct
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.ml.pouw.coins import CoinCommitment
+from verity.ml.pouw.credit import passes_distinct
+from verity.ml.pouw.protocol import Context, Matmul, Shape
+from verity.ml.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocols.pouw import pearl_c as PD
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))

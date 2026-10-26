@@ -63,11 +63,11 @@ _ws_spec = importlib.util.spec_from_file_location("dither_j10r_ws", HERE.parents
 WS = importlib.util.module_from_spec(_ws_spec)
 _ws_spec.loader.exec_module(WS)
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1window as HW  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.pouw import core_check as CC  # noqa: E402
+from verity.ml.pouw import credit as CR  # noqa: E402
+from verity.ml.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.pouw.circuit import h1window as HW  # noqa: E402
+from verity.ml.pouw.circuit import seeds as SD  # noqa: E402
 
 
 def _be(b: bytes) -> np.ndarray:

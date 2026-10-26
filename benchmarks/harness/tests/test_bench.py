@@ -975,7 +975,7 @@ def test_a_protocol_arm_takes_its_precision_control_and_pouw_settings_from_the_s
     which the adapter's refusals accept."""
 
     from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.ml.pouw.coins import CoinCommitment
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.interface import Context
 
@@ -1061,7 +1061,7 @@ def test_a_pearl_c_protocol_arm_is_gated_by_the_experimental_arms_call_check(mon
     A live run's coins name its session, its salt epoch and that epoch's root over the weights' root."""
 
     import torch
-    from verity.core.protocols.pouw.salt import epoch_open_root
+    from verity.ml.pouw.salt import epoch_open_root
 
     from verity_bench.vllm import runner
 

@@ -59,7 +59,7 @@ If it was tried and dropped, your hypothesis says what's different this time, or
   live is compute-accounting's call; the loader keys on digests, so a later move is cheap.
 - **The vLLM executor:** `integrations/vllm`.
 - **Shared tables:** scheme names, hashing formats, schedules, step groups and kernel variants are defined once, in
-  `verity.core.protocols.pouw.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
+  `verity.ml.pouw.serving`. Never keep a local copy (tree hashes, keys, arm tables); replace one you find.
 
 ## One attempt
 

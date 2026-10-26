@@ -4,10 +4,10 @@ epoch's coins or, for a pass recorded before them, from its beacon.
 """
 from __future__ import annotations
 
-from verity.core.protocols.pouw.audit import Epoch, Workload
-from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
-from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.window import LIVE_SCHEME
+from verity.ml.pouw.audit import Epoch, Workload
+from verity.ml.pouw.coins import CoinCommitment, CoinOpening
+from verity.ml.pouw.protocol import DomainError, Matmul, Shape
+from verity.ml.pouw.window import LIVE_SCHEME
 from verity.core.protocols.sampled_proofs.challenger import LiveCommitment, LiveOpening
 
 from verity_vllm.protocols.pouw.pearl_c.host import epoch_of

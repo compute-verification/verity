@@ -62,7 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import h200 as H  # noqa: E402
 
-from verity.core.protocols.pouw.window import eps_at  # noqa: E402
+from verity.ml.pouw.window import eps_at  # noqa: E402
 from verity.core.protocols.profile import MARGIN, Stratified, Stratum, _neg_log_ratio  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
     Candidate, Certificate, CostModel, Objective, Plan, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,

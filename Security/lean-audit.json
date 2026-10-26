@@ -11701,7 +11701,7 @@
    },
    "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
     "status": "open",
-    "test": "verity/core/protocols/pouw/tests/test_h1t_conjectures.py::test_distinct_live_h1t",
+    "test": "verity/ml/pouw/tests/test_h1t_conjectures.py::test_distinct_live_h1t",
     "why": "On every legal unit, H-1T's credited words are pairwise distinct functions of the unit's salt and none is free; open, with no counterexample on the legal units its test enumerates or samples."
    },
    "Pous.P2.Assumptions.P2RingRoundSecure": {

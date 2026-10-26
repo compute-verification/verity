@@ -19,8 +19,8 @@ import pytest
 torch = pytest.importorskip("torch")
 from torch import nn  # noqa: E402
 
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.ml.pouw import credit as CR  # noqa: E402
+from verity.ml.pouw.coins import Challenger  # noqa: E402
 from verity_vllm.acquire import h1_commit as HC  # noqa: E402
 from verity_vllm.engine import int8_experts as X  # noqa: E402
 from verity_vllm.protocols import pouw  # noqa: E402

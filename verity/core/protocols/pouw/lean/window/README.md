@@ -1,6 +1,6 @@
 # `pouw_window`: PoUW's audit window as executable Lean
 
-The port of `verity/core/protocols/pouw/window.py`, on Lean core and PoUW's commitments (`pouw_commit`: its frame-v3-sha512
+The port of `verity/ml/pouw/window.py`, on Lean core and PoUW's commitments (`pouw_commit`: its frame-v3-sha512
 domains, C-Flock's SHA-512 and hm96, core's tagged identity), and the proof service's challenger for a live window's
 coins (`core_sampled_proofs`). Once its properties are proven it moves, as a
 pure move, to the same path under `verity/core/`; the Python keeps running until then.

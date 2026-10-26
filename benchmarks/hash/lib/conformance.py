@@ -33,9 +33,9 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(ROOT))
 
 import vclib  # noqa: E402
-from verity.core.protocols.pouw import audit  # noqa: E402
-from verity.core.protocols.pouw import weights as Wt  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c  # noqa: E402
+from verity.ml.pouw import audit  # noqa: E402
+from verity.ml.pouw import weights as Wt  # noqa: E402
+from verity.ml.pouw.schemes import pearl_c  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
 from verity.ml.commitments import RangeIndexedDomain, hm96  # noqa: E402
 from verity.ml.commitments.limits import VerificationLimits  # noqa: E402
@@ -64,7 +64,7 @@ CG_REF = _load("commit_gpu_reference", ROOT / "benchmarks/pouw/commit_gpu/refere
 #: SPLITK's vectors' generator (#3467): its cases (`SV.CASES`), their rows and keys, and credit's reading of a case
 #: (`SV.commit`: `h1zy.chunk_words` under `Registered.commit`); `SV.OUT` the pinned vectors, every leaf's words_sha512,
 #: row_digest and frame_leaf and each value's domain and root
-SV = _load("splitk_rows_vectors", ROOT / "verity/core/protocols/pouw/tests/splitk_rows_vectors.py")
+SV = _load("splitk_rows_vectors", ROOT / "verity/ml/pouw/tests/splitk_rows_vectors.py")
 #: a K at or below weights.CHUNK_MAX, whose rows are their own leaves (no vector: the layout there is unchanged)
 WHOLE = ("k-4096", "a/4096@0", 4096, 64, SV.A_NONCE, True)
 

@@ -69,7 +69,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
+from verity.ml.pouw import window as Wd  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as Ch  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 
@@ -484,7 +484,7 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     opened after the window's root; the challenger received exactly `rounds`, and round r's coin opened once after round
     r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; the draw
     coin opened after `draw_after`, or none opened.  ``ok`` only when all hold."""
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.pouw.circuit import h1tile as HT
     d = published(directory)
     sid, window = coins.get("session"), coins.get("window") or {}
     out: dict[str, Any] = {"ok": False, "coins": "refused", "challenger_out": str(d), "session": sid}

@@ -3,7 +3,7 @@
     python tests/difftest_vectors.py <verity checkout> --out DIR
 
 Writes `DIR/difftest/cases.jsonl`, one case a line, `{"kind", "in", "python"}`. The outcome is the checkout's
-`verity.core.protocols.pouw` (the draws: its clear audit's, ``benchmarks/pouw/clear``): `{"ok": v}`, `{"reason": text}` for
+`verity.ml.pouw` (the draws: its clear audit's, ``benchmarks/pouw/clear``): `{"ok": v}`, `{"reason": text}` for
 a coin `coin_reason` refuses, `{"error": type}` when it raises. The Lean is PoUW's verifier of record (`pouw.verifier`): the Lean audit runs `PouwCommit/DifftestMain.lean` on the
 file (`runs` in `lean-audit.json`, which pins its SHA-256), which fails on any case whose Python outcome is not the
 Lean's, and `tests/test_pouw_commit_lean_difftest.py` checks that this script still writes it, that its cases reach every
@@ -42,8 +42,8 @@ def _outcome(f) -> dict:
 
 
 def generate(seed: int = 0) -> list[dict]:
-    from verity.core.protocols.pouw import audit, coins
-    from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape, tagged
+    from verity.ml.pouw import audit, coins
+    from verity.ml.pouw.protocol import DomainError, Matmul, Shape, tagged
     from verity.ml.randomness import derive
     from verity.ml.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                        VerificationLimits, verify_opening)

@@ -27,7 +27,7 @@ import itertools
 import random
 
 import pouw_credit_cases as C
-from verity.core.protocols.pouw import credit as Cr
+from verity.ml.pouw import credit as Cr
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 PRE_NAMES = ["files-form", "statements-form", "call-past", "twice", "undrawn", "no-file", "ok-registered",

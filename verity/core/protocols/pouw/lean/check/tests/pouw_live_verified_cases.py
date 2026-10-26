@@ -26,8 +26,8 @@ import hashlib
 import random
 
 import pouw_credit_cases as C
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.ml.pouw import credit as Cr
+from verity.ml.pouw.circuit import live_reads as LR
 
 PRE_NAMES = ["files-form", "no-live-file", "statements-form", "round-past", "twice", "not-live", "no-table"]
 RUN_NAMES = ["error", "refused", "rejected", "unit-other"]

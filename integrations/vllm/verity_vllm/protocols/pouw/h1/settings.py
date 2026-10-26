@@ -6,8 +6,8 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from verity.core.protocols.pouw import verifier
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.coins import Challenger
+from verity.ml.pouw import window as Wd
+from verity.ml.pouw.coins import Challenger
 from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 
 from verity_vllm.protocols.pouw import h1 as PH

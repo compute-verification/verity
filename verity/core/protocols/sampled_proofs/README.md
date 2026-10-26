@@ -254,7 +254,7 @@ only inside a proof (`one_stage.registered`).
   R6 takes one record a window, and refused without a binding). The rows are committed under public salts
   (`supplied_salts`), and R7 refuses an entry whose root is not the one it recomputes (`R7-supplied`). PoUW's seed
   inputs (`pouw.roots`, `pouw.salt`, `pouw.positions`) are supplied values
-  (`verity/core/protocols/pouw/tests/test_pouw_supplied_inputs.py`).
+  (`verity/ml/pouw/tests/test_pouw_supplied_inputs.py`).
 - Pinned roots (`check(..., pinned={value: root})`): roots of registered values the verifier doesn't fill, held before
   the record (a model's weights recorded before the salt). R7 holds such a value to its pin as to a root the log holds.
 - Binding (`check(..., binding={"stream", "prover"})`, lowercase hex: the verifier's stream digest and the identity it

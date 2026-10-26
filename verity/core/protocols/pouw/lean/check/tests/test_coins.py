@@ -8,9 +8,9 @@ import shutil
 
 import pytest
 
-from verity.core.protocols.pouw import coins as Co
+from verity.ml.pouw import coins as Co
 from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import window as Wd
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

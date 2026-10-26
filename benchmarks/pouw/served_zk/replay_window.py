@@ -1,5 +1,5 @@
 """Replay recorded served_zk windows through the window's Lean port (`pouw-window-difftest`) and its Python mirror
-(`verity.core.protocols.pouw.window`), each against what the run recorded.
+(`verity.ml.pouw.window`), each against what the run recorded.
 
   python replay_window.py OUT [--runs DIR ...] [--add DIR ...]    OUT/replay-window.json and one line on stdout
 
@@ -37,8 +37,8 @@ from typing import Any, Callable
 
 import verity_difftest as D
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import window as Wd
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 

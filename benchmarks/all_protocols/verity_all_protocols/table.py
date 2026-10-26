@@ -87,7 +87,7 @@ def check_answer(a: Any) -> dict[str, Any]:
     """``a`` when it is an answer in the shapes `Answer.ofJson` reads (`pouw.core_check.answer_of`, the Python mirror of
     the core interface's decoder): an accept has no reason and both its public outputs and its profile, a refusal a
     reason and neither. Anything else is a ValueError, which the runner reports as the leg's error."""
-    from verity.core.protocols.pouw import core_check as CC
+    from verity.ml.pouw import core_check as CC
 
     try:
         CC.answer_of(a)

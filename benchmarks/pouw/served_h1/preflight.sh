@@ -12,7 +12,7 @@ import time, os, sys
 t = time.perf_counter()
 import serve, receipts as RC, commit as CM
 from tests.engine import int8_exact_gpu as G
-from verity.core.protocols.pouw.coins import Challenger
+from verity.ml.pouw.coins import Challenger
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_exact as E, int8_ops
 from verity_vllm.engine.build import build_engine, target_mismatches

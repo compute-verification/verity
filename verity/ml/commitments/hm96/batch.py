@@ -1,6 +1,6 @@
 """hm96 tree leaves for many values at once, the mask in numpy: the bytes of `Instance.tree_leaf` of `Instance.commit_string`
 (the plain reference beside it), for a committer of many rows that holds no numpy itself (PoUW's registered weights,
-``verity.core.protocols.pouw.weights``)."""
+``verity.ml.pouw.weights``)."""
 
 from __future__ import annotations
 

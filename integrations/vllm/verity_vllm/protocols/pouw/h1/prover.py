@@ -87,7 +87,7 @@ def open_call(directory: str | Path, record: Mapping[str, Any], index: int, salt
     """Call `index` of the window `record` (`pouw_h1.CALLS_FILE`), its tables rebuilt from the prover's directory under
     the window's Program salt `salt` (`pouw_h1_challenger.program_salt_of` its commitment): refused (ValueError) when a
     rebuilt table's root isn't the one the call's manifest row carries."""
-    from verity.core.protocols.pouw.protocol import tagged
+    from verity.ml.pouw.protocol import tagged
 
     from verity_vllm.protocols.pouw.h1 import records as ZR
     from verity_vllm.protocols.pouw.h1 import requests as RQ

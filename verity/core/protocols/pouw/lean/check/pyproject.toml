@@ -1,7 +1,7 @@
 [project]
 name = "verity-pouw-check-difftest"
 version = "0.0.0"
-description = "The difftest of `pouw_check` against `verity.core.protocols.pouw.core_check`."
+description = "The difftest of `pouw_check` against `verity.ml.pouw.core_check`."
 requires-python = ">=3.12"
 dependencies = []
 
@@ -24,13 +24,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # verifier with its configuration). The leaf statements' files `pouw-leaf-own-window` checks are `leaf_lanes.py`'s, with
 # what it imports (PoUW's `circuit/` seeds, one-stage's `produced.py`, and the `verity.ml.kernels` `tc.py` they reach).
 inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py",
-          "verity/core/protocols/__init__.py", "verity/core/protocols/pouw/__init__.py",
+          "verity/core/protocols/__init__.py", "verity/ml/pouw/__init__.py",
           "verity/core/claims/__init__.py",
-          "verity/core/protocols/pouw/window.py", "verity/core/protocols/pouw/core_check.py",
-          "verity/core/protocols/pouw/verifier.py", "verity/core/protocols/pouw/salt.py",
-          "verity/core/protocols/pouw/credit.py", "verity/core/protocols/pouw/weights.py",
-          "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/audit.py",
-          "verity/core/protocols/pouw/protocol.py", "verity/ml/randomness",
+          "verity/ml/pouw/window.py", "verity/ml/pouw/core_check.py",
+          "verity/core/protocols/pouw/verifier.py", "verity/ml/pouw/salt.py",
+          "verity/ml/pouw/credit.py", "verity/ml/pouw/weights.py",
+          "verity/ml/pouw/coins.py", "verity/ml/pouw/audit.py",
+          "verity/ml/pouw/protocol.py", "verity/ml/randomness",
           "verity/core/protocols/sampled_proofs/__init__.py", "verity/core/protocols/sampled_proofs/challenger.py",
           "verity/core/protocols/sampled_proofs/one_stage/__init__.py",
           "verity/core/protocols/sampled_proofs/one_stage/registered.py",
@@ -44,7 +44,7 @@ inputs = ["verity/core/difftest", "verity/__init__.py", "verity/core/__init__.py
           "verity/core/protocols/sampled_proofs/one_stage/verdict.py",
           "verity/core/protocols/sampled_proofs/coins.py", "verity/core/protocols/sampled_proofs/service.py",
           "verity/core/protocols/profile.py",
-          "verity/core/protocols/pouw/leaf_lanes.py", "verity/core/protocols/pouw/circuit",
+          "verity/ml/pouw/leaf_lanes.py", "verity/ml/pouw/circuit",
           "verity/core/protocols/sampled_proofs/one_stage/produced.py",
           "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py",
           "verity/core/service/sampled_proofs/lakefile.toml", "verity/core/service/sampled_proofs/lake-manifest.json",

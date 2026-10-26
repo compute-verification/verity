@@ -25,12 +25,12 @@ from fractions import Fraction
 from itertools import combinations
 from pathlib import Path
 
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import window as W
-from verity.core.protocols.pouw.circuit import pc8
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import window as W
+from verity.ml.pouw.circuit import pc8
 from verity.core.protocols.sampled_proofs import service as S
 
-ROOT = Path(W.__file__).resolve().parents[4]
+ROOT = Path(W.__file__).resolve().parents[3]
 
 
 def probe_draw() -> None:

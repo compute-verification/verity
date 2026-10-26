@@ -193,7 +193,7 @@ def install(model, args, coins):
     `PearlCDeviceRun` over the layers' own weights, attached through `engine.hooks`.  The epoch's salt is `coins`' salt coin,
     asked for once the weights are committed (`Coins`).  Returns the run, the weights by id and the stack; the stack starts
     inactive (vLLM's own apply), and `arm_of` gives each mode's arm."""
-    from verity.core.protocols.pouw.audit import weights_root
+    from verity.ml.pouw.audit import weights_root
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.protocols.linear import vllm_site
     from verity_vllm.protocols.linear.api import Stack
@@ -664,7 +664,7 @@ class Coins:
 
     def __init__(self, epoch: int, entropy=None):
         from verity.core.protocols.pouw import verifier
-        from verity.core.protocols.pouw.coins import Challenger
+        from verity.ml.pouw.coins import Challenger
         from verity.core.protocols.sampled_proofs.challenger import served_claim
         entropy = verifier.coins if entropy is None else entropy
         served_claim(entropy)
@@ -672,7 +672,7 @@ class Coins:
         self.commitment = self.challenger.commitment
 
     def open(self, label: str, after: bytes):
-        from verity.core.protocols.pouw.protocol import DomainError
+        from verity.ml.pouw.protocol import DomainError
         if label in self.opened:
             if self.opened[label].after != after:
                 raise DomainError(f"epoch {self.commitment.epoch}'s {label!r} coin is already open, after another record")
@@ -685,12 +685,12 @@ class PipeCoins:
     """The engine's side: the epoch's commitment, and each coin asked of the controller's `Coins` over the pipe."""
 
     def __init__(self, conn, commitment: dict):
-        from verity.core.protocols.pouw.coins import CoinCommitment
+        from verity.ml.pouw.coins import CoinCommitment
         self.conn, self.commitment = conn, CoinCommitment.from_json(commitment)
 
     def open(self, label: str, after: bytes):
-        from verity.core.protocols.pouw.coins import CoinOpening
-        from verity.core.protocols.pouw.protocol import DomainError
+        from verity.ml.pouw.coins import CoinOpening
+        from verity.ml.pouw.protocol import DomainError
         self.conn.send({"coin": label, "after": after.hex()})
         msg = self.conn.recv()
         if "refused" in msg:
@@ -723,7 +723,7 @@ class Worker:
 
     def recv(self, timeout: float = 1200) -> dict:
         """The engine's answer; a coin it asks for on the way is answered from the epoch's `Coins`."""
-        from verity.core.protocols.pouw.protocol import DomainError
+        from verity.ml.pouw.protocol import DomainError
         while True:
             if not self.conn.poll(timeout):
                 raise RuntimeError(f"{self.group}: no answer in {timeout:.0f} s")
@@ -840,7 +840,7 @@ def state_entropy(path: str):
     and for the challenger process that later draws the window's units (`served_commit.py challenger --state`), so named
     by the Lean's claim instance (`verifier.CLAIM`)."""
     from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import COIN_BYTES, HM96, LABELS
+    from verity.ml.pouw.coins import COIN_BYTES, HM96, LABELS
     p = Path(path)
     if not p.exists():
         entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
@@ -1014,7 +1014,7 @@ def agree(a, b) -> float:
 
 
 def main() -> None:
-    from verity.core.protocols.pouw.serving import SCHEDULES
+    from verity.ml.pouw.serving import SCHEDULES
     from verity_vllm.protocols.pouw import pearl_c as PPD
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", required=True)

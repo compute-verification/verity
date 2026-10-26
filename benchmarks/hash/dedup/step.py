@@ -72,8 +72,8 @@ ERR = 0.08
 
 def commit_domain(w: int, m16: int):
     """The Commit-style domain of weight w's call of m16 rows: hm96-sha512 rows under a binding of the what-if's own."""
-    from verity.core.protocols.pouw.audit import HM96, rows_domain
-    from verity.core.protocols.pouw.protocol import tagged
+    from verity.ml.pouw.audit import HM96, rows_domain
+    from verity.ml.pouw.protocol import tagged
     return rows_domain(tagged("verity/hash-dedup/what-if/commit-rows/v1", w), -1, m16, HM96)
 
 
@@ -281,8 +281,8 @@ def python_ref(run, rec: dict, fixture) -> dict:
     """One kept call against the Python references: its tree (h3: A's hm96 tree over its FP32 rows under A's domain;
     inline: the Commit-style tree over its BF16 rows), its row digests (`pearl_c.row_digest` of the rows its seeds read),
     seed_A over the root it read, each row's seed and E_A line, and the padding rows' lines from seed_A."""
-    from verity.core.protocols.pouw.audit import HM96, ROW_SCHEMA, activation_binding, rows_domain
-    from verity.core.protocols.pouw.schemes import pearl_c as C
+    from verity.ml.pouw.audit import HM96, ROW_SCHEMA, activation_binding, rows_domain
+    from verity.ml.pouw.schemes import pearl_c as C
     b, w, i, m16, mp, mode = rec["bytes"], rec["w"], rec["index"], rec["m16"], rec["mp"], rec["mode"]
     salt, root_b = run.salt, run.roots[w]
     k = len(b["f32"]) // (4 * m16)
@@ -474,9 +474,9 @@ def main() -> int:
     import torch
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
-    from verity.core.protocols.pouw.audit import weights_root
+    from verity.ml.pouw.audit import weights_root
     from verity.core.protocols.pouw import verifier
-    from verity.core.protocols.pouw.coins import Challenger
+    from verity.ml.pouw.coins import Challenger
 
     t_start = time.perf_counter()
     dev = torch.device("cuda")

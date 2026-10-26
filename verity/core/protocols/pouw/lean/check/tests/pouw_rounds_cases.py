@@ -26,7 +26,7 @@ another window's weights or requests, H1's salt opened after the weights' root, 
 rule's.
 
 `tests/test_difftest.py` draws them for the harness, and
-`verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to the refusal it aims at.
+`verity/ml/pouw/tests/test_pouw_core_check.py` holds each mutation to the refusal it aims at.
 """
 from __future__ import annotations
 
@@ -37,9 +37,9 @@ import json
 import random
 from collections.abc import Callable
 
-from verity.core.protocols.pouw import coins as Co
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import coins as Co
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.commitments.identity import canonical_json_text
 from verity.ml.crypto import lms

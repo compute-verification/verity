@@ -3,7 +3,7 @@
 `libvc.so` (`vc.h`, a C ABI; `vclib.py`, its ctypes binding) is the one CUDA code base every served-path committer calls:
 hm96-sha512 hiding leaves in frame-v3-sha512 trees, byte for byte the formats of `verity.ml.commitments`
 (`verity/ml/commitments/hm96/PROTOCOL.md`, `verity/ml/commitments/frame_v3/PROTOCOL.md` §6, `rowleaf`) and Pearl-C -h3's
-pieces (`verity.core.protocols.pouw.schemes.pearl_c`). It is prover-side code: nothing a verifier runs reads it, so it stays
+pieces (`verity.ml.pouw.schemes.pearl_c`). It is prover-side code: nothing a verifier runs reads it, so it stays
 here and never in `verity/ml/kernels`. The protocol leads own what is committed and its CPU reference; this library only makes
 it fast, and `conformance.py` holds it to those references.
 
@@ -23,7 +23,7 @@ What it computes:
   [R] scales out as n R leaves, leaf n r + c row r's c-th K/n codes then its scale, which `vc_commit_rows_launch` commits as
   row/v2 rows under the value's `registered.domain` (`vclib.chunk_rows`). At K <= 4096 n = 1 and the leaves are the rows.
   `conformance.py`'s `case_splitk` holds it to SPLITK's two vectors (`a/14336@0`, `b/6144`, in
-  `verity/core/protocols/pouw/tests/vectors/splitk_rows.json`) leaf for leaf.
+  `verity/ml/pouw/tests/vectors/splitk_rows.json`) leaf for leaf.
 
 ## The contract
 

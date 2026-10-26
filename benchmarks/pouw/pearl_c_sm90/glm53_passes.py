@@ -55,7 +55,7 @@ def capture(a) -> int:
     import bench_arm as BA
     import e2e
     import torch
-    from verity.core.protocols.pouw.audit import weights_root
+    from verity.ml.pouw.audit import weights_root
     from verity_vllm.protocols.pouw import pearl_c as PPD
 
     out, dev = Path(a.out), torch.device("cuda")
@@ -104,7 +104,7 @@ def capture(a) -> int:
 
 def verify(a) -> int:
     import verify_run as VR
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.ml.pouw.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -251,7 +251,7 @@ def full_pass(d: Path, coins, jobs: int, every: int, without_y: bool = False) ->
 
 
 def full(a) -> int:
-    from verity.core.protocols.pouw.coins import CoinCommitment
+    from verity.ml.pouw.coins import CoinCommitment
 
     out = Path(a.out)
     coins = CoinCommitment.from_json(json.loads((out / "coins.json").read_text()))
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--scheme", default=glm53.SCHEME)
     p.add_argument("--cubin", help="the build's cubin (default this directory's)")
     p.add_argument("--shapes", nargs="*", help="capture: N:K, a weight each (default every in-domain linear)")
-    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.core.protocols.pouw.serving.SCHEDULES)")
+    p.add_argument("--schedule", default="serial", help="capture: the run's schedule (verity.ml.pouw.serving.SCHEDULES)")
     p.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     p.add_argument("--fast", action="store_true", help="verify_run's --fast")
     p.add_argument("--cross-check", type=int, default=64, help="with --fast, and full: every N-th tile on the scalar reference too")

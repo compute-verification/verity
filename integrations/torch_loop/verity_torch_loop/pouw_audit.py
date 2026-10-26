@@ -36,7 +36,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
-from verity.core.protocols.pouw import core_check as CC, window as Wd
+from verity.ml.pouw import core_check as CC, window as Wd
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity.ml.windows import interface as IF
 

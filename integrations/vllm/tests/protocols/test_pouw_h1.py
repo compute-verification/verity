@@ -20,12 +20,12 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
-from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw import window as Wd  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
-from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
+from verity.ml.pouw import core_check as CC  # noqa: E402
+from verity.ml.pouw import credit as CR  # noqa: E402
+from verity.ml.pouw import salt as PS  # noqa: E402
+from verity.ml.pouw import window as Wd  # noqa: E402
+from verity.ml.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.sampled_proofs import challenger as LC  # noqa: E402
 from verity.core.protocols.sampled_proofs import remote as R  # noqa: E402
 from verity.core.protocols.sampled_proofs.challenger import CoinError, LiveRecord  # noqa: E402
@@ -1110,7 +1110,7 @@ def test_a_reserved_session_opens_on_its_epochs_root_and_its_salt_coin_after_it(
     the salt over W; the run carries the answer without its secret. An
     answer naming another root or another session is refused before any coin, and so is a session of H1's layout (salt,
     draw and round coins: one a Pearl-C pass would leave incomplete), which is closed before its first coin."""
-    from verity.core.protocols.pouw.audit import salt_of
+    from verity.ml.pouw.audit import salt_of
     from verity_vllm.protocols.pouw.h1 import window as PHW
 
     salt_only = LC.LiveChallenger(Wd.LIVE_SCHEME, 0, Wd.SALT_FAMILIES, CH.entropy(1))
@@ -1311,7 +1311,7 @@ def test_the_challenger_setting_is_h1s_one_coin_source(tmp_path, monkeypatch):
 def test_hiding_rows_is_core_commit_rows_with_its_salts_drawn_as_one_stream(n, width, nonce):
     """`pouw_h1_requests.hiding_rows`, which H1's tables commit through, is `audit.commit_rows` under hm96 at the same salt
     key and nonce, leaf for leaf: its one RFC 8439 stream is `audit.hm96_salt`'s blocks."""
-    from verity.core.protocols.pouw.audit import HM96, commit_rows
+    from verity.ml.pouw.audit import HM96, commit_rows
     rng, key = random.Random(n), hashlib.sha256(b"key").digest()
     values = [rng.randbytes(width) for _ in range(n)]
     want = commit_rows(SALT, 5, values, hash=HM96, salt_key=key, nonce=nonce)

@@ -124,7 +124,7 @@ its open names is the auditor-trusted host's word (`trusted-host`).  Every path 
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
-The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its draw and
+The first client is PoUW's live window (`verity.ml.pouw.window`, "Live windows"): its salt, its draw and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
 `verity.ml.commitments` and `verity.core.claims`, so any client calls it as it is.
 """

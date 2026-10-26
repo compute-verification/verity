@@ -5,7 +5,7 @@ length; the registration one-stage's record of it, the service's answer an accep
 profile and draw), then one mutation (`MUTATIONS`)
 aimed at one refusal of `core_check`: of the parameters, the record, the answer, or a rule of the check.  Every string it
 writes is ASCII and every number an integer, where Lean's canonical JSON and Python's agree.  `tests/test_difftest.py`
-draws them for the harness, and `verity/core/protocols/pouw/tests/test_pouw_core_check.py` holds each mutation to
+draws them for the harness, and `verity/ml/pouw/tests/test_pouw_core_check.py` holds each mutation to
 the refusal it aims at.
 """
 from __future__ import annotations
@@ -17,9 +17,9 @@ from fractions import Fraction
 
 import pouw_pass_cases as PC
 import pouw_rounds_cases as RC
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
+from verity.ml.pouw import core_check as CC
+from verity.ml.pouw import salt as PS
+from verity.ml.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.crypto import lms
 

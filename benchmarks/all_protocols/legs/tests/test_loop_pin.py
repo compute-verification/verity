@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.pouw import credit as CR
-from verity.core.protocols.pouw import weights as Wt
+from verity.ml.pouw import credit as CR
+from verity.ml.pouw import weights as Wt
 from verity.ml.circuits import codec
 from verity_torch_loop import checkpoint as C
 from verity_torch_loop import loop as L
@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "live_challenger"))
 import models as M  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location(
-    "h1window_case", ROOT / "verity/core/protocols/pouw/tests/test_circuit_h1window.py")
+    "h1window_case", ROOT / "verity/ml/pouw/tests/test_circuit_h1window.py")
 H1 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(H1)
 

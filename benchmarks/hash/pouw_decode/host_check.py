@@ -23,7 +23,7 @@ import numpy as np
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import refs  # noqa: E402
-from verity.core.protocols.pouw.audit import hm96_kernel_constants  # noqa: E402
+from verity.ml.pouw.audit import hm96_kernel_constants  # noqa: E402
 
 RS_MAX_SEGS, POISON, INDEX, PD_PAIR, PD_STAMP, PD_GROUP, PD_LATE = 128, 0xA5, 5, 16, 32, 128, 512
 SRC = open(os.path.join(HERE, "..", "..", "pouw", "pearl_c_sm120", "hash_decode.cuh")).read()

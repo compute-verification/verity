@@ -52,11 +52,11 @@ from pathlib import Path
 
 from verity.ml.commitments import Commitment, MerkleTree, Opening
 
-from verity.core.protocols.pouw import audit as au
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.pouw import audit as au
+from verity.ml.pouw.protocol import Context, Matmul, Shape, tagged
+from verity.ml.pouw.schemes import get
+from verity.ml.pouw.schemes import pearl_c4 as F
+from verity.ml.pouw.schemes import pearl_c_work as W
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
