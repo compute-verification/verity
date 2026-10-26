@@ -932,8 +932,9 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
     subst hp
     exact e
-  have hVc := vCols_of_base hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
-    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg) (show o * c.g + g = n by rw [← hc0]; exact hn) hvb
+  have hVc := vCols_of_base (w := w) hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
+    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg)
+    (show o * c.g + g = n by rw [← hc0]; exact hn) hvb
   rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g hg
     (by rw [hn]; exact hn2), hn]
   exact hall hptv hpto hwv hwo hnr hsz hVc hOc
