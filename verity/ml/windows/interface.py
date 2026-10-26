@@ -1349,10 +1349,6 @@ class Window:
     _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.circuit.cuts:
-            raise ValueError(f"{self.circuit.name}: a window commits whole uncut rows; a circuit with cuts "
-                             f"({sorted(self.circuit.cuts)}) is recorded by its description (`descriptor_record`) until the "
-                             "committer reads cut rows")
         _committable(self.circuit.registered, self.circuit.ingress, self.circuit.name)
         params = self.circuit.registered.params if self.circuit.registered is not None else {}
         for r in self.circuit.reads:
@@ -1421,12 +1417,17 @@ class Window:
             if m.template not in cat:
                 got = self._recorded[m.template]
                 cat[m.template] = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
-            ports, lo = cat[m.template], m.base - base[m.template]
-            d = {"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
-                 "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
+            ports, lo, kv = cat[m.template], m.base - base[m.template], self.circuit.cuts.get(m.template, {})
+            d = {"rows": {}, "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
+            for g, (p, w) in enumerate(lay.rows):
+                k = int(kv.get(p, 1))
+                for j in range(k):
+                    # row j of a port cut k ways is its outer elements [j·n/k, (j+1)·n/k): its words' j-th k-th (`Layout.cut`)
+                    d["rows"][row_name(p, j, k)] = (ports[g][lo:lo + m.n] if k == 1 else
+                                                    np.ascontiguousarray(ports[g][lo:lo + m.n, j * w // k:(j + 1) * w // k]))
             reads = member_reads(self.circuit, m, base[m.template])
             if reads:
-                d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in lay.rows], axis=1)
+                d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in m.rows], axis=1)
                 for p, (param, positions, refs) in reads.items():
                     if (v := (self.registered or {}).get(param)) is None:
                         raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value")
@@ -1465,11 +1466,11 @@ class Window:
 
     def circuit_record(self) -> dict[str, Any]:
         """The window's ``circuit.json`` (`circuit_record`), its members stated by its cap and the circuit's wires, each
-        template's statement its bit rows (`unit_rows`)."""
+        template's statement its bit rows under its cuts (`unit_rows`)."""
         sts = {}
-        for fn, _ in self.circuit.templates:
-            i, o = unit_rows(fn)
-            sts[descriptor_id(fn)] = {"in_rows": i, "out_rows": o, "reads": "inline"}
+        for fn, tid in zip((f for f, _ in self.circuit.templates), self.circuit.ids):
+            i, o = unit_rows(fn, self.circuit.cuts.get(tid))
+            sts[tid] = {"in_rows": i, "out_rows": o, "reads": "inline"}
         blocks = self.circuit.blocks
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),
                               sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary,
