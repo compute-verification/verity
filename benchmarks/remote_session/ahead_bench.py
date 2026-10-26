@@ -34,7 +34,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.core.protocols.remote_bandwidth import receipts as rb  # noqa: E402
+from verity.core.protocols.remote_bandwidth import coins  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
@@ -107,19 +107,20 @@ def alone(p: prover.ProverSide, regime: dict, steps: int) -> float:
 
 
 def noticing(p: prover.ProverSide) -> list:
-    """The monotonic ns at which the session takes each boundary into its pending messages (`_drain`, `_appended`)."""
+    """The monotonic ns at which the session takes each boundary into its pending messages (`_drain`, `_reply`)."""
     noticed = []
 
     def watch(f):
-        def taking(pending):
+        def taking(*args):
+            pending = args[-1]
             n = len(pending)
             try:
-                return f(pending)
+                return f(*args)
             finally:
                 now = time.monotonic_ns()
                 noticed.extend(now for item in list(pending)[n:] if item[0]["type"] in ("coin", "close"))
         return taking
-    p._drain, p._appended = watch(p._drain), watch(p._appended)
+    p._drain, p._reply = watch(p._drain), watch(p._reply)
     return noticed
 
 
@@ -217,7 +218,7 @@ def main() -> int:
     rcodec.encode(backend.payloads[0], a.blocks, p.registration.key, bound=True, coin=bytes(32))
     encode_ms = (time.perf_counter_ns() - t0) / 1e6
     t0 = time.perf_counter_ns()
-    backend.run_pass(rb.seed(bytes(32), 0, bytes(64)))
+    backend.run_pass(bytes(coins.SEED_BYTES))
     pass_ms = (time.perf_counter_ns() - t0) / 1e6
     out = {"schema": "verity/remote-session/ahead-bench/v0", "reader": a.reader, "blocks": a.blocks, "codec": a.codec,
            "kv_pool": a.kv_pool, "windows": a.windows, "window_ms": a.window_ms, "jitter_ms": a.jitter_ms,

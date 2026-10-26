@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import gc
+import hashlib
 import json
 import shutil
 import sys
@@ -23,6 +24,11 @@ sys.path.insert(0, str(HERE))
 
 import device  # noqa: E402
 from device import BLOCK, PER_LEAF, DeviceStore, Lib, percentiles, rb, skr  # noqa: E402
+
+
+def bench_seed(tag: bytes, i: int) -> bytes:
+    """A fixed 64-byte seed for pass i of the bench's run `tag`, where a session's would be its pass coin."""
+    return hashlib.sha512(tag + i.to_bytes(4, "big")).digest()
 
 
 def timed(torch, fn) -> float:
@@ -70,7 +76,7 @@ def main() -> int:
            "read_bytes_per_s": N * BLOCK / read_ms * 1e3}
     print(json.dumps(out), flush=True)
 
-    seed = rb.seed(b"\1" * 32, 0, bytes(64))
+    seed = bench_seed(b"\1", 0)
     signs = torch.from_numpy(skr.signs(seed)).cuda()
     store.set_pass(lib, seed)
     sk = torch.empty((N, skr.ROWS), dtype=torch.int32, device="cuda")
@@ -99,7 +105,7 @@ def main() -> int:
     out["tensor_receipts_ms"] = min(tensor[1:])
     out["tensor_receipts_tau"] = out["tensor_receipts_ms"] / read_ms
     out["tensor_receipts_equal"] = bool(torch.equal(ys, ys16))
-    out["device_signs_equal"] = all(store.signs_match(rb.seed(b"\4" * 32, i, bytes(64))) for i in range(8))
+    out["device_signs_equal"] = all(store.signs_match(bench_seed(b"\4", i)) for i in range(8))
     del ys, ys16, pk
     torch.cuda.empty_cache()
     print(json.dumps({"plain_ms": out["plain_ms"], "plain_tau": out["plain_tau"],
@@ -113,14 +119,13 @@ def main() -> int:
             s = store
             s.shape(1 << c, a.kept_from, ctas)
             gpu, host = [], []
-            prev = s.run_pass(seed)[0]
-            ok = prev == plain_root
+            ok = s.run_pass(seed)[0] == plain_root
             for i in range(a.passes):
-                sd = rb.seed(b"\1" * 32, i + 1, prev)
+                sd = bench_seed(b"\1", i + 1)
                 t0 = time.perf_counter_ns()
-                prev, _ = s.run_pass(sd)
+                root, _ = s.run_pass(sd)
                 host.append(time.perf_counter_ns() - t0)
-                ok = ok and prev == s.plain_root(sd)
+                ok = ok and root == s.plain_root(sd)
             gpu = s.pass_gpu_ms[-a.passes:]
             names = ("head", "set_pass", "alloc", "launch", "wait", "root")
             ph = s.pass_host_phases[-a.passes:]
@@ -128,50 +133,20 @@ def main() -> int:
             row = {"chunk_log2": c, "ctas": ctas, "h0": s.h0, "root_ok": ok, "host_phases_p50_ns": phases,
                    "gpu_ms": percentiles(sorted(gpu)), "host_ns": percentiles(sorted(host)),
                    "tau": sorted(gpu)[len(gpu) // 2] / read_ms, "tau_host": sorted(host)[len(host) // 2] / 1e6 / read_ms}
-            challenge, prev_host = b"\x06" * 32, bytes(64)
-            s.start_chain(challenge, prev_host)
-            chain_gpu, chain_host, chain_seed_ok, chain_signs_ok, chain_root_ok = [], [], True, True, True
-            p0 = len(s.chain_host_phases)
-            for i in range(a.passes):
-                want_seed = rb.seed(challenge, i, prev_host)
-                t0 = time.perf_counter_ns()
-                prev_host, handle = s.run_chain(i)
-                chain_host.append(time.perf_counter_ns() - t0)
-                chain_gpu.append(s.pass_gpu_ms[-1])
-                handle = s.ready(handle)
-                chain_seed_ok = chain_seed_ok and handle[0] == want_seed
-                want_pk = torch.empty(device.PACK16_WORDS, dtype=torch.int32, device="cuda")
-                want_signs = torch.from_numpy(skr.signs(want_seed)).cuda()
-                lib.call("rs_pack16", want_signs.data_ptr(), want_pk.data_ptr())
-                chain_signs_ok = chain_signs_ok and bool(torch.equal(handle[1], want_pk.cpu()))
-                chain_root_ok = chain_root_ok and prev_host == s.plain_root(want_seed)
-            chain_ph = s.chain_host_phases[p0:]
-            chain_names = ("alloc", "launch", "wait", "root")
-            row.update({"chain_seed_ok": chain_seed_ok, "chain_signs_ok": chain_signs_ok,
-                        "chain_root_ok": chain_root_ok,
-                        "chain_host_phases_p50_ns": {
-                            k: sorted(x[j] for x in chain_ph)[len(chain_ph) // 2] for j, k in enumerate(chain_names)
-                        },
-                        "chain_gpu_ms": percentiles(sorted(chain_gpu)),
-                        "chain_host_ns": percentiles(sorted(chain_host)),
-                        "chain_tau": sorted(chain_gpu)[len(chain_gpu) // 2] / read_ms,
-                        "chain_tau_host": sorted(chain_host)[len(chain_host) // 2] / 1e6 / read_ms})
             out["pipelined"].append(row)
             print(json.dumps(row), flush=True)
             s.pass_gpu_ms.clear()
-            s.chain_host_phases.clear()
     t = []
     for i in range(20):
         t0 = time.perf_counter_ns()
-        skr.signs(rb.seed(b"\2" * 32, i, bytes(64)))
+        skr.signs(bench_seed(b"\2", i))
         t.append(time.perf_counter_ns() - t0)
     out["signs_host_ns"] = percentiles(sorted(t))
     store.shape(1 << int(a.chunks.split(",")[-1]), a.kept_from, 0)
     store.payload_tree(b"bench")
-    kept, prev = [], bytes(64)
+    kept = []
     for i in range(a.open_passes):
-        prev, h = store.run_pass(rb.seed(b"\3" * 32, i, prev))
-        kept.append(h)
+        kept.append(store.run_pass(bench_seed(b"\3", i))[1])
     import numpy as np
 
     rng = np.random.default_rng(5)
@@ -227,14 +202,14 @@ def main() -> int:
                 if time.perf_counter_ns() - t0 > 20_000_000:
                     stalls.append((t0, time.perf_counter_ns() - t0))
 
-        host, g0, prev = [], len(store.pass_gpu_ms), bytes(64)
+        host, g0 = [], len(store.pass_gpu_ms)
         with torch.cuda.stream(ps):
             th, pr = threading.Thread(target=opener), threading.Thread(target=probe)
             th.start()
             pr.start()
             while not done.is_set():
                 t0 = time.perf_counter_ns()
-                prev, _ = store.run_pass(rb.seed(b"\5" * 32, len(host), prev))
+                store.run_pass(bench_seed(b"\5", len(host)))
                 host.append(time.perf_counter_ns() - t0)
             th.join()
             pr.join()

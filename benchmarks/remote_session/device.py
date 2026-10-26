@@ -1,6 +1,6 @@
-"""The prover's GPU backend: an encoded store across the visible GPUs, its payload tree, chained sketch-sha512 passes
-over it with the device reader (`../codec_tensor/reader.cu` in `session.cu`) and the openings of what the verifier
-draws.
+"""The prover's GPU backend: an encoded store across the visible GPUs, its payload tree, sketch-sha512 passes over it
+with the device reader (`../codec_tensor/reader.cu` in `session.cu`), each under its live pass coin, and the openings
+of what the verifier draws.
 
 ~~~text
 segments   the store's N blocks as contiguous segments of whole chunks: first a shard a GPU in its HBM, as even as the
@@ -15,13 +15,13 @@ payload    N blocks of seeded random bytes, each 128-byte word's top byte below 
            built a chunk at a time on the chunk's GPU and retained on the CPU, so it does not displace the store
 store      E = the codec over the payload in place, by kv.cu (`../word_codec/kv.cu`) on each segment's GPU at the
            registration's key and the store's positions
-pass       on each GPU, its seed, signs and constants derived from the previous root in its root ring
-           (`rs_chain_prepare`), its shard's sketch-sha512 receipts on tensor cores with the leaves and levels up to
-           each chunk's root at hc hashed under the reads (`rs_pass`), and its share of the padding up to hc, and
-           beside it on two streams of its own its host segment's, by a few CTAs (`--host-ctas`, `--host-consumers`)
-           over PCIe; then on the leader (GPU 0) the levels above hc from every segment's over P2P, the root written
-           to every GPU's ring (`rs_top`). Each pass is queued on every GPU behind the leader's event for the root it chains from, while
-           the pass before it runs, so the passes follow one another on the devices with no host step between them.
+pass       on each GPU, its constants from its seed, the pass coin the host has (`set_pass`), and its signs
+           (`rs_signs16`), its shard's sketch-sha512 receipts on tensor cores with the leaves and levels up to each
+           chunk's root at hc hashed under the reads (`rs_pass`), and its share of the padding up to hc, and beside it
+           on two streams of its own its host segment's, by a few CTAs (`--host-ctas`, `--host-consumers`) over PCIe;
+           then on the leader (GPU 0) the levels above hc from every segment's over P2P, the root written to every
+           GPU's ring (`rs_top`). A pass's seed comes only after the root before it has reached the verifier, so the
+           passes run one at a time, each launched once its coin is on the host.
            A pass keeps its packed signs (8 KiB), each segment's levels h0 … hc and the levels above, nothing per block,
            in rings allocated with the store and copied to host memory as its part ends, so a pass allocates nothing
 opening    a window's draws at once, segment by segment on its GPU's opening stream: each drawn leaf's subtree of 2^h0
@@ -38,8 +38,8 @@ the payload root against `audit.payload_tree` and blocks of the store against `c
 block and the store's last), a pass's root against `receipts.tree` over the reference's receipts, and sessions under
 the registration's key, one honest and accepted by `audit.Session`, one with 1/16 of its blocks dropped and rejected at
 a receipt, and with a host tier one with only host blocks dropped (every fourth) and rejected at a receipt; then in
-calibration, the chained pass against the plain pass at every kept level over the whole store, and its seed and signs
-against the reference's.
+calibration, the pipelined pass against the plain pass at every kept level over the whole store, its handle's seed
+against its coin, and its signs at random seeds against the reference's.
 """
 from __future__ import annotations
 
@@ -55,7 +55,6 @@ import sys
 import tempfile
 import threading
 import time
-from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -464,8 +463,7 @@ class DeviceStore:
         self.pass_host_ms: list[float] = []
         self.open_stats: list[dict] = []
         self.pass_host_phases: list[tuple] = []
-        self.chain_host_phases: list[tuple] = []
-        self.launched, self.last = 0, None
+        self.launched = 0
         with torch.cuda.device(gpus[0].index):
             self.root_host = torch.empty((SLOTS, 8), dtype=torch.int64, pin_memory=True)
         self.started = [torch.cuda.Event(enable_timing=True) for _ in range(SLOTS)]
@@ -545,15 +543,13 @@ class DeviceStore:
             with self.on(gpu):
                 r = {"pad": torch.empty((max(2 * pad_n, 1), 8), dtype=torch.int64, device=dev),
                      "pad_out": torch.empty((max(self.pads[g][1], 1), 8), dtype=torch.int64, device=dev),
-                     "seed": torch.empty(rb.DIGEST_BYTES, dtype=torch.uint8, device=dev),
                      "pk": torch.empty(PACK16_WORDS, dtype=torch.int32, device=dev),
                      "roots": torch.zeros((SLOTS + 1, 8), dtype=torch.int64, device=dev)}
                 parts = []
                 if g == 0:
-                    r["seeds"] = torch.empty((SLOTS, rb.DIGEST_BYTES), dtype=torch.uint8, device=dev)
                     r["pks"] = torch.empty((SLOTS, PACK16_WORDS), dtype=torch.int32, device=dev)
                     r["top"] = torch.empty((SLOTS, self.top_at[H + 1], 8), dtype=torch.int64, device=dev)
-                    parts += ["seeds", "pks", "top"]
+                    parts += ["pks", "top"]
                 r["host"] = {k: torch.empty(r[k].shape, dtype=r[k].dtype, pin_memory=True) for k in parts}
                 ring.append(r)
         for s, g in enumerate(self.seg_gpu):
@@ -670,10 +666,8 @@ class DeviceStore:
                      SALT_DOMAIN + self.key + seed, self.blocks)
         lib.call("rb_sketch_set", skr.prefix(seed))
 
-    def launch(self, i: int, after: Ticket | None, seed: bytes | None = None) -> Ticket:
-        """Queue pass i chained from `after`'s root (None: the window's previous root, `start_chain`) on every GPU,
-        each behind the leader's event for that root, or with `seed` an unchained pass under that seed's constants
-        from the host; its ticket at once (`wait`)."""
+    def launch(self, i: int, seed: bytes) -> Ticket:
+        """Queue pass i under `seed`, its constants set from the host, on every GPU; its ticket at once (`wait`)."""
         so, G, hc = self.lib.so, len(self.gpus), self.hc
         tr = None if self.trace is None else [time.perf_counter_ns(), time.thread_time_ns(), *_faults()]
         slot = self.launched % SLOTS
@@ -681,27 +675,19 @@ class DeviceStore:
         # The offloader has copied this slot's last pass out of the pinned ring, so its copies on every GPU are done.
         self.free[slot].wait()
         self.free[slot].clear()
-        prev = SLOTS if after is None else after.slot
-        head = stream_head(seed) if seed is not None else None
+        head = stream_head(seed)
         lc = self.chunk // PER_LEAF
         for g, gpu in enumerate(self.gpus):
             ring = self.ring[g]
             with self.on(gpu) as s:
-                if after is not None:
-                    s.wait_event(self.top_done[after.slot])
                 if g == 0:
                     self.started[slot].record(s)
                 self.began[g][slot].record(s)
-                sd = ring["seeds"][slot] if g == 0 else ring["seed"]
                 pk = ring["pks"][slot] if g == 0 else ring["pk"]
                 if tr is not None:
                     tr.append(time.perf_counter_ns())
-                if seed is None:
-                    rc = so.rs_chain_prepare(i, ring["roots"].data_ptr() + 64 * prev, sd.data_ptr(), pk.data_ptr(),
-                                             s.cuda_stream)
-                else:
-                    self.set_pass(self.lib, seed)
-                    rc = so.rs_signs16(head, len(head), pk.data_ptr(), s.cuda_stream)
+                self.set_pass(self.lib, seed)
+                rc = so.rs_signs16(head, len(head), pk.data_ptr(), s.cuda_stream)
                 hbm, *host = self.gpu_segs[g]
                 if host and not rc:
                     # The host segment first, so its few CTAs are on the device before the shard's grids fill it.
@@ -780,8 +766,7 @@ class DeviceStore:
                 for g in range(len(self.gpus)):
                     self.copied[g][slot].synchronize()
                 host = self.ring[0]["host"]
-                handle.value = (seed if seed is not None else bytes(host["seeds"][slot].numpy()),
-                                host["pks"][slot].clone(), [x["host"][slot].clone() for x in self.seg_ring],
+                handle.value = (seed, host["pks"][slot].clone(), [x["host"][slot].clone() for x in self.seg_ring],
                                 host["top"][slot].clone())
             except BaseException as error:
                 handle.value = error
@@ -821,71 +806,37 @@ class DeviceStore:
         return root, ticket.handle
 
     def run_pass(self, seed: bytes):
-        """One unchained pass under `seed`: its root, and what its openings need, (seed, packed signs, each segment's
-        kept levels, the top levels)."""
+        """One pass under `seed`: its root, and what its openings need, (seed, packed signs, each segment's kept
+        levels, the top levels)."""
         t0 = time.perf_counter_ns()
-        ticket = self.launch(0, None, seed=seed)
+        ticket = self.launch(0, seed)
         t1 = time.perf_counter_ns()
         root, handle = self.wait(ticket)
         t2 = time.perf_counter_ns()
         self.pass_host_phases.append((0, 0, 0, t1 - t0, t2 - t1, time.perf_counter_ns() - t2))
         return root, handle
 
-    def start_chain(self, challenge: bytes, previous: bytes | None) -> None:
-        """Set one window's challenge on every GPU, and, if given, its first previous root (each GPU's slot SLOTS)."""
-        if type(challenge) is not bytes or len(challenge) != rb.CHALLENGE_BYTES:
-            raise ValueError("a chained window's challenge is 32 bytes")
-        words = None
-        if previous is not None:
-            words = self.torch.from_numpy(
-                np.frombuffer(rb._digest(previous, "a previous root"), dtype=">u8").astype(np.uint64).view(np.int64).copy())
-        for g, gpu in enumerate(self.gpus):
-            with self.on(gpu):
-                self.lib.call("rs_chain_set", challenge)
-                if words is not None:
-                    self.ring[g]["roots"][SLOTS].copy_(words)
-        if previous is not None:
-            self.last = None
-
-    def run_chain(self, i: int):
-        """Pass i chained from the last one `run_chain` ran (or the window's previous root), waited for."""
-        t0 = time.perf_counter_ns()
-        ticket = self.launch(i, self.last)
-        t1 = time.perf_counter_ns()
-        root, handle = self.wait(ticket)
-        t2 = time.perf_counter_ns()
-        self.last = ticket
-        self.chain_host_phases.append((0, t1 - t0, t2 - t1, time.perf_counter_ns() - t2))
-        return root, handle
-
-    def chain(self, passes: int | None = None, until_ns: int | None = None):
-        """Chained passes 0, 1, … from the window's previous root, as a session runs them: each queued before the one
-        ahead of it is awaited. Yields (i, root, handle, observed) as each root reaches the host (`perf_counter_ns`),
-        until `passes` or, once the clock reaches `until_ns`, the pass in flight."""
-        inflight = deque([(0, self.launch(0, None))])
-        nxt = 1
-        while inflight:
-            if (len(inflight) < 2 and (passes is None or nxt < passes)
-                    and (until_ns is None or time.perf_counter_ns() < until_ns)):
-                inflight.append((nxt, self.launch(nxt, inflight[-1][1])))
-                nxt += 1
-            i, ticket = inflight.popleft()
-            root, handle = self.wait(ticket)
-            yield i, root, handle, time.perf_counter_ns()
+    def passes(self, seeds, until_ns: int | None = None):
+        """Passes under `seeds` one after another, as a session runs them, each launched once the root before it is
+        on the host. Yields (root, handle, launched, observed) as each root reaches the host (`perf_counter_ns`),
+        until the seeds run out or, once the clock reaches `until_ns`, the pass in flight."""
+        for seed in seeds:
+            if until_ns is not None and time.perf_counter_ns() >= until_ns:
+                return
+            t0 = time.perf_counter_ns()
+            root, handle = self.wait(self.launch(0, seed))
+            yield root, handle, t0, time.perf_counter_ns()
 
     def warmup(self, ns: int) -> dict:
-        """Chained passes on a throwaway challenge for at least `ns` nanoseconds, keeping nothing, to bring the GPUs to
-        their boost clocks and warm their caches and the allocator before a session's first window. They read the
-        whole store and build the whole receipt tree, as a session's do, but none is sent, kept or opened: they touch
-        only this store's chain constants, and the real `start_chain` that follows resets the window's challenge and
-        previous root. So no window accounts for them."""
+        """Passes under random seeds for at least `ns` nanoseconds, keeping nothing, to bring the GPUs to their boost
+        clocks and warm their caches and the allocator before a session's first window. They read the whole store and
+        build the whole receipt tree, as a session's do, but none is sent, kept or opened, so no window accounts for
+        them."""
         if ns <= 0:
             return {"passes": 0, "ns": 0}
-        self.start_chain(bytes(rb.CHALLENGE_BYTES), bytes(rb.DIGEST_BYTES))
         t0 = time.perf_counter_ns()
-        passes = sum(1 for _ in self.chain(until_ns=t0 + ns))
+        passes = sum(1 for _ in self.passes(iter(lambda: secrets.token_bytes(coins.SEED_BYTES), None), until_ns=t0 + ns))
         self.sync()
-        self.last = None
         self.pass_gpu_ms.clear()
         return {"passes": passes, "ns": time.perf_counter_ns() - t0}
 
@@ -1186,11 +1137,11 @@ class Device:
         return min(out[1:])
 
     def calibrate(self) -> dict:
-        """The read alone on every GPU at once (`read_ms`: HBM, host and both), `calibration_passes` chained passes queued as a
-        session queues them (each root's interval from the one before, the allowance's pass, and the host's time from
-        a root's arrival to where a session sends it, its gap; it takes a high percentile of each, `percentiles`), a
-        pass's root and kept levels against the plain pass's at the same seed over the whole store, and a window's
-        openings over the calibration's first passes."""
+        """The read alone on every GPU at once (`read_ms`: HBM, host and both), `calibration_passes` passes under random
+        seeds run as a session runs them, one at a time (each from its launch to its root on the host, the allowance's
+        pass, and the host's time from a root's arrival to where a session sends it, its gap; it takes a high
+        percentile of each, `percentiles`), a pass's root and kept levels against the plain pass's at the same seed
+        over the whole store, and a window's openings over the calibration's first passes."""
         torch, s = self.torch, self.store
         hbm = [q for q in range(len(s.n)) if not s.on_host[q]]
         host = [q for q in range(len(s.n)) if s.on_host[q]]
@@ -1201,7 +1152,7 @@ class Device:
                              "numa": [self.gpus[s.seg_gpu[q]].numa for q in host]}
         for t in tiers.values():
             t["bytes_per_s"] = t["bytes"] / (t["ms"] / 1e3)
-        challenge, prev = self.rng.bytes(32), bytes(64)
+        seeds = [self.rng.bytes(coins.SEED_BYTES) for _ in range(self.calibration_passes)]
         # Timed as a session runs, with no collector.
         gc.collect()
         gc.freeze()
@@ -1210,15 +1161,15 @@ class Device:
         history = self.trace_allocator and allocator_history(torch, True)
         clock0 = (time.time_ns(), time.perf_counter_ns())
         s.trace = []
-        s.start_chain(challenge, prev)
-        observed, gaps, kept, first = [], [], [], None
+        observed, intervals, gaps, kept, first = [], [], [], [], None
         g0 = len(s.pass_gpu_ms)
-        for i, root, handle, at in s.chain(self.calibration_passes):
+        for seed, (root, handle, launched, at) in zip(seeds, s.passes(seeds)):
             if first is None:
-                first = (rb.seed(challenge, 0, prev), root, handle)
+                first = (seed, root, handle)
             if len(kept) < self.warm_passes:
                 kept.append(handle)
             observed.append(at)
+            intervals.append(at - launched)
             gaps.append(time.perf_counter_ns() - at)
         trace, s.trace = s.trace, None
         gc.enable()
@@ -1229,17 +1180,17 @@ class Device:
         self.calibration_trace = stall_report(observed, trace, events, clock0,
                                               [{k: b[k] - a[k] for k in a} for a, b in zip(stats0, stats1)])
         gpu = s.pass_gpu_ms[g0:]
-        seed, chained_root, chained = first
-        chained = s.ready(chained)
-        self.gates["device_seed"] = chained[0] == seed
-        plain_root = s.plain_root(seed, chained)
-        self.gates["plain_root"] = plain_root == chained_root
+        seed, pass_root, handle = first
+        handle = s.ready(handle)
+        self.gates["device_seed"] = handle[0] == seed
+        plain_root = s.plain_root(seed, handle)
+        self.gates["plain_root"] = plain_root == pass_root
         self.gates["plain_levels"] = s.plain_level_matches
-        self.gates["device_signs"] = all(s.signs_match(rb.seed(challenge, i, bytes(64))) for i in range(4))
+        self.gates["device_signs"] = all(s.signs_match(self.rng.bytes(coins.SEED_BYTES)) for _ in range(4))
         if not self.gates["device_seed"]:
-            raise RuntimeError("the device's chained seed is not the driver's")
+            raise RuntimeError("the pass's handle does not carry the seed it ran under")
         if not self.gates["plain_root"] or not all(s.plain_level_matches.values()):
-            raise RuntimeError(f"the chained pass differs from the plain pass at levels "
+            raise RuntimeError(f"the pipelined pass differs from the plain pass at levels "
                                f"{[h for h, ok in s.plain_level_matches.items() if not ok]}")
         if not self.gates["device_signs"]:
             raise RuntimeError("the device's signs are not the reference's")
@@ -1254,7 +1205,7 @@ class Device:
         s.pass_gpu_ms.clear()
         s.pass_host_ms.clear()
         torch.cuda.empty_cache()
-        intervals = sorted(b - a for a, b in zip(observed[1:], observed[2:]))
+        intervals = sorted(intervals[1:])
         gaps = sorted(gaps[1:])
         gpu = sorted(gpu[1:])
         return {"pass_ns_max": intervals[-1], "pass_ns_median": intervals[len(intervals) // 2],
@@ -1284,11 +1235,10 @@ class Device:
         self.store.offload_ns.clear()
         return out
 
-    def begin_window(self, challenge: bytes, previous: bytes | None) -> None:
-        self.store.start_chain(challenge, previous)
-
-    def launch(self, i: int, after: Ticket | None) -> Ticket:
-        return self.store.launch(i, after)
+    def launch(self, i: int, seed: bytes, plan: rb.Plan | None = None) -> Ticket:
+        if plan is not None:
+            raise ValueError("the device's passes read the whole registered store, under no plan")
+        return self.store.launch(i, seed)
 
     def wait(self, ticket: Ticket):
         return self.store.wait(ticket)
@@ -1333,7 +1283,7 @@ class Device:
         out["decode"] = all(rcodec.decode(encoded[j], j, key) == payloads[j] for j in range(min(256, small.blocks)))
         reg = audit.Registration(registration.node, small.blocks, root, registration.codec_seed, registration.codec,
                                  registration.receipt, registration.bind, registration.layout, registration.rows)
-        seed = rb.seed(self.rng.bytes(32), 0, reg.digest)
+        seed = self.rng.bytes(coins.SEED_BYTES)
         got, _ = small.run_pass(seed)
         r = rb.receipter(reg.receipt, seed, reg.rows)
         ys = [r(j, encoded[j]) for j in range(small.blocks)]
@@ -1347,7 +1297,7 @@ class Device:
             out["session_skip_host"] = self.gate_session(small, reg, set(range(small.hbm_blocks, small.blocks, 4)))
             out["ok"] = out["ok"] and out["session_skip_host"]["failure"] == "receipt"
         # `small` and its gate sessions use the same shared libraries as the real store, so its fixed chain templates
-        # replaced the real store's on every GPU. Restore both copies before calibration derives the first real pass.
+        # replaced the real store's on every GPU. Restore both copies before calibration's first real pass.
         for gpu in self.gpus:
             with self.store.on(gpu):
                 self.lib.set_chain(self.store.plan, self.salt_key)
@@ -1366,15 +1316,15 @@ class Device:
         session = audit.Session(params, reg, None, coins.local(reg.digest, 0, params.windows, secrets.token_bytes, appends=1),
                                 clock=lambda: now[0], not_before_ns=0)
         small.arm(dropped)
-        coin, prev, kept = session.start(), reg.digest, {}
+        session.start()
+        kept = {}
         for t in range(2):
-            small.start_chain(coins.coin(coin), prev if t == 0 else None)
             for i in range(2):
-                prev, kept[t, i] = small.run_chain(i)
+                root, kept[t, i] = small.run_pass(coins.seed(session.seed()))
                 now[0] += 1
-                if session.receive(t, i, prev, step=2 * t + i) is not None:
+                if session.receive(t, i, root, step=2 * t + i) is not None:
                     return {"accepted": False, "failure": session.failed.failure}
-            coin = session.boundary()
+            session.boundary()
             now[0] += 1
         for t in range(2):
             if t == 1:
