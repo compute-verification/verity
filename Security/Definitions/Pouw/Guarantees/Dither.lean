@@ -47,9 +47,10 @@ price: RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 * the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`,
 * the network certifier counts at most `K` exchanged bits, and
 * each round's work splits into its words and their commitment on advice of at most `B_adv(A)` bits fixed before the
-  round's coins, the commitment's output the prover's root, within the prover's timed use plus `ξ_A` over the period
-  (the extractor's walk and log), but with probability `κ_x(A)` on runs whose rounds make at most `Q` oracle calls
-  (`ExtractAdv`; from SHA-512 as a random oracle and its realization,
+  round's coins, the commitment's output the prover's root; on runs whose rounds make at most `Q` oracle calls the
+  two use at most the prover's timed use plus `ξ_A` over the period (the extractor's walk and log), and the check
+  fails on the words with probability at most `κ_x(A)` (`ExtractAdv`; from SHA-512 as a random oracle and its
+  realization,
   `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`),
 
 then for every prover `A`, the probability over the oracle and the verifier's coins that the service accepts its
@@ -74,13 +75,18 @@ units' coins aren't serialized is one prover per unit (`FleetSound`, RT-PROTO-2 
 
 Open (stated so the red team can aim at them):
 * the split of a program's use into a words part and a commitment part is `ExtractAdv`'s cost clause (the
-  realization's, in `WorkSoundNoFold`): the oracle calls are priced steps (G3), but the machine's composition doesn't
-  yet say which steps of a program are its commitment path (RT-LEAN-2 L28's remainder);
-* `G` is the abstract interface, not yet MODEL-SPEC's machine at a card's θ with its floors (RT-LEAN L4, L9;
-  RT-MODEL M12);
-* import is per period with no `n_max · E_out` form (RT-PROTO P2);
-* host CPUs and DPUs are resources of `G` only if the model prices them (P9);
-* the coin-to-root deadline and the period's boundary aren't read (P5). -/
+  realization's, in `WorkSoundNoFold`), on runs within the cap: the oracle calls are priced steps (G3), but nothing in
+  `Accel` says which steps of a program are its commitment path (RT-LEAN-2 L28's remainder; the facts that would
+  discharge it are `Definitions.Pouw.Assumptions.ShaRealize`'s Open);
+* the event reads `Fits`, so a run whose timed use doesn't fit the period's devices is outside it. That an accepted
+  period's rounds fit is what the deadlines buy, the commitment's `Δ` after the dither and the answer's `τ_ans` after
+  the check coins, with `k (Δ + τ_ans) ≤ T` (RT-PROTO P5): the card instance's `Timed` and `TimedWorkFits`
+  (WORKSOUND-INST-2, #4567);
+* `G` is any accelerator here. The card instance reads it as MODEL-SPEC's machine at a card's θ with its floors
+  (RT-LEAN L4, L9; RT-MODEL M12), prices an exchanged bit at `β = n_max H_mac` with the certifier streaming the
+  dither bits and counting `K = E_in + E_out` (RT-PROTO P2, which holds only while the dither bits stay streamed), and
+  makes the hosts and DPUs resources of `G` (P9; that they are all the processors the cards reach is
+  `PeriodInventory`, held pending Daniel). -/
 def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Set P.Inst) (reg : Fin k → P.Inst) (Obs : Type)
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ)
@@ -111,8 +117,11 @@ through their calls (`Accel.OracleCalls`), and the realization premise `ShaReali
 the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: work and answers are
 both timed (the answer deadline `τ_ans`, I1), so a run within the cap makes at most `Q` calls in its rounds' work and
 answers, and its distinct queries, with the verifier's, are at most `q`, those of an answer that reaches a later root
-among them. With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the
-same bound:
+among them. The premise still asks every prover's words program, on the advice and the dither alone, to be the walk
+over its log; a prover whose words or tree read an oracle answer of the round has none at one `B_adv`, so on a
+machine with such a prover the premise is false and this statement is vacuous (the walk's oracle reach,
+`Definitions.Pouw.Assumptions.ShaRealize`'s Open), and `WorkSound`, at each prover's own bounds, is the one to cite.
+With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`.
 The log's term `μ · q ξl / C` is `Q` log entries' upkeep against the credited cost: at `Q = cap_r / callUse_r` it is

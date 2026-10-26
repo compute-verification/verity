@@ -226,6 +226,43 @@ def test_first_puts_a_ready_fix_at_the_bottom_of_next_ahead_of_members_that_keep
     assert [m.commit for m in again] == [m.commit for m in members]
 
 
+def test_a_sync_merges_what_changes_no_lean_below_every_lean_change_in_first_then_admission_order(world):
+    """26 Oct (Daniel: "CI runs at breakneck speed"): a member above a Lean change waits for that change's Lean check, ~1 h, though
+    it changes no Lean itself.  What a sync merges goes non-Lean first, `--first`'s order then admission's within each part; a PR
+    that contains a Lean change stays above it, and one stacked on a member already on `next` is judged by its own change."""
+    world.gh.put(1, h1 := world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, h2 := world.change({"a.txt": "2\n"}))
+    world.gh.put(3, h3 := world.change({"pkg/B.lean": "-- 3\n"}))
+    world.gh.put(4, world.change({"b.txt": "4\n"}))
+    world.gh.put(5, world.change({"c.txt": "5\n"}, base=h1))                 # changes no Lean, but contains #1
+    world.gh.put(6, world.change({"d.txt": "6\n"}, base=h2))
+    members, _ = world.queue(first=(3, 4)).sync()
+    assert [m.pr for m in members] == [4, 2, 6, 3, 1, 5]
+    world.gh.put(9, world.change({"pkg/C.lean": "-- 9\n"}))
+    world.gh.put(10, world.change({"e.txt": "10\n"}, base=h3))               # its own change, against #3's head, is no Lean
+    world.gh.put(11, world.change({"f.txt": "11\n"}))
+    again, _ = world.queue().sync()
+    assert [m.pr for m in again] == [4, 2, 6, 3, 1, 5, 10, 11, 9]
+    assert [m.commit for m in again[:6]] == [m.commit for m in members]      # what the sync keeps never moves for it
+    world.gh.put(4, world.change({"b.txt": "4 rewritten\n"}))                # off the bottom: everything is merged again
+    rebuilt, _ = world.queue().sync()
+    assert [m.pr for m in rebuilt] == [2, 6, 11, 4, 3, 1, 5, 10, 9]
+
+
+def test_nonlean_first_off_at_main_keeps_first_then_admission_order_and_turning_it_on_rebuilds_nothing(world):
+    """drive.toml's `nonlean_first` at `main` decides a sync that isn't given it.  Turned on, it reorders only what a sync merges
+    anyway: a rebuild just to reorder would take a running Lean check's commit off `next`."""
+    _git(world.dev, "push", "-q", "origin", f"{world.change({DRIVE_FLAGS: 'nonlean_first = false'})}:refs/heads/main")
+    world.gh.put(1, world.change({"pkg/A.lean": "-- 1\n"}))
+    world.gh.put(2, world.change({"a.txt": "2\n"}))
+    world.gh.put(3, world.change({"b.txt": "3\n"}))
+    members, _ = world.queue(first=(3,)).sync()
+    assert [m.pr for m in members] == [3, 1, 2]
+    assert [m.commit for m in world.queue(nonlean_first=True).sync()[0]] == [m.commit for m in members]
+    _git(world.dev, "push", "-q", "origin", f"{world.change({'x.txt': 'x\n'})}:refs/heads/main")      # `next` is rebuilt
+    assert [m.pr for m in world.queue(nonlean_first=True).sync()[0]] == [2, 3, 1]
+
+
 def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world):
     """`.gitattributes` names `lean-audit` for every lean-audit.json; the queue's own clone must define it, or two PRs that each
     add a record conflict as text (12 Oct: #1806)."""
@@ -245,6 +282,53 @@ def test_the_queues_clone_merges_lean_audit_records_with_the_record_driver(world
     assert [m.pr for m in members] == [1, 2], entries[2].why
     merged = json.loads(_git(world.origin, "show", "refs/heads/next:pkg/lean-audit.json"))
     assert set(merged["guarantees"]) == {"T", "A", "B"}
+
+
+def test_a_sync_by_merge_tree_builds_the_next_and_refusals_the_worktree_merges_built(world, monkeypatch):
+    """25-26 Oct: a sync that merged each candidate in the clone's worktree, ~70 of them conflicting, took 40 min.  `_merge` now
+    merges with `git merge-tree` and `git commit-tree` and touches no worktree; over 30 PRs (conflicts in one and two files,
+    lock records only the merge driver an earlier member adds to `.gitattributes` merges, a stacked PR, a second sync that
+    appends) it builds the same `next` (tree, first-parent messages) and the same refusals as the worktree merges."""
+    lean = Path(__file__).resolve().parents[2] / "verity" / "lean"
+    base = world.change({f"tools/verity/lean/{f}": (lean / f).read_text() for f in ("merge.py", "check.py")})
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    rec = json.loads((world.dev / "pkg" / "lean-audit.json").read_text())
+    heads = {}
+    for n in range(1, 31):
+        if n == 2:
+            files = {".gitattributes": "lean-audit.json merge=lean-audit\n"}
+        elif n % 7 == 0:
+            files = {"pkg/lean-audit.json": json.dumps({**rec, "guarantees": {**rec["guarantees"], f"G{n}": "1"}})}
+        elif n % 5 == 0:
+            files = {"shared.txt": f"{n}\n", **({"a.txt": f"{n}\n"} if n % 10 == 0 else {})}
+        else:
+            files = {"a.txt" if n == 1 else f"f{n}.txt": f"{n}\n"}
+        heads[n] = world.change(files, base=heads[3] if n == 29 else "origin/main")
+        world.gh.put(n, heads[n])
+    new = world.queue()
+    monkeypatch.setattr(new, "_merge_in_worktree", lambda *a: pytest.fail("merged in the worktree"))
+    old = Queue(world.tmp / "q-old" / "verity", remote=str(world.origin), github=world.gh, store=world.store,
+                log=world.logs.append, ready=lambda n, h: (n, h) in world.gh.ready, shadow=True)
+    old._attr_source = False
+
+    def same() -> list:
+        (got, ge), (want, we) = new.sync(), old.sync()
+        assert [m.pr for m in got] == [m.pr for m in want]
+        assert {n: (e.state, e.why) for n, e in ge.items()} == {n: (e.state, e.why.replace(SHADOW_BRANCH, "next"))
+                                                                  for n, e in we.items()}
+        tips = [_git(world.origin, "rev-parse", f"refs/heads/{b}") for b in ("next", SHADOW_BRANCH)]
+        assert len({_git(world.origin, "rev-parse", f"{t}^{{tree}}") for t in tips}) == 1
+        assert len({_git(world.origin, "log", "--first-parent", "--format=%B", f"main..{t}") for t in tips}) == 1
+        assert _git(new.workdir, "rev-parse", "HEAD") == tips[0]
+        return got, ge
+
+    first, entries = same()
+    two, one = "conflicts with `next` in a.txt, shared.txt (touched by #1, #5)", "conflicts with `next` in shared.txt (touched by #5)"
+    assert {n: e.why for n, e in entries.items() if e.state == "refused"} == {10: two, 15: one, 20: two, 25: one, 30: two}
+    assert {7, 14, 21, 28, 29} <= {m.pr for m in first}
+    world.gh.put(31, world.change({"f31.txt": "31\n"}))
+    again, _ = same()
+    assert [m.commit for m in again[:-1]] == [m.commit for m in first] and again[-1].pr == 31
 
 
 def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_and_no_note_is_written(world, monkeypatch):

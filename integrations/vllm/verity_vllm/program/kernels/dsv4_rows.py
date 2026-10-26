@@ -12,8 +12,6 @@ The row kernels register from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import json
 from typing import Any, Callable, Sequence
 
@@ -550,7 +548,7 @@ def _sample_hash(rng: np.random.Generator, n: int, params: Sequence[Any], *, E: 
     return [_f32_words(rng, (n, E), 4.0, 0.1), ids.astype(np.int64).astype(np.uint32)]
 
 
-def _sample_clamp(rng: np.random.Generator, n: int, params: Sequence[Any], *, I: int, LIMIT: float) -> list[np.ndarray]:  # noqa: E741
+def _sample_clamp(rng: np.random.Generator, n: int, params: Sequence[Any], *, I: int, LIMIT: float) -> list[np.ndarray]:
     """bf16 gate / up words around +-LIMIT (and an ulp either side), +-0, a subnormal and beyond -88, where silu's expf overflows."""
     from verity_vllm.program.registry.dsv4_moe import limit_bits
     lim = limit_bits(LIMIT) >> 16

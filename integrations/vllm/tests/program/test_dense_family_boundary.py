@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import ast
 import importlib
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 REGISTRY = "verity_vllm.program.registry"
-REGISTRY_DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+REGISTRY_DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
 #: other families' Definition modules the family reads: the primitives, the b1 composites, `sampling.bit_at` (`UnpackF32_v1`),
@@ -21,8 +22,8 @@ READS = ("prims", "b1", "sampling", "value_inputs", "tables")
 THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
-MOVED = {"rope_difftest": "verity_vllm.properties.difftests", "rope_gptj_difftest": "verity_vllm.properties.difftests",
-         "rmsnorm_fused_sweep": "verity_vllm.program.kernels", "gemm_targets": "verity_vllm.program.frontend"}
+MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
+         "verity_vllm.program.kernels.rmsnorm_fused_sweep", "verity_vllm.program.frontend.gemm_targets")
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:
@@ -45,19 +46,20 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
 
 def _foreign(mod: str, names: tuple[str, ...]) -> list[str]:
     top = mod.partition(".")[0]
-    if top in sys.stdlib_module_names or top in THIRD_PARTY or _core(mod) or mod == CATALOG or mod.startswith(CATALOG + "."):
-        return []
     allowed = set(FAMILY) | set(READS)
     if mod == REGISTRY:
         return [f"{REGISTRY}.{x}" for x in names if x not in allowed]
-    if mod.startswith(REGISTRY + ".") and mod.split(".")[3] in allowed:
+    if mod.startswith(REGISTRY + "."):
+        return [] if mod[len(REGISTRY) + 1:].split(".")[0] in allowed else [mod]
+    if top in sys.stdlib_module_names or top in THIRD_PARTY or _core(mod) or mod == CATALOG or mod.startswith(CATALOG + "."):
         return []
     return [mod]
 
@@ -70,9 +72,10 @@ def test_a_family_definition_module_imports_only_verity_and_definition_modules(n
 
 
 def test_the_family_twins_and_vocabulary_left_the_registry():
-    for name, pkg in MOVED.items():
+    for module in MOVED:
+        name = module.rpartition(".")[2]
         assert not (REGISTRY_DIR / f"{name}.py").exists(), f"{name} is back in the registry"
-        assert importlib.import_module(f"{pkg}.{name}").__name__ == f"{pkg}.{name}"
+        assert importlib.import_module(module).__name__ == module
 
 
 def test_the_boundary_names_a_foreign_import():
