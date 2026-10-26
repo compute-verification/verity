@@ -517,9 +517,8 @@ theorem custody_decR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
         spec.repStreams[i].2.2 + k]? = some q := ⟨_, List.getElem?_eq_getElem hlt⟩
     obtain ⟨m, c⟩ := q
     dsimp only
-    first
-      | (unfold recJ; rw [hq])
-      | erw [hq]
+    unfold recJ
+    rw [hq]
     exact ⟨_, roundJ_sub spec _ k _ _, rfl⟩
   obtain ⟨lv, hlv, hrB, hpubs, hbytes⟩ := key
   refine ⟨lv, hlv, ?_⟩
