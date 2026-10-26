@@ -16,6 +16,14 @@ committed row longer than one SHA-512 block.
   `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
   It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the
   commit that code is at; the audit runs it from its own checkout of that commit (`--table ARGV...`: the verifier's entry).
+- Registered weights (`--registered`, opt-in): `serve --commit-weights OPENING --pin PIN` commits the weights once, before
+  any run (`loop.commit_weights`), the pin naming checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The circuit then reads each
+  unit's `wrow` and `sw` from them at public positions (`interface.Read`), so they are no free input: 1,081,344 of the
+  2,162,688 input bits of the default shape stay free. With it on, the members' private bodies are shared-row.
+- Committed activations (CMP-91): each window commits its `x` and `sx` rows, one a (request, step, layer), under domains
+  binding the run root (`TorchLoop.commit_activations`). Their entries are in the registration's window, fixed before the
+  draw, and their salts in the window's `activations-private.json`. No read of them is declared, so they leave the free
+  count as it is.
 - `verity_torch_loop/checkpoint.py`, `checkpoint/` and `manifests/checkpoints-int8.json`: the loop's model as the int8
   checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The auditor's gate (`benchmarks/live_challenger/models.py`) registers that role
   to sign the loop's weights root.
@@ -33,7 +41,9 @@ committed row longer than one SHA-512 block.
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
-  each tampered window refused.
+  each tampered window refused. `PP_TORCH_LOOP_REGISTERED=1` serves the registered weights, audits against their pin
+  (`records_audit.py --registered PIN`) and adds an arm serving other weights, which Lean's registered reads refuse
+  (r20261025-220011-057f).
 - `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
