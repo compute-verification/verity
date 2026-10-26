@@ -125,7 +125,7 @@ class Plan:
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
     temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``: 0, the
-    build's default, 1; on an H200, 1 is 4% faster at FAMILIES' passes of 35 slots of 117k rows and 2 is 11% faster at
+    build's default, 1; on an H200, 1 is 4% faster at FAMILIES' passes of 35 slots of 117k rows and 2 is 8% faster at
     CIR-113's shared rows, 2,134 slots of 1,965 rows, with the same bytes)."""
 
     def __init__(self, context: bytes, layout: S.Layout, device: Any = "cuda", arch: str | None = None,
