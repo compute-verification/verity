@@ -37,13 +37,15 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
 * `RegisteredBeforeDraw`: each window's registration fixed before its draw coin, `Properties.Pouw.Period`'s form at
   `Registered`.
-* `TileCreditPeriod`: `CheckedCreditPeriod`'s conclusion at `Credit.window`'s accepted prefix over the tile stratum,
-  under its premises with `DrawIsCoin` and `ServiceSound` replaced by `TileDrawIsCoin` and `TileServiceSound`.
-* `saltOf`, `Place`, `StagedPinsJ10R`, `stagedAtJ10R`, `j10rAtCoin`, `j10rRate`, `H1J10RCheckedCreditPeriod`: J10-R's
-  instance. Each window's salt as `Credit.window` reads it; a unit's place (its position, its call's first unit, the
-  call's slot and `K`, its tile and tile coordinates, its call's roots) and the noise and fold keys J10-R derives
-  there; the staged statement pinning `j10r_reference` at each unit's place; the relation and rightness at those; the
-  rate `SplitRateClosed` gives at H1's lucks; and `TileCreditPeriod` at them.
+* `saltOf`, `Place`, `StagedPinsJ10R`, `stagedAtJ10R`, `j10rAtCoin`, `j10rRate`: each window's salt as `Credit.window`
+  reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and tile
+  coordinates, its call's roots) and the noise and fold keys J10-R derives there; the staged statement pinning
+  `j10r_reference` at each unit's place; the unit's relation and rightness at those; the rate `SplitRateClosed` gives
+  at H1's lucks.
+* `H1J10RCheckedCreditPeriod`: `CheckedCreditPeriod`'s conclusion at `Credit.window`'s accepted prefix over the tile
+  stratum, at H1's lucks and J10-R's unit, under its premises with `DrawIsCoin` and `ServiceSound` replaced by
+  `TileDrawIsCoin` and `TileServiceSound` and `StagedPins` by `StagedPinsJ10R`. It states no parametric version:
+  `CheckedCreditPeriod`'s premises are `CircuitCreditPeriod`'s, which its proof applies at `tileRun` directly.
 
 *What differs from `H1CheckedCreditPeriod`.* The verdict is `Credit.window` (served H1's, 18 JSON inputs), not
 `protocol.check`. The draw is the tile stratum of the sampling block's stratified draw, with `N_p` and `K_d` its size
@@ -59,10 +61,12 @@ the column's (`j10rNoise` from the unit's bases), so two tiles' games share coin
 game, and `CircuitCreditPeriod`'s rate reads them per tile, so the sharing changes the games the claims are of, not
 the claims' form. That they hold at those games is a claim instance of its own (a card).
 
-*ρ.* `ρ` is the live share: every tile's share of the live words at most `1/(ρ·N_p)`. A call of slot `M` rows serving
-`m_s` of them at `R`-row tiles has `⌈m_s/R⌉` of its `M/R` row tiles live. At the demo's shape (plain INT8 weights, every
-step serving the full batch, 16,384 rows for the block and 4,096 for the skeleton) every call's slot is full,
-`m_s = M`, so `ρ = 1`, and `Λ = j10rRate (k s_T) 1 = 8 + 8/k s_T`.
+*ρ.* `ρ` is the live share: every tile's detected weight (`shareCone`, its late cone's share of the committed words)
+at most `1/(ρ·N_p)`. A call of slot `M` rows serving `m_s` of them at `R`-row tiles has `⌈m_s/R⌉` of its `M/R` row tiles
+live, the rest wordless. At the demo's shape (plain INT8 weights, every step serving the full batch, 16,384 rows for
+the block and 4,096 for the skeleton, each a whole number of slots) every call's slot is full, `m_s = M`, so with each
+unit's cone its own and every unit the same `R × C` words, `ρ = 1` and `Λ = j10rRate (k s_T) 1 = 8 + 8/k s_T`. Units
+of unequal words give `ρ = 1/(N_p · max_t shareCone t)`.
 
 *What it takes that the deployed path doesn't give*, each a named premise. `TileDrawIsCoin`: today `Credit.window`
 draws by its own work law (`Credit.law` over one stratum a `K` template, the period's committed `k`), not the sampling
@@ -244,48 +248,6 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
 def RegisteredBeforeDraw {C B : Type} {m n : ℕ} (ws : CreditWindows (Paths C m × B) n) : Prop :=
   ∀ (x z : Paths (Paths C m × B) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 
-/-! ## The period's credit at `Credit.window`'s accepted prefix -/
-
-/-- **(L)'s credit in live words over the windows served H1's verdict credits, over the sampling block's tile
-stratum.** `Properties.Pouw.Period.CheckedCreditPeriod` with `Credit.window`'s verdict (`tileRun`), the population the
-tile stratum of the sampling block's assignment `σ` and the draw size its `k s_T` (`K_d > 0`), and `DrawIsCoin` and
-`ServiceSound` replaced by `TileDrawIsCoin` and `TileServiceSound`: at `a, b > 0`, except with probability
-`δ_s + n·(δ_bind + δ_ks)`, an accepted period's fixed words are at least `(1 − ε(j))₊` of the live words of the
-windows before the first refusal (`creditPrefix` at `CreditWindows.prefixLen` and `creditLive`). -/
-def TileCreditPeriod : Prop :=
-  ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
-    [Nonempty V] {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
-    (sT : Fin mB) (unitOf : Fin nB → ℕ) (Sc : Scheme K) (Cd : Declared ι) {n : ℕ} (_hn : 0 < n)
-    (_hN : Cd.units ≤ tileCount σ sT) (hr : 0 < Cd.rounds) (_hKd : 0 < k sT)
-    (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
-    (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
-    (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
-    (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U)
-    (folded : Paths (Coin C Ξ Cd.rounds σ sT) n → ℝ) (ρ p p0 a b wmax Λ δs δbind δks : ℝ),
-    Scope Sc Cd δs →
-    0 < ρ → (∀ t : Fin (tileCount σ sT), ρ * (tileCount σ sT) * shareCone Sc Cd (tileCount σ sT) t ≤ 1) →
-    (∀ j, stageShare (tileStage Cd (tileCount σ sT)) (shareCone Sc Cd (tileCount σ sT)) j ≤ wmax) →
-    (∀ t : Fin (tileCount σ sT), 0 < shareCone Sc Cd (tileCount σ sT) t →
-      tileLuck Sc Cd (tileCount σ sT) t ≤ p ∧ tileLuck0 Sc Cd (tileCount σ sT) t ≤ p0) →
-    0 < a → 0 < b → 0 < Λ → SplitRate (k sT) ρ p p0 a b wmax Λ →
-    Pl.game = periodGame (tileStage Cd (tileCount σ sT)) (liveCone Sc Cd (tileCount σ sT)) 1 1 (k sT) Wp →
-    Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd (tileCount σ sT) live) →
-    PrefixOf (tileLayer Cd hr σ k hk sT unitOf ws opened rel right) Pl.game →
-    (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened rel right).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
-    TileServiceSound σ sT unitOf ws opened rel δks →
-    (∀ x w j v, rel x w j v → right x w j v) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
-    Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k _ G0 => GuessLuckAt (Sc.guess k) G0)) →
-    UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened rel right)
-      (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened rel right))
-      (fun _ t => (tileWords Sc Cd (tileCount σ sT) t : ℝ)) folded →
-    prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
-      creditPrefix Sc Cd (tileCount σ sT) (ws.prefixLen x) (creditLive Sc Cd Wp ws x) a b Λ δs) ≤
-        δs + n * (δbind + δks)
-
 /-! ## J10-R's instance -/
 
 /-- **Window `w`'s salt as `Credit.window` reads it**: its registered `salt`, hex-decoded. -/
@@ -358,10 +320,14 @@ def j10rAtCoin {C B V : Type} {m n Np : ℕ} (hm : 0 < m) (enc : C → ByteArray
 `w_max = 1`, `p = 7/8`, `p0 = ½`, the first, `8(1 + Kρ)/(ρK)`. -/
 noncomputable def j10rRate (K : ℕ) (ρ : ℝ) : ℝ := 8 * (1 + K * ρ) / (ρ * K)
 
-/-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile unit.** `TileCreditPeriod` at one
-round a window (`Cd.rounds = 1`, `w_max = 1`: every unit's noise reads the window's one salt, through its call's
-`seed_c`), the sampling block's tile stratum with `k s_T ≥ 1` drawn, a live share `0 < ρ ≤ 1`, H1's lucks `p = 7/8`,
-`p0 = ½`, the word line `a = b = 1` and `SplitRateClosed`'s rate `Λ = j10rRate (k s_T) ρ`. The unit's relation is
+/-- **(L)'s credit over the windows served H1's verdict credits, at J10-R's tile unit.** For every declared circuit
+`Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's `Credit.window` inputs any function of
+the period's coins (`CreditWindows`), over the sampling block's tile stratum `s_T` of `σ` (`N_p = |stratum σ s_T|`,
+`K_d = k s_T ≥ 1`): `CircuitCreditPeriod`'s premises at the period's proofs with `Credit.window`'s verdict (`tileRun`,
+`tileLayer`), its `JointSound` replaced by `TileDrawIsCoin` and `TileServiceSound`, with `RegisteredBeforeDraw`, at
+one round a window (`Cd.rounds = 1`, `w_max = 1`: every unit's noise reads the window's one salt, through its call's
+`seed_c`), a live share `0 < ρ ≤ 1`, H1's lucks `p = 7/8`, `p0 = ½`, the word line `a = b = 1` and
+`SplitRateClosed`'s rate `Λ = j10rRate (k s_T) ρ`. The unit's relation is
 the staged statement at the window's salt as `Credit.window` reads it and the unit's place (`stagedAtJ10R`), which
 `TileServiceSound` is about, and its rightness `j10r_reference`'s at the noise and fold keys of its place under the
 window's coin (`j10rAtCoin`); `Pins` is replaced by the window's salt being its live coin
