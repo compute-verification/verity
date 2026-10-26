@@ -115,8 +115,9 @@ def units(md: Model, unit_set: str) -> list[tuple[str, int, bool]]:
 EDGE_K = 131040
 S32_MAX = 2**31 - 1
 
-#: Ms the gate runs: decode (a masked tile at 7, 33, 257 and 1023, the models' steps at 1023, 4096 and 20480) and prefill
-GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 1023, 2048, 4096, 8192, 20480)
+#: Ms the gate runs: decode (a masked tile at 7, 33, 257 and 1023, the models' steps at 1023, 4096 and 20480, the e2e demo's
+#: batches at 4096 for the skeleton and 16384 for the block) and prefill
+GATE_MS = (1, 7, 16, 32, 33, 64, 128, 256, 257, 512, 1023, 2048, 4096, 8192, 16384, 20480)
 STRUCTURED = ("min", "max", "zero", "alt")
 STRUCT_ROWS = {1: "min", 2: "max", 3: "zero"}
 STRUCT_COLS = {0: "min", 1: "max", 2: "zero", 3: "alt"}

@@ -35,16 +35,19 @@ WARPS, STAGES = (4, 8), (2, 3, 4, 5)
 GROUPS = (1, 2, 4, 8, 16, 32)
 
 
-def coarse(m: int, kern) -> list:
+def coarse(m: int, n: int, kern) -> list:
+    """wgmma: each tile, its pair cluster where M has two tile rows, and split K where the tiles leave SMs idle."""
     if kern.name == "wgmma":
         tms = (64,) if m <= 64 else (64, 128) if m <= 256 else (128,)
-        return [W.Cfg(tm, bn) for tm in tms for bn in (64, 128, 256)]
+        out = [W.Cfg(tm, bn, 0, 8, cl) for tm in tms for bn in (64, 128, 256) for cl in (1, 2) if cl == 1 or m > tm]
+        return out + [W.Cfg(tm, bn, 0, 8, 1, 0) for tm in tms for bn in (64, 128, 256)
+                      if W.cdiv(m, tm) * W.cdiv(n, bn) < W.lib().sms]
     return coarse_triton(m)
 
 
 def refine(cfgs: list, kern) -> list:
     if kern.name == "wgmma":
-        return [W.Cfg(c[0], c[1], c[2], g) for c in cfgs for g in GROUPS]
+        return [W.Cfg(*c[:3], g, *c[4:]) for c in cfgs for g in GROUPS]
     return [X.Cfg(*c[:3], w, s, *c[5:]) for c in cfgs for w in WARPS for s in STAGES]
 
 
@@ -162,7 +165,7 @@ def main() -> int:
         for m in ms:
             t0 = time.time()
             shape = Shape(n, k, m)
-            med = stage(out, shape, coarse(m, kern), 3, clock, "coarse", kern)
+            med = stage(out, shape, coarse(m, n, kern), 3, clock, "coarse", kern)
             med = stage(out, shape, refine(best(med, a.top, kern), kern), 3, clock, "refine", kern)
             base = kern.baseline(m, n, k)
             med = stage(out, shape, best(med, a.top, kern) + [base], a.reps, clock, "final", kern)

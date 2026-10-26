@@ -28,25 +28,36 @@ BK, SMEM_BUDGET, MAX_STAGES = 128, 220 * 1024, 12
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, MAX_DYN_SMEM, SM_COUNT = 0, 3, 2, 8, 16
 #: the configs run.py gates beside the picked one
 EXTRA_CFGS = ("64x128:c0:g8", "64x256:c0:g8", "128x128:c0:g8", "128x256:c0:g8", "128x256:c0:g1", "128x64:c0:g8",
-              "64x64:c0:g8", "128x256:c32:g8")
+              "64x64:c0:g8", "128x256:c32:g8", "128x256:c0:g8:m2", "128x128:c0:g8:m2", "128x64:c0:g1:m2",
+              "64x256:c0:g8:m2", "64x64:c0:g8:m2", "128x256:c32:g8:m2", "64x64:c0:g8:k0", "128x64:c0:g8:k0",
+              "64x128:c0:g8:k3", "64x256:c0:g1:k0")
 
 u, i32, vp, sz, u64, P = C.c_uint, C.c_int, C.c_void_p, C.c_size_t, C.c_uint64, C.POINTER
+
+
+class LaunchConfig(C.Structure):
+    """CUlaunchConfig, for cuOccupancyMaxActiveClusters (the cluster kernels' dimensions are compiled in: no attributes)."""
+    _fields_ = [("grid", u * 3), ("block", u * 3), ("shared", u), ("stream", vp), ("attrs", vp), ("nattrs", u)]
+
+
 CUDA = {
     "cuDeviceGet": [P(i32), i32], "cuDevicePrimaryCtxRetain": [P(vp), i32], "cuCtxSetCurrent": [vp],
     "cuModuleLoadData": [P(vp), C.c_char_p], "cuModuleGetFunction": [P(vp), vp, C.c_char_p],
     "cuFuncSetAttribute": [vp, i32, i32], "cuDeviceGetAttribute": [P(i32), i32, i32],
     "cuLaunchKernel": [vp, u, u, u, u, u, u, u, vp, P(vp), P(vp)], "cuGetErrorString": [i32, P(C.c_char_p)],
     "cuTensorMapEncodeTiled": [vp, i32, u, vp, P(u64), P(u64), P(u), P(u), i32, i32, i32, i32],
+    "cuOccupancyMaxActiveClusters": [P(i32), vp, P(LaunchConfig)],
 }
 
 
 class Params(C.Structure):
     """s8_wgmma.cu's Params: the two tensor maps, s_a, s_w, y, M, N, K, the raster group, padded to its 128-byte alignment."""
     _fields_ = [("a", C.c_ubyte * 128), ("b", C.c_ubyte * 128), ("sa", u64), ("sw", u64), ("y", u64), ("M", C.c_int32),
-                ("N", C.c_int32), ("K", C.c_int32), ("group", C.c_int32), ("pad", C.c_ubyte * 88)]
+                ("N", C.c_int32), ("K", C.c_int32), ("group", C.c_int32), ("splits", C.c_int32), ("pad0", C.c_int32),
+                ("ws", u64), ("cnt", u64), ("pad", C.c_ubyte * 64)]
 
 
-assert C.sizeof(Params) == 384 and Params.sa.offset == 256 and Params.M.offset == 280
+assert C.sizeof(Params) == 384 and Params.sa.offset == 256 and Params.M.offset == 280 and Params.ws.offset == 304
 
 
 def stages(tm: int, bn: int) -> int:
@@ -62,24 +73,41 @@ def cdiv(a: int, b: int) -> int:
 
 
 class Cfg(tuple):
-    """(TM, BN, CTAs, group); `Cfg.parse("128x256:c0:g8")`. CTAs 0: as many as keep the rounds (`Lib.grid`)."""
+    """(TM, BN, CTAs, group, cluster, splits); `Cfg.parse("128x256:c0:g8")`, `"128x256:c0:g8:m2"`, `"64x64:c0:g8:k0"`.
+    CTAs 0: as many as keep the rounds (`Lib.grid`). Cluster 2: s8mm2_*, CTA pairs on M-adjacent tiles sharing W's box by
+    multicast (the group counts pairs of tile rows, the CTAs stay a cap: half as many pairs). Splits of K (cluster 1
+    only, and only where the tiles leave SMs idle, `splits_for`): their s32 sums meet in a workspace, exactly
+    (`Lib.workspace`); 0: as many as fill the SMs (`auto_splits`)."""
 
-    def __new__(cls, tm: int, bn: int, ctas: int = 0, group: int = 8):
-        if (tm, bn) not in TILES or ctas < 0 or group < 1:
-            raise ValueError(f"no such config: {tm}x{bn}:c{ctas}:g{group}")
-        return super().__new__(cls, (tm, bn, ctas, group))
+    def __new__(cls, tm: int, bn: int, ctas: int = 0, group: int = 8, cluster: int = 1, splits: int = 1):
+        if ((tm, bn) not in TILES or ctas < 0 or group < 1 or cluster not in (1, 2) or ctas == 1 and cluster == 2
+                or splits < 0 or splits != 1 and cluster != 1):
+            raise ValueError(f"no such config: {tm}x{bn}:c{ctas}:g{group}:m{cluster}:k{splits}")
+        return super().__new__(cls, (tm, bn, ctas, group, cluster, splits))
 
     @classmethod
     def parse(cls, text: str) -> Cfg:
         dims, *rest = text.split(":")
-        kw = {"c": 0, "g": 8}
+        kw = {"c": 0, "g": 8, "m": 1, "k": 1}
         for r in rest:
             kw[r[0]] = int(r[1:])
-        return cls(*map(int, dims.split("x")), kw["c"], kw["g"])
+        return cls(*map(int, dims.split("x")), kw["c"], kw["g"], kw["m"], kw["k"])
 
     def __str__(self) -> str:
-        tm, bn, ctas, group = self
-        return f"{tm}x{bn}:c{ctas}:g{group}"
+        tm, bn, ctas, group, cluster, splits = self
+        return (f"{tm}x{bn}:c{ctas}:g{group}" + (f":m{cluster}" if cluster != 1 else "")
+                + (f":k{splits}" if splits != 1 else ""))
+
+
+def auto_splits(units: int, kb: int, sms: int = 132) -> int:
+    """Splits of K that put a unit on every SM when the tiles alone don't, each at least two 128-deep blocks."""
+    return max(1, min(sms // units, kb // 2))
+
+
+def splits_for(units: int, kb: int, splits: int, sms: int = 132) -> int:
+    """The splits a launch runs: none where the tiles alone give every SM one (so the workspace stays under a round of
+    tiles, never [M, N] at prefill), else `splits` (0: `auto_splits`), at most one a 128-deep block."""
+    return 1 if units >= sms else min(splits or auto_splits(units, kb, sms), kb)
 
 
 def default_cfg(m: int, n: int, k: int, sms: int = 132) -> Cfg:
@@ -110,12 +138,15 @@ class Lib:
         sms = i32()
         self.ck("cuDeviceGetAttribute", C.byref(sms), SM_COUNT, dev)
         self.sms = sms.value
-        self.fns = {}
+        self.fns, self.clusters = {}, {}
         for tm, bn in TILES:
-            f = self.fn(f"s8mm_{tm}x{bn}")
-            self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(tm, bn))
-            self.fns[(tm, bn)] = f
+            for cl, name in ((1, f"s8mm_{tm}x{bn}"), (2, f"s8mm2_{tm}x{bn}")):
+                f = self.fn(name)
+                self.ck("cuFuncSetAttribute", f, MAX_DYN_SMEM, smem(tm, bn))
+                self.fns[(tm, bn, cl)] = f
+            self.clusters[(tm, bn)] = self.max_clusters(self.fns[(tm, bn, 2)], 128 * (tm // 64 + 1), smem(tm, bn))
         self.maps: dict[tuple[int, int, int, int], bytes] = {}
+        self.works: dict[tuple, tuple[torch.Tensor, torch.Tensor]] = {}
         self.layout = self._layout()
 
     def ck(self, f: str, *a) -> None:
@@ -129,6 +160,15 @@ class Lib:
         f = vp()
         self.ck("cuModuleGetFunction", C.byref(f), self.mod, name.encode())
         return f
+
+    def max_clusters(self, f: vp, block: int, shared: int) -> int:
+        """How many of a pair kernel's clusters the card holds at once (a cluster's CTAs share a GPC)."""
+        cfg = LaunchConfig((u * 3)(2, 1, 1), (u * 3)(block, 1, 1), shared, None, None, 0)
+        n = i32()
+        self.ck("cuOccupancyMaxActiveClusters", C.byref(n), f, C.byref(cfg))
+        if n.value < 1:
+            raise RuntimeError(f"{self.path}: no cluster of two fits ({block} threads, {shared} bytes of shared memory)")
+        return n.value
 
     def _launch(self, f: vp, grid: int, block: int, shared: int, param) -> None:
         params = (vp * 1)(C.addressof(param))
@@ -157,24 +197,42 @@ class Lib:
             self.maps[key] = C.string_at(at, 128)
         return self.maps[key]
 
-    def grid(self, tiles: int, ctas: int) -> int:
-        """At most `ctas` (0: every SM) CTAs, and of those the fewest that keep the same rounds of tiles."""
-        cap = min(ctas or self.sms, self.sms)
-        return cdiv(tiles, cdiv(tiles, cap))
+    def grid(self, units: int, ctas: int, most: int | None = None) -> int:
+        """At most `ctas` (0: every SM) CTAs, and of those the fewest that keep the same rounds of units: tiles, or with
+        `most` (the clusters the card holds) pairs of tiles, two CTAs each."""
+        if most is None:
+            cap = min(ctas or self.sms, self.sms)
+            return cdiv(units, cdiv(units, cap))
+        cap = min(ctas // 2 or most, most)
+        return 2 * cdiv(units, cdiv(units, cap))
+
+    def workspace(self, m: int, n: int, tm: int, units: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """Split K's s32 partial sums [M, N] and a counter a consumer warp of each tile, allocated zero once a shape and
+        left zero by every launch (the last split of each warp's rows clears them), so a CUDA graph replays it as is."""
+        key = (torch.cuda.current_device(), m, n, tm, units)
+        if key not in self.works:
+            dev = torch.device("cuda", key[0])
+            self.works[key] = (torch.zeros(m * n, dtype=torch.int32, device=dev),
+                               torch.zeros(units * (tm // 64) * 4, dtype=torch.int32, device=dev))
+        return self.works[key]
 
     def scaled_mm(self, xq, s_a, w, s_w, y, cfg: Cfg) -> dict:
         m, k = xq.shape
         n = w.shape[0]
-        tm, bn, ctas, group = cfg
+        tm, bn, ctas, group, cl, splits = cfg
         p = Params()
         C.memmove(C.addressof(p) + Params.a.offset, self.tmap(xq.data_ptr(), m, k, tm), 128)
-        C.memmove(C.addressof(p) + Params.b.offset, self.tmap(w.data_ptr(), n, k, bn), 128)
+        C.memmove(C.addressof(p) + Params.b.offset, self.tmap(w.data_ptr(), n, k, bn // cl), 128)
         p.sa, p.sw, p.y = s_a.data_ptr(), s_w.data_ptr(), y.data_ptr()
         p.M, p.N, p.K, p.group = m, n, k, group
-        tiles = cdiv(m, tm) * cdiv(n, bn)
-        grid = self.grid(tiles, ctas)
-        self._launch(self.fns[(tm, bn)], grid, 128 * (tm // 64 + 1), smem(tm, bn), p)
-        return {"grid": grid, "tiles": tiles}
+        units, kb = cdiv(cdiv(m, tm), cl) * cdiv(n, bn), cdiv(k, BK)
+        p.splits = splits_for(units, kb, splits, self.sms)
+        if p.splits > 1:
+            ws, cnt = self.workspace(m, n, tm, units)
+            p.ws, p.cnt = ws.data_ptr(), cnt.data_ptr()
+        grid = self.grid(units * p.splits, ctas, self.clusters[(tm, bn)] if cl == 2 else None)
+        self._launch(self.fns[(tm, bn, cl)], grid, 128 * (tm // 64 + 1), smem(tm, bn), p)
+        return {"grid": grid, "units": units, "cluster": cl, "splits": p.splits}
 
     def identity(self) -> dict:
         """The cubin's hash and build.sh's SASS gate on it: ok only when the sass.json beside it has no problem and the

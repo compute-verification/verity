@@ -28,7 +28,7 @@ from verity_torch_loop import weights as WG  # noqa: E402
 
 SEED = "text:verity/cmp92/h200/weights/v1"
 LINEARS = ("wq", "wk", "wv", "wo", "wup", "wdown")
-MS = (1, 7, 64, 257, 1023, 4096, 20480)
+MS = (1, 7, 64, 257, 1023, 4096, 16384, 20480)
 CHUNK_ROWS = 256
 
 

@@ -8,6 +8,8 @@ around every item), each gated in this run before it is timed:
                   (`configs.CONFIGS` or --configs, else its default; bf16 out, the Definition's epilogue): y into 0xA5 equal
                   to `run.reference` (run.py's gate holds that to the Definition's twin on every cell)
     exact_triton  on sm_90, int8_fused (Triton) the same way: the second exact kernel
+    simple        KS8-SIMPLE's simple path (HASH-11): torch._int_mm's s32 sums, then the epilogue as four eager kernels, one
+                  rounding each in the Definition's order; gated like exact: the path the exact kernel must beat
     lt            cuBLASLt int8, s32 out, autotuned: its top 32 heuristic algorithms (`lt.Plan`), each gated (z equal to
                   torch._int_mm's) and timed in a pre-pass of 3 interleaved items, the fastest kept
     cutlass       vLLM's CUTLASS int8 GEMM (`torch.ops._C.cutlass_scaled_mm`, bf16 out; its epilogue applies s_w first,
@@ -28,7 +30,7 @@ crossing.json, per arm and model (layer set) and per linear:
                           flat in M and starts growing with it
     at_ridge              the arm's time, TOPS and fraction of peak at the card's ridge and at its own (log-log interpolation)
 
-    python bench.py --out OUT [--models mqa16k52] [--ms 1,8,...] [--reps 9] [--arms exact,exact_triton,lt,cutlass,cutlass_swap]
+    python bench.py --out OUT [--models mqa16k52] [--ms 1,8,...] [--reps 9] [--arms exact,exact_triton,simple,lt,cutlass,cutlass_swap]
                     [--kernel wgmma|triton] [--configs BEST_JSON] [--no-head]
 """
 from __future__ import annotations
@@ -56,9 +58,9 @@ from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192, 16384,
             20480)
-ARMS = ("exact", "exact_triton", "lt", "cutlass", "cutlass_swap")
+ARMS = ("exact", "exact_triton", "simple", "lt", "cutlass", "cutlass_swap")
 PEAKS = {"sm_90": {"measured": 1942.7, "datasheet_1830mhz": 1979.0}, "sm_120": {"measured": 807.5}}
-OUT_BYTES = {"exact": 2, "exact_triton": 2, "lt": 4, "cutlass": 2, "cutlass_swap": 2}
+OUT_BYTES = {"exact": 2, "exact_triton": 2, "simple": 2, "lt": 4, "cutlass": 2, "cutlass_swap": 2}
 BW_BYTES = 4 << 30
 
 
@@ -122,6 +124,17 @@ class Linear:
             for wt in self.ws:
                 kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return f
+
+    def simple(self):
+        def call(wt):
+            y = E.int_mm(self.x, wt.w).to(torch.float32)
+            y.mul_(self.sa[:, None])
+            y.mul_(wt.sw[None, :])
+            return y.to(torch.bfloat16)
+        d = R.diff(call(self.ws[0]), self.ref_first)
+        torch.cuda.synchronize()
+        self.gates["simple"] = {"mismatches": d}
+        return None if d else (lambda: [call(wt) for wt in self.ws])
 
     def lt(self, clock) -> object:
         plan = LT.Plan(self.m, self.n, self.k)
@@ -222,8 +235,8 @@ def main() -> int:
             lin = Linear(n, k, m, kerns)
             fns = {}
             for arm in arms:
-                f = (lin.exact(arm) if arm in kerns else lin.lt(clock) if arm == "lt" else
-                     lin.cutlass(swap=arm == "cutlass_swap"))
+                f = (lin.exact(arm) if arm in kerns else lin.simple() if arm == "simple" else lin.lt(clock) if arm == "lt"
+                     else lin.cutlass(swap=arm == "cutlass_swap"))
                 if f is not None:
                     fns[arm] = f
             med, us, tm = kbench.timed(fns, a.reps, clock, lin.copies) if fns else ({}, {}, {"clocks": {}})

@@ -14,7 +14,7 @@ import re
 import sys
 
 MMA = re.compile(r"\b([QHOIU]MMA|[QHI]GMMA|UTC\w*MMA)(\.[\w.]+)?")
-KERNEL = re.compile(r"s8mm_(64|128)x(64|128|256)$")
+KERNEL = re.compile(r"s8mm2?_(64|128)x(64|128|256)$")
 #: the compiler's unsigned integer division (the raster's, by a runtime group and tile count) truncates a reciprocal it
 #: computed from the divisor with this F2I; it never sees a value, so it is counted apart from every other .FTZ
 INT_DIV = r"\bF2I\.FTZ\.U32\.TRUNC\.NTZ\b"
@@ -56,7 +56,7 @@ def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
                     funcs[cur]["forms"].append(form)
             else:
                 funcs[cur]["other_mma"].append(form)
-    want = {f"s8mm_{tm}x{bn}" for tm in (64, 128) for bn in (64, 128, 256)}
+    want = {f"s8mm{c}_{tm}x{bn}" for c in ("", "2") for tm in (64, 128) for bn in (64, 128, 256)}
     for name, r in funcs.items():
         if max(r.get("stack", 0), r.get("spill_stores", 0), r.get("spill_loads", 0)) or r.get("LDL") or r.get("STL"):
             problems.append(f"{name}: local memory {r}")
