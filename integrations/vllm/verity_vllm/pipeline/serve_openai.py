@@ -6,6 +6,7 @@
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
+        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON]]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -74,6 +75,10 @@ the seals still pending. SIGTERM or SIGINT stops it: the open window is closed a
 finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
+``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
+(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``; its coins are in-process, so no window
+credits anything yet.
+
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
 ``--switch-interval-ms`` (0.1 ms; Python's is 5 ms). ``pauses.jsonl``
@@ -97,6 +102,7 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.engine.served_seed import DEFAULT_SEED
+from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
@@ -212,6 +218,10 @@ class Options:
                              "order (x-verity-release), each once every earlier-released one is in")
     admit_hold_ms: int = option("--admit-hold-ms", type=int, default=5000,
                                 help="release-order: skip a missing earlier release once a later request has waited this long")
+    protocols: str | None = option("--protocols", default=None,
+                                   help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
+    protocols_config: str | None = option("--protocols-config", default=None,
+                                          help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -631,6 +641,11 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(f"--seal: {why}")
     if why := SS.scheme_refusal(opts):
         raise UsageError(why)
+    if why := SH.refusal(opts):
+        raise UsageError(why)
+    if opts.protocols_config and not opts.protocols:
+        raise UsageError("--protocols-config without --protocols")
+    SH.config_of(opts.protocols_config)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
@@ -672,10 +687,13 @@ def main(opts: Options) -> int:
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
     mirror = records_mirror(out, opts.copy_records_to)
-    windows = sealer = warmed = None
+    windows = sealer = warmed = arm = None
     if com is not None:
         from verity_vllm.engine.step_trace import scheduler_config
 
+        if opts.protocols:
+            arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
+                               config=SH.config_of(opts.protocols_config))
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
@@ -684,7 +702,7 @@ def main(opts: Options) -> int:
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
                                 window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
-                                request_cap=opts.window_requests)
+                                request_cap=opts.window_requests, arm=arm)
     loop = EngineLoop(engine, windows, cap=opts.window_requests)
     if windows is not None:
         windows.on_floor = loop.drain
@@ -726,7 +744,7 @@ def main(opts: Options) -> int:
               "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
-              "window_requests": opts.window_requests or None,
+              "window_requests": opts.window_requests or None, "protocols": arm.describe() if arm is not None else None,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),

@@ -351,11 +351,13 @@ class Serving:
 
     def __init__(self, out: Path, *, commit: bool = True, flip: tuple[int, int] | None = None, window_steps: int = 64,
                  idle_close_steps: int = 1, force_include_usage: bool = True, seed_override: int | None = None,
-                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None) -> None:
+                 served: dict | None = None, marks: Any = None, block: int | None = None, protocol: Any = None,
+                 arm: Any = None) -> None:
         self.runner = Runner()
         self.windows = sc.CommitWindows(Committer(self.runner, flip), out, run_id="t", window_steps=window_steps,
                                        idle_close_steps=idle_close_steps, eos_ids=[Tokenizer.eos_token_id],
-                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks) if commit else None
+                                       clock=lambda: 0.0, wall=lambda: 0.0, served=served, marks=marks,
+                                       arm=arm(self.runner) if arm is not None else None) if commit else None
         self.loop = so.EngineLoop(Engine(self.runner, seed_override), self.windows)
         self.server = so.Server(proto=protocol or proto.PlainProtocol(force_include_usage), served_name="m", max_model_len=512,
                                 tokenizer=Tokenizer(),
