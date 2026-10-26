@@ -104,6 +104,16 @@ def test_a_step_from_the_drivers_tables_reads_its_first_rows():
     assert not any(P.PerCall(step, SALT, "00" * 64, 64).run_into(Recorder()).values())
 
 
+def test_the_audits_catalog_resolves_the_templates_the_circuit_record_names(tmp_path):
+    pc = P.PerCall(P.stand_in(TINY, 4, b"r"), SALT, "00" * 64, 64)
+    (tmp_path / "params.json").write_text(json.dumps(pc.params("q")))
+    names = list(P.IF.Window(pc.circuit(), pc.run, pc.law, P.CAP).circuit_record()["statements"])
+    for resolve in (pc.resolve, P.resolver(tmp_path)):
+        assert [resolve(t).id for t in names] == [P.tile(64).id]
+    with pytest.raises(KeyError, match="v6 tile"):
+        P.resolver(tmp_path)(P.descriptor_id(P.tile(128)))
+
+
 @pytest.mark.slow
 def test_a_unit_is_its_definitions_outputs_on_its_recorded_words():
     """One recorded unit through the v6 Definition on bits (about 110 s): the only test that holds the recorded word layout

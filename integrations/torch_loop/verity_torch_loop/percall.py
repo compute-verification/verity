@@ -55,6 +55,7 @@ import numpy as np
 from verity.core.protocols.pouw import core_check as CC, window as Wd
 from verity.core.protocols.pouw.circuit import h1tile as Ht, seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import draw as D
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.windows import interface as IF
@@ -253,7 +254,7 @@ class PerCall:
 
     def resolve(self, tid: str) -> Any:
         t = self.template()
-        if tid != t.id:
+        if tid != descriptor_id(t):
             raise KeyError(f"{tid}: not the window's v6 tile")
         return t
 
@@ -386,7 +387,7 @@ def resolver(window_dir: Path) -> Callable[[str], Any]:
         raise ValueError(f"the window's check names {item['template']}, not the v6 tile at K = {k}")
 
     def resolve(tid: str) -> Any:
-        if tid != want.id:
+        if tid != descriptor_id(want):
             raise KeyError(f"{tid}: not the window's v6 tile")
         return want
     return resolve
