@@ -30,9 +30,10 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.MerkleExtract
 In every accelerator model `G` and for every round protocol `P` (the no-fold protocol is `noFoldRound` at its knobs, so
 protocol v1 and v2, or a SYM design's rounds, are instances), every set `Reg` of registrable instances and every
 period's registered instances `reg w ∈ Reg`, every service verdict on the transcript and the auditor's devices'
-readings (`Verdict`, `Readings`), every period `Pd` whose credited unit `hon` is the registered rounds' honest use, and
-every price `μ` that is the period's dual price at that unit (`Period.DualOpt μ 1`): if each registrable instance's
-honest round costs `H = H_mm + H_sha + H_o` at `μ` (its words and commitment, both positive, and the rest, `H_o ≥ 0`),
+readings (`Verdict`, `Readings`), every period `Pd` whose credited unit `hon` is the registered rounds' honest timed
+use (work and answers), and every price `μ` that is the period's dual price at that unit (`Period.DualOpt μ 1`): if
+each registrable instance's honest round costs `H = H_mm + H_sha + H_o` at `μ` (its words and commitment, both
+positive, and the rest, `H_o ≥ 0`, its answers among it),
 its public bests cost `pub_mm ≤ H_mm` and `pub_sha ≤ H_sha`, the registered rounds' honest costs sum to `μ · hon`,
 `0 < δ ≤ 1`, `η > 0`, `β, K, ξ ≥ 0`, the degenerate dithers' probabilities are `≥ 0`, `Q` oracle calls use at least
 the period's capacity of some resource `r` a call uses (`cap_r ≤ Q callUse_r`, so at most `Q` calls fit, whatever the
@@ -46,13 +47,14 @@ price: RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 * the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`,
 * the network certifier counts at most `K` exchanged bits, and
 * each round's work splits into its words and their commitment on advice of at most `B_adv(A)` bits fixed before the
-  round's coins, the commitment's output the prover's root, within the prover's work plus `ξ_A` over the period (the
-  extractor's walk and log), but with probability `κ_x(A)` on runs whose work makes at most `Q` oracle calls
+  round's coins, the commitment's output the prover's root, within the prover's timed use plus `ξ_A` over the period
+  (the extractor's walk and log), but with probability `κ_x(A)` on runs whose rounds make at most `Q` oracle calls
   (`ExtractAdv`; from SHA-512 as a random oracle and its realization,
   `Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`),
 
 then for every prover `A`, the probability over the oracle and the verifier's coins that the service accepts its
-period and other work `z` fits on the period's devices beside its rounds' work (`Prover.workUse`) with
+period and other work `z` fits on the period's devices beside its rounds' timed work and answers (`Prover.timedUse`)
+with
 `rv + W_other(z) > OPT_honest + ε_A C` is at most
 `δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, with `C = μ · hon = Σ_w H(reg w)` and
 `ε_A = (Σ_w (H − pub_mm − pub_sha)(reg w) + ln(1/δ)/η + β K)/C + μ · ξ_A/C` (`epsWorkSound`).
@@ -63,8 +65,10 @@ coin at a probability proportional to its public cost meets its premises at `η 
 and hashing are the public best), the honest work that is neither (no lower bound, full weight), the sampling luck,
 the exchanged bits, and the walk and log the extraction adds.
 
-The cap (L39): on the event bounded, the prover's work fits the devices, so by (G3) it makes at most `Q` oracle calls
-(`calls_le_of_fits` in the proof); `ExtractAdv` is needed only there. `WorkSoundNoFold` reads it at the query budget
+The cap (L39): the challenger times both of a round's phases, `work` from the dither to the commitment and `answer`
+from the check coins to the answer deadline `τ_ans` (RT-LEAN-2 I1), so on the event bounded the rounds' work and
+answers fit the devices, and by (G3) they make at most `Q` oracle calls (`calls_le_of_fits` in the proof);
+`ExtractAdv` is needed only there. `WorkSoundNoFold` reads it at the query budget
 `⌈Q⌉ + V` for every prover, so `ε` and `κ` are one bound. The rounds of a period are one sequence; a fleet whose
 units' coins aren't serialized is one prover per unit (`FleetSound`, RT-PROTO-2 P16).
 
@@ -72,10 +76,6 @@ Open (stated so the red team can aim at them):
 * the split of a program's use into a words part and a commitment part is `ExtractAdv`'s cost clause (the
   realization's, in `WorkSoundNoFold`): the oracle calls are priced steps (G3), but the machine's composition doesn't
   yet say which steps of a program are its commitment path (RT-LEAN-2 L28's remainder);
-* the cap reads only the rounds' `work` calls (the timed window, I1). The answers' calls aren't capped, though they can
-  reach later roots, so `WorkSoundNoFold`'s realization premise at `⌈Q⌉ + V` is false for a prover that hashes in its
-  answers (L39's answer half; `Definitions.Pouw.Assumptions.ShaRealize`'s Open). This statement, at each prover's
-  own `κ_x(A)`, is unaffected;
 * `G` is the abstract interface, not yet MODEL-SPEC's machine at a card's θ with its floors (RT-LEAN L4, L9;
   RT-MODEL M12);
 * import is per period with no `n_max · E_out` form (RT-PROTO P2);
@@ -108,13 +108,11 @@ def WorkSound : Prop :=
 oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than assumed. The oracle is a uniform table
 `eo : nf.Orc ≃ (X → D)` under which the verifier's opening check is the Merkle path check, programs reach it only
 through their calls (`Accel.OracleCalls`), and the realization premise `ShaRealize` holds on runs within the cap `Q` at
-the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: a run within the cap
-makes at most `Q` calls in its rounds' work, so its work's distinct queries, with the verifier's, are at most `q`.
-The answers' calls aren't capped (the timed window is the work's, I1), so the premise is false for a prover that
-hashes in its answers toward a later root (L39's answer half, open). It quantifies over every prover, so on a machine
-whose answer programs can call the oracle it is false and this statement is vacuous until the answer half closes;
-`WorkSound`, at each prover's own `q_A`, is the one to cite meanwhile. With SHA-512's speed at one `κ_sha` and one
-advice size `B_adv` for every prover, every prover gets the same bound:
+the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: work and answers are
+both timed (the answer deadline `τ_ans`, I1), so a run within the cap makes at most `Q` calls in its rounds' work and
+answers, and its distinct queries, with the verifier's, are at most `q`, those of an answer that reaches a later root
+among them. With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the
+same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`.
 The log's term `μ · q ξl / C` is `Q` log entries' upkeep against the credited cost: at `Q = cap_r / callUse_r` it is
@@ -168,7 +166,7 @@ def FleetSound : Prop :=
       (∀ u y, κ u (A u y) ≤ κmax u) →
       prob (fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) => ∃ u,
         (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
-          ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧
+          ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).timedUse ox.1 (ox.2 u)) z ∧
             ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u)) ≤ ∑ u, κmax u
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let

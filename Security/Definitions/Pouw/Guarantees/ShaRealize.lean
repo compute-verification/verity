@@ -21,8 +21,9 @@ model `G`, no-fold protocol `nf`, number of rounds `k` and registered instances 
 table `eo : nf.Orc ≃ (X → D)` with tree encodings `E`, and every reading of roots `rD`, paths `pl` and cell positions
 `dirs` under which the verifier's check `nf.opens` is the Merkle path check under the oracle along the cell's position
 (a protocol-code fact of frame-v3-sha512), and models whose programs reach the oracle only through their calls
-(`Accel.OracleCalls`), the realization premise `ShaRealize` at the cap `Q` on a run's work calls, the walk's use `ξw` a
-round, the log's `ξl` an entry, and each prover's own query budget `q A`, schedule `τ A` and advice size `Badv A`, gives
+(`Accel.OracleCalls`), the realization premise `ShaRealize` at the cap `Q` on a run's calls (its rounds' work and
+answers), the walk's use `ξw` a round, the log's `ξl` an entry, and each prover's own query budget `q A`, schedule
+`τ A` and advice size `Badv A`, gives
 `ExtractAdv` at `Q` with, for each prover `A`,
 * advice of at most `Badv A` bits,
 * `ξ_A = k · ξw + q A · ξl` of each resource over the period, and
