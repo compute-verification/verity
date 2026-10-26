@@ -83,6 +83,7 @@ import Proofs.Accounting.Layers
 import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
+import Proofs.Accounting.ComposeWindow
 import Proofs.Accounting.Served
 
 /-! `Proofs.Accounting`: the proofs of resource accounting's guarantees. -/

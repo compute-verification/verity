@@ -14,6 +14,7 @@ import Definitions.Accounting.Guarantees.Capacity
 import Definitions.Accounting.Guarantees.CoinFlow
 import Definitions.Accounting.Guarantees.Compose
 import Definitions.Accounting.Guarantees.ComposePeriod
+import Definitions.Accounting.Guarantees.ComposeWindow
 import Definitions.Accounting.Guarantees.Confidence
 import Definitions.Accounting.Guarantees.FillerLuck
 import Definitions.Accounting.Guarantees.FpG1
