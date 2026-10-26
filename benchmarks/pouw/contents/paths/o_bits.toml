@@ -1,0 +1,4 @@
+order = 367
+path = "`theory/o_bits_rates.py`, `theory/o_bits_checks.py`"
+runs_on = "CPU"
+what = "ACCEL O-BITS (CMP-112): each register writer's time a 32-bit word against the k32 INT8 tensor core's on the H200 and sm_120 at three readings (the DS sheets as written, CALIB's sheet and measured θ), and section 4(g)'s register-write bound as an LP over issue and the pipes; then exact CPU checks of the non-ring attacks (IMAD bit-31 packing against Theorem K's pair-difference rank, bit-sliced and Four Russians words at A = B = 0, the packed IMAD and b1 product routes), each priced at those rates"
