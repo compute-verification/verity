@@ -466,9 +466,20 @@ def flags_at(repo: Path, ref: str) -> DriveFlags:
 
 
 def gates_at(repo: Path, ref: str) -> tuple[str, ...]:
-    """drive.toml's `landing_gates` at ``ref``; none when ``ref`` has no drive.toml (QueueError when it can't be parsed)."""
+    """drive.toml's `landing_gates` at ``ref``; none when ``ref`` has no drive.toml (QueueError when it isn't TOML or the gates
+    are malformed).  Only that key is read: a branch's older code reads `main`'s drive.toml here (the ready mark's preflight),
+    and a key added since must not stop it running the gates (CI-185, 26 Oct: #4494's `max_lean_checks`)."""
     r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
-    return DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at {ref}").landing_gates if r.returncode == 0 else ()
+    if r.returncode:
+        return ()
+    source = f"{DRIVE_FLAGS} at {ref}"
+    try:
+        gates = tomllib.loads(r.stdout).get("landing_gates")
+    except tomllib.TOMLDecodeError as e:
+        raise QueueError(f"{source}: not TOML: {e}") from None
+    if gates is None:
+        return ()
+    return DriveFlags.parse(f"landing_gates = {json.dumps(gates)}\n", source).landing_gates
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:

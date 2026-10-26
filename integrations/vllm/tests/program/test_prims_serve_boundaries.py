@@ -6,13 +6,14 @@ catalog can take these modules without the integration."""
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
-REGISTRY = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
 REG = "verity_vllm.program.registry"
+REGISTRY = Path(importlib.util.find_spec(REG).origin).parent
 FAMILY = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths", "b1",
           "b1_tp2", "serve3", "spec", "pouw_rows")
 #: the other families' Definition modules this family reads (each family's own split judges its modules)
@@ -22,7 +23,7 @@ THIRD_PARTY = {"numpy"}
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 #: (module, what it imports outside the rule) -> why it stays
-EXCEPTIONS = {("pouw_rows", "verity.core.protocols.pouw.circuit.ncp2"): "NcpDequant is PoUW's own Definition, which the row binds"}
+EXCEPTIONS: dict[tuple[str, str], str] = {}
 
 
 def _imports(name: str) -> list[tuple[int, str]]:
@@ -52,7 +53,8 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 

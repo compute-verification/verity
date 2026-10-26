@@ -31,8 +31,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
     reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
     `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover and the private circuits, can't affect
-    soundness.
+    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover, the private circuits and `ml.definitions`,
+    can't affect soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -40,6 +40,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
+    - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
+      the proof-unit cut (`word`), and their encoding and digest (`encoding`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
@@ -207,8 +209,8 @@ the standing rulings stated nowhere else.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
-  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size and
-  the window's length are stated parameters (from `benchmarks/census/`), and a figure scaled from one machine says which
+  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size (from
+  `benchmarks/census/`) and the window's length are stated parameters, and a figure scaled from one machine says which
   parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
   compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
   not the result.

@@ -384,9 +384,9 @@ def use_rule_cache(directory: str | None) -> None:
 def _code_version() -> str:
     if not _CODE:
         import verity.ml.circuits
-        here = Path(__file__).parent
+        from verity_vllm.query import call_scope, cross_call
         h = hashlib.sha256()
-        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), *(here / f for f in ("word.py", "cross_call.py", "call_scope.py"))]:
+        for p in [*sorted(Path(verity.ml.circuits.__file__).parent.glob("*.py")), Path(__file__), *(Path(m.__file__) for m in (cross_call, call_scope))]:
             h.update(p.name.encode() + b"\0" + p.read_bytes() + b"\0")
         _CODE.append(h.hexdigest())
     return _CODE[0]
@@ -610,7 +610,7 @@ def prefetch(specs: Iterable[str], X: int = 16, W: int = 32, extras: int = 0, *,
     the largest that fits first; a cut over it runs alone.  None: `jobs` at a time, whatever they take."""
     import multiprocessing
     from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
-    from verity_vllm.query.program_view import spec_base, spec_statics
+    from verity_vllm.query.call_scope import spec_base, spec_statics
     if jobs <= 1 or "fork" not in multiprocessing.get_all_start_methods():
         return 0
     limits = gate_limits(max_gates)
@@ -675,7 +675,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
     `max_gates` (`gate_limits`): the run's gate limits; the query, and so `res["query"]`, is the same under any.
 
     A Boolean Program's group is its word link's (`pipeline.build_instances`): the word Definition's rule, units and boundaries,
-    and its `bits` Definition's size beside, in each group and the totals (`boolean_gates`, `program_view.bits_gates`)."""
+    and its `bits` Definition's size beside, in each group and the totals (`boolean_gates`, `call_scope.bits_gates`)."""
     limits = gate_limits(max_gates)
     memo = _RULES.setdefault(tuple(sorted(limits.items())), {})
     out: list[dict[str, Any]] = []
@@ -687,7 +687,7 @@ def check_calls(groups: Iterable[dict[str, Any]], X: int = 16, W: int = 32, extr
         if g.get("where") is not None and len(a["where"]) < 8 and g["where"] not in a["where"]:
             a["where"].append(g["where"])
 
-    from verity_vllm.query.program_view import bits_gates
+    from verity_vllm.query.call_scope import bits_gates
     for g in groups:
         try:
             rule = unit_rule(specialize(g["family"], g["statics"]), X, W, extras, memo=memo, max_gates=limits)
