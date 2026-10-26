@@ -50,7 +50,7 @@ theorem beq_bytes {a b : ByteArray} (h : (a == b) = true) : a = b := by
 
 /-- A blob found under a digest is bytes whose SHA-512 the digest names. -/
 theorem get_ofArray {blobs : Array ByteArray} {d w : String} {b : ByteArray}
-    (h : (Core.Blobs.ofArray blobs).get d w = .ok b) : Names d b := by
+    (h : (Core.Blobs.ofArray blobs).get d w = .ok b) : Blob blobs d b := by
   unfold Core.Blobs.get at h
   obtain ⟨d', hu, h⟩ := bind_ok h
   by_cases hc : (d'.size != 64 || Flock.hexOf d' != d) = true
@@ -64,12 +64,15 @@ theorem get_ofArray {blobs : Array ByteArray} {d w : String} {b : ByteArray}
       have hp := Array.find?_some hf
       have hm := Array.mem_of_find?_eq_some hf
       simp only [Core.Blobs.ofArray, Array.mem_map] at hm
-      obtain ⟨b0, -, hb0⟩ := hm
+      obtain ⟨b0, hb0m, hb0⟩ := hm
       simp only [Prod.mk.injEq] at hb0
       obtain ⟨h1, h2⟩ := hb0
       have hd : fst = d' := beq_bytes hp
-      unfold Names
-      rw [← hb, ← h2, h1, hd, hc.2]
+      refine ⟨?_, ?_⟩
+      · rw [← hb, ← h2]
+        exact hb0m
+      · unfold Names
+        rw [← hb, ← h2, h1, hd, hc.2]
     · cases h
 
 /-- What `buildSessionOf` returns is `Stmt.setupTables`'s session at its arguments, its circuit parsed as `circuitOf`
@@ -289,8 +292,8 @@ theorem fold_ok {I : Flock.Witness.Inputs} {rd : Reads} {bs : Core.Blobs} {scope
 /-- What `run` returns, when every session accepted. -/
 theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array Nat} {blobs : Array ByteArray} {r : Run}
     (h : run p pub sessions (some want) (Core.Blobs.ofArray blobs) = .ok r) (hall : r.all = true) :
-    ∃ (tags : Flock.Tags) (circuitB pubB : ByteArray), Flock.Tags.find? STATEMENT = some tags ∧ Names p.circuit circuitB ∧
-      Names pub pubB ∧ r.out.size = sessions.size ∧
+    ∃ (tags : Flock.Tags) (circuitB pubB : ByteArray), Flock.Tags.find? STATEMENT = some tags ∧
+      Blob blobs p.circuit circuitB ∧ Blob blobs pub pubB ∧ r.out.size = sessions.size ∧
       (0 < sessions.size → ∃ h, programDigest p.program = some h ∧ (Json.str h == getD p.partition "program") = true) ∧
       ∃ ss : List (String × Array ByteArray × Array Nat), ss.length = sessions.size ∧
         (∀ x ∈ sessions.toList.zip ss,
@@ -315,7 +318,7 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
   subst h <;>
   simp only [ha1, Bool.false_eq_true] at hall
   obtain ⟨-, hprog, hsize, ss, hlen, hss, hproved⟩ :=
-    fold_ok (bs := Core.Blobs.ofArray blobs) (fun _ _ _ hb => get_ofArray hb) sessions.toList _ _ hf ha1
+    fold_ok (bs := Core.Blobs.ofArray blobs) (fun _ _ _ hb => (get_ofArray hb).2) sessions.toList _ _ hf ha1
   have hunits := bne_eq_false_iff_eq.mp hq
   rw [hproved] at hunits
   refine ⟨tags, circuitB, pubB, by first | exact htags | rfl, get_ofArray hc, get_ofArray hp, by rw [hsize]; simp,
@@ -348,6 +351,13 @@ theorem acceptMeans : AcceptMeans := by
       | exact (hchk _ _ (hne ▸ h)).elim
       | exact (hchk _ _ (hne.symm ▸ h)).elim
       | (subst hne; exact (hchk _ _ h).elim)
+
+/-- **`AcceptMeans` fails for an accept-everything check**: such a check accepts evidence with no sessions, which
+`Accepted` refuses. -/
+theorem acceptMeans_nontrivial (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray)
+    (pub : OneStage.Public) (prof : Core.Integrity) (h : e.sessions = #[]) : ¬ Accepted p c e blobs pub prof := by
+  rintro ⟨_, _, _, _, _, _, _, _, hpos, _⟩
+  simp [h] at hpos
 
 /-- **`AcceptsZK` is the model's `ZkExec.AcceptsZK`** at the witness's inputs as the model reads them (`toExec`), on the
 transcript of the session's record and proof files. -/

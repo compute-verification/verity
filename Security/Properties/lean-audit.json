@@ -42,7 +42,9 @@
   "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.SampledProofs.OneStageZk",
-  "Properties.Onsite"
+  "Properties.Composed",
+  "Properties.Onsite",
+  "Properties.Remote"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -291,6 +293,9 @@
   "CoreProtocol.Blobs",
   "Properties.Onsite",
   "CoreOnsite",
+  "Properties.Composed",
+  "Properties.Remote",
+  "CoreRemote",
   "Properties.NciDesc",
   "Definitions.Pouw.Window"
  ],
@@ -493,9 +498,19 @@
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.Onsite": {
-   "imports": ["CoreOnsite", "Properties.SampledProofs.OneStageZk"],
+   "imports": ["CoreOnsite", "Properties.Composed"],
    "except": [],
-   "why": "onsite's property is stated against onsite's own protocol and one-stage v2's property it reads, on Lean core: nothing of Mathlib or of `security`"
+   "why": "onsite's properties are stated against onsite's own protocol and the conclusions `Properties.Composed` states, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Remote": {
+   "imports": ["CoreRemote", "Properties.Composed"],
+   "except": [],
+   "why": "remote's properties are stated against remote's own protocol and the conclusions `Properties.Composed` states, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Composed": {
+   "imports": ["CoreComposition.Product", "Properties.SampledProofs.OneStageZk"],
+   "except": [],
+   "why": "a composition's sampled proofs conclusions are stated in the composition's decoders' terms and one-stage v2's property, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
@@ -2189,6 +2204,15 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "Properties.Onsite.sampledProofsRegistered": {
+   "owner": "@proofs"
+  },
+  "Properties.Remote.sampledProofsAccepts": {
+   "owner": "@proofs"
+  },
+  "Properties.Remote.sampledProofsRegistered": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -3264,6 +3288,18 @@
    },
    "Properties.SampledProofs.OneStageZk.acceptMeans": {
     "function": "SampledProofs.OneStageZk.checkBlobs",
+    "outcome": "accept"
+   },
+   "Properties.Onsite.sampledProofsRegistered": {
+    "function": "Core.BlobProtocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.Remote.sampledProofsAccepts": {
+    "function": "Core.BlobProtocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.Remote.sampledProofsRegistered": {
+    "function": "Core.BlobProtocol.answer",
     "outcome": "accept"
    }
   },
