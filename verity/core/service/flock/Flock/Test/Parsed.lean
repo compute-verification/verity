@@ -27,8 +27,8 @@ def rows : List Port := [port "m0" 64, port "acc0" 64, port "v" 64, port "out" 1
 
 def circ (ports : List Port := rows) (upv : Nat := 1) (leaves : Array Int := (Array.range 192).map Int.ofNat)
     (cuts : Array (Nat × Nat × Nat) := #[]) (leavesOut : Array Nat := Array.range outW) : Circuit :=
-  { (default : Circuit) with ports := ports.toArray, upv, leavesIn := #[leaves], leavesOut := #[leavesOut],
-    leafCuts := cuts }
+  { (default : Circuit) with
+    ports := ports.toArray, upv, leavesIn := #[leaves], leavesOut := #[leavesOut], leafCuts := cuts }
 
 def ok (c : Circuit) : Bool := (checkParsed opening c).isOk
 
