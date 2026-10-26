@@ -156,12 +156,14 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
   repeat' split at h
   all_goals try (cases h; done)
   cases h
-  have e := hb ‹¬((_ : Array (Array F128)) != _) = true›
-  refine ⟨_, by assumption, ?_⟩
+  rename_i hrp _ _ hmap hne
+  have e := hb hne
+  refine ⟨_, hrp, ?_⟩
   dsimp only
   rw [← e]
-  exact (Claims.Bridge.Custody.mapM_forall₂
-    ‹@Array.mapM (Array String) (Array F128) (Except String) _ _ _ = .ok _›).imp fun _ _ hx => mapError_forall₂ hx
+  have hmap' : Array.mapM (fun xs : Array String => xs.mapM fun s => (f128OfHex s).mapError
+      (s!"rec inner transcript: {"the inner session's record's link points"}: " ++ ·)) _ = .ok _ := hmap
+  exact (Claims.Bridge.Custody.mapM_forall₂ hmap').imp fun _ _ hx => mapError_forall₂ hx
 
 /-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
 theorem held_eq {spec : SessionSpec} {text : String} {sess : Session} {j l : Lean.Json}
@@ -218,13 +220,8 @@ theorem load_extras {unit : String} {f : RecCoins.Files} {inn : RecCoins.Inner}
   all_goals cases h
   all_goals
     cases hse
-    first
-      | (split at hsp
-         · cases hsp
-           exact ⟨_, _, hs, by assumption, by assumption, rfl⟩
-         · cases hsp)
-      | (cases hsp
-         exact ⟨_, _, hs, by assumption, by assumption, rfl⟩)
+    cases hsp
+    exact ⟨_, _, hs, by assumption, by assumption, rfl⟩
 
 /-- **The record decodes at two link points of the files' `m_pts`**: without a draw at the files' spec, and at a draw
 that proves every unit in order (the only one `drawnSpec` takes) at the drawn statement's, whose `nbl` is the files'
