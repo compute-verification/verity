@@ -27,18 +27,28 @@ namespace Flock.Bridge
 
 open Properties.NetworkCertifier.Bytes (bs_inj)
 
-/-- **No colliding pair in the verifier's roots fixes each root's domain**: the roots `Flock.PortRoots.collides`
-computes are `rootsOf`'s. -/
+/-- At a `Flock.PortRoots.rowsV2` file every port's leaf schema is row/v2. -/
+theorem schemaOf_of_rowsV2 {c : Flock.Circuit} (hv2 : Flock.PortRoots.rowsV2 c = true) {q : ℕ}
+    (hq : q < c.ports.size) : schemaOf c q = Flock.HmRow.ROW_SCHEMA_V2 := by
+  simp only [Flock.PortRoots.rowsV2, Array.all_eq_true, Bool.and_eq_true, Option.isNone_iff_eq_none] at hv2
+  obtain ⟨h1, h2⟩ := hv2 q hq
+  simp [schemaOf, hq, Flock.Registered.portSchema, h1, h2]
+
+/-- **No colliding pair in the verifier's roots fixes each root's domain**: at a `rowsV2` file the roots
+`Flock.PortRoots.collides` computes are `rootsOf`'s. -/
 theorem fixes_of_collides_false {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (h : Flock.PortRoots.collides c pub nl = false) : PortRoots.RootFixesDomain c pub nl := by
+    (hv2 : Flock.PortRoots.rowsV2 c = true) (h : Flock.PortRoots.collides c pub nl = false) :
+    PortRoots.RootFixesDomain c pub nl := by
   intro q q' hlt hq he
   rw [PortRoots.rootsOf_getD c pub nl (hlt.trans hq), PortRoots.rootsOf_getD c pub nl hq] at he
+  simp only [Flock.Bridge.PortRoots.leaves, schemaOf_of_rowsV2 hv2 hq, schemaOf_of_rowsV2 hv2 (hlt.trans hq)] at he
   exact Flock.PortRoots.domOf_eq_of_collides_false h hlt hq (bs_inj he)
 
-/-- **The verifier's roots check is V2's port-roots guard.** -/
+/-- **The verifier's roots check is V2's port-roots guard** at a `rowsV2` file. -/
 theorem rootsColl_none_of_collides_false {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ}
-    (h : Flock.PortRoots.collides c pub nl = false) : PortRoots.rootsColl c pub nl = none :=
-  PortRoots.rootsColl_none_iff.2 (fixes_of_collides_false h)
+    (hv2 : Flock.PortRoots.rowsV2 c = true) (h : Flock.PortRoots.collides c pub nl = false) :
+    PortRoots.rootsColl c pub nl = none :=
+  PortRoots.rootsColl_none_iff.2 (fixes_of_collides_false hv2 h)
 
 /-- **The run's population check is `PopMatches`.** -/
 theorem popMatches_of_popOk {desc : Claims.Msg} {qr : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
@@ -154,10 +164,10 @@ theorem sampledKSLiveV3_of (h : SampledKSLiveV2) : SampledKSLiveV3 := by
   by_cases hc : Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨hck, p, hp, hpo⟩ := hc
-    obtain ⟨-, hdup, hcoll⟩ := Flock.PortRoots.check_ok hck (Flock.Desc.parse_flat hD) hpub
+    obtain ⟨hv2, hdup, hcoll⟩ := Flock.PortRoots.check_ok hck (Flock.Desc.parse_flat hD) hpub
     have hroots : Bridge.PortRoots.rootsColl D.unroll pub n = none := by
       rw [← hn]
-      exact Bridge.rootsColl_none_of_collides_false hcoll
+      exact Bridge.rootsColl_none_of_collides_false hv2 hcoll
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
       (h n Reg I ht D hD hU pub hpub hpt hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
         (Bridge.popMatches_of_popOk hp hpo) kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM
