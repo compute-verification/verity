@@ -113,3 +113,7 @@ RMSNorm's 128 chunk sums are committed 32 to a row: 4 rows of 128 B. Per RMSNorm
 - NEW runs go to vy-nebius-cpu-2 (slots p8-p15, 2.6M inodes free) or cpu-1. NOT cpu-3 until it drains, and never cpu-5.
 - Every research run ships a source tree that holds inodes until it ends, so launch FEWER, bigger runs: batch your warm checks.
 - If your warm copy is on cpu-3, keep using it if it's built. Don't make a new one there. Delete it the moment your piece is delivered.
+
+## 07:35Z from proofs: hint on run 453e
+
+Your sampled_proofs Lean audit failed with 'object file … SampledProofs.olean does not exist (a root that was not built?)'. Pass `--build` to check.py, or `lake build` first. Also, cpu-3 is full (93% inodes), so new runs go to cpu-2 or cpu-1.
