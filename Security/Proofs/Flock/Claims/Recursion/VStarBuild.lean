@@ -89,7 +89,8 @@ def msgsOf (rs : Array RecVStar.SchedRound) (rr : ℕ → List _root_.VStar.In.R
 
 /-- A row's words as bytes, each word little-endian (`VStar.In.wordsOf`'s inverse). -/
 def wordsBytes (ws : Array ℕ) : ByteArray :=
-  ⟨ws.flatMap fun w => #[(w % 256).toUInt8, (w / 256 % 256).toUInt8]⟩
+  ⟨(Array.range (2 * ws.size)).map fun i =>
+    if i % 2 = 0 then (ws[i / 2]! % 256).toUInt8 else (ws[i / 2]! / 256 % 256).toUInt8⟩
 
 /-- **The tops** (`VStar.In.Src.tops`), by rep and level, each node (a top row's first 32 words, `Firewall.topRows`'
 inverse) with its salt: level 0's, round `0`'s rows, the one tree both reps share; each later level's, the schedule's
