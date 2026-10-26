@@ -412,7 +412,7 @@ theorem fill_of_live {spec : SessionSpec} {h : ByteArray → ByteArray} {rootB :
   rw [hro] at ha
   injection ha with ha
   subst ha
-  obtain ⟨-, hr⟩ := array_mapM_ok_inv _ _ _ hm
+  obtain ⟨hsz', hr⟩ := array_mapM_ok_inv _ _ _ hm
   have hr := hr k (by simpa using hk)
   simp only [Array.getElem_mapIdx, Array.getElem_map, Array.getElem_range] at hr
   cases hmc : mids[streamOffset spec (eraseCoins (recordObj spec h rootB P S F)) spec.repStreams[i].2.2 + k]? with
