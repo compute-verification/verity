@@ -20,6 +20,10 @@ namespace FlockDeploy.KS
 
 open Flock FlockSoundness.Refine
 
+local instance lawfulBEqByteArrayLC : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
+
 /-! ## The public words, at a parsed value -/
 
 section Publics
@@ -396,7 +400,8 @@ theorem decisionAtS_log (H : Claims.Msg → Claims.Msg) (s : Ins) (spec : Sessio
     with ⟨r, l⟩
   have hr : r = .ok ((filesAt (tabsOf sts) (pointsOf spec c₁) f.ps).map
       (FlockComplete.dgOf spec (Claims.hOf H))) := by
-    have e := evOk_mapM_array (evOk_dg H spec) (filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)
+    have e : EvOk H _ _ := evOk_mapM_array (evOk_dg H spec) (filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)
+    unfold EvOk at e
     rw [hv] at e
     exact e
   subst hr
@@ -427,9 +432,9 @@ SHA-512 on one set**: the setup's and the files' digests are one, and the verdic
 (`plainE_calls_agree`'s at `nextR`). -/
 theorem callsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link link' : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
-    (ha' : actR rd x as' cs' = .decide s spec sts link' c₁ mids f')
+    (ha' : actR rd x as' cs' = .decide s spec sts link c₁ mids f')
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
     (hF : filesAt (tabsOf sts) (pointsOf spec c₁) f.ps = filesAt (tabsOf sts) (pointsOf spec c₁) f'.ps) :
     ((nextR rd x as cs).eval sha512).2.toFinset = ((nextR rd x as' cs').eval sha512).2.toFinset := by
