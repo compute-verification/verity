@@ -4,6 +4,7 @@ import NetworkCheck.Difftest
 import NetworkCheck.Records
 import NetworkCheck.RecordsGrid
 import NetworkCheck.RecordsBytes
+import NetworkCheck.Period
 
 /-!
 # The network certificate's checks
@@ -16,6 +17,9 @@ executable), held to `audit.py` by `tests/test_network_check_protocol.py`. `Netw
 raw, committed and certified records (`verity/network-records/v3`, the `network-records` executable, which
 `lean_audit.Audit` runs, with the egress grid compared or, for `check_link(grid=False)`, not), held to `audit.py` by `tests/test_network_records_protocol.py`; `NetworkCheck.RecordsGrid` proves
 that its linear Program grid is `NetworkCheck.Check`'s, and `NetworkCheck.RecordsBytes` that its evidence, payloads kept
-as bytes, is v4's read as bits. Code: it imports only Lean, C-Flock's verifier
+as bytes, is v4's read as bits. `NetworkCheck.Period` is onsite's communication component
+(`verity/certifier/v0`, the `network-period` executable): a period's link-windows proved by N2 and certified, beside its
+compute audits, and the bound `K` on what left the site, held to its Python mirror by
+`tests/test_network_period_protocol.py`. Code: it imports only Lean, C-Flock's verifier
 (`Flock.Hash`, `Flock.Bytes`, `Flock.Canon`), the core protocol interface, the certifier program and the LMS port.
 -/
