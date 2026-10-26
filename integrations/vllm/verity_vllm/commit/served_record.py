@@ -8,8 +8,9 @@ attached keeps each step's rows (`Row`: the runner's request id, its token rows 
 its prefill length) and binds, beside the sampled ids, the seed and the position each row's draw read (`SAMPLER_INPUTS`). `Record.absorb`
 reads a finished window back from the committed bytes into one `RequestRecord` per request:
 
-- ``inputs``: position p -> the committed input id at p (``c00.input/ids`` on the compiled path, ``model.embed_tokens/in`` on
-  the eager one), every row that computed p; a recompute must commit the same id again;
+- ``inputs``: position p -> the committed input id at p (the step-input port's ``step.input/ids``, else ``c00.input/ids`` on
+  the compiled path or ``model.embed_tokens/in`` on the eager one), every row that computed p; a recompute must commit the
+  same id again;
 - ``sampled``: position p -> the committed id sampled from p's logits, the token at p + 1, for every row whose last position
   reaches its prefill length (Model Runner V2 samples every row and drops a partial prefill's; those are ``discarded``);
 - ``seeds``, ``rows``, the prefix-cache hit (a first row starting past 0) and the preemptions (a row starting before the
@@ -23,7 +24,9 @@ request's first row by a request whose committed ids agree with t up to there (`
 prefix can be its first turn's prompt and its previous turn's suffix). Rows past the finish
 (positions from P + K - 1 on) are ``overrun``: computed and committed, never streamed, each input there the previous
 committed sample. Given the request's finish, the stream must also end where it says (`finish_problems`), so a stream
-cut short can't pass with its missing ids taken for an overrun.
+cut short can't pass with its missing ids taken for an overrun; a client's abort ends it anywhere short of ``max_tokens``,
+and then at most one committed sample runs past it (the step in flight when the abort was applied, under async scheduling).
+A request aborted before it was ever scheduled streamed nothing and has no committed row, and `Record.check` passes it.
 
 Stdlib only, but `committed_ints`, which reads a committer's retained bytes with numpy (and torch for a GPU block).
 """
@@ -35,9 +38,11 @@ from dataclasses import dataclass, field
 from typing import Any
 
 SCHEMA = "verity-vllm/served-record/v1"
-#: The embedding's input ids, by execution: the compiled path's name, then the eager path's (`NativeHostCommitter`'s
-#: ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
-IDS_NAMES = ("c00.input/ids", "model.embed_tokens/in")
+#: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
+PORT_NAMES = ("step.input/ids", "step.input/positions")
+#: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager
+#: path's (`NativeHostCommitter`'s ``<module>/in`` pre-hook on the ``VocabParallelEmbedding``).
+IDS_NAMES = (PORT_NAMES[0], "c00.input/ids", "model.embed_tokens/in")
 SAMPLED = "runner.sampler/sampled_token_ids"
 #: Each sampled row's seed and the position its draw read, one i64 a row (`SamplerInputsSource`).
 SAMPLER_INPUTS = ("runner.sampler/seed", "runner.sampler/pos")
@@ -126,6 +131,64 @@ class SamplerInputsSource:
         qsl = [int(x) for x in ib.query_start_loc_np[: n + 1]]
         self.rows[job.step] = [(str(ib.req_ids[i]), qsl[i], qsl[i + 1], int(ib.num_computed_tokens_np[i]), int(ib.prefill_len_np[i]))
                                for i in range(n)]
+
+
+class StepInputPort:
+    """The committer source that starts every step's stream with the step-input port the certifier's served-rows tie and
+    IO-TIE's ``IoTieRequest`` read (`verity.core.protocols.certifier.served_tie`): the step's input ids, then its positions,
+    each ``T`` little-endian i64s (IB = PB = 8), zero past the step's N scheduled tokens, ``T`` the engine's token budget
+    (``max_num_batched_tokens``). So the ids are the stream's bytes [0, 8T) and the positions [8T, 16T), at fixed leaves of
+    the step's tree when 8T is a whole number of chunks (refused otherwise). A pre-hook on the top model takes them from
+    its call (``input_ids``, ``positions``) before any module of it commits."""
+
+    short_name = "step_input_port"
+    own_names = frozenset(PORT_NAMES)
+    IB = PB = 8
+
+    def __init__(self, committer: Any, T: int) -> None:
+        chunk = int(getattr(committer, "chunk", 4096) or 4096)
+        if T < 1 or (T * self.IB) % chunk:
+            raise ValueError(f"step-input port: T = {T} i64s is not a whole number of {chunk}-byte chunks; "
+                             f"pass --max-num-batched-tokens a multiple of {chunk // self.IB}")
+        self.com, self.T, self._h = committer, int(T), None
+
+    def describe(self) -> dict[str, Any]:
+        """The port as a sealed window's context states it: names, T, the element bytes and each tensor's byte range."""
+        T, IB, PB = self.T, self.IB, self.PB
+        return {"names": list(PORT_NAMES), "T": T, "IB": IB, "PB": PB, "ids_bytes": [0, T * IB], "positions_bytes": [T * IB, T * (IB + PB)]}
+
+    def install(self) -> None:
+        self._h = self.com.model.register_forward_pre_hook(self._pre, with_kwargs=True)
+
+    def uninstall(self) -> None:
+        if self._h is not None:
+            self._h.remove()
+            self._h = None
+
+    def on_step_begin(self) -> None:
+        pass
+
+    def extra_step_bytes(self, envelope: Any, model: Any) -> dict[str, int]:  # noqa: ARG002
+        return {"per_step_bytes": self.T * (self.IB + self.PB), "tensors_per_step": len(PORT_NAMES)}
+
+    def _pre(self, _m: Any, args: tuple, kwargs: dict) -> None:
+        import torch
+
+        com, job = self.com, getattr(self.com, "_cur", None)
+        if job is None:
+            return None
+        ids = kwargs.get("input_ids", args[0] if args else None)
+        pos = kwargs.get("positions", args[1] if len(args) > 1 else None)
+        n = int((getattr(com, "_plan_shape", None) or (0, 0))[0])
+        if ids is None or pos is None or ids.dim() != 1 or pos.dim() != 1 or not 0 < n <= min(self.T, int(ids.shape[0]), int(pos.shape[0])):
+            com.errors.append(f"step-input port: step {job.step} has N = {n} tokens for T = {self.T}, "
+                              f"ids {None if ids is None else tuple(ids.shape)}, positions {None if pos is None else tuple(pos.shape)}")
+            return None
+        for name, t in zip(PORT_NAMES, (ids, pos)):
+            out = torch.zeros(self.T, dtype=torch.int64, device=t.device)
+            out[:n] = t[:n].long()
+            com._acquire(name, out, job)
+        return None
 
 
 def served_rows(committer: Any) -> dict[int, list[tuple]]:
@@ -234,6 +297,9 @@ class RequestRecord:
             problems.append(f"samples: an output sampled inside the prompt, at position {early[0]}")
         over_in = sorted(p for p in self.inputs if p >= last)
         over_s = sorted(p for p in self.sampled if p >= last)
+        if finish is not None and finish.get("reason") == "abort" and len(over_s) > 1:
+            problems.append(f"finish: aborted after {K} ids, and {len(over_s)} committed samples run past them, more than the one "
+                            "of the step in flight")
         for p in over_in:
             want = t[p] if p == last else self.sampled.get(p - 1)
             if self.inputs[p] != want:
@@ -354,22 +420,29 @@ class Record:
               finish: Mapping[str, Any] | None = None, decode: Callable[[Sequence[int]], str] | None = None) -> dict[str, Any]:
         rec = self.requests.get(request)
         if rec is None:
-            return {"passed": False, "problems": ["no committed row"], "prompt_ids": len(prompt_ids), "streamed_ids": len(streamed_ids)}
+            gone = finish is not None and finish.get("reason") == "abort" and not streamed_ids and not finish.get("k")
+            return {"passed": gone, "problems": [] if gone else ["no committed row"], "prompt_ids": len(prompt_ids),
+                    "streamed_ids": len(streamed_ids)}
         return rec.check(prompt_ids, streamed_ids, seed=seed, prefix_sources=self.requests, finish=finish, decode=decode)
 
 
 def finish_problems(out: Sequence[int], finish: Mapping[str, Any], decode: Callable[[Sequence[int]], str] | None = None) -> list[str]:
     """Whether the stream ``out`` ends where its finish says, so that a stream cut short can't pass as a finished one whose
     committed rows past the cut are an async overrun. ``finish``: ``reason`` (vLLM's ``finish_reason``), ``stop_reason``,
-    ``max_tokens`` and ``eos_ids``. A ``length`` finish streamed ``max_tokens`` ids; a ``stop`` on the model's EOS
+    ``max_tokens`` and ``eos_ids``. A ``length`` finish streamed ``max_tokens`` ids; a client's ``abort`` streamed the ``k``
+    it records, fewer than ``max_tokens`` (at its cap vLLM has finished it on length); a ``stop`` on the model's EOS
     (``stop_reason`` None) ends on one of ``eos_ids``, on a stop token (an int) ends on it, and on a stop string ends on
     the id whose text first holds it (with ``decode``; vLLM keeps every id of a stop-string finish and cuts the text)."""
-    reason, why = finish.get("reason"), finish.get("stop_reason")
+    reason, why, cap = finish.get("reason"), finish.get("stop_reason"), finish.get("max_tokens")
     if reason == "length":
-        cap = finish.get("max_tokens")
         return [] if cap is None or len(out) == int(cap) else [f"finish: length after {len(out)} ids, max_tokens {cap}"]
+    if reason == "abort":
+        k = finish.get("k")
+        if k is not None and len(out) != int(k):
+            return [f"finish: aborted after {k} ids, {len(out)} streamed"]
+        return [] if cap is None or len(out) < int(cap) else [f"finish: aborted after {len(out)} ids, at its max_tokens {cap}"]
     if reason != "stop":
-        return [f"finish: {reason!r}, neither stop nor length"]
+        return [f"finish: {reason!r}, neither stop, length nor abort"]
     if why is None:
         eos = {int(x) for x in finish.get("eos_ids") or ()}
         return [] if not eos or out[-1] in eos else [f"finish: stopped on EOS, the last streamed id {out[-1]} is none of {sorted(eos)}"]

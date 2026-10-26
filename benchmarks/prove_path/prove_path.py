@@ -17,7 +17,10 @@ Two kinds of committed run:
 * **A single-GPU Commit** (``--bundle DIR --row-dir DIR --workload F``, TP1): one window, ``rank0/``, from the Commit's sealed
   bundle (``<row dir>/commit/replay_bundle_p0``) under its run root. The compiler is `Capped` over `I2Compiler`: I2's
   `predict.steps.compile_steps` on the advice and the requests' bodies, each Program the one I2 compiles, its body read from
-  the Build's files of that digest (`I2Compiler.load`). The window is a stand-in of the record's SHA-512 rows root (`stand_in1`).
+  the Build's files of that digest and held to it (`I2Compiler.load`, `build_of`). What no digest covers (the rows' names,
+  the parameters' names and types, ``supplied``, the correspondence, ``prefix_cache.json``) the verifier reads only from its
+  own Build of each Program, traced with the pinned vLLM (``--vllm-python``, `own_builds`), never from the row dir; the
+  prover's Builds are its row dir's. The window is a stand-in of the record's SHA-512 rows root (`stand_in1`).
 * **A served window** (``--serve-run DIR --window K --row-dir DIR``, TP1): one closed Commit window of a `verity-vllm
   serve-openai` run, its window ``rank0/``. The run dir is serve-openai's (``serve.json``, ``windows.jsonl``, ``requests.jsonl``)
   with `verity-vllm advice`'s ``advice/w<K>/`` (``registration.json``, public; ``private/advice.bin`` and ``private/opening.json``,
@@ -35,9 +38,12 @@ Two kinds of committed run:
         --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
-        [--ranks 0,1] [--jobs N] [--forged] [--transfer-gate T ...] [--challenger local --main FILE]
+        [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] [--challenger local|gate:USER@HOST --main FILE]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--builds DIR] [--vllm-python PY]
     prove_path.py compiler --serve-run DIR [--hf-config F] [--target F] [--cap-bits L] [--transfer-gate T ...]
     prove_path.py serve-standin --bundle DIR --row-dir DIR --workload F --out RUN [--hf-config F] [--cap-bits L]
+    prove_path.py circuit --serve-run DIR --window K --partition F --advice FILE --out FILE [--hf-config F] [--target F] \\
+        [--cap-bits L] [--transfer-gate T ...] [--vllm-python PY]
 
 * **advice**: a declared run's I1 advice from its workload file (`advice_windows.advice_of_workload`), its canonical encoding.
   A served run's comes from its step trace instead (ADVICE-SRC); `compile_advice` reads either.
@@ -45,12 +51,17 @@ Two kinds of committed run:
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
   Programs for it, ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first output word flipped
   (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
-* **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`),
+* **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
+  a single-GPU or served window's Programs from its own Builds, traced into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
   draw's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the draw and Lean refused the outcome
-  (`forged_row`).
+  (`forged_row`). ``--plain``: the sessions are plain C-Flock, not `--zk` (a5's ``--plain``: a stratified draw over a window of
+  one member, no registered reads or shared rows, Lean `verify --coins os --stratified K`, no firewall), and the summary
+  names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
+  (``charge``, `charge_terms`): ``advice_bits``, ``delta``, ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ)
+  and ``exfiltration_bound`` (β_δ + λ_δ).
 * **compiler**: the binding's compiler for a served run (its name, digest and ℓ, the compiler it wraps, and the φ I2 compiles
   under), the one `verity-vllm advice` registers. The inner digest names the tree's code (`source_identity.code_identity`:
   ``integrations/vllm`` and ``verity`` by content), so the audit runs on a tree whose two are the server's. Where the model's
@@ -59,6 +70,11 @@ Two kinds of committed run:
   window's advice under.
 * **serve-standin**: a served run's dir laid out from a single-GPU Commit of record (one window, ``w0``, under the record's run
   root; the declared run's advice committed under the served compiler), a stand-in for serve-openai's until its sealed windows.
+* **circuit**: a served window's registered compiler as a command (`circuit_of_advice`), what ``records_audit.py audit``'s
+  compile check runs: the circuit record the advice compiles to, over its own Build of each Program (`own_builds`; it takes
+  no row dir), and the length it charges. ``records_audit.py`` audits a window
+  from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
+  opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
 
 `Capped` adds the public cap ℓ on the advice's length to the compiler's registered digest, and `compile_advice` is total on
 every byte string: the requests, or a `ValueError` naming why, the same one on every run.
@@ -74,9 +90,12 @@ registration to that list and no other. Until COMPILER lists the I/O shell's uni
 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
 the compiler listing none and under it less each one gate (`more_negatives`).
 
-**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local --main FILE`` on the
-auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is read;
-``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent history).
+**Coins**: each window's `service.Stream` draws on the verifier's own coins, or with ``--challenger local|gate:USER@HOST --main
+FILE`` on the auditor's challenger's (`a5_coins`: the run root's one session, committed to each registration before any coin is
+read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
+history; ``gate:USER@HOST`` is vy-challenger-1 through infra's gate with the lane's gate key ``--gate-key``, its challenger on
+``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
+a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
 `advice_before_draw` holds the advice to the receipt of the stream that drew.
 """
 from __future__ import annotations
@@ -90,7 +109,7 @@ import multiprocessing
 import os
 import sys
 import time
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -100,8 +119,11 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core.protocols.sampled_proofs.one_stage import registration as R  # noqa: E402
+from records_audit import PORTS, REFUSED, free_ports  # noqa: E402, F401
+from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
+from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
@@ -112,7 +134,7 @@ I2 = "verity/prove-path/i2-compile-steps/v0"
 #: bits a row)
 CAP_BITS = 1 << 23
 #: the checkpoint config I2's φ reads when none is given: unsloth/Llama-3.2-1B's (I2's test fixture)
-LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/predict/fixtures/llama32-1b.config.json"
+LLAMA32_1B_CONFIG = HERE.parents[1] / "integrations/vllm/tests/program/predict/fixtures/llama32-1b.config.json"
 ROWS1 = "prove_path.py commit: a single-GPU Commit's sealed replay bundle -> rows over the registered compiler's Programs"
 #: the sampling parameters a request's body carries to I2 (vLLM's `SamplingParams` names the record holds)
 BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
@@ -121,9 +143,9 @@ BODY_SAMPLING = ("temperature", "top_p", "top_k", "seed", "n")
 GATES_OF_RECORD: Mapping[str, tuple[str, ...]] = {"unsloth/Llama-3.2-1B": ("RoPEHead_v1{D=64}",)}
 #: the schema of the request Programs vllm's advice compiler writes into a served window's row dir (``manifest.json``, #3619)
 SERVED_PROGRAMS = "verity-vllm/served-window-programs/v1"
-#: where an audit's ports start when ``--port`` isn't given (`free_ports`): below Linux's ephemeral range (32768-60999), from
-#: which outbound connections take theirs
-PORTS = range(10000, 32000)
+#: what a plain audit's summary names as its interim (a5's `PLAIN_SCOPE` is the scope it refuses outside of)
+PLAIN_INTERIM = ("C-Flock plain on one table under a stratified draw, until proofs' multi-table coverage lands (PRs A, B and "
+                 "C); the statement reads no registered values and no shared rows")
 
 
 @dataclass(frozen=True)
@@ -159,11 +181,15 @@ class I2Compiler:
     compiles from the advice and each request's body by its I1 id (``ingress``; I2's prompts and sampling are values the request
     brings, never advice), under the registered φ (``registered``: the model, target, engine and ℓ, no workload). `load` reads
     each Program's body from the Build's files of the digest I2 compiled (a ``build_request*/`` under ``programs_root`` whose
-    ``result.json`` names it), refused where no Build dir holds it: the Build's files are the bodies' cache, I2's digests are the
-    Programs. ``transfer_gates`` are the templates it lists as holding transfer gates (module docstring), the run's stand-in until
-    I2 lists the I/O shell's own. Its digest names I2's code (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them,
-    so a node's ignored build outputs don't move it), φ, the default seed, ℓ and that list; a served window's I2 is named as the
-    server registered it instead (``registered_digest``, `served_identity`), with that list beside it where it lists any."""
+    ``result.json`` names it), refused where no Build dir holds it or its files aren't that Program (`build_of`: its digest
+    recomputed from its descriptor, its rows held to the descriptor's): the Build's files are the bodies' cache, I2's digests
+    are the Programs. What no digest covers (the rows' names, the parameters' names and types, ``supplied``, the
+    correspondence and ``prefix_cache.json``) is the Build's word, so the verifier's I2 reads only Builds it traced itself
+    (``trace``, `own_builds`) and the prover's reads its row dir's. ``transfer_gates`` are the templates it lists as holding
+    transfer gates (module docstring), the run's stand-in until I2 lists the I/O shell's own. Its digest names I2's code
+    (`code_identity`: ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it), φ, the
+    default seed, ℓ and that list; a served window's I2 is named as the server registered it instead (``registered_digest``,
+    `served_identity`), with that list beside it where it lists any."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -171,7 +197,10 @@ class I2Compiler:
     name: str = I2
     transfer_gates: tuple[str, ...] = ()
     registered_digest: str | None = None
+    #: the verifier's: the interpreter (with the pinned vLLM) its own Builds of I2's Programs are traced with into ``programs_root``
+    trace: str | None = field(default=None, compare=False)
     compiled: dict = field(default_factory=dict, compare=False, repr=False)
+    shapes: dict = field(default_factory=dict, compare=False, repr=False)
 
     @functools.cached_property
     def digest(self) -> str:
@@ -189,8 +218,8 @@ class I2Compiler:
     def requests(self, data: bytes) -> list[dict]:
         """I2's requests for the advice ``data``: each request's id, first step, prompt length, ``max_tokens`` (its kept outputs)
         and the digest of the Program I2 compiled for it; I2's refusal (`Unexpressible`) is a ValueError naming it."""
-        from verity_vllm.predict.build import Unexpressible
-        from verity_vllm.predict.steps import compile_steps
+        from verity_vllm.program.predict.build import Unexpressible
+        from verity_vllm.program.predict.steps import compile_steps
 
         if data not in self.compiled:
             try:
@@ -199,29 +228,70 @@ class I2Compiler:
                 raise ValueError(f"I2 refuses the advice: {e}") from None
             self.compiled[data] = [{"request_id": u.id, "arrive_step": u.first_step, "prompt_len": u.LP, "max_tokens": u.T + 1,
                                     "digest": u.digest} for u in c.requests]
+            self.shapes.update({u.digest: {"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy} for u in c.requests})
         return [dict(q) for q in self.compiled[data]]
 
     def load(self, rank: int, world: int, requests: Any) -> SimpleNamespace:
         """The window's Programs for I2's ``requests`` (`requests`), as `deferred_rows.of_record` holds the Build's: by request id
-        its instances, its dir and its digest, and each request's arrival, its first step in the advice."""
-        from verity_vllm.query.manifest import format as MF
-
+        its instances, its dir and its digest, and each request's arrival, its first step in the advice. Each Build dir is held to
+        I2's digest (`build_of`) before its instances are read, so the rows the window and the audit read are I2's Program's, not
+        the Build's word for it; with ``trace``, every Build dir is the verifier's own (`own_builds`)."""
         if (int(rank), int(world)) != (0, 1):
             raise ValueError(f"I2 compiles a single-GPU session: rank {rank} of a world of {world}")
+        if self.trace is not None:
+            own_builds(self, requests)
         by = bodies_by_digest(self.programs_root)
-        loaded, digs = {}, {}
+        loaded, digs, held = {}, {}, {}
         for q in requests:
             d = by.get(str(q.get("digest")))
             if d is None:
                 raise ValueError(f"request {q['request_id']}: no Build dir under {self.programs_root} holds I2's Program "
                                  f"{str(q.get('digest'))[:16]}")
-            v = MF.load_program(d)
-            got = str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "")
-            if got != q["digest"]:
-                raise ValueError(f"request {q['request_id']}: {d}'s instances are Program {got[:16]}, not I2's {q['digest'][:16]}")
-            loaded[q["request_id"]], digs[q["request_id"]] = v, got
+            if (d, q["digest"]) not in held:
+                try:
+                    held[d, q["digest"]] = build_of(d, q["digest"])
+                except ValueError as e:
+                    raise ValueError(f"request {q['request_id']}: {e}") from None
+            loaded[q["request_id"]], digs[q["request_id"]] = held[d, q["digest"]], q["digest"]
         return SimpleNamespace(progs={k: v["instances"] for k, v in loaded.items()}, dirs={k: v["dir"] for k, v in loaded.items()},
                                digs=digs, arrivals={q["request_id"]: int(q["arrive_step"]) for q in requests})
+
+
+def own_builds(i2: I2Compiler, requests: Sequence[Mapping[str, Any]]) -> None:
+    """The verifier's own Build of each Program I2 compiled for ``requests`` that no Build dir under ``i2.programs_root`` holds
+    yet: `steps.trace_commands`' trace of it (the pinned vLLM, CPU, on meta, as ``tools/advice_compile.py`` traces the prover's)
+    into ``programs_root``, run with ``i2.trace`` (`trace_builds`). So the rows' names, the parameters' names and types,
+    ``supplied``, the correspondence and ``prefix_cache.json`` the window reads are this verifier's trace of I2's Program, and
+    no row dir's."""
+    from verity_vllm.program.predict.steps import trace_commands
+
+    Path(i2.programs_root).mkdir(parents=True, exist_ok=True)
+    have, units = bodies_by_digest(i2.programs_root), {}
+    for q in requests:
+        if (dg := str(q["digest"])) not in have and dg not in units:
+            if dg not in i2.shapes:
+                raise ValueError(f"request {q['request_id']}: I2 compiled no Program {dg[:16]} here, so the verifier has no shape "
+                                 f"to trace it at")
+            units[dg] = i2.shapes[dg]
+    if units := list(units.values()):
+        trace_builds(trace_commands({"requests": units}, i2.registered, os.path.abspath(i2.programs_root)), str(i2.trace))
+
+
+def trace_builds(cmds: Sequence[Sequence[str]], python: str) -> None:
+    """Each of `steps.trace_commands`' ``verity-vllm build`` commands run with ``python``, from this tree's ``integrations/vllm``
+    with it and this tree first on its path (``PYTHONPATH=.:../..``, as ``tools/advice_compile.py`` runs them); a trace that
+    fails is a RuntimeError naming its Build dir: the verifier then has no Build of its own to read."""
+    import subprocess
+
+    import verity_vllm
+
+    vllm = Path(verity_vllm.__file__).resolve().parents[1]
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(vllm), str(vllm.parents[1]), *filter(None, [os.environ.get("PYTHONPATH")])])}
+    for cmd in cmds:
+        p = subprocess.run([python, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], cwd=vllm, env=env, capture_output=True, text=True)
+        if p.returncode != 0:
+            out = cmd[cmd.index("--out") + 1]
+            raise RuntimeError(f"the verifier's trace of {out} failed (rc {p.returncode}): {(p.stderr or p.stdout)[-1500:]}")
 
 
 #: the two packages a predicted Program is built from (`score.code_version`'s), by repository path
@@ -259,6 +329,111 @@ def bodies_by_digest(programs_root: str) -> dict[str, str]:
     return out
 
 
+def build_of(d: str, digest: str) -> dict[str, Any]:
+    """Build dir ``d``'s Program as `MF.load_program` reads it, held to Program ``digest``, each failure a `ValueError` naming it.
+
+    The digest is recomputed from the Build's body (``descriptor.json.gz``, `codec.program_digest`) and must be ``digest``, and
+    each digest the Build records (``result.json``'s, the instances head's) must be the recomputed one. The rows the window and
+    the audit read (``instances.json.gz``) must be the descriptor's: row k is the root's node k past its Input batches, by spec,
+    form and operand leaves, a read of an Input batch as the parameter leaves it binds. That layout is the program function's
+    binding record's (I2's ``Derived[...]{SRC}``: the shapes of its parameters but the last, the weights, which binds every
+    later Input batch). A word Build only: I2 compiles word Programs. Row names, the head's parameter names and types and its
+    ``supplied``, and the Build's correspondence and ``prefix_cache.json`` stay the Build's: no Program digest covers them, so
+    the verifier reads them only from Builds it traced itself (`own_builds`)."""
+    import gzip
+
+    from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
+    from verity.ml.circuits.program import is_input
+    from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
+    from verity_vllm.program.registry.catalog import load
+    from verity_vllm.query.manifest import format as MF
+
+    p = Path(d) / "descriptor.json.gz"
+    if not p.is_file():
+        raise ValueError(f"{d} has no descriptor.json.gz: its Program's digest can't be recomputed")
+    with gzip.open(p, "rt") as f:
+        desc = json.load(f)
+    got = program_digest(desc)
+    if got != digest:
+        raise ValueError(f"{p} is Program {got[:16]}, not I2's {str(digest)[:16]}")
+    v = MF.load_program(d)
+    inst = v["instances"]
+    for what, rec in (("result.json", ((v["result"] or {}).get("program") or {}).get("digest")), ("instances.json.gz", inst.get("digest"))):
+        if rec != got:
+            raise ValueError(f"{d}'s {what} records Program {str(rec)[:16]}, and its descriptor.json.gz is Program {got[:16]}")
+    if inst.get("ir") is not None:
+        raise ValueError(f"{d}'s instances.json.gz is a Build in IR {inst['ir']!r}, and I2 compiles word Programs")
+    nodes = decode_program(desc, load()[0]).root.body.nodes
+    n_in = next((k for k, n in enumerate(nodes) if not is_input(n.fn)), len(nodes))
+    where = input_layout(desc, [n.n for n in nodes[:n_in]])
+    rows = inst.get("rows") or []
+    if len(rows) != len(nodes) - n_in:
+        raise ValueError(f"{d}'s instances.json.gz has {len(rows)} rows, and its descriptor.json.gz {len(nodes) - n_in} nodes")
+
+    def param(run: Sequence) -> list:
+        sp, i, lo, hi = run
+        if sp != "n":
+            return [sp, i, lo, hi]
+        if i < n_in:
+            j, off = where[i]
+            return ["p", j, off + lo, off + hi]
+        return ["n", i - n_in, lo, hi]
+
+    for k, (r, n) in enumerate(zip(rows, nodes[n_in:])):
+        want = {"i": k, "spec": descriptor_id(n.fn), "form": n.form,
+                "args": [merged([param(run) for run in a]) for a in expanded_file_args([file_items_from_refs(a.refs) for a in n.args])]}
+        try:
+            have = {"i": r.get("i"), "spec": r.get("spec"), "form": r.get("form"), "args": [merged(a) for a in r.get("args") or ()]}
+        except (AttributeError, TypeError, ValueError):
+            have = {}
+        if have != want:
+            bad = ", ".join(x for x in want if have.get(x) != want[x])
+            raise ValueError(f"{d}'s instances.json.gz row {k} is not its descriptor.json.gz's node {k}: they differ in {bad}")
+    return v
+
+
+def input_layout(desc: Mapping[str, Any], sizes: Sequence[int]) -> list[tuple[int, int]]:
+    """Each root Input batch of leaf count ``sizes[m]`` as (parameter, leaf offset): in order, the parameters the program
+    function's ``SRC`` record shapes, then the last parameter, the weights, for every later batch. Refused where the record
+    names no shapes or the batches don't fill them."""
+    import math
+
+    pf = str(desc.get("program_fn") or "")
+    _, sep, rec = pf.partition("{SRC=")
+    try:
+        shapes = json.loads(rec[:-1])["dict"]["inputs"] if sep and rec.endswith("}") else None
+        need = [math.prod(int(x) for x in s) for s in shapes]
+    except (ValueError, KeyError, TypeError):
+        need = None
+    if need is None:
+        raise ValueError(f"the program function {pf[:80]} records no SRC input shapes: not one of I2's Programs")
+    out, j, off = [], 0, 0
+    for m, size in enumerate(sizes):
+        while j < len(need) and need[j] == 0:
+            j += 1
+        out.append((j, off))
+        off += int(size)
+        if j < len(need) and off >= need[j]:
+            if off > need[j]:
+                raise ValueError(f"Input batch {m} runs past parameter {j}'s {need[j]} leaves")
+            j, off = j + 1, 0
+    if any(need[j:]):
+        raise ValueError(f"the root's {len(sizes)} Input batches don't fill the {len(need)} parameters SRC shapes")
+    return out
+
+
+def merged(runs: Sequence[Sequence]) -> list[list]:
+    """Operand runs ``[space, index, lo, hi]`` with each run that continues the one before folded into it: one leaf sequence,
+    one spelling, however the Input batches split a parameter."""
+    out: list[list] = []
+    for sp, i, lo, hi in runs:
+        if out and out[-1][0] == sp and out[-1][1] == i and out[-1][3] == lo:
+            out[-1][3] = hi
+        else:
+            out.append([sp, i, lo, hi])
+    return out
+
+
 @functools.lru_cache(maxsize=4)
 def record1(bundle: str, row_dir: str) -> SimpleNamespace:
     """A single-GPU Commit's sealed bundle opened against its record (`deferred_rows.of_record`), once per process."""
@@ -276,12 +451,12 @@ def ingress_of(ctx: Mapping[str, Any]) -> dict[str, dict]:
 
 
 def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None, cap_bits: int = CAP_BITS,
-                 transfer_gates: Sequence[str] = ()) -> I2Compiler:
+                 transfer_gates: Sequence[str] = (), programs_root: str | None = None, trace: str | None = None) -> I2Compiler:
     """I2 over a single-GPU Commit: φ from the row's declared inputs (`score.phi_of`: its row id, the workload file the record
     served, refused unless its digest is the record's, and the checkpoint's ``config.json``), the bodies from the record, listing
-    ``transfer_gates``."""
-    from verity_vllm.predict.score import phi_of
-    from verity_vllm.predict.steps import Registered
+    ``transfer_gates``; its Programs' Builds under ``programs_root`` (default the row dir; with ``trace``, the verifier's own)."""
+    from verity_vllm.program.predict.score import phi_of
+    from verity_vllm.program.predict.steps import Registered
 
     r = record1(str(bundle), str(row_dir))
     doc = json.loads(Path(workload).read_text())
@@ -289,8 +464,8 @@ def i2_of_record(bundle: str, row_dir: str, workload: str, hf_config: str | None
     if got != r.row.get("workload_sha256"):
         raise ValueError(f"{workload}: workload sha256 {got[:16]} is not the record's {str(r.row.get('workload_sha256'))[:16]}")
     phi = phi_of({"row": r.row["label"], "workload": doc}, config=str(hf_config or LLAMA32_1B_CONFIG))
-    return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(row_dir),
-                      transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))))
+    return I2Compiler(Registered.of(phi, int(doc.get("seed") or 0), cap_bits), ingress_of(r.ctx), str(programs_root or row_dir),
+                      transfer_gates=tuple(dict.fromkeys(map(str, transfer_gates))), trace=trace)
 
 
 def _jsonl(path: Path) -> list[dict]:
@@ -339,7 +514,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     the pinned model (``serve.json``'s ``model`` and ``revision``, the checkpoint's ``config.json``, default unsloth/Llama-3.2-1B's),
     the serving device's target profile (``serve.json``'s ``target``, else the file ``target``) and the engine's execution label
     (``execution``, else ``engine.execution``); no workload."""
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.phi import Phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
     if not isinstance(prof, Mapping):
@@ -353,7 +528,7 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
 
 
 def registered_of_serve(serve: Mapping[str, Any], hf_config: str | None, target: str | None, cap_bits: int) -> Any:
-    from verity_vllm.predict.steps import Registered
+    from verity_vllm.program.predict.steps import Registered
 
     return Registered.of(phi_of_serve(serve, hf_config, target), int(serve.get("default_seed") or 0), cap_bits)
 
@@ -369,16 +544,17 @@ def served_gates(serve: Mapping[str, Any], given: Sequence[str] = ()) -> tuple[s
     return pinned
 
 
-def i2_of_serve(run: str, window: int, row_dir: str, hf_config: str | None, target: str | None,
-                cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = ()) -> I2Compiler:
+def i2_of_serve(run: str, window: int, programs_root: str, hf_config: str | None, target: str | None,
+                cap_bits: int = CAP_BITS, transfer_gates: Sequence[str] = (), trace: str | None = None) -> I2Compiler:
     """I2 over a served window: φ of the served engine (`phi_of_serve`), the server's default seed, the bodies the window's
-    requests brought (`serve_ingress`), each Program's body from the Build's files under the row dir, named as the server
-    registers it (`served_identity`), listing its model's transfer gates of record (`served_gates`, which ``transfer_gates``
-    may only restate)."""
+    requests brought (`serve_ingress`), each Program's body from the Build's files under ``programs_root`` (the prover's row
+    dir, or with ``trace`` the verifier's own Builds), named as the server registers it (`served_identity`), listing its model's
+    transfer gates of record (`served_gates`, which ``transfer_gates`` may only restate)."""
     serve = json.loads((Path(run) / "serve.json").read_text())
     name, digest = served_identity()
-    return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)), str(row_dir),
-                      name=name, transfer_gates=served_gates(serve, transfer_gates), registered_digest=digest)
+    return I2Compiler(registered_of_serve(serve, hf_config, target, cap_bits), serve_ingress(serve_requests(run, window)),
+                      str(programs_root), name=name, transfer_gates=served_gates(serve, transfer_gates), registered_digest=digest,
+                      trace=trace)
 
 
 @functools.lru_cache(maxsize=1)
@@ -402,11 +578,14 @@ def compiler_of(tp_commit: str, build_root: str, cap_bits: int = CAP_BITS, trans
 
 
 def compiler_of_args(a: argparse.Namespace) -> Capped:
-    gates = getattr(a, "transfer_gate", None) or ()
+    """The run's compiler. The verifier's (``a.builds``, `own_builds`: ``audit``'s and ``circuit``'s) reads I2's Programs from
+    Builds it traces itself into ``a.builds`` with ``a.vllm_python``; the prover's from its row dir."""
+    gates, own = getattr(a, "transfer_gate", None) or (), getattr(a, "builds", None)
+    trace = (getattr(a, "vllm_python", None) or sys.executable) if own else None
     if served(a):
-        return Capped(i2_of_serve(a.serve_run, a.window, a.row_dir, a.hf_config, a.target, a.cap_bits, gates), a.cap_bits)
+        return Capped(i2_of_serve(a.serve_run, a.window, own or a.row_dir, a.hf_config, a.target, a.cap_bits, gates, trace), a.cap_bits)
     if single(a):
-        return Capped(i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits, gates), a.cap_bits)
+        return Capped(i2_of_record(a.bundle, a.row_dir, a.workload, a.hf_config, a.cap_bits, gates, own, trace), a.cap_bits)
     return compiler_of(a.tp_commit, a.build_root, a.cap_bits, gates)
 
 
@@ -670,27 +849,6 @@ def in_processes(fn, jobs: int, items: list) -> Iterator[tuple[Any, Any]]:
             yield futures[f], f.result()
 
 
-def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
-    """A base port whose ``span`` loopback ports are all free now, the first of ``bases`` (default every base of `PORTS` in
-    random order). An audit's sessions listen at fixed offsets from it (``a5.RANK_PORTS`` a rank); a fixed default made two
-    audits on one node collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
-    import random
-    import socket
-
-    if bases is None:
-        bases = list(range(PORTS.start, PORTS.stop - span + 1, span))
-        random.SystemRandom().shuffle(bases)
-    for base in bases:
-        try:
-            with contextlib.ExitStack() as held:
-                for port in range(base, base + span):
-                    held.enter_context(socket.socket()).bind(("127.0.0.1", port))
-            return base
-        except OSError:
-            continue
-    raise SystemExit(f"no {span} free loopback ports in a row to listen on; give --port")
-
-
 def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
     a, r, requests, bound = job
     compiler = compiler_of_args(a)
@@ -825,6 +983,31 @@ def per_unit(s: dict) -> dict[str, dict]:
     return out
 
 
+def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
+    """The bits one unit of each of the window's templates commits (`partition._template_bits`), by template."""
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    return {m.template: P._template_bits(SRW.template(m.template).fn if m.schemas else sets[m.template][1]) for m in mine.members}
+
+
+def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float) -> dict[str, Any] | None:
+    """The terms of the leak bound an accepted audit gives (README, "What an accepted plain audit means"): c, the advice's bits
+    (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are faulty
+    (``location_bits``, `consumers.location_bits`); β_δ, the faulty units' committed bits (``harm_bound``: the profile's
+    `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
+    templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
+    (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
+    if not record.get("accepted"):
+        return None
+    p = AU.profile(record["registration"], record["draw"], delta)
+    law = p.strata()
+    weights: float | dict[str, float] = max(bits.values())
+    if law is not None and {s.name for s in law.strata} <= set(bits):
+        weights = {s.name: float(bits[s.name]) for s in law.strata}
+    return {"advice_bits": advice_bits, "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
+            "location_bits": location_bits(p), "harm_bound": p.harm_bound(weights), "exfiltration_bound": exfiltration_bound(p, weights)}
+
+
 def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
     """Rank ``r``'s audit (`rank_audit`). On the challenger's coins, a rank that ends without its draw says so, so the run root's
     one session closes once every other rank has drawn."""
@@ -852,11 +1035,14 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         more = {**more, **serve_negatives(serve_window(str(a.serve_run), int(a.window)), compiler, bound, bytes(rr.run.run_root).hex(),
                                           rr.store.commit_scheme)}
         check = lambda w: with_serve(src(w, mine, held), sv)
-    s, ok = A5.audit(a, A5.template_sets(Path(a.template_sets)), out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
+    sets = A5.template_sets(Path(a.template_sets))
+    s, ok = A5.audit(a, sets, out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
                      {"rank": r, "tp": held.get("tp"), "binding": bound, "requests": requests, "verifier_window_s": window_s,
                       **({"serve": sv} if sv else {})}, more, rank=r)
+    record = json.loads((out / "audit.json").read_text()) if (out / "audit.json").is_file() else {}
     row = {"ok": ok, "seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "per_unit": per_unit(s),
-           **({"serve": sv} if sv else {}),
+           "charge": charge_terms(record, template_bits(mine, sets), bound["advice"]["bits"], a.delta),
+           **({"serve": sv} if sv else {}), **({"plain": s["plain"]} if "plain" in s else {}),
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
     if s.get("draw") is not None:
@@ -913,9 +1099,11 @@ def audit(a: argparse.Namespace) -> int:
                      "gap": "the advice is opened to the verifier until the compile unit exists (README.md)",
                      **({"i2": i2_against_record(a, requests)} if single(a) else {}),
                      **({"serve": {"run": str(a.serve_run), "window": int(a.window), **serve_check_of(a, bound)}} if served(a) else {}),
-                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {}}
+                     "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
+                     **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
     if a.challenger:
-        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main)
+        manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main, ssh_key=a.gate_key,
+                                              peer=a.peer, key_record=a.challenger_key)
     try:
         for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
             summary["ranks"][str(r)] = row
@@ -935,8 +1123,12 @@ def audit(a: argparse.Namespace) -> int:
              | {"advice_before_draw": (s.get("advice_before_draw") or {}).get("ok")}
              | ({"forged": s["forged"]} if a.forged else {"accepted": (s.get("audit") or {}).get("accepted"),
                                                          "negatives_refused": all((s.get("negatives") or {"none": False}).values())})
+             | {"charge": {x: (s.get("charge") or {}).get(x) for x in ("location_bits", "harm_bound", "exfiltration_bound")}
+                | {"wrong_units_bound": ((s.get("charge") or {}).get("wrong_units") or {}).get("bound")}}
              for r, s in summary["ranks"].items()}
     print("PROVE-PATH " + json.dumps({"run_root" if single(a) else "tp_run_root": root, "forged": a.forged, "ok": summary["ok"],
+                                      "proof": "plain" if a.plain else "zk", **({"plain": summary["plain"]} if a.plain else {}),
+                                      "advice_bits": bound["advice"]["bits"], "delta": a.delta,
                                       "coins": summary["coins"]["source"], "transfer_gates": summary["transfer_gates"],
                                       **({"i2_equal": summary["i2"]["equal"]} if single(a) else {}),
                                       **({"serve": {k: summary["serve"][k] for k in ("window", "ok", "codes")}} if served(a) else {}),
@@ -959,6 +1151,29 @@ def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_
     return {"name": c.name, "digest": c.digest, "cap_bits": c.cap_bits, "inner": {"name": name, "digest": inner.digest},
             "served": {"name": name, "digest": digest}, "transfer_gates": list(inner.transfer_gates),
             "phi": reg.phi.to_json(), "default_seed": reg.default_seed}
+
+
+def circuit_of_advice(a: argparse.Namespace) -> dict[str, int]:
+    """A served window's registered compiler as the command `records_audit.compile_check` runs: the advice ``--advice``
+    compiled (`compile_advice`, every refusal a `ValueError`), the window over the compiler's Programs for it
+    (`serving_rows.population`, as `window1` makes the verifier's), each Program's Build this command's own trace
+    (`own_builds`, into a directory of its own beside ``--out``: it reads no row dir), and its circuit record
+    (`serving_rows.circuit_record`) written to ``--out``, under no run (its `interface.RUN_FIELDS` empty: the compiler knows
+    none). -> the advice's length in bits, the one the registration charges (`advice_windows.of_advice`)."""
+    import tempfile
+
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    data = Path(a.advice).read_bytes()
+    with tempfile.TemporaryDirectory(prefix="builds-", dir=Path(a.out).resolve().parent) as builds:
+        a.builds = builds
+        compiler = compiler_of_args(a)
+        p = compiler.load(0, 1, compile_advice(compiler, data))
+        window, _rows = SRW.population(p.progs, json.loads(Path(a.partition).read_text()), "", p.dirs, arrivals=p.arrivals,
+                                       transfer_gates=compiler.transfer_gates)
+    Path(a.out).write_bytes(IF.circuit_bytes(SRW.circuit_record(window)))
+    c = AW.codec_of()
+    return {"bits": int(c.total_bits(c.decode(data)))}
 
 
 def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
@@ -1042,8 +1257,16 @@ def main(argv: list[str] | None = None) -> int:
                    "(default a base whose ports are free now, `free_ports`)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
-    p.add_argument("--challenger", choices=["local"], help="draw each window on the auditor's challenger's coins, the run root's one "
-                   "session (a5_coins; local: a development session on this machine), not the verifier's own")
+    p.add_argument("--plain", action="store_true", help="plain C-Flock sessions, not --zk (a5's --plain): the partition's law "
+                   "stratified:K, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
+    p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
+                   "(a5_coins), not the verifier's own: local (a development session on this machine), or gate:USER@HOST "
+                   "(vy-challenger-1 through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
+                   "127.0.0.1 the session's challenger listens on")
+    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
+                   "(infra's challenger-key/v1), never the session's key.json")
+    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git rev-list "
                    "--first-parent origin/main), which must hold the commit the session's host pins")
     p = sub.add_parser("compiler", help="a served run's registered compiler: what verity-vllm advice --compiler-name/--compiler-digest takes")
@@ -1053,13 +1276,32 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("serve-standin", help="a served run's dir laid out from a single-GPU Commit of record")
     for flag in ("--bundle", "--row-dir", "--workload", "--out"):
         p.add_argument(flag, required=True)
-    for name in ("compiler", "serve-standin"):
+    p = sub.add_parser("circuit", help="a served window's registered compiler as a command: the circuit record it compiles the "
+                       "advice to (records_audit.py's compile check)")
+    for flag in ("--serve-run", "--partition", "--advice", "--out"):
+        p.add_argument(flag, required=True)
+    p.add_argument("--window", type=int, required=True)
+    p.add_argument("--transfer-gate", action="append", default=[])
+    sub.choices["audit"].add_argument("--builds", help="with --bundle or --serve-run: where the verifier traces its own Build of "
+                                      "each Program I2 compiles (own_builds; default OUT/builds), never a row dir")
+    for name in ("audit", "circuit"):
+        sub.choices[name].add_argument("--vllm-python", default=sys.executable, help="the interpreter the verifier's own Builds "
+                                       "are traced with, holding the pinned vLLM (CPU, on meta; default this one)")
+    for name in ("compiler", "serve-standin", "circuit"):
         sub.choices[name].add_argument("--hf-config")
         sub.choices[name].add_argument("--cap-bits", type=int, default=CAP_BITS)
-    sub.choices["compiler"].add_argument("--target")
+    for name in ("compiler", "circuit"):
+        sub.choices[name].add_argument("--target")
     a = ap.parse_args(argv)
     if a.cmd == "compiler":
         print(json.dumps(compiler_doc(a.serve_run, a.hf_config, a.target, a.cap_bits, a.transfer_gate), sort_keys=True))
+        return 0
+    if a.cmd == "circuit":
+        try:
+            print(json.dumps(circuit_of_advice(a)))
+        except ValueError as e:
+            print(f"prove_path.py circuit: {e}", file=sys.stderr)
+            return REFUSED
         return 0
     if a.cmd == "serve-standin":
         print(json.dumps(serve_standin(a), sort_keys=True))
@@ -1084,9 +1326,18 @@ def main(argv: list[str] | None = None) -> int:
                  "--window K --row-dir DIR")
     elif not a.opening or (a.cmd == "commit" and not a.advice):
         ap.error("--opening FILE (and commit's --advice FILE)")
-    if a.cmd == "audit" and a.challenger and not a.main:
-        ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the commit "
-                 "the session's host pins")
+    if a.cmd == "audit" and single(a):
+        a.builds = os.path.abspath(a.builds or Path(a.out) / "builds")
+        if Path(a.builds).resolve().is_relative_to(Path(a.row_dir).resolve()):
+            ap.error(f"--builds {a.builds} is under the row dir {a.row_dir}: the verifier reads only Builds it traced itself")
+    if a.cmd == "audit" and a.challenger:
+        if a.challenger != "local" and not a.challenger.startswith("gate:"):
+            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
+            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main: the verifier's `git rev-list --first-parent origin/main`, which must hold the "
+                     "commit the session's host pins")
     return commit(a) if a.cmd == "commit" else audit(a)
 
 

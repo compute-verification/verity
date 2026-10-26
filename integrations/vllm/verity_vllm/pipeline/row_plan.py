@@ -10,7 +10,7 @@ import os
 import time
 from typing import Any
 
-from verity_vllm.pipeline.row_config import _tail
+from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
 
 PLAN_TIMEOUT = 14400
@@ -86,7 +86,7 @@ def plan(row: Any, *, required: bool = True) -> None:
         "--out", out))
     wall = int(time.time()) - t0
     ok = "PASS" if rc == 0 and os.path.isfile(out) else "FAIL"
-    row.verdict("plan", ok, f"rc={rc} wall={wall}s {_tail(f'{d}/plan.log')}")
+    row.verdict("plan", ok, f"rc={rc} wall={wall}s {R.tail(f'{d}/plan.log', 240)}")
     row.tl("stage.plan", "end", ("ok", ok), ("wall_s", wall))
     if ok != "PASS" and not required:
         if os.path.exists(out):

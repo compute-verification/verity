@@ -89,9 +89,13 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     blobs, held = n2.blobs_of(runs["honest"])
     assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "certifier salt egress",
                                                      "record salt ingress", "sibling 1 egress"}
-    every = {b[o:o + 16] for b in blobs.values() for o in range(0, len(b) - 15, 16)}
+    assert any(len(b) % 16 for b in blobs.values())  # a head's tail (403 bytes), which only the last pieces cover
+    every = {b[o:o + 16].ljust(16, b"\0") for b in blobs.values()
+             for o in [*range(0, len(b) - 15, 16)] + [len(b) - 16, len(b) - len(b) % 16] * (len(b) % 16 > 0)}
     head = blobs["head egress 0"][16:32]
     kept, held_kept, out = n2.public_pieces(scan, blobs, held, b"g 1 2\n" + bytes(16).hex().encode() + b"\n" + head)
     assert out == sorted(x.hex() for x in every & {bytes(16), head})
     assert set(kept.values()) == every - {bytes(16), head} and len(kept) == len(set(kept.values()))
-    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} and held_kept
+    tails = {f"{k} @{len(blobs[k]) - len(blobs[k]) % 16}" for k in held if len(blobs[k]) % 16}
+    assert tails and tails <= set(kept)  # a zero-padded tail is scanned for, but no instance file holds it as it is
+    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept

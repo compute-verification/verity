@@ -45,20 +45,28 @@ A spec-level reference for network accounting's timing channel:
   place (`window_map`, from the advice's outputs, release buckets and advice v1's order permutation, each request on its
   ingress ordinal's stream from 1, accepted on TRACE-CORPUS's heavy trace; the verifier computes it in the clear from
   the opened advice, the named gap, until the map is read in the proof under the advice's hiding root), with the id the
-  Commit sampled for it (the port: one hiding row of ids a step, opened under the Commit's root). The cells are the
+  Commit sampled for it (the port: one hiding row of ids a step, read under the Commit's root). The cells are the
   warden's (`warden`): a connection's r slots a bucket, a `PAD` on its stream before its first cell and after its `END`,
   one id event a `DATA` cell. The warden commits each bucket's cells as one hiding row. It has the reference and the
-  unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row read as the warden's registered row, the port's
-  rows by `IoTiePort`, then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš routing of the port's entries
-  `IoTieRoute`, `IoTieMatch`);
-- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on a fake upstream: an ingress link-window's
-  cells cut into CERT-VARLEN's id requests, each request's count of prompt fields held to the advice's prompt_len and
-  its ordinal to its place in the cut, which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is built from. It
-  has the reference, the verifier's per-window statements, chained from window 0 by each window's carry-out
-  (`statements`, `chained`), and the unit's Boolean Definition (`IoTieRequest`: the cells' root by
-  `NetworkRowsRoot`, the own frame by `IoTieRequestOwn`, one `IoTieRequestFrame` and `IoTieRequestStep` a cell, the
-  prover's routing of the view's prompt lengths by `IoTieRoute`, the totals and the carry-out by `IoTieRequestEnd`);
+  unit's Boolean Definition, one a bucket row (`IoTieBucket`: the row and the port's rows read as registered rows,
+  the warden's and the Commit's (`port_reads`), then `IoTieContent`: `IoTieCell` on every cell, the prover's Beneš
+  routing of the port's entries `IoTieRoute`, `IoTieMatch`);
+- the ingress tie (`io_request`, `PROTOCOL.md`, "The ingress tie") on the warden's own ingress (`serve`): one unit a
+  registered bucket row (`warden_rows.bucket_port`), each live connection's lane of r slots read as the warden's cells
+  (a `PAD` on its ordinal, a `DATA` of exactly B − 9 bytes, its `END`), each request cell a cell of CERT-VARLEN's id
+  request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
+  hold each request's prompt_len to the advice's and which N2-ADVICE's advised verdict (`advised.IoTieVerdict`) is
+  built from. It has the reference, the lanes the verifier computes from the advice and the warden's release
+  (`lanes`, `Release`), and the unit's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
+  `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
+  Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
 - the capacity counts;
+- the egress side of the step-indexed scan (`egress`, N2) on a fake upstream, in no Spec: one unit a link and bucket
+  t (`EgressBucket`) that reads the scan's slot state S_t and the warden's egress row t, both registered reads of
+  input ports (`warden_rows.bucket_port` for the row), computes the bucket's cells from the state with every switch
+  computed and none witness, and outputs one u16 verdict, `ACCEPT` exactly when the row is the one the state renders.
+  It has the reference (`bucket_map`, `rendered`, `verdict`) and the state's egress-view layout (`Shape`'s offsets),
+  which the scan's ingress step writes;
 - the calibration of honest runs;
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
@@ -84,15 +92,32 @@ A spec-level reference for network accounting's timing channel:
   (`protocol/compile-slice.md`), and
   `benchmarks/network_traces/compile_slice_zk.py` proves it in zero knowledge. It takes the circuits and their
   evaluator from `verity`;
+- the compile slice with the block pool (`compile_slice_v2`): `CompileSlice_v2`, `CompileSlice_v1` with its prefix cache
+  replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
+  each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
+  are the pool's, so eviction, preemption and a leaving request's returns are in the slice
+  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+- the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
+  checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
+  lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,
+  evictable count, return and stamp where `ReplayStep_v1` reads it, and holds them to the registered ``srv`` and
+  ``cout`` it reads; its one output is the 16-bit verdict. So its only free input is the advice, ℓ_w = DA + PW bits
+  (`free_width`), and the charge is ℓ_w;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
-  draw under the run root as an hm96 row registration, a window's row the slice's ``srv`` row. `leaf_ok` holds a unit's
-  ``srv`` b‖c to its registered leaf, as the advice's ``adv`` row is held. It takes the advice registration's hm96 rows
-  from `verity`;
-- the served rows' tie (`served_tie`): `ServedRowsTie_v1`, a Boolean Definition with `check` its reference, holds a
+  draw under the run root as an hm96 row registration, a row each block of G steps (G = P unless given: a window's row,
+  the slice's ``srv`` row; at G < P block j is the slice's ``srv{j}``, `compile_slice.CompileSliceBlocks_v1`). `leaf_ok`
+  holds a unit's row b‖c to its registered leaf, as the advice's ``adv`` row is held,
+  and `reads_port` is the same read as the Lean verifier's registered reads take it. It takes the advice registration's
+  hm96 rows from `verity`;
+- the served rows' tie (`served_tie`): `ServedRowsTie_v2`, a Boolean Definition with `check` its reference, holds a
   window's served rows to the positions its steps' Commit holds (the step-input port, `port_chunks`: each step's ids and
   then its positions at the head of its stream), so the rows registered at serve time are the batch the server ran. Every
   unit is proved, and its port, selection and cost are its docstring. It takes the circuits, their evaluator and the
   hm96 leaves from `verity`;
+- the served rows held to their Programs (`served_statics`): `ServedStaticsTie_v1`, a Boolean Definition with `check`
+  its reference, holds each block's registered served rows, read through the Lean verifier's registered reads, to the
+  RoPE statics of the Programs its steps ran, with no row hashed but the block's
+  ([protocol/served-statics.md](protocol/served-statics.md)). It takes the circuits and their evaluator from `verity`;
 - the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
   buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
@@ -100,6 +125,10 @@ A spec-level reference for network accounting's timing channel:
   row's hit (the longest cached prefix while no block can have been evicted, a
   cached prefix past that) and owns or appends the units the row computes (`PROTOCOL.md`, "Advice v1"). It takes the
   circuits and their evaluator from `verity`;
+- the block pool (`cache_step_v2`): `CacheStep_v2`, one call's pass over vLLM's prefix-cache block pool: which slots
+  hold each cached block, the free queue's order by stamps, eviction named by a threshold stamp the call checks, and a
+  leaving request's returns. So a lookup's hit and evictable count and a free's returns are derived past the
+  cumulative pool bound too, in N = NB − 1 entries. `compile_slice_v2` wires it into the compile slice;
 - advice v1's arithmetic encoder (`arith_encode`), Boolean Definitions each with its reference as spec. The counting
   variant, which the composition takes: `ArithCountStep_v1{K, BIN, CW}` runs ENC-CODE's 32-bit coder forward on one
   symbol and counts the bits it puts in the window's segment, `ArithCountFinish_v1{CW}` adds the termination and
@@ -114,6 +143,10 @@ A spec-level reference for network accounting's timing channel:
   window 0's the book's priors under a public salt, with the verifier's check of how the windows join (`check_chain`)
   and `ChargeLink_v1{N}`, the charge from the carry-in row held to the carry-out row (`protocol/charge-chain.md`). It
   takes the circuits, their evaluator and hm96 from `verity` and the produced rows from sampled proofs;
+- the whole window's charge (`window_charge`): `ChargeCount_v2{N, H, O}` and `ChargeLink_v2{N, H, O}` charge advice
+  v1's window with its hits and order entries and their counts, coded as `code_v1` codes them, with the order's
+  position and rank added to the carry and chained under the value `window-charge` (`protocol/charge-chain.md`, "The
+  whole window"). It takes what `charge_chain` takes;
 - the active warden (`warden`): a relay that knows bytes only, between any client and any server. It forwards each
   direction's bytes unchanged, in B-byte cells, r a bucket each way per connection, and egress cell i goes out in
   bucket s + D + ⌊i/r⌋ from its admission s. A miss fails the connection closed with a `FAIL` cell that carries no
@@ -129,6 +162,23 @@ A spec-level reference for network accounting's timing channel:
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
+  whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s checked row: its frame parameter row, the
+  warden's registered row, and its u16 verdict, whose bit 0 is the slots' presence) and of ingress link ℓ (its frame
+  parameter row, the warden's registered row), the same gates whatever the load, so arrival steps and prompt lengths stay
+  private (`NetTiming.Layout`). `checked_refusal` checks that the layout fits the circuit (`NetTiming.Layout.Fits`, its
+  first conjunct taking a frame gate that is an input) at the record's grain, which contains the gate grain's, held to
+  `prog_fits`, `Layout.Fits` itself on a flattened program. `refusal`, the verifier's check before it draws, refuses
+  what passes it by name until Lean's `Layout.Fits` takes the checked row. `Fits` stays structural: a served window fits
+  in the step-indexed scan's form, and a window in any other form is refused;
+- the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
+  warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), computes the
+  next state (each block to the slot holding its connection, a new connection to the lowest free slot, its prompt ids
+  appended, a due slot's output count and ids taken from the Programs' row at its anchor, a slot held through its last
+  egress bucket, `admitted + D + ⌊n/r⌋`) and its egress view, the state as `egress.EgressBucket` reads it (bucket, then
+  per slot live, q, admitted, n and the output ids), as a row of its own, and outputs one ok bit; `Class.serves` names
+  the warden parameters it takes every run of. `benchmarks/network_traces/scan_zk.py` proves both sides at w63's class
+  in one registration: ingress unit t writes the state and view egress unit t reads, chained by registered reads;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
   windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
@@ -156,7 +206,8 @@ A spec-level reference for network accounting's timing channel:
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
   each release eligible under the sync the certifier ran its window under (the verifier's own clock source,
-  `LinkWindows.clock_source`: the certifier's clock certificates, `certificate.ClockCertificate`, which each window's
+  `LinkWindows.clock_source`: the certifier's salted clock certificates, `certificate.CertifiedClock`, each sync read
+  through its opening, witness, against the digest the public certificate signs, which each window's
   declared sync must match, one of Σ_sync, or that window is refused), so never before the bucket of its request's
   last frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the
   link's public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's.
@@ -167,11 +218,12 @@ A spec-level reference for network accounting's timing channel:
   pinned, so there every advised link is refused (fail closed), as is a link without the certifier's clock
   certificates;
 - the ingress tie through the proof service (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
-  proved as `NetworkIngressTieWindow` (one gate naming its pinned circuit digest, `io_request.circuit-check.json`, and
-  a zero pad to whole u16 words) on the cells the warden committed and registered, decided by the verifier of record
-  on its own statement from the advice, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the
-  stream's registrations from the stream's outcomes of record alone; `Ties`, the tie and its stream as the
-  `LinkWindows.ties` the advised link reads. A size class no sidecar pins has no accepted proof.
+  units, one a bucket row of the warden's registered ingress cells, proved as `NetworkIngressTieBucket` (one gate
+  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
+  (`warden_rows.bucket_port`), decided by the verifier of record on its own lanes from the advice and the warden's
+  release, and `IngressTie.tie`, which builds `advised.IoTieVerdict` on the link and the stream's registrations from
+  the stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the `LinkWindows.ties` the
+  advised link reads. A size class no sidecar pins has no accepted proof.
 
 It is pure Python. It imports only the standard library and `verity`: for the record digests' `tagged_sha256` and
 `tagged_sha512` and `canonical_json_bytes`, in `service` the proof service, the hm96 leaves and the check's
@@ -185,10 +237,12 @@ the circuits and their evaluator.
 definitions, proved equal to them in `Security/Proofs/NetworkCertifier/Code.lean`, and the difftest that holds this
 package to them (`lake exe certifier-difftest INSTANCES PYTHON N` on what `lean/scripts/difftest_vectors.py` writes; the audit runs it
 from `lean/lean-audit.json`). Advice v1's charge has its own: `lake exe certifier-charge-difftest INSTANCES PYTHON N` on
-what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`.
+what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge`, and its whole window's
+`lake exe certifier-window-difftest INSTANCES PYTHON N` on what `lean/scripts/window_vectors.py` writes from
+`window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
-`Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:
+`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;

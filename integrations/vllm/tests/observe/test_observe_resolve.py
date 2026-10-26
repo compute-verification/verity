@@ -141,6 +141,15 @@ def test_progression_form_operand_refs_expand_to_distinct_node_ids():
     assert ob.occurrence.site == "model.layers.0.self_attn.attn"
 
 
+@pytest.mark.parametrize("params,tp,want", [('[["a", "bf16"], ["b", "f32"]]', '{"world": 2}', (["a", "b"], {"world": 2})),
+                                            ('[["a", "bf16"], ["b"]]', '{"world": }', ([], None))])
+def test_a_large_program_json_is_scanned_and_a_cut_window_is_stated_unknown(tmp_path, monkeypatch, params, tp, want):
+    p = tmp_path / "program.json"
+    p.write_text(f'{{"n_input_nodes": 3, "params": {params}, "tp": {tp}, "program": {{}}}}')
+    monkeypatch.setattr(OB.os.path, "getsize", lambda path: 1 << 30)
+    assert OB._program_json_layout(str(p), None) == (3, *want, None)
+
+
 # ------------------------------------------------------------------------------------------------------------------ resolve: the record
 
 

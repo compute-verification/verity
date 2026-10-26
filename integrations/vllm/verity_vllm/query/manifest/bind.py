@@ -7,7 +7,8 @@ site's enclosing module at invocation k, `<module>/<fx node>` for a Value two Ca
 Value when two fx nodes of the module produce a member of one name at the step); output_member is the Definition's port name when it
 returns several (`<hint>.<port>` when the Build recorded a hint, which names the Call), else the recorded hint, else `out`.  The
 protocol's encodings are identity format, each one constant the manifest and the committing tap share:
-`part_rank<r>` / `shard_rank<r>` (`format.TP_PARTIAL_MEMBER`), a norm site's `all_reduce` (`collective_names.NORM_SITE_MEMBER`), the
+`part_rank<r>` / `shard_rank<r>` (`format.TP_PARTIAL_MEMBER`), a narrowed linear's rows `<member>@<width>` beside the whole rows'
+`<member>` (`format.NARROWED_MEMBER`), a norm site's `all_reduce` (`collective_names.NORM_SITE_MEMBER`), the
 token ids `<consumer>/in`, `runner.sampler/sampled_token_ids`, the kernel streams `fa2.m1/L<k>/<geometry>` and `moe/L<k>/<plane>`.  A
 row also carries its Call's `spec`, `port` and `position` (Program order), outside the manifest digest.
 
@@ -35,7 +36,11 @@ each step's events in four passes; the k-th event of a name in the step is occur
    sampler, token-id and plane taps, a capture map's taps whose label is the Call's hint);
 4. the tuple slots of occurrence k of a module bind the members of that module at invocation k that 1-3 left, in Program order: slots
    0..n-1 for n members, slot i binds the i-th; one member left, slot 0 binds it; otherwise none binds (a hook that returned y while
-   the quant branch went unacquired never binds y to port 0).
+   the quant branch went unacquired never binds y to port 0).  A narrowed linear's rows (a row's `narrowed_of`: some columns of the
+   rows of a tensor the module returns) are no tuple slot: only a label binds them.
+
+A row whose Values are rows r0.. of the runtime tensor (`runtime_rows`) binds like any other; the binding map starts each request's
+entry at row r0 of its share (`runtime_place`).
 
 An event no pass binds is an extra: a source label keeps itself as its identity (no manifest row has it), a tuple slot binds member
 `""`, which no row has.  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
@@ -44,13 +49,14 @@ Call's port it reads) and the encodings above (identity format).
 """
 from __future__ import annotations
 
+import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from typing import Any, Iterable, Mapping, Sequence
 
 from verity_vllm.query.manifest.format import batch_launch_shortfall, promoted_observation
 
-__all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "source_ports", "split_name"]
+__all__ = ["HIDDEN_FAMILIES", "Port", "Binder", "coverage_check", "runtime_place", "source_ports", "split_name"]
 
 HIDDEN_FAMILIES = ("fa2.m1/", "fa3.m1/", "moe/")
 
@@ -133,6 +139,9 @@ class Binder:
         #: engine step -> (op_path, member, invocation) -> {request whose rows spell it: the row's position in that request's Program}
         self.requests: dict[int, dict[tuple[str, str, int], dict[str, tuple]]] = defaultdict(dict)
         self.promoted: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
+        self.narrowed: dict[int, set[tuple[str, str, int]]] = defaultdict(set)
+        #: engine step -> (op_path, member, invocation) -> {request: the first row of the runtime tensor its Values are (`runtime_rows`)}
+        self.offsets: dict[int, dict[tuple[str, str, int], dict[str, int]]] = defaultdict(dict)
         for row in rows:
             r = {**row, **(row.get("identity") or {})}
             if r.get("family") == "weights" or r.get("op_path") == "weights" or not _on_rank(r, rank):
@@ -144,6 +153,10 @@ class Binder:
                 self.requests[st].setdefault(key, {}).setdefault(_request(r, declared or {}), pos)
                 if r.get("promoted"):
                     self.promoted[st].add(key)
+                if r.get("narrowed_of"):
+                    self.narrowed[st].add(key)
+                if r.get("runtime_rows"):
+                    self.offsets[st].setdefault(key, {})[_request(r, declared or {})] = int(r["runtime_rows"][0])
         self._by_op: dict[int, dict[str, list[tuple[str, str, int]]]] = {}
         self._spelt: dict[tuple[int, tuple[str, str, int]], dict[str, tuple[str, str, int]]] = {}
 
@@ -242,9 +255,9 @@ class Binder:
                 out[i] = (*c, "port") if c else (op, label, k, "unbound")
                 if c:
                     taken.update([v[j] for v in each.values()] if each else [c])
-        ops = self._ops(step)
+        ops, narrowed = self._ops(step), self.narrowed.get(step, ())
         for (op, k), sl in slots.items():
-            left = [c for c in ops.get(op, []) if c[2] == k and c not in taken]
+            left = [c for c in ops.get(op, []) if c[2] == k and c not in taken and c not in narrowed]
             order = sorted(sl)
             pairs = list(zip(order, left)) if order == list(range(len(left))) else [(0, left[0])] if len(left) == 1 and 0 in sl else []
             for slot, c in pairs:
@@ -254,6 +267,23 @@ class Binder:
                 if out[sl[slot]] is None:
                     out[sl[slot]] = (op, "", k, "unbound")
         return out  # type: ignore[return-value]
+
+
+def runtime_place(binder: Binder | None, step: int, key: tuple[str, str, int], request: str, lo: int, hi: int, goff: int,
+                  meta: Any) -> tuple[tuple[str, str, int], int, int, str | None]:
+    """A request's binding-map entry of `key` at `step`: its share [`lo`, `hi`) of `meta`'s runtime tensor at element `goff`, started at
+    row r0 of the share when the request's Values start there (`runtime_rows`).  -> (key, hi, goff, None), the range ending at the
+    share's end; unmoved, with why, when the share is not whole rows of the tensor or has no row r0; as it is without a binder."""
+    r0 = binder.offsets.get(int(step), {}).get(key, {}).get(str(request), 0) if binder is not None else 0
+    if not r0:
+        return key, hi, goff, None
+    rows = int(meta.shape[0]) if meta.shape else 0
+    per_row = math.prod(int(s) for s in meta.shape) // rows if rows else 0
+    n = (hi - lo) // per_row if per_row and (hi - lo) % per_row == 0 else None
+    if n is not None and r0 < n:
+        return key, hi - r0 * per_row, goff + r0 * per_row, None
+    return key, hi, goff, (f"{meta.name}: {request}'s values start at its row {r0}; its share is "
+                           + (f"rows [0, {n})" if n is not None else "not whole rows") + ": bound to no row")
 
 
 def _request_share_shortfall(numel: int, rows: int | None, tokens: int, rows_r: int | None, hi: int) -> str | None:
@@ -278,8 +308,9 @@ def _request_share_shortfall(numel: int, rows: int | None, tokens: int, rows_r: 
 def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[str, Any]]], *, request_id: str | int | None = None,
                    rank: int = 0, max_report: int = 12, ports: Any = None) -> dict[str, Any]:
     """Every manifest identity of (`request_id`, `rank`) must have a committed tensor bound to the same (step, op_path, output_member,
-    invocation) whose element range CONTAINS the manifest's; `layouts` = {step: [{"name", "numel"|"shape", ...} in layout order]}, each
-    name bound by the manifest's binder (`Binder`, with the committing sources' declared `ports`).  Reports missing
+    invocation) whose element range CONTAINS the manifest's, past the rows before a row's `runtime_rows`; `layouts` = {step: [{"name",
+    "numel"|"shape", ...} in layout order]}, each name bound by the manifest's binder (`Binder`, with the committing sources' declared
+    `ports`).  Reports missing
     identities (by family / step), and the committed extras (allowed).  Identity coverage only -- value correspondence is bind's separate
     check.  A kernel-stream tensor (`HIDDEN_FAMILIES`) the binder leaves unbound is still committed under its own name, as the binding
     map keeps it: a B>1 batch-level hidden row (request `*`) names the padded whole-step geometry, and is covered when the tensors of its
@@ -351,7 +382,8 @@ def coverage_check(manifest: dict[str, Any], layouts: dict[int | str, list[dict[
                 matched_keys.update((k[0], k[1], mem, k[3]) for mem, _w in members)
         elif got and manifest.get("global") and r["family"] == "moe_block_stream" and k[0] in tokens:
             why = _request_share_shortfall(max(got), rows_of[k][got.index(max(got))], tokens[k[0]], comp[k[0]].get(str(r["request_id"])), int(hi))
-        if not got or why or (hi is not None and max(got) < int(hi)):
+        skip = int((r.get("runtime_rows") or [0])[0]) * int(r.get("width") or 0)          # the rows before them the Program does not read
+        if not got or why or (hi is not None and max(got) < int(hi) + skip):
             missing.append({"family": r["family"], "step": r["step"], "engine_step": k[0], "request_id": r["request_id"], "op_path": r["op_path"],
                             "output_member": r["output_member"], "invocation": r["invocation"], "want_range": [lo, hi],
                             "committed_numel": got if got is None or len(got) <= 8 else got[:8] + ["..."]} | ({"why": why} if why else {}))

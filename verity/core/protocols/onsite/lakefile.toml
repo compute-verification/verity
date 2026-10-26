@@ -1,5 +1,6 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
-# space (PoUS) and communication (the network certifier), each a stub until its port lands. Its executable is the core CLI
+# space (PoUS), bandwidth and communication (the network certificate check); space and bandwidth are stubs until their
+# ports land. Its executable is the core CLI
 # (`onsite id | check | serve`), which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite"]
@@ -19,6 +20,20 @@ path = "../interface"
 [[require]]
 name = "core_composition"
 path = "../composition"
+
+# The ported components: sampled proofs' one-stage audit (integrity) and PoUW's window check (work).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../service/sampled_proofs"
+
+[[require]]
+name = "pouw_check"
+path = "../pouw/lean/check"
+
+# Communication: the network certificate check, with the certifier program it reads the Program's grid from.
+[[require]]
+name = "network_check"
+path = "../network/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"

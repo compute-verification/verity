@@ -76,7 +76,7 @@ The named assumptions: `StrictBirthday`, `ExpectedCR`, hm96's hiding, `Hm96Hidin
 which the soundness proofs read), and the JSON library's specification, `JsonSpec` (`Definitions/Claims/Json.lean`,
 which only completeness reads). What the claims rest on and no Lean statement can say is `trustedBase`.
 
-Frozen by `Flock.Guarantees.ClaimsStated` (`Models/Flock/Guarantees/Claims.lean`), whose statement reads every claim
+Frozen by `Flock.Guarantees.ClaimsStated` (`Definitions/Flock/Guarantees/Claims.lean`), whose statement reads every claim
 here but `Flock.ZK`, and by `Flock.Guarantees.MaskedZK`, which states `Flock.ZK` at the deployed masked record: the lock
 records each one's text under `reads`, so a changed claim is a changed record.
 -/
@@ -613,8 +613,8 @@ def zkTableCap : ℕ := 65536
 /-- **Flock's scope, readable**: the deployed parameters (`22 ≤ m ≤ 35`, `25 ≤ m` under `--zk`, `6 ≤ kLog ≤ min(m, 27)`)
 and the forms the soundness proof covers: hm96-sha512 rows, untyped, retained rounds, `hm96-sha512/v1` leaves or, with
 hidden outputs and without `--zk`, plain SHA-512 leaves (`flock-leaf/sha512-unsalted`), at most
-one table without `--zk` and `zkTableCap` with it, no public input ports, shared rows only in a `--zk` session with
-hidden outputs and registered reads; a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
+one table without `--zk` and `zkTableCap` with it, no public input ports, shared rows only with hidden outputs,
+registered reads and `hm96-sha512/v1` leaves (with or without `--zk`); a unit of at most `2^32` rows reading only port bits, which reads one input group and returns the outputs, or,
 with hidden outputs, the general instance form: the unit repeated, reading any number of committed input groups, and
 any number of stages the verifier evaluates, reading wires from earlier outputs, with an order of the wires that
 computes every slot from the leaves (`wiresAcyclic`); every row a `sha512/row/v1` row, or, with hidden outputs, every
@@ -624,7 +624,7 @@ def InScope (zk : Bool) (s : Stmt) : Prop :=
     s.form.hm96Rows ∧ ¬ s.form.typed ∧ s.form.retainedRounds ∧
     (s.form.leaf = "hm96-sha512/v1" ∨ (¬ zk ∧ s.form.hiddenOutputs ∧ s.form.leaf = "flock-leaf/sha512-unsalted")) ∧
     s.form.tables ≤ (if zk then zkTableCap else 1) ∧ ¬ s.form.publicInputs ∧
-    (s.form.sharedRows → zk ∧ s.form.hiddenOutputs ∧ s.form.registeredReads) ∧
+    (s.form.sharedRows → s.form.hiddenOutputs ∧ s.form.registeredReads ∧ s.form.leaf = "hm96-sha512/v1") ∧
     ((s.form.unitInputGroups = 1 ∧ ¬ s.form.tail) ∨ (s.form.hiddenOutputs ∧ s.form.wiresAcyclic)) ∧
     s.form.unitLog ≤ 32 ∧ s.form.readsOnlyPortBits ∧
     (s.form.rowsV1 ∨ (s.form.hiddenOutputs ∧ s.form.rowsV2OrSeg))

@@ -13,7 +13,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `verity/`: the distribution `verity` (the root `pyproject.toml`), in two parts. The module list is `verity/README.md`.
   Import from the owning module (`from verity.ml.circuits import Program`); `verity` re-exports nothing. Each directory's
   tests sit beside it as their own suite.
-  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Models/` states their guarantees, and one whose
+  - `verity/core/` (`verity.core`): the verifiers, trusted code. `Security/Definitions/` states their guarantees, and one whose
     proof isn't in `Security/Proofs/` is open: that verifier's properties aren't proven yet.
     - `protocols`: the integrity profile (`profile`) and one package per protocol: sampled proofs (`sampled_proofs`, with
       its plans and consumers), PoUW (`pouw`), PoUS (`pous`), the bandwidth audit over PoUS's store (`bandwidth`), the
@@ -46,7 +46,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per outside system. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
+- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
   builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
   through C-Flock's prover and the Lean verifier.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
@@ -67,6 +67,8 @@ Top-level directories (a grouping, not an import name, except `verity/`):
   - `cursor/`: the coordinators, each a plain Cursor cloud agent: `launch_coordinator.py` creates and archives them from
     Daniel's laptop.
   - `nebius/`: the console's units.
+  - `slack-events/`: the Slack events service, a Vercel project (root `infra/slack-events/service`) that routes people's
+    posts and new members through `research msg`'s code. comms owns it.
   - `ops/` (`verity_ops`): `ops deploy` and `ops keeper`, on top of `research`.
 - `archive/`: proof systems and code that are kept but not developed: A-GKR, B-Ligero, D-SP1 and the VOLE prover, still in
   the benchmark tables, plus whatever a ruling retires. Its own rules are `archive/AGENTS.md`.
@@ -165,7 +167,9 @@ the standing rulings stated nowhere else.
 - **Auditor-trusted devices.** The network certifiers and the memory challenger sign what they see. What they sign is
   witness and never reaches the auditor in the clear. They are the auditor's hardware: each runs on a machine the prover
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
-  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted.
+  assumption (`trusted-nebius-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
+  active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
+  (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
@@ -183,6 +187,9 @@ the standing rulings stated nowhere else.
   honest serving passes. No guarantee rests on it (exfiltration security, infiltration security, work soundness), since
   each is stated about the registered circuit. The developer validates it empirically: circuit-check, the hardware
   captures, the served outputs. Nobody proves it, lists it as an assumption, or counts it as an open gap in a guarantee.
+  A circuit that is registered and passes circuit-check is the one its guarantees are about (Daniel, 25 Oct). Lean holds
+  one description of it, the parsed circuit file the verifier checks: any other layer's circuit is defined from that
+  file, so no proof, premise or open gap relates two descriptions of one circuit.
 - **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
   values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
   schedulers, and none enters `verity/`. An integration hands Verity only:
@@ -197,6 +204,14 @@ the standing rulings stated nowhere else.
   (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
   so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
   still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
+- **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
+  *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
+  table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
+  all compute: every machine of a deployment, a whole datacenter, though a demo checks one. The datacenter's size and
+  the window's length are stated parameters (from `benchmarks/census/`), and a figure scaled from one machine says which
+  parts are proved and which are scaled. Give each bound as its pooled total over the period and as a share of the
+  compute it covers, beside the per-window figure, never the per-window figure alone: a per-window δ that looks weak is
+  not the result.
 
 ## Tests
 
@@ -309,6 +324,12 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   audit's for an accounting bound. Every configuration (zero-knowledge, plain, recursive) and every protocol instantiates
   those theorems. A new configuration adds an instance, not a proof, and a proof that redoes a layer for one
   configuration is refactored onto the shared one.
+- **One vocabulary** (Daniel, 25 Oct). A concept that more than one guarantee reads (the circuit, commitments and
+  hashes, coins and draws, probability, partitions and units, devices and signatures) has one definition in the spec,
+  in `Core` or `Hash`, and every area and protocol reads that one. An area defines only what is its own, and no new Lean
+  adds a second definition of a shared concept. A protocol is stated over the shared definitions and the layer theorems
+  above, so adding one needs no new foundation, and guarantees of different protocols compose on them with no
+  translation lemma between two descriptions of one thing. lean owns consolidating the duplicates that exist now.
 - **Lean is either code or security analysis.**
   - Code stays with its component and never requires `Security/`: C-Flock's executable verifier
     (`verity/core/service/flock/`, no dependencies), the ZK server (`Flock.Firewall` in that package, run as
@@ -331,14 +352,15 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
     `security_proofs` (ArkLib allowed): every proof and lemma, with `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for
     each proved guarantee.
     `Properties/` is the nested package `security_properties`: properties of the code stated against its Lean functions
-    (`Properties.<Protocol>`) and proved (`Properties.Proofs.<Protocol>`). It may require `security` and that code, never
+    (`Properties.<Protocol>`) and proved (`Proofs.Properties.<Protocol>`). It may require `security` and that code, never
     `security_proofs`.
   - A component's Lean goes in its own area of each tree it has Lean in (`Core`, `Nci`, `Pouw`, `Pous`,
     `NetworkCertifier`, `Flock`; `Accounting` is the device model the resource audits share, and their joint guarantee).
   - The spec imports only itself and Mathlib (`layers` in `Security/lean-audit.json`). A theorem that must stay
-    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock has no
-    `Definitions/` area yet: its guarantees are `Models/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock`
-    until its spec is extracted.
+    in a trusted module (a definition's proof field) may; the Lean check replays it like any proof. C-Flock's
+    `Definitions/Flock` holds what has been extracted so far (`Definitions/Flock.lean` lists it): its
+    guarantees are `Definitions/Flock/Guarantees`, and the rest of its analysis is in `Proofs/Flock` until its spec is
+    extracted.
   - `Security/` is three trees (Daniel, 24 Oct): definitions (what Daniel reads: vocabulary, named assumptions,
     guarantee statements), properties (statements about the code, reading only the definitions and that code) and
     proofs (every proof, lemma and proof-only definition). The Lean check refuses a guarantee or property whose
@@ -366,6 +388,12 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 Research velocity comes first (Daniel, 6 Oct). Be as generous as possible with what lands, and cut ceremony: propose
 cutting any gate, review or step that slows landing without catching real errors, and fix what breaks later. Our machines
 are research infrastructure, not a rehearsal of deployment, so don't mimic deployment settings.
+
+**Waiting is a bug** (Daniel, 25 Oct). A step you repeat (a build, a run, a check, a queue) that makes you wait more than
+about 10 minutes each time is friction even when it never fails. Fix it at the source, or take it to its owner that day
+with its numbers: minutes a wait, waits a day. The same goes for a rule or a ruling, Daniel's included: when one costs
+velocity, push back through your coordinator with the numbers and the change you'd make. The owner of a slow loop fixes
+it ahead of its other work.
 
 Solve the current task with the smallest clear implementation. Reuse existing code and commands before adding
 abstractions or procedures. Enforce deterministic requirements in code, with the fix in the failure message, rather than
@@ -506,8 +534,10 @@ Coordinators are launched, handed over and archived from Daniel's laptop with `i
   --title T --body-file F --by LANE`, from any VM, with `Lane LANE` in the body), marks it ready and goes back to
   research. A reviewer ci staffs writes its verdict, a PR that changes Lean waits for its Lean check, and the full check
   runs after landing and reverts a PR that breaks `main`; you hear back only if yours is held, ejected or reverted. Before
-  marking, run the Lean check of the packages you touched and `uv run tools/verity/check/suites.py --changed origin/main
-  --quick`, and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
+  marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on auto --cwd
+  source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
+  --changed $(git rev-parse origin/main) --quick"` (main's SHA, expanded in your checkout: a shipped tree may hold no
+  `origin/main`), and a suite's slow tier when you changed that suite's core. Prefer small PRs, which review lands soonest.
 - **Slack is for handle holders** (coordinators and service agents) and named humans only, at computeverification.slack.com.
   A worker asks its own coordinator. The coordination API is `research msg`: the using-slack skill,
   `.agents/skills/using-slack/SKILL.md`. Work for another lead goes in as a Linear issue into its team (Where writing

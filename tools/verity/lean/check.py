@@ -161,6 +161,7 @@ import textwrap
 import threading
 import time
 import tomllib
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -995,9 +996,11 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     out.unlink(missing_ok=True)
     canon.unlink(missing_ok=True)
     config = work / "facts-config.json"
+    premises = (policy.get("shape") or {}).get("premises")
     config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
                                   "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
                                   "spec": spec_of(policy),
+                                  "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
                                   "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                   "moved": sorted([new, old] for old, new in (moved or {}).items()),
                                   "out": str(out), "canon": str(canon)}))
@@ -1430,7 +1433,8 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
     itself at the head (the claim is not true of everything), and theorems `meets`, one per deployed record, that state
     the claim's checkable antecedents there and not `C` itself (it is not true at the deployment only because nothing
     meets its antecedents). Each witness is a guarantee, so its record, and a change to it, shows in the landing DM.
-    A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
+    An entry is stale only when it names no predicate under `claims.modules`, so a named assumption (a claim a guarantee
+    takes as a premise) may keep its entry, which is then checked like any other. A `meets` witness must say something about the deployment (LEAN-32, `vacuous_meets`): its conclusion, past its `∀`,
     `→` and `∃` binders and split at `∧` (each conjunct again past its own binders), is conjuncts that are each headed by
     a constant other than `C`, apply a definition under `meaning` themselves (the deployed record, a predicate or a field
     of it; `True`, or a fact of Init or Mathlib alone, applies none), and are neither a reflexivity (`a = a`, `a ↔ a`,
@@ -1443,15 +1447,16 @@ def claim_failures(policy: dict, facts: dict) -> list[str]:
                         "[...]}}, not: {claim: why}}")]
     fails, ws, nots = [], rule.get("witnesses", {}), rule.get("not", {})
     assumptions, guarantees = policy.get("assumptions", {}), policy.get("guarantees", {})
-    found = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
-             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"]) and d["name"] not in assumptions}
+    preds = {d["name"]: d["module"] for d in facts.get("spec_definitions", [])
+             if (d.get("predicate") or d.get("statement")) and under(rule["modules"], d["module"])}
+    found = {c: m for c, m in preds.items() if c not in assumptions}
     for c, m in sorted(found.items()):
         if c not in ws and c not in nots:
             fails.append(Failure("claims.no-witnesses", c, f"claims: {c} ({m}) is a claim definition with no witnesses: name "
                                  f"its `{c}_fails` (a theorem that it is false at a toy instance) and `{c}_meets` (its "
                                  f"checkable antecedents hold at each deployed record) under `claims.witnesses`, or list it "
                                  f"under `claims.not` with the reason it is no claim"))
-    for c in sorted((set(ws) | set(nots)) - set(found)):
+    for c in sorted((set(ws) | set(nots)) - set(preds)):
         fails.append(Failure("claims.stale", c, f"claims: {c} is listed under `claims` but is no predicate of the spec under "
                              f"{', '.join(rule['modules'])}; remove the entry"))
     for c, why in sorted(nots.items()):
@@ -1526,7 +1531,8 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     ``premised`` ({definition: the guarantees whose statements take it}, from `Facts.lean`'s `premises`) names the premises
     a statement takes, headed by a constant of an assumptions module or of any module this repository builds
     (`own_modules`: a premise defined in `Definitions` carries what it assumes as much as one in `Models`), its `Guarantees`
-    definitions unfolded and a `Premises` abbrev seen through:
+    definitions unfolded and a `Premises` abbrev seen through, and under its other definitions and in its conclusion each
+    constant of an assumptions module or a `shape.premises` module that a hypothesis mentions:
     one the lock doesn't list fails, and an update adds it the same way, so an entry lost in a merge is never silent."""
     assumed, fails, out = policy.get("assumptions", {}), [], {}
     read = {d: (m, h, g["guarantees"]) for m, g in now_reads.items() for d, h in g["definitions"].items()}
@@ -1639,7 +1645,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     hypotheses whose head is a constant of a module under `shape.premises`. Several acceptances of the function are
     one, of the tuple of their inputs (a binding property). A hypothesis is read by its body under its leading binders
     (`Facts.lean`'s `head` and `applies`): an acceptance applies the function there and holds under no hypothesis of
-    its own (`guarded`). A `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
+    its own (`guarded`); binder order and an equation of one field of two inputs don't matter (`part_refusals`). A
+    `Prop` field of a structure an input ranges over or returns (a family) is a hypothesis too
     (`Nonempty` among them), and a conjunction counts as its conjuncts, each a property of the entry's function or, when the
     entry lists `conjuncts` (one `{function, outcome}` per conjunct), of its own. A probability statement has its
     acceptance in its event: under `shape.events` (constants, such as `FlockSoundness.Game.prob`), a conjunct whose
@@ -1764,7 +1771,11 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
                   events: list[str] = ()) -> list[str]:
     """`refusals` for one conjunct.  Its hypotheses run from its first binder to the first input bound after its acceptance (the
     first hypothesis about the function), or, for an outcome of `none`, after its first hypothesis; what follows is its
-    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A probability
+    conclusion, so `accepts → ∀ w < n, P w` concludes `∀ w < n, P w` while `accepts → Q → P` takes `Q`.  A statement that
+    is one of these written in another order fits too: its binders reordered with its acceptances and premises first
+    (`reordered`), so `∀ x w, Q w → accepts x → P` is `∀ x, accepts x → ∀ w, Q w → P`; and a hypothesis equating one
+    field of two inputs is allowed (`shares`), since `∀ c c', c.root = c'.root → …` is `∀ … r, …` over `⟨…, r⟩` and
+    `⟨…, r⟩` with the root bound once.  A probability
     statement has its acceptance in the event (`shape.events`): when its conclusion has an event of one of those constants
     (`prob (fun o => A₁ o ∧ … ∧ Aₙ o ∧ B o) g σ ≤ …`, `Facts.lean`'s `eventsOf`) and in every one each conjunct before
     the last is about the function, every hypothesis is taken, and each that isn't a premise is refused, an acceptance
@@ -1785,10 +1796,31 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     probs = [e for e in got.get("events", []) if e["head"] in events]
     inevent = outcome != "none" and bool(probs) and all(
         len(e["conjuncts"]) > 1 and all(map(about, e["conjuncts"][:-1])) for e in probs)
-    start = next((h for h in hyps if outcome != "none" and not premise(h) and about(h)), None) if outcome != "none" else \
-        next(iter(hyps), None)
-    ends = min((i["at"] for i in got["inputs"] if start is not None and i["at"] > start["at"]), default=None)
-    taken = hyps if inevent else [h for h in hyps if ends is None or h["at"] < ends]
+
+    def split(rank: Callable[[int], int]) -> tuple[dict | None, list[dict]]:
+        """The acceptance (or first hypothesis) and the hypotheses taken, with the binders in the order ``rank`` gives."""
+        order = sorted(hyps, key=lambda h: rank(h["at"]))
+        start = next((h for h in order if not premise(h) and about(h)), None) if outcome != "none" else next(iter(order), None)
+        ends = min((rank(i["at"]) for i in got["inputs"] if start is not None and rank(i["at"]) > rank(start["at"])),
+                   default=None)
+        return start, order if inevent else [h for h in order if ends is None or rank(h["at"]) < ends]
+
+    read = {j for h in hyps if h["source"] == "binder" and about(h) for j in h.get("uses", ())}
+
+    def allowed(h: dict) -> bool:
+        return (outcome != "none" and about(h) and not inevent) or premise(h) or (
+            outcome != "none" and not inevent and shares(got, h, read))
+
+    start, taken = split(lambda a: a)
+    if not inevent and not all(map(allowed, taken)):
+        moved = reordered(got, lambda h: (outcome != "none" and about(h)) or premise(h) or h["source"] == "field")
+        if moved is not None:
+            order, first = moved
+            rank = {a: r for r, a in enumerate(order)}
+            concluded = set(order[first:]) & {i["at"] for i in got["inputs"]} & set(got["uses"])
+            if all(map(allowed, split(rank.__getitem__)[1])) and all(
+                    allowed(h) or concluded & set(h.get("uses", ())) for h in taken):
+                taken = []
     out = []
     if outcome != "none" and probs and not inevent:
         out.append(f"bounds an event of {', '.join(sorted({e['head'] for e in probs}))} whose conjuncts before its last "
@@ -1798,7 +1830,7 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
         out.append(f"takes no hypothesis that its function returned {outcome} ({said}): a property says what holds when "
                    f"it does (an iff's converse, or an honest case, is a completeness theorem, in Proofs/)")
     for h in taken:
-        if (outcome != "none" and about(h) and not inevent) or premise(h):
+        if allowed(h):
             continue
         what = "a field of an input it ranges over" if h["source"] == "field" else "a hypothesis"
         its = f"its event's first conjunct, {outcome} by {said}" if inevent else f"{outcome} by {said}"
@@ -1810,6 +1842,50 @@ def part_refusals(entry: dict, got: dict, premises: list[str], conjectures: set[
     if outcome == "none" and not any(reaches(f, set(got["conclusion"]) | {c for h in hyps for c in h["reaches"]}) for f in fns):
         out.append(f"says nothing about {said}, the function its entry names")
     return out
+
+
+def binders_of(got: dict) -> list[dict] | None:
+    """A statement part's binders, its inputs and its `Prop` binders, each with the positions of the binders it mentions
+    (`Facts.lean`'s `uses`), or None when `Facts.lean` didn't report them (facts older than `uses`)."""
+    binders = [*got["inputs"], *(h for h in got["hypotheses"] if h["source"] == "binder")]
+    return binders if "uses" in got and all("uses" in b for b in binders) else None
+
+
+def reordered(got: dict, seed: Callable[[dict], bool]) -> tuple[list[int], int] | None:
+    """The positions of the statement part ``got``'s binders reordered, and how many come first: the binders of the
+    hypotheses ``seed`` picks (its acceptances and premises), with every binder they mention, transitively, then the
+    rest, each group in its written order. A binder mentions only binders before it, and none of the first group mentions
+    one of the rest, so the order is a statement too, and the same one: `∀ w, Q w → A → C` is `A → ∀ w, Q w → C` when `A`
+    mentions neither `w` nor `Q`'s proof, and two binders that don't mention each other commute. A `Prop` field of a
+    structure an input ranges over moves with the input. None when `Facts.lean` didn't report what each binder mentions."""
+    binders = binders_of(got)
+    if binders is None:
+        return None
+    uses: dict[int, set[int]] = {}
+    for b in binders:
+        uses.setdefault(b["at"], set()).update(b["uses"])
+    kept = {h["at"] for h in got["hypotheses"] if seed(h)}
+    stack = list(kept)
+    while stack:
+        for j in uses.get(stack.pop(), ()):
+            if j not in kept:
+                kept.add(j)
+                stack.append(j)
+    return sorted(uses.keys() | kept, key=lambda a: (a not in kept, a)), len(kept)
+
+
+def shares(got: dict, h: dict, read: set[int]) -> bool:
+    """Whether the hypothesis ``h`` of the statement part ``got`` equates one field of two of its inputs (`x.f = y.f`,
+    `Facts.lean`'s `shares`: the same path of structure projections, not empty, of two different inputs bound before it),
+    both of them inputs its acceptance reads (``read``), and nothing mentions its proof. By structure eta,
+    `∀ x y, x.f = y.f → P x y` is `P` of two structures whose `f` is one value bound once (`⟨a, r⟩` and `⟨a', r⟩`), a
+    statement without the hypothesis."""
+    s, binders = h.get("shares"), binders_of(got)
+    if not s or h["source"] != "binder" or binders is None:
+        return False
+    j, k = s["inputs"]
+    return j != k and {j, k} <= read & {i["at"] for i in got["inputs"]} and max(j, k) < h["at"] and bool(s["path"]) and \
+        all(h["at"] not in b["uses"] for b in binders) and h["at"] not in got["uses"]
 
 
 def reaches(function: str, reached: set[str]) -> bool:
@@ -1948,7 +2024,7 @@ def tree_roles(pkg: Path, policy: dict) -> dict[str, str]:
 
 
 def tree_of(roles: dict[str, str], module: str) -> str | None:
-    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Properties.Proofs` before
+    """The tree of ``module``: that of the longest prefix ``roles`` names it under (`Proofs.Properties` before
     `Properties`), or None."""
     hits = [p for p in roles if under([p], module)]
     return roles[max(hits, key=len)] if hits else None
@@ -2128,7 +2204,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {})}, qwork, moved)
+                          "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
+                          "shape": policy.get("shape", {})}, qwork, moved)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}

@@ -16,6 +16,7 @@ verity-bench check SPEC      # exit 0 only when every point has a passing run, h
 verity-bench compare A B     # accept two results only when their identities agree (--allow PATH to permit one)
 verity-bench table R1 R2...  # one table from one spec's per-point results, only when their identities agree
 verity-bench served-table    # every protocol's served overhead from the store: runs of record, else newest passing (--json)
+verity-bench breakdown [RESULT...]  # where the bandwidth audit's time goes, by span: the store's newest passing runs, or these files
 verity-bench vllm --preset SPEC --arms A,B --out DIR   # the same measurement in this process, unrecorded
 ~~~
 
@@ -65,9 +66,10 @@ arms, so one spec times one engine in two executions (`llama31-8b-fp8-1gpu-compi
 unless its `[arm_settings."ARM"]` names another arm or `"none"`, and its `execution` is in the arm's identity. An
 experimental arm may name its own `execution` the same way: `commit@compiled` (`verity_bench.vllm.commit_arm`) is the
 Commit on vLLM's compiled serving, token-controlled by `stock-fp8@compiled` (`llama31-8b-fp8-1gpu-commit-served`).
-`verity_bench.vllm.bandwidth_ablation` holds PoUS's bandwidth-audit arm with one part changed or removed (its KV receipts,
-codec rounds or filler), each token-controlled by `bandwidth-plain`, so `llama31-8b-fp8-1gpu-bandwidth-ablation` times
-where the audit's time goes.
+`llama31-8b-fp8-1gpu-bandwidth-ablation` times where PoUS's bandwidth audit's time goes: the two credited arms beside
+memory accounting's spans arms (`benchmarks/vllm_encoded/README.md`) and the spans arms with the top-up off
+(`verity_bench.vllm.bandwidth_ablation`, `BandwidthArm(..., spans=True, topup=False)`), each token-controlled by
+`bandwidth-plain`; `verity-bench breakdown` renders it.
 
 An experimental arm (`arm_modules`, `pkg.mod:NAME`) may need its own environment. The spec's `[env]` table (upper-case
 names, string values, none of the dispatcher's, queue's or launcher's own) and its `setup`, a script in the source tree
@@ -153,6 +155,10 @@ Every metric is reported as a mean, and as a ratio to the baseline (`stock-fp8`,
 or below n − 1). A zero baseline rep leaves the ratio empty rather than averaging the others; the table shows `n` where
 there's no interval. Absolute decode and whole-run per-token times measure different things; compare ratios.
 
+An experimental arm's `spans(target)`, read before and after a timed run, is that rep's `spans` (each numeric leaf's
+change), and its `extras` is the rep's `extras`; a point keeps their summaries per arm (`span_totals`, `extras`). They are
+reported only: no gate reads them, and no ratio is taken of them.
+
 ## Results
 
 A result is `verity-bench/vllm-overhead/v1`: `identity`, `baseline`, `sweep`, `gates`, `execution` and `points`.
@@ -195,7 +201,7 @@ catalog alone.
 ## The served table
 
 `verity-bench served-table` (`verity_bench.served_table`) renders each protocol's served overhead on Llama-3.1-8B from
-the store, never from numbers in code. It has three sections.
+the store, never from numbers in code. It has four sections.
 
 - **PoUW's run of record** is kernels' live rows (`LIVE`: device, run, PoUW arm, control). Each row is read from the
   `summary.json` and `stop.json` in the run's record: the arm's median decode step at batch 32 over its control's
@@ -215,9 +221,23 @@ the store, never from numbers in code. It has three sections.
   an eager stock, over that.
 - **The conversion factors** (`stock-fp8@compiled` over batch-invariant eager `stock-fp8`, `FACTORS`) are rendered the
   same way.
+- **Where the bandwidth audit's time goes** (`BREAKDOWNS`: a protocol and a record, as above) is the bandwidth
+  breakdown's rows (below) at each point of the record's runs, in ms an output token and not a ratio, beside the
+  protocol's row of record.
 
 The caveat column is the newest `label` and `note` on the result's artifact, its run and the record art that named it,
 read through from the remote (and a live run's `row` label).
+
+## The bandwidth breakdown
+
+`verity-bench breakdown` (`verity_bench.breakdown`) reads, for each point of `llama31-8b-fp8-1gpu-bandwidth-ablation`,
+the newest passing run that times all six arms (the served rows' rule and pull), or the result files it's given. Each
+row is ms an output token, paired by rep: a part's ms a step (`extras.span_per_step.<kind>.<part>_ms`) times its kind's
+steps over the run's generated tokens. `bandwidth-audit-spans` minus `bandwidth-plain-spans` is split into rows that sum
+to it: the top-up's contention, `(audit-spans − audit-spans-no-topup) − (plain-spans − plain-spans-no-topup)` in time
+per output token, since the top-up runs beside the step and is in no span; each decode part and the prefill steps from
+the top-up-off spans arms; and the time outside every span. The credited lines' difference, spans off, is beside it as
+the audit's cost (the marks are in the spans arms' time). Then each spans arm's step by part, decode and prefill apart.
 
 ## Out of scope here
 
