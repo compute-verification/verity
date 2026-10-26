@@ -237,11 +237,10 @@ theorem loadPublic_counts {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteAr
     subst h
     simp only [pure, Except.pure, Except.ok.injEq] at *
     subst_vars
-  all_goals first
-    | exact fun t ht => by cases ht
-    | (intro t ht
-       obtain rfl := Option.some.inj ht
-       exact sharedRows_spec ‹_›)
+  all_goals
+    intro t ht
+    cases ht
+  all_goals exact sharedRows_spec ‹_›
 
 theorem getD_zero_eq_getElem! (a : Array ℕ) (k : ℕ) : a.getD k 0 = a[k]! := by
   rw [Array.getD_eq_getD_getElem?]
