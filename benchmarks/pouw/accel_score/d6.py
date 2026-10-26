@@ -722,6 +722,17 @@ def report(D: dict) -> str:
             L.append(f"| {card}, {short[m]} | {pct(r['eps']['at']['served']['eps'][1e-6], 3)} | "
                      f"{r['world']['gamma']:.2f} / {p['world']['gamma']:.2f} | {pct(1 - r['world']['uncredited'], 1)} | "
                      f"{PPL[m][2]} | {pct(r['share']['share'], 1)} |")
+    v4 = next(m for m in nf.WORLD if shape_scale(m) != 1)
+    _, st, qk, pvm, ix = nf.world_macs(v4)
+    unshaped = st * (1 - 1 / shape_scale(v4)) / (st + qk + pvm + ix)
+    L.append(f"\n{short[v4['name']]}'s coverage takes its stated {v4['static'] / 1e9:.2f}e9 static MACs a token as "
+             f"credited, with its listed shapes as their mix; the shapes hold {v4['static'] / shape_scale(v4) / 1e9:.2f}e9. "
+             "Credited at "
+             f"its listed shapes only, its coverage would be "
+             + " and ".join(f"{pct(1 - rows[HEADLINE, card, 'measured', v4['name']]['world']['uncredited'] - unshaped, 1)}"
+                            f" ({card})" for card in vc.CARDS)
+             + ", below the goal. Which reading is right is a world-model question (what the unshaped MACs are).")
+
     def g_max(designs):
         return max((r["world"]["gamma"], k) for k, r in rows.items() if k[0] in designs and k[2] == "measured")
 
