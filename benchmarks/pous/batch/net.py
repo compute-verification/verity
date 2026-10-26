@@ -79,7 +79,7 @@ def serve(port: int, listen: str, minutes: float) -> None:
 
 def quantiles(xs: list[float]) -> dict[str, float]:
     s = sorted(xs)
-    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]  # noqa: E731
+    at = lambda q: s[min(len(s) - 1, int(q * len(s)))]
     return {"n": len(s), "min": s[0], "p50": statistics.median(s), "p90": at(0.9), "p99": at(0.99), "max": s[-1]}
 
 
