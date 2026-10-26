@@ -2,6 +2,7 @@ import Properties.Pous.EndToEndAt
 import Proofs.Pous.EndToEnd
 import Proofs.Pous.P2.Rounds
 import Proofs.Flock.Soundness.KeyedDraw
+import Proofs.Pous.Obligation
 
 /-!
 # PoUS's ring game at any block count, proved
@@ -15,6 +16,9 @@ import Proofs.Flock.Soundness.KeyedDraw
   and the bound `c` in place of `P2RingAuditSecure`.
 * `endToEndRingOfRoundSecure`: `PousP2Rounds.graded` at `N`, on the server's responder read as a `VarResponderOn` with
   a constant state size (`PousP2Rounds.ofSeq`).
+* `endToEndRingOfRoundSecureWide`, `endToEndRingDemo`: the same chain at one `N` (`seqAccepts_le_of_round`, which
+  reads the per-round floor only at that `N`) from `P2RingRoundSecureWide`, and at Demo B's `N` with its state bound
+  (`Pous.SecurityProofs.stateBound_p2ring_demo`).
 -/
 
 namespace Pous.EndToEnd.SecurityProofs
@@ -220,5 +224,56 @@ theorem endToEndRingOfRoundSecure : EndToEndRingOfRoundSecure := by
   · rw [add_assoc]
     gcongr
     exact budget
+
+set_option exponentiation.threshold 20000 in
+/-- `PousP2Rounds.graded` at one block count on a constant state size: the per-round floor at `N` bounds P2's
+sequential audit of a `⌊ρ·|C|⌋`-bit responder by `(1 − p)^105 + 105·ε₀`. -/
+theorem seqAccepts_le_of_round {N : ℕ} [NeZero N] {p ε₀ : ℝ≥0∞} {D Q L : ℕ}
+    (h : ∀ (Sz : ℕ → ℕ) (k : ℕ) (W : Bits (schAt N).n) (A₁ : Preprocessor (schAt N) (Sz 0))
+      (A₂ : VarResponderOn (schAt N) Sz D Q L),
+      ∃ bad : Outcome (schAt N) k → Prop, pr bad ≤ k * ε₀ ∧
+        ∀ j < k, Sz j ≤ (schAt N).stateBound Params.ρ →
+          pr (fun x => varPassesOn _ k (j + 1) W A₁ A₂ x ∧ ¬ bad x) ≤
+            (1 - p) * pr (fun x => varPassesOn _ k j W A₁ A₂ x ∧ ¬ bad x))
+    (W : Bits (schAt N).n) (A₁ : Preprocessor (schAt N) (SAt N)) (A₂ : SeqResponderOn (schAt N) (SAt N) D Q L) :
+    pr (seqAcceptsOn (schAt N) 105 W A₁ A₂) ≤ (1 - p) ^ 105 + 105 * ε₀ := by
+  obtain ⟨bad, hbad, hstep⟩ := h (fun _ => SAt N) 105 W A₁ (PousP2Rounds.ofSeq A₂)
+  classical
+  have hc := PousP2Rounds.pr_chain (fun j x => varPassesOn _ 105 j W A₁ (PousP2Rounds.ofSeq A₂) x ∧ ¬ bad x)
+    (fun _ => True) (1 - p) 105
+    (fun j x hx => ⟨PousP2Rounds.varPassesOn_of_succ (Sz := fun _ => SAt N) (schAt N) W A₁
+      (PousP2Rounds.ofSeq A₂) x hx.1, hx.2⟩)
+    (fun j hj _ => hstep j hj le_rfl) 105 le_rfl
+  have hcard : ((Finset.range 105).filter fun _ : ℕ => True).card = 105 := by simp
+  rw [hcard] at hc
+  rw [Nat.cast_ofNat] at hbad
+  calc pr (seqAcceptsOn (schAt N) 105 W A₁ A₂)
+      = pr (varPassesOn (schAt N) 105 105 W A₁ (PousP2Rounds.ofSeq A₂)) :=
+        congrArg pr (funext fun x => propext (PousP2Rounds.varPassesOn_ofSeq_iff _ W A₁ A₂ x).symm)
+    _ ≤ pr (fun x => varPassesOn _ 105 105 W A₁ (PousP2Rounds.ofSeq A₂) x ∧ ¬ bad x) + pr bad :=
+        PousP2Rounds.pr_le_and_not_add _ _
+    _ ≤ (1 - p) ^ 105 + 105 * ε₀ := add_le_add hc hbad
+
+set_option exponentiation.threshold 20000 in
+theorem endToEndRingOfRoundSecureWide : EndToEndRingOfRoundSecureWide := by
+  intro p ε₀ D Q L hnum h N _ h1 h2 hH session binding W A
+  refine (endToEndRingAt N (SAt N) D Q L ((1 - p) ^ 105 + 105 * ε₀) _ hH
+    (seqAccepts_le_of_round (h N h1 h2)) session binding W A).trans ?_
+  calc (1 - p) ^ 105 + 105 * ε₀ + (2⁻¹ : ℝ≥0∞) ^ 131
+      ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) + (2⁻¹ : ℝ≥0∞) ^ 131 :=
+        add_le_add hnum le_rfl
+    _ ≤ ENNReal.ofReal Params.δ + Params.εMax := by
+        rw [add_assoc]
+        gcongr
+        exact budget
+
+set_option exponentiation.threshold 20000 in
+theorem endToEndRingDemo : EndToEndRingDemo := by
+  intro p ε₀ D Q L hnum h N _ hN hH session binding W
+  have hw := endToEndRingOfRoundSecureWide p ε₀ D Q L hnum h N (by rw [hN]; norm_num) (by rw [hN]; norm_num) hH
+    session binding W
+  have hS : SAt N = 1060008348186 := Pous.SecurityProofs.stateBound_p2ring_demo N _ _ hN
+  rw [hS] at hw
+  exact hw
 
 end Pous.EndToEnd.SecurityProofs
