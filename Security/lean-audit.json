@@ -2017,6 +2017,7 @@
   "VStar",
   "Proofs.Flock.Level3",
   "Proofs.Flock.Soundness",
+  "Properties.Flock.Circuit",
   "Randomness",
   "Proofs.Flock.Recursive",
   "Proofs.Flock.VBridge",
