@@ -14,7 +14,11 @@ names them or not.
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
 ``registered``, which the prover writes, names them. The fixture's program binds ``cs`` as a run input, so that refusal
-doesn't apply to it."""
+doesn't apply to it.
+
+`--ks-form` (`Flock.PortRoots`, `SampledKSLiveV3`'s event) goes to Lean whenever every port of the circuit file is a
+row/v2 row, and always when the caller cites `SampledKSLiveV3` (``ks_form=True``): fast tests read the argument list off a
+stubbed run, and on the fixture, whose rows are row/v1, the verifier itself rejects the session the audit cites V3 for."""
 from __future__ import annotations
 
 import hashlib
@@ -72,6 +76,46 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_files(t
     assert got is None and why[0] == "proof", why
 
 
+def _meta(**rows) -> dict:
+    meta = {"scheme": "frame-v3-sha512", "ports": [["x", 64, 0], ["y", 64, 0]]}
+    return {**meta, **rows}
+
+
+#: META row forms: every port a row/v2 row, or not (row/v1 rows, a segmented port, an entry short of a port, no META)
+ROW_FORMS = {
+    "row/v2": (_meta(row_schemas=[[PF.ROW_V2, 1024], [PF.ROW_V2, 64]]), True),
+    "row/v1": (_meta(row_schema="hm96-sha512/row/v1"), False),
+    "one segmented": (_meta(row_schemas=[[PF.ROW_V2, 1024], ["hm96-sha512/row-seg/v1", 9000]]), False),
+    "an entry short": (_meta(row_schemas=[[PF.ROW_V2, 1024]]), False),
+    "not json": ("{", False),
+}
+
+
+def _stub_files(tmp_path: Path, meta) -> PF.Proof:
+    meta = meta if isinstance(meta, str) else json.dumps(meta)
+    (tmp_path / "circuit.txt").write_text(f"flock-circuit toy\nMETA {meta}\nCIRCUIT unit 0\n")
+    (tmp_path / "pub.bin").write_bytes(b"{}\n")
+    (tmp_path / "session").mkdir()
+    (tmp_path / "session" / "session.json").write_text("{}")
+    return PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",))
+
+
+@pytest.mark.parametrize("form", ROW_FORMS, ids=ROW_FORMS.keys())
+@pytest.mark.parametrize("ks_form", [None, True])
+def test_ks_form_goes_to_lean_for_row_v2_files_and_whenever_the_caller_cites_v3(tmp_path, monkeypatch, form, ks_form):
+    meta, v2 = ROW_FORMS[form]
+    proof = _stub_files(tmp_path, meta)
+    assert PF.rows_v2(proof.circuit) is v2
+    ran = []
+    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF.subprocess, "run", lambda argv, **_: ran.append(argv) or subprocess.CompletedProcess(argv, 1, "", ""))
+    got, why = PF.verify(proof, circuit_sha512=PF.file_sha512(proof.circuit), program=RUN_ONLY, partition={},
+                         ks_form=ks_form)
+    assert got is None and why[0] == "proof", why
+    (argv,) = ran
+    assert argv[1:3] == ["verify", "--zk"] and ("--ks-form" in argv) is (v2 or ks_form is True), argv
+
+
 @pytest.fixture(scope="module")
 def fx(tmp_path_factory) -> Path:
     sys.path.insert(0, str(VERIFIER))
@@ -85,12 +129,13 @@ def fx(tmp_path_factory) -> Path:
     return root
 
 
-def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+            ks_form: bool | None = None):
     st = fx / "stage"
     return PF.verify(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                      program=(st / "program.json").read_bytes(),
                      partition=json.loads((st / "partition.json").read_text()),
-                     registered=json.loads((st / "registered.json").read_text()) if own else None)
+                     registered=json.loads((st / "registered.json").read_text()) if own else None, ks_form=ks_form)
 
 
 @lean
@@ -104,6 +149,19 @@ def test_the_honest_session_is_accepted_by_cores_own_verifier_run(fx):
     assert f.program == partition["program"]
     assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
     assert f.units == DRAWN
+
+
+@lean
+@pytest.mark.slow
+def test_the_audit_that_cites_v3_has_lean_reject_the_row_v1_session(fx):
+    """The fixture's rows are row/v1, outside `SampledKSLiveV3`'s form: `verify` adds no `--ks-form` of itself (the honest
+    test above), and when the caller cites V3 (``ks_form=True``) Lean rejects the honest session for its rows, proving no
+    unit."""
+    assert not PF.rows_v2(fx / "stage" / "circuit.txt")
+    got, why = _verify(fx, fx / "session", ks_form=True)
+    assert why is None, why
+    (f,) = got
+    assert f.accepted is False and "not an unsegmented sha512/row/v2 row" in f.why and f.units == (), f
 
 
 def _unnamed(fx: Path) -> str:

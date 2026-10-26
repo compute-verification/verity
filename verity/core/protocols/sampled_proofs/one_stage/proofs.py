@@ -10,7 +10,8 @@ a circuit file that doesn't hash to the committed digest before anything runs, s
 auditor's own lowering built. The circuit file's tie to the program's Definitions rests on that lowering: the verifier
 holds the file to the program only as far as its META names it, until it derives the circuit from the descriptor
 (PRF-133). Then one `flock-verify verify --zk` over every session (`--registered` when the statement reads registered
-values), and one `Finding` a session, in order:
+values; `--ks-form` when every port is a row/v2 row, or the caller cites `SampledKSLiveV3`), and one `Finding` a
+session, in order:
 whether it was accepted and why not, the program its verdict names (`program_sha512`, the digest of the canonical
 descriptor without annotations, which an accepted verdict must give as the partition object's `program`),
 its registered finding (each port's value and opened root) and the units it proved, the public file's global unit
@@ -42,6 +43,10 @@ EXE = "flock-verify"
 #: the statement every drawn unit's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
+#: the guarantee a verdict of `verify --zk --ks-form` is read under: its event is that run's acceptance
+KS_GUARANTEE = "Flock.SecurityProofs.SampledKSLiveV3"
+#: a META `row_schemas` entry's schema for an unsegmented `sha512/row/v2` row
+ROW_V2 = "hm96-sha512/row/v2"
 #: an input bound at registration (`program.REGISTERED_ID`, Lean's `Program.inputId?`), a descriptor's `definitions` key
 _REGISTERED_INPUT = re.compile(r"RegisteredInput[1-9][0-9]*_v1")
 _CHUNK = 1 << 24
@@ -113,6 +118,21 @@ def reads_registered(program: bytes) -> bool:
     return not isinstance(defs, dict) or any(_REGISTERED_INPUT.fullmatch(k) for k in defs)
 
 
+def rows_v2(circuit: Path) -> bool:
+    """Whether every port of the circuit file `circuit` is an unsegmented `sha512/row/v2` row: its META (the second line)
+    names one `row_schemas` entry a port, each `hm96-sha512/row/v2` (Lean's `Flock.PortRoots.rowsV2`). False for a file
+    whose META doesn't read so."""
+    try:
+        with open(circuit, "rb") as f:
+            f.readline()
+            meta = json.loads(f.readline().decode().removeprefix("META "))
+        schemas, ports = meta["row_schemas"], meta["ports"]
+        return (isinstance(schemas, list) and isinstance(ports, list) and len(schemas) == len(ports)
+                and all(isinstance(s, list) and s[:1] == [ROW_V2] for s in schemas))
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     """The global units a session proved: the public file's unit indices (``units.indices``) of the instances its record
     drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
@@ -122,7 +142,8 @@ def proved_units(public: Path, session: Path) -> tuple[int, ...]:
 
 
 def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapping[str, Any],
-           registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
+           registered: Mapping[str, Any] | None = None,
+           ks_form: bool | None = None) -> tuple[list[Finding] | None, tuple[str, str] | None]:
     """Each of `proof`'s sessions verified by the verifier of record against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose unit opens the committed value inside its circuit), on the circuit file the auditor committed as
@@ -136,7 +157,12 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     `RegisteredInput` as demanding them, so a prover that commits such a port's rows afresh and names none would be
     checked against no registered root. A run input that only the caller's registered file reads registered (the
     served RoPE statement's ``cs``) is the caller's to state: without the file, Lean holds it a run input, and refuses a
-    session whose public file names its reads or whose tables share its registered rows."""
+    session whose public file names its reads or whose tables share its registered rows.
+
+    `ks_form` adds ``--ks-form``, under which Lean refuses every session whose files are outside the form
+    `SampledKSLiveV3` (`KS_GUARANTEE`) covers (`Flock.PortRoots`): None adds it whenever every port of the circuit file
+    is a row/v2 row (`rows_v2`), True always. A caller that cites `SampledKSLiveV3` for the verdict passes True, so a
+    row/v1 or row-seg/v1 session is a rejected finding rather than a verdict outside the theorem's form."""
     if registered is None and reads_registered(program):
         return None, ("registered", "the program reads registered values (a RegisteredInput among its definitions) and "
                                     "the verifier holds no registered reads: verify with its own registered file")
@@ -149,6 +175,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     if file_sha512(proof.circuit) != circuit_sha512:
         return None, ("circuit", "the statement's circuit file is not the one the auditor committed for its stratum (its "
                                  "SHA-512 is not the period-open's): prove on the circuit file the auditor built")
+    ks = ["--ks-form"] if (rows_v2(proof.circuit) if ks_form is None else ks_form) else []
     with tempfile.TemporaryDirectory(prefix="verity-proofs-") as d:
         files = {"program": Path(d, "program.json"), "partition": Path(d, "partition.json"),
                  "registered": Path(d, "registered.json")}
@@ -158,7 +185,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         if registered is not None:
             files["registered"].write_text(json.dumps(registered))
             reads = ["--registered", str(files["registered"])]
-        p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
+        p = subprocess.run([str(executable()), "verify", "--zk", *ks, "--statement", STATEMENT, "--circuit", str(proof.circuit),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
                             "--session", *map(str, proof.sessions)], capture_output=True, text=True)
@@ -178,5 +205,5 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     return out, None
 
 
-__all__ = ["EXE", "PACKAGE", "STATEMENT", "Finding", "LeanError", "Proof", "executable", "file_sha512", "proved_units",
-           "reads_registered", "verify"]
+__all__ = ["EXE", "KS_GUARANTEE", "PACKAGE", "ROW_V2", "STATEMENT", "Finding", "LeanError", "Proof", "executable",
+           "file_sha512", "proved_units", "reads_registered", "rows_v2", "verify"]

@@ -32,6 +32,7 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.core.protocols.sampled_proofs.one_stage.proofs import rows_v2
 
 import r2_population as R2
 
@@ -211,12 +212,14 @@ def firewall_env(st: dict) -> dict:
 
 
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
-                flags: Sequence[str] = ()) -> dict:
+                flags: Sequence[str] = (), ks_form: bool | None = None) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
     `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
-    --stratified K``)."""
+    --stratified K``). `ks_form` adds ``--ks-form`` (`proofs.verify`'s): None for a `--zk` session whose ports are all
+    row/v2 rows (`proofs.rows_v2`), True always, which an audit that cites `SampledKSLiveV3` passes; the verdict's
+    ``ks_form`` says whether it ran."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -231,14 +234,16 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     bound = ["--partition", keys.get(Path(part[0]).name, "")] if part else []
     bound += ["--program", keys.get(Path(prog[0]).name, "")] if prog else []
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
+    ks = (zk and rows_v2(st["dir"] / "circuit.txt")) if ks_form is None else ks_form
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
+             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *(["--ks-form"] if ks else []), *flags,
+             "--session", str(sessions[-1].parent)],
             out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
     return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
-            "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
+            "partition": v.get("partition"), "ks_form": ks, **({"registered": v["registered"]} if "registered" in v else {}),
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
