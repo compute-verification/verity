@@ -16,9 +16,9 @@ import pytest
 from tests.properties import glm53_fused_rmsnorm_capture_gpu as X
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.kernels import derived_rows as DR
-from verity_vllm.program.kernels import dsa_norm_rows as NR
-from verity_vllm.program.registry import dsa_norm as DN
+from verity.ml.definitions.numerics import derived_rows as DR
+from verity.ml.definitions.numerics import dsa_norm_rows as NR
+from verity.ml.definitions.registry import dsa_norm as DN
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 WIDTHS = [N for _, N, _, _ in X.NORMS]

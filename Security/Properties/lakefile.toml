@@ -68,8 +68,8 @@ path = "../../verity/core/primitives/requirement"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
-  "Properties.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci", "Properties.Nci.Threads",
-  "Properties.NetworkCertifier.Device", "Properties.Pous", "Properties.Pous.TimedAudit",
+  "Properties.Pouw.Period", "Properties.Pouw.Strata", "Properties.Pouw.Credit", "Properties.Nci",
+  "Properties.Nci.Threads", "Properties.NetworkCertifier.Device", "Properties.Pous", "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger", "Properties.Pous.EndToEnd", "Properties.Pous.Period",
   "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.DeviceOutput",
   "Properties.NetworkCertifier.DeviceOutput.Runs", "Properties.Hash.Identity", "Properties.Nci.Desc",
@@ -77,5 +77,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.SampledProofs.Draw", "Properties.SampledProofs.Halt", "Properties.Core.Evaluate",
   "Properties.NetworkCertifier.Records", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
   "Properties.Accounting.Remote", "Properties.Accounting.Remote.Coins", "Properties.Accounting.Remote.Pooled",
-  "Properties.Accounting.Served", "Properties.Accounting.Remote.Line", "Properties.Accounting.Remote.Schedule",
-  "Properties.Accounting.Remote.Shared", "Properties.Accounting.Remote.Live"]
+  "Properties.Accounting.Served", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+  "Properties.Accounting.Remote.Line", "Properties.Accounting.Remote.Schedule", "Properties.Accounting.Remote.Shared",
+  "Properties.Accounting.Remote.Live"]

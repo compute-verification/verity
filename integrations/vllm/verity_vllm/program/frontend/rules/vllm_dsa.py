@@ -39,9 +39,9 @@ from verity_vllm.program.frontend.rules.patterns import Consumed
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile, launch_keys_of
 from verity_vllm.program.frontend.rules.vllm_iface import iface
 from verity_vllm.program.frontend.torch_frontend import _permute, _tensor_type
-from verity_vllm.program.registry import dsa, dsa_topk
-from verity_vllm.program.registry.sparse_mla import SPARSE_MLA_GLM53
-from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
+from verity.ml.definitions.registry import dsa, dsa_topk
+from verity.ml.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
+from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
 
 aten = torch.ops.aten
 BF16, F32, E4M3 = torch.bfloat16, torch.float32, torch.float8_e4m3fn

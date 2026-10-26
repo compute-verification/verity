@@ -11,7 +11,7 @@ from typing import Any, Callable, Iterable, Sequence
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity_vllm.program.kernels.rows import EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATORS
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.check.replay.delegate import DELEGATES
 from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word, node_runs
