@@ -10,10 +10,10 @@ recorded ones; it changes `calls` only, so every other field, and with them `E`,
 `D`'s.
 
 * `callsTrue_withSetup`, `callsNil_withSetup`: the setup's calls are true evaluations, so the recorded ones stay true.
-* `callsLogColl_withSetup`, `innerAcceptsCollAt_withSetup`: a fact at `D` holds at `D.withSetup H`, the more calls
-  holding a collision wherever fewer do (`findColl_isSome_of_sub`).
+* `callsLogColl_withSetup`, `innerAcceptsCollAt_withSetup`, `innerAcceptsCollAtV_withSetup`: a fact at `D` holds at
+  `D.withSetup H`, the more calls holding a collision wherever fewer do (`findColl_isSome_of_sub`).
 * `Bound.ksLin2_of_flockLin_binds_setup`: `Bound.ksLin2_of_flockLin_binds` at `D.withSetup H`, from the facts at `D`
-  but `CallsLogColl` and `ForksBindAt`, which it reads at `D.withSetup H`.
+  but `CallsLogColl` and `ForksBindAtV`, which it reads at `D.withSetup H`.
 -/
 
 namespace Claims.Recursion
@@ -66,6 +66,18 @@ theorem innerAcceptsCollAt_withSetup {x : Msg} (hT : CallsTrue H D I DO) (hA : I
   · exact Or.inl h
   · exact Or.inr (coll_withSetup (hT decO x Ω P ω r c ws hg) h)
 
+theorem innerAcceptsCollAtV_withSetup {x : Msg} (hT : CallsTrue H D I DO) (hA : InnerAcceptsCollAtV H D I DO x) :
+    InnerAcceptsCollAtV H (D.withSetup H) I DO x := by
+  intro decO Ω P ω r c ws hg
+  rcases hA decO Ω P ω r c ws hg with h | ⟨u, v, huv, -⟩
+  · exact Or.inl h
+  · refine Or.inr (VStar.coll_of_sub (l := D.calls x ws ++ setupCalls H D (runVstar H D I P x ω r))
+      (fun e he => (List.mem_append.1 he).elim (withSetup_true (hT decO x Ω P ω r c ws hg) e)
+        (setupCalls_true H _ _ e)) (fun p hp => ?_) (Option.isSome_iff_exists.2 ⟨_, huv⟩))
+    rcases List.mem_append.1 hp with hp | hp
+    · exact List.mem_append_left _ (List.mem_append_left _ hp)
+    · exact List.mem_append_right _ hp
+
 end Transfer
 
 section Coupling
@@ -75,7 +87,7 @@ variable {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited C
   {DO : Flock.Deploy Coin Col' T'} {decO : List (ℕ × Col') → List T'} {Ω : Type} {P : Prover Ω} {x : Msg}
 
 /-- **The recursion's KS at the bound record with the inner setup's calls searched**: `Bound.ksLin2_of_flockLin_binds`
-at `D.withSetup H`. Its facts are `D`'s, but `CallsLogColl` and `ForksBindAt`, which it reads there: an accepted inner
+at `D.withSetup H`. Its facts are `D`'s, but `CallsLogColl` and `ForksBindAtV`, which it reads there: an accepted inner
 run's calls are among the recorded ones and the setup's, or those collide. -/
 theorem Bound.ksLin2_of_flockLin_binds_setup [Zero Col] [Zero Col'] (decC : Msg → Msg → Coin) (Cp : Caps Coin)
     (hF : Flock.KS H DO) (hKS : KSFlockLin H Bd.DE Cp) (hdI : decOK Bd.deploy decI) (hdO : decOK DO decO)
@@ -85,22 +97,22 @@ theorem Bound.ksLin2_of_flockLin_binds_setup [Zero Col] [Zero Col'] (decC : Msg 
     (hRs : SessionRuns H D (Inner.ofFlock Bd.deploy decI) DO) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO)
     (hL : CallsLogColl H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBindAt H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO x)
-    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hFk : ForksBindAtV H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hM : RoundsMargin H D (Inner.ofFlock Bd.deploy decI)) (hN0 : CallsNil H D) [Fintype Ω] [Nonempty Ω] (M R : ℕ) :
     PrBad H D.V (Recursion.R D (Inner.ofFlock Bd.deploy decI)) (E H D (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
       κ D (Inner.ofFlock Bd.deploy decI) x +
         Real.sqrt (γ D (Inner.ofFlock Bd.deploy decI) x * PrB H D.V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI D x) + 1) *
-          PrBinner H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+          PrBinnerV H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI D x) *
           (PrFCI H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
         4 * (PrF0I H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI D x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 D (Inner.ofFlock Bd.deploy decI) Cp x *
-          (PrFdev H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) :=
+          (PrFdevV H (D.withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) :=
   Bound.ksLin2_of_flockLin_binds (D := D.withSetup H) (decO := decO) (P := P) (x := x) decC Cp hF hKS hdI hdO hdec hB
-    hRef hRounds hN hε hRd hS hRs hV (callsTrue_withSetup hT) hL hFk (innerAcceptsCollAt_withSetup hT hA) hM
+    hRef hRounds hN hε hRd hS hRs hV (callsTrue_withSetup hT) hL hFk (innerAcceptsCollAtV_withSetup hT hA) hM
     (callsNil_withSetup hN0) M R
 
 end Coupling
