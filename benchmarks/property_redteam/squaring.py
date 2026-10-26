@@ -1,12 +1,13 @@
-"""Squaring mod p1024 in 6b's circuit model, measured in budgeted and capped units: the attack on `SquaringFloor`.
+"""Squaring mod p1024 in 6b's circuit model, measured in budgeted and nonlinear units: the attack on `SquaringFloor`.
 
 **The target** (`Security/Definitions/Accounting/Assumptions/SquaringChain.lean`). The encode bound rests on
-`SquaringFloor F e ε`, a squaring costs `e` capped units (`Gates.capped`: budgeted units plus thin lanes, an `mma` step
-with a two-valued run-time multiplicand a compare-select unit), and `ChainSum`, a word's `k·S` chained squarings cost
-their sum, so `E = k·S·e`. `e = L − d(ε)`, `L = n/8 = 128`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 119` at
-`ε = 2^−40` (`E = 364,497` a word), `e = 121` at `ε = 2^−20` (`E = 370,623`). A squaring circuit under `e` capped units
-on more than `ε` of its inputs falsifies `SquaringFloor`. They replace `EncodeChainHardness` (`EncodeChain.lean`), the
-two at once in budgeted units, which `bitwise_codec.py` falsified.
+`SquaringFloor F e ε`, a squaring costs `e` nonlinear units (`Gates.nonlinear`: budgeted units plus data products, an
+`mma` lane whose two multiplicands both depend on run or coin data, one unit whatever their range), and `ChainSum`, a
+word's `k·S` chained squarings cost their sum, so `E = k·S·e`. `e = (2L − 1) + (L − d(ε))`, `L = n/8 = 128`,
+`d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 374` at `ε = 2^−40` (`E = 1,145,562` a word), `e = 376` at `ε = 2^−20`
+(`E = 1,151,688`). A squaring circuit under `e` nonlinear units on more than `ε` of its inputs falsifies
+`SquaringFloor`. They replace `EncodeChainHardness` (`EncodeChain.lean`), the two at once in budgeted units, which
+`bitwise_codec.py` falsified.
 
 **What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`
 as 6b's #2459 has it (`cursor/circuit-encode-declared-6cd3` @ 8225774747): `Op` (a gather with its table-read `low`),
@@ -47,8 +48,10 @@ operands are columns or adjacent pairs `f_p + 256·f_{p+1}` within s32, the carr
 at limb 0 down to 23 at limb 127, s8 a bit narrower, and five columns fit only near the top, where merges are too
 few to save a group). The margin is small but real: a 31-group plan first appears at `OperandBits 130` (s8, merged) to
 136 (u8, unmerged) (run r20261018-060115-4966), so the 128-bit rule is what holds 160. Lazy reduction can't skip bytes, since each product's operands must be bytes. Nothing beats
-`e = 119` (121 at 2^−20): the 128 bytes alone exceed it, and the conjecture survives by 41 units a squaring. Numbers are
-*measured* by building and running the circuits here unless marked modeled.
+the renormalization floor `L − d(ε) = 119` (121 at 2^−20): the 128 bytes alone exceed it, by 41 units a squaring. In
+nonlinear units every construction also pays its column sums, `L² = 16,384` data products (`column_sums`), so
+`seam_square` costs 16,544 against `e = 374`. Numbers are *measured* by building and running the circuits here unless
+marked modeled.
 """
 
 from __future__ import annotations
@@ -382,33 +385,27 @@ def budgeted(C: list[Gate], *, fixed: bool = False) -> int:
     return sum(units(C, i, fixed=fixed, dyn=dyn) for i in range(len(C)))
 
 
-def two_valued(iv: Iv) -> bool:
-    """An interval of at most two values, `hi ≤ lo + 1`."""
-    return iv[1] <= iv[0] + 1
-
-
-def thin_lanes(C: list[Gate], i: int, *, dyn: list[bool] | None = None, ivs: list[Iv] | None = None) -> int:
-    """`thinLanes`: the lanes of an s8-family step whose two multiplicands are both dynamic and one of which is derived
-    to hold at most two values. Such a lane is a selection, which the repriced property charges a compare-select unit."""
+def data_products(C: list[Gate], i: int, *, dyn: list[bool] | None = None) -> int:
+    """`dataProducts`: the lanes of an s8-family step whose two multiplicands both depend on a run or coin input, one
+    unit each whatever their range. A lane with a constant or registered multiplicand is a linear map, and free."""
     g = C[i]
     if g.op.kind != "mma":
         return 0
     dyn = dynamic(C) if dyn is None else dyn
-    ivs = intervals(C) if ivs is None else ivs
     k = g.op.k
-    pairs = zip(g.args[1:1 + k], g.args[1 + k:1 + 2 * k])
-    return sum(1 for a, b in pairs if dyn[a] and dyn[b] and (two_valued(ivs[a]) or two_valued(ivs[b])))
+    return sum(1 for a, b in zip(g.args[1:1 + k], g.args[1 + k:1 + 2 * k]) if dyn[a] and dyn[b])
 
 
-def thin(C: list[Gate]) -> int:
-    """`thin`: the circuit's thin lanes."""
-    dyn, ivs = dynamic(C), intervals(C)
-    return sum(thin_lanes(C, i, dyn=dyn, ivs=ivs) for i in range(len(C)))
+def products(C: list[Gate]) -> int:
+    """`products`: the circuit's data products."""
+    dyn = dynamic(C)
+    return sum(data_products(C, i, dyn=dyn) for i in range(len(C)))
 
 
-def capped(C: list[Gate]) -> int:
-    """`capped`: the budgeted units (the count on main, `fixed=True`) and the thin lanes, what the property's caps bound."""
-    return budgeted(C, fixed=True) + thin(C)
+def nonlinear(C: list[Gate]) -> int:
+    """`nonlinear`: the budgeted units (the count on main, `fixed=True`) and the data products, what the property's caps
+    bound: every operation but a linear map with coefficients fixed before the coins."""
+    return budgeted(C, fixed=True) + products(C)
 
 
 # ---- a builder that keeps intervals, dynamic and the gather dedup incrementally (O(1) a gate) ----------------------------
@@ -424,7 +421,7 @@ class Builder:
         self.dyn: list[bool] = []
         self._lean: list[int] = []  # each gate's Lean units
         self._fixed: list[int] = []
-        self._thin = 0
+        self._products = 0
         self._gmax: dict[tuple[int, bool], int] = {}  # (index gate, kind) -> max pre-#2420 indexBits so far
         self._gmaxf: dict[tuple[int, bool], int] = {}
         self._consts: dict[int, int] = {}
@@ -452,7 +449,7 @@ class Builder:
                 self._gmax[key] = max(self._gmax.get(key, 0), ib)
                 self._gmaxf[key] = max(self._gmaxf.get(key, 0), ibf)
         elif op.kind == "mma":
-            self._thin += thin_lanes(self.gates, i, dyn=self.dyn, ivs=self.ivs)
+            self._products += data_products(self.gates, i, dyn=self.dyn)
         self._lean.append(lean)
         self._fixed.append(fixed)
         return i
@@ -504,13 +501,13 @@ class Builder:
         return sum(self._fixed)
 
     @property
-    def thin(self) -> int:
-        return self._thin
+    def products(self) -> int:
+        return self._products
 
     @property
-    def capped_units(self) -> int:
-        """The repriced count: the budgeted units on main and the thin lanes."""
-        return self.fixed_units + self._thin
+    def nonlinear_units(self) -> int:
+        """The nonlinear units: the budgeted units on main and the data products."""
+        return self.fixed_units + self._products
 
     def evaluate(self, x: dict[int, int]) -> tuple[list[int], bool, bool]:
         """Run on input `x`: the gates' values, and whether the window (`InWindow`) and `DeclaredHold` hold."""
@@ -528,9 +525,15 @@ class Builder:
 # ---- the costed knobs ----------------------------------------------------------------------------------------------------
 
 
-def e_per_squaring(log2_inv_eps: int) -> int:
-    """6b's conjectured floor `e = L − d(ε)`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4` (EncodeChain.lean)."""
+def renorm_floor(log2_inv_eps: int) -> int:
+    """Lemma R's floor on a squaring's budgeted units, `L − d(ε)`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`."""
     return N_LIMBS - 4 - -(-log2_inv_eps // 8)
+
+
+def e_per_squaring(log2_inv_eps: int) -> int:
+    """`SquaringFloor`'s conjectured price in nonlinear units, `e = (2L − 1) + (L − d(ε))`: a data product for each of
+    the square's `2L − 1` column sums, and Lemma R's carries (SquaringChain.lean)."""
+    return 2 * N_LIMBS - 1 + renorm_floor(log2_inv_eps)
 
 
 def counting_floor(log2_inv_eps: int) -> int:
@@ -550,8 +553,8 @@ ROUNDS = codec.DEFAULT.rounds  # 3
 
 def column_sums(b: Builder, a: list[int], fmt: tuple[int, int] = U8) -> list[int]:
     """The 255 columns of `a²` for 128 limbs `a` of format `fmt` (u8, or s8 balanced digits), each an s8-family step from
-    `C = 0`, then the top 127 folded into the bottom by `256^128 ≡ DELTA`: 128 free `mma`/`affine` gates a column, all
-    within s32. Returns the 128 folded column gates `f_0 … f_127`."""
+    `C = 0`, then the top 127 folded into the bottom by `256^128 ≡ DELTA`, all within s32: no budgeted unit, and
+    `L² = 16,384` data products, a lane each. Returns the 128 folded column gates `f_0 … f_127`."""
     zero = b.const(0)
     cols: list[int] = []
     for m in range(2 * N_LIMBS - 1):
@@ -947,7 +950,8 @@ def measure(name: str, inputs: list[int]) -> dict:
         window += w
         hold += h
     budgeted_gates = [g for g in b.gates if g.op.kind == "budgeted"]
-    return {"lean_units": b.lean_units, "fixed_units": b.fixed_units, "gates": len(b.gates),
+    return {"lean_units": b.lean_units, "fixed_units": b.fixed_units, "products": b.products,
+            "nonlinear_units": b.nonlinear_units, "gates": len(b.gates),
             "budgeted_gates": len(budgeted_gates), "gathers": sum(g.op.kind == "gather" for g in b.gates),
             "proven": proven(b.gates) == [], "operand_bits_128": operand_bits(128, b.gates),
             "max_operand_bits": max((sum(b.gates[j].bits for j in g.args) for g in budgeted_gates), default=0),
@@ -998,7 +1002,8 @@ def main() -> None:
         "column_bits": [clog2(b.gates[g].hi + 1) for g in f], "greedy_widths": widths,
         "group_plans": plans,
         "conjecture": {f"2^-{t}": {"e": e_per_squaring(t), "E": ROUNDS * SQUARINGS * e_per_squaring(t),
-                                   "counting_floor": counting_floor(t)} for t in (20, 40)},
+                                   "renorm_floor": renorm_floor(t), "counting_floor": counting_floor(t)}
+                       for t in (20, 40)},
         "best": {"per_squaring": best, "per_word_k_S_e": ROUNDS * SQUARINGS * best},
         "hole_b_before_2459": {"per_squaring": rows["holeb_square"]["fixed_units"],
                                "proven": rows["holeb_square"]["proven"]},

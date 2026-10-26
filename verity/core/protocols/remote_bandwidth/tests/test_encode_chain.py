@@ -1,22 +1,22 @@
 """The falsification tests of `Accounting.Assumptions.SquaringFloor` and `ChainSum` (Security/Definitions/Accounting/
 Assumptions/SquaringChain.lean), which replace the falsified `EncodeChainHardness` (EncodeChain.lean, refuted by
-`Accounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the repriced
-circuit model costs at least `e = L − d(ε)` capped units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with `d₀ = 4`, at every
-`ε ≥ 2^−64` (`test_squaring_floor_known_constructions`), and chained squarings cost their sum
+`Accounting.SecurityProofs.Gates.EncodeChainRefuted`): every known construction of a squaring mod p1024 in the circuit
+model costs at least `e = (2L − 1) + (L − d(ε))` nonlinear units, `L = n/8` and `d(ε) = d₀ + log₂(1/ε)/8` with
+`d₀ = 4`, at every `ε ≥ 2^−64` (`test_squaring_floor_known_constructions`), and chained squarings cost their sum
 (`test_chain_sum_known_chains`).
 
 A squaring here is the step an exponentiation chain repeats: 128 s8 limbs in, 128 s8 limbs out, congruent to the square
-mod p. Products are free (s8-family steps from `C = 0`, their operands proven bytes by their producers' declared
-intervals) unless a lane is thin, both multiplicands run-time and one of them two-valued, which costs a compare-select
-unit; integer affine maps with constant coefficients are free. Every other gate is budgeted, one unit each, reading at
-most `B = 128` operand bits, the declared bits of its operands (`OperandBits`). The capped units are the budgeted units
-and the thin lanes. An s8 operand comes straight from a budgeted gate declared in `[−128, 127]`, since interval analysis
-proves no affine map of a wide value narrow, so no lane here is thin. Each construction is run on seeded inputs and
-checked against `pow(a, 2, p)` on every input (`ε = 1`, so `e = L − d₀`); a cheaper one, added here, fails the test and
-falsifies `SquaringFloor` at `e`. It is also the test of the per-squaring statement
-`Accounting.Guarantees.Gates.Renormalization` at `c = 0`: its outputs are limbs congruent to the square. The bitwise
-codec, which refuted `EncodeChainHardness`, pays a thin lane an AND (`benchmarks/property_redteam/tests/
-test_bitwise_codec.py`).
+mod p. The only free operations are linear maps whose coefficients are fixed before the coins: integer affine maps with
+constant coefficients, and s8-family lanes with a constant or registered multiplicand. A lane whose two multiplicands
+both depend on run or coin data is a data product, one unit whatever their range; so is every lane of the square's
+column sums (s8-family steps from `C = 0`, their operands proven bytes by their producers' declared intervals), `L²` of
+them. Every other gate is budgeted, one unit each, reading at most `B = 128` operand bits, the declared bits of its
+operands (`OperandBits`). The nonlinear units are the budgeted units and the data products. Each construction is run on
+seeded inputs and checked against `pow(a, 2, p)` on every input (`ε = 1`, so `e = 3L − 1 − d₀`); a cheaper one, added
+here, fails the test and falsifies `SquaringFloor` at `e`. Its budgeted units are also the test of the per-squaring
+statement `Accounting.Guarantees.Gates.Renormalization` at `c = 0` (`L − d(ε)`): its outputs are limbs congruent to the
+square. The bitwise codec, which refuted `EncodeChainHardness`, pays a data product an AND
+(`benchmarks/property_redteam/tests/test_bitwise_codec.py`).
 
 `Renormalization` has a floor on `ε` because circuits with no budgeted gate refute it below one: on the `a` whose
 squares' column sums don't carry, the column sums (s8-family steps, folded mod `p`) are the square's bytes. The red
@@ -53,9 +53,15 @@ LOOKAHEAD = 3
 SQUARINGS = ((P + 1) // 4).bit_length() - 1
 
 
-def e_per_squaring(log2_inv_eps: int) -> int:
-    """`L − d(ε)`, with `ε`'s share `log₂(1/ε)/8` limbs rounded up."""
+def renorm(log2_inv_eps: int) -> int:
+    """Lemma R's budgeted units, `L − d(ε)`, with `ε`'s share `log₂(1/ε)/8` limbs rounded up."""
     return N_LIMBS - D0 - -(-log2_inv_eps // 8)
+
+
+def e_per_squaring(log2_inv_eps: int) -> int:
+    """`SquaringFloor`'s price in nonlinear units: a data product for each of the square's `2L − 1` column sums, and
+    Lemma R's `L − d(ε)`."""
+    return 2 * N_LIMBS - 1 + renorm(log2_inv_eps)
 
 
 def bits(lo: int, hi: int) -> int:
@@ -67,16 +73,16 @@ Val = tuple[int, int, int]
 
 
 class Ckt:
-    """Counts a construction's budgeted gates and thin lanes, and checks the model's window on each value it makes. A
-    value is `(v, lo, hi)`: its value and its declared (or, for a free gate, derived) interval."""
+    """Counts a construction's budgeted gates and data products, and checks the model's window on each value it makes.
+    A value is `(v, lo, hi)`: its value and its declared (or, for a free gate, derived) interval."""
 
     def __init__(self) -> None:
         self.budgeted = 0
-        self.thin = 0
+        self.products = 0
 
     @property
-    def capped(self) -> int:
-        return self.budgeted + self.thin
+    def nonlinear(self) -> int:
+        return self.budgeted + self.products
 
     def gate(self, f, *operands: Val, lo: int, hi: int) -> Val:
         assert all(o[1] <= o[0] <= o[2] for o in operands)
@@ -101,18 +107,14 @@ def value(limbs: list[int]) -> int:
     return sum(d << (8 * m) for m, d in enumerate(limbs))
 
 
-def thin(iv: tuple[int, int]) -> bool:
-    """Whether a run-time multiplicand of interval `iv` makes its lane thin: at most two values."""
-    return iv[1] <= iv[0] + 1
-
-
-def folded_columns(ckt: Ckt, d: list[int], iv: tuple[int, int] = (-128, 127)) -> list[Val]:
-    """The square's column sums (s8-family coordinates over the run-time limbs `d`, each declared in `iv`), folded mod
-    p by the affine map `2^1024 ≡ c`, with the intervals interval analysis derives for them from s8 operands."""
+def folded_columns(ckt: Ckt, d: list[int], run_time: bool = True) -> list[Val]:
+    """The square's column sums (s8-family coordinates over the limbs `d`, run-time or registered), folded mod p by the
+    affine map `2^1024 ≡ c`, with the intervals interval analysis derives for them from s8 operands. A lane on two
+    run-time limbs is a data product."""
     cols = []
     for m in range(2 * N_LIMBS):
         idx = range(max(0, m - N_LIMBS + 1), min(m, N_LIMBS - 1) + 1)
-        ckt.thin += len(idx) if thin(iv) else 0
+        ckt.products += len(idx) if run_time else 0
         v = family([d[i] for i in idx], [d[m - i] for i in idx]) if len(idx) else 0
         cols.append((v, -128 * 127 * len(idx), 128 * 128 * len(idx)))
     return [tuple(a + F.c * b for a, b in zip(cols[m], cols[m + N_LIMBS])) for m in range(N_LIMBS)]
@@ -146,14 +148,16 @@ def lookahead(ckt: Ckt, f: list[Val]) -> tuple[list[Val], Val]:
 
 
 def square(carry_pass, d: list[int]) -> tuple[list[int], int]:
-    """One squaring of the s8 limbs `d` (a coin's, or the last squaring's budgeted outputs): its limbs and capped units."""
+    """One squaring of the s8 limbs `d` (a coin's, or the last squaring's budgeted outputs): its limbs and nonlinear
+    units."""
     ckt = Ckt()
     out, c = carry_pass(ckt, folded_columns(ckt, d))
     out[0] = tuple(a + F.c * b for a, b in zip(out[0], c))
     out, c = carry_pass(ckt, out)
     assert c[0] == 0
-    assert all((lo, hi) == (-128, 127) for _, lo, hi in out) and ckt.thin == 0
-    return [v for v, _, _ in out], ckt.capped
+    assert all((lo, hi) == (-128, 127) for _, lo, hi in out) and ckt.products == N_LIMBS ** 2
+    assert ckt.budgeted >= renorm(0)
+    return [v for v, _, _ in out], ckt.nonlinear
 
 
 def signed_limbs(a: int) -> list[int]:
@@ -178,13 +182,14 @@ def test_squaring_floor_known_constructions() -> None:
         assert min(costs) >= e_per_squaring(0), (carry_pass.__name__, min(costs))
 
 
-def test_squaring_floor_thin_operands() -> None:
-    """The thin-lane rule on the column sums: run-time limbs of a byte's interval leave every lane free, and two-valued
-    ones (bits) make every lane of the square thin, `L²` of them."""
-    for iv, want in (((-128, 127), 0), ((0, 255), 0), ((0, 2), 0), ((0, 1), N_LIMBS ** 2), ((5, 6), N_LIMBS ** 2)):
+def test_squaring_floor_data_products() -> None:
+    """The data-product rule on the column sums: run-time limbs make every lane of the square a data product, `L²` of
+    them whatever the limbs' range, and registered ones (a linear map by fixed coefficients) leave every lane free."""
+    for run_time, want in ((True, N_LIMBS ** 2), (False, 0)):
         ckt = Ckt()
-        folded_columns(ckt, [0] * N_LIMBS, iv)
-        assert (ckt.thin, ckt.budgeted) == (want, 0), iv
+        folded_columns(ckt, [0] * N_LIMBS, run_time)
+        assert (ckt.products, ckt.budgeted) == (want, 0), run_time
+    assert N_LIMBS ** 2 > 2 * N_LIMBS - 1
 
 
 def test_chain_sum_known_chains() -> None:
@@ -211,11 +216,12 @@ def test_chain_sum_e_at_p1024_k3() -> None:
     squarings = ((P + 1) // 4).bit_length() - 1
     assert squarings == 1021
     assert codec.DEFAULT.encode_squarings == F.block_words * 3 * squarings
-    assert e_per_squaring(0) == 124 and e_per_squaring(20) == 121 and e_per_squaring(FLOOR) == 116
-    assert e_per_squaring(HEADLINE) == 119
-    assert 3 * squarings * e_per_squaring(HEADLINE) == 364_497
-    assert F.block_words * 3 * squarings * e_per_squaring(HEADLINE) == 11_663_904
-    assert 3 * squarings * e_per_squaring(20) == 370_623
+    assert renorm(0) == 124 and renorm(20) == 121 and renorm(FLOOR) == 116 and renorm(HEADLINE) == 119
+    assert e_per_squaring(0) == 379 and e_per_squaring(20) == 376 and e_per_squaring(FLOOR) == 371
+    assert e_per_squaring(HEADLINE) == 374
+    assert 3 * squarings * e_per_squaring(HEADLINE) == 1_145_562
+    assert F.block_words * 3 * squarings * e_per_squaring(HEADLINE) == 36_657_984
+    assert 3 * squarings * e_per_squaring(20) == 1_151_688
 
 
 def folded_sums(d: list[int], p: int) -> list[int]:

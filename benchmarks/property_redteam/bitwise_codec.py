@@ -28,11 +28,12 @@ The cost has moved to MACs: one a gate-level AND. A field product here is ≈ 17
 word at n = 8 and 336,688 at n = 16, three rounds), so at p1024 a word, ≈ 3 · 2,040 products (`(p+1)/4`'s 1,021
 squarings and 1,018 multiplications a root), is ≈ 1.1·10^11 MACs (modeled from those two fields).
 
-**Repriced.** The model now charges each thin lane, an s8-family lane whose two multiplicands are run-time and one of
-them two-valued, a compare-select unit (`thinLanes`, `capped`), and `Property` caps the family's MACs per certified
-byte read. Every AND here on two run-time bits is a thin lane, so the block costs its key's 40 units and 36,152 thin
-lanes a word at n = 8 (`Builder.capped_units`), and a squaring ≈ 17n² of them; `EncodeChainHardness` is replaced by
-`SquaringFloor` and `ChainSum`, priced in those capped units (`test_bitwise_codec.py`).
+**Nonlinear units.** The model's only free operations are now linear maps whose coefficients are fixed before the
+coins, so every product of two values that both depend on run or coin data is a data product, one unit whatever its
+operands' ranges (`dataProducts`, `nonlinear`), and `Property` caps the data products per certified byte read. Every
+AND here on two run-time bits is a data product, so the block costs its key's 40 units and 36,152 data products a word
+at n = 8 (`Builder.nonlinear_units`), and a squaring ≈ 17n² of them; `EncodeChainHardness` is replaced by
+`SquaringFloor` and `ChainSum`, priced in nonlinear units (`test_bitwise_codec.py`).
 """
 
 from __future__ import annotations

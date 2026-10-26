@@ -8,7 +8,8 @@
 # circuits measured in its units (SquaringFloor's e a squaring); `free_codec.py` builds the whole codec word from the
 # one-word gather Model.lean counted as free before #2420; `bitwise_codec.py` builds a block of words at 8 units a key
 # byte under the count before the repricing (bits kept bits by u8 mma ANDs and affine NOTs), which falsified
-# EncodeChainHardness; `thin_pass.py` counts the repricing's thin lanes on property/v1's pass (honest int8 has none).
+# EncodeChainHardness; `products_pass.py` counts the gate model's data products on property/v1's pass (honest int8:
+# the attention row's QKᵀ and PV).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

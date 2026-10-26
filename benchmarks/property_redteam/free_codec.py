@@ -17,8 +17,8 @@ and a folded product fit s32, which is what keeps this module small; at p1024 th
 (`free_square`), so the encode is free there too, only too large to build here (≈3 × 1,040 products of ≈26k gates).
 
 Under the fix (`Nat.clog 2 args.length`, property/v1's `ceil(log2(V + 1))`), every comparator is a unit, and the same
-circuit costs its comparator count (`Builder.fixed_units`). Under the repricing each AND of two run-time bits is also a
-thin lane, a compare-select unit (`Builder.capped_units`).
+circuit costs its comparator count (`Builder.fixed_units`). In nonlinear units each AND of two run-time bits is also a
+data product, a unit (`Builder.nonlinear_units`).
 """
 
 from __future__ import annotations
