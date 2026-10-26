@@ -5,11 +5,19 @@ decode a kernel's `decode_layer` matches byte for byte.
     store.py layout [--out store-layout.json]
     store.py toy [--out store-toy] [--width 64] [--layers 2] [--ff 64] [--per-segment 11] [--workers N]
     store.py toy --plain [--out store-toy]
+    store.py commit --store DIR [--out $OUT] --seed text:... --manifest MANIFEST.json [--generator G] [--shape h200]
+        [--workers N]
 
 `layout` writes the real store's layout, which Git doesn't track (`LAYOUT_SHA512` pins it). `toy` writes the toy
 fixture (`store-toy/`): `toy.json`, `spot.json`, `spot-c.bin` and `c-star.bin`, which are tracked, and `w.bin` and
 `staging.bin`, which are not (`toy.json` pins each by its digest). `toy --plain` writes those two in under a second with
 no encoding.
+
+`commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
+`--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
+(`Generated`: `verity_torch_loop.weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
+the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
+it.
 
 **Layout.** The tensors, all s8 `[N, K]` row-major as `ScaledMmS8Coordinate` reads them, in this order: for each layer
 `l`, `model.layers.{l}.self_attn.qkv_proj.weight` (rows: the query heads, then K, then V), `...self_attn.o_proj.weight`,
@@ -37,14 +45,22 @@ flags bit 0 when it is not below `p` (about `2^-16434` a block), where the refer
 from __future__ import annotations
 
 import argparse
+import collections
 import hashlib
+import importlib
+import importlib.util
 import json
+import multiprocessing as mp
 import os
+import queue
 import sys
-from collections.abc import Sequence
+import threading
+import time
+from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
+from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -54,7 +70,7 @@ else:
 
 from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.layout import Layout
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params, encode_segment, expand_prefix, stream
+from verity.core.protocols.pous.schemes.p2 import P2, POINT, P2Params, encode_segment, expand_prefix, stream
 
 HERE = Path(__file__).resolve().parent
 LAYOUT_JSON = HERE / "store-layout.json"
@@ -69,6 +85,11 @@ STAGING_ALIGN = 256
 """Every tensor's staging offset is a multiple of this (TMA wants 16 bytes; a 2,054-multiple would give 2)."""
 TOY_SOURCE = hashlib.sha512(b"verity-pous/p2-store/toy/setup-source").digest()
 TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
+SETUP_FORMAT = "verity-pous/p2/store/v1"
+GENERATOR = "verity_torch_loop.weights"
+PARTS = {"self_attn.qkv_proj.weight": ("wq", "wk", "wv"), "self_attn.o_proj.weight": ("wo",),
+         "mlp.up_proj.weight": ("wup",), "mlp.down_proj.weight": ("wdown",)}
+"""A layer's tensor's rows: the generator's `l<layer>.<part>` tensors', in order (`lm_head.weight` is `head`)."""
 TENSOR_COLUMNS = ("name", "layer", "n", "k", "offset", "size", "first_block", "blocks", "staging_offset")
 LAYER_COLUMNS = ("layer", "first_block", "blocks", "staging_bytes")
 FRAMING = {
@@ -285,6 +306,249 @@ def spot_payload(i: int, used: int, payload_bytes: int) -> bytes:
     return stream(TOY_W + b"spot", i.to_bytes(8, "big"), used) + bytes(payload_bytes - used)
 
 
+def w_range(store: Store, tensor: Callable[[str, int, int], bytes], lo: int, hi: int) -> bytes:
+    """Bytes `[lo, hi)` of `W`: tensor `t`'s bytes `[a, b)`, `tensor(t.name, a, b)`, at `t.offset + a`, zero elsewhere."""
+    if not 0 <= lo <= hi <= store.params.w_bytes:
+        raise ValueError(f"W has bytes [0, {store.params.w_bytes}), not [{lo}, {hi})")
+    out = bytearray(hi - lo)
+    view = memoryview(out)
+    for t in store.tensors:
+        a, b = max(lo, t.offset), min(hi, t.offset + t.size)
+        if a < b:
+            view[a - lo:b - lo] = tensor(t.name, a - t.offset, b - t.offset)
+    return bytes(out)
+
+
+def frozen(shape: Shape) -> Shape:
+    """`MQA16K` itself for a shape of its dimensions, so that its store is the frozen one (`LAYOUT_SHA512`)."""
+    return MQA16K if replace(shape, name=MQA16K.name) == MQA16K else shape
+
+
+def generator_parts(name: str) -> tuple[str, ...]:
+    """The generator's tensors whose rows, in order, are the layout's tensor `name`'s (`PARTS`)."""
+    if name == "lm_head.weight":
+        return ("head",)
+    _, _, layer, rest = name.split(".", 3)
+    return tuple(f"l{layer}.{p}" for p in PARTS[rest])
+
+
+def load_generator(spec: str) -> Any:
+    """`spec`: the generator's module file (`.py`), or its module name."""
+    if not spec.endswith(".py"):
+        return importlib.import_module(spec)
+    name = "_p2_store_generator"
+    if name not in sys.modules:
+        found = importlib.util.spec_from_file_location(name, spec)
+        if found is None or found.loader is None:
+            raise ImportError(f"no generator module at {spec}")
+        mod = importlib.util.module_from_spec(found)
+        sys.modules[name] = mod
+        found.loader.exec_module(mod)
+    return sys.modules[name]
+
+
+def git_blob(path: str) -> str | None:
+    """A module file's git blob id, which names it at any commit that has it."""
+    if not path.endswith(".py"):
+        return None
+    data = Path(path).read_bytes()
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+class Generated:
+    """`W` from a seeded weights generator (`verity_torch_loop.weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
+    `program`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
+    back to back, each part an s8 tensor of the layout tensor's `K` columns."""
+
+    def __init__(self, generator: str, shape: str, seed: bytes) -> None:
+        self.generator, self.shape_name, self.seed = generator, shape, seed
+        self.mod = load_generator(generator)
+        self.shape = g = getattr(self.mod, "ALIASES", {}).get(shape) or self.mod.SHAPES[shape]
+        self.store = build(frozen(Shape(g.name, g.width, g.layers, g.heads, g.kv_heads, g.head_dim, g.mlp, g.vocab)))
+        gen = {t.name: t for t in self.mod.tensors(g)}
+        self.parts: dict[str, list[tuple[str, int]]] = {}
+        for t in self.store.tensors:
+            ps = [gen[p] for p in generator_parts(t.name)]
+            if any(p.kind != "s8" or p.cols != t.k for p in ps) or sum(p.rows for p in ps) != t.n:
+                raise ValueError(f"{t.name} [{t.n}, {t.k}] is not the generator's s8 {generator_parts(t.name)} at {g.name}")
+            self.parts[t.name] = [(p.name, p.nbytes) for p in ps]
+        self.size = self.mod.stream_bytes(g)
+        self.program = self.mod.program(g, seed)
+
+    def tensor(self, name: str, a: int, b: int) -> bytes:
+        """Bytes `[a, b)` of the layout's tensor `name`."""
+        out, at = [], 0
+        for part, n in self.parts[name]:
+            lo, hi = max(a, at), min(b, at + n)
+            if lo < hi:
+                out.append(self.mod.tensor_bytes(self.shape, self.seed, part, lo - at, hi - at))
+            at += n
+        return b"".join(out)
+
+    def read(self, lo: int, hi: int) -> bytes:
+        return w_range(self.store, self.tensor, lo, hi)
+
+    def pieces(self, manifest: dict) -> list[tuple[str, int, int, str]]:
+        """Each of the generator's s8 tensors in `W`, in `W`'s order: its name, `W` offset, bytes and the SHA-256 that
+        `manifest` (the generator's at this shape and seed) gives it. Every s8 tensor the manifest lists is one."""
+        if (manifest.get("program"), manifest.get("stream_bytes")) != (self.program, self.size):
+            raise ValueError("the manifest is another shape's or seed's: its program or stream_bytes differs")
+        rows = {r["name"]: r for r in manifest["tensors"]}
+        out = []
+        for t in self.store.tensors:
+            at = t.offset
+            for name, n in self.parts[t.name]:
+                r = rows[name]
+                if (r["kind"], r["nbytes"]) != ("s8", n) or not r.get("sha256"):
+                    raise ValueError(f"the manifest's {name} is not {n} s8 bytes with a sha256")
+                out.append((name, at, n, r["sha256"]))
+                at += n
+        left = {r["name"] for r in manifest["tensors"] if r["kind"] == "s8"} - {p[0] for p in out}
+        if left:
+            raise ValueError(f"W leaves out the manifest's s8 tensors {sorted(left)}")
+        return out
+
+
+_READ: Callable[[int, int], bytes] | None = None
+"""`commit_w`'s reader, which its forked workers inherit."""
+
+
+def _read(job: tuple[int, int]) -> bytes:
+    return _READ(*job)
+
+
+def _sha256_pieces(q: queue.Queue, pieces: Sequence[tuple[str, int, int, str]], state: dict) -> None:
+    """`pieces`' SHA-256 over the `(W offset, segment)` items `q` brings, in `W`'s order, until `None`: each piece whose
+    last byte has passed is checked (a mismatch's name into `state["bad"]`) and counted (`state["done"]`); an error
+    lands in `state["error"]` and the queue is still drained."""
+    i, h = 0, hashlib.sha256()
+    try:
+        while (item := q.get()) is not None:
+            lo, seg = item
+            hi, view = lo + len(seg), memoryview(seg)
+            while i < len(pieces) and pieces[i][1] < hi:
+                name, off, size, want = pieces[i]
+                h.update(view[max(lo, off) - lo:min(hi, off + size) - lo])
+                if off + size > hi:
+                    break
+                if h.hexdigest() != want:
+                    state["bad"].append(name)
+                i, h = i + 1, hashlib.sha256()
+        state["done"] = i
+    except BaseException as e:  # noqa: BLE001
+        state["error"] = e
+        while q.get() is not None:
+            pass
+
+
+def commit_w(store: Store, read: Callable[[int, int], bytes], workers: int,
+             pieces: Sequence[tuple[str, int, int, str]] = ()) -> bytes:
+    """`setup.commit(store.params, W)`, `W`'s segments `read(lo, hi)` by `workers` forked processes (at most `workers + 4`
+    held at once), and each of `pieces` (name, `W` offset, bytes, SHA-256 hex, in `W`'s order) held to its digest, hashed
+    on a thread as the segments pass, beside the commitment's SHA-512 (hashlib drops the GIL)."""
+    global _READ
+    params, sb = store.params, store.params.segment_bytes
+    jobs = iter([(s * sb, (s + 1) * sb) for s in range(params.segments)])
+    _READ = read
+    pool = mp.get_context("fork").Pool(workers) if workers > 1 else None
+    q: queue.Queue = queue.Queue(maxsize=4)
+    state: dict[str, Any] = {"bad": []}
+    hasher = threading.Thread(target=_sha256_pieces, args=(q, pieces, state), daemon=True)
+    hasher.start()
+
+    def results() -> Iterator[bytes]:
+        if pool is None:
+            yield from map(_read, jobs)
+            return
+        first = [next(jobs) for _ in range(min(workers + 4, params.segments))]
+        pending = collections.deque(pool.apply_async(_read, (j,)) for j in first)
+        while pending:
+            seg = pending.popleft().get()
+            nxt = next(jobs, None)
+            if nxt is not None:
+                pending.append(pool.apply_async(_read, (nxt,)))
+            yield seg
+
+    def segments() -> Iterator[bytes]:
+        for s, seg in enumerate(results()):
+            q.put((s * sb, seg))
+            if state["bad"] or "error" in state:
+                break
+            yield seg
+
+    try:
+        commitment = setup.commit(params, segments())
+    except ValueError:
+        if not (state["bad"] or "error" in state):
+            raise
+    finally:
+        q.put(None)
+        hasher.join()
+        if pool is not None:
+            pool.terminate()
+            pool.join()
+    if "error" in state:
+        raise state["error"]
+    if state["bad"]:
+        raise ValueError(f"the generator's {state['bad']} are not the manifest's: their SHA-256 differs")
+    if state["done"] != len(pieces):
+        raise ValueError(f"W holds {state['done']} of the {len(pieces)} tensors to check")
+    return commitment
+
+
+def _bytes_arg(text: str) -> bytes:
+    """``hex:...``, ``file:PATH`` (its bytes, a trailing newline stripped), ``hexfile:PATH`` or ``text:...``."""
+    kind, _, v = text.partition(":")
+    if kind == "hex":
+        return bytes.fromhex(v)
+    if kind == "file":
+        return Path(v).read_bytes().rstrip(b"\n")
+    if kind == "hexfile":
+        return bytes.fromhex(Path(v).read_text().strip())
+    if kind == "text":
+        return v.encode()
+    raise argparse.ArgumentTypeError("hex:..., hexfile:PATH, file:PATH or text:...")
+
+
+def dump(path: Path, doc: Any) -> None:
+    """`setup.json`'s form (p2-encode's): sorted keys, a one-space indent, replaced atomically."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    os.replace(tmp, path)
+
+
+def commit_cmd(a: argparse.Namespace) -> dict:
+    """`setup.json` with the commitment to `W` in this layout: p2-encode's `commit` fields for its stream, plus the
+    layout's digest and the checked tensors; reused when `--store` already has it for the same `W`."""
+    store_dir, out = Path(a.store), Path(a.out)
+    w = Generated(a.generator, a.shape, a.seed)
+    manifest = Path(a.manifest).read_bytes()
+    pieces = w.pieces(json.loads(manifest))
+    params = w.store.params
+    doc = {"format": SETUP_FORMAT, "manifest": params.manifest(), "scheme": P2(params).name, "generator": a.generator,
+           "generator_blob": git_blob(a.generator), "shape": a.shape, "program": w.program, "stream_bytes": w.size,
+           "w_bytes": params.w_bytes, "c_bytes": params.blocks * params.block_bytes, "layout": SCHEMA,
+           "layout_sha512": _sha(_dump(w.store.to_json()).encode()), "tensor_bytes": sum(t.size for t in w.store.tensors),
+           "weights_manifest_sha256": hashlib.sha256(manifest).hexdigest(), "checked_tensors": len(pieces)}
+    path = store_dir / "setup.json"
+    if path.exists():
+        old = json.loads(path.read_text())
+        if {k: old.get(k) for k in doc if k != "generator"} != {k: v for k, v in doc.items() if k != "generator"}:
+            raise SystemExit(f"{path} is another W's or another layout's setup: use a fresh --store")
+        if old.get("commitment"):
+            print(f"commit: reusing {path}'s commitment", file=sys.stderr)
+            dump(out / "setup.json", old)
+            return old
+    t0 = time.perf_counter()
+    doc["commitment"] = commit_w(w.store, w.read, a.workers, pieces).hex()
+    doc["commit_s"] = time.perf_counter() - t0
+    for d in (store_dir, out):
+        dump(d / "setup.json", doc)
+    print(json.dumps({"commitment": doc["commitment"], "segments": params.segments, "commit_s": doc["commit_s"]}))
+    return doc
+
+
 def _encode_segment(args: tuple[P2Params, bytes, int, bytes]) -> list[bytes]:
     params, salt, s, w_seg = args
     return encode_segment(params, None, salt, s, w_seg)
@@ -404,7 +668,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     tp.add_argument("--ff", type=int, default=64)
     tp.add_argument("--per-segment", type=int, default=11)
     tp.add_argument("--workers", type=int, default=os.cpu_count())
+    cp = sub.add_parser("commit", help="setup.commit of the real W from the seeded generator, into setup.json")
+    cp.add_argument("--store", required=True, help="the store's directory (scratch, outside the run directory)")
+    cp.add_argument("--out", default=os.environ.get("OUT", "."), help="the public outputs' directory ($OUT)")
+    cp.add_argument("--workers", type=int, default=os.cpu_count() or 1, help="processes generating W")
+    cp.add_argument("--generator", default=GENERATOR, help="the weights generator: a module name or its .py file")
+    cp.add_argument("--seed", type=_bytes_arg, required=True, help="hex:..., hexfile:PATH, file:PATH or text:...")
+    cp.add_argument("--shape", default="h200")
+    cp.add_argument("--manifest", required=True, help="the generator's manifest with every tensor's sha256")
     args = ap.parse_args(argv)
+    if args.cmd == "commit":
+        commit_cmd(args)
+        return 0
     if args.cmd == "layout":
         args.out.write_text(_dump(build(MQA16K).to_json()))
         print(args.out)
