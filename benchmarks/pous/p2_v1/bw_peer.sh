@@ -40,6 +40,7 @@ uv run --no-sync python benchmarks/pous/p2_v1/bandwidth.py toy "$S/toy" > "$O/pr
 : > "$O/verdicts.txt"
 
 coproc V { "${SSH[@]}" "cd $R && exec .venv/bin/python -m verity.core.protocols.remote_bandwidth.p2_party --registration $R/toy/registration.json --listen 127.0.0.1:0 --sessions 2 --answer $R/answers.jsonl" 2> "$O/verifier.err"; }
+vpid=$V_PID
 read -r line <&"${V[0]}"
 port=$(python3 -c 'import json, sys; print(json.loads(sys.argv[1])["listening"])' "$line")
 lport=$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
@@ -57,7 +58,7 @@ session() {  # NAME EXPECT [bandwidth.py session options]
 rc=0
 session honest accept --windows 2 --passes 2 --samples 16 --window-s 1 --deadline-s 1 || rc=1
 session cheat reject --windows 1 --passes 1 --samples 8 --window-s 1 --deadline-s 1 --skip-layer 1 || rc=1
-wait "$V_PID" || rc=1
+wait "$vpid" 2>/dev/null || true
 "${SSH[@]}" cat "$R/answers.jsonl" > "$O/verifier-answers.jsonl"
 python3 - "$O" >> "$O/verdicts.txt" <<'EOF' || rc=1
 import json, sys
