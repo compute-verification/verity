@@ -194,11 +194,11 @@ theorem wordCost_nonneg {I O : Type} (f : I → O) : 0 ≤ wordCost f := by
 theorem tableCalls_eq {I O : Type} {f : I → O} (hJ : ∃ J : Type, I = (NOrc × J)) (hv : Varies f) :
     tableCalls f = Fintype.card NX := by
   unfold tableCalls
-  rw [if_pos ⟨hJ, hv⟩]
+  rw [ite_eq_left ⟨hJ, hv⟩]
 
 theorem wordCost_eq {I O : Type} {f : I → O} (hO : O = NTr) (hv : Varies f) : wordCost f = 1 := by
   unfold wordCost
-  rw [if_pos ⟨hO, hv⟩]
+  rw [ite_eq_left ⟨hO, hv⟩]
 
 /-- Any function, at the use and calls its laws ask. -/
 noncomputable def NAlg.ofFun {I O : Type} (f : I → O) : NAlg I O where
@@ -213,12 +213,12 @@ noncomputable def NAlg.ofFun {I O : Type} (f : I → O) : NAlg I O where
   calls_le _ := by
     refine le_of_eq ?_
     show tableCalls f = if (1 : Fin 2) = 1 then tableCalls f else wordCost f
-    rw [if_pos rfl]
+    rw [ite_eq_left rfl]
   table hJ hv _ := (tableCalls_eq hJ hv).ge
   words hO hv _ := by
     refine le_of_eq ?_
     show (1 : ℝ) = if (0 : Fin 2) = 1 then tableCalls f else wordCost f
-    rw [if_neg (show ¬((0 : Fin 2) = 1) by decide), wordCost_eq hO hv]
+    rw [ite_eq_right (show ¬((0 : Fin 2) = 1) by decide), wordCost_eq hO hv]
 
 theorem use_ofFun_const {I O : Type} {f : I → O} (hf : ¬ Varies f) (x : I) (r : Fin 2) :
     NAlg.use (NAlg.ofFun f) x r = 0 := by
@@ -646,7 +646,7 @@ theorem ext_nil (h : NX → ND) (S : Set NX) (d : ND) (hS : ∀ w', NE.leaf w' �
     Pouw.MerkleExtract.ext h NE S d [] = none := by
   have hn : ¬ ∃ w, NE.leaf w ∈ S ∧ h (NE.leaf w) = d := fun ⟨w', hw', _⟩ => hS w' hw'
   simp only [Pouw.MerkleExtract.ext]
-  exact dif_neg hn
+  exact dite_eq_right hn
 
 /-- The extraction's words program: the constant word 0 (the walk finds no leaf before the root). -/
 noncomputable def mwZ : NAlg (Unit × NDraw) NTr := NAlg.ofFun fun _ => fun _ _ _ => 0
