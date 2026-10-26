@@ -7,7 +7,7 @@
 #          launch), s8_simple.py (#4472's) as the bench's plain arm, and s8_linear's build.sh, s8_wgmma.cu, s8_acc.h,
 #          sass_gate.py, wgmma.py and configs.py (#4520's) as its wgmma arm, built here by that build.sh. Fixtures not
 #          sent are computed here, the fallback not sent is built here (BUILD_REF=0: not) and with no h1u_*.so sent
-#          h1u_build makes KCOMMIT-FB's three arms from this tree (BUILD_H1U=0: not), all before the lease, as are the
+#          h1u_build makes the arms H1U_ARMS names from this tree (BUILD_H1U=0: not), all before the lease, as are the
 #          operands, in a scratch directory removed at exit.
 #
 #   research run --on vy-nebius-cpu-4 --as kernels-kp2dec --project verity --source . --cwd source -- \
@@ -20,7 +20,7 @@
 # the h1u build PROF_ARM (default kraq) under ncu (NCU, default the ncu beside NVCC; NCU_SET, default --set full; NCU_K,
 # its kernel filter), --clock-control none, into $OUT/prof/units.ncu-rep, its raw, details and SASS pages and
 # summary.json written after the lease.
-# Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default kr, kra and kraq), STEPS, CHECK_ARGS, BENCH_ARGS,
+# Env: NVCC (default CUDA 13.0's), H1U_ARMS (NAME=DEFINES ..., default H1U_DEFAULT's five), STEPS, CHECK_ARGS, BENCH_ARGS,
 # PROF_ARGS, LEASE_MIN (default 25),
 # PY (default /workspace/cp/venv312's or /workspace/jobs/venv312's python, else torch and numpy from PyPI in a uv venv
 # in the scratch directory), JOBS.
@@ -44,24 +44,28 @@ build() {
   cat "$lib/BUILD.txt"; grep -E 'registers|spill' "$lib/ptxas.txt"
 }
 
-# KCOMMIT-FB's sm_90a arms of benchmarks/hash/dither/h1u.cu (HASH-21), compiled from this tree with
+# sm_90a arms of benchmarks/hash/dither/h1u.cu (HASH-21's and HASH-22's), compiled from this tree with
 # benchmarks/hash/dither/j10r90.sh's defines and dither/job.sh's flags plus --no-compress: $OUT/lib/sm_90a/h1u_ARM.so,
 # their resource usage and BUILD.txt; then benchmarks/pouw/harness/sass_gate.py on them as sass_pins.json stands
 # (sass-gate.json, a diagnostic: the gate's verdict is HASH-21's)
 H1U_BASE=-DH1U_KSPLIT=4,-DH1K_AUTO=1,-DH1K_RONLY=1
 H1U_A=$H1U_BASE,-DH1U_JCTA=1,-DH1U_WARPS=4,-DH1U_JX=1,-DH1U_JBW=1
+H1U_Q=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1
+# HASH-21's kr, kra and kraq, then HASH-22's kraq4 (JCS 4) and kraqwxsc (h1u_jw.patch's JW, JWS and JPC, with JXS)
+H1U_DEFAULT="kr=$H1U_BASE kra=$H1U_A kraq=$H1U_Q,-DH1U_JCS=2 kraq4=$H1U_Q,-DH1U_JCS=4
+  kraqwxsc=$H1U_Q,-DH1U_JW=1,-DH1U_JXS=1,-DH1U_JWS=1,-DH1U_JPC=1"
 h1u_build() {
-  local nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc} lib=$OUT/lib/sm_90a arm def rc=0 p pids=()
+  local nv=${NVCC:-/usr/local/cuda-13.0/bin/nvcc} lib=$OUT/lib/sm_90a arm def rc=0 p pids=() arms=${H1U_ARMS:-$H1U_DEFAULT}
   [ -x "$nv" ] || nv=$(command -v nvcc) || { echo "job.sh: no nvcc" >&2; return 2; }
   mkdir -p "$lib"
   local flags=(-O3 -std=c++17 -shared -Xcompiler -fPIC --expt-relaxed-constexpr -gencode arch=compute_90a,code=sm_90a
                --no-compress)
   local jw=$S/jw/benchmarks/hash/dither/h1u.cu src
-  case " ${H1U_ARMS:-} " in *-DH1U_JW=1*)
+  case " $arms " in *-DH1U_JW=1*)
     mkdir -p "$(dirname "$jw")" && cp benchmarks/hash/dither/h1u.cu "$jw" && patch -s -p1 -d "$S/jw" < "$D/h1u_jw.patch" ||
       { echo "job.sh: h1u_jw.patch does not apply to this tree's h1u.cu" >&2; return 2; } ;;
   esac
-  for v in ${H1U_ARMS:-kr=$H1U_BASE kra=$H1U_A kraq=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2}; do
+  for v in $arms; do
     arm=${v%%=*}; def=${v#*=}
     # an arm that sets H1U_JW builds h1u.cu with h1u_jw.patch applied
     src=benchmarks/hash/dither/h1u.cu; case ",$def," in *,-DH1U_JW=1,*) src=$jw ;; esac
@@ -76,7 +80,7 @@ h1u_build() {
   deps=$("$nv" -M -std=c++17 benchmarks/hash/dither/h1u.cu 2>/dev/null | tr ' \\' '\n\n' | grep -v -E ':$|\.o$' | grep . \
     | xargs -r realpath -m --relative-to="$ROOT" | grep -v '^\.\./' | sort -u)
   { echo "commit $(cat "$OUT/commit.txt")"; "$nv" --version | tail -2; echo "flags ${flags[*]}"
-    for v in ${H1U_ARMS:-kr=$H1U_BASE kra=$H1U_A kraq=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2}; do echo "arm $v"; done
+    for v in $arms; do echo "arm $v"; done
     sha256sum "$lib"/h1u_*.so $deps; } > "$lib/BUILD-h1u.txt"
   for f in "$lib"/h1u_*.so; do
     "$(dirname "$nv")/cuobjdump" --dump-resource-usage "$f" > "${f%.so}.res.txt" 2>&1
