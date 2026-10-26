@@ -46,6 +46,11 @@ path = "../pous/check"
 name = "remote_audit"
 path = "../remote_bandwidth/lean"
 
+# Sampled proofs' choice of form: one-stage v2's audit or the recursive audit, V*'s compiled check (`VStar.Recursive`).
+[[require]]
+name = "core_vstar_recursive"
+path = "../../service/vstar/recursive"
+
 [[lean_lib]]
 name = "CoreOnsite"
 
