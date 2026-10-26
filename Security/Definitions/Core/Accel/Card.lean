@@ -156,4 +156,31 @@ def intPair : Fmt → Fmt → Bool
 def intCaptured (fa fb : Fmt) (sat : Bool) : Option Dot :=
   if intPair fa fb then some (intDot fa fb sat) else none
 
+/-- What one multiplier forms from operand `x` of format `fa` and `y` of `fb`: the classes of the two operands, the
+product's sign, the product of their significands and the sum of their exponent fields (a subnormal's as 1), which
+is the exact product with its exponent; for an integer pair, the exact product, its sign and magnitude. -/
+def mulOut (fa fb : Fmt) (x y : ℕ) : TC.Spec.Cls × TC.Spec.Cls × Bool × ℕ × ℕ :=
+  if intPair fa fb then
+    let p := fa.intVal x * fb.intVal y
+    (.finite, .finite, decide (p < 0), p.natAbs, 0)
+  else
+    let f := fa.mini
+    let g := fb.mini
+    let u := fa.code x
+    let v := fb.code y
+    let eu := (u >>> f.manBits) &&& (2 ^ f.expBits - 1)
+    let ev := (v >>> g.manBits) &&& (2 ^ g.expBits - 1)
+    let su := (u &&& (2 ^ f.manBits - 1)) ||| (if eu ≠ 0 then 2 ^ f.manBits else 0)
+    let sv := (v &&& (2 ^ g.manBits - 1)) ||| (if ev ≠ 0 then 2 ^ g.manBits else 0)
+    (f.cls u, g.cls v, ((u >>> (f.bits - 1)) ^^^ (v >>> (g.bits - 1))) &&& 1 = 1, su * sv,
+      (if eu ≠ 0 then eu else 1) + (if ev ≠ 0 then ev else 1))
+
+/-- A dot of rows of format `fa` and `fb` and `k` products reads its operand pairs only through their multiplier
+outputs: on rows of the format's length, it is a function of the accumulator, the `k` pairs' `mulOut` and the rows'
+block scales (empty unless the format is block-scaled). -/
+def ProductForm (fa fb : Fmt) (k : ℕ) (d : Dot) : Prop :=
+  ∃ F : Word → List (TC.Spec.Cls × TC.Spec.Cls × Bool × ℕ × ℕ) → List ℕ → List ℕ → Word,
+    ∀ (c : Word) (a b : List ℕ), a.length = fa.rowLen k → b.length = fb.rowLen k →
+      d c a b = F c (List.zipWith (mulOut fa fb) (a.take k) (b.take k)) (a.drop k) (b.drop k)
+
 end Verity.Accel

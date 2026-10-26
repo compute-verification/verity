@@ -1,4 +1,5 @@
 import Definitions.Core.TC.Spec
+import Definitions.Core.Accel.Card
 
 /-!
 # Named assumptions
@@ -52,5 +53,15 @@ This definition states only the part about one run. The state the device keeps o
 statement of one run can't name; a property that relies on it names it in its docstring and takes no premise for it. -/
 def TrustedHost {Device In Out : Type} (device : Device) (run : Device → In → Out) (code : In → Out) : Prop :=
   ∀ x, run device x = code x
+
+/-- **`accel-product-form(card)`**: every tensor-core MMA of the card whose semantics no capture pins (`x.dot`, the
+accelerator model's open dots) reads its operand pairs only through what one multiplier forms from a pair
+(`Accel.mulOut`: the operands' classes, the product's sign, the significands' product and the exponent fields' sum),
+besides its accumulator and its block scales (`Accel.ProductForm`). It is a fact about the tensor core's data flow: a
+multiplier sees one operand pair, and the adder tree sees only the multipliers' outputs and the accumulator. A capture
+checks it by swapping operand pairs whose multiplier outputs agree and comparing the outputs bit for bit; every pinned
+dot has the form (`Accel.CapturedProductForm`, a statement to prove). -/
+def AccelProductForm (x : Accel.Open) : Prop :=
+  ∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)
 
 end Verity.Assumptions
