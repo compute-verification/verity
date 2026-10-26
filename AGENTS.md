@@ -316,8 +316,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - A pure move that `tools/verity/check/move_check.py BASE HEAD` (`verity check move BASE HEAD`) certifies lands alone, ahead
   of the queue: the lander lands it with `research merge --push` on its own passing check, from the control pod
   (`/data/infra/drive.sh merge ...`), and drive's next sync rebuilds `next` on it. Only drive's App pushes `main` and `next`
-  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject run elsewhere only withdraws the mark,
-  for drive's next tick to rebuild `next`.
+  (GitHub's rulesets, 23 Oct): `research` refuses those pushes off the pod, and an eject, on the pod or off it, only withdraws
+  the mark, for drive's next tick to rebuild `next`.
 - `land = "check"`, drive's default, lands trains on their own check instead (`research.drive`'s docstring).
 
 ## Lean
