@@ -191,4 +191,4 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Approach**: a line of work (a scheme, a route or an attack) with a hypothesis, an owning lane and a status: live, parked, killed, superseded or merged. Each is a record in the evidence store (`research notes claim`, `research notes approach`, `research notes approaches`; the research notes' `kb/onboarding.md`), rendered into the notes as `campaigns/<campaign>/APPROACHES.md`, and every status but live gives its reason and evidence. A dead end is a killed or superseded approach, kept so nobody goes down it again unknowingly.
 - **Project**, **milestone** and **issue**: project management's only words, Linear's (Daniel, 26 Oct).
 
-Older names, where each stays and what it means, and the words that keep a narrower sense: [glossary/README.md](glossary/README.md).
+The table of older names, where each stays and what it means, and the words that keep a narrower sense: [glossary/README.md](glossary/README.md).
