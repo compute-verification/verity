@@ -23,6 +23,7 @@
   "Properties.Evaluate",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkScan",
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Halt",
@@ -241,6 +242,7 @@
   "Definitions.Core.TC.Spec",
   "Properties.NetworkRecords",
   "Properties.NetworkPeriod",
+  "Properties.NetworkScan",
   "Properties.SampledProofs",
   "SampledProofs",
   "Properties.Pous.TimedAudit",
@@ -449,6 +451,11 @@
    "imports": ["NetworkCheck.Period", "Mathlib.Algebra.BigOperators.Fin"],
    "except": [],
    "why": "what the period check's rows-form K counts is stated against its own terms (`rowsTerms`) and Mathlib's finite products, never a proof"
+  },
+  "Properties.NetworkScan": {
+   "imports": ["NetworkCheck.Period", "Definitions.NetworkCertifier.SampledAudit"],
+   "except": [],
+   "why": "the scan's layout and its fit are stated against the period check's `scanOf`, C-Flock's decoder and resolution, and the sampled audit's scope (`NetTiming.ScopeAcc`, `NetTiming.Layout.Fits`), never a proof"
   }
  },
  "reads_exempt": {
