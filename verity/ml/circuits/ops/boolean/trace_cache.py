@@ -5,12 +5,12 @@
 `trace.trace` with a key, as `trace.definition` and `elementwise`'s `specialized`, `shared_specialized` and `shared_operand` give
 it (the Definition's name, version and bindings), looks the circuit up in the directory `use` named before it runs the builder,
 and writes the circuit it traced there. An entry is named by the SHA-512 of that key with the parameter and return types, ``cse``,
-Python's and numpy's versions, and a digest of the code that could change the gates: every file of `verity.ml.circuits` but its
-tests (the tracer, the builders, their helpers and tables), `verity.ml.kernels`' own Python, and the builder's source file when it
-is elsewhere. So an edit anywhere in those makes every entry a miss. What the digest can't see (a builder outside
-`verity.ml.circuits` that calls a helper from a third module, a monkeypatched builder) can make an entry stale; a stale or tampered
-entry gives other gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't match the
-SHA-512 its header records, or whose header doesn't hold its key, is traced again and rewritten.
+Python's and numpy's versions, and a digest of the code that could change the gates (`code_digest`): every Python and JSON file
+of `verity` but tests, every file of `verity.ml.circuits` but its tests (its tables), and the builder's source file when it is
+elsewhere. So an edit anywhere in `verity` makes every entry a miss. What the digest can't see (a builder outside `verity` that
+calls a helper from another module there, a monkeypatched builder) can make an entry stale; a stale or tampered entry gives other
+gates, and so a Program digest unequal to one built without the cache. An entry whose bytes don't match the SHA-512 its header
+records, or whose header doesn't hold its key, is traced again and rewritten.
 
 An entry is ``MAGIC``, a line of JSON (the key, the circuit's sizes and counts, its arrays' type code and byte order, the payload's
 SHA-512), then the payload: each gate's kind as one byte (`trace._KINDS`), each gate's first and second operand wires (a NOT's
@@ -30,7 +30,6 @@ from typing import Callable, Sequence
 import numpy as np
 
 import verity.ml.circuits as _circuits
-import verity.ml.kernels as _kernels
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.codec import _static_json, canonical_json
 from verity.ml.circuits.types import Type
@@ -38,21 +37,31 @@ from verity.ml.circuits.types import Type
 MAGIC = b"verity-trace-cache v1\n"
 ENV = "VERITY_TRACE_CACHE"
 _KIND = {k: i for i, k in enumerate(TR._KINDS)}
+_CIRCUITS = Path(_circuits.__file__).resolve().parent
+_VERITY = _CIRCUITS.parents[1]
+#: directories `code_digest` never enters, besides hidden ones (`.lake`)
+_SKIP = {"tests", "__pycache__", "target"}
 
 
-def _files(root: Path, pattern: str) -> list[Path]:
-    return sorted(p for p in root.glob(pattern)
-                  if p.is_file() and not {"tests", "__pycache__"} & set(p.relative_to(root).parts[:-1]) and p.suffix != ".pyc")
+def _covered(path: Path) -> bool:
+    """Whether `code_digest` reads the file ``path`` (resolved)."""
+    if not path.is_relative_to(_VERITY):
+        return False
+    if any(d in _SKIP or d.startswith(".") for d in path.relative_to(_VERITY).parts[:-1]):
+        return False
+    return path.suffix in (".py", ".json") or path.is_relative_to(_CIRCUITS)
 
 
 @functools.cache
 def code_digest() -> str:
-    """SHA-512 over every file of `verity.ml.circuits` but its tests, and the Python directly in `verity.ml.kernels`, by path and
-    bytes."""
+    """SHA-512 over the files `_covered` names, by path and bytes."""
     h = hashlib.sha512()
-    for root, pattern in ((Path(_circuits.__file__).parent, "**/*"), (Path(_kernels.__file__).parent, "*.py")):
-        for p in _files(root, pattern):
-            h.update(p.relative_to(root.parent).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
+    for top, dirs, files in os.walk(_VERITY):
+        dirs[:] = sorted(d for d in dirs if d not in _SKIP and not d.startswith("."))
+        for name in sorted(files):
+            p = Path(top, name)
+            if _covered(p):
+                h.update(p.relative_to(_VERITY).as_posix().encode() + b"\0" + p.read_bytes() + b"\0")
     return h.hexdigest()
 
 
@@ -62,17 +71,14 @@ def _file_digest(path: str) -> str:
 
 
 def _source(build: Callable) -> str | None:
-    """The builder's source file when `code_digest` doesn't cover it (outside `verity.ml.circuits`, or in its tests), "" when it
-    does, None when the builder has no code to name one."""
+    """The builder's source file when `code_digest` doesn't cover it (outside `verity`, or in tests), "" when it does, None when
+    the builder has no code to name one."""
     while isinstance(build, functools.partial):
         build = build.func
     code = getattr(build, "__code__", None)
     if code is None or not os.path.isfile(code.co_filename):
         return None
-    root, path = Path(_circuits.__file__).parent.resolve(), Path(code.co_filename).resolve()
-    if path.is_relative_to(root) and not {"tests", "__pycache__"} & set(path.relative_to(root).parts[:-1]):
-        return ""
-    return code.co_filename
+    return "" if _covered(Path(code.co_filename).resolve()) else code.co_filename
 
 
 class TraceCache:
