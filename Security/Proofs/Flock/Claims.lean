@@ -275,6 +275,7 @@ import Proofs.Flock.Claims.Recursion.SlotsDeployed
 import Proofs.Flock.Claims.Recursion.VStarTraceAt
 import Proofs.Flock.Claims.Recursion.HpEarlyStaged
 import Proofs.Flock.Claims.Recursion.VStarAccept
+import Proofs.Flock.Claims.Recursion.VStarDense
 import Proofs.Flock.Claims.Recursion.HonestHalf
 import Proofs.Flock.Claims.Recursion.NumsFixedR
 import Proofs.Flock.Claims.Recursion.LastSharedR
