@@ -34,7 +34,7 @@ open Claims (Msg Out)
 open FlockDeploy (Coin FinalP nextR nextR_coin ReadOkR VerdictR)
 open Claims.Recursion.VStarB
 open RecDeploy.VPieces (VPiece vrows vholds noB vown)
-open RecDeploy.OpenLower (ownQR Joint)
+open RecDeploy.OpenLower (ownQR Joint decompB_of_joint)
 open RecDeploy.RestRead (DenseX kI)
 open RecDeploy.DecompBR
 
