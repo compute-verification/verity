@@ -7,7 +7,8 @@ record's digest the run) and runs `check_baseline`, which `NciCheck.BaselineDiff
 The cases are θ's provenance difftest's declarations (`baseline_difftest_vectors.case`), split at the run's own record
 into the protocol's params, commitment and evidence, then at most one change (`MUTATIONS`): the division made to fail
 (`gamma` 0), the run's record repeated in the log, and malformed params, commitments and evidence. Onsite's difftest
-(`verity/core/protocols/composition/tests/`) draws NCI's cases from `cases` and answers them with `reference`."""
+(`verity/core/protocols/composition/tests/`) draws its registration's cases from `cases` and answers them with
+`reference`."""
 
 from __future__ import annotations
 

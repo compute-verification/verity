@@ -1,6 +1,7 @@
-"""The intensity leg: NCI's check of record (`NciCheck.Protocol`, ``verity/nci/v1``) on the window's own declaration,
-the case onsite's NCI component reads (`verity_all_protocols.table`'s interface: ``leg(period_dir, node, out) ->
-answer``).
+"""The registration check: NCI's check of record (`NciCheck.Protocol`, ``verity/nci/v1``) on the window's own
+declaration, the case onsite's registration check reads in its commit phase, before composing
+(`Core.Composition.registered`; `verity_all_protocols.table.REGISTRATION`, with the legs' interface: ``leg(period_dir,
+node, out) -> answer``). NCI is no component of onsite: a registration it refuses refuses onsite.
 
 **The declaration** (`declaration`) is the window's program as the verifier holds it: the population program of the
 circuit record it registered before the loop ran (``period.json``'s ``circuit``), rebuilt from that record
@@ -18,13 +19,16 @@ registration's ``program``.
 
 The answer is `nci_reference.check_baseline`'s on the case, the reference `NciCheck.Baseline` is held to. With
 ``nci`` among the period's tools (``run.sh`` builds it), Lean's ``nci serve`` answers too and must agree. The leg
-writes ``out/nci.case.json`` (onsite's NCI case) and ``out/nci.json``. NCI reads no coins, so a tampered window's
-declaration is its honest one's, and the integrity leg is what refuses it.
+writes ``out/nci.case.json`` (onsite's registration case), ``out/policy.json`` (`policy`, which the runner's row
+carries) and ``out/nci.json``. NCI reads no coins, so a tampered window's declaration is its honest one's, and the
+integrity leg is what refuses it.
 
-**The policy.** A unit of the loop is one ``ScaledMmS8Coordinate_v1{K=128}``: 9 gates of the canonical layout reading
-2,112 bits, every one of them a run input. So the window's one IU reads 2112/9 ≈ 235 novel bits a gate, whatever the
-window's size. `ALPHA` is 256 bits a gate, the toy's policy point. At the GLM-5.3 demo's α = 2^-25 (policy A in
-``benchmarks/verifier_cost/nci_glm.py``) the toy doesn't comply. `GAMMA` is that demo's 2^44 gates an IU.
+**The policy.** A protocol carries no policy parameter, so the check reports what it measured: a unit of the loop is one
+``ScaledMmS8Coordinate_v1{K=128}``, 9 gates of the canonical layout reading 2,112 bits, every one of them a run input,
+so the window's one IU reads 2112/9 ≈ 235 novel bits a gate whatever the window's size, and uses its gates' share of
+Γ. The verdict onsite composes is at α = 256 bits a gate (`ALPHA`) and Γ = 2^44 gates an IU (`GAMMA`, the GLM-5.3
+demo's), a placeholder for the toy (`LABEL`). `policy` also states the verdict at the GLM-5.3 demo's α = 2^-25
+(`GLM_ALPHA`, policy A in ``benchmarks/verifier_cost/nci_glm.py``), where the toy doesn't comply.
 """
 from __future__ import annotations
 
@@ -43,9 +47,12 @@ from verity.ml.windows import interface as IF
 ROOT = Path(__file__).resolve().parents[3]
 REFERENCE = ROOT / "verity" / "core" / "protocols" / "network" / "nci" / "lean" / "scripts" / "nci_reference.py"
 PROTOCOL = "verity/nci/v1"
-#: the policy: Γ gates an IU (the GLM-5.3 demo's) and α novel bits a gate (the toy's point, module docstring)
+#: the policy the composed verdict is at: Γ gates an IU (the GLM-5.3 demo's) and α novel bits a gate (module docstring)
 GAMMA = 2 ** 44
 ALPHA = (256, 1)
+LABEL = "placeholder (toy)"
+#: the GLM-5.3 demo's α (policy A), at which `policy` states the verdict too
+GLM_ALPHA = (1, 2 ** 25)
 
 
 def reference():
@@ -81,16 +88,22 @@ def case_of(rec: dict[str, Any], program: Any) -> dict[str, Any]:
             "params": params}
 
 
-def answer(case: dict[str, Any]) -> dict[str, Any]:
-    """The reference's answer on ``case``, in the core interface's canonical form, as `NciCheck.Protocol.check` gives it
-    on a case whose parts decode."""
+def baseline(case: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """The registration record's digest and the reference's verdict on ``case``: ``{"gates", "ius", "complies",
+    "failure"}`` (each IU ``[size, novelReads]``), or ``{"error": code}``."""
     nr = reference()
     p, rec = case["params"], json.loads(bytes.fromhex(case["commitment"]))
     e = json.loads(bytes.fromhex(case["evidence"]))
     run = nr.record_digest(rec)
     instance = {"alpha": p["alpha"], "gamma": p["gamma"], "owner": e["owner"], "program": p["program"],
                 "provenance": e["provenance"], "theta": e["theta"]}
-    out = nr.check_baseline(instance, {"log": [*p["log"], rec], "params": p["parameters"], "run": run})
+    return run, nr.check_baseline(instance, {"log": [*p["log"], rec], "params": p["parameters"], "run": run})
+
+
+def answer(case: dict[str, Any]) -> dict[str, Any]:
+    """The reference's answer on ``case``, in the core interface's canonical form, as `NciCheck.Protocol.check` gives it
+    on a case whose parts decode."""
+    run, out = baseline(case)
     base = {"commitment": run, "profile": None, "protocol": PROTOCOL, "public": None}
     if "error" in out:
         return base | {"reason": out["error"], "verdict": "reject"}
@@ -102,6 +115,27 @@ def answer(case: dict[str, Any]) -> dict[str, Any]:
                    "verdict": "accept"}
 
 
+def at_alpha(case: dict[str, Any], alpha: tuple[int, int]) -> dict[str, Any]:
+    """``case`` under the policy's α ``alpha``."""
+    return {**case, "params": {**case["params"], "alpha": list(alpha)}}
+
+
+def policy(case: dict[str, Any]) -> dict[str, Any]:
+    """What the check measured on ``case`` and its verdict at each policy (module docstring): each IU's gates, novel
+    bits read, bits a gate and share of Γ; the verdict at `ALPHA` and `GAMMA`, the one onsite composes, labelled
+    `LABEL`; and the verdict at `GLM_ALPHA`."""
+    def verdict(out: dict[str, Any]) -> str:
+        return f"error: {out['error']}" if "error" in out else "complies" if out["complies"] is True else "doesn't comply"
+
+    _, out = baseline(case)
+    _, glm = baseline(at_alpha(case, GLM_ALPHA))
+    measured = None if "error" in out else {"gates": out["gates"], "ius": [
+        {"gates": size, "novel_bits": novel, "bits_a_gate": round(novel / size, 2), "gamma_use": size / GAMMA}
+        for size, novel in out["ius"]]}
+    return {"label": LABEL, "alpha": list(ALPHA), "gamma": GAMMA, "measured": measured, "verdict": verdict(out),
+            "at_glm": {"alpha": list(GLM_ALPHA), "gamma": GAMMA, "verdict": verdict(glm)}}
+
+
 def serve(exe: str, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """``nci serve`` on ``cases``, one canonical JSON line each: Lean's answers (`Core.Protocol`'s CLI)."""
     lines = "".join(codec.canonical_json(c).decode() + "\n" for c in cases)
@@ -110,7 +144,7 @@ def serve(exe: str, cases: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """The intensity leg of ``benchmarks/all_protocols`` (module docstring)."""
+    """The registration check of ``benchmarks/all_protocols`` (module docstring)."""
     period_dir = Path(period_dir)
     tools = json.loads((period_dir / "period.json").read_text()).get("tools") or {}
     t = time.monotonic()
@@ -122,12 +156,14 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         if {k: v for k, v in lean.items() if k != "reason"} != {k: v for k, v in got.items() if k != "reason"}:
             raise RuntimeError(f"nci answered {lean}, the reference {got}")
         got = lean
+    at = policy(case)
     out.mkdir(parents=True, exist_ok=True)
     (out / "nci.case.json").write_text(json.dumps(case, sort_keys=True))
-    (out / "nci.json").write_text(json.dumps({"answer": got, "lean": lean,
-                                              "policy": {"alpha": list(ALPHA), "gamma": GAMMA},
+    (out / "policy.json").write_text(json.dumps(at, sort_keys=True, indent=1))
+    (out / "nci.json").write_text(json.dumps({"answer": got, "lean": lean, "policy": at,
                                               "seconds": round(time.monotonic() - t, 2)}, sort_keys=True, indent=1))
     return got
 
 
-__all__ = ["ALPHA", "GAMMA", "PROTOCOL", "answer", "case_of", "declaration", "leg", "reference", "serve"]
+__all__ = ["ALPHA", "GAMMA", "GLM_ALPHA", "LABEL", "PROTOCOL", "answer", "at_alpha", "baseline", "case_of",
+           "declaration", "leg", "policy", "reference", "serve"]

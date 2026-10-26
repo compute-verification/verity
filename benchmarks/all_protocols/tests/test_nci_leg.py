@@ -1,10 +1,11 @@
-"""The intensity leg (`legs/nci.py`) on a window the loop served:
+"""The registration check's leg (`legs/nci.py`, `table.REGISTRATION`) on a window the loop served:
 
 * its case is NCI's on the window's own record and the verifier's program: the commitment is the registration record
   and the answer's commitment its digest, the program the one the registration names, every input node ``input`` and
-  the units one IU, θ empty; the reference accepts it at the leg's policy, with the IU's size and novel reads in the
-  profile;
-* the same declaration doesn't comply at the GLM-5.3 demo's α = 2^-25, so the leg's policy is what it accepts at;
+  the units one IU, θ empty; the reference accepts it at the composed verdict's policy, with the IU's size and novel
+  reads in the profile;
+* its policy report states what it measured (2,112 bits over 9 gates a unit, about 235 a gate, and its share of Γ), the
+  placeholder label, and that the same declaration doesn't comply at the GLM-5.3 demo's α = 2^-25;
 * a window whose circuit record is not the one the verifier registered is refused before any case is built.
 """
 from __future__ import annotations
@@ -21,7 +22,7 @@ from verity_all_protocols import table as T
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.ml.circuits import codec
 
-NCI = T.load("nci")
+NCI = T.load(T.REGISTRATION.component)
 
 
 @pytest.fixture(scope="module")
@@ -50,10 +51,23 @@ def test_the_case_is_the_windows_declaration_and_the_reference_accepts_it(served
 
 
 @pytest.mark.slow
+def test_the_policy_report_states_the_measured_reads_and_the_verdict_at_the_glm_demos_alpha(served, tmp_path):
+    NCI.leg(served, "test-node", tmp_path)
+    at = json.loads((tmp_path / "policy.json").read_text())
+    assert at["label"] == "placeholder (toy)" and at["alpha"] == [256, 1] and at["gamma"] == 2 ** 44
+    assert at["verdict"] == "complies" and at["at_glm"] == {"alpha": [1, 2 ** 25], "gamma": 2 ** 44,
+                                                           "verdict": "doesn't comply"}
+    [iu] = at["measured"]["ius"]
+    assert Fraction(iu["novel_bits"], iu["gates"]) == Fraction(2112, 9) and iu["bits_a_gate"] == 234.67
+    assert iu["gamma_use"] == iu["gates"] / 2 ** 44
+    row = RN.row_of(T.REGISTRATION, NCI.answer(json.loads((tmp_path / "nci.case.json").read_text())), tmp_path)
+    assert row["policy"] == at
+
+
+@pytest.mark.slow
 def test_the_declaration_does_not_comply_at_the_glm_demos_policy(served):
     case = NCI.case_of(*NCI.declaration(served))
-    strict = {**case, "params": {**case["params"], "alpha": [1, 2 ** 25]}}
-    a = NCI.answer(strict)
+    a = NCI.answer(NCI.at_alpha(case, NCI.GLM_ALPHA))
     assert a["verdict"] == "reject" and a["reason"].startswith("the division does not comply: isolation unit 0")
 
 

@@ -2,11 +2,12 @@
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
 core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
 fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the
-network certifier's period `build`, NCI's `cases`; space's and bandwidth's from the small periods of their hooks,
-`periods.py`), then often breaks the composition's own inputs (a component dropped, unknown, repeated or out of order, a
-case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case itself (a field
-missing or not hex, not an object), and every field of the outcome but its reason must agree exactly: the components' certified quantities
-and profiles among them."""
+network certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), and
+onsite's registration case from NCI's `cases`, then often breaks the composition's own inputs (a component dropped,
+unknown, repeated or out of order, a case under other params, a wrong or short commitment, non-canonical or malformed
+evidence; onsite's registration under another id or other params, its digest unbound, or left out) or the case itself (a
+field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly: the
+components' certified quantities and profiles among them."""
 
 from __future__ import annotations
 
@@ -95,11 +96,21 @@ MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-
                            "garbage-params", "not-a-case"] + ["binding", "binding-id"] * 5
 
 
+#: A registered composition's breaks of its registration (`Core.Composition.registered`): its entry or its case under
+#: another id, its case under other params, a commitment that doesn't bind its digest, and its entry or case left out.
+REGISTRATION_MUTATIONS = [None] * 24 + ["registration-id", "registration-case-id", "registration-params",
+                                        "registration-digest", "registration-dropped", "registration-case-dropped"]
+
+
 @st.composite
-def composite(draw, product: R.Product) -> dict:
+def composite(draw, product: R.Product | R.Registered) -> dict:
     """One case of `product`: its components' cases (one time in six every one aimed at acceptance, one in six every one
     but one that is aimed at undecided, so that a product of five reaches its binding breaks and its undecided verdict,
-    and each at any verdict otherwise), then at most one break of the composition's own inputs."""
+    and each at any verdict otherwise), then at most one break of the composition's own inputs. A registered
+    composition's case carries its registration's too, aimed at acceptance five times in six, with at most one break of
+    its own (`REGISTRATION_MUTATIONS`)."""
+    registered = product if isinstance(product, R.Registered) else None
+    product = registered.product if registered else product
     mode = draw(st.integers(0, 5))
     pending = draw(st.sampled_from([j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]))
     aims = [None if mode > 1 else R.UNDECIDED if mode == 1 and j == pending else R.ACCEPT
@@ -140,9 +151,29 @@ def composite(draw, product: R.Product) -> dict:
         entries[i]["commitment"] = draw(st.sampled_from(["G", "0", "A"])) + entries[i]["commitment"][1:]
     elif m == "garbage-params":
         params = draw(JSON)
-    evidence = canonical({"components": entries}).encode()
+    body: dict = {"components": entries}
+    if registered:
+        reg = draw(component_case(registered.registration, draw(st.sampled_from([R.ACCEPT] * 5 + [R.REJECT]))))
+        rm = draw(st.sampled_from(REGISTRATION_MUTATIONS))
+        rnamed = {"id": reg["id"], "params": reg["params"]}
+        rentry = {"commitment": reg["root"].hex(), "evidence": reg["evidence"].hex(), "id": reg["id"],
+                  "params": reg["params"]}
+        rdigest = reg["digest"]
+        if rm in ("registration-id", "registration-case-id"):
+            (rnamed if rm == "registration-id" else rentry)["id"] = draw(st.sampled_from(
+                [R.POUW.id, "verity/stub/nci/v0", ""]))
+        elif rm == "registration-params":
+            rentry["params"] = {"k": draw(st.integers(4, 6))}
+        elif rm == "registration-digest":
+            rdigest = draw(st.binary(min_size=64, max_size=64).filter(lambda b: b != reg["digest"]))
+        if isinstance(params, dict) and "components" in params and rm != "registration-dropped":
+            params = {**params, "registration": rnamed}
+        if rm != "registration-case-dropped":
+            body["registration"] = rentry
+        commitment = draw(st.binary(max_size=63)) if m == "commitment-size" else commitment + rdigest
+    evidence = canonical(body).encode()
     if m == "evidence-noncanonical":
-        evidence = json.dumps({"components": entries}).encode()
+        evidence = json.dumps(body).encode()
     elif m == "garbage-evidence":
         evidence = draw(st.binary(max_size=24))
     if m == "not-a-case":
@@ -235,7 +266,7 @@ class Trial(R.Product):
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
     """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
-    trial = Trial(R.ONSITE.id, R.ONSITE.components)
+    trial = R.Registered(R.ONSITE.id, R.ONSITE.registration, Trial(R.ONSITE.id, R.ONSITE.product.components))
     with pytest.raises(D.Mismatch) as e:
         D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
               server=onsite_server)
