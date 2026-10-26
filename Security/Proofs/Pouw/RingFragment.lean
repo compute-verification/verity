@@ -7,8 +7,9 @@ import Proofs.Pouw.RelativeSecurity
 
 BET-K-DISCHARGE (CMP-123, ACCEL): every program of the ring fragment pays at least Theorem K's count for Dither's
 transcript, with `theoremK` reused as it stands. This module states that count (`RingKCount`) and its cost form
-(`RingKCost`, from the count by `ringKCost_of_count`), and gives the honest naive kernel as its non-vacuity witness
-(`HonestWitness`, rule I). It is the base O-CHARGE (CMP-111) builds its Lean on. MODEL-SPEC's machine
+(`RingKCost`, from the count by `ringKCost_of_count`), and proves the honest naive kernel its non-vacuity witness
+(`honestWitness : HonestWitness`, rule I; `honest_tight`: the count holds there with equality). It is the base O-CHARGE
+(CMP-111) builds its Lean on. MODEL-SPEC's machine
 (`Verity.Accel.Machine`, CMP-109) is a run-level model of the card that isn't on `main` yet, and it has no
 straight-line layer, so the fragment is stated here on Theorem K's own programs (`SlpG`). The map from a run of
 MODEL-SPEC's machine on ring-fragment opcodes to an `SlpG` with a `Flow` is O-CHARGE's.
@@ -234,13 +235,245 @@ def HonestWitness : Prop :=
     products (honestProg pc vq w) = n * n' * B * L ∧
     ∀ c z, (honestProg pc vq w).val z (honestWord c) = dPrefix pc vq w c.1 c.2.1 c.2.2.val z
 
-/-- Under the honest witness every cell-block is certified, and `RingKCount`'s bound `L · #certified ≤ #products`
-(with no delivery) is an equality: the count is tight. -/
-theorem honest_tight (h : HonestWitness) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R)
-    (w : Fin np → R) :
+theorem cellIdx_val (c : DCells n n' B) : (cellIdx c).val = c.2.2.val + B * c.2.1.val + n' * B * c.1.val := rfl
+
+theorem slotIdx_val (x : DCells n n' B × Fin (L + 1)) : (slotIdx x).val = x.2.val + (L + 1) * (cellIdx x.1).val := rfl
+
+theorem honestProg_isProd (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (x : DCells n n' B × Fin (L + 1)) : (honestProg pc vq w).isProd (slotIdx x) = decide (x.2.val < L) := by
+  show decide ((slotIdx.symm (slotIdx x)).2.val < L) = _
+  rw [Equiv.symm_apply_apply]
+
+theorem honestProg_val_prod (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (z : DBits n L np B n' → R) (c : DCells n n' B) (j : Fin L) :
+    (honestProg pc vq w).val z (slotIdx (c, j.castSucc)) = (dP pc w c.1 c.2.2 j).eval z * (dX vq c.2.2 j c.2.1).eval z := by
+  have hp : (honestProg pc vq w).isProd (slotIdx (c, j.castSucc)) = true := by
+    rw [honestProg_isProd]
+    simp
+  rw [SlpG.val, if_pos hp]
+  simp [honestProg]
+
+theorem honestFlow_prod (c : DCells n n' B) (a : Fin (L + 1)) (h : a.val < L) :
+    (honestFlow (n := n) (L := L) (B := B) (n' := n')).free (slotIdx (c, a)) = some (slotIdx (c, Fin.last L)) := by
+  simp [honestFlow, h]
+
+theorem honestFlow_acc (i : Fin n) (l : Fin n') (t : Fin B) :
+    (honestFlow (n := n) (L := L) (B := B) (n' := n')).free (slotIdx ((i, l, t), Fin.last L)) =
+      if h : t.val + 1 < B then some (slotIdx ((i, l, ⟨t.val + 1, h⟩), Fin.last L)) else none := by
+  simp [honestFlow]
+
+/-- An accumulator reads only earlier slots. -/
+theorem honestReads_lt (a b : DCells n n' B × Fin (L + 1)) (h : honestReads a b = true) : slotIdx b < slotIdx a := by
+  obtain ⟨⟨i, l, t⟩, a2⟩ := a
+  obtain ⟨⟨i', l', t'⟩, b2⟩ := b
+  simp only [honestReads, decide_eq_true_eq, Prod.mk.injEq] at h
+  obtain ⟨rfl, h⟩ := h
+  rcases h with ⟨⟨hi, hl, ht⟩, hb⟩ | ⟨rfl, hi, hl, ht⟩
+  · simp only [Fin.lt_def, slotIdx_val, cellIdx_val, Fin.val_last]
+    rw [hi, hl, ht]
+    omega
+  · simp only [Fin.lt_def, slotIdx_val, cellIdx_val, Fin.val_last]
+    rw [hi, hl, ← ht]
+    have e : (L + 1) * (t'.val + 1 + B * l.val + n' * B * i.val) =
+        (L + 1) * (t'.val + B * l.val + n' * B * i.val) + (L + 1) := by ring
+    omega
+
+theorem honest_wf (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
+    (honestFlow (n := n) (L := L) (B := B) (n' := n')).WF (honestProg pc vq w) := by
+  refine ⟨fun k j h => ?_, fun j k k' h h' hk hk' => ?_⟩
+  · obtain ⟨⟨⟨i, l, t⟩, a⟩, rfl⟩ := slotIdx.surjective k
+    by_cases ha : a.val < L
+    · rw [honestFlow_prod _ _ ha] at h
+      obtain rfl := Option.some_injective _ h
+      refine ⟨?_, by rw [honestProg_isProd]; simp⟩
+      simp only [Fin.lt_def, slotIdx_val, Fin.val_last]
+      omega
+    · have ha' : a = Fin.last L := Fin.ext (by have := a.isLt; simp only [Fin.val_last]; omega)
+      subst ha'
+      rw [honestFlow_acc] at h
+      by_cases ht : t.val + 1 < B
+      · rw [dif_pos ht] at h
+        obtain rfl := Option.some_injective _ h
+        refine ⟨?_, by rw [honestProg_isProd]; simp⟩
+        simp only [Fin.lt_def, slotIdx_val, cellIdx_val, Fin.val_last]
+        have e : (L + 1) * (t.val + 1 + B * l.val + n' * B * i.val) =
+            (L + 1) * (t.val + B * l.val + n' * B * i.val) + (L + 1) := by ring
+        omega
+      · rw [dif_neg ht] at h
+        exact absurd h (by simp)
+  · obtain ⟨⟨⟨i, l, t⟩, a⟩, rfl⟩ := slotIdx.surjective k
+    obtain ⟨⟨⟨i', l', t'⟩, a'⟩, rfl⟩ := slotIdx.surjective k'
+    rw [honestProg_isProd, decide_eq_false_iff_not] at hk hk'
+    have ha : a = Fin.last L := Fin.ext (by have := a.isLt; simp only [Fin.val_last]; omega)
+    have ha' : a' = Fin.last L := Fin.ext (by have := a'.isLt; simp only [Fin.val_last]; omega)
+    subst ha ha'
+    rw [honestFlow_acc] at h h'
+    by_cases ht : t.val + 1 < B
+    · by_cases ht' : t'.val + 1 < B
+      · rw [dif_pos ht] at h
+        rw [dif_pos ht'] at h'
+        have e := slotIdx.injective (Option.some_injective _ (h.trans h'.symm))
+        have hi : i = i' := congrArg (fun x : DCells n n' B × Fin (L + 1) => x.1.1) e
+        have hl : l = l' := congrArg (fun x : DCells n n' B × Fin (L + 1) => x.1.2.1) e
+        have htt : t = t' := Fin.ext (by
+          have h2 := congrArg (fun x : DCells n n' B × Fin (L + 1) => x.1.2.2.val) e
+          dsimp only at h2
+          omega)
+        subst hi hl htt
+        rfl
+      · rw [dif_neg ht'] at h'
+        exact absurd h' (by simp)
+    · rw [dif_neg ht] at h
+      exact absurd h (by simp)
+
+theorem honest_affOps (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
+    AffOps (honestProg pc vq w) := by
+  intro j hj
+  have hj' : (slotIdx.symm j).2.val < L := of_decide_eq_true hj
+  exact ⟨dP pc w (slotIdx.symm j).1.1 (slotIdx.symm j).1.2.2 ⟨_, hj'⟩,
+    dX vq (slotIdx.symm j).1.2.2 ⟨_, hj'⟩ (slotIdx.symm j).1.2.1, fun z => dif_pos hj'⟩
+
+theorem honest_deliveries (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
+    deliveries (honestProg pc vq w) (honestFlow (n := n) (L := L) (B := B) (n' := n')) = 0 := by
+  classical
+  rw [deliveries, Finset.card_eq_zero, Finset.filter_eq_empty_iff]
+  rintro ⟨s, k⟩ - ⟨-, hlin, hfree⟩
+  try dsimp only at hlin hfree
+  apply hfree
+  have hl : honestReads (slotIdx.symm s) (slotIdx.symm ⟨k.val, k.isLt.trans s.isLt⟩) = true := by
+    by_contra hc
+    exact hlin (if_neg hc)
+  generalize (⟨k.val, k.isLt.trans s.isLt⟩ : Fin (honestN n L B n')) = k' at hl ⊢
+  obtain ⟨⟨⟨i, l, t⟩, a⟩, rfl⟩ := slotIdx.surjective s
+  obtain ⟨⟨⟨i', l', t'⟩, b⟩, rfl⟩ := slotIdx.surjective k'
+  simp only [Equiv.symm_apply_apply, honestReads, decide_eq_true_eq, Prod.mk.injEq] at hl
+  obtain ⟨rfl, h⟩ := hl
+  rcases h with ⟨⟨rfl, rfl, rfl⟩, hb⟩ | ⟨rfl, rfl, rfl, ht⟩
+  · exact honestFlow_prod _ _ hb
+  · have hlt : t'.val + 1 < B := ht ▸ t.isLt
+    rw [honestFlow_acc, dif_pos hlt, show (⟨t'.val + 1, hlt⟩ : Fin B) = t from Fin.ext ht]
+
+theorem honest_products (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
+    products (honestProg pc vq w) = n * n' * B * L := by
+  rw [products, Finset.card_filter, ← Equiv.sum_comp slotIdx, Fintype.sum_prod_type]
+  have hin : ∀ c : DCells n n' B,
+      (∑ a : Fin (L + 1), if (honestProg pc vq w).isProd (slotIdx (c, a)) = true then 1 else 0) = L := by
+    intro c
+    rw [Fin.sum_univ_castSucc]
+    simp [honestProg_isProd]
+  rw [Finset.sum_congr rfl fun c _ => hin c, Finset.sum_const, Finset.card_univ, smul_eq_mul]
+  simp only [DCells, Fintype.card_prod, Fintype.card_fin]
+  ring
+
+/-- An accumulator's read sum, over the slots as pairs: its own block's products and its cell's previous
+accumulator, each with coefficient 1. -/
+theorem honest_lin_sum (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (z : DBits n L np B n' → R) (s : Fin (honestN n L B n')) :
+    ∑ k : Fin s.val, (honestProg pc vq w).lin s k * (honestProg pc vq w).val z ⟨k.val, k.isLt.trans s.isLt⟩ =
+      ∑ y : DCells n n' B × Fin (L + 1),
+        (if honestReads (slotIdx.symm s) y then (1 : R) else 0) * (honestProg pc vq w).val z (slotIdx y) := by
+  classical
+  let G : Fin (honestN n L B n') → R := fun k =>
+    (if honestReads (slotIdx.symm s) (slotIdx.symm k) then (1 : R) else 0) * (honestProg pc vq w).val z k
+  have e1 : ∑ k : Fin s.val, (honestProg pc vq w).lin s k * (honestProg pc vq w).val z ⟨k.val, k.isLt.trans s.isLt⟩ =
+      ∑ k ∈ univ.map (Fin.castLEEmb s.isLt.le), G k := by
+    rw [Finset.sum_map]
+    rfl
+  have e2 : ∑ k ∈ univ.map (Fin.castLEEmb s.isLt.le), G k = ∑ k, G k := by
+    refine Finset.sum_subset (Finset.subset_univ _) fun k _ hk => ?_
+    have hks : ¬k < s := fun hks => hk (Finset.mem_map.mpr ⟨⟨k.val, hks⟩, Finset.mem_univ _, rfl⟩)
+    have hr : honestReads (slotIdx.symm s) (slotIdx.symm k) ≠ true := fun h =>
+      hks (by simpa using honestReads_lt _ _ h)
+    simp only [G, if_neg hr, zero_mul]
+  rw [e1, e2, ← Equiv.sum_comp slotIdx]
+  simp only [G, Equiv.symm_apply_apply]
+
+/-- An accumulator's value: its block's increment plus its cell's previous accumulator. -/
+theorem honest_val_acc (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (z : DBits n L np B n' → R) (i : Fin n) (l : Fin n') (t : Fin B) :
+    (honestProg pc vq w).val z (slotIdx ((i, l, t), Fin.last L)) =
+      dIncr pc vq w i l t z + if h : 0 < t.val then
+        (honestProg pc vq w).val z (slotIdx ((i, l, ⟨t.val - 1, by have := t.isLt; omega⟩), Fin.last L)) else 0 := by
+  classical
+  have hnp : ¬(honestProg pc vq w).isProd (slotIdx ((i, l, t), Fin.last L)) = true := by
+    rw [honestProg_isProd]
+    simp
+  have hoff : ((honestProg pc vq w).off (slotIdx ((i, l, t), Fin.last L))).eval z = 0 := by
+    simp [honestProg, BitAff.eval]
+  have hr1 : ∀ (c : DCells n n' B) (j : Fin L) (v : R),
+      (if honestReads ((i, l, t), Fin.last L) (c, j.castSucc) then (1 : R) else 0) * v =
+        if c = (i, l, t) then v else 0 := by
+    intro c j v
+    by_cases hc : c = (i, l, t) <;> simp [honestReads, hc, Fin.castSucc_ne_last]
+  rw [SlpG.val, if_neg hnp, hoff, add_zero, honest_lin_sum, Equiv.symm_apply_apply, Fintype.sum_prod_type]
+  simp only [Fin.sum_univ_castSucc]
+  rw [Finset.sum_add_distrib]
+  congr 1
+  · simp only [hr1]
+    rw [Finset.sum_comm]
+    simp only [Finset.sum_ite_eq', Finset.mem_univ, ↓reduceIte, honestProg_val_prod]
+    rfl
+  · by_cases ht : 0 < t.val
+    · rw [dif_pos ht, Finset.sum_eq_single (i, l, ⟨t.val - 1, by have := t.isLt; omega⟩)]
+      · rw [if_pos, one_mul]
+        simp [honestReads]
+        omega
+      · intro c _ hc
+        rw [if_neg, zero_mul]
+        intro hr
+        apply hc
+        obtain ⟨i', l', t'⟩ := c
+        simp [honestReads] at hr
+        obtain ⟨hi, hl, h3⟩ := hr
+        rw [hi, hl, show t' = ⟨t.val - 1, by have := t.isLt; omega⟩ from Fin.ext (by show t'.val = t.val - 1; omega)]
+      · intro h
+        exact absurd (Finset.mem_univ _) h
+    · rw [dif_neg ht]
+      refine Finset.sum_eq_zero fun c _ => ?_
+      rw [if_neg, zero_mul]
+      intro hr
+      obtain ⟨i', l', t'⟩ := c
+      simp [honestReads] at hr
+      obtain ⟨-, -, h3⟩ := hr
+      omega
+
+/-- Every honest word is its target, everywhere. -/
+theorem honest_val (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R)
+    (z : DBits n L np B n' → R) (c : DCells n n' B) :
+    (honestProg pc vq w).val z (honestWord c) = dPrefix pc vq w c.1 c.2.1 c.2.2.val z := by
+  obtain ⟨i, l, t⟩ := c
+  suffices H : ∀ m (t : Fin B), t.val = m →
+      (honestProg pc vq w).val z (slotIdx ((i, l, t), Fin.last L)) = dPrefix pc vq w i l t.val z from H _ t rfl
+  intro m
+  induction m with
+  | zero =>
+    intro t ht
+    have h0 : ¬0 < t.val := by omega
+    have hB : 0 < B := by have := t.isLt; omega
+    obtain rfl : t = ⟨0, hB⟩ := Fin.ext ht
+    rw [honest_val_acc, dif_neg h0, add_zero, dPrefix_zero pc vq w i l hB]
+  | succ m ih =>
+    intro t ht
+    have hlt : m + 1 < B := ht ▸ t.isLt
+    obtain rfl : t = ⟨m + 1, hlt⟩ := Fin.ext ht
+    rw [honest_val_acc, dif_pos (Nat.succ_pos m)]
+    show dIncr pc vq w i l ⟨m + 1, hlt⟩ z +
+        (honestProg pc vq w).val z (slotIdx ((i, l, ⟨m, by omega⟩), Fin.last L)) = dPrefix pc vq w i l (m + 1) z
+    rw [ih ⟨m, by omega⟩ rfl, ← dPrefix_succ pc vq w i l hlt z]
+    exact sub_add_cancel _ _
+
+/-- **The honest witness, proved** (rule I). -/
+theorem honestWitness : HonestWitness := by
+  intro R _ n L np B n' pc vq w
+  exact ⟨honest_wf pc vq w, honest_affOps pc vq w, fun c => by simp [honestWord, honestProg_isProd],
+    honest_deliveries pc vq w, honest_products pc vq w, fun c z => honest_val pc vq w z c⟩
+
+/-- Every honest cell-block is certified, and `RingKCount`'s bound `L · #certified ≤ #products` (with no delivery) is
+an equality: the count is tight. -/
+theorem honest_tight (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) (w : Fin np → R) :
     (certified pc vq w (honestProg pc vq w) honestWord).card = n * n' * B ∧
       L * (certified pc vq w (honestProg pc vq w) honestWord).card = products (honestProg pc vq w) := by
-  obtain ⟨-, -, -, -, hprod, hval⟩ := h pc vq w
+  obtain ⟨-, -, -, -, hprod, hval⟩ := honestWitness pc vq w
   have hall : certified pc vq w (honestProg pc vq w) honestWord = univ := by
     refine Finset.eq_univ_of_forall fun c => ?_
     simp only [certified, Finset.mem_filter, Finset.mem_univ, true_and]
