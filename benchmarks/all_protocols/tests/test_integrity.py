@@ -79,6 +79,15 @@ def test_refusals_reject_by_name(tmp_path, summary, rec, why):
     assert a["commitment"] == R.digest(REG)
 
 
+def test_a_refused_audit_record_names_leans_refusals(tmp_path):
+    why = {f"lean-verify/m{k}": f"registered reads: port o0: table row 0 does not open out's registered root at "
+                                f"position {k}" for k in range(5)}
+    summary = {"checks_before_draw": {"registration": True}, "audit": {"why": {**why, "draw": None}}}
+    a = I.answer(write(tmp_path / "a", summary, record(False, proved=False)), REG)
+    assert a["verdict"] == "reject" and a["reason"].startswith("audit record: proved; lean-verify/m0: registered reads")
+    assert "position 2" in a["reason"] and "position 3" not in a["reason"] and a["reason"].endswith("and 2 more")
+
+
 def test_an_audit_that_left_nothing_is_an_error(tmp_path):
     with pytest.raises(RuntimeError, match="no summary"):
         I.answer(tmp_path, REG)
@@ -133,7 +142,7 @@ TOOLS = os.environ.get("VERITY_ALL_PROTOCOLS_TOOLS")
 @pytest.mark.skipif(not TOOLS, reason="opt-in: VERITY_ALL_PROTOCOLS_TOOLS=tools.json (run.sh's built executables); "
                     "two windows proved under --zk, minutes")
 def test_two_windows_through_the_verifier_of_record(tmp_path):
-    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", TOOLS, "--windows", "2", "--jobs", "2", "--tamper", "1",
+    rc = RN.main(["--out", str(tmp_path / "out"), "--tools", TOOLS, "--windows", "2", "--tamper", "1",
                   "--law", "subset:8", "--requests", "3", "--steps", "1"])
     reports = sorted((json.loads(x) for x in (tmp_path / "out" / "reports.jsonl").read_text().splitlines()),
                      key=lambda r: r["window"])

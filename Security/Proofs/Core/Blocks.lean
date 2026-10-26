@@ -5,7 +5,7 @@ import Proofs.Core.Game.Basic
 # A wipe that meets the boundary's definitions
 
 `Wipe.blank` clears the device's whole state, sends nothing out and always accepts. It separates
-(`Wipe.blank_separates`), and meets the survivor bound at `2^-128` for every `foreignBits ≥ 128`
+(`Wipe.blank_separates`), and meets the survivor bound at the constant `2^-128` for every `foreignBits ≥ 128`
 (`Wipe.blank_survivorBound`), so `Wipe.Separates` and `Wipe.SurvivorBound` hold together on some wipe of every device.
 -/
 
@@ -13,11 +13,11 @@ namespace Verity
 
 open scoped ENNReal
 
-variable {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
+variable {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
 
 /-- The wipe that clears the device's state: the fill covers the whole store and leaves every bit of the device's state
 false, nothing leaves the device, the challenger always accepts, and the spot reads change nothing. -/
-def Wipe.blank (d : Device ι) (s : Blocks C B) (b : Fin B) (Ω Ch : Type) : Wipe d s b Ω Ch where
+def Wipe.blank (d : Accounting.Device ι) (s : Blocks C B) (b : Fin B) (Ω Ch : Type) : Wipe d s b Ω Ch where
   fill := d.mem
   fill_le := le_rfl
   egress := 0
@@ -31,9 +31,10 @@ theorem Wipe.blank_separates {Y : Type} :
   ⟨fun st _ _ => st, fun _ _ _ _ => rfl⟩
 
 theorem Wipe.blank_survivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {foreignBits : ℕ}
-    (h : 128 ≤ foreignBits) : (Wipe.blank d s b Ω Ch).SurvivorBound foreignBits (2⁻¹ ^ 128) := by
+    (h : 128 ≤ foreignBits) : (Wipe.blank d s b Ω Ch).SurvivorBound foreignBits fun _ _ _ => 2⁻¹ ^ 128 := by
   classical
   intro S hS hold keep
+  show _ ≤ (2⁻¹ : ℝ≥0∞) ^ 128
   have hS' : 128 ≤ S := by omega
   set P : (Fin S → Bool) × Ω × Ch → Prop := fun x =>
     (Wipe.blank d s b Ω Ch).accepts (hold x.1) x.2.1 x.2.2 ∧

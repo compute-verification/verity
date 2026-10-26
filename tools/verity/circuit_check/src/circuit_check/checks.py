@@ -1,7 +1,8 @@
 """The checks, over one Definition, one subcircuit (a template bound), or one served row's request Program.
 
-    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate`, the IR evaluator; a vLLM Definition's is its registered
-                     evaluator) on the edge and random vectors of `circuit_check.vectors`: it must be total (a Definition whose
+    correspondence   the reference (`verity.ml.circuits.evaluation.evaluate`, the IR evaluator, a composite's run body by body by
+                     `circuit_check.bodies`; a vLLM Definition's is its registered evaluator) on the edge and random vectors
+                     of `circuit_check.vectors`: it must be total (a Definition whose
                      reference raises is partial), and every realization of it must equal it bit for bit: every registered
                      kernel (`verity.ml.circuits.evaluation.self_check`), a template's evaluated target where it is another Definition, and
                      the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
@@ -17,7 +18,7 @@
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
-    redundant gates  a value computed twice inside one unit: the IR gates `verity_vllm.query.word.Graph` finds recomputed (same
+    redundant gates  a value computed twice inside one unit: the IR gates `verity.ml.definitions.word.Graph` finds recomputed (same
                      primitive, same operands by value) that `word.units` puts in one unit, and the ANDs of a Boolean unit on
                      identical operands; counted, with where (primitive @ activation, or the named subcircuit)
     dead gates       gates no output depends on (`verity.ml.circuits.liveness.dead_gates`, transitive), by primitive @ activation
@@ -45,11 +46,13 @@ and a pin without its lowering's ``type``, is a warning.
 from __future__ import annotations
 
 import random
+import time
 from collections import Counter
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from itertools import pairwise
 from pathlib import Path
-from typing import Any, Callable, Iterable, Sequence
+from typing import Any, Callable, Iterable, Iterator, Sequence
 
 import numpy as np
 
@@ -59,6 +62,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import is_boolean
 from verity.ml.circuits.defs import PrimitiveDefinition
 
+from . import bodies as BD
 from . import sidecars as SC
 from .vectors import edge_count, flat, instance_args, vectors
 
@@ -113,6 +117,26 @@ class Findings:
         self.warnings += other.warnings
 
 
+#: the seconds each check has taken in this process, by check, each net of the checks timed inside it (`spent`); `cli` clears
+#: it before a target and reports it with the target's result (``seconds_by_check``)
+SPENT: Counter = Counter()
+_INNER: list[float] = []
+
+
+@contextmanager
+def spent(check: str) -> Iterator[None]:
+    t0 = time.perf_counter()
+    _INNER.append(0.0)
+    try:
+        yield
+    finally:
+        dt = time.perf_counter() - t0
+        inner = _INNER.pop()
+        if _INNER:
+            _INNER[-1] += dt
+        SPENT[check] += dt - inner
+
+
 _SHA512 = ("one SHA-512 compression under the AND budget, traced from `sha512.compress_gadget`: the trace turns the gadget's "
            "23,455 commits (`sha512.commit`, And(x, ONE)) into x's wire, and `ir_lower` cannot commit an Xor, so every form "
            "is carried whole and grows round over round (mean 3,132 bits, 8.2 GB a third of the way in); each of these four "
@@ -153,14 +177,15 @@ def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
 
 
 def reference_outputs(t: Any, params: Sequence, arrays: Sequence[np.ndarray]) -> tuple[list[tuple[int, ...] | None], list[dict]]:
-    """The reference's output leaves per instance (None where it raises) and the instances it raised on."""
+    """The reference's output leaves per instance (None where it raises) and the instances it raised on; a composite's
+    reference run body by body (`bodies.evaluate`)."""
     n = arrays[0].shape[0] if arrays else 1
     out: list[tuple[int, ...] | None] = []
     raised: list[dict] = []
     for i in range(n):
         args = instance_args(params, arrays, i)
         try:
-            out.append(tuple(evaluate(t, *args)))
+            out.append(tuple(BD.evaluate(t, *args)))
         except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
             out.append(None)
             raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
@@ -515,12 +540,22 @@ _UNPINNED_ANDS = 2_000
 
 def _pieces_used(t: Any, pins: dict) -> tuple[Counter, Counter, int]:
     """(pieces used, primitives without a piece, estimated ANDs) of ``t``'s gates that are not constant (a gate whose operands
-    are all constant is evaluated, as `ir_lower.lower_gates` does); the estimate from the piece pins."""
+    are all constant is evaluated, as `ir_lower.lower_gates` does), counted body by body (`bodies.nonconstant`); the
+    estimate from the piece pins."""
     from verity_flock import ir_lower as IL
 
+    used, missing, est = Counter(), Counter(), 0
+    live = BD.nonconstant(t)
+    if live is not None:
+        for pid, k in live.items():
+            if pid in IL.PIECES:
+                used[pid] = k
+                est += k * pins.get("pieces", {}).get(pid, {}).get("and", _UNPINNED_ANDS)
+            else:
+                missing[pid] = k
+        return used, missing, est
     _prog, call = standalone_call(t)
     const: dict[int, bool] = {}
-    used, missing, est = Counter(), Counter(), 0
     for g in call:
         fam = getattr(g.prim, "family", None)
         if fam == "Input":
@@ -744,7 +779,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
     are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
     units is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else the unit rule's count;
     None when ``fn`` is over the partition budget and unchecked), and every other code fails as under v1."""
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
 
     P = F if applies else Findings()
     v2 = applies and q_word == 2
@@ -808,14 +843,15 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
     X = cut.CALL_X
     if fn.gates > opts.partition_max_gates:
         return {"X": X, "checked": False}
-    try:
-        c = cut.evaluate_call(fn, X, memo)
-    except cut.QueryInapplicable as e:
-        F.warn("partition", "q-call-inapplicable", fn.id, 1, e.detail.get("why", ""), detail=e.detail)
-        return {"X": X, "checked": True, "inapplicable": e.detail}
-    G = cut.call_gates(fn, memo)
-    com = cut.call_committed(G, c)
-    v = cut.check_call_cut(G, c.owner(), X)
+    with spent("q-call"):
+        try:
+            c = cut.evaluate_call(fn, X, memo)
+        except cut.QueryInapplicable as e:
+            F.warn("partition", "q-call-inapplicable", fn.id, 1, e.detail.get("why", ""), detail=e.detail)
+            return {"X": X, "checked": True, "inapplicable": e.detail}
+        G = cut.call_gates(fn, memo)
+        com = cut.call_committed(G, c)
+        v = cut.check_call_cut(G, c.owner(), X)
     for code in v.codes:
         det = v.detail.get(code, {})
         F.fail("partition", f"q-call-{code}", fn.id, f"({det.get('n', '?')} gate(s))", gates=det.get("gates"))
@@ -845,23 +881,27 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
     F = Findings()
     kind = "reference" if isinstance(t, ScalarReference) else "primitive" if isinstance(t, PrimitiveDefinition) else "composite"
     entry: dict[str, Any] = {"definition": t.id, "form": kind, "gates": None if kind == "reference" else _gates(t)}
-    corr, arrays, ref = correspondence(t, opts, F)
+    with spent("correspondence"):
+        corr, arrays, ref = correspondence(t, opts, F)
     params, _ = signature_of(t)
-    if arrays is None:
-        low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
-               "registered table lazily" if "table" in corr else "no vectors"}
-    elif lower_whole or kind != "composite":
-        low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
-    else:
-        low = {"lowered": False, "reason": "lowered as its template's units"}
-    corr["realizations"].append({"via": "c-flock:ir_lower", **low})
-    if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
-        corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
-    wv = word_view(t, opts, F)
+    with spent("lowering"):
+        if arrays is None:
+            low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
+                   "registered table lazily" if "table" in corr else "no vectors"}
+        elif lower_whole or kind != "composite":
+            low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
+        else:
+            low = {"lowered": False, "reason": "lowered as its template's units"}
+        corr["realizations"].append({"via": "c-flock:ir_lower", **low})
+        if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
+            corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
+    with spent("word-view"):
+        wv = word_view(t, opts, F)
     if wv is not None:
         corr["realizations"].append(wv)
     entry["correspondence"] = corr
-    ports = port_intervals(t, opts, F)
+    with spent("ports"):
+        ports = port_intervals(t, opts, F)
     if ports is not None:
         entry["ports"] = ports
     leaves = 0 if kind == "reference" else sum(pt.leaves for pt in params)
@@ -871,22 +911,27 @@ def check_definition(fn: Any, opts: Options = Options(), *, memo: dict | None = 
         F.warn("partition", "unchecked", t.id, 1, why)
         entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
         entry["redundant_gates"] = {"checked": False}
-        entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
+        with spent("dead-gates"):
+            entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
     elif kind == "composite":
         from verity.ml.circuits import boolean as BL
 
-        part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)
+        with spent("partition"):
+            part, rule = partition(t, opts, F, memo.setdefault("word", {}), applies=as_call, q_word=2 if BL.is_boolean(t) else 1)
         graph = part.pop("_graph", None)
         entry["partition"] = part
-        entry["redundant_gates"] = redundant_gates(t, opts, F, rule, graph, within_units=as_call) if part["checked"] else {"checked": False}
-        entry["dead_gates"] = dead_gates(t, opts, F)
+        with spent("redundant-gates"):
+            entry["redundant_gates"] = redundant_gates(t, opts, F, rule, graph, within_units=as_call) if part["checked"] else {"checked": False}
+        with spent("dead-gates"):
+            entry["dead_gates"] = dead_gates(t, opts, F)
     elif kind == "primitive":
         entry["partition"] = {"applies": as_call, "checked": True, "units_per_call": 1 if t.params else 0,
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
     if getattr(getattr(t, "defn", t), "gated", False):
-        entry["digest"] = circuit_digest_pin(t, pins, F)
+        with spent("digest"):
+            entry["digest"] = circuit_digest_pin(t, pins, F)
     entry["failures"], entry["warnings"] = F.failures, F.warnings
     done[(t.id, lower_whole, as_call)] = entry
     return entry
@@ -1048,9 +1093,9 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     from types import SimpleNamespace
 
     from verity_vllm.correspondence.reader_for_query import Correspondence
-    from verity_vllm.query import word as W
+    from verity.ml.definitions import word as W
     from verity_vllm.query.module_body import literal_calls
-    from verity_vllm.query.program_view import from_instances
+    from verity_vllm.query.program_view import from_instances, iter_instance_rows
     from verity_vllm.query.required import population
 
     memo = {} if memo is None else memo
@@ -1069,11 +1114,11 @@ def check_row(path: str | Path, opts: Options = Options(), *, memo: dict | None 
     out: dict[str, Any] = {"row": str(p), "query": r["query"], "calls": r["calls"], "units": r["units"], "gates": r["gates"],
                            "committed_interior_words": r["committed_interior_words"], "definitions": []}
     try:
-        from verity_vllm.query import cross_call
+        from verity.ml.definitions import cross_call
     except ImportError:
-        out["cross_call"] = {"checked": False, "reason": "verity_vllm.query.cross_call is not on this tree (PR #98)"}
+        out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree (PR #98)"}
     else:
-        x = cross_call.check_program(str(inst), strict=False)
+        x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
         for a in x["recomputes"]:
             F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "

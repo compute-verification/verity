@@ -53,13 +53,16 @@ theorem winIdeal_le_of_family {n q E : ℕ} (hn : 2 ^ 19 ≤ n)
     tsub_self, add_zero] at h
 
 /-- The device's state as a pair of bit strings: its chip and its store. -/
-def stateEquiv {ι : Type} (d : Device ι) : d.State ≃ (Fin d.chip → Bool) × (Fin d.mem → Bool) :=
+def stateEquiv {ι : Type} (d : Accounting.Device ι) :
+    Verity.Device.State d ≃ (Fin d.chip → Bool) × (Fin d.mem → Bool) :=
   ⟨fun σ => (σ.chip, σ.store), fun x => ⟨x.1, x.2⟩, fun _ => rfl, fun _ => rfl⟩
 
-noncomputable local instance instFintypeState {ι : Type} (d : Device ι) : Fintype d.State :=
+noncomputable local instance instFintypeState {ι : Type} (d : Accounting.Device ι) :
+    Fintype (Verity.Device.State d) :=
   Fintype.ofEquiv _ (stateEquiv d).symm
 
-theorem card_state {ι : Type} (d : Device ι) : Fintype.card d.State = 2 ^ d.chip * 2 ^ d.mem := by
+theorem card_state {ι : Type} (d : Accounting.Device ι) :
+    Fintype.card (Verity.Device.State d) = 2 ^ d.chip * 2 ^ d.mem := by
   rw [Fintype.card_congr (stateEquiv d)]
   simp
 
@@ -68,21 +71,23 @@ at most `n · 512` bits and its reads streamed meets the survivor bound at `⌈n
 the streamed wipe's family bound (`PousStreamedWipe.streamed_wipe_meets_family`). The device's state and the egress are
 a prover of the streamed game whose inside is the `n · 512` bits the fill covers and whose egress is `E` plus the
 on-chip state plus the store the fill leaves out. -/
-theorem survivorBound_of_reads {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n : ℕ}
+theorem survivorBound_of_reads {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B}
+    {n : ℕ}
     [NeZero n] (hn : 2 ^ 19 ≤ n)
     (w : Verity.Wipe d s b (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n 2152)) (hfill : w.fill ≤ n * 512)
     (hreads : Accounting.Assumptions.StreamedReads w) {foreignBits : ℕ}
     (hf : (n * 512 + 18) / 19 + w.egress ≤ foreignBits) :
-    w.SurvivorBound foreignBits ((2⁻¹ : ℝ≥0∞) ^ 128) := by
+    w.SurvivorBound foreignBits (fun _ _ _ => (2⁻¹ : ℝ≥0∞) ^ 128) := by
   classical
   intro S hS hold keep
   obtain ⟨ans, hans⟩ := hreads
-  have hcard : Fintype.card (d.State × (Fin w.egress → Bool)) ≤
+  have hcard : Fintype.card (Verity.Device.State d × (Fin w.egress → Bool)) ≤
       Fintype.card (Pous.Bits (n * 512) × Pous.Bits (w.egress + d.chip + (d.mem - n * 512))) := by
     simp only [Fintype.card_prod, card_state, Fintype.card_fun, Fintype.card_bool, Fintype.card_fin, ← pow_add]
     exact Nat.pow_le_pow_right (by norm_num) (by omega)
   obtain ⟨enc⟩ := Function.Embedding.nonempty_of_card_le hcard
-  have : Nonempty (d.State × (Fin w.egress → Bool)) := ⟨(⟨fun _ => false, fun _ => false⟩, fun _ => false)⟩
+  have : Nonempty (Verity.Device.State d × (Fin w.egress → Bool)) :=
+    ⟨(⟨fun _ => false, fun _ => false⟩, fun _ => false)⟩
   have hdec : ∀ x, Function.invFun enc (enc x) = x := Function.leftInverse_invFun enc.injective
   let P : Pous.StreamedWipe.Prover n 2152 512 S (n * 512) (w.egress + d.chip + (d.mem - n * 512)) :=
     { fill := fun z L => enc (w.filled (hold z) L)
@@ -163,8 +168,8 @@ theorem wipeSurvivorBound : WipeSurvivorBound := by
   obtain ⟨hk, hn, hm, -, rfl, rfl⟩ := certify_certified hc
   have heps : ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) = (2⁻¹ : ℝ≥0∞) ^ 128 := by
     rw [Nat.cast_one, Nat.cast_pow, Nat.cast_ofNat, one_div, ENNReal.inv_pow]
-  show w.SurvivorBound _ (((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞))
-  rw [heps]
+  show w.SurvivorBound _ (fun _ _ _ => ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞))
+  simp only [heps]
   revert w
   generalize c.params.k = k at hk ⊢
   subst hk

@@ -5,14 +5,12 @@ import Definitions.Core.PrivatePartition
 import Definitions.Core.Declaration
 import Definitions.Core.Boolean
 import Definitions.Core.Game
-import Definitions.Core.Device
-import Definitions.Core.Blocks
-import Definitions.Core.Adversary
 import Definitions.Core.Decisive
 import Definitions.Core.Scalar
 import Definitions.Core.Prims
 import Definitions.Core.TC
 import Definitions.Core.Fp32
+import Definitions.Core.NaiveStrassen
 
 /-!
 # Core's protocol: the model every protocol states its guarantees in

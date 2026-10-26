@@ -82,6 +82,18 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
+- `prove_bundle.sh`: a drawn-unit replay bundle (`benchmarks/e2e_demo`, `verity/drawn-unit-bundle/v2`) proved by
+  `prove_bundle.py`. `prove_bundle.py make` writes the torch loop's window under the fixture's test key and the bundle of
+  its draw: the fixture's `FIXTURE_DRAW`, or with `PB_K=K` a live one over a window registered `subset:K`, the
+  challenger's receipt of the registration and then Lean `flock-verify draw --registration` of the registered law's
+  units over the whole partition on its own coins. The bundle is held to the prover's window: its own check (the draw's
+  law the registered one among it), its run, registration and partition, each drawn member's public body and a live
+  draw's receipt and record. Each drawn member is one `prove --zk` session behind the Lean firewall, one at a time, served the bundle's
+  draw, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
+  proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the firewall and
+  refused by Lean without it. `PB_BUILD_ONLY=1` only builds the prover, Lean verifier and firewall into its `out/bin`, stamped
+  with the trees they come from. A later run with `PB_BINARIES=` that directory uses them while the stamp matches its own
+  source, so M3's reserved window doesn't spend time on the build.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node

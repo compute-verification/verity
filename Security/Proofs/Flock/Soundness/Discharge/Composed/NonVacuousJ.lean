@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJJson
+import Proofs.Flock.Soundness.Assumptions.CustodyZk
 
 /-!
 # The `J`-table statements' draw hypotheses hold together
@@ -38,7 +39,8 @@ variable {n mPts : ℕ}
 has a `DrawSetupZJ` at its inputs, its draw's units of `S` and its draw. -/
 theorem setupZJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = false) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKJ I dj mPts S) (j : Fin (nTab I)) :
+    (hd : recordDraw t.record = some (dj S)) (hok : Assumptions.Zk.DrawAtZKJ I dj mPts S)
+    (j : Fin (nTab I)) :
     Nonempty (DrawSetupZJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) := by
   obtain ⟨spec, sts, hs, -, hv⟩ := h
   obtain ⟨hsz, hstJ⟩ := setupOf_tableJ hh hd hs

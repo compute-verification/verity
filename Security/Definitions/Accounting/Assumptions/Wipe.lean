@@ -4,7 +4,7 @@ import Definitions.Accounting.Wipe
 # What an accepted streamed wipe assumes of the device (trusted)
 
 The premise of `MemoryChallenger.Properties.WipeSurvivorBound`, the bridge from an accepted `verity/wipe/v0` session to
-the wipe's survivor bound (`Verity.Wipe.SurvivorBound`), a named `Prop` on a wipe of core's device:
+the wipe's survivor bound (`Verity.Wipe.SurvivorBound`), a named `Prop` on a wipe of the device model:
 
 * `StreamedReads w`: something of the device's state when the fill ends, the egress and the reads revealed so far
   answers every spot read of every accepted run (`Accounting.Wipe.Answers`). It is the streamed game's shape
@@ -32,7 +32,7 @@ fill ends, the wipe's egress `w.egress`, the reads revealed before it in order a
 C6, the egress's count, is not here: `w.egress` is what the certifier counts, and the property bounds it by the count
 the session publishes. A prover breaks this premise only through a channel no certifier sees, a store outside the
 device's state, or a challenger that accepts a wrong or early answer. -/
-def StreamedReads {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n k : ℕ}
+def StreamedReads {ι : Type} {d : Accounting.Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n k : ℕ}
     (w : Verity.Wipe d s b (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n k)) : Prop :=
   ∃ answer, Accounting.Wipe.Answers w answer
 
