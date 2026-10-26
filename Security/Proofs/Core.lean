@@ -30,6 +30,7 @@ import Proofs.Core.Accel.Witness
 import Proofs.Core.Accel.Sheet
 import Proofs.Core.NaiveStrassen
 import Proofs.Core.Bilinear
+import Proofs.Core.HongKung
 import Proofs.Core.Blocks
 
 /-!
