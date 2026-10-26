@@ -116,13 +116,47 @@ def lp(card, reading, heads_only: bool, no_small_k: bool = False):
     return -res.fun, mix, res.ineqlin.marginals
 
 
-def honest_dither(card, reading) -> float:
-    """Distinct words a SM-clock of the honest kernel: one k32 word and duo's fold, LOP3 + IMAD + LEA.HI, a word."""
-    rate = {w[0].split(" (")[0]: w for w in card}
-    alu = next(w for w in card if w[0].startswith(("IADD3/LOP3", "LOP3/")))
-    imad = rate["IMAD"]
-    tc = 1 / k32_word_time(card, reading)
-    return min(tc, alu[6][reading] / 2, imad[6][reading], ISSUE * 32 / 3)
+# Lane instructions a word of the designs' folds (`machine_model/data/devices/*/designs`): duo is LOP3, LEA.HI and IMAD;
+# LI is a LOP3 on one word and an IMAD on the next (the H200's headline dither-1s-li-l32).
+FOLDS = {"duo": {"alu": 2.0, "imad": 1.0}, "li": {"alu": 0.5, "imad": 0.5}}
+
+
+def _row(card, prefix):
+    return next(w for w in card if w[0].startswith(prefix))
+
+
+def _lane_rate(card, pipe, reading) -> float:
+    """Lane instructions a SM-clock of the pipe's LOP3 or IMAD row (issue's 128 with no rate)."""
+    w = _row(card, ("IADD3/LOP3", "LOP3/")) if pipe == "alu" else next(w for w in card if w[0] == "IMAD")
+    return w[6][reading] or ISSUE * 32
+
+
+def honest_dither(card, reading, fold: str = "li") -> float:
+    """Words a SM-clock of the honest kernel: the k32 tensor core's words with the fold's lane instructions a word, under
+    the tensor pipe, each lane pipe and issue (the MMA's own issue slot included)."""
+    name, _, per, words, _, _, rates = card[0]
+    f = FOLDS[fold]
+    issue_per_word = sum(f.values()) / 32 + 1 / words
+    return min(rates[reading] / per * words, *(_lane_rate(card, p, reading) / n for p, n in f.items()),
+               ISSUE / issue_per_word)
+
+
+def concurrency(card, reading, fold: str = "li") -> tuple[float, float]:
+    """R-ACCEL-1 with other work priced on the tensor core alone: the tensor pipe runs other work at its peak and the
+    transcript's words come from Four Russians on the lanes (A = B = 0: 3 entries a word, 4 to a LDS.128 lane, 2 IADD3
+    and the fold). Returns (Four Russians words a SM-clock, that over the tensor peak's words): the strategy's credited
+    work plus other work over the honest optimum's is 1 plus the second. Lookups are priced conflict-free."""
+    name, _, per, words, _, _, rates = card[0]
+    issue = ISSUE - rates[reading] / per
+    f = FOLDS[fold]
+    lds = _row(card, "LDS.128 (copy)")
+    lds_t = instr_time(lds[2], lds[6][reading])
+    iadd = _row(card, ("IADD3",))
+    alu_t = 2 / (iadd[6][reading] or ISSUE * 32) + f["alu"] / _lane_rate(card, "alu", reading)
+    imad_t = f["imad"] / _lane_rate(card, "imad", reading)
+    issue_t = (3 / 4 + 2 + sum(f.values())) / 32
+    fr = min(issue / issue_t, 1 / (3 / 128 * lds_t), 1 / alu_t, 1 / imad_t)
+    return fr, fr / (rates[reading] / per * words)
 
 
 def main() -> None:
@@ -142,11 +176,18 @@ def main() -> None:
         for r in READINGS:
             k32 = 1 / k32_word_time(card, r)
             hd = honest_dither(card, r)
+            print(f"  {r:8s} k32 peak {k32:5.1f} words a SM-clock; honest Dither " +
+                  ", ".join(f"{f} {honest_dither(card, r, f):5.1f}" for f in FOLDS))
             for heads_only, nsk in ((True, False), (False, False), (True, True), (False, True)):
                 best, mix, _ = lp(card, r, heads_only, nsk)
                 tag = ("heads" if heads_only else "all  ") + (" no-small-k" if nsk else "           ")
-                print(f"  {r:8s} {tag} B = {best:7.1f}  c_g = {k32 / best:.3f}  (against honest Dither's {hd:5.1f}: "
-                      f"{hd / best:.3f})  mix {mix}")
+                print(f"  {r:8s} {tag} B = {best:7.1f}  c_g = {k32 / best:.3f}  (against honest Dither's with LI, "
+                      f"{hd:5.1f}: {hd / best:.3f})  mix {mix}")
+        print(f"-- R-ACCEL-1 on {cname}, other work on the tensor core alone: Four Russians words a SM-clock on the lanes "
+              f"beside it, and the strategy's gain over the honest optimum")
+        for r in READINGS:
+            print(f"  {r:8s} " + "; ".join(f"{f}: {fr:5.1f} words, +{g:.1%}" for f in FOLDS
+                                         for fr, g in [concurrency(card, r, f)]))
     print("\nSHA-512 a word (section 'barrier'): ~3,570 32-bit ALU instructions a 1,024-bit block, 111.6 a word")
     for cname, alu, k32 in (("H200", 64, 128), ("sm_120", 64, 32)):
         g = (3570 / 32) / alu / (1 / k32)
