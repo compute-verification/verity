@@ -90,6 +90,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   `--tie` ties the outputs to the certified ones (`verity_all_protocols/tie.py`) under a work law (default `work:64`, any
   other refused), and `--tie-tamper W,...` with `CERTIFIER_TAMPER=byte` ties those windows to a relay with one output
   byte changed on the egress, which must reject.
+  `--of-record` is S1's run of record (below). Every run writes its mode (`of_record` and its exact flags) to
+  `$OUT/mode.json`, each window's `period.json` and report (`mode`) and its `ALLP` line, so its evidence says whether it
+  counts.
 
 | name | protocol | leg file | owner | state |
 | --- | --- | --- | --- | --- |
@@ -99,9 +102,27 @@ every machine of a census deployment, the pooled total first and the per-window 
 | bandwidth | the bandwidth audit over PoUS's store, or remote bandwidth | `legs/bandwidth.py` | memory-accounting | missing |
 | communication | the network certifier | `legs/certifier.py` | network-accounting | real |
 
+## S1's run of record
+
+This is the one way to run S1 so that it counts:
+
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --windows 4 --tamper 3
-research run --on vy-nebius-cpu-5 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --windows 4 --start 4
+  bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
 ~~~
+
+`--of-record` sets the flags three lanes' work needs:
+
+- `--tie`, network-accounting's output tie;
+- `--pouw h1`, whose work leg refuses a window without PoUW's window;
+- `--law work:64`, the work law the tie needs;
+- `--jobs 1 --session-jobs 1`, so one firewalled session runs at a time.
+
+Under `--tie-tamper` it also sets `CERTIFIER_TAMPER=byte`.
+
+`run.sh` checks the command before it builds anything (`runner --check`, whose output is `$OUT/mode-check.json`). It
+refuses a command that contradicts the mode, with the reason: another `--law`, `--jobs` or `--session-jobs` other than 1,
+or another `CERTIFIER_TAMPER`.
+
+Window 0 is tied to a relay with one egress byte changed, so it must reject, and window 1 is honest, so it must accept.
+Any other command is a development run: its `mode.json` says `"of_record": false`.
