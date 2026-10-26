@@ -95,15 +95,17 @@ Preflight.  Each of 17 Oct's marks that broke or cancelled a train was cheap to 
 on `next`, a stale Lake pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS
 entry, a test that read a row another queued PR refits away (an error at collection), and one lane's unlanded branch carried in
 two PRs.  20 Oct's two failed `tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight now runs
-too, as it runs the landing gates the sync would.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
+too, as it runs the landing gates the sync would (on the head; the sync, on its merge onto `next`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
 failure `next` has too refuses nothing, and what keeps a check from running is said and refuses nothing (the train's check is the
 gate).  `--no-preflight` skips it, for the lander.
 
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
 order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
-that conflicts costs one call).  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
-merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
+that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
+sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
+change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
+along (they're merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
 PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
 change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  What a sync merges on top goes non-Lean first
@@ -112,7 +114,8 @@ on its diff against `main`, or against the PR it's stacked on) and contains none
 change, `--first`'s order and then admission's within each part, so it doesn't wait above a Lean change for its Lean check.
 Members the sync keeps never move for it.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
-`main`, `gate_refusal`), with the gate's fix: each PR the sync merges is judged first, a new one or one merged again above a
+`main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
+with the gate's fix: each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
 
 Landing.  `land` walks `next` down from its tip and fast-forwards `main` to the first commit the gate accepts: `main` gets exactly
@@ -141,6 +144,7 @@ clone fetched last.
 from __future__ import annotations
 
 import argparse
+import ast
 import concurrent.futures
 import contextlib
 import dataclasses
@@ -151,6 +155,7 @@ import importlib.util
 import json
 import math
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -173,6 +178,8 @@ RULES = "ci/queue.toml"
 RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 #: drive's flags of record (`DriveFlags`, `--config`)
 DRIVE_FLAGS = "tools/verity/check/drive.toml"
+#: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
+PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
@@ -340,8 +347,8 @@ class DriveFlags:
     land: str = "check"
     #: the after-landing run of `land = "review"` reuses no pass (`check.py --no-cache`)
     after_landing_no_cache: bool = False
-    #: scripts a PR's head passes to be admitted (`gate_refusal`: the ready mark's preflight, and the sync that merges it onto
-    #: `next`), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
+    #: scripts a PR passes to be admitted (`gate_refusal`: its head at the ready mark's preflight, its merge onto `next` at the
+    #: sync), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
     #: the most Lean checks of `land = "review"` running at once: a lower one and those stacked above it (`drive.lean_stack`)
     max_lean_checks: int = 2
@@ -500,10 +507,15 @@ def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, s
 
 
 def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
-                 run: Callable[[Path, str, str, str], tuple[int | None, str]] = run_gate) -> tuple[list[str], list[str]]:
+                 run: Callable[[Path, str, str, str], tuple[int | None, str]] = run_gate,
+                 onto: str | None = None) -> tuple[list[str], list[str]]:
     """What the landing ``gates`` say of ``head`` against ``main`` (each judges the change from their merge base): (each failure,
-    with its fix and how to run the gate; each gate that couldn't judge, with why).  A gate exits 0 to pass, and 1 with `--json`'s
-    `{"failures": [{"why": ..., "fix": [...]}]}` to fail; anything else is unable to judge."""
+    with its fix and how to run the gate; each gate that couldn't judge, with why).  ``head`` is a PR's head, or with ``onto``
+    its merge onto that branch, as the sync judges it: what the members below add counts too (26 Oct: #4238's merge took
+    AGENTS.md over its cap with #4603 and #4604 below it, though its head alone was under).  A gate exits 0 to pass, and 1 with
+    `--json`'s `{"failures": [{"why": ..., "fix": [...]}]}` to fail; anything else is unable to judge."""
+    what, merged = (head[:12], "") if onto is None else (f"its merge onto `{onto}` ({head[:12]})", f" on its merge onto `{onto}`")
+    rerun = "in the branch" if onto is None else f"on the branch merged with `origin/{onto}`"
     refused, unjudged = [], []
     for path in gates:
         rc, out = run(repo, main, head, path)
@@ -516,11 +528,11 @@ def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
                             for f in json.loads(out)["failures"]]
         if not failures:
             why = out if rc is None else f"exit {rc}" + (f": {out}" if rc != 1 else ": no failure it names")
-            unjudged.append(f"the landing gate {path} can't judge {head[:12]} on `main` {main[:12]} ({why.strip()[-400:]})")
+            unjudged.append(f"the landing gate {path} can't judge {what} on `main` {main[:12]} ({why.strip()[-400:]})")
             continue
         for why, fix in failures:
-            refused.append(f"the landing gate {path} at `main` {main[:12]}: {why}" + "".join(f"; {x}" for x in fix)
-                           + f" (`python3 {path} origin/main HEAD` in the branch runs it)")
+            refused.append(f"the landing gate {path} at `main` {main[:12]}{merged}: {why}" + "".join(f"; {x}" for x in fix)
+                           + f" (`python3 {path} origin/main HEAD` {rerun} runs it)")
     return refused, unjudged
 
 
@@ -987,8 +999,9 @@ class Queue:
         """(``pr``'s head merged onto ``tip``, "") or (None, why not), as `git merge --no-ff` in a checkout of ``tip`` gives them,
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`--attr-source`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (25-26 Oct: a sync that merged each candidate in
-        the worktree, ~70 of them conflicting, took 40 min).  A git without `--attr-source` (before 2.40) merges in the
-        worktree (`_merge_in_worktree`)."""
+        the worktree, ~70 of them conflicting, took 40 min).  A merge whose every conflict is in a pin is kept, each pin rebuilt
+        from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) merges in the worktree
+        (`_merge_in_worktree`), which refuses any conflict."""
         if not self._attr_source:
             return self._merge_in_worktree(tip, pr, members)
         r = _git(self.workdir, f"--attr-source={tip}", "merge-tree", "--write-tree", "--name-only", "--no-messages", tip, pr.head,
@@ -996,14 +1009,19 @@ class Queue:
         if r.returncode == 129 and "attr-source" in r.stderr:
             self._attr_source = False
             return self._merge_in_worktree(tip, pr, members)
-        if r.returncode == 0:
-            if not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
-                return tip, ""                                  # already merged: `merge --no-ff` makes no commit either
-            commit = _git(self.workdir, "commit-tree", r.stdout.split()[0], "-p", tip, "-p", pr.head, "-m", _message(pr),
-                          env=IDENTITY).stdout.strip()
-            return commit, ""
-        files = list(dict.fromkeys(r.stdout.splitlines()[1:])) if r.returncode == 1 else []
-        return None, self._unmerged(r, files, members)
+        if r.returncode == 1:
+            files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
+            if not (tree := repinned(self.workdir, r.stdout.split()[0], tip, pr.head, files)):
+                return None, self._unmerged(r, files, members)
+            self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
+        elif r.returncode:
+            return None, self._unmerged(r, [], members)
+        elif not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
+            return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
+        else:
+            tree = r.stdout.split()[0]
+        commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", pr.head, "-m", _message(pr), env=IDENTITY).stdout.strip()
+        return commit, ""
 
     def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
@@ -1106,11 +1124,11 @@ class Queue:
                 e.state, e.why = "waiting", f"contains #{blocked[0]}, which didn't merge"
                 dropped.add(n)
                 continue
-            refused, unjudged = gate_refusal(self.workdir, main, e.pr.head, gates)
-            if refused or unjudged:
-                commit, why = None, " | ".join(refused + unjudged)
-            else:
-                (commit, why), merged = self._merge(tip, e.pr, members), True
+            (commit, why), merged = self._merge(tip, e.pr, members), True
+            if commit is not None:
+                refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch)
+                if refused or unjudged:
+                    commit, why = None, " | ".join(refused + unjudged)
             if commit is None:
                 e.state, e.why = "refused", why
                 dropped.add(n)
@@ -1297,6 +1315,89 @@ def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
     r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
     return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
+
+
+def pins_at(repo: Path, ref: str) -> dict[str, tuple[str | None, str]]:
+    """{path: (key, under)} of each `Pin` in the pins tool's `PINS` on ``ref`` (`PINS_FILES`), read from its text with `ast`,
+    since research imports nothing from Verity; {} when ``ref`` holds none or it doesn't parse."""
+    for path in PINS_FILES:
+        if (r := _git(repo, "show", f"{ref}:{path}", check=False)).returncode == 0:
+            break
+    else:
+        return {}
+    try:
+        [calls] = [n.value.elts for n in ast.parse(r.stdout).body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Tuple)
+                   and any(isinstance(t, ast.Name) and t.id == "PINS" for t in n.targets)]
+        out = {}
+        for c in calls:
+            args = {**dict(zip(("path", "key", "under"), c.args)), **{k.arg: k.value for k in c.keywords}}
+            path, key, under = (ast.literal_eval(args[a]) for a in ("path", "key", "under"))
+            out[path] = (key, under)
+        return out
+    except (SyntaxError, ValueError, KeyError, AttributeError):
+        return {}
+
+
+def _blobs(repo: Path, specs: list[str]) -> dict[str, bytes]:
+    """{spec: its blob's bytes} for each of ``specs`` (`<tree>:<path>`) that names a blob, by one `git cat-file --batch`."""
+    out = subprocess.run(["git", "cat-file", "--batch"], cwd=repo, input="".join(f"{s}\n" for s in specs).encode(),
+                         capture_output=True, env=git_env(GIT_TERMINAL_PROMPT="0"), check=True).stdout
+    got, i = {}, 0
+    for s in specs:
+        j = out.index(b"\n", i)
+        head, i = out[i:j].split(), j + 1
+        if head[-1] in (b"missing", b"ambiguous"):
+            continue
+        if head[1] == b"blob":
+            got[s] = out[i:i + int(head[2])]
+        i += int(head[2]) + 1
+    return got
+
+
+def repinned(repo: Path, tree: str, ours: str, theirs: str, conflicted: list[str]) -> str | None:
+    """The merged ``tree`` with each conflicted pin rebuilt, when every path in ``conflicted`` is a pin (`pins_at` ``ours``);
+    else None.  A pin records the union of the paths both sides' versions record, OURS's in its order then THEIRS's new
+    ones, less those the merged tree lacks, each with the sha256 of its blob there; a JSON pin keeps the rest of OURS's text.
+    `pins.py --merged` would run each pin's command instead, which needs a checkout and Lake: two PRs that each changed a
+    pinned input both changed the pin, and drive ejected the second (#4605, over the PoUS TRUSTED.sha256)."""
+    pins = pins_at(repo, ours)
+    if not conflicted or any(p not in pins for p in conflicted):
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
+        _git(repo, "read-tree", tree, env=env)
+        for path in conflicted:
+            key, under = pins[path]
+            if not (sides := _blobs(repo, [f"{ours}:{path}", f"{theirs}:{path}"])):
+                return None
+            recorded: dict[str, str] = {}
+            try:
+                for text in (b.decode() for b in sides.values()):
+                    pairs = ([ln.split("  ", 1)[::-1] for ln in text.splitlines() if ln.strip()] if key is None
+                             else json.loads(text)[key].items())
+                    recorded |= {p: h for p, h in pairs if p not in recorded}
+            except (ValueError, KeyError, TypeError, AttributeError):
+                return None
+            full = {p: posixpath.normpath(posixpath.join(under, p)) for p in recorded}
+            found = _blobs(repo, [f"{tree}:{f}" for f in full.values()])
+            digests = {p: hashlib.sha256(found[f"{tree}:{f}"]).hexdigest() for p, f in full.items() if f"{tree}:{f}" in found}
+            text = ("".join(f"{h}  {p}\n" for p, h in digests.items()) if key is None
+                    else _with_json(next(iter(sides.values())).decode(), key, digests))
+            blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=repo, input=text.encode(), capture_output=True,
+                                  env=git_env(GIT_TERMINAL_PROMPT="0"), check=True).stdout.decode().strip()
+            mode = _out(repo, "ls-tree", tree, "--", path).split(" ", 1)[0] or "100644"
+            _git(repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{path}", env=env)
+        return _git(repo, "write-tree", env=env).stdout.strip()
+
+
+def _with_json(text: str, key: str, value: dict) -> str:
+    """``text``, a JSON object written with `indent=1`, with its top-level ``key`` set to ``value`` and every other byte kept."""
+    doc = json.loads(text)
+    if m := re.search(rf"^([ \t]*){re.escape(json.dumps(key))}:\s*(?=\{{)", text, re.M):
+        old, end = json.JSONDecoder().raw_decode(text, m.end())
+        if old == doc[key]:
+            return text[:m.end()] + json.dumps(value, indent=1).replace("\n", "\n" + m.group(1)) + text[end:]
+    return json.dumps({**doc, key: value}, indent=1) + "\n"
 
 
 def rules_at(repo: Path, ref: str) -> Rules | None:

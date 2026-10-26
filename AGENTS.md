@@ -286,7 +286,8 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
 - Drive admits a PR once its owner marks it ready at its head: `research queue ready N --mark --by LANE`, or
   `research data label pr:N@SHA ready true --by LANE`. A new head needs a new mark. The owner is the lane a `Lane NAME` line
   in the PR's body names, else the Cursor agent id the body carries. Marks written before `marked_after` in
-  `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out. `research queue status` says what each PR
+  `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out, as does a merge onto `next` that conflicts
+  or puts a Markdown file over its cap (drive.toml's `landing_gates`). `research queue status` says what each PR
   waits for.
 - Drive stacks admitted PRs on `next`, one merge commit each, non-Lean first (`nonlean_first`, drive.toml): a sync puts
   a PR whose own change is no Lean change below every Lean change it doesn't contain, in `--first`'s order and then
