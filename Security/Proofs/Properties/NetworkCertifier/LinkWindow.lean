@@ -102,13 +102,17 @@ theorem certified_spec {c : Case} (h : certified c = true) : WindowCertified c :
   · cases hx
 
 theorem synced_spec {c : Case} (h : synced c = true) : WindowSynced c := by
-  unfold synced at h
-  split at h
-  · rename_i s hs
-    simp only [Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq] at h
-    obtain ⟨hd, r, hr, he⟩ := h
-    exact ⟨s, hs, hd, r, hr, he⟩
-  · cases h
+  cases hk : c.kind with
+  | warden => simp only [WindowSynced, hk]
+  | plain | served | advised =>
+    simp only [synced, hk] at h
+    simp only [WindowSynced, hk]
+    split at h
+    · rename_i s hs
+      simp only [Bool.and_eq_true, Array.contains_iff_mem, Array.any_eq_true', beq_iff_eq] at h
+      obtain ⟨hd, r, hr, he⟩ := h
+      exact ⟨s, hs, hd, r, hr, he⟩
+    · cases h
 
 theorem linkWindowAcceptMeans : LinkWindowAcceptMeans := by
   intro c h
