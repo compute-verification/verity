@@ -69,6 +69,10 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    checkout has one), for a lead whose PR tool opens PRs only from its own run
                                                    branch; refuses when BRANCH isn't on the remote, isn't at --sha, or already
                                                    has an open PR; prints the PR's URL (`open_pr`)
+    research queue edit PR --body-file F [--dry-run]
+                                                   replace the PR's body with F outright, through gh as `open` does, keeping only
+                                                   the Cursor PR tool's markers and footer (`edit_pr`); refuses a body that drops or
+                                                   changes the PR's `Lane NAME` owner; --dry-run prints the body it would write
     research queue stats (--log FILE | --per-pr) [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`); --per-pr,
                                                    the per-PR shadow's would-land times from drive's state file instead
@@ -721,6 +725,12 @@ class Entry:
     commit: str | None = None
 
 
+def contained(repo: Path, base: str, head: str, heads: dict[str, int]) -> list[int]:
+    """The PRs of ``heads`` ({head: PR number}) whose head ``head`` contains: one of its commits not on ``base``, ``head``
+    itself included (the caller leaves its own PR out).  A PR goes on `next` after those it contains (`Entry.after`)."""
+    return sorted({heads[h] for h in _out(repo, "rev-list", f"{base}..{head}").split() if h in heads})
+
+
 def based_on(pr: PR, prs: Iterable[PR]) -> str:
     """``pr``'s base branch, with the open PR whose head that branch is (`BRANCH (#P's head)`) when one is."""
     parent = next((p for p in prs if p.branch == pr.base and p.number != pr.number), None)
@@ -861,7 +871,7 @@ class Queue:
             at = at[:-1] + ":59Z"                       # recorded to the minute: a mark in that minute may predate the ejection
         return when is not None and when > at
 
-    def entries(self, prs: list[PR], state: dict) -> dict[int, Entry]:
+    def entries(self, prs: list[PR], state: dict, base: str = "origin/main") -> dict[int, Entry]:
         rules = self.rules()
         heads = {p.head: p.number for p in prs}
         out: dict[int, Entry] = {}
@@ -884,8 +894,7 @@ class Queue:
                                              f"before `marked_after`): re-mark it or close it")
             else:
                 e.state, e.why = "waiting", f"not marked ready at {p.head[:8]}: `research queue ready {p.number} --on MACHINE` (or --local; --mark without the tier)"
-            below = _out(self.workdir, "rev-list", f"origin/main..{p.head}").split()
-            e.after = tuple(sorted(heads[h] for h in below if h in heads and heads[h] != p.number))
+            e.after = tuple(n for n in contained(self.workdir, base, p.head, heads) if n != p.number)
         for e in out.values():
             e.after = tuple(a for a in e.after if not self._carried(e.pr, out[a], state))
         changed = True
@@ -2122,7 +2131,10 @@ class Preflight:
         how to name it, and `next`'s members."""
         _git(self.repo, *STALL, "fetch", "-q", self.remote, "+refs/heads/main:refs/queue/preflight/main",
              f"+refs/pull/{pr.number}/head:refs/queue/preflight/pr")
-        if _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode:
+        missing = lambda: _git(self.repo, "cat-file", "-e", f"{pr.head}^{{commit}}", check=False).returncode   # noqa: E731
+        if missing() and pr.branch:         # GitHub's pull ref lags a push by seconds; the branch has the head `ready` read
+            _git(self.repo, *STALL, "fetch", "-q", self.remote, f"+refs/heads/{pr.branch}:refs/queue/preflight/branch", check=False)
+        if missing():
             raise QueueError(f"{pr.head[:12]} isn't on {self.remote} (pushed again since?)")
         main = _out(self.repo, "rev-parse", "refs/queue/preflight/main")
         r = _git(self.repo, *STALL, "ls-remote", "--exit-code", self.remote, f"refs/heads/{BRANCH}", check=False)
@@ -2139,34 +2151,37 @@ class Preflight:
         return tip, f"`{BRANCH}` at {tip[:12]}", members
 
     def _contained(self, pr: PR, prs: list[PR]) -> list[str]:
-        """(c): each other open PR whose head this head contains and that isn't admitted, with the fix."""
-        below = set(_out(self.repo, "rev-list", f"refs/queue/preflight/main..{pr.head}").split())
-        inside = sorted((p for p in prs if p.number != pr.number and p.head in below), key=lambda p: p.number)
+        """(c): each open PR whose head this head contains and that the sync wouldn't admit, so that it holds this PR behind it,
+        with the fix.  The sync's own admission judges it (`Queue.entries` over this head, taken as marked, and the PRs it
+        contains): not marked ready at that head, ejected there, held, with no owner, or containing such a PR itself, unless this
+        PR carries its change (`Queue._carried`).  26 Oct (TOP-90 row 74): lean's re-marks of #4510, #4439 and #4564 were taken,
+        and only the next sync said "contains #4439, which isn't admitted"."""
+        main = "refs/queue/preflight/main"
+        heads = {p.head: p.number for p in prs}
+        inside = set(contained(self.repo, main, pr.head, heads)) - {pr.number}
         if not inside:
             return []
-        rules = rules_at(self.repo, "refs/queue/preflight/main") or Rules()
+        rules = rules_at(self.repo, main) or Rules()
         labels = StoreLabels(self.store, log=lambda s: print(s, file=sys.stderr), since=rules.marked_after)
-        out = []
-        for p in inside:
-            if rules.hold_label in p.labels:
-                why = f"is held (`{rules.hold_label}` label)"
-            elif p.owner is None:
-                why = "has no owner (no `Lane NAME` line)"
-            else:
-                try:
-                    if labels.ready(p.number, p.head):
-                        continue
-                    if _who(p.owner) in (_who(pr.owner or ""), _who(labels.marked_by(p.number, p.head) or "")):
-                        continue                    # this PR carries its change (`Queue._carried`)
-                except QueueError as e:
-                    self.log(f"research queue: preflight: can't tell whether #{p.number}, which this head contains, is admitted ({e})")
-                    continue
-                when = labels.before_cutoff(p.number, p.head)
-                why = f"isn't marked ready at {p.head[:8]}" + (f" (its mark, from {when}, is before `marked_after`)" if when else "")
-            out.append(f"it contains #{p.number}'s head {p.head[:8]}, which {why}, so drive holds this PR behind it: if this PR "
-                       f"carries its change, #{p.number}'s owner withdraws its mark (`research data label pr:{p.number}@{p.head[:12]} "
-                       f"ready false --by OWNER`), or a PR of the same owner carries it; else mark #{p.number} ready so it lands first")
-        return out
+        q = Queue(self.repo, remote=self.remote, github=None, ready=lambda n, h: (n, h) == (pr.number, pr.head) or labels.ready(n, h),
+                  store=self.store, rules=rules, log=self.log, before_cutoff=labels.before_cutoff, marked_by=labels.marked_by,
+                  marked_at=labels.marked_at, prefetch=labels.prefetch)
+        try:
+            entries = q.entries([pr, *(p for p in prs if p.number in inside)], {"ejected": {}}, base=main)
+        except QueueError as e:
+            self.log(f"research queue: preflight: can't tell whether the open PRs this head contains are admitted ({e})")
+            return []
+
+        def why(n: int) -> str:
+            e, lab = entries[n], labels._newest.get((n, entries[n].pr.head))
+            if lab is not None and str(lab.value).lower() == "false" and lab.ref:
+                return f"ejected at {e.pr.head[:8]} by {lab.by}: {lab.ref}"
+            return f"not marked ready at {e.pr.head[:8]}" if e.why.startswith("not marked ready") else e.why
+
+        return [f"it contains #{n}'s head {entries[n].pr.head[:12]}, and #{n} isn't admitted ({why(n)}), so drive holds this PR "
+                f"behind it: mark #{n} ready first, so it lands first, or drop #{n}'s commits from this branch (if this PR carries "
+                f"#{n}'s change, #{n}'s owner withdraws its mark: `research data label pr:{n}@{entries[n].pr.head[:12]} ready false "
+                f"--by OWNER`)" for n in entries[pr.number].after if entries[n].state != "ready"]
 
     def _gates(self, pr: PR, notes: list[str]) -> list[str]:
         """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge is a note: the sync
@@ -2567,21 +2582,66 @@ def open_pr(top: Path, repo: str, head: str, title: str, body: str, *, base: str
         raise QueueError(f"open: no branch {head!r} on origin: push it first")
     if sha and not found[0].startswith(sha):
         raise QueueError(f"open: origin's {head} is at {found[0][:12]}, not {sha}: the head moved; re-check it with its owner")
-    gh = gh or broker_gh(top)
-    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
-
-    def call(*args: str) -> str:
-        r = run([gh, *args], cwd=top, capture_output=True, text=True, env=env, timeout=120)
-        if r.returncode:
-            raise QueueError(f"open: gh {args[0]} {args[1]}: {(r.stderr or r.stdout).strip()[-300:]}")
-        return r.stdout
-
+    call = _gh_call("open", top, gh, run)
     existing = json.loads(call("pr", "list", "--repo", repo, "--head", head, "--state", "open", "--json", "number,url") or "[]")
     if existing:
         raise QueueError(f"open: {head} already has PR #{existing[0]['number']} ({existing[0]['url']}); nothing opened")
     out = call("pr", "create", "--repo", repo, "--head", head, "--base", base, "--title", title, "--body", body,
                *(["--draft"] if draft else []))
     return out.strip().splitlines()[-1]
+
+
+def _gh_call(verb: str, top: Path, gh: str | None, run) -> Callable[..., str]:
+    """`gh ARGS` in ``top`` (the broker's gh by default, `broker_gh`), returning its stdout; a failure raises, naming ``verb``."""
+    gh = gh or broker_gh(top)
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
+    def call(*args: str) -> str:
+        r = run([gh, *args], cwd=top, capture_output=True, text=True, env=env, timeout=120)
+        if r.returncode:
+            raise QueueError(f"{verb}: gh {args[0]} {args[1]}: {(r.stderr or r.stdout).strip()[-300:]}")
+        return r.stdout
+
+    return call
+
+
+#: the markup a Cursor agent's PR tool keeps in a body: it rewrites only the text between these markers, so any text above them
+#: (the body `open` gave the PR) stays, and its footer, the agent's link whose id `PR.owner` reads, follows them
+CURSOR_BODY = ("<!-- CURSOR_AGENT_PR_BODY_BEGIN -->", "<!-- CURSOR_AGENT_PR_BODY_END -->")
+CURSOR_FOOTER_RE = re.compile(r'<div><a href="https://cursor\.com/agents/bc-[^"]*cursor_ref=pr_footer')
+
+
+def edited_body(old: str, new: str) -> str:
+    """``new`` as the whole of a PR body that was ``old``: none of ``old``'s text stays, only the platform's markup, which is
+    kept deliberately.  ``new`` goes between Cursor's markers when ``old`` has them, so the tool's next update replaces it
+    rather than leaving it above, and ``old``'s footer follows it (TOP-90 row 5: #4491, #4622, #4514 and #4468 each kept the
+    body they were opened with above every later one).  Markers or a footer ``new`` brings along are dropped."""
+    begin, end = CURSOR_BODY
+    foot = next((old[m.start():].strip() for m in reversed(list(CURSOR_FOOTER_RE.finditer(old)))
+                 if end not in old or m.start() > old.rfind(end)), "")
+    if m := CURSOR_FOOTER_RE.search(new):
+        new = new[:m.start()]
+    text = new.replace(begin, "").replace(end, "").strip("\n")
+    if begin in old and end in old:
+        text = f"{begin}\n{text}\n{end}"
+    return text + (f"\n\n{foot}" if foot else "") + "\n"
+
+
+def edit_pr(top: Path, repo: str, number: int, body: str, *, dry_run: bool = False, gh: str | None = None,
+            run=subprocess.run) -> tuple[str, str]:
+    """Replace PR ``number``'s body with ``body`` outright (`edited_body`) and return its URL and the body it now has; with
+    ``dry_run``, change nothing.  Refused (`QueueError`) when the PR's body names its owner on a `Lane NAME` line and the new
+    one names another owner or none: an edit never moves a PR to another lane or out of the queue."""
+    call = _gh_call("edit", top, gh, run)
+    cur = json.loads(call("pr", "view", str(number), "--repo", repo, "--json", "body,url"))
+    text = edited_body(cur.get("body") or "", body)
+    now = PR(number, "", body=text).owner
+    if (was := LANE_RE.search(cur.get("body") or "")) and _who(now or "") != _who(was.group(1)):
+        raise QueueError(f"edit: #{number}'s new body names owner {now or 'none'}, and the PR's is {was.group(1)}: keep its "
+                         f"`Lane {was.group(1)}` line; nothing edited")
+    if not dry_run:
+        call("pr", "edit", str(number), "--repo", repo, "--body", text)
+    return cur.get("url") or f"#{number}", text
 
 
 def _stats(a: argparse.Namespace) -> int:
@@ -2644,9 +2704,9 @@ def _checked_heads(a: argparse.Namespace) -> int:
 
 def main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
-    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open",
+    ap.add_argument("command", choices=["status", "sync", "land", "eject", "ready", "judge", "drive", "report", "open", "edit",
                                             "stats", "checked-heads", "review", "baseline", "lean-check"])
-    ap.add_argument("pr", nargs="?", help="eject, ready, review: the PR number; judge: the quick tier's run id; baseline: the "
+    ap.add_argument("pr", nargs="?", help="eject, ready, review, edit: the PR number; judge: the quick tier's run id; baseline: the "
                     "commit of `main` ci knows is green; lean-check: the commit of `next` to Lean-check")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--steps", help="baseline: the after-landing steps green at SHA (default every one): a later failure of "
@@ -2656,7 +2716,8 @@ def main(argv: list[str]) -> int:
                          "one holds, so the notice fails) or says it's ready (no default: the owner's lane), "
                          "default $RESEARCH_LANE")
     ap.add_argument("--shadow", action="store_true", help=f"build `{SHADOW_BRANCH}`, never push `main`, send no notices")
-    ap.add_argument("--dry-run", action="store_true", help="sync/land/drive: decide and report, push and launch nothing, tell no one")
+    ap.add_argument("--dry-run", action="store_true", help="sync/land/drive: decide and report, push and launch nothing, tell no "
+                                                           "one; open, edit: say what it would send, and send nothing")
     ap.add_argument("--workdir", type=Path, default=Path.home() / ".research" / "queue" / "verity", help="the queue's own clone")
     ap.add_argument("--remote", default=None, help="the repository to clone (default: this checkout's origin)")
     ap.add_argument("--repo", default=None, help="OWNER/NAME on GitHub (default: from the remote's URL)")
@@ -2719,7 +2780,8 @@ def main(argv: list[str]) -> int:
                                   "eject: only while this is the PR's head, so an eject that waits for drive's tick never hits a "
                                   "head pushed meanwhile")
     ap.add_argument("--title", help="open: the PR's title")
-    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner)")
+    ap.add_argument("--body-file", type=Path, help="open: the PR's body, verbatim (its first line `Lane NAME` names the owner); "
+                                                   "edit: the PR's whole new body, in place of all its text")
     ap.add_argument("--base", default="main", help="open: the base branch (default main)")
     ap.add_argument("--tip", default="origin/main", help="checked-heads: whose first-parent line (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
@@ -2755,6 +2817,24 @@ def main(argv: list[str]) -> int:
                       f"{' as a draft' if a.draft else ''}: {a.title!r} ({len(a.body_file.read_text())} bytes of body; dry run)")
                 return 0
             print(open_pr(top, repo, a.head, a.title, a.body_file.read_text(), base=a.base, sha=a.sha, draft=a.draft))
+            return 0
+        except (QueueError, OSError) as e:
+            print(f"research queue: {e}", file=sys.stderr)
+            return 1
+    if a.command == "edit":
+        if not (a.pr and a.pr.isdigit() and a.body_file):
+            ap.error("edit needs the PR number and --body-file F")
+        try:
+            top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+            remote = a.remote or _out(top, "remote", "get-url", "origin")
+            repo = a.repo or ((m := SLUG_RE.search(remote)) and m.group(1))
+            if not repo:
+                raise QueueError(f"can't tell OWNER/NAME from {remote!r}: pass --repo")
+            url, body = edit_pr(top, repo, int(a.pr), a.body_file.read_text(), dry_run=a.dry_run)
+            if a.dry_run:
+                print(f"research queue edit: would replace {url}'s body with ({len(body)} bytes; dry run):\n{body}", end="")
+            else:
+                print(f"research queue edit: {url}'s body replaced ({len(body)} bytes)")
             return 0
         except (QueueError, OSError) as e:
             print(f"research queue: {e}", file=sys.stderr)
