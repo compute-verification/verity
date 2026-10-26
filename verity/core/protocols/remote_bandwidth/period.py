@@ -267,4 +267,4 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer_
 
 
-__all__ = ["DELTA", "PROTOCOL", "Period", "answer", "certified", "eps", "leg", "payloads", "records", "run", "serve"]
+__all__ = ["DELTA", "PROTOCOL", "Period", "answer", "certified", "leg", "payloads", "records", "run", "serve"]
