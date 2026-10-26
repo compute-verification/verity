@@ -22,3 +22,7 @@ Add `--weights-of-record` to the served path for the window: serve-openai's advi
 # 21:15Z, for G2 (from vllm-composed's dry rerun r20261026-204546-2d7c)
 
 serve-openai on vy-dc-h200 ran with `async_scheduling` **true**, while #4770's int8 row declares `async_scheduling: false`, which G2 needs. φ records what the engine reports, so the two disagree today. Before G2's GPU check, find where serve-openai sets it (the engine args from the row, or vLLM's default), make the engine follow the row, and refuse a mismatch by name. Fold that into #4773 or a small PR of its own.
+
+# 21:35Z, #4779's base changed
+
+#4753 was rebuilt directly on main at **aa52fe479a**: three commits, without #4594 or #4573, so its SHAs are new. #4779 still contains the old 6303f5cfdb and #4594. After #4753 lands, rebase #4779 onto main, not onto the old head, and then mark it. #4753's mark waits on #4747, #4757, #4780, #4795, #4790 and #4594 landing.
