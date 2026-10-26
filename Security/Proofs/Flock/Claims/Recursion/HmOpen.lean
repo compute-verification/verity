@@ -34,10 +34,12 @@ theorem bitL_take64 (l : List UInt8) {t : ℕ} (ht : t < 512) : bitL (l.take 64)
 
 theorem bitL_xorMask {b : List UInt8} (hb : b.length = 64) (m : Fin 64 → UInt8) {t : ℕ} (ht : t < 512) :
     bitL (Claims.Recursion.xorMask b m) t = (bitL b t ^^ bitL (List.ofFn m) t) := by
+  have hm : (List.ofFn m).length = 64 := List.length_ofFn
+  have hb8 : t / 8 < b.length := by omega
+  have hm8 : t / 8 < (List.ofFn m).length := by omega
   unfold bitL Claims.Recursion.xorMask
-  rw [List.getD_eq_getElem?_getD, List.getElem?_mapIdx, List.getElem?_eq_getElem (by omega), Option.map_some,
-    Option.getD_some, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by omega), Option.getD_some,
-    UInt8.toNat_xor, Nat.testBit_xor]
+  simp only [List.getD_eq_getElem?_getD, List.getElem?_mapIdx, List.getElem?_eq_getElem hb8,
+    List.getElem?_eq_getElem hm8, Option.map_some, Option.getD_some, UInt8.toNat_xor, Nat.testBit_xor]
 
 theorem length_readForms (w : Claims.Flock.Wit) (fs : List HmNets.Lin) :
     (readForms w fs).length = (fs.length + 7) / 8 := by
@@ -140,8 +142,13 @@ theorem checks_of_calls {w : Claims.Flock.Wit} {c : Circuit} {nm : String} {q n 
     FlockDeploy.sha512 (rowInDeployed (readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))) =
       Claims.Recursion.xorMask ((readForms w (hmCommit c q n)).take 64)
         (fun i : Fin 64 =>
-          (Hm96.Default512.mask ⟨Array.ofFn (DeployedR.saltOf (readForms w (hmSalt c q n)))⟩).get! i.val) :=
-  ⟨saltCheck_of (hT _ List.mem_cons_self),
-    rowCheck_of hpfx (hT _ (List.mem_cons_of_mem _ List.mem_cons_self))⟩
+          (Hm96.Default512.mask ⟨Array.ofFn (DeployedR.saltOf (readForms w (hmSalt c q n)))⟩).get! i.val) := by
+  have hc : hmCalls c nm q n =
+      [(Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512),
+        (rowPfx c q, ((rowHidden c nm n).getD []).map HmNets.Lin.var, hmDigest c q n)] := rfl
+  rw [hc] at hT
+  have h1 := hT _ List.mem_cons_self
+  have h2 := hT _ (List.mem_cons_of_mem _ List.mem_cons_self)
+  exact ⟨saltCheck_of h1, rowCheck_of hpfx h2⟩
 
 end RecDeploy.HmOpen
