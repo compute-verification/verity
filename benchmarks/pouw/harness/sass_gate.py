@@ -16,7 +16,8 @@ or no numeric run, and nothing is exempt:
   moves between them and the way an immediate is loaded aside): ``__cuda_sm20_rcp_rn_f32_slowpath``,
   ``__cuda_sm20_sqrt_rn_f32_slowpath``, ``__cuda_sm3x_div_rn_noftz_f32_slowpath``, ``__cuda_sm20_div_u16`` (two at 13.0:
   ptxas specializes it to its call sites), ``__cuda_sm20_div_u64``, ``__cuda_sm20_rem_s64``. ptxas folds a constant
-  numerator into a function's copy of the div slow path when it is the function's only division; that body isn't pinned;
+  numerator into a function's copy of the div slow path when it is the function's only division: a body that loads it from
+  a kernel parameter's slot is pinned like any other (the call passes that slot), one with an immediate isn't;
 - rcp.rn's and sqrt.rn's fast path around a call into a pinned body (`FAST`): the range check, the branch, the call and the
   four-instruction fast block;
 - div.rn's fast path (`DIV`): MUFU.RCP b, its five FFMAs and FCHK, and the branch around a call into a pinned body; a
