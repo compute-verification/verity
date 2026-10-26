@@ -502,12 +502,21 @@ def program_streams(plan: dict, release: dict[int, int], params: GridParams) -> 
 
 
 STRATEGIES = ("honest", "burst", "spread", "bits", "late", "covert")
-LIVE_TAMPERS = ("extra", "drop", "token")
+LIVE_TAMPERS = ("extra", "drop", "token", "byte")
 
 
 def other_token(data: bytes) -> bytes:
     """Bytes of a canonical event's length other than `data`, which isn't empty: its first byte's low bit flipped."""
     return bytes([data[0] ^ 1]) + data[1:]
+
+
+def other_hex(data: bytes) -> bytes:
+    """`data` with its first hex digit's low bit flipped (``0``-``1``, ``a``-``b``, ``e``-``f``), so a response whose text
+    is the hex of its outputs carries one output byte changed and stays hex; `data` without a hex digit is refused."""
+    for i, c in enumerate(data):
+        if chr(c) in "0123456789abcdef":
+            return data[:i] + b"%x" % (int(chr(c), 16) ^ 1) + data[i + 1:]
+    raise ValueError("an event without a hex digit has no output byte to change")
 
 
 def other_id(token_id: int, eos: frozenset) -> int:
@@ -569,7 +578,9 @@ def adversary_plan(plan: dict, setup: Setup, strategy: str, seed: int = 0) -> di
     `covert.LiveSender` draws the symbols as it serves. On a live shim only, on time and logged: `extra` writes one
     event more at the end of the first session's response, after what the endpoint sent and the shim's padding
     (`pad_to`); `drop` writes that response's first event not at all, counted as written so the padding doesn't make
-    it up; and `token` writes every event that carries bytes, of every response to a request enqueued in window 0,
+    it up; `byte` writes that response's first event that carries bytes with one hex digit changed (`other_hex`: one
+    output byte, when the text is the outputs' hex), so only the output tie refuses it; and `token` writes every event
+    that carries bytes, of every response to a request enqueued in window 0,
     with other bytes (`other_token`), so the frame counts are honest's and only a check of the frames' tokens against
     the committed sampled ids (the I/O tie) refuses it. The tie draws positions in each window, so a window whose every
     token is wrong is refused at any number of draws, where one wrong frame among N would be refused only at the share
@@ -905,7 +916,7 @@ class LiveServer:
         self.compact = bool(plan.get("compact"))
         if self.compact and not self.token_ids:
             raise ValueError("compact records are a varied plan's, of token ids")
-        self.drop, self.token = plan.get("drop"), frozenset(plan.get("token") or ())
+        self.drop, self.token, self.byte = plan.get("drop"), frozenset(plan.get("token") or ()), plan.get("byte")
         self.eos = frozenset((plan.get("varied") or {}).get("eos_token_ids") or ())
         self.forward_user = bool(plan.get("varied"))
         self.held: Counter = Counter()
@@ -974,11 +985,12 @@ class LiveServer:
         """A response's canonical events, one list per chunk of its body as it arrives; under `pad_to`, empty events
         (`active.event(b"")`, what a chunk of no text gives) after its last, up to `pad_to`, counted in `padded`; for
         the `extra` session, one event more after those; for the `drop` session, its first left out; for a `token`
-        session, each that carries bytes carrying `other_token` of them. `tampered` logs each event changed or left
+        session, each that carries bytes carrying `other_token` of them; for the `byte` session, its first that carries
+        bytes carrying `other_hex` of them (one output byte of a hex response). `tampered` logs each event changed or left
         out, as (session, its index in the response). Under `token_ids`, id events of request `ordinal` (`id_events`);
         a `token` session's carry other ids (`other_id`), its EOS ids left as they are, so each response keeps its
         length and finish."""
-        cutter, n, made = Events(), 0, [0]
+        cutter, n, made, byte = Events(), 0, [0], name == self.byte
 
         def framed(e: bytes) -> list[bytes]:
             if self.compact:
@@ -994,6 +1006,12 @@ class LiveServer:
                 n, bodies = len(bodies), bodies[1:]
                 yield bodies
                 continue
+            if byte:
+                for k, b in enumerate(bodies):
+                    if text := event_data(b):
+                        self.log.setdefault("tampered", []).append([name, n + k])
+                        bodies[k], byte = event(other_hex(text)), False
+                        break
             if name in self.token:
                 for k, b in enumerate(bodies):
                     if self.compact and (d := compact_record_data(b)) is not None:
@@ -1159,7 +1177,7 @@ class Peer:
             return id_request(**fields, user=name, frame_bytes=self.B_in)
         if self.live_model is None:
             return request_bytes(name, q["frames"], self.B_in)
-        body = self.body if self.body is not None else live_body(q["session"], self.live_model)
+        body = q.get("body") or (self.body if self.body is not None else live_body(q["session"], self.live_model))
         return live_request_bytes(name, body, q["frames"], self.B_in)
 
     async def read(self, reader: asyncio.StreamReader, origin: float) -> None:
@@ -1771,9 +1789,9 @@ def live_comparisons(plan: dict, setup: Setup, frames: Sequence[LogicalFrame], r
     return {"model_syncs_met_windows": sum(w not in late for w in range(windows)), "hindsight": hindsight}
 
 
-def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dict:
+def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit, client: Path | None = None) -> dict:
     """The audit of one run's published records, and the comparisons with the reference and the model. The verifier
-    is `audit`, a class with `audit.Audit`'s interface."""
+    is `audit`, a class with `audit.Audit`'s interface; the peer's `peer.json` is in `client`, by default `run`."""
     setup = Setup(report)
     e, i = setup.egress_params, setup.ingress_params
     T, windows = e.buckets, plan["windows"]
@@ -1878,7 +1896,7 @@ def audit_configuration(plan: dict, report: dict, run: Path, audit=Audit) -> dic
         for b in in_frames.get(q["stream"], []):
             delivery[round(b * i.bucket_ms - q["trace_ms"], 3)] += 1
 
-    peer = json.loads((run / "peer.json").read_text())
+    peer = json.loads(((client or run) / "peer.json").read_text())
     zero = bytes(e.allocation * e.frame_bytes)
     wire = []
     for rec in sorted(out_records, key=lambda r: r.window):

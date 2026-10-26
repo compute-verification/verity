@@ -96,7 +96,8 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
                                    bit rows (`chunk_rows.unit_rows`) -> ``o0``
   any row's own Definition         every row of it, the row itself: ``in<g>`` per argument group -> ``out.<member>`` per
                                    committed member (``vu_export._decompose_row``'s port rule); chunked when the file's
-                                   ``chunk_cap`` names it, v2 bit rows (`chunk_rows.unit_rows`) -> ``o<j>`` per member
+                                   ``chunk_cap`` names it, v2 bit rows (`chunk_rows.unit_rows`, its MUFU table reads laid out
+                                   by `chunk_rows.reads`) -> ``o<j>`` per member
 
 so ``RoPEHead_v2{D=..}`` and ``GemmCoordinate_v4{K=..}``, the Boolean versions, are a RoPE head's and a GEMM coordinate's.
 

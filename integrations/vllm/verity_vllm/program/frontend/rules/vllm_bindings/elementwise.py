@@ -181,7 +181,7 @@ class Bf16ScalarChainRule(OpRule):
 
 
 def _softcap_member(node, ctx) -> str | None:
-    """[R15 dense / manifest] `aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
+    """`aten.mul.Tensor(tanh(x / C), C)` — the last op of a logits soft cap `C * tanh(x / C)` — produces the value
     its module returns: the row names carry the member hint `out` (the manifest's `members_for` reads it; the div / tanh rows are the
     chain's interior).  Structural test only: the operand is a `aten.tanh` of a `aten.div.Tensor(_, C)` with the same C, in one module."""
     x = node.args[0]

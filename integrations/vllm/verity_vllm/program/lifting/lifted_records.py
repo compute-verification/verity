@@ -1,5 +1,5 @@
 """What a record says about a lifted Program (`registry.lifted`): the post-EOS lag a run header ATTESTS and the lag a
-Build DECLARED (read through GP-01's one rule, `pipeline.global_program`), and the (query, use) documents of a
+Build DECLARED (read through GP-01's one rule, `program.workload.eos_lag_rows_declared`), and the (query, use) documents of a
 lifted VU-partition use (`query.query_artifact`)."""
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from typing import Any
 
 from verity.ml.definitions.registry.lifted import (LIFTED_RULES_VERSION, N_OUT_HISTOGRAM_MAX_SETS, USE_KIND_LIFTED, W_MAX, W_MAX_LIFTED,
                                                  W_MAX_LIFTED_STATUS, check_lag, width_summary_a44)
+from verity_vllm.program.workload import eos_lag_rows_declared
 
 
 LAG_FIELD = "RunHeader.profile.engine_kwargs.async_scheduling"  # the ONE attested field GP-01's eos_lag_rows and this LAG both read
@@ -18,17 +19,9 @@ _LAG_STATIC_RE = re.compile(r"^Workload_v1\{.*,lag=(\d+)\}$", re.S)  # the LAST 
 # lives in the spec-id string, not in a bindings dict of the Root wrapper)
 
 
-def _lag_rule(engine_block: Any) -> int | None:
-    """The ONE implementation of the lag rule (R17-1 / SPEC v0.5 A2.2; coord M-0017 "by reference to moe's unit, not a second
-    implementation"): GP-01's `eos_lag_rows_declared` on an engine block (`async_scheduling` True → 1, False → 0, anything else → None).
-    When moe's `TargetProfile.lag()` lands, this is the one call that moves."""
-    from verity_vllm.pipeline.global_program import eos_lag_rows_declared
-    return eos_lag_rows_declared(engine_block)
-
-
 def lag_from_header(header: dict) -> tuple[int, str]:
     """R17-1 (SPEC v0.5 A2.2; RULING 21 before it): the record's ATTESTATION of the lag — the RESOLVED `SchedulerConfig.async_scheduling`
-    in `profile.engine_kwargs` (True → 1, False → 0), read through the same function GP-01 / GM-01 read (`_lag_rule`), from nowhere
+    in `profile.engine_kwargs` (True → 1, False → 0), read through the same function GP-01 / GM-01 read (`eos_lag_rows_declared`), from nowhere
     else; an absent or non-boolean attestation is refused by name (never a default of 0 or 1).  Returns `(lag, field)`; the field
     string goes into the report.  This is the attested side; the DECLARED side is `declared_lag_of_row` and the two must agree (R0)."""
     try:
@@ -38,7 +31,7 @@ def lag_from_header(header: dict) -> tuple[int, str]:
     except (KeyError, TypeError):
         raise ValueError(f"{LAG_FIELD} is not attested in the run header: the post-EOS lag is a declared static (R17-1) and is never "
                          f"defaulted — refuse the record (attestation is exec/sys's int-3 unit, RULING 21)") from None
-    lag = _lag_rule(ek)
+    lag = eos_lag_rows_declared(ek)
     if lag is None:
         raise ValueError(f"{LAG_FIELD} = {ek.get('async_scheduling')!r} is not the resolved boolean (the CLI default `None` is not an attestation)")
     return check_lag(lag), LAG_FIELD
@@ -69,7 +62,7 @@ def declared_lag_of_row(workload_program: dict | None) -> tuple[int | None, str 
         for part in field.split("."):
             cur = cur.get(part) if isinstance(cur, dict) else None
         if isinstance(cur, bool):  # a bare boolean is the knob, not the lag: run it through the one rule
-            cur = _lag_rule({"async_scheduling": cur})
+            cur = eos_lag_rows_declared({"async_scheduling": cur})
         if isinstance(cur, int) and not isinstance(cur, bool):
             found.append((check_lag(cur), field))
     if not found:

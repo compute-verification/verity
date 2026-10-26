@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Complete.Json.Session
 import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # The honest record's live session and draw
@@ -8,7 +9,7 @@ Under the JSON library's specification (`JsonSpec`), at one table:
 
 * `live_recordObj`: `liveOf` reads the printed honest record back as its `root_B`, no public words, its points and each
   rep stream's rounds with no digest (`liveRound`).
-* `recordDraw_recordObj`: the record's draw is the statement's, up to `Same` (`none` when the statement has none).
+* `recordDraw_recordObj`: the record's draw is the statement's, up to key order (`none` when the statement has none).
 -/
 
 namespace FlockComplete.JsonRT
@@ -134,14 +135,14 @@ theorem live_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray �
   simp only [ok_bind, List.map_toArray, List.map_cons, List.map_nil]
   rfl
 
-/-- **The record's draw is the statement's**, up to `Same`. -/
+/-- **The record's draw is the statement's**, up to key order (`JsonEquiv`). -/
 theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArray → ByteArray} {spec : SessionSpec}
     {t : String} (ht : spec.tables = #[t]) (hdraw : DrawOk spec) (rb : ByteArray) (points : Array (Array F128))
     (streams : Array (Array Round)) (proofs : Array ByteArray) :
     match spec.unitDraw with
     | none => FlockSoundness.Discharge.Exec.recordDraw (printJ (recordObj spec h #[rb] points streams proofs)) = none
     | some d => ∃ d', FlockSoundness.Discharge.Exec.recordDraw (printJ (recordObj spec h #[rb] points streams proofs)) =
-        some d' ∧ Same d d' := by
+        some d' ∧ FlockDeploy.JsonEquiv d' d := by
   have hgood : Good (spec.unitDraw.getD Json.null) := by
     unfold DrawOk at hdraw
     revert hdraw
@@ -166,7 +167,8 @@ theorem recordDraw_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteA
     rintro ⟨hn, -, -⟩ hdvs
     simp only [Option.getD_some] at hdvs
     have hn' : dv ≠ Json.null := fun e => hn (same_null (e ▸ hdvs.symm))
-    refine ⟨dv, ?_, hdvs⟩
+    refine ⟨Flock.norm dv, ?_,
+      (FlockDeploy.jsonEquiv_norm dv (FlockDeploy.same_wf_right hdvs)).trans hdvs.jsonEquiv.symm⟩
     cases dv <;> first | rfl | exact absurd rfl hn'
 
 end FlockComplete.JsonRT

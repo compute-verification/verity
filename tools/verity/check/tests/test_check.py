@@ -627,6 +627,8 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     argv = gs[5][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
+    assert "--timeouts" in pytest and " --timeouts " in argv[2], \
+        "each suite bounded by its timeout_s: without it a hung test held a train slot 24 h (CI-184)"
 
 
 def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(tmp_path):
@@ -791,6 +793,89 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
                             [("a", ok, tmp_path), ("b", ok, tmp_path)]])
     passed, done = CHECK.run(tmp_path, 2, keep_going=True)
     assert not passed and {s["step"]: s["status"] for s in done} == {"fails": "failed", "a": "passed", "b": "passed"}
+
+
+def _gone(pid: int) -> None:
+    """Return once ``pid`` has exited (its pidfd is readable), or at once when it is gone already."""
+    import os
+    import select
+
+    try:
+        fd = os.pidfd_open(pid)
+    except ProcessLookupError:
+        return
+    select.select([fd], [], [])
+    os.close(fd)
+
+
+def test_a_step_that_hangs_writing_nothing_is_stopped_and_fails_as_hung(tmp_path, monkeypatch):
+    """r20261025-021824-ba9f and r20261025-023312-fa65 (CI-184): under --keep-going lean-suites failed, and pytest's suites.py
+    sat 23-24 h on a test that never returned, writing nothing, while circuit-check waited on the grant pytest's end writes and
+    the run held its slot.  Here pytest's process waits on a child that never exits; once the watch's clock (injected) has passed
+    `IDLE_S` with pytest's outputs unchanged, the child and pytest are stopped, pytest fails as hung, the grant is written and the
+    run ends."""
+    import json
+    import os
+
+    gate = tmp_path / "child.pid"
+    os.mkfifo(gate)
+    hang = _py("import subprocess, sys\nsubprocess.Popen([sys.executable, '-c', 'import os, signal, sys\\n"
+               "with open(sys.argv[1], \"w\") as f:\\n    f.write(str(os.getpid()))\\nsignal.pause()', sys.argv[1]]).wait()", gate)
+    clock, child = [0.0], []
+
+    def wait(p, seconds):
+        if p.args is not hang:
+            return p.wait()
+        if not child:
+            child.append(int(gate.read_text()))
+        clock[0] += seconds
+        return p.poll()
+
+    monkeypatch.setattr(CHECK, "CLOCK", lambda: clock[0])
+    monkeypatch.setattr(CHECK, "WAIT", wait)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
+    _fake_run(monkeypatch, [[("pytest", hang, tmp_path)], [("circuit-check", _py("pass"), tmp_path)],
+                            [("lean-suites", _py("raise SystemExit(1)"), tmp_path)]])
+    passed, done = CHECK.run(tmp_path, 3, keep_going=True)
+    _gone(child[0])
+    by = {s["step"]: s for s in done}
+    assert not passed and by["lean-suites"]["status"] == "failed" and by["circuit-check"]["status"] == "passed"
+    assert by["pytest"]["status"] == "failed" and by["pytest"]["detail"] == f"hung: no output for {CHECK.IDLE_S // 60} min"
+    assert by["pytest"]["rc"] == -15 and clock[0] == CHECK.IDLE_S
+    assert (tmp_path / CHECK.CC_GRANT).read_text() == "560\n"
+    lines = {r["step"]: r for r in map(json.loads, (tmp_path / CHECK.STEPS_LOG).read_text().splitlines())}
+    assert lines["pytest"]["detail"].startswith("hung: ")
+
+
+def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_over_budget_at_step_budget_s(tmp_path, monkeypatch):
+    """pytest writes its suites' logs (`WATCH`), circuit-check its progress (a file named after it): a step whose outputs grew at
+    each of its first 100 looks is hung `IDLE_S` after the last of them, and one that writes at every look is stopped at
+    `STEP_BUDGET_S`, whatever it writes."""
+    import subprocess
+
+    def stopped(name: str, wrote: str, writes: int) -> tuple[str | None, float]:
+        clock, f = [0.0], tmp_path / wrote
+
+        def wait(p, seconds):
+            clock[0] += seconds
+            if clock[0] <= writes * seconds:
+                with f.open("a") as w:
+                    w.write("x")
+            return p.poll()
+
+        monkeypatch.setattr(CHECK, "CLOCK", lambda: clock[0])
+        monkeypatch.setattr(CHECK, "WAIT", wait)
+        f.parent.mkdir(exist_ok=True)
+        p = subprocess.Popen(_py("import signal\nsignal.pause()"))
+        rc, why = CHECK.watch(name, p, tmp_path)
+        assert rc == -15
+        return why, clock[0]
+
+    every = CHECK.WATCH_EVERY_S
+    assert stopped("pytest", "suites/a_suite.log", 100) == (f"hung: no output for {CHECK.IDLE_S // 60} min", 100 * every + CHECK.IDLE_S)
+    assert stopped("circuit-check", "circuit-check.json.progress.jsonl", 100)[1] == 100 * every + CHECK.IDLE_S
+    assert stopped("pytest", "suites/a_suite.log", 10**6) == (f"over budget: still running after {CHECK.STEP_BUDGET_S / 3600:.1f} h",
+                                                            CHECK.STEP_BUDGET_S)
 
 
 def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):

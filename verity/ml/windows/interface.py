@@ -41,7 +41,13 @@ The circuit also declares what fills its other inputs (`Registered`, `Ingress`):
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
-description, a registered row free unless the verifier pinned its parameter's root before the run.
+description, a registered row free unless the verifier pinned its parameter's root before the run. The window commits
+the first kind (`Window`'s ``registered``): a member whose units read a registered parameter is a shared-row member, each
+read port a table of the registered rows its units read (`member_reads`), committed under the registered value's salts
+(core's ``one_stage.registered``), so each row's public string is the registered one, and its header names each row's
+position and path to the value's root; the verifier's ``--registered`` file of the member comes from the record and the
+root it pinned alone (`registered_reads`), and Lean's registered reads open each row against it. Cuts, tables, roots,
+openings and ingress are refused by the committer until it commits them.
 
 That the circuit computes what the integration ran is completeness, never proved: the verifier accepts a window exactly
 when its drawn units' committed outputs are their Definitions' outputs on their committed inputs (`Window.mismatches` is
@@ -363,7 +369,10 @@ class Wire(_Pattern):
 class Read(_Pattern):
     """A registered read at public positions (`_Pattern`): each reader row it covers is the row's words of the registered
     parameter ``param`` from its leaf ``base + sum(d[k] * step[k])`` on (16-bit leaves, the parameter's leaf order), the
-    position the verifier derives from the record alone, as `one_stage.registered` reads a registered value's rows."""
+    position the verifier derives from the record alone, as `one_stage.registered` reads a registered value's rows. A read
+    of an output port ties the unit's output row to that row: each unit reads a row of its own, which the Lean verifier
+    opens against the value's pinned root (a value the verifier pins from outside the prover, such as the output a
+    network certifier relayed), and it fills no input."""
     param: str
     key_fields: ClassVar[tuple[str, ...]] = ("param",)
 
@@ -567,10 +576,12 @@ def check_inputs(templates: Mapping[str, tuple[Layout, int]], cuts: Mapping[str,
     """Refuse (ValueError) a registered read, table read, opening or ingress that names no port of its template, reads
     outside its units, its parameter or its table, or whose rows are another's: every input row is wired, registered,
     ingress or free, at most one of them. The work is per declaration, never per unit."""
-    def port(tid: str, p: str, what: Any) -> tuple[int, int]:
-        if tid not in templates or p not in dict(templates[tid][0].rows):
-            raise ValueError(f"{what}: names no parameter of a template of the circuit")
-        return dict(templates[tid][0].rows)[p], int(cuts.get(tid, {}).get(p, 1))
+    def port(tid: str, p: str, what: Any, outs: bool = False) -> tuple[int, int]:
+        lay = templates[tid][0] if tid in templates else None
+        ports = {} if lay is None else dict(lay.rows + (lay.outs if outs else ()))
+        if p not in ports:
+            raise ValueError(f"{what}: names no parameter of a template of the circuit" + (" nor its output" if outs else ""))
+        return ports[p], int(cuts.get(tid, {}).get(p, 1))
 
     def units(tid: str, at: int, n: int, what: Any) -> None:
         if not _ints(at, n) or at < 0 or n < 1 or at + n > templates[tid][1]:
@@ -587,7 +598,7 @@ def check_inputs(templates: Mapping[str, tuple[Layout, int]], cuts: Mapping[str,
             raise ValueError(f"table {t.doc()}: a new name, rows of a registered parameter's leaves")
         tables[t.name] = t
     for r in reg.reads:
-        words, k = port(r.reader, r.port, r.doc())
+        words, k = port(r.reader, r.port, r.doc(), outs=True)
         _cut_ok(r, k, "read")
         units(r.reader, r.at, r.reader_units, r.doc())
         lo, hi = r.span()
@@ -614,6 +625,16 @@ def check_inputs(templates: Mapping[str, tuple[Layout, int]], cuts: Mapping[str,
             raise ValueError(f"ingress {g.doc()}: at a step, a natural")
         rects.append((g.reader, g.port, g.at, g.at + g.units, 0, k, g.doc()))
     _disjoint(rects, "inputs")
+
+
+def _committable(registered: Registered | None, ingress: Sequence[Ingress], what: str) -> None:
+    """Refuse (ValueError) declarations the committer doesn't commit yet: a window commits registered reads at public
+    positions, whole and uncut, and nothing else of them."""
+    if ingress or (registered is not None and (registered.tables or registered.roots or registered.openings
+                                               or any(r.cut != (0, 1) for r in registered.reads))):
+        raise ValueError(f"{what}: a window commits uncut registered reads at public positions (`Read`); its tables, table "
+                         "reads, openings, cut reads and ingress are recorded by their description until the committer "
+                         "commits them")
 
 
 def _cuts(cuts: Any) -> dict[str, dict[str, int]]:
@@ -674,6 +695,10 @@ class Circuit:
         """Each template's layout and units, by descriptor id."""
         return {tid: (layout(fn), n) for (fn, n), tid in zip(self.templates, self.ids)}
 
+    @property
+    def reads(self) -> tuple[Read, ...]:
+        return self.registered.reads if self.registered is not None else ()
+
     def declared(self) -> dict[str, Any]:
         """The record's fields for its cuts, registered reads and ingress, each only when the circuit has one, so a circuit
         without them records as before."""
@@ -701,15 +726,45 @@ class Circuit:
 def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     """The window's members: each template's units in the partition's order, cut where a wire's reader units begin or end,
     in chunks ``<descriptor id>/c<j>`` of at most ``cap`` (one statement each), on the template's bit rows under its cuts, each
-    row wired by the circuit's wire that covers it."""
+    row wired by the circuit's wire that covers it, and each port a registered read fills a table of the rows it reads."""
     program, query = circuit.program()
-    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts)
+    return _members(circuit.templates, program, query, cap, circuit.wires, circuit.cuts, circuit.reads)
+
+
+def _reads_of(tid: str, lo: int, n: int, reads: Sequence[Read], rows: Mapping[str, int]) -> dict[str, tuple[str, list[int], np.ndarray]]:
+    """Template ``tid``'s units ``[lo, lo + n)`` (its own indices), one member's, by each port a read fills: the parameter
+    it reads, the registered rows its table holds (each a row of the port's words, distinct, in first-read order: core's
+    ``registered.table``) and each unit's ref into them; ``rows``: the template's input rows' words, by port. A read covers
+    whole members and reads whole registered rows: its base and steps are multiples of the port's words."""
+    out = {}
+    for r in reads:
+        if r.reader != tid or not (r.at < lo + n and lo < r.at + r.reader_units):
+            continue
+        if lo < r.at or lo + n > r.at + r.reader_units:
+            raise ValueError(f"read {r.doc()} covers part of {tid}'s units [{lo}, {lo + n}); a read covers whole members")
+        words = rows.get(r.port)
+        if words is None or r.cut != (0, 1) or r.base % words or any(s % words for s in r.step):
+            raise ValueError(f"read {r.doc()}: an uncut read of whole registered rows of an uncut port, its base and steps "
+                             f"multiples of the port's words ({words})")
+        order: dict[int, int] = {}
+        refs = np.array([order.setdefault(int(p), len(order)) for p in r.source(np.arange(lo - r.at, lo - r.at + n)) // words],
+                        dtype=np.int64)
+        out[r.port] = (r.param, list(order), refs)
+    return out
+
+
+def member_reads(circuit: Circuit, m: CS.Member, base: int) -> dict[str, tuple[str, list[int], np.ndarray]]:
+    """Member ``m``'s registered reads (`_reads_of`), its template's first unit the global index ``base``."""
+    return _reads_of(m.template, m.base - base, m.n, circuit.reads, dict(m.rows + m.outs))
 
 
 def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[str, Any], cap: int,
-             wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None) -> tuple[CS.Member, ...]:
+             wires: Sequence[Wire], cuts: Mapping[str, Mapping[str, int]] | None = None,
+             reads: Sequence[Read] = ()) -> tuple[CS.Member, ...]:
     """`members` of ``templates`` (``(Definition, units)``) under their population ``program`` and ``query``. A member's row
-    is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first."""
+    is wired on all its units or on none (`rows.Member.wired`), so a template's units are cut at every wire's ends first. A
+    registered read covers whole members (`_reads_of`), and a member it covers is a shared-row member: each read port's
+    table the registered rows its units read, each other input row's its units' own rows."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     cuts = cuts or {}
@@ -739,7 +794,10 @@ def _members(templates: Sequence[tuple[Any, int]], program: Any, query: Mapping[
                 wired = tuple((row_name(w.port, r, int(kv.get(w.port, 1))), w.out,
                                tuple((base[w.writer] + w.writers(at, m, r)).tolist()))
                               for w in live for r in range(w.cut[0], w.cut[0] + w.cut[1]))
-                out.append(CS.Member(tid, rows, lay.outs, m, lo + at, name=f"{tid}/c{j}", schemas=schemas, wired=wired))
+                got = _reads_of(tid, at, m, reads, dict(rows + lay.outs))
+                tables = tuple((p, len(got[p][1]) if p in got else m) for p, _ in rows) if got else ()
+                out.append(CS.Member(tid, rows, lay.outs, m, lo + at, tables, name=f"{tid}/c{j}", schemas=schemas,
+                                     wired=wired))
                 j += 1
     return tuple(out)
 
@@ -932,12 +990,13 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     """A stated circuit record's inputs by what fills them, in bits, from its description alone (its templates, wires and
     declarations, `Circuit.description`; per template, wire and declaration, never per unit, and never its program): every
     unit's input rows (``inputs``), the rows its wires fill (``wired``, a wire's reader rows times its writer row's bits,
-    `SampledProofs.Wires`' ``wiredBits``), its registered reads, table reads and openings of a pinned parameter
-    (``registered``) and its ingress (``ingress``); ``free`` the rest, which only the prover chose. ``pins`` are the verifier's
-    own, never the record's: the registered parameters, by the names the record gives them, whose roots it fixed before the
-    run. A read of any other parameter, or a table read or opening of a table over one, is free, since a root the prover
-    commits after serving constrains nothing; with no pins every registered read is free. Refused unless the declarations
-    are well-formed for the record's templates (`check_wires`, `check_inputs`), so no row counts twice."""
+    `SampledProofs.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none, `Read`),
+    table reads and openings of a pinned parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
+    only the prover chose. ``pins`` are the verifier's own, never the record's: the registered parameters, by the names the
+    record gives them, whose roots it fixed before the run. A read of any other parameter, or a table read or opening of a
+    table over one, is free, since a root the prover commits after serving constrains nothing; with no pins every
+    registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
+    `check_inputs`), so no row counts twice."""
     if "wires" not in doc:
         raise ValueError("a circuit record whose members are listed is counted from its members, not its description")
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
@@ -953,7 +1012,8 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
     reg, pins = reg or Registered({}), frozenset(pins)
     pinned = {t.name for t in reg.tables if t.param in pins}
-    registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads if r.param in pins)
+    registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads
+                      if r.param in pins and r.port in dict(lays[r.reader][0].rows))
                   + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots if r.table in pinned)
                   + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings if o.table in pinned
                         for p in o.ports))
@@ -961,6 +1021,41 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     units = sum(n for _, n in lays.values())
     return {"units": units, "inputs": inputs, "wired": wired, "registered": registered, "ingress": ingress_bits,
             "free": inputs - wired - registered - ingress_bits}
+
+
+def registered_reads(doc: Mapping[str, Any], w: CS.Window, pins: Mapping[str, Mapping[str, Any]], *,
+                     registered: Any) -> dict[str, dict[str, Any]]:
+    """The Lean verifier's ``--registered`` file of each member reading a registered parameter (``registered-reads/v1``, in
+    the format of ``registered``, core's ``one_stage.registered``, by member key), from the stated record ``doc`` and its
+    window ``w`` (`window_of_record`'s) alone, but for each parameter's entry from ``pins`` (``{param: entry}``: the value's
+    ``root``, ``leaves``, ``words``, ``word_bits`` and ``domain`` as the verifier pinned them before the run): each read port
+    reads its parameter's rows in the port's row format, and unit ``m.base + i`` the row its ``i``-th unit reads (`_reads_of`).
+    Refused (ValueError) where a read's parameter has no pin, or a pin's rows are not the port's."""
+    _wires, _cuts_, reg, _ingress = declarations(doc)
+    if reg is None or not reg.reads:
+        return {}
+    base = {t: b for _k, t, b, _n in CS.template_partition(w.program, w.query).ranges}
+    out: dict[str, dict[str, Any]] = {}
+    for m in w.members:
+        got = _reads_of(m.template, m.base - base[m.template], m.n, reg.reads, dict(m.rows + m.outs))
+        if not got:
+            continue
+        ports = {}
+        for p, (param, positions, refs) in sorted(got.items()):
+            e = pins.get(param)
+            words = dict(m.rows + m.outs)[p]
+            if e is None:
+                raise ValueError(f"{m.key} {p} reads registered parameter {param!r}, whose root the verifier didn't pin")
+            if (e.get("words"), e.get("word_bits", registered.WORD_BITS)) != (words, registered.WORD_BITS) \
+                    or e.get("value") != param:
+                raise ValueError(f"{m.key} {p}: the pin of {param!r} is {e.get('value')!r} rows of {e.get('words')} "
+                                 f"{e.get('word_bits', registered.WORD_BITS)}-bit leaves, not the port's {words} 16-bit words")
+            ports[p] = {"value": param, "root": e["root"], "leaves": int(e["leaves"]), "words": words,
+                        "word_bits": registered.WORD_BITS, "domain": e["domain"],
+                        registered.SCHEMA_KEY: m.schema(p), "reads": [positions[int(i)] for i in refs],
+                        registered.READS_FROM: m.base}
+        out[m.key] = {"format": registered.READS_V1, "ports": ports}
+    return out
 
 
 def _frozen(x: Any) -> Any:
@@ -982,7 +1077,8 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
     program, query = CS.population_program(defs, several=several)
     stated = "cap" in doc
     if ("members" in doc) == stated or ("wires" in doc) != stated or (not stated and set(DECLARED) & set(doc)):
-        raise ValueError("a circuit record lists its members, or states them by its cap, wires and cuts, one or the other")
+        raise ValueError("a circuit record lists its members, or states them by its cap, wires, cuts and registered reads, one "
+                         "or the other")
     if stated:
         if not isinstance(doc["wires"], list):
             raise ValueError(f"a circuit record's wires are a list, not {doc['wires']!r}")
@@ -990,7 +1086,7 @@ def window_of_record(doc: Mapping[str, Any], law: Mapping[str, Any], resolve: Ca
         lays = {descriptor_id(fn): (layout(fn), n) for fn, n in defs}
         check_wires(lays, wires, cuts)
         check_inputs(lays, cuts, wires, registered, ingress)
-        ms = _members(defs, program, query, doc["cap"], wires, cuts)
+        ms = _members(defs, program, query, doc["cap"], wires, cuts, registered.reads if registered is not None else ())
     else:
         ms = tuple(CS.Member(m["template"], tuple(map(tuple, m["rows"])), tuple(map(tuple, m["outs"])), m["n"], m["base"],
                              tuple(map(tuple, m["tables"])), m["name"], tuple(map(tuple, m["schemas"])), tuple(m["link_units"]),
@@ -1034,23 +1130,39 @@ class _Recorded:
 class Window:
     """One window of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
     proof service's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
-    compiler and advice (`advice_binding`) when the circuit depends on run-time choices. Each template's units are
-    `record`ed in order, then `close` commits them and `write` writes and registers the window."""
+    compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``registered`` the values its
+    registered reads read (`Read`), by parameter: each committed once, before the run, as core's
+    ``one_stage.registered.Registered`` (rows of the reading port's words, its salts the prover's), which the verifier
+    pinned by its entry. Each template's units are `record`ed in order, then `close` commits them and `write` writes and
+    registers the window."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
     cap: int
     advice: Mapping[str, Any] | None = None
+    registered: Mapping[str, Any] | None = None
+    work_table: Mapping[str, Any] | None = None
     window: CS.Window = field(init=False)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
+    _entries: dict[str, dict[str, Any]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
-        if self.circuit.declared():
-            raise ValueError(f"{self.circuit.name}: a window commits whole uncut rows, each wired or free; a circuit with cuts, "
-                             f"registered reads or ingress ({sorted(self.circuit.declared())}) is recorded by its description "
-                             "(`descriptor_record`) until the committer reads cut rows")
+        if self.circuit.cuts:
+            raise ValueError(f"{self.circuit.name}: a window commits whole uncut rows; a circuit with cuts "
+                             f"({sorted(self.circuit.cuts)}) is recorded by its description (`descriptor_record`) until the "
+                             "committer reads cut rows")
+        _committable(self.circuit.registered, self.circuit.ingress, self.circuit.name)
+        params = self.circuit.registered.params if self.circuit.registered is not None else {}
+        for r in self.circuit.reads:
+            v = (self.registered or {}).get(r.param)
+            lay = layout(self.circuit.template(r.reader))
+            words = dict(lay.rows + lay.outs)[r.port]
+            if v is not None and (v.words != words or v.words * v.leaves != params[r.param]):
+                raise ValueError(f"{r.param}: committed as {v.leaves} rows of {v.words} words, not the {params[r.param]} "
+                                 f"leaves {r.port}'s rows of {words} words read")
         program, query = self.circuit.program()
-        self.window = CS.Window(program, query, dict(self.law), self.run, members(self.circuit, self.cap))
+        self.window = CS.Window(program, query, dict(self.law), self.run, members(self.circuit, self.cap),
+                                work_table=None if self.work_table is None else dict(self.work_table))
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
 
@@ -1100,15 +1212,39 @@ class Window:
                    if self.count(tid) != n}
         if missing:
             raise ValueError(f"units recorded / in the circuit by template: {missing}; a window closes over all of them")
-        base = self._bases()
-        data = []
+        base, cat = self._bases(), {}
+        data, salts_of, self._entries = [], {}, {}
         for m in self.window.members:
-            lay, got = layout(self.circuit.template(m.template)), self._recorded[m.template]
-            ports = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
-            lo = m.base - base[m.template]
-            data.append({"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
-                         "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}})
-        return CS.commit(self.window, data, workers=workers, salt_key=salt_key)
+            lay = layout(self.circuit.template(m.template))
+            if m.template not in cat:
+                got = self._recorded[m.template]
+                cat[m.template] = [np.concatenate([b.words[g] for b in got]) for g in range(len(lay.rows) + len(lay.outs))]
+            ports, lo = cat[m.template], m.base - base[m.template]
+            d = {"rows": {p: ports[g][lo:lo + m.n] for g, (p, _) in enumerate(lay.rows)},
+                 "outs": {p: ports[len(lay.rows) + j][lo:lo + m.n] for j, (p, _) in enumerate(lay.outs)}}
+            reads = member_reads(self.circuit, m, base[m.template])
+            if reads:
+                d["refs"] = np.stack([reads[p][2] if p in reads else np.arange(m.n) for p, _ in lay.rows], axis=1)
+                for p, (param, positions, refs) in reads.items():
+                    if (v := (self.registered or {}).get(param)) is None:
+                        raise ValueError(f"{m.key} {p} reads registered parameter {param!r}: give its committed value")
+                    if p in d["outs"]:
+                        # an output row stays the unit's own, committed under the value's salt, so a row other than
+                        # the value's opens no pinned root
+                        _rows, salts, entry = v.statement([positions[int(i)] for i in refs])
+                        salts_of[m.port(p)] = b"".join(salts)
+                        self._entries.setdefault(m.key, {})[p] = entry
+                        continue
+                    first = [int(np.flatnonzero(refs == j)[0]) for j in range(len(positions))]
+                    rows = d["rows"][p][first]
+                    if not np.array_equal(rows[refs], d["rows"][p]):
+                        raise ValueError(f"{m.key} {p}: two units recorded two rows for one row of {param!r}")
+                    _rows, salts, entry = v.statement(positions)
+                    d["rows"][p] = rows
+                    salts_of[m.port(p)] = b"".join(salts)
+                    self._entries.setdefault(m.key, {})[p] = entry
+            data.append(d)
+        return CS.commit(self.window, data, workers=workers, salt_key=salt_key, salts_of=salts_of)
 
     def _bases(self) -> dict[str, int]:
         return {t: b for _k, t, b, _n in CS.template_partition(self.window.program, self.window.query).ranges}
@@ -1133,19 +1269,21 @@ class Window:
             i, o = unit_rows(fn)
             sts[descriptor_id(fn)] = {"in_rows": i, "out_rows": o, "reads": "inline"}
         return circuit_record(self.window, self.circuit.name, list(zip(self.circuit.ids, (n for _, n in self.circuit.templates))),
-                              sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary)
+                              sts, self.circuit.external, cap=self.cap, wires=self.circuit.wires, boundary=self.circuit.boundary,
+                              declared=self.circuit.declared())
 
     def write(self, c: CS.Committed, out_dir: str | Path, provenance: Mapping[str, Any], *, registrar: Any,
               kind: str = "served") -> dict[str, Any]:
         """The window's files (`rows.write`, its ``index.json`` the labels) and ``circuit.json``, the registration core's record
         made by ``registrar`` (core's ``one_stage.registration``), its window naming ``provenance``, the circuit record's
-        SHA-512 and the advice binding."""
+        SHA-512 and the advice binding; each member reading a registered value, its header naming each table row's position
+        and path (`close`)."""
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
         (d / "circuit.json").write_bytes(body)
         bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {})}
-        return CS.write(c, d, bound, self.labels(), kind=kind, registrar=registrar)
+        return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar)
 
 
 class Integration(Protocol):

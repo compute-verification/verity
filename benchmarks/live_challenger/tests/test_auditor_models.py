@@ -58,35 +58,44 @@ def safetensors(path: Path, tensors: dict[str, np.ndarray]) -> None:
     path.write_bytes(struct.pack("<Q", len(h)) + h + b"".join(blobs))
 
 
-@pytest.fixture
-def model(tmp_path):
-    """A pinned tiny checkpoint (two shards), its manifest in a pinned tree, and its tensors."""
+def pinned(tmp_path, parts, window, split, config=None, role=ROLE, manifest=M.MANIFEST, **fields):
+    """A pinned checkpoint of int8 modules `parts` (two shards, the first holding `split` tensors), role `role`'s entry
+    (with `fields`) in the pinned tree's `manifest` (vLLM's holding another role when it is the torch loop's), core's
+    pin, and the descriptor of the window's linears `window`."""
     rng = np.random.default_rng(7)
     ts = {}
-    for name, (n, k) in PARTS.items():
+    for name, (n, k) in parts.items():
         ts[f"{name}.weight"] = rng.integers(-127, 128, (n, k), dtype=np.int8)
         ts[f"{name}.weight_scale"] = rng.uniform(1e-3, 1, (n, 1)).astype("<f4")
     ck, tree = tmp_path / "ckpt", tmp_path / "tree"
     ck.mkdir(mode=0o755)
     names = sorted(ts)
-    safetensors(ck / "model-00001-of-00002.safetensors", {n: ts[n] for n in names[:6]})
-    safetensors(ck / "model-00002-of-00002.safetensors", {n: ts[n] for n in names[6:]})
-    (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 1}))
+    safetensors(ck / "model-00001-of-00002.safetensors", {n: ts[n] for n in names[:split]})
+    safetensors(ck / "model-00002-of-00002.safetensors", {n: ts[n] for n in names[split:]})
+    if config is not None:
+        (ck / "config.json").write_text(json.dumps(config))
     for p in ck.iterdir():
         p.chmod(0o644)
     files = {p.name: {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "size": p.stat().st_size,
                       "digest_source": "recipe"} for p in sorted(ck.iterdir())}
-    (tree / M.MANIFEST).parent.mkdir(parents=True)
-    (tree / M.MANIFEST).write_text(json.dumps({"checkpoints": [
-        {"role": ROLE, "repo": "verity-int8/Tiny", "revision": "ab" * 20, "files": files,
-         "recipe": {"id": "verity-int8-channel127/v1"}}]}))
+    entry = {"role": role, "repo": "verity-int8/Tiny", "revision": "ab" * 20, "recipe": {"id": "verity-int8-channel127/v1"},
+             **fields, "files": files}
+    for path in {M.MANIFEST, manifest}:
+        (tree / path).parent.mkdir(parents=True)
+        (tree / path).write_text(json.dumps({"checkpoints": [entry if path == manifest else {"role": "LLAMA32_1B_INT8"}]}))
     pin = M.checkpoint_sha512({p.name: hashlib.sha512(p.read_bytes()).hexdigest() for p in ck.iterdir()})
     (tree / M.PINS).parent.mkdir(parents=True)
-    (tree / M.PINS).write_text(json.dumps({ROLE: {"checkpoint_sha512": pin}}))
-    d = descriptor()
+    (tree / M.PINS).write_text(json.dumps({role: {"checkpoint_sha512": pin}}))
+    d = descriptor(linears=window)
     (tmp_path / "desc.json").write_bytes(d)
     return {"ckpt": ck, "tree": tree, "tensors": ts, "descriptor": d, "circuit": hashlib.sha512(d).hexdigest(),
-            "desc_path": tmp_path / "desc.json", "pin": pin}
+            "desc_path": tmp_path / "desc.json", "pin": pin, "role": role, "entry": entry}
+
+
+@pytest.fixture
+def model(tmp_path):
+    """A pinned tiny checkpoint (two shards), its manifest in a pinned tree, and its tensors."""
+    return pinned(tmp_path, PARTS, LINEARS, 6, config={"num_hidden_layers": 1})
 
 
 def expected_roots(ts, circuit, key=KEY):
@@ -133,8 +142,8 @@ def test_a_registration_refuses_a_checkpoint_or_descriptor_that_isnt_the_pinned_
 
 def reg(model, descriptor=None, circuit=None):
     d = descriptor or model["descriptor"]
-    return M.register(model["tree"], ROLE, circuit or hashlib.sha512(d).hexdigest(), d, model["ckpt"], KEY, pinned=PIN,
-                      now="t")
+    return M.register(model["tree"], model["role"], circuit or hashlib.sha512(d).hexdigest(), d, model["ckpt"], KEY,
+                      pinned=PIN, now="t")
 
 
 def test_a_checkpoint_that_isnt_core_s_pin_or_that_another_user_can_write_is_refused(model):
@@ -183,6 +192,104 @@ def test_a_descriptor_whose_linears_arent_the_models_decoder_layers_in_order_is_
     the model doesn't compute."""
     with pytest.raises(M.Refused, match="decoder layers"):
         reg(model, descriptor(linears=linears))
+
+
+UP, DN = "model.layers.0.mlp.up_proj", "model.layers.1.mlp.down_proj"
+MLP = ((UP, 32, 64), (DN, 64, 32))
+#: circuits' entry of the torch loop's role in `MANIFESTS[1]` (#4395), its files aside
+TORCH_LOOP_ROLE = "TORCH_LOOP_MLP_H128_W8A8"
+TORCH_LOOP_ENTRY = {
+    "linears": [UP, DN],
+    "note": "the torch loop's served weights (integrations/torch_loop, `loop.Model()`), written by `python -m "
+            "verity_torch_loop.checkpoint`; no hub repo holds them",
+    "recipe": {"h": 128, "id": "torch-loop/mlp-w8a8/v1", "seed": 0, "vocab": 16},
+    "repo": "verity-torch-loop/mlp-w8a8-h128", "revision": "ef47a4f92c408f8c64778a9934b81c9729f2df2b"}
+
+
+@pytest.fixture
+def mlp(tmp_path):
+    """The torch loop's role as circuits pins it: a two-layer MLP in the torch loop's manifest alone (vLLM's holds another
+    role), whose entry declares its linears, up_proj then down_proj, and whose checkpoint has no config.json."""
+    (tmp_path / "loop").mkdir()
+    return pinned(tmp_path / "loop", {UP: (64, 32), DN: (32, 64)}, MLP, 2, role=TORCH_LOOP_ROLE,
+                  manifest=M.MANIFESTS[1], **TORCH_LOOP_ENTRY)
+
+
+def test_a_role_that_declares_its_linears_commits_each_unmerged_module_as_itself(mlp):
+    """An unmerged module is one part, itself: each linear's rows are its own int8 codes and s_w, in the declared order,
+    and the role's checkpoint needs no config.json."""
+    assert M.parts(UP) == [UP] and M.parts(DN) == [DN]
+    ts = mlp["tensors"]
+    rows = [[ts[f"{m}.weight"][j].tobytes() + ts[f"{m}.weight_scale"][j].tobytes() for j in range(n)]
+            for m, _k, n in MLP]
+    roots = Wt.weights_roots(mlp["circuit"], "h1/", [(n, k) for _m, k, n in MLP], lambda w: rows[w], KEY)
+    line = reg(mlp)
+    assert line["weights_root"] == Wt.weights_root(roots).hex() and line["model"] == TORCH_LOOP_ROLE
+    assert line["roots"] == {str(k): r.hex() for k, r in roots.items()}
+    assert line["source"]["repo"] == TORCH_LOOP_ENTRY["repo"]
+
+
+def test_a_role_only_in_the_torch_loops_manifest_is_its_entry(mlp):
+    assert M.manifest_entry(mlp["tree"], TORCH_LOOP_ROLE) == mlp["entry"]
+    assert M.manifest_entry(mlp["tree"], "LLAMA32_1B_INT8") == {"role": "LLAMA32_1B_INT8"}
+
+
+def test_a_role_in_both_manifests_or_in_neither_is_refused(mlp):
+    """Exactly one entry across both files: a role vLLM's manifest also lists is ambiguous, and an unlisted one unknown."""
+    vllm = mlp["tree"] / M.MANIFEST
+    vllm.write_text(json.dumps({"checkpoints": [{"role": TORCH_LOOP_ROLE, "repo": "elsewhere"}]}))
+    with pytest.raises(M.Refused, match=f"2 entries .*not one role of {M.MANIFESTS[0]} and {M.MANIFESTS[1]}"):
+        M.manifest_entry(mlp["tree"], TORCH_LOOP_ROLE)
+    with pytest.raises(M.Refused, match=f"0 entries \\(none\\), not one role of {M.MANIFESTS[0]} and {M.MANIFESTS[1]}"):
+        M.manifest_entry(mlp["tree"], "QWEN3_06B_INT8")
+
+
+def test_a_tree_pinned_before_the_torch_loops_manifest_still_serves_vllms_roles(model, mlp):
+    """A pinned tree that predates the torch loop's manifest has only vLLM's: its roles register as before, and the torch
+    loop's role is refused as unlisted. A torch loop manifest present but unreadable, or a missing vLLM manifest, is
+    refused."""
+    assert not (model["tree"] / M.MANIFESTS[1]).exists()
+    assert M.manifest_entry(model["tree"], ROLE)["repo"] == "verity-int8/Tiny"
+    with pytest.raises(M.Refused, match="0 entries"):
+        M.manifest_entry(model["tree"], TORCH_LOOP_ROLE)
+    (mlp["tree"] / M.MANIFESTS[1]).write_text("{")
+    with pytest.raises(M.Refused, match="torch_loop/manifests/checkpoints-int8.json is not readable JSON"):
+        M.manifest_entry(mlp["tree"], "LLAMA32_1B_INT8")
+    (mlp["tree"] / M.MANIFESTS[1]).write_text(json.dumps({"checkpoints": [mlp["entry"]]}))
+    (mlp["tree"] / M.MANIFEST).unlink()
+    with pytest.raises(M.Refused, match="the pinned tree has no integrations/vllm"):
+        M.manifest_entry(mlp["tree"], TORCH_LOOP_ROLE)
+
+
+@pytest.mark.parametrize("linears", [
+    (MLP[1], MLP[0]),
+    MLP[:1],
+    MLP + (("model.layers.2.mlp.up_proj", 32, 64),),
+    LINEARS,
+])
+def test_a_descriptor_whose_linears_arent_the_roles_declared_ones_in_order_is_refused(mlp, linears):
+    """Reordered, missing, extra, or the decoder's: the declared list is the whole of what the role's root may sign."""
+    with pytest.raises(M.Refused, match="the role's declared linears"):
+        reg(mlp, descriptor(linears=linears))
+
+
+@pytest.mark.parametrize("declared", [[], [UP, UP], "model.layers.0.mlp.up_proj", [UP, 3], {"0": UP}])
+def test_a_role_whose_declared_linears_are_malformed_is_refused(tmp_path, declared):
+    m = pinned(tmp_path, {UP: (64, 32), DN: (32, 64)}, MLP, 2, linears=declared)
+    with pytest.raises(M.Refused, match="not a nonempty list of distinct module names"):
+        reg(m)
+
+
+def test_a_role_that_declares_no_linears_keeps_the_decoder_rule(model, tmp_path):
+    """Without the field, the role's linears are config.json's decoder layers', as before: the MLP's descriptor is
+    refused for it, and so is a checkpoint with no config.json."""
+    assert M.declared_linears(M.manifest_entry(model["tree"], ROLE)) is None
+    with pytest.raises(M.Refused, match="decoder layers"):
+        reg(model, descriptor(linears=MLP))
+    (tmp_path / "bare").mkdir()
+    bare = pinned(tmp_path / "bare", {UP: (64, 32), DN: (32, 64)}, MLP, 2)
+    with pytest.raises(M.Refused, match="no readable config.json"):
+        reg(bare)
 
 
 def test_a_linear_the_checkpoint_shapes_otherwise_is_refused(model, monkeypatch):

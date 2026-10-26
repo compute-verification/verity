@@ -7,7 +7,7 @@ PROMOTED: the Definition now lives in the accepted registry (`verity.ml.definiti
 """
 from __future__ import annotations
 
-from verity.ml.definitions.registry.act import SiluMul  # noqa: F401
+from verity.ml.definitions.registry.act import SiluMul
 
 SEMANTIC_ID = "act/SiluMul@v2"
 

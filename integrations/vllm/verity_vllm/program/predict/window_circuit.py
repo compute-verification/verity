@@ -87,9 +87,9 @@ class WindowClass:
         return self.prompt + self.outputs - 1
 
 
-#: the class of record, the certifier run of record's envelope: at most 4 requests a window, each of at most 1,024
-#: prompt ids and 64 outputs
-CLASS_OF_RECORD = WindowClass(4, 1024, 64)
+#: the class of record, the certifier run of record's envelope: at most 8 requests a window (the endpoint's
+#: ``--window-requests 8``, its max_num_seqs), each of at most 1,024 prompt ids and 64 outputs
+CLASS_OF_RECORD = WindowClass(8, 1024, 64)
 
 
 #: the most keys an attention head reads through one `AllGather_v1{T, D}`, until v19's per-key-block cut is wired
@@ -107,6 +107,9 @@ class Grain:
     gemm_words: int = 32768
     rows: int = 256
     select: int = 768
+
+
+_GRAIN = Grain()
 
 
 @dataclass(frozen=True)
@@ -462,7 +465,7 @@ def class_program(registered: Any, cls: WindowClass) -> Any:
     return request_program(registered, RequestUnit(-1, "", 1, cls.positions - 1, GREEDY, None, 0))
 
 
-def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
+def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain = _GRAIN, name: str = NAME) -> IF.Circuit:
     """``cls``'s circuit at ``programs`` Programs (module docstring): the class Program lowered once a Program, each Program's
     units after its predecessor's in every template."""
     if not 1 <= programs <= cls.slots:
@@ -490,7 +493,7 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain
                       wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg, ingress=tuple(ingress))
 
 
-def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
+def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit at its Program count, one a request,
     refused where the class doesn't take the window: nothing else of the window reaches the circuit."""
     units = [u for u in compiled.requests if u is not None]

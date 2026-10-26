@@ -291,6 +291,12 @@ the certificates' signatures are checked on the host from their public fields, n
 spatial unit across links is not checked (each registration is one link-window, alone), and the frames' consistency
 with the served computation is left to N3.
 
+## A period, as onsite's communication component (`verity/certifier/v0`)
+
+Onsite composes the network certifier as one `Core.Protocol`, `NetworkCheck.Period` (`network/lean`, the
+`network-period` executable), which publishes the bound `K` on what left the site with its terms:
+[protocol/period.md](protocol/period.md).
+
 ## A served link (`served`)
 
 A served link's egress counts follow its requests' arrivals and the run-time syncs, so nothing fixes them before the
@@ -1098,9 +1104,9 @@ requests, whose frames are a function of the prompt's length alone), for every p
     one that releases the frame, so a floor that read a declaration would carry one window's word into another's
     view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
     link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
-    window under only from the certifier's clock certificate of the window, verified under its key and session, and
-    a window without a valid one is refused, and the link with it
-    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
+    window under only from the certifier's salted clock certificate of the window, opened against the digest it signs
+    under its key and session (the sync and the salt are witness, the certificate public), and a window without a
+    valid one is refused, and the link with it ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -1189,9 +1195,14 @@ requests, whose frames are a function of the prompt's length alone), for every p
   `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
   it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
   completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
-  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
-  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
-  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
+  certificate beside its egress record, so it needs no head change
+  ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+- **Named gap: the clock's opening** (owned by network-accounting). A window's clock certificate signs its sync salted
+  (`certificate.clock_commitment`), and until N2's advised unit opens it the verifier of record opens it on the host
+  (`advised.SignedClocks`), so on a refused window it reads the sync the certifier ran. Closing it is a circuit change
+  to N2's advised unit, with its `circuit-check` report, not a Lean one: the design is in
+  [protocol/clock-certificate.md](protocol/clock-certificate.md) ("The opening is on the host").
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);

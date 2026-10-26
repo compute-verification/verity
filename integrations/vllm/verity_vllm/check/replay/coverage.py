@@ -97,8 +97,8 @@ def _address_family(op: str, member: str, a: dict[str, Any]) -> str:
 
 
 def _manifest_engine_name(manifest: RequiredManifest) -> str:
-    """Which engine built a manifest: the traversal's header carries `engine` (schema + `traversal` = the class path; R16 reqval), the
-    inventory's carries none (byte-for-byte the R15 header) -- the guard header names it too where present (F-r17b-09)."""
+    """Which engine built a manifest: the traversal's header carries `engine` (schema + `traversal` = the class path), the
+    inventory's carries none (byte-for-byte the older header) -- the guard header names it too where present."""
     eng = manifest.engine
     if isinstance(eng, str):
         return eng
@@ -129,7 +129,7 @@ def controller_rows_of(programs: dict[str, Any], indices: dict[int, "ProgramInde
 
 def query_population(manifest: RequiredManifest | dict[str, Any] | None, addresses: dict[tuple, dict], evaluated: set[tuple], *, ranks: list[int],
                      strata: dict[str, dict] | None = None, first_n: int = 6, executed_prefix: dict[str, dict] | None = None, controller_rows: dict[str, int] | None = None) -> dict[str, Any]:
-    """[R17-3 / reqval] Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
+    """Reconcile the replay's reach against the population of record, Q(P), IDENTITY BY IDENTITY.
     `manifest`: the required-value manifest of the row (Q_module(P): the module-boundary population over the Program, families selected by
     the canonical VU query; the traversal adapter's or the inventory's -- the same identities either way); None = no manifest supplied,
     the reconciliation is over the Program rows' own addresses and says so.
@@ -143,7 +143,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
       * query_checks    -- the fail-closed reconciliation: a VU whose address is NOT a required identity (the replay enumerating
                            something Q(P) does not require), a required identity NO row produces, a row count that disagrees with the
                            manifest's `rows`, a rank set that disagrees.  Any non-zero count is a finding on the record (`ok` False).
-      * not_executed_by_rule [COORD R17-26] -- `executed_prefix` (request -> `executed_prefix_of_record`): the identities of Q(P) at
+      * not_executed_by_rule -- `executed_prefix` (request -> `executed_prefix_of_record`): the identities of Q(P) at
                            request-relative steps >= n_exec are the third bucket beside reached / uncovered (query_total unchanged;
                            `accounted` = reached + uncovered + not-executed == |Q(P)|); a request whose prefix carries faults is NOT
                            classified and fails the check by name."""
@@ -516,7 +516,7 @@ def query_population(manifest: RequiredManifest | dict[str, Any] | None, address
 
 
 def _uncovered_mechanisms(all_vus: list[dict], not_ev_fam: Counter) -> list[dict]:
-    """[R17 dense, ruling R17-11] The Program's attention rows are evaluated on their committed boundary (the Q_module_v1 unit); the
+    """The Program's attention rows are evaluated on their committed boundary (the Q_module_v1 unit); the
     AttnBlock interiors inside them (Q_fine_v1 units) are not read -- the record names that with the row count, so a PASS bounds its claim."""
     n = sum(1 for v in all_vus if v["family"] in ATTENTION_ROW_FAMILIES) + sum(int(not_ev_fam.get(f, 0)) for f in ATTENTION_ROW_FAMILIES)
     if n == 0:

@@ -1,7 +1,7 @@
-"""[R13 lane tp, P4 step 2] Tensor-parallel construction scaffolding for Bet A: the collectives of ONE rank's forward as explicit
+"""[P4 step 2] Tensor-parallel construction scaffolding for Bet A: the collectives of ONE rank's forward as explicit
 Verity ops over (this rank's partial, the peer rank's partial), so that `derive_step --tp 2 --rank r` exports a TP-aware Program.
 
-Established first (R13 tp step 1, `out/gen/sweep/evidence/tp/tp2_semantics/RESULT.md`): under the admitted BI profile at TP2 the
+Established first (tp step 1, `out/gen/sweep/evidence/tp/tp2_semantics/RESULT.md`): under the admitted BI profile at TP2 the
 row-parallel linears compute two K/2-sharded `Gemm_v1` partials whose bf16 outputs are summed by ONE bf16 addition (the pynccl
 all-reduce, `bf16(f32(a)+f32(b))`, order-free for two ranks) — a different exact computation from TP1's single GEMM; column-parallel
 GEMMs, the vocab-parallel embedding (masked shard lookup + the same sum) and the lm_head all-gather (a concatenation) are

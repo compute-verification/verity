@@ -66,7 +66,7 @@ class GatherMany:
 
 @dataclass(frozen=True)
 class Const:
-    """[R15 stoch] Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
+    """Every row consumes ONE Program constant: a `Const<width>[0x<bits>]` primitive instance the fold emits (once per
     Compute, immediately before it, in operand order) and wires in -- the derived Program's `ctx.kind("const")` of the same value.
     No device view: the value is a declared fact of the run header (the sampler's temperature / top_p / the row's position), never
     read from memory.  `name` is the instance-name tail (`gumbel_topp_token_select/top_p`).  `bits` a tuple of n values: an
@@ -91,7 +91,7 @@ class Pieces:
 
 @dataclass(frozen=True)
 class Param:
-    """[R15 stoch] Row i consumes the whole of a declared runtime PARAMETER of the Program (`kind`: `"seed"` -> the request's seed
+    """Row i consumes the whole of a declared runtime PARAMETER of the Program (`kind`: `"seed"` -> the request's seed
     parameter `Array<1,Value<64>>`); `keys[i]` is row i's request id.  No device view: the fold wires the parameter's leaves, exactly as
     the derived Program takes `seed` as an input (never a Const -- a wrong seed is a wrong INPUT, caught by the value check, not a
     different Program)."""
@@ -102,7 +102,7 @@ class Param:
 
 @dataclass(frozen=True)
 class Collective:
-    """[R17 D90, COORD R17-4] Row i consumes the `parts` of a two-rank collective in RANK order: this rank's OWN partial row `own[i]`
+    """Row i consumes the `parts` of a two-rank collective in RANK order: this rank's OWN partial row `own[i]`
     (an ordinary memory read of the rank's collective INPUT storage -- its in-log producer is the rank's `Gemm`/`EmbeddingShard` output;
     an unwritten row is Unresolved, never a root) and the PEER rank's partial row = a leaf range of the fold's `peers_<request>` root
     PARAMETER (root class `collective_received`: the other rank's committed partial, bound by the rank Program's `tp_links.json`).

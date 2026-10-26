@@ -389,7 +389,8 @@ def test_pins_of_another_format_are_refused(tmp_path):
 
 # ---- sm_90a ---------------------------------------------------------------------------------------------------------------
 # `plain90` and `refused90` are 13.0.1's sm_90a builds of the probes (r20261023-101808-80bd, the ptxas of the sm_90a pin
-# attempt r20261023-083327-2d51). The shipped pins have no sm_90a entry until ieee_pin.py's numeric run on an sm_90 card.
+# attempt r20261023-083327-2d51). The shipped 13.0.1-sm_90a entry is ieee_pin.cu's, numeric run r20261023-120437-0149 on
+# the H200.
 
 
 @pytest.fixture
@@ -405,11 +406,23 @@ def test_an_sm90a_build_without_flags_passes_under_its_own_entry_and_no_other(pi
     v = verdict("plain90", p=pins90)
     assert v["toolkit"] == "13.0.1-sm_90a" and v["offending_n"] == 0 and v["merged_reads_n"] == 0
     assert v["unmatched_calls"] == [] and v["covered"] == PLAIN_COVERED and v["flagged"] == sum(PLAIN_COVERED.values())
-    shipped = verdict("plain90")
-    assert shipped["toolkit"] is None and "with unpinned arguments '-arch sm_90a -m 64'" in shipped["unpinned"]
-    assert shipped["covered"] == {} and shipped["offending_n"] == shipped["flagged"]
     pins90["toolkits"]["13.0.1-sm_90a"]["numeric"] = None
     assert verdict("plain90", p=pins90)["offending_n"] == v["flagged"]
+
+
+def test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested():
+    """The shipped entry is found for an sm_90a build of its ptxas and exempts the seeds and the bodies ieee_pin.cu's builds
+    pinned; the probe's sqrt calls reach a __cuda_sm20_sqrt_rn_f32_slowpath that ptxas specialized otherwise, which no
+    numeric run tested, so they stay refused, and so does every refused kernel."""
+    entry = SG.load_pins()["toolkits"]["13.0.1-sm_90a"]
+    assert entry["args"] == ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]
+    assert entry["numeric"]["run"] == "r20261023-120437-0149"
+    v = verdict("plain90")
+    assert v["toolkit"] == "13.0.1-sm_90a" and v["unpinned"] is None and v["covered"]["int-seed"] == 12
+    assert [c.split(" ")[0] for c in v["unmatched_calls"]] == ["sqrt_k", "rho_k"]
+    assert "sqrt" not in str(v["covered"]) and 0 < v["offending_n"] < v["flagged"]
+    r = verdict("refused90")
+    assert r["toolkit"] == "13.0.1-sm_90a" and r["covered"] == {} and r["offending_n"] == r["flagged"] == 18
 
 
 def test_every_refused_kernel_fails_at_sm90a_too(pins90):

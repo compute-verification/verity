@@ -142,12 +142,12 @@ def test_word_check_sees_the_tapped_softmax_as_committed():
 
 def test_the_manifest_cli_and_verify_carry_the_policy(monkeypatch):
     from verity_vllm.pipeline import manifest as M
-    from verity_vllm.query.manifest import verify as V
+    from verity_vllm.pipeline import manifest_verify as MV
 
     assert M.taps_of() == () and M.taps_of(router_softmax=True) == (RS.FAMILY,) and M.TAPS[RS.FAMILY] is RS.POLICY
     seen = {}
     monkeypatch.setattr(M, "build", lambda program, **kw: seen.setdefault("kw", kw) and {})
-    V.rebuild(program="p", taps=M.taps_of(router_softmax=True))
+    MV.rebuild(program="p", taps=M.taps_of(router_softmax=True))
     assert seen["kw"]["taps"] == (RS.FAMILY,)
 
 

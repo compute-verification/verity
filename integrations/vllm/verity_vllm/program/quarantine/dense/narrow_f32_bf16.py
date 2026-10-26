@@ -8,7 +8,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity.ml.definitions.registry.dense import NarrowF32ToBf16  # noqa: F401
+from verity.ml.definitions.registry.dense import NarrowF32ToBf16
 
 SEMANTIC_ID = "dense/NarrowF32ToBf16@v1"
 
