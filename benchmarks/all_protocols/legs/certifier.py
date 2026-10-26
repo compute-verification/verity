@@ -63,6 +63,10 @@ input-row bits, less the rows wires feed or ``external`` names), the observation
 buckets, `certifier_serve.WINDOW_BUCKETS` each), jitter bound 1 (N2 holds the planned profile's egress counts exactly,
 so no observation moves), and no connection through the network certifier but the link, whose counts the profile fixes
 (``cells`` empty).
+
+**The block record** (`block_leg`): a period's accepted answer, of either path, as the certifier leg of
+``verity/block-record/v1`` (CMP-95 item 6): K in bits, its error the answer's exact ``eps``, and the certificate at
+δ = 1/100 and 10⁻⁶ wherever ``eps`` is at most δ. A loop's leg and the H200 fallback's write that one shape.
 """
 from __future__ import annotations
 
@@ -1057,11 +1061,47 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     return answer
 
 
-__all__ = ["DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED", "TAMPERED_WINDOW", "WARDEN_PENDING",
-           "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS", "answer_of_outcome", "audit_answer", "case_of",
-           "certified_events", "certifier_leg", "check", "clock_evidence", "free_inputs", "io", "layout", "leg",
-           "loop_units", "match_ids", "match_outputs", "n2_refusal", "n2_report", "period_windows", "publish",
-           "registered_outputs", "requests_of", "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free",
-           "scan_prove", "scan_schedule", "scan_window", "session", "warden_argv", "warden_ids",
-           "warden_io", "warden_leg", "warden_period_windows", "warden_publish", "warden_rehearse", "warden_session",
-           "warden_tampers", "warden_windows"]
+# --- the block record ----------------------------------------------------------------------------------------------------
+
+#: the block record's δs (``verity/block-record/v1``'s ``at``): a leg's certificate holds at δ where its error is at
+#: most δ. The leg's `DELTAS` are each audit's and scan's own δ, so a period's error is their sum.
+BLOCK_DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
+#: where the block record says a leg's error is read from: the runner row's ``quantity`` (the answer's public)
+BLOCK_ERROR_FROM = "quantity.eps"
+
+
+def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
+              owner: str | None = "network-accounting") -> dict[str, Any]:
+    """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v1``, CMP-95 item 6) of one
+    period's ``network-period check`` answer, in the clock form or the rows form: the answer's verdict, reason,
+    commitment and public; the quantity K, the bits a covert sender in ``server`` can move over the link in the
+    period's ``windows`` link-windows; the error the answer's exact ``eps``; and the certificate at each δ of
+    `BLOCK_DELTAS`, K wherever ``eps`` ≤ δ, else not established. ``runs``: the run ids it comes from; ``source``:
+    ``real`` or ``fixture``. Only an accepted answer certifies a K, so any other is a ValueError: the record's
+    quantity has no shape for a period that certifies nothing."""
+    if answer.get("protocol") != PROTOCOL:
+        raise ValueError(f"protocol {answer.get('protocol')!r}: not {PROTOCOL}")
+    if answer.get("verdict") != "accept":
+        raise ValueError(f"a {answer.get('verdict')} period certifies no K ({answer.get('reason')})")
+    if source not in ("real", "fixture"):
+        raise ValueError(f"source {source!r}: real or fixture")
+    if not runs:
+        raise ValueError("a leg comes from at least one run")
+    pub = answer["public"]
+    K, eps = int(pub["K"]), Fraction(pub["eps"])
+    at = {str(d): {"holds": True, "value": K, "epsilon": None, "by": "run"} if eps <= d else
+          {"holds": False, "why": f"the run established it except with {eps}, more than {d}"} for d in BLOCK_DELTAS}
+    return {"protocol": PROTOCOL, "owner": owner, "server": server, "source": source,
+            "answer": {k: answer.get(k) for k in ("verdict", "reason", "commitment", "public")},
+            "quantity": {"symbol": "K", "value": K, "unit": "bits", "windows": int(pub["windows"])},
+            "error": str(eps), "error_from": BLOCK_ERROR_FROM, "at": at, "runs": list(runs)}
+
+
+__all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
+           "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
+           "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
+           "clock_evidence", "free_inputs", "io", "layout", "leg", "loop_units", "match_ids", "match_outputs",
+           "n2_refusal", "n2_report", "period_windows", "publish", "registered_outputs", "requests_of", "rows_case_of",
+           "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule", "scan_window", "session",
+           "warden_argv", "warden_ids", "warden_io", "warden_leg", "warden_period_windows", "warden_publish",
+           "warden_rehearse", "warden_session", "warden_tampers", "warden_windows"]
