@@ -374,7 +374,7 @@ def fill(rows: Iterable[tuple[int, int, float | Fraction]], budget: float | Frac
     for _, top, n, k, h in sorted(items, reverse=True):
         x = min(top, budget * n / k)
         out += x * h
-        budget -= x * k / n
+        budget = (budget * n - x * k) / n
         if budget <= 0:
             break
     return out

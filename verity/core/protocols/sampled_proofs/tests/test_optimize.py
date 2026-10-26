@@ -64,7 +64,7 @@ def test_density_bound_is_its_exact_value_rounded_up():
                 for n in (rng.randint(1, 10 ** rng.randint(1, 16)) for _ in range(rng.randint(0, 8)))]
         delta = rng.choice([0.5, 0.01, 1e-6, 2.0 ** -40, 1 - 2.0 ** -40, 1 - 2.0 ** -53, rng.uniform(1e-9, 0.999)])
         exact, f = density_exact(rows, delta), density_bound(rows, delta)
-        assert exact <= Fraction(f) and (delta > 1 - 2.0 ** -40 or Fraction(f) <= exact * Fraction(SLACK))
+        assert isinstance(exact, (int, Fraction)) and exact <= Fraction(f) and (delta > 1 - 2.0 ** -40 or Fraction(f) <= exact * Fraction(SLACK))
 
 
 def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():
