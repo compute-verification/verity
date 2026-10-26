@@ -225,8 +225,8 @@ theorem rowsFit_of_stmt {tags : Tags} {cf : ByteArray} {tables : List (String ×
     Hidden.Any.RowsFitS c := by
   have hr := Layout.scopeOkH_rowsB h
   rcases parseStmt_cases hc with ⟨-, hc⟩ | ⟨-, ct, hct, rfl⟩
-  · exact rowsFit_of_committed hty (.inl hc) hr
+  · exact rowsFit_of_committed hty (Or.inl hc) hr
   · rw [v1PortsL_unrolled, bitRowsL_unrolled] at hr
-    exact (rowsFit_unrolled ct).2 (rowsFit_of_committed hty (.inr hct) hr)
+    exact (rowsFit_unrolled ct).2 (rowsFit_of_committed hty (Or.inr hct) hr)
 
 end FlockSoundness.Discharge.HiddenExec
