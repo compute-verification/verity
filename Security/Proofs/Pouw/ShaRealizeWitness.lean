@@ -150,12 +150,12 @@ theorem walk_log (x : Fin k → (toyNF D).Draw × (toyNF D).Chk) (w : Fin k) (u 
       some (word a) := by
   have hor : ((log a k).prover x w).oracle u ((toyE D).leaf (word a)) = u 0 := by
     unfold MerkleExtract.Prover.oracle
-    rw [dif_pos ⟨0, rfl⟩]
+    rw [dite_eq_left ⟨0, rfl⟩]
     exact congrArg u (Subsingleton.elim _ _)
   have hw : ∃ v, (toyE D).leaf v ∈ ((log a k).prover x w).pre u ∧
       ((log a k).prover x w).oracle u ((toyE D).leaf v) = u 0 :=
     ⟨word a, ⟨0, by decide, rfl⟩, hor⟩
-  rw [Pouw.MerkleExtract.ext, dif_pos hw]
+  rw [Pouw.MerkleExtract.ext, dite_eq_left hw]
   obtain ⟨⟨_, _, hi⟩, _⟩ := Classical.choose_spec hw
   exact congrArg some ((toyE D).leaf_inj hi).symm
 
