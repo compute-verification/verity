@@ -113,6 +113,18 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
     return s
 
 
+def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
+    """The schedules' names `schedule_of` admits for `scheme` on `kernel`."""
+    ok = set()
+    for name in SCHEDULES:
+        try:
+            schedule_of(name, scheme, kernel)
+        except ValueError:
+            continue
+        ok.add(name)
+    return frozenset(ok)
+
+
 class LaneCalls:
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
     ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``,
