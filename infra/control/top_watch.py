@@ -14,7 +14,7 @@ Default-kind page still Waiting on Daniel past its Deadline.
 - A Default-kind page past its Deadline, still Waiting on Daniel: Status Default applied, Decision "Default applied <time PT>:
   <If no answer>".
 - New text under the bold first line of the yellow "Your reply" callout, or a new comment, not starting with an @handle or the
-  page's lane (or top) and a colon: quoted (QUOTE_MAX characters).
+  page's lane (or top) and a colon or a time (`proofs 03:20Z:`): quoted (QUOTE_MAX characters).
 Each rings the page's Lane, led by its name, with what to do (`resolve` on its card), and @top with one line, since top writes the
 decisions log. The state keeps `since`, the pages decided, the reply pieces seen per page (by block id) and the comment ids
 seen.
@@ -148,8 +148,9 @@ def page_body(notion, pid: str) -> tuple[list[tuple[str, str]], dict[str, str]]:
 
 
 def lane_lead(lane: str) -> re.Pattern:
-    """How a lane's answer starts: an @handle, or the page's lane or top named with a colon (`proofs:`, as lanes sign)."""
-    return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*:")
+    """How a lane's answer starts: an @handle, or the page's lane or top named with a colon or a time, as lanes sign
+    (`proofs:`, `proofs 03:20Z:`, `proofs, 26 Oct 03:20Z:`). `proofs, please …` is still Daniel's."""
+    return re.compile(rf"{HANDLE_LEAD.pattern}|^\s*(?:{re.escape(lane)}|top)\s*(?::|,?\s+(?:\d{{1,2}}\s+[A-Z][a-z]{{2}}\s+)?\d{{1,2}}:\d{{2}})")
 
 
 def daniels(reply: list[tuple[str, str]], seen: set[str], lead: re.Pattern = HANDLE_LEAD) -> list[str]:
