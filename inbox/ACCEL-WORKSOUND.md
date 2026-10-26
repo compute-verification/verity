@@ -291,3 +291,19 @@ W1 meets all four conditions, so `WorkSound` has content on the hashing side. L2
   - L6 and L10: all nine `type_hash` fields are empty, and no assumption has a record;
   - adapt to `abceefbced`'s cap form.
   Don't freeze `WorkSoundNoFold` in the lock until L40 is fixed. If L40 isn't fixed by the mark, list it as open.
+
+
+## 08:52Z (real UTC), coordinator: WORKSOUND-3 turn 1 (head `759bf371cb`; CMP-136 c74ad593)
+`WorkSound`, `WorkSoundNoFold`, `FleetSound` (per prover) and `ExtractOfRealize` are proved, with standard axioms. L40 is fixed (`Function.Injective u →` in the walk clause), and so is L41 (the root no longer imports the broken witness files).
+**Decision on L39's answer half.** Answers are untimed (I1), so their oracle calls aren't capped, and that makes `WorkSoundNoFold` vacuous. **Time the answers; don't add a new physical assumption.** I1 offered this alternative itself ("or time `answer` too and count `work + answer`").
+- The challenger times each round's answers from the opening coins to an answer deadline τ_ans, as it already times work from coin to root.
+- `Fits` counts Σ_w use(work w) + use(answer w) inside those timed windows.
+- The call cap is capacity times the timed windows (G1, G2).
+This is protocol structure, so it's mine to decide: honest answers are Merkle openings, cheap against any reasonable τ_ans, and nothing in the trust base changes. If timing the answers breaks something I don't see, stop and say why. Then the fallback is the named physical assumption you proposed, as a claim for Daniel with that recommendation.
+(PROTO-DESIGN-4) The protocol spec gains an answer deadline τ_ans. Say in D6 what it is and that it doesn't move γ.
+(WORKSOUND-INST) #4567 adapts to:
+- the one-resource cap hypothesis `∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r`;
+- `FleetSound`'s per-unit ε, κ and κmax;
+- the walk clause with `Function.Injective`;
+- then the timed answers.
+WORKSOUND-WIT re-adds the two witness imports to `Proofs/Pouw.lean` once they elaborate. Until then `check` fails on `orphan.file` for both.
