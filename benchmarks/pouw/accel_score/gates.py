@@ -19,7 +19,8 @@ read rate. 𝓜 overlaps every pool in full, so Φ is generous where the card's 
 
 **s_×** (`s_x`): the fewest gates of a counted operation, a MAC of the workloads' formats (s8, E4M3, E5M2) in its dot
 step, gates a step over its k. It is read as the least size of any circuit for a counted operation: an assumption (a
-builder bounds that least size from above only).
+builder bounds that least size from above only). It is not that in 𝓜's own pricing: 𝓜 has indexed loads, which Φ
+prices as copies, so a table program computes an s8 MAC in fewer gates (`s_x_indexed`, RT-SIZE's RS7).
 """
 from __future__ import annotations
 
@@ -295,7 +296,8 @@ def lane_gates() -> dict:
     s["setp"] = size(lambda C, a, b: [_cmp_lt(C, a, b, True)] + [ZERO] * 31, [32] * 2, 32)
     s["sel"] = size(lambda C, a, b, c: FM.mux(C, FM.or_reduce(C, list(c)), a, b), [32] * 3, 32)
     s["min"] = size(lambda C, a, b: FM.mux(C, _cmp_lt(C, a, b, True), a, b), [32] * 2, 32)
-    s["lea"] = size(lambda C, a, b: FM.add(C, ([ZERO] * 16 + list(a))[:32], b, width=32), [32] * 2, 32)
+    s["lea"] = max((size(lambda C, a, b, sh=sh: FM.add(C, ([ZERO] * sh + list(a))[:32], b, width=32), [32] * 2, 32)
+                    for sh in (0, 16)), key=lambda g: g["total"])
     s["leaHi"] = size(lambda C, a, b, c: FM.add(C, (list(a) + list(c))[16:48], b, width=32), [32] * 3, 32)
     s["dp4a"] = size(lambda C, a, b, c: _s8_dot(4, sat=False)(C, c, [a[8 * i:8 * i + 8] for i in range(4)],
                                                               [b[8 * i:8 * i + 8] for i in range(4)]), [32] * 3, 32)
@@ -346,13 +348,16 @@ ACCEL = {
     "H200": dict(sms=132, mhz=1980, rho=dict(tensor=4096, issue=4, alu=64, imad=64, shfl=32, f64=64, smem=32,
                                              l2=512, dram=20000 / 33 / 132),
                  weight={"s8": 1, "e4m3": 1, "e5m2": 1, "bf16": 2, "f16": 2, "tf32": 4, "b1": 1 / 8},
-                 wgmma=True, sparse=("s8", "e4m3", "e5m2", "bf16", "f16", "tf32"), dmma=(16, 8, 16)),
+                 wgmma=True, sparse=("s8", "e4m3", "e5m2", "bf16", "f16", "tf32"), dmma=(16, 8, 16),
+                 smem_words=65536),
     "RTX PRO 6000": dict(sms=188, mhz=2430, rho=dict(tensor=1024, issue=4, alu=64, imad=64, shfl=32, f64=2, smem=32,
                                                      l2=5, dram=39925 / 243 / 188),
                          weight={"s8": 1, "e4m3": 1, "e5m2": 1, "e2m1": 1, "nvf4": 0.5, "mxf4": 0.5, "bf16": 2,
                                  "f16": 2, "tf32": 4},
-                         wgmma=False, sparse=("s8", "e4m3", "e5m2", "e2m1", "bf16", "f16", "tf32"), dmma=(16, 8, 16)),
+                         wgmma=False, sparse=("s8", "e4m3", "e5m2", "e2m1", "bf16", "f16", "tf32"), dmma=(16, 8, 16),
+                         smem_words=32768),
 }
+#: smem_words: one SM's shared memory in 32-bit words (`H200.lean`'s and `Sm120.lean`'s `.smem` size over the SMs).
 #: b1's tensor weight on the H200 is `Open.b1`, floored at 1/8 (θ's `b1 ≥ 1/8`, CALIB); sm_120 has no b1 MMA.
 PIPES = {"iadd3": "alu", "lop3": "alu", "shf": "alu", "prmt": "alu", "popc": "alu", "flo": "alu", "setp": "alu",
          "sel": "alu", "min": "alu", "lea": "alu", "leaHi": "alu", "mad": "imad", "madWide": "imad", "madHi": "imad",
@@ -421,15 +426,44 @@ def phi(card: str, pinned: bool = False, serving: bool = False) -> dict:
 
 
 COUNTED = ("s8", "e4m3", "e5m2")
+#: Every format and form a hidden counted operation may take (RT-SIZE's RS8): FP4's scalings, and each sparse form's
+#: logical MACs. Which operations count is ACCEL-SPEC's to say; `s_x` gives both.
+EVERY = COUNTED + ("e2m1", "nvf4", "mxf4")
 
 
 @functools.cache
 def s_x() -> dict:
-    """s_×: the fewest gates of a counted operation (a MAC of a counted format in its card's dot step), with each."""
+    """s_×: the fewest gates of a counted operation (a MAC of a counted format in its card's dot step), with each;
+    every: the same over `EVERY`, a 2:4 form at its logical MACs (twice its kept pairs)."""
     each = {(card, f): dot_gates(card, f)["per_mac"] for card in ACCEL for f in COUNTED}
     (card, f), g = min(each.items(), key=lambda kv: kv[1])
     fp4_ = min(dot_gates("RTX PRO 6000", f)["per_mac"] for f in ("nvf4", "mxf4"))
-    return dict(s_x=g, at=(card, f), each={f"{c} {f}": v for (c, f), v in each.items()}, fp4=fp4_)
+    every = {}
+    for c, a in ACCEL.items():
+        for e in EVERY:
+            if e in a["weight"]:
+                every[f"{c} {e}"] = dot_gates(c, e)["per_mac"]
+            if e in a["sparse"]:
+                every[f"{c} {e} 2:4"] = dot_gates(c, e, sparse=True)["per_mac"] / 2
+    at_every = min(every, key=every.get)
+    return dict(s_x=g, at=(card, f), each={f"{c} {f}": v for (c, f), v in each.items()}, fp4=fp4_,
+                every=every[at_every], every_at=at_every)
+
+
+def s_x_indexed() -> float:
+    """s_× in 𝓜's own pricing (RT-SIZE's RS7): 𝓜 has indexed loads (`Machine.lean`'s `Operand.indirect`), which Φ
+    prices as copies, 0 gates. A program whose weights are its own constants reads each s8 product w·x, sign-extended,
+    from a 256-entry table T_w at x's register plus T_w's base, and adds two products into the accumulator an IADD3
+    (exact for K ≤ 2^17): IADD3/2 gates a MAC, an upper bound on the least size of an s8 MAC in 𝓜."""
+    return lane_gates()["iadd3"] / 2
+
+
+def phi_mux_reads(card: str) -> dict:
+    """Φ's indexed loads priced as the headline prices a table read, each its multiplexer over one SM's shared memory
+    (`lookup_gates` over `smem_words`), at 𝓜's smem rate: the gates a SM-clock that convention adds, and over Φ."""
+    a = ACCEL[card]
+    add = a["rho"]["smem"] * lookup_gates(a["smem_words"], 32, 1)
+    return dict(words=a["smem_words"], per_sm_clock=add, over_phi=add / phi(card)["per_sm_clock"])
 
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -496,9 +530,10 @@ def sha512_gates() -> dict:
 
 
 def lookup_gates(table_entries: int, width: int, macs: float) -> float:
-    """An indexed read's least canonical circuit in this model: 𝓜 has no data-dependent load (`Isa.lean`'s `Op`:
-    copies between fixed locations), so a table read is its multiplexer tree, (entries − 1)·width ANDs and twice
-    that in XORs (`forms.mux`), over the MACs it stands for."""
+    """An indexed read as the canonical circuit of its function of the address: its multiplexer tree, (entries − 1)·
+    width ANDs and twice that in XORs (`forms.mux`), over the MACs it stands for. 𝓜 has indexed loads
+    (`Machine.lean`'s `Operand.indirect`) and Φ prices them as copies, 0 gates (RT-SIZE's RS7): this is the headline
+    S_b's convention, not 𝓜's (`s_x_indexed`, `phi_mux_reads`)."""
     return (3 if MEASURE == "gates" else 1) * (table_entries - 1) * width / macs
 
 
@@ -512,7 +547,12 @@ def report() -> str:
                  f"tensor {p['tensor_share']:.1%} of Φ; binding {p['binding']}")
         L.append("  mix: " + ", ".join(f"{k} {v:.1%}" for k, v in sorted(p["mix"].items(), key=lambda kv: -kv[1])))
     L.append(f"s_× = {sx['s_x']:.1f} gates ({sx['at']}); each: " +
-             ", ".join(f"{k} {v:.1f}" for k, v in sx["each"].items()) + f"; FP4 (not counted) {sx['fp4']:.1f}")
+             ", ".join(f"{k} {v:.1f}" for k, v in sx["each"].items()) + f"; FP4 (not counted) {sx['fp4']:.1f}; "
+             f"every format and form {sx['every']:.1f} ({sx['every_at']}); with indexed reads {s_x_indexed():.1f}")
+    for card in ACCEL:
+        m = phi_mux_reads(card)
+        L.append(f"{card}: indexed loads as multiplexers over {m['words']} words add {m['per_sm_clock']:.4g} gates a "
+                 f"SM-clock, {m['over_phi']:.1f}× Φ")
     L.append("lanes: " + ", ".join(f"{k} {v}" for k, v in lane_gates().items()))
     return "\n".join(L)
 

@@ -5,8 +5,9 @@ Credit is size. A sampling block's public cost S_b is the gate count of the smal
 over D5 v2.1's menu (0588f18015): `d6.job_parts`' methods, priced by `public_best.price_methods` at each resource's
 gate price (`gates.d5_sigma`, the cheapest instruction on it: the least size errs low), with b cᵀ's tensor term at its
 own gates (`gates.bit_size`), no hash item (the commitment is the service's; `size_job`'s hashed sensitivity adds the
-round's SHA-512 at `gates.sha512_gates`) and no table routes (𝓜 has no indexed
-load: a table read is its multiplexer tree, `gates.lookup_gates`, dearer than the product it stands for). The
+round's SHA-512 at `gates.sha512_gates`) and no table routes (a table read priced as its multiplexer tree,
+`gates.lookup_gates`, dearer than the product it stands for: a convention, since 𝓜 has indexed loads and Φ prices
+them as copies; `size_job`'s wired sensitivity is 𝓜's pricing, RT-SIZE's RS7). The
 registration declares S_reg = Σ_b S_b at the monitoring period's start; ε_skip is a share of S_reg. Φ is gates a
 second (`gates.phi`, one LP over 𝓜's units), s_× the fewest gates of a counted operation (`gates.s_x`). μ°, the period
 LP, its duals, μ¹ and the beside load x are retired as the credit's unit.
@@ -286,14 +287,16 @@ def exclusion(card: str, share: float, eps: float) -> dict:
     """Per monitoring period over the census's fleet: Φ_fleet T = F/2 · Φ an FP8 MAC-time (𝓜's E4M3 rate is its s8
     rate, weight 1, on both cards: the census's FLOP as the fleet's FP8 tensor capacity, a stated conversion), the
     registered S_reg = share · Φ_fleet T, U = Φ_fleet T − (1 − ε_skip) S_reg, and U/s_× counted operations against the
-    census's own F/2 MACs; ε_dark's dark leaves add ε_dark Φ_fleet T / s_×."""
-    sx = G.s_x()["s_x"]
+    census's own F/2 MACs; ε_dark's dark leaves add ε_dark Φ_fleet T / s_×. ratio_every and ratio_indexed: the same
+    ratio at s_× over every format and form (RS8) and at s_× with 𝓜's indexed loads (RS7)."""
+    sx, sx_every, sx_ix = G.s_x()["s_x"], G.s_x()["every"], G.s_x_indexed()
     out = {}
     for w, F in F_W.items():
         cap = F / 2 * phi_s8(card)
         S = share * cap
         U = cap - (1 - eps) * S
         out[w] = dict(cap=cap, S_reg=S, U=U, ops=U / sx, census_ops=F / 2, ratio=U / sx / (F / 2),
+                      ratio_every=U / sx_every / (F / 2), ratio_indexed=U / sx_ix / (F / 2),
                       census_gates=F / 2 * G.dot_gates(card, "e4m3")["per_mac"],
                       dark={d: d * cap / sx for d in EPS_DARK})
     return out
@@ -378,7 +381,8 @@ def build(quick: bool = False) -> dict:
     out["measure"] = G.MEASURE
     out["phi"] = {c: dict(full=G.phi(c), pinned=G.phi(c, pinned=True), serving=G.phi(c, serving=True))
                   for c in G.ACCEL}
-    out["s_x"] = G.s_x()
+    out["s_x"] = dict(G.s_x(), indexed=G.s_x_indexed())
+    out["phi_mux"] = {c: G.phi_mux_reads(c) for c in G.ACCEL}
     out["sha512"] = G.sha512_gates()
     out["lanes"] = G.lane_gates()
     out["elementwise"] = G.elementwise_gates()
@@ -408,7 +412,9 @@ def verdict(D: dict) -> str:
     cov = min(1 - r["world"]["uncredited"] for r in rows.values())
     cg = min(r["gate_cov"]["cov"] for r in rows.values())
     sh = [r["share"]["share"] for r in rows.values()]
+    shw = [r["share"]["share"] * r["size"]["s_wired"] / r["size"]["s"] for r in rows.values()]
     ratio = max(r["exclusion"]["year"]["ratio"] for r in rows.values())
+    rix = max(r["exclusion"]["year"]["ratio_indexed"] for r in rows.values())
     ev = D["every_pv"].values()
     ecov, egc, egam = min(x["cov"] for x in ev), min(x["gcov"] for x in ev), max(x["gamma"] for x in ev)
 
@@ -421,7 +427,10 @@ def verdict(D: dict) -> str:
             f"of gates ≥ {pct(cg, 1)} ({ok(cg >= GOALS['cov'])} ≥ 95%, ratio {cg / 0.95:.3f}); perplexity carried, "
             f"worst +{100 * PPL_WORST:.2f}% (8B at 8K; {ok(PPL_WORST < GOALS['ppl'])} < 5%, ratio "
             f"{PPL_WORST / GOALS['ppl']:.3f}; V4 not run); credited share in size {pct(min(sh), 2)}–{pct(max(sh), 2)} "
-            f"(no target); U/s_× up to {ratio:.2f}× the census's counted operations a monitoring period; with every "
+            f"with table reads as multiplexers, {pct(min(shw), 2)}–{pct(max(shw), 2)} in 𝓜's pricing (no target); "
+            f"U/s_× up to {ratio:.2f}× the census's counted operations a monitoring period at s_× "
+            f"{D['s_x']['s_x']:.1f}, {rix:.2f}× at 𝓜's indexed-read s_× {D['s_x']['indexed']:.1f}, and no bound under "
+            f"sharing; with every "
             f"PV class credited, coverage of MACs ≥ {pct(ecov, 1)} ({ok(ecov >= GOALS['cov'])}), of gates ≥ "
             f"{pct(egc, 1)} ({ok(egc >= GOALS['cov'])}), γ ≤ {egam:.2f} ({ok(egam <= GOALS['gamma'])})")
 
@@ -435,7 +444,9 @@ def report(D: dict) -> str:
     L.append(f"Every size is in {UNIT} of the canonical Boolean circuit (`verity.ml.circuits.boolean.trace`; this "
              f"build is ACCEL_GATE_MEASURE={D['measure']}, and the other measure is its companion build), called "
              "gates below. Credit is size: a sampling block's public cost S_b is the least gate count over D5 v2.1's "
-             "menu of a program for its products, the registration declares S_reg = Σ_b S_b at the monitoring "
+             "menu of a program for its products, without table routes (a read priced as its multiplexer; in 𝓜's "
+             "own pricing, a read a copy, it is the S_b table's wired column), the registration declares "
+             "S_reg = Σ_b S_b at the monitoring "
              "period's start, and ε_skip is a share of S_reg. Φ is gates a second from 𝓜 (#4662's `Accel`), s_× = "
              f"{sx['s_x']:.1f} gates (an s8 MAC). Results are per monitoring period (a week, a month, a year) over "
              f"the adversary resource model, census {CENSUS}. Columns are 8B / 70B / V4 unless stated; the headline "
@@ -541,12 +552,23 @@ def report(D: dict) -> str:
              f"{G.ACCEL['RTX PRO 6000']['mhz']} MHz × {G.ACCEL['RTX PRO 6000']['sms']} SMs ({G.ACCEL_REF}). The share "
              "uses Φ an s8 MAC-time, clock-free, so Φ at the clock the honest kernel's time is measured at (θ's "
              "2617 MHz on the RTX PRO 6000, above 𝓜's tick).\n")
+    L.append("Φ prices 𝓜's indexed loads as copies, 0 gates. Priced as the headline S_b prices a table read, each "
+             "its multiplexer over one SM's shared memory, they would add " + ", ".join(
+                 f"{D['phi_mux'][c]['per_sm_clock']:.3g} gates a SM-clock on the {c} ({D['phi_mux'][c]['words']:,} "
+                 f"words at 𝓜's {G.ACCEL[c]['rho']['smem']} a clock, {D['phi_mux'][c]['over_phi']:.1f}× Φ)"
+                 for c in G.ACCEL)
+             + ": the multiplexer convention makes Φ grow with the store a read addresses.\n")
     L.append("Gates a MAC of each dot step (`gates.dot_gates`): " + "; ".join(
         f"{c}: " + ", ".join(f"{f} {v:.1f}" for f, v in D["dots"][c].items()) for c in D["dots"]) + ". s_× = "
              f"{sx['s_x']:.1f} ({sx['at'][0]} {sx['at'][1]}); every counted format: " + ", ".join(
-                 f"{k} {v:.1f}" for k, v in sx["each"].items()) + f"; FP4, not counted, {sx['fp4']:.1f}. s_× is "
-             "read as the least size of any circuit for a counted operation: an assumption, since a builder bounds "
-             "that least size from above only.\n")
+                 f"{k} {v:.1f}" for k, v in sx["each"].items()) + f"; FP4, not counted, {sx['fp4']:.1f}. With "
+             f"every format and form counted (FP4's scalings, a 2:4 form at its logical MACs; RT-SIZE's RS8), s_× = "
+             f"{sx['every']:.1f} ({sx['every_at']}); which operations count is ACCEL-SPEC's to say. s_× is read as "
+             "the least size of any circuit for a counted operation: an assumption, since a builder bounds that "
+             "least size from above only. In 𝓜's own pricing it is false (RS7): 𝓜 has indexed loads "
+             "(`Machine.lean`'s `Operand.indirect`) and Φ prices them as copies, so a program with its weights as "
+             "constants reads each product w·x from a 256-entry table T_w and adds two an IADD3, "
+             f"{sx['indexed']:.1f} gates a s8 MAC (`gates.s_x_indexed`); RS7's Four Russians programs go lower.\n")
     L.append("Lane functions, gates an instruction a lane: " + ", ".join(f"{k} {v}" for k, v in D["lanes"].items())
              + ". Elementwise steps: " + ", ".join(f"{k} {v}" for k, v in D["elementwise"].items()) + ".\n")
 
@@ -561,18 +583,21 @@ def report(D: dict) -> str:
              "b1 MAC; sm_120's FP4 Strassen depth 2, (7/8)² FP4 MACs). Formats D5 prices on the tensor row at s8 "
              "MAC-time, against their own gates (< 1 errs low): " + "; ".join(
                  f"{c}: " + ", ".join(f"{k} {v:.3f}" for k, v in D["tensor_checks"][c].items()) for c in cards)
-             + f". Table routes are left out: a 256-entry int16 read is {D['lookups']['lut1']:.0f} gates a MAC, "
-             "a Four Russians read at least " + f"{min(D['lookups']['four_russians'].values()):.0f}"
-             + " a bit MAC, each above the product it stands for.\n")
+             + ". The headline leaves table routes out, pricing a table read as its multiplexer: a 256-entry int16 "
+             f"read is {D['lookups']['lut1']:.0f} gates a MAC, a Four Russians read at least "
+             f"{min(D['lookups']['four_russians'].values()):.0f} a bit MAC, each above the product it stands for. "
+             "That is a convention, not 𝓜's pricing: 𝓜 has indexed loads and Φ prices them as copies "
+             "(RT-SIZE's RS7).\n")
     sha = D["sha512"]
     L.append(f"The hashed column adds the round's SHA-512 compressions (the leaves, A and the coin expansion, "
              f"nofold's `comps` a naive MAC) at one compression's traced gates, {sha['total']:,} ({sha['and']:,} And2, "
              f"{sha['xor']:,} Xor2, {sha['not']:,} Not; `gates.sha512_gates`): what v1.1's credit carried, and the "
              "share it would give.\n")
     L.append("The wired column keeps D5's table routes with a read at its resources' gate prices (smem and issue carry "
-             "none): the actual circuit is one run's (`Accounting.Actual`), so a read's address is wiring, not a "
-             "multiplexer (RT-SIZE's RS1). The headline leaves the table routes out; the wired column is what the "
-             "least size over the menu is if that reading holds.\n")
+             "none). That is 𝓜's own pricing, since Φ prices an indexed load as a copy (RS7), and the actual "
+             "circuit's, which is one run's (`Accounting.Actual`), so a read's address is wiring, not a multiplexer "
+             "(RS1). The headline leaves the table routes out; the wired column is the least size over the menu in "
+             "𝓜's pricing.\n")
     L.append("| card, model | S_b a credited MAC: lo / hi | OPT* (dense) lo / hi | with the round's SHA-512 (lo), share "
              "| table reads as wiring (lo), share | static / PV | credited classes | the largest class's winning method |")
     L.append("|---|---|---|---|---|---|---|---|")
@@ -599,14 +624,16 @@ def report(D: dict) -> str:
              "monitoring period's serving blocks is the same sum (the next table). ε_dark's dark leaves add "
              "ε_dark Φ_fleet T / s_×.\n")
     L.append("| card, model | period | census F (FLOP) | Φ_fleet T (gates) | S_reg | U | U/s_× (counted ops) | "
-             "census F/2 (MACs) | U/s_× over F/2 | + dark at ε_dark 1e-3 / 1e-2 (ops) |")
-    L.append("|---|---|---|---|---|---|---|---|---|---|")
+             "census F/2 (MACs) | U/s_× over F/2 | every format counted (RS8) / with indexed reads (RS7) | "
+             "+ dark at ε_dark 1e-3 / 1e-2 (ops) |")
+    L.append("|---|---|---|---|---|---|---|---|---|---|---|")
     for card in cards:
         for m in models:
             ex = rows[card, "measured", m]["exclusion"]
             for w, x in ex.items():
                 L.append(f"| {card}, {SHORT[m]} | {w} | {sci(F_W[w])} | {sci(x['cap'])} | {sci(x['S_reg'])} | "
                          f"{sci(x['U'])} | {sci(x['ops'])} | {sci(x['census_ops'])} | {x['ratio']:.2f} | "
+                         f"{x['ratio_every']:.2f} / {x['ratio_indexed']:.2f} | "
                          f"{sci(x['dark'][1e-3], 1)} / {sci(x['dark'][1e-2], 1)} |")
     L.append("")
     L.append("The bound is weak: the uncertified gates of a monitoring period could complete "
@@ -621,8 +648,16 @@ def report(D: dict) -> str:
                  for c in cards) + ".\n")
     L.append("U/s_× bounds counted operations only if each needs s_× gates of its own. Under gate sharing it doesn't: "
              "a constant-operand or Four Russians product takes fewer gates an operation (RT-SIZE's RS3), and the "
-             "S_b table's wired column is that sharing in S_b. U/s_× over F/2 is RT-SIZE's vacuity V at the s8 "
-             "rate: above 1, the bound allows more hidden counted work than the fleet's FP8 peak.\n")
+             "S_b table's wired column is that sharing in S_b. Nor does it in 𝓜's own pricing, where an indexed "
+             f"load is a copy: an s8 MAC takes at most {sx['indexed']:.1f} gates (RS7; the table's indexed-reads ratio), and "
+             "RS7's Four Russians programs take fewer. Counting FP4 and the 2:4 forms' logical MACs (RS8) takes s_× "
+             f"to {sx['every']:.1f}. Pricing a read as its multiplexer instead doesn't rescue the bound: Φ would "
+             "then count 𝓜's indexed loads at their multiplexers, " + ", ".join(
+                 f"{D['phi_mux'][c]['over_phi']:.0f}× Φ on the {c}" for c in G.ACCEL)
+             + " (the Φ section). So a bound on counted operations in gates is vacuous under either convention; RS2's "
+             "and RS7's fix, a bound in 𝓜's resources, brings back the LP the 12:11 ruling retired, Daniel's. U/s_× "
+             "over F/2 is RT-SIZE's vacuity V at the s8 rate: above 1, the bound allows more hidden counted work "
+             "than the fleet's FP8 peak.\n")
 
     # Serving blocks.
     L.append("### Serving blocks (8-GPU servers, a wipe every 24 h)\n")
@@ -733,12 +768,13 @@ def report(D: dict) -> str:
     def rng(f):
         return ", ".join(f"{min(f(rows[c, 'measured', m]) for m in models):.1f}–"
                          f"{max(f(rows[c, 'measured', m]) for m in models):.1f} on the {c}" for c in cards)
-    L.append("### RT-SIZE's checkpoint 1 (CMP-158, 19:56Z) against this build\n")
+    L.append("### RT-SIZE's checkpoints 1 (CMP-158, 19:56Z) and 2 (20:24Z) against this build\n")
     L.append("- **RS1, values don't certify gates.** The wired column measures it here: with D5's table routes and a "
              "read as wiring, S_b (gates a credited MAC) is " + rng(lambda r: r["size"]["s_wired"])
-             + ", against the headline's " + rng(lambda r: r["size"]["s"]) + ". The headline leaves table routes out because 𝓜 has no indexed "
-             "load; in the actual circuit of one run that reason fails, so the headline S_b overstates the least "
-             "size unless the credit rests on a premise in 𝓜's resources (RS1's fix: a claim, Daniel's).")
+             + ", against the headline's " + rng(lambda r: r["size"]["s"]) + ". The headline leaves table routes "
+             "out by pricing a read as its multiplexer; in 𝓜 (RS7) and in the actual circuit of one run a read is "
+             "a copy, so the headline S_b overstates the least size unless the credit rests on a premise in 𝓜's "
+             "resources (RS1's fix: a claim, Daniel's).")
     L.append("- **RS2, a scalar Φ.** The share at Φ without FP64 and stand-ins shows how much of the low share is Φ "
              "counting what serving doesn't run; the companion build gives Φ in RT-SIZE's measure (ANDs).")
     L.append("- **RS3, s_× under sharing.** Stated with the exclusion bound: U/s_× holds only without gate sharing.")
@@ -746,7 +782,20 @@ def report(D: dict) -> str:
              "holds.")
     L.append("- **RS5, late answers.** The answers' busy share of a week (the ε_skip table) is the serialized "
              "queue's load; near 95% its lag runs to hours. Queued check coins are ACCEL-SPEC's fix, and D6 v2 "
-             "carries no timing change.\n")
+             "carries no timing change.")
+    L.append("- **RS7, s_× is no floor in 𝓜.** Confirmed: `Machine.lean` at 08bfdc3a07 has `Operand.indirect`, and "
+             "gates.py's premise that 𝓜 has no data-dependent load was false. `lookup_gates` now prices the "
+             "headline's convention (a read as its multiplexer), named as one; s_× with indexed reads is "
+             f"{sx['indexed']:.1f} (RS7's L1), with U/s_× at it in the exclusion table; and the multiplexer "
+             "convention, carried into Φ, adds " + ", ".join(f"{D['phi_mux'][c]['over_phi']:.0f}× Φ on the {c}"
+                                                              for c in G.ACCEL) + ". A gate bound fails either way.")
+    L.append(f"- **RS8, which operations count.** s_× over every format and form is {sx['every']:.1f} "
+             f"({sx['every_at']}), the exclusion table's every-format ratio. The headline keeps s8, E4M3 and E5M2, the "
+             "census's FP8 FLOP; ACCEL-SPEC says which count.")
+    L.append("- **RS9, RS2 at this build's Φ.** Agreed: Φ an s8 MAC-time over s_× is the vacuity at U = Φ|J| (the "
+             "exclusion paragraph), and the stand-in sparse dots are most of Φ (the pinned column). The fix is "
+             "#4662's owner's (pin `Open.dotSp`) and Daniel's (a resource bound).")
+    L.append(f"- **RS10, `lea`.** Traced at its largest variant (s = 0), {D['lanes']['lea']} gates; Φ doesn't move.\n")
 
     # Lean.
     L.append("### What the Lean needs (for the Lean worker after CMP-154)\n")
@@ -762,20 +811,22 @@ LEAN = [
     "unit), no makespan variable and no duals; `SAKMatmul` becomes: no program for the block's products is smaller "
     "than S_b. As a premise in gates that is false against table circuits (RT-SIZE's RS1; the S_b table's wired "
     "column, about 1/17 of S_b), so it can't be named as an assumption as it stands: either the statement restricts "
-    "the menu to programs without indexed reads and says why the actual circuit has none, or the premise moves to "
-    "𝓜's resources (RS1's fix). Either is a claim, Daniel's.",
+    "the menu to programs without indexed reads, which 𝓜 has (`Operand.indirect`, RS7), and says why the auditor's "
+    "circuit can't use them, or the premise moves to 𝓜's resources (RS1's fix). Either is a claim, Daniel's.",
     "`Hmac` (the credited MACs' price at μ°) → `Hsize`: S_b = s_b · (the block's MACs), s_b public, read from the "
     "registration; delete every μ°, μ¹ and dual-price lemma that only `Hmac` used.",
     "`W_b` (a block's weight in the draw) → S_b / S_reg: the challenger draws a gate of S_reg, so a proof block in "
     "proportion to its public size; `ε` → `ε_skip`, a share of S_reg, with δ_coin for the draw and δ_crypto beside.",
     "`W_reg` → S_reg = Σ_b S_b, declared at the monitoring period's start (P21 as structure).",
     "Φ: a per-card constant in gates a second, `Accel`'s LP over its units with each `Op`'s gate content (its "
-    "`Lane.eval`/`dmmaEval` circuit's size) as the objective, and s_× (the fewest gates of a counted operation) as a "
-    "named assumption (a lower bound the builders don't prove).",
+    "`Lane.eval`/`dmmaEval` circuit's size) as the objective, an indexed load a copy at 0 gates. s_× (the fewest "
+    "gates of a counted operation) can't be a named assumption at the dot step's size: in 𝓜's own pricing an s8 MAC "
+    "takes at most IADD3/2 (`gates.s_x_indexed`, RS7), so the assumption would be false.",
     "U(X, J) = Φ_X|J| − |A[X,J] ∩ W_cert| and its U/s_× counted operations, per serving block of exactly c_S gates "
     "(padded), summed over a monitoring period's blocks; ε_dark's leaves as q_U(L_dark). U/s_× needs each counted "
     "operation to own s_× gates of A (Contains, no sharing): a named Prop the theorem takes, which RT-SIZE's RS3 "
-    "shows false for matrix products in general, so it too is a claim.",
+    "shows false for matrix products in general and RS7 false inside 𝓜, so it too is a claim. Which operations "
+    "count (FP4, the 2:4 forms' logical MACs: RS8) is ACCEL-SPEC's, stated before the Prop.",
     "The measure: `Verity.Circuit`'s `size` counts gates of any width as 1 (RS2). This build counts the canonical "
     "Boolean circuit's And2 + Xor2 + Not, its companion And2 alone; the Lean's size must be one of them, on the "
     "Boolean profile, named once.",
