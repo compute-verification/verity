@@ -25,7 +25,7 @@ b677a8872dabcb6219f1ae2c271c35d1d8ca1ca3a4327a880500992691e0f0bc  ../../../../..
 88069a0c9b4dda40aee828ba450e3eea2cdcf0f87d277834f8374ec12022d8d7  ../../../../../Security/Definitions/Pous/Game/Prob.lean
 7efa0ece48a262059ddb80af87b9b71d46181a043cd22d2edaf93de9249c7c0c  ../../../../../Security/Definitions/Pous/Guarantees.lean
 e42e5066c3a3ad7077406e623e58ffba216e6be149d5b09f4931518da6afb6fc  ../../../../../Security/Definitions/Pous/Guarantees/P2.lean
-c8d78f5c2bdf9f4fc7b84b118d89e82ab6703c5aaa55ae1a9cfee3bde463d423  ../../../../../Security/Definitions/Pous/Guarantees/SecureErasure.lean
+8d38d5efdaa093b33243ac1d9684417bc7709e7f094e7392912640fee36d721c  ../../../../../Security/Definitions/Pous/Guarantees/SecureErasure.lean
 553dc52a24ef78a0faf6308a1902308b614b513fc59263ab7bc0f81c0fea4e1e  ../../../../../Security/Definitions/Pous/Guarantees/StreamedWipe.lean
 11e8efe5ca9c6d092347de8ef8a41bbe2e010e9209c915e98c674f6396d714a4  ../../../../../Security/Definitions/Pous/Model/Audit.lean
 5a3a5196064a7b60bfd1c62a98076098d3093a8e4ceddc5bc5200fb51ff84ed9  ../../../../../Security/Definitions/Pous/Model/BandChain.lean

@@ -1,0 +1,21 @@
+import Proofs.Flock.Bridge.PortRoots
+import Proofs.Flock.Bridge.PopMatches
+import Proofs.Flock.Bridge.Targets
+import Proofs.Flock.Bridge.Lowers
+import Proofs.Flock.Bridge.Count
+import Proofs.Flock.Bridge.CircuitOf
+import Proofs.Flock.Bridge.Canon
+import Proofs.Flock.Bridge.OpeningsCanon
+import Proofs.Flock.Bridge.Assembly
+import Proofs.Flock.Bridge.EndToEndHiddenC
+import Proofs.Flock.Bridge.FaultyRightC
+import Proofs.Flock.Bridge.KSLive
+
+/-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
+of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
+the row/v2 sampled statement at the constants `κ` and `canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every
+target it takes). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit (`Flock.Bridge.lowers`).
+`FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). -/
+
+/-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
+theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

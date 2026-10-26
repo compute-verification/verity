@@ -4,10 +4,11 @@ accepting the view its ingress bucket wrote, request 5 in request 1's slot past 
 with every output 1, the ingress units' view leaves the egress units' state leaves; chain's swapped buckets' ok bits 0
 on reads that hold; forged's egress row refused ("does not open"). A warden_serve run's directory (`--warden-run`,
 here the synthetic run published as `warden_serve.Publisher` publishes a served one) is read under its deployment's key,
-and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the challenger's coins
-(``--challenger``): its flags refused by name where they can't draw, the window's root bound to the warden's signed
-link-window, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
-takes. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
+its registration's ``warden/<side>`` roots (`scan_zk.warden_roots`) the root and domain of each side's row registration
+in ``cells.jsonl``, and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the
+challenger's coins (``--challenger``): its flags refused by name where they can't draw, the window's root bound to the
+warden's signed link-window, and its Spec what the round's registration shows (`service.check_public`) over the units
+its `Stream` takes. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -87,6 +88,10 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
         list(syn.at.sides[s].cells.rows) for s in ("ingress", "egress")]
     ing, eg = h.rounds["honest"]
     assert ing.outputs == [1] * sz.PARAMS.window and eg.outputs == [sz.EG.ACCEPT] * sz.PARAMS.window
+    regs = {d["registration"]["direction"]: d["registration"] for d in map(json.loads, (
+        tmp_path / "run" / "cells.jsonl").read_text().splitlines()) if d["registration"]["window"] == 0}
+    assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.warden_roots(h.at)} == {
+        f"warden/{d}": (regs[d]["root"], regs[d]["domain"], sz.PARAMS.window) for d in ("ingress", "egress")}
 
 
 def _rewrite(path: Path, blobs: list[bytes]) -> None:
@@ -126,6 +131,20 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     (other / "deployment.json").write_text(json.dumps(dep))
     with pytest.raises(SystemExit, match="warden_serve.py rehearse at scan_zk's schedule"):
         sz.host(tmp_path / "h3", other)
+
+
+def test_a_run_whose_warden_failed_a_connection_closed_is_refused_as_void_by_name(tmp_path):
+    run = published(tmp_path / "run")
+    rec = WS.ar.unpack_record(WS.ar.read_blobs(run / "responses.records")[0], sz.PARAMS.cell_bytes)
+    t, j = next((t, j) for t, row in enumerate(rec.grid) for j, f in enumerate(row) if f is not None)
+    grid = tuple(tuple(f if (u, k) == (t, j) else None for k, f in enumerate(row)) for u, row in enumerate(rec.grid))
+    _rewrite(run / "fails.records", [WS.ar.pack_record(replace(rec, grid=grid, window=3))])
+    (run / "check.json").write_text(json.dumps({"problems": ["audit: connection 7 failed closed (late) at egress cell 2",
+                                                             "connection 7: fail, HTTP None, complete False"]}))
+    with pytest.raises(SystemExit, match=re.escape("void run: the warden failed connections closed, 1 fail cells in "
+                                                   "link-windows [3] (connection 7 failed closed (late) at egress "
+                                                   "cell 2)")):
+        sz.host(tmp_path / "h", run)
 
 
 @pytest.mark.parametrize("flags,why", [

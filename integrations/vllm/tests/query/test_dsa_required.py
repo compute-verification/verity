@@ -28,7 +28,7 @@ from verity_vllm.program.frontend.emit import NAMESPACE
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.frontend.rules.vocab import PROFILES
-from verity_vllm.program.registry import hopper
+from verity.ml.definitions.registry import hopper
 from verity_vllm.query.program_view import CallView, Port, ProgramView, from_instances
 from verity_vllm.query.required import Population, request_manifest
 from verity_vllm.query.units import ValueRef
