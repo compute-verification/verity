@@ -393,16 +393,18 @@ theorem canon_eq {spec : SessionSpec} {st : Stmt} {rs : Array RecVStar.SchedRoun
   have h1 : (#[st] : Array Stmt)[1 / 2]! = st := rfl
   have hl : FlockDeploy.repLens spec #[st] = [rs.size, rs.size] := by
     show (List.range 2).map (fun k => (repSchedAt spec (#[st] : Array Stmt)[k / 2]!).length) = _
-    rw [show List.range 2 = [0, 1] from rfl, List.map_cons, List.map_cons, List.map_nil, h0, h1, hsc,
-      Array.length_toList]
+    rw [show List.range 2 = [0, 1] from rfl, List.map_cons, List.map_cons, List.map_nil]
+    simp only [h0, h1, hsc, Array.length_toList]
   have hget : (#[st] : Array Stmt)[k / 2]! = st := by
     obtain rfl | rfl : k = 0 ∨ k = 1 := by omega
     · exact h0
     · exact h1
   have hsz : [rs.size, rs.size].getD k 0 = rs.size := by
-    obtain rfl | rfl : k = 0 ∨ k = 1 := by omega <;> rfl
+    obtain rfl | rfl : k = 0 ∨ k = 1 := by omega
+    all_goals simp
   have hsum : ([rs.size, rs.size].take k).sum = k * rs.size := by
-    obtain rfl | rfl : k = 0 ∨ k = 1 := by omega <;> simp
+    obtain rfl | rfl : k = 0 ∨ k = 1 := by omega
+    all_goals simp
   unfold canonRounds canonAt
   rw [hl, hget, hsc, hsz, hsum]
   apply Array.ext (by simp)
@@ -410,7 +412,8 @@ theorem canon_eq {spec : SessionSpec} {st : Stmt} {rs : Array RecVStar.SchedRoun
   have hj : j < rs.size := by simpa using h₁
   simp only [Array.getElem_map, Array.getElem_range]
   have hi : k * rs.size + j + 3 ≤ B := by
-    obtain rfl | rfl : k = 0 ∨ k = 1 := by omega <;> omega
+    obtain rfl | rfl : k = 0 ∨ k = 1 := by omega
+    all_goals omega
   rw [getD_mid c hi]
   have hr : rs.toList.getD j default = rs.getD j default := by
     simp [List.getD_eq_getElem?_getD, Array.getD_eq_getD_getElem?]
@@ -568,14 +571,14 @@ theorem src_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : ℕ} {i 
     rw [hq] at hsrc hpa
     simp only [Option.mapM_some] at hpa
     simp only [bind, Except.bind] at hsrc
-    cases hj : jsonOf "--rec-inner-partition" q with
+    cases hj : FlockDeploy.jsonOf "--rec-inner-partition" q with
     | error e => rw [hj] at hsrc; cases hsrc
     | ok pj =>
       rw [hj] at hsrc
       have hpj : r.partition = some pj := by
         have := jsonOf_toOption "partition" "--rec-inner-partition" q
         rw [hj] at this
-        cases hj' : jsonOf "partition" q with
+        cases hj' : FlockDeploy.jsonOf "partition" q with
         | error e => rw [hj'] at this; cases this
         | ok pj' =>
           rw [hj'] at this hpa
@@ -607,8 +610,10 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
   | error e => intro h; cases h
   | ok q =>
     obtain ⟨spec, sts⟩ := q
-    cases sts[0]? <;> intro h <;> simpa [bind, Except.bind, pure, Except.pure, throw, throwThe,
-      MonadExceptOf.throw] using h
+    intro h
+    cases hs : sts[0]? with
+    | none => simp [hs, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+    | some st => simpa [hs, bind, Except.bind, pure, Except.pure] using h
 
 /-- **What `Inner.load` sets up**: the files' statement, whose `m` and `k_log` the session has, and whose circuit fold
 gives its comb. -/
@@ -641,7 +646,8 @@ namespace RecDeploy.OpenLower
 open Flock
 open Claims (Msg)
 open FlockDeploy (Coin setupOf tabsOf pointsOf)
-open RecDeploy.Rows (canonRounds)
+open Claims.Recursion.VStarB
+open RecDeploy.Rows (canonRounds posAt)
 open RecDeploy.InnerAt
 
 /-- **Check 5's inner session at the coins, but its extra claims** (`InnerAt`): at a V\* statement `xO` part `s`
@@ -721,10 +727,10 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
   have hxI : xIOf x = r.w.inner := by unfold xIOf; rw [hst]; rfl
   rw [hxI] at hset
   rw [hset] at hset'
-  obtain ⟨-, -, hst''⟩ := Prod.mk.inj (Option.some.inj hset')
   have hst1 : st'' = st := by
-    have := congrArg (fun a : Array Stmt => a[0]!) hst''
-    exact this.symm
+    have := congrArg (fun a : FlockDeploy.Ins × SessionSpec × Array Stmt => a.2.2.toList) (Option.some.inj hset')
+    simp at this
+    first | exact this.symm | exact this
   subst hst1
   have htabs : tabsOf #[st''] = #[Setup.ofCircuit st''] := by simp [tabsOf]
   refine ⟨(s', spec, #[st'']), by rw [hxI]; exact hset, ?_, ?_, ?_⟩
@@ -735,7 +741,8 @@ theorem staged_innerAt {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     rw [hins] at hins''
     cases hins''
     rw [hR f' hf unit inn hload' k hk2 rounds hrd hpos]
-    rw [canon_eq hsched (by rw [hxI] at hB ⊢; unfold RestRead.kI at hk; omega) hk2]
+    dsimp only
+    rw [canon_eq (B := Bk (xIOf x)) hsched (by omega) hk2]
 
 /-- **`InnerCoinsR` at a dense compiled statement**: `InnerAt` (`staged_innerAt`) and the extra claims (`ExtrasR`). -/
 theorem innerCoinsR_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
