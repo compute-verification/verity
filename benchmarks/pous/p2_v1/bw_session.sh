@@ -10,8 +10,9 @@
 # nothing; CONNECT=HOST:PORT (and CHEAT_CONNECT for the cheat) reaches the auditor's `p2_party --listen` instead
 # (vy-auditor-2's gate port, through the tunnel the gate opens), one session a listener. The registration the verifier
 # holds is the tracked bandwidth-mem69-v2.json, and the store must be it. ENC is only ever read. The lib is kernels'
-# build (p2lib.tar, LIB_SHA256), the layout CMP-95 item 2's (LAYOUT_SHA512), each from the run's inputs or, unsent,
-# kernels' run KSTAGE's on this host.
+# build: p2lib.tar from the run's inputs (LIB_SHA256), else that build's out/ on this host (BUILD), else build.sh's in
+# scratch, each held to its MANIFEST.sha256 and its sources to the kernels' build's (LIB_SOURCES_SHA256); the layout is
+# CMP-95 item 2's (LAYOUT_SHA512), from the run's inputs or kernels' run KSTAGE's on this host.
 #
 # Outside the lease: both held to their pins, the store's registration to the tracked one, and the toy's session on the
 # CPU (P2's reference decode, the same verifier) as a preflight. Under one untimed lease of at most LEASE_MIN minutes
@@ -28,7 +29,11 @@ ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
 NODE=${NODE:-vy-dc-h200-2}
 REG=$D/bandwidth-mem69-v2.json
 KSTAGE=${KSTAGE:-/workspace/research/runs/r20261026-073433-59f7}
+BUILD=${BUILD:-/workspace/research/runs/r20261025-233631-4164/out}
 LIB_SHA256=${LIB_SHA256:-6f9789ca44f23592a5c0d1239b10fd81b395f6d94b30bf5246987e225d847353}
+# kernels' build (BUILD): its libp2v1.so, and the sha256 of its source.txt's source lines (this tree's at b7250b3831)
+LIB_SO_SHA256=8380423f24bb469a06a8aeb7f3f7cad7989febad9bf220e1999cbebd48211db5
+LIB_SOURCES_SHA256=${LIB_SOURCES_SHA256:-6ce1eb44d059949d391d96764f0ddc0810de9a70702c2883ba5d4bd3dac80634}
 LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
 MODE=${MODE:-both}
 WINDOWS=${WINDOWS:-2} PASSES=${PASSES:-1} SAMPLES=${SAMPLES:-1024} WINDOW_S=${WINDOW_S:-1} DEADLINE_S=${DEADLINE_S:-1}
@@ -44,11 +49,22 @@ export O D PY ENC NODE REG LAYOUT S MODE WINDOWS PASSES SAMPLES WINDOW_S DEADLIN
 : > "$O/rc.txt"; : > "$O/verdicts.txt"
 step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
 
-[ "$(sha256sum < "$LIB_TAR" | cut -c1-64)" = "$LIB_SHA256" ] && mkdir -p "$S/lib" && tar -C "$S/lib" -xf "$LIB_TAR" \
-  && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) \
+mkdir -p "$S/lib"
+if [ -f "$LIB_TAR" ]; then
+  [ "$(sha256sum < "$LIB_TAR" | cut -c1-64)" = "$LIB_SHA256" ] && tar -C "$S/lib" -xf "$LIB_TAR"; LIB_FROM=$LIB_TAR
+elif [ -f "$BUILD/MANIFEST.sha256" ]; then
+  cp -r "$BUILD/." "$S/lib/"; LIB_FROM=$BUILD
+else
+  bash benchmarks/torch_gpu/p2_stage/build.sh "$S/lib" > "$O/build.log" 2>&1; LIB_FROM="build.sh at this commit"
+fi
+(cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) \
+  && [ "$(tail -n +2 "$S/lib/source.txt" | sha256sum | cut -c1-64)" = "$LIB_SOURCES_SHA256" ] \
   && [ "$(sha512sum < "$LAYOUT" | cut -c1-128)" = "$LAYOUT_SHA512" ]
 step ship $?
-echo "lib $LIB_TAR layout $LAYOUT" > "$O/inputs.txt"
+cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/dev/null
+so=$(sha256sum < "$S/lib/lib/libp2v1.so" | cut -c1-64)
+echo "lib from $LIB_FROM: libp2v1.so $so (kernels' build's: $([ "$so" = "$LIB_SO_SHA256" ] && echo same || echo other)); layout $LAYOUT" \
+  > "$O/inputs.txt"
 "$PY" "$D/bandwidth.py" registration --store "$ENC" --node "$NODE" --out "$O/registration.json" > "$O/registration.log" 2>&1 \
   && "$PY" - "$REG" "$O/registration.json" <<'EOF'
 import json, sys
