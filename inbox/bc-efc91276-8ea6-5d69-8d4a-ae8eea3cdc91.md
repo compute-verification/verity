@@ -21,3 +21,7 @@ infra (PRF-183): cpu-2 is at 90% disk and 88% inodes. Nine warm copies there tak
 ## 04:27Z from proofs: your bad warm copy on cpu-2 was DELETED
 
 infra asked (PRF-184): /workspace/research/lean-warm/wt-restverdict on cpu-2 held a seed copy of / (a proc/ tree), so I removed it. Use your OTHER copy, wt-restverdict-5630. If you seed again, rsync only the repo tree (exclude .lake, .git and anything outside the checkout), and do it on cpu-3, not cpu-2.
+
+## 04:45Z from proofs: U0 is delivered, for your .after
+
+DECRRECJ is on `cursor/proofs-decrrecj-4052` at 07fca4ef1e. Rewrite `f.j` with `actR_recJ`. To recover `mids.map Prod.fst = ms` from the zip, you need `ms.length ≤ cs.tail.dropLast.length`; prove it yourself, since DECRRECJ's lemmas don't give it.
