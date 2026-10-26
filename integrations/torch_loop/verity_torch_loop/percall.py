@@ -5,6 +5,7 @@ step's operands.
     python -m verity_torch_loop.percall plan [--shape h200|small] [--rows S] [--k-unit K]
     python -m verity_torch_loop.percall write --out DIR [--shape small] [--rows S] [--k-unit K] [--salt HEX] [--run HEX]
         [--tamper] [--eps 1/2] [--delta 1/1000000] [--range-bits B]
+    python -m verity_torch_loop.percall circuit (write's flags but --out): the verifier's circuit record's SHA-512
     python -m verity_torch_loop.percall audit --window DIR ... (`pouw_audit`'s flags)
 
 * **The unit** (`tile`) is `PouwH1Tile_v6{EXACT=GemmAccumulatorS8_v2{K=K_unit, sm120}, R=4, C=8, PAIRS=full}`: on R = 4 A
@@ -109,21 +110,26 @@ class Shape:
     head_dim: int
     mlp: int
     vocab: int
+    #: a probe's subset of the linears, by name (all when empty)
+    keep: tuple[str, ...] = ()
 
     def linears(self) -> list[Linear]:
         q, kv, h, f = self.heads * self.head_dim, self.head_dim, self.width, self.mlp
         dims = {"wq": (q, h), "wk": (kv, h), "wv": (kv, h), "wo": (h, q), "wup": (f, h), "wdown": (h, f)}
         out = [Linear(f"l{i}.{w}", f"l{i}.{t}", *dims[w]) for i in range(self.layers) for w, t in LAYER]
-        return out + [Linear("head", "head_quant", self.vocab, h)]
+        out += [Linear("head", "head_quant", self.vocab, h)]
+        return [lin for lin in out if lin.name in self.keep] if self.keep else out
 
     def macs_per_row(self) -> int:
         return sum(lin.n * lin.k for lin in self.linears())
 
 
-#: the H200 demo's frozen shape (CMP-92) and ALLP-H200's SMALL
+#: the H200 demo's frozen shape (CMP-92) and ALLP-H200's SMALL; PROBE_8192 one KV linear at K = 8192 (8 units at S = 4),
+#: a probe of one drawn unit's proving cost at the H200's K_unit
 H200 = Shape("h200", 16384, 52, 256, 64, 65536, 256)
 SMALL = Shape("small", 128, 2, 2, 64, 512, 256)
-SHAPES = {s.name: s for s in (H200, SMALL)}
+PROBE_8192 = Shape("probe-k8192", 8192, 1, 128, 64, 8192, 256, keep=("l0.wk",))
+SHAPES = {s.name: s for s in (H200, SMALL, PROBE_8192)}
 
 
 @dataclass(frozen=True)
@@ -449,14 +455,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return audit(argv[1:])
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("plan", "write"):
+    for name in ("plan", "write", "circuit"):
         p = sub.add_parser(name)
         p.add_argument("--shape", choices=sorted(SHAPES), default="small")
         p.add_argument("--rows", type=int, default=TILE_R)
         p.add_argument("--k-unit", type=int)
         p.add_argument("--batch", type=int)
-        if name == "write":
-            p.add_argument("--out", required=True)
+        if name != "plan":
             p.add_argument("--seed", default="")
             p.add_argument("--salt", help="the units' salt, 64 bytes in hex (default: SHA-512 of the run)")
             p.add_argument("--run", help="the window's context, hex (default: a tag of the block)")
@@ -464,6 +469,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             p.add_argument("--eps", type=_frac, default=EPS)
             p.add_argument("--delta", type=_frac, default=DELTA)
             p.add_argument("--range-bits", type=int, default=RANGE_BITS)
+        if name == "write":
+            p.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     shape = SHAPES[a.shape]
     ku = a.k_unit or min(K_UNIT, *(lin.k for lin in shape.linears()))
@@ -476,6 +483,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = a.run or _tag(b"run", shape.name.encode(), a.seed.encode(), str(a.rows).encode(), str(ku).encode()).hex()
     salt = bytes.fromhex(a.salt) if a.salt else hashlib.sha512(b"verity/h200-percall/salt/v1\0" + bytes.fromhex(run)).digest()
     pc = PerCall(blk, salt, run, ku, a.eps, a.delta, a.range_bits, tamper=a.tamper)
+    if a.cmd == "circuit":
+        empty = IF.Window(pc.circuit(), run, pc.law, CAP)
+        print(json.dumps({"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest(), "run": run,
+                          **pc.summary()}, sort_keys=True))
+        return 0
     win, held = pc.window()
     rec = pc.write(win, a.out, {"block": "h200-percall", "shape": shape.name, "rows": a.rows, "k_unit": ku, **blk.meta})
     print(json.dumps({"out": a.out, "run": run, "query": rec["query"], "law": rec["law"], "tamper": a.tamper,
