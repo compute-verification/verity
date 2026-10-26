@@ -9015,6 +9015,12 @@
    "assumptions": [],
    "type_hash": "b6ab57abe9ed0a1a43be839204bb683d6642ecbde4190d898b4a3ccc1d7b6003"
   },
+  "Pous.SecurityProofs.StreamedWipeMeets141GB5": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeets141GB5 : Pous.Guarantees.StreamedWipeMeets141GB5"],
+   "assumptions": [],
+   "type_hash": "1bd390853519827186390dd19f174a1a431546919678b8db3c48dfcb0cf5b91c"
+  },
   "Pous.SecurityProofs.StreamedWipeMeets2600GB": {
    "owner": "@memory-accounting",
    "signature": ["Pous.SecurityProofs.StreamedWipeMeets2600GB : Pous.Guarantees.StreamedWipeMeets2600GB"],
@@ -9032,6 +9038,12 @@
    "signature": ["Pous.SecurityProofs.StreamedWipeMeetsFamily : Pous.Guarantees.StreamedWipeMeetsFamily"],
    "assumptions": [],
    "type_hash": "c26c23adbc15ab18912cbd9a9ff20ad52027001e35dd08dc661c67472b511255"
+  },
+  "Pous.SecurityProofs.StreamedWipeMeetsReads": {
+   "owner": "@memory-accounting",
+   "signature": ["Pous.SecurityProofs.StreamedWipeMeetsReads : Pous.Guarantees.StreamedWipeMeetsReads"],
+   "assumptions": [],
+   "type_hash": "a2f5444f8d5e25a0cfbb34ecce8550e64849fff88fd423a419993391aa377856"
   },
   "Pouw.Fp8Atom.H1T.Proofs.h1tGamma": {
    "owner": "@compute-accounting",
@@ -11760,7 +11772,9 @@
    "Pous.SecurityProofs.ObligationOfStatic": "frozen (no-function): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) by any bound on P2's audit at the same block count, with a payload and responder fixed by the other tags' keys; it is about no function of the PoUS code and rests on no named assumption.",
    "Pous.SecurityProofs.ObligationOfRoundSecureWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the mutable store (Security/Definitions/Pous/P2/Mutable.lean) to 2^27 blocks, with a payload and responder fixed by the other tags' keys, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
    "Pous.SecurityProofs.ObligationDemoWide": "frozen (no-function,hash): It bounds P2's ring-model audit at a snapshot of the demo's store (1038*2^16 blocks, 105 reads, the state at most S0 at each) by 1% + 2^-129 + 2^-130, not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in N above 2^25.",
-   "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption."
+   "Pous.SecurityProofs.ObligationDemo": "frozen (no-function): Arithmetic at the demo's numbers (1038·2^16 blocks of 16,448 bits, U = 139.64 GiB: S₀ = ⌊ρ·|C|⌋ and U − S₀ ≤ 0.1163·U) and ObligationOfStatic at that block count; it is about no function of the PoUS code and rests on no named assumption.",
+   "Pous.SecurityProofs.StreamedWipeMeetsReads": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at every number of reads k with (1 - 1/r)^k <= 2^-129, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict.",
+   "Pous.SecurityProofs.StreamedWipeMeets141GB5": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean) at k = 5231 reads, an H200's 141 GB fill with its 2.3 GB driver reserve, whose acceptance is the model's Accepts over an arbitrary prover, not a run of MemoryChallenger.StreamedWipe.verdict (the port's judge, in a package the spec doesn't import) or any Lean function; it fits once a property states it against that verdict."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -22260,9 +22274,11 @@
     "Pous.SecurityProofs.SnapshotFresh",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
-    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily",
+    "Pous.SecurityProofs.StreamedWipeMeetsReads"
    ]
   },
   "Definitions.Pous.Guarantees": {
@@ -22412,6 +22428,14 @@
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
     "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
+  },
+  "Definitions.Pous.Guarantees.StreamedWipeReads": {
+   "digest": "a776db79696cc65dec20f466f3d75a87f62c8a16bae8e11b933ba24b5f734db2",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets141GB5": "a659ed0e0a86432ae5a56ef1ca3a397bf07257409ef21debb6fb79f29086b530",
+    "Pous.Guarantees.StreamedWipeMeetsReads": "0a36a70da47be9c52663087b4373ad8a41f51d28ed4116e3037324b6045057de"
+   },
+   "guarantees": ["Pous.SecurityProofs.StreamedWipeMeets141GB5", "Pous.SecurityProofs.StreamedWipeMeetsReads"]
   },
   "Definitions.Pous.Model.Audit": {
    "digest": "ae9ed577afee6873bd59d0b44e3a7daa4019bdf0958b65f2ec852459c09a026e",
@@ -23070,9 +23094,11 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Pous.SecurityProofs.StreamedWipe",
     "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets141GB5",
     "Pous.SecurityProofs.StreamedWipeMeets2600GB",
     "Pous.SecurityProofs.StreamedWipeMeets96GiB",
-    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily",
+    "Pous.SecurityProofs.StreamedWipeMeetsReads"
    ]
   },
   "Definitions.Pous.P2.Cost": {
