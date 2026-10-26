@@ -37,16 +37,15 @@ theorem same_of_good : ∀ {j : Json}, Good j → Same j j
 
 theorem getObjVal?_obj (n : Std.TreeMap.Raw String Json) (k : String) (v : Json) :
     (Json.obj n).getObjVal? k = .ok v ↔ n.get? k = some v := by
-  unfold Json.getObjVal?
-  cases n.get? k with
-  | none =>
-    constructor
-    · intro h; cases h
-    · intro h; cases h
-  | some w =>
-    constructor
-    · intro h; cases h; rfl
-    · intro h; cases h; rfl
+  simp only [Json.getObjVal?]
+  constructor
+  · intro h
+    cases hm : n.get? k with
+    | none => rw [hm] at h; cases h
+    | some a => rw [hm] at h; cases h; rfl
+  · intro h
+    rw [h]
+    rfl
 
 theorem getObjVal?_mkObj_ne {l : List (String × Json)} {k : String} (hk : (l.map Prod.fst).contains k = false)
     (v : Json) : (Json.mkObj l).getObjVal? k ≠ .ok v := by
