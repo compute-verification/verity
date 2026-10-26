@@ -4013,7 +4013,7 @@
    ]
   },
   "Definitions.Core.Blocks": {
-   "digest": "f356d0e63caec3c32ff5b53742af8f1cea2b827d9e116421ffd4d3daa5a4aa2c",
+   "digest": "7b9429e819a27179be416e206306b046e85dc3ca98a9c2d17d9669ec78eae546",
    "definitions": {
     "Verity.Block": "95e7c2bb369b4fba56afa792ceede84f7b4c2ca93db1bf83662310774cf93ef8",
     "Verity.Block.gates": "69e3f9952544c184ee133a01985437ca45d8beb2c9ced5ee4cda402f0cc3e544",
@@ -4026,12 +4026,12 @@
     "Verity.Blocks.since": "0f5dc1f0e458820235d86229818f1e1b5ed18d0b956777173b0c882cb74a75bf",
     "Verity.Device.State": "45dcb3777f1af16323daa150af9f76dc2c121490c96794b15e1842f4efc09037",
     "Verity.Wipe": "f5532d85d103327c097ca66364714f0461a79763463d13c8a30aa57e1021809e",
-    "Verity.Wipe.SurvivorBound": "745d75786363a13734d0446c60072e4684794252f1630bd3dc1d51a26d8b7a93",
+    "Verity.Wipe.SurvivorBound": "29179bf1fb133b51de8a96f16134a1774cede8b22db323d33962d5b083543d88",
     "Verity.Wipe.accepts": "9b069635fc908bb49f524a7dc719f75d17cb315c4a46e3d418d3a49bdb0a0aa4",
     "Verity.Wipe.egress": "201e6bdbef8ff09de7088e850de6c1be4b24f9b7c5b8ef3283049de85da88e96",
     "Verity.Wipe.fill": "1b4e523811876fad1a018d47ae8eb8e46b9c00211e917557e5be27ffc62687b7",
     "Verity.Wipe.filled": "ee72df89c6e231656fd9c609f6ebba6c3f0e3536acf018197bed2f07b22d0aec",
-    "Verity.Wipe.unfilled": "a5cb5fb5d8f2a5b02500e90dc65c4a219696b759521cab3135a221e907091ec9"
+    "Verity.Wipe.unfilled": "6169fa96405c46b719170cb0baec9d94f267f3a9e183bb2978e18b5c9f643748"
    },
    "guarantees": ["MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound"]
   },
