@@ -47,7 +47,9 @@ at `δ = 1/2`.
   transparent; that is not `ShaRealize` on a random oracle.
 * No program exchanges bits (`ext = 0`), so `β = K = 0`, and the verdict is the rounds' checks (`κ_S = 0`).
 * The oracle is trivial (`Orc = Unit`), so the calls are counted and priced but read nothing, and `ShaRealize`'s
-  `OracleCalls` and realization over a random oracle aren't exercised here.
+  `OracleCalls` and realization over a random oracle aren't exercised here. Any table `eo : Unit ≃ (X → D)` is a
+  single point, so at `D = Unit` the realization's walk clause is vacuous and `WorkSoundNoFold`'s `κ`, with its
+  `(q² + …)/|D|`, is at least 1; that guarantee has no witness here.
 -/
 
 namespace Pouw.SecurityProofs.DitherWitness
