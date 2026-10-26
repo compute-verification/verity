@@ -1,10 +1,12 @@
-"""Squaring mod p1024 in 6b's circuit model, measured in budgeted units: the attack on `EncodeChainHardness`.
+"""Squaring mod p1024 in 6b's circuit model, measured in budgeted and capped units: the attack on `SquaringFloor`.
 
-**The target** (`Security/Definitions/Accounting/Assumptions/EncodeChain.lean`). The encode bound rests on
-`EncodeChainHardness F k B E ε`: a restricted circuit computing `q` words of the codec, less parity, on more than `ε` of
-the draws costs `q·E` budgeted units less a word-per-run-bit discount. Its headline is `E = k·S·e`, `e = L − d(ε)` a
-squaring, `L = n/8 = 128`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 119` at `ε = 2^−40` (`E = 364,497` a word), `e = 121`
-at `ε = 2^−20` (`E = 370,623`). A squaring circuit under `e` budgeted units on more than `ε` of its inputs falsifies it.
+**The target** (`Security/Definitions/Accounting/Assumptions/SquaringChain.lean`). The encode bound rests on
+`SquaringFloor F e ε`, a squaring costs `e` capped units (`Gates.capped`: budgeted units plus thin lanes, an `mma` step
+with a two-valued run-time multiplicand a compare-select unit), and `ChainSum`, a word's `k·S` chained squarings cost
+their sum, so `E = k·S·e`. `e = L − d(ε)`, `L = n/8 = 128`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 119` at
+`ε = 2^−40` (`E = 364,497` a word), `e = 121` at `ε = 2^−20` (`E = 370,623`). A squaring circuit under `e` capped units
+on more than `ε` of its inputs falsifies `SquaringFloor`. They replace `EncodeChainHardness` (`EncodeChain.lean`), the
+two at once in budgeted units, which `bitwise_codec.py` falsified.
 
 **What this module ports.** A scalar (Python-int, so p1024-sized) port of `Security/Definitions/Accounting/Gates/Model.lean`
 as 6b's #2459 has it (`cursor/circuit-encode-declared-6cd3` @ 8225774747): `Op` (a gather with its table-read `low`),
