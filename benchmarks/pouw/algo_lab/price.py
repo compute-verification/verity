@@ -49,9 +49,14 @@ def census() -> dict[str, dict[str, float]]:
 DS90 = census()
 
 
-def loads(counts: dict[str, int], words: int) -> dict[str, float]:
+#: IMAD.HI.U32 measured on the H200 alone: 4.18 SMSP-cycles of the IMAD pipe, twice DS-90's IMAD (`dc/README.md`, uni.sh's
+#: IMAD forms); DS-90 has no IMAD.HI line, so `loads` charges it as an IMAD unless given this
+IMAD_HI_H200 = 4.18
+
+
+def loads(counts: dict[str, int], words: int, imad_hi: float | None = None) -> dict[str, float]:
     """SMSP-cycles a warp-word on each resource, of a program whose class counts are ``counts`` (lanes; MACs for an MMA;
-    bytes for SMEM.B) over ``words`` committed words."""
+    bytes for SMEM.B) over ``words`` committed words; ``imad_hi`` replaces IMAD.HI's IMAD-pipe cycles."""
     ww = words / LANES
     out = dict.fromkeys(RESOURCES, 0.0)
     for cls, n in counts.items():
@@ -62,6 +67,8 @@ def loads(counts: dict[str, int], words: int) -> dict[str, float]:
             continue
         instr = n / MMA_MACS[cls] if cls in MMA_MACS else n if cls in WARP_COUNTED else n / LANES
         for res, cyc in DS90[KIND[cls]].items():
+            if cls == "IMAD.HI" and res == "IMAD" and imad_hi is not None:
+                cyc = imad_hi
             out[res] += instr * cyc / ww
     return out
 

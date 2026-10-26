@@ -107,6 +107,7 @@ class FoldRow:
     fold: str
     load: dict[str, float]
     bare: dict[str, float]
+    bare_hi: dict[str, float]
     fold_instr: float
     cp_instr: float
     exact: bool
@@ -114,7 +115,8 @@ class FoldRow:
 
 def fold_row(name: str, fold: str, kw: dict, inst: D.Instance | None = None) -> FoldRow:
     """The fold on the reference's words, with the reference's tensor path; instructions are lane instructions a word.
-    ``bare`` is the load without the checkpoint, as the duo designs price their fold."""
+    ``bare`` is the load without the checkpoint, as the duo designs price their fold, and ``bare_hi`` the same with
+    IMAD.HI at its measured H200 price (`price.IMAD_HI_H200`)."""
     inst = inst or instances()[0]
     k = Kernel()
     W = REF.tensor_words(k, inst)
@@ -128,8 +130,10 @@ def fold_row(name: str, fold: str, kw: dict, inst: D.Instance | None = None) -> 
     cp = sum(v for c, v in kc.by_phase("word").items() if c not in PR.UNCOSTED) / (D.WPL * lanes)
     total = sum(v for c, v in k.by_phase("word").items() if not c.startswith(("MMA", "SMEM", "GMEM"))) / words
     load = PR.loads(k.by_phase("word"), words)
+    hi = PR.loads(k.by_phase("word"), words, PR.IMAD_HI_H200)
     cpl = PR.loads(kc.by_phase("word"), D.WPL * lanes)
-    return FoldRow(name, fold, load, {r: load[r] - cpl[r] for r in load}, total - cp, cp, exact)
+    return FoldRow(name, fold, load, {r: load[r] - cpl[r] for r in load}, {r: hi[r] - cpl[r] for r in hi},
+                   total - cp, cp, exact)
 
 
 def fold_table() -> tuple[list[FoldRow], dict[str, tuple]]:
@@ -145,6 +149,9 @@ def fold_table() -> tuple[list[FoldRow], dict[str, tuple]]:
     x, t = PR.mix2(a.bare, b.bare)
     mixes["duo LEA.HI/IMAD, no checkpoint"] = (x, t, fold_row(f"duo, IMAD form on {round(float(x) * 32)}/32", "duo",
                                                               {"form": F.mixed(float(x))}))
+    x, t = PR.mix2(a.bare_hi, b.bare_hi)
+    mixes["duo LEA.HI/IMAD, no checkpoint, IMAD.HI at 4.18"] = (
+        x, t, fold_row(f"duo, IMAD form on {round(float(x) * 32)}/32 (IMAD.HI 4.18)", "duo", {"form": F.mixed(float(x))}))
     return rows, mixes
 
 
@@ -166,11 +173,12 @@ def main() -> None:
     print(f"\n(e) folds: lane instructions a word (fold + checkpoint; fan-in floor {FANIN_FLOOR}), DS-90 time and issue "
           "a warp-word with the reference's tensor path")
     print(f"{'fold route':44s} {'exact':5s} {'fold':>6s} {'cp':>7s} {'time':>7s} {'bind':>6s} {'issue':>7s} "
-          f"{'ALU':>6s} {'IMAD':>6s} {'no cp':>7s}")
+          f"{'ALU':>6s} {'IMAD':>6s} {'no cp':>7s} {'hi4.18':>7s}")
     for r in frows + [m[2] for m in mixes.values()]:
         t, b = PR.time(r.load)
         print(f"{r.name:44s} {str(r.exact):5s} {r.fold_instr:6.3f} {r.cp_instr:7.4f} {t:7.4f} {b:>6s} "
-              f"{r.load['issue']:7.4f} {r.load['ALU']:6.3f} {r.load['IMAD']:6.3f} {PR.time(r.bare)[0]:7.4f}")
+              f"{r.load['issue']:7.4f} {r.load['ALU']:6.3f} {r.load['IMAD']:6.3f} {PR.time(r.bare)[0]:7.4f} "
+              f"{PR.time(r.bare_hi)[0]:7.4f}")
     for name, (x, t, _) in mixes.items():
         print(f"mix {name}: the LP's share of the IMAD form {x} ({float(x):.4f}), time {t:.4f}")
 

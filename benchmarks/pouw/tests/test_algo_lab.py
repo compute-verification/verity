@@ -73,3 +73,13 @@ def test_duos_imad_form_mix_is_a_sixth_under_leahi_on_ds90(folds):
     assert PR.time(by["duo, LEA.HI (reference dc90-l32)"].bare)[0] == pytest.approx(4.0)
     assert PR.time(row.bare)[0] == pytest.approx(3.375)
     assert row.load["issue"] > by["duo, LEA.HI (reference dc90-l32)"].load["issue"]
+
+
+def test_duos_mix_at_imad_his_measured_price(folds):
+    """With IMAD.HI at the 4.18 SMSP-cycles the H200 measured (twice DS-90's IMAD), DS-90's pipes still put the mix 12%
+    under LEA.HI, on about a quarter of the words; the H200 timed duo 21% slower with a third of them in the IMAD form
+    (`dc/README.md`), so the data sheet's pipe rows don't predict this mix."""
+    _, mixes = folds
+    x, t, row = mixes["duo LEA.HI/IMAD, no checkpoint, IMAD.HI at 4.18"]
+    assert x == Fraction(100, 409) and t == pytest.approx(3.5110, abs=1e-4)
+    assert row.exact and PR.time(row.bare_hi)[0] == pytest.approx(3.545)
