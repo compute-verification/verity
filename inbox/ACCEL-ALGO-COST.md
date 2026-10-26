@@ -70,3 +70,8 @@ Price COVER-ATTN's PV lookup routes with real shared-memory and issue limits (it
 - **Deadlines are real UTC:** 12:00Z is 5 AM PDT.
 
 Two new items for v2: (a) noise tiles, pricing the cross-term route (building each segment's word from the bit product plus cross terms) at t = 3 (H200) and 4 (RTX PRO 6000); (b) weight-side coin reuse across decode calls: does a fixed W' over many calls open amortized methods (tables over W', pre-adds)?
+
+## 04:13Z (real UTC), coordinator: NAIVE-STRASSEN on noise widths (note:20261026T0140Z-draft-accel-naive-strassen §8)
+- v1 and v2's committed words are full 8-bit, so Theorem 1 applies directly: naive is cheapest to depth 13 on the H200 and 12 on the RTX sheet.
+- Noise stripping costs at least 1.861× the honest word at every depth ≤ 13 (the leftover is a product of inner dimension 2L), so it does not open v1.
+- Per term, the binding term VUᵀ at depth 13 isn't held by any u_X ≤ 127 with U ±80. But served shapes need depth ≤ 10 (n ≤ 65536, b_min ≥ 64), and every u_X from 72 holds to 12. **The coordinator's decision: ±80 on both sides stays v2's noise.** ±96 on both is the margin if anything else breaks it.

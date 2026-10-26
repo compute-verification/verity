@@ -353,3 +353,8 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 - **Attention:** COVER-ATTN's ATT serves S and O from a second plain stream, so attention's credited work is a noised copy, not the served product. That's the P1 or twin-style trade, accepted for attention only because its share is small (4–7% of MACs). D6 must report the uncredited serving share it creates. Re-check ATT's γ without SEG-COINS's long segments, using tiles instead.
 - **The V4 K 1536 shape at 15.7** is acceptable if the model-level, time-weighted γ ≤ 10. Report it.
 - **Decode:** price weight-side coin reuse across calls (ALGO-COST and RT-PROTO are checking). Report decode γ separately in D6, at m = 1, 32 and 256.
+
+## 04:13Z (real UTC), coordinator: NAIVE-STRASSEN on noise widths (note:20261026T0140Z-draft-accel-naive-strassen §8)
+- v1 and v2's committed words are full 8-bit, so Theorem 1 applies directly: naive is cheapest to depth 13 on the H200 and 12 on the RTX sheet.
+- Noise stripping costs at least 1.861× the honest word at every depth ≤ 13 (the leftover is a product of inner dimension 2L), so it does not open v1.
+- Per term, the binding term VUᵀ at depth 13 isn't held by any u_X ≤ 127 with U ±80. But served shapes need depth ≤ 10 (n ≤ 65536, b_min ≥ 64), and every u_X from 72 holds to 12. **The coordinator's decision: ±80 on both sides stays v2's noise.** ±96 on both is the margin if anything else breaks it.
