@@ -118,9 +118,10 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
   have hread := FlockDeploy.Ins.setup_read hsu
   unfold Readable.Read.setup at hread
   rw [hpi] at hread
-  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hread with ⟨-, st1, h1, hs1, hsts1⟩ | ⟨-, hsz, -⟩
+  rcases FlockSoundness.Discharge.HiddenExec.setupTables_okAny hread with ⟨-, st1, h1, hs1, hsts1⟩ | ⟨hc1, hsz, -⟩
   swap
-  · first | (simp at hsz; done) | (simp at hsz; omega) | omega
+  · simp only [List.size_toArray, List.length_cons, List.length_nil, zero_add] at hsz
+    omega
   obtain rfl : st = st1 := by simpa using hsts1
   subst hs1
   have hhid : s.read.tags.hiddenOutputs = true := by rw [htags] <;> rfl
@@ -189,10 +190,11 @@ theorem repSchedAt_bounds {spec : SessionSpec} {st : Stmt} (hf : (fast100 st.m).
       decide_eq_true_eq] at k2
     exact k2.2
   have hHb : ∀ x ∈ FlockC3.Compose.repHead st.m st.c.kLog (2 + spec.points * st.regions.size), x.1 ≤ 65536 := by
-    have : ((FlockC3.Compose.repHead st.m st.c.kLog (2 + spec.points * st.regions.size)).all
-        fun x => decide (x.1 ≤ 65536)) = true := by
-      simp [FlockC3.Compose.repHead, Array.all_append] <;> omega
-    simpa [Array.all_eq_true_iff_forall_mem] using this
+    intro x hx
+    simp only [FlockC3.Compose.repHead, Array.mem_append, Array.mem_replicate, List.mem_toArray, List.mem_cons,
+      List.not_mem_nil, or_false] at hx
+    rcases hx with ((((((h | h | h) | ⟨-, h⟩) | h) | ⟨-, h⟩) | h) | ⟨-, h⟩) | h
+    all_goals (subst h; first | omega | (dsimp only; omega))
   have hpos := Flock.Guarantees.HoloRepCoins.repRounds_coins (by omega) h2
   have e : RecDeploy.repSchedAt spec st =
       (FlockC3.Compose.repHead st.m st.c.kLog (2 + spec.points * st.regions.size) ++ T).toList := by
@@ -255,7 +257,7 @@ theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : 
     exact hnames i k (by simpa using i.2) (by simpa using k.2) e
   obtain ⟨r₀, rss, ms', h6, -, hj, hfr⟩ := FlockDeploy.decR_framesR hd
   obtain ⟨r₀', h6', hlink, -⟩ := FlockDeploy.decR_rootB hd
-  obtain rfl : r₀' = r₀ := Option.some.inj (h6'.symm.trans h6)
+  obtain rfl : r₀ = r₀' := Option.some.inj (h6.symm.trans h6')
   obtain ⟨-, -, -, -, hsz, -⟩ := FlockDeploy.decR_fits hd
   have hk0 : 0 < d.f.ps.size := by rw [hsz, hsts]; simp
   have hsh0 : FlockVBridge.Family.ProofShaped (shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) 0) d.f.ps[0] := by
@@ -316,7 +318,7 @@ theorem decode_jAt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {rd : 
     obtain ⟨k, hk, rfl⟩ := Array.mem_iff_getElem.1 hr
     have hk' : k < (recStreams d.spec d.sts ms' cs.tail.dropLast)[i].size := by simpa using hk
     simp only [Array.getElem_mapIdx, FlockDeploy.Coin.vals, Array.size_map, Array.size_range]
-    first | exact ⟨(hn i hi' k hk').1, (hn i hi' k hk').2, rfl⟩ | exact hn i hi' k hk'
+    first | exact ⟨(hn i hi' k hk').1, (hn i hi' k hk').2, trivial⟩ | exact ⟨(hn i hi' k hk').1, (hn i hi' k hk').2, rfl⟩
   have hpts : (pointsOf d.spec d.c₁).size = d.spec.points := by
     unfold pointsOf
     rw [Array.size_map, Array.size_range]
