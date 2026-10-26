@@ -2936,6 +2936,9 @@
   "Accounting.SecurityProofs.Cut.MinCut": {
    "owner": "@memory-accounting"
   },
+  "Accounting.SecurityProofs.Cut.Table": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.SecurityProofs.Cut.Units": {
    "owner": "@memory-accounting"
   },
@@ -11488,7 +11491,8 @@
    "Accounting.SecurityProofs.Cut.MinCut": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every circuit of the gate model and every cut of it that holds its writes (Accounting.Gates.cut), not a property of a Lean function: the property's check has no Lean code yet.",
    "Accounting.SecurityProofs.Cut.Units": "frozen (no-function): A bound on the units of every circuit of the gate model's cut (Accounting.Gates.cut) by its side's units in the circuit, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Cut.Whole": "frozen (no-function): The trivial cut of every circuit of the gate model (Accounting.Gates.cut at every gate) has its units and run-input bits and no boundary, not a property of a Lean function: the property's census check has no Lean code yet.",
-   "Accounting.SecurityProofs.CheckedCarrierBits": "frozen (no-function): A counting bound over every function of the store that a value check's accepted set holds and a decoder reads the carried sectors back from (Security/Definitions/Accounting/Guarantees/CheckedCarrier.lean), about no function of the code: the audit has no value check in Lean."
+   "Accounting.SecurityProofs.CheckedCarrierBits": "frozen (no-function): A counting bound over every function of the store that a value check's accepted set holds and a decoder reads the carried sectors back from (Security/Definitions/Accounting/Guarantees/CheckedCarrier.lean), about no function of the code: the audit has no value check in Lean.",
+   "Accounting.SecurityProofs.Cut.Table": "frozen (conjecture,no-function): A consequence of the named open conjecture EncodeChainHardness for one family of circuits of the gate model, the table circuit (Accounting.Gates.table, Security/Definitions/Accounting/Gates/Table.lean), not a property of a Lean function: the property's check has no Lean code yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

@@ -1,5 +1,6 @@
 import Definitions.Accounting.Gates.Codec
 import Definitions.Accounting.Gates.Cut
+import Definitions.Accounting.Gates.Table
 import Definitions.Accounting.Assumptions.EncodeChain
 
 /-!
@@ -24,8 +25,11 @@ a cut instead:
 * `Whole`: the trivial cut, every gate in `D`, has no boundary, `C`'s units and `C`'s run-input bits.
 * `Units`: the cut circuit's units are at most `D`'s units in `C` and, for each gather in `D`, its index bits again:
   a gather in `D` whose index an earlier gather outside `D` already paid for pays it again.
+* `Table`: the table circuit (`Gates.table`), whose `w` writes all depend on its token, computes at most
+  `8 + 9·(n − 1)/E` bits of codec words, for every table: a circuit with cheap work behind a narrow channel stacks
+  little, whatever weights the prover picks.
 
-Every claim resting on `MinCut` is conditional on the named open conjecture `EncodeChainHardness`.
+Every claim resting on `MinCut` or `Table` is conditional on the named open conjecture `EncodeChainHardness`.
 -/
 
 namespace Accounting.Guarantees.Cut
@@ -59,5 +63,16 @@ def Whole : Prop :=
 def Units : Prop :=
   ∀ {ι : Type} (C : Dag ι) (D : Finset ℕ),
     budgeted (cut C D) ≤ ∑ i ∈ (Finset.range C.length).filter (· ∈ D), (units C i + (C[i]?.map Gate.gatherBits).getD 0)
+
+/-- **The table circuit stacks at most its token's bits.** Each of the `w` writes of `table w` depends on its run
+input, and under `EncodeChainHardness F k B E ε` inside its floor, every `q` distinct words of the codec it computes on
+more than `ε` of the draws, with the codec's inputs and any table, have `q · E · (n − 1) ≤ 9 · (n − 1) + 8 · E`. -/
+def Table : Prop :=
+  (∀ w c, c < w → (dynamic (table w)).getD (256 * w + 1 + c) false = true) ∧
+    ∀ (F : Field) (k B E εnum εden w : ℕ) (m : ℕ → ℕ) (x : Draw k → ℕ → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
+      EncodeChainHardness F k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
+      CodecInputs F (table w) (draws F k) m x → words.Nodup → (∀ i ∈ words, i < F.p) →
+      ComputesWords F k (table w) x m words out εnum εden →
+      words.length * E * (F.n - 1) ≤ 9 * (F.n - 1) + 8 * E
 
 end Accounting.Guarantees.Cut

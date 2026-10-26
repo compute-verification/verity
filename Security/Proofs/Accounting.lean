@@ -3,6 +3,7 @@ import Proofs.Accounting.Device
 import Proofs.Accounting.Gates
 import Proofs.Accounting.Cut
 import Proofs.Accounting.CheckedCarrier
+import Proofs.Accounting.Table
 import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Headline
 import Proofs.Accounting.HeadlineDc
