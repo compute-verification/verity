@@ -105,7 +105,8 @@ theorem elemsOf_accOut {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (h
     simp only [FlockVBridge.bitL_rowBytes, FlockVBridge.wbit]
     have hget : [elemsOf b.data.toList 2 0, elemsOf b.data.toList 2 1].getD (t / 128) 0 =
         elemsOf b.data.toList 2 (t / 128) := by
-      rcases (by omega : t / 128 = 0 ∨ t / 128 = 1) with h | h <;> rw [h] <;> rfl
+      rcases (by omega : t / 128 = 0 ∨ t / 128 = 1) with h | h <;> rw [h] <;>
+        first | exact List.getD_cons_zero | exact List.getD_cons_succ.trans List.getD_cons_zero
     rw [hget]
     unfold elemsOf
     rw [if_pos hq, FlockVBridge.bitOf_ofBits _ (Nat.mod_lt _ (by omega)), Nat.div_add_mod]
