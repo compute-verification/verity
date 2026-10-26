@@ -137,7 +137,7 @@ theorem words_mem (c : Circuit) (pi : HmIn.Ports) {u jj : ℕ} (hq : (pi.leaves.
         · exact hy)
       (by simpa using hj) (by
         intro acc'
-        rw [Array.getElem_range, if_pos hv]
+        rw [Array.getElem_range, ite_cond_eq_true _ _ (eq_true hv)]
         exact Array.mem_push_self))
   obtain ⟨i, hi, hgi⟩ := Array.mem_iff_getElem.1 ((in_mem_qsort _ _ _).2 h1)
   refine foldl_adds _ _ #[] (fun acc w y hy => by
@@ -196,9 +196,13 @@ theorem runsStep_mono {acc : Array (ℕ × ℕ)} {z : ℕ} (w : ℕ) (h : RunCov
   split
   · rename_i a b hb
     split
-    · rcases mem_of_back?_some hb hr with hr | rfl
-      · exact ⟨r, by simp [hr], h1, h2⟩
-      · exact ⟨(r.1, r.2 + 1), by simp, h1, by simp only; omega⟩
+    · rcases mem_of_back?_some hb hr with hr | hr
+      · refine ⟨r, ?_, h1, h2⟩
+        simp only [Array.toList_push, List.mem_append]
+        exact Or.inl hr
+      · subst hr
+        simp only at h1 h2
+        exact ⟨(a, b + 1), by simp, by simp only; omega, by simp only; omega⟩
     · exact ⟨r, by simp [hr], h1, h2⟩
   · rename_i hn
     rw [Array.back?_eq_none_iff] at hn
@@ -229,7 +233,7 @@ theorem runsStep_ok {L : ℕ} {acc : Array (ℕ × ℕ)} {w : ℕ} (h : RunsOk L
       · simp only
         omega
   · intro r hr
-    simp only [List.mem_singleton, List.toList_toArray] at hr
+    simp only [List.mem_singleton] at hr
     subst hr
     simp only
     omega
@@ -353,7 +357,8 @@ theorem cut_loop (L : ℕ) (ws : Array ℕ) (runs : List (ℕ × ℕ)) (hcov : �
     (f : ℕ × ℕ → Array (ℕ × ℕ) → Id (ForInStep (Array (ℕ × ℕ))))
     (hf : ∀ x ∈ runs, ∀ out, (∀ r ∈ out.toList, L ≤ r.1) → ∃ out', f x out = ForInStep.yield out' ∧
       (∀ r ∈ out'.toList, L ≤ r.1) ∧ (∀ z, x.1 ≤ z → z < x.2 → BlkCov out' z) ∧ ∀ z, BlkCov out z → BlkCov out' z) :
-    (∀ r ∈ (forIn runs #[] f).toList, L ≤ r.1) ∧ ∀ y ∈ ws, BlkCov (forIn runs #[] f) y := by
+    (∀ r ∈ (forIn (m := Id) runs (#[] : Array (ℕ × ℕ)) f).toList, L ≤ r.1) ∧
+      ∀ y ∈ ws, BlkCov (forIn (m := Id) runs (#[] : Array (ℕ × ℕ)) f) y := by
   obtain ⟨r1, -, r3⟩ := forIn_list_each (fun out => ∀ r ∈ out.toList, L ≤ r.1)
     (fun x out => ∀ z, x.1 ≤ z → z < x.2 → BlkCov out z) f runs #[] (fun x hx out hout => by
       obtain ⟨out', h1, h2, h3, h4⟩ := hf x hx out hout
@@ -371,7 +376,8 @@ theorem blocks_cover (ws : Array ℕ) (L : ℕ) (hL : ∀ w ∈ ws, L ≤ w) :
   rw [← Array.forIn_toList]
   exact cut_loop L ws _ (fun y hy => hcov y hy) _ (fun x hx out hout =>
     ⟨_, rfl, cut_run (hok x hx).1 out hout _ (fun i s =>
-      ⟨fun h => ⟨_, by rw [if_pos h]; rfl⟩, fun h => by rw [if_neg h]; rfl⟩)⟩)
+      ⟨fun h => ⟨_, by rw [ite_cond_eq_true _ _ (eq_true h)]; rfl⟩,
+        fun h => by rw [ite_cond_eq_false _ _ (eq_false h)]; rfl⟩)⟩)
 
 /-! ### `HmIn.inRegions` -/
 
@@ -384,6 +390,24 @@ theorem split_cover {w0 e s y : ℕ} (hse : s ≤ e) (h1 : w0 ≤ y) (h2 : y < w
   have hm := Nat.mod_lt (y - w0) hP
   refine ⟨Nat.div_lt_of_lt_mul (by omega), ?_, ?_⟩ <;> rw [Nat.mul_comm] <;> omega
 
+/-- `HmIn.inRegions`' fold over blocks `bs`: block `i`, `(w0, e)`, gives region `(w0 + r 2^s, s)` for each `r < 2^(e - s)`. -/
+theorem regFold_mem (bs : Array (ℕ × ℕ)) (T : ℕ) {i : ℕ} (hi : i < bs.size) {w0 e r : ℕ} (hgi : bs[i] = (w0, e))
+    (hr : r < 2 ^ (e - min e T)) :
+    (w0 + r * 2 ^ min e T, min e T) ∈ bs.foldl (fun acc (w, e) =>
+      let s := min e T
+      (Array.range (2 ^ (e - s))).foldl (fun acc r => acc.push (w + r * 2 ^ s, s)) acc) #[] := by
+  refine foldl_adds _ _ #[] (fun acc we z hz => ?_) hi (fun acc => ?_)
+  · obtain ⟨w, e⟩ := we
+    exact foldl_mono _ _ (fun acc r z hz => Array.mem_push_of_mem _ hz) z hz
+  · rw [hgi]
+    exact foldl_adds _ _ acc (fun acc r z hz => Array.mem_push_of_mem _ hz) (by simpa using hr)
+      (fun acc' => by rw [Array.getElem_range]; exact Array.mem_push_self)
+
+theorem inRegions_eq (c : Circuit) (pi : HmIn.Ports) : HmIn.inRegions c pi =
+    (HmIn.blocks (HmIn.words c pi)).foldl (fun acc (w, e) =>
+      let s := min e (PT_LOCAL - (7 + log2ceil c.unitRange.count))
+      (Array.range (2 ^ (e - s))).foldl (fun acc r => acc.push (w + r * 2 ^ s, s)) acc) #[] := rfl
+
 /-- Every word of `HmIn.words` is in an in region `(w, s)` from a word of the leaf group. -/
 theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ HmIn.words c pi) :
     ∃ x w s, x < (HmIn.inRegions c pi).size ∧ (HmIn.inRegions c pi)[x]! = (w, s) ∧ inCol c ≤ w ∧ w ≤ y ∧
@@ -395,20 +419,13 @@ theorem inRegions_cover (c : Circuit) (pi : HmIn.Ports) {y : ℕ} (hy : y ∈ Hm
   obtain ⟨i, hi, hgi⟩ := List.mem_iff_getElem.1 hblk
   rw [Array.getElem_toList] at hgi
   have hi' : i < (HmIn.blocks (HmIn.words c pi)).size := by simpa using hi
-  obtain ⟨hr, hlo, hhi⟩ := split_cover (Nat.min_le_left e (PT_LOCAL - (7 + log2ceil c.unitRange.count))) h1 h2
-  have hmem : (w0 + (y - w0) / 2 ^ min e (PT_LOCAL - (7 + log2ceil c.unitRange.count)) *
-      2 ^ min e (PT_LOCAL - (7 + log2ceil c.unitRange.count)), min e (PT_LOCAL - (7 + log2ceil c.unitRange.count))) ∈
-      HmIn.inRegions c pi := by
-    unfold HmIn.inRegions
-    dsimp only
-    refine foldl_adds _ _ #[] (fun acc we z hz => ?_) hi' (fun acc => ?_)
-    · obtain ⟨w, e⟩ := we
-      exact foldl_mono _ _ (fun acc r z hz => Array.mem_push_of_mem _ hz) z hz
-    · rw [hgi]
-      exact foldl_adds _ _ acc (fun acc r z hz => Array.mem_push_of_mem _ hz) (by simpa using hr)
-        (fun acc' => by rw [Array.getElem_range]; exact Array.mem_push_self)
+  generalize hT : PT_LOCAL - (7 + log2ceil c.unitRange.count) = T
+  obtain ⟨hr, hlo, hhi⟩ := split_cover (Nat.min_le_left e T) h1 h2
+  have hmem := regFold_mem _ T hi' hgi hr
+  rw [← hT, ← inRegions_eq] at hmem
   obtain ⟨x, hx, hgx⟩ := Array.mem_iff_getElem.1 hmem
-  exact ⟨x, _, _, hx, by rw [getElem!_pos _ x hx, hgx], by omega, hlo, hhi⟩
+  refine ⟨x, w0 + (y - w0) / 2 ^ min e T * 2 ^ min e T, min e T, hx, ?_, by omega, hlo, hhi⟩
+  rw [getElem!_pos _ x hx, hgx, hT]
 
 /-- Every public leaf `jj` of a unit's public leaf map is in an in region `x`, `(w, s)`, from a word of the leaf group:
 `in_pinned`'s hypotheses on `x`. -/
