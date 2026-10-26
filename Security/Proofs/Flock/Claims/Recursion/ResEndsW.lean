@@ -432,4 +432,26 @@ theorem accPorts_of_steps (rd : Msg → Option FinalP) (key : ℕ → ℕ → �
     AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt :=
   accPorts_of_WX rd key wE final w b elem untr cmt hS (endsW_of_reg rd wE final w b elem untr cmt hRS)
 
+/-- `StepsWX` is `StepsWG` at the side condition `XsW … AccV`, curried. -/
+theorem stepsWX_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (h : StepsWG rd key wE final w b elem shape untr cmt
+      (XsW rd wE final w b elem (AccV rd wE final w b elem shape untr cmt))) :
+    StepsWX rd key wE final w b elem shape untr cmt :=
+  fun x st hx hf c ws hJ xs hxs hcol => h x st hx hf c ws hJ ⟨xs, hxs, hcol⟩
+
+/-- **P3 from `StepsWG` at `XsW`** (STEPSW's form), wherever the brings list the registered reads. -/
+theorem accPorts_of_G (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE : Msg → ℝ)
+    (final : Msg → Option (List (List (Msg × Salt)) × Msg))
+    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (hS : StepsWG rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt
+      (XsW rd wE final w b elem (AccV rd wE final w b elem Claims.Recursion.Form.Dense untr cmt)))
+    (hRS : RegSetup b) :
+    AccPorts rd key wE final w b elem Claims.Recursion.Form.Dense untr cmt :=
+  accPorts_of_steps rd key wE final w b elem untr cmt
+    (stepsWX_of_G rd key wE final w b elem _ untr cmt hS) hRS
+
 end RecDeploy.ResLower
