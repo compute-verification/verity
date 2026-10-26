@@ -397,7 +397,8 @@ theorem freedSound_of_momentSound {G : Accel} {P : RoundProto} {k : ℕ} {Obs : 
         refine le_trans (Real.exp_le_exp.mpr ?_) (hmom ox z hv hb hfit).1
         calc Real.log (1 / δ) = η * (Real.log (1 / δ) / η) := by rw [mul_comm, div_mul_cancel₀ _ hη.ne']
           _ ≤ η * D ox := mul_le_mul_of_nonneg_left hle hη.le
-    rwa [one_div, Real.log_inv, neg_neg, Real.exp_log hδ] at h1
+    have hδe : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
+    exact h1.trans hδe.le
   refine le_trans (prob_mono (q := fun ox : P.Orc × (Fin k → P.Draw × P.Chk) => Bad ox ∨
       (A.Passes verdict dev ox.1 ox.2 ∧ ¬ Bad ox ∧ (∃ z, Pd.Fits (A.timedUse ox.1 ox.2) z) ∧
         Real.log (1 / δ) / η ≤ D ox)) fun ox ⟨hv, z, hfit, hnot⟩ => ?_)
@@ -406,9 +407,9 @@ theorem freedSound_of_momentSound {G : Accel} {P : RoundProto} {k : ℕ} {Obs : 
     · exact Or.inl hb
     · refine Or.inr ⟨hv, hb, ⟨z, hfit⟩, not_lt.mp fun hlt => hnot ?_⟩
       obtain ⟨W', z', hW', hfit', hval⟩ := (hmom ox z hv hb hfit).2
-      refine ⟨W', z', hW', hfit', hval.trans (add_le_add_left ?_ _)⟩
+      refine ⟨W', z', hW', hfit', hval.trans (add_le_add le_rfl ?_)⟩
       calc (ε A + D ox / C) * C ≤ (ε A + Real.log (1 / δ) / η / C) * C :=
-            mul_le_mul_of_nonneg_right (add_le_add_left (div_le_div_of_nonneg_right hlt.le hC) _) hC
+            mul_le_mul_of_nonneg_right (add_le_add le_rfl (div_le_div_of_nonneg_right hlt.le hC)) hC
         _ ≤ ε' A * C := mul_le_mul_of_nonneg_right (hε A) hC
   · linarith [hκ A]
 
@@ -593,7 +594,7 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
         (∃ w, ¬ Good ox.1 w (adv ox.1 ox.2 w))) ∨ (∃ w, Good ox.1 w (adv ox.1 ox.2 w) ∧ deg ox.1 ox.2 w),
     fun ox => Finset.sum_nonneg fun w _ => hDval0 _ _ w, fun ox => Finset.prod_nonneg fun w _ => hF0 _ _ _ _,
     ?_, ?_, ?_⟩
-  · show expect _ ≤ 1
+  · show Pouw.RelativeSecurity.expect _ ≤ 1
     rw [expect_prod]
     exact expect_le_of_le zero_le_one fun o =>
       expect_prod_rounds (adv o) (hadv o) (roundF reg μ pubmm pubsha η Mw' Mh' Good Dm Ds o) (hF0 o) (hF1 o)

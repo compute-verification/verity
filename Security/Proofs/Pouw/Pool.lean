@@ -145,7 +145,7 @@ coins `coin` the uniform distribution (`OwnDither`'s form), and the strategy `A`
 other replicas' coins (`CoinsConfidential`'s form). A function `g` of the prover and of the oracle and replica `u`'s
 coins, averaging at most `c ≥ 0` at every prover, then averages at most `c` at `A`'s: sliced at the other replicas'
 coins, `A` is one prover and `u`'s coins are uniform. -/
-theorem expect_replica_le {Orc Y Ω Prv : Type} [Fintype Orc] [Fintype Y] [Fintype Ω] {N : ℕ}
+theorem expect_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype Y] [Fintype Ω] {N : ℕ}
     (coin : Ω → Fin N → Y) (hown : ∀ f : (Fin N → Y) → ℝ, avg (fun ω => f (coin ω)) = avg f) (A : Ω → Prv)
     (u : Fin N) (hconf : ∀ ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A ω = A ω') (g : Prv → Orc × Y → ℝ)
     {c : ℝ} (hc : 0 ≤ c) (hg : ∀ ω, expect (g (A ω)) ≤ c) :
@@ -158,14 +158,14 @@ theorem expect_replica_le {Orc Y Ω Prv : Type} [Fintype Orc] [Fintype Y] [Finty
   have hsurj : ∀ y : Fin N → Y, ∃ ω, coin ω = y := by
     intro y
     by_contra hy
-    push_neg at hy
+    push Not at hy
     have h := hown (fun y' => if y' = y then (1 : ℝ) else 0)
     have hl : avg (fun ω => (fun y' : Fin N → Y => if y' = y then (1 : ℝ) else 0) (coin ω)) = 0 := by
       unfold avg
       simp [hy]
     have hr : 0 < avg (fun y' : Fin N → Y => if y' = y then (1 : ℝ) else 0) := by
       unfold avg
-      rw [Finset.sum_ite_eq' Finset.univ y (fun _ => (1 : ℝ)), if_pos (Finset.mem_univ y)]
+      rw [Finset.sum_ite_eq' Finset.univ y (fun _ => (1 : ℝ)), ite_eq_left (Finset.mem_univ y)]
       exact div_pos one_pos (by exact_mod_cast Fintype.card_pos_iff.mpr ⟨y⟩)
     linarith
   choose s hs using hsurj
@@ -196,7 +196,7 @@ theorem expect_replica_le {Orc Y Ω Prv : Type} [Fintype Orc] [Fintype Y] [Finty
 
 /-- `expect_replica_le` for an event: one of probability at most `c ≥ 0` at every prover has probability at most `c`
 at the strategy's. -/
-theorem prob_replica_le {Orc Y Ω Prv : Type} [Fintype Orc] [Fintype Y] [Fintype Ω] {N : ℕ}
+theorem prob_replica_le {Orc Y Ω : Type} {Prv : Type*} [Fintype Orc] [Fintype Y] [Fintype Ω] {N : ℕ}
     (coin : Ω → Fin N → Y) (hown : ∀ f : (Fin N → Y) → ℝ, avg (fun ω => f (coin ω)) = avg f) (A : Ω → Prv)
     (u : Fin N) (hconf : ∀ ω ω', (∀ v, v ≠ u → coin ω v = coin ω' v) → A ω = A ω') (E : Prv → Orc × Y → Prop)
     {c : ℝ} (hc : 0 ≤ c) (hE : ∀ ω, prob (E (A ω)) ≤ c) :
@@ -365,12 +365,18 @@ theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
         ∃ z, (Pd u).Fits ((A u oω.2).timedUse oω.1 (coin oω.2 u)) z) :=
     ⟨_, fun _ _ => Iff.rfl⟩
   have hδe : Real.exp (-Real.log (1 / δ)) = δ := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log hδ]
+  have hMu : ∀ u, Pouw.RelativeSecurity.expect
+      (fun oω : P.Orc × Ω => M u (A u oω.2) (oω.1, coin oω.2 u)) ≤ 1 := by
+    intro u
+    refine expect_replica_le (Orc := P.Orc) (Y := Fin k → P.Draw × P.Chk) (Prv := Prover G P k) coin hown (A u) u
+      (hconf u) (M u) zero_le_one fun ω => ?_
+    exact hM u (A u ω)
   have hluck : prob (fun oω : P.Orc × Ω => ∃ S : Finset (Fin N), (∀ u ∈ S, acc u oω) ∧ S.Nonempty ∧
       (∑ u ∈ S, 1 / η u) * (Real.log ((∑ u, 1 / η u) / ∑ u ∈ S, 1 / η u) + Real.log (1 / δ)) ≤
         ∑ u ∈ S, D u (A u oω.2) (oω.1, coin oω.2 u)) ≤ δ :=
     (prob_convex_pool_accepted (fun u oω => M u (A u oω.2) (oω.1, coin oω.2 u))
       (fun u oω => D u (A u oω.2) (oω.1, coin oω.2 u)) η hη (fun u oω => hM0 u _ _)
-      (fun u => expect_replica_le coin hown (A u) u (hconf u) (M u) zero_le_one fun ω => hM u (A u ω)) acc
+      hMu acc
       (fun u oω h => by
         obtain ⟨hv, hb, z, hfit⟩ := (hacc u oω).mp h
         exact (hZ u _ _ z hv hb hfit).1)
@@ -389,7 +395,7 @@ theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
   by_cases hb : ∃ u ∈ S, Bad u (A u oω.2) (oω.1, coin oω.2 u)
   · obtain ⟨u, _, hu⟩ := hb
     exact Or.inl ⟨u, mem_univ u, hu⟩
-  · push_neg at hb
+  · push Not at hb
     refine Or.inr ⟨S, fun u hu => (hacc u oω).mpr ⟨(hpf u hu).1, hb u hu, z u, (hpf u hu).2⟩, hne, ?_⟩
     exact not_lt.mp fun hlt => hnot ⟨fun u => D u (A u oω.2) (oω.1, coin oω.2 u),
       fun u hu => ⟨hD0 u _ _, (hZ u _ _ (z u) (hpf u hu).1 (hb u hu) (hpf u hu).2).2⟩, hlt.le⟩
