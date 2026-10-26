@@ -181,6 +181,7 @@ import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.KS.PlainR
 import Proofs.Flock.Claims.Recursion.LastBindsR
 import Proofs.Flock.Claims.Recursion.KSLin2R
+import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.VerdictFramed
