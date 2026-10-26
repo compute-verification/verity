@@ -11,8 +11,8 @@ import Proofs.Pouw.RelativeSecurity
 (`credited_iff`, at `k s_T > 0`), so the run's accepted prefix and live words are `Credit.window`'s (`prefixLen_eq`,
 `creditedLive_eq`), and `JointSound` at `tileLayer` follows from `TileDrawIsCoin` and `TileServiceSound` by
 monotonicity (`jointSound_tile`). The rate is `SplitRateClosed`'s at H1's lucks (`rate_j10r`: its first term,
-`8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin and the staged statement pinning
-`j10r_reference` at each unit's place (`pins_j10r`).
+`8(1 + Kρ)/(ρK)`), and `Pins` comes from the window's salt being its live coin (`pins_j10r`): the relation is
+`j10r_reference`'s at the unit's place, one description.
 -/
 
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
@@ -99,32 +99,32 @@ theorem rate_j10r {K : ℕ} {ρ : ℝ} (hK : 1 ≤ K) (hρ : 0 < ρ) (hρ1 : ρ 
   unfold j10rRate
   ring
 
-/-- **J10-R's unit relation pins its tile's rightness**: the staged statement at the window's salt and the unit's
-place pins `j10r_reference` at that place's noise and keys (`StagedPinsJ10R`), and the salt is the window's round-0
-coin (`SaltIsLiveCoin`). -/
+/-- **J10-R's unit relation pins its tile's rightness**: the relation, `j10r_reference`'s at the unit's place under the
+window's salt, is its rightness, the same at the window's round-0 coin, because the salt is that coin
+(`SaltIsLiveCoin`). -/
 theorem pins_j10r {C B V : Type} {m n Np : ℕ} (hm : 0 < m) {salt : Paths (Paths C m × B) n → Fin n → ByteArray}
     {enc : C → ByteArray} {place : Paths (Paths C m × B) n → Fin n → Fin Np → Place}
-    {staged : ByteArray → Place → Fin Np → (ℕ → V) → Prop}
-    {flat : Noise → List (List ℕ) → Fin Np → (ℕ → V) → Prop}
-    (hs : Properties.Pouw.Period.SaltIsLiveCoin hm salt enc) (hp : StagedPinsJ10R staged flat) :
-    ∀ x w j v, stagedAtJ10R salt place staged x w j v → j10rAtCoin hm enc place flat x w j v := by
+    {tile : Noise → List (List ℕ) → Fin Np → (ℕ → V) → Prop}
+    (hs : Properties.Pouw.Period.SaltIsLiveCoin hm salt enc) :
+    ∀ x w j v, pinnedAt salt place tile x w j v → j10rAtCoin hm enc place tile x w j v := by
   intro x w j v h
-  have h' := hp (salt x w) (place x w j) j v h
-  rw [hs x w] at h'
-  exact h'
+  unfold pinnedAt at h
+  unfold j10rAtCoin
+  rw [← hs x w]
+  exact h
 
 /-- **`H1J10RCheckedCreditPeriod`**: `CircuitCreditPeriod` at `tileRun`, its accepted prefix and live words
 `Credit.window`'s, at `rate_j10r`'s rate and `pins_j10r`'s pins. -/
 theorem h1J10RCheckedCreditPeriod : H1J10RCheckedCreditPeriod := by
-  intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr _hM hKd ws opened enc place staged
-    flat Wp Pl folded ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved _hReg hDraw hServ hSalt hStaged hMu
-    hRB hGs hUF
+  intro ι K T L U C Ξ V _ _ _ _ _ _ _ nB mB σ k hk sT unitOf Sc Cd n hn hN hr _hM hKd ws opened enc place tile
+    Wp Pl folded ρ δs δbind δks hS hρ hρ1 hρN hwmax hlk hG hDD hPre hMoved _hReg hDraw hServ hSalt hLucks hUF
+  obtain ⟨hMu, hRB, hGs⟩ := hLucks
   have hK0 : 0 < k sT := hKd
   have h := Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod Sc Cd hn hN hr (hk sT) Wp Pl
-    (tileRun σ k hk sT unitOf ws opened (stagedAtJ10R (saltOf ws) place staged) (j10rAtCoin hr enc place flat))
+    (tileRun σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile) (j10rAtCoin hr enc place tile))
     folded ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate (k sT) ρ) δs δbind δks hS hρ hρN hwmax hlk one_pos one_pos
     (j10rRate_pos hKd hρ) (rate_j10r hKd hρ hρ1) hG hDD hPre hMoved
-    (jointSound_tile Cd hr σ k hk sT unitOf ws opened _ _ hDraw hServ) (pins_j10r hr hSalt hStaged) hMu hRB hGs hUF
+    (jointSound_tile Cd hr σ k hk sT unitOf ws opened _ _ hDraw hServ) (pins_j10r hr hSalt) hMu hRB hGs hUF
   simp only [prefixLen_eq σ k hk sT unitOf hK0 ws opened, creditedLive_eq Sc Cd σ k hk sT unitOf hK0 ws opened _ _ Wp]
     at h
   exact h
