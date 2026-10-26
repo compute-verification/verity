@@ -132,19 +132,19 @@ theorem stacked_mem {i : RecVStar.Inner} {C : Array VStar.Stmt} (h : RecVStar.ca
 /-! ## What `accReads` reads -/
 
 theorem accReads_recOpen {i : RecVStar.Inner} {sch : Schedule} (hf : fast100 i.m = some sch) (l L H n : ℕ) :
-    ∃ X, RecVStar.accReads i (.recOpen l L H n) = .ok (some X) ∧ X.size = 2 * (sch.levels[l]!).q :=
+    ∃ Xs, RecVStar.accReads i (.recOpen l L H n) = .ok (some Xs) ∧ Xs.size = 2 * (sch.levels[l]!).q :=
   ⟨_, by unfold RecVStar.accReads; simp only [hf]; try rfl, by simp⟩
 
 theorem accReads_stacked {i : RecVStar.Inner} {r : RecVStar.StackedShape} {sch sr : Schedule}
     (hf : fast100 i.m = some sch) (hr : i.stacked = some r) (hsr : fast100 r.m = some sr) (l L H n : ℕ) :
-    ∃ X, RecVStar.accReads i (.recOpenStacked l L H n) = .ok (some X) ∧ X.size = (sr.levels[l]!).q :=
+    ∃ Xs, RecVStar.accReads i (.recOpenStacked l L H n) = .ok (some Xs) ∧ Xs.size = (sr.levels[l]!).q :=
   ⟨_, by unfold RecVStar.accReads; simp only [hf, hr, hsr]; try rfl, by simp⟩
 
 /-- Where a statement reads `acc` at unit `u`, `u` is one of `accReads`' units. -/
-theorem lt_of_accRead {r : XR} {st : VStar.Stmt} {u : ℕ} {X : Array (Option ℕ)}
-    (hX : RecVStar.accReads r.shape st = .ok (some X)) (hi : ∀ j nm pt, st ≠ .inner j nm pt)
-    (h : (accRead r st "acc" u).isSome = true) : u < X.size := by
-  have e : accRead r st "acc" u = (X[u]?).bind id := by
+theorem lt_of_accRead {r : XR} {st : VStar.Stmt} {u : ℕ} {Xs : Array (Option ℕ)}
+    (hX : RecVStar.accReads r.shape st = .ok (some Xs)) (hi : ∀ j nm pt, st ≠ .inner j nm pt)
+    (h : (accRead r st "acc" u).isSome = true) : u < Xs.size := by
+  have e : accRead r st "acc" u = (Xs[u]?).bind id := by
     cases st with
     | inner j nm pt => exact absurd rfl (hi j nm pt)
     | _ => unfold accRead; simp [hX, Except.toOption]
@@ -156,14 +156,14 @@ theorem lt_of_accRead {r : XR} {st : VStar.Stmt} {u : ℕ} {X : Array (Option �
 
 theorem lt_recOpen {r : XR} {sch : Schedule} (hf : fast100 r.shape.m = some sch) {l L H n u : ℕ}
     (h : (accRead r (.recOpen l L H n) "acc" u).isSome = true) : u < 2 * (sch.levels[l]!).q := by
-  obtain ⟨X, hX, hsz⟩ := accReads_recOpen hf l L H n
+  obtain ⟨Xs, hX, hsz⟩ := accReads_recOpen hf l L H n
   have := lt_of_accRead hX (fun _ _ _ he => by cases he) h
   omega
 
 theorem lt_stacked {r : XR} {R : RecVStar.StackedShape} {sch sr : Schedule} (hf : fast100 r.shape.m = some sch)
     (hR : r.shape.stacked = some R) (hsr : fast100 R.m = some sr) {l L H n u : ℕ}
     (h : (accRead r (.recOpenStacked l L H n) "acc" u).isSome = true) : u < (sr.levels[l]!).q := by
-  obtain ⟨X, hX, hsz⟩ := accReads_stacked hf hR hsr l L H n
+  obtain ⟨Xs, hX, hsz⟩ := accReads_stacked hf hR hsr l L H n
   have := lt_of_accRead hX (fun _ _ _ he => by cases he) h
   omega
 
