@@ -33,7 +33,10 @@ and FADDs, not a tensor instruction of its own), the other formats with themselv
 most 4 words (a lane's 128-bit load or store), and bulk copies of any length with shared memory at one end (TMA);
 atomics on shared memory, L2 and HBM.
 
-**Captured dots** (`captured`): the integer path exactly; `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (`mma.sync`
+**Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at
+D; `wgmma` m64n64k32, m64n128k32 and m64n256k32 `.s8`, all eight forms, about 10.3–10.6 M elements each with the
+extreme and clamp tiles, 0 mismatches, run r20261026-010336-7755, #4512; `mma.sync` m16n8k32 `.s8` pinned by DPRE,
+HASH-8); `bf16` at `k = 16`, `TC.HOPPER_BF16_M16N8K16` (`mma.sync`
 and `wgmma`, `models.HOPPER_BF16_M16N8K16`, `HOPPER_BF16_WGMMA_K16`); `e4m3` and `e5m2` at `k = 32`, one group of 32 on
 a 14-bit adder, floor −139 (`total_fp8.HOPPER_E4M3_WGMMA_K32`, lane QZ, H100, 144,543,744 words, 0 mismatches;
 `models.HOPPER_E5M2_K32`, run r20260922-183837-940b, 25,554,432 elements, 0 mismatches). Every other dot is `Open.dot`.

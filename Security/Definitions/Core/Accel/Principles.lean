@@ -1,4 +1,5 @@
-import Definitions.Core.Accel.Card
+import Definitions.Core.Accel.H200
+import Definitions.Core.Accel.Sm120
 
 /-!
 # P1 and P2 from the instruction set (trusted)
@@ -9,8 +10,9 @@ are statements to prove (in `Proofs/Core/Accel`), not assumptions: they follow f
 * **(P1) Exact products only through fixed operand formats.** An MMA reads each operand through its format's `bits`
   (`elem`), and its dot reads the operand pairs only through what one multiplier forms from a pair (`mulOut`): the
   exact product with its exponent, nothing else of the pair (`ProductForm`). The integer path is exact on its whole
-  range (`P1Int`); BF16 on Hopper's and sm_120's pipeline is exact on integers whose sum stays below `2^24`
-  (`P1Bf16`). A wider operand therefore takes several MMAs: that much is semantics, not an assumption.
+  range (`P1Int`); a float pipeline of adder width `w` is exact on integers whose magnitudes sum below
+  `2^min(w, 24)` (`P1Float`), which covers BF16 and the FP8 (E4M3, E5M2) and FP4 (E2M1) K32 atoms on both cards
+  (`P1Captured`). A wider operand therefore takes several MMAs: that much is semantics, not an assumption.
 * **(P2) A product lives in one accumulator.** An MMA's output `o` reads row `o / n` of `A`, column `o % n` of `B` and
   accumulator `o` only (`P2Local`), and distinct outputs read distinct row and column pairs (`P2Distinct`), so each of
   its `m·n·k` products is formed in one output's dot. An instruction writes only the locations its outputs name
@@ -74,17 +76,25 @@ def P1Int : Prop :=
     let s := c.toInt + (List.zipWith (fun x y => fa.intVal x * fb.intVal y) a b).sum
     (-2 ^ 31 ≤ s) → s < 2 ^ 31 → (intDot fa fb sat c a b).toInt = s
 
-/-- **P1, BF16** on `TC.HOPPER_BF16_M16N8K16` (Hopper's `mma.sync` and `wgmma`, and sm_120's): on finite operands and a
-finite accumulator whose values are integers, with the accumulator's and the products' magnitudes summing below
-`2^24`, the dot is the exact sum. -/
-def P1Bf16 : Prop :=
-  ∀ (c : Word) (a b : List ℕ), a.length = 16 → b.length = 16 →
-    (∀ x ∈ a ++ b, x < 2 ^ 16 ∧ Spec.bf16Class x ≠ .nan ∧ Spec.bf16Class x ≠ .inf) →
+/-- **P1, the float path**: format `f`'s dot on pipeline `p`, on finite operands and a finite accumulator whose values
+are integers, with the accumulator's and the products' magnitudes summing below `2^min(width, 24)`, is the exact sum.
+The adder aligns every term to `2^(E + 1 - width)`, `E` the largest exponent, and truncates; FP32 keeps 24 bits. -/
+def P1Float (f : Fmt) (p : Pipeline) : Prop :=
+  ∀ (c : Word) (a b : List ℕ), a.length = p.k → b.length = p.k →
+    (∀ x ∈ a ++ b, f.code x < 2 ^ f.mini.bits ∧ f.mini.cls (f.code x) ≠ .nan ∧ f.mini.cls (f.code x) ≠ .inf) →
     Spec.fp32Class c.toNat ≠ .nan → Spec.fp32Class c.toNat ≠ .inf →
-    let ps := List.zipWith (fun x y => termVal (Spec.bf16Product x y)) a b
+    let ps := List.zipWith (fun x y => termVal (f.mini.product (f.code x) (f.code y))) a b
     let c₀ := termVal (Spec.fp32Term c.toNat)
-    (∃ z : ℤ, c₀ = z) → (∀ p ∈ ps, ∃ z : ℤ, p = z) → |c₀| + (ps.map fun p => |p|).sum < 2 ^ 24 →
-    termVal (Spec.fp32Term (floatDot .bf16 HOPPER_BF16_M16N8K16 c a b).toNat) = c₀ + ps.sum
+    (∃ z : ℤ, c₀ = z) → (∀ p ∈ ps, ∃ z : ℤ, p = z) → |c₀| + (ps.map fun p => |p|).sum < 2 ^ min p.width 24 →
+    termVal (Spec.fp32Term (floatDot f p c a b).toNat) = c₀ + ps.sum
+
+/-- **P1 on the captured float atoms**: BF16 on `TC.HOPPER_BF16_M16N8K16` (Hopper's `mma.sync` and `wgmma`, and
+sm_120's), exact below `2^24`; Hopper's E4M3 and E5M2 K32 atom (one group of 32 on a 14-bit adder, the alignment
+truncation of `pearl_kw`'s `_group`), exact below `2^14`; sm_120's E4M3, E5M2 and E2M1 K32 atom (26 bits), exact below
+`2^24`. -/
+def P1Captured : Prop :=
+  P1Float .bf16 HOPPER_BF16_M16N8K16 ∧ P1Float .e4m3 H200.fp8Pipeline ∧ P1Float .e5m2 H200.fp8Pipeline ∧
+    P1Float .e4m3 Sm120.f8Pipeline ∧ P1Float .e5m2 Sm120.f8Pipeline ∧ P1Float .e2m1 Sm120.f8Pipeline
 
 /-- **P2, locality**: an MMA's output `o` changes only with row `o / n` of `A`, column `o % n` of `B` and accumulator
 `o`. -/
