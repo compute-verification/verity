@@ -15,8 +15,8 @@ template `reader`'s units read rows of their parameter `port` whole as row `out`
 
 `check` decides a circuit's wires in work proportional to its templates and wires, never to the units they cover (the
 rule of 18 Oct, AGENTS.md "Design rules"): each wire's writers lie in `span`, the least and greatest writer in closed
-form; and two wires of one reader port wire no reader row twice exactly when their rectangles (reader units × rows) are
-disjoint, compared pair by pair within each port. Its summary gives each reader row's writer (`Summary.writerOf`, by the
+form; and two wires wire no reader row twice exactly when they read different ports or their rectangles (reader units ×
+rows) are disjoint, compared pair by pair (#wires² comparisons, each of a few fields). Its summary gives each reader row's writer (`Summary.writerOf`, by the
 wires alone) and the wired rows and bits multiplied through (`wiredRows`, `wiredBits`), the wired term of the count of a
 window's free inputs.
 
@@ -26,7 +26,7 @@ and `wires_unrolled` pieces) holds both to the same Python reference. The verifi
 The refusals, in the order checked (`Code`): `cuts` (a cut names no template or port, or `k` is 0 or doesn't divide the
 port's outer length and words), then wire by wire `template` (its reader or writer is no template), `port` (its port is no
 input of the reader, or `out` no output of the writer), `cut` (its rows are not among the port's, or the last digit isn't
-`cuts`), `width` (a reader row's words are not the writer row's), `bounds` (a reader unit or a writer outside its
+`cuts`, or `cuts` doesn't divide the wire's reader rows), `width` (a reader row's words are not the writer row's), `bounds` (a reader unit or a writer outside its
 template), then `overlap` (some reader row wired twice).
 -/
 import Lean.Data.Json
@@ -142,7 +142,8 @@ def shape (c : Circuit) (w : Wire) : Except Code (Template × Template) :=
     match rt.rows.lookup w.port, wt.outs.lookup w.out with
     | some p, some ow =>
       let k := c.cutsOf w.reader w.port
-      if !(1 ≤ w.cuts && w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts)) then .error .cut
+      if !(1 ≤ w.cuts && w.cut0 + w.cuts ≤ k && (w.cuts == 1 || w.radix.getLast? == some w.cuts) &&
+          w.units % w.cuts == 0) then .error .cut
       else if p.words / k != ow then .error .width
       else .ok (rt, wt)
     | _, _ => .error .port
@@ -162,11 +163,6 @@ def disjoint (a b : Wire) : Bool :=
 def pairwiseDisjoint : List Wire → Bool
   | [] => true
   | w :: ws => ws.all (disjoint w) && pairwiseDisjoint ws
-
-/-- The wires grouped by reader port (sorted by reader and port, cut into runs of one port). -/
-def byPort (ws : List Wire) : List (List Wire) :=
-  (ws.mergeSort fun a b => a.reader < b.reader || (a.reader == b.reader && a.port ≤ b.port)).splitBy
-    fun a b => a.reader == b.reader && a.port == b.port
 
 /-- What `check` establishes: the wires, in order. -/
 structure Summary where
@@ -198,7 +194,7 @@ def check (c : Circuit) : Except Refusal Summary :=
   else match firstWire c (wireCode c) with
     | some r => .error r
     | none =>
-      if !(byPort c.wires).all pairwiseDisjoint then .error ⟨.overlap, none⟩
+      if !pairwiseDisjoint c.wires then .error ⟨.overlap, none⟩
       else .ok ⟨c.wires, c.wires.map (rowWords c)⟩
 
 /-- Whether wire `w` covers reader row `(tid, u, port, row)`, and if so its index. -/
@@ -226,8 +222,7 @@ abbrev Entry := (String × Nat × String × Nat) × (String × Int × String)
 /-- Every reader row the wire covers, with its writer, index by index. -/
 def Wire.entries (w : Wire) : List Entry :=
   (List.range w.units).map fun i =>
-    let (u, r) := w.readerAt i
-    ((w.reader, u, w.port, r), (w.writer, w.writerAt i, w.out))
+    ((w.reader, (w.readerAt i).1, w.port, (w.readerAt i).2), (w.writer, w.writerAt i, w.out))
 
 /-- The bounds entry by entry. -/
 def boundsRef (w : Wire) (rt wt : Template) : Bool :=
@@ -238,12 +233,8 @@ def wireCodeRef (c : Circuit) (w : Wire) : Option Code :=
   | .error e => some e
   | .ok (rt, wt) => if boundsRef w rt wt then none else some .bounds
 
-/-- No reader row twice among `es`. -/
-def distinctRows (es : List Entry) : Bool :=
-  let keys := (es.map (·.1)).mergeSort fun a b =>
-    a.1 < b.1 || (a.1 == b.1 && (a.2.1 < b.2.1 || (a.2.1 == b.2.1 && (a.2.2.1 < b.2.2.1 ||
-      (a.2.2.1 == b.2.2.1 && a.2.2.2 ≤ b.2.2.2)))))
-  (keys.zip keys.tail).all fun (a, b) => a != b
+/-- No reader row twice among `es` (quadratic in the entries). -/
+def distinctRows (es : List Entry) : Bool := decide (es.map (·.1)).Nodup
 
 /-- **The unrolled reference**: `check`'s refusals with the bounds and the overlap taken entry by entry, else every entry. -/
 def checkRef (c : Circuit) : Except Refusal (List Entry) :=
