@@ -280,7 +280,7 @@ theorem out_port_recOpen {lv LANES HH n : ℕ} {u : VStar.UnitC}
       rfl
     · rw [List.mem_singleton] at h1
       cases h1
-      exact absurd (congrArg Prod.fst he : ("acc_out" : String) = "out") (by decide)
+      exact absurd (show ("acc_out" : String) = "out" from congrArg Prod.fst he) (by decide)
 
 /-- **RecCap's `top` port is a 64-word row**: V\*'s rows of `rec-cap` (`vstarRows`) name `top` once, its one input of
 `CAP_TOP_WORDS = 64` words (`capUnit`). -/
@@ -313,7 +313,7 @@ theorem top_port_cap {l N : ℕ} {u : VStar.UnitC} (hu : (VStar.Stmt.cap l N).un
     have hy' : (a, k) ∈ [("out", VStar.CAP_OUT_WORDS)] := hy
     rw [List.mem_singleton] at hy'
     cases hy'
-    exact absurd (congrArg Prod.fst he : ("out" : String) = "top") (by decide)
+    exact absurd (show ("out" : String) = "top" from congrArg Prod.fst he) (by decide)
 
 section Deployed
 
