@@ -157,7 +157,7 @@ def instrument(prof: Profile):
     from verity_vllm.protocols.pouw import pearl_c as PPD
     run_cls = PPD.PearlCDeviceRun
     saved = [(PPD, n, getattr(PPD, n)) for n in ("_steps", "screen_into", "excluded")]
-    saved += [(run_cls, n, vars(run_cls)[n]) for n in ("_shape", "_pipe", "end", "gemm")]
+    saved += [(run_cls, n, vars(run_cls).get(n)) for n in ("_shape", "_pipe", "end", "gemm")]  # None: a mixin's, undone by delattr
     saved += [(PPD._Keys, "__call__", vars(PPD._Keys)["__call__"]), (PPD._Uploads, "put", vars(PPD._Uploads)["put"])]
     steps = PPD._steps
 
@@ -173,7 +173,7 @@ def instrument(prof: Profile):
     run_cls._shape = prof.section("shapes (first use: buffers)", run_cls._shape)
     run_cls._pipe = prof.section("pipelines (first use: build, tensor maps)", run_cls._pipe)
     end = run_cls.end
-    run_cls.end = lambda self: prof.section("pass end (tile tree, roots)", end)(self)
+    run_cls.end = lambda self, *a, **kw: prof.section("pass end (tile tree, roots)", end)(self, *a, **kw)
     gemm = run_cls.gemm
 
     def counted(self, w, x, weight, bias):
@@ -186,7 +186,10 @@ def instrument(prof: Profile):
 
     def undo() -> None:
         for owner, name, f in saved:
-            setattr(owner, name, f)
+            if f is None:
+                delattr(owner, name)
+            else:
+                setattr(owner, name, f)
     return undo
 
 

@@ -54,6 +54,10 @@ NAME_PREFIX = "NVIDIA RTX PRO 6000 Blackwell"
 SM_COUNT, MAX_DYN, CC_MAJOR, CC_MINOR, MAX_SHARED_OPTIN, SHARED_SIZE = 16, 8, 75, 76, 97, 1
 NORM_256, NORM_16 = 0x4600, 0x4400      # bf16(32 x the line norm): E's lines, and F's under v1
 NT, BM, BM_D, RASTER = 256, 128, 64, 8
+#: a caller with more real rows than this (a prefill's) pads them to BM rather than BM_D, so the chain runs on the mainloop:
+#: a served prefill step's chains took 18.9 ms at 640 rows there against 31.7 ms at 656 rows on 64 x 64 tiles
+#: (r20261024-171936-c297); at fewer rows the mainloop's 128 x 128 tiles leave SMs idle
+MAINLOOP_ROWS = 512
 ML_NT = 384                  # mainloop_sm120.cuh's block: a TMA producer warpgroup and 8 consumer warps
 WK_WARPS, WK_CL = 16, 4      # words_k's block (warps) and cluster (blocks) per m16 x n8 tile (pearl_c_sm120.cu)
 SR_ROWS, SR_MAX_K = 256, 32768   # stats_r (a block a row) for at most SR_ROWS rows of k <= SR_MAX_K, else stats_s5
@@ -65,6 +69,14 @@ LIVE = os.environ.get("PEARLC_LIVE", "1") != "0"
 #: decode's chain (gemm_pearlc_d) on 128-deep stages with L2's 256-byte fetch; PEARLC_DEEP=0 runs the 64-deep one it
 #: replaces (gemm_pearlc4_d), the same words
 DEEP = os.environ.get("PEARLC_DEEP", "1") != "0"
+#: B~'s prefetch into L2 ahead of a decode call's chain (`Pipeline.prefetch_b`): prefetch_l2's form (PEARLC_PREFETCH_FORM: 0 a
+#: line a thread, 1 the same evict_last, 2 a 16 KiB bulk prefetch a thread, the default: served b8's whole step at an ITL p50
+#: of 20.61 ms against 21.42 in form 0 and 21.85 without it, r20261024-193651-3ef1), its blocks, and B~'s leading bytes it
+#: takes (PEARLC_PREFETCH_MB, 0 all of them)
+PREFETCH_FORM = int(os.environ.get("PEARLC_PREFETCH_FORM", "2"))
+PREFETCH_CTAS = int(os.environ.get("PEARLC_PREFETCH_CTAS", "64"))
+PREFETCH_MB = int(os.environ.get("PEARLC_PREFETCH_MB", "0"))
+PREFETCH_FORMS = (0, 1, 2)
 VARIANT_G = {"sm120": 4, "sm120-unpromoted": 0}
 TMAP_UINT8, TMAP_SWIZZLE_128B, TMAP_L2_128B, TMAP_BYTES = 0, 3, 2, 128
 #: the mainloop GEMMs' operand pairs, a set of four tensor maps (A, B, P_A, P_B) each at `tma` + ML_SET * slot
@@ -398,7 +410,8 @@ class Pipeline:
     and `hash_leaf` is pd_tiles; the bytes are the same.  With `split_a` the commitment is two launches of the same bytes:
     `rows_a`, pd_commit in mode 1 (A's pads, each real row's digest, leaf, seed, line key and E_A line), then
     `tree_seed_a`, pd_tree (A's tree, seed_A, line_a and the padding rows' E_A lines under it), which only the padding
-    rows' products read after it.  The chain runs on 128 x 128
+    rows' products read after it; outside pd, the same two steps over the unsplit kernels (`FUSED_GENERIC`, A's level 0
+    in `tree_seed_a`).  The chain runs on 128 x 128
     tiles when m is a multiple of 128, else on 64 x 64 (`bm` forces either); the 32-column words on 128 x 32 CTA tiles, but
     A'F_B at 64 x 64 on the `words` kernel's warp tiles.  The 128 x 128 GEMMs run on the mainloop, their operands by the
     tensor maps in `tma` (ML_MAPS).  gemm_pearlc stores C~, U and y.
@@ -426,6 +439,11 @@ class Pipeline:
     #: E_A lines only with `fillers`)
     FUSED = {"commit_a": ("pad_a", "rowdig_a", "hash_rows_a", "tree_a", "seed_a", "seeds_a", "lines_ea"),
              "rows_a": ("pad_a", "rowdig_a", "hash_rows_a", "seeds_a", "lines_ea"), "tree_seed_a": ("tree_a", "seed_a")}
+    #: `split_a` outside pd (the pipeline's own `FUSED` there), the same kernels as the unsplit steps: ``rows_a`` A's pads,
+    #: row digests, each real row's seed and line key and the real rows' E_A lines (`lines` reading no line_a), then
+    #: ``tree_seed_a`` A's hm96 level 0 over the row digests, its levels, seed_A and line_a (with `fillers`, every row's E_A
+    #: line again, the real rows' the same bytes)
+    FUSED_GENERIC = {"rows_a": ("pad_a", "rowdig_a", "seeds_a", "lines_ea"), "tree_seed_a": ("hash_rows_a", "tree_a", "seed_a")}
     #: SMs a launch running beside the steps holds whole (pd_tree's CTA under PD_WHOLE), which the persistent GEMMs leave
     #: it: a GEMM CTA with no SM free would start only when that launch ends.  A tile's bytes don't depend on its CTA
     beside = 0
@@ -435,8 +453,8 @@ class Pipeline:
                  sha: str | None = None, split_a: bool = False, fillers: bool = True):
         """`bufs` names the buffers when the caller owns them (only those its steps touch); `m_real` rows of A are the
         matmul's, committed and hashed, the rest filler that only the products see (and the 64 x 64 GEMMs skip, LIVE).
-        With `split_a`, `fillers` False leaves the filler rows' E_A lines as the buffer holds them: pd_tree then writes A's
-        levels, seed_A and line_a alone, nothing the forming reads."""
+        With `split_a`, `fillers` False leaves the filler rows' E_A lines as the buffer holds them: ``tree_seed_a`` (pd_tree,
+        or outside pd `FUSED_GENERIC`'s) then writes A's tree, seed_A and line_a alone, nothing the forming reads."""
         self.dev, self.m, self.n, self.k, self.variant, self.keys = dev, m, n, k, variant, keys
         self.split_a, self.fillers = split_a, fillers
         self.sha = sha or os.environ.get("PEARLC_SHA", "fast")
@@ -463,6 +481,8 @@ class Pipeline:
         self.pd = pd_variant(self.m_real, n, k) if self.sha == "fast" and "pd_count" in self.b else None
         if self.pd is not None:
             pd_setup(dev)
+        elif split_a:
+            self.FUSED = {**Pipeline.FUSED, **Pipeline.FUSED_GENERIC}
         if self.sha == "fast" and any(x in self.b for x in SEGDIG) and not getattr(dev, "rs_heads", False):
             dev.launch("s512_heads", cdiv(RS_MAX_SEGS * (RS_MAX_SEGS + 1) // 2 + RS_MAX_SEGS + 1, 128), 128)
             dev.sync()
@@ -533,9 +553,10 @@ class Pipeline:
         its levels.  A's salt nonce is its unit index, read from `unit`; B's HM96_WEIGHTS + weight."""
         d, b = self.dev, self.b
         nonce = (0, 0) if tag == "a" else nonce_args(HM96_WEIGHTS + self.weight)
-        block = self.keys["unit"] + 96 if tag == "a" else 0
+        # read at launch: a ring's sets each hold their call's keys, and the lanes point `keys` at the set's before each call
+        block = lambda: self.keys["unit"] + 96 if tag == "a" else 0  # noqa: E731
         return [(f"rowdig_{tag}", lambda: self.row_digests(b[x], b[f"rowdig_{tag}"], b.get(f"segdig_{tag}", 0), count)),
-                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block, nonce)),
+                (f"hash_rows_{tag}", lambda: Pipeline.hm_level0(self, tag, b[f"rowdig_{tag}"], count, dom, block(), nonce)),
                 (f"tree_{tag}", lambda: self.levels(tag, count, dom))]
 
     def row_digests(self, x: int, out: int, scratch: int, count: int) -> None:
@@ -663,8 +684,9 @@ class Pipeline:
     def replaced(self) -> dict[str, object]:
         """The kernels the split ones replace at decode, on the same buffers: `af_warps`, A'F_B on `words` (a warp a tile over
         all of K) where `af` runs words_k, `stats_a_warps`, stats_s5 (a warp a row) where `stats_a` runs stats_r, and
-        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), and `gemm_pearlc_bk64`,
-        the chain on 64-deep stages (gemm_pearlc4_d) where `gemm_pearlc` runs the 128-deep ones (DEEP)."""
+        `gemm_pearlc_full`, the chain over all m rows where `gemm_pearlc` runs on the real ones (LIVE), `gemm_pearlc_bk64`,
+        the chain on 64-deep stages (gemm_pearlc4_d) where `gemm_pearlc` runs the 128-deep ones (DEEP), and
+        `gemm_pearlc_prefetched`, the chain after B~'s prefetch in each form (`prefetch_b`), which writes nothing."""
         d, b, m, k, out = self.dev, self.b, self.m, self.k, {}
         if self.g and SPLIT:
             out["af_warps"] = lambda: d.launch("words", m // 16, 128, p=(b["at"], b["fbT32"], b["af"]), i=(m, 32, k))
@@ -676,7 +698,22 @@ class Pipeline:
         if DEEP:
             out["gemm_pearlc_bk64"] = lambda: self.gemm("gemm_pearlc4_d" + self.suffix, "at", "bt", m, self.n,
                                                        out=("c", "u", "y"), **self.peel())
+
+        def prefetched():
+            for f in PREFETCH_FORMS:
+                self.prefetch_b(f)
+            self.gemm(chain, "at", "bt", m, self.n, out=("c", "u", "y"), **self.peel())
+        out["gemm_pearlc_prefetched"] = prefetched
         return out
+
+    def prefetch_b(self, form: int | None = None, limit: int | None = None) -> None:
+        """B~'s leading `limit` bytes (default PREFETCH_MB's, all n·k at 0) into L2 ahead of the chain, which reads them all:
+        prefetch_l2 in `form` (default PREFETCH_FORM) on PREFETCH_CTAS blocks.  It writes nothing."""
+        size = self.n * self.k
+        limit = PREFETCH_MB << 20 if limit is None else limit
+        size = min(size, limit) if limit else size
+        self.dev.launch("prefetch_l2", PREFETCH_CTAS, 256, p=(self.b["bt"],),
+                        i=(size - size % 128, PREFETCH_FORM if form is None else form))
 
     def real(self, x: str) -> int:
         """The bytes of buffer x's real rows (its first m_real of m), the only ones a consumer reads."""
@@ -733,18 +770,25 @@ class Pipeline:
         ea = ("lines_ea", lambda: d.launch("lines", cdiv(m, 128), 128, p=(b["line_a"], b["ea_codes"], 0, 0, b["lkeys_a"]),
                                            i=(0, 0, m, NORM_256, mr)))
         pd = self.pd is not None
-        forming = [ea] * (not pd) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
+        forming = [ea] * (not pd and not self.split_a) + form_side("a", m, "xa", "ea_codes", "fa_codes", "at")
         gemm = [("gemm_ct", lambda: self.gemm(ct, "at", "bt", m, n, out=("c2",)))]
         cleanup = [("af", lambda: self.words("at", "fbT32", m, "af", warps=self.bm == BM_D)),
                    ("pa", lambda: d.launch("pa", cdiv(m * 64, 256), 256, p=(b["epa_codes"], 0, b["af"], b["pa_t"]), i=(m,))),
                    ("gemm_pearlc", chain["gemm_pearlc_cu"])]
         epoch = self.tree_setup("b", n, "dom_b") + self.row_tree("b", "xb", n, "dom_b")
-        unit = self.tree_setup("a", mr, "dom_a") * (not pd) + self.tree_setup("t", tiles, "dom_t")
+        unit = self.tree_setup("a", mr, "dom_a") * (not pd and not self.split_a) + self.tree_setup("t", tiles, "dom_t")
         split = [("rows_a", lambda: self.pd_commit(1)), ("tree_seed_a", self.pd_tree)]
-        commit = (split if self.split_a else [("commit_a", self.pd_commit)]) if pd else self.row_tree("a", "xa", mr, "dom_a") + [
-            ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]), i=(1, 0, 0))),
-            ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128, p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]),
-                                         i=(mr, 0, 1)))]
+        rows, level0, levels = self.row_tree("a", "xa", mr, "dom_a")
+        seed_a = ("seed_a", lambda: d.launch("s512_seeds", 1, 128, p=(self.root("a"), b["seed_a"], b["line_a"], kk["unit"]),
+                                             i=(1, 0, 0)))
+        seeds_a = ("seeds_a", lambda: d.launch("s512_seeds", cdiv(mr, 128), 128,
+                                               p=(b["rowdig_a"], b["seeds_a"], b["lkeys_a"], kk["unit"]), i=(mr, 0, 1)))
+        own = ("lines_ea", lambda: d.launch("lines", cdiv(mr, 128), 128, p=(0, b["ea_codes"], 0, 0, b["lkeys_a"]),
+                                            i=(0, 0, mr, NORM_256, mr)))
+        generic = [("rows_a", lambda: [f() for _, f in self.tree_setup("a", mr, "dom_a") + [rows, seeds_a, own]]),
+                   ("tree_seed_a", lambda: [f() for _, f in [level0, levels, seed_a] + [ea] * (self.fillers and mr < m)])]
+        commit = ((split if self.split_a else [("commit_a", self.pd_commit)]) if pd else generic if self.split_a
+                  else [rows, level0, levels, seed_a, seeds_a])
         hashing = [("hash_leaf", self.pd_tiles if pd else self.tile_leaves),
                    ("tree_leaves_t", lambda: self.tree_leaves("t", b["leaves"], tiles, "dom_t")),
                    ("tree_t", lambda: self.levels("t", tiles))]
@@ -812,7 +856,7 @@ ALIASES = {"c2": "c"}
 STATS_A = ("alpha_a", "beta_a", "ia_a", "aux_a")
 #: the 64 x 64 pipeline's: the chain, A'F_B on words_k, and the kernels the split ones replace (`Pipeline.replaced`)
 SMALL_RERUNS = GEMM_RERUNS[:2] + (("af", ("af",)), ("af_warps", ("af",)), ("stats_a_warps", STATS_A),
-                                  ("gemm_pearlc_bk64", ("c", "u", "y")))
+                                  ("gemm_pearlc_bk64", ("c", "u", "y")), ("gemm_pearlc_prefetched", ("c", "u", "y")))
 #: each split kernel's step at decode, the step it replaces (`Pipeline.replaced`) and their outputs, held word for word (the
 #: chain's one output at a time: c2, where the replaced step's land, holds one m x n FP32 product)
 SPLITS = (("af", "af_warps", ("af",)), ("stats_a", "stats_a_warps", STATS_A),
@@ -870,6 +914,21 @@ def check_pd(dev: Dev, pipe: Pipeline, want) -> dict:
     return res
 
 
+def check_split(dev: Dev, pipe: Pipeline, want) -> dict:
+    """`split_a` outside pd (`Pipeline.FUSED_GENERIC`) on `pipe`'s buffers: ``rows_a`` then ``tree_seed_a`` after every
+    output of A's commitment (PD_OUTPUTS but the leaves) is poisoned, against the fixture's bytes (``@split``)."""
+    split = Pipeline(dev, pipe.m, pipe.n, pipe.k, pipe.variant, pipe.keys, pipe.b["xa"], pipe.b["xb"], bufs=pipe.b,
+                     m_real=pipe.m_real, bm=BM_D, weight=pipe.weight, split_a=True)
+    outs = [x for x in PD_OUTPUTS if x != "leaves"]
+    for x in outs:
+        dev.ck("cuMemsetD8_v2", u64(pipe.b[x]), POISON, pipe.size[x])
+    steps = {nm: fn for nm, _, fn in split.steps()}
+    for nm in ("rows_a", "tree_seed_a"):
+        steps[nm]()
+    dev.sync()
+    return {f"{x}@split": compare(dev, pipe, x, want(x)) for x in outs}
+
+
 def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
     m, n, k = man["shape"]
     load = lambda d, f: open(os.path.join(base, d, f["file"]), "rb").read()  # noqa: E731
@@ -891,6 +950,7 @@ def check(dev: Dev, man: dict, base: str, variants: list[str]) -> dict:
             if name == "c":
                 res["c@gemm_ct"] = compare(dev, pipe, name, want(name), alias="c2")
         res.update(check_pd(dev, pipe, want))
+        res.update(check_split(dev, pipe, want))
         for tag in ("a", "b"):
             for kernel in FORM_ALTS:
                 pipe.form_alt(tag, kernel)

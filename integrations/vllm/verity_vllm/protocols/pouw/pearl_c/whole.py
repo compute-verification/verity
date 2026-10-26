@@ -11,7 +11,8 @@ instance:
 
 * ``dispatch``: the key's set as the manager's ``graphs``.  A step runs eagerly, with the descriptor vLLM gives a batch
   without graphs, when the key has no set (no pass open, `enabled` off, graphs off, a schedule the graph path doesn't run)
-  or its set lacks the batch;
+  or its set lacks the batch; where the key is a Pearl-C pass's, outside `prepare`, the run hears of it first
+  (`eager_forward`, which with ``whole_eager`` runs the pass on side lanes);
 * ``run_fullgraph``: before vLLM's launch of the replay, `GraphCalls.whole_replay` with the calls the capture recorded,
   every call's slot in one upload; after it, while the GPU runs the forward, `GraphCalls.whole_replayed`, the rest of the
   forward's host work: the pass's records, a retained pass's files, and the next forward's slots staged.
@@ -64,6 +65,7 @@ class WholeStep:
         self.sets: dict[tuple, dict] = {VLLM: mgr.graphs}
         self.calls: dict[tuple, tuple] = {}
         self.counts = {"replayed": 0, "staged": 0, "eager": 0, "captured": 0}
+        self.preparing = False
         hooks.wrap(mgr, "dispatch", self._dispatch)
         hooks.wrap(mgr, "run_fullgraph", self._run_fullgraph)
 
@@ -82,12 +84,15 @@ class WholeStep:
         mgr = self.mgr
 
         def dispatch(*a: Any, **kw: Any) -> Any:
-            graphs = self.sets.get(self.key())
+            key = self.key()
+            graphs = self.sets.get(key)
             if graphs:
                 mgr.graphs = graphs
                 desc = original(*a, **kw)
                 if desc in graphs:
                     return desc
+            if key not in (None, VLLM) and not self.preparing:
+                self.run.eager_forward()
             captured, mgr._graphs_captured = mgr._graphs_captured, False
             try:
                 desc = original(*a, **kw)
@@ -115,10 +120,14 @@ class WholeStep:
         scratch pass that is then dropped from the stack's and the run's records.  Returns whether it captured."""
         if not self.stack.executing or not self.enabled:
             return False
-        with self.stack.pass_():
-            keys = [k for k in dict.fromkeys(self.run.whole_key(r) for r in (False, True)) if k is not None and k not in self.sets]
-            for key in keys:
-                self._capture(key)
+        self.preparing = True
+        try:
+            with self.stack.pass_():
+                keys = [k for k in dict.fromkeys(self.run.whole_key(r) for r in (False, True)) if k is not None and k not in self.sets]
+                for key in keys:
+                    self._capture(key)
+        finally:
+            self.preparing = False
         self.stack.passes.pop()
         self.run.details["passes"].pop()
         return bool(keys)
