@@ -187,7 +187,6 @@ theorem capHold_len {r : XR} {s i N : ℕ} {segs : List (Msg × List HmNets.Lin)
   · obtain ⟨c, -, h⟩ := Option.bind_eq_some_iff.1 h
     obtain ⟨q, -, rfl⟩ := Option.map_eq_some_iff.1 h
     exact pieceLen_commits c q N
-  · cases h
 
 theorem capHold_at {x : Msg} {r : XR} (hr : readX x = some r) (hx : DenseX x) {N : ℕ}
     (hc : capAt r = some (nS x - 1, N)) : ∃ segs, capHold r (nS x - 1) = some segs := by
@@ -368,8 +367,8 @@ theorem rowPiece_sum (r : XR) (i : ℕ) :
   have e : (rowPiece r i).map (fun p => pieceLen p.2) = (rowPiece r i).map fun _ => 128 := by
     apply List.map_congr_left
     intro p hp
-    obtain ⟨-, -, -, c, -, he⟩ := rowPiece_mem hp
-    rw [he]
+    obtain ⟨_h, _hh, _hi, _c, _hc, hpe⟩ := rowPiece_mem hp
+    rw [hpe]
     simp [pieceLen, hmCommit_length]
   rw [e, sum_map_const]
   omega

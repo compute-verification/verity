@@ -27,7 +27,7 @@ theorem act_not_coin {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} (hlast
   intro hc
   unfold FlockDeploy.act at hc
   repeat' (split at hc)
-  all_goals first | exact absurd hlast.symm (ha _) | simp_all
+  all_goals first | exact absurd hlast.symm (ha _) | (simp_all <;> exact absurd hlast.symm (ha _))
 
 /-- **The last step decides** where the plain verifier answers no coin and `decR` reads. -/
 theorem actR_of_decR {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} {d : DecR}
