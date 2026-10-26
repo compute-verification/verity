@@ -40,3 +40,7 @@ and **"leg" is retired** (in Linear: project, milestone, issue). The theorem's s
 `SampledProofsSound`, `PouwSound`, `PousSound`, `BandwidthAuditSound`, `NetworkCertifierSound` and `WipeSound`
 (ONETHM, `cursor/proofs-one20-48ae`); `Verity.soundness_of_subprotocols` is the composition (#4613). Record keys,
 wire strings (the verdict keys `integrity`, `communication`) and `Core.Protocol` keep their names.
+- **One adversary form, and a guard against vacuity (Daniel, 2:00 PM PDT):** every bound is for every prover τ, in the
+  reduction form `Pr[accept ∧ claim fails on E^τ's values] ≤ δ + f(Pr[B^τ outputs a SHA-512 collision])`, with E and B fixed
+  constructions; `ecr/sha-512` is asked only of B. Every guarantee gets `<name>_honest` (hypotheses hold at the honest
+  deployed instance) and `<name>_nontrivial` (the conclusion fails for an accept-everything verifier).
