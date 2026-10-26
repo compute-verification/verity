@@ -269,7 +269,7 @@ theorem readPs_blocks {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
       have hg := hget t (by rw [List.length_range]; omega) ht
       rw [List.getElem_range] at hg
       obtain ⟨T, hT, hms⟩ := readRep_fits hg
-      rw [List.getElem_map, List.getElem_map, hms, framesOf, List.length_map, hT.rounds,
+      rw [List.getElem_map, List.getElem_map, show rs[t].2 = _ from hms, framesOf, List.length_map, hT.rounds,
         cutLens_getD_length _ _ hc.2.symm, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h₂, Option.getD_some]
     dsimp only
     rw [← hL, cutLens_map_length, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD]
@@ -387,7 +387,7 @@ theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
     unfold streamOffset
     have hnames : spec.repStreams[k].2.2 = (spec.repStreams.toList.map (·.2.2))[k]'(by simpa using hks) := by simp
     rw [hnames, takeWhile_ne_nodup _ hnd k (by simpa using hks)]
-    congr 1
+    apply congrArg List.sum
     apply List.ext_getElem (by simp [repLens]; omega)
     intro t h₁ h₂
     have ht : t < k := by simp at h₁; omega
