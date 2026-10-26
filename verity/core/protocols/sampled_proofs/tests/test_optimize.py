@@ -17,7 +17,8 @@ from verity.core.protocols.profile import Stratified, Stratum
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table
 from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective, ReplayDomain,
                                                            TemplateCost, _hit, _miss, certify, density_bound, density_exact,
-                                                           for_budget, for_target, frontier, ln_upper, needs_benchmark,
+                                                           for_budget, for_target, frontier, ln_bound, ln_upper, max_harm,
+                                                           max_harm_check, needs_benchmark,
                                                            overlaps, perturb, replay_cost, row_ands, sensitivity,
                                                            template_cost, touched, weigh, work_law)
 
@@ -65,6 +66,32 @@ def test_density_bound_is_its_exact_value_rounded_up():
         delta = rng.choice([0.5, 0.01, 1e-6, 2.0 ** -40, 1 - 2.0 ** -40, 1 - 2.0 ** -53, rng.uniform(1e-9, 0.999)])
         exact, f = density_exact(rows, delta), density_bound(rows, delta)
         assert isinstance(exact, (int, Fraction)) and exact <= Fraction(f) and (delta > 1 - 2.0 ** -40 or Fraction(f) <= exact * Fraction(SLACK))
+
+
+def test_max_harm_brackets_the_exact_supremum():
+    """`max_harm`'s bracket holds the brute-force supremum of the harm over every count vector whose exact escape is at
+    least delta (`JointStratified`'s `maxHarm`), within a few units' harm; `ln_bound` brackets ln; a failing certificate
+    is refused, as Lean's `#guard`s pin."""
+    lo, hi = ln_bound(2, 1, False), ln_bound(2, 1, True)
+    assert lo < hi < lo + Fraction(1, 2 ** 100) and abs(lo - Fraction(log(2))) < 2.0 ** -52
+    assert ln_bound(7, 7, False) == ln_bound(7, 7, True) == 0
+    assert ln_bound(100, 1, False) <= ln_upper(Fraction(1, 100)) < ln_bound(100, 1, False) + Fraction(1, 2 ** 63)
+    assert max_harm_check([(10, 0, 3, 10, 0, 10)], Fraction(1, 2), 1) == (30, 30 + ln_upper(Fraction(1, 2)))
+    for bad in ((10, 1, 1, 5, 0, 8), (10, 1, 1, 6, 0, 9), (10, 1, -1, 0, 0, 9), (10, 1, 1, 0, 3, 2)):
+        with pytest.raises(ValueError):
+            max_harm_check([bad], Fraction(1, 2), 1)
+    rng = random.Random(1)
+    for _ in range(300):
+        rows = [(n, rng.randint(0, n), rng.choice([0, 1, 3, rng.random() * 10]))
+                for n in (rng.randint(0, 7) for _ in range(rng.randint(1, 3)))]
+        delta = rng.choice([0.5, 0.1, 0.01, rng.uniform(1e-4, 0.99)])
+        lower, upper, lam, cert = max_harm(rows, delta)
+        law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
+        best = max(sum(Fraction(h) * x for (_, _, h), x in zip(rows, xs))
+                   for xs in product(*(range(n + 1) for n, _, _ in rows))
+                   if law.escape({f"s{i}": x for i, x in enumerate(xs)}) >= Fraction(delta))
+        assert lower <= best <= upper <= best + 4 * max(Fraction(h) for _, _, h in rows) + Fraction(1, 2 ** 40), rows
+        assert max_harm_check([(*r, *c) for r, c in zip(rows, cert)], delta, lam) == (lower, upper)
 
 
 def test_certificate_of_a_full_law_is_zero_and_the_leak_adds_location():

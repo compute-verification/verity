@@ -20,7 +20,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `slots`: the claims' partition over the program and query, and that draw's checked proof units in its slots
   (`Slots.select`);
 * `bound`: the exact bounds on wrong units at δ;
-* `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`), which `certify` is held to;
+* `harm_bound`: the harm they hold at δ in closed form (`Bound.densityBound`);
+* `max_harm`: a certificate's bracket around `Flock.Guarantees.JointStratified`'s exact supremum of that harm
+  (`Bound.maxHarmCheck`), which `certify` is held to;
 * `hidden_offsets`, `hidden_locate`, `hidden_witness`: the draw over hidden positions (`HiddenDraw`): the honest table's
   offsets and total, the honest prover's witnesses, and the witness for a named call;
 * `verdict`: the verdicts' share of the outcome once the record's checks hold;
@@ -308,6 +310,30 @@ def harmBound (j : Json) : V Json := do
   return Json.mkObj [("budget", .str (toString budget)), ("floor", Lean.toJson value.floor.toNat),
     ("value", .str (toString value))]
 
+/-- `{"rows": [{"size", "k", "harm", "take", "lo", "hi"}], "delta", "multiplier"}` to `{"lower", "upper"}`, ratios around
+`StratifiedBlock.maxHarm` at δ (`Bound.maxHarmCheck`); refused where a row is not exactly those keys, natural numbers and
+a ratio harm, `k ≤ size`, δ not in (0, 1), the multiplier not a ratio, or the certificate fails. -/
+def maxHarm (j : Json) : V Json := do
+  if keys? j != some #["delta", "multiplier", "rows"] then throw "exactly {rows, delta, multiplier}"
+  let .arr rs := getD j "rows" | throw "rows is not a list"
+  let rows ← rs.mapM fun r => do
+    if keys? r != some #["harm", "hi", "k", "lo", "size", "take"] then
+      throw "a row is exactly {size, k, harm, take, lo, hi}"
+    let (some size, some k, .str h, some take, some lo, some hi) :=
+        (nat? (getD r "size"), nat? (getD r "k"), getD r "harm", nat? (getD r "take"), nat? (getD r "lo"),
+          nat? (getD r "hi"))
+      | throw "a row's size, k, take, lo and hi are natural numbers and its harm a ratio"
+    if size < k then throw "a row needs k <= size"
+    let h ← Core.Ratio.ofString h "harm"
+    pure ({ size, k, harm := (h.num : Rat) / (h.den : Rat), take, lo, hi } : Bound.HarmRow)
+  let .str d := getD j "delta" | throw "delta is not a ratio"
+  let δ ← Core.Ratio.ofString d "delta"
+  if δ.num == 0 || δ.den ≤ δ.num then throw "delta is not in (0, 1)"
+  let .str m := getD j "multiplier" | throw "multiplier is not a ratio"
+  let m ← Core.Ratio.ofString m "multiplier"
+  let (lower, upper) ← Bound.maxHarmCheck rows ((δ.num : Rat) / (δ.den : Rat)) ((m.num : Rat) / (m.den : Rat))
+  return Json.mkObj [("lower", .str (toString lower)), ("upper", .str (toString upper))]
+
 /-- `{"population", "p", "delta"}` to `{"bound"}` (`Bernoulli.count_bound`); refused where `Bernoulli` is: `p` not a
 ratio in [0, 1], δ not in (0, 1). -/
 def bernoulliBound (j : Json) : V Json := do
@@ -536,7 +562,7 @@ def table : List (String × (Json → V Json)) :=
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("check_proved", checkProved),
-   ("bound", bound), ("harm_bound", harmBound), ("bernoulli_bound", bernoulliBound),
+   ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
    ("session_registered", sessionRegistered), ("record", record), ("check_public", checkPublic),
