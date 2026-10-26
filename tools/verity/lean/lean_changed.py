@@ -39,7 +39,7 @@ phase) while it works there and clears the mark when it ends without a check.py 
 mid-way (a run cancelled, timed out or killed for memory) and says so. Before each build it `repair`s the tree: a module an
 interrupted build or a restore from Lake's cache left half-written (an output its trace lists missing, an `.olean` that is
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
-it, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
+it, as does a module's `.hash` file when the module has no trace, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
 never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
 
@@ -445,6 +445,19 @@ def forget(lib: Path, trace: Path) -> None:
     trace.unlink(missing_ok=True)
 
 
+def orphaned(lib: Path) -> dict[str, list[Path]]:
+    """The `.hash` files under ``lib`` (a `.lake/build/lib/lean`) and the build's `ir/` whose module has no trace there,
+    by module: what a `repair` that dropped only a trace left. Lake rebuilds or restores such a module, but a `.ltar`
+    restore keeps an output's `.hash` when it finds one, so the old hash would come back with a trace beside new bytes."""
+    out: dict[str, list[Path]] = {}
+    for d in (lib, lib.parent.parent / "ir"):
+        for h in sorted(d.rglob("*.hash")) if d.is_dir() else []:
+            rel = h.parent.relative_to(d) / h.name.split(".")[0]
+            if not lib.joinpath(rel).with_suffix(".trace").exists():
+                out.setdefault(str(rel), []).append(h)
+    return dict(sorted(out.items()))
+
+
 #: Lean refusing an import that declares what an earlier import already did: (the refused module, the earlier one)
 CLASH = re.compile(r"import (\S+) failed, environment already contains '[^']*' from (\S+)")
 
@@ -465,7 +478,8 @@ def clashed(tree: Path, pkgs: list[str], text: str) -> list[str]:
 
 def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None, log=print) -> None:
     """Make ``tree``'s copy of ``pkgs`` one Lake builds from, whatever a run left there: each module whose outputs `damaged`
-    finds loses its trace and `.hash` files (`forget`), so Lake rebuilds it. Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
+    finds loses its trace and `.hash` files (`forget`), so Lake rebuilds it, and a module with no trace loses its `.hash`
+    files (`orphaned`). Where a run ended mid-way (``left``, its `DIRTY`), also each package whose
     fetched dependencies hold a damaged module or a checkout that is not its manifest's, and the one whose dependencies it
     was taking (`phase` `deps`), has them dropped, so they are taken again."""
     if left is not None:
@@ -480,6 +494,12 @@ def repair(tree: Path, pkgs: list[str], links: dict[str, str], left: dict | None
         if bad:
             names = [str(t.relative_to(tree / p / ".lake" / "build" / "lib" / "lean").with_suffix("")) for t in bad]
             log(f"lean-records: {p}: {len(bad)} module(s) half-written by an earlier build, rebuilt: "
+                f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
+        if lone := orphaned(lib):
+            for h in (h for hs in lone.values() for h in hs):
+                h.unlink(missing_ok=True)
+            names = list(lone)
+            log(f"lean-records: {p}: {len(names)} module(s) without a trace kept their .hash files, dropped: "
                 f"{', '.join(names[:8])}{' ...' if len(names) > 8 else ''}")
         if left is None:
             continue

@@ -215,6 +215,28 @@ def test_an_output_newer_than_its_hash_is_half_written_and_loses_every_hash_with
     assert any("1 module(s) half-written by an earlier build, rebuilt: P/Torn" in s for s in said)
 
 
+def test_a_module_without_a_trace_loses_the_hash_files_it_kept(tmp_path):
+    """compute-accounting, 26 Oct 09:49Z: cpu-5's `build-0` held `W1.olean` rewritten at 09:08, its `.hash` from 07:47 and
+    no `W1.trace`, as a `repair` that dropped only the trace left it; `damaged` reads only traces, so it went unflagged,
+    and the next `.ltar` restore would have kept the stale `.hash` beside a new trace."""
+    tree = tmp_path / "tree"
+    lib = tree / "pkg" / ".lake" / "build" / "lib" / "lean"
+    good = module(lib, "P/Good")
+    module(lib, "P/W1").unlink()
+    ir = tree / "pkg" / ".lake" / "build" / "ir" / "P"
+    ir.mkdir(parents=True)
+    for name in ("W1", "Good"):
+        (ir / f"{name}.c").write_text("c")
+        (ir / f"{name}.c.hash").write_text("cc")
+    assert LC.damaged(lib) == [], "no trace to read"
+    said = []
+    LC.repair(tree, ["pkg"], {}, None, said.append)
+    assert not list(lib.glob("P/W1.*.hash")) and not (ir / "W1.c.hash").exists()
+    assert (lib / "P" / "W1.olean").exists() and (ir / "W1.c").exists(), "the outputs stay for Lake to replace"
+    assert good.exists() and (lib / "P" / "Good.olean.hash").exists() and (ir / "Good.c.hash").exists()
+    assert any("1 module(s) without a trace kept their .hash files, dropped: P/W1" in s for s in said)
+
+
 def test_a_tree_left_mid_way_is_repaired_and_said_so_and_a_clean_run_clears_the_mark(fast, tmp_path, monkeypatch):
     _, tree, _ = fast
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
