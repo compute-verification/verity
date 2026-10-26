@@ -24,74 +24,87 @@ namespace Pouw.Guarantees.DitherInstance
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
 /-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period on the card table `c` at the open
-parameters `x`** (CMP-136; RT-LEAN L3, L4, L9, L31, L32, L33; RT-LEAN-2 L27, L28, L39; RT-MODEL M12; RT-PROTO P2, P5,
-P9; RT-PROTO-2 P18). For every period's devices `D` (`n` cards pooled, at `f` ticks a second, and the other devices),
-every round protocol `P` and layout `L`, every accelerator `G` that is `D` at `x` under the resource match `e`
-(`OnCard`) whose oracle-call step is a public compression on the card (`CallsAtPub`), every set `Reg` of registrable
-instances and registered instances `reg`, every service verdict on the transcript and the devices' readings `dev`,
-and every period `Pd` with its dual price `μ` at the registered rounds' honest use: with `WorkSound`'s hypotheses, and
+parameters `x`** (CMP-136, CMP-154; RT-LEAN L3, L4, L9, L31, L32, L33; RT-LEAN-2 L27, L28, L39; RT-MODEL M12; RT-PROTO
+P2, P5, P9; RT-PROTO-2 P13, P18, P25). For every period's devices `D` (`n` cards pooled, at `f` ticks a second, and the
+other devices), every sampling-block protocol `P` and layout `L`, every accelerator `G` of the machine model 𝓜 that is
+`D` at `x` under the resource match `e` (`OnCard`) whose oracle-call step is a public compression on the card
+(`CallsAtPub`), every number `nsb` of sampling blocks, every set `Reg` of registrable instances and registered
+instances `reg`, every service verdict on the transcript and the devices' readings `dev`, and every period `Pd` with
+its dual price `μ` at the registration's honest use: with `WorkSound`'s hypotheses, and
 
 * the public bests fixed by the card: instance `a`'s `pub_mm` and `pub_sha` are the cheapest of `pb`'s named programs at
-  the period's dual price `μ`, for its honest round's `macs a` MACs and `comps a` compressions (`pubCost`);
-* the cards' hosts in the period's devices at the row `hr`'s AMX and SHA-512 rates (`HostsCounted`), so the capacity
-  `C` counts them (RT-UNITS U9);
-* the network term from the network certifier's counts: the verdict refuses a period whose signed counts into or out
-  of the devices pass the caps `E_in`, `E_out` (`Counted`), the certifier counts every exchanged bit
-  (`CertifierSeesImports`), so `K = E_in + E_out`; and an exchanged bit replaces at most `β = n_max H_mac` of priced
-  work (`OutsourceWithinEgress`), `H_mac` the honest round's cost a MAC at every registrable instance
-  (`H(a) ≤ H_mac · macs a`, `H = H_mm + H_sha + H_o`: an outside machine that returns the root saves the round's
-  hashing too, RT-PROTO-2 P18). A bit across the certifier carries the coin of at most `n_max` MACs when the certifier
-  streams the dither bits `b` (RT-PROTO P2, the coordinator's 06:20Z decision; `n_max = N` for a static call, `d_v` for
-  PV). The counts exclude the certifier's own coin stream, and the caps are set at served traffic (P18). Without a
-  streamed side, about 1 kbit carries a whole round, and `OutsourceWithinEgress` at this `β` is false;
-* the deadlines from the auditor's clocks: every round's dither coin drawn at `t w` and its check coins at `tc w`, at
-  least `Δ` and `τ_ans` before the period's end, the period refused if the network certifier saw a commitment arrive
-  later than `Δ` after its dither coin or an answer later than `τ_ans` after its check coins (`Timed`, RT-PROTO P5,
-  RT-LEAN-2 I1), a commitment and an answer arriving no sooner than their programs (`RootAfterCoin`,
-  `AnswerAfterCoin`), and the period's boundary `k (Δ + τ_ans) ≤ T`,
+  the period's dual price `μ`, for its honest sampling block's `macs a` MACs and `comps a` compressions (`pubCost`);
+* the cards' hosts in the period's devices at the row `hr`'s AMX and SHA-512 rates (`HostsCounted`), so the honest
+  optimum and the period's capacity count them (RT-UNITS U9);
+* the network term from the network certifier's counts: it watches the replica's boundary, and the verdict refuses a
+  period whose signed counts into or out of the devices pass the caps `E_in`, `E_out` (`Counted`). The certifier counts
+  every exchanged bit (`CertifierSeesImports`), so `E = E_in + E_out`, and an exchanged bit replaces at most
+  `β = n_max W_mac` of priced work (`OutsourceWithinEgress`). `W_mac` is the honest sampling block's cost a MAC at
+  every registrable instance (`W_b(a) ≤ W_mac · macs a`, `W_b = W_mm + W_sha + W_ans`: an outside machine that returns
+  the root saves the block's hashing too, RT-PROTO-2 P18). A bit across the boundary carries the coin of at most
+  `n_max` MACs when the challenger issues the dither bits as a signed coin stream (RT-PROTO P2, the coordinator's
+  06:20Z decision; `n_max = N` for a static call, `d_v` for PV). The counts exclude the challenger's signed coin
+  stream, and the caps are set at served traffic (P18). Without a streamed side, about 1 kbit carries a whole sampling
+  block, and `OutsourceWithinEgress` at this `β` is false;
+* the deadlines from the auditor's clocks (`Timed`, RT-PROTO P5, RT-PROTO-2 P13 and P25):
+  - the challenger issues each sampling block's coins at `t b`, at least `Δ` before the period's end, and the next
+    block's only after every root of this one is in;
+  - only selected sampling blocks (`sel` of the check coin) are answered, each check coin issued at `tc b`, at least
+    `τ_ans` before the end;
+  - the period is refused if the network certifier saw a root arrive later than `Δ` after its block's coins, or a
+    selected block's answer later than `τ_ans` after its check coin. An answer may arrive after later blocks' coins;
+  - a root arrives no sooner than its work (`RootAfterCoin`), and the period's length `T` is at least 0.
+
+  No count of sampling blocks or of selected ones is a hypothesis: the blocks' work runs one block at a time, so it
+  fits in `T` at any `nsb`. The answers run beside later blocks, and no answer's use is counted (`Prover`). So a
+  served period of about 1e8–1e9 sampling blocks a week is covered. `q (Δ + τ_ans) ≤ T` over the `q` selected blocks
+  is the honest replica's schedule (its answers through the firewall one at a time), not a premise of this bound,
 
 for every prover `A`, the probability over the oracle and the verifier's coins that the verdict accepts its period and
-other work `z` fits on the devices beside its rounds' timed work and answers with `rv + W_other(z) > OPT_honest + ε_A C` is at most
-`δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, at `C = μ · hon = Σ_w H(reg w)` and
-`ε_A = (Σ_w (H − pub_mm − pub_sha)(reg w) + ln(1/δ)/η + n_max H_mac (E_in + E_out))/C + μ · ξ_A/C`; and every period
-the verdict accepts did its rounds' work and answers within the period's capacity (`TimedWorkFits`), which is what
-the deadlines buy.
+other work `z` fits on the devices beside its sampling blocks' timed work with
+`rv + W_other(z) > OPT_honest + ε_A W_reg` is at most
+`δ + κ_S + κ_x(A) + κ_sha(A) + nsb (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, at `W_reg = μ · hon = Σ_b W_b(reg b)` and
+`ε_A = (Σ_b (W_b − pub_mm − pub_sha)(reg b) + ln(1/δ)/η_w + n_max W_mac E)/W_reg + μ · ξ_A/W_reg`. Here `W_ans` holds
+the selected blocks' honest answers at full weight, and `η_w` is the rate a unit of priced cost, `η q/W_reg`. Every
+period the verdict accepts did its sampling blocks' work within the period's capacity (`TimedWorkFits`), which is
+what the deadlines buy.
 
-The other devices are resources of `G` at their θ rates (RT-PROTO P9): the honest optimum and the capacity count them,
-and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the cards
-reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the capacity of
-one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the price. -/
+The other devices are resources of `G` at their rates in 𝓜 (RT-PROTO P9): the honest optimum and the capacity count
+them, and `SAKMatmul` and `ShaSpeed` hold at the dual price over them too. That they are all of the processors the
+cards reach is `Assumptions.PeriodInventory`, held pending Daniel and not read here. `Q` calls use at least the
+capacity of one card resource `r` a public compression uses (`cap_r ≤ Q callUse_r`, `CallsAtPub`), whatever the
+price. -/
 def WorkSoundAtX (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : Prop :=
   ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr → CallsAtPub G e pb →
-  ∀ (k : ℕ) (Reg : Set P.Inst) (reg : Fin k → P.Inst) (Obs : Type) (verdict : Verdict P k Obs)
-    (dev : Readings G P k Obs) (Pd : Period G) (μ : G.Res → ℝ) (Hmm Hsha Ho macs comps : P.Inst → ℝ)
-    (η δ nmax Hmac Ein Eout κS Δ Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P k → ℕ)
-    (ξ : Prover G P k → G.Res → ℝ) (κx κsha : Prover G P k → ℝ) (t : Fin k → ℝ) (cin cout : Obs → ℝ)
-    (arrive : Obs → Fin k → ℝ) (τans : ℝ) (tc : Fin k → ℝ) (ansAt : Obs → Fin k → ℝ),
-    (∀ w, reg w ∈ Reg) → Pd.DualOpt μ 1 →
-    (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubCost e μ pb.mm (macs a) ≤ Hmm a ∧
-      pubCost e μ pb.sha (comps a) ≤ Hsha a ∧ Hmm a + Hsha a + Ho a ≤ Hmac * macs a) →
-    ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
-    0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 ≤ Hmac → 0 ≤ Ein → 0 ≤ Eout → k * (Δ + τans) ≤ Pd.T →
+  ∀ (nsb : ℕ) (Reg : Set P.Inst) (reg : Fin nsb → P.Inst) (Obs : Type) (verdict : Verdict P nsb Obs)
+    (dev : Readings G P nsb Obs) (Pd : Period G) (μ : G.Res → ℝ) (Wmm Wsha Wans macs comps : P.Inst → ℝ)
+    (ηw δ nmax Wmac Ein Eout κS Δ Q : ℝ) (κdmm κdsha : ℕ → ℝ) (Badv : Prover G P nsb → ℕ)
+    (ξ : Prover G P nsb → G.Res → ℝ) (κx κsha : Prover G P nsb → ℝ) (cin cout : Obs → ℝ)
+    (t arrive : Obs → Fin nsb → ℝ) (sel : P.Chk → Prop) (τans : ℝ) (tc ansAt : Obs → Fin nsb → ℝ),
+    (∀ b, reg b ∈ Reg) → Pd.DualOpt μ 1 →
+    (∀ a ∈ Reg, 0 < Wmm a ∧ 0 < Wsha a ∧ 0 ≤ Wans a ∧ pubCost e μ pb.mm (macs a) ≤ Wmm a ∧
+      pubCost e μ pb.sha (comps a) ≤ Wsha a ∧ Wmm a + Wsha a + Wans a ≤ Wmac * macs a) →
+    ∑ b, (Wmm (reg b) + Wsha (reg b) + Wans (reg b)) = ∑ r, μ r * Pd.hon r →
+    0 < ηw → 0 < δ → δ ≤ 1 → 0 ≤ nmax → 0 ≤ Wmac → 0 ≤ Ein → 0 ≤ Eout → 0 ≤ Pd.T →
     (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
     (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
-    SAKMatmul G P μ Reg (fun a => pubCost e μ pb.mm (macs a)) (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a)
+    SAKMatmul G P μ Reg (fun a => pubCost e μ pb.mm (macs a)) (fun a => ηw * (Wmm a + Wsha a + Wans a) / Wmm a)
       κdmm →
-    ShaSpeed G P k reg μ (fun a => pubCost e μ pb.sha (comps a)) (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a)
-      κdsha κsha →
-    OutsourceWithinEgress G μ (nmax * Hmac) → ServiceSound G P k reg verdict dev κS →
-    CertifierSeesImports G P k dev cin cout → RootAfterCoin G P k dev t arrive → AnswerAfterCoin G P k dev tc ansAt →
-    ExtractAdv G P k reg Q Badv ξ κx →
-    FreedSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt) dev Pd 1
-      (fun A => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w))
-          (fun w => pubCost e μ pb.mm (macs (reg w))) (fun w => pubCost e μ pb.sha (comps (reg w))) η δ
-          (nmax * Hmac) (Ein + Eout) +
-        (∑ r, μ r * ξ A r) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+    ShaSpeed G P nsb reg μ (fun a => pubCost e μ pb.sha (comps a))
+      (fun a => ηw * (Wmm a + Wsha a + Wans a) / Wsha a) κdsha κsha →
+    OutsourceWithinEgress G μ (nmax * Wmac) → ServiceSound G P nsb reg verdict dev κS →
+    CertifierSeesImports G P nsb dev cin cout → RootAfterCoin G P nsb dev t arrive →
+    ExtractAdv G P nsb reg Q Badv ξ κx →
+    FreedSound G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive sel τans tc ansAt) dev Pd 1
+      (fun A => epsWorkSound (fun b => Wmm (reg b) + Wsha (reg b) + Wans (reg b))
+          (fun b => pubCost e μ pb.mm (macs (reg b))) (fun b => pubCost e μ pb.sha (comps (reg b))) ηw δ
+          (nmax * Wmac) (Ein + Eout) +
+        (∑ r, μ r * ξ A r) / ∑ b, (Wmm (reg b) + Wsha (reg b) + Wans (reg b)))
       (∑ r, μ r * (1 * Pd.hon r))
-      (fun A => δ + κS + κx A + κsha A + k * (κdmm (Badv A) + κdsha (Badv A))) ∧
-    TimedWorkFits G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive τans tc ansAt) dev Pd
+      (fun A => δ + κS + κx A + κsha A + nsb * (κdmm (Badv A) + κdsha (Badv A))) ∧
+    TimedWorkFits G P nsb (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive sel τans tc ansAt) dev Pd
 
 /-- **The headline on the card table `c` at θ**: `WorkSoundAtX` at every open parameter `x` meeting the table's floors
 (`c.floors`) with the product form (`AccelProductForm`). -/

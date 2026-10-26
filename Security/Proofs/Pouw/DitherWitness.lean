@@ -521,7 +521,7 @@ theorem twService : ServiceSound tw twRound 2 twReg twVerdict twDev 0 := fun _ =
   prob_le_zero fun _ h => h.2 h.1
 
 theorem twImport : ImportWithinCertifier tw twRound 2 twVerdict twDev 0 := fun _ _ _ _ => by
-  show ∑ _w : Fin 2, ((0 : ℝ) + 0) ≤ 0
+  show ∑ _b : Fin 2, (0 : ℝ) ≤ 0
   simp
 
 /-- The extractor's advice at round `w`: the coins of the rounds before `w`, which is all the round's state reads
@@ -625,10 +625,9 @@ theorem twExtract : ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) :
     · rfl
   · show ∑ w, (TAlg.use (mwX A w) (past o x w, (x w).1) r +
         TAlg.use (mhX A w) (o, (past o x w, (x w).1), TAlg.run (mwX A w) (past o x w, (x w).1)) r) ≤
-      ∑ w, (TAlg.use (A.work w) (A.workIn o x w) r + TAlg.use (A.answer w) (A.answerIn o x w) r) + 0
+      ∑ w, TAlg.use (A.work w) (A.workIn o x w) r + 0
     rw [add_zero]
-    refine sum_le_sum fun w _ =>
-      le_trans ?_ (le_add_of_nonneg_right (TAlg.use_nonneg (A.answer w) (A.answerIn o x w) r))
+    refine sum_le_sum fun w _ => ?_
     have hw : (cw A w : ℝ) ≤ TAlg.use (A.work w) (A.workIn o x w) 0 ∧
         (cw A w : ℝ) ≤ TAlg.use (A.work w) (A.workIn o x w) 1 :=
       TAlg.work (A.work w) A.St rfl rfl (A.workIn o x w)
@@ -669,21 +668,13 @@ noncomputable def hWork : TAlg (Unit × TTr × TDraw) (TTr × TRoot) where
   roots _ _ := (card_le_two _).trans (by simp)
   work _ _ _ _ := ⟨(card_le_two _).trans (by simp), (card_le_two _).trans (by simp)⟩
 
-theorem card_ans : Nat.card (TTr × (Fin 1 → Word × Unit)) = 79228162514264337593543950336 := by
+theorem card_ans : Nat.card (Fin 1 → Word × Unit) = 4294967296 := by
   simp [Nat.card_eq_fintype_card, ZMod.card]
 
-theorem ans_shape (S : Type) (hI : (Unit × TTr × Fin 2) = (Unit × (S × TDraw)))
-    (hO : (TTr × (Fin 1 → Word × Unit)) = (S × TRoot)) : False := by
-  have h1 := congrArg Nat.card hI
-  have h2 := congrArg Nat.card hO
-  rw [Nat.card_prod, Nat.card_prod, Nat.card_prod, Nat.card_prod, card_unit', card_tdraw, card_ttr,
-    Nat.card_eq_fintype_card (α := Fin 2), Fintype.card_fin] at h1
-  rw [card_ans, Nat.card_prod, card_troot] at h2
-  omega
-
-/-- The honest answer: the checked word, from the state. It outputs neither words nor a root, so no law charges it. -/
-noncomputable def hAnswer : TAlg (Unit × TTr × Fin 2) (TTr × (Fin 1 → Word × Unit)) where
-  run p := (p.2.1, fun _ => (p.2.1 p.2.2 0 0, ()))
+/-- Sampling block `b`'s honest answer: the checked word, from the state after the block's work, at the block's own
+check coin among the period's. It outputs neither words nor a root, so no law charges it. -/
+noncomputable def hAnswer (b : Fin 2) : TAlg (Unit × TTr × (Fin 2 → TDraw × Fin 2)) (Fin 1 → Word × Unit) where
+  run p := fun _ => (p.2.1 (p.2.2 b).2 0 0, ())
   use _ _ := 0
   use_nonneg _ _ := le_rfl
   calls _ := 0
@@ -691,26 +682,28 @@ noncomputable def hAnswer : TAlg (Unit × TTr × Fin 2) (TTr × (Fin 1 → Word 
   calls_le _ := le_rfl
   words h _ := absurd (congrArg Nat.card h) (by rw [card_ans, card_ttr]; omega)
   roots h _ := absurd (congrArg Nat.card h) (by rw [card_ans, card_troot]; omega)
-  work S hI h _ := (ans_shape S hI h).elim
+  work S _ h _ := absurd (congrArg Nat.card h) (by rw [card_ans, Nat.card_prod, card_troot]; omega)
 
-/-- **The honest prover**: every round computes the words, commits them and opens the checked one. -/
+/-- **The honest prover**: every sampling block computes the words and commits them, keeps the words as its state,
+and opens the checked one. -/
 noncomputable def honest : Prover tw twRound 2 where
   St := TTr
   start := hw fun _ => 0
   work _ := hWork
-  answer _ := hAnswer
+  absorb _ s _ := s
+  answer b := hAnswer b
 
 theorem honest_accepted (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.Accepted twReg o x := fun w =>
   (twAccept_iff _ _ _ _ _ _).2 ⟨enc_dec ((x w).1 (x w).2), rfl⟩
 
 theorem honest_timedUse (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.timedUse o x = twPd.hon := by
   funext r
-  show ∑ _w : Fin 2, ((if r = 2 then (1 : ℝ) else 2) + 0) = twHon r
+  show ∑ _b : Fin 2, (if r = 2 then (1 : ℝ) else 2) = twHon r
   unfold twHon
   split_ifs <;> norm_num
 
 theorem honest_calls (o : Unit) (x : Fin 2 → TDraw × Fin 2) : honest.calls o x ≤ twQ := by
-  show ∑ _w : Fin 2, ((2 : ℝ) + 0) ≤ twQ
+  show ∑ _b : Fin 2, (2 : ℝ) ≤ twQ
   norm_num [twQ]
 
 end Honest

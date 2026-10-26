@@ -1426,10 +1426,6 @@
    "owner": "@compute-accounting",
    "digest": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739"
   },
-  "Pouw.Assumptions.AnswerAfterCoin": {
-   "owner": "@compute-research",
-   "digest": "89342078975f690562e712e8ec371d4c153295df552320e84044025b6e175b84"
-  },
   "Pouw.Assumptions.CertifierSeesImports": {
    "owner": "@compute-research",
    "digest": "966a0d751ac558f6a4796279d246e233492835d7e2f6ae06f17d654ff3d79f4e"

@@ -5,10 +5,11 @@ import Definitions.Pouw.DitherInstance
 
 * `CertifierSeesImports`: the network certifier's counts take in every exchanged bit, class L (the auditor's devices,
   trust base item 3: the certifier runs on a machine the prover doesn't control).
-* `RootAfterCoin`, `AnswerAfterCoin`: a commitment arrives no sooner than the work that computed it, and an answer no
-  sooner than its program, physical causality (PHYS-INVENTORY's minimal-set item A3, `NodeWithinModel`).
+* `RootAfterCoin`: a commitment arrives no sooner than the work that computed it, physical causality
+  (PHYS-INVENTORY's minimal-set item A3, `NodeWithinModel`). No answer's timing is a premise: no later program reads
+  an answer and no answer's use is counted (CMP-154).
 
-  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads all three.
+  `Definitions.Pouw.Guarantees.DitherInstance.WorkSoundAt` reads both.
 * `PeriodInventory`, the period's devices are its inventory (RT-PROTO P9). It is stated and held: no guarantee reads it
   until Daniel decides whether the node's host CPUs and DPUs are devices of the period (the recommendation) or the
   protocol binds hashing to the cards instead. The fleet's transfer from the model to the devices reads it beside
@@ -20,33 +21,26 @@ namespace Pouw.Assumptions
 open Pouw.Dither
 
 /-- `pouw-certifier-sees-imports` (proposed; class L, the auditor's devices, trust base item 3; RT-PROTO P2, RT-LEAN
-L32). **The network certifier counts every exchanged bit**: it sits on every link of the period's devices, on a machine
-the prover doesn't control, so the bits a prover's rounds exchange with outside machines (`Prover.ext`, its work's and
-answers', in either direction, other than the certifier's own coin stream) are at most the bits it signs as entering
-(`cin`) and leaving (`cout`) the devices, as the verdict reads them from its readings `dev`. -/
+L32, CMP-154). **The network certifier counts every exchanged bit**: it watches the replica's boundary, every link of
+the period's devices, on a machine the prover doesn't control, so the bits a prover's sampling blocks' work exchanges
+with outside machines (`Prover.ext`, in either direction, other than the challenger's signed coin stream) are at most
+the bits it signs as entering (`cin`) and leaving (`cout`) the devices, as the verdict reads them from its readings
+`dev`. -/
 def CertifierSeesImports (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs)
     (cin cout : Obs → ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.ext o x ≤ cin (dev A o x) + cout (dev A o x)
 
 /-- `pouw-root-after-coin` (proposed; physical causality, PHYS-INVENTORY's minimal-set item A3 `NodeWithinModel`;
-RT-PROTO P5, RT-LEAN L33). **A commitment arrives no sooner than the work that computed it**: round `w`'s work reads the
-dither coin the challenger draws at `t w`, so the network certifier can't see its commitment arrive (`arrive`, its
-signed time as the verdict reads it from its readings `dev`) before `t w` plus the work's wall time in the model. The
-challenger's and the certifier's clocks are the auditor's devices; that the node takes at least the model's wall time is
-the node's being within the model (A3), not a property of the clocks. -/
-def RootAfterCoin (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs) (t : Fin k → ℝ)
-    (arrive : Obs → Fin k → ℝ) : Prop :=
-  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k),
-    t w + G.wall (A.work w) (A.workIn o x w) ≤ arrive (dev A o x) w
-
-/-- `pouw-answer-after-coin` (proposed; physical causality, A3 `NodeWithinModel`, as `RootAfterCoin`; RT-LEAN-2 I1).
-**An answer arrives no sooner than the program that computed it**: round `w`'s answer reads the check coins the
-challenger draws at `tc w`, so the network certifier can't see it arrive (`ansAt`) before `tc w` plus the answer's
-wall time in the model. -/
-def AnswerAfterCoin (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (dev : Readings G P k Obs) (tc : Fin k → ℝ)
-    (ansAt : Obs → Fin k → ℝ) : Prop :=
-  ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k),
-    tc w + G.wall (A.answer w) (A.answerIn o x w) ≤ ansAt (dev A o x) w
+RT-PROTO P5, RT-LEAN L33, CMP-154). **A commitment arrives no sooner than the work that computed it**: sampling block
+`b`'s work reads the dither coins the challenger issues at `t ob b` (its signed issue time, as the verdict reads it from
+the readings `ob = dev A o x`), so the network certifier, watching the replica's boundary, can't see the block's root
+arrive (`arrive ob b`, its signed time) before `t ob b` plus the work's wall time in the model. The challenger's and the
+certifier's clocks are the auditor's devices. That the node takes at least the model's wall time is the node's being
+within the model (A3), not a property of the clocks. -/
+def RootAfterCoin (G : Accel) (P : RoundProto) (nsb : ℕ) {Obs : Type} (dev : Readings G P nsb Obs)
+    (t arrive : Obs → Fin nsb → ℝ) : Prop :=
+  ∀ (A : Prover G P nsb) (o : P.Orc) (x : Fin nsb → P.Draw × P.Chk) (b : Fin nsb),
+    t (dev A o x) b + G.wall (A.work b) (A.workIn o x b) ≤ arrive (dev A o x) b
 
 /-- `pouw-period-inventory` (proposed, held pending Daniel; RT-PROTO P9, RT-UNITS U9, O-REDTEAM NF4; class 1, the
 accelerator model at θ, extended to the period's other processors). **The period's devices are its inventory**: every
