@@ -12,6 +12,7 @@ import Proofs.Flock.Claims.Recursion.HonestWitR
 import Proofs.Flock.Claims.Recursion.NumsFixedR
 import Proofs.Flock.Claims.Recursion.VStarTopsOk
 import Proofs.Flock.Claims.Recursion.RoundWords
+import Proofs.Flock.Claims.Recursion.VStarPortNames
 
 /-!
 # The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half`)
@@ -36,17 +37,18 @@ The run accepting is one named premise, `HonestRunAccepted`: the statement is in
 the compiled verifier accepts the reference prover's run. V\*'s gate-level completeness at the run is
 `HonestWitSatisfies`, and the inner prover's openings at the run are `IrShaped` (`Ir` is not fixed in Lean: the
 theorem holds for every inner prover `Ir` with `IrShaped` at the run, the facts of `Ir.rest`, which the deployed
-builder's `rec_vstage`, `rec_vstar` and `verifier_rows` build, that the stager's checks read). These three are witnessed outside Lean at the deployed
-builder: by the honest deployed fixture's runs (#3744 on PRTRIAGE's restaged fixture) and by CAPLOWER's `IrShaped` and
-gate-level checks in the deployed V\* difftest. No passing witness run exists yet. No collision among a part's recorded
-calls is `NoCollAt`, SHA-512's collision event.
+builder's `rec_vstage`, `rec_vstar` and `verifier_rows` build, that the stager's checks read). These three are
+witnessed outside Lean at the deployed builder: by every V\* part's session of the honest deployed recursive run being
+accepted by the compiled `flock-verify` (pending: r20261026-223243-c2a7; no passing run yet) and
+by CAPLOWER's `IrShaped` and gate-level checks in the deployed V\* difftest (no passing run yet). No collision among a
+part's recorded calls is `NoCollAt`, SHA-512's collision event.
 
 Discharged in Lean: each part's staging setting up (`stagedSetsUp_accepted`, from the run accepting), the stager's
 numbers (`numsFixed`), the stager accepting every part (`hok_honest`: the level tops and the caps from `hTops`, at the
-history `hist.take (kI x - 1)`, which holds the schedule's `2R` rounds since `kI x = 2 + 2R`), and the holders of one
-round's row agreeing on its port's words (`heldRows_words`, the verifier's `checkRoundWords`). The rest are hypotheses:
-the fitted rows (`RowsFit`), the tape exception (`hTops`) and each algebra part's ports being `acc0`, `acc1` or a
-schedule's `m<i>` (`hNm`).
+history `hist.take (kI x - 1)`, which holds the schedule's `2R` rounds since `kI x = 2 + 2R`; the inner parts' port
+names from `VStar.parts`, `innerPorts_named`), and the holders of one round's row agreeing on its port's words
+(`heldRows_words`, the verifier's `checkRoundWords`). The rest are hypotheses: the fitted rows (`RowsFit`) and the tape
+exception (`hTops`).
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
 
@@ -99,10 +101,10 @@ abbrev DAt : Claims.Recursion.Deploy Coin :=
 /-- **The verifier accepts the reference prover's run, at an instance that exists** (witnessed outside Lean). The
 statement `x` with witness `w` is in the compiled record's relation, parses to `st` at the dense form, and the compiled
 verifier accepts the reference prover's run on tape `ω` and coins `r`. A concrete statement can't be evaluated in Lean
-(its circuit is 22 MB and `Json.parse` is not kernel-evaluable), so this is witnessed by running the deployed verifier
-on the honest deployed fixture: #3744's slow test on PRTRIAGE's restaged fixture (restaged from r20261026-212829-1d52;
-its art id is pending, and art:1180894c is stale), and CAPLOWER's deployed trace difftest (r20261026-182150-2b81 timed
-out). No passing witness run exists yet. -/
+(its circuit is 22 MB and `Json.parse` is not kernel-evaluable), so this is witnessed outside Lean: every V\* part's
+session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
+compiled verdict exists). The pending witness is run r20261026-223243-c2a7 (`benchmarks/recursion_e2e --e2e --cpu`);
+no passing witness run exists yet. -/
 def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt)
     (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin) : Prop :=
@@ -144,16 +146,16 @@ end Premises
 at the deployed brings at `x` under `deployedB` (`bringsAt_deployedB`), V\*'s layout of record `layR elemR` and the
 deployed bound record, where the compiled verifier accepts the reference prover's run (`HonestRunAccepted`), each part
 `s < nS x`'s circuit accepts. `HonestRunAccepted`, `IrShaped` and `HonestWitSatisfies` are witnessed outside Lean at the
-deployed builder: by the honest deployed fixture's runs (#3744 on PRTRIAGE's restaged fixture) and by CAPLOWER's
-`IrShaped` and gate-level checks in the deployed V\* difftest. No passing witness run exists yet; each premise's
-docstring is to name its run id or art id when it passes.
+deployed builder: by every V\* part's session of the honest deployed recursive run being accepted by the compiled
+`flock-verify` (composed per part; pending run r20261026-223243-c2a7) and by CAPLOWER's `IrShaped` and gate-level
+checks in the deployed V\* difftest. No passing witness run exists yet; each premise's docstring is to name its run id or
+art id when it passes.
 
-Besides that premise it takes: V\*'s gate-level completeness at the run
-(`HonestWitSatisfies`, witnessed outside Lean by the deployed V\* difftest); no collision among
-each part's recorded calls (`NoCollAt`, SHA-512's collision event); the fitted rows (`RowsFit`); the tape exception
-(`hTops`: the reps' tops differ at every level above 0); and each algebra part's ports being `acc0`, `acc1` or a
-schedule's `m<i>` (`hNm`). The stager accepts every part by `hok_honest` (the level tops and the caps from `hTops`), and
-the holders of one round's row agree on its port's words by the verifier's check (`heldRows_words`). -/
+Besides those it takes no collision among each part's recorded calls (`NoCollAt`, SHA-512's collision event), the
+fitted rows (`RowsFit`) and the tape exception (`hTops`: the reps' tops differ at every level above 0). The stager
+accepts every part by `hok_honest` (the level tops and the caps from `hTops`, the inner parts' port names by
+`innerPorts_named`), and the holders of one round's row agree on its port's words by the verifier's check
+(`heldRows_words`). -/
 theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) (x : Msg)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → Flock.RecRecord.Record)
     (recRest : Msg → List (Msg × Out) → List UInt8)
@@ -173,13 +175,10 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
     (∀ i < RestRead.kI x - 1, HpEarly.RowsFit (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) i) →
     (∀ src, srcOf (Ir.fit x) x w ω.1 (hist.take (RestRead.kI x - 1)) = some src → ∀ l, 0 < l → ∀ a b,
       (src.tops[0]!)[l]? = some a → (src.tops[1]!)[l]? = some b → _root_.VStar.In.sameTop a b = false) →
-    (∀ s (j : ℕ) (nm : String) (p : _root_.VStar.Part) c, partAt x s = some (.inner j nm p, c) → ∀ xr rs,
-      readX x = some xr → repSched xr.shape = some rs → ∀ pn ∈ p.S.ports.map Prod.fst,
-        pn = "acc0" ∨ pn = "acc1" ∨ ∃ i, RecVStar.mIndex pn = some i ∧ i < (RecVStar.commitRounds rs).length) →
     ∀ s < nS x,
       Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
         Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s x (Claims.coinSeq r) ms := by
-  intro bR L bL I D w st ω r hRun hW hnc hist ms hIr hfit hTops hNm s hs
+  intro bR L bL I D w st ω r hRun hW hnc hist ms hIr hfit hTops s hs
   have hN := numsFixed bL.st
   obtain ⟨hR, hx, hf, hacc⟩ := hRun
   obtain ⟨xr, hxr⟩ := readX_of_lt_nS hs
@@ -227,7 +226,8 @@ theorem honest_half (mask : ℕ → ℕ → Bool) (Ir : InnerRec) (b0 : Brings) 
   exact honest_partAccepts_final mask Ir (deployedB b0) x aux nOf hd recRest decI hN hR hx hf ω r hacc hW s hs
     hTm (hnc s hs) hA hpE ⟨xr₁, rs, hxr₁, hrs⟩
     ⟨bL.st, _, stagedPart_run FlockDeploy.sha512 I.V bL.st x (refP I.V bL w) ω r hacc hs⟩ hTops
-    (fun _ => hok_honest hx hf hIr (hNm s) hH hTops) (fun _ hxr' => heldRows_words hxr')
+    (fun _ => hok_honest hx hf hIr (fun _ _ _ _ hp _ _ hr hrs => innerPorts_named hp hr hrs) hH hTops)
+    (fun _ hxr' => heldRows_words hxr')
     (fun hfitH => HhHeld.hh_A0 (mask := mask) (I := Ir.fit x) (x := x) (w := w) (ρ := ω.1) (hist := hist) (s := s)
       (ms := ms) (schedMatches_dense x st hx hf)
       (fun sv c src pin hp hsrc hpi => VStarTraceAt.traceAt_staged hSall mask s sv c src pin hp hsrc hpi) hfitH hmsg)
