@@ -87,9 +87,7 @@ theorem rowSlot_calls {x : Msg} {r : XR} (hr : readX x = some r) {j : ℕ} {σ :
   obtain ⟨hh, hf, hs⟩ := Option.bind_eq_some_iff.1 hs
   obtain ⟨c, hc, rfl⟩ := Option.map_eq_some_iff.1 hs
   intro p hp
-  show p ∈ ((readX x).bind fun r => (r.w.parts[s]?.bind partCircuit).map fun c =>
-    (heldRows r s).flatMap fun h => hmCalls c h.2.1 h.2.2.1 h.2.2.2).getD []
-  rw [hr, Option.bind_some, hc, Option.map_some, Option.getD_some]
+  simp only [layoutBDeployed, hr, Option.bind_some, hc, Option.map_some, Option.getD_some]
   exact List.mem_flatMap.2 ⟨hh, List.mem_of_find?_eq_some hf, hp⟩
 
 /-- **A later cap's slots' calls are `capsCalls`'**, where its part has port `top`. -/
@@ -105,15 +103,17 @@ theorem capSlotsAt_calls {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array 
   obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 hq
   rw [← Nat.add_assoc] at hst hc
   have hn' : ((rs.getD (j % rs.size) default).2.1).getD e 0 = (rs.getD (j % rs.size) default).2.1[e] := by
-    simp [Array.getD, he]
+    generalize (rs.getD (j % rs.size) default).2.1 = a at he ⊢
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem he, Option.getD_some]
   unfold capSlotsAt at hσ
   refine capSlots_calls hst hc hq (fun n hn => ?_) hσ
   obtain ⟨t, ht, rfl⟩ := List.mem_map.1 hn
   rw [hn'] at ht ⊢
   have ht' := List.mem_range.1 ht
-  rcases (by
-      have : j / rs.size < 2 := Nat.div_lt_of_lt_mul (by omega)
-      omega : j / rs.size = 0 ∨ j / rs.size = 1) with h0 | h1
+  have h2 : j / rs.size < 2 := Nat.div_lt_of_lt_mul (by omega)
+  obtain h0 | h1 : j / rs.size = 0 ∨ j / rs.size = 1 := by
+    generalize j / rs.size = m at h2 ⊢
+    omega
   · rw [h0]
     omega
   · rw [h1]
