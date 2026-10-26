@@ -13,6 +13,7 @@ import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.JointBlocks
 import Proofs.Accounting.JointPeriod
+import Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 import Proofs.Accounting.JointBridge.SpaceOfPeriodHeld
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
