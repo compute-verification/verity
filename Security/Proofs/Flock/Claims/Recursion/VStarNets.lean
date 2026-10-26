@@ -681,4 +681,23 @@ theorem traceOk_staged {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s
     (hi : VStar.In.partIn src (progOf c) sv = .ok pin) (hR : RowsOk c pin) : TraceOk c pin :=
   VStarTraceOk.traceOk_deployed hS hp hi (nets_three hS hp) hR
 
+theorem partAt_lt {x : Msg} {s : ℕ} {sv : VStar.Stmt} {c : Circuit} (hp : partAt x s = some (sv, c)) :
+    s < RecDeploy.nS x := by
+  obtain ⟨r, hr, -, hc⟩ := VStarTraceOk.partAt_some hp
+  unfold RecDeploy.nS
+  rw [hr]
+  cases hq : r.w.parts[s]? with
+  | none => rw [hq] at hc; simp at hc
+  | some q => exact (List.getElem?_eq_some_iff.1 hq).1
+
+/-- **`TraceOk` at every part of a staged statement** (`HpEarly.TraceOkAt`'s body): each part `s < nS x` staged at
+`xOf s`, and the port inputs' rows sized (`RowsOk`). -/
+theorem traceOkAt_staged {I : VStarBuild.InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape}
+    {h : List (Msg × Msg)} {stg : Stage} {xOf : ℕ → Msg} (hS : ∀ s < RecDeploy.nS x, StagedPart stg s x (xOf s))
+    (hR : ∀ s st c src pin, partAt x s = some (st, c) → VStarBuild.srcOf I x w ρ h = some src →
+      VStar.In.partIn src (progOf c) st = .ok pin → RowsOk c pin) :
+    ∀ s st c src pin, partAt x s = some (st, c) → VStarBuild.srcOf I x w ρ h = some src →
+      VStar.In.partIn src (progOf c) st = .ok pin → TraceOk c pin :=
+  fun s st c src pin hp hsrc hi => traceOk_staged (hS s (partAt_lt hp)) hp hi (hR s st c src pin hp hsrc hi)
+
 end RecDeploy.VStarNets

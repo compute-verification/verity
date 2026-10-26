@@ -451,11 +451,11 @@ theorem partAt_some {x : Msg} {s : ℕ} {sv : _root_.VStar.Stmt} {c : Circuit} (
 
 /-- **`TraceOk` at a staged part**: part `s`'s circuit at the compiled statement `x` (`partAt`) is the staged table's
 (`partCircuit_staged`), which the verifier parsed (`parseFacts_of_parse`), scoped (`staged_scope`), held to V\*'s parse
-(`stagedTables`) and set up with `kLog ≤ 27` (`table0`); the stager's port inputs at its statement have one ref per
-instance (`partIn_refs`). Its three nets and its port inputs' rows are the hypotheses. -/
-theorem traceOk_deployed {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
-    {c : Circuit} (hp : partAt x s = some (sv, c)) {src : _root_.VStar.In.Src} {pin : _root_.VStar.In.PartIn}
-    (hi : _root_.VStar.In.partIn src (progOf c) sv = .ok pin) (h3 : c.nets.size = 3) (hR : RowsOk c pin) :
+(`stagedTables`) and set up with `kLog ≤ 27` (`table0`). Its three nets, its port inputs' refs and their rows are the
+hypotheses. -/
+theorem traceOk_refs {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
+    {c : Circuit} (hp : partAt x s = some (sv, c)) {pin : _root_.VStar.In.PartIn} (h3 : c.nets.size = 3)
+    (hrefs : ∀ x ∈ pin.toList, x.2.refs.size = _root_.VStar.Trace.count pin) (hR : RowsOk c pin) :
     TraceOk c pin := by
   obtain ⟨r, hr, hsv, hc⟩ := partAt_some hp
   obtain ⟨p, r', sv', hx, ht, hpi, hr', ⟨ss, hss, hs⟩, h0, htab⟩ := stagedTables hS
@@ -480,6 +480,13 @@ theorem traceOk_deployed {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st
     cases h0'
     exact hk
   rw [hpc] at P hsc hcp hk
-  exact traceOk_of P hsc hcp hk h3 (partIn_refs hi) hR
+  exact traceOk_of P hsc hcp hk h3 hrefs hR
+
+/-- `traceOk_refs` at the stager's port inputs (`partIn_refs`). -/
+theorem traceOk_deployed {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {sv : _root_.VStar.Stmt}
+    {c : Circuit} (hp : partAt x s = some (sv, c)) {src : _root_.VStar.In.Src} {pin : _root_.VStar.In.PartIn}
+    (hi : _root_.VStar.In.partIn src (progOf c) sv = .ok pin) (h3 : c.nets.size = 3) (hR : RowsOk c pin) :
+    TraceOk c pin :=
+  traceOk_refs hS hp h3 (partIn_refs hi) hR
 
 end RecDeploy.VStarTraceOk
