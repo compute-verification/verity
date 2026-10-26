@@ -48,24 +48,24 @@ def headSz (m kLog cl : ℕ) : List ℕ :=
   [6, m - 13, 1] ++ (List.replicate (m - 6) 1 ++ ([1, 1] ++ (List.replicate (kLog - 6) 1 ++ ([1] ++
     (List.replicate cl 7 ++ [cl])))))
 
-/-- The rounds of `c` from `k` have the sizes `l`. -/
-def SzAt (c : Array (Array F128)) (k : ℕ) (l : List ℕ) : Prop :=
-  ∀ t (h : t < l.length), (c[k + t]!).size = l[t]
+/-- The rounds of `w` from `k` have the sizes `l`. -/
+def SzAt (w : Array (Array F128)) (k : ℕ) (l : List ℕ) : Prop :=
+  ∀ t (h : t < l.length), (w[k + t]!).size = l[t]
 
 namespace SzAt
 
-variable {c : Array (Array F128)}
+variable {w : Array (Array F128)}
 
-theorem nil {k : ℕ} : SzAt c k [] := fun t h => absurd h (Nat.not_lt_zero t)
+theorem nil {k : ℕ} : SzAt w k [] := fun t h => absurd h (Nat.not_lt_zero t)
 
-theorem one {k a : ℕ} (h : (c[k]!).size = a) : SzAt c k [a] := by
+theorem one {k a : ℕ} (h : (w[k]!).size = a) : SzAt w k [a] := by
   intro t ht
   have : t = 0 := by simp at ht; omega
   subst this
   simpa using h
 
-theorem cons {k k' a : ℕ} {l : List ℕ} (h0 : (c[k]!).size = a) (h : SzAt c k' l) (hk : k' = k + 1) :
-    SzAt c k (a :: l) := by
+theorem cons {k k' a : ℕ} {l : List ℕ} (h0 : (w[k]!).size = a) (h : SzAt w k' l) (hk : k' = k + 1) :
+    SzAt w k (a :: l) := by
   subst hk
   intro t ht
   cases t with
@@ -75,8 +75,8 @@ theorem cons {k k' a : ℕ} {l : List ℕ} (h0 : (c[k]!).size = a) (h : SzAt c k
     rw [show k + (t + 1) = k + 1 + t by omega]
     simpa using this
 
-theorem app {k k' : ℕ} {l₁ l₂ : List ℕ} (h₁ : SzAt c k l₁) (h₂ : SzAt c k' l₂) (hk : k' = k + l₁.length) :
-    SzAt c k (l₁ ++ l₂) := by
+theorem app {k k' : ℕ} {l₁ l₂ : List ℕ} (h₁ : SzAt w k l₁) (h₂ : SzAt w k' l₂) (hk : k' = k + l₁.length) :
+    SzAt w k (l₁ ++ l₂) := by
   subst hk
   intro t ht
   rw [List.getElem_append]
@@ -86,16 +86,16 @@ theorem app {k k' : ℕ} {l₁ l₂ : List ℕ} (h₁ : SzAt c k l₁) (h₂ : S
     have := h₂ (t - l₁.length) (by simp at ht; omega)
     rwa [show k + l₁.length + (t - l₁.length) = k + t by omega] at this
 
-theorem rep {k n a : ℕ} (h : ∀ t < n, (c[k + t]!).size = a) : SzAt c k (List.replicate n a) := by
+theorem rep {k n a : ℕ} (h : ∀ t < n, (w[k + t]!).size = a) : SzAt w k (List.replicate n a) := by
   intro t ht
   rw [List.getElem_replicate]
   exact h t (by simpa using ht)
 
-theorem sizes {l : List ℕ} (h : SzAt c 0 l) (hs : c.size = l.length) : c.toList.map Array.size = l := by
+theorem sizes {l : List ℕ} (h : SzAt w 0 l) (hs : w.size = l.length) : w.toList.map Array.size = l := by
   apply List.ext_getElem (by simp [hs])
   intro t h1 h2
   have := h t h2
-  rw [Nat.zero_add, getElem!_pos c t (by simp at h1; omega)] at this
+  rw [Nat.zero_add, getElem!_pos w t (by simp at h1; omega)] at this
   simpa using this
 
 end SzAt
@@ -104,11 +104,11 @@ end SzAt
 
 section Lig
 
-variable {c : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty c)] {M : Flock.RecAlgebra.Messages F128}
+variable {w : Array (Array F128)} [Fact (Flock.RecAlgebra.NoEmpty w)] {M : Flock.RecAlgebra.Messages F128}
 
 theorem challenge_sz {st st' : Flock.RecAlgebra.LSt F128} {k k' : ℕ} {rk : F256}
-    (h : Flock.RecAlgebra.challenge M st k (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((rk, st'), k')) :
-    k' = k + 1 ∧ (c[k]!).size = 2 := by
+    (h : Flock.RecAlgebra.challenge M st k (Flock.RecAlgebra.Coins.ofRounds w) = .ok ((rk, st'), k')) :
+    k' = k + 1 ∧ (w[k]!).size = 2 := by
   obtain ⟨s, ⟨a0, a1, a2⟩, msg, ood, oods, conss⟩ := st
   unfold Flock.RecAlgebra.challenge at h
   obtain ⟨hc, h⟩ := Flock.RecAlgebra.vcoinK2_bind h
@@ -121,8 +121,8 @@ theorem challenge_sz {st st' : Flock.RecAlgebra.LSt F128} {k k' : ℕ} {rk : F25
   exact ⟨rfl, hc⟩
 
 theorem challenges_sz : ∀ (n : ℕ) (st st' : Flock.RecAlgebra.LSt F128) (k k' : ℕ) (chs : Array F256),
-    Flock.RecAlgebra.challenges M n st k (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((chs, st'), k') →
-    k' = k + n ∧ SzAt c k (List.replicate n 2)
+    Flock.RecAlgebra.challenges M n st k (Flock.RecAlgebra.Coins.ofRounds w) = .ok ((chs, st'), k') →
+    k' = k + n ∧ SzAt w k (List.replicate n 2)
   | 0, st, st', k, k', chs, h => by
     simp only [Flock.RecAlgebra.challenges] at h
     obtain ⟨-, -, rfl⟩ := Flock.RecAlgebra.vpure h
@@ -137,8 +137,8 @@ theorem challenges_sz : ∀ (n : ℕ) (st st' : Flock.RecAlgebra.LSt F128) (k k'
     exact ⟨by omega, SzAt.cons hc hs rfl⟩
 
 theorem oodIntro_sz {dim split : ℕ} {st st' : Flock.RecAlgebra.LSt F128} {k k' : ℕ} {u : PUnit} (hd : dim ≠ 0)
-    (h : Flock.RecAlgebra.oodIntro M dim split st k (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((u, st'), k')) :
-    k' = k + 2 ∧ SzAt c k [dim, 1] := by
+    (h : Flock.RecAlgebra.oodIntro M dim split st k (Flock.RecAlgebra.Coins.ofRounds w) = .ok ((u, st'), k')) :
+    k' = k + 2 ∧ SzAt w k [dim, 1] := by
   unfold Flock.RecAlgebra.oodIntro at h
   obtain ⟨hz, h⟩ := Flock.RecAlgebra.vcoinVec_bind hd h
   obtain ⟨y, -, h⟩ := Flock.RecAlgebra.vnextOod_bind h
@@ -150,17 +150,17 @@ theorem oodIntro_sz {dim split : ℕ} {st st' : Flock.RecAlgebra.LSt F128} {k k'
 
 theorem queryFold_sz {sch : Flock.Schedule} {i cols : ℕ} {fold : Array F256} {st st' : Flock.RecAlgebra.LSt F128}
     {k k' : ℕ} {u : PUnit} (hq : (sch.levels.getD i default).q ≠ 0)
-    (h : Flock.RecAlgebra.queryFold sch M i cols fold st k (Flock.RecAlgebra.Coins.ofRounds c) = .ok ((u, st'), k')) :
-    k' = k + 3 ∧ SzAt c k (qSz sch i) := by
+    (h : Flock.RecAlgebra.queryFold sch M i cols fold st k (Flock.RecAlgebra.Coins.ofRounds w) = .ok ((u, st'), k')) :
+    k' = k + 3 ∧ SzAt w k (qSz sch i) := by
   obtain ⟨e, h0, h1, h2, -⟩ := Flock.RecAlgebra.vqueryFold hq h
   exact ⟨by omega, SzAt.cons h0 (SzAt.cons h1 (SzAt.one h2) rfl) rfl⟩
 
 theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.levels.getD i default).q ≠ 0) :
     ∀ (fuel i split : ℕ) (levels : Array (Array F256)) (e : ℕ) (st : Flock.RecAlgebra.LSt F128) (k : ℕ)
       (out : Array (Array F256) × ℕ) (st' : Flock.RecAlgebra.LSt F128) (k' : ℕ), i + fuel ≤ R →
-      Flock.RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Flock.RecAlgebra.Coins.ofRounds c) =
+      Flock.RecAlgebra.levelsLoop sch M R fuel i split levels e st k (Flock.RecAlgebra.Coins.ofRounds w) =
         .ok ((out, st'), k') →
-      k' = k + (loopSz sch R fuel i split).length ∧ SzAt c k (loopSz sch R fuel i split)
+      k' = k + (loopSz sch R fuel i split).length ∧ SzAt w k (loopSz sch R fuel i split)
   | 0, _, _, _, _, st, k, out, st', k', _, h => by
     simp only [Flock.RecAlgebra.levelsLoop] at h
     obtain ⟨-, -, rfl⟩ := Flock.RecAlgebra.vpure h
@@ -194,7 +194,7 @@ theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
       obtain ⟨⟨⟩, st₃, k₃, h₃, h⟩ := Flock.RecAlgebra.vbind_ok h
       obtain ⟨-, rfl⟩ := Flock.RecAlgebra.vmodify_ok h₃
       obtain ⟨e₅, s₅⟩ := levelsLoop_sz hq fuel (i + 1) _ _ _ st₃ _ out st' k' (by omega) h
-      have s₄ : SzAt c k₁ (qSz sch R) := SzAt.cons hq0 (SzAt.cons hq1 (SzAt.one hb) rfl) rfl
+      have s₄ : SzAt w k₁ (qSz sch R) := SzAt.cons hq0 (SzAt.cons hq1 (SzAt.one hb) rfl) rfl
       simp only [loopSz, hi', ↓reduceIte]
       refine ⟨?_, SzAt.app s₁ (SzAt.app s₄ s₅ ?_) ?_⟩
       all_goals simp [qSz] <;> omega
@@ -203,9 +203,9 @@ theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
 theorem ligeritoRun_sz {sch : Flock.Schedule} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
-    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Flock.RecAlgebra.Coins.ofRounds c) =
+    (hrun : (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k₀ (Flock.RecAlgebra.Coins.ofRounds w) =
       .ok ((out, stV), k')) :
-    k' = k₀ + (ligSz sch).length ∧ SzAt c k₀ (ligSz sch) := by
+    k' = k₀ + (ligSz sch).length ∧ SzAt w k₀ (ligSz sch) := by
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
   have hc01 := hcols 0 (by omega)
   have hq : ∀ i ≤ sch.levels.size - 1, (sch.levels.getD i default).q ≠ 0 :=
@@ -276,25 +276,25 @@ theorem roundSizes_eq {sh : Shape} {S : Flock.RecAlgebra.GfS} {sch : Flock.Sched
   have hd : k₄ = (Flock.RecAlgebra.zeroRounds (roundSizes sh)).size := by
     have e : k₄ = ((Flock.RecAlgebra.zeroRounds (roundSizes sh)).filter (·.size ≠ 0)).size := beq_iff_eq.mp hdr
     rwa [Flock.RecAlgebra.filter_noEmpty hneZ] at e
-  generalize hc : Flock.RecAlgebra.zeroRounds (roundSizes sh) = c at hneZ e0 e1 e2 ezc eα eβ er elc eg ers pL hd
-  have p0 : SzAt c 0 [6, sh.m - 13, 1] :=
+  generalize hc : Flock.RecAlgebra.zeroRounds (roundSizes sh) = w at hneZ e0 e1 e2 ezc eα eβ er elc eg ers pL hd
+  have p0 : SzAt w 0 [6, sh.m - 13, 1] :=
     SzAt.cons (size_at (by omega) (round_size hneZ e0).2)
       (SzAt.cons (size_at (by omega) (round_size hneZ e1).2) (SzAt.one (size_at (by omega) (round_size hneZ e2).2))
         rfl) rfl
-  have p1 : SzAt c 3 (List.replicate (sh.m - 6) 1) := SzAt.rep fun t ht => by
+  have p1 : SzAt w 3 (List.replicate (sh.m - 6) 1) := SzAt.rep fun t ht => by
     obtain ⟨c', hc', -⟩ := ezc t ht
     exact size_at (by omega) (round_size hneZ hc').2
-  have p2 : SzAt c k1 [1, 1] :=
+  have p2 : SzAt w k1 [1, 1] :=
     SzAt.cons (size_at (by omega) (round_size hneZ eα).2) (SzAt.one (size_at (by omega) (round_size hneZ eβ).2)) rfl
-  have p3 : SzAt c (k1 + 2) (List.replicate (sh.kLog - 6) 1) := SzAt.rep fun t ht => by
+  have p3 : SzAt w (k1 + 2) (List.replicate (sh.kLog - 6) 1) := SzAt.rep fun t ht => by
     obtain ⟨c', hc', -⟩ := elc t ht
     exact size_at (by omega) (round_size hneZ hc').2
-  have p4 : SzAt c (k1 + 2 + (sh.kLog - 6)) [1] := SzAt.one (size_at (by omega) (round_size hneZ er).2)
-  have p5 : SzAt c k2 (List.replicate (2 + n) 7) := SzAt.rep fun t ht => by
+  have p4 : SzAt w (k1 + 2 + (sh.kLog - 6)) [1] := SzAt.one (size_at (by omega) (round_size hneZ er).2)
+  have p5 : SzAt w k2 (List.replicate (2 + n) 7) := SzAt.rep fun t ht => by
     obtain ⟨c', hc', -⟩ := ers t (by omega)
     exact size_at (by omega) (round_size hneZ hc').2
-  have p6 : SzAt c (k2 + (2 + n)) [2 + n] := SzAt.one (size_at (by omega) (round_size hneZ eg).2)
-  have pH : SzAt c 0 (headSz sh.m sh.kLog (2 + n)) := by
+  have p6 : SzAt w (k2 + (2 + n)) [2 + n] := SzAt.one (size_at (by omega) (round_size hneZ eg).2)
+  have pH : SzAt w 0 (headSz sh.m sh.kLog (2 + n)) := by
     unfold headSz
     exact SzAt.app p0 (SzAt.app p1 (SzAt.app p2 (SzAt.app p3 (SzAt.app p4 (SzAt.app p5 p6 (by simp)) (by simp; omega))
       (by simp; omega)) (by simp; omega)) (by simp; omega)) (by simp; omega)
