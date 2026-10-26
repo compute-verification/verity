@@ -97,8 +97,9 @@ theorem stepWith_outCoin {Ω : Type} (H : Claims.Msg → Claims.Msg) (P : Claims
       intro _
       dsimp only
       rw [List.map_append, List.map_append, hc, List.length_append, List.length_singleton, hlt, List.range_succ,
-        List.map_append, List.dropLast_concat]
-      rfl
+        List.map_append]
+      simp only [List.map_cons, List.map_nil, List.dropLast_concat]
+      all_goals rfl
     | rej =>
       intro h
       simp at h
