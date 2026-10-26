@@ -250,7 +250,7 @@ def test_each_negative_is_refused_by_the_reference_or_computes_another_state(run
 
 @pytest.mark.slow
 def test_the_circuits_are_the_references_on_every_bucket_each_negative_and_random_flips(run):
-    """Slow (about 15 s: about 217,000 and 138,000 ANDs traced, the ingress unit evaluated on about 90 cases, the first
+    """Slow (about 15 s: 216,995 and 137,889 ANDs traced, the ingress unit evaluated on about 90 cases, the first
     bucket's on about 30, and the egress unit on 31)."""
     ch = run.chain
     T = len(run.rows)
