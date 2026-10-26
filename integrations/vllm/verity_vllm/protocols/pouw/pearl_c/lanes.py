@@ -8,8 +8,9 @@ calls go on, and the rest of the call runs on a main lane of the run's own at th
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).
 
 Under ``deferred-a`` A's tree goes beside the tile hashing too, where the kernel's pipeline splits A's commitment
-(`run.Pipeline`'s ``split_a``: ``rows_a``, pd_commit's mode 1, then ``tree_seed_a``, pd_tree), with hashing
-(`LaneCalls._aside`); a retained pass's record reads the tree once the call's side lane is done.  The main lane keeps the
+(`run.Pipeline`'s ``split_a``: ``rows_a``, pd_commit's mode 1, then ``tree_seed_a``, pd_tree; outside pd, where the pipeline
+has it, the same two steps over the generic kernels, A's level 0 among the tree's), with hashing (`LaneCalls._aside`,
+`splits_at`); a retained pass's record reads the tree once the call's side lane is done.  The main lane keeps the
 per-row keying forming reads (``row_seeds``: each real row's digest, seed, line key and E_A line), and A's tree builds
 A's levels, seed_A and line_a off it.  The padding rows (m₁₆ … the kernels' tile, outside the
 matmul) are the GEMM's alone: no tile leaf reads them (the leaves stop at m₁₆ rows) and y is served to m, so the split
@@ -55,10 +56,10 @@ STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  The tile hashing reads C~ and U; A's tree (``tree_seed_a``, only where the pipeline splits A's commitment,
-#: which then writes no padding rows' E_A lines) reads level 0 and the call's keys and writes the levels, seed_A and line_a.
-#: The screen runs on the main lane or the caller
+#: which then writes no padding rows' E_A lines) reads level 0 (outside pd, the row digests it hashes into level 0) and the
+#: call's keys and writes the levels, seed_A and line_a.  The screen runs on the main lane or the caller
 SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"segdig_t"})),
-           "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
+           "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "rowdig_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
 #: the rows (m₁₆) from which a call's A tree, where it is aside, runs on the side lane after the call's rather than on the
 #: call's own: on the H200 the own lane was the faster at m₁₆ 16 and the other at 64, at 7 of GLM-5.3's 8 dense shapes each
@@ -78,14 +79,24 @@ def splits(kernel: Any) -> bool:
     return "tree_seed_a" in getattr(kernel.run.Pipeline, "FUSED", {})
 
 
+def splits_at(kernel: Any, m16: int, n: int, k: int) -> bool:
+    """Whether `kernel`'s pipeline splits A's commitment at a shape: at pd's (`run.pd_variant`), and at every other where
+    it splits the generic kernels too (`run.Pipeline.FUSED_GENERIC`, a prefill's rows among them)."""
+    R = kernel.run
+    return splits(kernel) and (hasattr(R.Pipeline, "FUSED_GENERIC") or R.pd_variant(m16, n, k) is not None)
+
+
 def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: bool, whole_fork_stats: bool,
-                  whole_tree_sm: bool, lag_ends: bool = False, aside_ends: bool = False, whole_shape_joins: bool = False) -> None:
+                  whole_tree_sm: bool, lag_ends: bool = False, aside_ends: bool = False,
+                  whole_prefetch_b: bool = False, whole_shape_joins: bool = False) -> None:
     """Refuse a whole capture's options, and a pass end's, where `kernel` or the others can't run them.  `whole_defer_a`
     (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A tree within a whole
     capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
     A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A tree with one persistent CTA
     fewer, leaving the tree's CTA its SM; `whole_shape_joins` (with `whole_defer`) joins a call's side steps only before
-    the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside."""
+    the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
+    `whole_prefetch_b` (with `whole_defer`) prefetches each call's B̃ into L2 beside its A commitment (`run.Pipeline.prefetch_b`,
+    which writes nothing)."""
     if whole_defer_a and not (whole_defer and splits(kernel)):
         raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
                          f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
@@ -98,6 +109,10 @@ def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: boo
                          f"pipeline's GEMMs take `Pipeline.beside`")
     if aside_ends and not lag_ends:
         raise ValueError(f"{entry}: aside_ends runs a lagged end's tree aside, and lag_ends is off")
+    if whole_prefetch_b and not whole_defer:
+        raise ValueError(f"{entry}: whole_prefetch_b prefetches within a deferred whole capture (whole_defer)")
+    if whole_prefetch_b and not hasattr(kernel.run.Pipeline, "prefetch_b"):
+        raise ValueError(f"{entry}: whole_prefetch_b runs the kernel's B̃ prefetch (`Pipeline.prefetch_b`), which it lacks")
 
 
 def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedule:
@@ -114,6 +129,18 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
     if bad:
         raise ValueError(f"{scheme.name}: " + "; ".join(bad))
     return s
+
+
+def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
+    """The schedules' names `schedule_of` admits for `scheme` on `kernel`."""
+    ok = set()
+    for name in SCHEDULES:
+        try:
+            schedule_of(name, scheme, kernel)
+        except ValueError:
+            continue
+        ok.add(name)
+    return frozenset(ok)
 
 
 class LaneCalls:
@@ -210,10 +237,8 @@ class LaneCalls:
 
     def _aside(self, sh: Any) -> bool:
         """Whether a call of `sh` runs A's tree on the side lane (the module's docstring): the schedule moves ``a_tree``,
-        hashing is on, and the kernel's pipeline splits A's commitment at this shape (pd's)."""
-        R = self.kernel.run
-        return ("a_tree" in self.schedule.side and self.hashing and splits(self.kernel)
-                and R.pd_variant(sh.m16, sh.n, sh.k) is not None)
+        hashing is on, and the kernel's pipeline splits A's commitment at this shape (`splits_at`)."""
+        return "a_tree" in self.schedule.side and self.hashing and splits_at(self.kernel, sh.m16, sh.n, sh.k)
 
     def _side_groups(self, sh: Any) -> frozenset[str]:
         """The groups a call of `sh` runs on the side lane, with hashing: the schedule's, but A's tree only `_aside`."""

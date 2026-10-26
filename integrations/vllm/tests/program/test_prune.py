@@ -12,7 +12,7 @@ from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program import prune as PR
 from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, kept_records, narrowed, swapped, without_dead_units
-from verity_vllm.program.registry import b1, gemm_bias, topp_words as TW
+from verity.ml.definitions.registry import b1, gemm_bias, topp_words as TW
 
 from verity.ml.circuits.defs import Body, Node, bind
 from verity.ml.circuits.evaluation.reference import evaluate

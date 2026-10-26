@@ -16,7 +16,7 @@ from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import moe_plane_kind
 from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
-from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 
 
 SAMPLER_OP = "runner.sampler"
@@ -474,7 +474,7 @@ class ProgramIndex:
         return name, lo - base, hi - base, shape
 
     def weight_bits(self, field: str) -> int:
-        """[R16 fp8] the leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
+        """The leaf width the Program declares for a `weights` field (`Value<16>` bf16, `Value<8>` e4m3, `Value<32>` f32 block scales)."""
         for name, _count, _shape, bits in self.fields:
             if name == field:
                 return int(bits) or 16

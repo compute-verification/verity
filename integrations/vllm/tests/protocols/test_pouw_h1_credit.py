@@ -19,15 +19,17 @@ from tests.protocols import pouw_h1_credit as PC  # noqa: E402
 SALT = hashlib.sha512(b"salt").digest()
 
 
-def _window():
+def _window(j10r: bool = False):
     """Two steps over q, k (K = 64) and o (K = 128), 20 rows served at step 0 and none at step 1; each call's receipts
-    `h1tile.reference`'s over its padded codes and weight, seeded from the run's salt, its units' positions and its
-    registered roots. The run, each call's operands by index and each call's receipt words by index."""
+    `h1tile.reference`'s (with ``j10r``, a window over `h1tile.PouwH1Tile5` and `h1tile.j10r_reference`'s) over its
+    padded codes and weight, seeded from the run's salt, its units' positions and its registered roots. The run, each
+    call's operands by index and each call's receipt words by index."""
     from verity_vllm.engine import int8_ops as OPS
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
     shapes, blocks = [(64, 64), (32, 64), (32, 128)], (0, 0, 1)
-    served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest())
+    served = SV.Served(blocks=blocks, window=hashlib.sha512(b"window").digest(),
+                       unit=(lambda k: HW.tile_unit(k, (32, 32), HT.PouwH1Tile5)) if j10r else None)
     held: dict = {}
     words: dict = {}
 
@@ -39,9 +41,16 @@ def _window():
         a[:len(codes)] = codes
         held[call.index] = (a, np.asarray(w, np.int8))
         ncb = call.n // 32
-        out = np.array([HT.reference(a[32 * (u // ncb):32 * (u // ncb + 1)].view(np.uint8).tolist(),
-                                     held[call.index][1][32 * (u % ncb):32 * (u % ncb + 1)].view(np.uint8).tolist(),
-                                     run.salt, u0 + u, roots, pairs=[(0, 0)])[1] for u in range(n)], np.uint32)
+
+        def one(u):
+            i, j = divmod(u, ncb)
+            ta = a[32 * i:32 * (i + 1)].view(np.uint8).tolist()
+            tb = held[call.index][1][32 * j:32 * (j + 1)].view(np.uint8).tolist()
+            if j10r:
+                return HT.j10r_reference(ta, tb, run.salt, u0 + u, roots, u0,
+                                         HT.j10r_blocks(served.m, call.k, (32, 32), i, j), pairs=[(0, 0)])[1]
+            return HT.reference(ta, tb, run.salt, u0 + u, roots, pairs=[(0, 0)])[1]
+        out = np.array([one(u) for u in range(n)], np.uint32)
         words[call.index] = SV.receipt_words(out)
         return out
 
@@ -58,12 +67,14 @@ def _window():
             run.record(w, x, s_a, wt, sw, z=OPS.scaled_mm_zy(x, s_a, wt, sw, 64)[1])
     run.close()
     assert not served.refused, served.refused
+    assert HW.is_j10r(served.program) == j10r
     return run, held, words
 
 
 @pytest.mark.slow
-def test_credit_accepts_the_honest_window_and_refuses_each_negative_by_name():
-    run, held, words = _window()
+@pytest.mark.parametrize("j10r", [False, True], ids=["v1", "j10r"])
+def test_credit_accepts_the_honest_window_and_refuses_each_negative_by_name(j10r):
+    run, held, words = _window(j10r)
     w = PC.of_run(run, run.served)
     assert PC.bc_of(PC.CC.OK_ROW, PC.CC.ok_salt(w.window, 0)) == w.ok.bcs[0]
     units = [w.u0(0), w.u0(0) + 3, w.u0(2) + 1, w.u0(5)]

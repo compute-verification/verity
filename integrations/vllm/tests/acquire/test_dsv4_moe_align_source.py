@@ -24,7 +24,7 @@ from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.acquire.sources import moe_align_source as MA
 from verity_vllm.acquire.sources import oracle_witness as OW
 from verity_vllm.acquire.sources import taps
-from verity_vllm.program.registry import marlin_moe as MM
+from verity.ml.definitions.registry import marlin_moe as MM
 from verity_vllm.query.manifest.bind import Binder, source_ports
 
 

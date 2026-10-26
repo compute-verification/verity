@@ -789,12 +789,10 @@ def test_the_memory_challengers_lms_key_is_made_once_and_its_leaves_never_reused
     first = live.lms_signer(tmp_path / "key", params=small)
     assert first.scheme == "test/lms-sha512/n64-w1-h2/v0" and (tmp_path / "key" / "seed").stat().st_mode & 0o777 == 0o600
     a = lms.Signature.decode(small, first.sign(b"s" * 32, b"r"))
-    first.state.close()
     monkeypatch.setattr(lms, "keygen", lambda *_a, **_k: pytest.fail("the key is made again"))
     again = live.lms_signer(tmp_path / "key", params=small)
     assert again.public_key == first.public_key
     assert (a.q, lms.Signature.decode(small, again.sign(b"s" * 32, b"r")).q) == (0, 1)
-    again.state.close()
     tree = tmp_path / "key" / "tree.bin"
     raw = tree.read_bytes()
     tree.write_bytes(raw[:-1] + bytes([raw[-1] ^ 0xFF]))
@@ -825,7 +823,7 @@ def _deployed_signer(tmp_path):
     I, seed = hashlib.sha512(b"I").digest()[:16], hashlib.sha512(b"seed").digest()[:lms.DEPLOYED.N]
     key = lms.PrivateKey(lms.DEPLOYED, I, seed, _SparseTree(I, seed))
     lms.LeafState.create(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H)
-    return mc.LmsSigner(key, lms.LeafState(tmp_path / "state", lms.public_key(key), lms.DEPLOYED.H))
+    return mc.LmsSigner(key, tmp_path / "state")
 
 
 def test_an_lms_signed_session_at_the_p2_point_is_accepted_and_issues_the_profile(tmp_path, monkeypatch):

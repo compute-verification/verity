@@ -89,7 +89,7 @@ private theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = tru
 /-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
 private theorem setup_drawLaw {s : Ins} {p : SessionSpec × Array Flock.Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
-    ProvedScope.drawLaw s.read.zk s.read.tags s.read.draw = .ok () := by
+    ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by
   unfold Ins.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
@@ -292,7 +292,7 @@ private theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : 
       | arr ha => exact good_stratum (ha x hx) hy
 
 /-- Under `--zk` the setup admits a stratified or a subset draw. -/
-private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy true tags D = none) :
+private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy true tags false D = none) :
     (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
   revert h
   cases hl : D.law with
@@ -347,12 +347,11 @@ theorem stmt_of_one (S : JsonSpec) {x : Claims.Msg} {s : Ins} {spec : SessionSpe
   have hdl := setup_drawLaw (setupOf_some hs).2 hdr
   rw [hdd, hzk] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy true s.read.tags D = none := by
-    cases e : ProvedScope.lawWhy true s.read.tags D with
+  have hlw : ProvedScope.lawWhy true s.read.tags false D = none := by
+    cases e : ProvedScope.lawWhy true s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := draw_parse (setupOf_some hs).1 hdd
-  have hw := S.parse_wf t d ht
+  have hw := (insOf_draw_norm (setupOf_some hs).1 hdd).2
   refine ⟨ofJson_obj hD, ?_, D, hD, by rw [hspec]; exact hn⟩
   rcases law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
   · exact good_stratified hw hD hK

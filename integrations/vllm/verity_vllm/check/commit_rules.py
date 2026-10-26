@@ -22,9 +22,9 @@ HIDDEN_CLASS_BY_FA = {2: "fa2_hidden_m1_stream", 3: "fa3_hidden_m1_stream"}
 
 
 def required_classes_default(flash_attn_version: int | None) -> tuple[str, ...]:
-    """R13 hopper: the default manifest keyed by the engine's attention implementation (the TargetProfile fact `effective_flash_attn_version`,
+    """The default manifest keyed by the engine's attention implementation (the TargetProfile fact `effective_flash_attn_version`,
     the same fact that selects the Bet A attention Definition and the Match pattern): the attention hidden class is the FA2 tap's under FA2
-    and the FA3 tap's (`fa3_hidden_m1_stream`, hidden_source.HiddenM1SourceFA3) under FA3.  None -> the FA2 default (pre-R13 rows)."""
+    and the FA3 tap's (`fa3_hidden_m1_stream`, hidden_source.HiddenM1SourceFA3) under FA3.  None -> the FA2 default (rows recorded without the fact)."""
     hidden = HIDDEN_CLASS_BY_FA.get(int(flash_attn_version) if flash_attn_version is not None else 2, "fa2_hidden_m1_stream")
     return tuple(hidden if c == "fa2_hidden_m1_stream" else c for c in REQUIRED_CLASSES_DEFAULT)
 
@@ -69,9 +69,9 @@ def required_classes_check(declaration: dict | None, required: tuple[str, ...] |
 
 
 def binding_check(bnd: dict, *, min_openings: int = 64) -> tuple[bool, str]:
-    """R14 BIND-01 (TABLE-RULES r14-v1 Commit): (1) the binding map was built and its context (roots, layout) is the run's; (2) every identity of
+    """BIND-01: (1) the binding map was built and its context (roots, layout) is the run's; (2) every identity of
     the collector-independent expected population has a binding (a duplicate / alias / extra copy never counts for a missing one --
-    F-rev-01 drop `/1` + bind `/0` twice fails here); (3) openings drawn from the EXPECTED population all had a binding and all verified
+    dropping `/1` and binding `/0` twice fails here); (3) openings drawn from the EXPECTED population all had a binding and all verified
     (retain=none: the values come from replay and are checked by openings_after_release)."""
     if bnd.get("error"):
         return False, f"binding map not built: {bnd['error']}"
@@ -423,7 +423,7 @@ def rule_oracle_compare(commit: dict, ctx: dict) -> CheckResult:
 
 
 def rule_compiled_check(commit: dict, ctx: dict) -> CheckResult:
-    """commit_delta's two post-verdict compiled conditions (R15 compiled S3): kernel replay exact; ring refused nothing."""
+    """commit_delta's two post-verdict compiled conditions (S3): kernel replay exact; ring refused nothing."""
     vc = _d(commit.get("value_correspondence"))
     ckc = vc.get("compiled_check")
     cs = _d(_d(commit.get("compiled_source")).get("stats"))
@@ -539,7 +539,7 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
 
 
 def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL` (R14 MAN-01)."""
+    """v1: `cov = ex.coverage or commit.coverage; if cov is not None and not cov.ok: FAIL` (MAN-01)."""
     ex = _d(commit.get("extra"))
     cov = ex.get("coverage") or commit.get("coverage")
     claim = "Every identity the required-value manifest names (Program x query, per request / step / member / element range) was committed with its full extent (MAN-01)."
@@ -572,8 +572,8 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
 
 
 def rule_identity_layout(commit: dict, ctx: dict) -> CheckResult:
-    """v1: `idc = ex.identity_check; if idc is not None and not idc.ok: FAIL` (X-03 on identities, R13).  The rule body is native_host's
-    (`NativeHostCommitter.identity_check`, owned by lane/vllm-x03); this only names its findings."""
+    """v1: `idc = ex.identity_check; if idc is not None and not idc.ok: FAIL` (X-03 on identities).  The rule body is native_host's
+    (`NativeHostCommitter.identity_check`); this only names its findings."""
     idc = _d(commit.get("extra")).get("identity_check")
     claim = ("Every committed step's identity set is the expected manifest's: every expected module produced >= 1 tensor and none came from outside it, "
              "every attention layer carries the same positive count of hidden rows, exactly one sampled-ids tensor, the same name multiset as step 0 (X-03).")

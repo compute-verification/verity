@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# The whole encoded store through the staging decode on the demo card (full.py), in place and read only, from build.sh's
+# lib, the weights manifest with digests memory-accounting held W to, and CMP-95 item 2's layout; cwd = the source
+# tree's root:
+#
+#   tar -C BUILD_RUN/out -cf /tmp/p2lib.tar .
+#   research run --on vy-dc-h200-2 --project verity --campaign e2e-demo --source . --cwd source --timeout 90m \
+#     --env GPU_LEASE_WHO=kernels-kstage --send /tmp/p2lib.tar --send h200-manifest.json --send store-layout.json \
+#     -- bash benchmarks/torch_gpu/p2_stage/full.sh
+#
+# (h200-manifest.json: art:6600b3ec…, `verity_torch_loop.weights manifest --digests`; store-layout.json: `p2_v1/store.py
+# layout`.) ENC is memory-accounting's finished store (MEM-69's mem69-v2, every segment's `.c` and `.json`, `setup.json`
+# and `store.json`), only ever read: nothing here writes, moves or deletes anything under it.
+#
+# Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to LAYOUT_SHA512, the manifest to
+# MANIFEST_SHA256 and to the store's own record of it, the store's setup and record copied out. Under one untimed lease
+# of at most LEASE_MIN minutes (default 20), refused near INF-242's window (Tue 27 Oct 08:00-10:00Z): full.py, every
+# tensor of LAYERS (default all 52 layers and the head) staged and held to the manifest's SHA-256, then GEMM_LAYER's
+# matrices (default 51) through KS8-SIMPLE at each batch of M (default 16384). After the lease, check.py on the GEMM's
+# samples and SAMPLE blocks of every tensor (default 128) against P2's reference, niced on half the host's cores. Each
+# step's exit code is in $OUT/rc.txt; exits non-zero if any failed.
+set -uo pipefail
+O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
+D=benchmarks/torch_gpu/p2_stage
+PY=${VERITY_BENCH_VENV:-/workspace/cp/venv312}/bin/python
+CUDA=${CUDA:-/usr/local/cuda-13.0}
+ENC=${ENC:-/workspace/research/pous-store/mem69-v2}
+SEED=${SEED:-text:verity/cmp92/h200/weights/v1}
+# MEM-69: the deployment coin of record (infra, 00:34:29Z) and W's commitment under the frozen layout
+SOURCE=${SOURCE:-dd56f549e504fa8a48db829588683baa66d5ab0c8c381665a87c3b53ffeb3ced}
+COMMITMENT=${COMMITMENT:-9aaaf192b1a7c0962b6139b7bad5b6a2abc9809d889ed5da5890628d1799dfe4291ce318bc8ba410b41886e30d52278f89686f429839257eab1728ac5902706a}
+# p2_v1/store.py's LAYOUT_SHA512 (CMP-95 item 2), and art:6600b3ec…'s h200-manifest.json
+LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
+MANIFEST_SHA256=${MANIFEST_SHA256:-28a29668627351e0118b02bbb4dddd0d3f25e2dfa6860b82f3048c0871792f27}
+LAYERS=${LAYERS:-}
+GEMM_LAYER=${GEMM_LAYER:-51}
+M=${M:-16384}
+SAMPLE=${SAMPLE:-128}
+LEASE_MIN=${LEASE_MIN:-20}
+S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
+LAYOUT=$IN/store-layout.json; MANIFEST=$IN/h200-manifest.json
+export O D PY S ENC LAYOUT MANIFEST MANIFEST_SHA256 LEASE_MIN PATH=$CUDA/bin:$PATH \
+  PYTHONPATH=$PWD:$PWD/benchmarks/pous:$PWD/integrations/torch_loop${PYTHONPATH:+:$PYTHONPATH}
+: > "$O/rc.txt"
+step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
+
+mkdir -p "$S/lib" && tar -C "$S/lib" -xf "$IN/p2lib.tar" && (cd "$S/lib" && sha256sum -c --quiet MANIFEST.sha256) \
+  && [ "$(sha512sum < "$LAYOUT" | cut -c1-128)" = "$LAYOUT_SHA512" ] \
+  && [ "$(sha256sum < "$MANIFEST" | cut -c1-64)" = "$MANIFEST_SHA256" ]
+step ship $?
+cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
+for f in setup.json store.json; do [ -f "$ENC/$f" ] && cp "$ENC/$f" "$O/store-$f"; done
+"$PY" - > "$O/store-check.txt" 2>&1 <<'EOF'
+import glob, json, os, sys
+enc, want = os.environ["ENC"], os.environ["MANIFEST_SHA256"]
+got = {f: json.load(open(p)).get("weights_manifest_sha256") for f in ("setup.json", "store.json")
+       if os.path.exists(p := os.path.join(enc, f))}
+segs = (len(glob.glob(os.path.join(enc, "seg", "*.c"))), len(glob.glob(os.path.join(enc, "seg", "*.json"))))
+print(json.dumps({"store": enc, "weights_manifest_sha256": got, "segment_files": segs}))
+sys.exit(0 if any(got.values()) and all(v == want for v in got.values() if v) else 1)
+EOF
+step store $?
+grep -qE "^(ship|store) rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt" "$O/store-check.txt"; exit 2; }
+(cd "$IN" && sha256sum p2lib.tar h200-manifest.json store-layout.json) > "$O/inputs.sha256"
+git rev-parse HEAD > "$O/commit.txt" 2>&1
+nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit,memory.total,memory.used \
+  --format=csv > "$O/gpus.txt" 2>&1
+"$PY" -c 'import torch; print(torch.__version__, torch.version.cuda)' > "$O/python.txt" 2>&1
+gpu-lease status > "$O/lease-before.txt" 2>&1
+COMMON=(--layout "$LAYOUT" --weights "$MANIFEST" --generator verity_torch_loop.weights --shape h200 --weights-seed "$SEED"
+        --encoded "$ENC" --source "$SOURCE" --commitment "$COMMITMENT" --out "$O")
+FULL=("${COMMON[@]}" --lib "$S/lib/lib" --gemm-layer "$GEMM_LAYER" --m "$M" ${LAYERS:+--layers "$LAYERS"})
+export FULL_ARGS="${FULL[*]}"
+
+nvidia-smi --query-gpu=timestamp,index,clocks.sm,clocks.mem,power.draw,temperature.gpu,utilization.gpu,memory.used \
+  --format=csv -l 1 > "$O/smi.csv" 2>/dev/null &
+SMI=$!
+echo "p2_stage full: asking for the GPU at $(date -u +%H:%M:%SZ)"
+# shellcheck disable=SC2016
+env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
+  step() { echo "$1 rc $2 at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"; }
+  echo "leased at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"
+  now=$(date -u +%s); w0=$(date -u -d 2026-10-27T08:00:00Z +%s); w1=$(date -u -d 2026-10-27T10:00:00Z +%s)
+  if [ $((now + 60 * LEASE_MIN)) -gt "$w0" ] && [ "$now" -lt "$w1" ]; then
+    echo "a lease from now could reach INF-242 window (Tue 27 Oct 08:00-10:00Z): released unused" >> "$O/rc.txt"
+    step window 3; exit 3
+  fi
+  nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER,MEMORY > "$O/clocks.txt" 2>&1
+  # shellcheck disable=SC2086
+  "$PY" "$D/full.py" $FULL_ARGS > "$O/full.log" 2> "$O/full.err"
+  step full $?
+  nvidia-smi -i "$GPU_LEASE_UUID" -q -d CLOCK,PERFORMANCE,POWER,MEMORY > "$O/clocks-end.txt" 2>&1
+  echo "released at $(date -u +%H:%M:%SZ)" >> "$O/rc.txt"'
+step lease $?
+kill "$SMI" 2>/dev/null
+
+nice -n 10 "$PY" "$D/check.py" "${COMMON[@]}" --sample "$SAMPLE" --workers $(( ($(nproc) + 1) / 2 )) \
+  > "$O/check.log" 2> "$O/check.err"
+step check $?
+cat "$O/rc.txt"
+! grep -qE " rc [1-9]" "$O/rc.txt"
