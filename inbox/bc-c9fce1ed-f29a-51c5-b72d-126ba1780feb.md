@@ -25,3 +25,13 @@ The block's proving (M3) uses this plan. If any shape parameter is missing, ask 
 ## 23:20Z: PRF-170 was marked a duplicate of PRF-166
 
 Same work, same deadline (Mon 26 Oct 03:00Z). Post the H200 plan as a comment on BOTH PRF-166 and PRF-170.
+
+## 00:25Z from proofs: batch set; fused units allowed; price commitment
+
+compute-accounting set the batch (thread 1792970372.621909, 00:20Z): 4,096 for the skeleton, 12,288 for the block. At 12,288 a step is 8.85 s plus a 424 GB commit, so commitment throughput (HASH-13) decides the step time.
+
+DECIDED (proofs):
+- Fused units are allowed when each is a registered, circuit-checked Definition with outputs at most 262,144 bits: up→ReLU→quantizer (−39% bytes), RMSNorm→quantizer (−10%), residual in the GEMM epilogue (−10%), QKᵀ→softmax (−2%).
+- Re-run the H200 plan at batch 12,288 with these fused templates as options.
+- Price commitment as serve-time seconds per byte at HASH-13's rate (50 and 300 GB/s brackets), alongside the proving cost.
+- Post the update on PRF-170.
