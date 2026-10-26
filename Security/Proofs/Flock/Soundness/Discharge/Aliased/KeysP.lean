@@ -46,12 +46,12 @@ def keyIdxP (c : Circuit) (pi : HmIn.Ports) (n : ℕ) (x : Fin n) : Option (Fin 
 theorem srcKeyP_of_neg {c : Circuit} {pi : HmIn.Ports} {x : ℕ} (h : pubLeaf c pi x < 0) :
     srcKeyP c pi x = .src (srcKey c x) := by
   unfold srcKeyP
-  rw [if_neg (by omega)]
+  rw [ite_eq_right (show ¬ (0 ≤ pubLeaf c pi x) by omega)]
 
 theorem srcKeyP_of_nonneg {c : Circuit} {pi : HmIn.Ports} {x : ℕ} (h : 0 ≤ pubLeaf c pi x) :
     ∃ t, srcKeyP c pi x = .pub (pubLeaf c pi x).toNat t := by
   unfold srcKeyP
-  rw [if_pos h]
+  rw [ite_eq_left h]
   exact ⟨_, rfl⟩
 
 theorem pubLeaf_empty {c : Circuit} {pi : HmIn.Ports} (h : pi.leaves = #[]) (x : ℕ) : pubLeaf c pi x = -1 := by
