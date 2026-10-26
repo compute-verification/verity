@@ -27,7 +27,7 @@ negative `v`, which reads the fill as an index past the column does) at the most
 `v mod 2^b'` at the most `b'` its table reads read, which the fresh index bits of each kind pay for; `SquaringUnits`
 from it on the nibble family; `FoolingCap` by injecting the family into its outputs' residues mod `2^j`;
 `EncodeBudget` and `EncodeCost` from `SquaringFloor` and `ChainSum` (the encode bound at `k · S · e`, so at any
-`E` below it) by summing the census's units and thin lanes, and each window's run-input bound, over the windows and
+`E` below it) by summing the census's units and data products, and each window's run-input bound, over the windows and
 classes; `RhoPairs` from Fermat's little theorem
 (`s² = x · x^((p−1)/2) = ±x`). `DeclaredWindow` by `ProvenWindow`'s induction, each gate's declared bound earned from
 the earlier gates' intervals; `Int8LinearWindow` and `LutPvWindow` from `dotChain_ok`, which proves any s8 dot chain
@@ -873,10 +873,10 @@ lemma budgeted_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.wi
   · simp [units_of_budget_none C i C[i] hg hb]
   · cases b <;> simp [Finset.sum_ite_eq, hw]
 
-/-- Summing the thin lanes over the windows: each gate's lanes are in its window's count. -/
-lemma thin_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
-    thin C = ∑ v ∈ Finset.range A.windows, thinAt C fun t => A.win t = v := by
-  simp only [thin, thinAt]
+/-- Summing the data products over the windows: each gate's products are in its window's count. -/
+lemma products_eq (C : Dag ι) (A : Audit) (h : ∀ g ∈ C, A.win g.step < A.windows) :
+    products C = ∑ v ∈ Finset.range A.windows, productsAt C fun t => A.win t = v := by
+  simp only [products, productsAt]
   rw [Finset.sum_comm]
   refine Finset.sum_congr rfl fun i hi => ?_
   have hi' : i < C.length := Finset.mem_range.mp hi
@@ -890,7 +890,7 @@ lemma EncodeBound.mono {F : Field} {k B E E' εnum εden : ℕ} (h : EncodeBound
   intro ι C m x words out hR hci hnd hlt hcw
   have h' := h C m x words out hR hci hnd hlt hcw
   generalize words.length = q at h' ⊢
-  generalize capped C = c at h' ⊢
+  generalize nonlinear C = c at h' ⊢
   generalize runBits C = r at h' ⊢
   generalize F.n - 1 = N at h' ⊢
   rcases Nat.lt_or_ge r (q * N) with hqr | hqr
@@ -914,26 +914,26 @@ theorem EncodeBudget : Accounting.Guarantees.Gates.EncodeBudget := by
   intro F k B E e εnum εden ι W caps A m x words out hS hC hE hε hk hp hp4 hP hR hci hnd hlt hcw
   have h := encodeBound_of hS hC hE hε hk hp hp4 W m x words out hR hci hnd hlt hcw
   obtain ⟨hwin, hcap, -⟩ := hP
-  have hb : (capped W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
-    rw [capped, budgeted_eq W A hwin, thin_eq W A hwin, ← Finset.sum_add_distrib]
+  have hb : (nonlinear W : ℚ) ≤ caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) := by
+    rw [nonlinear, budgeted_eq W A hwin, products_eq W A hwin, ← Finset.sum_add_distrib]
     push_cast
     rw [Finset.mul_sum]
     apply Finset.sum_le_sum
     intro v hv
-    obtain ⟨h1, h2, h3, h4, h5, -⟩ := hcap v (Finset.mem_range.mp hv)
+    obtain ⟨h1, h2, h3, h4, h5, -, h7⟩ := hcap v (Finset.mem_range.mp hv)
     simp only [Census.budgeted, Caps.total, h5]
-    push_cast at h2 ⊢
+    push_cast
     linarith
   have hr : runBits W ≤ 8 * ∑ v ∈ Finset.range A.windows, caps.runBytes v := by
     rw [runBits, ← sum_countAt W A.win A.windows _ hwin, Finset.mul_sum]
     exact Finset.sum_le_sum fun v hv => (hcap v (Finset.mem_range.mp hv)).2.2.2.2.2.1
-  have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (capped W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
+  have h' : ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤ (nonlinear W : ℚ) * (F.n - 1 : ℕ) + (runBits W * E : ℕ) := by
     exact_mod_cast h
   have hr' : ((runBits W * E : ℕ) : ℚ) ≤ (8 * (∑ v ∈ Finset.range A.windows, caps.runBytes v) * E : ℕ) := by
     exact_mod_cast Nat.mul_le_mul_right E hr
   exact h'.trans (add_le_add (mul_le_mul_of_nonneg_right hb (Nat.cast_nonneg _)) hr')
 
-/-- The encode bound at `E` prices `q` distinct words at `q · E` capped units, for `n ≥ 2`. -/
+/-- The encode bound at `E` prices `q` distinct words at `q · E` nonlinear units, for `n ≥ 2`. -/
 theorem encodeCost_ge {F : Field} {k B E εnum εden : ℕ} (H : EncodeBound F k B E εnum εden) (hn : 2 ≤ F.n)
     (q : ℕ) : ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q := by
   unfold encodeCost

@@ -8,7 +8,7 @@ proves it false inside its floor at every `E ≥ 1` and every `B`, p1024 at `k =
 is a free s8-family step, so a circuit of bits computes any number of words for the key's gather units
 (`benchmarks/property_redteam/bitwise_codec.py` builds it, its test runs it). It stays listed, marked `falsified` under
 `shape.conjectures`, so that anything that takes it as a hypothesis is refused by the Lean check; no guarantee does. The
-encode bound now rests on its two parts in the repriced model (`Gates.capped`, a thin lane a compare-select unit):
+encode bound now rests on its two parts in the model's nonlinear units (`Gates.nonlinear`, a data product a unit):
 `SquaringFloor` and `ChainSum` (`Definitions/Accounting/Assumptions/SquaringChain.lean`).
 
 * `EncodeChainHardness F k B E ε`: in the circuit model, computing `q` distinct words of the codec's encoding (less

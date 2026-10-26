@@ -46,16 +46,16 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved (the red
   team's Lemma R): returning a square's limbs to byte format takes `L − c − d(ε)` budgeted units, `d(ε) =
   d₀ + log₂(1/ε)/8`, at every `ε` above a floor `2^−t` (claimed at p1024 with `d₀ = 4`, `t = 64`; false with no
-  floor). `SquaringFloor` is it at `c = 0` in capped units, and `ChainSum` composes it over the chain.
+  floor). `SquaringFloor` adds to it at `c = 0` the square's data products, and `ChainSum` composes it over the chain.
 * `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
   drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
   `(budget)/E + (run-input bits)/(n − 1)`, under `SquaringFloor` at `e` and `ChainSum` with `E ≤ k · S · e`: the
-  budget is the caps (rational units per certified byte, a thin lane counted as a compare-select unit) times the
+  budget is the caps (rational nonlinear units per certified byte, data products among them) times the
   audit's certified reads, summed over the windows, and the run inputs are each window's `R_in` bound, summed over the
   windows.
-* `EncodeCost`: under the same premises, the encode cost (`encodeCost`, in capped units) of `q` words is at least
+* `EncodeCost`: under the same premises, the encode cost (`encodeCost`, in nonlinear units) of `q` words is at least
   `q · E` (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
 * `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
   values (`Definitions/Accounting/Gates/Ranges`), the intervals `DeclaredHold` asks of those budgeted gates.
@@ -215,8 +215,8 @@ their declared intervals (its window is then `ProvenWindow`'s, never a hypothesi
 
   `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · (Σ_w R_in,w) · E`,
 
-with `c` the caps' units per certified byte read, a rational (property/v1's units: gathers by fresh index bits, and
-a thin lane a compare-select unit), and `R_in,w` window `w`'s run-input bytes:
+with `c` the caps' nonlinear units per certified byte read, a rational (property/v1's units: gathers by fresh index
+bits, and a unit for each data product), and `R_in,w` window `w`'s run-input bytes:
 `q ≤ c · reads / E + 8 · Σ_w R_in,w / (n − 1)`. -/
 def EncodeBudget : Prop :=
   ∀ (F : Field) (k B E e εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
@@ -231,7 +231,7 @@ def EncodeBudget : Prop :=
 
 /-- **The encode cost, bounded.** Under `SquaringFloor F e ε` and `ChainSum F k B e ε`, at `E ≤ k · S · e` and inside
 their floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), with `n ≥ 2`, `q` distinct words cost at least `q · E`
-capped units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input computes them
+nonlinear units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input computes them
 on more than `ε` of the draws. -/
 def EncodeCost : Prop :=
   ∀ (F : Field) (k B E e εnum εden q : ℕ),

@@ -69,11 +69,11 @@ tiles are not bounded. `G` holds at every value of them; what they are on a node
 named assumptions).
 
 *The circuit.* `Wc` is in the restricted class (`Gates.Restricted B`) and passes the stacking property at the caps
-`caps` on `Aud` (`Gates.Property`): in each window its capped units (its budgeted units and its thin lanes,
-`Gates.capped`) are within `c = caps.total` a byte `Aud` certifies, its multiply-accumulates within `caps.macs` a
+`caps` on `Aud` (`Gates.Property`): in each window its nonlinear units (its budgeted units and its data products,
+`Gates.nonlinear`) are within `c = caps.total` a byte `Aud` certifies, its data products within `caps.products` a
 byte, and its run inputs within that window's `R_in,v = caps.runBytes v` bytes. A window certifies at most its
-passes' stores, `P·N·4096` bytes. An encode of a word costs `E` capped units, with `E ≤ 3·S·e_s` (`S = 1,021`
-squarings a root) under `Accounting.Assumptions.SquaringFloor` at `e_s` capped units a squaring and
+passes' stores, `P·N·4096` bytes. An encode of a word costs `E` nonlinear units, with `E ≤ 3·S·e_s` (`S = 1,021`
+squarings a root) under `Accounting.Assumptions.SquaringFloor` at `e_s` nonlinear units a squaring and
 `Accounting.Assumptions.ChainSum` at the deployed codec (p1024, 3 rounds, `ε ≥ 2^−64`).
 
 *The requirement.* The prover chooses everything on `W`'s side after every coin: the placed execution `p x` (each
@@ -160,7 +160,7 @@ group a page, so a chunk may complete several pages while their coins are out; i
 and both of `G`'s thresholds are positive at the 30 s life for 8B and for 70B (`life30_8b`, `life30_70b`).
 
 Proof (`Accounting.SecurityProofs.DeclaredCircuitRequirement`): under the lifetime cap each carrier's inputs are at
-most `8·R_L` and its encodes at most `L·c·P·N·4096` capped units (`OfCircuit` with the property), so every pass
+most `8·R_L` and its encodes at most `L·c·P·N·4096` nonlinear units (`OfCircuit` with the property), so every pass
 rebuilds at
 most `X_r·τ + C` bits of its appended tiles, and its tiles of `W` are appended tiles; the conservation runs on a pass's
 tiles of `W` alone (their sectors held, read, linked or rebuilt), so the rebuilds of registered tiles, which nothing

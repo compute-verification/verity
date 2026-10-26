@@ -14,8 +14,8 @@ namespace Accounting.RateSketch.Provenance
 
 /-- **A carrier of a declared circuit's is within its census over its life**: over at most `life` of the audit's
 windows, its inputs are at most the run-input bits the stacking property's caps allow in any `life` of them
-(`8·R_life`), and its encodes at most `life` times the most capped units (budgeted units and thin lanes) the circuit
-has in a window. -/
+(`8·R_life`), and its encodes at most `life` times the most nonlinear units (budgeted units and data products) the
+circuit has in a window. -/
 theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cost : ℕ → ℕ∞} {W : Gates.Dag ι}
     {caps : Gates.Caps} {A : Gates.Audit} {I : Finset ℕ} {life : ℕ} (hK : K.OfCircuit cost W A I)
     (hP : Gates.Property caps A W) (hI : I ⊆ Finset.range A.windows) (hcard : I.card ≤ life)
@@ -24,7 +24,7 @@ theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cos
         (fun I => ∑ v ∈ I, caps.runBytes v) ∧
       K.gates cost E ≤
         (life * (Finset.range A.windows).sup (fun v =>
-          (Gates.census W fun t => A.win t = v).budgeted + Gates.thinAt W fun t => A.win t = v) : ℕ) := by
+          (Gates.census W fun t => A.win t = v).budgeted + Gates.productsAt W fun t => A.win t = v) : ℕ) := by
   have hsum : ∀ f : ℕ → ℕ, ∑ v ∈ I, f v ≤ life * (Finset.range A.windows).sup f := fun f =>
     calc ∑ v ∈ I, f v ≤ ∑ _v ∈ I, (Finset.range A.windows).sup f := Finset.sum_le_sum fun v hv => Finset.le_sup (hI hv)
       _ = I.card * (Finset.range A.windows).sup f := by rw [Finset.sum_const, smul_eq_mul]
@@ -35,7 +35,8 @@ theorem OfCircuit.budget {N m : ℕ} {α ι : Type} {K : Provenance N m α} {cos
       _ = 8 * ∑ v ∈ I, caps.runBytes v := (Finset.mul_sum _ _ _).symm
       _ ≤ _ := Nat.mul_le_mul_left 8 (Finset.le_sup (f := fun I => ∑ v ∈ I, caps.runBytes v)
           (Finset.mem_filter.mpr ⟨Finset.mem_powerset.mpr hI, hcard⟩))
-  · exact_mod_cast hsum fun v => (Gates.census W fun t => A.win t = v).budgeted + Gates.thinAt W fun t => A.win t = v
+  · exact_mod_cast hsum fun v =>
+      (Gates.census W fun t => A.win t = v).budgeted + Gates.productsAt W fun t => A.win t = v
 
 end Accounting.RateSketch.Provenance
 

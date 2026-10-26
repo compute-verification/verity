@@ -662,7 +662,7 @@ theorem restricted (B : ℕ) : Gates.Restricted B ([] : Gates.Dag Unit) :=
   ⟨fun i h => absurd h (Nat.not_lt_zero i), fun g hg => by cases hg⟩
 
 theorem property (caps : Gates.Caps)
-    (hc : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.macs)
+    (hc : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.products)
     (Aud : Gates.Audit) :
     Gates.Property caps Aud ([] : Gates.Dag Unit) := by
   obtain ⟨h1, h2, h3, h4, h7⟩ := hc
@@ -671,8 +671,8 @@ theorem property (caps : Gates.Caps)
     simp [Gates.unitsAt]
   have hc0 : ∀ f, Gates.countAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) f = 0 := fun f => by
     simp [Gates.countAt]
-  have ht : Gates.thinAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) = 0 := by
-    simp [Gates.thinAt]
+  have ht : Gates.productsAt ([] : Gates.Dag Unit) (fun t => Aud.win t = w) = 0 := by
+    simp [Gates.productsAt]
   intro c
   have e1 : c.rounding = 0 := hu .rounding
   have e2 : c.compareSelect = 0 := hu .compareSelect
@@ -680,8 +680,7 @@ theorem property (caps : Gates.Caps)
   have e4 : c.fold = 0 := hu .fold
   have e5 : c.neutral = 0 := hu .neutral
   have e6 : c.runBits = 0 := hc0 (Gates.Gate.inputBits .run)
-  have e7 : c.dotMacs = 0 := hc0 Gates.Gate.macs
-  rw [e1, e2, e3, e4, e5, e6, e7, ht, Nat.add_zero, Nat.cast_zero]
+  rw [e1, e2, e3, e4, e5, e6, ht, Nat.cast_zero]
   exact ⟨mul_nonneg h1 (Nat.cast_nonneg _), mul_nonneg h2 (Nat.cast_nonneg _), mul_nonneg h3 (Nat.cast_nonneg _),
     mul_nonneg h4 (Nat.cast_nonneg _), rfl, Nat.zero_le _, mul_nonneg h7 (Nat.cast_nonneg _)⟩
 
@@ -697,7 +696,7 @@ theorem meets (n P N ρ S q Xr Lr qr τ L B εnum εden : ℕ) {Ω Ca Ch : Type}
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Ω → (a : Fin (1 + n * P * (N + 2))) →
       ({b : Fin (1 + n * P * (N + 2)) // b < a} → Ca) → Ch)
     (caps : Gates.Caps)
-    (hcaps : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.macs)
+    (hcaps : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.products)
     (val : ℕ → ℕ → ℕ) (hval : ∀ r i, val r i < 2 ^ tw)
     (hL : 0 < L) (hlink : ρ * 256 ≤ Lr * τ) (hq : N ≤ q) (hqr : N ≤ qr * τ) :
     (∀ s w η j pre, Assumptions.SketchHashBudget
@@ -735,7 +734,7 @@ theorem applies (hG : Guarantees.DeclaredCircuitRequirement) (n P N ρ S q Xr Lr
     (choose : RateSketch.SketchPrefix n P N 128 ρ 512 16 1 2773 → Ω → (a : Fin (1 + n * P * (N + 2))) →
       ({b : Fin (1 + n * P * (N + 2)) // b < a} → Ca) → Ch)
     (caps : Gates.Caps)
-    (hcaps : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.macs)
+    (hcaps : 0 ≤ caps.rounding ∧ 0 ≤ caps.compareSelect ∧ 0 ≤ caps.gather ∧ 0 ≤ caps.fold ∧ 0 ≤ caps.products)
     (val : ℕ → ℕ → ℕ) (hval : ∀ r i, val r i < 2 ^ tw) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N) (hE : 0 < E)
     (hL : 0 < L) (hlink : ρ * 256 ≤ Lr * τ) (hq : N ≤ q) (hqr : N ≤ qr * τ)
     (hrank : Assumptions.SketchRank 16 128 12 ε) (hkey : Assumptions.KeyBinding (1 + n * P * (N + 2)) 1 δ enc)

@@ -13,7 +13,7 @@ import Proofs.Accounting.Gates
 contents when every run has at most `n` input and encoded bits (`Provenance.card_image_le`). A carrier's values are its
 sectors at every store, which take every value, so its sectors are at most `n` bits (`Carrier.card_le`). Under
 `SquaringFloor` and `ChainSum` (the encode bound at `E ≤ k · S · e`, `SecurityProofs.Gates.encodeBound_of`) an encode
-of `x` bits costs at least `x/(8·bytes)` words' `E` capped units (`encodeBitsCost_ge`, with `⊤` where the gate model
+of `x` bits costs at least `x/(8·bytes)` words' `E` nonlinear units (`encodeBitsCost_ge`, with `⊤` where the gate model
 has no circuit), so a gate budget bounds the encoded bits (`Provenance.encoded_mul_le`).
 
 `KeyBinding` makes a pass's store uniform but for `δ` at each prefix of the session's coins (`UniformBut`): at the
@@ -142,8 +142,8 @@ theorem card_image_le [DecidableEq α] (c : Provenance N m α) :
         simp only [inputs, encoded] at this
         omega
 
-/-- **A gate budget bounds the encoded bits**: under the encode bound at `E` capped units a word of `8·bytes` bits,
-the encoded bits times `E` are at most `8·bytes` times the encodes' capped units. -/
+/-- **A gate budget bounds the encoded bits**: under the encode bound at `E` nonlinear units a word of `8·bytes` bits,
+the encoded bits times `E` are at most `8·bytes` times the encodes' nonlinear units. -/
 theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
     (hE : Gates.EncodeBound F kr B E εnum εden) (hbytes : 0 < F.bytes) (c : Provenance N m α)
     (Es : SketchStore N m) :
@@ -179,8 +179,8 @@ theorem card_le (K : Carrier N m) {n : ℕ} (hK : ∀ E, K.provenance.inputs E +
   rw [hs, ← pow_mul, mul_comm] at h
   exact (Nat.pow_le_pow_iff_right (by norm_num)).mp h
 
-/-- A carrier whose circuit takes in at most `I` bits and spends at most `R` capped units on its encodes carries at
-most `I + 8·bytes·R/E` bits, under the encode bound at `E` capped units a word of `8·bytes` bits. -/
+/-- A carrier whose circuit takes in at most `I` bits and spends at most `R` nonlinear units on its encodes carries at
+most `I + 8·bytes·R/E` bits, under the encode bound at `E` nonlinear units a word of `8·bytes` bits. -/
 theorem card_le_of_budget (K : Carrier N m) {F : Gates.Field} {kr B E εnum εden I R : ℕ}
     (hE : Gates.EncodeBound F kr B E εnum εden) (hbytes : 0 < F.bytes) (hE0 : 0 < E)
     (hK : ∀ Es, K.provenance.inputs Es ≤ I ∧
@@ -298,8 +298,8 @@ def transcript (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) : PassProvena
   | input x f k, i => if hi : i < x then f E R O ⟨i, hi⟩ else (k (f E R O)).transcript E R O (i - x)
   | encode j x _ f k, i => if hi : i < x then f (E j) ⟨i, hi⟩ else (k (f (E j))).transcript E R O (i - x)
 
-/-- **A gate budget bounds the encoded bits**: under the encode bound at `E` capped units a word of `8·bytes` bits,
-the encoded bits times `E` are at most `8·bytes` times the encodes' capped units. -/
+/-- **A gate budget bounds the encoded bits**: under the encode bound at `E` nonlinear units a word of `8·bytes` bits,
+the encoded bits times `E` are at most `8·bytes` times the encodes' nonlinear units. -/
 theorem encoded_mul_le {F : Gates.Field} {kr B E εnum εden : ℕ}
     (hE : Gates.EncodeBound F kr B E εnum εden) (hbytes : 0 < F.bytes)
     (c : PassProvenance N b h ρ α) (Es : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) :

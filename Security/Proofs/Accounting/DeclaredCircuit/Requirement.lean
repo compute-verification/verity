@@ -21,9 +21,9 @@ shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_
 namespace Accounting.RateSketch.Carrier
 
 /-- **A carrier of a declared circuit's over at most `L` of the audit's windows carries at most `C` bits**: its inputs
-at most `8·R_L` and its encodes at most `⌈1024·L·c·P·N·4096/E⌉`, the capped units of each of its windows within the
+at most `8·R_L` and its encodes at most `⌈1024·L·c·P·N·4096/E⌉`, the nonlinear units of each of its windows within the
 caps' `c = caps.total` units a byte of the window's certified reads, at most `P·N·4096` bytes, under the encode bound
-at 1024-bit words and `E` capped units a word. -/
+at 1024-bit words and `E` nonlinear units a word. -/
 theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.Dag ι} {caps : Gates.Caps}
     {Aud : Gates.Audit} (hE : Gates.EncodeBound Gates.p1024 3 B E εnum εden)
     (hE0 : 0 < E) (hprop : Gates.Property caps Aud Wc)
@@ -37,7 +37,7 @@ theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.D
   refine hb.trans (Nat.add_le_add_left ?_ _)
   rw [show 8 * Gates.p1024.bytes = 1024 by decide]
   set M := (Finset.range Aud.windows).sup (fun v =>
-    (Gates.census Wc fun t => Aud.win t = v).budgeted + Gates.thinAt Wc fun t => Aud.win t = v) with hMdef
+    (Gates.census Wc fun t => Aud.win t = v).budgeted + Gates.productsAt Wc fun t => Aud.win t = v) with hMdef
   rcases Nat.eq_zero_or_pos M with h0 | hpos
   · rw [h0]
     simp
@@ -47,16 +47,16 @@ theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.D
     rw [hMdef, hne, Finset.sup_empty] at hpos
     exact not_lt_bot hpos
   obtain ⟨v, hv, hvM⟩ := Finset.exists_mem_eq_sup _ hne
-    (fun v => (Gates.census Wc fun t => Aud.win t = v).budgeted + Gates.thinAt Wc fun t => Aud.win t = v)
+    (fun v => (Gates.census Wc fun t => Aud.win t = v).budgeted + Gates.productsAt Wc fun t => Aud.win t = v)
   rw [← hMdef] at hvM
   have hvlt := Finset.mem_range.mp hv
   have hpv := hprop.2.1 v hvlt
   dsimp only at hpv
-  obtain ⟨hr, hc, hg, hf, hn, -⟩ := hpv
+  obtain ⟨hr, hc, hg, hf, hn, -, hp⟩ := hpv
   have hMv : (M : ℚ) ≤ caps.total * Aud.reads v := by
     rw [hvM]
     simp only [Gates.Census.budgeted, Gates.Caps.total, hn, add_zero, add_mul]
-    push_cast at hc ⊢
+    push_cast
     linarith
   have htot : 0 < caps.total := by
     by_contra hneg

@@ -34,10 +34,11 @@ contents are a circuit's values, which depend on the encodings only through the 
   those steps (`Requirement.creditedBits`: `W`'s live values in complete blocks) and of the bits `W` reads from
   complete blocks (`Requirement.creditedReadBits`).
 
-The stacked sessions charge an encode at the gate model's cost (`encodeBitsCost`, capped units of
-`Definitions/Accounting/Gates`: budgeted units and thin lanes, `⊤` where the model has no circuit computing the words).
+The stacked sessions charge an encode at the gate model's cost (`encodeBitsCost`, nonlinear units of
+`Definitions/Accounting/Gates`: budgeted units and data products, `⊤` where the model has no circuit computing the
+words).
 They rest on the remote audit's random oracle and named assumptions, and on more: the gate model's two conjectures
-`Accounting.Assumptions.SquaringFloor` (a squaring mod `p` costs `e` capped units) and
+`Accounting.Assumptions.SquaringFloor` (a squaring mod `p` costs `e` nonlinear units) and
 `Accounting.Assumptions.ChainSum` (a codec word's `k · S` chained squarings cost their sum, so a word costs
 `E ≤ k · S · e`), and `Accounting.Assumptions.KeyBinding` (under the append-coin rule, the blocks a pass reads are
 uniform but for `δ`). The
@@ -48,7 +49,7 @@ reads the encoding it is keyed under, and the sessions pay for no advice.
 adversary's state that recovers the encoding is at least its entropy) and of proofs of replication (Fisch, SealStack,
 2019: a replica stored as a function of other data is worth at most that data's bits), here with the circuit's
 inputs and encodes as the only channels, as red-blue pebbling (Hong–Kung 1981; Ren–Devadas, bandwidth-hard functions,
-TCC 2017) counts only what crosses the fast-memory boundary. The encode's price in capped units is a circuit lower
+TCC 2017) counts only what crosses the fast-memory boundary. The encode's price in nonlinear units is a circuit lower
 bound, assumed per squaring and summed over the chain, as `WorkHardness` assumes the codec's price. The append coin is commit-then-challenge: a
 writer commits to an append's digests before the verifier's live coin keys it, so what it chose can't aim at the key.
 -/
@@ -69,7 +70,7 @@ as the store ranges over every store:
 **The reading.** In the ideal encoding model the store is uniform, so whatever memory holds the circuit's values (a
 carrier) holds at most `I + X` bits about the store: about the other blocks' encodings, which is what stacking needs.
 `X ≤ q·b` for `q` encodes of at most a block's `b` bits each, and under `Accounting.Assumptions.SquaringFloor` and
-`Accounting.Assumptions.ChainSum` at `E` capped units a word of `8·bytes` bits a budget of `R` capped units gives
+`Accounting.Assumptions.ChainSum` at `E` nonlinear units a word of `8·bytes` bits a budget of `R` nonlinear units gives
 `X ≤ 8·bytes·R/E`. The count is over
 the prover's choices too: an input is any function of the store, so a carrier is a side source of `I + X` bits, whatever
 the prover feeds.
@@ -98,18 +99,18 @@ the blocks a pass reads are uniform but for `δ` (`Accounting.Assumptions.KeyBin
 rebuilds at most `X` bits
 plus one sector for each sector of a carrier (`RateSketch.Carrier`: memory whose contents are a circuit's values, which
 decode to those sectors at every store), the carrier chosen at the pass's prefix. Each carrier's circuit, over its life
-of `life` windows, takes in at most `R_in` input bytes a window and spends at most `c_ρ` capped units a byte of
+of `life` windows, takes in at most `R_in` input bytes a window and spends at most `c_ρ` nonlinear units a byte of
 certified read, at `reads` bytes a window (the property's parameters; its lifetime cap is `life`, since `L` is the side
 link's bits here), an encode of `x` bits costing `encodeBitsCost` at the deployed codec (p1024, 3 rounds) in the gate
 model's restricted class (at most `B` operand bits a budgeted gate, on more than `εnum/εden` of the draws), `⊤` where
-the model has no circuit computing the words. Under `Accounting.Assumptions.SquaringFloor` at `es` capped units a
-squaring and `Accounting.Assumptions.ChainSum`, at `E ≤ 3 · S · es` capped units a word (`S = 1,021` squarings a root)
-and `ε ≥ 2^−64` (p1024 and 3 rounds are inside the rest of their floor), the shortfall terms are the deployed
+the model has no circuit computing the words. Under `Accounting.Assumptions.SquaringFloor` at `es` nonlinear units a
+squaring and `Accounting.Assumptions.ChainSum`, at `E ≤ 3 · S · es` nonlinear units a word (`S = 1,021` squarings a
+root) and `ε ≥ 2^−64` (p1024 and 3 rounds are inside the rest of their floor), the shortfall terms are the deployed
 guarantee's at rebuilt bits `X + C` a pass,
 
   `C = 8·R_in·life + 1024·(c_ρ·reads·life)/E`,
 
-the carriers' bits: inputs, and the bits of the 1024-bit words the circuit can encode with its capped units. The
+the carriers' bits: inputs, and the bits of the 1024-bit words the circuit can encode with its nonlinear units. The
 error is the deployed guarantee's draws and rank tail, and its per-pass hash terms plus `δ` a pass:
 
   `2·2^-40 + n·ε + (n·P·G)·N/2^512 + (n·P)·qtot/2^96 + (n·P)·δ`.
@@ -199,8 +200,8 @@ inputs may depend on the pass's certified stream and oracle, so they may be rece
 side reads and the certified stream take in at most `L` bits in every world (`PIChip.linkBitsEven`; the session's own
 link bound `L_all` counts the carrier's reads too, and is any). With each carrier's circuit within the property's
 budgets, an encode costing `encodeBitsCost` over the codec's field `Fc` at `k` rounds, and
-`Accounting.Assumptions.SquaringFloor` at `es` capped units a squaring and `Accounting.Assumptions.ChainSum`, at
-`E ≤ k · S · es` capped units a word of `8·bytes` bits (`S = Field.squarings Fc`), inside their floor (`ε ≥ 2^−64`,
+`Accounting.Assumptions.SquaringFloor` at `es` nonlinear units a squaring and `Accounting.Assumptions.ChainSum`, at
+`E ≤ k · S · es` nonlinear units a word of `8·bytes` bits (`S = Field.squarings Fc`), inside their floor (`ε ≥ 2^−64`,
 `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), as in `StackedSessionConservationSketchDeployed`, the bound is
 `RemoteSessionConservationRelay`'s at side link `L + C`,
 
