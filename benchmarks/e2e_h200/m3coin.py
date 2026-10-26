@@ -54,6 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--peer", required=True, help="this machine's name in the auditor host's /etc/vy/peers")
     ap.add_argument("--minutes", type=int, default=20)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--main", required=True, help="main's first-parent history (git rev-list --first-parent origin/main)")
     a = ap.parse_args(argv)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -78,6 +79,13 @@ def main(argv: list[str] | None = None) -> int:
             raise Ch.CoinError(f"the gate answered {words[0]} with exit {rc}: {got.decode(errors='replace').strip()}")
         return got
 
+    pins = [x for x in ask(["pins"]).decode().split("\n") if x]
+    pin = json.loads(pins[-1]).get("commit") if pins else None
+    doc["host_pin"] = pin
+    if pin not in remote.main_lines(a.main):
+        write(failure=f"refused before reserve: the host's last pin {pin} is not on main's first-parent line")
+        raise SystemExit(f"the challenger host pins {pin} last, not a commit on main's first-parent line ({a.main}): its "
+                         "session's coins would be refused, so the one session isn't spent")
     pub = json.loads(ask(["pubkey"]))
     doc["challenger_key"] = {"W": pub["W"], "H": pub["H"], "public_sha512": hashlib.sha512(bytes.fromhex(pub["public"])).hexdigest()}
     r = json.loads(ask(["reserve", "--peer", a.peer, "--scheme", SCHEME, "--families", json.dumps([[LABEL, 1]]),
