@@ -496,7 +496,7 @@
   },
   "Accounting.Remote.Draw.Assumptions.Refused": {
    "owner": "@memory-accounting",
-   "digest": "a6140fd270d4bdec60585a30263c5c2920e51076d780afbf573b7149ecee25ff"
+   "digest": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
   },
   "Accounting.Remote.Held.Assumptions.Causal": {
    "owner": "@memory-accounting",
@@ -2437,10 +2437,11 @@
     "Definitions.Pous.Model.Audit",
     "Definitions.Pous.Model.SampledAudit",
     "Definitions.Pous",
+    "Definitions.Hash",
     "Definitions.Accounting"
    ],
    "except": ["Definitions.Accounting.Bandwidth.Game"],
-   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth)"
+   "why": "resource accounting's definitions are trusted text: the device model, a joint audit's run and the bandwidth and rate audits' games read PoUW's and PoUS's uniform probability and, for the compute audit's embedding, PoUW's game and Pearl-C's; the tensor-core sketch reads the sm_120 E4M3 step's definitions (Definitions.Pouw.Fp8Atom, Definitions.Pouw.PearlC.Sm120); lemma M reads PoUS's audit model (Definitions.Pous.Model.Audit, Definitions.Pous.Model.SampledAudit); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration); the actual circuit is core's circuit placed in space and time (Definitions.Core.Circuit), its runtime's region a declaration (Definitions.Core.Declaration), its provers' cost model PoUW's (Definitions.Pouw.Game); B2's responder and lemma M's vocabulary read PoUS's audit game (Definitions.Pous); they import no assumption, guarantee or proof; the bandwidth audit's game reads PoUS's uniform probability under its own layer (Definitions.Accounting.Bandwidth); the remote audit's receipts are the served row leaf in frame-v3-sha512 trees, and their binding event is a collision among the two openings' checks (Definitions.Hash)"
   },
   "Definitions.Accounting.Guarantees": {
    "imports": [
@@ -3813,6 +3814,22 @@
    "signature": ["Accounting.SecurityProofs.Remote.PooledDraw : Accounting.Guarantees.Remote.PooledDraw"],
    "assumptions": [],
    "type_hash": "e11bd8f0d7411ecef278283d438e8bb82499aa76458b00817ae5109a7008ad97"
+  },
+  "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR : Accounting.Guarantees.Remote.ReceiptsBindingOfCR"
+   ],
+   "assumptions": [],
+   "type_hash": "b548507034d640166412194e4e7aabc59a646d57368d1120f89faeb1c1f59067"
+  },
+  "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFork"
+   ],
+   "assumptions": [],
+   "type_hash": "26fd0a6eaacfe57684738f19ad110ac0c51d3fa200a790d2ac498a67532d7fe6"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
    "owner": "@memory-accounting",
@@ -6984,10 +7001,11 @@
     "      (∀ (own : Array Flock.Registered.Port) (t : FlockSoundness.Discharge.Exec.Transcript),",
     "        FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR zk I own t →",
     "          Or (Eq I.tags.hiddenOutputs Bool.true) (FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts zk I t))",
-    "      (FlockSoundness.Discharge.FailClosed.SoundExecJ I))"
+    "      (if hh : Eq I.tags.hiddenOutputs Bool.true then FlockSoundness.Discharge.FailClosed.SoundExecHJ I hh",
+    "      else FlockSoundness.Discharge.FailClosed.SoundExecJ I ⋯))"
    ],
    "assumptions": [],
-   "type_hash": "1d75a921e41b7b41d9c3d00afc7c507a637bae7cd795b20d40e40b11c02814a4"
+   "type_hash": "c27a68a3a851b0ae4402c1038e1d5d1807ee82389c65c7e29096d4aa647af7b5"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": {
    "owner": "@proofs",
@@ -11538,11 +11556,11 @@
    "Nci.SecurityProofs.CoveringBoundTwoCosts": "frozen (no-function): CoveringBound's twin at two costs, a weight's c_w and an activation's c_a, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardAt and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
    "Flock.SecurityProofs.SessionLoopZK": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release (ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), it takes the loop's obligation (Flock.Guarantees.LoopInnerRound0), the tables' obligation (Flock.Guarantees.TablesAdmitUnrefused), the transport's round trusts (LeanRelease.LinkRoundEq, FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
    "Flock.SecurityProofs.SessionLoopZKDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound at the session loop's release at the deployed tables (Masked.dataE, ofLoop at the deployed relation, SHA-512, the hm96 hiding gap at the pinned key): as a simulation statement against every malicious verifier it has no acceptance of a function to take; at the loop's own tables (Loop.realOf, at every level-0 source), at the loop's own link and Finish (ofLoopLink: Loop.linkOf, the level-0 roots the loop draws; LeanRelease.withFiles, Loop.filesE: each rep's Finish.proofFile on what the loop holds of it, and the record the auditor assembles, recordJson of the streams it saw), it takes the statement in scope (Claims.Flock.Scope, which the loop does not check and the verifier checks only at its verdict), every input the loop takes from its host and operating system being the tape's (Loop.Src, flock-firewall-os-src: its level-0 inputs, Loop.Level0Src, and its rep draws, Loop.RepSrc), the loop's obligation (Flock.Guarantees.LoopInnerRound0), the transport's round trusts (LeanRelease.FinishIs, LiveRoundEq, FillRoundEq) and the tables' side (CoinLayer Tables, Complete, DummyReg, Causal, SwCausal, TapeOK), premises that aren't on the list, at a statement the loop serves (Loop.Serves).",
-   "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
-   "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
-   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.PooledDraw": "frozen (no-function): It is about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.LiveCoinsDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.PooledDraw at a fixed W, about the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact)",
+   "Accounting.SecurityProofs.Remote.HeldDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.Held with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTime with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
+   "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the coins are committed (Accounting.Remote.Draw.Committed: the session each commitment plays, and the one it shows), Live is stated on the session each commitment shows (Committed.view, the world after the junk-commitment hybrid, where no openings coin's leaf can steer the prover) and Refused and Counted on the one it plays, each window's swap to a leaf committing zeros adding its hiding term (Committed.hide, claims statistical-hiding and common-reference-string; note:20261024T1817Z-report-rt4-fixes), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which this committed play leaves unbounded since its prover may compute the roots from the coin commitment (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher at that junk commitment, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each stage a call (JStage), its run one straight-line program over the call's bits, both sides shared across the call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JRunMap), not the service's code, and takes three premises about that map: ServiceSoundStagedJ10R (ServiceSoundStaged with the seed identified with the window's call coins), KScopeOneSidedJ10R (Theorem K's one-sided scope on the call: products one-sided of any form between the rows' dither bits and the columns' coin and U bits, the error the call's int8-wrapped prefix product, and charging purity mod 2 at every segment's row and column frame, which no check of the service refuses a run outside of) and ChargeVF3j16J10R (the active vector VF3j-16's prices with B_theta complete, kappa a product of the call's program). Its floor and luck are StagedFloorKOneSided's: c = 1 on the call's one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10R": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided at call scope under J10-R (RT-ALGO-17, card bbf40543), each draw a call of any shape (OJSpot), the round's run one straight-line program over every call's bits, both sides shared across each call and each segment's coin x coin part one <n, L, n'> product. It is stated over an arbitrary Machine and Service and an analysis map (JORunMap), not the service's code, and takes three premises about that map: ServiceSoundOverlapJ10R (ServiceSoundOverlap with the seed identified with the overlapped window's call coins), KScopeOverlapOneSidedJ10R (Theorem K's scope across calls: products one-sided per call at every bit point of the other calls' (OneSidedAtJ), the error each call's int8-wrapped prefix product, and charging purity across calls mod 2 at every segment's frame, which no check of the service refuses a run outside of) and ChargeVF3j16OverlapJ10R (the active vector VF3j-16's prices with B_theta complete, each product counted once). Its floor and luck are OverlapFloorKOneSided's: c = 1 on the calls' one-sided scope; K1 is not claimed outside it, and the verifier can't observe which case applies.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRate": "frozen (no-function): It bounds AccSeqsWithin, the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes BitsCount about an abstract charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -11679,7 +11697,9 @@
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": "frozen (no-function): It carries C-Flock's integrity audit over a horizon of windows (Flock.Guarantees.IntegrityHorizon) to the sampled audit's per-period guarantee (PeriodRun.Sound) of an abstract period of the device model whose verdict is a field of the run, not a Lean function, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityPeriod, Security/Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocks": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks and the wipes that open them, on one coin space: each block's five per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close)."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11829,7 +11849,9 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
-    "Accounting.SecurityProofs.Remote.PooledDraw"
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Actual.WipeHeld": {
@@ -11957,11 +11979,11 @@
    ]
   },
   "Definitions.Accounting.Assumptions.RemoteDraw": {
-   "digest": "aa61381a6870692a0cb93298f0b695b764f8b55851309f9f214f6a1d47a9deae",
+   "digest": "13fddd7383210a4e3caf86cbfdd4ef304c8bd8b48c199c4b426df97929d3051e",
    "definitions": {
     "Accounting.Remote.Draw.Assumptions.Counted": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62",
     "Accounting.Remote.Draw.Assumptions.Live": "8dbfee2935ed0fb5a3386fde91c2bbde338f00ce3f6301fa27cb1e10c3b554d9",
-    "Accounting.Remote.Draw.Assumptions.Refused": "a6140fd270d4bdec60585a30263c5c2920e51076d780afbf573b7149ecee25ff"
+    "Accounting.Remote.Draw.Assumptions.Refused": "d1684ab2095265ddc42a1b96006579547569610dbf78f7dcd917e70c29cdbf5f"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
@@ -13904,14 +13926,25 @@
     "Accounting.SecurityProofs.SketchRankFiber"
    ]
   },
-  "Definitions.Accounting.Guarantees.RemoteDraw": {
-   "digest": "ee588f92e34fc3aabd9a3a4effedb3f0800be582761025e8e662ca494fd72b7b",
+  "Definitions.Accounting.Guarantees.RemoteBinding": {
+   "digest": "7aae9c6158d48910c56b592711e824d636451059439d621597e4482d9c927a15",
    "definitions": {
-    "Accounting.Guarantees.Remote.HeldDrawn": "6bd9a98bcb2521ac6e4f4c4527de217c30145c6c5cdfc56ebcb52da6d7744793",
-    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "b1a340d90c1f365e13e5aedaba7a5fc362089650bd0e48fa7d225860b865a3da",
-    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "63eeb877c82e121519ac2bc0394b0a08d2c03c89f2ae967456ddbbc00e9c166c",
-    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "ad316f4b652bd92c7498bb488091f4677104278d9bdcde15bde38c936f1e2bd4",
-    "Accounting.Guarantees.Remote.PooledDraw": "092a97d93888b88ab1a4db6ac0c5d4dc221535e49dd0cbe24c3536552ae789de"
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfCR": "139034bb3ca9ed75c881b8ff8dee2c8f8958cb4a5cb68401fcf5131bab2f34c4",
+    "Accounting.Guarantees.Remote.ReceiptsBindingOfFork": "3e6070a604fa195c6523328eabf00c0d22060c967fa23c56bef1fb0f4ff45b2e"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
+   ]
+  },
+  "Definitions.Accounting.Guarantees.RemoteDraw": {
+   "digest": "d649cc604c963360a9bd1e56f3009b4a0eb045b418e875f1cc54a60e472900c2",
+   "definitions": {
+    "Accounting.Guarantees.Remote.HeldDrawn": "08548bc7e5de603efd55fba3cbe41dd55bb5d36ef2d547b56148bdb590e1408a",
+    "Accounting.Guarantees.Remote.HeldOverTimeDrawn": "6d2b4adaaa42cc5398f96046792b3ec8fae4efbd2d29702dd703672610709f99",
+    "Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn": "fb60f04afe00c886e8295bdeee4adcf597b9ef162900d3e146db112af8412347",
+    "Accounting.Guarantees.Remote.LiveCoinsDrawn": "37fc0bde3801b80a420d5f06e13c2455f585130eb46ef88376288048dce7b543",
+    "Accounting.Guarantees.Remote.PooledDraw": "e7428fd589ac3c2c6e5e66a9ba48e98d651097477f43b3f4566947200f70332b"
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.HeldDrawn",
@@ -15370,7 +15403,7 @@
    ]
   },
   "Definitions.Accounting.Remote.Draw": {
-   "digest": "7876cadfb63b6cbe3b24cfc413176090d5563297d284ab4717d1cdd5d096618c",
+   "digest": "41f05f43e05f02a9608dd7346c7418d5135e0c89f4f0e11effad440703580a47",
    "definitions": {
     "Accounting.Remote.Draw.Blocks": "c039d32ff0024407a58df4ca4cd9489e00cd3968a16cc2b29cd83ff475aad5c8",
     "Accounting.Remote.Draw.Coins": "2f7cc1f6aba6148b468add0d9e19c65c8fbc3c14c0869a701c2eb8a47b114f0e",
@@ -15379,6 +15412,16 @@
     "Accounting.Remote.Draw.Committed.junk": "f54a705eff576473dbc3bc29a82ff9b6b21451e18b75ddef473ef4b2adb8f6b3",
     "Accounting.Remote.Draw.Committed.play": "b4021d5c5bf4c2cf96ea43085af2e5486d59222be56ebd483adbe93131ab61bc",
     "Accounting.Remote.Draw.Committed.view": "ef821b4c4ca72a36487ad098844c31f66680c424d505fe7038f718a2e940bd25",
+    "Accounting.Remote.Draw.Receipts": "ce990b987165593ca1ae73c8b6fa10293ac57dc79d54d83dfb65d0f1897cb516",
+    "Accounting.Remote.Draw.Receipts.Moved": "6bd5f5ace2f498fbff6c1f62f484c5f3b6d78e0558481076eb1d3671209086c8",
+    "Accounting.Remote.Draw.Receipts.Shows": "b1578b2161811998c5899a0b1cb64da72b0ff220f0660fc3612aacccaad4f959",
+    "Accounting.Remote.Draw.Receipts.binding": "ac75eb04ee5f9cad622c81c54981feaf3b055e93f844f0874f125f61d9b9d8e8",
+    "Accounting.Remote.Draw.Receipts.hash": "156255457e4dc6a33e975da4efac95ebff0824649f6093f0fb1b498a17026592",
+    "Accounting.Remote.Draw.Receipts.held": "cfaaf22dada2eaeecfcb3f1548e31eed91e908f7c60f3fd0e28c48b8a86f450e",
+    "Accounting.Remote.Draw.Receipts.opened": "a94f7fbeac40fab1e9ed3b42512f994cf2a0bd214e4738512a82b22015aab97e",
+    "Accounting.Remote.Draw.Receipts.rank": "275c030becc12b016c54948a06396fe917f3a3f1cad352fbaee5d0dd4e284fd8",
+    "Accounting.Remote.Draw.Receipts.root": "64bb448d0274e8d7c08e48967310ca7bc868b3a5fe9c4c5fd1b1cb847dc5e6b2",
+    "Accounting.Remote.Draw.Receipts.verifier": "80b3e61d2ebc05cfce860b68301fbfd453db839ce61c2e8fe90274fbbccaf425",
     "Accounting.Remote.Draw.Session": "941ba13f9bb572a8f393d61cc00f47748ebe85bf7586ec44acd7b4e409f7378f",
     "Accounting.Remote.Draw.Session.bound": "dfa9fc1a0ba16e75c1c165d86ad380feeca3d05fdd11c215284a4323ad0ea2f0",
     "Accounting.Remote.Draw.Session.correct": "7a758b411d408715105f90ace2ed209efb98671de7d88223d7f6bef9f5abb26c",
@@ -15395,6 +15438,7 @@
     "Accounting.Remote.Draw.arrange": "f1709389a2de9004f1be097b693bdf7ddf7568ba0e8b09a06057a361baf40880",
     "Accounting.Remote.Draw.below": "4697905d5580aa26e8537bb1832747d8ac1b905c8bf98fd7380f9f1b9c61c95d",
     "Accounting.Remote.Draw.budget": "f2420d149470daf39805deb86dc8c1dbf4fe053a01569f29dd24bfb4b6137302",
+    "Accounting.Remote.Draw.cont": "6b8333254ae6181a181e5638072b1547400c6724f1d6f1fd3fce5cb36287dea8",
     "Accounting.Remote.Draw.offset": "795755fad153056dd737dfe6ad9dfae7f23914343aaf79dc839d225419c4f2d2",
     "Accounting.Remote.Draw.offsets": "986b9c49b7bd390877b5ba71588876f203728a830718a30c3af059d6a860bb48",
     "Accounting.Remote.Draw.openings": "47cc9ba6cd4841ef58d296e8ebd98e680845aaa74d6705da0f65170169012425",
@@ -15409,7 +15453,24 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.Remote.SketchBoundLine"
+   ]
+  },
+  "Definitions.Accounting.Remote.Fork": {
+   "digest": "a3d77638eb89f6aa61faaf43e8431f1437e84547a2a0e540148f6d13fd7d3a58",
+   "definitions": {
+    "Accounting.Remote.Draw.Receipts.Broken": "59501d40cf08d6960b9970b1ba1855b835be76d1a4312d9442cef71fd968c75f",
+    "Accounting.Remote.Draw.Receipts.Finds": "34a33bce4db88f4c1fad60bf4e35b1149805487d1fb25932fd3f1676361ee070",
+    "Accounting.Remote.Draw.Receipts.Split": "16cde9c0af4e33e83a79410d52c04c8b791fbc83477096f91a7214f129d122c8",
+    "Accounting.Remote.Draw.Receipts.finder": "5716de2bb2d0b43404cca31348a9c6a631bb2e277443930a1d4f08ebe91c6e5f",
+    "Accounting.Remote.Draw.Receipts.fork": "ca927660822cd18804b8ea2ab0564c0dc2ba9e27bbb19ac19386f6ac120f47d0",
+    "Accounting.Remote.Draw.Receipts.split": "239466009ed13774ffc6ade859df949fd3f9cc4dc8408fc73e5bb154a0695d96"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork"
    ]
   },
   "Definitions.Accounting.Remote.Held": {
@@ -15734,6 +15795,13 @@
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
     "Accounting.SecurityProofs.ComposePeriod.PeriodBudget",
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.TS.AdditiveFixed",
     "Accounting.SecurityProofs.TS.DrawnBindingOfFork",
     "Accounting.SecurityProofs.TS.DrawnRightOff",
@@ -16686,6 +16754,13 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.BindingOfECR",
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Claims.Bits_fails",
     "Claims.Complete_fails",
     "Claims.Flock.Bits_fails",
@@ -19750,7 +19825,17 @@
     "Hash.uint": "54f1380cede20ece799c577d798408019afc86701c15097bc10064e1b29ac7bf",
     "Hash.utf8": "ef81714f5482b6ab1df3203d386a5f234d14a69049d33735cee24064152636c6"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding"
+   ]
   },
   "Definitions.Hash.Guarantees": {
    "digest": "19e9fcea482aa5af527ceb48166741b5c12059a2133c4b0f9d00d9ae6ab64713",
@@ -19773,7 +19858,16 @@
     "Hash.Hm96.maskBit": "84c9847922cdabdcf8f9e4803039807462219e01b65429a93936bed110e7fbac",
     "Hash.Hm96.saltPrefix": "74d72964af334edfdb91fc4be5b5e9a07fbb5c930ebc4b745ab2246293d83aa6"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.RowBinding"
+   ]
   },
   "Definitions.Hash.RowLeaf": {
    "digest": "a332210454866a3b88c93c3c35906dc941366fe79a3b6566ebb3dfa4e8544ec7",
@@ -19799,7 +19893,16 @@
     "Hash.RowLeaf.leafMsg": "b6618d2baacea640c3f31fd3b3604c634198f8e03b74fbd9e97e8afbf34756cd",
     "Hash.RowLeaf.outerHashed": "2d80b04f02a6dbb598aede89f6ff2c3008d0ca0f96d2d9a3afa9eddfb0461f11"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.RowBinding"
+   ]
   },
   "Definitions.Hash.RowSeg": {
    "digest": "90bfdb254a02577fb455c429e2b39538b1096a953cb4aa4b3a604bec66068775",
@@ -19818,7 +19921,16 @@
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.RowBinding"
+   ]
   },
   "Definitions.Hash.RowV2": {
    "digest": "52e1b6519c9a37823278a704e4fa649e244d97074670631af94edaf015eb29f6",
@@ -19828,7 +19940,16 @@
     "Hash.RowV2.msg": "73f58fbc3bc895270bcc2e61559234430c03d76b31dcb1d1bd053200796feff0",
     "Hash.RowV2.rowPrefix": "5685bbc629d745a50fd750e1c773369607d76b2a4e18288590e2c6164197eb0e"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.RowBinding"
+   ]
   },
   "Definitions.Hash.Tree": {
    "digest": "c4b8c7ea14f3c9a159c9a52d84b0b56922af0b7ecce92dc113116c019277fdc5",
@@ -19846,7 +19967,17 @@
     "Hash.Tree.leafMsg": "c03f78eb03c50bae57d161e89fa7af3fe26e1c1584952f654cf4057b3f4b2d77",
     "Hash.Tree.nodeMsg": "f0246edca6110f84d6a81bbf1e435afe3a2e8da1f97e4b4ee3a97741dff654a8"
    },
-   "guarantees": ["Hash.SecurityProofs.RowBinding", "Hash.SecurityProofs.TreeBinding"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Remote.HeldDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeDrawn",
+    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
+    "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
+    "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
+    "Hash.SecurityProofs.RowBinding",
+    "Hash.SecurityProofs.TreeBinding"
+   ]
   },
   "Definitions.Nci": {
    "digest": "cb17b875c510656446a000071eb88c8642b91ee75ceba126abdbf87bbe46f15d",
@@ -21950,6 +22081,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
@@ -22534,6 +22667,8 @@
     "Accounting.SecurityProofs.Remote.HeldOverTimeLinksDrawn",
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.PooledDraw",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR",
+    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork",
     "Pous.SecurityProofs.P2ErrorSplitB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pB19Uncond",
     "Pous.SecurityProofs.P2MeetsM1pFamilyUncond",
@@ -32137,7 +32272,7 @@
    ]
   },
   "Flock.ProvedScope": {
-   "digest": "e17871ef222175ed80157ce994b3d9855ed09038b3eef60c14b2225fca6fa94d",
+   "digest": "547ca9ef8c9522785a3d255bd6ebda5759e955aaad63a3effaef06aee733efb1",
    "definitions": {
     "Flock.ProvedScope.NO_PROGRAM": "c1e8296485c16b9065ec7619c59042d2c85b28a452c8a0fc69bb424a18799cd8",
     "Flock.ProvedScope.bitRows": "d74e0d1cd6dda8ca99a69595e7e2c1c076d95dbafbd867f2238ae2c3b9e6b92c",
@@ -32151,7 +32286,7 @@
     "Flock.ProvedScope.leafOk": "ea451e4d24f59860510fe86cbf4c64817c58f0c34e2ffc91406602d90e0df98c",
     "Flock.ProvedScope.metaProgram": "72c68f2d9672db2822e71f17a3c20be4a7a994e1c1f99290c7f14471d7120db3",
     "Flock.ProvedScope.outReads": "f5b8fd482b2d8d287cfd34ae370e42f8a9e4b4135da0b76fe67c499b9db03a5b",
-    "Flock.ProvedScope.plainTablesWhy": "f90f97b3984b1e061b6b22a156494cfe232a458da127d26fecd8a194bcfb6d44",
+    "Flock.ProvedScope.plainTablesWhy": "3d3442795cc62c683c13d1126acf59c10f35668b7d957febf99fe333edce8ebf",
     "Flock.ProvedScope.portBits": "585baabbbd824e4325f37df6e5e83ddf55708ce02e603de7b541bb45922686ff",
     "Flock.ProvedScope.portMask": "23714665ca3e9816a87625c4e344cde88005a983ea0fdf701132d4a6650c1ca5",
     "Flock.ProvedScope.portReadsB": "c68fe911ec7b47605079bc5e6aaec87d0953330395799dc50815c1ff29ac00e7",
@@ -33526,12 +33661,14 @@
    ]
   },
   "Flock.Record": {
-   "digest": "697ae51ec236fcac0660648d58f086c1c39e2a404c7b943fde2e6d3f35e06bc5",
+   "digest": "79cd6d01f252e02c4efd4441e5bd838f98fd950259bde56c685ee4a3bbc41f5f",
    "definitions": {
     "Flock.Record.arr": "9df0e1daf24196fc6e670a3a7f3d4f0a3c82c61e8eee4d5bf3a08271c3106721",
     "Flock.Record.check": "bba52587ec1aba9b29fabcd7a69510dd279175672cb253a09dec230cb8ef566f",
-    "Flock.Record.decode": "262806cc44027839d1ee362b9743c0863b3ba662a781b7d550dd9b090d8593f1",
+    "Flock.Record.decode": "0f5b68fc64305dc55b9fc8a357cc5ef27bd91af93e2099c465ae9d391da4409e",
     "Flock.Record.decode._sparseCasesOn_1": "db3cf4d64ba54afdc52ff5c3157a190182857d75dd3aca61716adafe72922ed9",
+    "Flock.Record.decode._sparseCasesOn_6": "c1fefee5f817482e502558025bad2b876bd01fe4e4fb692e079408b156fa84ab",
+    "Flock.Record.decode._sparseCasesOn_7": "15a3f277f500464acdd31375a6610e09a4ed0ee88f025e02d9f1cba941c803a5",
     "Flock.Record.f128s": "04e28d3233afdc499f00fd193535bd0587ef0f280717aabf3c02e27e7dd45515",
     "Flock.Record.fld": "217db7f71969f89fe63a196c3d79470e4fa8a9ead499212240ac6d00b588f88d",
     "Flock.Record.isNull": "3194e4cc0fa1b2bcd866c572048dd869c632e141ec45c009ee26716ffbc2c367",
@@ -35705,9 +35842,9 @@
    ]
   },
   "Proofs.Accounting.TS.Session.Checked.Guarantees": {
-   "digest": "e3d1ee78dcb03553e8fc7332bcb424751c30ecd893ae144a9976588c8256a2e9",
+   "digest": "3a92b4d3d69ec6c989d0ec6ce80f5eced72651c817521d56f31f6e74c5b20a5f",
    "definitions": {
-    "Accounting.Guarantees.TS.CheckedSessionSound": "e0e282fa701db4a833ac8b33e3979991893eb46b1959c225ec453f86fb0ee096"
+    "Accounting.Guarantees.TS.CheckedSessionSound": "a9fba452008c71adfe968c0688b04eba17cf088e1f92c86afda64be675541a10"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.CheckedSessionSound"]
   },
@@ -35742,9 +35879,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Held.Guarantees": {
-   "digest": "e08749f326bca24705700e1b32e9563b1151e618b6922d0590c18a3dbb01d0df",
+   "digest": "9e0aa411e87deb4adea059e8dde0ec8102545d9e4bcea0857f1ed55a2e355fba",
    "definitions": {
-    "Accounting.Guarantees.TS.HeldSessionSound": "b457bf7e7916e9faebf055aa4ec4abf29753a27fac611e1d850e14babd9871d0"
+    "Accounting.Guarantees.TS.HeldSessionSound": "8a580458715c4a6018881918f62eeabe8ef6804c40aabc0fe1bd94a54de0e418"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.HeldSessionSound"]
   },
@@ -35916,9 +36053,9 @@
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
   "Proofs.Accounting.TS.Session.Tile.Guarantees": {
-   "digest": "2b3c9227f8851a32689115d7d059ec34f7810e45e34faad9a52225a009265ad5",
+   "digest": "79edbe33575570a4c2d954c55e31259adbc94c1d634a931095db4f2d49959981",
    "definitions": {
-    "Accounting.Guarantees.TS.TileSessionSound": "7f9178e66e7a823a3acd4480720a3102a9bed253dfdf46901464d7694d937f80"
+    "Accounting.Guarantees.TS.TileSessionSound": "f755e55bca780f4599472bd1326ff400ae14ae8d639a6f86889fc3e40d461839"
    },
    "guarantees": ["Accounting.SecurityProofs.TS.TileSessionSound"]
   },
@@ -39762,16 +39899,16 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.Design": {
-   "digest": "fa5d3228a72caab7e1340a10f82777313ee8a8efc8c7ddf8d853a571aadb04cd",
+   "digest": "c267aa7aa4b328a2d7733d0e759f14fe9ce3d94a3aee51f4ac50ae3484c61d5d",
    "definitions": {
     "FlockSoundness.Discharge.DrawDesign": "a36aa01333f5f237d281becbc2008ebd41334d6f800e73ab7d39dfcdf93b76c1",
-    "FlockSoundness.Discharge.DrawDesign.casesOn": "9a9eb7abe1109f8f9f452802c7643c06a818d8fcb2e84f249fc8fa52c3f79143",
-    "FlockSoundness.Discharge.DrawDesign.ideal": "a6e81abdf0b6d04e93f71066f8191a5d3bdad747c7d0fff60502193cd54b75dc",
-    "FlockSoundness.Discharge.DrawDesign.law": "63313868bab93006a83cb53ab565518ed0bb2a1ef41004610a6ee0c12a11d22a",
-    "FlockSoundness.Discharge.DrawDesign.pop": "4be7e7b0f17d11339569c3ccfe187daa39a64c40603b363d394baba10856ae1d",
-    "FlockSoundness.Discharge.DrawDesign.rec": "c170bb3e70a0d10f9311073fde69ca663d5bf0a2adae00ac46012b3e8fdd3577",
-    "FlockSoundness.Discharge.DrawDesign.stratified": "0663c02222898adf3842f2193d7eca04430e6555f85d06ca8db38df1029ac1f9",
-    "FlockSoundness.Discharge.DrawDesign.streams": "75e3bc45bfeb627e8abff3c67be2735a18700d125323f355355f4ffcacfaf2c6",
+    "FlockSoundness.Discharge.DrawDesign.casesOn": "989967de7e3eecc58bca414a929ada977cf7ffc515ae9327fae2f7f646ac61cd",
+    "FlockSoundness.Discharge.DrawDesign.idealMiss": "dfb5b65ac7775255d9453447563b51577bceab86036ecf7f76ef60e5f226b9b0",
+    "FlockSoundness.Discharge.DrawDesign.law": "26cbcc3946572c3efb8f11363dca261d0b4af8ac9b44a1371aacd6abf6e8b770",
+    "FlockSoundness.Discharge.DrawDesign.pop": "d237bedaf1952cecd0b1ad3f004f630db563da05e03b88ec4268565f39adc0a7",
+    "FlockSoundness.Discharge.DrawDesign.rec": "b73e3b9bf69a93fa5b1d1157951c7781d7641e848a30f2298f729da8eef8d742",
+    "FlockSoundness.Discharge.DrawDesign.stratified": "7c69e36eebe48ed69aeab32486adc9bc079c7d7d40c79b1652105d5456dcb087",
+    "FlockSoundness.Discharge.DrawDesign.streams": "fc8f82bfc2a2302e539d3fdda1757a0647996769e964e624bebc71eb943d6eaa",
     "FlockSoundness.Discharge.DrawDesign.subset": "cf358505c25e734181609a9a5bce3344e418436d18b3d25e53f2973de450c71b"
    },
    "guarantees": [
@@ -39780,47 +39917,53 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.Numeric": {
-   "digest": "f583cd678cb85bd13b3a36a327c45232045af764c3ba1d3ca494d1145bbb1b66",
+   "digest": "f7e729835c86be996fd5041220591c11a570089f7970d1879b1b117e6357195b",
    "definitions": {
-    "FlockSoundness.Discharge.FailClosed.SoundExec205": "19901de6911ddc83bb52840d94b761dda14819ac9ece09f03aad6e9d3df87e79",
+    "FlockSoundness.Discharge.FailClosed.SoundExec205": "4e00ef8b4ac2768ef29153768cb927430af55a7474e839ae67ba6e1897d3e0b6",
     "FlockSoundness.Discharge.FailClosed.SoundExecH205": "843fc3cdb3277810d8ae0139568f69355b7be2aa93403651710e219b7ad27030",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHG205": "fd6f358c23aa104da797c3e76fc9ca74f97aa836cae0c7c7798b79fcd62c5053",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHG205": "ca1d2e2516f10e98d17ad0d9bf136883714f79eac647c756f93db8a26e0ad408",
     "FlockSoundness.Discharge.FailClosed.SoundExecHR205": "4f32021353f54bf36efb85fe9bb7c5f5e99066e2e6cf780b15c41d2c4a72b832",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRG205": "5fe12a3f055879e077fdc4c11e2f8e509d99bc20954f51a12c3ddd17f9331dc3",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRU205": "cf5e3b2785b844353b1a329d84597616c5266f3484947e6ca154dee700a81033",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHU205": "5d7e75059ab14624539c44bfb9df35d0ed229e5cb18d299d5802087601e1c31d",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRG205": "eb74df2a68985946306350d187ff38d44ddae039f9ae5644acbd5f4d9ad1ba8d",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRU205": "1bd5f7cff1e5acb4950f9df318f50e69ce0f92c9ac4dfff9b2392040d05c7316",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHU205": "d63a7cd2ac96c7ef82e963028249a563a4cbf6d1eadf238fa89ee66c6e2c6130",
     "FlockSoundness.StrictCR.ksAvgStrict205": "d448c4b949d77b7e62155db188eb366e6975d7aee007a419bb74ae8a314f28fb",
     "FlockSoundness.StrictCR.ksStrict205": "898bce35ae9bb722e0afe46a50741c351d914b4c2baa878886c0f87991fe8266"
    },
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
-   "digest": "c42decbb44e442d36e2d48cd890126af53542d24acdaa26ee1dff62ee8330ce3",
+   "digest": "b4cade6373bf97057889db7ae5464d68a03aa97d54284f4b85f3c01e52bf659f",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts": "ea5c4b6ca5cb51a75d8a57cd78a7f966035c1f7a2d7386f108d2540319c2cd29",
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
-    "FlockSoundness.Discharge.FailClosed.SoundExec": "8d885934c7822bcf7ac82bfaf261dfef46a50685aaa49b7bcecc32670f13a9d3",
+    "FlockSoundness.Discharge.FailClosed.LiveDesign": "ddc2735a99a850c8f55adeb9dc7822b8c9fa1ff7acac1f3f8a6580e39707500c",
+    "FlockSoundness.Discharge.FailClosed.SoundExec": "bfffd3b34d957f780cd396b3ea4da0b7c6e776f7d8296f885e0864bd39e4abdb",
     "FlockSoundness.Discharge.FailClosed.SoundExecH": "bb58949b45fcb9282890d5d6b978250880995fe41821517a8205c3691095a7e5",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHG": "5513d999a516abcdc1966f0d40042920a239993fd62ae271b78e47668ed5065d",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHG": "e2d590989947b254ba587a9f625ff1f82549ee22b56adeeeae4a9c1e41c547bc",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHJ": "de277006b8f647c763727a1a6034e4fe955709d75575c139433e37374d9228ac",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHJG": "960ba9fb24f40e8064ab68a368bc74fab90055aff72f3059db4f07540b85515a",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHJU": "efc5be2c93b4ec5ebfefe3ac182c7df92e3567b26c9d9061c94af83bae7393e6",
     "FlockSoundness.Discharge.FailClosed.SoundExecHR": "6ab3d8dae0c314ed5c1fb9fda99506648d7437dce61ec5b7b58850fb88832e79",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRG": "7656ac5a00c5a565242a80f388a6ae8ab0a4ae37d106f54322ef70e964c43b7c",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRU": "3643d930b75bada0c207119381e86ab17198fdef03ce29dfcce602f57014d1e3",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHU": "6fbe3772615088e357f4845bc6d3257b3731912f45ab653c127e8648f98980ed",
-    "FlockSoundness.Discharge.FailClosed.SoundExecJ": "ded5e66ad45478781ca06927a0a2cfc3042b791ccbc01e2d8bcf52855f77d5c2",
-    "FlockSoundness.Discharge.FailClosed.SoundZ": "23e5ce96a293593257030c9b54df7fcf6900b44d21853ed14d731b80dfef7e17",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRG": "09e8dd0156a7087cd5192f5b6d0e23a7d3993dd45960c57bf1869cbfa7784128",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRU": "68001780cfad68c5e54a4d9742ddbb2d3b27d33b166c074626b639df726ca2fb",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHU": "cbe038bdcda1c40f7387d8edb8e5ac58a819abcf48ef231b278ca0af9ca5f8ab",
+    "FlockSoundness.Discharge.FailClosed.SoundExecJ": "28b0af65e85ecdcc9047add0637342e10c3de388cd1892e5f700c85491ea0fd5",
+    "FlockSoundness.Discharge.FailClosed.SoundZ": "5d72fbb2bce042cc577dae2c31ab7cd01555afb6b7218c9529760f35759fdee7",
     "FlockSoundness.Discharge.FailClosed.SoundZH": "ce8a783761d1547fe7c0ed6052a572143ea42cbfe4ea2053c87a039be6cef8ca",
-    "FlockSoundness.Discharge.FailClosed.SoundZHG": "8836f7c643a4548dfff3cb1bdcd9432a966ffcd5354321ec1316e5bc47560c86",
+    "FlockSoundness.Discharge.FailClosed.SoundZHG": "c610733fe0e30cac9b78d09c938f6de9cc676004f8c652baae68fbda5d3edb82",
     "FlockSoundness.Discharge.FailClosed.SoundZHJ": "68ec30cf15ebf9023b837ede5616f1570ab5117a470a8dc59c32c3d0578d8da5",
     "FlockSoundness.Discharge.FailClosed.SoundZHJG": "8e80bb0115411fbee4ce973e3a29e55c482d3ce18dea5d35e981a83e93bfa25f",
     "FlockSoundness.Discharge.FailClosed.SoundZHJR": "cbe33c6b3179255fed3b71ff53c50186cc593800d86ee01886fac3dacd8d8950",
     "FlockSoundness.Discharge.FailClosed.SoundZHJRG": "1499611e9340efd0ba1d10482ae5da5ba54d414a88fb63dbf61d0611f96f113b",
     "FlockSoundness.Discharge.FailClosed.SoundZHJRU": "19a770ccc53e72dea54c4d9508148bf9f666055334d6750481a935b8635c9049",
     "FlockSoundness.Discharge.FailClosed.SoundZHJU": "2e09ea0700b95481c9716c2be30ed958bf732a2ab74ee4652d1579bb0ca32128",
-    "FlockSoundness.Discharge.FailClosed.SoundZHU": "2604fa167bf95da5db741170e2402dfd3b141821826d1e9396877d13dc4b5be4",
+    "FlockSoundness.Discharge.FailClosed.SoundZHU": "0b414e933a10c493f9692594c19052fbbf1089730f0358550d478a9c0a84a763",
     "FlockSoundness.Discharge.FailClosed.SoundZJ": "c4bddf7459a3176587aa216e125751aa5b29351a5a762cb00cf3daf06260b7e7",
     "FlockSoundness.Discharge.FailClosed.ViewZ": "e7f9fc1ffeeba8c430b9c2aef2bea0c80cb3147221c4dab9297448ce4d236e13",
     "FlockSoundness.Discharge.FailClosed.ViewZHJ": "a4369fba435bbe3080c6ac00d0314dc13ae45545926b8cea68a84ff3c0c1dcef",
-    "FlockSoundness.Discharge.FailClosed.ViewZHJR": "7e841daac3ddd26fd203ca981000a491389c91ad52faabbe8e82503e028e848d"
+    "FlockSoundness.Discharge.FailClosed.ViewZHJR": "7e841daac3ddd26fd203ca981000a491389c91ad52faabbe8e82503e028e848d",
+    "FlockSoundness.Discharge.FailClosed.liveLaw": "90992be2185eaa10c9d662c41ca70b3acab6397f879781938314df39ae69da43",
+    "FlockSoundness.Discharge.FailClosed.liveLaw._sparseCasesOn_1": "d0f9956f1a47ce096a53fbfd30694aeee58ea037eee7a692ef7d69a6c0d92bb2"
    },
    "guarantees": [
     "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties",
@@ -41515,6 +41658,30 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
+  },
+  "Proofs.Flock.Soundness.Discharge.PlainHJ.Bind": {
+   "digest": "ca6a97b3c8b52c67619d6231e73dd8d85b817c674a371e7b0265672efdd9fe66",
+   "definitions": {
+    "FlockSoundness.Discharge.PlainHJ.layPHJ": "999c17c8f0e38bad4f1ac6b82bde351c8ab005f2827458fcef147ad28139f760",
+    "FlockSoundness.Discharge.PlainHJ.layPHJI": "d6519337fa63cef1f4ad5449c327a418d79166a1be158bd4ef4602d93001e95b",
+    "FlockSoundness.Discharge.PlainHJ.ppPHJ": "3adaacdd7dcfdc25fc61cdec0b80ad57d584d9a3fbd231f6b7677ea25e16757e",
+    "FlockSoundness.Discharge.PlainHJ.ppPHJI": "cb3966a8beefb967d0f99149a40be6f1c159f20fbfb6b33d882c1b5963a38d37",
+    "FlockSoundness.Discharge.PlainHJ.rsPHJ": "5fcb0788458f2dfafe083cdf761148fe223db82ef38d41ec5666748cb1b257b5",
+    "FlockSoundness.Discharge.PlainHJ.rsPHJI": "a65b5eddc62f35026699abd62472653a9da6bdcc686153813f7bf7135df7ab7d",
+    "FlockSoundness.Discharge.PlainHJ.sitesPHJI": "be39cd1c712ca083625597f4f402d5d1a715bea3240e86a946181a22602c2355"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+  },
+  "Proofs.Flock.Soundness.Discharge.PlainHJ.Defs": {
+   "digest": "89c21cc4333a3d6920dae3b4f31b93edf75a6e2567b2f35d193a6bf045615771",
+   "definitions": {
+    "FlockSoundness.Discharge.PlainHJ.DrawOkPHJ": "9fd719efc97c24115c29e23a5bf7aa6239eaf033662a6aa337249c15c784f69e",
+    "FlockSoundness.Discharge.PlainHJ.opnPHJ": "d7298198c91f60603ce23c52cd6ed6467bf8008f80570169602764be0b6932fb",
+    "FlockSoundness.Discharge.PlainHJ.planPHJ": "42d59449d3eb93445d4d65c7f0f70d59d21884a4049ed2409888670505dd7be4",
+    "FlockSoundness.Discharge.PlainHJ.tabPHJ": "3cff3c405e26b78012929bc6d0dfbc8a3a1f7ca274fe7e59dc04d5489aada845",
+    "FlockSoundness.Discharge.PlainHJ.tablePHJ": "84da63c95f44cebe7b3d820849960c383193893aca2d3bdb331eeb52d99a14b5"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Proofs.Flock.Soundness.Discharge.PlainJ.Defs": {
    "digest": "987fcb2ce0c866b40eb6fb5f36a745ece083eac1bd5eb5ac5399f79ac4f08e90",

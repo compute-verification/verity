@@ -45,7 +45,7 @@ def nodeOwnerFold (P : Prog) (owner : Array Json) : Except String (Array (Option
     Desc.ownerStep (inputs P)[k]! ((rootOffs P)[k + 1]! - (rootOffs P)[k]! > 0) owner[k]!) #[]
 
 theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
-    ∃ i P reads mask own, parse j = .ok i ∧ Flock.Program.decode i.program.toUTF8 = .ok P ∧
+    ∃ i P reads mask own, parse j = .ok i ∧ decodeProgram i.program = .ok P ∧
       P.orderViolation = none ∧ Desc.rootLaidOut P = true ∧ Desc.inputsAtRoot P = true ∧ Desc.walkable P = true ∧
       Desc.analyze P = .ok reads ∧ nodeThetaFold P i.theta = .ok mask ∧ i.owner.size = nodeCount P ∧
       nodeOwnerFold P i.owner = .ok own ∧ iuCount own ≤ nodeCount P ∧ (∀ u < iuCount own, u ∈ usedOf own) ∧
@@ -58,7 +58,7 @@ theorem descEvaluate_ok (j out : Json) (h : Desc.evaluate j = .ok out) :
   unfold Desc.evaluate at h
   rcases h1 : parse j with e | i <;> simp only [h1, bind, Except.bind] at h
   · cases h
-  rcases h2 : Flock.Program.decode i.program.toUTF8 with e | P <;> simp only [h2] at h
+  rcases h2 : decodeProgram i.program with e | P <;> simp only [h2] at h
   · cases h
   simp only [pure, Except.pure] at h
   by_cases h3 : P.orderViolation.isSome = true
@@ -581,8 +581,9 @@ theorem ius_fst (c : Circuit) (dv : Division) {u : ℕ} (hu : u < dv.n) : (ius c
 /-- **`Desc.evaluate` agrees with `evaluate`, given the open statements.** -/
 theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgrees := by
   intro j out hev
-  obtain ⟨i, P, reads, mask, own, hpar, hdec, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
+  obtain ⟨i, P, reads, mask, own, hpar, hdp, hov, hlo, hin, hwk, han, hθ, hos, hof, hn, hused, rfl⟩ :=
     descEvaluate_ok j out hev
+  have hdec := ((decodeProgram_ok _ _).1 hdp).1
   have hi : Parses j i := (parse_ok j i).1 hpar
   have hgl := hG _ P hdec hov hlo hin hwk ⟨reads, han⟩
   obtain ⟨c, hc⟩ := (circuitOf_isOk P).2 hgl
@@ -738,7 +739,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
           obtain ⟨t, ht, rfl⟩ := List.getElem_of_mem hm
           exact ⟨t, by omega, hget t (by omega)⟩⟩)
       hneq
-    rw [(evaluate_ok j' _).2 ⟨_, P, c, dv, (parse_ok j' _).2 hpar', hdec, hc, hdv, rfl⟩]
+    rw [(evaluate_ok j' _).2 ⟨_, P, c, dv, (parse_ok j' _).2 hpar', hdp, hc, hdv, rfl⟩]
     have hr : (Array.range (iuCount own)).map (fun u => ((Desc.sizes (rootOffs P) own (iuCount own))[u]!,
         Desc.novelWidth (Desc.intoOf (rootOffs P) own mask reads (iuCount own))[u]!)) = ius c dv := by
       apply Array.ext
