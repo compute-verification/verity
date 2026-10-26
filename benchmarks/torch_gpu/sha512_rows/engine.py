@@ -71,10 +71,10 @@ class LeafArgs(ctypes.Structure):
 
 
 def variant_flags(name: str) -> tuple[str, ...]:
-    """``-DSX_V``/``-DSX_ROLL`` for a variant name: the modes of S0, S1, s0 and s1 (0 to 2), and ``s`` for straight-line."""
+    """``-DSX_V``/``-DSX_ROLL`` for a variant name: the modes of S0, S1, s0 and s1 (0 to 3), and ``s`` for straight-line."""
     digits, roll = (name[:-1], 0) if name.endswith("s") else (name, 1)
-    if len(digits) != 4 or any(c not in "012" for c in digits):
-        raise ValueError(f"a variant is four digits 0-2 and an optional 's', not {name!r}")
+    if len(digits) != 4 or any(c not in "0123" for c in digits):
+        raise ValueError(f"a variant is four digits 0-3 and an optional 's', not {name!r}")
     v = sum(int(c) << (2 * i) for i, c in enumerate(digits))
     return (f"-DSX_V={v}", f"-DSX_ROLL={roll}")
 

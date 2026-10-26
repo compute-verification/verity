@@ -70,8 +70,9 @@ def test_words_and_digests_round_trip() -> None:
 def test_a_variant_name_is_four_modes_and_an_optional_straight_line_mark() -> None:
     assert E.variant_flags("2211") == ("-DSX_V=90", "-DSX_ROLL=1")
     assert E.variant_flags("0000s") == ("-DSX_V=0", "-DSX_ROLL=0")
+    assert E.variant_flags("0033") == ("-DSX_V=240", "-DSX_ROLL=1")
     with pytest.raises(ValueError):
-        E.variant_flags("3000")
+        E.variant_flags("4000")
 
 
 def test_a_row_outside_its_tensor_is_refused() -> None:

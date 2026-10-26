@@ -41,12 +41,26 @@ tensors, which at 4,096 slots fills the GPU better than one layer a call (25 row
 
 - 0: funnel shifts on the integer ALU;
 - 1: the high half of each rotation as mul.hi/mad.lo on the FMA pipe;
-- 2: both halves on the FMA pipe.
+- 2: both halves on the FMA pipe;
+- 3: none on the ALU (`rotr3`): a rotation is a mul.wide of each word and two adds as mad.lo by 1 (2 IMAD.WIDE, 2 IMAD), a
+  shift one add fewer.
+
+A trailing `s` runs the rounds straight-line (`engine.variant_flags`).
 
 On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split could issue more than the ALU alone,
 but on the H200 every variant that moves rotations there measured slower, as `SHA_ROT` did for commit_gpu on sm_120. The
 default is `0000`, plain funnel shifts, and `pouw` (commit_gpu's `sha::compress`, the loop commit_slots runs) is within 1%
 of it. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
+
+Mode 3 is the balanced schedule (HASH-23). `0033` takes S0 and S1 off the ALU. Its SASS has 2,637 ALU instructions and
+2,328 IMAD slots a compression (IMAD.WIDE counts 2), where the default has 3,405 and 152, so the pipe bound falls from 53.2
+SM-clocks to 41.2 (1.29x). On commit_gpu's ruler (`ruler.sh`, run r20261026-045623-03b9, 1,980 MHz throughout) it runs
+at 4.50 G/s, 0.94x of commit_gpu's default (4.79), which is 58.1 SM-clocks. The default is ALU-bound (ncu: ALU pipe 97.6%
+busy). `0033` is bound by no one pipe (ALU 71%, FMA heavy 63%, issue 59%): its 58.1 clocks lie between the slower pipe's
+41.2 and the two pipes' sum, 77.6, because the scheduler overlaps them only in part. Its ~5.3 warps a scheduler stall on
+pipe throttle and on dispatch, which the default never does. Two of the schedule's forms don't survive ptxas: a mad.wide
+with a 64-bit addend becomes a mul.wide and an IADD3, so an add can't leave the ALU that way, and a mad.hi's addend costs
+two moves. `rotr3` uses neither.
 
 ## Measured
 
@@ -67,6 +81,8 @@ compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the frozen H200 shape.
 - `sass.py`: opcode counts per variant.
 - `gpu.sh`: one leased GPU session.
+- `ruler.sh`, `as_commit_gpu.cuh`: the variants on commit_gpu's ruler (`commit_gpu sha`, gated by `reference.py check`)
+  against its default build, with each build's SASS pipe mix, SM clock and ncu's pipe utilization.
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 ```bash
