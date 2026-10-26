@@ -2,7 +2,12 @@
 composed in order (`F32Add_v2`, `F32Mul_v2`, `F32Div_v2`, `MufuEx2Ftz_v1`, `F2fpBf16_v1`), on rows of scores, uniform words,
 special words and ties, at N = 1 up to CMP-92's context of 32; it is within bf16's rounding of the exact softmax; and
 `QkSoftmaxRow_v1{T, D=64}` on the H200's step is `GemmCoordinate_v2{K=64}`'s words over the key rows followed by that
-composition. Each is Boolean with one 16-bit output a key, and a row of no words, no keys or a D off the step is refused."""
+composition. Each is Boolean with one 16-bit output a key, and a row of no words, no keys or a D off the step is refused.
+
+`SoftmaxRowPad_v1{N}` at n is `SoftmaxRow_v1{N=n}` of the first n words then +0, and `QkSoftmaxRowPad_v1{T, D=64}` at n is
+`QkSoftmaxRow_v1{T=n}` on the first n key rows then +0 (`qk_softmax_row_pad_reference`), whatever the masked words or rows
+hold (NaN, inf, uniform words), at every n of a short row and at n = 1, 2, 5, 17, 31 and 32 of T = 32; n = 0 writes +0 and
+n > T is n = T; n is a position-kind port; the reference refuses n outside 1..T."""
 from __future__ import annotations
 
 import numpy as np
@@ -10,7 +15,8 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits import ports as PT
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import gemm as G
@@ -18,6 +24,7 @@ from verity.ml.circuits.ops import mufu as M
 from verity.ml.circuits.ops import prims as P
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.boolean import softmax_row as SR
+from verity.ml.circuits.program import Program
 
 #: signed zeros, the smallest and largest subnormals, the smallest normal, 1.0 and its neighbours, 2, the largest finite,
 #: infinities, a signalling and two quiet NaNs, each of either sign
@@ -159,7 +166,119 @@ def test_the_fused_unit_at_the_context_length_is_gemm_coordinate_words_then_the_
     assert np.array_equal(_fused(q, k), _softmax_words(_scores_words(q, k)))
 
 
-@pytest.mark.parametrize("target", [bind(SR.SoftmaxRow, N=1), bind(SR.SoftmaxRow, N=3), _qk(1), _qk(3)], ids=lambda t: t.id)
+def _junk(rng, shape) -> np.ndarray:
+    """Masked words: a third uniform words, a third special words (NaN, inf), a third +inf or a quiet NaN, so a masked score
+    would win the max or poison the row if it took part."""
+    pick = rng.integers(0, 3, shape)
+    return np.choose(pick, [rng.integers(0, 1 << 16, shape), rng.choice(BF16_SPECIALS, shape),
+                            rng.choice(np.array([0x7F80, 0x7FC0, 0xFFC0], np.uint16), shape)]).astype(np.uint16)
+
+
+def _row_pad(rows: np.ndarray, n: int) -> np.ndarray:
+    N = rows.shape[1]
+    return np.asarray(BS.evaluate_words(bind(SR.SoftmaxRowPad, N=N), rows, np.full(len(rows), n, np.uint16))
+                      ).astype(np.uint32).reshape(len(rows), N)
+
+
+def _pad(T: int) -> object:
+    return bind(SR.QkSoftmaxRowPad, T=T, D=64, **BG.GEMM_HOPPER)
+
+
+def _fused_pad(q: np.ndarray, k: np.ndarray, n: int) -> np.ndarray:
+    T = k.shape[1]
+    return np.asarray(BS.evaluate_words(_pad(T), q, k, np.full(len(q), n, np.uint16))).astype(np.uint16).reshape(len(q), T)
+
+
+def _masked_heads(rng, heads: int, T: int, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """`_heads` at T keys with every key row j >= n junk (`_junk`), and some such rows +inf or NaN whole."""
+    q, k = _heads(rng, heads, T)
+    k[:, n:] = _junk(rng, k[:, n:].shape)
+    whole = rng.random((heads, T - n)) < 0.25
+    k[:, n:][whole] = rng.choice(np.array([0x7F80, 0x7FC0], np.uint16), (int(whole.sum()), 1))
+    return q, k
+
+
+def test_the_padded_row_is_the_row_of_its_first_n_words() -> None:
+    """Every n of N = 3, the masked words junk: the first n outputs are `SoftmaxRow_v1{N=n}`'s (its word primitives'
+    composition) and the rest +0. n = 0 writes +0, and n = 4 or 0xFFFF is n = 3."""
+    rng = np.random.default_rng(700)
+    N = 3
+    base = np.concatenate([_scores(rng, (150, N)), _rows(rng, 150, N), _ties(rng, 75, N)])
+    for n in range(1, N + 1):
+        rows = base.copy()
+        rows[:, n:] = _junk(rng, rows[:, n:].shape)
+        want = np.zeros(rows.shape, np.uint32)
+        want[:, :n] = _softmax_words(rows[:, :n])
+        assert np.array_equal(_row_pad(rows, n), want), n
+    assert not _row_pad(base, 0).any()
+    full = _row_pad(base, N)
+    assert np.array_equal(full, _row(base))
+    for n in (N + 1, 0xFFFF):
+        assert np.array_equal(_row_pad(base, n), full), n
+
+
+def test_the_padded_unit_is_the_unit_at_n_keys_then_zeros() -> None:
+    """Every n of T = 2, the masked key rows junk: `qk_softmax_row_pad_reference`, `QkSoftmaxRow_v1{T=n}` on the first n rows
+    then +0. n = 0 writes +0 and n = 3 or 0xFFFF is n = 2."""
+    rng = np.random.default_rng(802)
+    T = 2
+    for n in range(1, T + 1):
+        q, k = _masked_heads(rng, 150, T, n)
+        assert np.array_equal(_fused_pad(q, k, n), SR.qk_softmax_row_pad_reference(q, k, n, BG.GEMM_HOPPER["DOT"])), n
+    q, k = _heads(rng, 150, T)
+    assert not _fused_pad(q, k, 0).any()
+    full = _fused_pad(q, k, T)
+    for n in (T + 1, 0xFFFF):
+        assert np.array_equal(_fused_pad(q, k, n), full), n
+
+
+@pytest.mark.slow
+def test_the_padded_unit_at_the_context_length_is_the_unit_at_n_keys_then_zeros() -> None:
+    """T = 32, the sidecar's binding, at n = 1, 2, 5, 17, 31 and 32 with junk in the masked key rows: equal to
+    `QkSoftmaxRow_v1{T=n}` word for word, then +0. Shorter rows can't show the mask at the far end of a 32-word sum."""
+    rng = np.random.default_rng(832)
+    for n in (1, 2, 5, 17, 31, 32):
+        q, k = _masked_heads(rng, 60, 32, n)
+        got = _fused_pad(q, k, n)
+        assert np.array_equal(got, SR.qk_softmax_row_pad_reference(q, k, n, BG.GEMM_HOPPER["DOT"])), n
+        assert not got[:, n:].any(), n
+
+
+def test_an_infinite_or_nan_masked_score_does_not_leak() -> None:
+    """Clean heads whose masked key rows score +inf (which would be the max) or NaN (which would make every word NaN): the
+    outputs are the unmasked unit's, finite, and +0 past n."""
+    rng = np.random.default_rng(900)
+    T, n = 2, 1
+    q = np.full((2, 64), 0x3F80, np.uint16)
+    k = _operands(rng, (2, T, 64))
+    k[0, n:], k[1, n:] = 0x7F80, 0x7FC0
+    got = _fused_pad(q, k, n)
+    assert np.array_equal(got, SR.qk_softmax_row_pad_reference(q, k, n, BG.GEMM_HOPPER["DOT"]))
+    assert not got[:, n:].any() and not ((got[:, :n] & 0x7F80) == 0x7F80).any()
+
+
+def test_n_is_a_position_kind_port() -> None:
+    """The unit's key count is a run input of kind position, so it is public; a caller passing it a value it didn't declare
+    as a position is refused (`ports.E_PORT_KIND`)."""
+    prog = Program(_pad(2))
+    assert PT.facts(prog.root).node(2).one.kind == "position"
+    params, ret = _pad(2).signature()
+    undeclared = CompositeDefinition("SoftmaxRowPadTestUndeclared", 1, (), lambda S: (params, ret),
+                                     lambda B, S, q, k, n: B.call(_pad(2), q, k, n), register=False)
+    with pytest.raises(PT.PortError, match="takes kind=position") as e:
+        Program(undeclared)
+    assert e.value.code == "E_PORT_KIND"
+
+
+@pytest.mark.parametrize("n", [0, 4, -1, True, 1.0])
+def test_the_reference_refuses_a_key_count_outside_the_row(n) -> None:
+    q, k = _heads(np.random.default_rng(1), 3, 3)
+    with pytest.raises(ValueError, match="key count"):
+        SR.qk_softmax_row_pad_reference(q, k, n, BG.GEMM_HOPPER["DOT"])
+
+
+@pytest.mark.parametrize("target", [bind(SR.SoftmaxRow, N=1), bind(SR.SoftmaxRow, N=3), _qk(1), _qk(3),
+                                    bind(SR.SoftmaxRowPad, N=3), _pad(3)], ids=lambda t: t.id)
 def test_each_is_boolean_with_one_16_bit_output_a_key(target) -> None:
     assert BL.is_boolean(target)
     n = target.bindings.get("N", target.bindings.get("T"))
