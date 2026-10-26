@@ -263,3 +263,7 @@ RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does t
 
 ## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
 (PROTO-DESIGN-2) s_b (M13 and the H200's b1 ≥ 1/8): 8 on the H200, 2 on sm_120. Also, RT-MODEL on P9: a host choice of 2 × 192-core Zen 5c reaches about 10–14% of GPU time for hashing (2 × 56-core Xeon about 3.4%; GH200 14–27%), so hosts must be in the fleet's capacity. Whether a hardware inventory is a named premise is going to Daniel.
+
+## 04:40Z, coordinator: NAIVE-STRASSEN's paper (note:20261026T0140Z-draft-accel-naive-strassen, head a9ef5cfa4b)
+- Theorem 1 (tensor units only, additions free, so conservative): every Strassen or Winograd schedule costs at least 1 + 4·8^-ℓ at depth ℓ ≤ 13 on the H200 (sheet and measured) and the RTX measured, and ℓ ≤ 12 on the RTX sheet. In size, it loses for n ≤ ~16k·b_min (H200) and ~8k·b_min (RTX sheet).
+- Under noise stripping, HYB's activation-side terms at V ±64 hold only to depth 10 (an explicit depth-12 schedule costs 0.987). It recommends V ±96. BET-HYBRID-2's v2 rec is ±80 on both sides, and NAIVE-STRASSEN will post the minimum u_X that holds depth 13. Use the larger of the two answers.
