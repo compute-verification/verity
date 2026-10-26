@@ -39,7 +39,8 @@
 #     PP_TORCH_FROZEN_WORKERS processes (default 16); then the tampered step (every output's
 #     bit 0 flipped), whose drawn units Lean must refuse, on PP_TORCH_FROZEN_TAMPERED tags (default all; "none" skips it);
 #     an honest window's first drawn session's proof edited one bit at a time (records_audit.py --flip-proofs, at most
-#     PP_TORCH_FROZEN_FLIPS a tag, default "bf16-dot=64 s8-width=2 s8-mlp=1"), each of which Lean verify must refuse;
+#     PP_TORCH_FROZEN_FLIPS a tag, default "bf16-dot=64 s8-width=2 s8-mlp=1"), and its public file one bit at a time under the
+#     honest proof, each of which Lean verify must refuse;
 #     W per block and pooled (frozen_w) into $O/w.json. PP_ONLY=honest|forged runs one arm. PP_TORCH_LOOP_SHAPE: more
 #     serve_frozen.py flags (--layers, --position, --tags, --keep).
 #   PP_TORCH_LOOP=1: a window of an integration that is not vLLM (integrations/torch_loop: a W8A8 MLP in PyTorch, its one
@@ -141,7 +142,7 @@ PP="$PY benchmarks/prove_path/prove_path.py"
 keep() {  # NAME: $W/NAME's records into $O/NAME
   mkdir -p $O/$1
   (cd $W/$1 && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
-    ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' -print0 \
+    ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed

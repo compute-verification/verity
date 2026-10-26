@@ -350,7 +350,8 @@ def _code(fn: Any) -> str | None:
 def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> dict:
     """At most ``most`` of `zk_mutants.py`'s one-bit edits of the first drawn session's proof (a prover that sent the edited
     proof, the round messages that carried it rebuilt and the coins kept), each verified by Lean `verify --zk` on the honest
-    member's circuit and public file: what the verifier of record refuses, not the prover."""
+    member's circuit and public file: what the verifier of record refuses, not the prover. Then that public file with one
+    bit flipped (``public-bit-*``) under the honest proof."""
     import a0
     sys.path.insert(0, str(HERE.parents[1] / "verity" / "ml" / "flock" / "verifier"))
     import zk_mutants as ZM
@@ -370,6 +371,17 @@ def proof_edits(lean: str, wdir: Path, members: tuple, out: Path, most: int) -> 
             shutil.copyfile(f, sd / f.name)
         v = a0.lean_verify(lean, st, members[k].n, out / c["name"], zk=True)
         cases[c["name"]] = {"refused": a0.lean_refused(v), "why": v.get("why"), "expected": c["expect"]["why"]}
+    n = members[k].n
+    pub = (st["dir"] / f"pub-{n}.bin").read_bytes()
+    for name, off in (("public-bit-mid", len(pub) // 2), ("public-bit-last", len(pub) - 1)):
+        d = out / name / "member"
+        shutil.copytree(st["dir"], d, copy_function=os.link, dirs_exist_ok=True)
+        (d / f"pub-{n}.bin").unlink()
+        (d / f"pub-{n}.bin").write_bytes(pub[:off] + bytes([pub[off] ^ 1]) + pub[off + 1:])
+        shutil.copytree(honest, out / name / "sessions" / honest.name, copy_function=os.link, dirs_exist_ok=True)
+        v = a0.lean_verify(lean, {**st, "dir": d}, n, out / name, zk=True)
+        cases[name] = {"refused": v["accepted"] is False and v.get("digest") is not None, "why": v.get("why"),
+                       "expected": f"the public file's byte {off} of {len(pub)}, bit 0 flipped, under the honest proof"}
     return {"member": k, "session": honest.name, "edits": len(cases), "refused": sum(v["refused"] for v in cases.values()),
             "cases": cases}
 
