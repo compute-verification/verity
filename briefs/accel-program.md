@@ -113,6 +113,8 @@ multiplication algorithm is faster than Strassen."
 
 **OPEN DECISION, asked of Daniel at 26 Oct 03:00Z (the barrier).** ABSORB-THM's Theorem B: over an instruction set containing LOP3, a proved "work ≥ c·n³" for the transcript is an explicit superlinear circuit lower bound, beyond known techniques. The options are (A) a narrow named computational assumption, cryptanalyzed like SHA-512's; (B) SHA-512 per word as a random oracle (γ ≈ 134–223); (C) credit only the provable floor (c ≈ 1/3 on the H200); (D) keep searching. The coordinator recommends (A) with (C) beside it. Until Daniel answers, every result is stated as its unconditional part plus the weakest assumption it needs.
 
+**Ruling, 25 Oct 7:37 PM PDT (Daniel): R-ACCEL-6, SAK scoped to matmul.** The one computational premise is symmetric algorithmic knowledge for exact matrix products only, "because these are so closely studied". Everything that isn't a matmul (receipt, fold, ABSORB, lucks) must be proved or designed away, e.g. a SHA-512 commitment of every word at large L (γ_hash ≈ 6460/L, γ_rm ≈ L/K).
+
 **Wording:**
 
 - Don't use "completeness" for a model property; the word is overloaded.
