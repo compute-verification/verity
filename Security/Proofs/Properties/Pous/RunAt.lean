@@ -4,12 +4,12 @@ import Proofs.Properties.Pous.Run
 /-!
 # The composed check's property at every point, proved
 
-`runCheckAcceptsAt : RunCheckAcceptsAt` and `runCertifiesAt_of` (`Properties.Pous.EndToEndAt`): `runCheckAccepts`'s and
-`runCertifies_of`'s proofs (`Proofs.Properties.Pous.Run`) with the point's parameters `ps` in place of the deployed
-ones. The check's steps (`checkAt_ok`), the device's record (`inv_recorded`) and the list lemmas are already
-point-free and are reused; the lemmas on `C*`'s blocks, leaves and the table's strings are restated at `ps`. The one
-fact the deployed proof read off the point's numbers, `0 < blocksPerSegment`, follows from a challenged index being
-below `ps.blocks`.
+`runCheckAcceptsAt : RunCheckAcceptsAt` and `runCertifiesAt : RunCertifiesAt` (`Properties.Pous.EndToEndAt`):
+`runCheckAccepts`'s and `runCertifies`'s proofs (`Proofs.Properties.Pous.Run`) with the point's parameters `ps` in
+place of the deployed ones. The check's steps (`checkAt_ok`), the device's record (`inv_recorded`) and the list lemmas
+are already point-free and are reused; the lemmas on `C*`'s blocks, leaves and the table's strings are restated at
+`ps`. The one fact the deployed proof read off the point's numbers, `0 < blocksPerSegment`, follows from a challenged
+index being below `ps.blocks`.
 -/
 
 namespace Pous.EndToEnd.SecurityProofs
@@ -228,11 +228,11 @@ theorem shaped_ofAt {c : SetupProtocol.Commitment} {C : Array (Array ByteArray)}
   obtain ⟨-, -, -, -, -, -, hb, -⟩ := (hseg s hs).2 v hv
   exact hb
 
-/-- `RunCertifiesAt` from the setup check's two open properties, which quantify over every parameter set. -/
-theorem runCertifiesAt_of (hd : AcceptsDecodes) (hp : PublishesRoot) : RunCertifiesAt := by
+/-- `RunCertifiesAt` from the setup check's two properties, which quantify over every parameter set. -/
+theorem runCertifiesAt : RunCertifiesAt := by
   intro pt trusted c C pub digests r sid dev ⟨hs, hc⟩
-  have hD := hd pt.params c C ⟨pub, (), hs⟩
-  have hP := hp pt.params c C pub () hs
+  have hD := PousCheck.Properties.SecurityProofs.acceptsDecodes pt.params c C ⟨pub, (), hs⟩
+  have hP := PousCheck.Properties.SecurityProofs.publishesRoot pt.params c C pub () hs
   obtain ⟨ha, hsid, htr, hrest⟩ := runCheckAcceptsAt pt trusted pub digests r sid hc dev C
   have hroot : Merkle.root (leaves pub.salt C) = some pub.root := by rw [hP.2.2.1]; exact hP.1
   exact ⟨hD, hP, ha, hsid, htr, hrest (shaped_ofAt hD) hroot⟩
