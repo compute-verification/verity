@@ -95,6 +95,23 @@ def test_the_period_open_commits_each_stratums_circuit_file_sha512(program, tmp_
     assert PC.build(d, out, lower=stand_in)["files"] == {**files, "k64": _sha(b"another lowering's file\n")}
 
 
+def test_a_commit_runs_period_open_commits_its_declared_fixed_length(tmp_path, monkeypatch):
+    """``pouw_h1_gpu.py --commit --peer --period P`` opens P with ``--length``, its ``--declare``'s fixed length, in the
+    form the gate takes and core's credit reads back (`credit.committed_length`), so credit holds its window to it."""
+    from verity_vllm.protocols.pouw import h1 as PH
+
+    from tests.protocols import pouw_h1_gpu as GPU
+    decl = PH.Static((1,) * 32, 3, 32, 4)
+    argv = GPU.period_open_argv("o1", "a" * 128, 7, decl)
+    assert argv[:11] == ["period-open", "--name", "o1", "--cap", "1", "--circuit", "a" * 128, "--draw-k", "7",
+                         "--rows", "32"]
+    length = _auditor(monkeypatch).length_of(argv[argv.index("--length") + 1])
+    assert length == GPU.fixed_length(decl) == {"max_tokens": [3] * 32, "stop": "fixed"}
+    ledger = CH.Ledger(tmp_path / "windows.jsonl", 1)
+    ledger.period_open("o1", circuit="a" * 128, draw_k=7, rows=32, length=length)
+    assert CR.committed_length(ledger.lines, "o1") == ([3] * 32, None)
+
+
 def test_a_template_the_declared_program_does_not_define_is_lowered_for_no_stratum(program, tmp_path, monkeypatch):
     """The lowering is of the declared Program's own templates: when K's template (`h1window.template` over
     `tile_unit` at the layout's tile) is none of the descriptor's definitions, no file is built and nothing is

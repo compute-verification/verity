@@ -25,7 +25,7 @@ import pytest
 pytest.importorskip("torch")
 pytest.importorskip("vllm")
 
-from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, load_artifact, reuse_mismatches  # noqa: E402
+from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, load_artifact, reuse_mismatches
 
 B0_DIGEST = "59b35d80faf29438d21a0ea1c96c877ec69e2f21174f11b835ac1ef04c1ed496"  # A's cp-cba request_8_4 == CB-C2's cp-cbc sens/base
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
