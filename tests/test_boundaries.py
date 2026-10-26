@@ -154,6 +154,14 @@ TEST_ONLY = {
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
+#: Modules of ``verity.ml`` that only a prover's or developer's build turns on, which nothing in ``verity/core`` names (an
+#: import, an attribute or a string), each with the module and why a verifier must not read it.
+PROVER_ONLY = {
+    "trace_cache": ("verity/ml/circuits/ops/boolean/trace_cache.py",
+                    "traced circuits reused across a prover's builds: a verifier reading them would take a stale or tampered "
+                    "entry for a Definition's gates"),
+}
+
 MODULE_ATTR = re.compile(r"[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*:[A-Za-z_]\w*")
 IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 
@@ -419,6 +427,20 @@ def test_a_use_past_a_guard_is_found() -> None:
            "getattr(V, '_build_unchecked')(P)\ndef _build_unchecked(p):\n    return p\n")
     assert sorted(line for _name, line in _uses(ast.parse(src), {"_build_unchecked"})) == [1, 2, 3]
     assert _is_test("verity/ml/circuits/tests/test_partition_v2.py") and not _is_test("verity/ml/circuits/partition_v2.py")
+
+
+def test_core_never_names_a_prover_only_module() -> None:
+    """No file of ``verity/core`` (its tests included) names a module of ``PROVER_ONLY``, and each still exists."""
+    offenders = []
+    for path in sorted((SRC / "core").rglob("*.py")):
+        if {".lake", "__pycache__"} & set(path.relative_to(SRC).parts):
+            continue
+        hits = _uses(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)), set(PROVER_ONLY))
+        hits += [(name, line) for name, line, _ in _imports(path) if set(name.split(".")) & set(PROVER_ONLY)]
+        offenders += [f"{path.relative_to(SRC)}:{line}: {name}" for name, line in hits]
+    assert not offenders, "a verifier reads no prover-only module (PROVER_ONLY):\n" + "\n".join(offenders)
+    missing = [f for f, _why in PROVER_ONLY.values() if not (ROOT / f).is_file()]
+    assert not missing, f"PROVER_ONLY entries whose module is gone; remove them: {missing}"
 
 
 def _docstrings(tree: ast.AST) -> set[int]:

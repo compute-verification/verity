@@ -266,6 +266,8 @@ class TracingCircuit(Circuit):
 
 
 _KINDS = ("and", "xor", "not")
+#: the traced circuits this process reuses (`trace_cache.use`); None, as a verifier always has it, traces every time
+CACHE = None
 
 
 @dataclass
@@ -300,7 +302,11 @@ def _flat_out(res: Any, ret: Type) -> list[L]:
     return [f for e in res for f in e]
 
 
-def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True) -> Traced:
+def trace(build: Callable, params: Sequence[Type], ret: Type, *, cse: bool = True, key: tuple | None = None) -> Traced:
+    """``build``'s gate circuit over ``params`` to ``ret``. ``key``, a Definition's (name, version, bindings), lets `CACHE`, when a
+    build has turned it on, give the circuit an earlier trace of the same key and code made."""
+    if key is not None and CACHE is not None:
+        return CACHE.trace(key, build, params, ret, cse)
     C = TracingCircuit(cse=cse)
     ins = _elements_in(C, params)
     outs = [C.canon(f) for f in _flat_out(build(C, *ins), ret)]
@@ -501,16 +507,17 @@ def definition(name: str, version: int, build: Callable, params: Sequence[tuple[
     word Definition ``word``."""
     types = [t for _, t in params]
     traced: list[Traced] = []
+    key = (name, version, {})
 
     def body(B, S, *colls):
         if not traced:
-            traced.append(trace(build, types, ret))
+            traced.append(trace(build, types, ret, key=key))
         return emit(traced[0], types, ret, B, *colls)
 
     d = CompositeDefinition(name, version, (), lambda S: (tuple(params), ret), body, doc=doc, conformance=conformance,
                             register=register)
     d.build = build  # type: ignore[attr-defined]
-    d.traced = lambda: traced[0] if traced else trace(build, types, ret)  # type: ignore[attr-defined]
+    d.traced = lambda: traced[0] if traced else trace(build, types, ret, key=key)  # type: ignore[attr-defined]
     d.word = word  # type: ignore[attr-defined]
     return d
 
