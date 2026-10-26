@@ -78,14 +78,7 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
-  - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
-    starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
-    decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
-    C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
-    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
-    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity_torch_loop.weights`),
-    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it.
-  - `serve.py`: the toy served from that store under the remote bandwidth audit (`remote_bandwidth.p2`), the CPU
+  - `serve.py`: `store.py`'s toy store (below) served under the remote bandwidth audit (`remote_bandwidth.p2`), the CPU
     reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
     from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
@@ -93,6 +86,13 @@ Implementations:
     (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
     they're published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`. `tests/test_pous_p2_serve.py`
     regenerates it.
+  - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
+    starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
+    decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
+    C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
+    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
+    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity_torch_loop.weights`),
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
