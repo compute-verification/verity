@@ -6,6 +6,8 @@ where it doesn't. Every output fits its size class: 16 bits a bf16 word, 32 an f
     F32SumPart_v1{G}            (s: Array<G, F32>) -> F32
     RmsNormRecip_v1{N, G, EPS}  (s: Array<G, F32>) -> F32
     RmsNormOut_v1{C}            (x: Array<C, BF16>, rs: F32, w: Array<C, BF16>) -> Array<C, BF16>
+    RmsSumSqChunks_v1{C, K}     (x: Array<C, BF16>) -> Array<C/K, F32>
+    RmsNormOutSums_v1{C, S, G, N, EPS}  (x: Array<C, BF16>, w: Array<C, BF16>, s: Array<S, F32>) -> Array<C, BF16>
 
 (BF16 is ``Array<16, Value<1>>``, F32 ``Array<32, Value<1>>``.) `RmsNormRow`'s function is `RMSNormRef_v1{N, EPS, bf16}`'s
 (`verity_vllm.program.registry.ref_prims`, HF's ``LlamaRMSNorm``) on the GPU's operations, so a kernel matches it bit for bit
@@ -28,6 +30,13 @@ words and the groups 64 chunk sums, so G = 2: 128 + 2 + 1 + 128 units a row. Wit
 function (+0 + s = s for every s it sums). An f32 sum is not associative, so another grouping is another Definition's
 binding, never a regrouping of these.
 
+C-Flock refuses a unit none of whose rows is over 111 bytes, which `RmsNormRecip` (one 64-bit row) and `F32SumPart` (wired to
+G four-byte rows) are. `RmsNormOutSums` folds them into the output (CIR-109): it is
+``RmsNormOut{C}(x, RmsNormRecip{N, G, EPS}(F32SumPart{S/G} of each run of S/G consecutive s), w)`` word for word, so it
+reads x, w and all S chunk sums. Its s is one parameter, so a statement may lay it out one sum a row (128 four-byte rows at N
+= 16,384, 131 rows in all and so 256 hm96 slots) or several a row, as `RmsSumSqChunks` writes them: C/K chunk sums, chunk i
+`RmsSumSqPart{K}` of words iK to iK + K - 1.
+
 The square root is `f32_sqrt_rn`, ``PouwF32SqrtRn_v1``'s builder (PoUW's `PouwF32SqrtRn_v2` traces it in
 `verity.core.protocols.pouw.circuit.boolean`, which `verity.ml` can't import): `isqrt` and `f32_sqrt_rn` here are copies of
 it. #4238 moves that builder into `ops.boolean.sqrt`; its rebase deletes the copies here for ``from .sqrt import f32_sqrt_rn``.
@@ -46,8 +55,9 @@ from verity.ml.circuits.boolean.forms import NOT, ONE, OR, ZERO, add, const_bits
 from .. import fp32 as W
 from .elementwise import bf16_mul_f32, specialized
 
-__all__ = ["F32SumPart", "RmsNormOut", "RmsNormRecip", "RmsNormRow", "RmsSumSqPart", "f32_bits", "f32_sqrt_rn", "f32_sum",
-           "isqrt", "recip_root", "rms_norm_out", "rms_norm_row", "sum_squares"]
+__all__ = ["F32SumPart", "RmsNormOut", "RmsNormOutSums", "RmsNormRecip", "RmsNormRow", "RmsSumSqChunks", "RmsSumSqPart",
+           "f32_bits", "f32_sqrt_rn", "f32_sum", "isqrt", "recip_root", "rms_norm_out", "rms_norm_out_sums", "rms_norm_row",
+           "sum_squares"]
 
 BF16 = Array(16, BL.BIT)
 F32 = Array(32, BL.BIT)
@@ -119,6 +129,14 @@ def rms_norm_row(C, xs, ws, eps: int):
     return rms_norm_out(C, xs, recip_root(C, sum_squares(C, xs), len(xs), eps), ws)
 
 
+def rms_norm_out_sums(C, xs, ss, ws, groups: int, n: int, eps: int):
+    """`rms_norm_out` at rs = `recip_root` of the `f32_sum` of ``groups`` group sums, group g the `f32_sum` of ``ss``'s g-th
+    run of len(ss) / groups consecutive words."""
+    k = len(ss) // groups
+    acc = f32_sum(C, [f32_sum(C, ss[g * k:(g + 1) * k]) for g in range(groups)])
+    return rms_norm_out(C, xs, recip_root(C, acc, n, eps), ws)
+
+
 def _count(S: Any, k: str, what: str) -> int:
     v = getattr(S, k)
     if not isinstance(v, int) or isinstance(v, bool) or v < 1:
@@ -180,6 +198,35 @@ def _out_signature(S: Any):
     return (("x", chunk), ("rs", F32), ("w", chunk)), chunk
 
 
+def _per(S: Any, whole: str, part: str) -> int:
+    a, b = _count(S, whole, f"a multiple of {part}"), _count(S, part, f"a divisor of {whole}")
+    if a % b:
+        raise ValueError(f"{whole} = {a} is not a multiple of {part} = {b}")
+    return a // b
+
+
+def _chunks_build(S: Any):
+    _per(S, "C", "K")
+    k = S.K
+    return lambda C, *xs: [sum_squares(C, xs[i:i + k]) for i in range(0, len(xs), k)]
+
+
+def _chunks_signature(S: Any):
+    return (("x", Array(_C(S), BF16)),), Array(_per(S, "C", "K"), F32)
+
+
+def _out_sums_build(S: Any):
+    _per(S, "S", "G")
+    c, g, n, eps = _C(S), S.G, _N(S), _eps(S)
+    return lambda C, *e: rms_norm_out_sums(C, e[:c], e[2 * c:], e[c:2 * c], g, n, eps)
+
+
+def _out_sums_signature(S: Any):
+    _per(S, "S", "G"), _N(S), _eps(S)
+    chunk = Array(_C(S), BF16)
+    return (("x", chunk), ("w", chunk), ("s", Array(S.S, F32))), chunk
+
+
 RmsNormRow = specialized("RmsNormRow", 1, ("N", "EPS"), _row_build, _row_signature,
                          doc="a bf16 row's RMSNorm on bits, one unit a row: bf16_rn(RN(w_j * bf16_rn(RN(x_j * rs)))), "
                              "rs = RN(1 / RN(sqrt(RN(RN(acc / N) + EPS)))), acc the RN(x_i^2) summed from +0 in ascending order; "
@@ -195,3 +242,11 @@ RmsNormRecip = specialized("RmsNormRecip", 1, ("N", "G", "EPS"), _recip_build, _
                                "every NaN 0x7FFFFFFF")
 RmsNormOut = specialized("RmsNormOut", 1, ("C",), _out_build, _out_signature,
                          doc="a chunk of RMSNorm's output on bits: bf16_rn(RN(w_j * bf16_rn(RN(x_j * rs)))), NaN 0x7FFF")
+RmsSumSqChunks = specialized("RmsSumSqChunks", 1, ("C", "K"), _chunks_build, _chunks_signature,
+                             doc="C/K chunks of a bf16 row's squares on bits, chunk i RN(x_j^2) for j in [iK, iK + K) summed "
+                                 "from +0 in ascending order, every NaN 0x7FFFFFFF")
+RmsNormOutSums = specialized("RmsNormOutSums", 1, ("C", "S", "G", "N", "EPS"), _out_sums_build, _out_sums_signature,
+                             doc="a chunk of RMSNorm's output on bits from the row's S chunk sums: "
+                                 "bf16_rn(RN(w_j * bf16_rn(RN(x_j * rs)))), rs = RN(1 / RN(sqrt(RN(RN(acc / N) + EPS)))), "
+                                 "acc the G group sums summed from +0, group g s's g-th run of S/G words summed from +0, "
+                                 "both in ascending order; every f32 NaN 0x7FFFFFFF, every bf16 NaN 0x7FFF")
