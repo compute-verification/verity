@@ -1,6 +1,6 @@
 """vLLM adapter (runtime side): load a workload, and drive its requests through a built engine.
 
-The engine is built in `engine.build`, the capture and its run header are in `engine.capture`, the run's profile manifest and
+The engine is built in `engine.build`, the capture and its run header are in `observe.capture`, the run's profile manifest and
 versions in `engine.run_facts`, and code identity in `engine.code_identity`; the stages reach all of them through this module's
 names.  `load_workload` and what it calls stay in this file: tests execute them from its source, without importing torch.
 """
@@ -27,8 +27,8 @@ from verity_vllm.engine.code_identity import (_VERITY_INDUCTOR_DIR_MARK, CUBIN_C
                                               loaded_code_objects, loaded_code_objects_delta)
 from verity_vllm.engine.run_facts import (ACCEPTED, ACCEPTED_PROFILE_ID, ACCEPTED_RECORD, host_doc, model_config_subset,  # noqa: F401
                                           profile_manifest, versions_doc)
-from verity_vllm.engine.pinned import PinnedArena, spanned_bytes, storage_bytes_view  # noqa: F401
-from verity_vllm.engine.capture import SCHEMA, Capture, ObserverConfig, RunHeader, make_header  # noqa: F401
+from verity_vllm.observe.pinned import PinnedArena, spanned_bytes, storage_bytes_view  # noqa: F401
+from verity_vllm.observe.capture import SCHEMA, Capture, ObserverConfig, RunHeader, make_header  # noqa: F401
 
 
 def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:

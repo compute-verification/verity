@@ -322,7 +322,7 @@ refuses any set at TP > 1.  The planned shape is the same seam: one `install` pe
 
 The durations are host time around `step()`, and include device time only where vLLM synchronizes inside the step.  A
 caller that needs device time synchronizes around the run itself, as the harness does.  `clock` is injectable, so tests
-measure on a stub clock.  The capture's timing-only mode (`engine.capture.Capture`, its `step_times` with `forward_s` and
+measure on a stub clock.  The capture's timing-only mode (`observe.capture.Capture`, its `step_times` with `forward_s` and
 `sample_s`) times an observed run, not a served one.
 
 ## Protocol options
