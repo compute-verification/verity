@@ -88,7 +88,7 @@ theorem card_draws_le (N : ℕ) (hN : 0 < N) (I : Fin 105 → Fin N) :
 /-- **A union bound over the draw**: if each value `i` is drawn (`d t i`) on at most a `1/|I|` share of `T`, any event
 `F` of the drawn value is at most as likely as under a uniform `i`. -/
 theorem pr_draw_le {A T I : Type} [Fintype A] [Fintype T] [Fintype I] [Nonempty A] [Nonempty T] [Nonempty I]
-    (d : T → I → Prop)
+    (d : T → I → Prop) [∀ t i, Decidable (d t i)]
     (hfib : ∀ i, (Finset.univ.filter fun t => d t i).card * Fintype.card I ≤ Fintype.card T)
     (F : A → I → Prop) :
     pr (fun x : A × T => ∃ i, d x.2 i ∧ F x.1 i) ≤ pr (fun x : A × I => F x.1 x.2) := by
