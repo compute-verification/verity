@@ -63,10 +63,11 @@ landing, Daniel 25 Oct 11:19 PM PDT) lands only once a lean-audit passed on a co
 (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it as for a train's
 check), or any recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
 the locks on top, and `next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
-(`_carry`), so `main` stays a commit of `next` and the Lean checks above move with their commits: one covers its new commit
-when it regenerated those records too, the tree that lands being the one it checked with its own.  While one runs, a Lean
-change above it, reviewed or not, gets a check stacked at `next`'s top, below what came this tick (`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a
-whole check of its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
+no merge above changed (`_carry`), so `main` stays a commit of `next` and the Lean checks above move with their commits: one
+covers its new commit when it regenerated the records they differ in, the tree that lands being the one it checked with its
+own.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what came this tick
+(`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a whole check of
+its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
 change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
 holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
 `nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway, never a member it keeps), so a member that changes
@@ -3333,36 +3334,37 @@ class Driver:
 
     def _carried_ok(self, drive: dict, c: str) -> bool | None:
         """Whether the passed Lean check of ``c`` covers it: true unless `_carry` moved it there from the commit it ran on, whose
-        tree differs from ``c``'s by the lock records a landing below committed; then only when it regenerated each of those too,
-        so the tree that lands is the one it checked with its records.  None when its records can't be read."""
+        tree differs from ``c``'s by lock records a landing below committed; then only when it regenerated each of those files
+        too, so the tree that lands is the one it checked with its records.  None when its records can't be read."""
         rec = drive["lean"][c]
         if not (carried := rec.get("carried")) or carried.get("ok"):
             return True
         if (files := self._regenerated_files(drive, rec["run"])) is None:
             return None
-        carried["ok"] = bool(files) and set(carried["files"]) <= files
+        carried["ok"] = set(carried["files"]) <= files
         return carried["ok"]
 
     def _carry(self, drive: dict, chain: list[Member], t: int, lock: str) -> None:
         """After ``chain[:t + 1]`` landed with the lock commit ``lock`` on top, rebuild `next` on it, so `main` is again a commit
         of `next` and the next sync keeps what is above (26 Oct 22:40Z: a sync after a lock commit merged all 93 members again,
-        and the passed and running Lean checks above went with their commits).  Each member above, up to one whose merge changes
-        a lock ``lock`` holds, is made again on the one below it: the same message, its PR's head as second parent, and its
-        merge's tree with ``lock``'s records; the next sync merges the rest.  Each Lean check that runs or passed on a rebuilt
-        commit moves to its image, `carried` from the commit it ran on, and covers it only when it regenerated those records too
-        (`_carried_ok`); a failed one is dropped, and its commit checked again."""
+        and the passed and running Lean checks above went with their commits).  Each member above is made again on the one below
+        it: the same message, its PR's head as second parent, and its merge's tree with each of ``lock``'s records that no merge
+        from the landing up to it changed (one that did keeps its own record, which a Lean check above regenerates).  Each Lean
+        check that runs or passed on a rebuilt commit moves to its image, `carried` from the commit it ran on with the files they
+        differ in, and covers it only when it regenerated those (`_carried_ok`); a failed one is dropped, and its commit checked
+        again."""
         q, lean = self.q, drive.setdefault("lean", {})
-        files = sorted(changed(self.repo, chain[t].commit, lock))
-        entries = [_out(self.repo, "ls-tree", lock, "--", f).split("\t")[0].split() for f in files]
+        records = {f: _out(self.repo, "ls-tree", lock, "--", f).split("\t")[0].split()
+                   for f in changed(self.repo, chain[t].commit, lock)}
         top, images = lock, {}
         with tempfile.TemporaryDirectory() as tmp:
             index = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
             for m in chain[t + 1:]:
                 parents = _out(self.repo, "rev-list", "--parents", "-n", "1", m.commit).split()[1:]
-                if set(files) & changed(self.repo, parents[0], m.commit):
-                    break
+                for f in changed(self.repo, parents[0], m.commit) & set(records):
+                    del records[f]
                 _git(self.repo, "read-tree", m.commit, env=index)
-                for f, (mode, _, blob) in zip(files, entries):
+                for f, (mode, _, blob) in records.items():
                     _git(self.repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{f}", env=index)
                 tree = _git(self.repo, "write-tree", env=index).stdout.strip()
                 top = _git(self.repo, "commit-tree", tree, "-p", top, *(x for p in parents[1:] for x in ("-p", p)), "-m",
@@ -3381,12 +3383,11 @@ class Driver:
         for c, new in images.items():
             if (rec := lean.pop(c, None)) is None or rec.get("state") == "failed":
                 continue
-            was = rec.get("carried") or {}
-            lean[new] = {**rec, "tree": self._tree(new),
-                         "carried": {"from": was.get("from", c), "files": sorted({*was.get("files", ()), *files})}}
+            ran = (rec.get("carried") or {}).get("from", c)
+            lean[new] = {**rec, "tree": self._tree(new), "carried": {"from": ran, "files": sorted(changed(self.repo, ran, new))}}
             moved.append(f"{c[:12]} to {new[:12]}")
         q.log(f"research queue drive: `{q.branch}` rebuilt on the lock commit {lock[:12]}: {len(images)} member(s) above it "
-              f"kept, each with its merge's tree and {', '.join(files)}"
+              "kept, each with its merge's tree and the records no merge above changed"
               + (f"; Lean checks moved: {', '.join(moved)}" if moved else ""))
 
     def _lean_check(self, drive: dict, chain: list[Member], k: int, i: int, dry_run: bool) -> None:

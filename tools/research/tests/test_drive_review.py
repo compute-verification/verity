@@ -19,7 +19,7 @@ from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, LEAN_STEP
 from research.queue import QueueError, StoreLabels, label_target, lean_change
 from research.store import vocab
-from test_drive_postland import _registry
+from test_drive_postland import _registry, _tree
 from test_queue import World, _git
 from test_queue_drive import Harness, _failed_run, _live_run, _steps_run, _tip
 
@@ -240,14 +240,16 @@ def test_a_moved_lean_check_that_regenerated_locks_runs_again_on_the_rebuilt_com
     assert h.d.q.load_state()["drive"]["lean"][new]["state"] is None
 
 
-def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str]) -> tuple[Review, str, str, dict]:
+def _lock_landing(world, monkeypatch, tmp_path, above: dict[str, str], lock: str | None = None) -> tuple[Review, str, str, dict]:
     """#1 (a Lean change with its lock) checked and landed with the records its check regenerated, `{"records": 2}`, while a
-    check stacked at `next`'s top for #2 (a Lean change in the same package, without its lock) runs; its run dir holds
-    ``above``'s records.  (the harness, that check's run id, the commit it ran on, {run: its fetch})"""
+    check stacked at `next`'s top for #2 (a Lean change in the same package: without its lock, or stacked on #1 with ``lock``
+    as its lock) runs; its run dir holds ``above``'s records.  (the harness, that check's run id, the commit it ran on, {run: its
+    fetch})"""
     h = Review(world, monkeypatch, nonlean_first=False)
     h.d.regenerate_locks = True
     world.gh.put(1, world.change({"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": '{"records": 1}\n'}))
-    world.gh.put(2, world.change({"pkg/B.lean": "theorem b : True := trivial\n"}))
+    world.gh.put(2, world.change({"pkg/B.lean": "theorem b : True := trivial\n", **({"pkg/lean-audit.json": lock} if lock else {})},
+                                 base=world.gh.prs[1].head if lock else "origin/main"))
     world.gh.put(3, world.change({"c.txt": "3\n"}))
     h.review(1)
     h.tick()
@@ -303,6 +305,22 @@ def test_a_landing_with_regenerated_locks_rebuilds_next_on_its_lock_commit_and_t
           "deferred": rid, "fetch": h.d.fetch}
     assert merge.regenerated_parent(world.origin, main, h.q.store, ran=top, **kw) == rid
     assert merge.regenerated_parent(world.origin, main, h.q.store, **kw) is None     # it didn't run on the parent
+
+
+def test_a_member_above_whose_merge_changes_the_regenerated_lock_keeps_its_own_record_and_its_place(world, monkeypatch, tmp_path):
+    """In the S1 tail most Lean changes above a landing change its lock too: each keeps its merge's record, so the rebuild
+    doesn't stop there, and a check above it, of the same tree, covers its image as it is."""
+    h, rid, top, _ = _lock_landing(world, monkeypatch, tmp_path, {}, lock='{"records": 5}\n')
+    lock, new = _main(world), _tip(world)
+    assert _git(world.origin, "rev-parse", f"{new}~2") == lock and _tree(world, new) == _tree(world, top)
+    assert h.d.q.load_state()["drive"]["lean"][new]["carried"] == {"from": top, "files": []}
+    logged = len(world.logs)
+    h.review(2)
+    h.review(3)
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("landed #3"), world.logs
+    assert any("kept 2, merged 0" in x for x in world.logs[logged:]) and _main(world) == new and len(h.launched) == 2
 
 
 def test_a_moved_check_that_didnt_regenerate_the_records_below_it_covers_nothing(world, monkeypatch, tmp_path):
