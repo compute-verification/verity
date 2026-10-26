@@ -8,7 +8,7 @@ Runtime side (imports torch / vLLM / triton): `observer`, `triton_adapter`, `sto
 `profiles`, `fold`, `compare`.  The contract between the two halves is the event schema in `events.py`
 (`verity-capture/log/v1`); see `DESIGN.md`.
 
-Vocabulary (Verity IR design snapshot, 2026-09-16): Definition -> Specialization -> Instance -> subcircuit.  The
+Vocabulary (the Verity IR design): Definition -> Specialization -> Instance -> subcircuit.  The
 runtime artifact is the *raw observation log* (never "trace"); "execution transcript" is reserved for the IR.
 """
 
