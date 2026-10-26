@@ -30,6 +30,19 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   sensitivity (each cost group scaled, each input at its low and high) and the hints (`plan.json`), and prints the
   tables.
 
+- `transformer.py`: the end-to-end demo's transformer (PRF-166), CMP-92's decoder block over one server-time block of
+  serving, small (width 128, 2 heads, MLP 512, 2 layers, a byte vocabulary, context 32) or large (`--model large`: 100
+  layers at width 8,192, 80.6 GB of INT8 linears and 13.4 GB of KV on one 96 GiB card; each dimension a flag). Every op
+  is a proof unit of its Definition: the linears `ScaledMmS8Coordinate_v1`, attention `GemmCoordinate_v2`, the residual
+  `Bf16Add_v1`, and CIR-100's ops (RMSNorm, the s8 quantizer, softmax, ReLU, the embedding, argmax) as stubs, each id
+  `stub:`, until they land. The harm is faulty units, IntegrityPeriod's W. It writes the frontier of expected C-Flock
+  cost (every serve-time commitment in it) against certified faulty units at δ, the chosen plan for `--target`, its
+  certificate recomputed through `Stratified.harm_bound` and `count_bound` at δ = 1% and 1e-6, the pooled bound over a
+  week, a month and a year on one server and on an assumed 10,000 (an assumed 10-minute block: neither is in the
+  census), and the plan as the circuit record's templates with the `work:1` law and work table that draw its k
+  (`handoff`). Its tests are this directory's suite.
+
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
+uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--target W] [--delta D]
 ```

@@ -1,8 +1,11 @@
 """chain_record's steps that read no prover: custody holds each gate run's files to its end.json; certs accepts a virtual
-certifier-serve run's kept certificates and clock certificates (`n2_zk.virtual`, fresh keys, each window's declared sync
-signed), refuses the window of a certificate whose signature is changed and every window from a clock certificate's, and
-refuses a key under `lms.DEPLOYED`'s height with --deployed; the report needs the endpoint's step on the advice profile
-and never accepts a stand-in; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s."""
+certifier-serve run's records, clock certificates and the client's kept copies (`n2_zk.virtual`, fresh keys, each
+window's declared sync signed), refuses the window of a record whose signature is changed, every window from a clock
+certificate's, a kept certificate whose signature is changed, and a key under `lms.DEPLOYED`'s height with --deployed;
+the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
+several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
+window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
+warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve."""
 
 from __future__ import annotations
 
@@ -50,41 +53,58 @@ def honest(tmp_path_factory):
     with pytest.MonkeyPatch.context() as mp:
         mp.setattr(n2.cs, "CertifyingPublisher", _Clocked)
         n2.virtual(out, requests=8, tokens=4, strategies=("honest",))
+    _keep(out / "honest", out / "honest" / "client")
     return out / "honest"
 
 
+def _keep(run: Path, client: Path) -> Path:
+    """The client's kept files as `keep_certificates` writes them: each certificate's public part with its session."""
+    session = json.loads((run / "deployment.json").read_text())["session"]
+    certified, _ = n2.cs.read_certified(run / "certified.jsonl")
+    line = lambda c: json.dumps({"session": session} | n2.cs.certificate_json(c)) + "\n"
+    client.mkdir(exist_ok=True)
+    (client / "certificates.jsonl").write_text("".join(line(r.certificate) for r in certified.values()))
+    (client / "clocks.jsonl").write_text("".join(line(c.certificate)
+                                                 for c in n2.cs.read_clocks(run / "clocks.jsonl")))
+    return client
+
+
 def _corrupt(src: Path, dst: Path, name: str, line: int) -> None:
-    dst.mkdir()
-    for f in ("certified.jsonl", "clocks.jsonl"):
-        shutil.copy(src / f, dst / f)
+    shutil.copytree(src, dst)
     rows = (dst / name).read_text().splitlines()
     doc = json.loads(rows[line])
-    sig = doc["certificate"]["signature"]
-    doc["certificate"]["signature"] = sig[:-2] + ("00" if sig[-2:] != "00" else "11")
+    cert = doc.get("certificate", doc)
+    cert["signature"] = cert["signature"][:-2] + ("00" if cert["signature"][-2:] != "00" else "11")
     rows[line] = json.dumps(doc)
     (dst / name).write_text("\n".join(rows) + "\n")
 
 
 def test_certs_accepts_the_kept_files(honest):
-    got = cr.certs(honest, honest)
+    got = cr.certs(honest, honest / "client")
     assert got["verdict"] == "accepted", got.get("why")
     assert got["certified_windows"] == got["windows"] == got["clocks_signed"]
+    assert got["client_check"]["records_are_the_clients"] and got["client_check"]["clocks_are_the_clients"]
     assert got["signed_are_declared"] and not got["key"]["deployed"]
-    assert cr.certs(honest, honest, deployed=True)["verdict"] == "refused"
+    assert cr.certs(honest, honest / "client", deployed=True)["verdict"] == "refused"
 
 
 def test_certs_refuses_a_changed_signature(honest, tmp_path):
     _corrupt(honest, tmp_path / "rec", "certified.jsonl", 0)
-    got = cr.certs(honest, tmp_path / "rec")
+    got = cr.certs(tmp_path / "rec", tmp_path / "rec" / "client")
     assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"] - 1
+    assert not got["client_check"]["records_are_the_clients"]
     _corrupt(honest, tmp_path / "clk", "clocks.jsonl", 0)
-    got = cr.certs(honest, tmp_path / "clk")
+    got = cr.certs(tmp_path / "clk", tmp_path / "clk" / "client")
     assert got["verdict"] == "refused" and got["clocks_signed"] == 0 and got["certified_windows"] == 0
+    _corrupt(honest, tmp_path / "kept", "client/certificates.jsonl", 0)
+    got = cr.certs(tmp_path / "kept", tmp_path / "kept" / "client")
+    assert got["verdict"] == "refused" and got["certified_windows"] == got["windows"]
+    assert "its signature doesn't verify" in got["client_check"]["refused"][0]
 
 
 def test_certs_refuses_a_client_without_clocks(honest, tmp_path):
     (tmp_path / "c").mkdir()
-    shutil.copy(honest / "certified.jsonl", tmp_path / "c")
+    shutil.copy(honest / "client" / "certificates.jsonl", tmp_path / "c")
     assert cr.certs(honest, tmp_path / "c")["verdict"] == "refused"
 
 
@@ -144,6 +164,63 @@ def test_report_holds_the_advice_profile_to_the_endpoint_and_refuses_stand_ins(t
     got = cr.report(steps)["steps"]["n2"]
     assert got["verdict"] == "failed" and got["members"]["honest"]["accepted_windows"] == 1
     assert got["why"].startswith("honest: the control (the prover's own prover-instances.bin) holds 57 of 337")
+
+
+def test_report_merges_runs_and_counts_a_negative_that_escaped_the_draw(tmp_path):
+    ok = {"profile": "advice", "rc": {"n2": "0", "scan": "0"}}
+    steps = _steps(tmp_path, ok)
+    draw = {"selection": "sampled", "law": "subset:2", "k": 2, "population": 4}
+    window = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
+    reference = [{"window": w, "expect": int(w != 0)} for w in range(4)]
+
+    def run(name, member, units):
+        doc = {"draw": draw, "ok": name == "honest", "members": {name: member},
+               "sampled": {name: {"draw": {"units": units}, "why": []}}}
+        (tmp_path / f"{name}.json").write_text(json.dumps(doc))
+        return str(tmp_path / f"{name}.json")
+
+    structured = {"leaked": [], "verifier_found": ["head egress 45 @320"], "structured": {"head egress 45 @320": "across"},
+                  "control": {"holds_all": True}}
+    steps.n2 = [run("honest", {"windows": [window] * 2, "network": {"accepted": True}, "received": structured}, [1, 2]),
+                run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [1, 2])]
+    got = cr.report(steps)
+    n2s = got["steps"]["n2"]
+    assert got["verdict"] == "accepted" and got["negatives_refused"] == {"n2/moved": "escaped the draw"}
+    assert n2s["members"]["honest"]["structured"] == {"head egress 45 @320": "across"}
+    assert n2s["members"]["moved"]["escaped_the_draw"] == {"faulty_windows": [0], "drawn": [1, 2]}
+    assert n2s["eps_at_delta"]["law"] == "subset:2" and (n2s["eps_at_delta"]["units"], n2s["eps_at_delta"]["drawn"]) == (4, 2)
+    steps.n2[1] = run("moved", {"windows": [window] * 2, "network": {"accepted": True}, "reference": reference}, [0, 1])
+    got = cr.report(steps)["steps"]["n2"]
+    assert got["verdict"] == "failed" and got["why"] == "moved: network accepted"
+    steps.n2[0] = run("honest", {"windows": [window] * 2, "network": {"accepted": True},
+                                 "received": {**structured, "leaked": ["head egress 45 @320"]}}, [1, 2])
+    got = cr.report(steps)["steps"]["n2"]
+    assert got["why"].startswith("honest: witness pieces leaked to the verifier: ['head egress 45 @320']")
+
+
+def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
+    import math
+    from dataclasses import asdict
+    sz = sys.modules.get("scan_zk") or _load("scan_zk")
+    sys.modules["scan_zk"] = sz
+    run = tmp_path / "c1"
+    (run / "out").mkdir(parents=True)
+    (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))
+    (run / "end.json").write_text(json.dumps({"run": "c1", "verdict": {"windows": 75, "requests": 100}}))
+    doc = cr.leak(run, {"draw": {"honest": 64}, "T": 32})
+    assert doc["widths"] == {"NS": 149_520, "NP": 4_480, "NV": 4_832, "egress_row": 65_536}
+    assert doc["terms"]["b"] == 154_352 and doc["terms"]["fmax"] == {"0.01": 5, "1e-06": 14}
+    week = {r["prog"]: r for r in doc["rows"] if r["period"] == "week" and r["machines"] == 1}
+    lw, rate, cap = 604_800 / 3.2, 100 / 75, math.log2(66)
+    assert week["registered"]["per_period"] == pytest.approx(lw * (32 * 4_480 + rate * cap))
+    assert week["anchors"]["per_link_window"] == pytest.approx(rate * (1_120 + cap))
+    assert week["anchors"]["pooled"]["0.01"] - week["anchors"]["per_period"] == pytest.approx(
+        5 * (154_352 + math.log2(lw * 64 + 1)))
+    with pytest.raises(SystemExit, match="drew 16 of 64"):
+        cr.leak(run, {"draw": {"honest": 16}})
+    (run / "out/deployment.json").write_text(json.dumps({"params": {**asdict(sz.PARAMS), "lanes": 8}}))
+    with pytest.raises(ValueError, match="lanes = 4"):
+        cr.leak(run)
 
 
 def test_subset_bound():

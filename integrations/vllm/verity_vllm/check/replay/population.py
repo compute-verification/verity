@@ -23,8 +23,8 @@ ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4", "Atten
 
 
 def _phase(step: int, last_step: int) -> str:
-    """Phase axis of the stratum key.  `last_step` = the request's LAST EXECUTED step: cap - 1, or -- [revb F-r17b-39] under an executed
-    prefix (R17-26 / R17-1) -- n_exec - 1, the lag step of an EOS-stopped request (the R17-1 / F-r17-14 boundary), so that request's
+    """Phase axis of the stratum key.  `last_step` = the request's LAST EXECUTED step: cap - 1, or -- under an executed
+    prefix -- n_exec - 1, the lag step of an EOS-stopped request (the executed prefix's boundary), so that request's
     `last` stratum exists and is sampled deterministically like every other request's; steps past it are 'not-executed' (split out of the
     pool by name, never a 'last' or a 'mid')."""
     if step == 0:
@@ -37,7 +37,7 @@ def _phase(step: int, last_step: int) -> str:
 
 
 def phase_anchor(pi_n_steps: int, ep: dict | None) -> dict[str, Any]:
-    """[revb F-r17b-39] The step the `last` phase of a request is anchored to, NAMED: n_exec - 1 under a fault-free executed prefix that
+    """The step the `last` phase of a request is anchored to, NAMED: n_exec - 1 under a fault-free executed prefix that
     stops before the cap (the lag step), else cap - 1.  On the record per request (`strata_keys.phase_anchor`)."""
     cap_last = int(pi_n_steps) - 1
     if ep and not ep.get("faults") and int(ep["n_exec"]) < int(ep["cap"]):
@@ -72,11 +72,11 @@ def _lifetime(engine_step: int, ring_slots: int | None) -> str:
 
 
 def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict[str, Any]:
-    """[FLUSH-03 fact of record; rev M-0494 (3)] per (request, step, MoE layer) with BOTH planes committed: the committed `up` bytes differ
+    """[FLUSH-03 fact of record] per (request, step, MoE layer) with BOTH planes committed: the committed `up` bytes differ
     from the committed `down` bytes.  Before FLUSH-03 the gather collector committed the same layer's down plane under the up name (vLLM's
     TritonExperts carves intermediate_cache1 = up and intermediate_cache3 = down out of ONE workspace; with no flush between the block's two
-    GEMM launches the staged up view was read after the w2 launch had overwritten it -- moe M-0205/M-0232, 22/22 same-layer pairs identical
-    on the R15/int-1 OLMoE records).  The comparison is over the COMMON PREFIX of the two request-local slices (min(len) bytes): when
+    GEMM launches the staged up view was read after the w2 launch had overwritten it -- 22/22 same-layer pairs identical
+    on the int-1 OLMoE records).  The comparison is over the COMMON PREFIX of the two request-local slices (min(len) bytes): when
     2I == H (OLMoE) that is the whole plane; when the widths differ the alias would still show as identical leading bytes (one base pointer,
     two row strides), so a prefix test catches it on every geometry.  Result: True = every compared pair differs; False = an identical pair
     (named: request, step, layer, bytes) -- the up plane is the down plane's alias; None = no MoE layer with both planes committed (dense
@@ -133,7 +133,7 @@ def moe_plane_alias_check(store: CommittedStore, *, max_named: int = 12) -> dict
 
 
 def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int = 0) -> set[str]:
-    """[MAN-06g, hopper BLOCKER M-0748 F-hopper-BIAS2 / rev-cb M-0751 (b)] the INTERIOR producers this row's VU would have to compose that
+    """[MAN-06g] the INTERIOR producers this row's VU would have to compose that
     this replay cannot evaluate: an `['n', producer, lo, hi]` input whose producer row claims no committed member (interior: the pre-bias
     Gemm under a BiasAdd, MAN-07) and whose family has no registered evaluator (Gemm_v2 on Hopper / batch-invariant Ada Programs), or a
     composable interior whose own inputs have that defect (bounded by INTERIOR_DEPTH).  Derived from the Program rows alone (families +
@@ -164,14 +164,14 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
                addresses: dict[tuple, dict] | None = None, last_step: int | None = None,
                codes: dict[str, dict] | None = None) -> tuple[list[dict], Counter, Counter]:
     """Every Program row of one request is in the population: the evaluable VUs [{i, spec, family, phase, stratum}], the not-evaluable
-    count by reason, and the not-evaluable count BY FAMILY (rev-cb M-0411 O4: strata of the record by name, never dropped).
+    count by reason, and the not-evaluable count BY FAMILY (strata of the record by name, never dropped).
     `ring_slots`: the collector's window ring depth -- an identity committed at ENGINE step >= ring_slots lives in storage the ring
-    already committed under another step's identities (window recycle): the `lifetime` stratum axis (rev-cb O3 / coord M-0451 O3).
-    `addresses` [R17-3 reqval]: an accumulator keyed by the row's MANIFEST address (request, request-relative step, op_path, member) ->
+    already committed under another step's identities (window recycle): the `lifetime` stratum axis.
+    `addresses`: an accumulator keyed by the row's MANIFEST address (request, request-relative step, op_path, member) ->
     {spec, family, class ('vu' | a why class), why, rows}: every row that produces a required identity is recorded at that identity,
     evaluable or not, so `query_population` can reconcile the replay's reach against Q(P) identity by identity (a row with no member --
     structure, interior -- produces no identity and is not recorded).
-    `last_step` [revb F-r17b-39]: the request's last EXECUTED step (`phase_anchor(...)["last_step"]`: n_exec - 1 under an executed prefix,
+    `last_step`: the request's last EXECUTED step (`phase_anchor(...)["last_step"]`: n_exec - 1 under an executed prefix,
     the lag step of an EOS-stopped request); None = the cap's last step.  The POPULATION is the same either way (every row is enumerated);
     only the phase label of the stratum key moves.
     `codes`: an accumulator, not-evaluable reason -> its structured code (`replay_codes.reason_code`), what the verdict reads."""
@@ -301,7 +301,7 @@ EXECUTED_PREFIX_RULE = ("R17-1: a request that served a_r < cap tokens (its serv
 
 
 def _continuation_rule() -> Callable[..., dict[str, Any]] | None:
-    """Continuation_v1's `executed_prefix_by_rule(served, cap=, A=, eos=)` (pad, `verity.ir/continuation.py`, R17-32) when the unit is on
+    """Continuation_v1's `executed_prefix_by_rule(served, cap=, A=, eos=)` (pad, `verity_vllm.program.lifting.continuation`) when the unit is on
     the tree -- the ONE mechanism revb S-r17b-20 (R3) asks for: the not-executed class = {t : r_t = 0} of the recurrence over the served
     list.  None when the unit is not on this tree (the caller then records the arithmetic as the mechanism BY NAME, never silently)."""
     try:
@@ -322,16 +322,16 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
                               served_len_commit: int | None = None, linked: bool | None = None, lag_attested: bool | None = None,
                               rows_past_stop: int = 0, a_r_source: str, served: Sequence[int] | None = None, eos_ids: Iterable[int] | None = None,
                               rule: Callable[..., dict[str, Any]] | None = None, account_missing: Sequence[str] | None = None) -> dict[str, Any]:
-    """Normalise one request's R17-1 executed prefix for the population.  The CALLER (the Commit) supplies the facts of record -- `a_r` READ
+    """Normalise one request's executed prefix for the population.  The CALLER (the Commit) supplies the facts of record -- `a_r` READ
     from the Match record, `served_len_commit` its own committed served length, `linked` (C2 boundary linkage + tokens_equal + G6 agree),
     `lag_attested` (declared == record_attests == tokens.json), `eos_declared` (served token a_r-1 is a declared EOS id), `rows_past_stop`
     (committed rows of the request at steps >= arrival + n_exec, from the Commit's coverage) -- this function only fixes the arithmetic and
-    NAMES the faults: `faults` non-empty means the class is NOT applicable to this request and the record fails by name (R17-27 (a)(b)(c),
-    F-pm-24).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
+    NAMES the faults: `faults` non-empty means the class is NOT applicable to this request and the record fails by name (conditions (a)(b)(c)
+    of `check.executed_prefix`, F-pm-24).  Every condition is fail-closed: an unasserted fact (None) is a fault, not a default.
     [revb S-r17b-09 n1] `a_r_source` is REQUIRED and names WHERE a_r was read (the Match record file + digest, as moe's executed_prefix_facts
     passes it); it has no default, so a caller passing the Commit's own count cannot put 'match record' on the record by omission -- an own
     count must be labelled as such by the caller, and (a) then faults on `linked`.
-    [revb S-r17b-20 (R3) ONE mechanism; pad M-0568] with `served` (the request's served token ids of record) and `eos_ids` (the Program's
+    [ONE mechanism] with `served` (the request's served token ids of record) and `eos_ids` (the Program's
     declared EOS ids) the class is DERIVED FROM r_t: `rule` (default Continuation_v1's `executed_prefix_by_rule`) runs the recurrence over
     the served list, `n_exec = |{t : r_t = 1}|`, and the arithmetic `min(a_r + LAG, cap)` is demoted to a CHECK (a disagreement is a fault
     by name); the rule's own problems (served past the first EOS, F-pm-24, over the cap) are faults.  Without `served` -- or on a tree
@@ -412,10 +412,10 @@ _T_STATIC = re.compile(r"\bT=\d+,")
 
 
 def _stratum_spec(fam: str, spec: str, statics: dict[str, Any]) -> str:
-    """The spec as the STRATUM key.  [R17 dense, ruling R17-11] an attention row's spec carries its history length T (one value per token of
+    """The spec as the STRATUM key.  An attention row's spec carries its history length T (one value per token of
     the request), so 'spec incl. shape' would make every attention row of the run its own stratum -- an exhaustive replay of the family
     (~0.1 ms x T per row; B8 1024/128: 8 x 32k rows x up to 1152 committed reads each), not a sample.  The stratum keeps the numerical
-    MECHANISM the length selects -- NB = ceil(T / BN), the number of key blocks visited, and [revb F-r17b-16] `last=full|partial`: whether
+    MECHANISM the length selects -- NB = ceil(T / BN), the number of key blocks visited, and `last=full|partial`: whether
     the last block is FULL (T mod BN == 0: no masked lane) or PARTIAL (masked lanes -> exact zeros through exp2 and the lane sums) -- three
     chains (single block / multi-block / partial last block) that NB alone does not keep apart: measured on llama L40S B8 256/32, 32 of 80
     NB-only strata mixed the one full-block row (T = 128) with 127 partial ones, so the full-block chain was picked with probability

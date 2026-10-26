@@ -44,6 +44,8 @@ def fast(tmp_path, monkeypatch):
     monkeypatch.setattr(LC, "unlink", lambda *a, **k: None)
     monkeypatch.setattr(LC, "label", lambda _: None)
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
+    monkeypatch.setattr(LC, "reused", lambda *a, **k: {})
+    monkeypatch.setattr(LC, "passed", lambda *a, **k: None)
 
     def sync(_closure, _files, t):
         (t / "pkg" / "lean-audit.json").write_text(OLD)
@@ -229,3 +231,101 @@ def test_after_a_run_left_mid_way_dependencies_off_their_pinned_checkout_are_tak
     LC.repair(tree, ["pkg"], links, {"run": "r-old", "package": "other", "phase": "check"}, said.append)
     assert links == {} and not (tree / "pkg" / ".lake" / "packages").exists()
     assert any("dep is not the checkout its manifest pins (abc)" in s for s in said)
+
+
+@pytest.fixture()
+def trying(tmp_path, monkeypatch):
+    """`try_file` against nested stand-in packages `Sec` and `Sec/Proofs` (whose modules sit under `srcDir = ".."`, as
+    Security/Proofs' do), a slot tree, no sandbox, and `build` and check.py recorded instead of run."""
+    root = tmp_path / "root"
+    (root / "Sec" / "Proofs" / "Flock").mkdir(parents=True)
+    (root / "Sec" / "Proofs" / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n')
+    (root / "Sec" / "Proofs" / "Flock" / "X.lean").write_text("import Mathlib\n")
+    lake = tmp_path / "lake"
+    lake.write_text("")
+    cache = tmp_path / "cache"
+    tree = cache / LC.RECORDS / "local"
+    monkeypatch.setattr(LC, "ROOT", root)
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: cache)
+    monkeypatch.setattr(LC.LA.COMMON, "tracked_files", lambda _: ["Sec/Proofs/Flock/X.lean"])
+    monkeypatch.setattr(LC.LA, "packages", lambda _: ["Sec", "Sec/Proofs"])
+    monkeypatch.setattr(LC.LA, "deps_key", lambda _: "k")
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Sec"])
+    monkeypatch.setattr(LC, "records_tree", lambda: tree)
+    monkeypatch.setattr(LC, "sync", lambda *_: 1)
+    monkeypatch.setattr(LC, "sandboxed", lambda: False)
+    monkeypatch.setattr(LC.shutil, "which", lambda _: str(lake))
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", lambda *a, **k: None)
+    calls = {"build": [], "run": [], "link": [], "lean_rc": 0, "deps_rc": 0}
+
+    def link(pkg, t, deps, links, log=print, copy=False):
+        calls["link"].append((pkg, copy))
+        links[pkg] = "k"
+        return True
+
+    def build(pkg, t, lake_, targets=None, sandbox=True, cmd=None):
+        calls["build"].append((pkg, t, targets, sandbox, cmd))
+        return (calls["lean_rc"] if cmd else calls["deps_rc"]), ""
+
+    monkeypatch.setattr(LC, "link", link)
+    monkeypatch.setattr(LC, "build", build)
+    monkeypatch.setattr(LC.subprocess, "run", lambda argv, **kw: calls["run"].append(argv))
+    return tree, calls
+
+
+def test_try_builds_the_files_imports_then_runs_lean_on_it_in_its_owning_package_and_never_check(trying, tmp_path):
+    tree, calls = trying
+    calls["lean_rc"] = 1
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 1, "lean's exit status"
+    assert calls["build"] == [("Sec/Proofs", tree, ["+Proofs.Flock.X:deps"], False, None),
+                              ("Sec/Proofs", tree, None, False, ["env", "lean", "Flock/X.lean"])]
+    assert calls["link"] == [("Sec/Proofs", True)], "the owning package's dependencies, a copy as --records takes"
+    assert calls["run"] == [], "no check.py, audit or --update"
+    assert not (tree / LC.DIRTY).exists() and any("lean exit 1" in s for s in said)
+    assert LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--tree", str(tree)]) == 1
+    with pytest.raises(SystemExit):
+        LC.main(["--try", "Sec/Proofs/Flock/X.lean", "--records", "Sec"])
+
+
+def test_try_runs_no_lean_when_the_imports_fail_to_build(trying, tmp_path):
+    _, calls = trying
+    calls["deps_rc"] = 3
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 3
+    assert [c[4] for c in calls["build"]] == [None], "lean never runs on a file whose imports don't build"
+
+
+def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links(trying, tmp_path):
+    tree, calls = trying
+    (tree / "Sec" / "Proofs" / ".lake" / "packages" / "mathlib").mkdir(parents=True)
+    (tree / LC.LINKS).write_text(json.dumps({"Sec": "k"}))
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0
+    assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
+
+
+def test_try_refuses_without_a_build_slot_naming_the_nodes_that_have_them(trying, tmp_path, monkeypatch):
+    _, calls = trying
+    monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
+    said = []
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert calls["build"] == [] and any("vy-nebius-cpu-1" in s and "nothing ran" in s for s in said)
+
+
+def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):
+    tree, calls = trying
+    said = []
+    assert LC.try_file("Elsewhere/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", tree=tmp_path / "other", log=said.append) == 2
+    monkeypatch.setattr(LC, "sandboxed", lambda: True)
+    monkeypatch.setattr(LC, "link", lambda *a, **k: False)
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert calls["build"] == [] and any("--records Sec/Proofs" in s for s in said)
+
+
+def test_module_of_reads_the_packages_src_dir(trying):
+    root = LC.ROOT
+    assert LC.module_of("Sec/Proofs", "Sec/Proofs/Flock/X.lean") == "Proofs.Flock.X"
+    (root / "Sec" / "lakefile.lean").write_text('package sec where\n  srcDir := "src"\n')
+    assert LC.module_of("Sec", "Sec/src/A/B.lean") == "A.B"
+    (root / "Plain").mkdir()
+    assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
