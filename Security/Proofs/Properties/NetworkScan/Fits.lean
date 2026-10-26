@@ -1,5 +1,6 @@
 import Properties.NetworkScan
 import Proofs.Properties.Nci.BodiesOk
+import Proofs.Properties.NetworkScan.Accept
 
 /-!
 # The scan's layout fits its Program: where its egress and ingress gates resolve
@@ -432,5 +433,182 @@ theorem resolve_param_input (hroot : P.root < P.defs.size ∧ (P.defs[P.root]!).
   · exact absurd hprim (by simp [hnokr.2.2.2.1 (Or.inr hf)])
 
 end
+
+/-- A template is a root node calling a composite. -/
+theorem templateNodes_mem (P : Prog) {k : ℕ} (h : k ∈ NetworkCheck.Period.templateNodes P) :
+    k < (P.defs[P.root]!).body.nodes.size ∧ (callee P k).prim = false := by
+  unfold NetworkCheck.Period.templateNodes at h
+  simp only [List.mem_filter, List.mem_range] at h
+  obtain ⟨hk, hd⟩ := h
+  refine ⟨hk, ?_⟩
+  split at hd
+  · rename_i d hd'
+    obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hd'
+    show (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).prim = false
+    rw [getElem!_pos P.defs _ hlt, e]
+    simpa using hd
+  · cases hd
+
+/-- **What `inputArg` takes**: an argument that is one root input node's leaves, from its first. -/
+theorem inputArg_spec (P : Prog) {a : Flock.Program.Arg} {kr : ℕ} (h : NetworkCheck.Period.inputArg P a = some kr) :
+    ∃ c, a.seq.parts = #[.affine false kr 0 c] ∧ NciCheck.Desc.isInputNode P (node P kr) = true := by
+  unfold NetworkCheck.Period.inputArg at h
+  split at h <;> try (cases h; done)
+  rename_i k c hl
+  split at h <;> try (cases h; done)
+  rename_i n hn
+  split at h <;> try (cases h; done)
+  rename_i hin
+  cases h
+  refine ⟨c, ?_, ?_⟩
+  · have e : a.seq.parts = ⟨a.seq.parts.toList⟩ := rfl
+    rw [hl] at e
+    exact e
+  · obtain ⟨hlt, e⟩ := Array.getElem?_eq_some_iff.1 hn
+    show NciCheck.Desc.isInputNode P ((P.defs[P.root]!).body.nodes[kr]!) = true
+    rw [getElem!_pos _ kr hlt, e]
+    exact hin
+
+section
+variable {P : Prog} {s : NetworkCheck.Period.Schedule} {C : Claims.Sampling.Prog}
+
+/-- What the decoder and the description's checks give together: every Definition `DefOk`, the root a composite, every
+body laid out, callees first. -/
+theorem facts {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s) :
+    (∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!) ∧
+      (P.root < P.defs.size ∧ (P.defs[P.root]!).prim = false) ∧ (∀ d < P.defs.size, Walk.LaidOut P d) ∧
+      NciCheck.Desc.calleesFirst P = true := by
+  obtain ⟨st, hdefs, hinv, -⟩ := BodiesOk.decode_spec bytes P hd
+  obtain ⟨hr, hp, -⟩ := BodiesOk.decode_root bytes P hd
+  have hw := hA.laid.2.2
+  simp only [NciCheck.Desc.walkable, Bool.and_eq_true] at hw
+  exact ⟨by rw [hdefs]; exact hinv.1, ⟨hr, hp⟩, (Walk.bodiesLaidOut_spec P hw.1.2).2.1, hw.1.1⟩
+
+/-- **`Fits`' first part**: before the window's `T` steps, every egress gate is one the flattened Program returns, and
+no input. Egress leaf `t · L + x` is in the root's return (one run over all `T` instances' leaves), and resolves down
+the egress template's member, whose leaves it computes (`ownReturns`), to a gate of the egress node, below the root,
+where no input is. -/
+theorem fits_egress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
+    (hF : Flattens P C) :
+    ∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
+      g ∈ C.outs ∧ C.gates[g]? ≠ some .input := by
+  obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
+  obtain ⟨hke, hkc⟩ := templateNodes_mem P hA.egress_mem
+  have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
+  have hend := ((hL _ hroot.1) hroot.2).2.1
+  have hfs : (node P (egressNode P)).fn < P.defs.size :=
+    lt_trans (Walk.calleesFirst_spec P hc P.root hroot.1 _ (node_mem _ hke)) hroot.1
+  have hle : (callee P (egressNode P)).outLeaves = NetworkCheck.Period.outBits + s.allocation * (8 * s.cellBytes) := by
+    rw [(((hok _ hfs).1).2 hkc).2.2, hA.egress_ret]
+    simp only [rowTy, BodiesOk.leaves_tuple2, BodiesOk.leaves_array, BodiesOk.leaves_value]
+    ring
+  have hleaf : ∀ t < s.window, ∀ x < (callee P (egressNode P)).outLeaves,
+      gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩ ∈ C.outs ∧
+        C.gates[gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩]? ≠
+          some .input := by
+    intro t ht x hx
+    have htx : t * (callee P (egressNode P)).outLeaves + x < s.window * (callee P (egressNode P)).outLeaves :=
+      BodiesOk.lt_mul_of _ _ _ _ ht hx
+    obtain ⟨q, hq, c, rfl, hcq⟩ := hA.returned
+    obtain ⟨-, hret, ps, hps, -⟩ := (hok P.root hroot.1).2
+    rw [hps, (Walk.ofParts_spec ps).1] at hq
+    obtain ⟨i, hi, hqi⟩ := Array.mem_iff_getElem.1 hq
+    have hpi : ps[i]! = .affine false (egressNode P) 0 c := by rw [getElem!_pos ps i hi, hqi]
+    have hcnt : t * (callee P (egressNode P)).outLeaves + x < ps[i]!.count := by
+      rw [hpi]; simp only [Part.count]; omega
+    obtain ⟨hidx, hget⟩ := seq_get_at ps hi hcnt
+    rw [hpi] at hget
+    change _ = (⟨false, egressNode P, 0 + _⟩ : Flock.Program.Ref) at hget
+    rw [Nat.zero_add, ← hps] at hget
+    rw [← hps] at hidx
+    have href := (hret _ hidx).2
+    rw [hget] at href
+    obtain ⟨-, hj⟩ := href rfl
+    have hdown : Down P ((P.defs[P.root]!).body.offsets[egressNode P]!)
+        ((P.defs[P.root]!).body.offsets[egressNode P + 1]!)
+        (P.rootScope, ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩) := by
+      refine ⟨hroot.1, hroot.2, rfl, hke, hj, ⟨fun hs => ?_, Or.inr ⟨?_, hA.egress_own⟩⟩, ?_, ?_⟩
+      · exact absurd (hA.egress_batch.1.symm.trans hs) (by intro h; cases h)
+      · exact Walk.calleesFirst_spec P hc P.root hroot.1 _ (node_mem _ hke)
+      · exact Nat.le_add_left _ _
+      · exact (Nat.zero_add _).le
+    obtain ⟨a, hres, hlo, hhi⟩ := resolve_own P hok hL hc P.rootScope _ hdown (Walk.depth_lt_fuel P hA.laid.2.2)
+    have hga : gateAt P P.rootScope ⟨false, egressNode P, t * (callee P (egressNode P)).outLeaves + x⟩ = a := by
+      unfold gateAt; rw [hres]; rfl
+    rw [hga]
+    have hlt : a < C.gates.length := by
+      rw [hF.1]
+      have := hmono (egressNode P + 1) _ hke (le_refl _)
+      omega
+    obtain ⟨p, ops, sc, hgate, hiff, -⟩ := hF.2.1 a hlt
+    have hni := gate_not_input P hroot hL hA.laid.2.1 hke hkc hlo hhi hgate
+    refine ⟨(hF.2.2 a).2 ⟨_, hidx, by rw [hget]; exact hres⟩, fun h => ?_⟩
+    exact Bool.false_ne_true (hni.symm.trans (hiff.1 h))
+  intro t ht ℓ σ g hg
+  simp only [scanLayout, NetTiming.slotGates, List.mem_cons, List.mem_map, List.mem_range] at hg
+  have h16 : NetworkCheck.Period.outBits = 16 := rfl
+  rcases hg with rfl | ⟨b, hb, rfl⟩
+  · exact hleaf t ht 0 (by omega)
+  · have := BodiesOk.lt_mul_of _ _ _ _ σ.isLt hb
+    exact hleaf t ht _ (by omega)
+
+/-- **`Fits`' second part**: before the window's `T` steps, every ingress gate is an input. Step `t`'s ingress is its
+bucket's `row` parameter, which resolves up through the bucket's template node to its argument, one root input node's
+leaves, and down to that input node's gates. -/
+theorem fits_ingress {bytes : ByteArray} (hd : Flock.Program.decode bytes = .ok P) (hA : Accepted P s)
+    (hF : Flattens P C) : ∀ t < s.window, ∀ g ∈ (scanLayout P s).ingress t, C.gates[g]? = some .input := by
+  obtain ⟨hok, hroot, hL, hc⟩ := facts hd hA
+  have hmono := Resolve.offsets_mono P P.root (hL _ hroot.1) hroot.2
+  have hend := ((hL _ hroot.1) hroot.2).2.1
+  intro t ht g hg
+  have e : (scanLayout P s).ingress t = (List.range (s.allocation * (8 * s.cellBytes))).map
+      fun j => gateAt P (P.child P.rootScope (bucket P t).1 (bucket P t).2) ⟨true, 0, j⟩ := rfl
+  rw [e, List.mem_map] at hg
+  obtain ⟨j, hj, rfl⟩ := hg
+  rw [List.mem_range] at hj
+  have hI := hA.ingress t ht
+  generalize bucket P t = km at hI ⊢
+  obtain ⟨k, m⟩ := km
+  obtain ⟨hmem, hb, hm, hp0, hrow, kr, hkr⟩ := hI
+  dsimp only at hmem hb hm hp0 hrow hkr ⊢
+  obtain ⟨hk, hkc⟩ := templateNodes_mem P hmem
+  rw [Option.bind_eq_some_iff] at hkr
+  obtain ⟨a, ha, hia⟩ := hkr
+  obtain ⟨c, hparts, hin⟩ := inputArg_spec P hia
+  have hsz : 0 < (node P k).args.size := lt_of_lt_of_eq hp0 (((hok P.root hroot.1).2.1 k hk).2.1.1).symm
+  have ha0 : (node P k).args[0]! = a := by
+    rw [getElem!_pos _ 0 hsz]
+    simpa [hsz] using ha
+  have hjr : j < ((callee P k).params[0]!).2.leaves := by
+    rw [hrow]
+    simp only [rowTy, BodiesOk.leaves_array, BodiesOk.leaves_value]
+    have : s.allocation * (8 * s.cellBytes) = s.allocation * s.cellBytes * (8 * 1) := by ring
+    omega
+  obtain ⟨g, hres, hkr', hlo, hhi⟩ := resolve_param_input P hok hL hc hroot hk hb hkc
+    (by rw [show ((P.defs[P.root]!).body.nodes[k]!).args[0]! = a from ha0]; exact hparts) hin hm hp0 hjr
+  have hga : gateAt P (P.child P.rootScope k m) ⟨true, 0, j⟩ = g := by unfold gateAt; rw [hres]; rfl
+  rw [hga]
+  simp only [NciCheck.Desc.isInputNode, Bool.and_eq_true] at hin
+  have hlt : g < C.gates.length := by
+    rw [hF.1]
+    have := hmono (kr + 1) _ hkr' (le_refl _)
+    omega
+  obtain ⟨p, ops, sc, hgate, hiff, -⟩ := hF.2.1 g hlt
+  have hp := gate_at_prim P hroot hL hkr' hin.1 hlo hhi hgate
+  exact hiff.2 (by rw [hp]; exact hin.2)
+
+end
+
+/-- **`ScanFits`' first two parts**: if `scanOf` accepts the scan `j`, whose canonical text `c` decodes to `P`, then
+before the window's `T` steps every egress gate of `P`'s scan layout is returned and no input, and every ingress gate
+is an input, in every flattening of `P`. -/
+theorem scanFits_egress_ingress {j : Lean.Json} {program : String} {s : NetworkCheck.Period.Schedule}
+    {sc : NetworkCheck.Period.Scan} {c : String} {P : Prog} {C : Claims.Sampling.Prog}
+    (h : NetworkCheck.Period.scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c)
+    (hd : Flock.Program.decode c.toUTF8 = .ok P) (hF : Flattens P C) :
+    (∀ t < s.window, ∀ ℓ σ, ∀ g ∈ NetTiming.slotGates ((scanLayout P s).egress t ℓ σ),
+      g ∈ C.outs ∧ C.gates[g]? ≠ some .input) ∧
+      ∀ t < s.window, ∀ g ∈ (scanLayout P s).ingress t, C.gates[g]? = some .input :=
+  ⟨fits_egress hd (scanOf_accepted h hc hd) hF, fits_ingress hd (scanOf_accepted h hc hd) hF⟩
 
 end Properties.NetworkScan.Fits
