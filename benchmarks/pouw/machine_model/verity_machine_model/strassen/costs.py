@@ -68,6 +68,8 @@ def inst(name: str) -> tuple[Fmt, ...]:
                 Fmt("nvf4", F(1, 2), 9, 64, 24),
                 Fmt("f16", F(2), 4097, 16, 24), Fmt("f16k8", F(4), 4097, 8, 24), Fmt("bf16", F(2), 513, 16, 24),
                 Fmt("tf32", F(4), 4097, 4, 24))
+    if name in ("rtx6000-sheet-b1", "rtx6000-measured-b1"):
+        return inst(name.removesuffix("-b1")) + (Fmt("b1", F(1, 8), 2),)
     if name == "int8-only":
         return (s8,)
     raise KeyError(name)
