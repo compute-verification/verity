@@ -24,7 +24,6 @@ import Definitions.Accounting.Headline
 import Definitions.Accounting.HeadlineDc
 import Definitions.Accounting.Joint
 import Definitions.Accounting.JointPeriod
-import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Definitions.Accounting.JointBridge.CreditedWords
 import Definitions.Accounting.JointBridge.H200
 import Definitions.Accounting.Localization

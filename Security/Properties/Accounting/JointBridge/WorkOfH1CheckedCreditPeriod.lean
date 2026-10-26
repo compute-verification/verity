@@ -1,23 +1,30 @@
-import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+import Definitions.Accounting.JointBridge.CreditedWords
+import Definitions.Accounting.JointBridge.H200
+import Definitions.Accounting.Assumptions.CreditedWords
 import Properties.Pouw.Period
 
 /-!
 # The joint period's PoUW guarantee from H1's checked credit over the torch loop
 
 `Accounting.Guarantees.JointPeriod` takes each audit's per-period guarantee (`Accounting.PeriodRun.Sound`) as a
-hypothesis. `WorkOfH1CheckedCreditPeriod` gives PoUW's, at the work certificate `W` and price `p`, for a period that
-realizes H1's checked credit (`Accounting.RealizesWorkOfH1CheckedCreditPeriod` at the play's acceptance, `n` times its
-run's fixed words, and the check's credit over the accepted prefix), from
-`Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its error `δ_s + n·(δ_bind + δ_ks)`.
+hypothesis. `WorkOfH1CheckedCreditPeriodAt p macs b` gives PoUW's, at the work certificate `W` and price `p`, for a
+period whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords` at the play's acceptance and the
+check's credit over the accepted prefix, `m = Accounting.Compose.minWordMacs Sc Cd macs` multiply-adds a word and `b`
+bits a word), from `Properties.Pouw.Period.H1CheckedCreditPeriod` and its premises, with its error
+`δ_s + n·(δ_bind + δ_ks)`. It is `Properties.Accounting.JointBridge.WorkOfCreditedWords` at H1's instance.
+`WorkOfH1CheckedCreditPeriod` is it at every price, word count and word width, and `WorkOfH1CheckedCreditPeriodH200`
+at the H200's INT8 price (`Accounting.h200S8Price`), `PouwH1Tile_v1`'s `512` multiply-adds a receipt word
+(`Accounting.receiptWordMacs 4 8`) and its `32` bits.
 
 The other audits' coins fix the adversary the device is in H1's game, so the windows, the service's openings, the
-salts, the period's live tiles, the play and its folded words are functions of them (`ws ξ`, …), and each premise of
-the source that reads them is taken at every value `ξ` of the coins. The scheme, the declared circuit, the number of
-windows, the check's parameters, the salt's encoding, the staged and flat statements and the errors are the protocol's
-and are fixed. The premises are the source's, unchanged; the gaps it names (`RegisteredBeforeDraw` and the binding it
-reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here. The one gap this bridge adds is the
-structure's `work_of_fixed` (RT4-LOGIC-6): the period's words fixed right are within the compute account's
-device-model work at `p`.
+salts, the period's live tiles, the play, its folded words and the right words it imported are functions of them
+(`ws ξ`, …), and each premise of the source that reads them is taken at every value `ξ` of the coins. The scheme, the
+declared circuit, the number of windows, the check's parameters, the salt's encoding, the staged and flat statements
+and the errors are the protocol's and are fixed. The premises are the source's, unchanged; the gaps it names
+(`RegisteredBeforeDraw` and the binding it reads on today's tags, `SaltIsLiveCoin`, `StagedPins`) stay premises here.
+The bridge adds two (RT4-LOGIC-6): each right word the device didn't import cost `m` multiply-adds of priced work on it
+(`Accounting.Assumptions.WordCostsMacs`, at `n` times the run's fixed words), and it imported at most `K / b` right
+words (`Accounting.Assumptions.HelpWithinCertifier`).
 -/
 
 namespace Properties.Accounting.JointBridge
@@ -25,18 +32,20 @@ namespace Properties.Accounting.JointBridge
 open Properties.Pouw.Period PouwCheck
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-- **PoUW's per-period guarantee in the joint period, from H1's checked credit on the torch loop.** On any device and
-any period of a node's run on one coin space whose PoUW audit realizes H1's checked credit
-(`Accounting.RealizesWorkOfH1CheckedCreditPeriod`: PoUW's coordinate of the coins is the source game's, its verdict
-the play's acceptance, the work certificate within the check's credit on an accepted period, and the words fixed right
-within the compute account's work at price `p`), with the source's instance at each value `ξ` of the coins meeting
-`H1CheckedCreditPeriod`'s premises: PoUW's per-period guarantee holds at certificates `c`, price `p` and error
-`δ_s + n·(δ_bind + δ_ks)`, i.e. at any value of the other coins, the probability over PoUW's own coins that it accepts
-while the compute account did less than `W` of work at `p` is at most that. -/
-def WorkOfH1CheckedCreditPeriod : Prop :=
+/-- **PoUW's per-period guarantee in the joint period, from H1's checked credit on the torch loop, at price `p`,
+`macs k` multiply-adds a word of kind `k` and `b` bits a word.** On any device and any period of a node's run on one
+coin space whose PoUW audit credits H1's checked words (`Accounting.RealizesCreditedWords`: PoUW's coordinate of the
+coins is the source game's, its verdict the play's acceptance, and the work certificate within the check's credit less
+the `K / b` words the network certifier's bits hold, at `m = minWordMacs Sc Cd macs` multiply-adds a word at `p .tc`),
+each right word the device didn't import costing `m` multiply-adds of priced work (`WordCostsMacs` at `n` times the
+run's fixed words and `help` imported words), at most `K / b` right words imported (`HelpWithinCertifier`), and the
+source's instance at each value `ξ` of the coins meeting `H1CheckedCreditPeriod`'s premises: PoUW's per-period
+guarantee holds at certificates `c`, price `p` and error `δ_s + n·(δ_bind + δ_ks)`, i.e. at any value of the other
+coins, the probability over PoUW's own coins that it accepts while the compute account did less than `W` of work at `p`
+is at most that. -/
+def WorkOfH1CheckedCreditPeriodAt (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (b : ℕ) : Prop :=
   ∀ (ι α I : Type) [Fintype α] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
     (d : Accounting.Device ι) (C : Verity.Circuit) (r : Accounting.PeriodRun d α C Ω) (c : Accounting.Certificates)
-    (p : Accounting.Price)
     {ι' K T L U Cn Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype Cn] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι') {n : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ 144)
     (hr : 0 < Cd.rounds) (_hM : Cd.rounds = 1) (hK : 24 ≤ 144) (prm : Params) (enc : Cn → ByteArray)
@@ -46,11 +55,15 @@ def WorkOfH1CheckedCreditPeriod : Prop :=
     (salt : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → Fin n → ByteArray)
     (Wp : ((i : I) → Ω i) → Period Cn (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) (Fin 144) Cd.rounds n)
     (Pl : ((i : I) → Ω i) → Play (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n K T L U)
-    (folded : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ),
-    Accounting.RealizesWorkOfH1CheckedCreditPeriod r c p (Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n)
-      (fun ξ => (Pl ξ).accepts) (fun ξ x => n * ((Pl ξ).run x).fixed)
+    (folded : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
+    (help : ((i : I) → Ω i) → Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n → ℝ)
+    (real : Accounting.RealizesCreditedWords r c p (Accounting.Compose.minWordMacs Sc Cd macs) b
+      (Paths (Paths Cn Cd.rounds × (Equiv.Perm (Fin 144) × Ξ)) n) (fun ξ => (Pl ξ).accepts)
       (fun ξ x => creditPrefix Sc Cd 144 ((ws ξ).prefixLen prm x) (checkedLive Sc Cd (Wp ξ) prm (ws ξ) x) 1 1 (67 / 8)
-        δs) →
+        δs)),
+    Accounting.Assumptions.WordCostsMacs r p (Accounting.Compose.minWordMacs Sc Cd macs) real.coin
+      (fun ξ => (Pl ξ).accepts) (fun ξ x => n * ((Pl ξ).run x).fixed) help →
+    Accounting.Assumptions.HelpWithinCertifier r c b real.coin (fun ξ => (Pl ξ).accepts) help →
     Scope Sc Cd δs →
     (∀ t : Fin 144, (8 / 9 : ℝ) * (144 : ℕ) * shareCone Sc Cd 144 t ≤ 1) →
     (∀ j, stageShare (tileStage Cd 144) (shareCone Sc Cd 144) j ≤ 1) →
@@ -73,5 +86,21 @@ def WorkOfH1CheckedCreditPeriod : Prop :=
       (periodMode Cd (Wp ξ) (checkedRun hK prm (ws ξ) (opened ξ) (stagedAt (salt ξ) staged) (flatAtCoin hr enc flat)))
       (fun _ t => (tileWords Sc Cd 144 t : ℝ)) (folded ξ)) →
     r.Sound c p .pouw (δs + n * (δbind + δks))
+
+/-- **PoUW's per-period guarantee in the joint period from H1's checked credit**, at every price `p`, per-kind
+multiply-add count `macs` and word width `b` (`WorkOfH1CheckedCreditPeriodAt`). -/
+def WorkOfH1CheckedCreditPeriod : Prop :=
+  ∀ (p : Accounting.Price) (macs : Accounting.Compose.Kind → ℕ) (b : ℕ), WorkOfH1CheckedCreditPeriodAt p macs b
+
+/-- **PoUW's per-period guarantee in the joint period from H1's checked credit on the H200, at INT8**:
+`WorkOfH1CheckedCreditPeriodAt` at `Accounting.h200S8Price sha fetch` (an INT8 tensor-core multiply-add `1`, a
+CUDA-core op `32`, an oracle query `⌈sha⌉`, in dense E4M3 multiply-adds, W1's prices on `W1Device.s8H100`), every word
+at `PouwH1Tile_v1`'s `receiptWordMacs 4 8 = 512` multiply-adds, and `32` bits a word (a receipt word is the XOR of the
+lanes' 32-bit halves), for every SHA-512 and fetch price. The certificate it admits on an accepted period is
+`W ≤ 512·(credit − K/32)` dense E4M3 multiply-adds, for a declared circuit with a credited word (`m` is `0` for one
+with none). -/
+def WorkOfH1CheckedCreditPeriodH200 : Prop :=
+  ∀ sha fetch : ℚ,
+    WorkOfH1CheckedCreditPeriodAt (Accounting.h200S8Price sha fetch) (fun _ => Accounting.receiptWordMacs 4 8) 32
 
 end Properties.Accounting.JointBridge
