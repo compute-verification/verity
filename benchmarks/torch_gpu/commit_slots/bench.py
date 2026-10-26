@@ -1,8 +1,9 @@
 """On a CUDA device: the GPU call's throughput at the frozen H200 shape (README.md), as JSON to ``--out``/bench.json.
 
 1. **Alone.** A whole step, the 52 layers' outputs (resident, random) committed at each of ``--slots``: seconds a step, GB/s
-   of committed bytes, the kernels' split (rows, units, fold, finish), and the step's share of a serving step of each of
-   ``--step-s`` seconds at ``--step-slots`` slots, scaled with the slot count.
+   of committed bytes, the kernels' split (rows, units, fold, finish), and its share of a serving step whose other work
+   (GEMMs, attention, elementwise) takes each of ``--rest-s`` seconds at ``--step-slots`` slots, scaled with the slot
+   count: commit / (rest + commit).
 2. **Beside the GEMMs.** At the first slot count, a layer's four int8 GEMMs at M = slots (cuBLASLt through
    ``torch._int_mm``: QKV, o_proj, up, down at the frozen widths) alone, the layer's commit alone, and both at once (the
    commit on the call's side stream): the GEMMs' slowdown, and a step estimate from the measured GEMMs.
@@ -59,7 +60,7 @@ def step(plan: G.Plan, bufs: list[torch.Tensor], slots: int, layers: int) -> dic
     return {"s": _ms(start, marks[-1][1]) / 1e3, "split_s": split}
 
 
-def alone(layout: S.Layout, slots: int, reps: int, step_s: list[float], step_slots: int) -> dict[str, Any]:
+def alone(layout: S.Layout, slots: int, reps: int, rest_s: list[float], step_slots: int) -> dict[str, Any]:
     plan = G.Plan(CTX, layout)
     bufs = data(layout, slots)
     step(plan, bufs, slots, len(layout.groups))
@@ -72,7 +73,7 @@ def alone(layout: S.Layout, slots: int, reps: int, step_s: list[float], step_slo
     return {"slots": slots, "layers": len(layout.groups), "committed_bytes": nbytes, "rows": slots * layout.row_count,
             "units": slots * layout.unit_count, "s": [r["s"] for r in runs], "best_s": best["s"], "split_s": best["split_s"],
             "GB_per_s": nbytes / best["s"] / 1e9, "row_compressions_per_s": blocks / best["s"],
-            "share_of_step": {str(t): best["s"] / (t * slots / step_slots) for t in step_s}}
+            "share_of_step": {str(t): best["s"] / (t * slots / step_slots + best["s"]) for t in rest_s}}
 
 
 def beside(layout: S.Layout, slots: int, reps: int) -> dict[str, Any]:
@@ -129,11 +130,12 @@ def beside(layout: S.Layout, slots: int, reps: int) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--slots", type=int, nargs="+", default=[20480, 4096, 1024])
+    ap.add_argument("--slots", type=int, nargs="+", default=[16384, 4096, 12288, 20480, 1024])
     ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--step-s", type=float, nargs="+", default=[3.7, 7.5],
-                    help="serving step times at --step-slots to state the share at, scaled with the slots (a step's tokens)")
-    ap.add_argument("--step-slots", type=int, default=20480)
+    ap.add_argument("--rest-s", type=float, nargs="+", default=[5.33],
+                    help="a serving step's time without the commit at --step-slots, scaled with the slots (a step's tokens); "
+                         "5.33 s is compute-accounting's block at 16,384 (GEMMs 5.08 s, attention and elementwise 0.25 s)")
+    ap.add_argument("--step-slots", type=int, default=16384)
     ap.add_argument("--no-beside", action="store_true")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
@@ -145,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
                            "torch": torch.__version__, "nvidia_smi": smi, "layout": layout.name,
                            "slot_bytes": layout.slot_bytes, "alone": []}
     for slots in a.slots:
-        r = alone(layout, slots, a.reps, a.step_s, a.step_slots)
+        r = alone(layout, slots, a.reps, a.rest_s, a.step_slots)
         doc["alone"].append(r)
         print(json.dumps(r), flush=True)
     if not a.no_beside:

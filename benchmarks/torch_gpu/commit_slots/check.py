@@ -3,10 +3,10 @@
 1. The fixture: the edge layout at its 3 slots gives ``fixtures/commit-slots-v1.json``'s root.
 2. The edge layout at a few slot counts gives the reference's step root and slot roots; at larger ones, the host twin's.
 3. Two H200 layers at 17 slots give the reference's; three at 256 the host twin's.
-4. The frozen H200 layout (52 layers) at ``--slots`` (20,480), each layer's outputs fresh random bytes on the device,
-   committed one layer at a time with two buffers reused as a serving loop reuses them: the reference rebuilds each
-   sampled slot from its bytes (copied before its buffer is reused) and gets the device's slot root, and its step tree over
-   the device's slot roots gets the device's step root.
+4. The frozen H200 layout (52 layers) at each of ``--slots`` (4,096, 16,384 and 20,480), each layer's outputs fresh
+   random bytes on the device, committed one layer at a time with two buffers reused as a serving loop reuses them: the
+   reference rebuilds each sampled slot from its bytes (copied before its buffer is reused) and gets the device's slot
+   root, and its step tree over the device's slot roots gets the device's step root.
 
 Exits 1 if any check fails.
 """
@@ -99,7 +99,7 @@ def frozen(slots: int, samples: int, seed: int) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--slots", type=int, default=20480, help="the frozen layout's slot count")
+    ap.add_argument("--slots", type=int, nargs="+", default=[4096, 16384, 20480], help="the frozen layout's slot counts")
     ap.add_argument("--samples", type=int, default=4, help="random slots the reference rebuilds, beside the first and last")
     ap.add_argument("--quick", action="store_true", help="skip the frozen layout")
     a = ap.parse_args(argv)
@@ -123,7 +123,8 @@ def main(argv: list[str] | None = None) -> int:
     run(against, "h200-2-layers", two, 17, 17, "reference")
     run(against, "h200-3-layers", three, 256, 256, "host twin")
     if not a.quick:
-        run(frozen, a.slots, a.samples, 5)
+        for slots in a.slots:
+            run(frozen, slots, a.samples, 5)
     props = torch.cuda.get_device_properties(0)
     doc = {"ok": all(r["ok"] for r in results), "device": props.name, "capability": f"{props.major}.{props.minor}",
            "torch": torch.__version__, "checks": results}

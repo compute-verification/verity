@@ -123,8 +123,8 @@ Run `r20261026-002612-bfed` (vy-dc-h200, one H200, commit 2eb946b41c, `gpu.sh`):
 - `commit_slots.cuh`: the hashing shared by the kernels and the host twin (rows, salts, hm96 leaves, frame nodes, the
   per-slot fold and the step tree); `commit_slots.cu` the kernels; `commit_slots_host.cpp` the host twin.
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit`; builds cached under `~/.cache/verity/commit_slots`.
-- `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 20,480 slots on sampled
-  slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8 GEMMs;
-  `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
+- `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
+  sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
+  GEMMs; `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the host twin against the reference, and (with a GPU) the kernels against the host twin.

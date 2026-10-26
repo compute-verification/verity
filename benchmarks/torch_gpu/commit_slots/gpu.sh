@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # commit_slots on one leased GPU (cwd = the source tree's root): outside the lease, the kernels' build (nvcc, for this GPU)
 # and the host twin's; under one lease of at most LEASE_MIN minutes, the GPU tests, check.py (the roots against the CPU
-# reference's, the frozen layout at 20,480 slots on sampled slots) and bench.py (GB/s and share of the step). Python is the
-# node's serving venv (CUDA torch), with the tree on PYTHONPATH.
+# reference's, the frozen layout at 4,096 to 20,480 slots on sampled slots) and bench.py (GB/s and share of the step).
+# Python is the node's serving venv (CUDA torch), with the tree on PYTHONPATH.
 #
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-kcommit \
 #     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
