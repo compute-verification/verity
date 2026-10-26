@@ -17,7 +17,7 @@ about the card and nothing about algorithms:
 
 Everything else is the instruction set's semantics: an opcode reads its input words from the stores `inStore` names
 and writes `eval` of them to the stores `outStore` names, and nothing else moves a word. So a product an opcode forms
-reaches another word only through further instructions, each of which pays its usage (P2 in `Accel.Mma`).
+reaches another word only through further instructions, each of which pays its usage (P2 in `Accel.Principles`).
 
 **Execution.** A program is a text per thread (`Prog`); a thread has a program counter and runs its text in order
 (`step`), and the threads share the stores. A branch (`Instr.bra`) is the one data-dependent control: it reads a
