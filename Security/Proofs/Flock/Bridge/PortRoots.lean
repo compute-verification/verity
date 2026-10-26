@@ -268,6 +268,15 @@ theorem fixes_of_none {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} (h : r
   simp only [decide_eq_true_eq, not_and, not_not] at this
   exact this he
 
+/-- **The decidable form of the guard**: no colliding pair of ports (`rootsColl c pub nl = none`) iff an earlier port
+with a port's root has its domain. -/
+theorem rootsColl_none_iff {c : Flock.Circuit} {pub : Flock.Public} {nl : ℕ} :
+    rootsColl c pub nl = none ↔ RootFixesDomain c pub nl := by
+  refine ⟨fixes_of_none, fun h => Option.map_eq_none_iff.mpr (List.find?_eq_none.mpr fun ⟨a, b⟩ hp => ?_)⟩
+  obtain ⟨hlt, hq⟩ := mem_pairs.mp hp
+  simp only [decide_eq_true_eq, not_and, not_not]
+  exact h b a hlt hq
+
 theorem finderPr_one {H : Msg → Msg} {F : Claims.Finder}
     (h : ∀ s, ∃ u v, F.out s = some (u, v) ∧ Claims.Collision H u v) : F.Pr H = 1 := by
   have hc : (Fintype.card F.S : ℝ) ≠ 0 := Nat.cast_ne_zero.mpr Fintype.card_ne_zero
