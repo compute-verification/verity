@@ -336,7 +336,6 @@
     {"file": "verity_vllm/check/fold_compare.py", "kind": "BLE001", "symbol": "compare_subcircuits", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.types.Array` imported but unused"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "F401", "symbol": "<module>", "detail": "`json` imported but unused"},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "BLE001", "symbol": "_continuation_rule", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "E731", "symbol": "plan_chains", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "BLE001", "symbol": "_program_splits", "detail": "Do not catch blind exception: `Exception`"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "F401", "symbol": "recompute_run", "detail": "`verity_vllm.program.registry.sampling_topp_difftest` imported but unused"},

@@ -27,8 +27,6 @@
     {"file": "verity_vllm/check/replay/replay.py", "kind": "seed-default", "symbol": "Replayer.__init__", "detail": "seed"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "seed-default", "symbol": "tier_b", "detail": "seed"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "seed-default", "symbol": "tier_c", "detail": "seed"},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "broad-except", "symbol": "_continuation_rule", "detail": "except Exception"},
-    {"file": "verity_vllm/check/replay/population.py", "kind": "broad-except", "symbol": "population", "detail": "except Exception"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_challenge"},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "seed-default", "symbol": "sampled_replay", "detail": "seed_source"},
     {"file": "verity_vllm/program/kernels/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},

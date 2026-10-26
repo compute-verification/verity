@@ -47,6 +47,8 @@ from verity_vllm.records.workload import Workload
 VARIANT = ("vllm d9105ea80 V2 sampler, explicit seed: FlashInfer disabled; _temperature_kernel -> _apply_topp_split(S) "
            "[_topp_sb_stats_kernel, _topp_sb_step_kernel x5, _topp_sb_mask_kernel] -> _gumbel_sample_kernel (Philox tl.rand + Gumbel) "
            "+ argmax/gather; torch.multinomial not used")
+#: the prefix of a record entry naming an input file that is there but couldn't be read
+UNREADABLE = "unreadable: "
 
 
 def _f32_bits(x: float) -> int:
@@ -183,26 +185,31 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
 
 
 def _stop_rule(build_dir: str | Path | None) -> dict:
-    """The Program's declared stop rule (GP-01 `stop_rule`: eos_token_ids, eos_lag_rows) from the Build's workload_program.json, if given."""
+    """The Program's declared stop rule (GP-01 `stop_rule`: eos_token_ids, eos_lag_rows) from the Build's workload_program.json, if given;
+    {"source", "error"} when the file is there but can't be read."""
     if build_dir is None:
         return {}
     for p in (Path(build_dir) / "build_workload" / "workload_program.json", Path(build_dir) / "build_workload_program.json.gz"):
+        if not p.exists():
+            continue
         try:
             if p.suffix == ".gz":
                 import gzip
-                gp = json.loads(gzip.open(p, "rt").read())
+                with gzip.open(p, "rt") as f:
+                    gp = json.loads(f.read())
             else:
                 gp = json.loads(p.read_text())
-            return dict(gp.get("stop_rule") or {}) | {"source": str(p)}
-        except (OSError, ValueError):
-            continue
+        except (OSError, ValueError) as e:
+            return {"source": str(p), "error": f"{type(e).__name__}: {e}"[:200]}
+        return dict(gp.get("stop_rule") or {}) | {"source": str(p)}
     return {}
 
 
 def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | None, str]:
     """The scheduler's EOS lag rows read from the RECORD's own attestation of `async_scheduling` (True -> 1,
     False -> 0): RunHeader.profile.engine_kwargs, RunHeader.engine_kwargs, capture/versions.json engine_kwargs -- the same locations GM-01
-    reads (global_match.record_engine_facts); None when the record does not attest it (the lag slot is then unjudgeable, said so)."""
+    reads (global_match.record_engine_facts); None when the record does not attest it (the lag slot is then unjudgeable, said so), with
+    an `unreadable: ` reason when versions.json is there but can't be read (the draw ledger's problem)."""
     cands: list[tuple[str, object]] = []
     prof = getattr(header, "profile", None) if not isinstance(header, dict) else header.get("profile")
     prof = prof if isinstance(prof, dict) else {}
@@ -211,19 +218,21 @@ def record_lag_rows(header, snapshots_dir: Path | None = None) -> tuple[int | No
     ek_top = getattr(header, "engine_kwargs", None) if not isinstance(header, dict) else header.get("engine_kwargs")
     if isinstance(ek_top, dict):
         cands.append(("RunHeader.engine_kwargs.async_scheduling", ek_top.get("async_scheduling")))
-    if snapshots_dir is not None:
+    unread = None
+    vp = Path(snapshots_dir) / "versions.json" if snapshots_dir is not None else None
+    if vp is not None and vp.exists():
         try:
-            v = json.loads((Path(snapshots_dir) / "versions.json").read_text())
+            v = json.loads(vp.read_text())
             ekv = v.get("engine_kwargs") if isinstance(v.get("engine_kwargs"), dict) else {}
             cands.append(("capture/versions.json engine_kwargs.async_scheduling", ekv.get("async_scheduling")))
-        except (OSError, ValueError):
-            pass
+        except (OSError, ValueError) as e:
+            unread = f"{UNREADABLE}capture/versions.json ({type(e).__name__}: {e})"[:240] + " -- its engine_kwargs.async_scheduling is not read"
     for src, v in cands:
         if isinstance(v, bool):
             return (1 if v else 0), f"{src}={v!r}"
         if isinstance(v, str) and v.strip().lower() in ("true", "false"):
             return (1 if v.strip().lower() == "true" else 0), f"{src}={v!r}"
-    return None, "not attested (async_scheduling absent from the record's engine_kwargs)"
+    return None, unread or "not attested (async_scheduling absent from the record's engine_kwargs)"
 
 
 def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set | None) -> tuple[list[int] | None, dict]:
@@ -290,10 +299,14 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         except (OSError, ValueError) as e:  # noqa: BLE001
             out["problems"].append(f"draw ledger: the workload manifest could not be read ({e!r}): prompt_len / cap unknown, the ledger is unjudged")
     sr = _stop_rule(build_dir)
+    if sr.get("error"):
+        out["problems"].append(f"draw ledger: {UNREADABLE}the Program's stop rule {sr['source']} ({sr['error']}): its EOS ids and declared lag are unknown")
     eos_ids = set(int(x) for x in sr["eos_token_ids"]) if sr.get("eos_token_ids") else None
     # the lag: the RECORD's attestation of async_scheduling (M-0213 / ruling 21; the same fact GM-01 G6 reads), the Program's declared
     # stop_rule.eos_lag_rows beside it when it carries one; a disagreement is GM-01's to fail, named here
     lag_rec, lag_src = lag_attested if lag_attested is not None else (None, "not read")
+    if lag_rec is None and str(lag_src).startswith(UNREADABLE):
+        out["problems"].append(f"draw ledger: the record's lag attestation is {lag_src}")
     lag_decl = sr.get("eos_lag_rows")
     lag = lag_rec if lag_rec is not None else (int(lag_decl) if lag_decl is not None else None)
     out["stop_rule"] = {"eos_token_ids": sorted(eos_ids) if eos_ids else None, "eos_ids_source": sr.get("source"),

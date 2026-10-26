@@ -186,6 +186,25 @@ def test_record_lag_rows_reads_the_header_then_versions_json_and_says_not_attest
     (tmp_path / "versions.json").write_text(json.dumps({"engine_kwargs": {"async_scheduling": False}}))
     assert record_lag_rows({}, tmp_path) == (0, "capture/versions.json engine_kwargs.async_scheduling=False")
     assert record_lag_rows({})[0] is None and "not attested" in record_lag_rows({})[1]
+    # a versions.json that is there but can't be read is named, and the ledger fails on it rather than taking the declared lag unattested
+    (tmp_path / "versions.json").write_text('{"engine_kwargs": ')
+    lag, why = record_lag_rows({}, tmp_path)
+    assert lag is None and why.startswith("unreadable: capture/versions.json (JSONDecodeError") and "async_scheduling is not read" in why
+    assert record_lag_rows(H(), tmp_path)[0] == 1                                  # the header attests first: the file isn't needed
+    wl = _wl(tmp_path, [("a", 10, 4)])
+    out = draw_accounting(_draws("a", 10, 4, 0), wl, _build(tmp_path, [99], lag_decl=1), lag_attested=(lag, why))
+    assert out["problems"] == [f"draw ledger: the record's lag attestation is {why}"] and out["stop_rule"]["eos_lag_rows"] == 1
+
+
+@pytest.mark.parametrize("name, data", [("build_workload/workload_program.json", '{"stop_rule": '),
+                                        ("build_workload_program.json.gz", b"not gzip")])
+def test_a_stop_rule_file_that_cant_be_read_is_a_ledger_problem_not_an_undeclared_rule(tmp_path, name, data):
+    b = tmp_path / "build"
+    (b / name).parent.mkdir(parents=True, exist_ok=True)
+    (b / name).write_bytes(data.encode() if isinstance(data, str) else data)
+    out = draw_accounting(_draws("a", 10, 4, 0), _wl(tmp_path, [("a", 10, 4)]), b, lag_attested=(1, "test"))
+    assert len(out["problems"]) == 1 and out["problems"][0].startswith(f"draw ledger: unreadable: the Program's stop rule {b / name} (")
+    assert out["stop_rule"]["eos_ids_source"] == str(b / name) and out["stop_rule"]["attested"] is False
 
 
 @pytest.mark.parametrize("row, att, n_rows, V", [
