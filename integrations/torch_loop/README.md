@@ -24,6 +24,13 @@ committed row longer than one SHA-512 block.
   binding the run root (`TorchLoop.commit_activations`). Their entries are in the registration's window, fixed before the
   draw, and their salts in the window's `activations-private.json`. No read of them is declared, so they leave the free
   count as it is.
+- The wired circuit (`--wired`, opt-in, CIR-100): each linear at each token row is one `ScaledMmS8_v1{K=128, N=128}` unit,
+  its outputs one 256-byte row, and each ReLU and quantize one `QuantRowS8_v1{N=128, RELU}` unit (`verity.ml.circuits.ops.quant`),
+  which reads that row and writes the codes and the scale the next linear reads (`interface.Wire`). Only each request's own
+  row is free, so an altered activation is the refusal of the drawn quantize unit (`--tamper-activations`), not a free
+  input. With `--registered` the weights are one row a linear (`commit_weights(wired=True)`), and the default shape's
+  free inputs drop to 2,112 bits. A member holds one unit (`--cap 1`), and a wired member reading registered rows is a
+  shared-row member, whose wiring check reads its tables at its refs (`verity.ml.windows.wiring`).
 - `verity_torch_loop/checkpoint.py`, `checkpoint/` and `manifests/checkpoints-int8.json`: the loop's model as the int8
   checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The auditor's gate (`benchmarks/live_challenger/models.py`) registers that role
   to sign the loop's weights root.
@@ -43,7 +50,8 @@ committed row longer than one SHA-512 block.
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
   each tampered window refused. `PP_TORCH_LOOP_REGISTERED=1` serves the registered weights, audits against their pin
   (`records_audit.py --registered PIN`) and adds an arm serving other weights, which Lean's registered reads refuse
-  (r20261025-220011-057f).
+  (r20261025-220011-057f). `PP_TORCH_LOOP_WIRED=1` audits the wired circuit under `stratified:3` (a unit of every template),
+  with an arm whose quantize units' codes are tampered.
 - `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
