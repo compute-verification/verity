@@ -8,7 +8,9 @@ import Proofs.Flock.Claims.Recursion.VCallsAt
 twins over the draws' evaluations (`InnerAcceptsCollAtV`, `ForksBindAtV`), the link's collision is one among the two
 draws' evaluations (`drawCalls`), which `FdevV`'s output searches:
 
-* `Bound.fork_collOV`: `Bound.fork_collO` with the escapes `drawCalls` holds, through `Bound.fork_collO_core`;
+* `Bound.fork_collOV`: `Bound.fork_collO` with the escapes `drawCalls` holds, through `Bound.fork_collO_coreBy` at
+  each draw's `callsAt`;
+* `Bound.PrBAbort_le_PrBinnerV`: `B` at `P_O`'s aborting runs is at most `B_I` over the draws' evaluations;
 * `Bound.linkOutV_collO`, `Bound.Pr_badO_le_linV`, `Bound.Pr_badO_le_PrFdevV`: `P_O`'s bad draws at most
   `k_I·(Pr[FdevV] + 1/(M+1))`.
 -/
@@ -28,7 +30,7 @@ evaluations.** A rejecting inner view is a collision among its draw's evaluation
 that differ at message `j` are `ForksBindAtV`'s. Inner views that agree at message `j` are `fork_collO_core`'s,
 whose collision among the recorded calls is one among the evaluations. -/
 theorem Bound.fork_collOV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hN0 : CallsNil H D) (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (j : ℕ) (hj : j < Bd.DE.V.k (xI D x))
@@ -52,29 +54,31 @@ theorem Bound.fork_collOV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock 
         drawCalls H D (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (fork j t.2.1 t.2.2.1, t.2.2.2.2)) →
       (findColl l).isSome → forkCollV H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t :=
     fun l hsub hs => VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) hsub hs
-  have hlift' : ∀ l : List (Msg × Msg), (∀ p ∈ l, p ∈ D.calls x ws ++ D.calls x ws') → (findColl l).isSome →
+  have hlift' : ∀ l : List (Msg × Msg),
+      (∀ p ∈ l, p ∈ D.callsAt H x t.2.1 ws ++ D.callsAt H x (fork j t.2.1 t.2.2.1) ws') → (findColl l).isSome →
       forkCollV H D (Inner.ofFlock Bd.deploy decI) DO decO P x j t := fun l hsub hs =>
     hlift l (fun p hp => (List.mem_append.1 (hsub p hp)).elim
       (fun h => List.mem_append_left _ (by rw [hl₁]; exact List.mem_append_left _ h))
       (fun h => List.mem_append_right _ (by rw [hl₂]; exact List.mem_append_left _ h))) hs
   rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hE₁ with hacc₁ | ⟨_, _, huv, _⟩
   swap
-  · exact hlift _ (fun p hp => List.mem_append_left _ (by rw [hl₁]; exact hp))
+  · exact hlift _ (fun p hp => List.mem_append_left _ (by rw [hl₁]; exact mem_callsAt_append hp))
       (Option.isSome_iff_exists.2 ⟨_, huv⟩)
   rcases hA decO Ω P t.1 (fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hE₂ with hacc₂ | ⟨_, _, huv, _⟩
   swap
-  · exact hlift _ (fun p hp => List.mem_append_right _ (by rw [hl₂]; exact hp))
+  · exact hlift _ (fun p hp => List.mem_append_right _ (by rw [hl₂]; exact mem_callsAt_append hp))
       (Option.isSome_iff_exists.2 ⟨_, huv⟩)
   by_cases hraw : ((D.innerView H x t.2.1 ws).msgs.map Prod.fst).getD j [] =
       ((D.innerView H x (fork j t.2.1 t.2.2.1) ws').msgs.map Prod.fst).getD j []
   swap
   · exact hFk decO Ω P j t ⟨ws, ws', hE₁, hE₂, hraw⟩
-  exact Bound.fork_collO_core hB hV hT hL j hj t hws hws' hacc₁ hacc₂ hraw hne hlift'
+  exact Bound.fork_collO_coreBy (cl := fun x r ws => D.callsAt H x r ws) hB hV
+    (fun ω r c ws hg => callsAt_true_of (hT decO x Ω P ω r c ws hg)) hL j hj t hws hws' hacc₁ hacc₂ hraw hne hlift'
 
 /-- **A link that succeeds at `P_O`'s reading names a collision among its draws' evaluations**: `linkOut_collO`, with
 `fork_collOV`, the pair `linkOutV` outputs. -/
 theorem Bound.linkOutV_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hN0 : CallsNil H D) (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     {M : ℕ} (j : Fin ((Inner.ofFlock Bd.deploy decI).V.k (xI D x))) (ω : Ω) (r : Fin (D.V.k x) → Coin)
@@ -99,7 +103,7 @@ theorem Bound.linkOutV_collO (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlo
 
 /-- **`P_O`'s bad draws, linearly, over the draws' evaluations**: `Pr_badO_le_lin` with `FdevV`. -/
 theorem Bound.Pr_badO_le_linV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hN0 : CallsNil H D) (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     [Fintype Ω] [Nonempty Ω] (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI D x)) :
@@ -173,7 +177,7 @@ theorem Bound.Pr_badO_le_linV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFl
 /-- **`P_O`'s bad draws at most `k_I·(Pr[FdevV] + 1/(M+1))`**: `Pr_badO_le_linV`, and no bad draw where the inner
 protocol takes no rounds. -/
 theorem Bound.Pr_badO_le_PrFdevV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
     (hN0 : CallsNil H D) (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     [Fintype Ω] [Nonempty Ω] (M : ℕ) :
@@ -192,6 +196,32 @@ theorem Bound.Pr_badO_le_PrFdevV (hB : Bd.Binds) (hV : InnerViewRun H D (Inner.o
         Bd.BadO decI H D DO decO P x t.1 t.2) = 0 :=
       le_antisymm ((Pr_mono fun t ht => ht.2 fun j hj => absurd hj (by omega)).trans_eq Pr_false) (Pr_nonneg _)
     rw [hb, h0, Nat.cast_zero, zero_mul]
+
+/-- **`B` at `P_O`'s aborting runs finds only collisions `B_I` finds over the draws' evaluations**: `PrBAbort_le_by` at
+the calls a finder searches at a draw (`Deploy.callsAt`, `CallsLogCollAt`), which the draws' evaluations hold
+(`drawCalls`). -/
+theorem Bound.PrBAbort_le_PrBinnerV (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
+    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hL : CallsLogCollAt H D (Inner.ofFlock Bd.deploy decI) DO)
+    (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hN0 : CallsNil H D)
+    (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI)) [Fintype Ω] [Nonempty Ω] :
+    PrBAbort H Bd.DE.V (Bd.innerPO decI H D DO decO P x decC) (xI D x) (Bd.keepAO decI H D DO decO P x) ≤
+      PrBinnerV H D (Inner.ofFlock Bd.deploy decI) DO decO P x := by
+  by_cases hk : 0 < Bd.DE.V.k (xI D x)
+  · have hk' : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI D x) := hk
+    refine (Bound.PrBAbort_le_by (cl := fun x r ws => D.callsAt H x r ws) decC hdec hV hL
+      (fun ω d => callsAt_true hT hN0 ω d) hR hk).trans ?_
+    simp only [PrBinnerV, hk', ↓reduceDIte]
+    unfold Finder.Pr
+    refine Pr_mono fun s hs => ?_
+    obtain ⟨u, v, huv, -⟩ := hs
+    refine VStar.coll_of_sub (drawCalls_pair_true hT hN0 _ _ _) (fun p hp => ?_) (Option.isSome_iff_exists.2 ⟨_, huv⟩)
+    rcases List.mem_append.1 hp with h | h
+    · exact List.mem_append_left _ (List.mem_append_left _ h)
+    · exact List.mem_append_right _ (List.mem_append_left _ h)
+  · unfold PrBAbort
+    simp only [hk, ↓reduceDIte]
+    exact PrBinnerV_nonneg H D (Inner.ofFlock Bd.deploy decI) DO decO P x
 
 end MergedLinV
 
