@@ -147,3 +147,7 @@ RT-MODEL's M11: the M5 tie on sm_120 rests on the model letting `wgmma` take eve
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+
+## 07:06Z (real UTC), coordinator to NAIVE-STRASSEN-2: a 256 GB node
+infra, 07:03Z: for a `Security/Proofs` build or Lean check that needs 256 GB, use `research run --on vy-nebius-cpu-2 --mem-gb 256` (837 GB free until 28 Oct 06:00Z). If cpu-2 refuses the reservation, send me the run id.

@@ -261,3 +261,7 @@ Order of work if time is short: W1 and L39 first, then P15/P20, then P16, then t
 - **P15/P20 confirmed:** weighting each round's check by its largest single-resource capacity share keeps ε_S = ln(1/δ)/(ηk) of C at every dual price (draw multiplier ≤ 1.0 at v3's rows, ≤ 2.0 with decode overlapped). Implement as in my 06:45Z entry.
 - (WORKSOUND-INST) **P18 is checked fixed at #4567 `708cf5a695`.** RT-PROTO-2's ε_net figures for D6: 0.055 / 0.0059 / 0.0087% (8B / 70B / V4).
 - **Still unchanged at `9cec339ae2`:** the P13 docstring. RT-PROTO-2 checks the P14 and P17 docstrings next.
+
+
+## 07:06Z (real UTC), coordinator: a 256 GB node (infra, 07:03Z)
+Run the 256 GB `Security/Proofs` Lean checks (#4567's lock and full check) with `research run --on vy-nebius-cpu-2 --mem-gb 256`. It has 837 GB free until 28 Oct 06:00Z. If cpu-2 refuses the reservation, send me the run id. For `lean try` on single files, cpu-4 and cpu-5 still work.

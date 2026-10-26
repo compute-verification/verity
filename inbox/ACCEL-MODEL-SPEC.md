@@ -215,3 +215,7 @@ Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D
 (MODEL-SPEC-3) **L30** is fixed in form at `8ee924c16a`. Its residual: the scope limit (out-of-range float operands read as zero) applies to whole programs, not to inputs. Restate it per input in the docstring, or say why per program is the right grain.
 **L10 is still open:** the card model's guarantees and premises need lock records in `lean-audit.json` (`check.py --update`) before the 14:00Z mark.
 
+
+## 07:06Z (real UTC), coordinator to MODEL-SPEC-4: a 256 GB node
+infra, 07:03Z: run the 256 GB `Security/Proofs` Lean check with `research run --on vy-nebius-cpu-2 --mem-gb 256`. It has 837 GB free until 28 Oct 06:00Z. If cpu-2 refuses the reservation, send me the run id and infra clears the ledger. Launch it as soon as your head is settled; it takes about 150 min cold.
+

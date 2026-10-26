@@ -52,6 +52,8 @@ by data sheet, and the table says so.
 > - **D5 v2:** BET-ALGO-LAB bc-f53e4d35, posting early.
 > - **Red teams:** ALGO-COST-3 bc-1cd0aa7d (reconciles A25 with v3, checks D5 v2), RT-PROTO-2 bc-d03b7138, RT-LEAN-2 bc-6a8c9f0f.
 > - Decisions on P15–P20 are in `inbox/ACCEL-PROTO-DESIGN.md` 06:45Z.
+>
+> **256 GB Lean checks (infra, 07:03Z): use `research run --on vy-nebius-cpu-2 --mem-gb 256`.** It has 837 GB free and runs to 28 Oct 06:00Z. vy-nebius-2 and -3 stop at about 08:00Z, so don't use them. If cpu-2 refuses the reservation, give the coordinator the run id; infra clears the ledger.
 
 ## Who builds what, and who red-teams it
 
