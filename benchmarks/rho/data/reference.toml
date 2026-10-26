@@ -63,6 +63,14 @@ bits = { value = 6.4e12, unit = "bit", source = "ruling: Daniel 25 Oct, the weig
 [exfil.rl-rollouts]
 bits = { value = 1.68e8, unit = "bit", source = "ruling: Daniel 25 Oct, 100M tokens of R1-style rollouts (21 MB at 17 bits a token, about 10x compressed)", status = "ruled" }
 
+# The faulty-outputs channel (operating.faulty): steps the sampled proofs let go unchecked return outputs the adversary
+# chose; the regime's identities each end at their first drawn faulty step.
+[faulty]
+q = { value = 2.0833e-15, unit = "1/step", low = 1e-16, high = 6.25e-10, source = "benchmarks/nci/tiers.py DEFAULTS: share 0.01 / (overhead 4.8e12 + replay 1.1e5), the sampled proofs' compute share over a drawn step's proving and replay cost; low and high: exposure.RANGES' ends, 1e-3 / (1e13 + 1e6) and 0.1 / (batched proving 1.6e8 + 1e3)", status = "derived" }
+delta = { value = 1e-6, low = 1e-6, high = 0.01, source = "ruling: Daniel 25 Oct reference datacenter, delta = 1e-6 and 1% wherever a probabilistic term enters", status = "ruled" }
+step_bits = { value = 16, unit = "bit/step", low = 8, high = 16, source = "AGENTS.md: a proof unit's outputs are at most 16 bits, a literal limit (tiers DEFAULTS step_bits); low: exposure.RANGES, a guess", status = "ruled" }
+floor_steps = { value = 1, unit = "step", low = 1, high = 1e12, source = "benchmarks/nci/tiers.py DEFAULTS floor_steps; high: exposure.RANGES, a guess", status = "assumed" }
+
 [scenario.reference-onsite-h200]
 fleet = "world-h200"
 regime = "onsite"
