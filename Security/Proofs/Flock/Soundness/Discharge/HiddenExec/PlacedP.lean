@@ -13,7 +13,8 @@ import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
   public inputs (`AcceptedHP.aliased_of_key`, through `aliased_of_keyP`).
 * `SitesHP plan tab`: each drawn unit's acceptance, template instance and block, as `SitesH`.
 * `SitesHP.progPlaces_keyProgP`: `ProgPlaces` for the circuit's program on the keys with public inputs
-  (`Placed.keyProgP`), from the sites and the parse alone; `constCols_keyProgHP` is its `hConst`.
+  (`Placed.keyProgP`), from the sites and the parse alone; `constCols_keyProgHP` and `zeroCols_keyProgHP` are its
+  `hConst` and `hZero` (a stacked input on the zero gate is off a public leaf, `AcceptedHP.zero_block`).
 -/
 
 set_option Elab.async false
@@ -22,8 +23,28 @@ namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3
 open Model Audit
+open FlockSoundness.Discharge.Zero (ZeroIn)
 
 /-! ## An accepted hidden-output statement at public inputs -/
+
+/-- **A stacked input off a public leaf that reads the zero carries 0** at public inputs, at template instance `g`'s
+place, in every block of a satisfying witness (`stack_zero_blockH`, through `copyPos_blockHP`). -/
+theorem stack_zero_blockHP {tags : Tags} {st : Stmt} {pi : HmIn.Ports} (L : Layout st)
+    (Lf : Layout (Hidden.flatTwin st)) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog)))
+    (F : Aliased.UnitFacts tags (Hidden.flatTwin st)) (hp : HmIn.parse st.c = .ok pi) (hR : UnitRowsFlatP st pi)
+    {g : ℕ} (hg : g < st.c.g) (x : Fin ((unitRows st L.unit_built).stackW st.c.upv))
+    (hx : x.val < ((unitRows st L.unit_built).stack st.c.upv).nIn) (hneg : Aliased.pubLeaf st.c pi x.val < 0)
+    (hz : ZeroIn st.c x.val) {z : Model.Witness (L.model regs).m} (hsat : (L.model regs).Satisfies z)
+    (o : Fin (2 ^ (L.model regs).nbl)) :
+    (L.model regs).block z o (stackPlace (L.model regs) (unitRows st L.unit_built) st.c.upv
+        (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x) = 0 := by
+  have hx' : x.val < st.c.upv * (st.c.unit.inWords * WORD) := by
+    have : x.val < st.c.upv * (unitRows st L.unit_built).nIn := hx
+    rwa [L.unitRows_nIn] at this
+  rw [copyPos_blockHP L Lf regs F hp F.check hR hg x hx hneg hsat o]
+  obtain ⟨s, hs, he⟩ := Zero.copyPos_zero Lf regs F hg hx' hz
+  rw [he]
+  exact zeroPos_blockH L Lf regs F hs hsat o
 
 /-- **An accepted untyped hidden-output statement at public inputs whose block R1CS is `T`**: `Stmt.setupHidden`
 accepted at the verifier's public inputs `own`, returning `st` with public input ports `pi` (`s`); `L` is a layout of
@@ -127,6 +148,16 @@ theorem aliased_of_key {C : Audit.Circuit} {n : ℕ} {P : Audit.Partition C n} {
   obtain ⟨ro, ri, -, hRi, hr⟩ := a.s.regions
   exact aliased_of_keyP a.L a.flatLayout a.regs a.unitFacts a.s.ports C a.hR a.hregs hRi
     (fun r hr' => by rw [hr, Array.toList_append]; exact List.mem_append_right _ hr') inst hg hk o
+
+/-- **A template instance's stacked input off a public leaf that reads the zero carries 0**, at the template instance's
+columns, in every block of a satisfying witness (`stack_zero_blockHP`). -/
+theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val < a.rows.nIn)
+    (hneg : Aliased.pubLeaf a.st.c a.pi x.val < 0) (hz : ZeroIn a.st.c x.val) {z : Model.Witness T.m}
+    (hsat : T.Satisfies z) (o : Fin (2 ^ T.nbl)) :
+    T.block z o (a.col hg x) = 0 := by
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, own, st, ht, h, pi, s, L, hR, regs, hregs, hT⟩ := a
+  subst hT
+  exact stack_zero_blockHP L (flat_layoutP ht s) regs (flat_unitFactsP ht s) s.ports hR hg x hx hneg hz hsat o
 
 end AcceptedHP
 
@@ -245,5 +276,88 @@ theorem constCols_keyProgHP :
   Const.constCols_of_instC _ (Zero.oneGate_uniform n) (SitesHP.progPlaces_keyProgP_inst hU hparse hpi outs)
 
 end keyedP
+
+
+/-! ## `hZero` at the circuit's program on the keys with public inputs -/
+
+section circuitP
+
+variable {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
+  {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
+  {k : ℕ} {c : Flock.Circuit} {hU : Built c.unit} {pi : HmIn.Ports} {ins : ℕ → Fin (Placed.circuitRows c hU).nIn → Fin k}
+  {one : Fin k} {hone : ∀ u x, ins u x ≠ one}
+
+/-- **`hZero` for the circuit's program at hidden-output sites at public inputs**, as `zeroCols_uniformH`: every column
+on the zero gate carries 0 in every satisfying witness, when every input the program wires to the zero gate is off a
+public leaf and reads the zero. -/
+theorem zeroCols_uniformHP (si : SitesHP plan tab)
+    (hrows : si.RowsOf (Placed.uniform k (Placed.circuitRows c hU) ins one hone n))
+    (hparse : ∀ S R u (h : u ∈ S),
+      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+    (hpi : HmIn.parse c = .ok pi)
+    {outs : Finset (Fin (Placed.gates k (Placed.circuitRows c hU) n))}
+    (pp : ProgPlaces (Placed.uniform k (Placed.circuitRows c hU) ins one hone n) outs plan tab)
+    (hinst : ∀ u, pp.inst u = Const.Prog.instC _ outs u) (ho : ∀ S R u h, pp.o S R u h = si.o S R u h)
+    (hcol : ∀ S R u h, pp.col S R u h = si.col hrows S R u h)
+    {zer : Fin k} (hz1 : zer ≠ one)
+    (hzer : ∀ (u : Fin n) x, ins u.val x = zer → ZeroIn c x.val ∧ Aliased.pubLeaf c pi x.val < 0) :
+    ((Placed.uniform k (Placed.circuitRows c hU) ins one hone n).partition outs).ZeroCols plan tab pp.derived.place
+      {Fin.castLE (Placed.le_gates k _ n) zer} := by
+  refine Zero.Prog.zeroCols_singleton pp (one := Fin.castLE (Placed.le_gates k _ n) one)
+    (Zero.unit_uniform n _ zer.isLt) (fun he => hz1 (Fin.castLE_injective _ he)) (fun u => ?_) ?_
+  · rw [hinst u, Const.Prog.instC_wire_one]
+    exact Zero.oneGate_uniform n u
+  · intro S R u h x hx hw z hsat
+    rw [hinst u, Const.Prog.instC_wire_input _ _ _ x hx] at hw
+    have hx' : x.val < (Placed.circuitRows c hU).nIn :=
+      lt_of_lt_of_eq hx (congrArg Rows.nIn (Placed.rows_uniform _ _ _ _ _ n u))
+    have hv := congrArg Fin.val hw
+    rw [Zero.insAt_uniform n u x.val hx'] at hv
+    obtain ⟨hzi, hni⟩ := hzer u ⟨x.val, hx'⟩ (Fin.ext hv)
+    rw [ho, hcol]
+    have hxa : x.val < (si.acc S R u h).rows.nIn := lt_of_lt_of_eq hx (congrArg Rows.nIn (hrows S R u h))
+    have hc := (si.acc S R u h).c_eq (hparse S R u h)
+    have hq := (si.acc S R u h).pi_eq (hparse S R u h) hpi
+    have hza : ZeroIn (si.acc S R u h).st.c x.val := by rw [hc]; exact hzi
+    have hna : Aliased.pubLeaf (si.acc S R u h).st.c (si.acc S R u h).pi x.val < 0 :=
+      (congrArg₂ (fun d q => Aliased.pubLeaf d q x.val < 0) hc hq).mpr hni
+    exact (si.acc S R u h).zero_block (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) x) hxa hna hza
+      hsat _
+
+/-- **`hZero` for the circuit's program on source-indexed input gates at public inputs**, as
+`zeroCols_circuitProgH`. -/
+theorem zeroCols_circuitProgHP {B : ℕ} {src : Fin (Placed.circuitRows c hU).nIn → Option (Fin B)}
+    (si : SitesHP plan tab) (hrows : si.RowsOf (Placed.circuitProg c hU n B src))
+    (hparse : ∀ S R u (h : u ∈ S),
+      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+    (hpi : HmIn.parse c = .ok pi)
+    {outs : Finset (Fin (Placed.gates (Placed.inGates n B) (Placed.circuitRows c hU) n))}
+    (pp : ProgPlaces (Placed.circuitProg c hU n B src) outs plan tab)
+    (hinst : ∀ u, pp.inst u = Const.Prog.instC _ outs u) (ho : ∀ S R u h, pp.o S R u h = si.o S R u h)
+    (hcol : ∀ S R u h, pp.col S R u h = si.col hrows S R u h)
+    (hsrc : ∀ x, src x = none → ZeroIn c x.val ∧ Aliased.pubLeaf c pi x.val < 0) :
+    ((Placed.circuitProg c hU n B src).partition outs).ZeroCols plan tab pp.derived.place
+      {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n B)} :=
+  zeroCols_uniformHP si hrows hparse hpi pp hinst ho hcol
+    (fun h => by simp [Placed.zeroGate, Placed.oneGate, Fin.ext_iff] at h)
+    fun u x hx => hsrc x ((Placed.insOf_eq_zero_iff u.isLt x).1 hx)
+
+/-- **`hZero` at `SitesHP.progPlaces_keyProgP`**: every column on the zero gate carries 0 in every satisfying witness,
+since an input on it is off a public leaf and reads the zero (`Aliased.srcKeyP_eq_zero`). -/
+theorem zeroCols_keyProgHP (hU : Built c.unit) {si : SitesHP plan tab}
+    (hparse : ∀ S R u (h : u ∈ S),
+      HmRow.parse (si.acc S R u h).tags (si.acc S R u h).cf (si.acc S R u h).tables = .ok c)
+    (hpi : HmIn.parse c = .ok pi)
+    (outs : Finset (Fin (Placed.gates (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU) n))) :
+    ((Placed.keyProgP c pi hU n).partition outs).ZeroCols plan tab
+      (SitesHP.progPlaces_keyProgP hU hparse hpi outs).derived.place
+      {Fin.castLE (Placed.le_gates _ _ n) (Placed.zeroGate n (Placed.circuitRows c hU).nIn)} :=
+  zeroCols_circuitProgHP si (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse) hparse hpi _ (fun _ => rfl)
+    (fun _ _ _ _ => rfl) (fun _ _ _ _ => rfl) fun x hx => by
+      have h1 : x.val < c.upv * min (c.unit.inWords * WORD) c.unit.constPos := x.isLt
+      obtain ⟨hneg, hk⟩ := Aliased.srcKeyP_eq_zero.1 ((Aliased.keyIdxP_eq_none x).1 hx)
+      exact ⟨(Zero.srcKey_zero_iff (lt_of_lt_of_le h1 (Nat.mul_le_mul_left _ (Nat.min_le_left _ _)))).1 hk, hneg⟩
+
+end circuitP
 
 end FlockSoundness.Discharge.HiddenExec
