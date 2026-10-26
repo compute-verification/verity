@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.VerdictPublics
+import Proofs.Flock.Claims.Recursion.VerdictPublicsAfter
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
@@ -19,7 +19,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
   positions (`DecAt.levels_of_merkleOk`).
 
 `Top.targetL` (`VerdictTargetL`) gives `TargetL` from the coin tie `TargetZ`, and `TargetPublics` is proved
-(`Top.targetPublics`, `VerdictPublics`). `targets_of_open`: every target from rows B and E, `TargetZ`, `TargetRDep`,
+(`Top.targetPublics`, `VerdictPublicsAfter`). `targets_of_open`: every target from rows B and E, `TargetZ`, `TargetRDep`,
 `TargetDMerkle` and `TargetDecode`.
 -/
 
