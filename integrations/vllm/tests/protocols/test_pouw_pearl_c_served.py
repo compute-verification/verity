@@ -3,7 +3,9 @@ gate open the session it reserved on its salt epoch's root R = `salt.epoch_open_
 committed and the epoch's number k over W (``pass_index``), its coins the salt coin alone (`window.SALT_FAMILIES`), takes
 that coin after R (`pouw_h1_window.salt_session`, `pouw_pearl_c_host.epoch_of`) and closes the session at release, so
 the session ends closed and complete; refused, before any patch or any coin: no session, a session of H1's layout, a
-session bound to another commitment or another root, an in-process coin beside the challenger's and a mix of the two. A
+session bound to another commitment or another root, an in-process coin beside the challenger's and a mix of the two,
+and a session reserved while the lane's open period is H1's, which `pouw_h1_window.reserve_salt` refuses before
+reserving. A
 reinstall is an epoch of its own: a fresh hm96 key, and over the same W the next k. The verifier holds the pass to that
 session (`pouw_h1_challenger.session_reason`'s Pearl-C branch, `salt_session_reason`; Lean `Properties.Pouw.LiveSalt`),
 recomputing R from W and ``pass_index``: it counts only reserved salt-only and ended closed and complete, and the pass's
@@ -17,6 +19,7 @@ from __future__ import annotations
 import itertools
 import json
 import random
+import re
 import shutil
 import socket
 import threading
@@ -276,6 +279,76 @@ def test_a_gate_answer_not_the_reserved_session_on_the_epoch_root_is_refused_bef
         PO.install(model, _served(lambda sid, r: given))
     assert RUNS == []
     _untouched(model)
+
+
+def _reserving(gate):
+    """Infra's gate `gate` (`challenger_host.Gate`) as words, for ``reserve`` alone: it reserves session `SID` with the
+    request's layout and answers as the gate's reserve does, naming the period of its lane the session joined."""
+    def call(verb, *words):
+        assert verb == "reserve"
+        a = dict(zip(words[::2], words[1::2]))
+        e = gate.reserve(SID, json.loads(a["--families"]), scheme=a["--scheme"], epoch=int(a["--epoch"]))
+        return {**RESERVED, "seq": e["seq"], "period": gate._current.get("vllm")}
+    return call
+
+
+def _kinds(gate):
+    return [json.loads(line)["kind"] for line in gate.lines]
+
+
+H1_OPEN = {"cap": 4, "circuit": "c1" * 64, "draw_k": 27, "rows": 64}
+H1_REFUSED = ("the lane's open period p-h1 is H1's (its open commits draw_k, rows): a salt-only session is a window "
+              "H1's checks refuse (window.live_epoch_reason)")
+
+
+def test_a_salt_only_session_is_refused_by_name_while_the_lanes_open_period_is_h1s():
+    """While the lane's open period is H1's (its open commits H1's draw K and table rows), a Pearl-C salt-only session
+    would be a window H1's checks refuse, so the period would earn nothing: `reserve_salt` refuses by name before
+    reserving, reading the lane's open period from the gate's ledger. A session reserved in it anyway (here by hand) is
+    refused by the install by name, before any patch and before the gate opens it, so no session is opened; so is a
+    reserve that joined a period the install isn't given. A Pearl-C period (its cap and circuit alone), another lane's H1
+    period, or none is reserved and installs."""
+    gate = CH.Gate(PRIVATE, KEY)
+    gate.period_open("p-h1", **H1_OPEN)
+    with pytest.raises(ValueError, match=re.escape(f"refused before reserving a salt-only session: {H1_REFUSED}")):
+        PHW.reserve_salt(_reserving(gate), lambda: gate.lines, "vllm", "vy-nebius-1", 0)
+    assert _kinds(gate) == ["period-open"]
+
+    period = PHW.open_period(gate.lines, "vllm")
+    reserved = _reserving(gate)("reserve", "--families", json.dumps(Wd.SALT_FAMILIES), "--scheme", Wd.LIVE_SCHEME,
+                                "--epoch", "0")
+    assert reserved["period"] == period["period"] == "p-h1"
+
+    def refused(**kw):
+        model = _model()
+        ctx = _served(lambda sid, r: pytest.fail("the gate opened a session"), **kw)
+        assert len(PO.refusals(ctx)) == 1
+        with pytest.raises(PO.Refused) as e:
+            PO.install(model, ctx)
+        _untouched(model)
+        return str(e.value)
+    assert f"{SCHEME}: {H1_REFUSED}" in refused(session=reserved, period=period)
+    assert f"{SCHEME}: the gate's reserve answer joined period p-h1, but the lane's open period read from the auditor's " \
+        "ledger (the pouw setting 'period', pouw_h1_window.open_period) is none" in refused(session=reserved)
+    assert f"{SCHEME}: pouw setting 'period' is the lane's open period, its period-open body" in refused(
+        session=reserved, period={"lane": "vllm"})
+    assert _kinds(gate) == ["period-open", "reserve"] and RUNS == []
+
+    late = CH.Gate(PRIVATE, KEY)                          # the period opened between the ledger's read and the reserve
+    late.period_open("p-h1", **H1_OPEN)
+    with pytest.raises(ValueError, match=re.escape(f"session {SID} is reserved and refused before its open: the gate's "
+                                                   "reserve answer joined period p-h1, but the lane's open period")):
+        PHW.reserve_salt(_reserving(late), lambda: [], "vllm", "vy-nebius-1", 0)
+    assert _kinds(late) == ["period-open", "reserve"]
+
+    for opens in ((), (("p-pc", "vllm", {"cap": 2, "circuit": "c1" * 64}),), (("k-h1", "kernels", H1_OPEN),)):
+        g = CH.Gate(PRIVATE, KEY)
+        for name, lane, fields in opens:
+            g.period_open(name, lane, by=lane, **fields)
+        answer, period = PHW.reserve_salt(_reserving(g), lambda: g.lines, "vllm", "vy-nebius-1", 0)
+        joined = "p-pc" if opens and opens[0][1] == "vllm" else None
+        assert answer["period"] == (period and period["period"]) == joined and _kinds(g)[-1] == "reserve"
+        assert PO.refusals(_served(lambda *a: None, session=answer, period=period)) == ()
 
 
 class _GateSession:

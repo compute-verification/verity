@@ -105,7 +105,7 @@ def f32c(x: float) -> PrimitiveDefinition:
     return const(32, P.bits_of(np.float32(x)))
 
 
-def _scale_log2_bits(D: int) -> int:
+def scale_log2_bits(D: int) -> int:
     """FA2 `set_params_fprop`: `scale_softmax_log2 = float(softmax_scale) * M_LOG2E` (double), narrowed to f32."""
     s = float(np.float32(D ** -0.5))
     return P.bits_of(np.float32(s * 1.4426950408889634))
@@ -398,7 +398,7 @@ def AttnBlock(B, S, q, k, v, m_prev, l_prev, o_prev):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+    scale_log2 = B.call(const(32, scale_log2_bits(D)))
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -768,7 +768,7 @@ def AttnBlockV3(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D))) if scale_log2 is None else scale_log2
+    scale_log2 = B.call(const(32, scale_log2_bits(D))) if scale_log2 is None else scale_log2
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
@@ -943,7 +943,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 #              partially bound composite is not an encodable static value: descriptor-codec.md §5), built by `norm_bundle(C)`
 #
 # NOT lifted (named in composition.md §1, unchanged across the three profiles): F2fpBf16 (the bf16 store conversion),
-# the FA2 lane ownership `_lane`, the four-lane epilogue order, `_scale_log2_bits`, GuardNegInfZero, the zero padding of
+# the FA2 lane ownership `_lane`, the four-lane epilogue order, `scale_log2_bits`, GuardNegInfZero, the zero padding of
 # partial blocks, the RMSNorm reduction trees (RMSNormTriton's 128x8 / 1024-chunk, RMSNormFusedCuda's cub BlockReduce),
 # BiasAdd / RoPE / SiluMul / Embedding / TokenSelect.
 
@@ -964,7 +964,7 @@ def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
         bmax = B.call(P.F32Max, bmax, s[c])  # B1: row max
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
-    scale_log2 = B.call(const(32, _scale_log2_bits(D))) if scale_log2 is None else scale_log2
+    scale_log2 = B.call(const(32, scale_log2_bits(D))) if scale_log2 is None else scale_log2
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)

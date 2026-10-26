@@ -23,6 +23,12 @@ It prints ``{"listening": URL}`` once it listens, then serves until it is stoppe
   HTTP head: each step's `io_tie.id_event` of P = ``--id-payload`` bytes (`scan_id`, below 2^17, the scan's IDB),
   then `io_tie.TRAILER` (`id_response`), as vLLM's ``--protocol ids`` answers the warden's.
 
+``--tamper KIND`` makes the server a covert sender on one id request's answer, the ``--tamper-at``-th id request it
+serves (from 0, in arrival order), every other answered as before (`TAMPERS`, `tampered`): ``byte``, one output byte
+changed before its id is taken; ``extra``, one id event more before the trailer; ``late``, the first event at once and
+the rest ``--late-s`` seconds later, past the warden's release of the next cell, so the warden fails the connection at
+that slot.
+
 `test_certifier_serve.py`'s ``_Varied`` is the same endpoint with varied responses and EOS.
 """
 from __future__ import annotations
@@ -48,6 +54,10 @@ ID_BITS = 30
 SCAN_ID_BITS = 17
 #: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
 ID_PAYLOAD = 503
+#: ``--tamper``'s kinds (module docstring)
+TAMPERS = ("byte", "extra", "late")
+#: ``late``'s hold, past the scan schedule's D = 21 buckets of 100 ms from admission to a connection's first egress cell
+LATE_S = 3.0
 
 
 def step_outputs(model: L.Model, token: int, steps: int) -> list[bytes]:
@@ -106,6 +116,16 @@ def id_response(outputs: list[bytes], payload: int) -> bytes:
     return b"".join(IT.id_event(scan_id(o), payload) for o in outputs) + IT.TRAILER
 
 
+def tampered(outputs: list[bytes], kind: str | None) -> list[bytes]:
+    """The outputs a ``byte`` or ``extra`` answer takes its ids from: the first output's first byte flipped, or the
+    last output once more; any other kind's are the outputs."""
+    if kind == "byte":
+        return [bytes([outputs[0][0] ^ 1]) + outputs[0][1:], *outputs[1:]]
+    if kind == "extra":
+        return [*outputs, outputs[-1]]
+    return list(outputs)
+
+
 def refusal(body: dict, steps: int | None = None) -> str | None:
     """Why the endpoint answers 400 (None: it serves the body): a varied body (module docstring), or a fixed one
     (`certifier_serve.request_body`: exactly ``max_tokens`` tokens, ``min_tokens`` the same and ``ignore_eos``, at
@@ -131,10 +151,14 @@ def refusal(body: dict, steps: int | None = None) -> str | None:
 
 
 class Endpoint:
-    def __init__(self, model: L.Model, steps: int, id_payload: int = ID_PAYLOAD) -> None:
+    def __init__(self, model: L.Model, steps: int, id_payload: int = ID_PAYLOAD, tamper: str | None = None,
+                 tamper_at: int = 0, late_s: float = LATE_S) -> None:
         IT.id_event(0, id_payload)
+        if tamper is not None and tamper not in TAMPERS:
+            raise ValueError(f"--tamper: one of {TAMPERS}, not {tamper!r}")
         self.model, self.steps, self.name = model, steps, f"torch-loop/mlp-w8a8-h{model.h}"
-        self.id_payload = id_payload
+        self.id_payload, self.tamper, self.tamper_at, self.late_s = id_payload, tamper, tamper_at, late_s
+        self.id_requests = 0
 
     async def __call__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -153,7 +177,15 @@ class Endpoint:
             if (why := id_refusal(ids)) is not None:
                 return await self.json(writer, 400, {"error": why})
             outputs = step_outputs(self.model, ids["prompt"][-1], min(ids["max_tokens"], self.steps))
-            writer.write(id_response(outputs, self.id_payload))
+            k, self.id_requests = self.id_requests, self.id_requests + 1
+            kind = self.tamper if k == self.tamper_at else None
+            data = id_response(tampered(outputs, kind), self.id_payload)
+            if kind == "late":
+                writer.write(data[:self.id_payload])
+                await writer.drain()
+                await asyncio.sleep(self.late_s)
+                data = data[self.id_payload:]
+            writer.write(data)
             return await writer.drain()
         if not head.startswith(b"POST /v1/completions "):
             doc = ({"data": [{"id": self.name}]} if head.startswith(b"GET /v1/models ")
@@ -200,8 +232,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0, help="the model's weights' seed (`loop.Model`)")
     ap.add_argument("--id-payload", type=int, default=ID_PAYLOAD,
                     help="P: a warden's id requests' cells' payload, B - 9, each id-form event's bytes")
+    ap.add_argument("--tamper", choices=TAMPERS, help="one id request's answer tampered (module docstring)")
+    ap.add_argument("--tamper-at", type=int, default=0, help="the id request tampered, from 0 in arrival order")
+    ap.add_argument("--late-s", type=float, default=LATE_S, help="late's hold, in seconds")
     a = ap.parse_args(argv)
-    asyncio.run(serve(a.host, a.port, Endpoint(L.Model(h=a.h, seed=a.seed), a.steps, a.id_payload)))
+    asyncio.run(serve(a.host, a.port, Endpoint(L.Model(h=a.h, seed=a.seed), a.steps, a.id_payload, a.tamper,
+                                               a.tamper_at, a.late_s)))
     return 0
 
 

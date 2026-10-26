@@ -44,6 +44,9 @@ UNITS = {
         "the window tests' stand-in tile, a position beside its receipt sink",
     "integrations/vllm/tests/protocols/test_pouw_h1_served.py::StandIn":
         "vllm's served-trees tests' stand-in tile, a position beside its receipt sink",
+    "verity/ml/circuits/population.py::_instance_ports":
+        "a population of units: each instance's position beside its receipt sink, declared only for a template with a sink",
+    "verity/ml/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
     "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
@@ -61,6 +64,8 @@ TESTS = {
     "verity/ml/circuits/tests/test_ports_one_use.py::ROOT_PORTS":
         "the one-use check's random and negative Programs: a root's positions, read by seeds batched over them",
     "verity/ml/circuits/tests/test_ports_one_use.py::Seed": "the seed those Programs batch, to hold E_COIN_REUSE's position rule",
+    "verity/ml/circuits/tests/test_population_ports.py::Seed":
+        "a seed whose population declares no ports and is refused (E_PORT_KIND): a population never mints a seed",
 }
 ALLOWED = SEEDS | UNITS | KEY_COUNTS | TESTS
 

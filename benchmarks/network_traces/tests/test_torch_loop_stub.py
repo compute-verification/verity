@@ -76,6 +76,50 @@ def test_a_wardens_id_request_is_answered_id_form_with_each_steps_id_then_the_tr
     assert b"".join(cells) == want[:2 * P]
 
 
+def test_a_tampered_endpoint_changes_only_its_tamper_at_id_requests_answer():
+    """``byte`` changes one output byte before its id, ``extra`` sends one id event more, and ``late`` holds back all
+    but the first event (its hold is ``late_s``, 0 here); the other id requests are answered as before."""
+    outputs = S.step_outputs(MODEL, 3, 2)
+    honest = S.id_response(outputs, P)
+    flipped = bytes([outputs[0][0] ^ 1]) + outputs[0][1:]
+    want = {"byte": IT.id_event(S.scan_id(flipped), P) + honest[P:],
+            "extra": honest[:2 * P] + IT.id_event(S.scan_id(outputs[1]), P) + IT.TRAILER, "late": honest}
+    assert S.scan_id(flipped) != S.scan_id(outputs[0])
+
+    class Chunks(_Writer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.chunks: list[bytes] = []
+
+        def write(self, data: bytes) -> None:
+            super().write(data)
+            self.chunks.append(bytes(data))
+
+    for kind in S.TAMPERS:
+        endpoint = S.Endpoint(MODEL, 2, tamper=kind, tamper_at=1, late_s=0)
+
+        async def main() -> list[Chunks]:
+            got = []
+            for _ in range(3):
+                reader, writer = asyncio.StreamReader(), Chunks()
+                reader.feed_data(ids_request())
+                reader.feed_eof()
+                await endpoint(reader, writer)
+                got.append(writer)
+            return got
+
+        first, hit, after = asyncio.run(main())
+        assert bytes(first.data) == bytes(after.data) == honest and len(first.chunks) == 1
+        assert bytes(hit.data) == want[kind]
+        assert hit.chunks == ([honest[:P], honest[P:]] if kind == "late" else [want[kind]])
+    try:
+        S.Endpoint(MODEL, 2, tamper="drop")
+    except ValueError as e:
+        assert "--tamper" in str(e)
+    else:
+        raise AssertionError("an unknown tamper is refused")
+
+
 def test_an_id_request_the_loop_cant_serve_is_refused_over_http():
     for kw, why in (({"temperature": 0.7}, "greedy"), ({"top_p": 0.9}, "greedy"), ({"prompt": [16]}, "below 16"),
                     ({"max_tokens": 0}, "max_tokens >= 1")):

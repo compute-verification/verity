@@ -35,3 +35,18 @@ def _boolean_roots() -> list[Any]:
         bind(BG.ScaledMmS8CoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8),
         bind(BG.ScaledMmS8, K=64, N=3, **BG.GEMM_SM120_S8),
     ]
+
+
+def _population_roots() -> list[Any]:
+    """`TemplateInstances_v1` of the scaled s8 coordinate (K = 64, sm_120) at N = 2, a served s8 linear's window program (the
+    torch loop's, at its K), and `TemplatePopulations_v1` of the s8 accumulator and that coordinate at counts 1 and 2."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.boolean import gemm as BG
+    from verity.ml.circuits.population import (
+        mixed_population_program,
+        population_program,
+    )
+
+    acc = bind(BG.GemmAccumulatorS8, K=64, **BG.GEMM_SM120_S8)
+    coord = bind(BG.ScaledMmS8Coordinate, K=64, **BG.GEMM_SM120_S8)
+    return [population_program(coord, 2).fn, mixed_population_program([(acc, 1), (coord, 2)]).fn]

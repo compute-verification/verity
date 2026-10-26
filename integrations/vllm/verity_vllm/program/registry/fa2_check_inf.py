@@ -23,7 +23,7 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.gemm import DotBf16 as DotBf16V2
 from verity.ml.circuits.ops.prims import ZERO32, const
 from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.b1 import ZERO16, _lane, _scale_log2_bits
+from verity_vllm.program.registry.b1 import ZERO16, _lane, scale_log2_bits
 from verity_vllm.program.registry.prims import A16, BF16, F32
 
 
@@ -51,7 +51,7 @@ def _check_inf_block(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2, *, read_
     m_new = bmax if FIRST else B.call(P.F32Max, m_prev, bmax)
     m_use = B.call(P.GuardNegInfZero, m_new)
     if scale_log2 is None:
-        scale_log2 = B.call(const(32, _scale_log2_bits(D)))
+        scale_log2 = B.call(const(32, scale_log2_bits(D)))
     if not FIRST:  # B2: rescale factor
         scores_scale = B.call(P.MufuEx2Ftz, B.call(P.F32MulFtz, B.call(P.F32SubFtz, m_prev, m_use if CHECK else m_new), scale_log2))
     max_scaled = B.call(P.F32MulFtz, m_use, scale_log2)
