@@ -187,6 +187,15 @@ theorem rs_rows_inner {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u
     rw [hin, FlockVBridge.OfVStar.repPorts, rs_foldl_sum]
     simp only [List.sum_append, List.sum_cons, List.sum_nil] <;> omega
 
+theorem rs_findIdx_app : ∀ (L : List String) (nm : String) (rest : List String), nm ∉ L →
+    (L ++ nm :: rest).findIdx? (· == nm) = some L.length
+  | [], nm, rest, _ => by simp [List.findIdx?_cons]
+  | a :: L, nm, rest, h => by
+    have ha : a ≠ nm := fun e => h (e ▸ List.mem_cons_self ..)
+    have hL : nm ∉ L := fun hm => h (List.mem_cons_of_mem _ hm)
+    rw [List.cons_append, List.findIdx?_cons, rs_findIdx_app L nm rest hL]
+    simp [ha]
+
 /-- **`v` and `out` are found where V\*'s rows put them**, the ports named once. -/
 theorem rs_vOut {C : Circuit} {A : List (String × ℕ × ℕ)} {wv wo : ℕ}
     (hr : C.ports.toList.map (fun p => (p.name, p.words, p.bits)) =
@@ -220,10 +229,13 @@ theorem rs_vOut {C : Circuit} {A : List (String × ℕ × ℕ)} {wv wo : ℕ}
   have h1 : A.length < C.ports.size := by omega
   have h2 : A.length + 1 < C.ports.size := by omega
   refine ⟨?_, ?_, ?_⟩
-  · rw [hf, List.findIdx?_append, hnone _ hvA]
-    simp [hAl] <;> omega
-  · rw [hf, List.findIdx?_append, hnone _ hoA]
-    simp [hAl, hvo] <;> omega
+  · rw [hf, show A.map Prod.fst ++ ["v", "out"] = A.map Prod.fst ++ "v" :: ["out"] from rfl,
+      rs_findIdx_app _ _ _ hvA, hAl]
+  · have hoA' : "out" ∉ A.map Prod.fst ++ ["v"] := fun h =>
+      (List.mem_append.1 h).elim hoA (fun h' => by simp at h')
+    rw [hf, show A.map Prod.fst ++ ["v", "out"] = (A.map Prod.fst ++ ["v"]) ++ "out" :: [] by simp,
+      rs_findIdx_app _ _ _ hoA']
+    simp
   · have hv := congrArg (·[A.length]?) hr
     have ho := congrArg (·[A.length + 1]?) hr
     simp only [List.getElem?_map, Array.getElem?_toList, Array.getElem?_eq_getElem h1, Option.map_some,
@@ -252,7 +264,9 @@ theorem rs_leavesIn_lt {c : Circuit} (h : HmOut.checkRows c = .ok ()) {l : Array
       Array.any_eq_true'.2 ⟨y, hy, decide_eq_true (by omega)⟩
     have hb2 : c.leavesIn.any (fun l => l.any (fun x => decide (x ≥ (HmOut.inWords c : Int)))) = true :=
       Array.any_eq_true'.2 ⟨l, hl, hb⟩
-    exact (Bool.or_eq_true _ _).2 (Or.inl hb2)
+    first
+      | (rw [Bool.or_eq_true]; exact Or.inl hb2)
+      | simp [hb2]
 
 /-- **The row after V\*'s row ports is an input row**: were it an output row, its words would be whole chunks
 (`OutRows`), so the unit's input leaves, past the rows before it, would reach past the input rows' words. -/
@@ -287,7 +301,7 @@ theorem rs_vIn {C : Circuit} {A : List (String × ℕ × ℕ)} {a b : String × 
   have hc := hch _ (Array.getElem_mem_toList hAs)
   have hiw : HmOut.inWords C ≤ (A.map (·.2.1)).sum := by
     have he2 : HmOut.inWords C = ((C.ports.toList.take (HmOut.nIn C)).map (·.words)).sum :=
-      extract_words (·.words) C.ports (HmOut.nIn C)
+      extract_words Port.words C.ports (HmOut.nIn C)
     have h2 : ((C.ports.toList.take A.length).map (·.words)).sum = (A.map (·.2.1)).sum := by
       have h := congrArg (fun l => (l.take A.length).map (fun r : String × ℕ × ℕ => r.2.1)) hr
       simp only [List.take_left] at h
@@ -436,7 +450,7 @@ theorem resTie_dense {b : Brings} {IV : Claims.Verifier Coin}
     0 < p.sts[0].c.g ∧ (o + g) / p.sts[0].c.g < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧ 0 < p.sts[0].c.upv ∧
       ResTie S ns nv (Rows.resVRead (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0))
         (keyCopy p ht w (jj, o, g, 0)) := by
-  obtain ⟨-, hc0, hcp, hpn, hg0, hupv, hblk, hqv, hqo, hvin, hoout, ptv, pto, hptv, hpto, hwv, hpw⟩ :=
+  obtain ⟨h0', hc0, hcp, hpn, hg0, hupv, hblk, hqv, hqo, hvin, hoout, ptv, pto, hptv, hpto, hwv, hpw⟩ :=
     resSite_staged hsh.2 hck hr hss hsv hpc hx
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   have e0 : p.sts[0] = sts[0] := by subst hp; rfl
@@ -446,7 +460,8 @@ theorem resTie_dense {b : Brings} {IV : Claims.Verifier Coin}
   have hholo' : RecResiduals.holoOf c = .ok holo := hc ▸ hholo
   obtain ⟨-, hnv⟩ := checkPart_ns hcp hres' hshp hholo' hpart
   have hG : 0 < sts[0].c.g := by rw [hc]; exact hg0
-  have hnp : o + g < sts[0].pub.n := by rw [← e0]; omega
+  have hpn' : 2 ≤ sts[0].pub.n := by rw [← e0]; exact hpn
+  have hnp : o + g < sts[0].pub.n := lt_of_lt_of_le hn2 hpn'
   refine resTie_resVRead (o := o) (g := g) (n := o + g) hst hd hB hT hnc hsh hck hr hss hsv hpc hx ht hsu h0 hidx
     hres hset hshp hholo hpart hG rfl hn2 hnp hqv hqo hvin hoout hptv hpto ?_ ?_
   · intro f hf inn rows hload hrows
