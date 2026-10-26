@@ -19,19 +19,21 @@ accounting envelopes is to be stated on these objects.
   `|C|` is its number of operation gates, `C.size C.computed`. A multi-bit value is a bundle of gates, read in order as
   the string `bits X l`.
 * The **registration** `R = (θ, C, 𝓘)` (`Registration`) is a declaration `(C, θ)`, the fixed values of `θ`'s gates and
-  a partition `𝓘` of the operation gates into `B` blocks. A block is a unit of a `Partition`. No ordering of the blocks
-  is required: Lemma 1 and Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
-* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every block has exactly `c` gates, padding included,
-  and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`. Blocks of
-  at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each block, read by nothing of `d`.
+  a partition `𝓘` of the operation gates into `B` proof blocks. A proof block is a unit of a `Partition`; NCI's instance
+  calls them inference blocks, and training's serving blocks. No ordering of the proof blocks is required: Lemma 1 and
+  Theorem 3 read none, so the draft's "inter-block edges point forward" is dropped.
+* A **`(c, k)`-partition** (`Partition.IsCK`) of a Boolean circuit: every proof block has exactly `c` gates, padding
+  included, and at most `k` unregistered input bits, `|in(I) \ θ| ≤ k` (`unregistered`). Its circuit has size `c · B`.
+  Proof blocks of at most `c` gates become exactly `c` by a `Pad`: registered padding gates in each proof block, read by
+  nothing of `d`.
 * The **slowdown** relative to a reference of size `T₀` is `|C| / T₀` (`slowdown`), a ratio of circuit sizes.
 * **Local description length** (§4): `LDL M t r y` is the length of a shortest program on which the decoder `M`, with
   indexed access to the registered information `r`, outputs `y` within `t` steps, and `⊤` when none does. Side
   information `z` is registered information paired with it, `LDL M t (r, z) y`. The decoder is a parameter (`Decoder`):
   its programs are self-delimiting and more time never changes an output.
-* Lemma 1's block evaluation: `Registration.recompute X u` evaluates block `u`'s gates from the registered values and
-  `X`'s values at its unregistered inputs, which a decoder is handed as `blockProgram`: an evaluator `e`, the block's
-  index in `⌈log₂ B⌉` bits (`indexCode`) and the bits of `in(I) \ θ` in gate order.
+* Lemma 1's proof-block evaluation: `Registration.recompute X u` evaluates proof block `u`'s gates from the registered
+  values and `X`'s values at its unregistered inputs, which a decoder is handed as `blockProgram`: an evaluator `e`, the
+  proof block's index in `⌈log₂ B⌉` bits (`indexCode`) and the bits of `in(I) \ θ` in gate order.
 
 A multi-bit circuit reaches this model through its bit-level expansion (`Definitions.Core.Expand`).
 -/
@@ -63,17 +65,17 @@ that `S` reads is among them. -/
 def Declaration.unregistered (d : Declaration) (S : Finset (Fin d.D.N)) : Finset (Fin d.D.N) :=
   d.D.into S \ d.θ
 
-/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every block has exactly `c` gates and at most
-`k` unregistered input bits. -/
+/-- **A `(c, k)`-partition** of a Boolean declaration's operation gates: every proof block has exactly `c` gates and at
+most `k` unregistered input bits. -/
 structure Partition.IsCK (d : Declaration) {B : ℕ} (P : Partition d.D B) (c k : ℕ) : Prop where
   boolean : d.D.Boolean
   card : ∀ u, (P.gates u).card = c
   reads : ∀ u, (d.unregistered (P.gates u)).card ≤ k
 
-/-- **A padding** of the partition `P` of `d` to the partition `P'` of `d'`, with as many blocks: `d'`'s circuit
-contains `d`'s (`M`), with the same registered gates among `d`'s, every gate of `d` stays in its block, and every
+/-- **A padding** of the partition `P` of `d` to the partition `P'` of `d'`, with as many proof blocks: `d'`'s circuit
+contains `d`'s (`M`), with the same registered gates among `d`'s, every gate of `d` stays in its proof block, and every
 other gate of `d'`, the padding, is a registered input gate or reads registered gates only. Padding is fixed and
-input-independent, so each block reads the unregistered gates it read before (`Verity.Pad.unregistered`).
+input-independent, so each proof block reads the unregistered gates it read before (`Verity.Pad.unregistered`).
 It completes the accounting; it is not evidence that hardware evaluated anything. -/
 structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaration) (P' : Partition d'.D B) where
   M : Containment d.D d'.D
@@ -86,7 +88,7 @@ structure Pad (d : Declaration) {B : ℕ} (P : Partition d.D B) (d' : Declaratio
 noncomputable def slowdown (C : Circuit) (T₀ : ℝ) : ℝ := ((C.size C.computed : ℕ) : ℝ) / T₀
 
 /-- **The registration** `R = (θ, C, 𝓘)`, fixed once before the monitored computation: the declaration `(C, θ)`, the
-values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` blocks. -/
+values of `θ`'s gates (`val`, read only there) and the partition `P` into `B` proof blocks. -/
 structure Registration where
   d : Declaration
   val : d.D.Transcript
@@ -100,15 +102,15 @@ variable (R : Registration)
 /-- A run of the registered circuit: its evaluation on inputs that agree with the registered values on `θ`. -/
 def Honest (a : R.d.D.Transcript) : Prop := ∀ g ∈ R.d.θ, a g = R.val g
 
-/-- **Block `u` recomputed** from the registration and `X`: a registered gate takes its registered value, every other
-gate outside the block takes `X`'s value, and the block's gates are computed in order. On the block and its inputs, only
-`X`'s values on `in(I) \ θ` matter. -/
+/-- **Proof block `u` recomputed** from the registration and `X`: a registered gate takes its registered value, every
+other gate outside the proof block takes `X`'s value, and the proof block's gates are computed in order. On the proof
+block and its inputs, only `X`'s values on `in(I) \ θ` matter. -/
 def recompute (X : R.d.D.Transcript) (u : Fin R.B) : R.d.D.Transcript :=
   R.d.D.run fun g => if g ∈ R.d.θ then some (R.val g) else if R.P.unit g = some u then none else some (X g)
 
 end Registration
 
-/-- Block `u`'s index in `⌈log₂ B⌉` bits, least significant first. -/
+/-- Proof block `u`'s index in `⌈log₂ B⌉` bits, least significant first. -/
 def indexCode {B : ℕ} (u : Fin B) : List Bool :=
   List.ofFn fun i : Fin (Nat.clog 2 B) => u.val.testBit i
 
@@ -125,13 +127,14 @@ within `t` steps given `r`, and `⊤` when there is none. -/
 noncomputable def LDL {ρ : Type} (M : Decoder ρ) (t : ℕ) (r : ρ) (y : List Bool) : ℕ∞ :=
   ⨅ (p : List Bool) (_ : M.run r p t = some y), (p.length : ℕ∞)
 
-/-- The program Lemma 1 hands a decoder for block `u` of a run `X`: the evaluator `e`, the block's index, and the bits
-of its unregistered inputs in gate order. -/
+/-- The program Lemma 1 hands a decoder for proof block `u` of a run `X`: the evaluator `e`, the proof block's index,
+and the bits of its unregistered inputs in gate order. -/
 def blockProgram (R : Registration) (e : List Bool) (X : R.d.D.Transcript) (u : Fin R.B) : List Bool :=
   e ++ indexCode u ++ R.d.D.bits X ((R.d.unregistered (R.P.gates u)).sort (· ≤ ·))
 
-/-- **A fixed evaluator** `e` performs the extraction rule `y` within time `t` for every block: on block `u`'s program
-of any run `X`, `M` outputs the string `y u` extracts from block `u` recomputed from that program's contents. -/
+/-- **A fixed evaluator** `e` performs the extraction rule `y` within time `t` for every proof block: on proof block
+`u`'s program of any run `X`, `M` outputs the string `y u` extracts from proof block `u` recomputed from that program's
+contents. -/
 def Evaluates {ρ : Type} (M : Decoder ρ) (r : ρ) (t : ℕ) (R : Registration) (e : List Bool)
     (y : Fin R.B → R.d.D.Transcript → List Bool) : Prop :=
   ∀ u X, M.run r (blockProgram R e X u) t = some (y u (R.recompute X u))

@@ -6,7 +6,7 @@ import Definitions.Core.Expand
 A multi-bit circuit (NCI's check, the sampled-proof templates, any `w > 1` declaration) reaches the working draft's
 Boolean model through `Circuit.expand`: the expansion computes the circuit bit for bit on every input, is Boolean when
 every computed gate of positive width reads a gate of positive width, has as many gates as the circuit has bits, and a
-partition's blocks keep their sizes in bits and read at most the bits they read before.
+partition's proof blocks keep their sizes in bits and read at most the bits they read before.
 -/
 
 namespace Verity.Guarantees
@@ -28,8 +28,9 @@ def ExpandBits : Prop :=
 def ExpandBoolean : Prop :=
   ∀ C : Circuit, C.BitFaninPos → C.expand.Boolean
 
-/-- **Sizes in bits.** The expansion's size is the width of the circuit's computed gates; a block of an expanded
-partition has as many gates as its block has bits, and reads at most as many unregistered bits as its block did. -/
+/-- **Sizes in bits.** The expansion's size is the width of the circuit's computed gates; a proof block of an expanded
+partition has as many gates as its proof block has bits, and reads at most as many unregistered bits as its proof block
+did. -/
 def ExpandSize : Prop :=
   ∀ (d : Declaration) (B : ℕ) (P : Partition d.D B),
     d.D.expand.size d.D.expand.computed = d.D.width d.D.computed ∧

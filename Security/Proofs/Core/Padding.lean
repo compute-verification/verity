@@ -6,17 +6,17 @@ import Mathlib.Tactic.Linarith
 /-!
 # Proofs of padding and of Theorem 3 at the serving blocks
 
-* `Pad.unregistered`: a padded block reads the unregistered gates its block read;
-* `PadBuild`: the padding of a Boolean declaration's blocks, `n u` gates into block `u`. `d`'s gates come first, then
-  one registered input gate `z` (the constant the padding reads), then the padding gates, each reading `z` and computing
-  `0`. `Padding` pads the chosen blocks to `c` gates and the others by none.
+* `Pad.unregistered`: a padded proof block reads the unregistered gates its proof block read;
+* `PadBuild`: the padding of a Boolean declaration's proof blocks, `n u` gates into proof block `u`. `d`'s gates come
+  first, then one registered input gate `z` (the constant the padding reads), then the padding gates, each reading `z`
+  and computing `0`. `Padding` pads the chosen proof blocks to `c` gates and the others by none.
 -/
 
 namespace Verity
 
 open Finset
 
-/-- A padded block reads the unregistered gates its block read. -/
+/-- A padded proof block reads the unregistered gates its proof block read. -/
 theorem Pad.unregistered {d d' : Declaration} {B : ℕ} {P : Partition d.D B} {P' : Partition d'.D B}
     (X : Pad d P d' P') (u : Fin B) :
     d'.unregistered (P'.gates u) = (d.unregistered (P.gates u)).map ⟨X.M.emb, X.M.emb_inj⟩ := by
@@ -43,7 +43,7 @@ namespace PadBuild
 
 variable {d : Declaration} {B : ℕ} (P : Partition d.D B) (n : Fin B → ℕ)
 
-/-- The number of padding gates: `n u` in block `u`. -/
+/-- The number of padding gates: `n u` in proof block `u`. -/
 abbrev T {d : Declaration} {B : ℕ} (_P : Partition d.D B) (n : Fin B → ℕ) : ℕ := ∑ u : Fin B, n u
 
 /-- `d`'s gate `g`. -/
@@ -99,7 +99,7 @@ def isIn (b : Fin (d.D.N + 1 + T P n)) : Bool :=
 def rd (b : Fin (d.D.N + 1 + T P n)) : Finset (Fin (d.D.N + 1 + T P n)) :=
   if h : b.val < d.D.N then (d.D.reads ⟨b, h⟩).map (embE P n) else if b.val = d.D.N then ∅ else {z P n}
 
-/-- The blocks: `d`'s gates in theirs, `z` in none, padding gate `p` in the block of its index. -/
+/-- The proof blocks: `d`'s gates in theirs, `z` in none, padding gate `p` in the proof block of its index. -/
 def unitF (b : Fin (d.D.N + 1 + T P n)) : Option (Fin B) :=
   if h : b.val < d.D.N then P.unit ⟨b, h⟩
   else if _ : b.val = d.D.N then none
