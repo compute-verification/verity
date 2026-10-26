@@ -5,11 +5,12 @@ round's: honest accepted with every output 1, its state and view chains wires th
 (`scan_zk.wired`); chain's ingress member refused at unit A's o1 and tampered's egress member at the re-signed row
 ("does not open"). A group of link-windows (IO-TIE's) is one registration, a member a template and link-window, its
 members the Program's ranges. A warden_serve run's directory (`--warden-run`, here the synthetic run published as
-`warden_serve.Publisher` publishes a served one) is read under its deployment's key, and refused by name where a row,
-the key or the schedule isn't the warden's. The honest round on the challenger's coins (``--challenger``): its flags
-refused by name where they can't draw, the group's root bound to the warden's signed link-windows, and its Spec what the
-round's registration shows (`service.check_public`) over the units its `Stream` takes. Nothing here lowers or proves
-(`scan_zk.prove` does, on a node)."""
+`warden_serve.Publisher` publishes a served one) is read under its deployment's key, its registration's
+``rows/<direction>/<w>`` roots (`scan_zk.warden_roots`) the root and domain of each row registration in ``cells.jsonl``,
+and refused by name where a row, the key or the schedule isn't the warden's. The honest round on the challenger's coins
+(``--challenger``): its flags refused by name where they can't draw, the group's root bound to the warden's signed
+link-windows, and its Spec what the round's registration shows (`service.check_public`) over the units its `Stream`
+takes. Nothing here lowers or proves (`scan_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
@@ -160,6 +161,11 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     assert [list(h.at.sides[s][0].cells.rows) for s in ("ingress", "egress")] == [
         list(syn.at.sides[s][0].cells.rows) for s in ("ingress", "egress")]
     assert all(m.refused is None and set(m.outputs) == {1} for m in h.rounds["honest"])
+    regs = {d["registration"]["direction"]: d["registration"] for d in map(json.loads, (
+        tmp_path / "run" / "cells.jsonl").read_text().splitlines()) if d["registration"]["window"] == 0}
+    assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.warden_roots(
+        [{"warden": m.warden} for m in h.rounds["honest"]])} == {
+        f"rows/{d}/0": (regs[d]["root"], regs[d]["domain"], sz.PARAMS.window) for d in ("ingress", "egress")}
 
 
 def _cells(run: Path) -> dict[tuple[str, int], dict]:

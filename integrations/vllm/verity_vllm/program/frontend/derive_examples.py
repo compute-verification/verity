@@ -278,7 +278,7 @@ class StochasticServe(nn.Module):
             seed = torch.tensor([1234], dtype=torch.int64)
         if self.literal_splits is not None:
             splits = torch.full((self.steps + 1,), int(self.literal_splits), dtype=torch.int32)
-        entry = (lambda s: None) if self.constant_S is not None else (lambda s: splits[s:s + 1])   # noqa: E731
+        entry = (lambda s: None) if self.constant_S is not None else (lambda s: splits[s:s + 1])
         LP = prompt.shape[0]
         logits = self.lm(prompt, torch.arange(0, LP))
         tok = self._select(logits, seed, LP - 1, entry(0))
