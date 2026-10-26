@@ -14,8 +14,8 @@ acceptance.
 
 * `Bridge.KsScoped I D pub kd`: the six.
 * `Bridge.AcceptsScoped I t`: `verify --zk`'s verdict on one session's transcript: `AcceptsZK`, and the files pass
-  `Flock.PortRoots.check`, and the files and the record's draw pass `Flock.KsScope.check`. `Bridge.LiveAcceptsScoped I o`
-  is it at the live audit's transcript.
+  `Flock.PortRoots.check`, and the files and the record's draw pass `Flock.KsScope.check`.
+  `Bridge.LiveAcceptsScoped I o` is it at the live audit's transcript.
 * `Bridge.typed_of_check`: the check refuses a typed statement. `Bridge.built_of_parse`: the circuit file of an untyped
   statement that parses has a built unit.
 * `Bridge.ksScoped_files`, `Bridge.div_of_drawWhy`: the check gives five of the six from the files, and the sixth, the
@@ -140,7 +140,8 @@ open scoped ENNReal
 open Classical in
 /-- **`SampledKSLiveV3` with its file preconditions read off acceptance**: on the event that `verify --zk` accepts the
 transcript, the files and the record's draw (`Bridge.LiveAcceptsScoped`: `AcceptsZK`, `Flock.PortRoots.check` and
-`Flock.KsScope.check`; v2's one-stage check is to run the same three), the sampled-proofs run passes the registration's population (`Bridge.RunPopOk`), and the claims
+`Flock.KsScope.check`; v2's one-stage check is to run the same three),
+the sampled-proofs run passes the registration's population (`Bridge.RunPopOk`), and the claims
 relation fails, at files and a draw in `Bridge.KsScoped` the bound is `SampledKSLiveV3`'s, and outside them the event
 has probability 0. It has none of V3's hypotheses `I.tags.typed = false`, `Built D.unroll.unit`, `pub.tables = none`,
 `scopeOkH D.unroll = true`, `kd % nTab I = 0` and `TagsOkZHJ I`. `SampledKSLiveV3` implies it
