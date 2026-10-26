@@ -24,6 +24,7 @@ tampered window's member, whose proof must not be accepted.
   held to the registration's roots and domains, and the prover's file is made under the same header.
 * **The session** serves the bundle's member draw (`serve --zk --draw-file`). The prover runs behind the firewall's send
   check (``FC_FIREWALL=1``, Lean's `flock-firewall`), and Lean `verify --zk --archive --partition --program` decides it.
+  The sessions run one at a time, and Lean verifies each (one core) while the next one proves.
   A unit is accepted when its session's M0 and Lean verdicts accept, the served draw is the bundle's, and the proved
   units are the bundle's units.
 * **Flipped bits** (`flipped`): `zk_mutants.py`'s one-bit proof edits of the honest session of least k_log (each with the
@@ -46,6 +47,7 @@ import os
 import shutil
 import socket
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -197,8 +199,10 @@ def _law(law: dict) -> str:
     return f"{law['law']}:{law['k']}"
 
 
-def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: bool = False) -> dict:
-    """One `--zk` session of member ``mm`` served ``draw``, and Lean's verdict on it."""
+def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: bool = False,
+            lean_pool: ThreadPoolExecutor | None = None) -> dict:
+    """One `--zk` session of member ``mm`` served ``draw``, and Lean's verdict on it: with ``lean_pool``, a future of
+    it, so that the next session proves while Lean verifies this one."""
     sdir.mkdir(parents=True, exist_ok=True)
     (sdir / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     env = {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": a.firewall, **a0.firewall_env(mm["st"])} if firewall else {"FC_FIREWALL": "0"}
@@ -207,10 +211,14 @@ def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: 
     record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, draw_file=sdir / "draw.json",
                               zk=True, env=env, prove_timeout=a.session_timeout)
     served = (record or {}).get("unit_draw") or {}
-    lean = a0.lean_verify(a.lean, mm["st"], mm["m"].n, sdir, zk=True)
+
+    def verify() -> dict:
+        lean = a0.lean_verify(a.lean, mm["st"], mm["m"].n, sdir, zk=True)
+        return {x: lean.get(x) for x in ("accepted", "why", "verify_s", "partition", "digest", "registered")}
+
     return {"m0": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True,
                    "why": ((record or {}).get("verdict") or {}).get("why")},
-            "lean": {x: lean.get(x) for x in ("accepted", "why", "verify_s", "partition", "digest")},
+            "lean": lean_pool.submit(verify) if lean_pool else verify(),
             "served_draw": served.get("units"), "proved": a0.proved_units(mm["header"], live or {}),
             "prover": {"accepted": (live or {}).get("accepted"), "why": (live or {}).get("why"),
                        "stopped": (live or {}).get("prover_stopped")},
@@ -277,11 +285,16 @@ def main(argv=None) -> int:
         return 1
     sv = Staged(wdir, out / "honest")
     members = doc["members"][:a.members] if a.members else doc["members"]
-    rows, first = {}, None
-    for bm in members:
-        mm = sv.member(bm["k"])
+    rows, first, proved = {}, None, []
+    with ThreadPoolExecutor(max_workers=1) as lean_pool:
+        for bm in members:
+            mm = sv.member(bm["k"])
+            proved.append((bm, mm, session(a, mm, bm["draw"], out / "honest" / f"session-m{bm['k']}", lean_pool=lean_pool)))
+            print(f"PROVEBUNDLE member m{bm['k']} proved: e2e {proved[-1][2]['timing']['e2e_s']} s", flush=True)
+        for _, _, s in proved:
+            s["lean"] = s["lean"].result()
+    for bm, mm, s in proved:
         units = sorted(bm["base"] + i for i in bm["local"])
-        s = session(a, mm, bm["draw"], out / "honest" / f"session-m{bm['k']}")
         s["checks_before_draw"] = mm["checks"]
         s["k_log"] = mm["k_log"]
         s["accepted"] = (all(mm["checks"].values()) and s["m0"]["accepted"] and s["lean"]["accepted"] is True and s["roots"]
