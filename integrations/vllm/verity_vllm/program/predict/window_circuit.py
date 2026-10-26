@@ -504,15 +504,15 @@ def _inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) ->
     runs."""
     out = []
     for tid, spans_ in spans.items():
-        runs: list[tuple[int, int, int, int]] = []
+        merged: list[tuple[int, int, int, int]] = []
         for at, n, slot, step in spans_:
-            if runs and runs[-1][2:] == (slot, step):
-                runs[-1] = (runs[-1][0], runs[-1][1] + n, slot, step)
+            if merged and merged[-1][2:] == (slot, step):
+                merged[-1] = (merged[-1][0], merged[-1][1] + n, slot, step)
             else:
-                runs.append((at, n, slot, step))
+                merged.append((at, n, slot, step))
         groups = []
-        for i in range(0, len(runs), slots):
-            g = runs[i:i + slots]
+        for i in range(0, len(merged), slots):
+            g = merged[i:i + slots]
             if [r[2] for r in g] != list(range(slots)) or len({(r[1], r[3]) for r in g}) != 1:
                 raise Unexpressible(f"{tid}: units from {g[0][0]} are not {slots} slots' runs of one length at one step")
             groups.append((g[0][0], ((slots, "slot"),) + (((g[0][1], "-"),) if g[0][1] > 1 else ()), g[0][3]))
