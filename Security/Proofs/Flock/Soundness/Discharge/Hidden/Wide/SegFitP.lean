@@ -31,6 +31,7 @@ theorem unitIn_of_drop {tags : Tags} {st : Stmt} (L : Layout st) (F : Aliased.Un
   obtain ⟨k, hk', jj, -, t, -, hr, hlt, -⟩ := publicCol_at hp hk.1 F.check L.unit_built hq
   have hb := built_spec L.unit_built
   have hz : st.c.unit.useful < 2 ^ st.c.unitRange.slotLog := by rw [L.unit_slotLog]; exact F.check.unit_zero
+  have hz' : st.c.unit.useful < 2 ^ (st.c.rangeOf st.c.unitNet).slotLog := hz
   have h1 := hb.2.1
   have h2 := hb.2.2.2.1
   exact ⟨k, _, ⟨hk', by omega, hr⟩, hlt⟩
