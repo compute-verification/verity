@@ -36,6 +36,8 @@ Nothing in `verity` reads this directory. The theorems it cites are in `Security
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
 | `figures.py` | the dampener's talk figures, to the evidence store |
 | `statement.py` | every number the Notion page "The compute dampener: claims, model and tiers" quotes, at the commit it runs on; `python benchmarks/nci/statement.py [--json]` |
+| `reference_dc.py` | the reference datacenter: how much the remote and onsite protocols slow training at datacenter scale, per training class, fleet, monitoring period and dark share, with the adversary's operating points; `python benchmarks/nci/reference_dc.py [--json] [--out DIR] [--params FILE.json]` |
+| `reference_dc.json` | the reference datacenter's parameters, each with its unit and source, and a range for the tornado; the hardware values (Phi, memory, sigma, the inventory's shape) are datasheet values until compute-research's replace them here |
 | `render.py` | the whole index as Markdown on stdout |
 
 Topics: `weights`, `updates`, `seed-based`, `gradients`, `activations`, `tokens`, `capability-per-bit`, `theory`,
@@ -380,6 +382,47 @@ The prior review's citations all resolve, but these uses don't hold up. Each ite
   (`brown-2026-weight-theft/7`, `/8`).
 - **Unsourced claims.** "Updates compressible 50–100x" and the DeepSeek-V4-Pro LoRA sizes have no source here.
 
+## The reference datacenter
+
+Claims about how much the protocols slow training come from this model, not from the demo. `reference_dc.py` takes the
+committed computation (2e16 requests a year of 4,500 tokens to DeepSeek-V4-Pro in FP8, about 8.8e30 FLOP a year) and
+sizes a fleet that serves it at full use: 1.8e7 eight-GPU H200 servers, or 7.8e5 NVL72 racks. It reports each result
+per monitoring period (a week, a month, a year), pooled over every location, at delta 1% and 1e-6, with the per-window
+figure beside it. Dark compute has two parts:
+
+- **(A) Dark islands.** A dark share (0.1%, 1%) of all compute runs outside the protocols, at rho = 1, from any
+  starting state. It is limited by an island's compute and memory: 25.6 TB of Adam state needs NVMe on an H200 server
+  and host memory on an NVL72. It is also limited by coordination over side channels (`beta_side` a location; a
+  SparseLoCo run's 1,000 syncs of 17 GB each). Exfiltration times are given per location and pooled; pooling is
+  legitimate only where the reference already sits split across the locations.
+- **(B) Uncertified compute U on monitored servers.** U is PoUW's deficit eps_W, the certificate slack
+  p_window_fail / delta, the verdict lag, and what sampled proofs let through: accepted faulty blocks, and the training
+  failing blocks' chosen outputs carry. Each class bounds it per server-window by
+  Train_T ≤ Σ min(q_T(C, K), n q_T(c, k) + U). Cut (a) is onsite only: the server-window is one block with
+  K = R + I_cert + beta_side × window. Cut (b), remote and onsite, is the window's inference blocks at k = 2e7 bits.
+  The pooled cap is free to use remotely; onsite, every sync leaves each server through its side channels.
+
+The classes:
+
+- **T-fan:** e K / beta_x. Conditional on the joint activation premise, and not connected to the verifier.
+- **T-thread:** K Lambda / b_a, with `slowdown.rates`' caps. Connected through #4304.
+- **T-cover:** u (K² / b + K), at Dot16 granularity with a flagged normalization u. Connected through #4314.
+- **Small-state (N1):** reports the state threshold instead of a slowdown.
+
+Every premise is checked at the block's own size, and the one-block regime (the first steps whose inputs and replay fit
+in one server-window) is reported. A rho below 1, or a premise that fails, means no penalty is proved there, not that
+dark training is efficient. Units are FLOP throughout, and the gate conversion is a later pass.
+
+Sweeps cover `beta_side`, from 0.1 b/s to 10 Mb/s (side channels take over an H200 server-day's K near 6.4 Mb/s), and
+the dark share. A tornado with elasticities covers every parameter with a `range` in `reference_dc.json`. A scenario
+table covers R's scope (per GPU or per location) and the window's length.
+
+At the datasheet values, remote D is about 130 for T-fan and T-thread and about 7 for T-cover, set by eps_W and the
+inference block's rho. Onsite raises T-fan's D on H200 servers to about 5,400, and leaves T-thread and T-cover where
+they are, because their server-window bounds are vacuous. An NVL72 day reads more than the whole update at C1's floor,
+so cut (a) proves nothing there; with R per rack and hourly windows it gives T-fan about 1.2e4. Rendered tables and
+plots go to the evidence store: `--out DIR`, then `research data put --kind nci-reference-dc/v1 --tree DIR --preserve`.
+
 ## Not yet here
 
 - Scenario columns (today, ordinary progress to 2028, a crash program) and capability ratings on agreed scales.
@@ -392,4 +435,5 @@ The prior review's citations all resolve, but these uses don't hold up. Each ite
 ~~~sh
 python benchmarks/nci/render.py > /tmp/nci-index.md     # never commit the output
 python benchmarks/nci/slowdown.py --calibration kimi-k2-1m-raw
+python benchmarks/nci/reference_dc.py --out /tmp/reference-dc    # tables.md, results.json, plots: the evidence store
 ~~~
