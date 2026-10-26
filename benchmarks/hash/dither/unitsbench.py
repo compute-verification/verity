@@ -98,6 +98,11 @@ class Lib:
             h.kh_ucallr_bytes.restype = u32
             h.kh_j10r_rows_bytes.restype = ctypes.c_ulonglong
             h.kh_j10r_rows_bytes.argtypes = [u32, u32]
+            # an H1U_JW build's workspace holds its column blocks and W' too, which kh_j10r_rows_bytes leaves out
+            self.jw_bytes = getattr(h, "kh_j10r_jw_bytes", None)
+            if self.jw_bytes is not None:
+                self.jw_bytes.restype = ctypes.c_ulonglong
+                self.jw_bytes.argtypes = [u32, u32, u32]
             if hasattr(h, "kh_j10r_row_fault_word"):
                 h.kh_j10r_row_fault_word.restype = ctypes.c_ulonglong
                 h.kh_j10r_row_fault_word.argtypes = [u32, u32, u32, ctypes.c_int]
@@ -201,6 +206,7 @@ class MultiJ10R:
         for j, i in enumerate(order):
             c, b, out = entries[i]
             nbytes = (lib.h.kh_j10r_ws_bytes(c.a.shape[0], b.shape[0], c.a.shape[1]) if rc
+                      else lib.jw_bytes(c.a.shape[0], b.shape[0], c.a.shape[1]) if lib.jw_bytes is not None
                       else lib.h.kh_j10r_rows_bytes(*c.a.shape))
             rw = self.rws[i] = torch.empty((int(nbytes),), dtype=torch.uint8, device="cuda")
             t[j] = (c.a.data_ptr(), b.data_ptr(), c.jseeds.data_ptr(), out.data_ptr(), rw.data_ptr(), b.shape[0],
