@@ -48,7 +48,8 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
       rw [FlockSoundness.Refine.K512_mask, VStarTrace.get!_eq, List.toArray_ofFn]
       simp only [Array.getElem_toList]
       rw [Array.getElem?_eq_getElem (by
-        have := hk; rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, ByteArray.data_toList_length] at this
+        have := hk; rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, Array.length_toList] at this
+        have hL : FlockSoundness.Refine.K512.L = 64 := rfl
         omega)]
       rfl
   · rw [hsp, ← sha512_eq]

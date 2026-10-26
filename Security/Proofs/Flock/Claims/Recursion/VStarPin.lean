@@ -24,7 +24,8 @@ def fitSalt (b : ByteArray) : ByteArray :=
 def fitPortRow (k : ℕ) (r : VStar.In.Row) : VStar.In.Row := ⟨fitRow k r.words, fitSalt r.salt⟩
 
 /-- Port `nm`'s word count at circuit `c` (its first port of that name). -/
-def portWords (c : Circuit) (nm : String) : ℕ := ((c.ports.find? (·.name == nm)).map (·.words)).getD 0
+def portWords (c : Circuit) (nm : String) : ℕ :=
+  (((c.ports.findIdx? (·.name == nm)).bind (c.ports[·]?)).map (·.words)).getD 0
 
 /-- **The port inputs fitted to the circuit**: each port's rows to its words, each salt to 192 bytes. -/
 def fitPin (c : Circuit) (pin : VStar.In.PartIn) : VStar.In.PartIn :=
@@ -79,7 +80,7 @@ theorem portRow_fitPin (c : Circuit) (pin : VStar.In.PartIn) (nm : String) (n : 
 theorem portWords_of {c : Circuit} {nm : String} {q : ℕ} (hq : c.ports.findIdx? (·.name == nm) = some q)
     (hqs : q < c.ports.size) : portWords c nm = c.ports[q].words := by
   unfold portWords
-  rw [Array.find?_eq_getElem?_findIdx?, hq]
+  rw [hq]
   simp [Array.getElem?_eq_getElem hqs]
 
 /-- **`TraceOk.rows` at the fitted port inputs**, where each port's name gives its words (`portWords`): its rows are of
