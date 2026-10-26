@@ -2,6 +2,7 @@ import NetworkCheck.Check
 import CoreProtocol.Profile
 import Flock.Program
 import Flock.Public
+import NciCheck.Desc
 
 /-!
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
@@ -55,7 +56,10 @@ bytes) and both returning the same, then T of one whose parameter is `state` and
 schedule's row (`EgressBucket`), in the Boolean profile's types (a byte 8 bits, a u16 16), and its every input gate is
 a template's parameter. An egress template that takes its row as an input, the checker form, is refused by name: no
 egress gate is an input (`NetTiming.Layout.Fits`), so `K` counts only what a Program that computes its egress rows
-leaves free. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
+leaves free. The rest of what `NetTiming.Layout.Fits` asks is read off the description (`scanOf`): the Program laid out
+as the decoder lays one out and within its resolution's walk (`NciCheck.Desc`), every egress leaf returned by the root
+and computed by the egress template, and every template's argument one input node's leaves, no egress template's an
+ingress row's. In the rows form the compute audits' layout terms and their units' bits are in no term; their Programs
 are checked as in the clock form.
 
 **Commitment**, canonical JSON `{"audits": [registration, …], "windows": [registration, …]}`: one-stage's registration
@@ -378,6 +382,39 @@ def bitsOf (t : Flock.Program.Ty) : Nat := t.widths.foldl (· + ·) 0
 /-- Parameters' bits: their types' summed. -/
 def paramBits (ps : Array (String × Flock.Program.Ty)) : Nat := ps.foldl (fun n p => n + bitsOf p.2) 0
 
+/-- The collections a part of references names: its space and index, or each item's of an explicit part. -/
+def partNames : Flock.Program.Part → Array (Bool × Nat)
+  | .affine p i _ _ => #[(p, i)]
+  | .strided p i _ _ _ _ _ => #[(p, i)]
+  | .explicit it => it.map fun r => (r.p, r.i)
+
+/-- Per Definition, whether every leaf it returns is a gate it computes, never a parameter's leaf passed through: each
+part of its return names nodes of its body, none a scan, each calling a primitive or a Definition decoded before it of
+which the same holds. Once per Definition, at the cost of its return's parts. -/
+def ownReturns (P : Flock.Program.Prog) : Array Bool :=
+  (List.range P.defs.size).foldl (fun a d =>
+    let defn := P.defs[d]!
+    a.push (!defn.prim && defn.body.ret.parts.all fun q => (partNames q).all fun (p, k) =>
+      !p && match defn.body.nodes[k]? with
+        | some n => n.form != .scan && ((P.defs[n.fn]!).prim || (n.fn < d && a[n.fn]!))
+        | none => false)) #[]
+
+/-- The root's template nodes, in order: those calling a composite. -/
+def templateNodes (P : Flock.Program.Prog) : List Nat :=
+  let nodes := (P.defs[P.root]!).body.nodes
+  (List.range nodes.size).filter fun k => match P.defs[nodes[k]!.fn]? with
+    | some d => !d.prim
+    | none => false
+
+/-- The root node a template's argument reads when the argument is that input node's leaves in order from its first
+(one affine run), as the generator form binds each parameter to an input array of its own. -/
+def inputArg (P : Flock.Program.Prog) (a : Flock.Program.Arg) : Option Nat :=
+  match a.seq.parts with
+  | #[.affine false k 0 _] => match (P.defs[P.root]!).body.nodes[k]? with
+    | some n => if NciCheck.Desc.isInputNode P n then some k else none
+    | none => none
+  | _ => none
+
 /-- A compute audit's layout terms and its Program, from the Program's descriptor (`Flock.Program.decode` of its
 canonical bytes): its units are its root's template instances, each committing its template's return; a root with no
 template is refused. -/
@@ -401,7 +438,16 @@ the same and each one's `row` the schedule's row (`S · B` bytes), then `T` of t
 and the schedule's row, and every input gate is a template's parameter. The types are the Boolean profile's, as the
 scan's Definitions have them: a byte 8 bits, a u16 16. An egress template with a row among its parameters, the checker
 form, is refused first, by name: there the egress row is an input gate, which `NetTiming.Layout.Fits` refuses, and `K`
-would count the free inputs of a Program that only compares its egress rows. -/
+would count the free inputs of a Program that only compares its egress rows.
+
+Then what `NetTiming.Layout.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
+the description, at the cost of its nodes and returns: the Program is laid out as C-Flock's decoder lays one out and
+within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
+every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
+returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); each
+ingress template's row, and every template's argument, is one input node's leaves (`inputArg`), so each ingress gate is
+an input and a template reads only input gates outside its own; and no egress template's argument is an ingress row's
+input node, so no egress gate depends on an ingress gate. -/
 def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let prog ← match Flock.Program.decode (← Flock.canon j).toUTF8 with
     | .ok prog => pure prog
@@ -442,6 +488,28 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   let laterBits := (later.map (paramBits ·.2.params)).getD 0
   unless inputs == paramBits df.params + (T - 1) * laterBits + T * paramBits de.params do
     throw "scan: an input gate that is no template's parameter"
+  unless NciCheck.Desc.rootLaidOut prog && NciCheck.Desc.inputsAtRoot prog && NciCheck.Desc.walkable prog do
+    throw "scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks \
+      (NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)"
+  let ke := (templateNodes prog).getLast?.getD 0
+  unless (root.body.ret.parts.any fun q => match q with
+      | .affine false k 0 c => k == ke && T * de.outLeaves ≤ c
+      | _ => false) do
+    throw "scan: the root doesn't return every egress leaf, so an egress gate would be one the Program doesn't return \
+      (NetTiming.Layout.Fits)"
+  unless (ownReturns prog)[xe.fn]! do
+    throw "scan: the egress template returns a leaf it doesn't compute (a parameter's, passed through), so an egress \
+      gate would be an input (NetTiming.Layout.Fits)"
+  let ingress := #[xf] ++ (later.map (#[·.1])).getD #[]
+  let rows := ingress.map fun x => x.args[0]?.bind (inputArg prog)
+  unless rows.all (·.isSome) do
+    throw "scan: an ingress template's row is not one input node's leaves, so an ingress gate would be no input \
+      (NetTiming.Layout.Fits)"
+  unless (ingress.push xe).all fun x => x.args.all fun a => (inputArg prog a).isSome do
+    throw "scan: a template's argument is not one input node's leaves"
+  unless xe.args.all fun a => !rows.contains (inputArg prog a) do
+    throw "scan: an egress template's argument is an ingress row's input node, so an egress gate would depend on the \
+      ingress (NetTiming.Layout.Fits)"
   pure { steps := T, free := T * bitsOf df.params[1]!.2, ingress := bitsOf df.ret, egress := bitsOf de.ret }
 
 def paramsOf (j : Json) : V Params := do
