@@ -1,6 +1,5 @@
 import Proofs.Accounting.Memory
 import Proofs.Accounting.Device
-import Proofs.Accounting.Adversary
 import Proofs.Accounting.Gates
 import Proofs.Accounting.FillerLuck
 import Proofs.Accounting.Headline
@@ -12,6 +11,8 @@ import Proofs.Accounting.Bandwidth
 import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
+import Proofs.Accounting.JointPeriod
+import Proofs.Accounting.JointBlocksAbstract
 import Proofs.Accounting.Pouw
 import Proofs.Accounting.PouwWork
 import Proofs.Accounting.BandwidthAudit

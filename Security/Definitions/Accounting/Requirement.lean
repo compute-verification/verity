@@ -151,10 +151,10 @@ def readBits (s : ℕ) : ℕ := bits W (reads W e s)
 
 /-- The bits `W` holds over the engine steps of window `w`, in bit-steps: its live bits as each step begins, summed (as
 `Schedule.held` counts bit-ticks). -/
-def held (w : Window) : ℕ := ∑ s ∈ Window.steps w, liveBits W e s
+def held (w : Window) : ℕ := ∑ s ∈ w.steps, liveBits W e s
 
 /-- The bits `W` reads over the engine steps of window `w` (as `Schedule.read` counts them). -/
-def read (w : Window) : ℕ := ∑ s ∈ Window.steps w, readBits W e s
+def read (w : Window) : ℕ := ∑ s ∈ w.steps, readBits W e s
 
 end Values
 
@@ -172,7 +172,7 @@ open Classical in
 /-- **`W`'s gates on `X` over the engine steps of window `w`**: those the execution runs on the devices `X` at a step of
 `w`, the registered values and the run's inputs aside. -/
 noncomputable def stepRegion (X : Finset L) (w : Window) : Finset G :=
-  p.ran.filter fun g => g ∉ W.registered ∧ g ∉ W.inputs ∧ p.leaf g ∈ X ∧ p.step g ∈ Window.steps w
+  p.ran.filter fun g => g ∉ W.registered ∧ g ∉ W.inputs ∧ p.leaf g ∈ X ∧ p.step g ∈ w.steps
 
 /-- `in(S)` (`Verity.Circuit.into`): the values outside `S` that a gate of `S` uses. -/
 def into (S : Finset G) : Finset G := S.biUnion (W.uses p.value) \ S
@@ -229,7 +229,7 @@ def readBlocks (s : ℕ) : Finset ℕ := blocks ℓ (reads W e s)
 def readIn (s j : ℕ) : ℕ := bitsIn W ℓ (reads W e s) j
 
 /-- The bits `W` reads from block `j` over the engine steps of window `w`. -/
-def readOf (w : Window) (j : ℕ) : ℕ := ∑ s ∈ Window.steps w, readIn W e ℓ s j
+def readOf (w : Window) (j : ℕ) : ℕ := ∑ s ∈ w.steps, readIn W e ℓ s j
 
 /-- `ℓ` packs the values `S` into blocks of `b` bits: each lies within its block, and two in one block don't overlap. -/
 def Packs (b : ℕ) (S : Finset G) : Prop :=

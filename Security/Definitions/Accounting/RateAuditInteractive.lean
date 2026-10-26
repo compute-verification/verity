@@ -156,21 +156,6 @@ def Accepts {s : ℕ} (A : InteractiveDevice N b h ρ S L q) (E : Store N b) (R 
 
 end InteractiveDevice
 
-/-- An interactive device is an interactive adversary of the window (core's `Verity.InteractiveAdversary`): its chip
-program runs from nothing sent, and its side sources answer from the store, the coins and the bits sent. -/
-instance instInteractiveAdversaryInteractiveDevice (N b h ρ S L q : ℕ) :
-    Verity.InteractiveAdversary (InteractiveDevice N b h ρ S L q) (Store N b) (Bits ρ × Oracle N b h ρ) S
-      (IWorld N b h ρ) (Bits ρ × Fin N × Bits b) (Fin N → Bits h) L q where
-  state A := A.state
-  world A E c := A.world E c.1 c.2
-  run A st w := (A.chip st).run w []
-  queries A st w := (A.chip st).queries w []
-  ingressBits A st w := (A.chip st).ingressBits w []
-  linkBits A st w := (A.chip st).linkBits w []
-  queries_le A st w := (A.bounded st w).2
-  linkBits_le A st w := (A.bounded st w).1
-  side A E c := A.side E c.1 c.2
-
 end Accounting.Rate
 
 namespace Accounting

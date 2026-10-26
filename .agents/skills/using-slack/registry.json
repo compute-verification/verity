@@ -224,13 +224,14 @@
         "Security/Definitions/Nci.lean",
         "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
+        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
-        "benchmarks/all_protocols/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -621,7 +622,8 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"

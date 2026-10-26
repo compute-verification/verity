@@ -1,4 +1,4 @@
-import Definitions.Core.Device
+import Definitions.Accounting.Device
 import Mathlib.Algebra.Field.Rat
 
 /-!
@@ -6,9 +6,9 @@ import Mathlib.Algebra.Field.Rat
 
 An accelerator is \(\mathcal G = (\Sigma, M, R, \rho, \mathcal I, u)\): stores \(\Sigma\) of \(M_s\) words each,
 resources \(R\) of \(\rho_r\) units a tick each, and an instruction set \(\mathcal I\) whose every opcode has exact
-semantics and uses \(u_r(o) \ge 0\) units of each resource. `Machine` is that tuple on a `Verity.Device`, whose coarse
-limits (on-chip bits, device-memory bits, op rates, bandwidth, side channels) it refines. The model states two things
-about the card and nothing about algorithms:
+semantics and uses \(u_r(o) \ge 0\) units of each resource. `Machine` is that tuple on an `Accounting.Device`, whose
+coarse limits (on-chip bits, device-memory bits, op rates, bandwidth, side channels) it refines. The model states two
+things about the card and nothing about algorithms:
 
 * **(G1) Capacity.** Store `s` is `size s` words (`Loc`): a run holds at most \(M_s\) words in it at every tick because
   there are no other locations. Code is data too: it lives in device memory, so the texts of all the threads a run
@@ -35,7 +35,8 @@ schedule. An address operand (`Operand.indirect`) is a register's value plus an 
 takes one, and an operand may be an immediate the text carries.
 
 **Time.** A tick is the device's unit of time (an instance takes the SM clock at its maximum, so a tick is at least one
-clock), as in `Verity.Window`. Instructions take effect at issue: the model has no latency, which only helps a program.
+clock), as in `Accounting.Window`. Instructions take effect at issue: the model has no latency, which only helps a
+program.
 
 **Where the model is coarser than the card.** Every coarsening lets a program do more than the card, so a lower bound in
 the model holds on the card:
@@ -53,7 +54,7 @@ namespace Verity.Accel
 abbrev Word : Type := BitVec 32
 
 /-- **An accelerator** \((\Sigma, M, R, \rho, \mathcal I, u)\) refining the device `toDevice`. -/
-structure Machine (ι : Type) extends Device ι where
+structure Machine (ι : Type) extends Accounting.Device ι where
   /-- the stores Σ -/
   Store : Type
   [decStore : DecidableEq Store]
@@ -196,7 +197,8 @@ def usage (iss : List (List m.Instr)) (t : ℕ) (r : m.Res) : ℚ≥0 :=
 /-- **(G2) Rate**: over every window, the instructions run use at most `ρ_r` units of each resource `r` a tick, plus
 the backlog. At `slack = 0` and a window of one tick it bounds each tick. -/
 def Rate (iss : List (List m.Instr)) : Prop :=
-  ∀ (w : Window) (r : m.Res), ∑ t ∈ w.ticks, usage iss t r ≤ m.ρ r * ((w.len + m.slack : ℕ) : ℚ≥0)
+  ∀ (w : Accounting.Window) (r : m.Res),
+    ∑ t ∈ w.ticks, usage iss t r ≤ m.ρ r * ((w.len + m.slack : ℕ) : ℚ≥0)
 
 /-- The instructions of code a run on `sched` holds: the texts of the threads it steps, each once. -/
 def code (P : m.Prog Θ) (sched : List (List Θ)) : ℕ := (sched.flatten.dedup.map fun θ => (P θ).length).sum

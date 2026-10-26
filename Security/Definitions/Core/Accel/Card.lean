@@ -255,7 +255,7 @@ def machine {ι : Type} (cap : ι → ℕ) (oracle : ℕ) : Machine ι where
   fetch := .dram
   fetchUse := 4
 
-/-- **The card refines its coarse device** (`Verity.Device`): the machine's tensor units a tick, its issue slots' 32
+/-- **The card refines its coarse device** (`Accounting.Device`): the machine's tensor units a tick, its issue slots' 32
 lanes and its device-memory words' 32 bits a tick are at most the device's s8 MACs, CUDA-core lanes and bits, and every
 s8 MAC uses a tensor unit. The stores' bits are the device's by `machine`'s definition. -/
 def Refines : Prop := c.ρ .tensor ≤ c.tc ∧ 32 * c.ρ .issue ≤ c.cuda ∧ 32 * c.ρ .dram ≤ c.bw ∧ c.weight .s8 = 1
