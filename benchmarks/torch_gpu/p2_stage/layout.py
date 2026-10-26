@@ -13,11 +13,11 @@ The store's layout is CMP-95 item 2's fixture, memory-accounting's (`benchmarks/
 - K and t from counter-mode SHA-512 after `schemes.p2.expand_prefix` of the protocol's 24-byte salt (`registered_prefix`).
 
 A layer's matrices (`MATRICES`) are its four tensors: QKV (the query heads, then K, then V: 16,512 x 16,384 at the frozen
-shape), O, up and down. Their scales are not in W.
+shape), O, up and down; after the last layer the head (`HEAD`, 256 x 16,384) is layer `layers`. Their scales are not in W.
 
 `Weights` is where the plaintext comes from: the seeded weights stream (`verity_torch_loop.weights manifest`), every tensor
-at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales. `payloads` lays it out as the
-store's W.
+at its stream offset, QKV being wq, wk and wv one after another, each with its f32 scales, and the head the stream's
+`head` (`Tensor.stream_names`). `payloads` lays it out as the store's W.
 
 `decode_block` is the reference's decode of one block (`p2_v1.reference.decode` under `reference.keys_after`), refusing
 what `store.decode_block` refuses: a row not below p, or a decode wider than the payload.
@@ -50,6 +50,8 @@ COLUMNS = ("name", "layer", "n", "k", "offset", "size", "first_block", "blocks",
 
 MATRICES = {"qkv": "self_attn.qkv_proj", "o": "self_attn.o_proj", "up": "mlp.up_proj", "down": "mlp.down_proj"}
 PARTS = {"qkv": ("wq", "wk", "wv"), "o": ("wo",), "up": ("wup",), "down": ("wdown",)}
+#: the store's last tensor, after the layers (as layer `layers`), and its tensor in the weights stream
+HEAD, STREAM_HEAD = "lm_head.weight", "head"
 
 Read = Callable[[int, int], bytes]
 
@@ -92,6 +94,15 @@ class Tensor:
     def matrix(self) -> str | None:
         """Its key in `MATRICES`, or None (the head)."""
         return next((m for m in MATRICES if self.name == matrix_name(self.layer, m)), None)
+
+    @property
+    def stream_names(self) -> tuple[str, ...]:
+        """The weights stream's tensors it stacks, in order: a matrix's `PARTS` of its layer, or the head."""
+        if self.matrix is not None:
+            return tuple(f"l{self.layer}.{p}" for p in PARTS[self.matrix])
+        if self.name == HEAD:
+            return (STREAM_HEAD,)
+        raise KeyError(f"{self.name} has no tensor in the weights stream")
 
 
 @dataclass(frozen=True)
@@ -190,6 +201,14 @@ class Weights:
             raise ValueError(f"{matrix}'s tensors {PARTS[matrix]} have different row lengths")
         return sum(s[0] for s in ss), ss[0][1]
 
+    def tensor_parts(self, t: Tensor) -> list[tuple[int, int]]:
+        """`(offset, nbytes)` in the stream of store tensor `t`'s stream tensors (`Tensor.stream_names`), stacked; refused
+        unless they stack to `t`'s [N, K]."""
+        rows = [self.rows[n] for n in t.stream_names]
+        if len({r["shape"][1] for r in rows}) != 1 or (sum(r["shape"][0] for r in rows), rows[0]["shape"][1]) != (t.n, t.k):
+            raise ValueError(f"{t.name} is [{t.n}, {t.k}] in the store, {[r['shape'] for r in rows]} in the stream")
+        return [(r["offset"], r["nbytes"]) for r in rows]
+
     def span(self, layer: int) -> tuple[int, int]:
         """The stream bytes [lo, hi) holding the layer's matrices and their scales."""
         ps = [p for m in PARTS for s in (False, True) for p in self.parts(layer, m, s)]
@@ -253,11 +272,7 @@ def payloads(lay: StoreLayout, src: Weights, read: Read, j0: int, n: int) -> byt
         a, b = max(lo, t.offset), min(hi, t.offset + t.size)
         if a >= b:
             continue
-        if t.matrix is None:
-            raise KeyError(f"{t.name} has no tensor in the weights stream")
-        if src.shape(t.layer, t.matrix) != (t.n, t.k):
-            raise ValueError(f"{t.name} is [{t.n}, {t.k}] in the store, {list(src.shape(t.layer, t.matrix))} in the stream")
-        out[a - lo:b - lo] = src.read(src.parts(t.layer, t.matrix), a - t.offset, b - t.offset, read)
+        out[a - lo:b - lo] = src.read(src.tensor_parts(t), a - t.offset, b - t.offset, read)
     return bytes(out)
 
 

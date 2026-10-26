@@ -25,10 +25,8 @@ chain step is additive, `consTerm`). The final check's residuals read the two as
 * `AccPorts`: on the accumulator ports, the copy's row is `elemReadC (Top.accRC rd key)`'s plus one `δ` (P3).
 * `ResLoweredP`: `ResLowered` at `JointP`, which KS holds where it reads `hres`; `resLowJP_of_resLoweredP` gives
   `DecompBR.ResLowJP`.
-* `ResSite`: the residual part's site facts at a piece's context: the copy's position in table 0, and the circuit,
-  instance and port facts `resTie_resVRead` takes.
-
-`ResLowerDA`'s `resLowered_D` is `ResLoweredP` at the deployed constants from P2, P3 and `ResSite`.
+`ResLowerDD`'s `resLowered_D` is `ResLoweredPD` (at `showsDec`, part `s`'s own decision beside its staged
+statement) at the deployed constants from P2 and P3.
 
 Nothing downstream of `ResLoweredP` reads `accRC`'s values themselves: it concludes `resHolds`, the vanishing of each
 piece's residuals (`ResZero`), and that is all `ResLowJP` and KS's row R take from it.
@@ -145,60 +143,13 @@ def AccPorts (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ → ℕ →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e =
         Rows.elemReadC (Top.accRC rd key) xi ms' cs q.key e + δ ((j - accBase xi) % 2)
 
-/-- **The residual part's site facts**: at a piece's context (`PortsAt`'s, at the dense form and the deployed reader),
-with the staged statement set up as `(i, spec, p.sts)`, the copy's position fits table 0 (`0 < g`, its block below the
-table's `2^(m - k_log)` blocks, its unit below `upv`), and at table 0's part the inputs `resTie_resVRead` takes: part
-`s`'s circuit `cC`, table 0's units all its instances, the copy's instance below them, `cC`'s `v` an input port and its
-`out` an output port, check 5's rows as wide as `v`'s port at that instance, and `out`'s port as wide as the zero
-rows'. -/
-def ResSite (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
-    (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
-    Prop :=
-  ∀ (x : Msg) (st : Claims.Recursion.Stmt), (DRL rd wE final w b elem).parse x = some st →
-    Claims.Recursion.Form.Dense st.form → ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit),
-    RecDeploy.OpenLower.JointP FlockDeploy.sha512 (DRL rd wE final w b elem) (DeployedR.layR elem)
-      (AccP rd wE final w b elem Claims.Recursion.Form.Dense recRead (cmtTr recRead)) x c ws →
-    ∀ s (wt : Claims.Flock.Wit), ws[s]? = some wt →
-    ∀ (r : XR), readX x = some r → ∀ (ss : Array VStar.Stmt), RecVStar.statements r.shape = .ok ss →
-    ∀ (j : ℕ) (nm : String) (pt : VStar.Part), ss[s]? = some (.inner j nm pt) →
-    ∀ (xO : Msg) (p : _root_.Flock.Readable.Parsed),
-      _root_.Flock.Readable.parseBytes readOfO xO = some p →
-      Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO wt = true →
-      showsPart recRead b s x xO c →
-      (DeployedR.layR elem).Agrees (cmtTr recRead) x s wt xO ((DeployedR.layR elem).msgs x ws) →
-      (∀ e ∈ (DeployedR.layR elem).calls x s wt, FlockDeploy.sha512 e.1 = e.2) →
-      (Claims.findColl ((DeployedR.layR elem).calls x s wt ++
-        vcallsAt FlockDeploy.sha512 (DRL rd wE final w b elem) xO)).isSome = false →
-    ∀ q ∈ DecompBR.resPD (Claims.Recursion.xI (DRL rd wE final w b elem) x), DecompBR.ownRD x q = some s →
-    ∀ (i : RecIns) (spec : SessionSpec), setupO xO = some (i, spec, p.sts) → ∀ (ht : 0 < p.sts.size),
-      (0 < p.sts[0].c.g ∧ (q.key.2.1 + q.key.2.2.1) / p.sts[0].c.g < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
-        q.key.2.2.2 < p.sts[0].c.upv) ∧
-      ∀ (m k cl jj : ℕ) (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ)
-        (nv : ℕ), RecResiduals.params p.sts[0].c.unit.name = some (m, k, cl, jj) →
-        RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf p.sts[0].c = .ok holo →
-        RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
-        ∃ cC : Circuit, r.w.parts[s]?.bind partCircuit = some cC ∧
-          Registered.unitIndices p.sts[0].pub = .ok (Array.range p.sts[0].pub.n) ∧
-          q.key.2.1 + q.key.2.2.1 < p.sts[0].pub.n ∧
-          ∃ (qv qo : ℕ) (ptv pto : Port), cC.ports.findIdx? (·.name == "v") = some qv ∧
-            cC.ports.findIdx? (·.name == "out") = some qo ∧ qv < HmOut.nIn cC ∧ ¬ qo < HmOut.nIn cC ∧
-            cC.ports[qv]? = some ptv ∧ cC.ports[qo]? = some pto ∧
-            (∀ (f : RecCoins.Source), RecCoins.Source.atC3 i.src i.inner i.commits = some f →
-              ∀ (inn : RecCoins.Inner) (rows : Array (Array ℕ)), f.load p.sts[0].c.unit.name = .ok inn →
-              FlockSoundness.Discharge.Recursion.residualRows inn jj = some rows →
-              ptv.words = (RecCoins.padTo rows[q.key.2.1 + q.key.2.2.1]!
-                (Registered.rowWords rows[q.key.2.1 + q.key.2.2.1]!.size 16)).size ∧
-                q.key.2.1 + q.key.2.2.1 < rows.size ∧ 8 * nv ≤ rows[q.key.2.1 + q.key.2.2.1]!.size) ∧
-            pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[q.key.2.1 + q.key.2.2.1]!
-              (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[q.key.2.1 + q.key.2.2.1]!.size
-                16)).size
-
 /-- **`resPieces_computesAt` at a pinned witness** (`PartAcceptsP`): the same share, asked only at the part's own
-witness `w`. -/
+witness `w`, at any `shows` that implies `showsPart` (which `hpc` then reads whole). -/
 theorem resPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
     {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {b : Brings} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ}
-    {x : Msg} {c : ℕ → Coin} {w : Claims.Flock.Wit} {ms : List Msg}
-    (h : PartAcceptsP H D (deployZkRec _root_.Flock.Readable.relation) L shape (showsPart untr b) cmt s x c w ms)
+    {x : Msg} {c : ℕ → Coin} {w : Claims.Flock.Wit} {ms : List Msg} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop}
+    (hsP : ∀ {s x xO c}, shows s x xO c → showsPart untr b s x xO c)
+    (h : PartAcceptsP H D (deployZkRec _root_.Flock.Readable.relation) L shape shows cmt s x c w ms)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : _root_.Flock.RecVStar.statements r.shape = .ok ss)
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt))
     (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
@@ -208,7 +159,7 @@ theorem resPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
     (hpc : ∀ (xO : Msg) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p →
       Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w = true →
-      showsPart untr b s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
+      shows s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
       ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
         ∃ ht : 0 < p.sts.size, 0 < p.sts[0].c.g ∧
@@ -232,7 +183,7 @@ theorem resPieces_computesP {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin}
                   (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨-, xO, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
-  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads (hsP hs)
   have hck' : Claims.Flock.check (_root_.Flock.Readable.parseOf _root_.Flock.Readable.relation readOfO) xO w =
       true := hck
   have hcp := _root_.Flock.Readable.stmtCopies_of_allOuts htab
