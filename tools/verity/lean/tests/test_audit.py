@@ -1355,6 +1355,84 @@ def test_a_premise_defined_anywhere_the_repository_builds_is_listed_and_a_depend
         "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands)"]
 
 
+def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
+    """LEAN-60: a premise whose module is outside `meaning` (a Proofs module) has no `reads` record, and its entry was an
+    owner alone, so #4641's strengthened `RecDeploy.PlainLeavesAdmitted` changed no record. Its digest is now its walk's
+    (`Facts.lean`'s `assumption_reads`: it and what it reads): a change to either fails under its name, and an update
+    writes it, which the review prints."""
+    pin = fact(signature="P.t (n : Nat) (h : P.Leaves n) : P.f n = n", hyps=[])
+    pin["premises"] = [{"binder": "h", "head": "P.Leaves", "module": "P.Thms"}]
+    graph = {"P.Thms": {"imports": ["Init"], "olean": "/r/Security/Proofs/.lake/build/lib/lean/P/Thms.olean"}}
+    walk = lambda bound: {"P.Leaves": [{"name": "P.Leaves", "module": "P.Thms", "kind": "def", "sha256": sha("leaves")},
+                                       {"name": "P.bound", "module": "P.Thms", "kind": "def", "sha256": sha(bound)}]}
+    f = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 1"))
+    fails, pol = A.judge({**POLICY, "assumptions": {}}, f, FILES, update=True)
+    assert fails == [] and pol["assumptions"] == {"P.Leaves": {"owner": "@lean", "digest": A.digest(walk("n + 1")["P.Leaves"])}}
+    assert A.judge(pol, f, FILES)[0] == [] and A.judge(pol, f, FILES, update=True)[1]["assumptions"] == pol["assumptions"]
+    moved = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 2"))
+    assert A.judge(pol, moved, FILES)[0] == [
+        "assumptions: P.Leaves's definition in P.Thms, or a definition it reads, changed; run `check.py --update` and commit "
+        "the record (Daniel's DM shows the change when it lands)"]
+    new = A.judge(pol, moved, FILES, update=True)[1]
+    assert A.assumption_changes(pol, new) == ["assumption P.Leaves: changed (its statement or a definition it reads)"]
+    bare = {**pol, "assumptions": {"P.Leaves": {"owner": "@lean"}}}
+    assert A.judge(bare, f, FILES)[0][0].startswith("assumptions: P.Leaves has no record")
+    assert A.assumption_changes(bare, pol) == ["assumption P.Leaves: recorded: its statement and the definitions it reads, "
+                                               "digested"]
+    assert A.judge(bare, facts(pins={"P.t": pin}, graph=graph), FILES)[0] == [], "older facts, without the walks"
+
+
+LEAVES = "import Control.LeafBound\nnamespace Control\ndef Leaves (n : Nat) : Prop := n < leafBound n\nend Control\n"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_premise_outside_meaning_changes_its_record_when_it_or_what_it_reads_changes(tmp_path):
+    """LEAN-60 on a real build: a premise defined outside `meaning` (`Control.Leaves`, as `RecDeploy.PlainLeavesAdmitted`
+    is in a Proofs module), reading a definition of another such module (`leafBound`), gets a digest; a rebuild that
+    changes neither keeps the lock byte for byte, and a change to the definition it reads, or to its own statement, changes
+    its record and nothing else, which the audit refuses until `--update` records it."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    bound = pkg / "Control" / "LeafBound.lean"
+    leaves = pkg / "Control" / "Leaves.lean"
+    bound.write_text("namespace Control\ndef leafBound (n : Nat) : Nat := n + 1\nend Control\n")
+    leaves.write_text(LEAVES)
+    (pkg / "Control" / "LeafThm.lean").write_text(
+        "import Control.Leaves\nnamespace Control\ntheorem leaf (n : Nat) (_h : Leaves n) : n < n + 1 := Nat.lt_succ_self n\n"
+        "end Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.LeafThm\n")
+    pol = A.load(pkg)
+    A.dump(pkg, pol | {"meaning": ["Control.Assumptions", "Control.Defs", "Control.Thms"],
+                       "reads_exempt": {"Control.Leaves": "the premise outside `meaning` this test digests"},
+                       "guarantees": pol["guarantees"] | {"Control.leaf": {"owner": "@lean"}}})
+    build = lambda: subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    audit = lambda update: A.audit(pkg, tmp_path / "out", update=update, replay=False, runs=False, log=lambda *_: None)
+    build()
+    assert unshaped(audit(True)) == []
+    first = (pkg / A.POLICY).read_text()
+    rec = json.loads(first)["assumptions"]
+    assert set(rec) == {"Control.Hyp", "Control.Leaves"} and rec["Control.Leaves"]["owner"] == "@lean"
+    assert len(rec["Control.Leaves"]["digest"]) == 64 and "Control.Leaves" not in json.dumps(json.loads(first)["reads"])
+    build()
+    assert unshaped(audit(False)) == [] and unshaped(audit(True)) == [] and (pkg / A.POLICY).read_text() == first
+    seen = {rec["Control.Leaves"]["digest"]}
+    for path, text in ((bound, "namespace Control\ndef leafBound (n : Nat) : Nat := n + 2\nend Control\n"),
+                       (leaves, LEAVES.replace("n < leafBound n", "n + 1 < leafBound n"))):
+        before = json.loads((pkg / A.POLICY).read_text())
+        path.write_text(text)
+        build()
+        assert [f.code for f in audit(False)["failures"] if not f.code.startswith("shape")] == ["assumptions.digest"]
+        rep = audit(True)
+        after = json.loads((pkg / A.POLICY).read_text())
+        assert unshaped(rep) == [] and A.statement_changes(rep["review"]) == [
+            "assumption Control.Leaves: changed (its statement or a definition it reads)"]
+        assert after["assumptions"]["Control.Hyp"] == before["assumptions"]["Control.Hyp"]
+        assert after["assumptions"]["Control.Leaves"]["digest"] not in seen
+        seen.add(after["assumptions"]["Control.Leaves"]["digest"])
+        after["assumptions"]["Control.Leaves"] = before["assumptions"]["Control.Leaves"]
+        assert after == before, "the premise's record changed, and nothing else"
+
+
 def test_a_statement_whose_premises_could_not_be_read_fails():
     """`Facts.lean` writes `premises: null` when `premisesOf` throws on a statement; read as no premises, every premise of it
     would go unlisted, so it fails instead. Facts without the field (older documents) are not held to it."""

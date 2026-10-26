@@ -26,6 +26,10 @@ judgement; `check.py` holds the policy.
   `meaning` where that walk
   stops, with their modules (`outside`). Signatures print with no notation, since no notation is loaded: nothing a
   package declares can change how its statements read.
+- `assumption_reads`: for each name under `assumptions`, and each premise head and named hypothesis a pin reports, that
+  constant and every definition, inductive type and constructor it reads, transitively, in the modules under `meaning`
+  and those a package of this repository builds (an `.olean` in its own `.lake/build`), wherever its module lies; its
+  canon text and theirs are `read:` lines. A name the walk doesn't hold (a theorem, a fetched dependency's) is left out.
 - `spec_definitions`: the definitions and inductive types the audited modules under `spec` declare in their source (with a
   declaration range: what Lean generates for them has none), projections and internal names aside, each with whether it
   is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
@@ -40,7 +44,7 @@ judgement; `check.py` holds the policy.
 
 The hashes in the document are Lean's `Expr.hash`, which has 32 bits; `check.py` keeps them only to check records written
 before SHA-256. When `CONFIG` names a `canon` path, the pins' statements and the definitions they read are also written
-there, one JSON line each, as `canon` texts, and `check.py` hashes those with SHA-256. A pinned statement that is a
+there, one JSON line each, as `canon` texts (and those `assumption_reads` holds), and `check.py` hashes those with SHA-256. A pinned statement that is a
 definition under `meaning` applied under binders (`∀ xs, G as`) is also written with that definition unfolded once
 (`liftOf`), with the definition and its module, so that `check.py` can certify a statement lifted into a `Guarantees`
 definition as the statement its record holds.
@@ -284,10 +288,10 @@ unsafe def entriesOf (α : Type) (data : ModuleData) (ext : Name) : Array (Name 
   | some (_, es) => es.map fun e => unsafeCast e
   | none => #[]
 
-/-- The definitions under `meaning` that the constants `roots` read, transitively, and the constants other than theorems
-outside `meaning` that the walk reaches and does not follow (with their modules). Each definition's `meaningDeps` is read
-from `table` (`usesTable`): a read definition's value is walked once per run, not once per guarantee. -/
-def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (roots : Array Name) :
+/-- The definitions of the modules `inScope` admits that the constants `roots` read, transitively, and the constants other
+than theorems outside them that the walk reaches and does not follow (with their modules). Each definition's `meaningDeps`
+is read from `table` (`usesTable`): a read definition's value is walked once per run, not once per guarantee. -/
+def readsWhere (env : Environment) (table : Std.HashMap Name (Array Name)) (inScope : Name → Bool) (roots : Array Name) :
     Array (Name × Name × ConstantInfo) × Array (Name × Name) := Id.run do
   let mut seen : NameSet := {}
   let mut stack := roots
@@ -304,12 +308,17 @@ def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning :
       let some i := env.getModuleIdxFor? c | continue
       let m := moduleName env i
       if ci matches .thmInfo _ then continue
-      if !under meaning m then
+      if !inScope m then
         outside := outside.push (c, m)
         continue
       out := out.push (c, m, ci)
       stack := stack ++ meaningDeps env table ci
   return (out, outside)
+
+/-- `readsWhere` over the modules under `meaning`: what a guarantee's statement reads. -/
+def reads (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning : Array Name) (roots : Array Name) :
+    Array (Name × Name × ConstantInfo) × Array (Name × Name) :=
+  readsWhere env table (under meaning) roots
 
 /-- `c` less the trailing components with a leading `_` that Lean's compilers add (`batch._f`, `go._unary`): the declaration
 under whose name `c`'s `own` constants are, so that a helper's `own` names its declaration's matchers. -/
@@ -929,6 +938,35 @@ unsafe def main (args : List String) : IO UInt32 := do
     return out
   let pinned ← tasks.mapM fun t => IO.ofExcept t.get
   lap "pins" pinned.size
+  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
+    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
+  let mut oleans := #[]
+  for t in found do
+    oleans := oleans ++ (← IO.ofExcept t.get)
+  -- the modules a package of this repository builds, as `check.py`'s `own_modules` reads them from `graph`
+  let own : NameSet := Id.run do
+    let mut s := {}
+    for h : i in [0:mnames.size] do
+      let o := oleans[i]!
+      if (o.splitOn "/.lake/build/").length > 1 && (o.splitOn "/.lake/packages/").length == 1 then
+        s := s.insert mnames[i]
+    return s
+  let field (j : Json) (k : String) : Array Json := (j.getObjValD k).getArr?.toOption.getD #[]
+  let nameAt (j : Json) (k : String) : Option Name := (j.getObjValD k).getStr?.toOption.map String.toName
+  let candidates := names cfg "assumptions" ++ pinned.foldl (init := #[]) fun acc (_, j) =>
+    acc ++ (field j "premises").filterMap (nameAt · "head") ++ (field j "hypotheses").filterMap (nameAt · "named")
+  let assumed := (candidates.foldl (init := (({} : NameSet), #[])) fun (s, out) a =>
+    if s.contains a then (s, out) else (s.insert a, out.push a)).2
+  let inScope (m : Name) : Bool := under meaning m || own.contains m
+  let walks : Array (Name × Array (Name × Name × ConstantInfo)) := Id.run do
+    let tasks := assumed.map fun a => Task.spawn fun _ => (readsWhere env table inScope #[a]).1
+    let mut acc := #[]
+    for h : i in [0:assumed.size] do
+      let rs := tasks[i]!.get
+      if rs.any (·.1 == assumed[i]) then
+        acc := acc.push (assumed[i], rs)
+    return acc
+  lap "assumptions" walks.size
   let mut conflicts := #[]
   if let some path := (cfg.getObjValD "canon").getStr?.toOption then
     -- each line's text is computed in a task (`Task.spawn` takes the closure, so the text is not built here) and the
@@ -964,6 +1002,12 @@ unsafe def main (args : List String) : IO UInt32 := do
           lines := lines.push <| Task.spawn fun _ =>
             (Json.mkObj [("id", toJson s!"moved-read:{c}"), ("as", toJson (rn c).toString),
               ("canon", toJson (readCanon rci rn))]).compress
+    for (_, rs) in walks do
+      for (c, _, rci) in rs do
+        if done.contains c then continue
+        done := done.insert c
+        lines := lines.push <| Task.spawn fun _ =>
+          (Json.mkObj [("id", toJson s!"read:{c}"), ("canon", toJson (readCanon rci))]).compress
     let h ← IO.FS.Handle.mk path .write
     for l in lines do
       h.putStrLn l.get
@@ -976,11 +1020,6 @@ unsafe def main (args : List String) : IO UInt32 := do
       else
         took := took.insert (rn c) c
   lap "canon" conflicts.size
-  let found ← (List.range ((mnames.size + 255) / 256)).toArray.mapM fun k => IO.asTask do
-    (mnames.extract (256 * k) (256 * k + 256)).mapM fun m => return toString (← findOLean m)
-  let mut oleans := #[]
-  for t in found do
-    oleans := oleans ++ (← IO.ofExcept t.get)
   let mut graph := #[]
   for h : i in [0:mnames.size] do
     let olean := oleans[i]!
@@ -992,6 +1031,8 @@ unsafe def main (args : List String) : IO UInt32 := do
     ("axioms", toJson (used.toArray.qsort Name.lt |>.map toString)), ("offenders", toJson offenders),
     ("unreported_errors", toJson unreportedErrors), ("declared_axioms", toJson declared), ("escapes", toJson escapes), ("spec_definitions", toJson specDefs),
     ("instances", toJson instances), ("pins", Json.mkObj pinned.toList),
+    ("assumption_reads", Json.mkObj (walks.toList.map fun (a, rs) => (a.toString, toJson (rs.map fun (c, m, ci) =>
+      Json.mkObj [("name", toJson c.toString), ("module", toJson m.toString), ("kind", toJson (kind ci))])))),
     ("moved_conflicts", toJson conflicts)]
   let vcfg := cfg.getObjValD "verifier"
   let doc := if (names vcfg "entries").isEmpty then doc else
