@@ -4,6 +4,13 @@
     GemmCoordinate_v2{K, DOT}   bf16 word: cvt.rn.bf16.f32(DotBf16)   (Triton `acc.to(bf16)`; the same on sm_80/sm_90)
     GemmCoordinatePad_v1{T, K, DOT}  (x, wrow: bf16[T]) -> bf16: `GemmCoordinate_v2{K, DOT}` on x and wrow each padded with
                                 K - T bf16 +0 words (a masked k loop's loads), for T <= K: attention's PV at T keys
+    PvRow_v1{T, K, D, DOT}      (p: bf16[T], v0..v{T-1}: bf16[D]) -> bf16[D]: one head's attention output row, dim d
+                                `GemmCoordinatePad_v1{T, K, DOT}` of p and (v0[d], ..., v{T-1}[d]); each key's V row is its own
+                                D-word row (128 bytes at D = 64), as a unit reads it whole from the unit that wrote it
+    PvRowPad_v1{T, K, D, DOT}   (p: bf16[T], v0..v{T-1}: bf16[D], n: u16) -> bf16[D]: `PvRow_v1{T, K, D, DOT}` with key t's
+                                p word and V row +0 words unless t < n, so for 1 <= n <= T it is `PvRow_v1{T=n}` on the first
+                                n keys whatever the rest hold; n, the key count, is a position port (`KEY_COUNT`), the one
+                                unsigned word `QkSoftmaxRowPad_v1` reads
     Gemm_v2{K, N, DOT}          x[K] @ W[N,K]^T -> [N], no epilogue
 
 `DOT` is a static naming the step: `GEMM_AMPERE` binds `AmpereBF16TcDot16_v2`, `GEMM_HOPPER` binds
@@ -51,18 +58,20 @@ from collections.abc import Callable
 
 from verity.ml.circuits.census import FAMILY_COUNTS, serves_none
 from verity.ml.circuits.defs import bind, composite
+from verity.ml.circuits.ports import In, Ports
 from verity.ml.circuits.refs import Coll, broadcast, concat
 from verity.ml.circuits.silicon.integer import BLACKWELL_SM120_S8_M16N8K32, HOPPER_SM90_S8_K32, IntegerMma, exact_k_limit
 from verity.ml.circuits.types import Array, Value
 
 from . import fp32 as F
 from . import prims as P
+from . import scalar as SC
 from .prims import BF16, E2M1, E4M3, F32, S8, S32, ZERO32
 
 __all__ = ["DotBf16", "GEMM_AMPERE", "GEMM_HOPPER", "GEMM_SM120_E4M3", "GEMM_SM120_MXF4", "GEMM_SM120_NVF4", "GEMM_SM120_S8",
            "GEMM_SM90_S8", "Gemm", "GemmAccumulatorS8", "GemmCoordinate", "GemmCoordinateE4m3", "GemmCoordinateMxf4",
-           "GemmCoordinateNvf4", "GemmCoordinatePad", "S8_K_LIMIT", "ScaledMmS8", "ScaledMmS8Coordinate",
-           "ScaledMmS8CoordinateRows", "s8_gemm"]
+           "GemmCoordinateNvf4", "GemmCoordinatePad", "KEY_COUNT", "PvRow", "PvRowPad", "S8_K_LIMIT", "ScaledMmS8",
+           "ScaledMmS8Coordinate", "ScaledMmS8CoordinateRows", "s8_gemm"]
 
 _SCALE = Value(8)
 
@@ -116,6 +125,18 @@ def _refuse_r(base: Callable[[dict], str | None]) -> Callable[[dict], str | None
     return refuse
 
 
+def _refuse_d(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal, and a D under 1 (the width of V's key rows)."""
+
+    def refuse(b: dict) -> str | None:
+        D = b.get("D")
+        if isinstance(D, int) and D < 1:
+            return f"D={D} is not a head width: each of V's key rows is D >= 1 words"
+        return base(b)
+
+    return refuse
+
+
 @composite("DotBf16", 2, ["K", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.K, BF16))), F32),
            conformance="exact-model-tested", refuse=_K16)
 def DotBf16(B, S, x, w):
@@ -146,6 +167,58 @@ def GemmCoordinatePad(B, S, x, wrow):
     zeros = broadcast(space, idx, leaf, S.K - S.T)
     pad = lambda a: Coll(Array(S.K, BF16), concat([a.refs, zeros]))
     return B.call(bind(GemmCoordinate, K=S.K, DOT=S.DOT), pad(x), pad(wrow))
+
+
+@composite("PvRow", 1, ["T", "K", "D", "DOT"],
+           lambda S: ((("p", Array(S.T, BF16)), *((f"v{t}", Array(S.D, BF16)) for t in range(S.T))), Array(S.D, BF16)),
+           conformance="exact-model-tested", refuse=_refuse_d(_refuse_t(_K16)))
+def PvRow(B, S, p, *vs):
+    """One head's attention output row at T <= K keys: for each of V's D dims, `GemmCoordinatePad_v1{T, K, DOT}` of the
+    probability row p and that dim's column of the T key rows v0..v{T-1}. One unit a head: each key row is D words (128 bytes
+    at D = 64), over the 111 bytes C-Flock needs of some row of a unit, where a coordinate's own two rows are 2T bytes."""
+    v = Coll(Array(S.T, Array(S.D, BF16)), concat([r.refs for r in vs]))
+    return B.batch(bind(GemmCoordinatePad, T=S.T, K=S.K, DOT=S.DOT), p, v, axes=(None, 1))
+
+
+#: a padded unit's key count ``n``: a run input of kind position, public as an unpadded unit's T is. No coin port is beside
+#: it, so the Definition it types is never a seed (`tests/test_seed_ports.py`)
+KEY_COUNT = Ports(params={"n": In(kind="position")})
+#: the key count's type: one unsigned word
+U16 = Value(16)
+_SIGN = 1 << 31
+
+
+def _refuse_u16_t(base: Callable[[dict], str | None]) -> Callable[[dict], str | None]:
+    """`base`'s refusal, and a T past the largest key count a u16 n holds."""
+
+    def refuse(b: dict) -> str | None:
+        T = b.get("T")
+        if isinstance(T, int) and T > 0xFFFF:
+            return f"T={T} is past 65535, the largest key count n a u16 word holds"
+        return base(b)
+
+    return refuse
+
+
+@composite("PvRowPad", 1, ["T", "K", "D", "DOT"],
+           lambda S: ((("p", Array(S.T, BF16)), *((f"v{t}", Array(S.D, BF16)) for t in range(S.T)), ("n", U16)),
+                      Array(S.D, BF16)),
+           conformance="exact-model-tested", refuse=_refuse_u16_t(_refuse_d(_refuse_t(_K16))), ports=KEY_COUNT)
+def PvRowPad(B, S, p, *rest):
+    """`PvRow_v1{T, K, D, DOT}` on the first n of T keys: key t's p word and V row are kept when t < n, n unsigned, and are
+    +0 words otherwise (`SelectBf16_v1`). t < n is (t + 1)·2^16 <= n·2^16 with each side's sign bit flipped, as signed
+    i32 words (`I32Le_v1`; `Bf16ToF32_v1` is the shift by 16, and `I32Add_v1` of 2^31 flips the sign bit, which turns
+    the unsigned order into the signed one). For
+    1 <= n <= T, dim d is then `GemmCoordinate_v2{K, DOT}` on p[:n] and v0[d]..v{n-1}[d] padded with +0 words to K, which is
+    `PvRow_v1{T=n}`'s dim d: the same operands, whatever the absent keys' words are (a +0 p word against an inf V word would
+    be a NaN product). n = 0 keeps no key, and n > T every key."""
+    *vs, n = rest
+    zero = B.call(P.const(16, 0))
+    count = B.call(SC.I32Add, B.call(P.Bf16ToF32, n), B.call(P.const(32, _SIGN)))
+    keep = [B.call(SC.I32Le, B.call(P.const(32, ((t + 1) << 16) ^ _SIGN)), count) for t in range(S.T)]
+    ps = Coll(Array(S.T, BF16), concat([B.call(SC.SelectBf16, keep[t], p[t], zero).refs for t in range(S.T)]))
+    rows = [B.batch(SC.SelectBf16, keep[t], v, zero, axes=(None, 0, None)) for t, v in enumerate(vs)]
+    return B.call(bind(PvRow, T=S.T, K=S.K, D=S.D, DOT=S.DOT), ps, *rows)
 
 
 @composite("Gemm", 2, ["K", "N", "DOT"], lambda S: ((("x", Array(S.K, BF16)), ("w", Array(S.N, Array(S.K, BF16)))), Array(S.N, BF16)),
@@ -281,6 +354,9 @@ def _register_kernels() -> None:
     domain = "every encoding; DOT one of the core BF16 steps (other steps fall back to the reference)"
     register_kernel(DotBf16, K.dot_kernel(steps), domain=domain, sample=K.sample_tc)
     register_kernel(GemmCoordinate, K.gemm_coordinate_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(GemmCoordinatePad, K.gemm_coordinate_pad_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(PvRow, K.pv_row_kernel(steps), domain=domain, sample=K.sample_tc)
+    register_kernel(PvRowPad, K.pv_row_pad_kernel(steps), domain=domain, sample=K.sample_pv_row_pad)
     register_kernel(Gemm, K.gemm_kernel(steps), domain=domain)
     e4m3 = {P.BlackwellE4m3QmmaDot32: BLACKWELL_SM120_E4M3_M16N8K32, P.HopperE4m3QgmmaDot32: HOPPER_E4M3_WGMMA_K32}
     register_kernel(GemmCoordinateE4m3, K.gemm_coordinate_kernel(e4m3), sample=K.sample_tc,

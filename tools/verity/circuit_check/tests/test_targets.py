@@ -118,7 +118,7 @@ def test_a_definition_valued_static_parses_to_the_definition_it_names_recursivel
 def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     """CIR-42: `PouwH1Tile`'s roots (its sidecar's bindings of each version: ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=...}`` and
     the tile's cells) could not be targeted by id; each parses to the very Definition the sidecar binds, without building it
-    or the catalog."""
+    or the catalog. The sidecar's last root is `TemplateInstances_v1` of the v1 tile, which is not a tile."""
     TG.load_registries()
     _no_catalog(monkeypatch)
     (make,) = [make for units, make in TG._root_bindings("_pouw_roots") if units[0].startswith(
@@ -127,6 +127,8 @@ def test_the_pouw_h1_tile_roots_parse_from_their_ids(monkeypatch):
     if not roots:
         pytest.skip("PouwH1Tile is not registered on this tree (no circuit.segment)")
     assert len({root.id for root in roots}) == len(roots)
+    *roots, population = roots
+    assert population.id.startswith("TemplateInstances_v1{template='PouwH1Tile_v1{") and population.id.endswith(",N=2}")
     for root in roots:
         assert root.id.startswith("PouwH1Tile_v") and "{EXACT=GemmAccumulatorS8_v2{K=64," in root.id
         assert TG.definition(root.id) is root

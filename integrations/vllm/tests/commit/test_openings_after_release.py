@@ -390,7 +390,7 @@ def test_verdict_rules_for_host_plus_replay_and_bounded_records():
     # A record WITH a binding block is a row-procedure record: C2 of record (replay / linkage / pin) must be on it for the PASS branch.
     from verity_vllm.check.commit_rules import binding_check
     po = {"n": 81, "bound": 81, "unbound_n": 0, "opened": 76, "verified": 76, "skipped": "retain=host excluding [...]: 5 of 81 -> replay", "deferred_replay_n": 5}
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "population": {"n": 69761}, "openings_population": po}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 69761, "bound_n": 69761, "missing_n": 0}, "population": {"n": 69761}, "openings_population": po}
     assert binding_check(bnd) == (True, "PASS")
     ok, why = binding_check({**bnd, "openings_population": {**po, "verified": 75}})
     assert not ok and "host share" in why, why

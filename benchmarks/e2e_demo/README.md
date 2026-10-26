@@ -17,9 +17,9 @@ The step commitment is kernels' commit call (CMP-95 item 3, `verity/commit-slots
 unit trees over rows, only each unit's outputs committed. An output row opens in its unit's own commitment unit. An input
 row opens where its producer committed it, and names the producer's coordinates (the torch loop's `x` and `sx` open at
 their layer's input quantizer). The bundle adds a block tree over each server-time block's step roots.
-`verity_e2e_demo/commit_slots.py` is kernels' CPU reference vendored at the commit `REFERENCE` pins (#4469). Once their
+`verity_e2e_demo/commit_slots.py` is kernels' CPU reference vendored at the commit its header names (#4469). Once their
 commit_slots package is on `main`, import it and delete the copy. The suite pins the SHA-512 of their fixture,
-`commit-slots-v1.json`, which the copy must reproduce.
+`commit-slots-v1.json` at the commit `REFERENCE` pins, which the copy must reproduce.
 
 `target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`

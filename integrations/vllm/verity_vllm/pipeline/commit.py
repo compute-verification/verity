@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import time
 
+from verity_vllm.records.commit_run import SCHEMA
+
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
 import contextlib
@@ -78,8 +80,6 @@ from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
-
-SCHEMA = "verity/commit-integ/delta/v1"
 
 # [R16 sys, BRIEF §5/§10] automatic stage telemetry of THIS process: hot/cold, engine built or reused (+ reason), warm-up, arms, validation
 TL = Timeline.from_env("commit_delta", hot=False)
@@ -258,7 +258,8 @@ def admission_lag(wl: dict) -> int:
 def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     """[DP-pad-02 (b), F-moe-r17-03] the Program's DECLARED stop rule, read ONCE for every Commit consumer (required
     population, composition, boundary linkage, sampled-replay population): `eos` = global_program.stop_rule's eos_token_ids over the pinned
-    checkpoint's generation_config / config + the workload's sampling block (None = undeclared); `lag` = the workload Program's declared
+    checkpoint's generation_config / config + the workload record's sampling block, read from the file `wl` was loaded from, as GP-01
+    reads it (None = undeclared); `lag` = the workload Program's declared
     LAG (TargetProfile.lag() of the manifest's declared target -- the SAME fact GP-01 composes into Workload_v1{..., lag}), kept only when
     the engine's RESOLVED read-back (versions.engine_kwargs.async_scheduling == the RunHeader's attestation) AGREES; a disagreement or an
     unattested engine leaves it None (every EOS stop then fails by name) -- never the engine value as the rule, never inferred from the
@@ -266,13 +267,15 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "async_scheduling": None, "notes": [], "srule": None}
     try:
         from verity_vllm.pipeline import global_program as _GP
-        _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
+        from verity_vllm.program.workload import eos_lag_rows_declared
+        from verity_vllm.records.workload import Workload
+        _srule = _GP.stop_rule(eng.cp.get("local_path"), None, Workload.load(wl["source"]).sampling)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
         _decl_lag = _GP.workload_target(wl.get("target")).lag()
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
-        _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
+        _eng_lag = eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
         out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"R17-1: the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")
@@ -546,8 +549,8 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
     workload requests/steps/ranks), the identity-coverage verdict, and openings drawn from the EXPECTED population (incl. the last step
     and every family) verified against the original roots.  Requests: `r<i>` in workload order; B>1 needs the per-step request->row map
     from the global Program (gprog/manifest) -- without it the map binds everything to r0 and the coverage of r1.. FAILS (fail-closed)."""
-    from verity_vllm.commit import binding as B, partition as PT
-    from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
+    from verity_vllm.commit import binding as B, executed_prefix as EP, partition as PT
+    from verity_vllm.check import commit_tokens as CT
 
     # [R15 manbind / COORD 5] the map's key `program_digest` is the Program of record = the required manifest's (the Build's digest; at B>=2
     # gprog's workload digest or the labelled components fold).  The committer's own digest seeds the step roots and is recorded beside
@@ -1955,7 +1958,7 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                         _c = {f"r{i}": int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for i, q in enumerate(reqs)}
                         # [R17-1 / F-moe-r17-03] the SAME executed prefix of record binding_record placed the population over (served tokens of
                         # this run + the declared stop rule / LAG): the layouts-only requirement and its per-step composition sizes follow it
-                        from verity_vllm.check import executed_prefix as _EP
+                        from verity_vllm.commit import executed_prefix as _EP
                         _epr_cov = _EP.executed_prefix_of_record(sorted(_c, key=lambda k: int(k[1:])), {_rid_of(_o, str(k)): [int(t) for t in v] for k, v in r["tokens"].items()},
                                                                  caps=_c, eos_of_record=stop_of_record.get("eos"), lag=stop_of_record.get("lag"))
                         _n_exec = {k: int(_epr_cov["requests"][k]["executed_prefix_len"]) for k in _c}

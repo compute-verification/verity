@@ -208,7 +208,13 @@ installs it first, so a machine without elan works), must pass clean and fail on
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
   closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
-  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner.
+  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner;
+  its failure prints the entry `--update` would write, and what the premise unfolds to. A premise that is an alias of
+  listed assumptions is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of `∀` and
+  `→` and reducible unfolding, only listed assumptions or such aliases (`Facts.lean`'s `unfolds`; what it takes, an
+  antecedent or a binder's type, may mention only listed ones). Its parts are held to the lock in its place, and a closed
+  one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
+  predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
   module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`, the one
   its `reads` record holds, so
@@ -416,10 +422,10 @@ the digest is recomputed. Guarantees arrive byte for byte from their branches, a
 names. A guarantee's `owner` merges apart from the rest of its entry, so one side's new owner and the other side's
 restatement both apply.
 
-It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
-a dependency both bumped. It also refuses when one side stops reading a definition in a module the other side changed,
-since the record doesn't say which guarantees read it. A refusal is a conflict in git, with the entries named. Resolve it the
-old way: take either side and run `check.py --update` on the merged tree.
+What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
+`reads` and assumption digests merge as the union or ours' value, named on stderr, and the train's Lean check regenerates
+them. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
+conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
