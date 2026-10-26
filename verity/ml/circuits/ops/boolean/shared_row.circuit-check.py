@@ -8,8 +8,9 @@ from typing import Any
 def _boolean_roots() -> list[Any]:
     """The check at a 1 KiB row (G = 512) in segments of 1, 32 and 64 words, at G = 128 of 1 and 64, and at G = 1, 3 and 12 of
     1, 1 and 4 (no tree, and segment counts that aren't powers of two); the wrapper at G = 512 on the s8 coordinate on two
-    rows at K = 64 (and at G = 128), on PV's head row at T = 1 of K = 32 with D = 64, on the padded softmax row at the frozen
-    context, T = 32 with D = 64, and on the embedding's coordinate at the frozen vocabulary, V = 256."""
+    rows at K = 64 (and at G = 128), on the embedding's coordinate at the frozen vocabulary, V = 256, and, for segments of
+    more than one word, on PV's row at D = 4 and the padded softmax row at T = 2. The served PV and softmax rows (D = 64,
+    T = 32) are over `targets.MAX_GATES` in the wrapper as they are bare, so a family member this size stands for them."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
     from verity.ml.circuits.ops.boolean import rowwise as BR
@@ -22,7 +23,7 @@ def _boolean_roots() -> list[Any]:
                                                          (12, 4))),
         bind(SR.SharedRowWindow, FN=s8, G=512),
         bind(SR.SharedRowWindow, FN=s8, G=128),
-        bind(SR.SharedRowWindow, FN=bind(BG.PvRow, T=1, K=32, D=64, **BG.GEMM_HOPPER), G=512),
-        bind(SR.SharedRowWindow, FN=bind(SM.QkSoftmaxRowPad, T=32, D=64, **BG.GEMM_HOPPER), G=512),
         bind(SR.SharedRowWindow, FN=bind(BR.EmbeddingCoordinate, V=256), G=512),
+        bind(SR.SharedRowWindow, FN=bind(BG.PvRow, T=1, K=16, D=4, **BG.GEMM_HOPPER), G=512),
+        bind(SR.SharedRowWindow, FN=bind(SM.QkSoftmaxRowPad, T=2, D=16, **BG.GEMM_HOPPER), G=512),
     ]
