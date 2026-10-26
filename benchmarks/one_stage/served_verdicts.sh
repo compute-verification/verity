@@ -10,15 +10,17 @@
 #     so the engine's idle closes them into one window. The lease ends once every closed window is sealed.
 #  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows): every
 #     closed window's advice under PROVE-PATH's registered compiler, then this window's request Programs
-#     (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES (`prove_path.py window-circuit --pin weights`,
-#     #4317 with #4757; `record` is the class of record, 8,1024,64); then the window audited from its records alone
+#     (`tools/advice_compile.py`); V3b's window circuit at each class of CLASSES (`prove_path.py window-circuit --pin PIN`,
+#     default `weights`; #4317 with #4757; `record` is the class of record); then the window audited from its records alone
 #     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): C-Flock `--zk` on the drawn proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1), not the window circuit's: proving the window circuit's own units is V3c (VLLM-103),
 #     named missing until it lands.
 #  4. PoUW (H1 credit), the bandwidth audit, PoUS and the network certifier: `served_verdicts.py pieces` runs each one's piece
 #     where POUW_CMD, BANDWIDTH_CMD, POUS_CMD or CERTIFIER_CMD names it, else names it MISSING with its issue. No verdict is
-#     made for a piece that didn't run.
+#     made for a piece that didn't run. A subprotocol that runs on the serving engine (H1's `--protocols pouw:...`, the
+#     bandwidth session's `--remote-verifier HOST:PORT`) goes in SERVE_ARGS, serve-openai's further arguments, and its piece
+#     reads what it wrote in the serve dir.
 #  5. the record: `served_verdicts.py record`: the all-protocols window report ($OUT/record/verdicts.json) and CMP-153's block
 #     record ($OUT/record/block-record.json), composed `pending` while any subprotocol is missing.
 # Coins: sampled proofs' draw is on the verifier's own live coins (Lean's IO.getRandomBytes, in-process) unless PP_CHALLENGER
@@ -58,11 +60,13 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   export PATH=$VENV/bin:$CUDA_HOME/bin:$PATH
   mkdir -p "$D" "$OUT/serve"
   cd "$TREE/integrations/vllm" || return 9
+  # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
     --precision verity_int8 --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree --window-steps 256 \
     --required-manifest "$ROW/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
-    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 --copy-records-to "$OUT/serve" > "$OUT/serve.log" 2>&1 &
+    --disk-floor-gb "$DISK_FLOOR_GB" --seal-hold-gb 32 --seal-warm-gb 0 --copy-records-to "$OUT/serve" ${SERVE_ARGS:-} \
+    > "$OUT/serve.log" 2>&1 &
   local srv=$! up=0 c=0 s=0 rc release
   trap 'kill -TERM "$srv" 2>/dev/null; wait "$srv"; exit 143' TERM INT
   for _ in $(seq 1 900); do
@@ -196,7 +200,7 @@ for c in $CLASSES; do
   cls=(); tag=record; [ "$c" = record ] || { cls=(--class "$c"); tag=${c//,/-}; }
   f=$D/window-circuit-w$K-$tag.json
   timeout "${WC_TIMEOUT:-30m}" "$PY" benchmarks/prove_path/prove_path.py window-circuit --serve-run "$D" --window "$K" \
-    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" --pin weights "${cls[@]}" \
+    --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --out "$f" --pin "${PIN:-weights}" "${cls[@]}" \
     > "$OUT/window-circuit-$tag.json" 2> "$OUT/window-circuit-$tag.err"
   rc=$?
   if [ "$rc" = 0 ]; then
