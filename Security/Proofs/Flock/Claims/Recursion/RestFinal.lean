@@ -68,6 +68,9 @@ theorem cutRounds_ok : ∀ (lens : List (List ℕ)) (m : Msg), cutLen lens ≤ m
       | zero => simpa using hl
       | succ j => simpa using hoj j
 
+theorem drop_drop3 (m : Msg) (a b c : ℕ) : ((m.drop a).drop b).drop c = m.drop (a + b + c) := by
+  simp only [List.drop_drop, Nat.add_assoc]
+
 theorem cutRound_rest : ∀ (l : List ℕ) (m : Msg) {ps : List (Msg × Salt)} {rest : Msg},
     cutRound l m = some (ps, rest) → rest = m.drop (sumS l)
   | [], m, ps, rest, h => by
@@ -80,9 +83,8 @@ theorem cutRound_rest : ∀ (l : List ℕ) (m : Msg) {ps : List (Msg × Salt)} {
     unfold cutRound at h
     split_ifs at h with hle
     obtain ⟨⟨ps', rest'⟩, hp, he⟩ := Option.map_eq_some_iff.1 h
-    rw [← (Prod.mk.inj he).2, cutRound_rest ls _ hp, List.drop_drop, List.drop_drop, hs]
-    congr 1
-    omega
+    simp only [Prod.mk.injEq] at he
+    rw [← he.2, cutRound_rest ls _ hp, hs, drop_drop3]
 
 /-- **What follows the rounds** is the message past their bytes. -/
 theorem cutRounds_rest : ∀ (lens : List (List ℕ)) (m : Msg) {os : List (List (Msg × Salt))} {last : Msg},
@@ -97,8 +99,6 @@ theorem cutRounds_rest : ∀ (lens : List (List ℕ)) (m : Msg) {os : List (List
     obtain ⟨⟨ps, rest⟩, h1, h⟩ := Option.bind_eq_some_iff.1 h
     obtain ⟨⟨os', last'⟩, h2, he⟩ := Option.map_eq_some_iff.1 h
     rw [← (Prod.mk.inj he).2, cutRounds_rest ls _ h2, cutRound_rest l m h1, List.drop_drop, hs]
-    congr 1
-    omega
 
 /-! ## The openings' bytes and rows -/
 
@@ -335,6 +335,7 @@ theorem finalReads (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
   rw [hr] at hr'
   have e : r = r' := Option.some.inj hr'
   subst e
+  have hn : nS x = r.w.parts.length := by simp [nS, hr]
   obtain ⟨N, hc, hpos⟩ := capAt_readX hr
   have hN : N = level0Nodes st := by
     rw [capAt_level0 hr hm] at hc

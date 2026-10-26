@@ -99,10 +99,10 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   have ha := actR_of_decR hlast ha hd
   unfold ReadOkR
   rw [ha]
-  obtain ⟨v', -, -, -, -, -, -, hv', -, -, -, -, -, rfl⟩ := FlockDeploy.decR_some hd
-  rw [hv] at hv'
-  cases hv'
-  exact hlive x ms cs _ hlen hd hck
+  obtain ⟨v', -, -, -, -, -, -, hv', -, -, -, -, -, hdd⟩ := FlockDeploy.decR_some hd
+  have e : v' = v := Option.some.inj (hv'.symm.trans hv)
+  subst e
+  exact hlive x ms cs d hlen hd (by rw [hdd]; exact hck)
 
 /-- **A fit lifts to every rows of its rows' byte sizes**: rows the same sizes as fitting ones have a fit. -/
 def FitsLift : Prop :=
