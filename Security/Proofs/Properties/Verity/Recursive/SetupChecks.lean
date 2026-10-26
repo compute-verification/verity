@@ -60,8 +60,8 @@ structure SetupMatch (i : RecIns) (h : VStar.Recursive.InnerHeld) (j : ℕ) (tag
   partition : i.base.read.I.partition = some partition
   program : i.base.read.I.program = some program
   publicInputs : i.base.read.publicInputs = none
-  registered : i.base.registered = registered
   readRegistered : i.base.read.registered = registered.isSome
+  registered : i.base.registered = registered
   draw : i.base.read.draw = draw
   inner : i.inner = some h.shape
   src : i.src = some h.src
@@ -287,83 +287,85 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
   simp only [ht] at hv
   obtain ⟨circuitB, hcB, hv⟩ := bind_ok hv
   obtain ⟨pubB, hpB, hv⟩ := bind_ok hv
-  obtain ⟨⟨registered, complete, known, regParams⟩, hreg, hv⟩ := bind_ok hv
-  try dsimp only at hv
-  have hPR : PartRegistered p.registered registered complete known regParams := by
-    cases hpr : p.registered with
-    | none =>
+  rcases hpr : p.registered with _ | rj <;> simp only [hpr] at hv <;>
+    obtain ⟨⟨registered, complete, known, regParams⟩, hreg, hv⟩ := bind_ok hv
+  on_goal 1 =>
+    have hPR : PartRegistered none registered complete known regParams := by
       simp only [PartRegistered]
-      rw [hpr] at hreg
       have hreg := Except.ok.inj hreg
       simp only [Prod.mk.injEq] at hreg
       obtain ⟨rfl, rfl, rfl, rfl⟩ := hreg
       exact ⟨rfl, rfl, rfl, rfl⟩
-    | some rj =>
+    clear hreg
+  on_goal 2 =>
+    have hPR : PartRegistered (some rj) registered complete known regParams := by
       simp only [PartRegistered]
-      rw [hpr] at hreg
       obtain ⟨⟨own, c, k, ps⟩, hro, hreg⟩ := map_ok hreg
       simp only [Prod.mk.injEq] at hreg
       obtain ⟨rfl, rfl, rfl, rfl⟩ := hreg
       exact ⟨own, hro, rfl⟩
-  obtain ⟨rows, hrows, hv⟩ := bind_ok hv
-  obtain ⟨bindings, hbind, hv⟩ := bind_ok hv
-  obtain ⟨recordB, hrecB, hv⟩ := bind_ok hv
-  rcases hrec : String.fromUTF8? recordB with _ | record
-  · simp only [hrec] at hv
-    first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
-  simp only [hrec] at hv
-  generalize hT : Zk.tags (tags0.withCoins (Coins.tree (Zk.coinSpec (tags0.tableNames 1)))) (Zk.maskLogOf circuitB) 1
-    = T at hv
-  generalize hD : (if T.hm96Rows = true then Witness.recordDraw record else none) = D at hv
-  have hv := Except.ok.inj hv
-  obtain ⟨proofs, -, hv⟩ := bind_ok hv
-  obtain ⟨⟨spec', tabs⟩, hst, hv⟩ := bind_ok hv
-  try dsimp only at hv
-  obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, hscope, hv⟩ := bind_ok hv
-  obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
-  rcases D with _ | d
-  · first
-      | (simp [ProvedScope.drawLaw, bind, Except.bind] at hv; done)
-      | cases hv
-  have hdraw : T.hm96Rows = true ∧ Witness.recordDraw record = some d := by
-    cases hh : T.hm96Rows
-    · simp [hh] at hD
-    · simp only [hh, eq_self_iff_true, ↓reduceIte] at hD
-      exact ⟨rfl, hD⟩
-  obtain ⟨hhm, hrd⟩ := hdraw
-  try dsimp only at hst
-  split at hst
-  · rename_i spec sts hb
-    have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
-      cases hl : ProvedScope.drawLaw true T false (some d) with
-      | error e => simp [hl, Except.map] at hst
-      | ok u => rfl
-    obtain ⟨⟨⟩, hprog, hb⟩ := bind_ok hb
-    obtain ⟨⟨⟩, hinn, hb⟩ := bind_ok hb
-    obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb
-    subst hT
-    cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
-    on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
-    all_goals
-      obtain ⟨⟨⟩, hcov, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hkn, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hchk, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hone, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hshape, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hcoins, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hpub, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hlr, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, htop, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hlink, hb⟩ := bind_ok hb
-      obtain ⟨⟨⟩, hlab, hb⟩ := bind_ok hb
-      refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, rows, bindings, recordB, record, d, spec0,
-        sts0, rfl, hcB, hpB, hPR, hrows, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
-        ⟨hinn, hchk, hone, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
-    · intro hc
-      cases hc
-    · intro _
-      exact hcomp
-  · cases hst
+    clear hreg
+  all_goals
+    try dsimp only at hv
+    obtain ⟨rows, hrows, hv⟩ := bind_ok hv
+    obtain ⟨bindings, hbind, hv⟩ := bind_ok hv
+    obtain ⟨recordB, hrecB, hv⟩ := bind_ok hv
+    rcases hrec : String.fromUTF8? recordB with _ | record
+    · simp only [hrec] at hv
+      first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
+    simp only [hrec] at hv
+    generalize hT : Zk.tags (tags0.withCoins (Coins.tree (Zk.coinSpec (tags0.tableNames 1))))
+      (Zk.maskLogOf circuitB) 1 = T at hv
+    generalize hD : (if T.hm96Rows = true then Witness.recordDraw record else none) = D at hv
+    have hv := Except.ok.inj hv
+    obtain ⟨proofs, -, hv⟩ := bind_ok hv
+    obtain ⟨⟨spec', tabs⟩, hst, hv⟩ := bind_ok hv
+    try dsimp only at hv
+    obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
+    obtain ⟨⟨⟩, hscope, hv⟩ := bind_ok hv
+    obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
+    rcases D with _ | d
+    · first
+        | (simp [ProvedScope.drawLaw, bind, Except.bind] at hv; done)
+        | cases hv
+    have hdraw : T.hm96Rows = true ∧ Witness.recordDraw record = some d := by
+      cases hh : T.hm96Rows
+      · simp [hh] at hD
+      · simp only [hh, eq_self_iff_true, ↓reduceIte] at hD
+        exact ⟨rfl, hD⟩
+    obtain ⟨hhm, hrd⟩ := hdraw
+    try dsimp only at hst
+    split at hst
+    · rename_i spec sts hb
+      have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
+        cases hl : ProvedScope.drawLaw true T false (some d) with
+        | error e => simp [hl, Except.map] at hst
+        | ok u => rfl
+      obtain ⟨⟨⟩, hprog, hb⟩ := bind_ok hb
+      obtain ⟨⟨⟩, hinn, hb⟩ := bind_ok hb
+      obtain ⟨⟨spec0, sts0⟩, hbuild, hb⟩ := bind_ok hb
+      subst hT
+      cases complete <;> simp only [Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at hb
+      on_goal 2 => obtain ⟨⟨⟩, hcomp, hb⟩ := bind_ok hb
+      all_goals
+        obtain ⟨⟨⟩, hcov, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hkn, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hchk, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hone, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hshape, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hcoins, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hpub, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hlr, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, htop, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hlink, hb⟩ := bind_ok hb
+        obtain ⟨⟨⟩, hlab, hb⟩ := bind_ok hb
+        refine ⟨tags0, circuitB, pubB, registered, _, known, regParams, rows, bindings, recordB, record, d, spec0,
+          sts0, rfl, hcB, hpB, hPR, hrows, hbind, hrecB, hrec, hhm, hrd, hprog, hbuild, ?_, hcov, hkn,
+          ⟨hinn, hchk, hone, hshape, hcoins, hpub, hlr, htop, hlink, hlab, fun _ => hlaw⟩, hscope⟩
+      · intro hc
+        cases hc
+      · intro _
+        exact hcomp
+    · cases hst
 
 end Verity.Recursive
