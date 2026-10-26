@@ -159,13 +159,15 @@ theorem framesRead_eq {xo : Claims.Msg} {sto : Claims.Recursion.Stmt} (hst : par
       (D.T (2 * 0 + r.val)) := by
     have h := D.ctx_rows_fit hk
     rw [hctx, hrows] at h
-    exact fitsRep_of rfl rfl rfl hn' rfl rfl h
+    exact fitsRep_of (c := (repCtx v.2.1 v.2.2 c₁ r₀ cs.tail.dropLast (2 * 0 + r.val))) (c' := (repCtx v.2.1 v.2.2 default r₀ [] (2 * 0 + r.val))) rfl rfl rfl hn' rfl rfl h
   have hex : ∃ pT : Flock.Proof × F128, FitsRep (repCtx v.2.1 v.2.2 default r₀ [] (2 * 0 + r.val))
-      ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * 0 + r.val) []) pT.1 pT.2 := ⟨(_, _), hfit'⟩
+      ((cutLens (repLens v.2.1 v.2.2) rss).getD (2 * 0 + r.val) []) pT.1 pT.2 :=
+    ⟨(D.d.f.ps[2 * 0 + r.val]!, D.T (2 * 0 + r.val)), hfit'⟩
   have hb : FitsRep (D.ctx (2 * 0 + r.val)) (D.rows (2 * 0 + r.val)) (Classical.choose hex).1
       (Classical.choose hex).2 := by
     rw [hctx, hrows]
-    exact fitsRep_of rfl rfl rfl hn'.symm rfl rfl (Classical.choose_spec hex)
+    exact fitsRep_of (c := (repCtx v.2.1 v.2.2 default r₀ [] (2 * 0 + r.val))) (c' := (repCtx v.2.1 v.2.2 c₁ r₀ cs.tail.dropLast (2 * 0 + r.val))) rfl rfl rfl hn'.symm rfl rfl
+      (Classical.choose_spec hex)
   have hkl : (D.ctx (2 * 0 + r.val)).st.fold.kLog = (D.ctx (2 * 0 + r.val)).st.kLog := by
     rw [D.ctx_st cls (fun _ => #[]) 0 r hG]
     exact hG.foldKLog
