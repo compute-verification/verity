@@ -47,13 +47,16 @@ theorem mapM_some_of {α β : Type} {f : α → Option β} :
     obtain ⟨bs, hbs⟩ := mapM_some_of (l := l) fun a' ha' => h a' (List.mem_cons_of_mem a ha')
     exact ⟨b :: bs, by simp [List.mapM_cons, hb, hbs]⟩
 
-/-- **The record value `decR` builds reads as custody's**, at reader `rd`, at every decision. -/
+/-- **The record value `decR` builds reads as custody's**, at reader `rd`, at every decision with a coin a message
+whose statement passes its scope check. -/
 def DecLive (rd : Msg → Option FinalP) : Prop :=
-  ∀ x ms cs d, decR rd x ms cs = some d → ∃ lv, liveOfJ d.spec (coinSubJ d.spec d.c₁ d.mids d.f.j) = .ok lv
+  ∀ x ms cs d, ms.length = cs.length → decR rd x ms cs = some d → d.s.read.check = .ok () →
+    ∃ lv, liveOfJ d.spec (coinSubJ d.spec d.c₁ d.mids d.f.j) = .ok lv
 
 /-- **The last step reads**, at any reader: the statement sets up, the last message isn't tagged `0` and `rd` reads
 it with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as the reps' blocks, every
-rep's block has a fit, and the record value reads as custody's. -/
+rep's block has a fit, and the record value reads as custody's where there is a coin a message and the statement
+passes its scope check. -/
 theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
     {r₀ : List ByteArray} {rss : List (List ByteArray)}
@@ -63,7 +66,7 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
     (hps : fl.ps.size = 2 * v.2.2.size) (hrss : (repLens v.2.1 v.2.2).sum = rss.length)
     (hfit : ∀ k < 2 * v.2.2.size, ∃ pT : Flock.Proof × F128,
       FitsRep (repCtx v.2.1 v.2.2 c₁ r₀ cs.tail.dropLast k) ((cutLens (repLens v.2.1 v.2.2) rss).getD k []) pT.1 pT.2)
-    (hlive : DecLive rd) : ReadOkR rd x ms cs := by
+    (hlen : ms.length = cs.length) (hck : v.1.read.check = .ok ()) (hlive : DecLive rd) : ReadOkR rd x ms cs := by
   obtain ⟨d, hd⟩ : ∃ d, decR rd x ms cs = some d := by
     have hm : ∃ a₁, ms.head? = some a₁ := by
       cases ms with
@@ -96,7 +99,10 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   have ha := actR_of_decR hlast ha hd
   unfold ReadOkR
   rw [ha]
-  exact hlive x ms cs d hd
+  obtain ⟨v', -, -, -, -, -, -, hv', -, -, -, -, -, rfl⟩ := FlockDeploy.decR_some hd
+  rw [hv] at hv'
+  cases hv'
+  exact hlive x ms cs _ hlen hd hck
 
 /-- **A fit lifts to every rows of its rows' byte sizes**: rows the same sizes as fitting ones have a fit. -/
 def FitsLift : Prop :=

@@ -10,11 +10,11 @@ schedule counts (`nAtSched`). It holds at `finalR` and `restR elem` for every `e
 hypothesis:
 
 * **The last message** is assembled from `finOpen (restR elem)`'s pieces: every earlier round's openings
-  (`openPieces`), `elem`'s pieces, then the trailer at the last part, whose bytes are constant (`lastAt_eq`).
+  (`openPieces`), `elem`'s pieces, then the trailer at the last part, whose bytes are constant (`lastAt_parts`).
 * **`finalR` reads the trailer off the end** (`finalR_trailer`), so it cuts the rest at the trailer's lengths
-  (`openLens`). The openings' bytes are at least what those lengths sum to (`cutLen_openLens`), since every piece is
-  rows each followed by its 192-byte salt (`rowLens_openSegs`); so it reads `openLens`' rounds, each as many rows
-  as its lengths (`cutRounds_ok`), whatever `elem` reads.
+  (`openLens`). The openings' bytes are what those lengths sum to (`lastAt_parts`), since every piece is rows each
+  followed by its 192-byte salt (`rowLens_openSegs`); so it reads `openLens`' rounds, each as many rows
+  as its lengths (`cutRounds_ok`), whatever `elem` reads, and what follows them is `elem`'s pieces (`finalR_last`).
 * **The counts are the schedule's**: round 0 opens RecCap's `N = level0Nodes` instances (`capAt_level0`), and stream
   round `i` each top's `n` instances (`capsOpen_count`) and the row it absorbs where it absorbs one (`rowOpen_count`,
   `rowsCoverAll`), which `nAtSched_succ` counts.
@@ -67,6 +67,38 @@ theorem cutRounds_ok : ∀ (lens : List (List ℕ)) (m : Msg), cutLen lens ≤ m
     · cases j with
       | zero => simpa using hl
       | succ j => simpa using hoj j
+
+theorem cutRound_rest : ∀ (l : List ℕ) (m : Msg) {ps : List (Msg × Salt)} {rest : Msg},
+    cutRound l m = some (ps, rest) → rest = m.drop (sumS l)
+  | [], m, ps, rest, h => by
+    have h' : (([] : List (Msg × Salt)), m) = (ps, rest) := Option.some.inj h
+    rw [← (Prod.mk.inj h').2]
+    simp [sumS]
+  | ℓ :: ls, m, ps, rest, h => by
+    have hs : sumS (ℓ :: ls) = ℓ + Hm96.sha512.saltBytes + sumS ls := by
+      simp only [sumS, List.map_cons, List.sum_cons]
+    unfold cutRound at h
+    split_ifs at h with hle
+    obtain ⟨⟨ps', rest'⟩, hp, he⟩ := Option.map_eq_some_iff.1 h
+    rw [← (Prod.mk.inj he).2, cutRound_rest ls _ hp, List.drop_drop, List.drop_drop, hs]
+    congr 1
+    omega
+
+/-- **What follows the rounds** is the message past their bytes. -/
+theorem cutRounds_rest : ∀ (lens : List (List ℕ)) (m : Msg) {os : List (List (Msg × Salt))} {last : Msg},
+    cutRounds lens m = some (os, last) → last = m.drop (cutLen lens)
+  | [], m, os, last, h => by
+    have h' : (([] : List (List (Msg × Salt))), m) = (os, last) := Option.some.inj h
+    rw [← (Prod.mk.inj h').2]
+    simp [cutLen]
+  | l :: ls, m, os, last, h => by
+    have hs : cutLen (l :: ls) = sumS l + cutLen ls := by simp only [cutLen, List.map_cons, List.sum_cons]
+    simp only [cutRounds] at h
+    obtain ⟨⟨ps, rest⟩, h1, h⟩ := Option.bind_eq_some_iff.1 h
+    obtain ⟨⟨os', last'⟩, h2, he⟩ := Option.map_eq_some_iff.1 h
+    rw [← (Prod.mk.inj he).2, cutRounds_rest ls _ h2, cutRound_rest l m h1, List.drop_drop, hs]
+    congr 1
+    omega
 
 /-! ## The openings' bytes and rows -/
 
@@ -221,11 +253,13 @@ theorem readPieces_length (ps : List (ℕ × List (Msg × List HmNets.Lin))) (ws
 
 /-! ## `FinalReads` -/
 
-/-- **`final` reads the last message at every witnesses**, at the deployed `finalR` and the last round's pieces
-`restR elem`, for every `elem`. -/
-theorem finalReads (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
-    FinalReads finalR (restR elem) := by
-  intro x hx ws hl
+/-- **The last message off the witnesses**: the openings, `elem`'s pieces, then the trailer at `openLens`, whose
+lengths sum to the openings' bytes. -/
+theorem lastAt_parts (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
+    (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) :
+    ∃ r, readX x = some r ∧ lastAt (restR elem) x ws = (readPieces (openPieces r) ws ++
+      readPieces ((elem r).map fun p => (p.1.val, p.2)) ws) ++ trailer (openLens r) ∧
+      cutLen (openLens r) = (readPieces (openPieces r) ws).length := by
   obtain ⟨r, rs, s0, spec, st, hr, hrs, hset, hm, hsc, hk⟩ := schedBridge hx
   have hn : nS x = r.w.parts.length := by simp [nS, hr]
   have hR : layoutOf.rounds x = 2 + 2 * rs.size := hk
@@ -279,9 +313,39 @@ theorem finalReads (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
     rw [hop, hol, List.map_cons, List.sum_cons,
       rounds_len _ _ fun j _ => roundOpen_good r rs j]
     simp only [cutLen, List.map_cons, List.sum_cons, capOpen_good]
+  exact ⟨r, hr, hlast, by rw [readPieces_length, hlen]⟩
+
+/-- **`finalR` reads `elem`'s pieces past the openings.** -/
+theorem finalR_last (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) {x : Msg}
+    (hx : DenseX x) {ws : List Claims.Flock.Wit} (hl : ws.length = nS x) {os : List (List (Msg × Salt))} {last : Msg}
+    (hf : finalR (lastAt (restR elem) x ws) = some (os, last)) :
+    ∃ r, readX x = some r ∧ last = readPieces ((elem r).map fun p => (p.1.val, p.2)) ws := by
+  obtain ⟨r, hr, hlast, hlen⟩ := lastAt_parts elem hx hl
+  refine ⟨r, hr, ?_⟩
+  rw [hlast, finalR_trailer] at hf
+  rw [cutRounds_rest _ _ hf, hlen, List.drop_left]
+
+/-- **`final` reads the last message at every witnesses**, at the deployed `finalR` and the last round's pieces
+`restR elem`, for every `elem`. -/
+theorem finalReads (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
+    FinalReads finalR (restR elem) := by
+  intro x hx ws hl
+  obtain ⟨r, rs, s0, spec, st, hr, hrs, hset, hm, hsc, hk⟩ := schedBridge hx
+  obtain ⟨r', hr', hlast, hlen⟩ := lastAt_parts elem hx hl
+  rw [hr] at hr'
+  have e : r = r' := Option.some.inj hr'
+  subst e
+  obtain ⟨N, hc, hpos⟩ := capAt_readX hr
+  have hN : N = level0Nodes st := by
+    rw [capAt_level0 hr hm] at hc
+    exact (Prod.mk.inj (Option.some.inj hc)).2.symm
+  have hk1 : kI x - 1 = 2 * rs.size + 1 := by omega
+  have hol : openLens r = rowLens (capOpen r (nS x - 1) (List.range N)) ::
+      (List.range (2 * rs.size)).map fun j => (roundOpen r rs j).flatMap fun p => rowLens p.2 := by
+    simp [openLens, hc, hrs]
   obtain ⟨os, last, hcut, hos, hoj⟩ := cutRounds_ok (openLens r)
     (readPieces (openPieces r) ws ++ readPieces ((elem r).map fun p => (p.1.val, p.2)) ws)
-    (by rw [List.length_append, readPieces_length, hlen]; omega)
+    (by rw [List.length_append, ← hlen]; omega)
   have hosl : os.length = 2 * rs.size + 1 := by
     rw [hos, hol, List.length_cons, List.length_map, List.length_range]
   refine ⟨os, last, ?_, ?_, ?_⟩
