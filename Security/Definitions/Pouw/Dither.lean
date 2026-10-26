@@ -40,8 +40,8 @@ ports, device memory, links), each at its data-sheet rate `rate` (`ρ`, units a 
 and per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, the
 bits it exchanges with machines outside the period's devices `ext` (what the network certifier counts), and its oracle
 calls `calls`, each a step of the machine that uses `callUse` (RT-LEAN-2 L28). `P1` and `P2` are the arithmetic
-premises, exact operand formats and one accumulator per product, as MODEL-SPEC (CMP-109) defines them in
-`Definitions.Core.Accel.Principles`. `θ = (M, ρ, u)` are the model's parameters. -/
+premises, exact integer MMAs and one accumulator per product, as the machine 𝓜 defines them (`Accel.Card.Exact`,
+`Assumptions.AccelProductForm`). `θ = (M, ρ, u)` are the model's parameters. -/
 structure Accel where
   /-- The programs, what they compute and how they compose. -/
   Mc : Machine

@@ -7,11 +7,10 @@ products, priced by the tensor core alone (G2's tensor resource over P1's exact 
 **Atoms.** An exact path for one sub-product is an MMA format (`Atom`): the tensor units a MAC uses, in eighths of an
 s8 MAC (`weight8`), the most consecutive integers it holds per operand entry (`cap`), and, for a float format, the
 instruction's `k` and the width `w` within which its dot of `k` products is exact (`k · ⌊d_A/2⌋ · ⌊d_B/2⌋ ≤ 2^w`).
-These are MODEL-SPEC's numbers (`Accel.H200`, `Accel.Sm120`, `Accel.Principles`): each card's `weight`, the
-formats' integer runs, and P1's widths (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float dot
-as exact as FP32 allows (f16 and tf32 are `Open.dot` on both cards) and accumulation across MMAs as exact only adds
-atoms. `b1` is at `Open.b1 = 1/8`; costs are monotone in the weights, so a lower bound here holds at every
-`Open.b1 ≥ 1/8` and, on the H200, every `Open.sync ≥ 1`.
+These are the cards' tables' numbers (`Accel.H200`, `Accel.Sm120`): each card's `weight`, the formats' integer runs,
+and the widths within which a dot is exact (24 where FP32 bounds the dot, 14 for the H200's FP8). Taking every float
+dot as exact as FP32 allows and accumulation across MMAs as exact only adds atoms. `b1` is at the H200's weight 1/8;
+costs are monotone in the weights, so a lower bound here holds at every weight at least these.
 
 **Schedules** (`Sched`) multiply two `2^l × 2^l` block matrices whose entries range over `a` and `b` consecutive
 integers: an atom; a digit split of one operand, `x - c = x₀ + d·x₁` with `2 ≤ d < a`, `x₀` over `d` values and `x₁`
