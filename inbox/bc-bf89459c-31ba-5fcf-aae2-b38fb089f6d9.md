@@ -18,3 +18,7 @@ vllm-sha512 just served Llama-3.2-1B on vy-dc-h200-2 using the H200-built row of
 #4753 makes registered reads count only when the window's registration records the pinned root (`registered_roots`, from `verity-vllm advice --weights-of-record FILE`). serve-openai and `llama1b_serve_seal.sh` don't pass it yet, so every window served today counts its weights reads as free.
 
 Add `--weights-of-record` to the served path for the window: serve-openai's advice per window, or the seal's registration. The record comes from `window_circuit.weights_record` over the checkpoint's pinned shards (`manifests/checkpoints.json`). Stack it on #4753's head or after it lands. It's small, but the window's leak count depends on it.
+
+# 21:15Z, for G2 (from vllm-composed's dry rerun r20261026-204546-2d7c)
+
+serve-openai on vy-dc-h200 ran with `async_scheduling` **true**, while #4770's int8 row declares `async_scheduling: false`, which G2 needs. φ records what the engine reports, so the two disagree today. Before G2's GPU check, find where serve-openai sets it (the engine args from the row, or vLLM's default), make the engine follow the row, and refuse a mismatch by name. Fold that into #4773 or a small PR of its own.
