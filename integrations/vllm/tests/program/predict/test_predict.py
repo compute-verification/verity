@@ -33,6 +33,7 @@ GLM53_S1 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__stoch-t0.8-p0.95__eager
 GLM53_S8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager"
 DSV4 = "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
+H200 = {"compute_capability": [9, 0], "num_sms": 132}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
@@ -289,6 +290,22 @@ def test_the_int8_linears_follow_the_build_of_records_rule():
         ("self_attn.qkv_proj.weight", 128 * 64, [8]), ("self_attn.qkv_proj.weight_scale", 128, [32]),
         ("self_attn.o_proj.weight", 64 * 64, [8]), ("self_attn.o_proj.weight_scale", 64, [32])]
     assert len(leaves) == len(weight_leaves(model_shape(TINY))) + 4 * 2
+
+
+def test_a_batch_invariant_request_reads_its_launchs_longest_query():
+    """FA3's tile reads the launch's max_seqlen_q (`pipeline.launch_context`), as the Build's attention binding does: at head dim 64,
+    an 8-row prompt prefilled beside a 40-row one runs the 40 rows' tile (BN 128), alone the one-warpgroup tile (8 x 2 query heads per
+    KV head <= 64: BN 192), and both decode at 192.  The H200 int8 B4 row's LP11_T8 request (traced bec8910e) is this case at Llama-3.2-1B's shapes.
+    A shape whose requests run in different launches has no one FA3 tile."""
+    def tiles(requests: list[dict]) -> dict[int, int]:
+        r = build_program(_phi({**TINY, "hidden_size": 256}, requests, target=dict(H200)), "request", LP=8, T=2)
+        return dict(sorted((int(m[1]), int(m[2])) for k in r.desc["definitions"] if (m := re.match(r"AttentionHead_v4\{T=(\d+),D=64,BN=(\d+)", k))))
+
+    one, other = {"prompt_len": 8, "max_tokens": 3, "arrive_step": 0}, {"prompt_len": 40, "max_tokens": 2, "arrive_step": 0}
+    assert tiles([one]) == {t: 192 for t in range(1, 11)}
+    assert tiles([one, other]) == {**{t: 128 for t in range(1, 9)}, 9: 192, 10: 192}
+    with pytest.raises(Unexpressible, match=re.escape("FA3's tile (kBlockN) is not one value")):
+        tiles([one, other, {**one, "arrive_step": 6}])
 
 
 def test_an_int8_rows_dtype_is_its_checkpoints():

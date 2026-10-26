@@ -41,7 +41,7 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, launch_rows, launch_seqlen_q, select_token, served_class
 from .domain import check_phi
 from .phi import Phi
 
@@ -444,7 +444,7 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
-        self.cached = 0
+        self.cached, self.ctx = 0, None
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
 
@@ -530,7 +530,7 @@ class _Model:
             if prefill:
                 self.lp_of[L] = P0 + M
             own_rows = M if prefill else 1
-            launch_sq = own_rows
+            launch_sq = own_rows if self.ctx is None else launch_seqlen_q(self.ctx, own_rows, 0 if prefill else P0 - self.lp_of[L] + 1, S.tp, S.accepted)
             for i in range(M):
                 kh.append(k[i].refs)
                 vh.append(qkv[i].refs.slice(q_w + k_w, q_w + k_w + v_w))
@@ -762,6 +762,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
             raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
                                 f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
         model.launch = _Launch(batch)
+    if wrapper == "request" and isinstance(model, _Model):
+        model.ctx = launch_rows(phi, LP, T, C)
     if C:
         model.open_with(Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, params[n_user - 1][1].leaves)), C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
