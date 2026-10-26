@@ -38,6 +38,10 @@
    "owner": "@memory-accounting",
    "digest": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
   },
+  "Accounting.Assumptions.HelpWithinCertifier": {
+   "owner": "@lean",
+   "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab"
+  },
   "Accounting.Assumptions.KeyBinding": {
    "owner": "@memory-accounting",
    "digest": "eb1a8d6d2ea53d5165ef9a744d87458f2090749ae2063b2e3a73fa7d5887a996"
@@ -241,6 +245,10 @@
   "Accounting.Assumptions.UniformLabels": {
    "owner": "@memory-accounting",
    "digest": "8a5606786b3b26b8e965277006ad1272a3769f44ae8512e98c60ecd6430e4672"
+  },
+  "Accounting.Assumptions.WordCostsMacs": {
+   "owner": "@lean",
+   "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
   },
   "Accounting.Assumptions.WorkHardness": {
    "owner": "@memory-accounting",
@@ -1892,14 +1900,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Accounting.Assumptions.HelpWithinCertifier": {
-   "owner": "@lean",
-   "digest": "853ef0a90886823abe7731abc7684c9e03ead7fd60b2b3c8317fbd79cf4b70ab"
-  },
-  "Accounting.Assumptions.WordCostsMacs": {
-   "owner": "@lean",
-   "digest": "e774e9e1282970b24d157ea3971e9e5d69ec6af60e483d34f57d855f9527dda7"
   }
  },
  "meaning": [
