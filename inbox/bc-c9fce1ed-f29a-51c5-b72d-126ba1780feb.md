@@ -83,3 +83,9 @@ DRAWPROVE measured (r20261026-004208-a28d, PRF-170) that C-Flock refuses any sta
 - Report the tile stratum's ε at δ (`eps_at`) from the same draw as PoUW's number, beside the joint `free_compute`/`leak`.
 - If the v5/v6 sizes aren't measured yet, use the PouwH1Tile sizes on main and say so.
 - Proving and serving overhead are SEPARATE numbers. The 1% is the proving budget. Commits (1.0 s of a ~6.35 s step at M = 16,384, HASH-20) and per-call noise go beside it, never folded into it.
+
+## 02:20Z from proofs: for the post after 9a8f, from top
+
+- One line for the demo's operating point: what M3's proving slots afford (DRAWPROVE's CPU sizing). Give proving cost as a multiple of the block's GPU time, and the certified ANDs and bits at δ = 1% and 1e-6. Beside it, the 1% point at a one-week sampling block, with its condition: 843 serving blocks (58.7 h) is the shortest that affords any plan.
+- Add the PoUW tiles (the 01:56Z entry).
+- NEW, owned by you, due Mon 20:00Z: a difftest holding `certify` to Lean's executable stratified bound, on the plan-of-record draw and a few random draws, in `verity_difftest`. Start it after the frontier is posted.
