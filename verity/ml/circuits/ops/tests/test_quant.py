@@ -93,16 +93,18 @@ def test_the_edge_rows_reach_their_edges() -> None:
 
 @pytest.mark.parametrize("relu", [True, False])
 def test_a_row_in_chunks_is_the_row_unit(relu) -> None:
-    """A row wider than one unit: its amax (once whole, once as the amax of four parts' amaxes without the ReLU), then four
-    chunk units under it, whose codes are the row's and whose scales are each the row's."""
+    """A row wider than one unit: its amax (whole; as the amax of four parts' amaxes without the ReLU; and as the last part's
+    values with the other three parts' amaxes, under the row's RELU), then four chunk units under it, whose codes are the row's
+    and whose scales are each the row's."""
     xb = rows(H, np.random.default_rng(4))
     codes, scale, amax = reference(xb, relu)
     c = H // 4
     part = bind(Q.RowAbsMax, N=c, RELU=relu)
     parts = np.stack([E.evaluate_batch(part, xb[:, k * c:(k + 1) * c]) for k in range(4)], axis=1).astype(np.uint16)
     tree = E.evaluate_batch(bind(Q.RowAbsMax, N=4, RELU=False), parts).astype(np.uint16)
+    last = E.evaluate_batch(bind(Q.RowAbsMax, N=c + 3, RELU=relu), np.concatenate([xb[:, 3 * c:], parts[:, :3]], axis=1))
     whole = E.evaluate_batch(bind(Q.RowAbsMax, N=H, RELU=relu), xb).astype(np.uint16)
-    assert _same_amax(tree, amax) and _same_amax(whole, amax)
+    assert _same_amax(tree, amax) and _same_amax(last.astype(np.uint16), amax) and _same_amax(whole, amax)
     chunk = bind(Q.QuantChunkS8, N=c, RELU=relu)
     for k in range(4):
         got, s = _split(E.evaluate_batch(chunk, xb[:, k * c:(k + 1) * c], whole), c)
