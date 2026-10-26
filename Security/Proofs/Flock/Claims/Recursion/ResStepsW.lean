@@ -1,5 +1,7 @@
 import Proofs.Flock.Claims.Recursion.ResChainW
 import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
+import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.CapLowerPin
 import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Soundness.Discharge.Hidden.Delta
