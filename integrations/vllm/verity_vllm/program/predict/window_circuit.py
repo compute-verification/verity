@@ -116,6 +116,9 @@ class Grain:
     select: int = 768
 
 
+_GRAIN = Grain()
+
+
 @dataclass(frozen=True)
 class Row:
     """One unit's output row: template ``tid``'s unit ``unit``, its output ``out`` of ``words`` u16 words."""
@@ -522,7 +525,7 @@ def _inference(spans: dict[str, list[tuple[int, int, int, int]]], slots: int) ->
     return out
 
 
-def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
+def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain = _GRAIN, name: str = NAME) -> IF.Circuit:
     """``cls``'s circuit at ``programs`` Programs (module docstring): the class Program lowered once a Program, node by node,
     so each template's units are node j's of Program 0, then of Program 1, and so on; its blocks' slots are the Programs."""
     if not 1 <= programs <= cls.slots:
@@ -553,7 +556,7 @@ def class_circuit(registered: Any, cls: WindowClass, programs: int, grain: Grain
                       blocks=IF.Blocks(programs, cls.positions, tuple(_inference(b.spans, programs))))
 
 
-def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = Grain(), name: str = NAME) -> IF.Circuit:
+def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grain = _GRAIN, name: str = NAME) -> IF.Circuit:
     """``compiled``'s window (`steps.Compiled`, of ``registered``) as ``cls``'s circuit at its Program count, one a request,
     refused where the class doesn't take the window: nothing else of the window reaches the circuit."""
     units = [u for u in compiled.requests if u is not None]

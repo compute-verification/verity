@@ -247,7 +247,7 @@ def invariants(slots: Sequence[Slot], *, cap: int, A: int) -> dict[str, bool]:
 
 
 def executed_prefix_by_rule(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int]) -> dict[str, Any]:
-    """The per-request block of moe's `executed_prefix_of_record` (`verity_vllm/check/executed_prefix.py`) computed FROM the rule: the
+    """The per-request block of moe's `executed_prefix_of_record` (`verity_vllm/commit/executed_prefix.py`) computed FROM the rule: the
     recurrence over the SERVED list as the raw prefix.  `executed_prefix_len = |{t : r_t = 1}|`, `eos_step` = the FIRST EOS's request-relative
     row, `lag_steps` = the (0, 1) slot(s) as request-relative rows (`t - 1`).  A served token AFTER the first EOS is `served_past_first_eos`
     (the rule stops at the first EOS; a last-token test would accept `[EOS, x, EOS]`), a last served token outside the pinned

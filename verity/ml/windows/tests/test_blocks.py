@@ -129,15 +129,18 @@ def test_members_are_cut_where_a_servers_units_begin_or_end():
 def test_an_output_row_read_names_a_values_leaves_and_fills_no_input_row():
     """An output-row `Read` (on ``o<j>``) states that the reader unit's output row is the parameter's leaves at its pattern's
     positions: a value a server sends out. It is held to its template's units and its parameter's leaves, uncut, may sit on a
-    row wires and another output-row read read, and counts in no input."""
+    row wires read, and counts in no input; a second read of the row is refused, since the row opens against one pinned
+    root."""
     reg = TI.declared().registered
     out = I.Read(TI.G8ID, "o0", "resp", at=0, radix=(6,), base=0, step=(8,))
-    c = TI.declared(registered=replace(reg, params={**reg.params, "resp": 48, "wire": 48},
+    c = TI.declared(registered=replace(reg, params={**reg.params, "resp": 48}, reads=(*reg.reads, out)))
+    assert I.input_count(c.description(), pins={"weights", "resp"}) == \
+        I.input_count(TI.declared().description(), pins={"weights"})
+    with pytest.raises(ValueError, match="both fill rows"):
+        TI.declared(registered=replace(reg, params={**reg.params, "resp": 48, "wire": 48},
                                        reads=(*reg.reads, out, replace(out, param="wire"))))
-    pins = {"weights", "resp", "wire"}
-    assert I.input_count(c.description(), pins=pins) == I.input_count(TI.declared().description(), pins={"weights"})
-    for edit, why in [(dict(base=1), r"output-row read .* leaves \[1, 49\)"), (dict(param="acts"), "output-row read"),
-                      (dict(at=1), r"units \[1, 7\)"), (dict(radix=(3, 2), step=(16, 8), cut=(0, 2)), "output-row read")]:
+    for edit, why in [(dict(base=1), r"read .* leaves \[1, 49\)"), (dict(param="acts"), "of a registered parameter"),
+                      (dict(at=1), r"units \[1, 7\)"), (dict(radix=(3, 2), step=(16, 8), cut=(0, 2)), r"rows \[0, 2\) of o0's 1")]:
         with pytest.raises(ValueError, match=why):
             TI.declared(registered=replace(reg, params={**reg.params, "resp": 48}, reads=(*reg.reads, replace(out, **edit))))
 
@@ -163,9 +166,10 @@ def cmp92(servers: int) -> I.Circuit:
     S·p(p+1), the KV cache wired across steps), and the layer's H coordinates (``GemmCoordinate_v2{32}``, its ``x`` the two
     v rows); at the O logit steps p = NP − 1 + k the next token (``Gemm_v2{16, 1}``). Byte k of slot j enters at step k
     from the request row's leaf j(1 + NP) + 1 + k (the length, then the bytes as u16) and leaves at step NP − 1 + k as the
-    response's leaf j·O + k. With two servers, the rows crossing between them (layer 0's coordinates into layer 1, the token
-    back into the embedding) are wire transfers, an output-row read on the writer and a read on the reader, and each server
-    loads its own weights."""
+    response's leaf j·O + k. With two servers, the rows crossing between them are wire transfers: layer 0's coordinates into
+    layer 1 an output-row read on the writer and a read on the reader (``x1``), and the token back into the embedding a read
+    of the response's leaves on the reader, the head's output row being read once, as the response; each server loads its
+    own weights."""
     two = servers == 2
     w0, w1 = ("weights0", "weights1") if two else ("weights", "weights")
     pos, layer = T * H, 8 * H * H
@@ -187,11 +191,10 @@ def cmp92(servers: int) -> I.Circuit:
              I.Read(HID, "w", w1, at=0, radix=(O * S,), base=ow[1] + 2 * H * H, step=(0,))]
     params = {"request": S * (1 + NP), "response": S * O}
     if two:
-        params |= {"weights0": pos + layer, "weights1": layer + H, "x1": H * T * S, "tok": (O - 1) * S}
+        params |= {"weights0": pos + layer, "weights1": layer + H, "x1": H * T * S}
         reads += [I.Read(OID, "o0", "x1", at=0, radix=(H * T * S,), base=0, step=(1,)),
                   I.Read(QID, "x", "x1", at=6 * T * S, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
-                  I.Read(HID, "o0", "tok", at=0, radix=((O - 1) * S,), base=0, step=(1,)),
-                  I.Read(EID, "a", "tok", at=NP * S * H, radix=((T - NP) * S, H), base=0, step=(1, 0))]
+                  I.Read(EID, "a", "response", at=NP * S * H, radix=(T - NP, S, H), base=0, step=(1, O, 0))]
     else:
         params["weights"] = pos + 2 * layer + H
         wires += [I.Wire(QID, "x", OID, "o0", at=6 * T * S, radix=(T * S, 6, H), base=0, step=(H, 0, 1), cut=(0, H)),
@@ -206,14 +209,14 @@ def cmp92(servers: int) -> I.Circuit:
     rows = {"request": {"base": 0, "radix": [NP, S], "step": [1, 0]}, "response": {"base": NP - 1, "radix": [O, S], "step": [1, 0]},
             "x1": {"base": 0, "radix": [T, S], "step": [1, 0]}, "tok": {"base": NP - 1, "radix": [O - 1, S], "step": [1, 0]}}
 
-    def transfer(server: str, direction: str, kind: str, value: str) -> dict:
-        return {"server": server, "direction": direction, "kind": kind, "value": value, "t": rows.get(value)}
+    def transfer(server: str, direction: str, kind: str, value: str, t: str | None = None) -> dict:
+        return {"server": server, "direction": direction, "kind": kind, "value": value, "t": rows.get(t or value)}
 
     transfers = [transfer("s0", "in", "request", "request"), transfer(names[-1], "out", "response", "response"),
                  *(transfer(s, "in", "load", w) for s, w in zip(names, (w0, w1)))]
     if two:
-        transfers += [transfer("s0", "out", "wire", "x1"), transfer("s1", "in", "wire", "x1"), transfer("s1", "out", "wire", "tok"),
-                      transfer("s0", "in", "wire", "tok")]
+        transfers += [transfer("s0", "out", "wire", "x1"), transfer("s1", "in", "wire", "x1"),
+                      transfer("s1", "out", "wire", "response", "tok"), transfer("s0", "in", "wire", "response", "tok")]
     network = {"server": [{"name": s, "uplink": f"link-{s}", "units": SPLIT[s] if two else "all"} for s in names],
                "server_time": [{"server": s, "steps": [0, T]} for s in names], "transfers": transfers}
     return I.Circuit(f"cmp92-{servers}", ((EMB, H * T * S), (QKV, LAYERS * 6 * T * S), (QK, LAYERS * QK_LAYER),
@@ -230,14 +233,14 @@ def circuits() -> dict[int, I.Circuit]:
 def test_cmp92s_class_circuit_on_one_server_and_on_two_has_one_inference_and_nothing_free(circuits):
     """Both splits are one class circuit's units with one inference block, the plan's QKᵀ entry at step p
     ``{at: S·p(p+1), radix: [2, p+1, S], axes: [-, -, slot], step: p}`` among them; with the verifier's pins (the weights
-    and the request on one server; with two, each server's weights and the wire transfers' values too) no input row is
-    free, the response and the outgoing wire values being output-row reads that fill none. The records' blocks differ in
-    the network keys alone."""
+    and the request on one server; with two, each server's weights, the wire transfer ``x1`` and the response, which the
+    token back into the embedding reads) no input row is free, the response and ``x1`` on their writers being output-row
+    reads that fill none. The records' blocks differ in the network keys alone."""
     one, two = circuits[1], circuits[2]
     assert one.units == two.units and list(one.units.values()) == [H * T * S, 12 * T * S, 2 * QK_LAYER, 2 * H * T * S, O * S]
     assert {"template": KID, "at": S * 5 * 6, "radix": [2, 6, S], "axes": ["-", "-", "slot"], "step": 5} in \
         [e.doc() for e in one.blocks.inference]
-    pins = {1: {"weights", "request"}, 2: {"weights0", "weights1", "request", "x1", "tok"}}
+    pins = {1: {"weights", "request"}, 2: {"weights0", "weights1", "request", "x1", "response"}}
     for n, c in circuits.items():
         count = I.input_count(json.loads(json.dumps(c.description())), pins=pins[n])
         assert count["free"] == 0 and count["ingress"] == 0, count
@@ -251,8 +254,8 @@ def test_cmp92s_two_server_split_cuts_every_template_at_the_server_boundary(circ
     """With one server the layer row units are one statement (their one wire covers both layers); with two, each template is
     cut where s0's units end, so no statement's units span both servers, and the verifier derives the same members from the
     descriptor record. The window's blocks are byte-identical under any run. The members are the circuits' without their
-    registered reads: `members` fills tables for uncut reads of input rows only, and CMP-92's output-row and cut reads are
-    refused until the committer commits them."""
+    registered reads: `members` fills tables for uncut reads of whole registered rows over whole members only, and CMP-92's
+    weight reads start mid-row and its two-server ``x1`` read is cut."""
     cap = 1 << 20
     with pytest.raises(ValueError, match="whole registered rows"):
         I.members(circuits[1], cap)

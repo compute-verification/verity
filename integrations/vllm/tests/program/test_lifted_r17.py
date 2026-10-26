@@ -34,7 +34,7 @@ from verity.ml.definitions.numerics import serve3_reference as ref  # noqa: E402
 from verity.ml.definitions.registry.b1 import weights_type  # noqa: E402
 from tests.program.test_serve3 import D_MAX, LP, TINY, _inputs  # noqa: E402
 from verity.ml.circuits.types import Array, Value  # noqa: E402
-from verity_vllm.pipeline import global_program as GP  # noqa: E402
+from verity_vllm.program.workload import eos_lag_rows_declared
 
 I32, BF16 = Value(32), Value(16)
 BOT32, BOT16, INV32, INV16 = L.enc_bot(32), L.enc_bot(16), L.inv(32), L.inv(16)
@@ -357,10 +357,10 @@ def test_a5_lifted_use_document_carries_its_own_kind_and_rules_version_and_gate_
 def test_a2_lag_from_header_is_gp01s_rule_on_the_attested_engine_block():
     for knob, want in ((True, 1), (False, 0)):
         hdr = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": knob}}}
-        assert lifted_records.lag_from_header(hdr) == (want, lifted_records.LAG_FIELD) == (GP.eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]), lifted_records.LAG_FIELD)
+        assert lifted_records.lag_from_header(hdr) == (want, lifted_records.LAG_FIELD) == (eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]), lifted_records.LAG_FIELD)
     for bad in (None, 1, 0, "yes"):  # GP-01 returns None for these: refused by name, never defaulted
         hdr = {"$e": "RunHeader", "profile": {"engine_kwargs": {"async_scheduling": bad}}}
-        assert GP.eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]) is None
+        assert eos_lag_rows_declared(hdr["profile"]["engine_kwargs"]) is None
         with pytest.raises(ValueError, match="not the resolved boolean"):
             lifted_records.lag_from_header(hdr)
     with pytest.raises(ValueError, match="not attested"):
@@ -373,7 +373,7 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
     assert lifted_records.declared_lag_of_row({"lag": {"value": 1}, "stop_rule": {"eos_lag_rows": 1}}) == (1, "lag.value")
     assert lifted_records.declared_lag_of_row({"stop_rule": {"lag": 0, "eos_lag_rows": 0}}) == (0, "stop_rule.lag")
     assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": 1}}) == (1, "stop_rule.eos_lag_rows")
-    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": GP.eos_lag_rows_declared({"async_scheduling": True})}}) == (1, "stop_rule.eos_lag_rows")
+    assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": eos_lag_rows_declared({"async_scheduling": True})}}) == (1, "stop_rule.eos_lag_rows")
     assert lifted_records.declared_lag_of_row({"lag": {"value": False}}) == (0, "lag.value")  # the knob, through the one rule
     assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_token_ids": [1]}}) == (None, None)  # a pre-R17-1 Build: declared NOTHING
     assert lifted_records.declared_lag_of_row({"stop_rule": {"eos_lag_rows": None}}) == (None, None)  # GP-01's None (undeclared engine): nothing

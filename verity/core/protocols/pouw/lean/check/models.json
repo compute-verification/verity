@@ -202,5 +202,15 @@
   "recipe": "upstream-bf16",
   "repo": "Qwen/Qwen2.5-32B",
   "revision": "1818d35814b8319459f4bd55ed1ac8709630f003"
+ },
+ "TORCH_LOOP_MLP_H128_W8A8": {
+  "checkpoint_sha512": "ef47a4f92c408f8c64778a9934b81c9729f2df2b14a5e41149a810009c3c671fba5330000115c05907f0561926603751823efc968ee837be514a2b657011e932",
+  "files": {
+   "config.json": "55df7b40b2f4d82bab2d6c04a9734a6eef293830552134071271d0b5503b249300b27b62065ff65f62e7060b366a7cc0a78ddd076dca5edd5919eb112e6f01b6",
+   "model.safetensors": "61bc190e563ecbca73a31b927d9b078e49c1abeb317cec6208fa4f5f7f00c1f2a1f1295d1c6aa201f48625075f9b8016941622607f7a284d2a3419492501034d"
+  },
+  "recipe": "torch-loop/mlp-w8a8/v1",
+  "repo": "verity-torch-loop/mlp-w8a8-h128",
+  "revision": "ef47a4f92c408f8c64778a9934b81c9729f2df2b"
  }
 }
