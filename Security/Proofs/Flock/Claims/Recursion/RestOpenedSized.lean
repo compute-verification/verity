@@ -933,7 +933,9 @@ theorem rowSlot_len {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.hol
     rw [hvs]
     simp only [Except.toOption, Option.bind_some]
     exact Array.getElem?_eq_getElem (by omega)
-  have hdj : hd.1 = j := beq_iff_eq.1 (_root_.List.find?_some hf)
+  have hdj : hd.1 = j := by
+    have h1 := List.find?_some hf
+    exact beq_iff_eq.1 h1
   obtain ⟨q, hq, k', rs', hck, -, hname, hfi, hrs', hmr⟩ :=
     mem_heldRows_round hst hc (List.mem_of_find?_eq_some hf)
   rw [hrs] at hrs'
