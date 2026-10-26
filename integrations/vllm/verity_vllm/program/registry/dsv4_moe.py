@@ -66,13 +66,11 @@ exactly; ``alpha = 1`` makes ``-f * alpha`` the ``-f`` of `silu_and_mul`.
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from verity.ml.circuits.defs import bind, composite, primitive
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.scalar import F32_NAN_PTX, F32Eq, F32Fabs, F32Fmaxf, F32Fminf
-from verity.core.protocols.pouw.circuit.words import PouwF32SqrtRn
+from verity.ml.circuits.ops.sqrt import PouwF32SqrtRn
 from verity_vllm.program.registry import act, b1
 from verity_vllm.program.registry import prims as P
 from verity_vllm.program.registry.moe import F32GtStrict, MoeRouterPick, RouterArgmaxStep, _array, _lane0_sum

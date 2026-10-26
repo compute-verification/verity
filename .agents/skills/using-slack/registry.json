@@ -228,10 +228,10 @@
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
-        "benchmarks/all_protocols/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_h200/",
         "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
@@ -653,6 +653,24 @@
         "Which parts of the training-slowdown claim are proved, and which are still assumptions?",
         "If a lab hides some of its GPUs from monitoring, how much protection is left?",
         "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
+      ]
+    },
+    {
+      "handle": "counters",
+      "holder": "the counters coordinator (bc-163d178a-a74a-59de-8ea7-6e320c7891ef), a new slice launched from top's charter",
+      "remit": "Trusted event counters: which few counted event streams (bits moved, core steps) make each security goal provable.",
+      "charter": "Daniel, 2026-10-25 8:14 PM PDT (a new slice, via top)",
+      "usergroup": "S0CCWGJBEJU",
+      "owns": [],
+      "branch_suffixes": [
+        "91ef"
+      ],
+      "examples": [
+        "If we could trust one hardware counter in a datacenter, which should it be, and what would it settle?",
+        "Does counting the bits a GPU sends to its host make the memory or network guarantee provable?",
+        "Which security goals would trusted tensor-core step counts settle, and which would still need proofs?",
+        "How do our guarantees change as a physical rate bound, such as CUDA-core to tensor-core bandwidth, gets looser?",
+        "Could a retrofit to today's GPUs give us any of these counters, or does it take new silicon?"
       ]
     }
   ]

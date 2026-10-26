@@ -19,16 +19,15 @@ only where every Definition that body Calls has one (`registry.boolean_sigma`).
 `lift(fn)` is a derived Program's function (`frontend.derive`'s flat `Derived[...]`) on bits: the same Calls in the same order,
 each of the Boolean version of its Definition, over parameters and values whose every w-bit word is an element
 ``Array<w, Value<1>>`` (`boolean.bit_type`).  Word leaf j of a collection is element j of its bit form, so node indices and the
-runtime correspondence carry over unchanged.  `derived(report)` is a word derivation's report with its Program on bits, which
-the Build takes when `TargetProfile.ir == "boolean"`; the default (word) derives exactly as before.  The Build writes a lifted
+runtime correspondence carry over unchanged.  `frontend.boolean.derived(report)` is a word derivation's report with its Program on
+bits, which the Build takes when `TargetProfile.ir == "boolean"`; the default (word) derives exactly as before.  The Build writes a lifted
 Program's word Program beside it (`WORD_DESCRIPTOR`), and the readers that work in word units (the workload composition, the
 Match) read a derive dir through `word_descriptor`.
 
 `purity(program)` lists every Definition a Program reaches that is not Boolean (a word-id MUFU sub-Call inside a Boolean
 version counts): zero when the Program is bits throughout.  `dry_run(program)` reads a word Program and reports what its Boolean
-Program would reach today: each derived Call's Boolean version or its gap, and the same count over the would-be Program.
-
-    verity-vllm boolean-purity DESCRIPTOR [--dry-run] [--out JSON]
+Program would reach today: each derived Call's Boolean version or its gap, and the same count over the would-be Program
+(`verity-vllm boolean-purity`, `program.boolean_purity`).
 """
 from __future__ import annotations
 
@@ -38,8 +37,6 @@ import importlib
 import json
 import pkgutil
 import re
-import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
@@ -48,7 +45,6 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import REGISTRY, Body, Builder, CompositeDefinition, FunctionDefinition, PrimitiveDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.refs import Coll, PartLog, concat, prefix_runs, runs
 from verity.ml.circuits.types import Array, Record, Tuple, Type, Value
-from verity_vllm.config import option
 
 SCHEMA = "verity-vllm/boolean-purity/v1"
 #: a Boolean derive dir's word Program, the one its Program is σ-checked against node by node (its digest the derive report's
@@ -471,45 +467,6 @@ def boolean_function(fn: SpecializedDefinition) -> SpecializedDefinition:
     return bind(v) if isinstance(v, CompositeDefinition) else v
 
 
-def derived(rep, *, check_registry: bool = True):
-    """A word derivation's report (`frontend.derive.DeriveReport`) with its Program on bits (`boolean_function`), the word root and
-    digest in its provenance (``ir``); a refusal (``numerics_unregistered``) names every Call with no Boolean version.  A lifted
-    Program (σ-checked node by node) names the word Program it computes as its ``word``, as a Boolean Definition names its word:
-    the Build writes its instance sequence through that link (`pipeline.build_instances`)."""
-    from dataclasses import replace
-
-    from verity.ml.circuits.codec import encode_program, program_digest
-    from verity.ml.circuits.liveness import dead_gates
-    from verity.ml.circuits.program import Program
-    from verity_vllm.program.frontend.derive import DeriveReport, Unsupported
-    from verity_vllm.program.frontend.program_identity import check_identity
-
-    if not rep.ok:
-        return rep
-    prov = dict(rep.provenance, ir={"ir": "boolean", "word_root": rep.root, "word_digest": rep.digest})
-    try:
-        fn = boolean_function(rep.program.fn)
-    except NoBooleanVersion as e:
-        u = Unsupported("numerics_unregistered", hint=f"ir=boolean: {e}", detail={"missing": e.missing})
-        return DeriveReport(None, u, prov | {"unsupported": u.to_json()})
-    if fn.name.startswith("Derived["):
-        sc = sigma_check(rep.program.fn, fn)
-        if not sc["ok"]:
-            u = Unsupported("identity", hint=f"ir=boolean: not σ of the word function: {'; '.join(sc['mismatches'])}", detail=sc)
-            return DeriveReport(None, u, prov | {"unsupported": u.to_json()})
-        prov["ir"]["sigma_check"] = {k: sc[k] for k in ("nodes", "definitions", "ok")}
-    program = Program(fn, annotations=dict(rep.program.annotations))
-    if "sigma_check" in prov["ir"]:
-        program.word = rep.program  # type: ignore[attr-defined]
-    check_identity(program, check_registry=check_registry)
-    desc = encode_program(program)
-    digest, root, dead = program_digest(desc), descriptor_id(program.fn), dead_gates(program, limit=32)
-    # each Call and node index is the word Program's, and word leaf j is element j: the correspondence carries over unchanged
-    prov["result"] = dict(prov["result"], root=root, digest=digest, gates=program.gates, dead_gates=dead.total)
-    return replace(rep, program=program, provenance=prov, digest=digest, root=root, gates=program.gates, dead=dead,
-                   descriptor=desc if rep.descriptor is not None else None)
-
-
 # ---- purity: the Definitions a Program reaches that are not Boolean ------------------------------------------------------------
 
 def _reachable(roots) -> dict[str, Any]:
@@ -602,18 +559,6 @@ def dry_run(program) -> dict:
                             "list": nb["list"] + [{"id": w, "kind": "wrapper"} for w in wrappers]}}
 
 
-# ---- command line ------------------------------------------------------------------------------------------------------------
-
-@dataclass
-class Options:
-    """Every Definition a built Program reaches that is not Boolean (the floor's count), or with --dry-run what a word
-    Program's Boolean Program would reach today."""
-    desc: Path = option("desc", type=Path, help="a Program descriptor (descriptor.json[.gz]: a Build's request or workload Program)")
-    dry_run: bool = option("--dry-run", default=False, action="store_true",
-                           help="read a word Program: each derived Call's Boolean version or gap, and the would-be count")
-    out: Path | None = option("--out", default=None, type=Path, help="write the report here (JSON) as well as to stdout")
-
-
 def load_program(path: Path):
     from verity.ml.circuits.codec import decode_program, program_digest
     from verity_vllm.program.registry.catalog import load as load_registry
@@ -624,19 +569,5 @@ def load_program(path: Path):
     return decode_program(desc, registry), program_digest(desc)
 
 
-def main(a: Options) -> int:
-    program, digest = load_program(a.desc)
-    rep = dry_run(program) if a.dry_run else purity(program)
-    rep = {**rep, "program_digest": digest, "descriptor": str(a.desc)}
-    text = json.dumps(rep, indent=1, sort_keys=True)
-    if a.out:
-        a.out.write_text(text + "\n")
-    print(text)
-    nb = rep["non_boolean"]
-    print(f"[boolean-purity] {rep['mode']}: {nb['definitions']} non-Boolean Definitions ({nb['specializations']} specializations)"
-          + (f"; gaps: {', '.join(rep['gaps'])}" if rep.get("gaps") else ""), file=sys.stderr)
-    return 0
-
-
 __all__ = ["NoBooleanVersion", "boolean_version", "made_on_demand", "bit_offsets", "lift", "sigma_lift", "sigma_check",
-           "boolean_function", "derived", "purity", "dry_run", "derived_calls", "Options", "main"]
+           "boolean_function", "purity", "dry_run", "derived_calls", "load_program", "word_descriptor", "write_word"]

@@ -6,8 +6,6 @@ register from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 from typing import Any, Callable, Sequence
 
 import numpy as np

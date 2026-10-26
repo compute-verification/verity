@@ -24,11 +24,13 @@ step-input port (`port_of`; `port_layout` is where the window's streams put it).
 by), and the bundle names no Programs: a served window's Programs are the registered compiler's for its advice, made after
 the window closed.
 
-A window is sealed off the engine loop (`Sealer`): at its close the committer is frozen (`freeze`: the window's own per-step
-state, and the pinned blocks its values sit in lent out of the committer's pool until the seal has read them), the registered
-tensors' bytes are read (`extras_of`), and `seal_window` runs over the frozen view on the sealer's thread while the engine
-serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps the serve dir's
-filesystem above a floor: a window whose seal would take it under is not sealed.
+A window is sealed off the engine loop (`Sealer`), over a view of the committer that holds the window's own per-step state,
+with the pinned blocks its values sit in lent out of the committer's pool until the seal has read them (`thaw`): the view
+the window was detached into at its close (`NativeHostCommitter.detach`), finalized on the sealer's thread before its seal,
+or, for a committer that detaches no window, the committer frozen after a finalize at the close (`freeze`). The registered
+tensors' bytes (`extras_of`) are read once for each weights root, and `seal_window` runs over the view on the sealer's
+thread while the engine serves the next window; the bytes it writes are the ones an inline seal writes. `DiskFloor` keeps
+the serve dir's filesystem above a floor: a window whose seal would take it under is not sealed.
 
 The seal shares the engine's GIL, so it holds it only briefly: its binding map is encoded a chunk of entries at a time
 (`commit.json_chunks`), built with no cyclic collection running (`gc_paused`) and freed a chunk at a time (`drop`). `Watchdog`
@@ -448,9 +450,10 @@ def _own_rows(src: Any) -> Any:
 
 
 def thaw(frozen: Any) -> None:
-    """`freeze`'s lent blocks back to the committer's pool, once the seal has read them: free from the next window's reset."""
+    """`freeze`'s lent blocks back to the committer's pool, once the seal has read them: free from the next window's reset. A
+    detached window's view (`NativeHostCommitter.detach`) holds them from its window's end."""
     pool = getattr(frozen, "pool", None)
-    if frozen.lent and hasattr(pool, "restore"):
+    if getattr(frozen, "lent", None) and hasattr(pool, "restore"):
         pool.restore(frozen.lent)
     frozen.lent = []
 
@@ -472,8 +475,8 @@ def warm_pool(com: Any, gb: float, clock: Callable[[], float] = time.perf_counte
 
 
 def extras_of(com: Any, rc: Any) -> Any:
-    """The registered tensors' bytes a window's bundle carries (`replay_bundle.weights_extra`), read from the device on the engine
-    loop at the close; None without a weights tree (`write_store` then refuses the window by name)."""
+    """The registered tensors' bytes a window's bundle carries (`replay_bundle.weights_extra`), read from the device; None without
+    a weights tree (`write_store` then refuses the window by name)."""
     from verity_vllm.pipeline import replay_bundle as RB
 
     return RB.weights_extra(com, rc) if getattr(com, "weights_tree", None) else None
@@ -486,8 +489,8 @@ def committed_bytes(com: Any) -> int:
 
 
 class Sealer:
-    """Seals closed windows off the engine loop: one thread runs each window's job (its seal, then its line in windows.jsonl) in
-    window order. `submit` returns at once while the windows awaiting their seal hold under ``hold_bytes`` of committed values
+    """Seals closed windows off the engine loop: one thread runs each window's job (its finalize and records when the close
+    detached it, then its seal and its line in seals.jsonl) in window order. `submit` returns at once while the windows awaiting their seal hold under ``hold_bytes`` of committed values
     (the pinned host memory the double-buffered windows take), else it waits for room and says how long; `drain` waits for
     every job. A job's own failure is its window's: the next one still runs."""
 
