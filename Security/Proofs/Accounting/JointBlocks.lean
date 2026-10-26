@@ -29,4 +29,19 @@ theorem JointHorizonBlocks : Accounting.Guarantees.JointHorizonBlocks := by
   · exact Or.inl (Or.inl h)
   · exact Or.inl (Or.inr h)
 
+/-- **The joint guarantee over a horizon of blocks, for a set of the audits**
+(`Accounting.Guarantees.JointHorizonBlocksLegs`): `Pouw.union_bound_horizon` over the blocks and the audits of `A`. -/
+theorem JointHorizonBlocksLegs : Accounting.Guarantees.JointHorizonBlocksLegs := by
+  intro ι α I _ _ _ Ω _ _ d C B r c p A δ h
+  have := Pouw.union_bound_horizon (J := Fin B) (A := A) (fun b a => (r b).own a)
+    (fun b a ξ => (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) (fun b a => δ b a) (fun b a => h b a a.2)
+  simp only [Finset.sum_coe_sort] at this
+  exact (Pouw.pr_mono fun _ ⟨b, a, ha, hb⟩ => ⟨b, ⟨a, ha⟩, hb⟩).trans this
+
+/-- **Demo A's composed theorem** (`Accounting.Guarantees.JointHorizonBlocksA`): `JointHorizonBlocksLegs` at sampled
+proofs, PoUW and the network certifier. -/
+theorem JointHorizonBlocksA : Accounting.Guarantees.JointHorizonBlocksA := by
+  intro ι α I _ _ _ Ω _ _ d C B r c p δ h
+  exact JointHorizonBlocksLegs ι α I Ω d C B r c p _ δ h
+
 end Accounting.SecurityProofs
