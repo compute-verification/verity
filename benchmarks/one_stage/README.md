@@ -82,6 +82,12 @@ negatives.
   per-statement and per-unit costs with their standard errors, writing `costfit` observations. `ZK_DRAWS=c` proves every
   staged unit: the cost of c drawn units in one statement, up to a table's 2^(35 − k_log) (2048 at K = 4096). Each point
   takes its own GPU lease, and a node without CUDA 13.3 gets its packages unpacked under `FLOCK_WORK`.
+- `prove_bundle.sh`: a drawn-unit replay bundle (`benchmarks/e2e_demo`, `verity/drawn-unit-bundle/v1`) proved by
+  `prove_bundle.py`. The bundle is held to the prover's window: its own check, its run, registration and partition, and
+  each drawn member's public body. Each drawn member is one `prove --zk` session behind the Lean firewall, served the
+  bundle's draw, with Lean `verify --zk` as the verdict. The negatives are `zk_mutants.py`'s one-bit proof edits, refused
+  by Lean, and a tampered window's member, stopped by the firewall and refused by Lean without it. The job regenerates
+  the e2e fixture's window under its test key and holds the checked-in bundle to it byte for byte.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the firewall's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and firewall), which is what a CPU node
