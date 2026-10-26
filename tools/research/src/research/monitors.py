@@ -716,21 +716,27 @@ UNVERIFIED_S = 3 * 3600
 def unverified_main(ctx: Ctx) -> list[Finding]:
     """`main` has carried commits no post-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
     a day and a half with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
-    main, timed from the oldest commit after it (GitHub's compare). One event per further hour behind, to ci and top, until a
-    post-landing run verifies main again; read from drive's state, not its log, so it still rings while drive is down."""
+    main, timed from the oldest landing after it: main's first-parent commits after it, drive's `Queue: #N` merges, each
+    committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
+    GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
+    hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until a post-landing run verifies
+    main again; read from drive's state, not its log, so it still rings while drive is down."""
     state = json.loads((ctx.root / DRIVE_STATE).read_text())
     verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
     if not verified:
         raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
-    doc = json.loads(ctx.sh(["gh", "api", f"repos/{REPO_SLUG}/compare/{verified}...main"], timeout=60))
-    if not (commits := doc.get("commits") or []):
+    repo = os.environ.get("RESEARCH_DEPLOY_REPO") or "/data/watchers/repo"
+    ctx.sh(["git", "-C", repo, "fetch", "-q", "origin", "main"], timeout=120)
+    landed = [ln.split() for ln in ctx.sh(["git", "-C", repo, "log", "--first-parent", "--format=%H %ct",
+                                           f"{verified}..FETCH_HEAD"], timeout=60).splitlines() if ln.strip()]
+    if not landed:
         return []
-    since = epoch(commits[0]["commit"]["committer"]["date"])
+    since = float(landed[-1][1])
     if (behind := ctx.now - since) < UNVERIFIED_S:
         return []
-    hours, ahead = int(behind // 3600), int(doc.get("ahead_by") or len(commits))
+    hours = int(behind // 3600)
     return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
-                    f"verified commit is `{verified[:12]}`, and {ahead} commit(s) have landed since, the first at {iso(since)}.",
+                    f"verified commit is `{verified[:12]}`, and {len(landed)} landing(s) followed it, the first at {iso(since)}.",
                     owners=("ci", "top"))]
 
 
