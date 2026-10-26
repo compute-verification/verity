@@ -54,11 +54,17 @@ def DecShaped (rd : Msg → Option FinalP) : Prop :=
     ∀ (k : ℕ) (hk : k < d.f.ps.size),
       FlockVBridge.Family.ProofShaped (shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) k) d.f.ps[k]
 
-/-- **The session's draw is the statement's**: at every statement that sets up, `unitDraw` is the statement's draw up
-to `JsonEquiv`. -/
+/-- The draw `drawOfJ` reads off a record whose `unit_draw` is `u`, or `null` where there is none. -/
+def drawOfU : Option Json → Option Json
+  | some .null => none
+  | some d => some d
+  | none => none
+
+/-- **The session's draw is the statement's**: at every statement that sets up, the draw a record carrying the session's
+`unitDraw` has is the statement's draw up to `JsonEquiv`. -/
 def DrawTied : Prop :=
   ∀ (x : Msg) (s : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), setupOf false x = some (s, spec, sts) →
-    drawEq spec.unitDraw s.read.draw = true
+    drawEq (drawOfU spec.unitDraw) s.read.draw = true
 
 /-- **Custody passes at the reader's record**: at every decision of `decR` on as many coins as messages, at a
 statement whose scope check passes, what `liveOfJ` reads of the substituted record (`jAt` at SHA-512) passes custody
@@ -139,6 +145,96 @@ theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {li
   simp only [hS, beq_self_eq_true, hD, hL, hC, hQ, hN', FlockDeploy.Custody.check_true, bind, Except.bind, pure,
     Except.pure, Bool.false_eq_true, ↓reduceIte]
   rfl
+
+/-- **The honest record's draw is its session's `unitDraw`**, as `drawOfJ` reads it. -/
+theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
+    (points : Array (Array F128)) (streams : Array (Array Flock.Round)) (proofs : Array ByteArray) :
+    drawOfJ (FlockComplete.JsonRT.recordObj spec h rootB points streams proofs) = drawOfU spec.unitDraw := by
+  unfold drawOfJ FlockComplete.JsonRT.recordObj
+  rw [FlockComplete.JsonRT.getObjVal?_mkObj (FlockComplete.JsonRT.recordList_distinct spec h rootB points streams
+    proofs) (by simp [FlockComplete.JsonRT.recordList])]
+  cases spec.unitDraw with
+  | none => rfl
+  | some d => cases d <;> rfl
+
+/-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
+passes and which carries a draw, where the reading fixes the last message's statement, the session's draw is the
+statement's and custody passes at the reader's record. -/
+theorem holdsR_after (rd : Msg → Option FinalP) (x : Msg) (as : List Msg) (cs : List Coin)
+    (hlen : as.length = cs.length)
+    (hck : ∀ s spec sts, setupOf false x = some (s, spec, sts) → s.read.check = .ok () ∧ s.read.draw.isSome = true)
+    (hstmt : DecStmt rd) (hud : DrawTied) (hcu : CustodyRecJ rd) :
+    holdsR FlockDeploy.sha512 rd .after x as cs := by
+  unfold holdsR
+  split
+  · next s spec sts link c₁ mids f h =>
+    obtain ⟨hx, hd⟩ := actR_decide_setup h
+    intro spec' sts' hs'
+    rw [setupWith_sha512_of hx] at hs'
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj hs')
+    obtain ⟨hq, hn⟩ := hck _ _ _ hx
+    obtain ⟨lv, hL, hC⟩ := hcu x as cs _ hlen hd hq
+    have hD : drawEq (drawOfJ f.j) s.read.draw = true := by
+      obtain ⟨v, -, -, -, -, -, -, -, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
+      obtain ⟨-, hspec, -, -, -, -, hf⟩ := DecR.mk.inj he
+      rw [hf]
+      dsimp only
+      rw [FlockDeploy.recJ, drawOfJ_recordObj, ← hspec]
+      exact hud _ _ _ _ hx
+    exact checksAtJ_ok_of (f := ⟨f.stmt, f.j, #[]⟩) (hstmt x as cs _ hd) hD hL hC hq hn
+  · trivial
+
+/-! ## The base checks at the outer reader's statements -/
+
+/-- **`hrest`'s base checks, at the reading**: at the inner statement of every compiled statement the outer reader
+parses, on as many coins as messages, each of the verdict's other checks holds. -/
+def BasesHold (rd : Msg → Option FinalP) : Prop :=
+  ∀ (x : Msg) (st : Claims.Recursion.Stmt), parse x = some st → ∀ b ∈ VerdictP.bases, ∀ (as : List Msg)
+    (cs : List Coin), as.length = cs.length → holdsR FlockDeploy.sha512 rd b (xIOf x) as cs
+
+/-- **The base checks hold** where the reading fixes the last message's statement and refuses unshaped proofs, the
+session's draw is the statement's and custody passes at the reader's record. -/
+theorem basesHold (rd : Msg → Option FinalP) (hstmt : DecStmt rd) (hsh : DecShaped rd) (hud : DrawTied)
+    (hcu : CustodyRecJ rd) : BasesHold rd := by
+  intro x st hx b hb as cs hlen
+  have hck : ∀ s spec sts, setupOf false (xIOf x) = some (s, spec, sts) →
+      s.read.check = .ok () ∧ s.read.draw.isSome = true := by
+    intro s spec sts h
+    obtain ⟨s', spec', sts', h', hq, hn⟩ := parse_innerOk hx
+    rw [h] at h'
+    obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj h')
+    exact ⟨hq, hn⟩
+  simp only [VerdictP.bases, List.mem_cons, List.not_mem_nil, or_false] at hb
+  rcases hb with rfl | rfl | rfl | rfl
+  · exact holdsR_setup rd _ as cs
+  · exact holdsR_shaped rd _ as cs (hsh _ as cs)
+  · exact holdsR_names rd _ as cs fun s spec sts h => (hck s spec sts h).1
+  · exact holdsR_after rd _ as cs hlen hck hstmt hud hcu
+
+/-- **`hrest` at a base check**: at every compiled statement the outer reader parses, every coins and every
+messages, `IVStar`'s check of the split verdict's base check `b` holds, whatever the pieces and the deployment's other
+parameters. -/
+theorem restBase_holds (rd : Msg → Option FinalP) (hB : BasesHold rd) {Q : Type} (pieces : Msg → List Q)
+    (pholds : Q → Msg → List Msg → List Coin → Prop)
+    (hpieces : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), FlockDeploy.ReadOkR rd x ms cs →
+      (∀ b ∈ VerdictP.bases, holdsR FlockDeploy.sha512 rd b x ms cs) → (∀ q ∈ pieces x, pholds q x ms cs) →
+        holdsR FlockDeploy.sha512 rd .verdict x ms cs)
+    (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
+    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (rel' : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (bB : Brings) (L : LayoutB)
+    (IV : Claims.Verifier Coin) {x : Msg} {st : Claims.Recursion.Stmt} (hx : (recBound rel' bB L IV).parse x = some st)
+    {b : VerdictR} (hb : b ∈ VerdictP.bases) (c : ℕ → Coin) (ms : List Msg) :
+    (IVCheck.elem (DeployCheck.last (ReadCheck.verdict (VerdictP.base b))) :
+        IVCheck (DeployCheck (ReadCheck (VerdictP Q)))).Holds FlockDeploy.sha512
+      (bdDeployed rel (nextR rd) colsE wE join rowIn final w)
+      (deploySplit FlockDeploy.sha512 rel (nextR rd) colsE wE join rowIn final w (nextR_coin rd FlockDeploy.sha512)
+        (lastSplitP FlockDeploy.sha512 rd pieces pholds hpieces).toLast)
+      (Claims.Recursion.xI (recBound rel' bB L IV) x) c ms := by
+  intro os last _ hos
+  refine hB x st hx b hb _ _ ?_
+  rw [List.length_map, List.length_range, ← hos]
+  simp [Claims.Recursion.Bound.opened]
 
 end
 
