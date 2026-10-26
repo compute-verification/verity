@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Copies
 import Proofs.Flock.Soundness.Discharge.Hidden.LayoutP
 import Proofs.Flock.Soundness.Discharge.Layout.InCover
 import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 
 /-!
 # `Layout.Aliased` at a hidden-output statement with public inputs
@@ -83,17 +84,17 @@ theorem port_mem {gs : Array Group} {p t : ℕ} (hp : p < (portCols gs).size) (h
   rw [getElem!_pos (portCols gs) p hp]
   exact Array.getElem_mem_toList hp
 
+theorem map_fst_getD (a : Array (ℕ × ℕ)) (p : ℕ) : (a.map (·.1)).getD p 0 = (a.getD p default).1 := by
+  simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map]
+  cases a[p]? <;> rfl
+
 /-- **Port `p` of the unit's leaf group** is port `p` of the unit, 16 bits from column `col · WORD + 16 p`. -/
 theorem leafPort {c : Circuit} (C : CheckFacts c) {p : ℕ} (hp : p < (c.unit.inGroups.getD 0 default).bits.size) :
     p < (portCols c.unit.inGroups).size ∧
       (portCols c.unit.inGroups)[p]!.1 = (c.unit.inGroups.getD 0 default).col * WORD + 16 * p ∧
       (portCols c.unit.inGroups)[p]!.2 = 16 := by
   obtain ⟨hps, h1, h2⟩ := firstGroup_port C.unit_groups.1 hp
-  have e : ((portCols #[c.unit.inGroups.getD 0 default]).map (·.1)).getD p 0 =
-      ((portCols #[c.unit.inGroups.getD 0 default]).getD p default).1 := by
-    simp only [Array.getD_eq_getD_getElem?, Array.getElem?_map]
-    cases (portCols #[c.unit.inGroups.getD 0 default])[p]? <;> rfl
-  refine ⟨hps, by rw [← h1, e, portCols_16_get C.unit_groups.2 hp], ?_⟩
+  refine ⟨hps, by rw [← h1, map_fst_getD, portCols_16_get C.unit_groups.2 hp], ?_⟩
   rw [h2]
   refine C.unit_groups.2 _ ?_
   rw [getElem!_pos _ p hp]
@@ -151,7 +152,7 @@ theorem inVal_congr {c : Circuit} {pi : HmIn.Ports} {pub : Public} {b k k' jj jj
     inVal c pi pub b k jj = inVal c pi pub b k' jj' := by
   simp only [inVal, hk, hk', ↓reduceIte, hd, hq]
 
-section public
+section pubIn
 
 variable {tags : Tags} {st : Stmt} {pi : HmIn.Ports} (L : Layout st) (Lf : Layout (Hidden.flatTwin st))
   (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
@@ -261,7 +262,7 @@ theorem pub_block (hregs : ∀ r ∈ st.regions.toList, Refine.regionOf st.c.kLo
       (fun u => st.c.unitRange.slot (g * st.c.upv + u)) (L.hb hg) x).isLt)]
     exact Fin.ext haddr
   obtain ⟨xr, w, s, hxr, hws, hcol, hlo, hhi⟩ :=
-    in_cover st.c pi (u := x.val / (st.c.unit.inWords * WORD)) (jj := p) (by rw [hq]; exact hpub)
+    in_cover st.c pi (u := x.val / (st.c.unit.inWords * WORD)) (jj := p) (by rw [← hq]; exact hpub)
   have hb := in_pinned L regs hregs hRi hri hne hz o hxr hws hcol hlo hhi hk ht
   rw [hfin] at hb
   exact ⟨p, t, hkey, hq.symm, hb⟩
@@ -321,6 +322,6 @@ theorem aliased_of_keyP (hp : HmIn.parse st.c = .ok pi) (C : CheckFacts st.c) (h
     · rw [he]
     · rw [he, he', zeroPos_blockH L Lf regs F hs hz o, zeroPos_blockH L Lf regs F hs' hz o]
 
-end public
+end pubIn
 
 end FlockSoundness.Discharge.HiddenExec
