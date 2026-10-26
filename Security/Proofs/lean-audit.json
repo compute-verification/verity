@@ -53,7 +53,9 @@
   "Proofs.Properties.Pouw.LiveSalt.Ledger",
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
-  "Proofs.Properties.Composition"
+  "Proofs.Properties.Composition",
+  "Proofs.Properties.SampledProofs.OneStageZk",
+  "Proofs.Properties.Onsite"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

@@ -40,7 +40,9 @@
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
   "Properties.Composition",
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
+  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
+  "Properties.SampledProofs.OneStageZk",
+  "Properties.Onsite"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -286,6 +288,9 @@
   "Definitions.Pouw.Basic",
   "Properties.Composition",
   "CoreComposition",
+  "CoreProtocol.Blobs",
+  "Properties.Onsite",
+  "CoreOnsite",
   "Properties.NciDesc",
   "Definitions.Pouw.Window"
  ],
@@ -486,6 +491,11 @@
    "imports": ["CoreComposition.Product"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
+  },
+  "Properties.Onsite": {
+   "imports": ["CoreOnsite", "Properties.SampledProofs.OneStageZk"],
+   "except": [],
+   "why": "onsite's property is stated against onsite's own protocol and one-stage v2's property it reads, on Lean core: nothing of Mathlib or of `security`"
   }
  },
  "reads_exempt": {
@@ -770,6 +780,12 @@
    "signature": ["Properties.Composition.answerAccepts : Properties.Composition.AnswerAccepts"],
    "assumptions": [],
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
+  },
+  "Properties.Onsite.integrityAccepts": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.OneStageZk.acceptMeans": {
+   "owner": "@proofs"
   },
   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": {
    "owner": "@compute-accounting",
@@ -3240,6 +3256,14 @@
    },
    "Properties.Composition.answerAccepts": {
     "function": "Core.Protocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.Onsite.integrityAccepts": {
+    "function": "Core.BlobProtocol.answer",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.OneStageZk.acceptMeans": {
+    "function": "SampledProofs.OneStageZk.checkBlobs",
     "outcome": "accept"
    }
   },
