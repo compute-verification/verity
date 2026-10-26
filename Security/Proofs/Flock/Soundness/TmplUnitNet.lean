@@ -78,7 +78,7 @@ theorem parseTmpl_facts {tags : Flock.Tags} {bytes : ByteArray} {tables : List (
 theorem parseTmpl_notRec {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {c : Flock.Circuit}
     (h : HmOut.parseTmpl tags bytes tables = .ok c) : HmOut.recUnit c.unit.name = false := by
   obtain ⟨tu, c₀, -, -, he, hu, hn⟩ := parseTmpl_facts h
-  obtain ⟨tu', -, -, -, -, he', hr⟩ := parseTmpl_cases' h
+  obtain ⟨tu', c₀', -, -, -, he', hr⟩ := parseTmpl_cases' h
   have h1 : c.tmpl = some tu := by rw [he]
   have h2 : c.tmpl = some tu' := by rw [he']
   obtain rfl : tu' = tu := Option.some.inj (h2.symm.trans h1)
