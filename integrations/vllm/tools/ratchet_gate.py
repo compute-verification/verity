@@ -51,7 +51,12 @@ and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR 
 at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
 sync onto `next` leaves the PR out).  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
 on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
-else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  Before marking a branch, run
+else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A sync gates each PR on its merge onto
+`next`, which holds every PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default
+``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes, BASE and the change's commits, which are all it
+reads: a sync of N PRs judges each once, not N times.  The source lint isn't kept: it runs on the top change each time, after
+its verdict is judged or recalled.  An entry that can't be read is judged again, and an error is never kept.  Before marking
+a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
 sync takes as a refusal: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose ``failures`` name
@@ -62,8 +67,10 @@ from __future__ import annotations
 import argparse
 import ast
 import functools
+import hashlib
 import io
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -76,6 +83,8 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
 KIND = "vllm-ratchet-gate/v2"
+#: this file's bytes, part of every cached verdict's key, so a changed gate judges every change again
+SELF = hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
 INTEGRATION = "integrations/vllm"
 TESTS = f"{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
@@ -598,18 +607,15 @@ def violations(failures: list[dict]) -> list[str]:
     return out
 
 
-def judge(c: Change, base: str, top: bool = False) -> None:
-    """Sets ``c``'s verdict, why and fix; ``top``: ``c`` is the top change, whose Python the source lint reads."""
+def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
     c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
                                                  or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
-    new_findings, ruff_grown = source_lint(c, base) if top else ([], [])
-    if not c.touched and not noqa and not c.linted:
+    if not c.touched and not noqa:
         c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {' or '.join(f'{x}/' for x in LINTS)}, no "
-                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/"
-                                         + (", and no Python the repository's ruff lint holds" if c.linted == [] else ""))
+                                         f"{RUFF_CONFIG} or {REPO_RUFF_CONFIG}, no ruff pin and no `# noqa` under {INTEGRATION}/")
         return
     grown, added, bad, found = [], [], [], []
     if c.touched:
@@ -624,11 +630,10 @@ def judge(c: Change, base: str, top: bool = False) -> None:
         if selection:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
-    if not (grown or bad or noqa_grows or found or new_findings):
+    if not (grown or bad or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else [])
-            + ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []))
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -649,26 +654,85 @@ def judge(c: Change, base: str, top: bool = False) -> None:
                  f"exception, so fix the finding each new one suppresses, or delete a stale noqa elsewhere in the same change "
                  f"(a noqa line that moves with its code counts as kept)")
         c.fix = new_noqa[:CHEAPEST] + ([f"... and {len(new_noqa) - CHEAPEST} more"] if len(new_noqa) > CHEAPEST else [])
-    elif found:
+    else:
         moves = git("diff", "--name-only", "-M", "--diff-filter=R", c.lo, c.hi).strip()
         c.why = (f"the base's lint code ({c.lo[:12]}) finds {len(found)} violation(s) on its tree that its allowlists don't "
                  f"cover: a change to a lint is judged like source, so fix the code or keep the lint and its entries"
                  + (f" (a layout move, whose lints move with it, is exempt once `python3 {MOVE_CHECK} {c.lo[:12]} "
                     f"{c.hi[:12]}` certifies it)" if moves else ""))
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
+
+
+def lint_top(c: Change, base: str) -> None:
+    """The source lint on the top change ``c``, after ``judge``: a finding it adds fails a change that passed or touched
+    nothing else, unless it is exempt; a change already failed or exempt keeps its verdict."""
+    if c.verdict in ("failed", "exempt"):
+        return
+    new, grown = source_lint(c, base)
+    if not c.linted:
+        return
+    if not new:
+        note = f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"
+        c.why = note if c.verdict == "untouched" else f"{c.why}; {note}"
+        c.verdict = "passed"
+    elif is_revert(c):
+        c.verdict, c.why = "exempt", "a revert"
+    elif is_pure_move(c, base):
+        c.verdict, c.why = "exempt", f"a pure move ({MOVE_CHECK} certifies it)"
     else:
-        c.why = (f"adds {len(new_findings)} ruff finding(s) to the Python it changes, under the base's root {REPO_RUFF_CONFIG} "
-                 f"({'; '.join(ruff_grown)}): fix the code (`ruff check --fix PATH` fixes some, F401 and F541 among them), or, "
-                 f"where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
-        c.fix = new_findings[:CHEAPEST] + ([f"... and {len(new_findings) - CHEAPEST} more"]
-                                           if len(new_findings) > CHEAPEST else [])
+        c.verdict = "failed"
+        c.why = (f"adds {len(new)} ruff finding(s) to the Python it changes, under the base's root {REPO_RUFF_CONFIG} "
+                 f"({'; '.join(grown)}): fix the code (`ruff check --fix PATH` fixes some, F401 and F541 among them), or, where "
+                 f"a rule is wrong for that line, say why in a `# noqa: CODE` on it")
+        c.fix = new[:CHEAPEST] + ([f"... and {len(new) - CHEAPEST} more"] if len(new) > CHEAPEST else [])
+
+
+#: what `judge` decides, the fields a cached verdict restores
+JUDGED = ("verdict", "why", "before", "after", "touched", "lints", "fix", "noqa_added", "noqa_removed", "pooled")
+
+
+def cache_path(c: Change, base: str) -> Path | None:
+    root = os.environ.get("RATCHET_GATE_CACHE")
+    if root == "":
+        return None
+    root = Path(root) if root else Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "verity" / "ratchet-gate"
+    return root / (hashlib.sha256(json.dumps([SELF, base, c.lo, c.hi, c.commits]).encode()).hexdigest() + ".json")
+
+
+def recall(c: Change, p: Path | None) -> bool:
+    try:
+        doc = json.loads(p.read_text()) if p is not None else None
+    except (OSError, ValueError):
+        return False
+    if not (isinstance(doc, dict) and set(JUDGED) <= doc.keys() and doc["verdict"] in ("untouched", "passed", "exempt", "failed")):
+        return False
+    for k in JUDGED:
+        setattr(c, k, doc[k])
+    return True
+
+
+def keep(c: Change, p: Path | None) -> None:
+    if p is None:
+        return
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        tmp = p.with_name(f".{p.name}.{os.getpid()}")
+        tmp.write_text(json.dumps({k: getattr(c, k) for k in JUDGED}))
+        tmp.replace(p)
+    except OSError:
+        pass
 
 
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
     for c in cs:
-        judge(c, base, top=c.hi == top)
+        p = cache_path(c, base)
+        if not recall(c, p):
+            judge(c, base)
+            keep(c, p)
+        if c.hi == top:
+            lint_top(c, base)
     failed = [c for c in cs if c.verdict == "failed"]
     return {"kind": KIND, "base": base, "top": top, "changes": [c.doc() for c in cs],
             "failures": [{"commit": c.hi, "pr": c.pr, "why": c.why, "fix": c.fix} for c in failed]}

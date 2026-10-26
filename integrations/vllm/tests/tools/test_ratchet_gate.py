@@ -105,6 +105,13 @@ class Repo:
         return self.git("rev-parse", "HEAD")
 
 
+@pytest.fixture(autouse=True)
+def verdict_cache(tmp_path, monkeypatch) -> Path:
+    """each test its own cache of verdicts, so none reads another's"""
+    monkeypatch.setenv("RATCHET_GATE_CACHE", str(tmp_path / "gate-cache"))
+    return tmp_path / "gate-cache"
+
+
 @pytest.fixture
 def repo(tmp_path, monkeypatch) -> Repo:
     r = Repo(tmp_path / "repo")
@@ -310,6 +317,32 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
     assert [(c["base"], c["before"], c["after"]) for c in doc["changes"][:2]] == [(base, 3, 2), (m1, 2, 3)]
     assert [(f["commit"], f["pr"]) for f in doc["failures"]] == [(m2, 2)]
     assert doc["changes"][2]["commit"] == m3
+
+
+def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
+    """A sync gates each PR on its merge onto `next`, every PR below it included (#4183's gate held drive's tick ~20 min a PR on
+    26 Oct): with the cache, N merges cost N judgments, not N(N+1)/2."""
+    base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
+    heads = []
+    for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
+                               {P02: _allowlist(_entry("verity_vllm/a.py", "X"), _entry("verity_vllm/c.py", "C"))},
+                               {"integrations/vllm/verity_vllm/d.py": "D = 1\n"}]):
+        repo.git("checkout", "-q", "-b", f"b{i}", base)
+        heads.append(repo.commit(f"pr {i}", files))
+    repo.git("checkout", "-q", "-b", "next", base)
+    tops = [repo.queue(i + 1, f"pr {i}", h) for i, h in enumerate(heads)]
+    monkeypatch.setenv("RATCHET_GATE_CACHE", "")
+    fresh = [G.gate("main", t) for t in tops]
+    monkeypatch.setenv("RATCHET_GATE_CACHE", str(verdict_cache))
+    judged, judge = [], G.judge
+    monkeypatch.setattr(G, "judge", lambda c, b: (judged.append(c.hi), judge(c, b))[1])
+    assert [G.gate("main", t) for t in tops] == fresh
+    assert judged == tops
+    assert [G.gate("main", t) for t in tops] == fresh and judged == tops
+    sorted(verdict_cache.glob("*.json"))[0].write_text("{")
+    assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
+    monkeypatch.setattr(G, "SELF", "another gate")
+    assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
 
 
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
@@ -626,18 +659,20 @@ def test_a_file_the_change_does_not_touch_is_never_linted(both_ruffed, monkeypat
     assert [(c["verdict"], c["linted"]) for c in G.gate("main", "docs")["changes"]] == [("untouched", [])] and seen == []
 
 
-def test_only_the_top_change_is_linted_as_each_member_below_was_at_its_own_merge(both_ruffed):
+def test_only_the_top_change_is_linted_as_each_member_below_was_at_its_own_merge(both_ruffed, verdict_cache):
+    """The lint isn't cached: #1's verdict kept from below the top doesn't spare it the lint at the top."""
     base = both_ruffed.git("rev-parse", "main")
     one = both_ruffed.commit("one: an unused import", {"tools/b.py": "import sys\n"})
     both_ruffed.git("checkout", "-q", "-b", "two", base)
     two = both_ruffed.commit("two: clean", {"tools/c.py": "C = 1\n"})
     both_ruffed.git("checkout", "-q", "-b", "next", base)
-    both_ruffed.queue(1, "one", one)
+    m1 = both_ruffed.queue(1, "one", one)
     assert _verdicts(G.gate("main", "next")) == [("#1", "failed")]
     both_ruffed.queue(2, "two", two)
     doc = G.gate("main", "next")
     assert [(c["name"], c["verdict"], c["linted"]) for c in doc["changes"]] == [("#1", "untouched", None),
                                                                                 ("#2", "passed", ["tools/c.py"])]
+    assert list(verdict_cache.glob("*.json")) and _verdicts(G.gate("main", m1)) == [("#1", "failed")]
 
 
 def test_with_no_ruff_to_run_the_gate_cannot_judge_and_names_the_hosts_fix(both_ruffed, monkeypatch, capsys):
