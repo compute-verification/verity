@@ -180,9 +180,7 @@ def openLens (r : XR) : List (List ℕ) :=
 
 /-- **The trailer's piece**: its constant bytes, at the last part. -/
 def trailerPiece (r : XR) : List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)) :=
-  match h : r.w.parts.length with
-  | 0 => []
-  | n + 1 => [(⟨n, by omega⟩, [(trailer (openLens r), [])])]
+  if h : 0 < r.w.parts.length then [(⟨r.w.parts.length - 1, by omega⟩, [(trailer (openLens r), [])])] else []
 
 /-- **The last round's pieces past the openings**: the element-level last message's (`elem`), then the trailer. -/
 def restR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (r : XR) :

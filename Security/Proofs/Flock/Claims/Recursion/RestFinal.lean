@@ -249,10 +249,8 @@ theorem finalReads (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
     simp [finOpen, hr]
   have htp : ((trailerPiece r).map fun p => (p.1.val, p.2)) =
       [(r.w.parts.length - 1, [(trailer (openLens r), ([] : List HmNets.Lin))])] := by
-    unfold trailerPiece
-    split
-    next hz => exfalso; omega
-    next n hn' => simp [hn']
+    rw [trailerPiece, dif_pos (show 0 < r.w.parts.length by omega)]
+    all_goals rfl
   -- the last message: the openings, `elem`'s pieces, then the trailer
   have hlast : lastAt (restR elem) x ws = (readPieces (openPieces r) ws ++
       readPieces ((elem r).map fun p => (p.1.val, p.2)) ws) ++ trailer (openLens r) := by
@@ -311,6 +309,6 @@ theorem finalReads (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
           have := heldRows_absorbs hh hrs
           rw [hi] at this
           exact hA this
-        simp [rowPiece_nil hnr, hA]
+        rw [rowPiece_nil hnr, if_neg hA, List.length_nil]
 
 end RecDeploy.RestRead
