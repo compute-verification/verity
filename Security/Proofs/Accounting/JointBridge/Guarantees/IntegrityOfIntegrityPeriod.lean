@@ -58,6 +58,8 @@ structure RealizesIntegrityOfIntegrityPeriod {ι : Type} {d : Device ι} {α : T
 
 namespace Guarantees.Bridge
 
+open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
+  FlockSoundness.Discharge.ZkHidden in
 /-- **The integrity audit of a period, from C-Flock's integrity audit over a horizon.** For a period `r` whose
 sampled-proofs audit realizes C-Flock's integrity audit over `T` sampling blocks `W t`
 (`RealizesIntegrityOfIntegrityPeriod`), each sampling block's draw covering at least a fraction `q > 0` of its units,
@@ -66,8 +68,6 @@ strategy the node plays a sampling block with on some run (`Period.Plays`), at c
 period's units is at least `ln(1/δ)/q`, the sampled audit has its per-period guarantee (`PeriodRun.Sound`) at error
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}),$$
 `Flock.Guarantees.IntegrityHorizon`'s, when that is finite. -/
-open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
-  FlockSoundness.Discharge.ZkHidden in
 def IntegrityOfIntegrityPeriod : Prop :=
   ∀ (ι : Type) (d : Device ι) (α : Type) [Fintype α] (C : Verity.Circuit) (I : Type) (Ω : I → Type)
     [DecidableEq I] [∀ i, Fintype (Ω i)] (r : PeriodRun d α C Ω) (W : ℕ → Flock.Guarantees.SamplingBlock) (T : ℕ)
