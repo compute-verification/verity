@@ -24,7 +24,8 @@ phases' unit rates, and
 
     f = (128 R_cap L / E + R_in L) / M_dyn
 
-with f again for the decode rate alone and for the softmax's work a key at property/v1's floor (`softmax_floor`).
+with f again for the decode rate alone, for the softmax's work a key at property/v1's floor (`softmax_floor`), and for that
+with every requantization and linear epilogue at one rounding an element too (`exact_floor`).
 
     python frontier.py --atoms-needed > atoms-needed.json            # the atoms atoms.py counts
     python frontier.py --atoms atoms.json --out frontier.json          # the table (and frontier.md beside it)
@@ -708,27 +709,54 @@ def softmax_floor(atoms: Mapping[str, Any]) -> dict:
                 else a) for k, a in atoms.items()}
 
 
+#: a requantization's or an epilogue's one rounding an element: the round to int8, or the output's round to bf16
+ESSENTIAL_ROUNDING = {"Int8RowQuant_v1": "F32Rint_v1", "Int8StaticQuant_v1": "F32Rint_v1", "Int8KvQuant_v1": "F32Rint_v1",
+                      "ScaledMmS8_v1": "F2fpBf16_v1", "Int8AttnOut_v1": "F32ToBf16Rn_v1"}
+
+
+def exact_floor(atoms: Mapping[str, Any]) -> dict:
+    """`softmax_floor`'s atoms with every requantization and linear epilogue also at its floor: one rounding an element, the
+    count of its `ESSENTIAL_ROUNDING` primitive as measured (the amax, the clamp, the divide, the cast and the scale products
+    gone), the least an exact int8 profile can be charged for them."""
+    def floor(part: Mapping[str, Any], prim: str) -> dict:
+        n = part.get("primitives", {}).get(f"{prim}|roundings", 0)
+        return {"units": {"roundings": n} if n else {}, "primitives": {f"(floor) {prim}|roundings": n} if n else {}}
+    out = {}
+    for k, a in softmax_floor(atoms).items():
+        prim = ESSENTIAL_ROUNDING.get(parse(k)[0])
+        if prim is None:
+            out[k] = a
+        elif "slope" in a:
+            out[k] = {**a, "const": floor(a["const"], prim), "slope": floor(a["slope"], prim)}
+        else:
+            out[k] = {**a, **floor(a, prim)}
+    return out
+
+
 def table(spec: Mapping[str, Any], atoms: Mapping[str, Any]) -> dict:
     node, wl = spec["node"], spec["workload"]
     S, P = wl["context"], wl["prompt"]
     out: dict[str, Any] = {"schema": "verity-stacked-share/frontier/v1", "node": node, "workload": wl, "E_word": E_WORD,
                            "lifetimes_s": LIFETIMES, "R_in": R_IN, "anchor": check_anchor(spec["models"], atoms, spec["anchor"], S, P),
                            "models": {}}
-    floor = softmax_floor(atoms)
+    floors = {"softmax_floor": softmax_floor(atoms), "exact_floor": exact_floor(atoms)}
     for name, m in spec["models"].items():
         row: dict[str, Any] = {"hf": m.get("hf"), "revision": m.get("revision"), "source": m.get("source"),
                                "weights_as_published": m.get("weights"), "arch": m["arch"], "layers": layer_kinds(m)}
         for kv in KV_MODES:
-            ph, fl = {}, {}
+            ph, fl = {}, {f: {} for f in floors}
             for phase in PHASES:
                 c = compose(m, phase, kv, S, P)
                 u = evaluate(c["terms"], atoms)
                 ph[phase] = {"units": u, "kinds": kinds(u["by_role_primitive"]), "macs": c["macs"], "dd": c["dd"], "dyn": c["dyn"]}
-                fl[phase] = {**ph[phase], "units": evaluate(c["terms"], floor, primitives=False)}
+                for f, at in floors.items():
+                    fl[f][phase] = {**ph[phase], "units": evaluate(c["terms"], at, primitives=False)}
             sv = serve(m, node, ph["decode"], ph["prefill"], kv, S, P)
-            sf = serve(m, node, fl["decode"], fl["prefill"], kv, S, P)
-            row[kv] = {"decode": ph["decode"], "prefill": ph["prefill"], "serving": sv, "per_key": per_key_units(m, atoms, kv, S, P),
-                       "softmax_floor": {k: sf[k] for k in ("R_decode", "R_prefill", "R_cap", "R_cap_phase", "f", "f_decode")}}
+            row[kv] = {"decode": ph["decode"], "prefill": ph["prefill"], "serving": sv, "per_key": per_key_units(m, atoms, kv, S, P)}
+            for f in floors:
+                sf = serve(m, node, fl[f]["decode"], fl[f]["prefill"], kv, S, P)
+                row[kv][f] = {"units": {p: fl[f][p]["units"]["total"] for p in PHASES},
+                              **{k: sf[k] for k in ("R_decode", "R_prefill", "R_cap", "R_cap_phase", "f", "f_decode")}}
         out["models"][name] = row
     return out
 
@@ -774,8 +802,9 @@ def markdown(t: Mapping[str, Any]) -> str:
         lines += [f"**KV {kv}.**", "",
                   "| model | dynamic memory | B/token | state/request | M_dyn | batch | step | R_cap (phase) | units/B/step (decode) "
                   "| units/key-byte | T_turn | W_byte | " + " | ".join(f"f {lt}, E {e}" for lt in LIFETIMES for e in E_WORD)
-                  + " | f 1 h, E conjectured, R of decode alone | f 10 min / 1 h, E conjectured, softmax at 1 unit a head-key |",
-                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
+                  + " | f 1 h, E conjectured, R of decode alone | f 10 min / 1 h, E conjectured, softmax at 1 unit a head-key "
+                  "| f 10 min / 1 h, E conjectured / red team, softmax and requantization at their floors |",
+                  "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|" + "---|" * (len(LIFETIMES) * len(E_WORD))]
         for name, r in t["models"].items():
             x = r[kv]
             sv, dyn = x["serving"], x["decode"]["dyn"]
@@ -788,7 +817,8 @@ def markdown(t: Mapping[str, Any]) -> str:
                 f"{g(sv['T_turn_s'])} s | {g(sv['W_byte'])} | "
                 + " | ".join(pct(sv["f"][lt][e]) for lt in LIFETIMES for e in E_WORD)
                 + f" | {pct(sv['f_decode']['1 h']['conjectured'])} | {pct(x['softmax_floor']['f']['10 min']['conjectured'])} / "
-                f"{pct(x['softmax_floor']['f']['1 h']['conjectured'])} |")
+                f"{pct(x['softmax_floor']['f']['1 h']['conjectured'])} | "
+                + " / ".join(pct(x["exact_floor"]["f"][lt][e]) for lt in LIFETIMES for e in ("conjectured", "red team")) + " |")
         lines.append("")
     lines += ["**Where the units go, KV at write** (share of a token's units by role).", "",
               "| model | phase | " + " | ".join(name for name, _ in SHARES) + " |", "|---|---|" + "---|" * len(SHARES)]

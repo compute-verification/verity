@@ -137,8 +137,9 @@ def test_the_table_on_synthetic_atoms():
             assert sv["R_cap"] == max(sv["R_decode"], sv["R_prefill"])
             E, L = F.E_WORD["proved"], F.LIFETIMES["1 h"]
             assert sv["f"]["1 h"]["proved"] == pytest.approx((128 * sv["R_cap"] * L / E + F.R_IN * L) / sv["M_dyn"])
-            fl = r[kv]["softmax_floor"]
+            fl, ex = r[kv]["softmax_floor"], r[kv]["exact_floor"]
             assert fl["R_decode"] < sv["R_decode"] and fl["R_prefill"] < sv["R_prefill"]
+            assert ex["R_decode"] < fl["R_decode"] and ex["R_prefill"] < fl["R_prefill"]
     m = SPEC["models"]["Llama-3.1-8B"]
     floor = F.softmax_floor(atoms)
     gap = [F.evaluate(F.compose(m, "decode", "at write", S, P)["terms"], a, primitives=False)["total"] for a in (atoms, floor)]
@@ -152,6 +153,38 @@ def test_the_table_on_synthetic_atoms():
     md = F.markdown(t)
     assert "| DeepSeek-V3/R1/V3.1 |" in md and "**KV at write.**" in md and "**Where the units go, KV at write**" in md
     json.dumps(F.jsonable(t))
+
+
+def test_exact_floor():
+    """At the exactness floor a requantization costs its rounds (K of an Int8RowQuant or Int8StaticQuant of K, the window's
+    2 a key-element), a linear epilogue its N outputs' rounds and the attention output its one; the rest is `softmax_floor`'s."""
+    def essential(fam: str, st: dict) -> int | None:
+        return {"Int8RowQuant_v1": st.get("K"), "Int8StaticQuant_v1": st.get("K"), "ScaledMmS8_v1": st.get("N"),
+                "Int8AttnOut_v1": 1}.get(fam)
+    atoms = {}
+    for k in F.needed(SPEC["models"], S, P):
+        a, (fam, st) = synthetic(k), F.parse(k)
+        n = essential(fam, st)
+        if n is not None:
+            a["primitives"] = {f"{F.ESSENTIAL_ROUNDING[fam]}|roundings": n, "X_v1|roundings": a["units"]["roundings"] - n}
+        if fam == "Int8KvQuant_v1":
+            a["slope"] = {"units": {"roundings": 7 * 2 * st["D"]}, "primitives": {"F32Rint_v1|roundings": 2 * st["D"]}}
+        atoms[k] = a
+    soft, exact = F.softmax_floor(atoms), F.exact_floor(atoms)
+    for name in ("Llama-3.1-8B", "DeepSeek-V3.2-Exp", "MiniMax-M1"):
+        for kv in F.KV_MODES:
+            terms = F.compose(SPEC["models"][name], "decode", kv, S, P)["terms"]
+            want = Fraction(0)
+            for t in terms:
+                fam, st = F.parse(t.atom) if not t.atom.startswith("model:") else ("", {})
+                if fam == "Int8KvQuant_v1":
+                    want += t.n * (F.atom_units(soft, t.atom, t.s)["roundings"] - 2 * st["D"] * t.s)
+                elif essential(fam, st) is not None:
+                    want += t.n * (F.atom_units(soft, t.atom, t.s).get("roundings", 0) - essential(fam, st))
+            got = (F.evaluate(terms, soft, primitives=False)["by_class"]["roundings"]
+                   - F.evaluate(terms, exact, primitives=False)["by_class"]["roundings"])
+            assert got == want, (name, kv)
+    assert exact[F.ROW(128)] == soft[F.ROW(128)] and exact[F.NT(4096, 1e-05)] == atoms[F.NT(4096, 1e-05)]
 
 
 def test_modeled_terms_and_kinds():

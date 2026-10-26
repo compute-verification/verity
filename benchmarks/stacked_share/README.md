@@ -71,7 +71,8 @@ serve it:
   - the units and honest operations by class;
   - the dynamic memory's kind, bytes, write path and cut widths;
   - the roofline serving model's R_cap, M_dyn and turnover;
-  - f at each E and L.
+  - f at each E and L, and again with the softmax's work a key at property/v1's floor (`softmax_floor`) and with every
+    requantization and linear epilogue at one rounding an element as well (`exact_floor`).
 
   It also writes the tables as `frontier.md`.
 - `frontier_job.sh` runs both on a CPU node.
@@ -82,5 +83,6 @@ serve it:
 | units per token | modeled: the atoms composed per layer, checked exact against the 8B census |
 | linear attention, DeltaNet and routed-weight arithmetic | modeled: one rounding per FP output (`MODELED`) |
 | DSA's indexer scores, top-k and row selection | modeled: a unit per operation (`MODELED`); the served Waksman form is refused by property/v1 |
+| the floors | modeled: the softmax at one rounding a head-key; a requantization or an epilogue at the measured count of its essential rounding (`ESSENTIAL_ROUNDING`) |
 | shapes, experts, KV and state sizes | config: each model's `config.json` at its recorded revision |
 | R_cap, batch, t_step | modeled: roofline on the reference node (`node` in `frontier_models.json`) |
