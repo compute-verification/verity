@@ -22,6 +22,10 @@ first = []
 land = "review"
 # the after-landing run reuses no pass (`check.py --no-cache`), until a suite's reuse is per test
 after_landing_no_cache = true
+# the most review-landing Lean checks running at once: one, and those stacked above it on `next` for Lean changes it doesn't hold
+max_lean_checks = 5
+# a sync merges PRs that change no Lean below Lean changes, so they don't wait for a Lean check (members it keeps never move)
+nonlean_first = true
 # the per-PR landing in shadow beside the trains (`research.drive`): at most this many of its checks at once, landing and ejecting
 # nothing; 0 is off (`research queue stats --per-pr` reads what it would land)
 per_pr_shadow = 0

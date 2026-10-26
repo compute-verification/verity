@@ -11,8 +11,6 @@ MUFU through core's measured tables; the wgmma k16 step through `verity.ml.kerne
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from dataclasses import dataclass
 
 import numpy as np
