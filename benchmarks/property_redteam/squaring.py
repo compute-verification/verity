@@ -1,6 +1,6 @@
 """Squaring mod p1024 in 6b's circuit model, measured in budgeted units: the attack on `EncodeChainHardness`.
 
-**The target** (`Security/Models/Accounting/Assumptions/EncodeChain.lean`). The encode bound rests on
+**The target** (`Security/Definitions/Accounting/Assumptions/EncodeChain.lean`). The encode bound rests on
 `EncodeChainHardness F k B E ε`: a restricted circuit computing `q` words of the codec, less parity, on more than `ε` of
 the draws costs `q·E` budgeted units less a word-per-run-bit discount. Its headline is `E = k·S·e`, `e = L − d(ε)` a
 squaring, `L = n/8 = 128`, `d = d₀ + ⌈log₂(1/ε)/8⌉`, `d₀ = 4`: `e = 119` at `ε = 2^−40` (`E = 364,497` a word), `e = 121`

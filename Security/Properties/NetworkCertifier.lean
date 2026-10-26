@@ -8,9 +8,9 @@ The properties of `NetworkCheck.protocol` (`verity/network-certificate/v4`, the 
 against its functions as they run, each in one shape: for every input, if the function accepts (or, for a refusal,
 doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
 check refuse, what an acceptance establishes about each link-window and what an undecided outcome means.
-`Properties.Proofs.NetworkCertifier` proves them; the converses (that the check accepts, or is undecided on, what
+`Proofs.Properties.NetworkCertifier` proves them; the converses (that the check accepts, or is undecided on, what
 these conclusions describe) and the honest transcript's acceptance are completeness, at the end of
-`Properties.Proofs.NetworkCertifier.Outcomes`, each with one instance in `Properties.Proofs.NetworkCertifier.Instance`. What an accepted run of the certifier device is, is
+`Proofs.Properties.NetworkCertifier.Outcomes`, each with one instance in `Proofs.Properties.NetworkCertifier.Instance`. What an accepted run of the certifier device is, is
 `Properties.CertifierNetwork.Runs`.
 
 The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none

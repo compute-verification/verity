@@ -4,7 +4,7 @@ import Proofs.Pouw.PearlC.DeviceChainCapGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
 import Proofs.Pouw.PearlC.TileUOnlyGamma
 import Proofs.Pouw.PearlC.FreezeP
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.PearlC.TTOutW1Variants
 

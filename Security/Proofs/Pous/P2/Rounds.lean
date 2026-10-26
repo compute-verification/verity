@@ -1,4 +1,4 @@
-import Models.Pous.Assumptions.P2
+import Definitions.Pous.Assumptions.P2
 import Proofs.Pous.Sanity
 
 /-!

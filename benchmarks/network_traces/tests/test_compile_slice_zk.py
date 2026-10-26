@@ -93,15 +93,15 @@ def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
         Z.LS.public_pieces(a8, {"srv0 0": Z._u16(srv0)}, set(), b"")
     pieces, held, public = Z.scan_pieces(a8, units, {}, SimpleNamespace(public=False), ("srv0", "srv1"), b"")
     assert pieces == {"wit 0 @0": Z._u16(wit)[:16], "wit 0 @16": Z._u16(wit)[16:32], "wit 0 @20": Z._u16(wit)[20:],
-                      "srv0 0": Z._u16(srv0), "srv1 0": Z._u16(srv1)}
+                      "wit 0 @32": Z._u16(wit)[32:].ljust(16, b"\0"), "srv0 0": Z._u16(srv0), "srv1 0": Z._u16(srv1)}
     assert held == set(pieces) and public == []
     vdir = tmp_path / "verifier"
     vdir.mkdir()
     (vdir / "openings.json").write_bytes(Z._u16(srv0).hex().encode() + b"," + Z._u16(srv1) + b"\x01\x02")
-    (tmp_path / "inst.bin").write_bytes(Z._u16(wit) + Z._u16(srv0) + Z._u16(srv1))
+    (tmp_path / "inst.bin").write_bytes(Z._u16(wit).ljust(48, b"\0") + Z._u16(srv0) + Z._u16(srv1))
     got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
     assert got["verifier_found"] == ["srv0 0", "srv1 0"] and got["leaked"] == ["srv0 0", "srv1 0"]
-    assert got["control"]["holds_all"] and got["control"]["pieces_found"] == 5
+    assert got["control"]["holds_all"] and got["control"]["pieces_found"] == 6
     (vdir / "pub-2.bin").write_bytes(Z._u16(srv1) + bytes(4))
     got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
     assert got["leaked"] == ["srv0 0"] and got["structured"] == {"srv1 0": "public"}

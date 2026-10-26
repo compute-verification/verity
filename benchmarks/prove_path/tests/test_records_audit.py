@@ -13,7 +13,9 @@
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
-  compile and charges the length the registration does."""
+  compile and charges the length the registration does;
+* that command compiles over its own trace of each Program, never the prover's row dir, so a row dir whose names make
+  another circuit under unchanged digests is refused by name and one whose names make the same circuit is ignored."""
 from __future__ import annotations
 
 import hashlib
@@ -351,8 +353,8 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     monkeypatch.setattr(SRW, "population", lambda progs, partition, run, dirs, **kw: (window, []) if run == "" else None)
     (tmp_path / "part.json").write_text(json.dumps({"templates": [TID], "law": LAW}))
     (tmp_path / "advice.bin").write_bytes(s.data)
-    base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--row-dir", s.a.row_dir, "--partition",
-            str(tmp_path / "part.json"), "--out", str(tmp_path / "out.json")]
+    base = ["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"), "--out",
+            str(tmp_path / "out.json")]
     capsys.readouterr()
     assert PP.main([*base, "--advice", str(tmp_path / "advice.bin")]) == 0
     assert json.loads(capsys.readouterr().out.strip().splitlines()[-1]) == {"bits": s.bound["advice"]["bits"]}
@@ -363,3 +365,42 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
     assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
     assert "prove_path.py circuit:" in capsys.readouterr().err
+
+
+def test_a_row_dir_whose_names_are_permuted_under_its_digests_is_refused_or_ignored_by_the_compile_check(tmp_path, monkeypatch):
+    """No Program digest covers a Build's row names or its weights fields' names (nor its ``supplied``, correspondence or
+    ``prefix_cache.json``: these TINY Builds carry none, so their names are their correspondence), and the served compiler's
+    command reads none of them from the prover: it takes no row dir and compiles over its own trace of each Program I2
+    compiled (`prove_path.own_builds`; the trace `test_prove_path._tiny_served`'s stub). Against a prover's row dir permuted
+    under unchanged digests (each Build still I2's Program, `build_of`), the compile check refuses by name (``circuit``) the
+    circuit.json whose names make another circuit (a layer-1 SiluMul row and layer 0's down_proj swap names: five layer-0
+    rows), and ignores names that make the same one (layers 0 and 1's SiluMul rows swapped, which moves only the prover's own
+    reads; two weights fields swapped): the verifier's record is its own trace's in each case."""
+    import prove_path as PP
+    from test_prove_path import LAYER0, _circuit, _row_dir, _tiny_served
+
+    s = _tiny_served(tmp_path, monkeypatch)
+    (tmp_path / "part.json").write_text(json.dumps(LAYER0))
+    (tmp_path / "advice.bin").write_bytes(s.data)
+    out = tmp_path / "mine" / "circuit.json"
+    out.parent.mkdir()
+    assert PP.main(["circuit", "--serve-run", str(s.run), "--window", "0", "--partition", str(tmp_path / "part.json"),
+                    "--advice", str(tmp_path / "advice.bin"), "--out", str(out), "--vllm-python", "pinned-python"]) == 0
+    assert [py for py, _ in s.traced] == ["pinned-python"] * len(s.units) and list(out.parent.iterdir()) == [out]
+    mine = json.loads(out.read_text())
+    own, own_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(tmp_path / "own"), None, None, trace="py")), s.data, LAYER0)
+    assert IF.circuit_of(own) == IF.circuit_of(mine)
+    copy = ("import json, shutil, sys; a = sys.argv; shutil.copy(a[1], a[a.index('--out') + 1]); "
+            f"print(json.dumps({{'bits': {s.bound['advice']['bits']}}}))")
+    compilers = {s.bound["compiler"]["name"]: {"digest": s.bound["compiler"]["digest"], "argv": [sys.executable, "-c", copy, str(out)]}}
+    opening = json.loads(Path(s.a.opening).read_text())
+    reads = lambda rows: [(rid, int(r["i"])) for rid, _pi, r, _d in rows[0]]  # noqa: E731
+    for k, (name, names, params, codes, same_reads) in enumerate((
+            ("honest", None, False, [], True),
+            ("a layer-1 SiluMul row and layer 0's down_proj swapped", (("SiluMul_v2", 1), ("Gemm_v2", 0)), False, ["circuit"], False),
+            ("layers 0 and 1's SiluMul rows swapped", (("SiluMul_v2", 0), ("SiluMul_v2", 1)), False, [], False),
+            ("layers 0 and 1's down_proj weights swapped", None, True, [], True))):
+        rows = _row_dir(tmp_path / f"rows{k}", s, names, params)
+        theirs, their_rows = _circuit(PP.Capped(PP.i2_of_serve(str(s.run), 0, str(rows), None, None)), s.data, LAYER0)
+        v, bound = RA.compile_check(theirs, s.bound, opening, compilers, tmp_path / "c")
+        assert (v["codes"], bound is None, reads(their_rows) == reads(own_rows)) == (codes, bool(codes), same_reads), name
