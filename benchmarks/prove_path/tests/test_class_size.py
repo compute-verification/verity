@@ -136,6 +136,8 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
     assert CZ.measured("TokenFeed_v1{NP=1024,FIRST=false}")[:2] == (62, 23)
     assert CZ.measured("TokenFeed_v1{NP=2048,FIRST=true}")[:2] == (30, 24)
     assert (CZ.measured("SlotRow_v1{NP=1024}")[:2], CZ.measured("SlotMask_v1{}")[:2]) == ((0, 23), (32, 22))
+    assert [CZ.measured(lab)[:2] for lab in ("ScanSlots_v1{NS=9353,NP=1024,IDB=17,K0=12,K=45}", "OutCollect_v1{KO=64,FIRST=true}",
+                                             "OutCollect_v1{KO=64,FIRST=false}")] == [(0, 23), (155, 22), (2_141, 22)]
 
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
