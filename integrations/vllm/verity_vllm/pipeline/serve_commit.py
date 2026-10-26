@@ -214,7 +214,9 @@ class CommitWindows:
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
     ``reset``, ``install``, ``uninstall``, ``finalize``, ``_layouts``, ``_step_index``, ``sources``, and to close off the loop
     ``enable_window_views`` and ``detach``, whose view has ``wait_absorbed`` and ``finalize``); ``eos_ids`` and
-    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`)."""
+    ``decode`` are the tokenizer's, for the finish check (`served_record.finish_problems`). ``arm`` (`serve_h1.H1Windows`)
+    opens on each window once its committer is installed and closes first at its close, before the committer comes off,
+    its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -222,8 +224,10 @@ class CommitWindows:
                  marks: Callable[[int, str], None] | None = None, seal: Mapping[str, Any] | None = None,
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
-                 request_cap: int = 0) -> None:
+                 request_cap: int = 0, arm: Any = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
+        self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
+        self.arm_failed: list[int] = []                  # the windows whose arm failed to open or close
         self.request_cap = int(request_cap)              # --window-requests: at most this many distinct requests a window (0: any)
         self.in_window: set[str] = set()                 # the engine ids live at any step of the open window
         self.seal = dict(seal) if seal is not None else None     # `seal_window`'s label, code and engine_of_record: seal every window
@@ -306,10 +310,27 @@ class CommitWindows:
         self.off_loop = self._views()
         self.com.reset()
         self.com.install()
+        if self.arm is not None:
+            try:
+                self.arm.open(self.window)
+            except (ValueError, RuntimeError, OSError) as e:      # the window's visible failure; serving goes on
+                self._arm_out[self.window] = {"error": f"open: {type(e).__name__}: {e}"[:500]}
+                self.arm_failed.append(self.window)
         self.open_s = self.clock() - t0
         self.is_open = True
         if self.marks is not None:
             self.marks(self.window, "open")
+
+    def _close_arm(self) -> None:
+        """The arm's window closed, before anything of the committer's: its outcome, or why it failed."""
+        try:
+            got = self.arm.close(self.window)
+        except (ValueError, RuntimeError, OSError) as e:          # the window's visible failure; the Commit's close goes on
+            got = {"error": f"close: {type(e).__name__}: {e}"[:500]}
+            if self.window not in self.arm_failed:
+                self.arm_failed.append(self.window)
+        with self._lock:
+            self._arm_out.setdefault(self.window, got)
 
     def stepped(self) -> None:
         """An engine step has returned: its committed steps ended now."""
@@ -341,6 +362,9 @@ class CommitWindows:
         t0 = self.clock()
         laps = [("", t0)]
         lap = functools.partial(_lap, laps, self.clock)
+        if self.arm is not None:
+            self._close_arm()
+            lap("arm")
         if self.off_loop:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
@@ -462,6 +486,8 @@ class CommitWindows:
 
     def _write_window(self, rec: dict[str, Any]) -> None:
         with self._lock:
+            if self.arm is not None:
+                rec["pouw_h1"] = self._arm_out.pop(rec["window"], None)
             self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
@@ -623,4 +649,5 @@ class CommitWindows:
                 "cache_hits": sum(1 for c in checked if c.get("cache_hit")),
                 "cached_positions": sum(int(c.get("cache_hit") or 0) for c in checked),
                 "unchecked": unchecked,
+                **({"pouw_h1": {**self.arm.summary(), "failed": self.arm_failed[:20]}} if self.arm is not None else {}),
                 "passed": bool(checked) and not bad_req and not bad_win and not unchecked and not closing and queued == len(seals)}
