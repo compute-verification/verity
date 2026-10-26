@@ -46,6 +46,8 @@ from __future__ import annotations
 
 import time
 
+from verity_vllm.records.commit_run import SCHEMA
+
 _T_PROCESS0 = time.time()      # [R16 sys] process start (before the torch / vLLM imports): startup.imports = engine.build start - this
 
 import contextlib
@@ -65,7 +67,6 @@ from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings
 from verity_vllm.config import group, option
 from verity_vllm.engine import engine_profile as prof  # noqa: F401
-from verity_vllm.records.commit_run import SCHEMA
 
 prof.apply_env()
 
