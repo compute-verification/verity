@@ -3,8 +3,8 @@ file rendered as Markdown in the structure Daniel set (25 Oct 6:56 PM PDT): 1. r
 2. measured on the demo, the inputs to the scaling claim; 3. computed from the same theorem and the measured costs, not
 run; then what the demo didn't show, and every number's source.
 
-**Numbers.** Every number is a placeholder ``⟨NAME⟩`` of `demo_a.template.md`, filled from one of three places, each
-name from exactly one:
+**Numbers.** Every number is a placeholder ``⟨NAME⟩`` of ``demo_a.template`` (Markdown; not ``.md``, so the suite's
+inputs, which leave Markdown out, cover it), filled from one of three places, each name from exactly one:
 
 * `RECORD`: the first block record (the block the report is about), by the path each entry names;
 * `MEASURED`: the measurements file (``verity/demo-a-measurements/v1``), each value with the run or field it came from;
@@ -49,7 +49,7 @@ from typing import Any
 
 from verity_e2e_demo import block_record
 
-TEMPLATE = Path(__file__).parent / "demo_a.template.md"
+TEMPLATE = Path(__file__).parent / "demo_a.template"
 MEASUREMENTS = "verity/demo-a-measurements/v1"
 DELTA = Fraction(1, 100)
 #: the share of compute spent on proving in part 3
