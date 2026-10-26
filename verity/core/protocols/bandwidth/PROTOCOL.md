@@ -3,7 +3,9 @@
 Status: superseded. The bandwidth audit on the served path is the remote bandwidth audit
 (`verity/core/protocols/remote_bandwidth/PROTOCOL.md`), which applies this audit's guarantee, `AuditRO`, per pass. v0's
 tag `ro-blake3/v1` is BLAKE3, which the one-hash rule (6 Oct) takes off the served path, so no deployment runs this
-audit. The code stays while `verity_vllm.protocols.remote_bandwidth`'s tag receipt reads `tags`. What follows is v0 as it was granted.
+audit, and no served code reads it: `verity_vllm.protocols.remote_bandwidth`'s receipts are the remote audit's own
+(`KindReceipt`, sketch-sha512 by default). The code stays for the benchmarks that measure its tags. What follows is v0
+as it was granted.
 
 v0 with the certified tag `ro-blake3/v1` at `s = 1,849` and `T = 1.2 ms`. The red team granted head
 `f18c1854a` with conditions (art:847a28cdb35482186f67e1aec1bcab52c9bf1ad73cac87c2a7141b366be12fa6), fixing `T` and
