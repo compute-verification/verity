@@ -31,9 +31,11 @@ split into `a` blocks that each have `L` products of their own and `b` blocks th
 (`RingKCost`): `min(κ L, d) · #certified ≤ κ · #products + d · #deliveries`. No row purity: the delivery charge
 replaces it.
 
-**What it discharges.** For degree-2 ring programs, `KScopeAffine`'s third conjunct (row purity), and
-`ChargeVF3j16`'s cost line in this form: a machine that charges `κ` a product and `d` a delivery charges at least
-`min(κ L, d)` a certified cell-block, so at `κ_eff = min(κ, d/L)` a product of the floor. `KScopeAffine`'s first
+**What it would discharge**, once `RingKCount` is proved, given the price obligation below and a bridge (not yet
+written) from `RingKCost` to `RoundsHypKSt`'s cost line. For degree-2 ring programs, `KScopeAffine`'s third conjunct
+(row purity), and `ChargeVF3j16`'s cost line in this form: a machine that charges `κ` a product and `d` a delivery
+charges at least `min(κ L, d)` a certified cell-block, so at `κ_eff = min(κ, d/L)` a product of the floor. That is
+Theorem K's full count only when `d ≥ κ L`. `KScopeAffine`'s first
 conjunct (`AffProd` products) is the fragment's degree-2 restriction and stays. `KScopeOneSided` isn't discharged: the
 parity luck (0.854) reads uncertified words that are short, not exact, so the difference argument below doesn't reach
 them.
@@ -48,8 +50,10 @@ them.
   needs degree-2 errors), not this count.
 * **Free fan-out of an accumulator.** An MMA that reads its `C` out of place and leaves `C` live (sm_120's
   `mma.sync`, MODEL-SPEC's `D = C + A·B` with `D ≠ C`) gives one word two free readers. `Flow.WF` refuses that, so
-  such a program is in the fragment only if the second read is charged as a delivery. H200's `wgmma` accumulates in
-  place (no `C` operand) and is in it.
+  such a program is in the fragment only if the second read is charged as a delivery. The card charges nothing for
+  it (an out-of-place `mma.sync` costs what an in-place one does), so the count with free forks is open: rank alone
+  allows a fork's shared prefix to serve several blocks. H200's `wgmma` accumulates in place (no `C` operand) and is
+  in it.
 * **Non-ring instructions** (O-BITS): `IMAD.HI`, `IMAD.WIDE`'s high word, shifts, `LOP3`, `PRMT`, compares, selects
   and the float formats.
 * **Operands are free.** A product's bit-affine operands are given, not computed by slots, so the loads and adds that
