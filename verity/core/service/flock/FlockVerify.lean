@@ -868,9 +868,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
         (spec, sts.map Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Lean.Json.null, registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
   let programSha := program.bind ProvedScope.programDigest
-  let ksFiles := if zk then
-      PortRoots.checkOf (if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables) tags pubB
-    else .ok ()
+  let ksParsed := if tags.hiddenOutputs && !templated then parsed else HmOut.parse tags circuitB tables
+  let ksFiles := if zk then PortRoots.checkOf ksParsed tags pubB else .ok ()
   IO.eprintln s!"inputs: {(← IO.monoMsNow) - t0} ms"
   -- each statement is set up once, when a session first needs it: the population's, and each draw's
   let mut setups : Array (Option String × Except String (SessionSpec × Array Setup × Lean.Json × Lean.Json)) := #[]
@@ -914,7 +913,8 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
       -- short of every unit, then a session's over an inner record without a draw, then a session's without the program,
       -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
-      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`)
+      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a circuit, a
+      -- public file or a draw outside its form (`KsScope.checkOf`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)
       if draw.isNone then ProvedScope.drawLaw zk tags plainTables draw
@@ -923,6 +923,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       ProvedScope.programHeld program
       RecordText.check record
       ksFiles
+      if zk then KsScope.checkOf ksParsed tags pubB count draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok
