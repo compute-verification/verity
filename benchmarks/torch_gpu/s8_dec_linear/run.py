@@ -419,12 +419,14 @@ def part_time(kern: Kernels, st: dict[str, Stage], sv0: Stage, pfx: bytes, tenso
             clocks[n].append(sm_clock())
             joules[n].append(None if e0 is None else e1 - e0)
     med = {n: statistics.median(v) for n, v in got.items()}
-    jmed = {n: statistics.median(v) if v[0] is not None else None for n, v in joules.items()}
+    # NVML's counter steps about every 100 ms (H200, driver 580), so one rep's reading is a whole number of steps: the mean
+    # over reps (whose phases against the steps are spread) estimates an arm's energy, and only for arms of several steps
+    jmean = {n: statistics.fmean(v) if v[0] is not None else None for n, v in joules.items()}
     for n in names:
         kind, size = arms[n][1], arms[n][2]
         rate = {"decode": {"GBps": size / med[n] / 1e9}, "gemm": {"TOPS": size / med[n] / 1e12},
                 "layer": {"W_GBps": size / med[n] / 1e9}}[kind]
-        power = {} if jmed[n] is None else {"J": jmed[n], "W": jmed[n] / med[n]}
+        power = {} if jmean[n] is None else {"J": jmean[n], "W": jmean[n] / statistics.fmean(got[n])}
         log({"part": "time", "arm": n, "M": tm, "median_s": med[n], "reps": got[n], "sm_mhz": clocks[n], "joules": joules[n],
              **power, **rate})
     per = {n: med[n] / layers for n in names if n.startswith("layer:")}
@@ -442,12 +444,13 @@ def part_time(kern: Kernels, st: dict[str, Stage], sv0: Stage, pfx: bytes, tenso
         hide = min(plain, dec["p2v1" if n.endswith("p2v1") else stage_name])
         summary[n] = {"layer_s": per[n], "slowdown_vs_plain": per[n] / best, "step_s": 52 * per[n],
                       "hidden": (per[base_arm] - per[n]) / hide}
-    if en.limit_w and jmed["layer:plain"] is not None:
+    if en.limit_w and jmean["layer:plain"] is not None:
         # at the power limit a layer takes at least its GEMMs' and its decode's energy over the limit, however overlapped
-        # (an estimate: each arm's energy is at its own clocks, and both carry the card's static power)
-        j_plain = jmed["layer:plain"] / layers
-        for name in (stage_name, "p2v1"):
-            j_dec = sum(jmed[f"decode:{name}:{mt['name']}"] for mt in mats)
+        # (an estimate: each arm's energy is at its own clocks, and both carry the card's static power); the decode's
+        # energy is the staged layer's less the plain one's, the layer arms being the only ones many counter steps long
+        j_plain = jmean["layer:plain"] / layers
+        for name, arm in ((stage_name, "layer:staged"), ("p2v1", "layer:staged-p2v1")):
+            j_dec = jmean[arm] / layers - j_plain
             floor = max(plain, dec[name], (j_plain + j_dec) / en.limit_w)
             serial = plain + dec[name]
             summary[f"power_floor:{name}"] = {
