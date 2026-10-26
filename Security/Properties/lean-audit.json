@@ -484,6 +484,9 @@
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
   },
+  "Pous.Cited.SecurityProofs.citedAnswerAccepted": {
+   "owner": "@memory-accounting"
+  },
   "Pous.Cited.SecurityProofs.citedRunAccepted": {
    "owner": "@memory-accounting",
    "signature": ["Pous.Cited.SecurityProofs.citedRunAccepted : Pous.Cited.CitedRunAccepted"],
@@ -2693,6 +2696,11 @@
    },
    "MemoryChallenger.Properties.SecurityProofs.verdictSigned": {
     "function": "MemoryChallenger.verdict",
+    "outcome": "accept"
+   },
+   "Pous.Cited.SecurityProofs.citedAnswerAccepted": {
+    "function": ["PousCheck.SetupProtocol.protocol.answer", "PousCheck.SetupProtocol.protocol.params",
+     "PousCheck.RunProtocol.acceptsCited"],
     "outcome": "accept"
    },
    "Pous.Cited.SecurityProofs.citedRunAccepted": {

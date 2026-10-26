@@ -22,9 +22,13 @@ must accept the run against that commitment. Two statements say what that keeps:
 * `CitedRunAccepted`, at P2's deployed point under S1's LMS: with the setup check's acceptance publishing `pub`, a run
   whose citation and composed check accept (`RunProtocol.acceptsCited`) is `Pous.EndToEnd.Accepted`, word for word, so
   `Pous.EndToEnd.RunCertifies` applies to it unchanged.
+* `CitedAnswerAccepted`, the same with the record's answer in place of the acceptance: when the cited answer is what the
+  setup protocol answered (`Core.Protocol.answer`) on the bytes its record holds, at the citation's parameters, what
+  `RunProtocol.cite` checks of that answer (the setup protocol's acceptance, at the run's parameters, publishing exactly
+  `pub`) is the acceptance `CitedRunAccepted` takes, of the commitment and `C*` those bytes decode to.
 
-Both are proved in `Proofs.Properties.Pous.Cited`, from the setup check's `AcceptsDecodes` and `PublishesRoot` and the
-trees' binding (`mth_binds`), under no hash assumption: a collision is a disjunct of the conclusion, as in
+All three are proved in `Proofs.Properties.Pous.Cited`, from the setup check's `AcceptsDecodes` and `PublishesRoot` and
+the trees' binding (`mth_binds`), under no hash assumption: a collision is a disjunct of the conclusion, as in
 `RunCheckAccepts`.
 -/
 
@@ -68,5 +72,21 @@ def CitedRunAccepted : Prop :=
     SetupProtocol.protocol.check Pous.EndToEnd.q c C = .accept pub prof →
     RunProtocol.acceptsCited MemoryChallenger.SCHEMES Run.DEPLOYED trusted s pub digests r sid = .ok () →
       Pous.EndToEnd.Accepted trusted c C pub digests r sid
+
+/-- **A run accepted on the setup check's own answer is `Accepted`.** At P2's deployed point under S1's LMS, for every
+verifier's list `trusted` of memory-challenger keys: if the citation's answer is what the setup protocol answered on the
+bytes `pb`, `cb` and `eb` of its parameters, commitment and `C*` (the inputs the citation's record holds), those
+parameters decode to the citation's, and the run's check accepts the citation `s` and the run against `pub`
+(`RunProtocol.acceptsCited`), then `cb` and `eb` decode to a commitment and a `C*` that setup and the composed check
+accept the run on (`Pous.EndToEnd.Accepted`). -/
+def CitedAnswerAccepted : Prop :=
+  ∀ (trusted : List ByteArray) (s : RunProtocol.SetupRef) (pub : SetupProtocol.Public) (digests : ByteArray)
+    (r : Run.Session) (sid pb cb eb : ByteArray),
+    s.answer = SetupProtocol.protocol.answer pb cb eb →
+    (Core.canonicalJson pb >>= SetupProtocol.protocol.params) = .ok s.params →
+    RunProtocol.acceptsCited MemoryChallenger.SCHEMES Run.DEPLOYED trusted s pub digests r sid = .ok () →
+      ∃ (c : SetupProtocol.Commitment) (C : Array (Array ByteArray)),
+        SetupProtocol.protocol.commitment cb = .ok c ∧ SetupProtocol.protocol.evidence eb = .ok C ∧
+          Pous.EndToEnd.Accepted trusted c C pub digests r sid
 
 end Pous.Cited

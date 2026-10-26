@@ -1,8 +1,10 @@
 import Properties.Pous.Cited
 import Proofs.Properties.Pous.Run
+import Proofs.Flock.Claims.Complete.Json.Hex
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
-# Proofs of the cited run's properties (`Properties.Pous.Cited`): `rootDecodes` and `citedRunAccepted`
+# Proofs of the cited run's properties (`Properties.Pous.Cited`): `rootDecodes`, `citedRunAccepted` and `citedAnswerAccepted`
 
 `rootDecodes`: an accepted `C*` decodes to the committed `W` (`acceptsDecodes`), so it has `q`'s shape, and has the
 published root (`publishesRoot`), so its leaves and those of a `C*'` of that shape at that root have one root. Over
@@ -10,7 +12,10 @@ leaves of 64 bytes, one root means the same leaves unless two inner nodes' input
 one leaf input, so one row digest, unless the two inputs collide; and one row digest means one block, the prefix
 carrying the block's length, unless the two rows' inputs collide. So `C*'` is `C*` block for block, and decodes as it
 does. `citedRunAccepted`: the cited form's acceptance is the citation and `Run.check` (`acceptsCited_deployed`), and
-`Accepted` is the setup check's acceptance and `Run.check`.
+`Accepted` is the setup check's acceptance and `Run.check`. `citedAnswerAccepted`: an answer of the setup protocol that
+accepts is its check's acceptance of what the three inputs decode to, publishing `publicJson` of the check's public
+outputs (`answer_accept`); the citation reads those outputs back as `pub` (`cite_ok`), and `Public.ofJson` reads back
+exactly what `toJson` writes (`ofJson_toJson`), so they are `pub`.
 -/
 
 namespace Pous.Cited.SecurityProofs
@@ -130,5 +135,128 @@ theorem citedRunAccepted : CitedRunAccepted := by
   intro trusted c C pub prof s digests r sid hset hcited
   cases prof
   exact ⟨hset, ((RunProtocol.acceptsCited_deployed trusted s pub digests r sid).1 hcited).2⟩
+
+/-! ## The cited answer -/
+
+theorem bind_ok {ε α β : Type} {x : Except ε α} {f : α → Except ε β} {b : β} (h : (x >>= f) = .ok b) :
+    ∃ a, x = .ok a ∧ f a = .ok b := by
+  cases x with
+  | error _ => cases h
+  | ok a => exact ⟨a, rfl, h⟩
+
+theorem exactly_ok {α : Type} {f : Lean.Json → V α} {enc : α → Lean.Json} {j : Lean.Json} {b : α}
+    (h : MemoryChallenger.exactly f enc j = .ok b) : f j = .ok b := by
+  obtain ⟨a, hf, h⟩ := bind_ok h
+  obtain ⟨x, -, h⟩ := bind_ok h
+  obtain ⟨y, -, h⟩ := bind_ok h
+  dsimp only at h
+  split at h
+  · obtain ⟨u, hu, -⟩ := bind_ok h
+    cases hu
+  · cases h
+    exact hf
+
+theorem getObjVal?_mkObj {l : List (String × Lean.Json)} (hd : l.Pairwise (fun a b => ¬ compare a.1 b.1 = .eq))
+    {k : String} {v : Lean.Json} (hm : (k, v) ∈ l) : (Lean.Json.mkObj l).getObjVal? k = .ok v := by
+  simp only [Lean.Json.mkObj, Lean.Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?]
+  rw [Std.TreeMap.Raw.getElem?_ofList_of_mem (Std.ReflCmp.compare_self) hd hm]
+  rfl
+
+theorem ok_bind {α β : Type} (a : α) (f : α → V β) : (Except.ok a >>= f) = f a := rfl
+
+theorem nat_num (j : Lean.Json) (k c : String) (x : Nat) (h : j.getObjVal? k = .ok (.num x)) :
+    J.nat j k c = .ok x := by
+  simp only [J.nat, J.get, h]
+  rfl
+
+theorem str_str (j : Lean.Json) (k c s : String) (h : j.getObjVal? k = .ok (.str s)) : J.str j k c = .ok s := by
+  simp only [J.str, J.get, h]
+  rfl
+
+/-- `Public.ofJson` reads back exactly what `Public.toJson` writes. -/
+theorem ofJson_toJson (p : SetupProtocol.Public) : SetupProtocol.Public.ofJson p.toJson = .ok p := by
+  obtain ⟨b, c, r, s⟩ := p
+  have hb := nat_num (SetupProtocol.Public.toJson ⟨b, c, r, s⟩) "blocks" "the setup's public outputs" b
+    (getObjVal?_mkObj (by simp) (by simp))
+  have hc := str_str (SetupProtocol.Public.toJson ⟨b, c, r, s⟩) "commitment" "the setup's public outputs" (hexOf c)
+    (getObjVal?_mkObj (by simp) (by simp))
+  have hr := str_str (SetupProtocol.Public.toJson ⟨b, c, r, s⟩) "root" "the setup's public outputs" (hexOf r)
+    (getObjVal?_mkObj (by simp) (by simp))
+  have hs := str_str (SetupProtocol.Public.toJson ⟨b, c, r, s⟩) "salt" "the setup's public outputs" (hexOf s)
+    (getObjVal?_mkObj (by simp) (by simp))
+  simp only [SetupProtocol.Public.ofJson, hb, hc, hr, hs, ok_bind, FlockComplete.JsonRT.unhex_hexOf]
+  rfl
+
+/-- An answer whose public outputs are `toJson pub'` and which the citation reads as `pub` published `pub'`. -/
+theorem published_eq {a : Core.Answer} {pub pub' : SetupProtocol.Public}
+    (ha : a.published = some (SetupProtocol.Public.toJson pub')) (h : RunProtocol.publishedOf a = some pub) :
+    pub = pub' := by
+  unfold RunProtocol.publishedOf at h
+  rw [ha] at h
+  change (MemoryChallenger.exactly SetupProtocol.Public.ofJson SetupProtocol.Public.toJson
+    (SetupProtocol.Public.toJson pub')).toOption = some pub at h
+  cases he : MemoryChallenger.exactly SetupProtocol.Public.ofJson SetupProtocol.Public.toJson
+      (SetupProtocol.Public.toJson pub') with
+  | error e => rw [he] at h; cases h
+  | ok x =>
+    rw [he] at h
+    cases h
+    have := (exactly_ok he).symm.trans (ofJson_toJson pub')
+    cases this
+    rfl
+
+/-- What a citation the run's check accepts says of its answer: an acceptance, at the run's parameters, whose public
+outputs read back as `pub`. -/
+theorem cite_ok {pt : Run.Point} {pub : SetupProtocol.Public} {s : RunProtocol.SetupRef}
+    (h : RunProtocol.cite pt pub s = .ok ()) :
+    s.answer.verdict = .accept ∧ s.params = pt.params ∧ RunProtocol.publishedOf s.answer = some pub := by
+  unfold RunProtocol.cite at h
+  by_cases h1 : s.record.isEmpty = true
+  · rw [ite_eq_left h1] at h; cases h
+  rw [ite_eq_right h1] at h
+  by_cases h2 : s.answer.protocol ≠ SetupProtocol.ID
+  · rw [ite_eq_left h2] at h; cases h
+  rw [ite_eq_right h2] at h
+  by_cases h3 : s.answer.verdict ≠ .accept
+  · rw [ite_eq_left h3] at h; cases h
+  rw [ite_eq_right h3] at h
+  by_cases h4 : s.params ≠ pt.params
+  · rw [ite_eq_left h4] at h; cases h
+  rw [ite_eq_right h4] at h
+  by_cases h5 : s.answer.digest ≠ some (pub.commitment ++ pub.salt) ∨ RunProtocol.publishedOf s.answer ≠ some pub
+  · rw [ite_eq_left h5] at h; cases h
+  exact ⟨Classical.not_not.1 h3, Classical.not_not.1 h4, Classical.not_not.1 (not_or.1 h5).2⟩
+
+/-- An answer that accepts, of bytes whose parameters decode to `p`: the commitment and evidence decode, the check
+accepts them at `p`, and the answer's public outputs are `publicJson` of the check's. -/
+theorem answer_accept {P : Core.Protocol} {pb cb eb : ByteArray} {p : P.Params}
+    (hp : (Core.canonicalJson pb >>= P.params) = .ok p) (h : (P.answer pb cb eb).verdict = .accept) :
+    ∃ c e pub prof, P.commitment cb = .ok c ∧ P.evidence eb = .ok e ∧ P.check p c e = .accept pub prof ∧
+      (P.answer pb cb eb).published = some (P.publicJson pub) := by
+  unfold Core.Protocol.answer at h ⊢
+  rw [hp] at h ⊢
+  cases hc : P.commitment cb with
+  | error _ => rw [hc] at h; cases h
+  | ok c =>
+    rw [hc] at h
+    cases he : P.evidence eb with
+    | error _ => simp only [he] at h; cases h
+    | ok e =>
+      simp only [he] at h
+      cases hch : P.check p c e with
+      | accept pub prof => exact ⟨c, e, pub, prof, rfl, rfl, hch, by simp only [hch]⟩
+      | reject _ => rw [hch] at h; cases h
+      | undecided _ => rw [hch] at h; cases h
+
+theorem citedAnswerAccepted : CitedAnswerAccepted := by
+  intro trusted s pub digests r sid pb cb eb hans hpar hcited
+  obtain ⟨hcite, hrun⟩ := (RunProtocol.acceptsCited_deployed trusted s pub digests r sid).1 hcited
+  obtain ⟨hv, hq, hpub⟩ := cite_ok hcite
+  rw [hans] at hv hpub
+  obtain ⟨c, C, pub', prof, hc, hC, hchk, hpj⟩ := answer_accept hpar hv
+  cases published_eq hpj hpub
+  cases prof
+  rw [hq] at hchk
+  exact ⟨c, C, hc, hC, hchk, hrun⟩
 
 end Pous.Cited.SecurityProofs
