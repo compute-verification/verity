@@ -76,7 +76,7 @@ compiled circuit to that code.
 from verity.ml.crypto import lms
 from verity.core.protocols.pous import memory_challenger as mc
 
-signer = mc.LmsSigner(key, lms.LeafState(state_path, lms.public_key(key), lms.DEPLOYED.H))  # key = lms.keygen(lms.DEPLOYED, seed)
+signer = mc.LmsSigner(key, state_path)  # key = lms.keygen(lms.DEPLOYED, seed); lms.LeafState.create(state_path, ...) once
 log = mc.SessionLog(log_path)                     # its own file (mc.SessionLog.create once), never in the key's directory
 coins = mc.CoinTree.draw(challenger_secret, session_id, params.blocks, k)          # session_id: the auditor's, for this audit
 c = mc.MemoryChallenger(coins, signer, log=log, limit_ns=500_000 + rtt, block_bytes=params.block_bytes,
