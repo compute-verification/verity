@@ -38,8 +38,10 @@ parameters its pins.
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
 loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
 the audit holds each entry's domain to the one core's ``registered.domain`` makes of the program, the value, its rows and
-the window's run root (`committed_activations`), and reports their roots. The circuit reads none of them, so they take
-nothing from the free inputs.
+the window's run root (`committed_activations`), and reports their roots. Those the circuit doesn't read take nothing from
+the free inputs. Those it reads (the wired loop's ties, each read by its writer's output port and its reader's input port)
+are pinned from the registration beside ``--registered``'s (`window_pins`), so Lean's registered reads tie each reader's
+row to its writer's.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
@@ -303,6 +305,23 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     return {str(v): dict(e) for v, e in values.items()}
 
 
+def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
+    """The per-window values the circuit reads (its registered parameters among the registration's ``activations``: a wired
+    loop's ties, each read by its writer's output port and its reader's input port), by parameter, each refused
+    (ValueError) unless it names its value and a root and its domain binds the window's run root. The registration fixes
+    them before the draw, so the Lean verifier's registered reads open each tie's rows against a root the prover chose
+    before it knew which units are drawn."""
+    params = set((circuit.get("registered") or {}).get("params") or {})
+    acts = w.get("activations") or {}
+    values = {v: dict(e) for v, e in (acts.get("values") or {}).items() if v in params}
+    for v, e in values.items():
+        want = REG.domain(acts["program"], v, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS),
+                          window=w.get("run")).domain_id.hex()
+        if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
+            raise ValueError(f"the window's value {v!r} names another value or a domain not bound to its run root, or no root")
+    return values
+
+
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
     """The per-window values the registration's window commits (``activations``), each refused unless it names its value
     and a root and its domain binds the window's run root (a root committed in another window opens under none of this
@@ -423,18 +442,20 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
     return mine, doc, sets
 
 
-def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()) -> list[list[int]]:
+def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = (), own: Iterable[str] = ()) -> list[list[int]]:
     """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
-    the population's indices from the templates' order)."""
+    the population's indices from the templates' order), unless it reads one of the window's ``own`` values
+    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the draw samples like any other. A
+    value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
     base, at = {}, 0
     for t, n in circuit["templates"]:
         base[t], at = at, at + n
-    units = {u for lo, hi in given for u in range(lo, hi)}
+    units, own = {u for lo, hi in given for u in range(lo, hi)}, set(own)
     for r in (circuit.get("registered") or {}).get("reads", ()):
         j = r["port"][1:]
-        if r["port"][:1] == "o" and j.isascii() and j.isdigit() and r.get("cut", [0, 1]) == [0, 1]:
+        if r["port"][:1] == "o" and j.isascii() and j.isdigit() and r.get("cut", [0, 1]) == [0, 1] and r.get("param") not in own:
             units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
     out: list[list[int]] = []
     for u in sorted(units):
@@ -463,6 +484,10 @@ def audit(a: argparse.Namespace) -> int:
     try:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
+        ties = window_pins(json.loads((wdir / "registration.json").read_text()).get("window") or {}, doc)
+        if twice := sorted(set(ties) & set(pins)):
+            raise ValueError(f"values {twice} are both pinned and the window's own")
+        pins |= ties
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -489,7 +514,7 @@ def audit(a: argparse.Namespace) -> int:
     a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
-    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else ())
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=ties)
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     if a.challenger:
