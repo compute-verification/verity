@@ -247,3 +247,15 @@ D5 v2: `pub_sha` per card is the default build's model cost at θ (with IMAD.WID
 - **P2:** the outsourcing bound holds only while the certifier streams one coin side. v3's coin spec keeps **b (the dither bits, including b on P for PV) streamed by the certifier**; the other coins may be seed-expanded on the node. `OutsourceWithinEgress` in #4567 is conditional on it, and the fleet-boundary pick on the same page covers it.
 
 D5 v2 prices pub at the period's dual prices, at v3's caps.
+
+
+## 06:37Z (real UTC), coordinator: ALGO-COST-2 final (note:20261026T0440Z-draft-accel-algo-cost-2, final; code dd7e392b44 on cursor/compute-research-accel-o-redteam-ea24)
+Decisions (also in PROTO-DESIGN's inbox):
+1. **v3's caps.**
+   - **H200:** t = 2, L′ 256 (512 at V4's short-K shapes). A25: job-LP leak 0 at every static shape and at PV for every n from 128 to 131072, γ 5.2–5.9 on static rounds.
+   - **RTX PRO 6000:** the least-γ pick, t ≤ 3 with L′ ≤ 256 (γ 1.05–1.25). Its zero-high-digit peel leaves 0.87 / 5.00 / 1.89 / 5.52% (frozen / 8B / 70B / V4) as honest time left uncredited, not ε (P12 and the 06:10Z ruling). The L′ 64 alternative (≤ 0.07%, γ 2.5–4.6) goes in D6 as a second row.
+   - The peel is public, so an honest kernel that runs it closes the gap. GPU queue after M3: an RTX PRO 6000 kernel with the peel.
+2. **A period always holds tensor-bound work beside credited rounds:** QKᵀ (uncredited, R-ACCEL-8), decode's uncredited share, and other jobs. So **the served period's dual prices are the headline**, not job-only prices. At those prices the peel's (dy − 1)L′/K saving (1.2–12.4% of tensor time on the H200, 0.6–1.5% on the RTX PRO 6000 at v3's picks) and the H200's O-route (10% at K ≤ 4096, L′ 256) are honest time left uncredited. D5 v2 and D6 carry two columns: served period (headline) and job-only.
+3. **A26:** D5's standalone H200 0.961 (smem port bound 0.955) doesn't apply inside v3's rounds, which are lane-saturated: c = 1.000 there. Report both.
+4. **Item 4 (A2's carried accumulators, P-HYB3's floor of 6 adds)** stays open and is named in D7. It matters only if P-HYB3 is needed, that is, if v3's world-mix γ exceeds 10, which A25's H200 numbers make unlikely. No successor unless PROTO-DESIGN-3's world-mix γ comes out over 10.
+5. **D5 v2 is unchecked**, since ALGO-COST-2 has retired. Post v2 as soon as it's ready, not at 17:00Z: a fresh checker (ALGO-COST-3) reruns `v3_caps.py`, `joint_alloc.py` and `pv_bound.py` against it, and needs an hour.

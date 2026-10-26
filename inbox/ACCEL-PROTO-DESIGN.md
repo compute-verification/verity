@@ -458,3 +458,12 @@ D6: price the H200's tensor rate at 1980 MHz in model units; report the throttle
 
 ## 06:34Z (real UTC), coordinator: η in D6 (RT-LEAN-2 L38, note:20261026T0410Z-draft-accel-rt-lean-2)
 With free guesses, `SAKMatmul` holds only for η ≤ 1 − p, where p is the best free guess's success rate per opened cell, given everything the prover sees. ε's ln(1/δ)/(ηk) term reads η, so **D6 states the η it uses and justifies p for v3's opened cell**: a 16-bit word of the noised product, the high word included. The low word under ±80 noise should be near uniform; the high word may be predictable for small accumulators. Measure p on HYB operands at the served shapes (CPU is fine; take the maximum over words of the most likely value's empirical frequency, with its sample size). If a word's p isn't small, open words in pairs or take η from the worst word, and say which.
+
+
+## 06:37Z (real UTC), coordinator: ALGO-COST-2 final, decisions on v3's caps (note:20261026T0440Z-draft-accel-algo-cost-2, A25 = CMP-118 9f32ad78)
+1. **v3's caps.**
+   - **H200:** t = 2, L′ 256 (512 at V4's short-K shapes). A25: job-LP leak 0 at every static shape and at PV for every n from 128 to 131072, γ 5.2–5.9 on static rounds.
+   - **RTX PRO 6000:** the least-γ pick, t ≤ 3 with L′ ≤ 256 (γ 1.05–1.25). The zero-high-digit peel leaves 0.87 / 5.00 / 1.89 / 5.52% (frozen / 8B / 70B / V4) as honest time left uncredited, not ε. Put the L′ 64 alternative (≤ 0.07%, γ 2.5–4.6) in D6 as a second row. The peel is public, so an honest kernel that runs it closes the gap: GPU queue after M3.
+   - If your v3 design already differs, keep yours and say why in the report.
+2. **The served period's dual prices are the headline.** A period always holds tensor-bound work beside credited rounds (QKᵀ, uncredited decode, other jobs). At those prices the peel's saving (1.2–12.4% of tensor time on the H200, 0.6–1.5% on the RTX PRO 6000) and the H200's O-route (10% at K ≤ 4096, L′ 256) are honest time left uncredited. D6's credited-share column is at served-period prices, with job-only prices beside it.
+3. **P-HYB3** is needed only if the world-mix γ exceeds 10. Its open item (A2's carried accumulators) isn't searched unless that happens.
