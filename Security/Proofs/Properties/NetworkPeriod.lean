@@ -47,9 +47,7 @@ theorem caps_le {m : ℕ} (caps : Fin m → ℕ) : ∏ j, (caps j + 1) ≤ 2 ^ �
 
 theorem zip_ofFn {α β : Type} {n : ℕ} (f : Fin n → α) (g : Fin n → β) :
     (Array.ofFn f).zip (Array.ofFn g) = Array.ofFn fun i => (f i, g i) := by
-  ext i h₁ h₂
-  · simp
-  · simp
+  ext <;> simp
 
 theorem clockK_ofFn (jitter syncs windows : ℕ) {m n : ℕ} (caps : Fin m → ℕ) (a : Fin n → Audit)
     (w : Fin n → Facts) :
