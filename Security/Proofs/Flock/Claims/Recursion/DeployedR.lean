@@ -246,6 +246,18 @@ theorem rdOpens_encOpens {p : Flock.Proof} (h : OpensFit p) (rest : Msg) :
       p.ligerito.finalProof.siblings p.ligerito.finalProof.salts, rest) = some (opensOf p, rest)
   simp [opensOf]
 
+/-- **What a reader takes of the last message's proof is its openings**: `absorbedFrom` keeps of `q` only the fields
+`opensOf` keeps. -/
+theorem absorbedFrom_opensOf (c : FlockDeploy.RepCtx) (a q : Flock.Proof) :
+    FlockDeploy.absorbedFrom c a (opensOf q) = FlockDeploy.absorbedFrom c a q := rfl
+
+/-- **A rep reads the same off a proof's openings as off the proof** (so `ReadsBack` at `fl.ps = ps` carries over
+to `rdR`'s `ps.map opensOf`). -/
+theorem readRep_opensOf (c : FlockDeploy.RepCtx) (rows : List (List ByteArray)) (q : Flock.Proof) :
+    FlockDeploy.readRep c rows (opensOf q) = FlockDeploy.readRep c rows q := by
+  unfold FlockDeploy.readRep
+  simp only [absorbedFrom_opensOf]
+
 /-- **`rdR` reads `encLast`**: the statement, and each proof's openings (`opensOf`), where every length fits its
 word. -/
 theorem rdR_encLast {stmt : Msg} {ps : List Flock.Proof} (hs : stmt.length < 2 ^ 64) (hl : ps.length < 2 ^ 64)
