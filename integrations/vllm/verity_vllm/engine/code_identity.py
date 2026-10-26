@@ -380,7 +380,7 @@ def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[s
     {(kernel name, source sha256)}; call_set_sha256 over the pieces' launch programs), plus where it was read from.  Shared by the record
     path (RunHeader.compilation.generated_kernels) and commit_delta's versions.json so the two pins are comparable byte for byte."""
     try:
-        from verity_vllm.check import kernel_identity as KI
+        from verity_vllm.engine import kernel_identity as KI
 
         ind = inductor_dir or settings.TORCHINDUCTOR_CACHE_DIR or KI.inductor_cache_dir()
         doc = KI.collect(ind, KI.triton_cache_dir())

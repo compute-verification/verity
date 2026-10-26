@@ -10,6 +10,11 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
   fused, `acquire.h1_commit.fused_embed`). `CommitTap` wraps the
   committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q (``/0``)
   and s_a (``/1``), and the ids.
+* **The server's Commit** (`acquire.h1_commit.tap`): on serve-openai's rows-sha512 collector H1 builds no committer.
+  The tap reads each linear's x_q and s_a where the bench row's int8 source acquires them, under the manifest's op path
+  ``<module>/<fx node>`` (``ops``, read as `site(module)`), and a step's ids at its step-input port (``port``,
+  `served_record.StepInputPort`), whose T ids it reads up to the step's scheduled tokens, so they carry no CUDA graph's
+  padding.
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s rows are the Commit's x_q and s_a of
   linear w's site at the engine step H1's step s maps to, in H1's table form (`pouw_h1_served.Served.a_words`), and its
   AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`) whatever
@@ -76,9 +81,13 @@ def _same(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
 @dataclass
 class CommitTap:
     """What the Commit acquired, kept for H1 (`tap` on a committer, `attach`), and the Commit's values built from it.
-    ``embed`` is the module whose input the committer acquires as the step's token ids."""
+    ``embed`` is the module whose input the committer acquires as the step's token ids; ``port`` the name its step-input
+    port acquires them under instead, T ids zero past the step's scheduled tokens; ``ops`` the Commit's op path of a
+    site, ``<module>/<fx node>``, by which it acquires the site's x_q and s_a, -> the site (`site`)."""
 
     embed: str | None = None
+    port: str | None = None
+    ops: dict[str, str] = field(default_factory=dict)
     refused: list[str] = field(default_factory=list)
     #: the Commit's registered entries by its name of them (`credit.commit_rows`, `credit.commit_ids`), and where it
     #: acquired each; how many are trees of the Commit's own (rows off the window's)
@@ -90,6 +99,8 @@ class CommitTap:
     #: site -> [engine step, x_q, s_a] the Commit acquired last; engine step -> its ids; H1 step -> engine step
     _x: dict[str, list[Any]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
+    #: the engine steps whose ids are the port's, cut to the step's scheduled tokens, so no graph padding is left to drop
+    _bare: set[int] = field(default_factory=set)
     _steps: dict[int, int | None] = field(default_factory=dict)
     #: each open step A table's rows as the Commit acquired them so far (one block a call, by call) and where
     _rows: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
@@ -99,11 +110,13 @@ class CommitTap:
 
     def tap(self, com: Any) -> None:
         """Wrap ``com``'s acquire (the committer's ``_acquire(name, tensor, job)``, which every source calls) so each
-        tensor it acquires is also `take`'n."""
+        tensor it acquires is also `take`'n, with the step's scheduled tokens where the committer has them (its
+        ``_plan_shape``, set before the step's forward)."""
         orig = com._acquire
 
         def acquire(name: str, t: Any, job: Any) -> Any:
-            self.take(name, t, int(job.step))
+            n = int((getattr(com, "_plan_shape", None) or (0,))[0])
+            self.take(name, t, int(job.step), n or None)
             return orig(name, t, job)
         com._acquire, self._com = acquire, com
 
@@ -112,12 +125,21 @@ class CommitTap:
             vars(self._com).pop("_acquire", None)
             self._com = None
 
-    def take(self, name: str, t: Any, step: int) -> None:
-        """One tensor the Commit acquired at engine step ``step``: a site's x_q or s_a, or the embedding's input ids."""
+    def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
+        """One tensor the Commit acquired at engine step ``step``: a site's x_q or s_a, or the step's input ids, the
+        embedding's input or the port's first ``n``, the step's scheduled tokens."""
         if self.embed is not None and name == f"{self.embed}/in":
             self._ids[step] = _host(t).reshape(-1).astype(np.int64)
             return
+        if self.port is not None and name == self.port:
+            if n is None:
+                self.refused.append(f"engine step {step}: the port's input ids with no count of the step's scheduled tokens")
+                return
+            self._ids[step] = _host(t).reshape(-1)[:n].astype(np.int64)
+            self._bare.add(step)
+            return
         op, _, port = name.rpartition("/")
+        op = self.ops.get(op, op)
         if not op.endswith("/row_quant") or port not in ("0", "1"):
             return
         if port == "0":
@@ -175,11 +197,14 @@ class CommitTap:
 
     def ids_at(self, r: int, pad: int = 0) -> list[int]:
         """Round r's input ids: the Commit's ids of the engine step H1's step r maps to (none for a step it acquired
-        nothing at), less the last ``pad``, the positions a CUDA graph padded the step with (`pouw_h1.Call.pad`)."""
+        nothing at), less the last ``pad``, the positions a CUDA graph padded the step with (`pouw_h1.Call.pad`), which
+        the port's never hold."""
         j = self._steps.get(r)
         got = self._ids.get(j) if j is not None else None
         if j is not None and got is None:
             self.refused.append(f"step {r}: the Commit acquired no input ids at engine step {j}")
+        if j in self._bare:
+            pad = 0
         self.round_ids[r] = [] if got is None else [int(t) for t in got][:len(got) - pad]
         return self.round_ids[r]
 
