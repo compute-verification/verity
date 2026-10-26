@@ -41,7 +41,7 @@ theorem sqs_append (a b : List Frame) : sqs (a ++ b) = sqs a ++ sqs b := List.fi
 
 theorem sqs_cons (f : Frame) (fs : List Frame) : sqs (f :: fs) = (sqOf f).toList ++ sqs fs := by
   unfold sqs
-  cases h : sqOf f <;> simp [List.filterMap_cons, h]
+  cases h : sqOf f <;> simp [h]
 
 theorem chunks_ne_nil : ∀ (fs : List Frame), ∀ c ∈ (chunks fs).1, c ≠ []
   | [] => by simp [chunks]
