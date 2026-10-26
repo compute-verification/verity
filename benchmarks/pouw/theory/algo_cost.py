@@ -11,7 +11,8 @@ holds three or more nonzeros, two when some does (a tile of 16 rows x 64 k needs
 Prints, for each scheme read from Sedoglavic's catalogue (LRP files under SCHEMES, fetched from fmm.univ-lille.fr):
 its check (the scheme reproduces random integer products exactly), rank, the number of summed forms per side and their
 term counts, Σ_p (f_p − 1) on the output side, and its tensor price (R + Σ c_form)/(mkn) at v1's noise. The overflow
-rates are exact (convolutions of the entry distributions), at data 0 and minimized over a data grid.
+rates are exact (convolutions of the entry distributions), at data 0 and minimized over a data grid. `paper_family`
+reprices NAIVE-STRASSEN's schedule family (CMP-110) at v1's range with this 2:4 route added, depths 1 to 3.
 """
 
 from __future__ import annotations
@@ -60,6 +61,41 @@ def form_cost(p: float) -> float:
     """0.5 a 2:4 pass; the second pass's share is the chance a 16 x 64 tile has a group of 4 with >= 3 nonzeros."""
     q = 4 * p**3 * (1 - p) + p**4
     return 0.5 * (1 + (1 - (1 - q) ** 256))
+
+
+STRASSEN_NU = [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
+WINOGRAD_NU = [(1, 1), (1, 1), (4, 1), (1, 4), (2, 2), (3, 3), (2, 2)]
+
+
+def paper_family(R: dict, depth: int = 3) -> None:
+    """NAIVE-STRASSEN's family at v1's range with the 2:4 overflow route added (A5).
+
+    A leaf whose forms have (nu_A, nu_B) terms costs min(2, 1 + c(nu_A) + c(nu_B)): 2 is the family's price (f16 at
+    weight 2, or two INT8 digits) while f16 holds the form (161 nu <= 4097), and a lower bound past that.
+    """
+    def c(t: int) -> float:
+        return 0.0 if t == 1 else form_cost(R[t][1]) if t in R else 1.0
+
+    def leaf(a: int, b: int, route: bool) -> float:
+        return 1.0 if (a, b) == (1, 1) else min(2.0, 1 + c(a) + c(b)) if route else 2.0
+
+    def uniform(nus, r: int, route: bool) -> float:
+        tot = 0.0
+        for path in itertools.product(nus, repeat=r):
+            a = int(np.prod([x for x, _ in path]))
+            b = int(np.prod([y for _, y in path]))
+            tot += leaf(a, b, route)
+        return tot / 8**r
+
+    def mix(r: int, a: int = 1, b: int = 1) -> float:
+        if r == 0:
+            return leaf(a, b, True)
+        return min(sum(mix(r - 1, a * x, b * y) for x, y in nus) / 8 for nus in (STRASSEN_NU, WINOGRAD_NU))
+
+    for r in range(1, depth + 1):
+        print(f"depth {r}: Strassen {uniform(STRASSEN_NU, r, True):.4f} (family {uniform(STRASSEN_NU, r, False):.5f}), "
+              f"Winograd {uniform(WINOGRAD_NU, r, True):.4f} (family {uniform(WINOGRAD_NU, r, False):.5f}), "
+              f"per-node mix {mix(r):.4f}")
 
 
 def parse(path: Path):
@@ -114,6 +150,7 @@ def main(argv: list[str]) -> None:
     R = rates()
     for t, (z, mn) in R.items():
         print(f"t={t}: overflow at data 0 {z:.4f}, min over data grid {mn:.4f}; form cost {form_cost(mn):.3f} products")
+    paper_family(R)
     d = Path(argv[1]) if len(argv) > 1 else Path("/tmp/fmm")
     for name, shape in [("2x2x2", (2, 2, 2)), ("2x3x3", (2, 3, 3)), ("3x3x3", (3, 3, 3)), ("4x4x4", (4, 4, 4))]:
         f = d / f"{name}_LRP.mpl"
