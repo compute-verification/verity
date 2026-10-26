@@ -21,9 +21,9 @@ whose verifier accepts everything.
   witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no witness is in `RLeak`.
-* `HorizonWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw, and its soundness hypothesis at
-  `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts, `ε = 0` and
-  `q = F = 1`, its bound reads `1 ≤ 0`.
+* `HorizonWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
+  hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
+  `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
 -/
@@ -330,44 +330,51 @@ theorem SampledLeakAccepted_nontrivial (H : Msg → Msg) :
   leakD_bound_fails H _ _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) []])
     (h [] (leakD_scopeAcc []) Unit silentP)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- With no input registered, the registration opens at every statement `leakD` parses. -/
+theorem leakD_regOpens (H : Msg → Msg) (x : Msg) :
+    ∀ s, (leakD Coin).parse x = some s → RegOpens H (leakD Coin).commit s ∅ [] :=
+  fun _ _ => ⟨by simp, by simp⟩
+
 /-- **`SampledLeakRegistered`'s acceptance conclusion fails at the accepting verifier** `leakD`, at one step at
-`δ = 0`, with no input registered, so the registration opens trivially. -/
+`δ = 0`, with no input registered: at the statement `[]`, in scope (`leakD_scopeAcc`) with its registration opening
+(`leakD_regOpens`), its silent prover's bound fails. -/
 theorem SampledLeakRegistered_nontrivial (H : Msg → Msg) :
-    ¬ ∀ x, ScopeAcc (leakD Coin) (fun _ => notLay) (fun _ => 1) x →
-      (∀ s, (leakD Coin).parse x = some s → RegOpens H (leakD Coin).commit s ∅ []) →
-      ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω),
-        PrBad H (leakD Coin).V
-            (RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay)
-              (fun _ => 1) 0 (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1)
-            (Claims.Sampling.E (leakD Coin) fun _ => [()]) x P ≤
-          Claims.Sampling.κ (leakD Coin) 0 x +
-              Real.sqrt (Claims.Sampling.γ (leakD Coin) x * PrB H (leakD Coin).V P x) +
-            (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) Ω P x).Pr H +
-            (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) (leakD Coin).commit
-              (leakD Coin).parse (fun _ => []) Ω P x).Pr H := fun h =>
+    ¬ PrBad H (leakD Coin).V
+        (RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay)
+          (fun _ => 1) 0 (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1)
+        (Claims.Sampling.E (leakD Coin) fun _ => [()]) [] silentP ≤
+      Claims.Sampling.κ (leakD Coin) 0 [] +
+          Real.sqrt (Claims.Sampling.γ (leakD Coin) [] * PrB H (leakD Coin).V silentP []) +
+        (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) Unit silentP []).Pr H +
+        (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) (leakD Coin).commit
+          (leakD Coin).parse (fun _ => []) Unit silentP []).Pr H :=
   leakD_reg_bound_fails H _ _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) []])
-    (h [] (leakD_scopeAcc []) (fun _ _ => ⟨by simp, by simp⟩) Unit silentP)
 
 end Toy
 
 /-! ## The horizon -/
 
-/-- **`HorizonWrongUnitsLe`'s hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units and each
-`k`-subset with share `1 / C(n, k)`, and with no unit wrong, every acceptance event meets a wrong unit with
-probability `0`. -/
-theorem HorizonWrongUnitsLe_honest (n k : ℕ) :
+/-- **`HorizonWrongUnitsLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units
+and each `k`-subset with share `1 / C(n, k)`. -/
+theorem uniform_draw (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
-      (∀ S : Finset (Fin n), S.card = k →
+      ∀ S : Finset (Fin n), S.card = k →
         (Finset.univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.1 = S).card * n.choose k =
-          Fintype.card {S : Finset (Fin n) // S.card = k}) ∧
-      ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
-        Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
-  refine ⟨fun x => x.2, fun S hS => ?_, fun m acc i => ?_⟩
-  · have h1 : (Finset.univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.1 = S) = {⟨S, hS⟩} := by
-      ext x
-      simp [Subtype.ext_iff]
-    rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
-  · simp [Pr]
+          Fintype.card {S : Finset (Fin n) // S.card = k} := by
+  refine ⟨fun x => x.2, fun S hS => ?_⟩
+  have h1 : (Finset.univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.1 = S) = {⟨S, hS⟩} := by
+    ext x
+    simp [Subtype.ext_iff]
+  rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
+
+/-- **`HorizonWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
+(`uniform_draw`) with no unit wrong, every acceptance event meets a wrong unit with probability `0`, so `ε = 0`. -/
+theorem HorizonWrongUnitsLe_honest (n k : ℕ) :
+    ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
+      Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
+  intro m acc i
+  simp [Pr]
 
 /-- **`HorizonWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
 that unit wrong, `q = F = 1`. -/
