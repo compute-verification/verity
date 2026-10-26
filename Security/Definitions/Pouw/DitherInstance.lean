@@ -39,7 +39,7 @@ open Pouw.RelativeSecurity
 section Cards
 
 instance instFintypeAccelRes : Fintype Verity.Accel.Res where
-  elems := {.tensor, .tensorLong, .issue, .alu, .imad, .shfl, .f64, .smem, .dram}
+  elems := {.tensor, .tensorLong, .issue, .alu, .imad, .shfl, .f64, .smem, .dram, .l2}
   complete r := by cases r <;> simp
 
 /-- **`n` cards pooled into one**: every store and every resource `n` times the card's, the code space too, and the
