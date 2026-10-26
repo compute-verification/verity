@@ -10,6 +10,7 @@ import Proofs.Pouw.Eps1
 import Proofs.Pouw.Dimension
 import Proofs.Pouw.Dither
 import Proofs.Pouw.DitherWitness
+import Proofs.Pouw.DitherInstance
 import Proofs.Pouw.Dimension.A2WordsProofs
 import Proofs.Pouw.Dimension.CausalProofs
 import Proofs.Pouw.Dimension.EmbedProofs

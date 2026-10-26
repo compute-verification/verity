@@ -25,6 +25,7 @@ import Definitions.Pouw.Assumptions.Dimension.RouteU
 import Definitions.Pouw.Assumptions.Dimension.RouteUPipe
 import Definitions.Pouw.Assumptions.Dimension.RouteUPipeAssumptions
 import Definitions.Pouw.Assumptions.Dither
+import Definitions.Pouw.Assumptions.DitherInstance
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TAssumptions
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TGamma
 import Definitions.Pouw.Assumptions.Fp8Atom.H1TRunningAssumptions
@@ -57,6 +58,7 @@ import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutW1
 import Definitions.Pouw.Assumptions.Pinned
 import Definitions.Pouw.Assumptions.RelativeSecurity
+import Definitions.Pouw.Assumptions.ShaRealize
 /-!
 # PoUW's named assumptions, and the definitions and statements over them (trusted)
 
