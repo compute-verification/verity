@@ -308,13 +308,11 @@ installs it first, so a machine without elan works), must pass clean and fail on
 - **The hashes are SHA-256.** They are taken over a canonical form of the kernel term (`Facts.lean`'s `canonText`),
   which keeps what Lean's `Expr.hash` keeps (constant names, universe levels, bound variable indices, projections,
   literals) and drops what it drops (binder names and binder info, `let` names, metadata). A renamed hypothesis is
-  therefore the same statement, and a different term is a different one. Records written with `Expr.hash`, which has
-  32 bits, are still checked as they are, and the run notes them. `--update` rewrites them, and its review says
-  "rehashed" where the 32-bit hash still matches, which Daniel's DM (below) leaves out.
+  therefore the same statement, and a different term is a different one. A record of `Expr.hash`'s 32 bits (none is
+  left) is checked as it is; `--update` rewrites it, "rehashed" in its review and left out of Daniel's DM (below).
 
 **A changed guarantee reaches Daniel.** A weakened definition leaves every proof valid, so the axiom checks and the
-replay pass it: only the records see it, and only a person can judge it. (A redefinition of `Collision` once made a
-Merkle binding guarantee vacuous for unsalted schemes; the records flagged it and a review caught it.) `--update` records
+replay pass it: only the records see it, and only a person can judge it. `--update` records
 the change and prints it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions or
@@ -339,13 +337,12 @@ are, and in place of `G as` the value of `G` at the type's universe levels with 
 `Meta.unfoldDefinition?` unfolds an applied constant), the proofs Lean abstracts out of a definition (its `G._proof_<n>`
 theorems) put back in place, as a theorem's type keeps them. Nothing else is reduced, and the text is hashed as every
 type is. A certified lift gets one line, "lifted into G: the same statement, its definition unfolded once", and `G`, new and
-read by no other guarantee, needs no reading of its own; the review then holds no statement change. (No merge needs a
-statement reviewer, for a lift or any other change: Daniel, 8 Oct.) Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
+read by no other guarantee, needs no reading of its own; the review then holds no statement change. Any other lift prints in full: a `G` whose value differs from `e` in anything the hash sees
 (binder names and metadata aside), a `G` outside a `Guarantees` module, and a lift that moves a named assumption from the
 theorem's binders into `G`, which the record's `assumptions` would lose. Daniel's DM reads only the records, so it still
 lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
+`four_names` lists the namespace roots whose guarantees are all in the four-name form: each is
 `X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
 audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
 lifted, or no longer a guarantee.
