@@ -41,6 +41,7 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | SASS | Mark | Model, or what is missing |
 |---|---|---|
 | IADD3, IMAD, IMAD.WIDE, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, LEA | covered | `Lane` (`iadd3`, `mad`, `madWide` coarsely at one lane, `lop3`, `shf`, `prmt`, `popc`, `flo`, `brev`, `setp`, `sel`, `min`, `max`, `lea`) |
+| IMAD.HI, LEA.HI | covered, semantics not captured | `Lane.madHi` (PTX `mad.hi`), `Lane.leaHi` (the high word of the funnel shift, plus `b`); added at FOLD-SAT's report (CMP-131); their SASS semantics are to capture, and FOLD-SAT's SMT models are to align |
 | IDP.4A (dp4a) | covered | `Lane.dp4a` |
 | IDP.2A (dp2a) | missing | |
 | IABS, BMSK, SGXT, IMUL.HI (`mul.hi`), ISCADD | missing | each is a short sequence of covered lanes, at more units |

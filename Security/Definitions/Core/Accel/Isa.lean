@@ -15,7 +15,7 @@ writes, and the units of each resource it uses; this module says what each compu
   group-sum pipelines compute them (`floatDot`; BF16 is `TC.Spec.tcDotTotal` itself). A row's operands are its
   format's `bits` wide, packed into words, so an MMA can't multiply wider operands (P1), and each of its `m·n·k`
   products is formed inside one output's dot (P2).
-* **Lane functions** (`Op.lane`): one lane's CUDA-core instruction on registers: integer add, multiply-add, logic,
+* **Lane functions** (`Op.lane`): one lane's CUDA-core instruction on registers: integer add, multiply-add (low, wide, high), logic,
   shifts, byte permute, bit counts, compares, selects, `dp4a`, and FP32 `fma`, `add` and `mul` (`Verity.Fp32`).
 * **Copies** (`Op.copy`): `n` words from one store to another, unchanged: loads, stores, register moves, TMA.
 * **Atomics** (`Op.atom`): a read-modify-write of one word of a store: integer add, exchange.
@@ -217,6 +217,8 @@ inductive Lane
   | mad
   /-- `IMAD.WIDE.U32`: `a·b + (c₁:c₀)` as two words, low then high -/
   | madWide
+  /-- `IMAD.HI`: the high 32 bits of `a·b`, plus `c` (PTX's `mad.hi`), each factor signed or not -/
+  | madHi (signed : Bool)
   /-- `LOP3`: the bitwise function of `a, b, c` whose truth table is `lut` -/
   | lop3 (lut : BitVec 8)
   /-- `SHF`: the funnel shift of `b:a` by `c`, left or right, the amount clamped to 32 or taken modulo 32 -/
@@ -239,6 +241,8 @@ inductive Lane
   | max (signed : Bool)
   /-- `LEA`: `(a << s) + b` -/
   | lea (s : Fin 32)
+  /-- `LEA.HI`: `b` plus the high word of `(c:a) << s` -/
+  | leaHi (s : Fin 32)
   /-- `IDP4A`: `c + Σ` of the four byte products of `a` and `b`, each side signed or not -/
   | dp4a (sa sb : Bool)
   /-- `FFMA`: `a·b + c` in FP32, rounded once to nearest even (`Fp32.f32FmaV2`) -/
@@ -262,7 +266,7 @@ def nOut : Lane → ℕ
   | _ => 1
 
 def pipe : Lane → Pipe
-  | .mad | .madWide | .dp4a _ _ => .imad
+  | .mad | .madWide | .madHi _ | .dp4a _ _ => .imad
   | .ffma | .fadd | .fmul => .fma
   | _ => .alu
 
@@ -301,6 +305,9 @@ def eval : Lane → (ℕ → Word) → ℕ → Word
   | .madWide, x, o =>
     let s := (x 0).toNat * (x 1).toNat + ((x 3).toNat * 2 ^ 32 + (x 2).toNat)
     BitVec.ofNat 32 (if o = 0 then s else s / 2 ^ 32)
+  | .madHi signed, x, _ =>
+    let p : ℤ := if signed then (x 0).toInt * (x 1).toInt else (x 0).toNat * (x 1).toNat
+    BitVec.ofInt 32 (p / 2 ^ 32) + x 2
   | .lop3 lut, x, _ => lop3Eval lut (x 0) (x 1) (x 2)
   | .shf left clamp, x, _ =>
     let n := if clamp then Nat.min (x 2).toNat 32 else (x 2).toNat % 32
@@ -316,6 +323,7 @@ def eval : Lane → (ℕ → Word) → ℕ → Word
   | .min signed, x, _ => if (if signed then (x 0).slt (x 1) else (x 0).ult (x 1)) then x 0 else x 1
   | .max signed, x, _ => if (if signed then (x 0).slt (x 1) else (x 0).ult (x 1)) then x 1 else x 0
   | .lea s, x, _ => (x 0 <<< s.val) + x 1
+  | .leaHi s, x, _ => x 1 + BitVec.ofNat 32 (((x 2).toNat * 2 ^ 32 + (x 0).toNat) * 2 ^ s.val / 2 ^ 32)
   | .dp4a sa sb, x, _ =>
     BitVec.ofInt 32 ((x 2).toInt + ((List.range 4).map fun i => byte sa (x 0) i * byte sb (x 1) i).sum)
   | .ffma, x, _ => BitVec.ofNat 32 (Fp32.f32FmaV2 (x 0).toNat (x 1).toNat (x 2).toNat)
