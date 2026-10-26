@@ -32,7 +32,7 @@ Analyzing (numpy and scipy; the plots need matplotlib):
 - `table.py`: p(τ) table rows pooled over runs, from `analyze.py`'s JSON.
 - `align.py`: concurrent series aligned in wall time and binned (1 s and 10 s), with each machine's sampled CPUs.
 - `bins_irqpin.py`: an `irqpin.py` run's on and off flows in 10 s bins.
-- `model_awake.py`: each GPU condition's on-node server time convolved with the network leg measured with both ends'
+- `model_awake.py`: each GPU condition's on-node server time convolved with the network path measured with both ends'
   receive CPUs awake. `model_mined.py`: the same for the mined P2 sweep's server times.
 - `plot.py`, `plot_net.py`: survival curves.
 
@@ -72,7 +72,7 @@ The runs of 17 Oct, all at commits of this directory's history:
 | r20261017-091835-86b0, r20261017-093157-8438 | three paths at once (8438 with each machine's CPUs sampled) | `net.py --only ping-series-concurrent` |
 | r20261017-094651-6c4c | pings, challenger on or off its receive-interrupt CPU | `irqpin.py` |
 | r20261017-100427-881e | the same with 4 KiB answers in 1,472-byte datagrams (fragmented) | `irqpin.py --ops 2 --seconds 150` |
-| r20261017-101331-a890 | the same in 1,422-byte datagrams (whole): the both-awake leg | `irqpin.py --ops 2 --dgram 1422 --seconds 150` |
+| r20261017-101331-a890 | the same in 1,422-byte datagrams (whole): the both-awake case | `irqpin.py --ops 2 --dgram 1422 --seconds 150` |
 
 Run r20261017-095551-61bf is void (the previous run's responder still held cpu-1's port), and r20261017-093126-4d37
 and r20261017-075242-169d failed at launch.

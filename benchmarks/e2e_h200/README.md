@@ -3,12 +3,12 @@
 The GPU serving loop of the one-H200 demo (CMP-96): steps of the frozen MQA shape (`shape.FROZEN`, ALLP-IFACE's `H200`) on
 the plain INT8 weights, loaded once into the card's memory and resident across steps (Demo A, M1-M3; `--weights staged` keeps
 M4's decode-to-staging path from the store), every op's output committed through the per-step commit call, drawn slots
-opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each leg run against the
+opened by replaying their requests and drawn units replayed bit for bit against the Definitions, each subprotocol run against the
 step or named, and a replay bundle and block record written. `verity bench e2e_h200 --out OUT [...]` runs it
 (`run.py --help`).
 
 It lives here, not in `integrations/`, because it is a run harness that composes pieces from several owners (memory's
-store and decode call, kernels' GEMMs, attention and commit call, circuits' Definitions, the legs) for one recorded run, as
+store and decode call, kernels' GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run, as
 `benchmarks/` holds; `integrations/torch_loop` stays the CPU loop of `verity.ml.windows.interface`. When the real pieces land
 they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
@@ -43,7 +43,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (#4538; `percall:kraq` is #4540's), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | h1zy's J10-R lane Definitions (#4654) and Credit.window over the tile stratum (CMP-127); window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`, NET-77): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (CMP-95 items 5 and 6, PR #4454) |
-| Legs | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the M4 path's P2 store; bandwidth not run (M4); integrity is the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the M4 path's P2 store; bandwidth not run (M4); sampled proofs are the replay and the opening | MEM-67/69, CMP-97, NET-72, C-Flock `--zk` and Lean |
 
 `replay.py` and `cpu_step.py` are the replay lane's (#4460): the CPU replay of drawn units in the 16-bit forms, and an
 independent CPU decode step; the suite holds the driver's rows equal to `cpu_step`'s.

@@ -30,7 +30,7 @@ The Glossary's terms (`ARCHITECTURE.md`), and these:
 - **Sampling block**: one batch of matmul calls whose coins go out together, with its noise, its commitment and its
   draw. Unlike the Glossary's default, its draw is not stratified by subcircuit (see the sampling design below).
 - **Proof block**: what one check proves with C-Flock `--zk`: one segment of one output cell of a call. This is the
-  Glossary's proof unit, which TERMS-BLOCK (CMP-150) is renaming.
+  Glossary's proof block.
 - **W_b**: sampling block b's public cost, its honest cost at μ° from its public shape. W is work at the period's
   prices, as in the Glossary's W_cert.
 - **Registration**: before a monitoring period's first coin, the developer registers every sampling block of the
@@ -103,7 +103,7 @@ It needs four things:
 - W_b for every b, and W_reg, public in the registration before the first coin;
 - a live coin for each sampling block after its own roots, from the challenger, in the replica's order;
 - a law object beside `draw.parse_law`'s, and the Lean verifier's `Flock.Draw`;
-- its escape bound, which is `WorkSound`'s sampling term (a moment bound at rate ηq/W_reg a unit of cost) rather than
+- its acceptance-probability bound, which is `WorkSound`'s sampling term (a moment bound at rate ηq/W_reg a unit of cost) rather than
   `work_escape_le`.
 
 **A proof block** is one cell (i, j) and one segment s of a call:

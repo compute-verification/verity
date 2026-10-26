@@ -1097,12 +1097,12 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   `StoreMatches` asks for (`requirement.Requirement.last` over the census, in Python). It reads the circuit, its
   schedule and the registration, never a committed value, so residency comes from the public schedule. A free at a
   value's last *use*, the last step whose gather selected it, would read residency off committed values.
-  `StoreMatches` would fail for every candidate no later step selects, and one wrong unit upstream of the selection
+  `StoreMatches` would fail for every candidate no later step selects, and one faulty proof block upstream of the selection
   would move the free. In FMT-R678's counterexample (note:20261019T0021Z-report-format-r6-r8, run
   r20261019-001741-3fc1), one flipped bit of a length unit keeps \(L - 1\) dead pages of \(L\) resident to the last
   step, \((L - 1)(S - 1) \cdot 32\) bits more, while the structural residency is the same in both runs. The
   structural free holds more instead: each candidate page stays resident to the last step that may select it, \(L\)
-  times the honest run's use there with no wrong unit. The prover does hold those pages, so the audit's own claim is
+  times the honest run's use there with no faulty proof block. The prover does hold those pages, so the audit's own claim is
   sound, but they are memory the circuit may not need. That is why registered weights, which `W` must hold whatever
   the router or the tokens select, are creditable in every format, and KV only where no selection reads it. Each
   request's arrival step and executed extent are part of the schedule. They are host- or value-derived until the
@@ -1166,7 +1166,7 @@ over them. Until `public()` is trimmed to match (after #2519, which keeps `stale
   \(u_s\) the pass's planned blocks it credits no receipt of (0 when its receipts cover its plan), a window
   its own sum less \(\varepsilon\) of the session's (the unproved share may all be one window's), and \(\delta\) adds
   to the ledger's error (`Ledger.error`, `error_horizon`). That \(\varepsilon\) bounds the unproved credit, not only
-  the share of units drawn wrong, is the link's to establish: a wrong unit at a heavy step carries more than its
+  the share of units drawn wrong, is the link's to establish: a faulty proof block at a heavy step carries more than its
   share.
   - *Reads the circuit doesn't make.* The plan is the resident set, and the circuit's reads at a step can be fewer: a
     gather's unselected rows, requests absent from the step's batch, unrouted experts, filler. `PlanMatches` is

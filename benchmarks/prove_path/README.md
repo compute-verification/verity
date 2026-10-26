@@ -94,7 +94,7 @@ units, with every input free. NET-68, below, makes the circuit the whole window.
   - The honest arm, through `records_audit`, was accepted: Lean draw and verify on both members, 322 of the 328 units
     drawn, and 25 of 25 negatives refused, R4 and `advice-root-after-the-draw` among them.
   - The forged arm, on local coins (r20261025-093852-2ec5), was refused by Lean: M0's R7, no proof for the forged rep.
-  - The charge: at most 2 wrong units of 328 at δ = 0.5, with 1,679 advice bits under a cap of 8,388,608.
+  - The charge: at most 2 faulty proof blocks of 328 at δ = 0.5, with 1,679 advice bits under a cap of 8,388,608.
   - #`freeInputs` is 2,752,512 bits, or 2,097,152 if the RoPE stand-ins' inputs counted as ingress. 2a registers none of
     them, so c is all of them even under option A, and the leak bound is vacuous until NET-68.
 - **First demo of record:** r20261025-041404-a1c5, on the code before #4061's interface. It drew from 8 layer-0

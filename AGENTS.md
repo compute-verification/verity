@@ -171,7 +171,7 @@ the standing rulings stated nowhere else.
   doesn't control, never as a process on the prover's node, and trust in the device and its host provider is a named
   assumption (`trusted-host`). Nothing the prover runs or hosts is trusted. A network certifier functions as an
   active warden, in network steganography's sense, but "network certifier" is its one name: never "warden" or "tap"
-  (Daniel, 25 Oct; old names in `ARCHITECTURE.md`'s Glossary).
+  (Daniel, 25 Oct; old names in `glossary/`).
 - **The audited hardware is untrusted, and so is its vendor** (Daniel, 17 Oct: an international scheme may treat the chip
   designer as adversarial). No guarantee rests on a GPU attesting its own SKU, firmware or clocks. Hardware constants
   (f_max, peak rates) come from the data sheet for now, quoted under two or three readings rather than one main line,
