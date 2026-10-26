@@ -492,4 +492,34 @@ theorem honest_tight (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin 
 
 end Honest
 
+/-! ## Toward the count (the degree-2, fork-free fragment) -/
+
+section Count
+
+variable {R : Type} [CommRing R] {n L np B n' : ℕ}
+
+/-- **Distinct certified cell-blocks have distinct word slots** (`theoremK` at no product): two on one slot would
+make the difference of their targets vanish at every bit point with at most two ones, so its rank would be 0, against
+`PrefixDiffRank`. -/
+theorem word_injOn (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np → R) (p₀ : Fin np) (hp₀ : φ (w p₀) = 1)
+    (hL : 0 < L) (pc : Fin n → Fin B → Fin L → R) (vq : Fin B → Fin L → Fin n' → R) {N : ℕ}
+    (P : SlpG (DBits n L np B n') R N) (word : DCells n n' B → Fin N) :
+    Set.InjOn word (certified pc vq w P word : Set (DCells n n' B)) := by
+  intro e he e' he' h
+  by_contra hne
+  have hc : Certified pc vq w P word e := (Finset.mem_filter.mp (Finset.mem_coe.mp he)).2
+  have hc' : Certified pc vq w P word e' := (Finset.mem_filter.mp (Finset.mem_coe.mp he')).2
+  have hrank := (hR φ w p₀ hp₀ pc vq).2 e e' hne 1
+  have hle := theoremK φ (∅ : Finset ℕ) (fun _ => (0 : R)) (fun _ => (⟨0, 0⟩ : BitAff (DBits n L np B n') R))
+    (fun _ => ⟨0, 0⟩) ⟨0, 0⟩
+    (fun z => dPrefix pc vq w e.1 e.2.1 e.2.2.val z - 1 * dPrefix pc vq w e'.1 e'.2.1 e'.2.2.val z)
+    fun U hU => by
+      beta_reduce
+      rw [← hc U hU, ← hc' U hU, h]
+      simp [BitAff.eval]
+  rw [Finset.card_empty, mul_zero] at hle
+  omega
+
+end Count
+
 end Pouw.RingFragment
