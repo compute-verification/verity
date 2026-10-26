@@ -17,8 +17,8 @@ import pytest
 
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
-from verity.core.protocols.certifier import advice as ADV, head_check as HC, served as SV, service as SVC
-from verity.core.protocols.certifier import advised as AD
+from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC, served as SV, \
+    service as SVC
 from verity.core.protocols.certifier.certificate import Direction, Issuer, parameters_digest
 from verity.core.protocols.certifier.grid import GridParams
 from verity.core.protocols.certifier.schedule import ClockSync

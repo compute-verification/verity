@@ -87,7 +87,7 @@ composition keeps as a 2-bit counter (C = 3). Async's lag bits take one context 
 **A window's charge** (`ChargeCount_v1{N}`) is the one call the compile unit makes a window, for a window that sends
 only decisions (no hits, resumes, order entries or lag bits: the compile slice's class). Its N slots are the window's
 decisions in order, `en` (the slot holds one) and `bit` (the decision), and a slot with `en` 0 changes nothing. In the
-replay's units they are the ones the window's load loads (`verity/core/protocols/certifier/protocol/charge-chain.md`). It counts
+replay's units they are the ones the window's load loads (`protocol/charge-chain.md`). It counts
 `code_v1._window`'s segment for them:
 - n_arrived, the enabled slots' count, as the book's Exp-Golomb bin, one general step at the bin's (cum, freq, total)
   read from the public table by a one-hot of the count's bit length, then, once n ≥ 2, its offset in the bin, one more

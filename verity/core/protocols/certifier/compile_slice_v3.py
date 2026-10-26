@@ -91,8 +91,10 @@ from verity.ml.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array
-from verity.core.protocols.certifier import cache_step as CST, cache_step_v2 as C2, compile_slice as CS
-from verity.core.protocols.certifier import compile_slice_v2 as V2, replay_chain as RC, replay_step as RS
+from verity.core.protocols.certifier import cache_step as CST, compile_slice as CS
+from verity.core.protocols.certifier import cache_step_v2 as C2
+from verity.core.protocols.certifier import compile_slice_v2 as V2
+from verity.core.protocols.certifier import replay_chain as RC, replay_step as RS
 from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = CS.STATICS + ("CD", "SW", "DA")

@@ -1,5 +1,5 @@
 """The charge's carry chain: `ChargeCount_v1{N}`'s carry handed from one window to the next under hiding commitments
-(`verity/core/protocols/certifier/protocol/charge-chain.md`).
+(`protocol/charge-chain.md`).
 
     ChargeLink_v1{N}  (book, carry_in[96], carry_out[96], en[N], bit[N]) -> (ok, bits[CW])
 

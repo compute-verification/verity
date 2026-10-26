@@ -51,7 +51,8 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.gates.frame_v3 import _part
-from verity.core.protocols.certifier import head_check as HC, replay_chain as RC, served_rows as SR, served_tie as ST
+from verity.core.protocols.certifier import head_check as HC, replay_chain as RC, served_rows as SR
+from verity.core.protocols.certifier import served_tie as ST
 from verity.core.protocols.certifier.head_check import BIT
 
 STATICS = ("R", "G", "IW", "L", "T")
