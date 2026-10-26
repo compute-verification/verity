@@ -71,6 +71,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           "integrations/vllm/verity_vllm/protocols/pouw/h1/served.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/settings.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/static.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/tables_device.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/window.py",
           "integrations/vllm/verity_vllm/protocols/pouw/native.py",
           "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/passes.py",

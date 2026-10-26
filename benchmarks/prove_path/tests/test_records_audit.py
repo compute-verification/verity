@@ -404,8 +404,8 @@ def test_a_value_is_a_tie_only_when_output_ports_write_every_leaf_its_input_port
 
 def test_an_input_only_window_value_is_free_in_the_count_and_named():
     """`declared_count` with ``untied``: the input rows read from a value no output port writes leave ``registered`` for
-    ``free``, by exactly those rows, even when the audit's pins name it, and the count names it; a tie's reads stay
-    registered."""
+    ``free``, by exactly those rows, and the count names it; a tie's reads stay registered. Both are pins, as the audit
+    pins every value it opens."""
     doc = _crafted(TIE + INPUT_ONLY, PARAMS)
     per_unit = 16 * sum(w for _p, w in IF.layout(COORD).rows)
     before, after = RA.declared_count(doc, 0, pins=PARAMS), RA.declared_count(doc, 0, pins=PARAMS, untied={"e"})
@@ -451,8 +451,7 @@ def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
     ties, untied = RA.window_pins(w, doc)
     assert set(ties) == {"up", "up_codes", "up_scale", "down", "down_codes", "down_scale"} and untied == {}
     assert {"x", "sx"} <= set(w["activations"]["values"]) and not {"x", "sx"} & set(ties)
-    pins = {v for v, _p in L.WIRED_WEIGHTS} | set(ties)
-    honest = RA.declared_count(doc, 0, pins=pins, untied=untied)
+    honest = RA.declared_count(doc, 0, pins={*weights, *ties}, untied=untied)
     h, r = L.H, 2
     assert honest["free"] == r * 16 * (h // 2 + 2) == 2112
     tm = descriptor_id(L.linear_template(h))
@@ -462,8 +461,9 @@ def test_the_toys_ties_are_pinned_and_its_embedding_fed_rows_are_free(tmp_path):
                                        IF.Read(tm, "sx", "sx", 0, (r,), 0, (2,)).doc()]
     ties2, untied2 = RA.window_pins(w, crafted)
     assert set(ties2) == set(ties) and set(untied2) == {"x", "sx"}
-    assert RA.declared_count(crafted, 0, pins=pins | set(untied2))["free"] == 0
-    fixed = RA.declared_count(crafted, 0, pins=pins | set(untied2), untied=untied2)
+    pins = {*weights, *ties2, *untied2}
+    assert RA.declared_count(crafted, 0, pins=pins)["free"] == 0
+    fixed = RA.declared_count(crafted, 0, pins=pins, untied=untied2)
     assert (fixed["free"], fixed["registered"], fixed["untied"]) == (2112, honest["registered"], ["sx", "x"])
 
 

@@ -417,41 +417,52 @@ def OneWaitAbort (H : Msg → Msg) (D : Flock.Deploy Coin Col T) : Prop :=
           accPrD (abortRun H P D.V x keep ω) ^ D.k x) ≤
           D.εtable x + e.term ω + D.N₀ x / (Real.exp 1 * D.k x) * accPrD (abortRun H P D.V x keep ω)
 
-/-- **Flock's one-wait bound at the abort law, from the table's bound there**: when the word is no longer than `N₀`,
-`ε_table ≥ 0`, the verifier takes a round, `k ≥ 1` and the statement has one table wherever it accepts some run, and
-`Ok` admits `0` and every column an accepted run opens, with `ColsOk` and `ConflictTied` at the prover's runs. -/
-theorem oneWaitAbort_of_tableBound (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
+/-- **Two kept runs at one tape that open a position of the word to two columns collide**, with the second draw forked
+at round `0`: `ConflictTied` at the runs' openings as they abort (`opD`). -/
+theorem opD_tied (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ) (hconf : ConflictTied H D N)
+    {Ω A : Type} (P : Prover Ω) (x : Msg) (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool) (j₀ : Fin (D.V.k x))
+    (hj₀ : j₀.val = 0) (ω : Ω) (d d' : (Fin (D.V.k x) → Coin) × A)
+    (h : ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p) :
+    TiedColl H ((abortRun H P D.V x keep ω d).vLog ++ (abortRun H P D.V x keep ω (forkDraw j₀ d d')).vLog) := by
+  classical
+  obtain ⟨p, h1, h2, h3⟩ := h
+  have hfd : forkDraw j₀ d d' = d' := by
+    show (forkCoins j₀ d.1 d'.1, d'.2) = d'
+    rw [Claims.Bridge.forkCoins_zero j₀ hj₀]
+  rw [hfd]
+  simp only [opD] at h1 h2 h3
+  split_ifs at h1 h2 h3 with ha ha'
+  · obtain ⟨hk1, hr1⟩ := abortRun_acc_iff.1 ha
+    obtain ⟨hk2, hr2⟩ := abortRun_acc_iff.1 ha'
+    obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
+    obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h2
+    have hne : u ≠ v := fun huv => h3 (by rw [hu, hv, huv])
+    rw [abortRun_of_keep hk1] at hu ⊢
+    rw [abortRun_of_keep hk2] at hv ⊢
+    exact hconf x Ω P ω d.1 d'.1 p.val u v hr1 hr2 p.isLt hu hv hne
+  all_goals simp at h1 h2
+
+/-- **One wait's bound at the abort law at a tape, from the table's bound there**: `oneWaitD` at the runs as they
+abort, the escapes `e₀` with the conflict at round `0` (`opD_tied`). -/
+theorem oneWaitAbort_le_of_tableBound (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
     (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x)
     (hone : ∀ x, (∃ s, D.parse x = some s ∧ s.tables = 1) ∨ NoAcc H D.V x) (Ok : Msg → Col → Prop) (hz : ∀ x, Ok x 0)
-    (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N) (htab : TableBoundθAbort H D N Ok) :
-    OneWaitAbort H D := by
+    (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
+    (P : Prover Ω) {A : Type} [Fintype A] [Nonempty A] (keep : Ω → (Fin (D.V.k x) → Coin) → A → Bool)
+    (e₀ : EscapesD H (D.V.k x) (abortRun H P D.V x keep))
+    (hb : ∀ (ω : Ω) (C : Fin (N x) → Col), (∀ p, Ok x (C p)) → ¬ GoodTable D N x C →
+      accPrD (abortRun H P D.V x keep ω) ≤ D.εtable x + e₀.term ω +
+        Pr fun d : (Fin (D.V.k x) → Coin) × A => (abortRun H P D.V x keep ω d).out = .acc ∧
+          ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) p.val = some u ∧ u ≠ C p)
+    (ω : Ω) (hε : 0 < accPrD (abortRun H P D.V x keep ω)) :
+    accPrD (abortRun H P D.V x keep ω) * (accFailD (abortRun H P D.V x keep ω) (D.k x) (Extracts D x) /
+      accPrD (abortRun H P D.V x keep ω) ^ D.k x) ≤
+      D.εtable x + (e₀.addFork (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩
+        (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+        (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl)).term ω +
+        D.N₀ x / (Real.exp 1 * D.k x) * accPrD (abortRun H P D.V x keep ω) := by
   classical
-  intro x Ω _ _ P A _ _ keep
-  obtain ⟨e₀, hfit, hb⟩ := htab x Ω P A keep
-  set j₀ : Fin (D.V.k x) := ⟨0, hVk x⟩
-  set ev : Ω → (Fin (D.V.k x) → Coin) × A → (Fin (D.V.k x) → Coin) × A → Prop :=
-    fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p with hev
-  have tied : ∀ ω d d', ev ω d d' → TiedColl H ((abortRun H P D.V x keep ω d).vLog ++
-      (abortRun H P D.V x keep ω (forkDraw j₀ d d')).vLog) := by
-    intro ω d d' ⟨p, h1, h2, h3⟩
-    have hfd : forkDraw j₀ d d' = d' := by
-      show (forkCoins j₀ d.1 d'.1, d'.2) = d'
-      rw [Claims.Bridge.forkCoins_zero j₀ rfl]
-    rw [hfd]
-    simp only [opD] at h1 h2 h3
-    split_ifs at h1 h2 h3 with ha ha'
-    · obtain ⟨hk1, hr1⟩ := abortRun_acc_iff.1 ha
-      obtain ⟨hk2, hr2⟩ := abortRun_acc_iff.1 ha'
-      obtain ⟨u, hu⟩ := Option.isSome_iff_exists.1 h1
-      obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 h2
-      have hne : u ≠ v := fun huv => h3 (by rw [hu, hv, huv])
-      rw [abortRun_of_keep hk1] at hu ⊢
-      rw [abortRun_of_keep hk2] at hv ⊢
-      exact hconf x Ω P ω d.1 d'.1 p.val u v hr1 hr2 p.isLt hu hv hne
-    all_goals simp at h1 h2
-  refine ⟨e₀.addFork (D.k x) (Nat.cast_nonneg _) j₀ ev tied,
-    e₀.fits_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) j₀ rfl ev tied hfit, fun ω hε => ?_⟩
   have hacc : ¬ NoAcc H D.V x := fun hno => by
     have : accPrD (abortRun H P D.V x keep ω) = 0 := by
       unfold accPrD
@@ -471,7 +482,8 @@ theorem oneWaitAbort_of_tableBound (H : Msg → Msg) (D : Flock.Deploy Coin Col 
     (fun C hC hg => hb ω C hC hg) (D.k x) hk1
   have hE : (Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) =>
       ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) s p) =
-      Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) => ev ω s.1 s.2 := rfl
+      Pr fun s : ((Fin (D.V.k x) → Coin) × A) × ((Fin (D.V.k x) → Coin) × A) =>
+        ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (s.1, s.2) p := rfl
   rw [hE] at hj
   rw [EscapesD.term_addFork]
   have hrate : (N x : ℝ) * accPrD (abortRun H P D.V x keep ω) / (Real.exp 1 * D.k x) ≤
@@ -479,6 +491,22 @@ theorem oneWaitAbort_of_tableBound (H : Msg → Msg) (D : Flock.Deploy Coin Col 
     rw [div_mul_eq_mul_div]
     exact div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right (hN x) hε.le) (by positivity)
   linarith
+
+/-- **Flock's one-wait bound at the abort law, from the table's bound there**: when the word is no longer than `N₀`,
+`ε_table ≥ 0`, the verifier takes a round, `k ≥ 1` and the statement has one table wherever it accepts some run, and
+`Ok` admits `0` and every column an accepted run opens, with `ColsOk` and `ConflictTied` at the prover's runs. -/
+theorem oneWaitAbort_of_tableBound (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
+    (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)
+    (hk : ∀ x, 1 ≤ D.k x ∨ NoAcc H D.V x)
+    (hone : ∀ x, (∃ s, D.parse x = some s ∧ s.tables = 1) ∨ NoAcc H D.V x) (Ok : Msg → Col → Prop) (hz : ∀ x, Ok x 0)
+    (hok : ColsOk H D N Ok) (hconf : ConflictTied H D N) (htab : TableBoundθAbort H D N Ok) :
+    OneWaitAbort H D := by
+  intro x Ω _ _ P A _ _ keep
+  obtain ⟨e₀, hfit, hb⟩ := htab x Ω P A keep
+  exact ⟨_, e₀.fits_addFork (D.weight x) (D.k x) (Nat.cast_nonneg _) ⟨0, hVk x⟩ rfl
+    (fun ω d d' => ∃ p, ConflictAt (opD D N x (abortRun H P D.V x keep ω)) (d, d') p)
+    (opD_tied H D N hconf P x keep ⟨0, hVk x⟩ rfl) hfit,
+    oneWaitAbort_le_of_tableBound H D N hN hεt hVk hk hone Ok hz hok hconf x P keep e₀ hb⟩
 
 /-- **Flock as the inner protocol meets `Inner.KSAbort`, from one wait's bound at the abort law**, at every decoder that
 meets `ListWithin`, when `K > 0`, `ε_table ≥ 0`, and `k ≥ 8` and the relation splits by table wherever the verifier

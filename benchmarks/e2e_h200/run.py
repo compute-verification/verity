@@ -17,9 +17,9 @@ are replayed alone and their slot roots compared with the committed ones (`e2e_h
 family of the replayed step are replayed against the Definitions and opened against the step's root. The by-table backends
 keep every step's tables and replay from them.
 
-Exit 0 when every drawn unit replays to its committed word and every opened slot to its committed root, 3 when one doesn't
-(``--tamper OP`` flips bit 0 of OP's committed words at every step: replay or opening must find it), 4 when a leg's fixture
-check fails.
+Exit 0 when every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's
+own check holds (a PoUW unit's z the served sums, `e2e_h200.percall`), 3 when one doesn't (``--tamper OP`` flips bit 0 of
+OP's committed words at every step: replay or opening must find it), 4 when a leg's fixture check fails.
 """
 from __future__ import annotations
 
@@ -176,7 +176,8 @@ def main(argv: list[str] | None = None) -> int:
                                                    Params(shape, store, a.device, a.weights == "resident"))[1][-1].root,
                               results[-1].root),
         "pouw": L.not_run("pouw", "H200-PERCALL's per-call-noise tiles (CMP-126), a --subcircuit of the registration")
-        if not subs else L._entry("pouw", "fixture", subcircuits=[s.name for s in subs]),
+        if not subs else L._entry("pouw", "fixture", subcircuits={s.name: s.manifest() for s in subs},
+                                  mismatches=sum(getattr(s, "mismatches", 0) for s in subs)),
     }
     store.close()
     doc = REC.write_record(
@@ -196,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
                       "opening": opening and {k: opening[k] for k in ("mismatches", "units_opened", "units_unverified",
                                                                       "reference_unequal")},
                       "legs": {k: v["status"] for k, v in legs.items()}}), flush=True)
-    if replay["mismatches"] or (opening and (opening["mismatches"] or opening["units_unverified"]
+    if replay["mismatches"] or legs["pouw"].get("mismatches") or (opening and (opening["mismatches"] or opening["units_unverified"]
                                              or opening["reference_unequal"])):
         return 3
     if legs["pous"].get("mismatched_blocks") or legs["wipe"].get("store_digest_equal") is False \
