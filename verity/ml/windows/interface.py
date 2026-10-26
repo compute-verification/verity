@@ -664,6 +664,24 @@ class Circuit:
         raise KeyError(f"{tid}: no template of {self.name}")
 
 
+def read_shape(circuit: Circuit, value: str) -> dict[str, Any]:
+    """Registered parameter ``value``'s rows as the circuit's reads fix them, the shape an outside committer (a network
+    certifier's output value, `out_commit.OutShape`) commits it at: ``words``, the row width of the port every read of it
+    names; ``rows``, its leaves over that; 16-bit leaves in ``hm96-sha512/row/v2`` rows (`unit_rows`). Refused
+    (ValueError) when no read names it, two read it at two widths, or its leaves aren't whole rows."""
+    lays = circuit.layouts
+    widths = {dict(lays[r.reader][0].rows + lays[r.reader][0].outs)[r.port] for r in circuit.reads if r.param == value}
+    leaves = (circuit.registered.params if circuit.registered is not None else {}).get(value)
+    if not widths or leaves is None:
+        raise ValueError(f"{circuit.name}: no registered read of {value!r}")
+    if len(widths) != 1:
+        raise ValueError(f"{circuit.name}: {value!r} is read at {sorted(widths)} words a row, not one width")
+    (w,) = widths
+    if leaves % w:
+        raise ValueError(f"{circuit.name}: {value!r}'s {leaves} leaves aren't whole rows of {w} words")
+    return {"value": value, "words": w, "rows": leaves // w, "word_bits": 16, "row_schema": V2}
+
+
 def members(circuit: Circuit, cap: int) -> tuple[CS.Member, ...]:
     """The window's members: each template's units in the partition's order, in chunks ``<descriptor id>/c<j>`` of at most
     ``cap`` (one statement each), on the template's bit rows, each wired by the circuit's wires that cover it."""
