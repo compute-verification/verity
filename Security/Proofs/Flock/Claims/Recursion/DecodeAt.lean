@@ -19,7 +19,8 @@ import Proofs.Flock.VBridge.Family.Encode
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
 (`jAt`) decodes at the setup SHA-512 gives (`decode_at`, RECINT's `TargetDecode` with `At` unfolded), under the JSON
 library's specification (`Claims.JsonSpec`), which it reads only for what `Json.parse` (a `partial def`) returns: the
-public header's draw and the parsed draw are well-formed (`parse_wf`), and the statement's `Hello` parses back to its
+public header's draw is well-formed (`parse_wf`; the statement's draw is the verifier's rebuilt one, `draw_wf`), and
+the statement's `Hello` parses back to its
 coins (`parse_canon`, so no coin tree). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
@@ -98,10 +99,11 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, z9, he⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
-  rw [hb] at z9
-  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at z9
-  rw [he, ← z9]
+  obtain ⟨-, -, -, -, -, -, -, -, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  obtain ⟨dr, hz9, he⟩ := z9
+  rw [hb] at hz9
+  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hz9
+  rw [he, ← hz9]
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
@@ -150,10 +152,11 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
     cases e : ProvedScope.lawWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
+  have hwf := FlockComplete.JsonRT.draw_wf hdraw hdd
   have hg : Good d := by
     rcases FlockComplete.JsonRT.law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hK
-    · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hk
+    · exact FlockComplete.JsonRT.good_stratified hwf hD hK
+    · exact FlockComplete.JsonRT.good_subset hwf hD hk
   have hnn : d ≠ Json.null := by
     intro hn'
     rw [hn'] at hD
