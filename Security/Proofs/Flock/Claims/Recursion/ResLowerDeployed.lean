@@ -706,7 +706,6 @@ theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
     simp [rowForms, hvin, hrh]
   rw [hel, formBit_var, hvb, Claims.Recursion.VStar.copyOf_eq (by omega), hdiv, hmod]
   simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
-  omega
 
 /-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layVR` with check 5's public rows from
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
@@ -934,7 +933,7 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     subst hp
     exact e
   have hVc := vCols_of_base hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
-    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg) (by rw [← hc0]; exact hn) hvb
+    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg) (show o * c.g + g = n by rw [← hc0]; exact hn) hvb
   rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g hg
     (by rw [hn]; exact hn2), hn]
   exact hall hptv hpto hwv hwo hnr hsz hVc hOc
