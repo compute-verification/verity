@@ -1087,7 +1087,9 @@ class Driver:
     def _revert(self, commits: list[str]) -> str:
         """`git revert` each of ``commits`` `main` hasn't undone already (`_undone`) on `main`, in order (`-m 1` for a merge), and
         push: "pushed", "undone" (each was undone already), "conflict" (one doesn't apply) or "refused" (the push lost a race
-        with a push to `main`: the next tick tries again).  `main` stays as it was unless "pushed"."""
+        with a push to `main`: the next tick tries again).  `main` stays as it was unless "pushed".  Off drive it refuses before
+        anything (`queue.Queue._drive_only`)."""
+        self.q._drive_only("main", "once", False)
         _git(self.repo, "checkout", "-q", "-B", "main", "refs/remotes/origin/main")
         if not (todo := [c for c in commits if not self._undone(c)]):
             return "undone"
@@ -1537,8 +1539,10 @@ class Driver:
 
     def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, base: str, main: str,
               moved: list[str], scratch: Path) -> Member | None:
-        """Land ``m``'s train (`land`), with the locks its check regenerated committed on top (`regenerate_locks`)."""
+        """Land ``m``'s train (`land`), with the locks its check regenerated committed on top (`regenerate_locks`).  Off drive it
+        refuses before anything (`queue.Queue._drive_only`)."""
         q = self.q
+        q._drive_only("main", "once", False)
         rid, locks, held = self._locks(v, scratch)
         if held:
             self.refuse(drive, f"locks:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {held}. Find why; "
@@ -2749,7 +2753,9 @@ class Driver:
         t, rid = self._lean_gate(drive, chain, k, dry_run)
         t = self._past_failed(drive, chain, t)
         if t >= 0:
-            t = self._past_failed(drive, chain, self._compiles(drive, chain, base, t))
+            if (cut := self._compiles(drive, chain, base, t)) < t:
+                self._drop_passed_above(drive, chain, cut)
+            t = self._past_failed(drive, chain, cut)
         if t < 0:
             return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} waits (see above)"
         m, members = chain[t], chain[: t + 1]
@@ -2787,6 +2793,16 @@ class Driver:
             return 0
         k = self._reviewed(chain[:top])[0]
         return max((i + 1 for i, m in enumerate(chain[:k]) if m.commit in passed), default=0)
+
+    def _drop_passed_above(self, drive: dict, chain: list[Member], cut: int) -> None:
+        """Drop the passed Lean checks of commits above ``chain[cut]``, which a member that doesn't compile keeps from landing
+        (`_compiles`): `_landable` would keep that member frozen at its old head for them, though its owner pushed the fix that
+        `_eject` leaves for the next sync to take (CI-190: "landed #1", then "nothing lands: #2 waits" every tick)."""
+        for x in chain[cut + 1:]:
+            if (drive["lean"].get(x.commit) or {}).get("state") == "passed":
+                del drive["lean"][x.commit]
+                self.q.log(f"research queue drive: the passed Lean check of {x.commit[:12]} is dropped: what lands stops below it "
+                           f"(#{chain[cut + 1].pr} doesn't compile), and the next sync takes what was pushed since")
 
     def _past_failed(self, drive: dict, chain: list[Member], t: int) -> int:
         """The highest index at or below ``t`` a landing may reach past drive's failed Lean checks: below the highest failed commit
