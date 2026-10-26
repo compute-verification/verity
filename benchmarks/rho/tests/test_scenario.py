@@ -44,3 +44,11 @@ def test_every_lean_citation_is_in_a_lock():
     cites += [c for kind in KINDS.values() for c in getattr(kind, "CITES", ()) + getattr(kind, "PHYSICAL", ())]
     absent = sorted({c for c in cites if lean.status(c) == "absent"})
     assert not absent, f"no lock lists {absent}"
+
+
+@pytest.mark.parametrize("name", REG.names("scenario"))
+def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
+    for f in evaluate_named(REG, name).families:
+        rhos = [f.ladder[s].rho for s in ("proved", "conditional", "draft")]
+        assert rhos == sorted(rhos) and math.isclose(rhos[-1], f.lo)
+        assert 0 <= f.combined.slowdown.monitored <= 1

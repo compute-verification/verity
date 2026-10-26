@@ -123,6 +123,13 @@ class Slowdown:
     regions: Mapping[str, Share]
     terms: Mapping[str, float]
 
+    @property
+    def monitored(self) -> float:
+        """The share of the adversary's training done on monitored compute: the protocols do their job for this
+        algorithm when it is small (`g ≪ d`), and not when it is near 1."""
+        rate = self.dark + (1 - self.dark) * self.g
+        return (1 - self.dark) * self.g / rate if rate > 0 else 0.0
+
 
 def slowdown(partition: Partition, allowance: Allowance, kappa: float, efficiency: float = 1.0,
              side: Side = "bound") -> Slowdown:

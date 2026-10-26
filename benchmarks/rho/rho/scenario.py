@@ -13,7 +13,8 @@ adversary picks its family, so the scenario's ρ lies in `[min_A lo_A, min_A hi_
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 from rho import hardware, instances, lean, regimes
 from rho.attacks import ATTACKS
@@ -81,6 +82,10 @@ class Estimate:
         return self.slowdown.rho if self.slowdown else math.nan
 
 
+#: The statuses a bound can have, strongest first; a ladder step admits its own and every stronger one.
+LADDER = ("proved", "conditional", "draft")
+
+
 @dataclass(frozen=True)
 class FamilyResult:
     family: str
@@ -88,6 +93,9 @@ class FamilyResult:
     bounds: tuple[Estimate, ...]
     combined: Estimate
     attacks: tuple[Estimate, ...]
+    #: the guaranteed slowdown admitting bounds up to each status (`LADDER`): what is proved, what is proved under
+    #: named premises, and what a draft adds
+    ladder: Mapping[str, Estimate] = field(default_factory=dict)
 
     @property
     def lo(self) -> float:
@@ -143,6 +151,15 @@ def _declared(a: Allowance, p: Profile, block: Budget) -> float:
     return max(1.0, p.kappa * block.compute / (2 * n)) if n > 0 else math.inf
 
 
+def _combine(args: tuple[Argument, ...], bounds: list[tuple[Estimate, Allowance | None]], p: Profile,
+             partition: Partition, block: Budget) -> Estimate:
+    """Every bound met at once: each block gets the least of their caps, under the union of their citations."""
+    met = [a for _, a in bounds if a is not None]
+    cites = tuple(c for b, (_, a) in zip(args, bounds, strict=True) if a is not None for c in b.cites)
+    return _rated("+".join(e.argument for e, a in bounds if a is not None) or "none", "bound", cites,
+                  slowdown(partition, least(*met), p.kappa, p.efficiency), partition, _declared(least(*met), p, block))
+
+
 def evaluate(s: Scenario) -> Result:
     partition = s.regime.partition(s.context)
     block = Budget(s.context.policy.gamma, s.context.policy.k)
@@ -150,13 +167,11 @@ def evaluate(s: Scenario) -> Result:
     for fam in s.families:
         p = fam.profile(s.model, s.run)
         bounds = [_estimate(b, p, partition, block) for b in s.bounds]
-        met = [a for _, a in bounds if a is not None]
-        cites = tuple(c for b, (_, a) in zip(s.bounds, bounds, strict=True) if a is not None for c in b.cites)
-        combined = _rated("+".join(e.argument for e, a in bounds if a is not None) or "none", "bound", cites,
-                          slowdown(partition, least(*met), p.kappa, p.efficiency), partition,
-                          _declared(least(*met), p, block))
+        combined = _combine(s.bounds, bounds, p, partition, block)
+        ladder = {step: _combine(s.bounds, [(e, a) if e.status in LADDER[:i + 1] else (e, None) for e, a in bounds],
+                                 p, partition, block) for i, step in enumerate(LADDER)}
         out.append(FamilyResult(fam.name, p, tuple(e for e, _ in bounds), combined,
-                                tuple(_estimate(a, p, partition, block)[0] for a in s.attacks)))
+                                tuple(_estimate(a, p, partition, block)[0] for a in s.attacks), ladder))
     return Result(s, tuple(out))
 
 
