@@ -14,10 +14,15 @@ they replace the fixtures here, one module each, and the record's `stands_in_for
 
 ## What runs, and what stands in
 
-The units are circuits' plan's at size classes, one unit a row (CMP-92 af6de1f1, revised 23:30Z, section 1b): a row op's
-output is one row unit (`RmsNormRow`, `QuantRowS8`, `SoftmaxRow`, `Bf16AddRow`, the embedding and argmax rows), and each
-linear, QK^T and PV coordinate is one unit (`ScaledMmS8Coordinate_v1{K}`, no K-split; `GemmCoordinate_v2{K=d}`;
-`GemmCoordinatePad_v1{T, K=32}`). `driver.py` names the step's tables and `commit.tables` lays them out.
+The units are circuits' FAMILIES map's (PRF-166 db928eb0; `e2e_h200/plan.py`, `shape.Forms`). The residual stream and every
+row op's rows are chunk rows of 128 words. RMSNorm is `RmsSumSqChunks_v1{4096,128}` (32 chunk sums a row) and
+`RmsNormOutSums_v1` a chunk row. The quantizer is `RowAbsMax_v1` over parts of 16,384 and `QuantChunkS8_v1{8192}` a chunk. Each
+linear coordinate is one `ScaledMmS8CoordinateRows_v1{K, R = K/8192}`, gathered into its readers' rows by `AllGather_v1`.
+Attention is padded to 32 keys: `QkSoftmaxRowPad_v1{T=32,D=64}` and `PvRow_v1{T=32}` a head, the heads paired by
+`AllGather_v1{2,64}`. Then `Bf16AddRow_v2{128}` a chunk row, `EmbeddingCoordinate_v1` a coordinate and `Argmax_v2`. At the
+frozen shape a slot is 6,102,102 units in 6,102,832 rows. `driver.py` names the step's tables, and `commit.py` commits each
+unit's output rows as one commit unit. The `MINI` shape's forms are small enough for the CPU suite to reach every level of
+the map.
 
 A step (`Driver.step_slots`) runs a batch of rows, each the KV pool's slot at its own position; `Driver.step` is the
 lockstep step `run.py` drives, and `Driver.serve` (`run.py --requests`) serves requests through `slots.SlotKV`'s slots by
@@ -33,8 +38,8 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | Slots and KV cache | `slots.py`: `SlotKV` admits requests FIFO into the lowest free sequence slots, runs each at its own position, frees and reuses a slot when its request finishes, and holds each slot's K and V rows (the one KV head, the context's positions) as the step's bf16 bits; `check_slots.py` checks it at the frozen KV shape on a device | stays |
 | Attention | `attention.py`: on CUDA kernels' `attn_ref` (#4466, `benchmarks/torch_gpu/attn_ref`; its cubin from `build.sh`, `$ATTN_REF_CUBIN`) for QK^T and PV and `softmax_t` (the MUFU ex2 table in torch integer ops); elsewhere the Definitions' numpy kernels | kernels' fast attention (`attn_bf16`) |
 | Commit | `commit.py`: kernels' per-slot tree (`--commit slots`, #4469, `benchmarks/torch_gpu/commit_slots`: row/v2 leaves, step → slot → unit → rows), a group at a time on a side stream, salt keys fresh a step; or the by-table `verity_vllm.commit.row_tables` (`reference`, `host`, `device`), which keeps every step's tables | — |
-| Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's commit units opened against the step's root (`slots.verify_unit`) and the reference's slot root compared with the engine's | PRF-170's plan's live coins |
-| Replay | `e2e_h200/units.py`: coordinate units through `replay.py`'s templates (main's Definitions); row units through compositions of `replay.py`'s word functions until circuits' row Definitions land; a row's attention reads its slot's K and V rows at the steps that wrote them, one attention family a position; a fixture coin draws K a family | circuits' row Definitions; PRF-170's plan through `replay.draw` |
+| Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | PRF-170's plan's live coins |
+| Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the replay lane adds the map's; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | the replay lane's templates for the map; PRF-170's plan through `replay.draw` |
 | PoUW | `--subcircuit e2e_h200.percall:kraq` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraq build (#4540), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its three blockers are named in the record (`percall.CREDIT`) | h1zy's J10-R lane Definitions, Credit.window over the tile stratum (CMP-127) and the sm_90a SASS pin; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`, NET-77): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | IFACE-B's `verity/drawn-unit-bundle/v1` and `verity/block-record/v1` (CMP-95 items 5 and 6, PR #4454) |

@@ -1,18 +1,20 @@
-"""The step's row ops and the W8A8 linear in torch, on whatever device their tensors are on, each the function of its row
-unit in circuits' plan (CMP-92, comment af6de1f1 as revised 23:30Z to size classes, sections 1 and 1b): every f32 op one IEEE
+"""The step's row ops and the W8A8 linear in torch, on whatever device their tensors are on, each the function of its units
+in circuits' FAMILIES map (`plan`; the semantics are CMP-92's plan, af6de1f1, sections 1 and 1b): every f32 op one IEEE
 round to nearest (torch's elementwise kernels, no fast math, no FMA across separate ops), division and sqrt correctly
 rounded through f64 (`div_rn`, `sqrt_rn`), every reduction sequential in ascending index from +0 (`seq_sum`, never torch's
-blocked sums: a Triton kernel on CUDA, numpy on the host), every bf16 rounding RNE. NaN words are not modelled: no op here makes one from finite inputs.
+blocked sums: a Triton kernel on CUDA, numpy on the host), every bf16 rounding RNE. NaN words are not modelled (no op here
+makes one from finite inputs), except that `argmax` and `quantize` take a NaN input as their Definitions do.
 
-    rmsnorm    RmsNormRow_v1{N, EPS}: s = sum_i RN(x_i^2) from +0, mean = RN(s / N), rs = RN(1 / RN(sqrt(RN(mean + eps)))),
-               out_j = bf16(RN(w_j * bf16(RN(x_j * rs))))
-    quantize   QuantRowS8_v1{N, RELU}: amax = max |x| (after max(x, 0) under RELU), scale = RN(amax / 127) (1 when amax is 0),
-               codes = clamp(rne(RN(x / scale)), -128, 127)
-    s8_linear  ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}: the exact s32 sum (`s32_mm`), then bf16(RN(RN(f32(acc) * sx) * sw))
-               (`scale`)
-    add        Bf16AddRow_v1{N}: bf16(RN(a + b))
-    embed      the embedding row: bf16(RN(tok[:, token] + pos[:, t]))
-    argmax     the argmax row: the first index of the greatest logit
+    rmsnorm    RmsSumSqChunks_v1 and RmsNormOutSums_v1{C, S, G, N, EPS}: chunk c's sum s_c = sum_i RN(x_i^2), group g's
+               sum of its chunk sums, s = the groups' sum, each from +0; mean = RN(s / N), rs = RN(1 / RN(sqrt(RN(mean +
+               eps)))), out_j = bf16(RN(w_j * bf16(RN(x_j * rs))))
+    quantize   RowAbsMax_v1{N, RELU} over parts and QuantChunkS8_v1{N, RELU}: amax = max |x| (after x < 0 -> +0 under
+               RELU), scale = RN(amax / 127) (1 when amax is not > 0), codes = clamp(rne(RN(x / scale)), -128, 127), a NaN 0
+    s8_linear  ScaledMmS8CoordinateRows_v1{K, R, GEMM_SM90_S8}: the exact s32 sum (`s32_mm`), then
+               bf16(RN(RN(f32(acc) * sx) * sw)) (`scale`)
+    add        Bf16AddRow_v2{N}: bf16(RN(a + b))
+    embed      EmbeddingCoordinate_v1{V}: bf16(RN(tok[:, token] + pos[:, t]))
+    argmax     Argmax_v2{V}: TokenSelect, the first index of the greatest logit, a NaN never taken
 
 The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and a float64 matmul in row chunks on the CPU (exact: integers below 2^53): the stand-in for
 kernels' KP2-S8 GEMM until it is handed over.
@@ -92,30 +94,45 @@ def add(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     return bf16(f32(a) + f32(b))
 
 
-def rmsnorm(x: torch.Tensor, w: torch.Tensor, eps: torch.Tensor) -> torch.Tensor:
-    """x (B, N) bf16, w (N,) bf16, eps a () f32 -> (B, N) bf16."""
-    n = x.shape[1]
+def rmsnorm(x: torch.Tensor, w: torch.Tensor, eps: torch.Tensor, chunk: int | None = None,
+            groups: int = 1) -> tuple[torch.Tensor, torch.Tensor]:
+    """x (B, N) bf16, w (N,) bf16, eps a () f32 -> (B, N) bf16 and the chunk sums (B, N / chunk) f32: each chunk's sum of
+    RN(x_i^2), then each of ``groups`` groups' sum of its chunk sums, then the groups' sum, each sequential from +0."""
+    b, n = x.shape
+    c = chunk or n
     xf = f32(x)
-    mean = div_rn(seq_sum(xf * xf), torch.full((x.shape[0],), float(n), dtype=torch.float32, device=x.device))
+    sums = seq_sum((xf * xf).reshape(b * (n // c), c)).reshape(b, n // c)
+    total = seq_sum(seq_sum(sums.reshape(b * groups, -1)).reshape(b, groups))
+    mean = div_rn(total, torch.full((b,), float(n), dtype=torch.float32, device=x.device))
     rs = div_rn(torch.ones_like(mean), sqrt_rn(mean + eps))
     h = bf16(xf * rs[:, None])
-    return bf16(f32(w)[None, :] * f32(h))
+    return bf16(f32(w)[None, :] * f32(h)), sums
 
 
 @dataclass
 class Quant:
     codes: torch.Tensor    # (B, K) s8
     scale: torch.Tensor    # (B,) f32
+    amax: torch.Tensor     # (B, P) bf16 words as s16: the first P - 1 parts' max |x|, then the row's
 
 
-def quantize(x: torch.Tensor, relu: bool = False) -> Quant:
+def quantize(x: torch.Tensor, relu: bool = False, part: int | None = None) -> Quant:
+    """``part``: the words of a `RowAbsMax_v1` part (the whole row by default). max |x| is the greatest word with its sign
+    cleared, so a NaN is above +inf and the scale of a row with a NaN is 1."""
     xf = f32(x)
     if relu:
-        xf = torch.clamp_min(xf, 0.0)
-    amax = xf.abs().amax(-1)
-    scale = torch.where(amax > 0, div_rn(amax, torch.full_like(amax, 127.0)), torch.ones_like(amax))
-    codes = torch.round(div_rn(xf, scale[:, None])).clamp(-128, 127).to(torch.int8)
-    return Quant(codes, scale)
+        xf = torch.where(xf < 0, torch.zeros_like(xf), xf)
+    b, n = x.shape
+    p = part or n
+    mag = x.view(torch.int16).to(torch.int32) & 0x7FFF
+    if relu:
+        mag = torch.where(xf == 0, 0, mag)
+    mag = mag.reshape(b, n // p, p).amax(-1)
+    amax = torch.cat([mag[:, :-1], mag.amax(-1, keepdim=True)], 1).to(torch.int16)
+    am = (mag.amax(-1) << 16).view(torch.float32)
+    scale = torch.where(am > 0, div_rn(am, torch.full_like(am, 127.0)), torch.ones_like(am))
+    codes = torch.nan_to_num(torch.round(div_rn(xf, scale[:, None])), nan=0.0).clamp(-128, 127).to(torch.int8)
+    return Quant(codes, scale, amax)
 
 
 def s32_mm(xq: torch.Tensor, wq: torch.Tensor) -> torch.Tensor:
@@ -147,5 +164,9 @@ def s8_linear(q: Quant, wq: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
 
 
 def argmax(logits: torch.Tensor) -> torch.Tensor:
-    """The first index of the greatest value of each row, (B,) int64."""
-    return torch.argmax(f32(logits), dim=-1)
+    """`TokenSelect` over each row, (B,) int64: the first index of the greatest value (+0 = -0), a NaN never taken, and 0
+    when the row's first value is NaN or none is above -inf (torch's argmax takes a NaN as the greatest)."""
+    xf = f32(logits)
+    nan = torch.isnan(xf)
+    j = torch.argmax(torch.where(nan, float("-inf"), xf), dim=-1)
+    return torch.where(nan[:, 0], torch.zeros_like(j), j)
