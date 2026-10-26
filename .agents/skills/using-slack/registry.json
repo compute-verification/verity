@@ -684,7 +684,7 @@
       "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
       "owns": [],
       "branch_suffixes": [
-        "4c4d"
+        "9c4d"
       ],
       "examples": [
         "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
