@@ -224,6 +224,7 @@ import Proofs.Flock.Claims.Recursion.HonestAccR
 import Proofs.Flock.Claims.Recursion.HonestPartsLayR
 import Proofs.Flock.Claims.Recursion.VStarWit
 import Proofs.Flock.Claims.Recursion.VStarBuild
+import Proofs.Flock.Claims.Recursion.HpLast
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.RowDLevels
