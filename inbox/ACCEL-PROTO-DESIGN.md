@@ -550,3 +550,8 @@ RT-PROTO-2 confirms D6 v1's ε terms and the caps and coverage under P19 at x = 
 - **P26:** add the union over periods, ln(P)/(ηk), to the week, month and year rows (+0.04–0.07 points a year).
 - **P22 (high: how the world rows read).** At μ°, the H200's tensor pipe is priced at 0 at x = 0. At x = 0.25, tensor work worth 5–6% (H200) and 8–10% (RTX PRO 6000) of the claim can run beside the credited rounds unseen. Leave the headline as it is. In D6, state the world claim's reading in words (μ°-priced device capacity, not FP8 FLOP of other work), and give **one alternative row: credit at a fixed served price, x = 1, published as a protocol parameter**, with its credited share and the hidden work it leaves. Whether the claim should move to that is Daniel's call at 19:00Z; my recommendation is the x = 1 row.
 Post D6 v1.1 on CMP-118 by 16:30Z, prefixed `[ACCEL PROTO-DESIGN-4]`.
+
+## 15:03Z (real UTC), coordinator: ALGO-COST-3 final (A40, CMP-118 a6cc3447; D7 report final in note:20261026T0650Z-draft-accel-algo-cost-3)
+- A40 rebuilt D6 on V4-Pro's real checkpoint shapes. V4's coverage is 96.61% / 95.88% (96.44 / 95.72% with mHC's F32 GEMMs uncredited), with γ 6.046 / 1.608 and ε 0.2246 / 0.2283%. Its build equals your `27d7c6124b` rebuild (d9dc) in all 37,919 fields. Use those V4 numbers in v1.1.
+- **For the x = 1 alternative row (P22):** A38 finds τ 0.2 wins only at x = 0 on D5 v2.1, and at x > 0 τ 0.01 wins. Take the x = 1 row at its own best τ, and say which.
+- Note in v1.1 that θ's sm_120 joint rows are closed rows (A36), so the RTX PRO 6000 x > 0 cells are upper bounds until CALIB moves `theta.toml` to a current vector, which is GPU work after M3.
