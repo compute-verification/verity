@@ -73,3 +73,16 @@ c_bit confirmed: the H200's b1 at 8× (0/1 only); sm_120's bound is FP4 at 2×.
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 04:01Z (real UTC), coordinator: COVER-ATTN final (note:20261026T0310Z-draft-accel-cover-attn; cover_attn.py 27fc89418f; CMP-118 comment 3f59b924)
+- **γ under SEG-COINS plus ATT,** 4-byte words, 8B / 70B / V4:
+  - H200: 6.42 / 4.44 / 7.27 at SHA 6.80 G/s, and 8.14 / 5.34 / 9.35 at 4.79;
+  - RTX PRO 6000: 3.06 / 2.34 / 3.35 at 9.82, and 3.60 / 2.62 / 4.00 at 7.13.
+- **Coverage:** 100% / 100% / 99.7% (V4's indexer, 0.26%, is uncredited). Llama's QKᵀ is batched across KV groups.
+- **ε_alg on attention is 0 with the right honest kernel:**
+  - overlap the tensor pipe with the ALU (SHA-512, coin expansion, wraps). That makes the H200 ALU-bound everywhere, so there's no idle ALU for lookups;
+  - on the RTX PRO 6000, where the period is tensor-bound (70B, and 8B at 9.82), the honest kernel runs part of PV as Four-Russians lookups itself. Without that, it's 2.04% (70B) and 0.96% (8B).
+  - Overlap also lowers γ (H200 8B 6.42 → 4.50).
+- **The certifier K/V noise stream** is about 0.07–1.1 GB/s a GPU.
+
+COVER-ATTN read SEG-COINS's static form as one long segment and two words a cell, plus v1's wraps term. Confirm or correct that in your note.
