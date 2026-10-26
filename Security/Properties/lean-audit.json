@@ -505,13 +505,13 @@
     "CoreOnsite",
     "Properties.Composition",
     "Properties.Flock.Circuit.CircuitOf",
-    "Definitions.Accounting.JointPeriod",
+    "Definitions.Accounting.JointLive",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
     "Flock.Hash"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary (Accounting.PeriodLive, the one definition of a period), the shared game and the row-leaf opening it reads the commitment through, never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],

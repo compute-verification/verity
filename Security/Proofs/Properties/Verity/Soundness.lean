@@ -10,8 +10,9 @@ Onsite's acceptance is NCI's on the registration sampled proofs committed to, an
 `acceptRegistration`). So the event `Verity.Soundness` bounds lies inside the union of the subprotocols' events, each at
 most its target's error at the strategy (`prob_exists_finset_le`).
 
-Beside it, the two checks every guarantee carries: `soundness_of_subprotocols_honest`, its hypotheses hold wherever
-each claim holds on every play, so none is false by its form; and `soundness_of_subprotocols_nontrivial`, its
+Beside it, the two checks every guarantee carries: `soundness_of_subprotocols_honest`, at the honest deployment (the
+deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
+event and the theorem's own have probability `0`; and `soundness_of_subprotocols_nontrivial`, its
 conclusion fails for a verifier that accepts everything, wherever a claim fails on every play of a strategy whose files
 pass the commit phase's check and the errors sum below one. `Vocab.holds_sampled_of_opens` is the honest commitment's
 case of sampled proofs' claim: a correct transcript that the commitment opens everywhere, the constants by their
@@ -84,19 +85,32 @@ theorem prob_play_eq_one (ns : List ℕ) (θ F c : ByteArray) (p : Outcome → P
     (hp : ∀ log e, p ⟨θ, F, c, log, e⟩) (σ : Game.Strategy (play ns θ F c)) : Game.prob p (play ns θ F c) σ = 1 := by
   refine (Game.prob_bind_of_const (fun log => Game.send ByteArray fun e => Game.ret (⟨θ, F, c, log, e⟩ : Outcome)) p
     (fun _ => True) (fun log t => ?_) (releases ns) σ).trans (Game.prob_true _ _)
-  rw [Game.prob_true]
-  simp only [Game.prob]
-  rw [if_pos (hp log t.1)]
+  simp [Game.prob, hp]
 
-/-- **Its hypotheses hold where every claim holds on every play**: each subprotocol's target, at any errors. -/
+/-- **Its hypotheses hold at the honest deployment**: at registered files, where each subprotocol's honest lemma holds
+(`Vocab.HonestHolds`), the deployment's honest prover meets every target with probability `0` on its event, and the
+event the theorem bounds has probability `0`. -/
 theorem soundness_of_subprotocols_honest {ι α : Type} [Fintype α] {d : Device ι} (V : Vocab d α)
-    (h : ∀ a θ F c σ o, V.Holds θ F c σ a o) :
-    V.SampledProofsSound ∧ V.PouwSound ∧ V.PousSound ∧ V.BandwidthAuditSound ∧ V.NetworkCertifierSound := by
-  have hT : ∀ a, V.Target a := fun a θ F c σ =>
-    (Game.prob_mono (p := fun o => V.Verdict a o ∧ ¬ V.Holds θ F c σ a o) (q := fun _ => False)
-      (fun o ho => ho.2 (h a θ F c σ o)) _ σ).trans
-      ((Game.prob_false _ σ).le.trans (zero_le _))
-  exact ⟨hT _, hT _, hT _, hT _, hT _⟩
+    (h : ∀ a, V.HonestHolds a) (θ F c : ByteArray) (hreg : V.Registered θ F) :
+    (∀ a, Game.prob (fun o => V.Verdict a o ∧ ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
+        ≤ V.error a θ F c (V.honest θ F c)) ∧
+      Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧ ∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o)
+        (V.game θ F c) (V.honest θ F c) = 0 := by
+  have h0 : ∀ a, Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0 :=
+    fun a => h a θ F c hreg
+  refine ⟨fun a => ?_, le_antisymm ?_ zero_le⟩
+  · refine le_trans (Game.prob_mono (p := fun o => V.Verdict a o ∧ ¬ V.Holds θ F c (V.honest θ F c) a o)
+      (q := fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (fun o ho => ho.2) _ _) ?_
+    rw [h0 a]
+    exact zero_le
+  · calc Game.prob (fun o => Accepts o.sent ∧ V.Registered o.params o.file ∧
+            ∃ a, ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c)
+        ≤ Game.prob (fun o => ∃ a ∈ Finset.univ, ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c)
+            (V.honest θ F c) :=
+          Game.prob_mono (fun o ⟨_, _, a, ha⟩ => ⟨a, Finset.mem_univ a, ha⟩) _ _
+      _ ≤ ∑ a, Game.prob (fun o => ¬ V.Holds θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) :=
+          prob_exists_finset_le _ _ _ _
+      _ = 0 := by simp only [h0, Finset.sum_const_zero]
 
 /-- **Its conclusion fails for a verifier that accepts everything**: at files that pass the commit phase's check, a
 strategy on whose every play some claim fails, and errors summing below one. -/
@@ -120,13 +134,14 @@ holds at any `ε ≥ 0`. -/
 theorem holds_sampled_of_opens (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) (o : Outcome)
     (hc : ∀ u, (V.partsOf F).Correct (V.extract θ F c σ) u) (ho : ∀ g, V.Opens θ F c g (V.extract θ F c σ g))
     (hε : 0 ≤ (V.certOf θ).ε) : V.Holds θ F c σ .sampled o := by
-  have hu : V.unbound θ F c (V.extract θ F c σ) = ∅ := by
+  have hu : Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ) = ∅ := by
     classical
     refine Finset.filter_eq_empty_iff.2 fun u _ => ?_
     rintro (hw | ⟨g, -, hg⟩)
     · exact hw (hc u)
     · exact hg (ho g)
-  show ((V.unbound θ F c (V.extract θ F c σ)).card : ℝ) ≤ (V.certOf θ).ε * V.units F
+  show ((Accounting.unbound (V.partsOf F) (V.Opens θ F c) (V.extract θ F c σ)).card : ℝ) ≤
+    (V.certOf θ).ε * V.units F
   rw [hu, Finset.card_empty, Nat.cast_zero]
   exact mul_nonneg hε (Nat.cast_nonneg _)
 
@@ -139,12 +154,22 @@ theorem opens_const {θ F c : ByteArray} {g : Fin (V.circuitOf F).N} {b : Bool} 
 
 /-- **The file finder outputs a collision** when the committed blob is not the registered one and has its SHA-512. -/
 theorem fileFinder_collides {θ F : ByteArray} (hne : F ≠ V.registered θ)
-    (hd : sha512 F.data.toList = sha512 (V.registered θ).data.toList) : (V.fileFinder θ F).collides = 1 := by
+    (hd : sha512Msg F.data.toList = sha512Msg (V.registered θ).data.toList) :
+    (V.fileFinder θ F).Pr sha512Msg = 1 := by
   have hl : F.data.toList ≠ (V.registered θ).data.toList := fun e =>
     hne (ByteArray.ext (Array.ext' e))
-  unfold Finder.collides fileFinder
-  simp only [Game.prob, if_neg hne]
-  rw [if_pos ⟨_, _, rfl, hl, hd⟩]
+  have hs : ∀ s : (V.fileFinder θ F).S,
+      ∃ u v, (V.fileFinder θ F).out s = some (u, v) ∧ Claims.Collision sha512Msg u v :=
+    fun _ => ⟨_, _, by simp only [fileFinder, if_neg hne], hl, hd⟩
+  classical
+  unfold Claims.Finder.Pr Claims.Pr
+  rw [Finset.filter_true_of_mem fun s _ => hs s, Finset.card_univ]
+  exact div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero)
+
+/-- **The file finder's SHA-512 calls**: two on its one coin, at most `0 · calls(τ) + 2`. -/
+theorem fileFinder_calls (θ F : ByteArray) (x : (V.fileFinder θ F).S) (n : ℕ) :
+    (V.fileFinder θ F).cost x ≤ 0 * n + 2 := by
+  simp [fileFinder]
 
 end Vocab
 
