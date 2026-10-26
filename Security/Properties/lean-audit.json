@@ -404,11 +404,6 @@
    "except": [],
    "why": "the period's work at the deployed check's accepted prefix is stated against the check's own verdict (`PouwCheck.protocol.check`) and the accounting model's period, its proofs and its named claims (`Definitions.Accounting.ComposePeriod`, `Definitions.Accounting.Assumptions`), never a proof"
   },
-  "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
-   "imports": ["Definitions.Accounting", "Properties.Pouw.Period"],
-   "except": [],
-   "why": "a joint period's audit bridge is stated over the joint period (`Definitions.Accounting.JointPeriod`), the bridge's realization (`Definitions.Accounting.JointBridge`) and the source protocol's period statement (`Properties.Pouw.Period`), never a proof"
-  },
   "Properties.Pous.Period": {
    "imports": [
     "Mathlib",
@@ -424,9 +419,9 @@
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
   },
   "Properties.Accounting.JointBridge": {
-   "imports": ["Definitions.Accounting", "Properties.Pous.Period"],
+   "imports": ["Definitions.Accounting", "Properties.Pous.Period", "Properties.Pouw.Period"],
    "except": [],
-   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`) and the protocol's own period statement (`Properties.Pous.Period`), never a proof"
+   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
   }
  },
  "reads_exempt": {

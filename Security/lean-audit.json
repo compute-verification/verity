@@ -1905,7 +1905,10 @@
   "Definitions.Hash",
   "Definitions.Hash.Guarantees",
   "Definitions.Population",
-  "Proofs.Accounting.TS.Session"
+  "Proofs.Accounting.TS.Session",
+  "PouwCheck.Inputs",
+  "Properties.Pous",
+  "Properties.Pouw.Period"
  ],
  "claims": {
   "modules": ["Definitions.Claims"],
