@@ -41,16 +41,17 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
     - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
-      the proof-unit cut (`word`), and their encoding and digest (`encoding`).
+      the proof-block cut (`word`), and their encoding and digest (`encoding`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
       C-Flock, the proof system. Its patches on upstream Flock, the CUDA prover, the zero-knowledge prover (`live/`,
       `flock-circuit --zk`), and `verifier/`: the verifier's specification and the scripts that run it, with upstream's
       Rust verifier as a cross-check.
 - `Security/`: the Lean every protocol states its guarantees in, and their proofs: `Definitions/`, `Models/` and `Proofs/`
   (Lean below). `Properties/` is `security_properties` (Lean below).
-- `integrations/`: one directory per serving stack Verity's compute runs in. `integrations/vllm/` (`verity_vllm`) is the vLLM integration. It
-  builds each served workload's circuit and commits its values while serving; `benchmarks/one_stage/` takes those values
-  through C-Flock's prover and the Lean verifier.
+- `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
+  (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
+- `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
+  (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -61,7 +62,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     `circuit_check/` (the property checks every circuit passes) and `lean/` (the Lean check, `check.py`).
   - `research`: the run recorder and the run-store client: runs, the evidence store, Slack, pods and deploys. It imports
     nothing from Verity.
-  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs (`research run --on auto` runs them on a node).
+  - `agent-guard`: the VM's secret guard, its OOM recorder, and the hook that keeps builds and tests off agent VMs.
   - `move`: layout moves.
 - `infra/`: our machines.
   - `cluster/` (`cluster`): the shared machines' policy, planner and ledger. Stdlib only.
@@ -98,8 +99,8 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
   `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").
 
 `verity` is the repository's one command (`tools/verity/cli/`): `verity check` runs every part of the
-check, `verity check tests|lean|circuits` runs only those parts, and `verity bench NAME` runs `benchmarks/<NAME>/`'s runner.
-`verity --help` lists the rest.
+check, `verity check tests|lean|circuits` runs only those parts, and `verity bench|example NAME` runs
+`benchmarks/<NAME>/`'s or `examples/<NAME>/`'s runner. `verity --help` lists the rest.
 
 ~~~text
 uv sync --all-packages --extra torch-cpu  # the whole workspace, editable, with CPU-only torch (GPU work: a member's `torch` extra)
@@ -122,7 +123,7 @@ the standing rulings stated nowhere else.
   - the verifier's coins and draws;
   - hiding commitments.
 
-  Partitions are private, and their properties are public. A proof unit's outputs fit its size class, a public power of
+  Partitions are private, and their properties are public. A proof block's outputs fit its size class, a public power of
   two from 16 to 262,144 bits and a property of its Definition, and its output bits count in leakage (Daniel, 19 Oct,
   provisional; `UNIT_CLASS_MAX` set to 16 restores the 16-bit limit).
 
@@ -144,8 +145,8 @@ the standing rulings stated nowhere else.
   - BLAKE3 leaves the served path for `archive/`. There are two named exceptions:
     - Pearl's FP8 scheme, as Pearl defines it.
     - Duo receipts, PoUW's per-step receipts: keyed u32 mul/xor/rotl folds over committed accumulator words. They
-      bind under the named premise H-μ⁺, which is the premise ledger's row R1
-      (`note:20261016T0219Z-report-premise-ledger`) and not yet in a lock.
+      bind under the named premise H-μ⁺, the premise ledger's row R1
+      (`note:20261016T0219Z-report-premise-ledger`), not yet in a lock.
 - **Live coins only.** Fiat–Shamir is out, with two exceptions, each at a rate where live coins are impractical:
   - the remote bandwidth audit's pass seeds inside a window, derived from the window's live challenge and the previous
     pass's root (Daniel, 12 Oct);
@@ -195,7 +196,7 @@ the standing rulings stated nowhere else.
 - **Integrations are frontends, and Verity is agnostic to them** (Daniel, 24 Oct). Verity's vocabulary is circuits,
   values, commitments, coins, proofs and verdicts. It has no notion of models, checkpoints, requests, batches or
   schedulers, and none enters `verity/`. An integration hands Verity only:
-  - a circuit, partitioned into proof units, with its public layout (which gates are the system's external I/O, such as
+  - a circuit, partitioned into proof blocks, with its public layout (which gates are the system's external I/O, such as
     the network frames the certifiers see), registered by digest;
   - when the circuit depends on choices made at run time, a registered compiler (itself a circuit, with a public length
     cap) and the advice it compiles: a bit string Verity never interprets, whose length is charged;
@@ -203,9 +204,9 @@ the standing rulings stated nowhere else.
   - on a draw, the drawn units' openings, to the prover behind the firewall.
 
   What the circuit means, and how it was built, is the integration's; that it computes what is served is completeness
-  (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
-  so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
-  still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
+  (above). Any serving stack plugs in the same way without changing `verity/`. Nothing under `verity/` imports an
+  integration (the import rules, above), and the serving notions `verity/` still holds (the certifier's advice format,
+  vLLM's scheduler, among them) move out to the integration.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over

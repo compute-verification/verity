@@ -12,7 +12,7 @@ a head leaf in the head's two or three SHA-512 compressions instead of the certi
 and heads are witness: the challenger sees the root, never a certificate, a salt or a head.
 
 **Selection** is `All`: every link-window is checked, so an accepted outcome is the exhaustive fact. A registration is
-one link-window, one proof unit. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
+one link-window, one proof block. Its `window` provenance is `{"kind": "served", "window": w}`, and the challenger holds w
 to the registration's order in the stream (`LinkWindows.register`), so the receipt's order is the link-window. The
 network verdict of record is `LinkWindows.network_verdict`, the AND over the link's link-windows with no ε or share
 credit: it accepts only when every window of the egress profile (a served or advised link's profile) is registered in
@@ -362,19 +362,19 @@ def _units(check, served, advised=AD.gate) -> tuple[CompositeDefinition, Composi
 
     return (CompositeDefinition(
         "NetworkLinkWindow", 5, ("EGRESS", "INGRESS"), lambda S_: (_SIGNED + _heads(S_), _OUT), body,
-        doc="the proof unit of network accounting: one link-window, both directions, over the two certificates' signed "
+        doc="the proof block of network accounting: one link-window, both directions, over the two certificates' signed "
             "digests; EGRESS and INGRESS are each end's head check's (L, T, COUNTS). Its two output bits are the "
             "verdict, both head checks, and the deadline, both heads' deadline bits", register=False),
         CompositeDefinition(
         "NetworkServedLinkWindow", 4, ("EGRESS", "INGRESS", "SERVED"),
         lambda S_: (_SIGNED + _heads(S_) + (_SYNC,), _OUT), body_served,
-        doc="the proof unit of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on a served link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts derived from the ingress head's under the declared sync (`served.NetworkServedCounts`, "
             "SERVED its (T, FOUT, FIN, R, RIN)), in its verdict bit", register=False),
         CompositeDefinition(
         "NetworkAdvisedLinkWindow", 2, ("EGRESS", "INGRESS", "ADVISED"),
         lambda S_: (_SIGNED + _heads(S_) + _advice(S_), _OUT), body_advised,
-        doc="the proof unit of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
+        doc="the proof block of network accounting on an advised link: `NetworkLinkWindow`'s checks, and the egress "
             "head's counts held to the advice's releases, and the advice to the ingress head's counts "
             "(`advised.NetworkAdvisedCounts`, ADVISED its (T, RIN, OWN)), in its verdict bit", register=False))
 
@@ -386,7 +386,7 @@ _PROOF_UNIT, _PROOF_SERVED_UNIT, _PROOF_ADVISED_UNIT = _units(_head_expanded, _s
 
 def unit(egress: tuple[int, int, int], ingress: tuple[int, int, int], served: tuple[int, ...] | None = None,
          advised: tuple[int, int, int] | None = None, *, proof: bool = False):
-    """N2's proof unit for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
+    """N2's proof block for heads of the size classes `egress` and `ingress`, each (L, T, COUNTS) (`head_check.unit`),
     and on a served link the served counts' size class `served`, (T, FOUT, FIN, R, RIN, OWN) (`served.unit`), or on an
     advised link the advised counts' `advised`, (T, RIN, OWN) (`advised.unit`). With `proof`, the unit a proof's
     circuit lowers: the same id and signature, so the template the registered query names, with each gate the
@@ -724,7 +724,7 @@ class LinkWindows:
 
     @cached_property
     def unit(self):
-        """N2's proof unit for this link (`unit`): its heads' size classes are the link's, and on a served link its
+        """N2's proof block for this link (`unit`): its heads' size classes are the link's, and on a served link its
         served counts' (`served_key`), on an advised link its advised counts' (`advised_key`)."""
         return unit(self.head_key(0), self.head_key(1), self.served_key(), self.advised_key())
 
