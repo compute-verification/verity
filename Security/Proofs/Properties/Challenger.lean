@@ -53,15 +53,13 @@ theorem liveAnswer : LiveAnswer := by
 theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
   intro P L R dev a b e h
   obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer P L a b e h
-  refine ⟨p, c, ev, ξ, hp, hc, hev, hacc, fun hlive => ?_⟩
-  rw [R.reads p hlive] at hξ
-  cases hraw : SampledProofs.Challenger.drawCoins (R.key p) (Flock.hexOf (R.window p c)) R.label (R.after p c)
-      (R.record ev) with
+  refine ⟨p, c, ev, ξ, hp, hc, hev, hacc, fun d hd' => ?_⟩
+  rw [R.reads p c d hd'] at hξ
+  cases hraw : SampledProofs.Challenger.drawCoins d.key d.window d.label d.after (R.record ev) with
   | error r => rw [hraw] at hξ; cases hξ
   | ok raw =>
     rw [hraw] at hξ
-    rcases hd dev (R.key p) (R.window p c) R.label (R.after p c) (R.record ev) raw hraw with
-      ⟨s, hs, hopen, hrel⟩ | hb
+    rcases hd dev d.key d.window d.label d.after (R.record ev) raw hraw with ⟨s, hs, hopen, hrel⟩ | hb
     · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hξ⟩
     · exact .inr hb
 

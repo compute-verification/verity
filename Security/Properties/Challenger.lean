@@ -107,9 +107,9 @@ def Signed (dev : Device) (pk m : ByteArray) : Prop :=
 
 /-- The device's own ledger under `pk` opens window `w` (its open root) for the session `id`, under the ledger's v2
 schema. -/
-def OpensOn (dev : Device) (pk w : ByteArray) (id : String) : Prop :=
+def OpensOn (dev : Device) (pk : ByteArray) (w id : String) : Prop :=
   ∃ line ∈ dev.ledger pk, ∃ e, ledgerEntry? line = some e ∧ e.kind = "open" ∧ e.schema = LEDGER_SCHEMA ∧
-    e.session = id ∧ getD (getD e.body "window") "root" = .str (Flock.hexOf w)
+    e.session = id ∧ getD (getD e.body "window") "root" = .str w
 
 /-! ## What the reader checks and hashes -/
 
@@ -299,46 +299,49 @@ def Break (dev : Device) (key : ChallengerKey) (label : String) (coins : Json) :
 /-! ## The property -/
 
 /-- **The coins a draw reads are the ones its challenger drew.** For every challenger device, if `drawCoins` reads `ξ`
-from `coins` under the verifier's key `key`, window `w` and family `label`, released after `after`, then `ξ` is the
-coins of `label` that a session of the device under `key` released after `after`, a session the device's own ledger
-opens on `w`; or the run carries a `Break`. -/
+from `coins` under the verifier's key `key`, window `w` (its open root, lowercase hex) and family `label`, released
+after `after`, then `ξ` is the coins of `label` that a session of the device under `key` released after `after`, a
+session the device's own ledger opens on `w`; or the run carries a `Break`. -/
 def DrawnByDevice : Prop :=
-  ∀ (dev : Device) (key : ChallengerKey) (w : ByteArray) (label : String) (after : ByteArray) (coins : Json)
-    (ξ : ByteArray),
-    drawCoins key (Flock.hexOf w) label after coins = .ok ξ →
+  ∀ (dev : Device) (key : ChallengerKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
+    drawCoins key w label after coins = .ok ξ →
       (∃ s ∈ dev.sessions key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
         Break dev key label coins
 
 /-! ## ONE-4's target: a component's coins, from the device's log -/
 
-/-- `L` reads its coins through the challenger's reader at every parameters that pin a challenger (`live`): under the
-key its parameters pin, on the window its parameters and commitment name, of its family `label`, released after what
-its commitment names (never its evidence's), from the record its evidence carries (`record`), decoded to its coins
-(`decode`). -/
-structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
-  live : P.Params → Prop
-  key : P.Params → ChallengerKey
-  window : P.Params → P.Commitment → ByteArray
+/-- What a draw's coins are read under, all of it the verifier's: the challenger's key, the window (its open root,
+lowercase hex), the family, and what the coins were released after. -/
+structure Draws where
+  key : ChallengerKey
+  window : String
   label : String
-  after : P.Params → P.Commitment → ByteArray
+  after : ByteArray
+
+/-- `L` reads its coins through the challenger's reader wherever the parameters and commitment name a challenger
+(`source`, read from them alone, never from the evidence): from the record its evidence carries (`record`), decoded to
+its coins (`decode`). -/
+structure ReadsChallenger (P : Core.Protocol) (L : Core.Live P) where
+  source : P.Params → P.Commitment → Option Draws
   record : P.Evidence → Json
   decode : ByteArray → Flock.V L.Coins
-  reads : ∀ p, live p → ∀ c e, L.coins p c e =
-    (drawCoins (key p) (Flock.hexOf (window p c)) label (after p c) (record e) >>= decode)
+  reads : ∀ p c d, source p c = some d → ∀ e,
+    L.coins p c e = (drawCoins d.key d.window d.label d.after (record e) >>= decode)
 
 /-- **ONE-4: what a component accepts, it accepts at the coins its challenger device drew, or the run carries a
 break.** For every protocol whose check reads its coins through the challenger's reader (`ReadsChallenger`) and every
 challenger device: if `answer` accepts `a`, `b`, `e`, they decode to `p`, `c`, `ev`, and `answerAt` accepts them at
-the coins `ξ` the evidence's record shows; and when `p` pins a challenger (`live`), `ξ` is the decoding of what a
-session of the device under `p`'s key released of the family after what `c` names, a session the device's own ledger
-opens on the window `p` and `c` name, or the record in `ev` carries a `Break`. -/
+the coins `ξ` the evidence's record shows; and where `p` and `c` name a challenger (`source`), `ξ` is the decoding of
+what a session of the device under its key released of the family after what they name, a session the device's own
+ledger opens on their window, or the record in `ev` carries a `Break`. -/
 def CoinsFromLog : Prop :=
   ∀ (P : Core.Protocol) (L : Core.Live P) (R : ReadsChallenger P L) (dev : Device) (a b e : ByteArray),
     (P.answer a b e).verdict = .accept →
       ∃ p c ev ξ, (Core.canonicalJson a >>= P.params) = .ok p ∧ P.commitment b = .ok c ∧ P.evidence e = .ok ev ∧
         (P.answerAt L a b ξ e).verdict = .accept ∧
-        (R.live p → (∃ s ∈ dev.sessions (R.key p).pub, OpensOn dev (R.key p).pub (R.window p c) s.id ∧
-            R.decode (s.released R.label (R.after p c)) = .ok ξ) ∨
-          Break dev (R.key p) R.label (R.record ev))
+        ∀ d, R.source p c = some d →
+          (∃ s ∈ dev.sessions d.key.pub, OpensOn dev d.key.pub d.window s.id ∧
+            R.decode (s.released d.label d.after) = .ok ξ) ∨
+          Break dev d.key d.label (R.record ev)
 
 end Properties.Challenger
