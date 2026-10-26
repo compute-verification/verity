@@ -39,10 +39,8 @@ def own_ramlock(monkeypatch, tmp_path):
 
 @pytest.fixture(autouse=True)
 def outside_a_run(monkeypatch):
-    """A check runs these tests inside its own `research run`: main() must not write that run's slot record, nor raise every
-    slot's mem= to that run's --mem-gb ask (CHECK_RUN_MEM_GB)."""
+    """A check runs these tests inside its own `research run`: main() must not write that run's slot record."""
     monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
-    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
 @pytest.fixture(autouse=True)
@@ -879,7 +877,6 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     monkeypatch.undo()                                                             # undoes any_core's pin too
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
-    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))
     assert SLOT.twin_here("claim", tmp_path, "p3", {"run": "r-other"})[0] == "claimed"   # its twin claimed p3 here first
     t = [NOW]
