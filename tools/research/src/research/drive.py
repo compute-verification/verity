@@ -1630,6 +1630,14 @@ class Driver:
         else:
             self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {' '.join(to)}: {text}")
 
+    def _tell_out(self, drive: dict, state: dict) -> None:
+        """Tell each PR the last sync left off `next` once per head: one that didn't merge (`conflicts`), and one that contains
+        such a PR (`waiting`)."""
+        for kind, key in (("conflict", "conflicts"), ("waiting", "waiting")):
+            for n, c in state.get(key, {}).items():
+                self.refuse(drive, f"{kind}:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{self.q.branch}`: {c['why']}",
+                            c.get("handle"))
+
     def _handle(self, pr: int) -> str | None:
         if self._prs is None:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
@@ -2579,9 +2587,7 @@ class Driver:
             q.frozen = {m.pr for m in chain[:q.hold]}
             q.sync(dry_run)
             state = {**q.load_state(), "drive": drive}
-            for n, c in state.get("conflicts", {}).items():
-                self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}",
-                            c.get("handle"))
+            self._tell_out(drive, state)
         landed, why = None, self._unbaselined(drive)
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
@@ -3145,9 +3151,7 @@ class Driver:
                     if next((c for c in checked if c >= i), None) not in failed_at}
         members, entries = q.sync(dry_run)
         state = {**q.load_state(), "drive": drive}
-        for n, c in state.get("conflicts", {}).items():
-            self.refuse(drive, f"conflict:{n}@{c['head']}", f"#{n} at {c['head'][:8]} is out of `{q.branch}`: {c['why']}",
-                        c.get("handle"))
+        self._tell_out(drive, state)
         on_chain = {m.commit for m in members}
         following = {rid for rec in drive.get("deferred", {}).values() for rid in rec["ids"]}
         if not dry_run:
