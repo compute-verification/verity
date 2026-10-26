@@ -11,8 +11,9 @@ the freed-compute bound it gives (R-ACCEL-1).
   `c`, the proof service's soundness per prover (`ServiceSoundDither`: C-Flock sound and zero knowledge, SHA-512 only
   through each adversary's finders, live coins from the auditor's challenger) and the network certifier's import count
   (`ImportWithinCertifier`), a monitoring period of `k` rounds is `(1 − ε)`-work-sound at every price vector, with
-  `ε = (1 − c) + D/k + β K/(k H)`: model slack, sampling luck, network import. Each adversary's error is its own
-  (`breakBound` at the luck `e^{−η D}`).
+  `ε = (1 − c) + D/k + β K/(k H)`: model slack, sampling luck, network import. The floor holds on the rounds the
+  adversary's run is credited for (`RoundsFloor`) and so on its whole run (`WorkSound`). Each adversary's error is its
+  own (`breakBound` at the luck `e^{−η D}`).
 * `FreedOfFloor`: the floor at the dual price of the period's linear program bounds freed compute by `ε C`, `C` the
   period's devices at that price (`Period.FreedWithin`).
 
@@ -34,9 +35,11 @@ every round protocol `P` (today's Dither is `ditherRound` at its knobs), every s
 `k` rounds of live coins (`e`), every price vector `λ` and every analysis map `run`: if the devices meet (G1), (G2),
 (P1) and (P2), Theorem O holds in the model at `λ` with constant `c`, rate `η` and import weight `β` against the
 honest round's priced cost `H`, the service is sound up to its proof layer per prover, and the network certifier
-counts at most `K` imported bits, then every adversary that commits first has its accepted periods priced below
-`(1 − ε) k H` with probability at most its own `breakBound` at the luck `e^{−η D}`, where
-`ε = (1 − c) + D/k + β K/(k H)`.
+counts at most `K` imported bits, then every adversary that commits first has its accepted periods whose rounds are
+priced below `(1 − ε) k H` with probability at most its own `breakBound` at the luck `e^{−η D}` (`RoundsFloor`), and so
+its accepted periods priced below `(1 − ε) k H` as a whole (`WorkSound`), where `ε = (1 − c) + D/k + β K/(k H)`. The
+rounds' floor is the one freed compute reads (`FreedOfFloor`): other work the adversary runs beside its rounds is not
+counted toward it.
 
 The three terms: the model's slack `1 − c` (Theorem O's constant; 0 where the honest kernel is the model's optimum),
 the sampling luck `D/k` (at `δ = e^{−η D}`, `D = ln(1/δ)/η`, with `η = 1 − p` at the per-round luck `p`), and the
@@ -51,16 +54,18 @@ def DitherWorkSound : Prop :=
     Simplex p → 0 < H → 0 ≤ η → 0 ≤ β → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
     G.G1 → G.G2 → G.P1 → G.P2 → TheoremO G P p c η β H →
     ServiceSoundDither G S P run e sha fb fz δb βb δz βz → ImportWithinCertifier G S K →
-    WorkSound G S p (k * H) (epsDither c D β K H k)
-      (breakBound sha fb fz cb db cz dz (Real.exp (-(η * D))) δb βb δz βz)
+    let ε := epsDither c D β K H k
+    let κ := breakBound sha fb fz cb db cz dz (Real.exp (-(η * D))) δb βb δz βz
+    RoundsFloor G S P run e p ((1 - ε) * (k * H)) κ ∧ WorkSound G S p (k * H) ε κ
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
 credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
 complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
-fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`; the floor of
-`DitherWorkSound` at the price vector `λ_r ∝ μ_r ρ_r`), frees at most `ε C` with `C = μ · cap`, the period's devices at
-the dual price. Counting one resource alone (tensor-core time) is the floor at one vertex of the simplex, which is the
+fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`, with `X` its rounds'
+use `PeriodPlay.use`: the rounds' floor `RoundsFloor` of `DitherWorkSound` at the price vector `λ_r ∝ μ_r ρ_r`), frees
+at most `ε C` with `C = μ · cap`, the period's devices at the dual price. The floor on the whole run (`WorkSound`) is
+not enough here: it would count the other work `z` toward the credited part's floor. Counting one resource alone (tensor-core time) is the floor at one vertex of the simplex, which is the
 dual price only where that resource binds every job. -/
 def FreedOfFloor : Prop :=
   ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),

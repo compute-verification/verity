@@ -1,16 +1,19 @@
 import Models.Pouw.Guarantees.Dither
+import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Dither's work-soundness: the freed-compute bound, the map to the floors of record, and the honest witness
 
 * `FreedOfFloor`: the guarantee `Models.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
   program.
+* `workFloor_of_roundsFloor`: the rounds' floor gives the whole run's floor under the service's premise that the
+  rounds use no more of any resource than the run, so `DitherWorkSound`'s proof owes only its `RoundsFloor` conjunct.
 * `workFloor_iff_serviceFloorPerProver`: where the machine's cost of a run is its priced cost at `λ`, the priced floor
   `WorkFloor` is the service floor per prover of the floors of record (`ServiceFloorPerProver`), so the conclusions
   of `StagedFloorKOneSidedPerProver` and `DitherWorkSound` are one form.
 * `honest_witness` (rule I): an honest prover of today's Dither round (`L = 32`, U in `±1, …, ±64`, placement
   `t mod 32`, on a `1 × 32 × 1` instance) over a one-round period meets every hypothesis of `DitherWorkSound` at `c = 1`
-  and is accepted on every coin, at priced cost `k H`. The model (`flat`) prices every program at least one honest
+  and is accepted on every coin, its rounds and its whole run each at priced cost `k H`. The model (`flat`) prices every program at least one honest
   round, so Theorem O holds in it at `c = 1`; it witnesses that the premises hold together with an honest run, not that
   Theorem O holds in a real model (O-CHARGE, O-BITS).
 -/
@@ -57,6 +60,25 @@ theorem workFloor_iff_serviceFloorPerProver (G : Accel) (S : Service) (p : G.Res
     WorkFloor G S p F κ ↔ ServiceFloorPerProver G.Mc S F κ := by
   unfold WorkFloor ServiceFloorPerProver Machine.charge
   simp only [hc]
+
+/-- **The rounds' floor gives the whole run's floor**: where the service is sound per prover (so an accepted period's
+rounds use no more of any resource than the adversary's run), every run whose rounds are priced at `F` or more is
+itself priced at `F` or more, at every price vector. -/
+theorem workFloor_of_roundsFloor (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
+    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders G.Mc S R)
+    (δb βb δz βz : ℝ) (p : G.Res → ℝ) (F : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal)
+    (hp : Simplex p) (hG2 : G.G2) (hS : ServiceSoundDither G S P run e sha fb fz δb βb δz βz)
+    (h : RoundsFloor G S P run e p F κ) : WorkFloor G S p F κ := by
+  intro Ω _ M hM
+  refine le_trans (ENNReal.ofReal_le_ofReal (prob_mono ?_)) (h Ω M hM)
+  rintro ⟨σ, r⟩ ⟨hv, hlt⟩
+  refine ⟨hv, lt_of_le_of_lt ?_ (lt_of_le_of_lt (le_max_right _ _) hlt)⟩
+  have hx := (hS Ω M hM r).2.2 (e σ) (by rw [Equiv.symm_apply_apply]; exact hv)
+  rw [Equiv.symm_apply_apply] at hx
+  unfold PeriodPlay.priced Accel.priced
+  exact Finset.sum_le_sum fun q _ =>
+    mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right (hx.2.1 q) (hG2.1 q).le) (hp.1 q)
 
 /-! ## The honest witness (rule I) -/
 
@@ -213,9 +235,15 @@ theorem honest_accepted (H : ℝ) (σ : S1.Seed) :
   show @decide (P1.ok a0 σ.1.1 σ.1.2 (ditherHonest K1 a0 σ.1.1)) (Classical.propDecidable _) = true
   exact @decide_eq_true _ (Classical.propDecidable _) rfl
 
+/-- The honest prover's rounds, as the witness analysis cuts them, are priced one honest round. -/
+theorem honest_rounds_priced (H : ℝ) (x : Paths (P1.Draw × P1.Chk) 1) :
+    (run1 H Unit (honest H) ()).play.priced p1 x = (1 : ℕ) * H := by
+  change ∑ _r : Unit, (1 : ℝ) * ((H * ((1 : ℕ) : ℝ) + 0) / 1) = ((1 : ℕ) : ℝ) * H
+  simp
+
 /-- **The honest witness** (rule I): at `k = 1`, `c = 1`, `β = K = 0` and no break, the honest prover of today's
 Dither round meets every hypothesis of `DitherWorkSound`, commits first, is accepted on every coin, and is priced
-`k H`. -/
+`k H`, its rounds and its whole run alike. -/
 theorem honest_witness (H η : ℝ) (hH : 0 < H) (hη : 0 ≤ η) (sha : Claims.Msg → Claims.Msg)
     (fb fz : Finders (flat H).Mc S1 1) :
     Simplex (G := flat H) p1 ∧ 0 < H ∧ 0 ≤ η ∧ (0 : ℝ) ≤ 0 ∧
@@ -224,9 +252,11 @@ theorem honest_witness (H η : ℝ) (hH : 0 < H) (hη : 0 ≤ η) (sha : Claims.
       ImportWithinCertifier (flat H) S1 0 ∧
       (∀ σ σ' r, ((flat H).Mc.eval (honest H) (σ, r)).1 = ((flat H).Mc.eval (honest H) (σ', r)).1) ∧
       (∀ σ, S1.verify ((flat H).Mc.eval (honest H) (σ, ())).1 σ ((flat H).Mc.eval (honest H) (σ, ())).2 = true) ∧
+      (∀ x, (run1 H Unit (honest H) ()).play.priced p1 x = (1 : ℕ) * H) ∧
       ∀ ω, (flat H).priced p1 (honest H) ω = (1 : ℕ) * H := by
   refine ⟨simplex_p1 H, hH, hη, le_rfl, g1_flat H, g2_flat H hH.le, trivial, trivial, theoremO_flat H η hH,
-    serviceSound_flat H hH.le sha fb fz, import_flat H, fun _ _ _ => rfl, honest_accepted H, fun ω => ?_⟩
+    serviceSound_flat H hH.le sha fb fz, import_flat H, fun _ _ _ => rfl, honest_accepted H, honest_rounds_priced H,
+    fun ω => ?_⟩
   rw [priced_flat]
   show H * ((1 : ℕ) : ℝ) = ((1 : ℕ) : ℝ) * H
   ring

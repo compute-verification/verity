@@ -16,8 +16,8 @@ The final guarantee of the ACCEL program (`Models.Pouw.Guarantees.Dither.DitherW
   Dither as one instance (`ditherRound`) whose knobs (`Knobs`: `L`, U's range and placement) are parameters;
 * **Theorem O's slot** (`TheoremO`): a statement about the model alone, to be proved in it (O-CHARGE, CMP-111;
   O-BITS, CMP-112), never an assumption about algorithms;
-* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), its priced floor
-  (`WorkFloor`, `WorkSound`) and the error `epsDither`;
+* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), its priced floors, on the
+  rounds (`RoundsFloor`) and on the whole run (`WorkFloor`, `WorkSound`), and the error `epsDither`;
 * **freed compute** (`Period`, `Period.FreedWithin`): R-ACCEL-1's definition, kept in this one place.
 -/
 
@@ -207,6 +207,10 @@ def ext : {k : ℕ} → PeriodPlay G P k → Paths (P.Draw × P.Chk) k → ℝ
   | _, .done, _ => 0
   | _, .round _ M next, x => G.ext M x.1.1 + (next x.1).ext x.2
 
+/-- The rounds' priced cost at `λ` along the realized coins: `Σ_r λ_r (Σ_w u_{w,r}) / ρ_r`. -/
+noncomputable def priced {k : ℕ} (pl : PeriodPlay G P k) (p : G.Res → ℝ) (x : Paths (P.Draw × P.Chk) k) : ℝ :=
+  ∑ r, p r * (pl.use x r / G.rate r)
+
 end PeriodPlay
 
 /-- **An adversary's period as the analysis reads it**: its play, and per round the binding and zero-knowledge break
@@ -230,6 +234,19 @@ def WorkFloor (G : Accel) (S : Service) (p : G.Res → ℝ) (F : ℝ)
     (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) →
     ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (G.Mc.eval M ω).1 ω.1 (G.Mc.eval M ω).2 = true ∧
       max (G.Mc.size M) (G.priced p M ω) < F) ≤ κ Ω M
+
+/-- **The rounds' priced floor, adversary by adversary**: every adversary that commits first has its accepted periods
+whose rounds (the credited part, as the analysis `run` cuts it out of the adversary's run, along the period's coins
+`e`) are priced below `F` at `λ` with probability at most `κ Ω M`. The rest of the adversary's run is its other work,
+so this is the floor freed compute reads (`Period.FreedWithin`); it implies `WorkFloor` wherever the rounds' use is at
+most the run's. -/
+def RoundsFloor (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
+    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (p : G.Res → ℝ) (F : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
+    (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) →
+    ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (G.Mc.eval M ω).1 ω.1 (G.Mc.eval M ω).2 = true ∧
+      (run Ω M ω.2).play.priced p (e ω.1) < F) ≤ κ Ω M
 
 /-- **`(1 − ε)`-work-soundness** at `λ` against the honest period's priced cost `Hp`: accepted runs priced below
 `(1 − ε) Hp` have probability at most `κ`. -/
@@ -266,8 +283,8 @@ variable {G : Accel} (Pd : Period G)
 /-- What the devices can do in the period (G2): `ρ_r T` of resource `r`. -/
 def cap (r : G.Res) : ℝ := G.rate r * Pd.T
 
-/-- A strategy fits the devices: its credited part uses `X`, its other work `z ≥ 0` units of each job, and the two
-together use no resource past its capacity. -/
+/-- A strategy fits the devices: its credited part (its rounds, `PeriodPlay.use`) uses `X`, its other work `z ≥ 0`
+units of each job, and the two together use no resource past its capacity. -/
 def Fits (X : G.Res → ℝ) (z : Pd.J → ℝ) : Prop := (∀ j, 0 ≤ z j) ∧ ∀ r, X r + ∑ j, z j * Pd.needs j r ≤ Pd.cap r
 
 /-- A strategy's value: its credited work `W` plus its other work's. -/
