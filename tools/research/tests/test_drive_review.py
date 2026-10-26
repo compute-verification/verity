@@ -294,7 +294,8 @@ def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_c
     for n in (1, 2, 3):
         h.review(n)
     h.q.sync()
-    assert [lean_change(h.d.repo, m.commit) for m in h.q.chain()] == [True, False, True]
+    assert {m.pr: lean_change(h.d.repo, m.commit) for m in h.q.chain()} == {1: True, 2: False, 3: True}
+    assert h.q.chain()[0].pr == 2                                         # proofs only: non-Lean first puts it below
 
 
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
