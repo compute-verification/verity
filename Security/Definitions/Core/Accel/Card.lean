@@ -66,6 +66,8 @@ inductive Res
   | smem
   /-- device memory's bandwidth, in words -/
   | dram
+  /-- the L2's read bandwidth, in words the L2 serves (RT-MODEL M6(b)) -/
+  | l2
   deriving DecidableEq
 
 /-- A copy's units, per word, at one endpoint: shared memory's banks or device memory's bandwidth. -/
@@ -73,6 +75,9 @@ def port : Store → Res → ℚ≥0
   | .smem, .smem => 1
   | .dram, .dram => 1
   | _, _ => 0
+
+/-- A read's units, per word, at its source: `port`, and a word of the L2's read bandwidth when the L2 serves it. -/
+def rd (s : Store) (r : Res) : ℚ≥0 := port s r + if s = .l2 ∧ r = .l2 then 1 else 0
 
 /-- **The units an opcode uses**, `weight f` tensor units a MAC of format `f` at shape scale `scale sh`. An MMA's
 operand words read from shared memory pay its banks, a word a bank unit, as a copy's do (`wgmma` reads `B`, and
@@ -100,11 +105,11 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
     | _, _ => 0
   | .uni _, r => if r = .issue then 1 else 0
   | .copy s t n, r =>
-    (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r) +
+    (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (rd s r + port t r) +
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)
-  | .bcast s n k, r => (if r = .issue then ((max k 1 : ℕ) : ℚ≥0) / 32 else 0) + (n : ℚ≥0) * port s r
-  | .atom s _, r => (if r = .issue then 1 / 32 else 0) + port s r
-  | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r)
+  | .bcast s n k, r => (if r = .issue then ((max k 1 : ℕ) : ℚ≥0) / 32 else 0) + (n : ℚ≥0) * rd s r
+  | .atom s _, r => (if r = .issue then 1 / 32 else 0) + rd s r
+  | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + rd t r)
   | .dmma sh, r =>
     (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight .f64 else 0) + (if r = .issue then 1 else 0)
 

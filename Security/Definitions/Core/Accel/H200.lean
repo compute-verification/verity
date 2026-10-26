@@ -39,7 +39,11 @@ reports.
   `tensorLong`: over a long window DMMA alone reaches the sheet's 67 TFLOPS, and DMMA beside the low-precision
   formats shares their one budget;
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
-* HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words.
+* HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words;
+* the L2's reads (`l2`, RT-MODEL M6(b)): no document gives them and CALIB hasn't measured them on this card (θ's
+  `l2.read` row is open), so the instance takes the lane loads' issue bound, 4 · 32 · 4 = 512 words an SM, 67,584
+  (535 TB/s, 75 × sm_120's measured 7.10). Until the H200 memory probe measures it, a bound over the model gets
+  `c = 0.25` here, not the card's 0.286.
 
 **Opcodes** (PTX ISA 9.0 §9.7.14–9.7.15): `mma.sync` at `m16n8` with both operands in registers, and `wgmma` at `m64`,
 `n` a multiple of 8 up to 256, `A` in registers or shared memory and `B` in shared memory; `k` as PTX gives it per
@@ -107,6 +111,7 @@ def ρ : Res → ℚ≥0
   | .f64 => 132 * 64
   | .smem => 132 * 32
   | .dram => 20000 / 33
+  | .l2 => 132 * 512
 
 /-- The tensor units a MAC of each format uses. -/
 def weight : Fmt → ℚ≥0

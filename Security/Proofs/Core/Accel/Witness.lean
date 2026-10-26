@@ -254,7 +254,7 @@ theorem smem_ge : (512 : ℚ≥0) ≤ ρ .smem := by
 theorem load_use (n c : ℕ) (hn : n ≤ 2048) (r : Res) : tickUse x [load n c] r ≤ ρ r := by
   have h4 : ((n / 4 : ℕ) : ℚ≥0) ≤ 512 := by exact_mod_cast (by omega : n / 4 ≤ 512)
   unfold load
-  split <;> cases r <;> simp [tickUse, copyN, opUse, port] <;>
+  split <;> cases r <;> simp [tickUse, copyN, opUse, port, rd] <;>
     first
     | exact inv32_le
     | exact h4.trans ((by norm_num : (512 : ℚ≥0) ≤ 604).trans dram_ge)
@@ -263,11 +263,11 @@ theorem load_use (n c : ℕ) (hn : n ≤ 2048) (r : Res) : tickUse x [load n c] 
 theorem mma_use (n p : ℕ) (r : Res) (hr : r ≠ .tensorLong) : tickUse x [mma n p] r ≤ ρ r := by
   have ha : packedWords 64 (Fmt.s8.rowLen 32) Fmt.s8.bits = 512 := by decide
   have hb : packedWords 256 (Fmt.s8.rowLen 32) Fmt.s8.bits = 2048 := by decide
-  cases r <;> simp [tickUse, mma, mmaOp, opUse, port, ρ, Card.weightOf, card, weight, Shape.wa, Shape.wb, ha, hb] at hr ⊢ <;>
+  cases r <;> simp [tickUse, mma, mmaOp, opUse, port, rd, ρ, Card.weightOf, card, weight, Shape.wa, Shape.wb, ha, hb] at hr ⊢ <;>
     norm_num
 
 theorem mma_long (n p : ℕ) : tickUse x [mma n p] .tensorLong = 524288 := by
-  simp [tickUse, mma, mmaOp, opUse, port, Card.weightOf, card, weight]
+  simp [tickUse, mma, mmaOp, opUse, port, rd, Card.weightOf, card, weight]
   norm_num
 
 theorem mmaTick_use (n j : ℕ) (r : Res) (hr : r ≠ .tensorLong) : tickUse x (mmaTick n j) r ≤ ρ r := by
@@ -295,7 +295,7 @@ theorem store_use (n u : ℕ) (r : Res) : tickUse x ((chunk (n * n / 4) 151 u).m
     exact_mod_cast (by simp [chunk] : (chunk (n * n / 4) 151 u).length ≤ 151)
   have h := store_tick (x := x) n u r
   rw [h]
-  cases r <;> simp [opUse, port]
+  cases r <;> simp [opUse, port, rd]
   · rw [← one_div, ← mul_div_assoc, mul_one, div_le_iff₀ (by norm_num)]
     exact hc.trans (by norm_num [ρ])
   · exact (mul_le_mul_of_nonneg_right hc (by norm_num)).trans ((by norm_num : (151 * 4 : ℚ≥0) ≤ 604).trans dram_ge)
@@ -313,10 +313,10 @@ theorem kernel_tick_use (n : ℕ) (hn : n ≤ 2048) (t : ℕ) (r : Res) (hr : r 
     · exact store_use n u r
 
 theorem load_long (n c : ℕ) : tickUse x [load n c] .tensorLong = 0 := by
-  unfold load; split <;> simp [tickUse, copyN, opUse, port]
+  unfold load; split <;> simp [tickUse, copyN, opUse, port, rd]
 
 theorem store_long (n u : ℕ) : tickUse x ((chunk (n * n / 4) 151 u).map (store n)) .tensorLong = 0 := by
-  rw [store_tick]; simp [opUse, port]
+  rw [store_tick]; simp [opUse, port, rd]
 
 /-- The kernel's `tensorLong` units at tick `t`: none at the MMAs' idle ticks (`t + 19n ≡ 20` mod 21, as
 `t - 2n ≡ 20` there), at most a `wgmma`'s elsewhere. -/
@@ -460,12 +460,12 @@ theorem kernel_dram (n : ℕ) :
   have h := chunk_sum4 (n * n / 4) ((n * n / 4 + 150) / 151)
   rw [min_eq_left (by omega)] at h
   have hl : ∀ c, tickUse x [load n c] .dram = ((n / 4 : ℕ) : ℚ≥0) := by
-    intro c; unfold load; split <;> simp [tickUse, copyN, opUse, port]
+    intro c; unfold load; split <;> simp [tickUse, copyN, opUse, port, rd]
   have hm : ∀ j, tickUse x (mmaTick n j) .dram = 0 := by
-    intro j; unfold mmaTick; split <;> simp [tickUse, mma, mmaOp, opUse, port]
+    intro j; unfold mmaTick; split <;> simp [tickUse, mma, mmaOp, opUse, port, rd]
   have hs : ∀ u, tickUse x ((chunk (n * n / 4) 151 u).map (store n)) .dram =
       (((chunk (n * n / 4) 151 u).length * 4 : ℕ) : ℚ≥0) := by
-    intro u; rw [store_tick]; simp [opUse, port]
+    intro u; rw [store_tick]; simp [opUse, port, rd]
   simp only [kernel, List.map_append, List.sum_append, List.map_map, Function.comp_def, hl, hm, hs]
   rw [show ((List.range ((n * n / 4 + 150) / 151)).map fun u =>
       (((chunk (n * n / 4) 151 u).length * 4 : ℕ) : ℚ≥0)) =

@@ -39,20 +39,20 @@ theorem p2Priced : P2Priced := by
   have h : (1 / 32 : ℚ≥0) ≤ 1 := by rw [← NNRat.coe_le_coe]; norm_num
   intro weight scale hi o
   cases o with
-  | mma fa fb _ sh sa sb => simpa [opUse, port] using h
-  | mmaSp fa fb _ sh sa sb => simpa [opUse, port] using h
+  | mma fa fb _ sh sa sb => simpa [opUse, port, rd] using h
+  | mmaSp fa fb _ sh sa sb => simpa [opUse, port, rd] using h
   | lane g => simp [opUse]
   | uni g => simpa [opUse] using h
-  | copy s t n => cases s <;> cases t <;> simp [opUse, port]
+  | copy s t n => cases s <;> cases t <;> simp [opUse, port, rd]
   | bcast s n k =>
     have h1 : (1 : ℚ) ≤ max (k : ℚ) 1 := le_max_right _ _
     have hk : (1 / 32 : ℚ≥0) ≤ ((max k 1 : ℕ) : ℚ≥0) / 32 := by
       rw [← NNRat.coe_le_coe]
       push_cast
       linarith
-    cases s <;> simpa [opUse, port] using hk
-  | atom s _ => cases s <;> simp [opUse, port]
-  | red s t n _ => cases s <;> cases t <;> simp [opUse, port]
+    cases s <;> simpa [opUse, port, rd] using hk
+  | atom s _ => cases s <;> simp [opUse, port, rd]
+  | red s t n _ => cases s <;> cases t <;> simp [opUse, port, rd]
   | dmma sh => simpa [opUse] using h
 
 theorem p2Frame : P2Frame := by
