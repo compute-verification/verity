@@ -17,28 +17,32 @@ two bounds from its one draw, `free_compute` and `leak`, at delta = 1% and 1e-6,
 (`Bf16AddRow_v2{128}` x 128 an add, RMSNorm as `RmsSumSqPart_v1` and `RmsNormOutSums_v1` a chunk, the quantizer as
 `RowAbsMax_v1` and `QuantChunkS8_v1`), the gathers as `AllGather_v1` (the O projection's input `{2,64}`), attention as
 `QkSoftmaxRow_v1` and `PvRow_v1` a head and position, and the embedding and argmax a coordinate and a token. PoUW's tiles
-are `PouwH1Tile_v1`'s measured lane (4x8 outputs at K = 4,096, `benchmarks/pouw/period_cost.py`), one lane a 131,072 of
-the block's s8 multiply-accumulates: v5/v6 are not measured, so v1's size stands in.
+are J10-R's per-call lane units, `PouwH1LaneZy_v2` over `PouwH1Tile_v5` (a 32 x 32 leaf over the call's K), one
+subcircuit at each K, at compute-accounting's traced ANDs (CMP-126, 08:00Z, `TILE_TRACED`): a statement for each 131,072
+of its MACs (`PouwH1LaneZyChunk_v2`) and one for the combine, each statement's output the one bit `ok`,
+and about 257 bits of receipt committed a chunk. Drawn lanes share their chunks' statements, at the chunk's k_log.
 
 **Budget.** Daniel (6:05 PM PDT): proving within 1% of the block's compute. Serving's overhead is beside it, never in it
 (Daniel, 6:36 PM PDT): the commits (HASH-20's 1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
 block's 1% is less than one statement's fixed cost, so the plan of record is given for sampling blocks (the proof units
 one draw covers, committed and registered before it) of the least length whose 1% affords a plan, a week, a month and a
 year: one draw over all their units, its statements shared per subcircuit. M3's live draw (`m3`) is a uniform 8 of one
-block's units, given as its cost against the block's GPU time and what it certifies.
+block's units (and, for its reservation, 8 of its tile lanes), given as its cost against the block's GPU time and its 1%
+budget, and what it certifies.
 
 **Certificate.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
 delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
-the exact `count_bound` (`certificate`). `stratified_isHarmBound_exact` (Security/Proofs/Flock/Soundness/Audit/HarmBound.lean)
-proves the knapsack's value an `IsHarmBound` of the stratified law; the locked `Partition.audit_influence` and
-`Partition.audit_exfiltration` turn such a bound into the accepted audit's bound under the backend's open obligations
-(KnowledgeSound, LinkSound), for the abstract one-stage audit, not a Lean function; and no difftest holds core's Python
-`harm_bound` to the Lean.
+the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
+(Security/Proofs/Flock/EndToEnd/Joint/Statement.lean, #4560, proved in #4590): per sampling block, one detection budget
+`sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's wrong
+units each at most `StratifiedBlock.maxHarm`, their exact supremum over the sets escaping with probability at least
+delta, from one draw at one delta. #4600's difftest holds `certify`'s fields to that supremum.
 
 **Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit a sampling block,
 `ceil(k / cap)` statements of drawn units), its feature a unit's ANDs with its rows' openings, every unit's outputs
 committed at the GPU row committer's 225 GB/s (CMP-92 00:45Z), and a drawn request replayed at its share of the block's
-GPU time (a stand-in).
+GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay domain,
+a drawn unit replayed at 32 requests' share (`TILE_REQUESTS`), unshared with the other subcircuits' replays.
 
     uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 """
@@ -62,7 +66,7 @@ from verity.core.protocols.pouw.window import eps_at  # noqa: E402
 from verity.core.protocols.profile import MARGIN, Stratified, Stratum, _neg_log_ratio  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
     Candidate, Certificate, CostModel, Objective, Plan, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
-    frontier)
+    frontier, row_ands)
 
 #: Demo A's block: 16,384 requests, a 6.35 s step (HASH-20: the commit 1.0 s of it), 32 steps a request
 SHAPE = H.Shape(batch=16_384, step_s=6.35, steps=32)
@@ -79,29 +83,56 @@ BUDGET_SHARE = 0.01
 #: the budgets swept, in multiples of one serving block's GPU time, past the cheapest plan's
 GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8CoordinateRows_v1"
-TILE = "PouwH1Tile_v1"
+TILE = "PouwH1LaneZy_v2"
 #: C-Flock's largest statement (r20261026-004208-a28d refused k_log 28)
 K_LOG_MAX = 27
 #: M3's live draw (PRF-171): a uniform subset of this many of one block's units
 M3_UNITS = 8
-#: PouwH1Tile_v1's measured lane (`benchmarks/pouw/period_cost.py`): 4x8 outputs at K = 4,096
-TILE_MACS = 4 * 8 * 4096
-TILE_ANDS = 46_744_981
+#: PoUW's proof unit (CMP-126, compute-accounting 08:00Z): J10-R's per-call lane unit `PouwH1LaneZy_v2` over
+#: `PouwH1Tile_v5`, 1,024 outputs over the call's whole K, traced on its Boolean form: at each K its ANDs and its
+#: statements, one `PouwH1LaneZyChunk_v2` of 131,072 MACs each and the combine, each statement's output the one bit `ok`
+TILE_OUTPUTS = 1024
+TILE_CHUNK_MACS = 131_072
+TILE_TRACED = {16_384: (5_540_007_551, 129), 65_536: (22_095_177_215, 513)}
+#: serving commits only the receipt, about 257 bits a chunk
+TILE_COMMIT_BITS = 257
+#: a chunk's rows, PouwH1Tile_v1's measured lane's (a stand-in until the v2 chunk's are staged), and its staged k_log
 TILE_ROWS = (4096,) * 12 + (64,) * 3
-TILE_OUT_BITS = 1024 + 2 * (128 + 3) * 32
+TILE_K_LOG = 27
+#: a unit is a 32 x 32 leaf (`h1zy`: 32 lanes of 4 x 8 and their combine), its rows 32 tokens, in decode 32 requests
+TILE_REQUESTS = 32
+
+
+def tile_parts() -> tuple[int, int]:
+    """A chunk's ANDs and the combine's, from the two traced lanes (each lane its chunks and one combine)."""
+    (a0, s0), (a1, s1) = (TILE_TRACED[k] for k in sorted(TILE_TRACED))
+    chunk, rest = divmod(a1 - a0, s1 - s0)
+    combine = a0 - (s0 - 1) * chunk
+    if rest or combine <= 0 or any(s - 1 != k * TILE_OUTPUTS // TILE_CHUNK_MACS for k, (_, s) in TILE_TRACED.items()):
+        raise ValueError(f"TILE_TRACED is not chunks of {TILE_CHUNK_MACS} MACs plus one combine: {TILE_TRACED}")
+    return chunk, combine
 #: `PvRow_v1{T}`'s staged ANDs (DSV4V2 r20261026-023338-0808, FAMILIES r20261026-040304-8200), linear between
 PV_ANDS = ((1, 111_104), (8, 321_024), (31, 1_009_152), (32, 1_039_168))
 
 
 @dataclass(frozen=True)
 class Unit(H.Template):
-    """A subcircuit of the block at C-Flock's staged `k_log`."""
+    """A subcircuit of the block at C-Flock's staged `k_log`, serving committing `commit` bits a unit (its `out_bits`
+    when None). A unit of `chunks` chunks (PoUW's lanes) is proved as its chunks at `k_log`, a statement holding `cap`
+    whole units in `groups` statements, and one combine."""
 
     k_log: int = 0
+    commit: int | None = None
+    chunks: int = 0
 
     @property
     def cap(self) -> int:
-        return min(1 << (35 - self.k_log), 1 << 20)
+        base = min(1 << (35 - self.k_log), 1 << 20)
+        return max(1, base // self.chunks) if self.chunks else base
+
+    @property
+    def groups(self) -> int:
+        return max(1, ceil(self.chunks / min(1 << (35 - self.k_log), 1 << 20))) if self.chunks else 1
 
 
 def qk_ands(t: int) -> int:
@@ -128,8 +159,9 @@ def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
     q, kv, heads = m.heads * m.head_dim, m.kv_heads * m.head_dim, m.heads
     out: list[Unit] = []
 
-    def put(tid: str, token: int, gen: int, ands: int, rows: tuple[int, ...], out_bits: int, k: int) -> None:
-        out.append(Unit(tid, R * (T * token + Gn * gen), ands, rows, out_bits, True, k))
+    def put(tid: str, token: int, gen: int, ands: int, rows: tuple[int, ...], out_bits: int, k: int,
+            commit: int | None = None) -> None:
+        out.append(Unit(tid, R * (T * token + Gn * gen), ands, rows, out_bits, True, k, commit))
 
     chunks = (256,) * (d // 128)
     for k, r, token, gen, ands, kl in ((d, 2, L * (q + 2 * kv + d + f), V, 2_150_483, 25),
@@ -157,8 +189,13 @@ def families(m: H.Shape = SHAPE, *, tiles: bool = True) -> list[Unit]:
     put("EmbeddingCoordinate_v1{V=256}", d, 0, 4_820, (1, 2 * V, 2, 2), 16, 22)
     put("Argmax_v2{V=256}", 0, 1, 15_557, (2 * 128, 2 * 128, 2), 16, 22)
     if tiles:
-        put(f"{TILE}{{4x8,K=4096}}", L * ((q + 2 * kv + d + f) * d + d * f) // TILE_MACS, V * d // TILE_MACS,
-            TILE_ANDS, TILE_ROWS, TILE_OUT_BITS, 27)
+        for k, outputs in ((d, R * (T * L * (q + 2 * kv + d + f) + Gn * V)), (f, R * T * L * d)):
+            ands, statements = TILE_TRACED[k]
+            chunks = statements - 1
+            if outputs % TILE_OUTPUTS:
+                raise ValueError(f"{outputs} outputs at K={k} are not whole lanes of {TILE_OUTPUTS}")
+            out.append(Unit(f"{TILE}{{H1=v5,K={k},N={TILE_OUTPUTS}}}", outputs // TILE_OUTPUTS, ands,
+                            TILE_ROWS * chunks, statements, True, TILE_K_LOG, TILE_COMMIT_BITS * chunks, chunks))
     return out
 
 
@@ -166,7 +203,8 @@ def candidates(m: H.Shape = SHAPE, *, blocks: int = 1, tiles: bool = True) -> li
     """One candidate a subcircuit over a sampling block of `blocks` serving blocks, its unit's work its own ANDs, its
     output bits committed, and its statement cap its staged k_log's."""
     return [Candidate(t.id, t.id, t.units * blocks, t.ands, t.out_bits, ands=t.ands, rows=t.rows,
-                      commit_bits=t.out_bits, cap=t.cap, replay="request", per_replay=t.units // m.batch)
+                      commit_bits=t.out_bits if t.commit is None else t.commit, cap=t.cap,
+                      replay=t.id if t.chunks else "request", per_replay=1 if t.chunks else t.units // m.batch)
             for t in families(m, tiles=tiles)]
 
 
@@ -174,13 +212,23 @@ def costs(m: H.Shape = SHAPE, blocks: int = 1) -> CostModel:
     """The fit's rates, each subcircuit's costs derived from them once (`CostModel.of`'s arithmetic, which otherwise
     reopens every row at each of the sweep's million lookups)."""
     r = H.Rates.fitted()
-    each = {t.id: TemplateCost(statement_fixed=r.statement_fixed + r.statement_per_and * t.proved,
-                               statement_per_unit=0.0, unit=r.per_and * t.proved)
+    chunk, combine = tile_parts()
+    chunk += sum(row_ands(b) for b in TILE_ROWS)
+
+    def fixed(t: Unit) -> float:
+        if not t.chunks:
+            return r.statement_fixed + r.statement_per_and * t.proved
+        return t.groups * (r.statement_fixed + r.statement_per_and * chunk) + r.statement_fixed \
+            + r.statement_per_and * combine
+
+    each = {t.id: TemplateCost(statement_fixed=fixed(t), statement_per_unit=0.0, unit=r.per_and * t.proved)
             for t in families(m)}
     return CostModel(templates=each, per_and=r.per_and, statement_fixed=r.statement_fixed,
                      statement_per_and=r.statement_per_and,
                      commit_per_bit=1 / (8 * COMMIT_BPS),
-                     replay={"request": ReplayDomain(m.batch * blocks, m.block_s / m.batch)},
+                     replay={"request": ReplayDomain(m.batch * blocks, m.block_s / m.batch)}
+                     | {t.id: ReplayDomain(t.units * blocks, TILE_REQUESTS * m.block_s / m.batch)
+                        for t in families(m) if t.chunks},
                      shared=True, source="h200.Rates.fitted")
 
 
@@ -289,13 +337,18 @@ def point(cands: list[Candidate], cm: CostModel, proving: float, *, grid: int = 
     return Point(proving, hw, hb, p, at)
 
 
-def tile_eps(sizes: dict[str, int], cands: list[Candidate]) -> dict[str, float] | None:
-    """The tile stratum's epsilon at each delta from the plan's draw (`eps_at`, every lane credited its ANDs)."""
-    c = next((c for c in cands if c.template.startswith(TILE)), None)
-    if c is None or not sizes.get(c.template):
-        return None
-    k, n, w = sizes[c.template], c.units, c.ands
-    return {str(d): float(eps_at(k, Fraction(d), n * w, n, w)) for d in DELTAS}
+def tile_eps(sizes: dict[str, int], cands: list[Candidate]) -> dict[str, dict[str, float]] | None:
+    """Each tile stratum's epsilon at each delta from the plan's draw (`eps_at`, every lane credited its ANDs), by K."""
+    out = {}
+    for c in cands:
+        if c.template.startswith(TILE) and sizes.get(c.template):
+            k, n, w = sizes[c.template], c.units, c.ands
+            out[c.template] = {str(d): float(eps_at(k, Fraction(d), n * w, n, w)) for d in DELTAS}
+    return out or None
+
+
+def tile_eps_max(eps: dict[str, dict[str, float]] | None) -> dict[str, float]:
+    return {str(d): max(e[str(d)] for e in eps.values()) for d in DELTAS} if eps else {}
 
 
 def sweep(cands: list[Candidate], cm: CostModel, m: H.Shape = SHAPE, *, grid: int = 41,
@@ -367,18 +420,22 @@ def plan_at(m: H.Shape, name: str, n: int, *, share: float = BUDGET_SHARE, grid:
     return row
 
 
-def m3(m: H.Shape = SHAPE, k: int = M3_UNITS, *, tiles: bool = False) -> dict:
-    """M3's live draw: a uniform k of one block's units (`subset:k`, one stratum), its expected proving cost a session a
-    subcircuit it meets, against the block's GPU time, and what it certifies by core's `harm_bound` (the heaviest units
-    first), the leak's location term at the unit-weighted bound."""
-    cands, cm = candidates(m, tiles=tiles), costs(m)
+def m3(m: H.Shape = SHAPE, k: int = M3_UNITS, *, tiles: bool = False, only: str | None = None) -> dict:
+    """M3's live draw: a uniform k of one block's units (`subset:k`, one stratum; with `only`, of the subcircuits whose
+    id starts with it), its expected proving cost, `ceil(x / cap)` statements of a subcircuit it draws x units of, against
+    the block's GPU time and its 1% budget, and what it certifies by core's `harm_bound` (the heaviest units first), the
+    leak's location term at the unit-weighted bound."""
+    cands, cm = candidates(m, tiles=tiles or only is not None), costs(m)
+    if only is not None:
+        cands = [c for c in cands if c.template.startswith(only)]
     N = sum(c.units for c in cands)
-    cost = 0.0
+    cost, total = 0.0, comb(N, k)
     for c in cands:
         a0, a1 = cm.statement(c)
-        met = 1 - comb(N - c.units, k) / comb(N, k)
-        cost += met * a0 + k * c.units / N * (a1 + cm.unit(c) + cm.of(c).replay)
-    cost += k * m.block_s / m.batch
+        statements = sum(comb(c.units, x) * comb(N - c.units, k - x) * ceil(x / c.cap) for x in range(1, k + 1))
+        requests = TILE_REQUESTS if c.template.startswith(TILE) else 1
+        cost += statements / total * a0 + k * c.units / N * (a1 + cm.unit(c) + cm.of(c).replay
+                                                             + requests * m.block_s / m.batch)
     st = Stratified((Stratum("unit", N, k),))
     ands, bits = sum(c.units * c.ands for c in cands), sum(c.units * c.out_bits for c in cands)
     at = {}
@@ -388,8 +445,8 @@ def m3(m: H.Shape = SHAPE, k: int = M3_UNITS, *, tiles: bool = False) -> dict:
         leak = st.harm_bound({"unit": [(float(c.out_bits), c.units) for c in cands]}, d) + location(N, count)
         at[str(d)] = {"free_compute": work, "leak": leak, "work_share": work / ands, "bits_share": leak / bits,
                       "wrong_units": count}
-    return {"k": k, "tiles": tiles, "units": N, "ands": ands, "bits": bits, "cost": cost,
-            "of_block": cost / m.block_s, "at": at}
+    return {"k": k, "tiles": tiles, "only": only, "units": N, "ands": ands, "bits": bits, "cost": cost,
+            "of_block": cost / m.block_s, "of_budget": cost / (BUDGET_SHARE * m.block_s), "at": at}
 
 
 def ands_against_gpu(m: H.Shape = SHAPE) -> dict:
@@ -477,11 +534,25 @@ def render_record(rows: list[dict], share: float = BUDGET_SHARE) -> str:
             lines.append(f"| {r['span']} | {r['blocks']:,} | {r['budget']:.4g} | {r['cheapest']:.4g} | no plan | | | | "
                          "| | |")
             continue
-        a, z, e = r["at"]["0.01"], r["at"]["1e-06"], r.get("tile_eps") or {}
+        a, z, e = r["at"]["0.01"], r["at"]["1e-06"], tile_eps_max(r.get("tile_eps"))
         lines.append(f"| {r['span']} | {r['blocks']:,} | {r['budget']:.4g} | {r['cheapest']:.4g} | "
                      f"{r['per_block']:.4g} | {r['drawn']:,} | {a['free_compute']:.3g} ({a['work_share']:.2g}) | "
                      f"{a['leak']:.3g} ({a['bits_share']:.2g}) | {z['free_compute']:.3g} ({z['work_share']:.2g}) | "
                      f"{z['leak']:.3g} ({z['bits_share']:.2g}) | {e.get('0.01', 0):.3g} / {e.get('1e-06', 0):.3g} |")
+    for r in rows:
+        for t, eps in (r.get("tile_eps") or {}).items():
+            lines.append(f"- {r['span']}: k_T = {r['sizes'][t]:,} of {t}, eps {eps['0.01']:.3g} / {eps['1e-06']:.3g}")
+    return "\n".join(lines)
+
+
+def render_m3(rows: list[dict]) -> str:
+    lines = ["| M3 draw | units | cost GPU-s | of the block | of its 1% budget | free_compute at 1% | leak at 1% |",
+             "|---|---|---|---|---|---|---|"]
+    for o in rows:
+        name = f"{o['k']} of {o['only']}" if o["only"] else f"uniform {o['k']}{' with tiles' if o['tiles'] else ''}"
+        a = o["at"]["0.01"]
+        lines.append(f"| {name} | {o['units']:.4g} | {o['cost']:.4g} | {o['of_block']:.3g} | {o['of_budget']:.3g} | "
+                     f"{a['free_compute']:.3g} ({a['work_share']:.2g}) | {a['leak']:.3g} ({a['bits_share']:.2g}) |")
     return "\n".join(lines)
 
 
@@ -492,6 +563,9 @@ def main(argv=None) -> None:
     ap.add_argument("--no-frontier", action="store_true")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
+    draws = [m3(), m3(tiles=True), m3(only=TILE)] + [m3(only=f"{TILE}{{H1=v5,K={k},") for k in sorted(TILE_TRACED)]
+    (a.out / "m3.json").write_text(json.dumps(draws, indent=1, default=str))
+    print(render_m3(draws), flush=True)
     tag = "-".join(s.replace(" ", "_") for s in a.spans) if a.spans else "all"
     rows = []
     for name, n in spans(SHAPE).items():
@@ -503,7 +577,7 @@ def main(argv=None) -> None:
                          default=str), flush=True)
     print(render_record(rows), flush=True)
     if not a.no_frontier:
-        o = frontier_report() | {"m3": [m3(), m3(tiles=True)]}
+        o = frontier_report() | {"m3": draws}
         (a.out / "frontier.json").write_text(json.dumps(o, indent=1, default=str))
         print(render(o), flush=True)
 

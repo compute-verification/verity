@@ -2,7 +2,8 @@
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
 `certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under top's
 rate no worse than either half's best alone, within the budget, the least sampling block the first whose share of its
-GPU time affords a plan, and M3's uniform draw and the tile stratum's epsilon as core and PoUW state them."""
+GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
+tile strata's epsilon as core and PoUW state them."""
 
 from __future__ import annotations
 
@@ -43,17 +44,42 @@ def test_the_partition_is_families_table_within_the_cap():
     assert [D.qk_ands(t) for t in (1, 8, 16, 32)] == [39_924, 303_754, 605_290, 1_208_362]
     assert [D.pv_ands(t) for t in (1, 8, 31)] == [111_104, 321_024, 1_009_152]
     assert [D.attention_k_log(t) for t in (6, 7, 14, 15, 30, 31)] == [22, 23, 23, 24, 24, 25]
-    (tile,) = [t for t in fs if t.id.startswith(D.TILE)]
-    s8_macs = sum(t.units * int(t.id.split("K=")[1].split(",")[0]) for t in fs if t.id.startswith(D.S8))
-    assert tile.units * D.TILE_MACS == s8_macs and len(D.families(tiles=False)) == len(fs) - 1
-    assert max(t.k_log for t in fs) <= D.K_LOG_MAX and all(t.cap == min(2 ** (35 - t.k_log), 2 ** 20) for t in fs)
+    def k_of(t):
+        return int(t.id.split("K=")[1].split(",")[0])
+
+    tiles = [t for t in fs if t.id.startswith(D.TILE)]
+    s8_macs = sum(t.units * k_of(t) for t in fs if t.id.startswith(D.S8))
+    assert sum(t.units * D.TILE_OUTPUTS * k_of(t) for t in tiles) == s8_macs
+    assert len(tiles) == len(D.TILE_TRACED) and len(D.families(tiles=False)) == len(fs) - len(tiles)
+    chunk, combine = D.tile_parts()
+    for t in tiles:
+        ands, statements = D.TILE_TRACED[k_of(t)]
+        assert t.ands == ands == t.chunks * chunk + combine and t.out_bits == statements == t.chunks + 1
+        assert t.chunks * D.TILE_CHUNK_MACS == D.TILE_OUTPUTS * k_of(t)
+        assert t.cap * t.chunks <= 2 ** (35 - t.k_log) * t.groups and (t.cap + 1) * t.chunks > 2 ** (35 - t.k_log)
+    assert [(t.cap, t.groups) for t in tiles] == [(2, 1), (1, 2)]
+    assert max(t.k_log for t in fs) <= D.K_LOG_MAX
+    assert all(t.cap == min(2 ** (35 - t.k_log), 2 ** 20) for t in fs if not t.chunks)
     one, week = D.candidates(), D.candidates(blocks=7)
+    by_c = {t.id: t for t in fs}
     for c, w in zip(one, week):
-        assert c.work == c.ands and c.influence == 0 and c.commit_bits == c.out_bits > 0 and w.units == 7 * c.units
+        t = by_c[c.template]
+        commit = D.TILE_COMMIT_BITS * t.chunks if t.chunks else c.out_bits
+        assert c.work == c.ands and c.influence == 0 and c.commit_bits == commit and c.out_bits > 0 \
+            and w.units == 7 * c.units
     cm, rates = D.costs(), replace(D.costs(), templates={})
     assert cm.shared and cm.commit_per_bit == pytest.approx(1 / (8 * 225e9))
-    assert all(cm.statement(c) == rates.statement(c) and cm.unit(c) == rates.unit(c) for c in one)
+    assert all(cm.statement(c) == rates.statement(c) and cm.unit(c) == rates.unit(c)
+               for c in one if not by_c[c.template].chunks)
+    proved = chunk + sum(D.row_ands(b) for b in D.TILE_ROWS)
+    for c in one:
+        t = by_c[c.template]
+        if t.chunks:
+            a0 = t.groups * (cm.statement_fixed + cm.statement_per_and * proved) + cm.statement_fixed \
+                + cm.statement_per_and * combine
+            assert cm.statement(c) == (pytest.approx(a0), 0.0) and cm.unit(c) == rates.unit(c)
     assert D.costs(blocks=7).replay["request"].units == 7 * m.batch
+    assert all(D.costs(blocks=7).replay[t.id].units == 7 * t.units for t in tiles)
     assert m.block_s == pytest.approx(32 * 6.35)
     g = D.ands_against_gpu()
     assert sum(d["ands_share"] for d in g["definitions"].values()) == pytest.approx(1)
@@ -103,14 +129,19 @@ def test_each_budget_certifies_no_less_than_either_half_alone():
 
 def test_the_tile_epsilon_is_the_least_whose_k_prime_the_draw_meets():
     cands = D.candidates()
-    tile = next(c for c in cands if c.template.startswith(D.TILE))
-    eps = D.tile_eps({tile.template: 1760}, cands)
-    for d, e in eps.items():
-        f = Fraction(e).limit_denominator(2 ** 32)
-        n, w = tile.units, tile.ands
-        assert k_prime(f, Fraction(float(d)), n * w, n, w) <= 1760 < k_prime(f - Fraction(1, 2 ** 32),
-                                                                             Fraction(float(d)), n * w, n, w)
-    assert eps["1e-06"] > eps["0.01"] and D.tile_eps({}, cands) is None
+    tiles = [c for c in cands if c.template.startswith(D.TILE)]
+    by = D.tile_eps({c.template: 1760 for c in tiles}, cands)
+    assert set(by) == {c.template for c in tiles}
+    for tile in tiles:
+        eps = by[tile.template]
+        for d, e in eps.items():
+            f = Fraction(e).limit_denominator(2 ** 32)
+            n, w = tile.units, tile.ands
+            assert k_prime(f, Fraction(float(d)), n * w, n, w) <= 1760 < k_prime(f - Fraction(1, 2 ** 32),
+                                                                                 Fraction(float(d)), n * w, n, w)
+        assert eps["1e-06"] > eps["0.01"]
+    assert D.tile_eps_max(by) == {d: max(e[d] for e in by.values()) for d in ("0.01", "1e-06")}
+    assert D.tile_eps({}, cands) is None and D.tile_eps_max(None) == {}
 
 
 def test_the_least_sampling_block_is_the_first_that_affords_a_plan():
@@ -126,6 +157,7 @@ def test_the_least_sampling_block_is_the_first_that_affords_a_plan():
 def test_m3_draws_a_uniform_eight_and_certifies_the_heaviest_units():
     o = D.m3()
     assert o["of_block"] == o["cost"] / D.SHAPE.block_s > 0
+    assert o["of_budget"] == pytest.approx(o["of_block"] / D.BUDGET_SHARE)
     law = Stratified.uniform(o["units"], D.M3_UNITS)
     for d in D.DELTAS:
         at = o["at"][str(d)]
@@ -134,6 +166,15 @@ def test_m3_draws_a_uniform_eight_and_certifies_the_heaviest_units():
         assert 0 < at["work_share"] < 1 and 0 < at["bits_share"] <= 1
     assert o["at"]["1e-06"]["free_compute"] > o["at"]["0.01"]["free_compute"]
     assert D.m3(tiles=True)["units"] > o["units"]
+    lanes = {k: D.m3(only=f"{D.TILE}{{H1=v5,K={k},") for k in sorted(D.TILE_TRACED)}
+    cands, cm = D.candidates(), D.costs()
+    for k, x in lanes.items():
+        (c,) = [c for c in cands if c.template.startswith(f"{D.TILE}{{H1=v5,K={k},")]
+        a0, a1 = cm.statement(c)
+        drawn = D.M3_UNITS * (a1 + cm.unit(c) + cm.of(c).replay + D.TILE_REQUESTS * D.SHAPE.block_s / D.SHAPE.batch)
+        assert x["cost"] == pytest.approx(-(-D.M3_UNITS // c.cap) * a0 + drawn, rel=1e-12)
+    both = D.m3(only=D.TILE)
+    assert lanes[16_384]["cost"] < both["cost"] < lanes[65_536]["cost"]
 
 
 def test_the_knee_is_where_the_certified_shares_stop_falling_fast():

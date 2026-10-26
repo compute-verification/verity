@@ -56,7 +56,8 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200 (PRF-166): plain INT8 weights, no P2 decode, a block of 16,384 requests at
   HASH-20's 6.35 s step, 32 steps a request, on circuits' FAMILIES map (every subcircuit a Definition C-Flock stages,
-  at its measured ANDs and staged k_log) with PoUW's tile lanes as one more subcircuit (`PouwH1Tile_v1`'s size), and
+  at its measured ANDs and staged k_log) with PoUW's tiles as one more subcircuit at each K (J10-R's per-call lane units,
+  `PouwH1LaneZy_v2` over v5, at CMP-126's traced ANDs), and
   statements shared per subcircuit per sampling block. The harm is Daniel's half skipped work (each unit's own ANDs),
   half leaked output bits, each half weighted at each budget by the least bound that budget certifies for it alone;
   each point reports `certify`'s `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the tile stratum's ε
