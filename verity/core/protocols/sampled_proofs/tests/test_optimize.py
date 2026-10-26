@@ -1,7 +1,7 @@
 """The sampling planner (`optimize`): its statement count, replay count and closed-form bound against brute force and core's
 bound, `Achievability`'s rates at zero statement cost, the frontier under C-Flock's statement-batched cost, the choice
 between a partition and a covering, serving's commitment (per unit, and the fixed serve-time total with its overlaps), the
-block kinds' weights, and the sensitivity queries."""
+weight classes' weights, and the sensitivity queries."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def test_a_population_without_harm_has_no_frontier():
 
 @pytest.fixture(scope="module")
 def achievability():
-    """Three templates of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work."""
+    """Three subcircuits of work 1, 8 and 200 at delta = 2^-10 and C = 400, each unit costing its work."""
     cands = [Candidate("a", "A", 4000, 1, 16), Candidate("b", "B", 500, 8, 16), Candidate("c", "C", 20, 200, 16)]
     costs = CostModel({c.template: TemplateCost(unit=float(c.work)) for c in cands})
     objective = Objective(2.0 ** -10)
@@ -135,7 +135,7 @@ def test_statement_size_moves_to_the_cap_as_the_draw_densifies(batched):
 
 
 def _uniform_cost(cands, costs, objective, target) -> float:
-    """The cheapest law drawing one fraction q of every template (each at its cheapest statement size) that certifies
+    """The cheapest law drawing one fraction q of every subcircuit (each at its cheapest statement size) that certifies
     `target`, by bisection on q."""
     def sizes(q: float) -> dict[str, int]:
         return {c.template: min(c.units, max(1, ceil(q * c.units))) for c in cands}
