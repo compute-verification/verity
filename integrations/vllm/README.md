@@ -53,7 +53,7 @@ step observer and run header; `pinned.py` its host buffers), `run_facts.py` (pro
 `vllm_adapter.py` (workloads and request driving; the stages import the engine's names from it), `engine_driver.py`,
 `engine_profile.py`, `arrivals.py`, `static_schedule.py` (a `sampling.ignore_eos` run held to the schedule its declaration alone
 decides), `served_seed.py` (the public default seed a served request without one is sampled under), `rank_worker.py` (the TP rank worker extension), and `profiles/` (kappa: capture profiles and workload JSON; one generic
-constructor + a facts table).  Never: commit, decide what is required.
+constructor + a facts table; the adapter's fixed cases, `cases.py`).  Never: commit, decide what is required.
 
 **`program/`** implements *Program*: Definitions (`registry/`, the registered library; importing it registers the on-demand
 primitive families through `verity.ml.circuits.codec.register_lazy_family`), lowering (`frontend/`: the torch frontend, `derive`, `rules/`
