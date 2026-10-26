@@ -244,7 +244,7 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
     · rename_i hne
       cases h
       obtain ⟨_, ss, hlen, hss, hpr, hsz, hprog⟩ := fold_ok _ _ _ hf hall
-      have hq : r1.proved.qsort (· < ·) = want := by simpa [hall] using hne
+      have hq : r.proved.qsort (· < ·) = want := by simpa [hall] using hne
       refine ⟨tags0, circuitB, pubB, rfl, get_ofArray hc, get_ofArray hpb, by simpa using hsz, fun hpos => ?_, ss, hlen,
         hss, ?_⟩
       · exact hprog (List.ne_nil_of_length_pos (by simpa using hpos))
