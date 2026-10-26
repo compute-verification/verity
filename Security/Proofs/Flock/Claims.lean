@@ -171,6 +171,7 @@ import Proofs.Flock.Claims.Recursion.DecRRecJ
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+import Proofs.Flock.Claims.Recursion.InnerAtCoins
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy

@@ -1,5 +1,8 @@
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
+import Proofs.Flock.VBridge.Algebra.RunSkel
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import Proofs.Flock.VBridge.PartS
 
 /-!
 # Row D's ties at the deployed layout: the side's schedule and check 5's positions
@@ -163,6 +166,38 @@ theorem verifierRows_congr (h : algFields sh = algFields sh') (rounds : Array (A
 
 end Congr
 
+/-! ## The verifier rows read only the rounds that hold coins -/
+
+/-- **`verifierRows` skips rounds of no coins** (`Coins.ofRounds`): at recorded rounds equal but for them, it computes
+the same rows. -/
+theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
+    (h : a.filter (·.size ≠ 0) = b.filter (·.size ≠ 0)) :
+    RecAlgebra.verifierRows sh a extras comb = RecAlgebra.verifierRows sh b extras comb := by
+  have e : RecAlgebra.Coins.ofRounds a = RecAlgebra.Coins.ofRounds b := by
+    unfold RecAlgebra.Coins.ofRounds
+    rw [h]
+  unfold RecAlgebra.verifierRows
+  rw [e]
+
+/-- **`verifierRows` reads a round**: the zerocheck draws its first coins before anything else, so no rows come of no
+rounds. -/
+theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
+    {w : Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))}
+    (h : RecAlgebra.verifierRows sh rounds extras comb = .ok w) : 0 < rounds.size := by
+  rcases Nat.eq_zero_or_pos rounds.size with h0 | h0
+  · exfalso
+    unfold RecAlgebra.verifierRows at h
+    obtain ⟨⟨lins, info⟩, hl, -⟩ := FlockVBridge.PartS.bind_ok h
+    obtain ⟨j, hr⟩ := RecAlgebra.residualLins_run hl
+    obtain ⟨-, r0, -, -, -, k1, -, -, hz, -⟩ := RecAlgebra.run_stages hr
+    unfold RecAlgebra.zerocheck at hz
+    obtain ⟨v, k₁, hv, -⟩ := RecAlgebra.cm_bind hz
+    rcases RecAlgebra.coinVec_ok hv with ⟨h6, -⟩ | ⟨-, hr6, -⟩
+    · exact absurd h6 (by decide)
+    · rw [Array.eq_empty_of_size_eq_zero h0] at hr6
+      simp [RecAlgebra.Coins.ofRounds] at hr6
+  · exact h0
+
 /-! ## Check 5's `dirs` rows -/
 
 /-- **Check 5's `rec-open` rows, opened**: where `openRows` gives rows, the inner session's algebra, the one level of
@@ -255,14 +290,18 @@ theorem shape?_ok {m k c : ℕ} {sh : Shape} (h : RecResiduals.shape? m k c = so
 stages at `x` and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its
 source, the session is the inner statement's table 0 (its `m` and `k_log`), its extra claims are the table's at the
 first coin's link points, and each rep's rounds are `canonRounds` of the coins after the link, as row D's readers take
-them. This is the coin side of check 5 at every value it registers (`staged_rep_drawn` is its round-by-round form). -/
+them, up to rounds of no coins (which `verifierRows` skips, `verifierRows_filter`) and wherever the rep has a round
+(which any rows it gives do, `verifierRows_pos`). This is the coin side of check 5 at every value it registers
+(`staged_rep_drawn` is its round-by-round form). -/
 def InnerCoinsR (untr : TrReader) (b : Brings) (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → ∀ (_ : 0 < sts.size) (f : RecCoins.Source) (inn : RecCoins.Inner),
       RecCoins.Source.atC3 i.src i.inner i.commits = some f → f.load sts[0].c.unit.name = .ok inn →
       ∃ v, setupOf false (xIOf x) = some v ∧ inn.m = (tabsOf v.2.2)[0]!.m ∧ inn.kLog = (tabsOf v.2.2)[0]!.kLog ∧
         inn.extras = (tabsOf v.2.2)[0]!.extra (pointsOf v.2.1 (((List.range (Bk (xIOf x))).map c).headD default)) ∧
-        ∀ r < 2, inn.rounds r = .ok (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast r)
+        ∀ r < 2, ∀ rounds, inn.rounds r = .ok rounds → 0 < rounds.size →
+          rounds.filter (·.size ≠ 0) =
+            (canonRounds v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c).tail.dropLast r).filter (·.size ≠ 0)
 
 /-- **The position tie** (`PosTieR`, the coin side of `CopyDirsTieR`): at a V\* statement `xO` part `s` stages at `x`
 and shows the coins `c` at, where check 5 loads the staged table's (table 0's) inner session from its source and
@@ -328,9 +367,7 @@ theorem posTieR_of {untr : TrReader} {b : Brings} {pieces : Msg → List OpenPie
     · rw [h]; simpa using h0
     · rw [h]; simpa using h1
   obtain ⟨hrounds, hvr⟩ := rep_ok hrq
-  rw [hrd q.rep hrep] at hrounds
-  have hR' := (Except.ok.inj hrounds).symm
-  rw [hR', verifierRows_comb] at hvr
+  rw [verifierRows_filter (hrd q.rep hrep _ hrounds (verifierRows_pos hvr)), verifierRows_comb] at hvr
   -- the reader's position
   have hexs : ((tabsOf v.2.2)[0]!.extra (pointsOf v.2.1 (((List.range (Bk (xIOf x))).map c).headD default))) =
       .ok extras := by rw [← hex, hext]
