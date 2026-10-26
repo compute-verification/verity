@@ -47,9 +47,7 @@ theorem rawIns_pf {w : FlockDeploy.Raw} {pf : ByteArray} {b b' : FlockDeploy.Ins
     repeat' split at h'
     all_goals first | (cases h'; done) | skip
   all_goals (cases h; cases h'; simp_all)
-  all_goals first
-    | exact ‹∀ (k : ℕ) (t : Array (String × ℕ × ℕ)), _ = k → ¬_ = some t› _ _ rfl (‹some _ = _› : some _ = _).symm
-    | (subst_vars; simp_all)
+  all_goals exact ‹∀ (k : ℕ) (t : Array (String × ℕ × ℕ)), _ = k → ¬_ = some t› _ _ rfl (‹some _ = _› : some _ = _).symm
 
 /-! ## `Stmt.setupTables` at one table, with the verifier's own public input words -/
 
@@ -296,10 +294,10 @@ theorem staged_same {st : Stage} {x : Msg} {ms ms' : List (Msg × Out)} {s : ℕ
   have hpop : i.base.read.draw = none → RecVStar.population t = RecVStar.population t' := fun _ => by
     obtain ⟨r₁, ss, sv, hr₁, hss, hj, hp₁⟩ := staged_pop hins1 hset1 (by simp)
     obtain ⟨r₂, ss', sv', hr₂, hss', hj', hp₂⟩ := staged_pop hins2 hset2 (by simp)
-    obtain rfl : r₂ = r₁ := Option.some.inj (hr₂.symm.trans hr₁)
-    obtain rfl : ss' = ss := Except.ok.inj (hss'.symm.trans hss)
-    obtain rfl : sv' = sv := Option.some.inj (hj'.symm.trans hj)
-    exact (hp₁ : RecVStar.population t = sv.instances).trans (hp₂ : RecVStar.population t' = sv.instances).symm
+    obtain rfl : r₁ = r₂ := Option.some.inj (hr₁.symm.trans hr₂)
+    obtain rfl : ss = ss' := Except.ok.inj (hss.symm.trans hss')
+    obtain rfl : sv = sv' := Option.some.inj (hj.symm.trans hj')
+    exact (hp₁ : RecVStar.population t = _).trans (hp₂ : RecVStar.population t' = _).symm
   obtain ⟨hc, hm, hmp, hrs⟩ := hidden_same ht ht' hpop
   exact ⟨t, t', rfl, rfl, rfl, rfl, hm, hmp, by rw [hc], hrs⟩
 
