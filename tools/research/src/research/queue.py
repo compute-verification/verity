@@ -534,7 +534,7 @@ def lean_running(state: dict, pr: int) -> str | None:
     r20261024-165000-3c72 was cancelled mid-audit).  A stacked one (`Driver._stack_lean`) doesn't hold it."""
     for rec in ((state.get("drive") or {}).get("lean") or {}).values():
         if rec.get("state") is None and not rec.get("stacked") and any(n == pr for n, _ in rec.get("members") or ()):
-            return " ".join(rec.get("ids") or ())
+            return " ".join(rec.get("ids") or ()) or "(launching)"
     return None
 
 
