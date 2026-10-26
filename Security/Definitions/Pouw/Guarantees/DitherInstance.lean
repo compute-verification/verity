@@ -70,7 +70,8 @@ def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) : Prop :=
 
 /-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, whose floors are `sync ≥ 1`
 (the data sheet's tensor peak is the core's, whichever instruction issues it), `b1 ≥ 1/8` (CALIB's BGMMA measurement)
-and `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock, CPG Table 7; RT-MODEL M12), with the H200's public bests (the
+`madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock, CPG Table 7; RT-MODEL M12) and `slack ≥ 1` (the kernel idles a tick
+after every 20 `wgmma`s; RT-MODEL M1), with the H200's public bests (the
 placeholder until D5). -/
 def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200Placeholder
 

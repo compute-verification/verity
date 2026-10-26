@@ -25,7 +25,7 @@ import Definitions.Core.Accel.Principles
   before the period's end; `TimedWorkFits` is what that buys, the rounds' work within the period's capacity.
 
 The open parameters `x` are not fixed here: the headline holds at every `x` meeting θ's floors (`Card.floors`: on the
-H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`; on sm_120 `madHi ≥ 2` and no native `b1`, RT-MODEL M12, M13) with the
+H200 `sync ≥ 1`, `b1 ≥ 1/8`, `madHi ≥ 2`, `slack ≥ 1`; on sm_120 `madHi ≥ 2` and no native `b1`, RT-MODEL M12, M13) with the
 product form (`Assumptions.AccelProductForm`). Without the floors the model runs an `IMAD.HI`, a `b1` MAC or an
 `mma.sync` MAC for nothing, `ShaSpeed` at a card's rates is false in it, and the headline says nothing.
 -/
@@ -39,7 +39,7 @@ open Pouw.RelativeSecurity
 section Cards
 
 instance : Fintype Verity.Accel.Res where
-  elems := {.tensor, .issue, .alu, .imad, .shfl, .f64, .smem, .dram}
+  elems := {.tensor, .tensorLong, .issue, .alu, .imad, .shfl, .f64, .smem, .dram}
   complete r := by cases r <;> simp
 
 /-- **`n` cards pooled into one**: every store and every resource `n` times the card's, the code space too, and the

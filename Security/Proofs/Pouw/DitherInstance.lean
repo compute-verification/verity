@@ -69,9 +69,9 @@ theorem WorkSoundSm120 : Pouw.Guarantees.DitherInstance.WorkSoundSm120 :=
   workSoundSm120_of_workSound Pouw.SecurityProofs.Dither.WorkSound
 
 /-- An open parameter at θ's floors: every dot, dense and sparse, the constant zero (in product form), `sync = 1`,
-`b1 = 1/8`, `madHi = 2`, no backlog. -/
+`b1 = 1/8`, `madHi = 2`, a backlog of one tick. -/
 def floorOpen : Verity.Accel.Open where
-  slack := 0
+  slack := 1
   b1 := 1 / 8
   sync := 1
   madHi := 2
@@ -84,7 +84,7 @@ theorem floorOpen_productForm : Verity.Assumptions.AccelProductForm floorOpen :=
 /-- The H200's floors with the product form are met. -/
 theorem h200_floors :
     ∃ x, Verity.Accel.H200.card.floors x ∧ Verity.Assumptions.AccelProductForm x :=
-  ⟨floorOpen, ⟨le_rfl, le_rfl, le_rfl⟩, floorOpen_productForm⟩
+  ⟨floorOpen, ⟨le_rfl, le_rfl, le_rfl, le_rfl⟩, floorOpen_productForm⟩
 
 /-- The RTX PRO 6000's floors with the product form are met. -/
 theorem sm120_floors :
