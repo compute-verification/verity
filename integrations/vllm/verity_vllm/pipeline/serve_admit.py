@@ -39,7 +39,7 @@ import asyncio
 import sys
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
@@ -74,6 +74,7 @@ class Admission:
     ingress: dict[str, Any]
     user: str | None = None
     release: tuple[str, int] | None = None   # (the warden's run, the request's place in its release order)
+    times: dict[str, float] = field(default_factory=dict)   # wall-clock stamps (telemetry): head, received, submitted, admitted
 
 
 def engine_id_of(http_id: str) -> str:
