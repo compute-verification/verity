@@ -104,7 +104,7 @@ def test_path_edit_to_a_directory_that_did_not_move_is_refused(tmp_path):
 def test_path_after_a_checkout_variable_is_certified(tmp_path):
     """`tools/move/layout.py` rewrites a moved path after `$REPO/` or `${ROOT}/` (a shell script's checkout), so the check
     reads it from the root there too; a moved path inside a longer one is still not the move's."""
-    run = 'export PYTHONPATH=$REPO/protocols/pous/src:${ROOT}/protocols/pous\nOUT=$W/x/protocols/pous\n'
+    run = 'SRC=$REPO/protocols/pous/src:${ROOT}/protocols/pous\nOUT=$W/x/protocols/pous\n'
     repo, base = _repo(tmp_path, {**BASE_FILES, "run.sh": run})
     _move(repo, "protocols/pous", "security_proofs/pous")
     _write(repo, {"run.sh": run.replace("$REPO/protocols", "$REPO/security_proofs").replace("}/protocols", "}/security_proofs")})
