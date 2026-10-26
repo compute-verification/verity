@@ -1,5 +1,6 @@
 """The agent watch (INF-69) frees a held run: RUNNING, its last event a finished tool call, then nothing but heartbeats for
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
+import io
 import json
 import re
 import uuid
@@ -348,6 +349,49 @@ def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     assert events[1][1] == {"callId": "c1", "name": "Shell", "status": "completed"}
     assert seen[0].full_url.endswith("/v1/agents/bc-a/runs/run-1/stream")
     assert seen[0].get_header("Authorization").startswith("Basic ")
+
+
+def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch):
+    """26 Oct: with the API answering near its 60 s timeout, one sweep's serial reads took 24 min and the cloud watch alerted.
+    A read past `reads_until` raises TimeoutError without asking, one before it waits at most what is left; a POST always goes."""
+    class Resp:
+        def __enter__(self):
+            return io.BytesIO(b"{}")
+
+        def __exit__(self, *a):
+            return False
+
+    asked = []
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: asked.append((req.get_method(), timeout)) or Resp())
+    clock = Clock(100.0)
+    api = W.Api("k", clock=clock)
+    api.get("/v1/agents")
+    api.reads_until = 130.0
+    api.get("/v1/agents")
+    clock.t = 130.0
+    with pytest.raises(TimeoutError):
+        api.get("/v1/agents")
+    api.post("/v1/agents/bc-a/runs/run-1/cancel")
+    assert asked == [("GET", 60), ("GET", 30.0), ("POST", 60)]
+
+
+def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_path):
+    """An IDLE agent's run read (`Watch.read`) caught only HTTP errors, so a timeout there, or a spent read budget, failed the
+    whole sweep and left status.json stale."""
+    class SlowApi(FakeApi):
+        def get(self, path, **params):
+            if path.endswith("/runs/run-i"):
+                raise TimeoutError("The read operation timed out")
+            return super().get(path, **params)
+
+    clock = Clock()
+    api = SlowApi([{"id": "bc-i", "status": "IDLE", "latestRunId": "run-i", "updatedAt": W.iso(clock.t)},
+                   {"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-1"]
+    assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
+    assert records(tmp_path) == [], "a timeout is not an unreadable run"
 
 
 def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
