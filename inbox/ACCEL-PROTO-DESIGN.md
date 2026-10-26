@@ -539,3 +539,14 @@ Decisions on your open items:
 3. **Route (iii), emulated b1 (ALGO-COST-3's A35), has to enter D5's menu.** A known cheaper route missing from the menu makes `SAKMatmul` (the menu's hull) false wherever it wins, which is the RTX PRO 6000 from x = 0.25 up. ALGO-COST-3 owns adding it to D5's code. #4665's `PubBest` follows after the sprint. Until then, D6 says the RTX PRO 6000 x > 0 rows are upper bounds and the headline at x = 0 stands.
 4. **Accepted:** the headline beside load at x = 0 with x > 0 rows beside it, τ scored by each card's period share, and PB5's PV L′ 64 not adopted.
 RT-PROTO-2 reviews D6 v1 now for its final D7 report. If it finds something, I may resume you once for D6 v1.1.
+
+
+## 12:36Z (real UTC), coordinator to PROTO-DESIGN-4: RT-PROTO-2's D6 review, findings P21–P26 (CMP-118 71d22b4c; final report in note:20261026T0622Z-draft-accel-rt-proto-2)
+RT-PROTO-2 confirms D6 v1's ε terms and the caps and coverage under P19 at x = 0. No menu route beats pub at x = 0. Its framing check holds in μ° units. For D6 v1.1:
+- **P21: adopted as protocol structure.** The period's registered total (every round's registered instance, L27) is published before the period's first check. State it in v3's spec and keep ε at 0.27 / 0.23 / 0.23% and 0.28 / 0.23 / 0.23%. Give RT-PROTO-2's no-publication figures (0.42 / 0.38 / 0.37 and 0.32 / 0.27 / 0.28) as the variant.
+- **P23: a group is the serving replica**, multi-node for V4: at least 12 H200s or 17 RTX PRO 6000s, not 8. The network certifier's boundary goes around the whole group. Recompute G and ε_net with that (RT-PROTO-2 expects under 0.01 points).
+- **P24: credit no MACs to V4's input embedding** (0.93e9 parameters, a lookup). Fix the shape scale so only real static matmuls are credited, and report V4's coverage as it then is. If the RTX PRO 6000's V4 coverage drops below 95%, say so plainly: that's a goal miss for that row.
+- **P25: price the timed answers.** Give τ_ans, Δ and the period length T, with k(Δ + τ_ans) ≤ T (T ≥ 3.8 h per second of Δ + τ_ans), and the answers' cost in γ, even if it's negligible.
+- **P26:** add the union over periods, ln(P)/(ηk), to the week, month and year rows (+0.04–0.07 points a year).
+- **P22 (high: how the world rows read).** At μ°, the H200's tensor pipe is priced at 0 at x = 0. At x = 0.25, tensor work worth 5–6% (H200) and 8–10% (RTX PRO 6000) of the claim can run beside the credited rounds unseen. Leave the headline as it is. In D6, state the world claim's reading in words (μ°-priced device capacity, not FP8 FLOP of other work), and give **one alternative row: credit at a fixed served price, x = 1, published as a protocol parameter**, with its credited share and the hidden work it leaves. Whether the claim should move to that is Daniel's call at 19:00Z; my recommendation is the x = 1 row.
+Post D6 v1.1 on CMP-118 by 16:30Z, prefixed `[ACCEL PROTO-DESIGN-4]`.
