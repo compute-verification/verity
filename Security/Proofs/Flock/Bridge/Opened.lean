@@ -15,8 +15,10 @@ break binding. This file gives the step from the sampling relation to that form,
   (its committed inputs and outputs) to the value `openedOf` reads.
 * `unbound`: the units wrong in `openedOf`'s transcript, or with a wire of their `io` that doesn't open to it;
   `card_unbound_lt_of_relS`: `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer than `K₀` of them.
-* `correct_of_not_unbound`: where openings are unique (`Unique`, the negation of a break on these roots), a unit
-  outside `unbound` is correct in every transcript its `io` opens to, so the bound holds of each such transcript.
+* `correct_of_not_unbound`: where each wire opens to one value (`Unique`, the negation of a break), a unit
+  outside `unbound` is correct in every transcript its `io` opens to.
+* `card_badIn_lt_of_relS`, R4's form: where openings are unique, every transcript the commitment opens to (`OpensTo`)
+  has fewer than `K₀` bad units (`badIn`: wrong in it, or with a wire of their `io` that doesn't open to it).
 -/
 
 namespace Flock.Bridge
@@ -32,9 +34,10 @@ def OpensAt (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H
   if (C.op g).isInput = true ∧ (κ g).isSome = true then κ g = some v
   else ∃ o : Opening Bool, o.pos = posOf C g ∧ Cm.Opens H roots o = true ∧ o.val = v
 
-/-- **Openings are unique** under `roots`: two openings of one position that pass carry one value. -/
-def Unique (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) : Prop :=
-  ∀ o o' : Opening Bool, o.pos = o'.pos → Cm.Opens H roots o = true → Cm.Opens H roots o' = true → o.val = o'.val
+/-- **Each wire opens to one value** under `roots`. -/
+def Unique (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H : Claims.Msg → Claims.Msg)
+    (Cm : Commitment Bool) (roots : List Claims.Msg) : Prop :=
+  ∀ (g : Fin C.N) (v v' : Bool), OpensAt C κ H Cm roots g v → OpensAt C κ H Cm roots g v' → v = v'
 
 theorem opening_of_val {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool} {s : Claims.Sampling.Stmt} {w : Wit}
     {i : ℕ} {b : Bool}
@@ -54,9 +57,13 @@ theorem opensAt_of_val {κ : Fin C.N → Option Bool} {H : Claims.Msg → Claims
   rw [OpensAt, if_neg hk]
   exact opening_of_val h
 
-theorem opensAt_unique {κ : Fin C.N → Option Bool} {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool}
-    {roots : List Claims.Msg} (hU : Unique H Cm roots) {g : Fin C.N} {v v' : Bool}
-    (h : OpensAt C κ H Cm roots g v) (h' : OpensAt C κ H Cm roots g v') : v = v' := by
+/-- Two openings of one position that pass carry one value: then each wire opens to one value. -/
+theorem unique_of_openings {κ : Fin C.N → Option Bool} {H : Claims.Msg → Claims.Msg} {Cm : Commitment Bool}
+    {roots : List Claims.Msg}
+    (hU : ∀ o o' : Opening Bool, o.pos = o'.pos → Cm.Opens H roots o = true → Cm.Opens H roots o' = true →
+      o.val = o'.val) :
+    Unique C κ H Cm roots := by
+  intro g v v' h h'
   unfold OpensAt at h h'
   split_ifs at h h'
   · exact Option.some.inj (h.symm.trans h')
@@ -188,7 +195,7 @@ theorem ofBool_getLsbD_zero (x : BitVec 1) : BitVec.ofBool (x.getLsbD 0) = x := 
 outside `unbound` is correct in any transcript `T` each wire of whose `io` opens to `T`'s bit there. -/
 theorem correct_of_not_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) (val : ℕ → Option Bool)
-    (hU : Unique H Cm roots) {u : Fin n} (hu : u ∉ unbound P κ H Cm roots val)
+    (hU : Unique C κ H Cm roots) {u : Fin n} (hu : u ∉ unbound P κ H Cm roots val)
     {T : (Verity.Circuit.ofAudit C).Transcript}
     (hT : ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u → OpensAt C κ H Cm roots g ((T g).getLsbD 0)) :
     (Verity.Partition.ofAudit P).Correct T u := by
@@ -202,7 +209,48 @@ theorem correct_of_not_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n
   refine (Verity.Partition.ofAudit P).correct_congr (fun g hg => ?_) hc
   calc T g = BitVec.ofBool ((T g).getLsbD 0) := (ofBool_getLsbD_zero _).symm
     _ = Verity.Circuit.ofBits (openedOf C κ val) g := by
-      rw [opensAt_unique hU (hT g hg) (hb g hg)]
+      rw [hU g _ _ (hT g hg) (hb g hg)]
       rfl
+
+/-- **A transcript the commitment opens to**: each committed wire that opens under `roots` opens to `T`'s bit. -/
+def OpensTo {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) (H : Claims.Msg → Claims.Msg)
+    (Cm : Commitment Bool) (roots : List Claims.Msg) (T : (Verity.Circuit.ofAudit C).Transcript) : Prop :=
+  ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).committed → ∀ v, OpensAt C κ H Cm roots g v →
+    OpensAt C κ H Cm roots g ((T g).getLsbD 0)
+
+open Classical in
+/-- **The bad units of a transcript**: wrong in it, or with a wire of their `io` that doesn't open to it. -/
+noncomputable def badIn {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg)
+    (T : (Verity.Circuit.ofAudit C).Transcript) : Finset (Fin n) :=
+  Finset.univ.filter fun u => ¬ (Verity.Partition.ofAudit P).Correct T u ∨
+    ∃ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u ∧ ¬ OpensAt C κ H Cm roots g ((T g).getLsbD 0)
+
+theorem badIn_subset_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) (val : ℕ → Option Bool)
+    (hU : Unique C κ H Cm roots) {T : (Verity.Circuit.ofAudit C).Transcript} (hT : OpensTo P κ H Cm roots T) :
+    badIn P κ H Cm roots T ⊆ unbound P κ H Cm roots val := by
+  classical
+  intro u hu
+  by_contra hn
+  have hb : ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u → OpensAt C κ H Cm roots g (openedOf C κ val g) :=
+    fun g hg => not_not.1 fun h => hn (Finset.mem_filter.2 ⟨Finset.mem_univ _, Or.inr ⟨g, hg, h⟩⟩)
+  have hT' : ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u →
+      OpensAt C κ H Cm roots g ((T g).getLsbD 0) :=
+    fun g hg => hT g (Finset.mem_filter.1 hg).1 _ (hb g hg)
+  rcases (Finset.mem_filter.1 hu).2 with hw | ⟨g, hg, hng⟩
+  · exact hw (correct_of_not_unbound P κ H Cm roots val hU hn hT')
+  · exact hng (hT' g hg)
+
+/-- **R4's form**: where openings under the statement's roots are unique, a witness in `RelS` at
+`δ = C(n − K₀, kd)/C(n, kd)` leaves every transcript the commitment opens to with fewer than `K₀` bad units. -/
+theorem card_badIn_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
+    (Cm : Commitment Bool) (w : Wit) (hU : Unique C κ H Cm roots)
+    (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P) w)
+    {T : (Verity.Circuit.ofAudit C).Transcript} (hT : OpensTo P κ H Cm roots T) :
+    (badIn P κ H Cm roots T).card < K₀ :=
+  (Finset.card_le_card (badIn_subset_unbound P κ H Cm roots _ hU hT)).trans_lt
+    (card_unbound_lt_of_relS P κ kd K₀ desc q roots H Cm w h)
 
 end Flock.Bridge
