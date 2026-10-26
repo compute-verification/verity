@@ -1455,6 +1455,12 @@
         "integrations/vllm/verity_vllm/program/kernels/compiled_relations.py": "integrations/vllm/verity_vllm/program/compiled_relations.py",
         "integrations/vllm/verity_vllm/program/kernels/compiled_norm_literal.py": "integrations/vllm/verity_vllm/program/compiled_norm_literal.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/llama1b_tp1_commit.sh": "examples/vllm/commit.sh",
+        "benchmarks/one_stage/llama1b_serve_seal.sh": "examples/vllm/serve.sh"
+      }
     }
   ]
 }
