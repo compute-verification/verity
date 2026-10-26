@@ -42,3 +42,9 @@ s_b (the cheaper product route for O's dither terms) has two new candidates: M7 
 - **2-byte words (words mod 2^16)** halve the hashing everywhere, but need SAK(matmul) restated over Z/2^16. **The coordinator's decision:** v2's baseline stays at 4-byte words. Report 2-byte words as an upgrade, which goes to Daniel only if v2 needs it for γ ≤ 10.
 
 **Your fix is now the critical path for γ ≤ 10 on the served models.** With the skip, the served shapes are at 8.9–13.5; without it, 2.4–3.7. Push your design to your note now, even partial, so PROTO-DESIGN-2 and RT-PROTO can use it. RT-PROTO's P1 proposes one: take O out of the credited round, and price peels and wraps as serving work.
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+s_b, the cheapest route for O at A = B = 0 where O = bcᵀ (bits × bits):
+- on the H200, b1 MMA at a cost of at least 1/8 of an INT8 MAC (measured), so s_b can reach 8 and L ≤ K/8;
+- on sm_120 there's no native b1 (M13), and the cheapest route is FP4 at ½, so s_b = 2.
+Your design should not depend on a small s_b.

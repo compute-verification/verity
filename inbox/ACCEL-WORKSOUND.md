@@ -56,3 +56,6 @@ HY2: wrap corrections and peels are serving work outside the words. Under R-ACCE
 - **U2:** the clock depends on the workload (1518–1797 MHz under saturated wgmma, against 1980 for lanes), up to 1.30× a second for a lower-power program. **U4:** at the no-fold L of 1000–3110, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. **U5:** four units must be added to `Accel`: sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions. None beats the tensor core. **U9:** host CPUs and PCIe/NVLink are outside the model.
 
 ShaSpeed's statement names a pinned public implementation, and the honest hashing cost is that implementation's, so c_sha = 1. State it that way, and keep h(1 − c_sha) in ε for when the pin is behind the best known.
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+**M12, a vacuity risk for the headline.** `Open.sync`, `b1` and `madHi` have no lower bounds. With madHi = 1, the model computes a SHA-512 compression faster than the card, so a `ShaSpeed` stated at a card rate is false in the model and `WorkSound` is vacuous. Require θ's floors (sync ≥ 1, madHi = 2, b1 ≥ 1/8 on the H200) as part of the model at θ, and make sure your honest example still satisfies `ShaSpeed` with them.

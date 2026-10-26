@@ -169,3 +169,6 @@ Yours: θ table for D3 by 08:00Z (PR), with run ids or data-sheet citations per 
 - **U2:** the clock depends on the workload (1518–1797 MHz under saturated wgmma, against 1980 for lanes), up to 1.30× a second for a lower-power program. **U4:** at the no-fold L of 1000–3110, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. **U5:** four units must be added to `Accel`: sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions. None beats the tensor core. **U9:** host CPUs and PCIe/NVLink are outside the model.
 
 RT-UNITS' U1, U2, U6 and U8: SHA-512 rows per card (ALU-only vs IMAD-balanced), whether the ALU and IMAD pipes overlap on sm_120 (resolve against the README's 5.28 vs 7.13 measurement), clocks per workload, and the missing θ rows (H200 IDP.4A, H200 L2 bandwidth, sm_120 IMAD.HI, sm_120 32-bit add at 128 vs measured 64).
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+RT-MODEL's M12 and M13: madHi = 2 on both cards per the programming guide (please confirm footnote 6), sync ≥ 1, b1 ≥ 1/8 on the H200, and no native b1 on sm_120 (ptxas emulates at ≥ 0.77; FP4 at ½ is the cheapest route). Also host rows for P9: per-core SHA-512 and INT8 (AMX), DDR, and PCIe 5.0 ×16 at about 63 GB/s each way.

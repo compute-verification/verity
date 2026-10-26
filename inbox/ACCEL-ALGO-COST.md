@@ -20,3 +20,6 @@ Add to item 4: O-IO's lookup route on ATT's noised P at the prover's own workloa
 - **U2:** the clock depends on the workload (1518–1797 MHz under saturated wgmma, against 1980 for lanes), up to 1.30× a second for a lower-power program. **U4:** at the no-fold L of 1000–3110, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. **U5:** four units must be added to `Accel`: sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions. None beats the tensor core. **U9:** host CPUs and PCIe/NVLink are outside the model.
 
 RT-UNITS' U4: at the no-fold L, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. Include it in item 2.
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+RT-MODEL on the shared-memory port: 128 B a SM-clock holds for distinct words. Small tables (at most 16 words) reach about 64 B a SMSP-cycle with broadcast, above the 55 O-IO's lookup routes need. Rerun O-IO's LP at 64 B for small tables, with a bank-conflict factor for large ones.

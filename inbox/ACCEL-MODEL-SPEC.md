@@ -147,3 +147,10 @@ O-IO's results:
 - **U2:** the clock depends on the workload (1518–1797 MHz under saturated wgmma, against 1980 for lanes), up to 1.30× a second for a lower-power program. **U4:** at the no-fold L of 1000–3110, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. **U5:** four units must be added to `Accel`: sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions. None beats the tensor core. **U9:** host CPUs and PCIe/NVLink are outside the model.
 
 (MODEL-SPEC-2) RT-UNITS' U2 (workload-dependent clock: one tick overstates per-second rates), U5 (add sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions), U7 (compression only matters to HBM- or L2-bound methods), U8 (sm_120 ALU/IMAD overlap) and U9 (hosts, as RT-PROTO's P9).
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+(MODEL-SPEC-2) New since my 04:20Z message:
+- **M11:** per-instruction k lists. `wgmma` has one k per type, and s8 k16 exists only as `mma.sync`, at 48.7% of `wgmma`. This is the slack M5's Strassen tie rests on.
+- **M12:** floors on the open parameters: sync ≥ 1, madHi = 2 on both cards (the programming guide gives 32 lanes; 30.6 measured on the H200), b1 ≥ 1/8 on the H200. Without them the headline is vacuous.
+- **M13:** drop native b1 from `Sm120.Avail`, or floor it at ½ (the FP4 route).
+- **M7 narrowed:** sparse MMA pays off only on mostly-zero operands, but `Dot` still needs the selector input.

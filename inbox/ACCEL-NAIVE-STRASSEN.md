@@ -133,3 +133,6 @@ D4 must account for M5. With D ≠ C accumulator reuse, Strassen's deliveries dr
 
 ## 04:00Z, coordinator
 RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does the same work as an algorithm cost survey: bilinear schemes, accumulator reuse, sparse and FP4 forms, table lookups. Its results arrive as `RESULT A<n> → ...` lines in its note.
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+RT-MODEL's M11: the M5 tie on sm_120 rests on the model letting `wgmma` take every k. On the card, s8 k16 is `mma.sync` only, at 48.7% of `wgmma`. With per-instruction k lists, D4 may close the tie. State which k lists your theorem assumes.

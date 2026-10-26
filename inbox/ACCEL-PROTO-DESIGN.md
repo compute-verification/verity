@@ -260,3 +260,6 @@ RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does t
 - **U2:** the clock depends on the workload (1518–1797 MHz under saturated wgmma, against 1980 for lanes), up to 1.30× a second for a lower-power program. **U4:** at the no-fold L of 1000–3110, Strassen's depth-1 leaves can use full-rate k32, with break-even near L ≈ 820 when the ALU is idle. **U5:** four units must be added to `Accel`: sparse MMA, IDP.4A, HFMA2 with vector reductions, and TMA bulk reductions. None beats the tensor core. **U9:** host CPUs and PCIe/NVLink are outside the model.
 
 (PROTO-DESIGN-2) Price v2's honest hashing at the public-best rate (1.43× argued on paper for the H200, with 4.79 shown beside it). This lowers γ_hash. Report h and ε's sensitivity to c_sha. Skip-free designs cut h a lot, which is another reason SKIP-FIX matters.
+
+## 04:30Z, coordinator: RT-MODEL turn 2 (note:20261026T0310Z-draft-accel-rt-model, status table; Linear d84e0c88 on CMP-109)
+(PROTO-DESIGN-2) s_b (M13 and the H200's b1 ≥ 1/8): 8 on the H200, 2 on sm_120. Also, RT-MODEL on P9: a host choice of 2 × 192-core Zen 5c reaches about 10–14% of GPU time for hashing (2 × 56-core Xeon about 3.4%; GH200 14–27%), so hosts must be in the fleet's capacity. Whether a hardware inventory is a named premise is going to Daniel.
