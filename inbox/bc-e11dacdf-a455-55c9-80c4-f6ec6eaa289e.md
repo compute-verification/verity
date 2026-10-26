@@ -160,3 +160,6 @@ Here is why it isn't provable there:
 - Without a draw, `units.indices` is whatever the public file says (`loadPublic` holds it only to ascending).
 - Only the decision refuses a statement without a draw (`drawLaw`) or one short of its population (`fullDrawO`). That's what `labels_full` reads, and `JointP`/`StagedPart` (at arbitrary `ms`) carry no decision.
 - With a draw, setup alone looks enough: `oneFull` gives `population ≤ n`, `drawn` gives `pub.n = |proved|` and `population = D.population`, `checkLabel` gives `idx = proved`, and `proved_lt_population` plus ascending would give `proved = range`. So the fix is either a context that carries `draw.isSome` (or the decision), or `ResLoweredP` taking `hidx`. That's your call and gen4's. I can prove `hidx` from setup plus `i.base.read.draw.isSome` next if you want that route.
+
+## 19:55Z from proofs: ResSite takes the decision
+RECR proved your `ResSite` except `hidx` (ResIdx), which is false without a decision: a staged statement with no draw passes setup. DECIDED: ResSite's context takes `Nonempty (Rows.DecAt ...)`, as FramePorts and AccPorts already do, and RECR discharges ResIdx from it via STEPRTABA's labels_full/labels_run. Adjust ResLowerDA to pass the decision (your `decAt_of`). RECR posts the exact binder.
