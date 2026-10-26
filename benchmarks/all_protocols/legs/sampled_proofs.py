@@ -4,7 +4,9 @@
 The audit is `benchmarks/prove_path/records_audit.py`'s, as `run.sh` with ``PP_TORCH_LOOP=1`` runs it: the registration
 held to the circuit the verifier registered before the loop ran (``--circuit``) and to the run root the loop published,
 the draw on live coins read after the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, and the
-audit record of the verifier of record (`one_stage.verifier.audit_record`, the Lean ``sampled-proofs-verifier``).
+audit record of the verifier of record (`one_stage.verifier.audit_record`, the Lean ``sampled-proofs-verifier``). The units
+whose outputs the loop serves out (``period.json``'s ``outputs``, the verifier's own from the loop's shape) are proved whole
+beside the draw (``--outputs``: every work draw's closure).
 
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
@@ -42,8 +44,9 @@ ROOT = Path(__file__).resolve().parents[3]
 RECORDS_AUDIT = ROOT / "benchmarks" / "prove_path" / "records_audit.py"
 #: the δ a window's audit record is decided at when its ``period.json`` names none
 DELTA = "1/100"
-#: the ports one audit's sessions may listen on, from its base (a session per drawn member, at most k)
-SPAN = 128
+#: the ports one audit's sessions may listen on, from its base (a session per member with a proved unit: at most k beside
+#: the output class's members)
+SPAN = 256
 PORTS = range(10000, 32000)
 _held: set[int] = set()
 _lock = threading.Lock()
@@ -158,11 +161,15 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     t, work = p["tools"], period_dir.parent / f"{period_dir.name}-sampled-proofs"
     delta = Fraction(p.get("delta") or DELTA)
     env = {**os.environ, **p.get("prover_env", {})}
+    outputs = []
+    if p.get("outputs"):
+        (out / "outputs.json").write_text(json.dumps(p["outputs"]))
+        outputs = ["--outputs", str(out / "outputs.json")]
     with ports() as base:
         argv = [sys.executable, str(RECORDS_AUDIT), "audit", "--window", str(period_dir), "--law", p["law"],
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
                 "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
-                "--firewall", t["flock-firewall"], "--out", str(work)]
+                "--firewall", t["flock-firewall"], "--out", str(work), *outputs]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:
             subprocess.run(argv, cwd=ROOT, env=env, stdout=log, stderr=err, check=False)
     keep(work, out / "audit")

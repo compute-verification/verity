@@ -21,11 +21,13 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
 the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
+Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
+proved whole beside the draw, under a work law: every draw's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
 it (`leak_count`). An integration's labels are never read.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]]
 
@@ -59,8 +61,10 @@ import argparse
 import contextlib
 import hashlib
 import json
+import math
 import os
 import random
+import re
 import socket
 import subprocess
 import sys
@@ -340,6 +344,27 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
     return mine, doc, sets
 
 
+def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()) -> list[list[int]]:
+    """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
+    verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
+    covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
+    the population's indices from the templates' order)."""
+    base, at = {}, 0
+    for t, n in circuit["templates"]:
+        base[t], at = at, at + n
+    units = {u for lo, hi in given for u in range(lo, hi)}
+    for r in (circuit.get("registered") or {}).get("reads", ()):
+        if re.fullmatch(r"o[0-9]+", r["port"]) and r.get("cut", [0, 1]) == [0, 1]:
+            units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
+    out: list[list[int]] = []
+    for u in sorted(units):
+        if out and out[-1][1] == u:
+            out[-1][1] = u + 1
+        else:
+            out.append([u, u + 1])
+    return out
+
+
 def _code(fn: Any) -> str | None:
     """The module a Definition's code is in: where the summary says each template's Definition came from."""
     d = getattr(fn, "defn", fn)
@@ -381,6 +406,7 @@ def audit(a: argparse.Namespace) -> int:
     a.port = a.port if a.port is not None else free_ports(A5.RANK_PORTS)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else ())
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     if a.challenger:
@@ -399,7 +425,7 @@ def audit(a: argparse.Namespace) -> int:
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                    "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
+                                    "audit", "draw", "draw_counts", "negatives", "coins", "timing", "outputs")}}
     row["leak"] = leak_count(mine.members, doc.get("external") or (), int((held["advice"] or {}).get("bits", 0)))
     row["definitions"] = {t: _code(fn) for t, (_c, fn) in sets.items() if t in {m.template for m in mine.members}}
     row["loaded"] = sorted({m.split(".")[0] for m in sys.modules if m.startswith("verity")})
@@ -429,7 +455,7 @@ def audit(a: argparse.Namespace) -> int:
     if a.challenger:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
-    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "seconds")}
+    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
@@ -453,6 +479,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
+    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out, proved "
+                   "whole beside the draw (`output_class`; a work law)")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)

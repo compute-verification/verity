@@ -107,6 +107,19 @@ class TorchLoop:
     def circuit(self) -> IF.Circuit:
         return IF.Circuit(f"torch-loop/mlp-w8a8-h{self.model.h}", ((template(self.model.h), self.units),))
 
+    def output_units(self) -> list[list[int]]:
+        """The units whose outputs the loop serves out, as ascending ``[lo, hi)`` ranges: the last linear's at every request
+        and step (`run`'s order: request, step, layer, then output coordinate), from the loop's shape alone."""
+        h, last = self.model.h, len(self.model.layers) - 1
+        per = len(self.model.layers) * h
+        return [[(r * self.steps + s) * per + last * h, (r * self.steps + s) * per + per]
+                for r in range(len(self.requests)) for s in range(self.steps)]
+
+    def work_table(self, law: dict) -> dict[str, int] | None:
+        """Under a ``work`` law, every unit of the circuit's one template credited alike (work 1, floor 1), so the law draws
+        its ``k`` as a uniform ``k``-subset; None under any other law."""
+        return {IF.descriptor_id(template(self.model.h)): 1} if law.get("law") == "work" else None
+
     def run(self, window: IF.Window) -> None:
         """Serve every request, recording each linear's units into ``window`` as they are computed."""
         coord, h = template(self.model.h), self.model.h
@@ -127,6 +140,6 @@ class TorchLoop:
     def window(self, law: dict, cap: int = 16, advice: dict | None = None) -> IF.Window:
         """The loop's window under ``law`` in members of at most ``cap`` units, every unit recorded; ``advice``: the binding
         of its compiler and its schedule's commitment (`interface.advice_binding`), when its circuit is the compiler's."""
-        win = IF.Window(self.circuit(), self.run_root, law, cap, advice=advice)
+        win = IF.Window(self.circuit(), self.run_root, law, cap, advice=advice, work_table=self.work_table(law))
         self.run(win)
         return win

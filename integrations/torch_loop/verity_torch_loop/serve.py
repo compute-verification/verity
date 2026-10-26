@@ -9,8 +9,9 @@ registration under core's ``one_stage.registration``, the value files) to ``--ou
 SHA-512, the run root, the population and the units whose outputs are not their Definition's (`Window.mismatches`: none
 unless ``--tamper``). With ``--opening FILE`` the circuit is its compiler's (`compile`): the loop's schedule is committed as
 advice under that compiler, the registration binds both, and the advice's opening (the prover's private file) goes to
-``FILE``. The second prints the circuit record's SHA-512 alone, from the loop's shape and no value: the circuit the verifier
-registers before the loop runs, when it has no compiler."""
+``FILE``. The second prints the circuit record's SHA-512 and the loop's output units (`TorchLoop.output_units`), from the
+loop's shape and no value: the circuit the verifier registers before the loop runs, when it has no compiler, and the units
+its draw proves whole. Under a ``work`` law both carry the loop's work table (`TorchLoop.work_table`)."""
 from __future__ import annotations
 
 import argparse
@@ -42,8 +43,9 @@ def main(argv: list[str] | None = None) -> int:
     loop = L.TorchLoop(L.Model(h=a.h), [int(x) for x in a.requests.split(",")], a.steps, a.tamper, a.run_id)
     law = D.parse_law(a.law)
     if a.circuit_only:
-        empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap)
-        print(json.dumps({"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest()}))
+        empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap, work_table=loop.work_table(law))
+        print(json.dumps({"circuit": hashlib.sha512(IF.circuit_bytes(empty.circuit_record())).hexdigest(),
+                          "outputs": loop.output_units()}))
         return 0
     advice = None
     if a.opening:

@@ -586,19 +586,22 @@ class _Recorded:
 class Window:
     """One window of an integration's values: ``circuit``'s units under ``run`` (the record's run root, hex) and ``law`` (the
     proof service's law of the window, as its draw parses it), in members of at most ``cap`` units, with ``advice`` its
-    compiler and advice (`advice_binding`) when the circuit depends on run-time choices. Each template's units are
+    compiler and advice (`advice_binding`) when the circuit depends on run-time choices, and ``work_table`` the verifier's
+    work table under a ``work`` law (`draw.work_table`), which the circuit record carries. Each template's units are
     `record`ed in order, then `close` commits them and `write` writes and registers the window."""
     circuit: Circuit
     run: str
     law: Mapping[str, Any]
     cap: int
     advice: Mapping[str, Any] | None = None
+    work_table: Mapping[str, Any] | None = None
     window: CS.Window = field(init=False)
     _recorded: dict[str, list[_Recorded]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         program, query = self.circuit.program()
-        self.window = CS.Window(program, query, dict(self.law), self.run, members(self.circuit, self.cap))
+        self.window = CS.Window(program, query, dict(self.law), self.run, members(self.circuit, self.cap),
+                                work_table=None if self.work_table is None else dict(self.work_table))
         if self.advice is not None:
             self.advice = advice_binding(self.advice["compiler"], self.advice["advice"]["root"], self.advice["advice"]["bits"])
 

@@ -7,7 +7,7 @@ result over each monitoring period of a datacenter.
 
 A window is one stretch of one machine's serving and its audits, and a monitoring period is the many windows on every
 machine of a deployment a result is about (`ARCHITECTURE.md`'s Glossary). Per window W (``--start`` on): the verifier
-registers the loop's circuit from its shape and run id (``serve --circuit-only``), the loop serves once
+registers the loop's circuit and its output units from its shape and run id (``serve --circuit-only``), the loop serves once
 (`integrations/torch_loop`, run id ``RUN/wW``, so each window has a root of its own) and writes its window into scratch
 with ``period.json`` beside it (the legs' records, `table.PERIOD`); each protocol of `table.TABLE` audits it through its leg
 (`decide`), up to ``--jobs`` windows at once, each audit on ports of its own; and ``DIR/wW/report.json`` holds the window's
@@ -152,7 +152,7 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "window": index, "period": index, "node": a.node, "circuit": registered["circuit"], "run_root": got["run"],
-        "law": a.law, "delta": a.delta, "cap": a.cap, "tools": a.tools,
+        "outputs": registered.get("outputs"), "law": a.law, "delta": a.delta, "cap": a.cap, "tools": a.tools,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw")} if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {}}, sort_keys=True))
     kept = out / "window"
@@ -209,8 +209,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--jobs", type=int, default=1, help="windows audited at once, each on ports of its own")
     ap.add_argument("--node", default=os.environ.get("RESEARCH_MACHINE") or os.uname().nodename)
     ap.add_argument("--tamper", default="", help="windows whose loop tampers with its outputs, e.g. 1,3")
-    ap.add_argument("--law", default="subset:64", help="the proof service's law of each window (k = 64: about 74 wrong "
-                    "units over a whole monitoring period at δ = 1% and n = 1024)")
+    ap.add_argument("--law", default="work:64", help="the proof service's law of each window (k = 64: about 74 wrong "
+                    "units over a whole monitoring period at δ = 1% and n = 1024); a work law also proves the loop's "
+                    "output units whole, beside its uniform 64-subset (the loop's one template, work 1)")
     ap.add_argument("--delta", default="1/100", help="each window's audit record's own δ")
     ap.add_argument("--cap", type=int, default=8)
     ap.add_argument("--requests", default="3,7")

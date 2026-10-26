@@ -25,7 +25,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   `{"verdict": "missing", "owner": LANE}`, and a leg that raises reports `error`. Neither is ever a verdict.
 - `legs/sampled_proofs.py`: integrity, real. `benchmarks/prove_path/records_audit.py` on the window, from its records
   alone, at k = 64 and δ = 1/100 by default: live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of
-  record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). It also hands on
+  record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). The default law,
+  `work:64` over the loop's one template, draws a uniform 64-subset, and its closure proves the loop's output units (the
+  last linear's, `period.json`'s `outputs`) whole beside it, so every unit whose output is served out is proved. It also hands on
   `sampled-proofs.case.json`, the case `SampledProofs.OneStage` reads (written by `benchmarks/one_stage/a5.py`), with
   whether `OneStage.check`'s Python on it gives the leg's verdict (`case-check.json`).
 - `verity_all_protocols/compose.py`: the composed verdict. A rejecting leg rejects it (onsite's reject dominance). It is
