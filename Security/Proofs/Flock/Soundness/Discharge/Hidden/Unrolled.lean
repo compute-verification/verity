@@ -373,6 +373,26 @@ theorem keysRow_commit {tags : Tags} {cf : ByteArray} {tables : List (String × 
     exact Layout.keysRow_of_parse (parse_untyped hty h).1 h1 hpr
   · exact keysRow_of_tmpl hty h h1 hpr
 
+/-- **The statement circuit's unit has the committed unit's input groups.** -/
+theorem Committed.unrolled_inGroups {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}
+    (hty : tags.typed = false) (h : Committed tags cf tables cs) :
+    (HmOut.unrolled cs).unit.inGroups = cs.unit.inGroups := by
+  rcases h with h | h
+  · rw [unrolled_flat (parse_tmpl_none hty h)]
+  · obtain ⟨n, _pos, hsz, heu, -, hg, -⟩ := tmpl_unit_at h
+    rw [heu]
+    show ((cs.nets.set! cs.unitNet ("unit", n)).getD cs.unitNet default).2.inGroups = _
+    rw [getD_set_unit _ _ _ _ hsz, ite_eq_left rfl, hg]
+
+/-- **`KeysRow` at a session's statement circuit** (`HmOut.parseStmt`, untyped tags): its committed circuit's
+(`keysRow_commit`), when the statement's unit has only its leaf group. -/
+theorem keysRow_stmt {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hty : tags.typed = false) (h : HmOut.parseStmt tags cf tables = .ok c) (h1 : c.unit.inGroups.size = 1)
+    {hU : Built c.unit} (hpr : Layout.PortReads c hU) : Layout.KeysRow c hU (Layout.portRowW c) := by
+  obtain ⟨cs, hcs, rfl⟩ := commit_of_parseStmt hty h
+  have hC := committed_of_commit hcs
+  exact keysRow_commit hty hC (by rw [← hC.unrolled_inGroups hty]; exact h1) hpr
+
 /-! ## On the committed circuit, flat or templated -/
 
 variable {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {cs : Circuit}

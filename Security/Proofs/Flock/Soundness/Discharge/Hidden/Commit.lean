@@ -354,6 +354,13 @@ theorem SpecC.model_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tab
     (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) : L.model regs = stmtOf st hwf regs :=
   Integrate.model_eqW (Committed.netWidths ht s.committed) (Committed.netKinds ht s.committed) L s.self.leaf hwf regs
 
+/-- **A session's statement circuit is `HmOut.parseStmt`'s**: its committed circuit, unrolled. -/
+theorem SpecC.parseStmt_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) :
+    HmOut.parseStmt tags cf tables = .ok (HmOut.unrolled st.c) :=
+  Or.elim s (fun s => parseStmt_of_commit ht s.parse) fun s => by
+    rw [unrolled_flat (parse_tmpl_none ht s.parse)]
+    exact parseStmt_of_parse (HmOut.parse_isTmpl s.parse) s.parse
+
 /-- **A flat session's circuit is `HmOut.parse`'s.** -/
 theorem SpecC.parse_flat (hi : tags.isTmpl = false) (s : SpecC tags cf pf coins tables draw st) :
     HmOut.parse tags cf tables = .ok st.c :=
