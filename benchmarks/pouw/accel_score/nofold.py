@@ -210,6 +210,15 @@ V2_CARDS = {
 SHA_BUILT = {"H200": 4.79e9, "RTX PRO 6000": 7.13e9}
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
 P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
+P_X_AT = {80: 0.0016, 96: 0.0042}   # p_X by V's width, Llama-3.1-8B (BET-HYBRID-2 table (c))
+# v2 as frozen (coordinator, 04:13Z and 04:20Z): U ±80; V ±80 on the H200; on the RTX PRO 6000 the cheaper of V ±96
+# (A10 (b)) or V ±80 with an honest kernel that runs depth-1 Strassen or HK itself (A10 (a), A14). Noise tiles t = 2
+# (H200) and t = 4 (RTX PRO 6000).
+V_WIDTH = {"H200": 80, "RTX PRO 6000": 96}
+TILES = {"H200": 2, "RTX PRO 6000": 4}
+# The tiles' cross-term route Σ_j (b + V)π_jᵀ Uᵀ + V(Σ_j c_j)ᵀ: one INT8 digit plus a sparse high part, so c_t = 2 + the
+# best form (ALGO-COST A12, A13; floor 2). Unlisted tile counts take the least listed, the prover's cheapest.
+C_T = {("H200", 2): 2.502, ("H200", 3): 2.548, ("RTX PRO 6000", 4): 2.539}
 RHO_V2 = 4                     # Z_X Uᵀ and V Y_Wᵀ, two base-128 digits each; Z_X = Σ_s (X_s + V)π_sᵀ absorbs (VΠ)Uᵀ
 M_PREFILL = 8192               # tokens a prefill call
 EPS_ALG_V2 = 0.005             # budget on the deployed kernel's gap at A = B = 0, per credited shape
@@ -223,7 +232,7 @@ SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATT
 
 
 def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False,
-             built: bool = False, weight_coins: bool = True, tiles: int = 1) -> dict:
+             built: bool = False, weight_coins: bool = True, tiles: int = 1, u_x: int | None = None) -> dict:
     """One prefill call of protocol v2, per MAC in plain INT8 tensor time at η.
 
     A segment (one word a cell) is L long and holds `tiles` noise tiles of period L' = L/tiles, each with a fresh
@@ -245,17 +254,18 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     S = math.ceil(K / L)
     Lp = L / tiles
     n_terms = K / Lp
-    dz, dy = (2 if 224 * n_terms < 2 ** 14 else 3), (2 if 128 * n_terms < 2 ** 14 else 3)
+    u_x = V_WIDTH[card] if u_x is None else u_x
+    dz, dy = (2 if (128 + u_x) * n_terms < 2 ** 14 else 3), (2 if 128 * n_terms < 2 ** 14 else 3)
     g_hash = per_comp * per_bit * (S * word_bits + 32) / K
     g_a = per_comp * per_bit * 8 / N if commit_a else 0.0
     side = m + N if weight_coins else m
     coin_bits = side * K + 8 * side * Lp + (K * math.log2(Lp) if weight_coins else 0)
     g_coin = per_comp * coin_bits / (512 * m * N * K)
     g_rm = (dz + dy) * Lp / K
-    g_wrap = c_op * (P_W + P_X) / 2
+    g_wrap = c_op * (P_W + P_X_AT[u_x]) / 2
     tensor, alu = 1 + g_rm, g_hash + g_a + g_coin + g_wrap
     g = tensor + alu
-    c_t = (1 if tiles == 1 else 2) + 1
+    c_t = 2 if tiles == 1 else C_T.get((card, tiles), min(C_T.values()))
     saved = max(0.0, (dy - 1) * Lp, g_rm * K - K / s_b, L - K / s_b, K + g_rm * K - K / s_b - c_t * K / tiles)
     a_nw = alu - g_wrap
     return {"L": L, "tiles": tiles, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a,
@@ -388,13 +398,14 @@ def world_macs(m: dict) -> tuple[dict, float, float, float, float]:
     return hist, m["static"] * WORLD_TOKENS, qk, pv, ix
 
 
-def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, **kw) -> dict:
+def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, frozen: bool = False, **kw) -> dict:
     """v2's static rounds with tiles, picked under overlapped accounting: MAC-weighted tensor, ALU without wraps, wraps,
-    the tensor saving at A = B = 0, and the worst shape's pipe maximum."""
+    the tensor saving at A = B = 0, and the worst shape's pipe maximum. `frozen` fixes the card's tile count (TILES)."""
     tot = T = A = W = S = 0.0
     worst = (0.0, None)
+    tile_set = (TILES[card],) if frozen else range(1, max_tiles + 1)
     for K, N, reps in SHAPES[model]:
-        r = v2_pick(card, K, N, 16, budget, tile_set=range(1, max_tiles + 1), overlap=True, **kw)
+        r = v2_pick(card, K, N, 16, budget, tile_set=tile_set, overlap=True, **kw)
         w = K * N * reps
         tot, T, A, W, S = tot + w, T + w * r["T"], A + w * r["A_nw"], W + w * r["wrap"], S + w * r["saved"]
         if r["gamma_max"] > worst[0]:
@@ -431,7 +442,7 @@ def lookup_alu(card: str, hist: dict) -> float:
     return min(c_op * 8 / g * (1 + 2 ** g / (n / 2)) for g in range(2, LOOKUP_G_MAX + 1))
 
 
-def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6) -> list[dict]:
+def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, cards=None, **kw) -> list[dict]:
     """v2 static (tiles) plus ATT at the world model, the period's tensor and ALU pipes overlapped.
 
     Credit is priced at max(T, A without wraps); the honest period takes max(T, A). Where the period is tensor-bound the
@@ -439,12 +450,12 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6) -> l
     6000 kernel). ε_alg is what a prover at A = B = 0 (or low rank) saves within the tensor pipe's slack over the ALU
     without wraps: PD2-1's routes first, at no ALU cost, then lookups at ℓ."""
     rows = []
-    for card in V2_CARDS:
+    for card in cards or V2_CARDS:
         a_wrap = V2_CARDS[card][2] * ATT_WRAP_P / 2
         for m in WORLD:
             hist, st, qk, pv, ix = world_macs(m)
             tot = st + qk + pv + ix
-            s = static_pipes(card, m["name"], budget, max_tiles, built=built)
+            s = static_pipes(card, m["name"], budget, max_tiles, built=built, **kw)
             pv_t, pv_a, qk_t, qk_a = att_pipes(card, m, hist, built=built)
             T = st * s["T"] + pv * pv_t + qk * qk_t + ix
             A_nw = st * s["A_nw"] + pv * pv_a + qk * qk_a
@@ -457,7 +468,11 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6) -> l
             slack = max(0.0, T - A_nw)
             s1 = min(st * s["saved"], slack)
             s2 = min(pv - x, (slack - s1) / (1 + ell))
-            rows.append({"card": card + (" built" if built else "") + (" t=1" if max_tiles == 1 else ""), "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
+            label = card + (" built" if built else "") + (" t=1" if max_tiles == 1 else "")
+            label += f" t={TILES[card]}" if kw.get("frozen") else ""
+            label += f" V±{kw.get('u_x', V_WIDTH[card])}" if kw.get("frozen") else ""
+            rows.append({"card": label, "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
+                         "util": T / honest,
                          "T": T / tot, "A": (A_nw + Wr) / tot, "eps_alg": (s1 + s2) / credit,
                          "wrap_uncredited": (honest - credit) / honest, "lookup": x / pv,
                          "copy_share": (qk + pv) / tot, "uncredited": ix / tot, "worst": s["worst"],
@@ -475,6 +490,37 @@ def v2_world_print(budget: float = 0.01) -> None:
         print(f"  {r['card']:18} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
               f"{r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['lookup']:6.1%} {r['copy_share']:5.1%} "
               f"{r['uncredited']:5.2%}  {r['static_gamma']:.2f}, K {K} N {N} L {L} t {t}: {g:.2f}")
+
+
+def v2_frozen_print(budget: float = 0.01) -> list[dict]:
+    """v2 as frozen: the card's tile count, A12/A13's c_t, V ±80 on the H200, and both A10 options on the RTX PRO 6000
+    (V ±96; V ±80 with the honest kernel running Strassen or HK, whose overlapped γ is v2's at ±80 wherever the period
+    is ALU-bound). Then ε_alg at every registrable static shape on its own, the prover's cheapest instance (A = B = 0,
+    its own model of one shape), not only the world mix."""
+    print(f"\nv2 as frozen at the world model (tiles H200 t={TILES['H200']}, RTX PRO 6000 t={TILES['RTX PRO 6000']}; "
+          f"c_t A12/A13; 16-bit words; overlapped; eps_alg budget {budget:.0%} a shape)")
+    print(f"  {'card':30} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'util':>5} {'eps_alg':>7} "
+          f"{'wraps':>6} {'copy':>5} {'uncr':>5}  static worst shape")
+    rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True)
+            + v2_world(budget, cards=["RTX PRO 6000"], frozen=True, u_x=80)
+            + v2_world(budget, built=True, cards=["RTX PRO 6000"], frozen=True, u_x=80))
+    for r in rows:
+        g, (K, N, L, t) = r["worst"]
+        print(f"  {r['card']:30} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
+              f"{r['util']:5.1%} {r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['copy_share']:5.1%} "
+              f"{r['uncredited']:5.2%}  K {K} N {N} L {L}: {g:.2f}")
+    print("  each registrable static shape alone (prover's own model of that shape, A = B = 0): worst eps_alg, its L")
+    for card in V2_CARDS:
+        for u_x in sorted({V_WIDTH[card], 80}):
+            worst = (0.0, None, None)
+            for model, shapes in SHAPES.items():
+                for K, N, _ in shapes:
+                    r = v2_pick(card, K, N, 16, budget, tile_set=(TILES[card],), overlap=True, u_x=u_x)
+                    if r["eps_ovl"] >= worst[0]:
+                        worst = (r["eps_ovl"], (K, N, r["L"]), r["gamma_max"])
+            e, (K, N, L), g = worst
+            print(f"  {card:13} V±{u_x}: worst eps_alg {e:.2%} at K {K} N {N} L {L} (gamma {g:.2f})")
+    return rows
 
 
 def v2_decode(budget: float = 0.01) -> None:
@@ -579,5 +625,6 @@ if __name__ == "__main__":
     v2_att()
     v2_tiles()
     v2_world_print()
+    v2_frozen_print()
     v2_decode()
     seg_coins()
