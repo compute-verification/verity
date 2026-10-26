@@ -1,6 +1,7 @@
 import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
 import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Discharge.ZkExec.Event
 
 /-!
 # The hidden-output `--zk` chain's statement circuit (PRF-133, ASK-112 option A)
