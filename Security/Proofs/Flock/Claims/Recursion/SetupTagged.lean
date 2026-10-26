@@ -8,8 +8,8 @@ import Proofs.Flock.Claims.Recursion.VStarCross
 The inner statement's setup, wherever it is `.ok` at `H`, makes a call that is neither (`setupM_log_untagged`): its
 session digest `σ = SHA-512(sigmaTag ‖ …)`, whose tag `verity/flock-circuit/sigma` has `f` at byte 7. So a premise
 asking every call of an accepted inner run to be a recorded one, or a collision among them, asks at every accepted run
-with a setup for a collision among the recorded calls (`setupM_not_layoutBTops`), which `ReadersLogCollS` does not: it
-searches the setup's calls too.
+with a setup for a collision among the recorded calls (`setupM_not_layoutBTops`), which `CallsLogCollAt` does not: it
+searches the setup's calls too (`Deploy.callsAt`).
 
 The proof runs the setup on a poisoned oracle (`poison`), SHA-512 refusing every input `p` holds of. Off a run whose
 log `p` holds of nowhere, the poisoned run is the `OC` run (`poisonSim`, one more simulation of `Flock.With.Sim`, at
@@ -135,9 +135,12 @@ theorem setupTablesWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteA
     | (exact throw_ok hs)
     | (obtain ⟨_, hx, hs⟩ := ebind_ok' hs
        try (cases hx; done)
-       try (simp only [hhid, ↓reduceIte] at hx; refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
+       try (simp only [hhid, ↓reduceIte] at hx
+            obtain ⟨_, hx, -⟩ := ebind_ok' hx
+            refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ hx; exact htag)
        try (refine mapM_range_ne_ok (by omega) (fun a ha => ?_) hx
             simp only [hhid, ↓reduceIte] at ha
+            obtain ⟨_, ha, -⟩ := ebind_ok' ha
             refine setupHiddenWith_poison hp ?_ _ _ _ _ _ _ _ _ ha
             exact htag))
     | (rw [ite_ok] at hs
@@ -177,7 +180,7 @@ theorem innerTags_untagged : RecVStar.innerTags.hiddenOutputs = true ∧
 
 /-- **`S(x_I)` holds a call no part records**: where the inner statement sets up on hidden outputs at a `σ` tag with
 `f` at byte 7, its setup is `.ok` at SHA-512 (`setupWith_sha512_of`), so one of the inputs `innerSetupIns` lists, the
-ones `ReadersLogCollS` searches beside the recorded calls, is not `HmTagged` (`setupM_log_untagged`). -/
+ones `Deploy.callsAt` searches beside the recorded calls, is not `HmTagged` (`setupM_log_untagged`). -/
 theorem innerSetupIns_untagged {xI : Msg} {s : FlockDeploy.Ins} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
     (h : FlockDeploy.setupOf false xI = some (s, spec, sts)) (hhid : s.read.tags.hiddenOutputs = true)
     (hsig : 8 ≤ s.read.tags.sigmaTag.toUTF8.data.toList.length ∧
