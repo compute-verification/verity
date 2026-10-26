@@ -277,6 +277,7 @@ def main(argv=None) -> int:
     ap.add_argument("--session-timeout", type=float, default=14400)
     ap.add_argument("--live", action="store_true", help="the bundle's draw must be live, with its receipt")
     ap.add_argument("--flips", type=int, default=0, help="Lean-verify only the first N one-bit proof edits (0: all)")
+    ap.add_argument("--lean-jobs", type=int, default=1, help="Lean verifies at once beside the one session proving")
     a = ap.parse_args(argv)
     out, wdir = Path(a.out), Path(a.window)
     out.mkdir(parents=True, exist_ok=True)
@@ -297,7 +298,7 @@ def main(argv=None) -> int:
     sv = Staged(wdir, out / "honest")
     members = doc["members"][:a.members] if a.members else doc["members"]
     rows, first, proved = {}, None, []
-    with ThreadPoolExecutor(max_workers=1) as lean_pool:
+    with ThreadPoolExecutor(max_workers=max(1, a.lean_jobs)) as lean_pool:
         for bm in members:
             mm = sv.member(bm["k"])
             proved.append((bm, mm, session(a, mm, bm["draw"], out / "honest" / f"session-m{bm['k']}", lean_pool=lean_pool)))
