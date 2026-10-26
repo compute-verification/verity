@@ -111,7 +111,9 @@ through their calls (`Accel.OracleCalls`), and the realization premise `ShaReali
 the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: a run within the cap
 makes at most `Q` calls in its rounds' work, so its work's distinct queries, with the verifier's, are at most `q`.
 The answers' calls aren't capped (the timed window is the work's, I1), so the premise is false for a prover that
-hashes in its answers toward a later root (L39's answer half, open). With SHA-512's speed at one `κ_sha` and one
+hashes in its answers toward a later root (L39's answer half, open). It quantifies over every prover, so on a machine
+whose answer programs can call the oracle it is false and this statement is vacuous until the answer half closes;
+`WorkSound`, at each prover's own `q_A`, is the one to cite meanwhile. With SHA-512's speed at one `κ_sha` and one
 advice size `B_adv` for every prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`.
