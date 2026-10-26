@@ -438,6 +438,10 @@
    "owner": "@memory-accounting",
    "digest": "044d87c4d62cdc247e32c17d11254755d63f8de976c1b199ecd87fcc35637f35"
   },
+  "Accounting.PeriodLive.Sound": {
+   "owner": "@lean",
+   "digest": "952857ec27c25e78414e42ffbf914da1f8820a1176f4bfb80b8355b43b2e179e"
+  },
   "Accounting.PeriodRun.Sound": {
    "owner": "@lean",
    "digest": "4513323da308735e615d853a84c02fad17a033e83cf23d466e4519a31bcae2ba"
@@ -3352,6 +3356,18 @@
    "assumptions": [],
    "type_hash": "68dde909d4760fe6bf5586fa1e9c403148c9c10907160757d962f5fdfdba5159"
   },
+  "Accounting.SecurityProofs.JointHorizonBlocksLive": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonBlocksLive : Accounting.Guarantees.JointHorizonBlocksLive"],
+   "assumptions": [],
+   "type_hash": "8d59a240309c77494b87bfc8a5307e99f2f94d62d4e2d67c0e293db89008af9a"
+  },
+  "Accounting.SecurityProofs.JointHorizonLive": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonLive : Accounting.Guarantees.JointHorizonLive"],
+   "assumptions": [],
+   "type_hash": "58d041d7e631829c0ee218447df0819288054a4dd91e5578dd3104c0b3599a62"
+  },
   "Accounting.SecurityProofs.JointPerRun": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.JointPerRun : Accounting.Guarantees.JointPerRun"],
@@ -3369,6 +3385,12 @@
    "signature": ["Accounting.SecurityProofs.JointPeriod : Accounting.Guarantees.JointPeriod"],
    "assumptions": [],
    "type_hash": "199c3429112a2415364481b6adda32dad7324bcf045feef1f65fd46b2d7717d1"
+  },
+  "Accounting.SecurityProofs.JointPeriodLive": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointPeriodLive : Accounting.Guarantees.JointPeriodLive"],
+   "assumptions": [],
+   "type_hash": "66f19dacaae0cf5d6081ad88844354ac233b3fb0378e50c4a99b342f8b12e019"
   },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
@@ -11697,7 +11719,10 @@
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec."
+   "Flock.SecurityProofs.SampledKSLiveV3": "frozen (no-function): SampledKSLiveV2 on the event that the verifiers accept the files, proved from it; it reads SampledKSLiveV3 (Security/Proofs/Flock/Bridge/Refused.lean), whose event is flock-verify --zk's acceptance (Flock.PortRoots.check: row/v1, row/v2 or row-seg/v1 ports, distinct names, no colliding per-schema roots) and the sampled-proofs run's Slots.popOk, so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Accounting.SecurityProofs.JointPeriodLive": "frozen (no-function): Like JointPeriod, over the period as a causal game (Verity.Game, R5) rather than product coins: each audit's per-period guarantee is a hypothesis over an abstract live period of the device model whose verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings and schedule are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
+   "Accounting.SecurityProofs.JointHorizonBlocksLive": "frozen (no-function): Like JointHorizonLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees, each wipe's survivor bound and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12860,9 +12885,12 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -13674,6 +13702,19 @@
     "Accounting.Guarantees.JointHorizonBlocksAbstract": "144ba7e5493fa277ccd9ef43927deca71dd15c0683b5b6094d1f253c59e56eea"
    },
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksAbstract"]
+  },
+  "Definitions.Accounting.Guarantees.JointLive": {
+   "digest": "14f0fd4dc88508a8459c3def01cd0ff3978cad9593e7a53a97df877cca90cc45",
+   "definitions": {
+    "Accounting.Guarantees.JointHorizonBlocksLive": "719eb4d0880c8bc0bd3c6e08b08ac8ac9817b9bf684f69717f9c020b24e8ebec",
+    "Accounting.Guarantees.JointHorizonLive": "07533021ad9c6eeb83b92132ac74d5fc3b6c6aa181454fe96c3e1f2afe4d9aad",
+    "Accounting.Guarantees.JointPeriodLive": "b81df86955608dceb3e2ade59608407fd005cb87d6f716d204d2d2e0a7c5f973"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
+    "Accounting.SecurityProofs.JointPeriodLive"
+   ]
   },
   "Definitions.Accounting.Guarantees.JointPeriod": {
    "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
@@ -14619,9 +14660,12 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.RateOfAudit",
     "Accounting.SecurityProofs.RateOfAuditInteractive",
     "Accounting.SecurityProofs.RateOfAuditInteractiveRO",
@@ -14649,6 +14693,47 @@
     "Accounting.BlocksRun.wipe": "085e4093e9e5cc263b651909d4b218d8325e397865b1ee6fa2b276f7836ff0c7"
    },
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocks"]
+  },
+  "Definitions.Accounting.JointLive": {
+   "digest": "f4f31e61abf47d69d2850170607eb5c285e9516f1a307a39b33f629293eb5a83",
+   "definitions": {
+    "Accounting.BlocksLive": "1bc948949878195e0176b541d7c22aa5bbe1adc9619b02f6686be3c0cab94be4",
+    "Accounting.BlocksLive.MemoryTerm": "af0a5b89fd45a59f4a65d1213dc454c197ecf067325834383ee062720dead4c4",
+    "Accounting.BlocksLive.block": "831f7ffc4b01bccb5da15cfb98754aa37ec417d25d68522cda96bb9df7ef8318",
+    "Accounting.BlocksLive.chal": "b6cc3413d0bc5900a464536d6010c9360789e042657827bb01dcca32a9b36530",
+    "Accounting.BlocksLive.readDeadline": "eea17761ab5ab4272561953e145c7c1322bac85d3902bd4ba3c3d425118c1e43",
+    "Accounting.BlocksLive.weights": "b48ed1d7706fb898c4972b23383fba8427f9cef92fcc8f7cc46f0cdfc71f2f1f",
+    "Accounting.BlocksLive.wipe": "3b06c96353bad71be6df0acac7b79a4d6fbf2624f1a05cdb85deefa2025a9ead",
+    "Accounting.DoubleOpen": "0020434973acc769eb6ae63e36b6cc8344245620581afaa008feb3888965e849",
+    "Accounting.IntegrityHolds": "4479b225575377e7c2b0b0279fec71caccf7530fa1aef29bdf3ed416e40bea60",
+    "Accounting.OpensTo": "0beea19cfafb8f1f9bb0829d0f26205c5a8d47e94c6c321b7a94c5333bfc160c",
+    "Accounting.PeriodLive": "071853b8632c0170a5318d95f7a3f23235cc680a6718635b760d61aed96bec29",
+    "Accounting.PeriodLive.Break": "26057fc0ae9b26e61e52562105b0a858a6707e5547bdbe0d154a6f8a8aa94b03",
+    "Accounting.PeriodLive.Holds": "d15843566551d135f0ef5b6809e86f868d1706d88bca19dcf121f57e37031b8c",
+    "Accounting.PeriodLive.Sound": "952857ec27c25e78414e42ffbf914da1f8820a1176f4bfb80b8355b43b2e179e",
+    "Accounting.PeriodLive.accepts": "95f1b203b3d03c383aebb33ba7d1d8a20a667fff1869dd3dc57407da4a837956",
+    "Accounting.PeriodLive.acct": "419708f3fe81a5ac9a32c4e5dbb8260550d3c17d1b30e17898c9eb3c4a5a07ea",
+    "Accounting.PeriodLive.commWithin": "d6de99e689e51f17d4842ca933ec31f51b49db68aea5dd9683d0caa045c52da8",
+    "Accounting.PeriodLive.commit": "c80ee1803c72a15a314abe94959066139270fe9e54d5c667b230b57f4b46d7d9",
+    "Accounting.PeriodLive.opens": "83148d726fe476b764af2205ff7150c43c18bde23f5a4869aeefd1c0ab4e391b",
+    "Accounting.PeriodLive.parts": "41b81d01fee3f784725bd0c7248c421f6e5c3a1b2ae926ffb26353422d3b6c1d",
+    "Accounting.PeriodLive.schedule": "e09992ac5b3697137b69f27d4eda319b37b7cc9f1f8a9fb1fdbab6a0f70b5207",
+    "Accounting.PeriodLive.shows": "67d8a9461ac44e87636ba4897c53bd8d02a79a93591c66923634667f26b74c6c",
+    "Accounting.PeriodLive.units": "3dbc1e09163a300843cdb4c06a287017615f2661949d51e7170462d047422416",
+    "Accounting.PeriodLive.win": "44d9cb8531425e6faceb4d1ddcd5f3d10f4d140b1cd51df49423e4f54146be8f",
+    "Accounting.Reaches": "33075db4a03690ffaf07157eb65da05aafca81061b96bc08520b5ee7d0f49b5f",
+    "Accounting.WipeLive": "66516a6c29671d8cb22df4d8d0947220b04ebb321ab3f503f3dec4f416375262",
+    "Accounting.WipeLive.Survives": "0a2c1b5bba1f85d2cf2b2dfe6cb33764826c30179e054e12dcb7b843b1162ba3",
+    "Accounting.WipeLive.accepts": "dbc5f4bbb69089c5158d4454eb7c36b418d39983c1a1a9e21d60f13f7c393e43",
+    "Accounting.WipeLive.fill": "9d1c42124e58b889f4b950830771fb4a507ae91a642d86f6df3eec252e4327d6",
+    "Accounting.WipeLive.kept": "db716a28fdf8e99f61fda9cab33a36082db3058d6c268b74fbe752ee09c27fcb",
+    "Accounting.unbound": "355edf5fc7181474887de2b337665592151fcb7be9d8f3b05fd817946f45596f"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
+    "Accounting.SecurityProofs.JointPeriodLive"
+   ]
   },
   "Definitions.Accounting.JointPeriod": {
    "digest": "1bd7aa7b193bcd9a8591295185d5bfac76487671f52e32c46d11e0c8f0a011f5",
@@ -14693,7 +14778,10 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
-    "Accounting.SecurityProofs.JointPeriod"
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
+    "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.JointPeriodLive"
    ]
   },
   "Definitions.Accounting.Memory": {
@@ -17564,7 +17652,10 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.JointPeriodLive",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
     "Accounting.SecurityProofs.Recall",
@@ -17795,6 +17886,9 @@
     "Verity.Sound": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
+    "Accounting.SecurityProofs.JointPeriodLive",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192",
     "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192",
@@ -17923,7 +18017,10 @@
     "Accounting.SecurityProofs.JointHorizonBlocksA",
     "Accounting.SecurityProofs.JointHorizonBlocksAbstract",
     "Accounting.SecurityProofs.JointHorizonBlocksLegs",
+    "Accounting.SecurityProofs.JointHorizonBlocksLive",
+    "Accounting.SecurityProofs.JointHorizonLive",
     "Accounting.SecurityProofs.JointPeriod",
+    "Accounting.SecurityProofs.JointPeriodLive",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
     "Nci.Cover.SecurityProofs.CoverTrainingChained",
