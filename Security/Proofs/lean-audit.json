@@ -56,6 +56,7 @@
   "Proofs.Properties.Nci.ReadsExact",
   "Proofs.Properties.Nci.BodiesOk.ReadsDecoded",
   "Proofs.Properties.Composition",
+  "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness"
  ],
  "exempt": {

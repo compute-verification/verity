@@ -1,3 +1,4 @@
+import CoreProtocol.Cli
 import NciCheck.Protocol
 
 /-! The `nci` executable: `Core.Protocol.main` of `NciCheck.Protocol.protocol` (`verity/nci/v1`), the core CLI that

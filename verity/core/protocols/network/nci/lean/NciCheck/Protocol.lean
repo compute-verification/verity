@@ -1,5 +1,5 @@
 import NciCheck.Baseline
-import CoreProtocol.Cli
+import CoreProtocol.Protocol
 
 /-!
 # The NCI check, a core protocol: `verity/nci/v1`

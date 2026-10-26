@@ -42,6 +42,7 @@
   "Properties.RemoteAudit.Live",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Composition",
+  "Properties.Nci.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game"
  ],
@@ -249,6 +250,7 @@
   "NciCheck.Check",
   "NciCheck.Baseline",
   "NciCheck.Desc",
+  "NciCheck.Protocol",
   "Flock",
   "Properties.CertifierDevice",
   "CertifierDevice",
@@ -323,6 +325,7 @@
     "Definitions.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "NciCheck.Baseline",
+    "NciCheck.Protocol",
     "Properties.Nci"
    ],
    "except": [],
@@ -625,6 +628,9 @@
    "signature": ["NciCheck.Properties.SecurityProofs.DescWitnesses : NciCheck.Properties.DescWitnesses"],
    "assumptions": [],
    "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b"
+  },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "owner": "@network-accounting"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
@@ -3309,6 +3315,10 @@
    },
    "Properties.Pouw.LiveSalt.onePair": {
     "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+    "function": "NciCheck.Protocol.check",
     "outcome": "accept"
    }
   },
