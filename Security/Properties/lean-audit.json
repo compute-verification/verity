@@ -39,7 +39,10 @@
   "Properties.RemoteAudit.Live",
   "Properties.Composition",
   "Properties.Verity.Soundness",
-  "Properties.Verity.Game"
+  "Properties.Verity.Game",
+  "Properties.Verity.Legs",
+  "Properties.NetworkCertifier.Period",
+  "Properties.Verity.Network"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -293,9 +296,9 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "Properties.Identity"],
+   "imports": ["NetworkCheck.Check", "NetworkCheck.Period", "Properties.Identity"],
    "except": [],
-   "why": "the properties are stated against the check's own functions, never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and the period check's (NetworkCheck.Period), never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
@@ -401,9 +404,18 @@
    "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
   },
   "Properties.Verity": {
-   "imports": ["CoreOnsite", "Properties.Composition", "Definitions.Accounting.JointPeriod", "Definitions.Core.Game", "Definitions.Hash.RowLeaf", "Flock.Hash"],
+   "imports": [
+    "CoreOnsite",
+    "Properties.Composition",
+    "Definitions.Accounting.JointPeriod",
+    "Definitions.Core.Game",
+    "Definitions.Hash.RowLeaf",
+    "Flock.Hash",
+    "Properties.Verity",
+    "Properties.NetworkCertifier.Period"
+   ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, the network period check's property (PeriodAcceptMeans, which the lift from ComponentAccepts .network reads) and its own modules (the game's vocabulary), never over a proof"
   }
  },
  "reads_exempt": {
@@ -2012,6 +2024,9 @@
    "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  },
+  "Properties.NetworkCertifier.periodAcceptMeans": {
+   "owner": "@network-accounting"
   }
  },
  "shape": {
@@ -3047,6 +3062,10 @@
    },
    "Properties.Pouw.LiveSalt.acceptMeans": {
     "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.periodAcceptMeans": {
+    "function": "NetworkCheck.Period.protocol.check",
     "outcome": "accept"
    }
   },
@@ -8546,7 +8565,11 @@
     "Properties.Composition.digests": "3f6c516221163d568ddc3ec0ad2128b6f40f10c8023f86cdbd9bc67367e89f38",
     "Properties.Composition.triples": "c13bf0420c351aa780cb5d3b9df5299a788f116b55f766540d9366b2993990d6"
    },
-   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts", "Verity.soundness_of_subprotocols"]
+   "guarantees": [
+    "Properties.Composition.acceptMeans",
+    "Properties.Composition.answerAccepts",
+    "Verity.soundness_of_subprotocols"
+   ]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",
