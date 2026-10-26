@@ -293,7 +293,7 @@
  ],
  "layers": {
   "Properties.Composition": {
-   "imports": ["CoreComposition.Product"],
+   "imports": ["CoreComposition.Product", "CoreComposition.Registered"],
    "except": [],
    "why": "the properties are stated against the composition's own functions and the core interface's, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -775,7 +775,10 @@
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320"
   },
   "Properties.Composition.acceptRegistration": {
-   "owner": "@soundness"
+   "owner": "@soundness",
+   "signature": ["Properties.Composition.acceptRegistration : Properties.Composition.AcceptRegistration"],
+   "assumptions": [],
+   "type_hash": "2b69d1ebab2dbc01cb230d75376dded7450fa3910a2ef8f78a5f00418e6f9dc6"
   },
   "Properties.Composition.answerAccepts": {
    "owner": "@proofs",
@@ -3834,7 +3837,17 @@
     "Core.Composition.run": "3d1e2602bd7db40ea261ffaf4152fa516be4606fd4d584b83a7502e1a77bf14f",
     "_private.CoreComposition.Product.0.Core.Composition.reasons": "f19dd4d38993b4aec3bfb2e367bea0f8433abfc65851e0abbb8d3828495332ad"
    },
-   "guarantees": ["Properties.Composition.acceptMeans"]
+   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.acceptRegistration"]
+  },
+  "CoreComposition.Registered": {
+   "digest": "f9e5baf960f376723278b0a0e5072f2400ebeaf6338ec5ef53a45cd69aff96b2",
+   "definitions": {
+    "Core.Composition.checkRegistered": "d29a35fd29641e41642e8667fbeaffa6f47accd108611d7e9f630782b86131cb",
+    "Core.Composition.committedBy": "ef69ce764880d33a7fa4cc847a8df03606bb921d342d969db90b5439ec359891",
+    "Core.Composition.mismatch": "132b91273d4c533824c6ab60af43a2c877b86ad12ce8cbc3ac297ec7010c20da",
+    "Core.Composition.registrationAnswer": "55e71347b20cc427f4f97945d0cc45eda24cc7a386403e7765a2d697535f9c5a"
+   },
+   "guarantees": ["Properties.Composition.acceptRegistration"]
   },
   "CoreProtocol.Profile": {
    "digest": "6b48d70a03be47bbc16fb54d2b4ca09269285cd9442ce7211c9abdf9cec0535b",
@@ -3963,6 +3976,7 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.Composition.acceptMeans",
+    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
@@ -6402,6 +6416,7 @@
     "Properties.CertifierDevice.linkSchedule",
     "Properties.CertifierDevice.records",
     "Properties.Composition.acceptMeans",
+    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -6517,6 +6532,7 @@
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.Composition.acceptMeans",
+    "Properties.Composition.acceptRegistration",
     "Properties.Composition.answerAccepts",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
     "Properties.NetworkCertifier.acceptsLinkWindows",
@@ -6704,6 +6720,7 @@
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
     "Properties.Composition.acceptMeans",
+    "Properties.Composition.acceptRegistration",
     "Properties.Identity.streamIsFlock",
     "Properties.Identity.taggedIsFlock",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -7786,7 +7803,7 @@
    ]
   },
   "NciCheck.Baseline": {
-   "digest": "720870767decd05c2138bcfccc27cbde9309a07aa1ae768cc09117b4ed59ff95",
+   "digest": "30bc1ef63a8e7d5ae617549e8bd32be19679108362bd051bc170aa5b3f351079",
    "definitions": {
     "NciCheck.Baseline.FORMAT": "db8349f01bd5c47f9184d4537291dcab05661eff5a91f153e7136dae66378470",
     "NciCheck.Baseline.FORMAT_V2": "5ba177c582788daf6933a082bbbf2bac083829f2f2afc790e578803b567c8eac",
@@ -7825,7 +7842,7 @@
     "NciCheck.Baseline.provOf": "644e7b00fcc8e2518c0cae39aed07acc83ed2f9919a0238885dcb00ab084d56a",
     "NciCheck.Baseline.provenance": "142df26c5b5e97d8bbabf8accb8fabdd1ca21e6c84297dcae93bc606d3b08b6d",
     "NciCheck.Baseline.provenanceOf": "595a8deb72face08633de1d757b531ce4a486518e50c8c8093304ed9a3d84716",
-    "NciCheck.Baseline.refusal": "c37ab3a02e96ce8ecf9be1b2834b44931433397405d055b43e714f8a3c833359",
+    "NciCheck.Baseline.refusal": "00d8192cab2151fcff8aec7e48a83ada992777d9deb1998c8c102761fe6ce35c",
     "NciCheck.Baseline.strAt": "0ce5cb41f5d240004f4043d513db2c7d73fcedc772bc6c911874f27fb51916df",
     "NciCheck.Baseline.strOf?": "80e91fa93ad803e7aac5fad0bb6fb1f6524c81d6e99d12fd7c6d3665d9ecd17a",
     "NciCheck.Baseline.strOf?._sparseCasesOn_1": "2e2a197a405c0066914f221f50e15e493edfb4c445e239c050b701fde6f61396",
@@ -7944,7 +7961,7 @@
    ]
   },
   "NciCheck.Desc": {
-   "digest": "d9402e1ddcf9ed4a58a1d9cdeddb80b23cf5d555f5f777b2682c2baf7f2d78d7",
+   "digest": "2a8b2d24bf4792c804ac470bf415e8f7077d02df1d1187a09f92cc883aa38c9b",
    "definitions": {
     "NciCheck.Desc.Chain": "c56251016e6ab9c082b7fcec3000e638afb07e0cb4e002fb2fe64b469d9f836c",
     "NciCheck.Desc.Chain.at": "158fc743edceeb48e0afad687e2f4bdbfbfb1dd740c53b5f068ed59a3481b927",
@@ -8075,7 +8092,7 @@
     "NciCheck.Desc.ofSeq": "fd54f7d2dec50a4d40145bc5da5cfb9c942f938f1f023ce0449ab0802331b4b6",
     "NciCheck.Desc.ownerStep": "b247cfb93a8d6803a811254ae52d476cbfcf2a82113c6f8551731f1fd9befc83",
     "NciCheck.Desc.reached": "9b353be85fc68f150b007ce70da623c1943373c9e73d61a57f113b46b1e3aba6",
-    "NciCheck.Desc.refusal": "93c75786d62441d0649be85bc28da973c188e3508feebe8d0a87ffbc6764e12f",
+    "NciCheck.Desc.refusal": "365524efc3196a5fbea071ce89e8b756db71bc0a4ac62cb82bad841a45732560",
     "NciCheck.Desc.resolvable": "0dda23a2b49c7f1d504ab1508fbe25ee1955dbab5b525d82e7c2c9c2d09acd66",
     "NciCheck.Desc.retAt": "e8d8a4bbc339bc115592ab103264462c92e8c8ce3c09593a166bd916f53c9655",
     "NciCheck.Desc.rootLaidOut": "b1902101d4cde10a5b199931558c9e1a5fde5dea774e32e031fe955fd529d4dc",
@@ -8107,7 +8124,7 @@
    ]
   },
   "NciCheck.Protocol": {
-   "digest": "8d384a11b42aa4f81d9c6eb5355168723602a725ef9d5379888023016f12c86b",
+   "digest": "fa3cd386300f82952eb3c996aec167ecc952826bd9466d24ee342c5fcd72a0ae",
    "definitions": {
     "NciCheck.Protocol.Commitment": "e2ad1c8fe7c6c7b7ea71c7294bb7c54481d7f15698d365474f889ba6edd19904",
     "NciCheck.Protocol.Commitment.hex": "95f1facfb76f85c418d6751b0d2b768ec7604afeb4bfaf7d33f38e0ab52e9083",
@@ -8122,14 +8139,14 @@
     "NciCheck.Protocol.Params.log": "e3bb74183b729b50e3c5022750657fdd275cee3553b9b93ef964378c8126b995",
     "NciCheck.Protocol.Params.parameters": "e8a622e2a54d49ea33bd8fb60b3b650ca908dd2a98e69957641f6e9406e4519f",
     "NciCheck.Protocol.Params.program": "6538cdd08424a97950b38c192612a67a0aa5b2d97151ce94dea258ab359b5d64",
-    "NciCheck.Protocol.check": "c53403abb9341fcb7d1cf166c7f2283f35014a43ec264e80ed226051857e89a5",
+    "NciCheck.Protocol.check": "aa7e403f34c57f16bbb14ffe88429930cd3ca54c4147e3c332b17904fde6c9df",
     "NciCheck.Protocol.check._sparseCasesOn_1": "371b6edb3fbec8aa6109f37cce44041b8be58a2158733d51bc238004821dab08",
     "NciCheck.Protocol.check._sparseCasesOn_2": "d517b506356537dae2d4cab3e20d901b12add2920c285bf870a10bd3108cfb48",
     "NciCheck.Protocol.failureOf": "f06f78660d5ebb0591f0420b5fc0da4cfd84a6a1aff83a065dfb6950f721b35f",
     "NciCheck.Protocol.instanceOf": "035eb77c79600408c058daf128db7825e102795b503ee6191ac470996d47c8db",
     "NciCheck.Protocol.paramsOf._sparseCasesOn_1": "1d654f624f315a605caaaacc4b38f4748a5d1e6d4c62db0bdc64e6baad41df5c",
     "NciCheck.Protocol.paramsOf._sparseCasesOn_4": "c9c22d8af7a6f048df8f6ab16e43385cec490e61c9c752554a96ee8604157351",
-    "NciCheck.Protocol.reasonOf": "7df461ce5751aa5393feb3c207b6e898d62b2b24dce51786b0c87069b4750c50",
+    "NciCheck.Protocol.reasonOf": "92f7ae467ae1d6467cff43acc3ad21d9e29ef45235dc148eb8634cbad997c0b7",
     "NciCheck.Protocol.reasonOf._sparseCasesOn_1": "3042179e9d1adaf39ca64526e5e34ecfefe01c21aaf015f6ff3f37caf82bd468",
     "NciCheck.Protocol.reportOf": "083dab19f39edd72a0613293d1971c3a13e07f9c445850bd4962c9a75eb25da6",
     "NciCheck.Protocol.trustedOf": "d024e25374f0882e915f5237e0b8db9e83ad4804ef9294afe6432159bfe24d72"
@@ -9752,18 +9769,24 @@
    ]
   },
   "Properties.Composition": {
-   "digest": "b9f50ea80ef3e1d5ca7aeebdf8b27f10d9b45a16e8ab6a0f355c4b27dd2320f9",
+   "digest": "2be3153f27f8449acbfa837da7eb4eddbc4712cd020d2abf4946796c5b7cf179",
    "definitions": {
     "Properties.Composition.AcceptMeans": "b74b5f32f9ca94ba09cafef0ce9f3276e6056d3dd76c9bc77f59cabc5f114048",
+    "Properties.Composition.AcceptRegistration": "98c21c59231e10ae8758d7e2b29c299f0388765178f506a91af19a69af4c2fc0",
     "Properties.Composition.Accepted": "bf80cb850b5bafc41b003264ee2f01b909875cff3da4d37e7ef16c566c756e13",
     "Properties.Composition.AnswerAccepts": "3730657920dee4f71784d3f9a8da810a24e704fd3ab0eb044eec35a18b4675ff",
     "Properties.Composition.DecodedAccepted": "09ee34a6e081457094734878a34bdc6b085e3b581683ea26acb64d5497d4435a",
     "Properties.Composition.Fits": "17f56db7d8753eb5cb1b56cf5372c484416cfc401ba473cec8c93df4d2447b35",
+    "Properties.Composition.RegisteredAccepted": "8e5ed572dea9862d4dea4673e4ae6fcc23cd75c2053349c9885a82f82a266c6d",
     "Properties.Composition.digestOf": "2a96b9ee3bea5327b2ce55f309f13b9c82641b0c69f2b6c233df18f7f351ff42",
     "Properties.Composition.digests": "3f6c516221163d568ddc3ec0ad2128b6f40f10c8023f86cdbd9bc67367e89f38",
     "Properties.Composition.triples": "c13bf0420c351aa780cb5d3b9df5299a788f116b55f766540d9366b2993990d6"
    },
-   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts"]
+   "guarantees": [
+    "Properties.Composition.acceptMeans",
+    "Properties.Composition.acceptRegistration",
+    "Properties.Composition.answerAccepts"
+   ]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",
