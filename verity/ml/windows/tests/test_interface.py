@@ -508,6 +508,25 @@ def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_
             I.input_count({**doc, "registered": bad}, BY_ID.__getitem__)
 
 
+def test_a_registered_values_shape_is_the_width_of_the_port_its_reads_name():
+    """`read_shape`: ``w``'s rows are ``wrow``'s width, its leaves over that, and a value no read names, one read at two
+    widths or one whose leaves aren't whole rows is refused."""
+    win, _ = registered()
+    wrow = dict(I.layout(COORD).rows)["wrow"]
+    assert I.read_shape(win.circuit, "w") == {"value": "w", "words": wrow, "rows": 6 * K // 2 // wrow, "word_bits": 16,
+                                              "row_schema": I.V2}
+    with pytest.raises(ValueError, match="no registered read of 'v'"):
+        I.read_shape(win.circuit, "v")
+    other = next(p for p, n in I.layout(COORD).rows if n != wrow)
+    two = I.Circuit("two", ((COORD, 12),), registered=I.Registered(
+        {"w": 6 * K // 2}, reads=(READ, I.Read(TID, other, "w", 0, (12,), 0, (0,)))))
+    with pytest.raises(ValueError, match="not one width"):
+        I.read_shape(two, "w")
+    odd = I.Circuit("odd", ((COORD, 12),), registered=I.Registered({"w": 6 * K // 2 + 1}, reads=(READ,)))
+    with pytest.raises(ValueError, match="aren't whole rows"):
+        I.read_shape(odd, "w")
+
+
 def test_a_read_covers_whole_members_and_reads_whole_rows():
     """Members are cut where a read's units begin or end, as where a wire's do, so a read covers whole members: units 2..11
     read the weight's rows as tables and units 0 and 1 hold their own rows."""
