@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.PastIn
 import Proofs.Flock.Claims.Recursion.AccFits
+import Proofs.Flock.Claims.Recursion.KSLin2LayR
 
 /-!
 # `MoreSlotsTrue` at the outer relation, unconditionally
