@@ -19,7 +19,9 @@
   units read the same rows off a shared-row member's tables through its refs as off a plain member's bodies (each
   written by `rows.Committed`), and a body of another size or a ref past its table is refused; where #4426's
   registered weights are in the tree, a ``--registered`` period's shared-row members read unit for unit as the plain
-  period's, and its free inputs are `interface.input_count`'s (slow);
+  period's, and its free inputs are `interface.input_count`'s (slow); a ``--registered --wired`` period gives the leg
+  its requests, the stub's outputs (each wired down_proj unit's whole ``o0`` row) and its free inputs, the requests'
+  step-0 inputs alone, and a record that spans other than one unit a request is refused (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
 * of the windows the runner audits at once, one makes the run's session and the others read it (`once`), and the
@@ -785,3 +787,33 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     circuit = json.loads((d / "circuit.json").read_text())
     assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
+
+
+@pytest.mark.slow
+def test_a_wired_registered_window_gives_the_leg_its_requests_outputs_and_free_inputs(tmp_path):
+    from verity.ml.windows import interface as IF
+
+    weights = {"opening": tmp_path / "opening.json", "pin": tmp_path / "pin.json"}
+    RN.serve(["--commit-weights", str(weights["opening"]), "--pin", str(weights["pin"]), "--wired"])
+    a = Namespace(law="work:14", cap=2, requests="3,7", steps=STEPS, tamper=set(), node="test-node", tools={},
+                  pouw=None, delta="1/100", start=0, windows=1, weights=weights, session_jobs=1, wired=True)
+    d, _ = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
+    circuit = json.loads((d / "circuit.json").read_text())
+    assert circuit["name"] == f"torch-loop/mlp-w8a8-h{H}/wired" and len(circuit["templates"]) == 3
+    units = L.loop_units(d)
+    assert L.requests_of(d, units) == ([3, 7], STEPS, H)
+    outputs = L.registered_outputs(units)
+    model = S.L.Model(h=H)
+    for i, token in enumerate([3, 7]):
+        assert [outputs[f"r{i}", k] for k in range(STEPS)] == S.step_outputs(model, token, STEPS)
+    text = [b"".join(outputs[f"r{i}", k] for k in range(STEPS)).hex().encode() for i in range(2)]
+    events = [t[j:j + L.TOKEN_BYTES] for t in text for j in range(0, len(t), L.TOKEN_BYTES)]
+    assert L.match_outputs([{"stream": 1, "session": "s.0"}, {"stream": 2, "session": "s.1"}], events, FRAMES, outputs,
+                           STEPS)["equal"]
+    # every activation is a tie and every weight registered: only the requests' step-0 up_proj inputs are free
+    assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit)["free"] == 2 * (1024 + 32)
+    index = json.loads((d / "index.json").read_text())
+    index["members"][0]["labels"][0][1] -= 1
+    (d / "index.json").write_text(json.dumps(index))
+    with pytest.raises(ValueError, match="not one a request of 2"):
+        L.loop_units(d)

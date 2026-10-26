@@ -216,9 +216,21 @@ def member_rows(period_dir: Path, m: Mapping[str, Any]) -> np.ndarray:
 
 def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]]:
     """Every unit of the period's window: its label (`index.json`: request, step, layer) and its rows by port, u16 words,
-    read off the member's value files (`member_rows`)."""
+    read off the member's value files (`member_rows`). A wired record's label names its units' requests in order
+    (``requests``, `loop.TorchLoop.run_wired`), and each of its units' labels gains its own (``request``)."""
     win = json.loads((period_dir / "window.json").read_text())
     labels = {m["name"]: m["labels"] for m in json.loads((period_dir / "index.json").read_text())["members"]}
+    records: dict[str, list[int]] = {}
+    for spans in labels.values():
+        for lo, hi, lab in spans:
+            if "requests" in lab:
+                records.setdefault(json.dumps(lab, sort_keys=True), []).extend(range(lo, hi))
+    first = {}
+    for key, us in records.items():
+        n = len(json.loads(key)["requests"])
+        if sorted(us) != list(range(min(us), min(us) + n)):
+            raise ValueError(f"index.json: the record labelled {key} spans units {sorted(us)}, not one a request of {n}")
+        first[key] = min(us)
     out: dict[int, tuple[dict, dict[str, np.ndarray]]] = {}
     for m in win["members"]:
         names, widths = [p for p, _ in m["ports"]], [w for _, w in m["ports"]]
@@ -227,7 +239,9 @@ def loop_units(period_dir: Path) -> dict[int, tuple[dict, dict[str, np.ndarray]]
         units = json.loads((period_dir / m["units"]).read_text())["indices"]
         label = {}
         for lo, hi, lab in labels[m["name"]]:
-            label.update({u: lab for u in range(lo, hi)})
+            key = json.dumps(lab, sort_keys=True) if "requests" in lab else None
+            label.update({u: lab if key is None else {**lab, "request": lab["requests"][u - first[key]]}
+                          for u in range(lo, hi)})
         for i, u in enumerate(units):
             out[u] = (label[u], {p: rows[i, at[p]:at[p] + w] for p, w in zip(names, widths)})
     return out
@@ -272,31 +286,36 @@ def free_inputs(circuit: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def registered_outputs(units: Mapping[int, tuple[dict, dict]]) -> dict[tuple[str, int], bytes]:
-    """Each request's step outputs as the window registered them: the last linear's units' ``o0`` words in unit order,
-    2H bytes a step, by (request, step)."""
-    last = max(lab["layer"] for lab, _ in units.values())
-    got: dict[tuple[str, int], list[tuple[int, int]]] = {}
+    """Each request's step outputs as the window registered them: the last linear's units' ``o0`` words in unit order
+    (a word a unit in the per-coordinate circuit, the whole row of one unit in the wired one), 2H bytes a step, by
+    (request, step). A wired circuit's quantize units name no layer."""
+    last = max(lab["layer"] for lab, _ in units.values() if "layer" in lab)
+    got: dict[tuple[str, int], list[tuple[int, np.ndarray]]] = {}
     for u, (lab, rows) in units.items():
-        if lab["layer"] == last:
-            got.setdefault((lab["request"], lab["step"]), []).append((u, int(rows["o0"][0])))
-    return {k: np.array([w for _, w in sorted(v)], "<u2").tobytes() for k, v in sorted(got.items())}
+        if lab.get("layer") == last:
+            got.setdefault((lab["request"], lab["step"]), []).append((u, rows["o0"]))
+    return {k: np.concatenate([w for _, w in sorted(v, key=lambda x: x[0])]).astype("<u2").tobytes()
+            for k, v in sorted(got.items())}
 
 
 def requests_of(period_dir: Path, units: Mapping[int, tuple[dict, dict]] | None = None) -> tuple[list[int], int, int]:
     """(each request's prompt token, the loop's steps, the MLP's width H): a request's token is the one whose quantized
-    embedding is the ``x`` row its first linear took at step 0 (`loop.TorchLoop.run`)."""
+    embedding is the ``x`` row its first linear took at step 0 (`loop.TorchLoop.run`, or `run_wired` in the loop's wired
+    circuit, ``torch-loop/mlp-w8a8-h<H>/wired``)."""
     sys.path.insert(0, str(TRACES))
     import torch_loop_stub as S
 
     units = loop_units(period_dir) if units is None else units
     name = json.loads((period_dir / "circuit.json").read_text())["name"]
-    h = int(re.fullmatch(r"torch-loop/mlp-w8a8-h(\d+)", name).group(1))
+    if (got := re.fullmatch(r"torch-loop/mlp-w8a8-h(\d+)(?:/wired)?", name)) is None:
+        raise RuntimeError(f"circuit {name!r} is not the toy's (torch-loop/mlp-w8a8-h<H>, or its /wired circuit)")
+    h = int(got.group(1))
     model = S.L.Model(h=h)
     table = {S.L.bits(S.L.quantize(model.embed[t][None, :])[0]).tobytes(): t for t in range(S.L.VOCAB)}
     first: dict[str, tuple[int, bytes]] = {}
     steps = 1 + max(lab["step"] for lab, _ in units.values())
     for u, (lab, rows) in sorted(units.items()):
-        if lab["step"] == 0 and lab["layer"] == 0 and lab["request"] not in first:
+        if lab["step"] == 0 and lab.get("layer") == 0 and lab["request"] not in first:
             first[lab["request"]] = (u, rows["x"].astype("<u2").tobytes())
     tokens = []
     for r in sorted(first, key=lambda r: int(r.lstrip("r"))):
