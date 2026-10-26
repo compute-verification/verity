@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.BoundMergedLin
+import Proofs.Flock.Claims.Recursion.VCalls
 
 /-!
 # Route 2C: `KSLin2` from `KSFlockLin` at `DE`
@@ -8,7 +8,8 @@ Here the inner stage reads `KSFlockLin` at `DE` instead, against `P_O`'s abortin
 to the composite with no root:
 
 * `B` at `P_O`'s aborting runs is at most `B_I` (`Bound.PrBAbort_le_merged`), as before, so `4k_I·Pr[B]` is at most
-  `4k_I·Pr[B_I]`, and a rejecting judged draw one more `Pr[B_I]` (`Pr_innerRejects_le_PrBI`).
+  `4k_I·Pr[B_I]`, and a rejecting judged draw one more `Pr[B_I]` over the draws' evaluations
+  (`Pr_innerRejects_le_PrBinnerV_at`, `PrBI_le_PrBinnerV`).
 * The caps' link `FC` at `P_O`'s aborting runs is the composite's `FCI` over `E_O`'s draws, but where the loop meets a
   draw `P_O`'s runs don't show (`BadO`) (`Bound.PrFC_le_FCI`). A run that opens is kept, so its draw isn't bad; off the
   bad draws a run opens exactly where its draw's inner view accepts and its inner coins query the position
@@ -18,8 +19,11 @@ to the composite with no root:
 * Level 0's conflict `F0` is `F0I` the same way, its `k_I` waits each meeting a bad draw at most as often as one draw
   is bad (`Bound.PrF0_le_F0I`).
 
-So the bad draws cost `N_I + 4·W_I + 4·k_I` draws' worth, each at most `k_I·(Pr[Fdev] + 1/(M+1))`
-(`Bound.Pr_badO_le_PrFdev`), within `β₂·(Pr[Fdev] + 1/(M+1))` (`Bound.innerLin2_of_flockLin_binds`).
+So the bad draws cost `N_I + 4·W_I + 4·k_I` draws' worth, each at most `k_I·(Pr[FdevV] + 1/(M+1))`
+(`Bound.Pr_badO_le_PrFdevV`), within `β₂·(Pr[FdevV] + 1/(M+1))` (`Bound.innerLin2_of_flockLin_binds`). A V\* part's
+check escapes to a collision with the compiled verifier's own evaluations at its V\* statement, so the facts read of
+V*'s parts are `InnerAcceptsCollAtV` and `ForksBindAtV`, and `B_I` and `Fdev` search the draws' evaluations
+(`BinnerV`, `FdevV`).
 `Bound.ksLin2_of_flockLin_binds` is the recursion's bound from it, as `KSLin_of` (`PrBad_le_of_inner`).
 -/
 
@@ -597,20 +601,20 @@ theorem Bound.PrF0_le_F0I (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x 
     ∃ u v, (F0I H D (Inner.ofFlock Bd.deploy decI) DO decO P x R).out s' = some (u, v) ∧ Collision H u v)))
     hbad))
 
-omit [DecidableEq Col'] in
 /-- **The inner stage at the bound record from `KSFlockLin` at `DE`, with no root**: at most
 `κ_I + (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`.
 `E^rep` at `DE` against `P_O`'s aborting runs is `KSFlockLin`'s bound (`PrBadGood_le_merged`), its `B` at most `B_I`
 (`PrBAbort_le_merged`), its `FC` and `F0` at most `FCI` and `F0I` but for bad draws (`PrFC_le_FCI`, `PrF0_le_F0I`); a
-rejecting judged draw is at most `Pr[B_I]`; and the bad draws, `N_I + 4·W_I + 4·k_I` draws' worth, are each at most
-`k_I·(Pr[Fdev] + 1/(M+1))` (`Pr_badO_le_PrFdev`), within `β₂`. -/
+rejecting judged draw is at most `Pr[B_I]` over the draws' evaluations (`Pr_innerRejects_le_PrBinnerV_at`), as is
+`Pr[B_I]` (`PrBI_le_PrBinnerV`); and the bad draws, `N_I + 4·W_I + 4·k_I` draws' worth, are each at most
+`k_I·(Pr[FdevV] + 1/(M+1))` (`Pr_badO_le_PrFdevV`), within `β₂`. -/
 theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg → Msg → Coin) (Cp : Caps Coin)
     (hKS : KSFlockLin H Bd.DE Cp) (hdI : decOK Bd.deploy decI) (hdec : ∀ x c, decC x (Bd.ans c) = c)
     (hB : Bd.Binds) (hR : InnerRounds D (Inner.ofFlock Bd.deploy decI))
     (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO)
     (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
-    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hM : RoundsMargin H D (Inner.ofFlock Bd.deploy decI)) (hN0 : CallsNil H D) [Fintype Ω] [Nonempty Ω] (M R : ℕ) :
     PrBadGood H D.V (innerR D (Inner.ofFlock Bd.deploy decI)) outR (EO D (Inner.ofFlock Bd.deploy decI) DO decO)
         (dec H D) (fun x => (Inner.ofFlock Bd.deploy decI).waits (xI D x))
@@ -619,12 +623,12 @@ theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg →
         (fun x => (Inner.ofFlock Bd.deploy decI).check (xI D x)) x P ≤
       (Inner.ofFlock Bd.deploy decI).κ (xI D x) +
         ((4 * (Inner.ofFlock Bd.deploy decI).V.k (xI D x) + 1) *
-            PrBI H D (Inner.ofFlock Bd.deploy decI) DO decO P x +
+            PrBinnerV H D (Inner.ofFlock Bd.deploy decI) DO decO P x +
           4 * Cp.width (xI D x) * (PrFCI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
           4 * (PrF0I H D (Inner.ofFlock Bd.deploy decI) DO decO P x R +
             (((Inner.ofFlock Bd.deploy decI).k (xI D x) : ℝ) + 1) / ((R : ℝ) + 1)) +
           βdev2 D (Inner.ofFlock Bd.deploy decI) Cp x *
-            (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))) := by
+            (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))) := by
   have h1 := Bound.PrBadGood_le_merged (decO := decO) (P := P) (x := x) decC hdec hV hR
   have h2 : (Inner.ofFlock Bd.DE decI).PrBadAbort H (xI D x) (Bd.innerPO decI H D DO decO P x decC)
       (Bd.keepAO decI H D DO decO P x) ≤
@@ -643,33 +647,34 @@ theorem Bound.innerLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg →
   have h3 := Bound.PrBAbort_le_merged (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR
   have h4 := Bound.PrFC_le_FCI (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR Cp M
   have h5 := Bound.PrF0_le_F0I (decO := decO) (P := P) (x := x) decC hdec hV hL hT hN0 hR R
-  have h6 := Pr_innerRejects_le_PrBI_at hA hT hN0 hM decO P
-  have h7 := Bound.Pr_badO_le_PrFdev (decO := decO) (P := P) (x := x) hB hV hT hL hFk hA M
+  have h6 := Pr_innerRejects_le_PrBinnerV_at hA hT hN0 hM decO P
+  have h3' := PrBI_le_PrBinnerV hT hN0 decO P x
+  have h7 := Bound.Pr_badO_le_PrFdevV (decO := decO) (P := P) (x := x) hB hV hT hL hN0 hFk hA M
   have hK0 : (0 : ℝ) ≤ (Inner.ofFlock Bd.deploy decI).V.k (xI D x) := Nat.cast_nonneg _
   have hW0 : (0 : ℝ) ≤ Cp.width (xI D x) := Nat.cast_nonneg _
   have hk0 : (0 : ℝ) ≤ (Inner.ofFlock Bd.deploy decI).k (xI D x) := Nat.cast_nonneg _
   have hN0' : (0 : ℝ) ≤ NI D (Inner.ofFlock Bd.deploy decI) x := Nat.cast_nonneg _
   have ht0 : (0 : ℝ) ≤ 1 / ((M : ℝ) + 1) := by positivity
-  have hF0 := PrFdev_nonneg H D (Inner.ofFlock Bd.deploy decI) DO decO P x M
+  have hF0 := PrFdevV_nonneg H D (Inner.ofFlock Bd.deploy decI) DO decO P x M
   have hKF0 : (0 : ℝ) ≤ (Inner.ofFlock Bd.deploy decI).V.k (xI D x) *
-      (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) :=
+      (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) :=
     mul_nonneg hK0 (by linarith)
   have hWKF0 := mul_nonneg hW0 hKF0
-  have hKB := mul_le_mul_of_nonneg_left h3 hK0
+  have hKB := mul_le_mul_of_nonneg_left (h3.trans h3') hK0
   have hWF := mul_le_mul_of_nonneg_left h4 hW0
   have hNB := mul_le_mul_of_nonneg_left h7 hN0'
   have hWB := mul_le_mul_of_nonneg_left h7 hW0
   have hkB := mul_le_mul_of_nonneg_left h7 hk0
   have hβ : βdev2 D (Inner.ofFlock Bd.deploy decI) Cp x *
-      (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) =
+      (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) =
       NI D (Inner.ofFlock Bd.deploy decI) x * ((Inner.ofFlock Bd.deploy decI).V.k (xI D x) *
-          (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))) +
+          (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))) +
         8 * (Cp.width (xI D x) * ((Inner.ofFlock Bd.deploy decI).V.k (xI D x) *
-          (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)))) +
+          (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)))) +
         4 * ((Inner.ofFlock Bd.deploy decI).k (xI D x) * ((Inner.ofFlock Bd.deploy decI).V.k (xI D x) *
-          (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)))) +
+          (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)))) +
         4 * ((Inner.ofFlock Bd.deploy decI).V.k (xI D x) *
-          (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))) := by
+          (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))) := by
     unfold βdev2; ring
   linarith
 
@@ -683,23 +688,22 @@ theorem Bound.ksLin2_of_flockLin_binds [Zero Col] [Zero Col'] (decC : Msg → Ms
     (hRd : SessionRounds D (Inner.ofFlock Bd.deploy decI) DO) (hS : SessionAccepts D)
     (hRs : SessionRuns H D (Inner.ofFlock Bd.deploy decI) DO) (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO)
     (hT : CallsTrue H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (hFk : ForksBindAt H D (Inner.ofFlock Bd.deploy decI) DO x)
-    (hA : InnerAcceptsCollAt H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hFk : ForksBindAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
+    (hA : InnerAcceptsCollAtV H D (Inner.ofFlock Bd.deploy decI) DO x)
     (hM : RoundsMargin H D (Inner.ofFlock Bd.deploy decI)) (hN0 : CallsNil H D) [Fintype Ω] [Nonempty Ω] (M R : ℕ) :
     PrBad H D.V (Recursion.R D (Inner.ofFlock Bd.deploy decI)) (E H D (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
       κ D (Inner.ofFlock Bd.deploy decI) x +
         Real.sqrt (γ D (Inner.ofFlock Bd.deploy decI) x * PrB H D.V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI D x) + 1) *
-          PrBinner H D (Inner.ofFlock Bd.deploy decI) DO decO P x +
+          PrBinnerV H D (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI D x) * (PrFCI H D (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
         4 * (PrF0I H D (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI D x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 D (Inner.ofFlock Bd.deploy decI) Cp x *
-          (PrFdev H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) := by
+          (PrFdevV H D (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1)) := by
   have h := PrBad_le_of_inner H D (Inner.ofFlock Bd.deploy decI) DO hRef (outerKS_of_flockKS hF hN hε hRd hS hRs)
     decO hdO x P _ (Bound.innerLin2_of_flockLin_binds (decO := decO) (P := P) (x := x) decC Cp hKS hdI hdec hB hRounds
       hV hT hL hFk hA hM hN0 M R)
-  rw [PrBinner_eq]
   linarith
 
 end Coupling
@@ -721,14 +725,14 @@ def KSLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bou
       κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
         Real.sqrt (γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x * PrB H (D.record Bd.IVStar).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x) + 1) *
-          PrBinner H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+          PrBinnerV H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI (D.record Bd.IVStar) x) *
           (PrFCI H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M +
             1 / ((M : ℝ) + 1)) +
         4 * (PrF0I H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (PrFdev H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M +
+          (PrFdevV H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M +
             1 / ((M : ℝ) + 1))
 
 end Scoped

@@ -1,14 +1,15 @@
 import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!
-# `PartChecksB` at what each part's circuit accepts (`PartAccepts`), and the corollaries without it
+# `PartChecksBV` at what each part's circuit accepts (`PartAccepts`), and the corollaries without it
 
-Every route that reads `VStarB.PartChecksB` takes it with `VStarB.DecompB` at one inner check it chooses:
-`∃ chk, (∀ s, PartChecksB … chk s) ∧ DecompB … chk`. `PartChecksB` bounds `chk` from below, and `DecompB` reads `chk`
+Every route 2C reads `VStarB.PartChecksBV` with `VStarB.DecompB` at one inner check it chooses:
+`∃ chk, (∀ s, PartChecksBV … chk s) ∧ DecompB … chk`. `PartChecksBV` bounds `chk` from below, and `DecompB` reads `chk`
 only as a hypothesis on the readers' messages, so it is antitone in `chk` (`decompB_mono`). So there is a least `chk`
-that `PartChecksB` admits, what part `s`'s circuit accepts, read at the messages (`PartAccepts`): at a compiled
+that `PartChecksBV` admits, what part `s`'s circuit accepts, read at the messages (`PartAccepts`): at a compiled
 statement of the shape, some V\* statement showing the coins and some outer witness passing `Flock.check` there, with
-its recorded calls true and none colliding, that agrees with the messages at the rounds it holds whole and at its
+its recorded calls true and none colliding with each other or with the compiled verifier's own evaluations at that
+statement (`vcallsAt`: check 5's row commitments among them), that agrees with the messages at the rounds it holds whole and at its
 pieces, whose commit strings are the messages at the rounds read whole off the run (`LayoutB.CmtAgrees`), and whose
 shared rows are the messages' where they carry them (`LayoutB.RowsRead`). The commit strings tie every part to the
 readers' rounds, those it reads without holding them included, so no two parts' checks can pass on different values of
@@ -17,11 +18,12 @@ the commit strings and `LayoutB.ReadsRows` the shared rows (`RecDeploy.vstarAcce
 at a layout whose messages carry no shared row (`LayoutB.readsRows_of_rowIn`), as at every deployed layout, so no
 deployed route gains a premise.
 
-* `PartChecksB` holds at `PartAccepts`, at every deployment, layout, shape and staging (`partChecksB_partAccepts`).
-* `PartAccepts` implies every inner check `PartChecksB` admits (`partAccepts_chk`).
+* `PartChecksBV` holds at `PartAccepts`, at every deployment, layout, shape and staging (`partChecksBV_partAccepts`).
+* `PartAccepts` implies every inner check `PartChecksBV` admits (`partAccepts_chk`).
 * So the pair is `DecompB` at `PartAccepts` (`exists_chk_iff`).
+* A row a part commits is the one the compiled verifier recomputes the commitment of (`partAccepts_tie`, check 5).
 
-`PartChecksB` therefore has no content apart from `DecompB`. What V\*'s units must compute, each its share of
+`PartChecksBV` therefore has no content apart from `DecompB`. What V\*'s units must compute, each its share of
 `IVStar`'s checks, is all in `DecompB` at `PartAccepts`: wherever every part's circuit accepts at a witness that agrees
 with the readers' messages, `IVStar` accepts those messages, or two of the parts' recorded calls collide. An inner check
 of the code side's choice (one stated against the element-level verdict's steps, say) still gives it: any `chk` with
@@ -62,8 +64,8 @@ def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
       L.CmtAgrees cmt x xO ms ∧ L.RowsRead x s w ms
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **`PartChecksB` at what each part's circuit accepts**, at every deployment, layout, shape and staging: a witness
-whose calls collide takes the escape, and any other is its own `PartAccepts`. -/
+/-- **`PartChecksBV` at what each part's circuit accepts**, at every deployment, layout, shape and staging: a witness
+whose calls collide, or collide with the verifier's, takes the escape, and any other is its own `PartAccepts`. -/
 theorem partChecksBV_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) :
     PartChecksBV H D DO L shape shows cmt (PartAccepts H D DO L shape shows cmt) s := by
@@ -73,8 +75,8 @@ theorem partChecksBV_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock
   · exact Or.inr rfl
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **`PartAccepts` is the least inner check `PartChecksB` admits**: at every part, it implies any `chk` at which
-`PartChecksB` holds. -/
+/-- **`PartAccepts` is the least inner check `PartChecksBV` admits**: at every part, it implies any `chk` at which
+`PartChecksBV` holds. -/
 theorem partAccepts_chk {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hP : ∀ s, PartChecksBV H D DO L shape shows cmt chk s)
@@ -93,7 +95,7 @@ theorem decompB_mono {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin} {L
     (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' :=
   fun x st hx hf c ws hl hT hC => hD x st hx hf c ws hl hT fun s hs => hle _ _ _ _ (hC s hs)
 
-/-- **Some inner check gives both `PartChecksB` at every part and `DecompB` exactly when `DecompB` holds at
+/-- **Some inner check gives both `PartChecksBV` at every part and `DecompB` exactly when `DecompB` holds at
 `PartAccepts`.** So the pair the routes take is one premise, `DecompB` at what each part's circuit accepts. -/
 theorem exists_chk_iff (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (IV : Verifier Coin)
     (L : LayoutB) (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) :
@@ -128,7 +130,7 @@ open FlockDeploy (Coin)
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record
 (`recTr`), from `DecompB` alone**: `ksLin2_deployed_recRead` at the brings whose transcript is
-`recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`partChecksB_partAccepts`), `recRead` reading that
+`recTr aux nOf hd recRest`, with its inner check `PartAccepts` (`partChecksBV_partAccepts`), `recRead` reading that
 transcript back (`readsBack_recTr`) and the readers' calls true (`readersTrue_layoutBTops`,
 `hmSlotsCommit_of_full`). What stays open at the dense form is `DecompB` at what each part's circuit accepts, the same
 premise as the pair (`exists_chk_iff`). This bounds no number by itself: that premise is open. -/

@@ -17,7 +17,7 @@ each index one of the list's parts.
 `FinPieces` dropped.
 
 `FinPieces` is structural. That these pieces read the last message's bytes (the rows and salts at the offsets `final`
-reads them, and `rest`'s at the element-level message's) is what `PartChecksB` and `DecompB` take, unchanged here.
+reads them, and `rest`'s at the element-level message's) is what `PartChecksBV` and `DecompB` take, unchanged here.
 -/
 
 namespace RecDeploy
@@ -130,7 +130,7 @@ theorem finPieces_finOpen (rest : (r : XR) → List (Fin r.w.parts.length × Lis
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`**: `ksLin2_deployed_staged` with
 `FinPieces` from `finPieces_finOpen`. The last round's pieces are every earlier round's openings at the parts that
 commit them, then the element-level last message's at the parts `rest` names. What stays open at the dense form is
-`PartChecksB` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and `untr` reading the
+`PartChecksBV` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and `untr` reading the
 coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are open. -/
 theorem ksLin2_deployed_open (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -144,7 +144,7 @@ theorem ksLin2_deployed_open (b : Brings)
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
@@ -172,7 +172,7 @@ theorem bitsLin2_deployed_open (b : Brings)
     ReadsBackB FlockDeploy.sha512 Bd.IVStar bL (fun _ => True) untr →
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧

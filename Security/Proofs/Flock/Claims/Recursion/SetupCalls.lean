@@ -15,7 +15,9 @@ a function of the inner statement) and the inner verifier's on the readers' mess
   at `IVStar` wherever `DE`'s steps read no coin in their calls.
 * `callsLogCollS`: `CallsLogColl` at `(deployRec I.V ivScope b).withSetup H` from it.
 * `callsLogColl_C_setup`, `forksBindAt_C_pick_setup`, `forksBindAt_C_setup`: `callsLogColl_C` and
-  `forksBindAt_C_pick` with the setup's calls searched.
+  `forksBindAt_C_pick` with the setup's calls searched, the forks binding over the draws' evaluations
+  (`ForksBindAtV`), where an inner view's rejection escapes to a collision with the compiled verifier's own.
+* `innerAcceptsCollAtV_C`: `innerAcceptsCollAt_C` with that escape.
 -/
 
 namespace RecDeploy
@@ -110,10 +112,24 @@ theorem callsLogColl_C_setup {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg
     exact List.mem_toFinset.1 (hv ▸ List.mem_toFinset.2 he')
   · exact Or.inr h
 
+/-- **`innerAcceptsCollAt_C` over the compiled verifier's evaluations**: the representative's view accepts where the
+deployed record's does, and its calls and V\* statements are the deployed record's. -/
+theorem innerAcceptsCollAtV_C {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
+    (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
+    (hCF : Bd.LastCoinFree H) (x : Msg)
+    (hA : Claims.Recursion.InnerAcceptsCollAtV H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
+      x) :
+    Claims.Recursion.InnerAcceptsCollAtV H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO x := by
+  intro decO Ω P ω r c ws hg
+  rcases hA decO Ω P ω r c ws hg with h | h
+  · exact Or.inl ((innerView_C H Bd ivScope b hCF x r ws).1.trans h)
+  · exact Or.inr h
+
 /-- **`forksBindAt_C_pick` with the inner setup's calls searched**: its argument, with `IVStar`'s calls among the
-recorded ones and the setup's (`hL` at `withSetup H`), and the collisions it finds among the recorded ones found among
-them and the setup's too. -/
-theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
+recorded ones and the setup's (`hL` at `withSetup H`), and the collisions it finds among the recorded ones, or among
+them and the compiled verifier's own evaluations (`hA`), found among the draws' evaluations (`forkCollV`). -/
+theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg)
+    (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (pk : Msg → ℕ → Msg → Msg) (hEC : Bd.LastBindsEC H) (hCF : Bd.LastCoinFree H)
     (hT : Claims.Recursion.CallsTrue H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO)
@@ -128,9 +144,9 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] (H : Msg →
       (∀ j, j + 1 < Bd.DE.V.k (xIOf x) → (b.rd.msgs x ws).getD j [] =
           pk x j (((run H P (deployRec Bd.IVStar ivScope b).V x ω r).msgs.map Prod.fst).getD j [])) ∨
         ∃ u v, findColl ((deployRec Bd.IVStar ivScope b).calls x ws) = some (u, v) ∧ Collision H u v)
-    (hA : Claims.Recursion.InnerAcceptsCollAt H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
+    (hA : Claims.Recursion.InnerAcceptsCollAtV H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
       x) :
-    Claims.Recursion.ForksBindAt H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO x := by
+    Claims.Recursion.ForksBindAtV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO x := by
   intro decO Ω P j t hod
   obtain ⟨ws, ws', hg₁, hg₂, hne⟩ := hod
   have hg₁' : Claims.Recursion.EOGives H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P x
@@ -141,16 +157,42 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] (H : Msg →
       ((deployRec Bd.IVStar ivScope b).withSetup H).calls x ws', H p.1 = p.2 := fun p hp =>
     (List.mem_append.1 hp).elim (Claims.Recursion.withSetup_true (hT decO x Ω P _ _ _ ws hg₁') p)
       (Claims.Recursion.withSetup_true (hT decO x Ω P _ _ _ ws' hg₂') p)
+  have hD₁ := Claims.Recursion.drawCalls_eq hg₁
+  have hD₂ := Claims.Recursion.drawCalls_eq hg₂
+  have htrueV : ∀ p ∈ Claims.Recursion.drawCalls H ((deployRecC Bd ivScope b).withSetup H)
+      (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
+      Claims.Recursion.drawCalls H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x
+        t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1, t.2.2.2.2), H p.1 = p.2 := by
+    rw [hD₁, hD₂]
+    intro p hp
+    rcases List.mem_append.1 hp with hp | hp <;> rcases List.mem_append.1 hp with hp | hp
+    · exact Claims.Recursion.withSetup_true (hT decO x Ω P _ _ _ ws hg₁') p hp
+    · exact Claims.Recursion.setupCalls_true H _ _ p hp
+    · exact Claims.Recursion.withSetup_true (hT decO x Ω P _ _ _ ws' hg₂') p hp
+    · exact Claims.Recursion.setupCalls_true H _ _ p hp
+  have hliftV : ∀ l : List (Msg × Msg),
+      (∀ p ∈ l, p ∈ Claims.Recursion.drawCalls H ((deployRecC Bd ivScope b).withSetup H)
+        (Inner.ofFlock Bd.deploy decI) DO decO P x t.1 (t.2.1, t.2.2.2.1) ++
+        Claims.Recursion.drawCalls H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO
+          P x t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1, t.2.2.2.2)) →
+      (∃ u v, findColl l = some (u, v) ∧ Collision H u v) →
+      Claims.Recursion.forkCollV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x
+        j t := by
+    rintro l hsub ⟨u, v, huv, -⟩
+    unfold Claims.Recursion.forkCollV
+    exact Claims.Recursion.VStar.coll_of_sub htrueV hsub (by simp [huv])
   have hlift : ∀ l : List (Msg × Msg),
       (∀ p ∈ l, p ∈ ((deployRec Bd.IVStar ivScope b).withSetup H).calls x ws ++
         ((deployRec Bd.IVStar ivScope b).withSetup H).calls x ws') →
       (∃ u v, findColl l = some (u, v) ∧ Collision H u v) →
-      Claims.Recursion.forkColl H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x
+      Claims.Recursion.forkCollV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x
         j t := by
-    rintro l hsub ⟨u, v, huv, -⟩
-    unfold Claims.Recursion.forkColl
-    rw [hg₁.2, hg₂.2]
-    exact Claims.Recursion.VStar.coll_of_sub htrue hsub (by simp [huv])
+    intro l hsub
+    refine hliftV l fun p hp => ?_
+    rw [hD₁, hD₂]
+    rcases List.mem_append.1 (hsub p hp) with h | h
+    · exact List.mem_append_left _ (List.mem_append_left _ h)
+    · exact List.mem_append_right _ (List.mem_append_left _ h)
   have hleft := hlift ((deployRec Bd.IVStar ivScope b).calls x ws) fun p hp =>
     List.mem_append_left _ (List.mem_append_left _ hp)
   have hright := hlift ((deployRec Bd.IVStar ivScope b).calls x ws') fun p hp =>
@@ -199,10 +241,18 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] (H : Msg →
     hcsd hne'
   rcases hA decO Ω P t.1 t.2.1 t.2.2.2.1 ws hg₁' with ha₁ | ha₁
   swap
-  · exact hleft ha₁
+  · refine hliftV _ (fun p hp => ?_) ha₁
+    rw [hD₁, hD₂]
+    rcases List.mem_append.1 hp with h | h
+    · exact List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ h))
+    · exact List.mem_append_left _ (List.mem_append_right _ h)
   rcases hA decO Ω P t.1 (Claims.Recursion.fork j t.2.1 t.2.2.1) t.2.2.2.2 ws' hg₂' with ha₂ | ha₂
   swap
-  · exact hright ha₂
+  · refine hliftV _ (fun p hp => ?_) ha₂
+    rw [hD₁, hD₂]
+    rcases List.mem_append.1 hp with h | h
+    · exact List.mem_append_right _ (List.mem_append_left _ (List.mem_append_left _ h))
+    · exact List.mem_append_right _ (List.mem_append_right _ h)
   rcases hL decO x Ω P t.1 t.2.1 t.2.2.2.1 ws hg₁ with hl₁ | hl₁
   swap
   · exact hleftS hl₁
@@ -256,7 +306,8 @@ theorem forksBindAt_C_pick_setup {Col' T' : Type} [DecidableEq Col] (H : Msg →
   exact hlift _ (fun p hp => hp) (Claims.Recursion.findColl_of_coll H htrue (hmem q hq) (hmem q' hq') hc)
 
 /-- `forksBindAt_C_pick_setup` with the readers' rounds before the last the runs' own (`pk x j m = m`). -/
-theorem forksBindAt_C_setup {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg) (Bd : Bound Coin Col T)
+theorem forksBindAt_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg)
+    (Bd : Bound Coin Col T)
     (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
     (hEC : Bd.LastBindsEC H) (hCF : Bd.LastCoinFree H)
     (hT : Claims.Recursion.CallsTrue H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO)
@@ -272,9 +323,9 @@ theorem forksBindAt_C_setup {Col' T' : Type} [DecidableEq Col] (H : Msg → Msg)
           ((run H P (deployRec Bd.IVStar ivScope b).V x ω r).msgs.map Prod.fst).getD j []) ∨
         ∃ u v, findColl ((deployRec Bd.IVStar ivScope b).calls x ws) = some (u, v) ∧ Collision H u v)
     (x : Msg)
-    (hA : Claims.Recursion.InnerAcceptsCollAt H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
+    (hA : Claims.Recursion.InnerAcceptsCollAtV H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
       x) :
-    Claims.Recursion.ForksBindAt H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO x :=
+    Claims.Recursion.ForksBindAtV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO x :=
   forksBindAt_C_pick_setup H Bd decI ivScope b DO (fun _ _ m => m) hEC hCF hT hL x (fun decO => hP decO x) hA
 
 end Cols
