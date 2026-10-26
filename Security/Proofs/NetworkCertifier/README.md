@@ -91,6 +91,9 @@ Horizon.lean    the wrong units over a horizon: a uniform draw misses `f` units 
                                          added, the horizon's bound (horizonWrongUnits)
 Sanity.lean     a satisfiability witness for every named hypothesis, the joint witnesses, and the
                                          toy of the September draft
+Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
+                                         record, and `G_nontrivial`, its conclusion false at a verifier
+                                         that accepts everything
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
