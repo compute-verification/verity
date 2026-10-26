@@ -25,10 +25,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import shape as S
-
 from verity.core.protocols.pouw.circuit import h1tile as HT
 from verity.core.protocols.pouw.circuit import seeds as SD
+
+import shape as S
 
 SCHEMA = "j10r-sm90/fixtures/v1"
 ARRAYS = ("units", "receipts", "z", "seed_c", "sigma")
