@@ -46,7 +46,9 @@ like source: the base's lint code, run on the PR's tree, must find nothing the P
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds
 the repository's ruff lint the same way (`tests/lint/test_repo_ruff.py`, list `tests/lint/allowlists/repo_ruff.json`: every
-tracked file outside this lint's and `archive/`). Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
+tracked file outside this lint's and `archive/`), except that its stale entries don't fail: its list may hold the findings of
+PRs queued on `next` that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` deletes what a tree no
+longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `tools/verity/check/drive.toml`'s `landing_gates` names
 it, so the merge queue runs `integrations/vllm/tools/ratchet_gate.py` from `main` when a PR is marked ready and when it is merged onto `next`,
 and refuses a PR that grows a ratchet (naming the entries it added) or that the base's lints refuse (naming each violation).

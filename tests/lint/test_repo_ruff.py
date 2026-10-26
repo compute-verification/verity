@@ -6,15 +6,17 @@ to its own list, and ``archive/`` is kept but not developed (``archive/AGENTS.md
 lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``.  A finding is keyed ``(file, kind, symbol, detail)`` as there:
 the file relative to the repository, the rule's code, the enclosing ``Class.function`` (``<module>`` at top level) and ruff's
 message with ``from line N`` dropped, so edits elsewhere in a file don't churn the list.  An entry allows ``count`` findings of
-its key (1 when absent).  A finding the list doesn't allow fails, and so does an entry that allows more than is found, so the
-list only shrinks.  ``ruff check --fix PATH`` fixes some (F401, F541, RUF100's stale ``# noqa``); delete the entry each fix
-makes stale.
+its key (1 when absent).  A finding the list doesn't allow fails.  An entry that allows more than is found doesn't: the list
+can run ahead of a tree, holding the findings of PRs queued below it on ``next`` that a fix, an ejection or a reorder leaves
+out, and ``--prune`` deletes and lowers what this tree no longer finds.  ``ruff check --fix PATH`` fixes some (F401, F541,
+RUF100's stale ``# noqa``).
 
 The ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) refuses a change that grows the list, and judges a change to this
 module, to ``ruff.toml`` or to the ruff pin by running this lint as the change's base has it on the change's tree.  So it imports
 only the standard library and pytest, and ``test_no_new_findings`` takes no fixture.
 
-    python3 tests/lint/test_repo_ruff.py --write   # the list as today's findings, for a move: the gate refuses one that grows it
+    python3 tests/lint/test_repo_ruff.py --prune   # delete and lower what this tree no longer finds: the list only shrinks
+    python3 tests/lint/test_repo_ruff.py --write   # the list as this tree's findings, for a move: the gate refuses one that grows it
 """
 from __future__ import annotations
 
@@ -112,21 +114,16 @@ def test_no_new_findings() -> None:
                      + "\n".join(new))
 
 
-def test_the_list_has_no_stale_entries() -> None:
-    found = Counter(k for k, _ in scan())
-    stale = [("  delete " if found[k] == 0 else f"  lower count to {found[k]}: ") + entry_line(k, n)
-             for k, n in sorted(allowed().items()) if found[k] < n]
-    assert not stale, (f"ruff (ruff.toml): {len(stale)} entr(y/ies) in tests/lint/allowlists/{NAME}.json no longer match "
-                       "anything: the finding is gone, so delete the entry (the list only shrinks):\n" + "\n".join(stale))
-
-
-def write() -> None:
-    found = Counter(k for k, _ in scan())
-    lines = [f"    {entry_line(k, n)}" for k, n in sorted(found.items())]
+def dump(entries: Counter) -> None:
+    lines = [f"    {entry_line(k, n)}" for k, n in sorted(entries.items()) if n]
     LIST.write_text('{\n  "rule": "ruff (ruff.toml)",\n  "entries": [\n' + ",\n".join(lines) + "\n  ]\n}\n", encoding="utf-8")
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] != ["--write"]:
+    found = Counter(k for k, _ in scan())
+    if sys.argv[1:] == ["--write"]:
+        dump(found)
+    elif sys.argv[1:] == ["--prune"]:
+        dump(allowed() & found)
+    else:
         sys.exit(__doc__.rsplit("\n\n", 1)[-1])
-    write()
