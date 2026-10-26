@@ -708,6 +708,32 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
                     cleared="*Cleared:* the public export holds every fixture main registers.")]
 
 
+#: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` a post-landing run passed
+DRIVE_STATE = "root/.research/queue/verity.state.json"
+UNVERIFIED_S = 3 * 3600
+
+
+def unverified_main(ctx: Ctx) -> list[Finding]:
+    """`main` has carried commits no post-landing run verified for over 3 h (top, 26 Oct: 467 PRs landed on an unverified main for
+    a day and a half with nobody outside ci told): drive's last verified commit (its state's `drive.postland.verified`) against
+    main, timed from the oldest commit after it (GitHub's compare). One event per further hour behind, to ci and top, until a
+    post-landing run verifies main again; read from drive's state, not its log, so it still rings while drive is down."""
+    state = json.loads((ctx.root / DRIVE_STATE).read_text())
+    verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
+    if not verified:
+        raise RuntimeError(f"/{DRIVE_STATE} names no drive.postland.verified")
+    doc = json.loads(ctx.sh(["gh", "api", f"repos/{REPO_SLUG}/compare/{verified}...main"], timeout=60))
+    if not (commits := doc.get("commits") or []):
+        return []
+    since = epoch(commits[0]["commit"]["committer"]["date"])
+    if (behind := ctx.now - since) < UNVERIFIED_S:
+        return []
+    hours, ahead = int(behind // 3600), int(doc.get("ahead_by") or len(commits))
+    return [Finding(f"{verified[:12]}:{hours}", f"*`main` has gone {hours} h without a passing post-landing check*: its last "
+                    f"verified commit is `{verified[:12]}`, and {ahead} commit(s) have landed since, the first at {iso(since)}.",
+                    owners=("ci", "top"))]
+
+
 # ---- every machine: its memory, the runs infrastructure killed, the peers it watches, the checks lost -----------------------------
 
 USER_SLICE = "/sys/fs/cgroup/user.slice/user-1001.slice"      # each research run is a session scope here (one ssh login each)
@@ -1346,6 +1372,10 @@ MONITORS: list[Monitor] = [
             "`not local and not on any source` was registered without `research data push`, so ask whoever registered it to push "
             "it; a loop that isn't running is restarted with `setsid -f /data/infra/fixtures_export.sh`.",
             every_s=900, for_s=1800, unread_s=4 * 3600),
+    Monitor("unverified-main", "ci", "warn", "relay", unverified_main,
+            "Read the newest post-landing run's verdict line (drive.log's 'told @ci' line names it): land the red suite's fix, or "
+            "revert the PR that broke it (AGENTS.md: main always passes). It rings again each hour until a post-landing run passes.",
+            every_s=600, events=True, unread_s=3600),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 

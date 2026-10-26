@@ -1385,3 +1385,32 @@ def test_a_check_whose_step_failed_is_cancelled_once_a_ticket_waits_for_a_slot_o
     row["suite"], calls[:] = True, []                     # a suites.py run's failed suite rings, and the lander decides
     (f,) = M.failed_checks(M.Ctx(now=T0, memo={}, run=answer, act=True))
     assert "Cancelled" not in f.text and not any("cancel" in c for c in calls)
+
+
+def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_landing_run_passes(tmp_path):
+    """top, 26 Oct: main went a day and a half with no passing post-landing check and nobody outside ci heard. The relay reads
+    drive's last verified commit from its state (not its log, so a stopped drive still rings) and times main's lag from the
+    oldest commit after it."""
+    state = tmp_path / M.DRIVE_STATE
+    state.parent.mkdir(parents=True)
+    verified = "595cce6ddaf69e4411d8b11df4e91878c5826e27"
+    state.write_text(json.dumps({"drive": {"postland": {"verified": verified}}}))
+    since = T0 - 3 * 3600 - 60                                              # main moved past it 3 h 1 min ago
+    compare = {"ahead_by": 467, "commits": [{"commit": {"committer": {"date": M.iso(since)}}}, {"commit": {"committer": {
+        "date": M.iso(T0 - 60)}}}]}
+    run = Run((has(f"compare/{verified}...main"), (0, json.dumps(compare), "")))
+    (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
+    assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
+    assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "467 commit(s)" in f.text
+    assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
+    run = Run((has("compare/"), (0, json.dumps({"ahead_by": 0, "commits": []}), "")))
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "main is its last verified commit"
+
+    m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
+    run = Run((has("compare/"), (0, json.dumps(compare), "")))
+    for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
+        M.step(st, [m], lambda memo, now=now: M.Ctx(now=now, memo=memo, root=tmp_path, run=run), now, M.AlertDir(alerts),
+               by="test", force=True)
+    lines = (alerts / "monitors.jsonl").read_text().splitlines()
+    assert [(x["event"], x["key"], x["owners"]) for x in map(json.loads, lines)] == [
+        ("event", "unverified-main|595cce6ddaf6:4", ["ci", "top"])]
