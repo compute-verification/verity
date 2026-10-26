@@ -113,20 +113,20 @@ def WorkSoundOnCard (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Pr
 /-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, whose floors are `sync ≥ 1`
 (the data sheet's tensor peak is the core's, whichever instruction issues it), `b1 ≥ 1/8` (CALIB's BGMMA measurement)
 `madHi ≥ 2` (`IMAD.HI` at 32 lanes a SM-clock, CPG Table 7; RT-MODEL M12) and `slack ≥ 1` (the kernel idles a tick
-after every 20 `wgmma`s; RT-MODEL M1), with D5 v1's public bests on the H200 and the H200 node's hosts. -/
+after every 20 `wgmma`s; RT-MODEL M1), with D5 v2's public bests on the H200 and the H200 node's hosts. -/
 def WorkSoundH200 : Prop := WorkSoundAt Verity.Accel.H200.card pubBestH200 hostH200
 
 /-- **The headline on the RTX PRO 6000 (sm_120) at θ**: `WorkSoundAt` on `Verity.Accel.Sm120.card`, whose floor is
-`madHi ≥ 2` and which has no native `b1` MMA (ptxas emulates it; RT-MODEL M13), with D5 v1's public bests on the
+`madHi ≥ 2` and which has no native `b1` MMA (ptxas emulates it; RT-MODEL M13), with D5 v2's public bests on the
 RTX PRO 6000 and its node's hosts. -/
 def WorkSoundSm120 : Prop := WorkSoundAt Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 /-- **The headline on the H200 SXM itself**: `WorkSoundOnCard` on `Verity.Accel.H200.card`, at the open parameters
-`card-within-accel(H200)` gives, with D5 v1's public bests on the H200 and the H200 node's hosts. -/
+`card-within-accel(H200)` gives, with D5 v2's public bests on the H200 and the H200 node's hosts. -/
 def WorkSoundOnCardH200 : Prop := WorkSoundOnCard Verity.Accel.H200.card pubBestH200 hostH200
 
 /-- **The headline on the RTX PRO 6000 (sm_120) itself**: `WorkSoundOnCard` on `Verity.Accel.Sm120.card`, at the open
-parameters `card-within-accel(RTX PRO 6000)` gives, with D5 v1's public bests on it and its node's hosts. -/
+parameters `card-within-accel(RTX PRO 6000)` gives, with D5 v2's public bests on it and its node's hosts. -/
 def WorkSoundOnCardSm120 : Prop := WorkSoundOnCard Verity.Accel.Sm120.card pubBestSm120 hostSm120
 
 end Pouw.Guarantees.DitherInstance

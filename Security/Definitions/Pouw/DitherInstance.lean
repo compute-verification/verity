@@ -16,7 +16,7 @@ import Definitions.Core.Accel.Principles
 * **`G` is the devices at the open parameters `x`** (`OnCard`): `G`'s resources are the pooled cards' and the others',
   at θ's rates; its memory is theirs; its (P1) and (P2) are MODEL-SPEC's; and every words program the cards run is a
   program of `G` with the run's units as its use, its ticks and backlog as its wall time and no import;
-* **the public best methods** (`PubBest`), fixed per card and priced at the period's dual price (`pubCost`): D5 v1's
+* **the public best methods** (`PubBest`), fixed per card and priced at the period's dual price (`pubCost`): D5 v2's
   named programs (`pubBestH200`, `pubBestSm120`);
 * **the cards' hosts** (`HostRow`, `HostsCounted`): the AMX and SHA-512 rates of each card's share of its node's CPUs,
   which the period's devices count;
@@ -187,29 +187,36 @@ def shaUnits (a m i : ℚ≥0) : Verity.Accel.Res → ℚ≥0
   | .issue => i
   | _ => 0
 
-/-- **D5's named public matmul programs on the H200** (BET-ALGO-LAB, `note:20261026T0315Z-draft-accel-public-best`
-"D5 v1", `pub_programs` at `c32d0feeac`, run r20261026-054420-769a; v2 as frozen at A = B = 0, V and U ±80, L 2048,
-K 16384, n 16512). D5's units in the model's: its tensor MAC-times as they are, its lane-issues over 32 (a warp
-instruction), its FMA-pipe lanes over 2 (an `IMAD` or `IDP.4A` takes two of θ's 128, one of the model's 64 `imad`
-lanes) and its shared-memory bytes over 4 (words). `pub_mm.H200.v2` standalone (the lanes idle; c 0.961: plain s8
-0.961, DP4A 0.025, swar5 0.015) and with the lanes busy (v2's periods; c 1.000: the honest dense kernel). -/
+/-- **D5 v2's named public matmul programs on the H200** (BET-ALGO-LAB, `note:20261026T0815Z-draft-accel-public-best-2`,
+`art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`; `d5_v2.py` at `34866fd9f8`): protocol v3's
+round at A = B = 0, the frozen qkv shape (K 16384, n 16512) at CMP-118's caps (t 2, L' 512), the hull of every route
+in D5 v2's menu (the tile route, PD2-1's O-route, the zero-high-digit peel, Strassen's orbit, the integral catalogue,
+every route beside the MMA) priced at the honest period's duals μ° without the hashing. Served (μ° on `alu` and
+`joint0`): the dense product with O by PD2-1's O-route, pub_mm 0.4853 against H_mm 0.4984. Job-only (μ° on `alu`
+alone, the matmul unpriced): the dense product with the peels, which is also the honest kernel. At a fixed price the
+cheapest listed program is at most any mixture of them, so the hull's pub at μ° is the list's minimum. D5's units in
+the model's: its tensor MAC-times as they are, its lane-issues over 32 (a warp instruction), its FMA-pipe lanes over
+2 (an `IMAD` or `IDP.4A` takes two of θ's 128, one of the model's 64 `imad` lanes) and its shared-memory bytes over 4
+(words). -/
 def pubMmH200 : List ResUnits :=
-  [mmUnits (9605 / 10000) (156 / 10000 / 32) (7255 / 1000000) (1247 / 100000 / 2) (3001 / 100000 / 4),
-   mmUnits 1 (1 / 1024 / 32) 0 0 (2148 / 100000 / 4)]
+  [mmUnits (35 / 32) (99 / 2097152) 0 0 (207 / 32768), mmUnits (9 / 8) (25 / 524288) 0 0 (53 / 8192)]
 
-/-- **D5's named public matmul programs on the RTX PRO 6000** (as on the H200, at L 768): `pub_mm.RTXPRO6000.v2`
-standalone (c 0.863: 70% plain, 30% depth-1 Strassen, fix-ups on the ALU, DP4A beside) and with the lanes busy (c
-1.000). D5's register-file words aren't a resource of the model and are dropped, which only lowers `pub_mm`. -/
+/-- **D5 v2's named public matmul programs on the RTX PRO 6000** (as on the H200, at CMP-118's t 3, L' 256). Served
+(μ° on `alu`, `rf` and `joint1`): Strassen's 2×2 orbit at depth 1, pub_mm 0.8255 against H_mm 0.8586. Job-only (μ° on
+`alu` and `rf`): the dense product with O by the zero-high-digit peel, pub_mm 0.2930 against H_mm 0.2974. And the honest
+kernel. Values off a dyadic are rounded down at the seventh decimal. D5's register-file words aren't a resource of the
+model and are dropped, which only lowers `pub_mm`. -/
 def pubMmSm120 : List ResUnits :=
-  [mmUnits (789 / 1000) (616 / 10000 / 32) (467 / 100000) (8695 / 100000 / 2) (1076 / 10000 / 4),
-   mmUnits 1 (3255 / 1000000 / 32) 0 0 (3646 / 100000 / 4)]
+  [mmUnits (59 / 64) (56829 / 40000000) (63 / 4000) 0 (1678031 / 40000000),
+   mmUnits (67 / 64) (329 / 3145728) 0 0 (233 / 24576), mmUnits (17 / 16) (83 / 786432) 0 0 (59 / 6144)]
 
 /-- **The pinned public SHA-512 schedules on the H200, at the model's prices** (the coordinator's 06:18Z decision on
 RT-UNITS U13: `ShaSpeed` is in model units, so `c_sha = 1` in the model): the default build of `commit_gpu`
 (r20261018-062010-1c6b, measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760, IMAD 152), A-wide + R-hi (D5's
 `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850, IMAD.WIDE 850), with RT-UNITS'
 counts a compression (`note:20261026T0320Z-draft-accel-rt-units`). Priced as the model prices a lane (`opUse`): one
-ALU or `imad` lane, `IMAD.WIDE` two `imad` lanes (U13), `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot. -/
+ALU or `imad` lane, `IMAD.WIDE` two `imad` lanes (U13), `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot.
+These are D5 v2's schedules too (`public_best.SHA_SCHEDULES` at `34866fd9f8`, the same ALU and issue counts). -/
 def pubShaH200 : List ResUnits :=
   [shaUnits 3400 152 (3608 / 32), shaUnits 2460 2426 (4002 / 32), shaUnits 2550 2550 (4306 / 32)]
 
@@ -219,10 +226,10 @@ and R-hi (D5's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487). -/
 def pubShaSm120 : List ResUnits :=
   [shaUnits 3415 0 (3415 / 32), shaUnits 2563 2556 (4267 / 32), shaUnits 2441 2435 (3902 / 32)]
 
-/-- The H200's public best methods: D5 v1's named programs. -/
+/-- The H200's public best methods: D5 v2's named programs. -/
 def pubBestH200 : PubBest Verity.Accel.H200.card := ⟨pubMmH200, pubShaH200⟩
 
-/-- The RTX PRO 6000's public best methods: D5 v1's named programs. -/
+/-- The RTX PRO 6000's public best methods: D5 v2's named programs. -/
 def pubBestSm120 : PubBest Verity.Accel.Sm120.card := ⟨pubMmSm120, pubShaSm120⟩
 
 /-- **An oracle call costs a public SHA-512 compression on the card** (WORKSOUND-3's question at `ba41b902bf`): `G`'s
