@@ -13,11 +13,14 @@ from verity_all_protocols import runner as RN
 
 SHAPE = {"program": "ab" * 64, "value": "out", "words": 1, "rows": 512, "word_bits": 16,
          "row_schema": "hm96-sha512/row/v2"}
+#: vy-challenger-1's salt-only session through infra's gate, without which a run of record is refused
+GATE = ["--pouw-gate", "research@204.12.178.84", "--peer", "vy-nebius-cpu-4", "--challenger-key", "key.json", "--main",
+        "main.txt"]
 
 
-def refused(tmp_path, capsys, *argv: str) -> str:
+def refused(tmp_path, capsys, *argv: str, gate: list[str] = GATE) -> str:
     with pytest.raises(SystemExit) as x:
-        RN.main(["--out", str(tmp_path / "out"), "--tools", str(tmp_path / "missing.json"), "--of-record", *argv])
+        RN.main(["--out", str(tmp_path / "out"), "--tools", str(tmp_path / "missing.json"), "--of-record", *gate, *argv])
     assert x.value.code == 2
     return capsys.readouterr().err
 
@@ -56,7 +59,7 @@ def test_a_run_of_record_is_the_joint_run_and_records_its_flags(tmp_path, monkey
     """``--of-record`` alone is the joint run: the wired circuit with registered weights, the output tied at the
     circuit's out shape, every unit drawn (``work:14`` on the toy), and no gap in its mode."""
     monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
-    argv = ["--of-record", "--windows", "2", "--tie-tamper", "0"]
+    argv = ["--of-record", *GATE, "--windows", "2", "--tie-tamper", "0"]
     shapes, loops, relays = run_of_record(tmp_path, monkeypatch, argv)
     commit, shape = shapes[0], shapes[1]
     assert commit[0] == "--commit-weights" and "--wired" in commit
@@ -82,7 +85,7 @@ def test_a_run_of_record_is_the_joint_run_and_records_its_flags(tmp_path, monkey
 
 def test_giving_wired_to_a_run_of_record_is_the_same_run(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
-    for argv in (["--of-record"], ["--of-record", "--wired"]):
+    for argv in (["--of-record", *GATE], ["--of-record", *GATE, "--wired"]):
         assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--check", *argv]) == 0
         flags = json.loads(capsys.readouterr().out)["flags"]
         assert (flags["wired"], flags["tie"], flags["law"], flags["cap"]) == (True, True, "work:14", 2)
@@ -116,7 +119,7 @@ def test_a_development_run_says_it_is_not_of_record(tmp_path, capsys):
 
 def test_check_prints_a_run_of_records_mode_without_reading_its_tools(tmp_path, monkeypatch, capsys):
     monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
-    assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--of-record", "--check"]) == 0
+    assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--of-record", *GATE, "--check"]) == 0
     mode = json.loads(capsys.readouterr().out)
     assert mode["of_record"] is True and mode["flags"]["law"] == "work:14" and mode["flags"]["certifier_tamper"] is None
     assert mode["flags"]["registered"] is True and mode["flags"]["wired"] is True and mode["flags"]["tie"] is True
@@ -127,6 +130,19 @@ def test_check_prints_a_run_of_records_mode_without_reading_its_tools(tmp_path, 
 def test_a_run_of_record_refuses_another_law(law, tmp_path, capsys):
     err = refused(tmp_path, capsys, "--law", law)
     assert "S1's run of record draws under work:14" in err and f"not --law {law}" in err
+
+
+@pytest.mark.parametrize("gate", [[], ["--pouw-live"]])
+def test_a_run_of_record_salts_pouw_from_the_auditors_challenger(gate, tmp_path, capsys):
+    """Without ``--pouw-gate`` PoUW's H1 window is seeded, and ``--pouw-live``'s gate runs on the prover's node: neither
+    is live under AGENTS.md, so neither is of record."""
+    err = refused(tmp_path, capsys, "--check", gate=gate)
+    assert "from vy-challenger-1's salt-only session" in err and "--pouw-gate research@204.12.178.84" in err
+
+
+def test_a_gate_needs_its_peer_key_record_and_main_line(tmp_path, capsys):
+    err = refused(tmp_path, capsys, "--check", gate=["--pouw-gate", "research@204.12.178.84", "--peer", "n"])
+    assert "--pouw-gate needs --peer, --challenger-key and --main" in err
 
 
 def test_a_run_of_record_refuses_windows_audited_at_once(tmp_path, capsys):

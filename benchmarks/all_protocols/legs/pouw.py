@@ -46,6 +46,7 @@ from pathlib import Path
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import operands as OP
 from verity.core.protocols.pouw import window as Wd
+from verity.core.protocols.sampled_proofs import challenger as Ch, remote
 
 LEAN_ENV = "VERITY_POUW_CHECK"
 H1_DIR = "pouw"
@@ -82,11 +83,19 @@ class NoWindow(ValueError):
     """The period has no PoUW window (module docstring)."""
 
 
-def _live(d: Path) -> dict | None:
+def _live(d: Path, pins: dict | None = None) -> dict | None:
     """The salt session's inputs the loop wrote beside the window in `d` (``SALT``), or None for a seeded window; always
-    None where core takes no live parameters (`LIVE_PARAM`)."""
+    None where core takes no live parameters (`LIVE_PARAM`). With the verifier's `pins` (``period.json``'s
+    ``pouw.verifier``: ``challenger_key``, the deployment's challenger-key/v1 record, and ``main``, the path of its copy of
+    main's first-parent line), the key and the main line are those, never the prover's: a session under any other key
+    (a development gate's) or pinned off that line is refused."""
     f = d / SALT
-    return json.loads(f.read_text())["live"] if LIVE_PARAM is not None and f.exists() else None
+    if LIVE_PARAM is None or not f.exists():
+        return None
+    live = json.loads(f.read_text())["live"]
+    if pins:
+        live = {**live, "key": Ch.key_of_record(pins["challenger_key"]).to_json(), "main": remote.main_lines(pins["main"])}
+    return live
 
 
 def h1_check(live: bool = False) -> dict:
@@ -99,7 +108,9 @@ def h1_check(live: bool = False) -> dict:
 def h1_params(period_dir: Path, work: dict) -> dict:
     """The verifier's parameters for the period's H1 window (module docstring)."""
     rec = json.loads((period_dir / "registration.json").read_text())
-    live = _live(period_dir / H1_DIR)
+    period = period_dir / "period.json"
+    pins = (json.loads(period.read_text()).get("pouw") or {}).get("verifier") if period.exists() else None
+    live = _live(period_dir / H1_DIR, pins)
     return {"check": h1_check(live is not None), "context": rec["window"]["run"], "delta": H1_DELTA, "eps": H1_EPS,
             "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": work["max_tokens"], "stop": Wd.STOP_FIXED},
             "query": CC.TILES[H1_TEMPLATE].query, "range": list(H1_RANGE),

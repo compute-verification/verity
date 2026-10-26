@@ -1,7 +1,8 @@
 """The torch loop's window, written for the audit from its records alone (`benchmarks/prove_path/records_audit.py`).
 
     python -m verity_torch_loop.serve --out DIR [--law L] [--requests 3,7] [--steps 2] [--h 128] [--cap 8] [--run-id ID] \\
-        [--tamper] [--opening FILE] [--pouw h1 [--pouw-out DIR] [--pouw-salt HEX | --pouw-live HOST [--pouw-epoch K]]]
+        [--tamper] [--opening FILE] [--pouw h1 [--pouw-out DIR] [--pouw-salt HEX | --pouw-live HOST [--pouw-epoch K]
+        | --pouw-gate USER@HOST --peer NAME --challenger-key RECORD --main FILE [--gate-key KEY] [--pouw-epoch K]]]
     python -m verity_torch_loop.serve --circuit-only [the same shape and --run-id] [--pouw h1]
 
 The first serves the requests (`loop.TorchLoop`), commits every unit and its activations (`TorchLoop.commit_activations`,
@@ -18,8 +19,12 @@ beside the first's. ``--pouw-live HOST`` (with ``--registered --weights``): the 
 after the tiles' operands are committed, on R = `salt.anchored_epoch_root(W, X, k)` (W the pinned weights' root, X the
 operands', k ``--pouw-epoch``), by a development gate on this machine whose auditor host's root is the scratch
 directory ``HOST`` (`window_salt.local`, pinned on this tree's commit); its answer and the verifier's ``live`` params go
-to ``salt.json`` beside the window. ``--pouw-late``: the session is opened on other operands' X (a prover that takes the
-salt first and commits its operands after it), so PoUW's check refuses the window's salt.
+to ``salt.json`` beside the window. ``--pouw-gate USER@HOST --peer NAME --challenger-key RECORD --main FILE
+[--gate-key KEY]``, instead of ``--pouw-live``: the session is vy-challenger-1's, through infra's gate (`a5_coins.Gate`,
+with the lane's gate key), its challenger the one the deployment's challenger-key/v1 ``RECORD`` names, and ``FILE`` the
+verifier's copy of main's first-parent line. Only this salt is live under AGENTS.md: ``--pouw-live``'s gate runs on the
+prover's machine. ``--pouw-late``: the session is opened on other operands' X (a prover that takes the salt first and
+commits its operands after it), so PoUW's check refuses the window's salt.
 
     python -m verity_torch_loop.serve --commit-weights OPENING --pin PIN [--h 128] [--wired]
 
@@ -69,8 +74,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--pouw-out")
     ap.add_argument("--pouw-salt", help="the H1 tiles' salt, 64 bytes in hex (default fresh)")
     ap.add_argument("--pouw-live", metavar="HOST", help="the H1 tiles' salt from a live session of a local gate rooted here")
-    ap.add_argument("--pouw-epoch", type=int, default=0, help="with --pouw-live: the salt epoch's number k")
-    ap.add_argument("--pouw-late", action="store_true", help="with --pouw-live: open the session on other operands' X")
+    ap.add_argument("--pouw-gate", metavar="USER@HOST", help="the H1 tiles' salt from vy-challenger-1's salt-only session "
+                    "through infra's gate (with --peer, --challenger-key and --main)")
+    ap.add_argument("--peer", help="with --pouw-gate: this machine as the gate's /etc/vy/peers names it")
+    ap.add_argument("--challenger-key", help="with --pouw-gate: the deployment's challenger-key/v1 record")
+    ap.add_argument("--gate-key", help="with --pouw-gate: the lane's own gate key (default ssh's own)")
+    ap.add_argument("--main", help="with --pouw-gate: the verifier's `git rev-list --first-parent origin/main`, a commit a line")
+    ap.add_argument("--pouw-epoch", type=int, default=0, help="with --pouw-live or --pouw-gate: the salt epoch's number k")
+    ap.add_argument("--pouw-late", action="store_true", help="with --pouw-live or --pouw-gate: open the session on other "
+                    "operands' X")
     ap.add_argument("--registered", action="store_true", help="the circuit reads the weights as registered values")
     ap.add_argument("--weights", help="with --registered --out: the weights' opening (--commit-weights)")
     ap.add_argument("--tamper-weights", action="store_true")
@@ -94,10 +106,15 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--out DIR, or --circuit-only")
     if a.registered and a.out and not a.weights:
         ap.error("--registered --out needs --weights OPENING")
-    if a.pouw_live and not (a.pouw and a.registered and a.out and not a.pouw_salt):
-        ap.error("--pouw-live needs --pouw h1 --registered --weights OPENING --out, and no --pouw-salt")
-    if a.pouw_late and not a.pouw_live:
-        ap.error("--pouw-late needs --pouw-live")
+    live = a.pouw_live or a.pouw_gate
+    if a.pouw_live and a.pouw_gate:
+        ap.error("--pouw-live or --pouw-gate, not both")
+    if live and not (a.pouw and a.registered and a.out and not a.pouw_salt):
+        ap.error("--pouw-live and --pouw-gate need --pouw h1 --registered --weights OPENING --out, and no --pouw-salt")
+    if a.pouw_gate and not (a.peer and a.challenger_key and a.main):
+        ap.error("--pouw-gate needs --peer, --challenger-key and --main")
+    if a.pouw_late and not live:
+        ap.error("--pouw-late needs --pouw-live or --pouw-gate")
     if a.tie and a.out and not a.out_opening:
         ap.error("--tie --out needs --out-opening OPENING")
     loop = L.TorchLoop(L.Model(h=a.h), [int(x) for x in a.requests.split(",")], a.steps, a.tamper, a.run_id,
@@ -133,25 +150,31 @@ def main(argv: list[str] | None = None) -> int:
     rec = json.loads((Path(a.out) / "registration.json").read_text())
     pouw = None
     if a.pouw:
-        h1 = PW.H1Loop(loop, weights=PW.weights_group(loop.model, weights) if weights else None, live=bool(a.pouw_live))
+        h1 = PW.H1Loop(loop, weights=PW.weights_group(loop.model, weights) if weights else None, live=bool(live))
         pdir = Path(a.pouw_out or Path(a.out) / "pouw")
         issued = None
-        if a.pouw_live:
+        if live:
             WS = PW.window_salt()
-            main_line = [WS.a5_coins().on_main([])]
+            AC = WS.a5_coins()
+            if a.pouw_gate:
+                main_line = AC.R.main_lines(a.main)
+                gate = AC.Gate(a.pouw_gate, a.gate_key, a.peer, a.challenger_key, main_line)
+            else:
+                main_line = [AC.on_main([])]
+                gate = WS.local(Path(a.pouw_live), main_line)
             anchors = h1.anchors()
             if a.pouw_late:
                 width = {v: e["words"] for v, e in h1.operands["values"].items()}
                 early = OP.block(h1.program, OP.commit(h1.program, loop.run_root, {v: [[0] * n] for v, n in width.items()}))
                 anchors = {**anchors, "window": {**anchors["window"], OP.KEY: early}}
-            issued = WS.issue(WS.local(Path(a.pouw_live), main_line), anchors, a.pouw_epoch, main_line, pdir / "salt-session")
+            issued = WS.issue(gate, anchors, a.pouw_epoch, main_line, pdir / "salt-session")
             salt = issued.salt
         else:
             salt = bytes.fromhex(a.pouw_salt) if a.pouw_salt else PW.fresh_salt()
         prec = h1.write(h1.window(salt), pdir, {"loop": "torch-loop/pouw-h1"}, issued=issued)
         pouw = {"circuit": json.loads((pdir / "provenance.json").read_text())["circuit"], "tiles": h1.real,
                 "work": prec["window"]["public"]["work"], "law": prec["law"], "registration": R.digest(prec), "out": str(pdir),
-                "X": h1.X.hex(), "live": issued is not None, "late": a.pouw_late}
+                "X": h1.X.hex(), "live": issued is not None, "gate": a.pouw_gate, "late": a.pouw_late}
     print(json.dumps({"pouw": pouw, "circuit": rec["window"]["circuit"], "run": loop.run_root, "population": win.window.population,
                       "members": len(win.window.members), "mismatched": {t: len(v) for t, v in bad.items()},
                       "compiler": rec["window"].get("compiler"), "registration": R.digest(rec), "out": str(Path(a.out)),
