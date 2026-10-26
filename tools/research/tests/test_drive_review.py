@@ -711,3 +711,42 @@ def test_review_lists_the_members_lacking_a_land_verdict_and_records_one_refusin
                                                                                "no land verdict")
     (lab,) = world.store.labels(label_target(1, world.gh.prs[1].head), key=vocab.REVIEWED)
     assert (lab.value, lab.by, lab.ref) == ("land", "lane-9", "note:ci/x")
+
+
+def test_the_owner_of_an_unmarked_pr_a_marked_one_waits_for_is_told_once_per_pair_of_heads(world, monkeypatch):
+    """TOP-90: #4412, marked, waited on #4382's unmarked commits (CI-178) and nobody told #4382's owner.  Its owner hears once per
+    (head of the waiting PR, head of the unmarked one), and nothing once it's admitted or when the waiting PR isn't marked."""
+    _registry(world, "lane-5", "lane-7", "lane-8", "lane-9")
+    h = Review(world, monkeypatch)
+    old = world.change({"x.txt": "x = 1\n"})
+    world.gh.put(5, world.change({"x.txt": "x = 2\n"}, base=old), ready=False)  # moved on from `old`, unmarked
+    world.gh.put(7, world.change({"k.txt": "kernels\n"}, base=old))             # branched from #5 at `old`
+    world.gh.put(8, world.change({"y.txt": "y\n"}, base=old), ready=False)      # waits too, but isn't marked: no one hears
+    world.gh.put(9, world.change({"z.txt": "z\n"}, base=world.gh.prs[5].head))  # on #5's current head
+    world.store.add_label(label_target(7, world.gh.prs[7].head), vocab.READY, "true", "marker7")
+
+    def told() -> list[str]:
+        return [p for p in h.posts if "waits for your mark" in p]
+
+    h.tick()
+    five = world.gh.prs[5].head
+    assert told() == [
+        f"@ci @lane-5 queue: #7 (marked by marker7) waits for your mark of #5, which it contains (at {old[:12]}): mark #5 ready at "
+        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #7 carries it",
+        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]}): mark #5 ready at "
+        f"{five[:8]}, or withdraw it (`research queue eject 5 --reason ...`) and #9 carries it"], told()
+    h.tick()
+    assert len(told()) == 2                                     # once per pair of heads
+    world.gh.put(7, world.change({"k.txt": "kernels 2\n"}, base=world.gh.prs[7].head))
+    h.tick()
+    assert len(told()) == 3 and told()[-1].startswith("@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5")
+    world.gh.put(5, world.change({"x.txt": "x = 3\n"}, base=five), ready=False)
+    h.tick()
+    # #9 holds #5's older head now, and shares `old` with #8 as #7 does (`Queue.entries`); #7 is marked, so its owner hears nothing
+    assert [p.split(": mark")[0] for p in told()[3:]] == [
+        f"@ci @lane-5 queue: #7 (marked by lane-7) waits for your mark of #5, which it contains (at {old[:12]})",
+        f"@ci @lane-5 queue: #9 (marked by lane-9) waits for your mark of #5, which it contains (at {five[:12]})",
+        f"@ci @lane-8 queue: #9 (marked by lane-9) waits for your mark of #8, which it contains (at {old[:12]})"], told()
+    world.gh.ready.add((5, world.gh.prs[5].head))
+    h.tick()
+    assert len(told()) == 6 and h.q.status()[7].state != "waiting"

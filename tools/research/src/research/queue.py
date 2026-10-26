@@ -105,7 +105,8 @@ merged again), and a `main` that moved outside the queue rebuilds `next` on it, 
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
 PR whose head contains another open PR's head, or commits of a lower-numbered one's branch at an older head (`Queue.entries`), goes
 in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
-mark (`Queue._carried`).  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
+mark (`Queue._carried`); drive tells the owner of an unmarked one that a marked PR waits for, once per pair of heads
+(`Driver.tell_unmarked`).  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
 which files conflict and which queued PRs touched them.  So is a PR a landing gate refuses (drive.toml's `landing_gates` at
 `main`, `gate_refusal`), with the gate's fix: each PR the sync merges is judged first, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never takes a running check's commit off `next`.
