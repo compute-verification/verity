@@ -1,0 +1,4 @@
+order = 285
+path = "`accel_score/score.py`"
+runs_on = "CPU"
+what = "ACCEL PROTO-DESIGN's scorer (CMP-118): each candidate protocol's γ on the H200 on the roofline with its SHA-512 noise, keys and receipt commitments, and the share of a step's static INT8 MACs it credits at γ ≤ 10"
