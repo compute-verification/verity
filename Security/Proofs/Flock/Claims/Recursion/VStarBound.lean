@@ -244,6 +244,66 @@ def LayoutB.piecesOf (L : LayoutB) (x : Msg) (s : ℕ) (w : Flock.Wit) (i : ℕ)
   ((L.pieceAt x i).foldl (fun (acc : ℕ × List (ℕ × Msg)) p =>
     (acc.1 + pieceLen p.2, if p.1 = s then acc.2 ++ [(acc.1, readSegs w p.2)] else acc.2)) (0, [])).2
 
+/-! ## The compiled verifier's own evaluations -/
+
+/-- **The compiled verifier's SHA-512 evaluations at a V\* statement `xO`**, each `(u, H u)`: its setup's there
+(`Deploy.setup`), among them check 5's row commitments (`RecCoins.checkRows`: at each row port the statement registers,
+the commitment the verifier recomputes from its own rows, the verifier's `v` at its coins or zero rows, under the
+salt the statement carries). They are `setupCalls` at `xO` alone, so route 2C's finders search them (`drawCalls`). -/
+def vcallsAt {Coin : Type} (H : Msg → Msg) (D : Deploy Coin) (xO : Msg) : List (Msg × Msg) :=
+  (D.setup xO).map fun u => (u, H u)
+
+theorem vcallsAt_true {Coin : Type} (H : Msg → Msg) (D : Deploy Coin) (xO : Msg) :
+    ∀ e ∈ vcallsAt H D xO, H e.1 = e.2 := by
+  intro e he
+  obtain ⟨u, -, rfl⟩ := List.mem_map.1 he
+  rfl
+
+theorem vcallsAt_append_true {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {xO : Msg} {l : List (Msg × Msg)}
+    (hT : ∀ e ∈ l, H e.1 = e.2) : ∀ e ∈ l ++ vcallsAt H D xO, H e.1 = e.2 :=
+  fun e he => (List.mem_append.1 he).elim (hT e) (vcallsAt_true H D xO e)
+
+/-- The verifier's evaluations at the `s`-th V\* statement are among those at all of them. -/
+theorem vcallsAt_sub {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {xs : List Msg} {s : ℕ} (hs : s < xs.length) :
+    ∀ e ∈ vcallsAt H D (xs.getD s []), e ∈ setupCalls H D xs := by
+  intro e he
+  have hx : xs.getD s [] ∈ xs := by
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hs, Option.getD_some]
+    exact List.getElem_mem hs
+  exact List.mem_flatMap.2 ⟨_, hx, he⟩
+
+/-- No collision among `l ++ l'` is none among `l`, where every call is a true evaluation. -/
+theorem findColl_false_of_append {H : Msg → Msg} {l l' : List (Msg × Msg)} (ht : ∀ e ∈ l ++ l', H e.1 = e.2)
+    (h : (findColl (l ++ l')).isSome = false) : (findColl l).isSome = false :=
+  Bool.eq_false_iff.2 fun hl => by
+    rw [findColl_isSome_of_sub H ht (fun _ he => List.mem_append_left _ he) hl] at h
+    exact absurd h (by decide)
+
+/-- **Check 5's tie: a row a part commits is the verifier's, up to a collision with the verifier's evaluations.** Where
+the calls `l` a part records (true evaluations) hold `frame v σ` with output `d`, and the compiled verifier at the V\*
+statement `xO` evaluates `frame v₀ σ₀` (`Deploy.setup`) to the same `d`, the commitment its check compares, `v = v₀`
+unless `l` and the verifier's evaluations (`vcallsAt`) collide: a frame's input fixes its row (`hinj`). At check 5's
+value rows, `v₀` is the verifier's `v` at its coins; at its zero rows, zero (`zero_tie`). -/
+theorem row_tie {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {l : List (Msg × Msg)} {xO : Msg}
+    {frame : Msg → Msg → Msg} (hinj : ∀ v σ v' σ', frame v σ = frame v' σ' → v = v') {v σ v₀ σ₀ d : Msg}
+    (hc : (frame v σ, d) ∈ l) (hT : ∀ e ∈ l, H e.1 = e.2) (hv : frame v₀ σ₀ ∈ D.setup xO)
+    (hd : H (frame v₀ σ₀) = d) (hnc : (findColl (l ++ vcallsAt H D xO)).isSome = false) : v = v₀ := by
+  refine hinj v σ v₀ σ₀ (Classical.byContradiction fun hne => ?_)
+  have hm : (frame v₀ σ₀, H (frame v₀ σ₀)) ∈ vcallsAt H D xO := List.mem_map.2 ⟨_, hv, rfl⟩
+  have hs := findColl_isSome_mem H (l ++ vcallsAt H D xO) (vcallsAt_append_true hT) (frame v σ) (frame v₀ σ₀)
+    (List.mem_map.2 ⟨_, List.mem_append_left _ hc, rfl⟩) (List.mem_map.2 ⟨_, List.mem_append_right _ hm, rfl⟩)
+    ⟨hne, (hT _ hc).trans hd.symm⟩
+  rw [hs] at hnc
+  exact absurd hnc (by decide)
+
+/-- **Check 5's zero tie**: `row_tie` where the verifier's commitment is of zero rows `z`, so the part's rows are
+zero, up to a collision with the verifier's evaluations. -/
+theorem zero_tie {Coin : Type} {H : Msg → Msg} {D : Deploy Coin} {l : List (Msg × Msg)} {xO : Msg}
+    {frame : Msg → Msg → Msg} (hinj : ∀ v σ v' σ', frame v σ = frame v' σ' → v = v') {v σ z σ₀ d : Msg}
+    (hc : (frame v σ, d) ∈ l) (hT : ∀ e ∈ l, H e.1 = e.2) (hz : frame z σ₀ ∈ D.setup xO)
+    (hd : H (frame z σ₀) = d) (hnc : (findColl (l ++ vcallsAt H D xO)).isSome = false) : v = z :=
+  row_tie hinj hc hT hz hd hnc
+
 section Facts
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
@@ -294,6 +354,32 @@ def PartChecksB (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
       L.CmtAgrees cmt x xO ms → L.RowsRead x s w ms →
       chk s x c ms) ∨
       (findColl (L.calls x s w)).isSome
+
+/-- **`PartChecksB` with the compiled verifier's own evaluations in its escape**: as `PartChecksB`, or two of the calls
+part `s` records and the compiled verifier's at its V\* statement `xO` (`vcallsAt`) collide. Route 2C reads it
+(`partChecksB_toV`), so a part's check need hold only where its recorded calls agree with the verifier's: a row it
+commits is then the row the verifier recomputes the commitment of (`row_tie`). -/
+def PartChecksBV (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
+    (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg)
+    (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (s : ℕ) : Prop :=
+  ∀ (x : Msg) (st : Stmt), D.parse x = some st → shape st.form → ∀ (xO : Msg) (w : Flock.Wit),
+    Flock.check DO.parse xO w = true → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
+    (∀ (c : ℕ → Coin), shows s x xO c → ∀ ms : List Msg,
+      (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) →
+      (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) →
+      L.CmtAgrees cmt x xO ms → L.RowsRead x s w ms →
+      chk s x c ms) ∨
+      (findColl (L.calls x s w ++ vcallsAt H D xO)).isSome
+
+omit [Nonempty Coin] [Inhabited Coin] [Fintype Coin] in
+theorem partChecksB_toV {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} {s : ℕ} (h : PartChecksB H D DO L shape shows cmt chk s) :
+    PartChecksBV H D DO L shape shows cmt chk s := by
+  intro x st hx hf xO w hck hT
+  rcases h x st hx hf xO w hck hT with h | h
+  · exact Or.inl h
+  · exact Or.inr (findColl_isSome_of_sub H (vcallsAt_append_true hT) (fun _ he => List.mem_append_left _ he) h)
 
 /-- **V\* part `s` holds the commit strings its statement shows** (restating `PartOpens` for option (d)). A part holds a
 round before the last whole only as the commit string `b ‖ c` its gadgets compute from a row and a salt it holds, so

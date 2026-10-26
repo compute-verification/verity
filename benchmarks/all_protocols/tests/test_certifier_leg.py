@@ -22,7 +22,8 @@
   period's, and its free inputs are `interface.input_count`'s (slow);
 * ``CERTIFIER_PATH`` picks the path, the certifier-only one by default, and the warden path's stubbed lines are the
   other's less its records' gap; ``WARDEN_TAMPER`` names the stub's tampers;
-* of the windows the runner audits at once, one makes the run's session and the others read it (`once`);
+* of the windows the runner audits at once, one makes the run's session and the others read it (`once`), and the
+  session proves N2's members one firewalled session at a time (``n2_zk.py prove --jobs 1``);
 * the warden session's run parses as the gate's scan rehearsal at the scan's own schedule, a period's link-windows are
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
@@ -428,6 +429,38 @@ def test_windows_audited_at_once_make_the_runs_one_session_once(tmp_path):
     assert made == ["first"] and got == {"a": {"by": "first"}, "b": {"by": "first"}}
 
 
+def test_the_session_proves_n2s_members_one_firewalled_session_at_a_time(tmp_path, monkeypatch):
+    period, s, calls = tmp_path / "period", tmp_path / L.SESSION, []
+    period.mkdir()
+    s.mkdir()
+    (period / "period.json").write_text(json.dumps({"periods": 2}))
+
+    class Stub:
+        def terminate(self) -> None:
+            pass
+
+        def wait(self) -> None:
+            pass
+
+    def run(argv, log, env=None) -> int:
+        calls.append(list(argv))
+        out = Path(argv[argv.index("--out") + 1])
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "summary.json").write_text("{}")
+        return 0
+
+    monkeypatch.setattr(L, "_tools", lambda d: {"flock-circuit": "fc", "flock-verify": "fv", "flock-firewall": "ff",
+                                                 "m0-pythonpath": ""})
+    monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
+    monkeypatch.setattr(L, "requests_of", lambda d: ([1, 2], 3, 4))
+    monkeypatch.setattr(L, "_stub", lambda *a: (Stub(), "http://stub"))
+    monkeypatch.setattr(L, "_run", run)
+    monkeypatch.setenv("CERTIFIER_TAMPER", "extra")
+    L._session(period, s)
+    n2 = next(c for c in calls if Path(c[1]).name == "n2_zk.py")
+    assert n2[n2.index("--rounds") + 1] == "honest,extra" and n2[n2.index("--jobs") + 1] == "1"
+
+
 def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
     monkeypatch.delenv("WARDEN_TAMPER", raising=False)
     assert L.warden_tampers() == list(L.WARDEN_TAMPERS) and set(L.WARDEN_TAMPERS) <= set(S.TAMPERS)
@@ -752,3 +785,18 @@ def test_a_registered_weights_window_reads_unit_for_unit_as_the_plain_one(tmp_pa
     circuit = json.loads((d / "circuit.json").read_text())
     assert L.free_inputs(circuit)["bits"] == IF.input_count(circuit, pins={"w", "sw"})["free"] == 1024 * (1024 + 32)
     assert L.free_inputs(json.loads((plain / "circuit.json").read_text()))["bits"] == FREE
+
+
+def test_a_wired_windows_requests_and_registered_outputs_are_the_per_coordinate_windows(tmp_path):
+    """The wired circuit records each linear once for all requests (a record's ``requests``, one a unit) and its quantize
+    units carry no layer: the leg reads the same prompts, steps and outputs off it as off the per-coordinate circuit."""
+    from verity_torch_loop import serve
+
+    shape = ["--requests", "3,7", "--steps", "2", "--law", "stratified:3", "--run-id", "allp-cert-wired"]
+    assert serve.main([*shape, "--out", str(tmp_path / "coord")]) == 0
+    assert serve.main([*shape, "--out", str(tmp_path / "wired"), "--cap", "2", "--wired"]) == 0
+    coord, wired = (L.loop_units(tmp_path / d) for d in ("coord", "wired"))
+    assert L.requests_of(tmp_path / "wired", wired) == L.requests_of(tmp_path / "coord", coord) == ([3, 7], 2, 128)
+    outputs = L.registered_outputs(wired)
+    assert outputs == L.registered_outputs(coord) and sorted(outputs) == [(r, s) for r in ("r0", "r1") for s in (0, 1)]
+    assert all(len(v) == 2 * 128 for v in outputs.values())

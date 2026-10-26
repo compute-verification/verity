@@ -249,6 +249,7 @@
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "integrations/torch_loop/",
         "fixtures/bench-instances/",
         "fixtures/redteam/",
         "fixtures/redteam-3/",
@@ -561,6 +562,7 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
+        "examples/README.md",
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
@@ -574,7 +576,8 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "integrations/vllm/"
+        "integrations/vllm/",
+        "examples/vllm/"
       ],
       "linear": "VLLM",
       "branch_suffixes": [
@@ -645,7 +648,8 @@
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
       "owns": [
-        "benchmarks/rho/"
+        "benchmarks/rho/",
+        "benchmarks/circuit_properties/"
       ],
       "branch_suffixes": [
         "4207"
@@ -659,22 +663,25 @@
       ]
     },
     {
-      "handle": "counters",
-      "holder": "the counters coordinator (bc-163d178a-a74a-59de-8ea7-6e320c7891ef), a new slice launched from top's charter",
-      "remit": "Trusted event counters: which few counted event streams (bits moved, core steps) make each security goal provable.",
-      "charter": "Daniel, 2026-10-25 8:14 PM PDT (a new slice, via top)",
-      "usergroup": "S0CCWGJBEJU",
-      "owns": [],
+      "handle": "soundness",
+      "holder": "the soundness coordinator (bc-d2745108-9b89-5c53-8137-de8e75809c4d), a new slice launched from top's charter, split from proofs to own the Full proofs project",
+      "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
+      "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
+      "owns": [
+        "verity/core/protocols/onsite/",
+        "verity/core/protocols/remote/"
+      ],
       "branch_suffixes": [
-        "91ef"
+        "9c4d"
       ],
       "examples": [
-        "If we could trust one hardware counter in a datacenter, which should it be, and what would it settle?",
-        "Does counting the bits a GPU sends to its host make the memory or network guarantee provable?",
-        "Which security goals would trusted tensor-core step counts settle, and which would still need proofs?",
-        "How do our guarantees change as a physical rate bound, such as CUDA-core to tensor-core bandwidth, gets looser?",
-        "Could a retrofit to today's GPUs give us any of these counters, or does it take new silicon?"
-      ]
+        "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
+        "Which subprotocols of the soundness theorem are proved, and which are still premises?",
+        "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
+        "When will Verity.Soundness be on main with no subprotocol left as a hypothesis?",
+        "Does the theorem cover the code that actually runs, or a model of it?"
+      ],
+      "usergroup": "S0CBTDSL95M"
     }
   ]
 }

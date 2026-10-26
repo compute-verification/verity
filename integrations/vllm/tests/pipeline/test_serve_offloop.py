@@ -585,7 +585,9 @@ def test_a_draining_loop_refuses_new_requests_and_ends_once_idle():
 
 
 def test_the_disk_floor_refuses_to_start_below_one_window_beyond_it(tmp_path):
-    base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300"]
+    (man := tmp_path / "manifest.json").write_text("{}")
+    base = ["--model", "m", "--revision", "r", "--out", str(tmp_path / "new" / "dir"), "--seal", "--window-gb", "10", "--disk-floor-gb", "300",
+            "--required-manifest", str(man)]
     opts = cli.parse("serve-openai", base, environ={})
     with pytest.raises(UsageError, match="disk floor .*--disk-floor-gb"):
         so.preflight(opts, which=lambda _: "/v/bin/ninja", usage=lambda _p: SimpleNamespace(free=309 * ss.GB))

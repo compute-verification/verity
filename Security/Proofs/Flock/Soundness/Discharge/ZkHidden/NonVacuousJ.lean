@@ -67,7 +67,8 @@ set_option linter.unusedVariables false in
 theorem setupZHJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t)
-    (hd : recordDraw t.record = some (dj S)) (hok : DrawOkZKHJ I dj mPts S) (j : Fin (nTab I)) :
+    (hd : recordDraw t.record = some (dj S)) (hok : Assumptions.Zk.DrawAtZKHJ I dj mPts S)
+    (j : Fin (nTab I)) :
     Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :=
   setupZHJ_of_acceptsZKI I hh ht hc dj h hd hok j
 

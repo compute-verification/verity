@@ -154,6 +154,12 @@ WHY = {name: "does not open" for name in REFUSED_AT}
 CHANGED = {"request": "x", "weight": "wrow"}
 
 
+def head(heads: dict, block: Block, p: str) -> TR.TransferHead:
+    """Port ``p``'s value's head among `blocks.certified`'s, which are by value and direction."""
+    value, kind, _window = block.values[p]
+    return heads[value, TR.KINDS[kind][0]]
+
+
 def log(msg: str) -> None:
     print(f"TZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
@@ -282,7 +288,7 @@ def verifier(at: SimpleNamespace, regs: list[dict]) -> SimpleNamespace:
     certifiers = {UPLINK: (at.cert.key, at.cert.session)}
     heads = BK.certified(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
     pins = BK.pins(at.doc, at.blocks, layouts(at.doc), regs, certifiers)
-    ports = {p: TR.port(heads[at.block.values[p][0]], at.reads[p]) for p in PORTS}
+    ports = {p: TR.port(head(heads, at.block, p), at.reads[p]) for p in PORTS}
     return SimpleNamespace(heads=heads, pins=pins, ports=ports, free=IF.input_count(at.doc, pins=pins)["free"],
                            free_unpinned=IF.input_count(at.doc)["free"])
 
@@ -337,7 +343,7 @@ def refused(at: SimpleNamespace, v: SimpleNamespace, mp: dict, base: int, name: 
     reads make it (`warden_rows.refusal`): the ports it refuses, with why."""
     out, rows = {}, member_rows(name, at)
     for p in PORTS:
-        h = v.heads[at.block.values[p][0]]
+        h = head(v.heads, at.block, p)
         salts, entry = mp[p]
         why = WR.refusal(TR.port(h, at.reads[p], base), TR.domain(at.doc["program"], h.value, h.words, h.rows),
                          entry, [TR.bc(list(map(int, r)), s) for r, s in zip(rows[p], salts)])
@@ -405,7 +411,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    reads = WR.reads_file({p: TR.port(v.heads[at.block.values[p][0]], at.reads[p], sg.base) for p in PORTS})
+    reads = WR.reads_file({p: TR.port(head(v.heads, at.block, p), at.reads[p], sg.base) for p in PORTS})
     (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
     (out / "transfer-registrations.json").write_text(json.dumps(presented(name, at), indent=1, sort_keys=True))
     m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
