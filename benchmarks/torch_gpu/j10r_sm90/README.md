@@ -66,10 +66,12 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
   The column blocks are hashed and W' = B + c + U is built once a call (`h1jr_wcols`, `h1jr_w`), into a larger
   workspace (`kh_j10r_jw_bytes`), so a unit loads W' as its B operand. The units go `H1U_JWSWZ` row blocks at a time,
   column block by column block. `H1U_JWS` stores W' in B-fragment order, as `H1U_JXS` stores X in A's, so a unit
-  loads two column tiles' fragments in one 16-byte load.
+  loads two column tiles' fragments in one 16-byte load. `H1U_JPC` has `h1jr_x` (with `H1U_JXS`) and `h1jr_w` (with
+  `H1U_JWS`) go over their output in fragment order, a thread a lane's 16 bytes, so their stores are contiguous.
 - `job.sh`: `gpu` runs on vy-dc-h200-3. Before the lease it computes the fixtures and builds the fallback where they
-  weren't sent, builds the h1u arms (`H1U_ARMS`; by default HASH-21's kr, kra and kraq: the defines and flags of
-  KCOMMIT-FB's j10r90.sh) from this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where
+  weren't sent, builds the h1u arms (`H1U_ARMS`; by default HASH-21's kr, kra and kraq, with the defines and flags of
+  KCOMMIT-FB's j10r90.sh, then kraq4 and kraqwxsc, HASH-22's fastest exact arms without and with `h1u_jw.patch`) from
+  this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where
   its files were sent, and generates the operands. Then, under one lease, it runs the check, the bench and the
   profile (`STEPS`). `build` and `cpu` do the fallback's build and the fixtures on a node with nvcc. The file's header
   gives the commands.
