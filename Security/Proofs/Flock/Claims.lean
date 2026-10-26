@@ -269,6 +269,7 @@ import Proofs.Flock.Claims.KS.ZkAcceptsRun
 import Proofs.Flock.Claims.CompleteFails
 import Proofs.Flock.Claims.Sampling
 import Proofs.Flock.Claims.Witnesses
+import Proofs.Flock.Claims.Recursion.OutTopRows
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.

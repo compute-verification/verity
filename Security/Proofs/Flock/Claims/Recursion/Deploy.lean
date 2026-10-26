@@ -144,10 +144,11 @@ structure XR where
   shape : RecVStar.Inner
   dims : RecVStar.Inner
 
-/-- The draw `FlockDeploy.drawOfJ` reads off a record whose `unit_draw` is `u`, or none where it is absent or `null`. -/
+/-- The draw `FlockDeploy.drawOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it
+is absent or `null`. -/
 def drawOfU : Option Json → Option Json
   | some .null => none
-  | some d => some d
+  | some d => some (Flock.norm d)
   | none => none
 
 /-- **The session's draw is the statement's at one table**: at one table the setup reads the session's `unitDraw` back

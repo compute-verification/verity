@@ -77,10 +77,13 @@ theorem drawTiedS (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) : DrawT
   intro x s spec sts hx hq hn
   obtain ⟨d, hdr⟩ := Option.isSome_iff_exists.1 hn
   obtain ⟨hU, hnull⟩ := FlockComplete.ZkTables.unitDraw_of_setup S hx hq hdr
-  rw [hU, hdr]
-  cases d with
-  | null => exact absurd rfl hnull
-  | _ => exact FlockDeploy.drawEq_refl _
+  have hnn := (FlockDeploy.insOf_draw_norm (FlockDeploy.setupOf_some hx).1 hdr).1
+  have e : drawOfU (some d) = some d := by
+    cases d with
+    | null => exact absurd rfl hnull
+    | _ => exact congrArg some hnn
+  rw [hU, hdr, e]
+  exact FlockDeploy.drawEq_refl _
 
 /-- **`.after` holds at every decision at SHA-512** on as many coins as messages, of a statement whose scope check
 passes and which carries a draw, where the session's draw is the statement's there and custody passes at the reader's
