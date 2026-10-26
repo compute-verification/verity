@@ -1,8 +1,8 @@
 """`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
 of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.Session` as
 `ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
-answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session drawn more than
-one window an openings coin or paced at one window in flight, which no property of the Lean covers.
+answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
+window in flight, which no property of the Lean covers.
 
 The cases are a small period on one node (`period.run` on a clock the test sets): honest, its prover reading a store
 that dropped every other block, and stopped before its last window is verified; every recorded scenario
@@ -157,10 +157,10 @@ def test_a_small_periods_answers_agree(server) -> None:
 
 
 def _covered(kw: dict) -> bool:
-    """A scenario's session is one the check replays (`RemoteAudit.Protocol.sessionOf`): one window an openings coin,
-    and not paced at one window in flight."""
+    """A scenario's session is one the check replays (`RemoteAudit.Protocol.sessionOf`): not paced at one window in
+    flight."""
     pace = kw.get("pace")
-    return kw.get("groups_per_coin", 1) == 1 and (pace is None or pace.in_flight == 2)
+    return pace is None or pace.in_flight == 2
 
 
 @pytest.mark.parametrize("name", list(M.SCENARIOS))

@@ -1,11 +1,12 @@
 import Properties.RemoteAudit.Component
 
 /-!
-# The bandwidth component accepts only what `Session.run` accepts, proved (`Properties.RemoteAudit.Component`)
+# The bandwidth component accepts only what `Shared.run g` accepts, proved (`Properties.RemoteAudit.Component`)
 
-`check` matches on `replay`, which binds `sessionOf` and then `Session.run` (`replay_ok`), and accepts only at a state
-that ended accepted with a record, publishing `certify` of it (`acceptIsVerified`). `plays_verified` reads `Plays` as
-`Verified`: the session `sessionOf` decodes is the one it decodes, so it is the record's at the node.
+`check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
+that ended accepted with a record, publishing `certify` of it at g (`acceptIsVerified`). `plays_verified` reads `Plays`
+as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the record's at the node, at the node's
+windows a draw.
 -/
 
 namespace Properties.RemoteAudit.Component
@@ -13,26 +14,26 @@ namespace Properties.RemoteAudit.Component
 open Properties.RemoteAudit.Line
 
 theorem replay_ok {p : RemoteAudit.Protocol.Params} {reg : RemoteAudit.Registration}
-    {e : RemoteAudit.Protocol.Evidence} {s : RemoteAudit.Session.State}
-    (h : RemoteAudit.Protocol.replay p reg e = .ok s) :
+    {e : RemoteAudit.Protocol.Evidence} {s : RemoteAudit.Session.State} {g : ℕ}
+    (h : RemoteAudit.Protocol.replay p reg e = .ok (s, g)) :
     ∃ (params : RemoteAudit.Session.Params) (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ)
       (events : Array RemoteAudit.Session.Event) (rs : Array RemoteAudit.Session.Result),
-      RemoteAudit.Protocol.sessionOf p e = .ok (params, coins, appendCoins, notBeforeNs, events) ∧
-      RemoteAudit.Session.run (RemoteAudit.Session.State.init params reg coins appendCoins notBeforeNs) events =
+      RemoteAudit.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
+      RemoteAudit.Shared.run g (RemoteAudit.Session.State.init params reg coins appendCoins notBeforeNs) events =
         .ok (rs, s) := by
   unfold RemoteAudit.Protocol.replay at h
   cases hs : RemoteAudit.Protocol.sessionOf p e with
   | error why => simp [hs, bind, Except.bind] at h
   | ok x =>
-    obtain ⟨params, coins, appendCoins, notBeforeNs, events⟩ := x
+    obtain ⟨params, g', coins, appendCoins, notBeforeNs, events⟩ := x
     simp only [hs, bind, Except.bind] at h
-    cases hr : RemoteAudit.Session.run
+    cases hr : RemoteAudit.Shared.run g'
         (RemoteAudit.Session.State.init params reg coins appendCoins notBeforeNs) events with
     | error why => simp [hr] at h
     | ok y =>
       obtain ⟨rs, s'⟩ := y
-      simp only [hr, pure, Except.pure, Except.ok.injEq] at h
-      subst h
+      simp only [hr, pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
+      obtain ⟨rfl, rfl⟩ := h
       exact ⟨params, coins, appendCoins, notBeforeNs, events, rs, rfl, hr⟩
 
 theorem acceptIsVerified : AcceptIsVerified := by
@@ -40,15 +41,15 @@ theorem acceptIsVerified : AcceptIsVerified := by
   unfold RemoteAudit.Protocol.check at h
   split at h
   · cases h
-  · rename_i s hr
+  · rename_i s g hr
     split at h
     · rename_i sm hout hsum
       obtain ⟨params, coins, appendCoins, notBeforeNs, events, rs, hs, hrun⟩ := replay_ok hr
-      rcases hc : RemoteAudit.Protocol.certify sm 1 with ⟨pub', prof'⟩
+      rcases hc : RemoteAudit.Protocol.certify sm g with ⟨pub', prof'⟩
       rw [hc] at h
       simp only [Core.Outcome.accept.injEq] at h
       obtain ⟨rfl, -⟩ := h
-      exact ⟨params, coins, appendCoins, notBeforeNs, events, rs, s, sm, hs, hrun, hout, hsum, by rw [hc]⟩
+      exact ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, sm, hs, hrun, hout, hsum, by rw [hc]⟩
     · cases h
     · cases h
 
@@ -56,11 +57,11 @@ theorem acceptIsVerified : AcceptIsVerified := by
 theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Plays node rec a b e) :
     Verified node rec := by
   obtain ⟨p, ev, -, -, -, hs, pub, prof, hc⟩ := h
-  obtain ⟨params, coins, appendCoins, notBeforeNs, events, rs, s, _, hs', hrun, hout, -, -⟩ :=
+  obtain ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, _, hs', hrun, hout, -, -⟩ :=
     acceptIsVerified p node.reg ev pub prof hc
   rw [hs] at hs'
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
-  obtain ⟨rfl, rfl, rfl, rfl, rfl⟩ := hs'
+  obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hs'
   exact ⟨rs, s, hrun, hout⟩
 
 end Properties.RemoteAudit.Component
