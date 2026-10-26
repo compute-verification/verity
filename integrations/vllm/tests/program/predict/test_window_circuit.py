@@ -8,10 +8,14 @@ from __future__ import annotations
 
 import json
 from collections import Counter
+from pathlib import Path
 
 import numpy as np
 import pytest
+from tests.check.test_weights_of_record import _bf16, write_safetensors
 from tests.program.predict import test_steps as S
+from verity_vllm.check import weights_of_record as WR
+from verity_vllm.pipeline import advice as ADV
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, window_circuit
@@ -219,18 +223,76 @@ def test_inference_entries_are_the_slots_runs_side_by_side():
         WC._inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
 
 
-def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window):
+def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window, tmp_path):
     """`interface.input_count` over the circuit's description (JSON, no Program lowered) at the verifier's one pin, the
-    weights record's root, fixed before the run, finds no free input row, so a proof of the window's units leaves nothing
-    but the declared advice to the prover; the ingress is the two slots, 5 i32s each. Every registered read, table read and
-    opening is of the weights (the GEMM slices', norms' and RoPE tables' rows; the embedding table's root, domain and rows),
-    so with no pin all of them are free."""
+    weights record's root of record fixed before the run (`weights_record`), and a window whose registration records that
+    root for ``weights`` (`verity-vllm advice --weights-of-record`), finds no free input row, so a proof of the window's
+    units leaves nothing but the declared advice to the prover; the ingress is the two slots, 5 i32s each. Every registered
+    read, table read and opening is of the weights (the GEMM slices', norms' and RoPE tables' rows; the embedding table's
+    root, domain and rows), so with no pin, or a window whose ``weights`` root is another's or none, all of them are free."""
     circuit, _ = window
     doc, reg = json.loads(json.dumps(circuit.description())), circuit.registered
     assert {r.param for r in reg.reads} | {t.param for t in reg.tables} == set(reg.params) == {WC.WEIGHTS}
     count = {"units": 2442, "inputs": 17372576, "wired": 2785376, "registered": 14586880, "ingress": 2 * 5 * 32, "free": 0}
-    assert IF.input_count(doc, pins={WC.WEIGHTS}) == count
-    assert IF.input_count(doc) == {**count, "registered": 0, "free": 14586880}
+    pin = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path)))
+    assert IF.input_count(doc, pins=pin, roots=pin) == count
+    free = {**count, "registered": 0, "free": 14586880}
+    assert IF.input_count(doc) == IF.input_count(doc, pins=pin) == free
+    other = ADV.registered_weights(WC.weights_record(S._registered(), *_checkpoint(tmp_path / "other", seed=4)))
+    assert other != pin and IF.input_count(doc, pins=pin, roots=other) == free
+
+
+def _checkpoint(tmp_path, seed: int = 3) -> tuple[str, str]:
+    """TINY's checkpoint as safetensors shards of its HF names (random bf16 weights from ``seed``) and a manifest pinning it
+    at `test_steps._registered`'s model and revision: the checkpoint directory and the manifest."""
+    T, rng = S.TINY, np.random.default_rng(seed)
+    H, I, NH, KVH, V = T["hidden_size"], T["intermediate_size"], T["num_attention_heads"], T["num_key_value_heads"], T["vocab_size"]
+    D = H // NH
+    t = {"model.embed_tokens.weight": _bf16(rng, V, H), "model.norm.weight": _bf16(rng, H)}
+    for i in range(T["num_hidden_layers"]):
+        p = f"model.layers.{i}."
+        t |= {p + "self_attn.q_proj.weight": _bf16(rng, NH * D, H), p + "self_attn.k_proj.weight": _bf16(rng, KVH * D, H),
+              p + "self_attn.v_proj.weight": _bf16(rng, KVH * D, H), p + "self_attn.o_proj.weight": _bf16(rng, H, NH * D),
+              p + "mlp.gate_proj.weight": _bf16(rng, I, H), p + "mlp.up_proj.weight": _bf16(rng, I, H),
+              p + "mlp.down_proj.weight": _bf16(rng, H, I), p + "input_layernorm.weight": _bf16(rng, H),
+              p + "post_attention_layernorm.weight": _bf16(rng, H)}
+    d = tmp_path / "snap"
+    d.mkdir(parents=True, exist_ok=True)
+    write_safetensors(str(d / "model.safetensors"), {n: ("BF16", a) for n, a in t.items()})
+    (d / "config.json").write_text(json.dumps({**T, "rope_theta": 10000.0}))
+    man = tmp_path / "checkpoints.json"
+    model = S._registered().phi.model
+    man.write_text(json.dumps({"checkpoints": [{"repo": model["repo"], "revision": model["revision"], "local_path": str(d),
+                                                "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / "model.safetensors"))}}}]}))
+    return str(d), str(man)
+
+
+def test_the_weights_pin_is_the_class_programs_weights_record_of_the_pinned_checkpoint(tmp_path):
+    """`weights_record`: every field of the class Program's weights record (TINY's 23: each layer's fused qkv and gate-up,
+    o and down projections and norms, the embedding, the final norm, the rotary table and the attention scales), in the
+    Program's order, composed from the checkpoint's pinned shards, so it is of record; one element changed in a shard is
+    another root, and a shard the manifest doesn't pin leaves the record not of record, which no window registers
+    (`advice.registered_weights`), nor one of another model than the run served."""
+    reg = S._registered()
+    d, man = _checkpoint(tmp_path)
+    rec = WC.weights_record(reg, d, man)
+    assert (rec["of_record"], rec["complete"], rec["n_fields"], rec["unresolved"]) == (True, True, 23, [])
+    program = WC.class_program(reg, WindowClass(1, 2, 2)).program
+    assert [f["field"] for f in rec["fields"]] == [n for n, _ in dict(program.fn.signature()[0])[WC.WEIGHTS].fields]
+    assert ADV.registered_weights(rec) == ADV.registered_weights(rec, {"model": "org/m", "revision": "r"}) == {
+        WC.WEIGHTS: rec["root_of_record"]}
+    assert WC.weights_record(reg, *_checkpoint(tmp_path / "again"))["root_of_record"] == rec["root_of_record"]
+    shard = Path(d) / "model.safetensors"
+    body = bytearray(shard.read_bytes())
+    body[-1] ^= 1
+    shard.write_bytes(bytes(body))
+    unpinned = WC.weights_record(reg, d, man)
+    assert unpinned["of_record"] is False and unpinned["root_of_record"] != rec["root_of_record"]
+    for bad, serve, why in [(unpinned, None, "of record False"), ({**rec, "schema": "verity/commit/weights-of-record/v1"}, None, "v1"),
+                            (rec, {"model": "org/other", "revision": "r"}, "the run served org/other@r")]:
+        with pytest.raises(ValueError, match=why):
+            ADV.registered_weights(bad, serve)
+    assert WR.SCHEMA == rec["schema"]
 
 
 def test_what_the_class_doesnt_take_is_refused_by_name(monkeypatch):
@@ -297,4 +359,5 @@ def test_a_token_select_is_its_function_at_the_grains_chunk():
     assert (n["TokenSelectChunk_v2{C=128}"], n["TokenSelectCombine_v2{V=256,C=128}"]) == (20, 10)
     assert not [t for t in n if t.startswith(("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}"))]
     assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(20)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
-    assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
+    pin = {WC.WEIGHTS: "ab" * 32}
+    assert IF.input_count(circuit.description(), pins=pin, roots=pin)["free"] == 0

@@ -48,6 +48,11 @@ prefix-cache hit's prefix, a TP rank's peers), a request a Commit window carries
 lowering doesn't know, a weight whose leaves aren't whole u16 words, a row form the cut rule can't state and a unit of more
 than ``grain.rows`` rows. The circuit is completeness only: that it computes what serving ran is held by the units' proofs on
 their committed rows, never by this lowering.
+
+Its weight reads, the embedding's table reads and its openings count registered (`interface.input_count`) only where the
+window's registration records for ``weights`` the root the verifier pinned before the run: the root of record of the
+weights record (`weights_record`, from the checkpoint's pinned shards), which `verity-vllm advice --weights-of-record`
+records in each window's registration. Anywhere else they are free.
 """
 from __future__ import annotations
 
@@ -577,5 +582,27 @@ def window_circuit(registered: Any, compiled: Any, cls: WindowClass, grain: Grai
     return class_circuit(registered, cls, len(units), grain, name)
 
 
+def weights_record(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None = None,
+                   kv_cache_dtype: str = "auto") -> dict[str, Any]:
+    """The weights of record of the circuit's registered ``weights`` (`check.weights_of_record`): each field of the class
+    Program's weights record, in its order, composed from the checkpoint's pinned shards (``checkpoints_manifest``, default
+    the repository's ``manifests/checkpoints.json``) at ``registered``'s model and revision. Its root of record is the root
+    the verifier pins for ``weights`` before the run and a window's registration records (`verity-vllm advice
+    --weights-of-record`), and a weight read counts registered exactly when the two are one (`interface.input_count`). The
+    weights record is the model's, one at every class."""
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.config import CHECKPOINTS
+
+    from .common import _arr_shape
+
+    r = class_program(registered, WindowClass(1, 2, 2))
+    fields = [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
+    model = registered.phi.model
+    ck = WR.CheckpointIndex(checkpoint_dir, checkpoints_manifest=str(checkpoints_manifest or CHECKPOINTS), model=model["repo"],
+                            revision=model["revision"])
+    return WR.weights_of_record({"instances": {}, "result": {"program_digest": r.digest}, "dir": None}, ck, prefix="",
+                                kv_cache_dtype=kv_cache_dtype, fields=fields)
+
+
 __all__ = ["CLASS_OF_RECORD", "FAMILIES", "Grain", "NAME", "Row", "WindowClass", "class_circuit", "class_program",
-           "window_circuit"]
+           "weights_record", "window_circuit"]

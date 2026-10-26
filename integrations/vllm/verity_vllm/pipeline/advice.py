@@ -29,8 +29,9 @@ the advice's length go public, as the binding a window's registration carries (`
 
     registration.json     public: the binding (the compiler's name and digest, the advice's root and ``total_bits``), the
                           registered compiler, `advice_windows.Capped` with ℓ (the cap on the advice's length its digest covers)
-                          and the compiler it wraps (``compiler``), and the bits
-                          I1 charges each egress window of `--T` buckets (``bits_by_window``)
+                          and the compiler it wraps (``compiler``), the bits
+                          I1 charges each egress window of `--T` buckets (``bits_by_window``), and with `--weights-of-record`
+                          the root of each parameter the window circuit registers (``registered``: `registered_weights`)
     private/advice.bin    the prover's: the advice, I1's canonical encoding
     private/advice.json   the same advice, I1's `to_json`
     private/opening.json  the advice's opening (`advice_windows.opening`: its encoding and every row's salt)
@@ -52,6 +53,7 @@ row continues, its kept outputs and the KV it computed), so a request that runs 
 position it reached, and its record (lengths and finish) is the Commit record's.
 
     verity-vllm advice RUN [--trace FILE] [--io FILE] [--out DIR] [--window K] [--T 600] [--tau 0.1] [--compiler-name N --compiler-digest D] [--cap BITS]
+        [--weights-of-record FILE]
 """
 from __future__ import annotations
 
@@ -386,15 +388,38 @@ def _sha(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
 
 
-def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int) -> dict[str, Any]:
+def registered_weights(record: dict[str, Any], serve: dict[str, Any] | None = None) -> dict[str, str]:
+    """What a window's registration records of the weights it served (``registered``): the window circuit's registered
+    parameter (`window_circuit.WEIGHTS`) and ``record``'s root of record (`check.weights_of_record`), the root the verifier
+    pins before the run from the checkpoint's pinned shards, so the circuit's weight reads count registered exactly when the
+    two are one (`interface.input_count`).  Refused unless the record is of record under the current schema (every field
+    composed from the pinned shards) and, given the run's ``serve.json``, of its model at its revision."""
+    from verity_vllm.check import weights_of_record as WR
+    from verity_vllm.program.predict.window_circuit import WEIGHTS
+
+    root = record.get("root_of_record")
+    if record.get("schema") != WR.SCHEMA or record.get("of_record") is not True or not isinstance(root, str):
+        raise ValueError(f"the weights record is {record.get('schema')!r}, of record {record.get('of_record')!r}: a window "
+                         f"registers the root of a record of record under {WR.SCHEMA}")
+    entry = (record.get("checkpoint") or {}).get("entry") or {}
+    if serve is not None and (entry.get("repo"), entry.get("revision")) != (serve.get("model"), serve.get("revision")):
+        raise ValueError(f"the weights record is {entry.get('repo')}@{entry.get('revision')}, and the run served "
+                         f"{serve.get('model')}@{serve.get('revision')}")
+    return {WEIGHTS: root}
+
+
+def registration(compiler: Any, a: I1.Advice, root: bytes, rows: int, T: int,
+                 registered: dict[str, str] | None = None) -> dict[str, Any]:
     """What goes public of the advice: the binding (the compiler, the root of the advice's hiding commitment and its length in
-    bits) and the bits I1 charges each egress window of ``T`` buckets.  Nothing of the advice itself."""
+    bits), the bits I1 charges each egress window of ``T`` buckets and, given, the root of each registered parameter
+    (``registered``, `registered_weights`).  Nothing of the advice itself."""
     c = codec(a)
     return {"schema": REGISTRATION, "scheme": AW.SCHEME, "binding": AW.binding(compiler, root.hex(), int(c.total_bits(a))),
             "compiler": {"name": str(compiler.name), "digest": compiler.digest, "cap_bits": int(compiler.cap_bits),
                          "inner": {"name": str(compiler.inner.name), "digest": compiler.inner.digest}},
             "rows": rows, "row_bits": AW.ROW_BITS, "T": int(T),
-            "bits_by_window": {str(w): int(n) for w, n in sorted(c.bits_by_window(a, int(T)).items())}}
+            "bits_by_window": {str(w): int(n) for w, n in sorted(c.bits_by_window(a, int(T)).items())},
+            **({"registered": dict(registered)} if registered else {})}
 
 
 def codec(a: Any) -> Any:
@@ -402,16 +427,17 @@ def codec(a: Any) -> Any:
     return WA if isinstance(a, WA.Advice) else I1
 
 
-def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
-    """The advice (I1's, or a Commit window's) committed: its public registration (`registration`) and its private opening
-    (`advice_windows.opening`).  Advice over the compiler's ℓ (``compiler``: an `advice_windows.Capped`) is refused: the
-    compiler is total only up to it."""
+def commit(compiler: Any, a: Any, T: int = 600, salts: list[bytes] | None = None,
+           registered: dict[str, str] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The advice (I1's, or a Commit window's) committed: its public registration (`registration`, with ``registered``) and
+    its private opening (`advice_windows.opening`).  Advice over the compiler's ℓ (``compiler``: an `advice_windows.Capped`)
+    is refused: the compiler is total only up to it."""
     data = codec(a).encode(a)
     cap = int(compiler.cap_bits)
     if 8 * len(data) > cap:
         raise ValueError(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {cap} bits")
     reg = AW.commit_advice(compiler, data, salts)
-    return registration(compiler, a, reg.root, len(reg.rows), T), AW.opening(data, reg)
+    return registration(compiler, a, reg.root, len(reg.rows), T, registered), AW.opening(data, reg)
 
 
 def windows_of(recs: list[dict[str, Any]]) -> tuple[dict[int, list[dict[str, Any]]], list[int]]:
@@ -443,9 +469,10 @@ def served(recs: list[dict[str, Any]]) -> bool:
 
 
 def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path | None = None, io: str | Path | None = None,
-          T: int = 600, tau: float = 0.1, compiler: Any = None, window: int | None = None) -> dict[str, Any]:
+          T: int = 600, tau: float = 0.1, compiler: Any = None, window: int | None = None,
+          registered: dict[str, str] | None = None) -> dict[str, Any]:
     """The run's advice, committed (`write_one`); a `verity-vllm serve-openai` run's, one advice a closed Commit window
-    (`write_served`)."""
+    (`write_served`); each registration with ``registered``, the root of each parameter its window circuit registers."""
     run = Path(run)
     if trace is None:
         trace = next((p for p in (run / ST.SERVED, run / "step_trace.jsonl") if p.exists()), run / "step_trace.jsonl")
@@ -456,12 +483,13 @@ def write(run: str | Path, out: str | Path | None = None, *, trace: str | Path |
     compiler = compiler if compiler is not None else registered_compiler()
     out = Path(out) if out else run / "advice"
     if served(recs):
-        return write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window)
-    return write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler)
+        return write_served(run, out, recs, trace, io, T=T, tau=tau, compiler=compiler, window=window, registered=registered)
+    return write_one(run, out, recs, trace, io, io_record(io) if io else None, T=T, tau=tau, compiler=compiler,
+                     registered=registered)
 
 
 def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, tau: float,
-                 compiler: Any, window: int | None = None) -> dict[str, Any]:
+                 compiler: Any, window: int | None = None, registered: dict[str, str] | None = None) -> dict[str, Any]:
     """A server's advice, one a closed Commit window (`windows_of`; only ``window`` when given): each under ``out/w<k>/`` as
     `write_one` writes it, its registration naming the window's Commit (its run id and run root, from windows.jsonl).  The
     windows are read in order, each opening with what the last one left (`from_trace`'s ``carry``), so ``window`` reads the
@@ -503,7 +531,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
         carry, gone = b.left, None
         if window is None or w == window:
             reports[str(w)] = _written(run, out / f"w{w}", b, sub, trace, io, T=T, compiler=compiler,
-                                       extra={"window": w, "commit": commits.get(w)})
+                                       extra={"window": w, "commit": commits.get(w)}, registered=registered)
     index = {"schema": SERVED, "run": str(run), "trace": str(trace), "T": int(T),
              "windows": {w: {"registration": f"w{w}/registration.json", "root": r["registration"]["binding"]["advice"]["root"],
                              "bits": r["registration"]["binding"]["advice"]["bits"], "commit": r["registration"]["commit"]}
@@ -525,18 +553,20 @@ def stopped(run: Path) -> bool:
 
 
 def write_one(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, io_map: dict[str, Any] | None, *,
-              T: int, tau: float, compiler: Any, extra: dict[str, Any] | None = None) -> dict[str, Any]:
+              T: int, tau: float, compiler: Any, extra: dict[str, Any] | None = None,
+              registered: dict[str, str] | None = None) -> dict[str, Any]:
     """One advice from ``recs`` and the Commit record's requests ``io_map``, committed: ``out/registration.json`` (public, with
-    ``extra``) and ``out/private/``."""
-    return _written(run, out, from_trace(recs, io_map, tau=tau), recs, trace, io, T=T, compiler=compiler, extra=extra)
+    ``extra`` and ``registered``) and ``out/private/``."""
+    return _written(run, out, from_trace(recs, io_map, tau=tau), recs, trace, io, T=T, compiler=compiler, extra=extra,
+                    registered=registered)
 
 
 def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: Path, io: str | Path | None, *, T: int, compiler: Any,
-             extra: dict[str, Any] | None = None) -> dict[str, Any]:
+             extra: dict[str, Any] | None = None, registered: dict[str, str] | None = None) -> dict[str, Any]:
     a = b.advice
     data = WA.encode(a)
     back = WA.decode(data)
-    public, opened = commit(compiler, a, T)
+    public, opened = commit(compiler, a, T, registered=registered)
     public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
@@ -591,6 +621,10 @@ class Options:
                            "advice_windows.Capped over the one named, whose digest covers ℓ (default 2^23, 1 MiB)")
     T: int = option("--T", type=int, default=600, help="egress buckets per window, for the bits I1 charges each window")
     tau: float = option("--tau", type=float, default=0.1, help="the egress bucket's width in seconds, for each output's release bucket")
+    weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON",
+                                           help="the served weights' record (check.weights_of_record), whose root of record each "
+                                                "window's registration records for the circuit's weights (default: none recorded, "
+                                                "and every weight read counts free)")
 
 
 def _say(rep: dict[str, Any], where: str = "") -> bool:
@@ -605,8 +639,13 @@ def _say(rep: dict[str, Any], where: str = "") -> bool:
 
 def main(a: Options) -> int:
     try:
+        registered = None
+        if a.weights_of_record:
+            serve = Path(a.run) / "serve.json"
+            registered = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
+                                            json.loads(serve.read_text()) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
-                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap))
+                    compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered=registered)
     except ValueError as e:
         raise UsageError(f"{a.run}: {e}") from e
     if rep.get("schema") != SERVED:

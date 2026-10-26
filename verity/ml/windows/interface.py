@@ -41,8 +41,9 @@ The circuit also declares what fills its other inputs (`Registered`, `Ingress`):
 public positions (`Read`), a registered table's root or domain id (`TableRead`), a table's row opened at a hidden key
 (`Opening`), and the system's ingress at its step (`Ingress`). Every input row is wired, one of these, or free, and no row
 is two of them (`check_inputs`); `input_count` counts the free rows' bits from the record alone, at the size of its
-description, a registered row free unless the verifier pinned its parameter's root before the run. The window commits
-the first kind (`Window`'s ``registered``): a member whose units read a registered parameter is a shared-row member, each
+description, a registered row free unless the window's root for its parameter is the one the verifier pinned before the
+run. The window's registration records each registered parameter's root (`Window.write`), and commits the first kind
+(`Window`'s ``registered``): a member whose units read a registered parameter is a shared-row member, each
 read port a table of the registered rows its units read (`member_reads`), committed under the registered value's salts
 (core's ``one_stage.registered``), so each row's public string is the registered one, and its header names each row's
 position and path to the value's root; the verifier's ``--registered`` file of the member comes from the record and the
@@ -73,7 +74,7 @@ import math
 import pkgutil
 import re
 import subprocess
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
@@ -455,7 +456,8 @@ class Table:
 @dataclass(frozen=True)
 class TableRead:
     """Template ``reader``'s units ``[at, at + units)`` read their ``port`` whole as table ``table``'s root or its domain
-    id (``of``): a supplied value (`one_stage.registered`), free where its parameter's root isn't pinned (`input_count`)."""
+    id (``of``): a supplied value (`one_stage.registered`), free unless the window's root for its parameter is the pinned
+    root (`input_count`)."""
     reader: str
     port: str
     table: str
@@ -472,8 +474,8 @@ class Opening:
     """Template ``reader``'s units ``[at, at + units)`` open table ``table``'s row at the hidden position their ``key`` port
     holds: ``ports`` are the opening (the row, its salt, its path), and ``verdict`` the output row whose bit is 1 exactly
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
-    and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the table's root is
-    pinned (`input_count`)."""
+    and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the window's root for
+    the table's parameter is the pinned root (`input_count`)."""
     reader: str
     table: str
     key: str
@@ -1179,17 +1181,45 @@ def declarations(doc: Mapping[str, Any]) -> tuple[tuple[Wire, ...], dict[str, di
     return wires, cuts, registered, ingress
 
 
-def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve, pins: Iterable[str] = ()) -> dict[str, int]:
+def held_params(pins: Mapping[str, str] | str | None, roots: Mapping[str, str] | None) -> frozenset[str]:
+    """The registered parameters whose window root is the verifier's pin: ``pins`` the roots the verifier fixed before the
+    run and ``roots`` the window's, as its registration records them (`Window.write`), each ``{param: root}`` with a root
+    hex digits, compared without case; a bare string ``pins`` is none. Refused (ValueError) in any other form, so a set
+    of names never passes for pins."""
+    if isinstance(pins, str):
+        return frozenset()
+    pins, roots = pins or {}, roots or {}
+    for what, m in (("pins", pins), ("roots", roots)):
+        if not isinstance(m, Mapping) or not all(isinstance(p, str) and isinstance(r, str) and re.fullmatch(r"[0-9a-fA-F]+", r)
+                                                 for p, r in m.items()):
+            raise ValueError(f"{what} are {{param: root}}, each root hex digits, not {m!r}: a registered read counts "
+                             "registered only where the window's root for its parameter is the pinned root")
+    return frozenset(p for p, r in pins.items() if r.lower() == str(roots.get(p, "")).lower())
+
+
+def registered_roots(window: Mapping[str, Any]) -> dict[str, str]:
+    """The roots a window's registration records for its registered parameters (its ``registered``, `Window.write`: core's
+    registration's window, or an integration's own window registration), by parameter; none where it records none.
+    Refused (ValueError) unless each is a root of hex digits."""
+    roots = window.get("registered") or {}
+    held_params({}, roots)
+    return dict(roots)
+
+
+def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve, pins: Mapping[str, str] | str | None = None,
+                roots: Mapping[str, str] | None = None) -> dict[str, int]:
     """A stated circuit record's inputs by what fills them, in bits, from its description alone (its templates, wires and
     declarations, `Circuit.description`; per template, wire and declaration, never per unit, and never its program): every
     unit's input rows (``inputs``), the rows its wires fill (``wired``, a wire's reader rows times its writer row's bits,
     `SampledProofs.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none, `Read`),
-    table reads and openings of a pinned parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
-    only the prover chose. ``pins`` are the verifier's own, never the record's: the registered parameters, by the names the
-    record gives them, whose roots it fixed before the run. A read of any other parameter, or a table read or opening of a
-    table over one, is free, since a root the prover commits after serving constrains nothing; with no pins (a bare string
-    is none) every registered read is free. Refused unless the declarations are well-formed for the record's templates (`check_wires`,
-    `check_inputs`), so no row counts twice."""
+    table reads and openings of a held parameter (``registered``) and its ingress (``ingress``); ``free`` the rest, which
+    only the prover chose. ``pins`` are the verifier's own, never the record's: the roots it fixed before the run, by the
+    names the record gives the registered parameters (``{param: root}``); ``roots`` the window's, as its registration
+    records them (`Window.write`). A parameter is held where the window's root for it is the pinned root (`held_params`).
+    A read of any other parameter, or a table read or opening of a table over one, is free, since a root the prover
+    commits after serving, or another root than the pinned one, constrains nothing; with no pins (a bare string is none)
+    every registered read is free. Refused unless the declarations are well-formed for the record's templates
+    (`check_wires`, `check_inputs`), so no row counts twice."""
     if "wires" not in doc:
         raise ValueError("a circuit record whose members are listed is counted from its members, not its description")
     defs = [(resolve(t), int(n)) for t, n in doc["templates"]]
@@ -1203,10 +1233,10 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
 
     inputs = sum(16 * sum(w for _, w in lay.rows) * n for lay, n in lays.values())
     wired = sum(w.units * row_bits(w.reader, w.port) for w in wires)
-    reg, pins = reg or Registered({}), frozenset(() if isinstance(pins, str) else pins)
-    pinned = {t.name for t in reg.tables if t.param in pins}
+    reg, held = reg or Registered({}), held_params(pins, roots)
+    pinned = {t.name for t in reg.tables if t.param in held}
     registered = (sum(r.units * row_bits(r.reader, r.port) for r in reg.reads
-                      if r.param in pins and r.port in dict(lays[r.reader][0].rows))
+                      if r.param in held and r.port in dict(lays[r.reader][0].rows))
                   + sum(r.units * 16 * dict(lays[r.reader][0].rows)[r.port] for r in reg.roots if r.table in pinned)
                   + sum(o.units * 16 * dict(lays[o.reader][0].rows)[p] for o in reg.openings if o.table in pinned
                         for p in o.ports))
@@ -1473,13 +1503,16 @@ class Window:
               kind: str = "served") -> dict[str, Any]:
         """The window's files (`rows.write`, its ``index.json`` the labels) and ``circuit.json``, the registration core's record
         made by ``registrar`` (core's ``one_stage.registration``), its window naming ``provenance``, the circuit record's
-        SHA-512 and the advice binding; each member reading a registered value, its header naming each table row's position
+        SHA-512, the advice binding and each registered value's root by parameter (``registered``, which `input_count`
+        holds to the verifier's pins); each member reading a registered value, its header naming each table row's position
         and path (`close`)."""
         d = Path(out_dir)
         d.mkdir(parents=True, exist_ok=True)
         body = circuit_bytes(self.circuit_record())
         (d / "circuit.json").write_bytes(body)
-        bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {})}
+        roots = {p: v.root.hex() for p, v in sorted((self.registered or {}).items())}
+        bound = {**provenance, "circuit": hashlib.sha512(body).hexdigest(), **(self.advice or {}),
+                 **({"registered": roots} if roots else {})}
         return CS.write(c, d, bound, self.labels(), kind=kind, registered=self._entries, registrar=registrar)
 
 
