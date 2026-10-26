@@ -142,7 +142,7 @@ def test_a_rank_that_does_not_realise_the_declared_target_fails_closed_before_an
 
 
 @pytest.mark.parametrize("extra, extension", [(("--no-observer",), "verity_vllm.engine.int8_ranks.Int8Ranks"),
-                                              ((), "verity_vllm.engine.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
+                                              ((), "verity_vllm.pipeline.tp.rank_worker.TP2CaptureWorkerExtension")], ids=["control", "capture"])
 def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_path, stand_ins, monkeypatch, extra, extension):
     """The driver registers the int8 parts and exports them (``VERITY_INT8_PARTS``); every engine it builds names an extension whose
     import registers them in each rank, a Match control's included."""
@@ -244,7 +244,7 @@ class _Worker:
 
 
 def _extension(monkeypatch, model):
-    from verity_vllm.engine import rank_worker as RW
+    from verity_vllm.pipeline.tp import rank_worker as RW
     monkeypatch.setattr(RW, "_tp_facts", lambda worker: {"tp": {"rank": 1, "world_size": 2}})
     w = _Worker(model)
     w.__class__ = type("Worker", (_Worker, RW.TP2CaptureWorkerExtension), {})
@@ -281,14 +281,14 @@ def test_a_ranks_probe_reads_back_its_own_engines_execution(monkeypatch):
 @pytest.mark.parametrize("target", [H200, None], ids=["declared", "undeclared"])
 def test_a_ranks_header_is_made_over_an_engine_built_for_the_declared_target(monkeypatch, tmp_path, target):
     """`tp2_install`'s header is `make_header` over the rank's `Engine`, whose `target` is what `run_facts.profile_manifest` attests."""
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.observe import capture
     seen = []
 
     def make_header(engine, workload, **kw):
         seen.append(engine)
         raise RuntimeError("header made")
 
-    monkeypatch.setattr(va, "make_header", make_header)
+    monkeypatch.setattr(capture, "make_header", make_header)
     _, w = _extension(monkeypatch, object())
     with pytest.raises(RuntimeError, match="header made"):
         w.tp2_install(out_dir=str(tmp_path), workload=WORKLOAD, case="C", cp={"repo": "org/model"}, engine_kwargs={}, env_flags={},

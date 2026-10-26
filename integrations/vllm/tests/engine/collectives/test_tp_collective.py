@@ -1,5 +1,5 @@
 """Lane tp2 (window 2026-09-17): the quarantine `AllReduceSumBf16{N,R}` definition and the collective linkage tool
-(`tests.collectives.collective_link`) on the ov-tp2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
+(`tests.engine.collectives.collective_link`) on the ov-tp2 evidence shards (`tests/fixtures/tp2/`, see its README)."""
 
 from __future__ import annotations
 
@@ -12,17 +12,17 @@ import pytest
 
 from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StorageAlloc, StorageFree, TritonLaunch, ViewDesc
 from verity_vllm.properties.quarantine_lint import lint
-from tests.collectives import collective_link as CL
+from tests.engine.collectives import collective_link as CL
 from verity_vllm.engine.collectives.collective_record import COLLECTIVE_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
 from verity.ml.circuits.codec import decode_program, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.program import Program
-from verity_vllm.program.registry import b1_tp2
-from verity_vllm.program.registry import prims as P
-from verity_vllm.program.registry.quarantine import collective as QC
-from verity_vllm.program.registry.quarantine.collective import allreduce as A
+from verity.ml.definitions.registry import b1_tp2
+from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.quarantine import collective as QC
+from verity_vllm.program.quarantine.collective import allreduce as A
 
 REPO = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures" / "tp2"
@@ -183,7 +183,7 @@ def test_r3_per_hop_rounding_and_order_dependence_exist():
 def test_r2_equals_the_wave1_body_checker_formula():
     """The 116/116 `body_ok` evidence (`tp2_body.summary.json`) was produced by `tp.analyze`'s numpy body
     `f32_to_bf16_rne(f32(x_0) + f32(x_1))`; the Definition computes the same words, so that evidence is evidence FOR this definition."""
-    from tests.collectives import analyze as ta
+    from tests.engine.collectives import analyze as ta
     rng = np.random.default_rng(7)
     N = 2048
     a = ta.f32_to_bf16_rne((rng.standard_normal(N) * rng.choice([0.01, 1.0, 300.0], N)).astype(np.float32))
@@ -205,7 +205,7 @@ def test_descriptor_round_trip_and_registry():
 
 
 def test_quarantine_lint_passes_for_the_collective_package():
-    rep = lint(REPO / "verity_vllm" / "program" / "registry" / "quarantine")
+    rep = lint(Path(QC.__file__).parents[1])
     mine = [f for f in rep["files"] if "/collective/" in f["file"]]
     assert {Path(f["file"]).name for f in mine} >= {"allreduce.py", "allreduce_difftest.py", "__init__.py"}
     assert all(f["status"] == "pass" for f in mine), [(f["file"], f["problems"]) for f in mine]
@@ -215,7 +215,7 @@ def test_quarantine_lint_passes_for_the_collective_package():
 
 
 def test_difftest_adapter_cases_and_spec_are_torch_free():
-    from verity_vllm.program.registry.quarantine.collective import allreduce_difftest as D
+    from verity_vllm.program.quarantine.collective import allreduce_difftest as D
     import random
     kinds = set()
     for i in range(10):

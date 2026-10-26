@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads", "deployments", "adversary")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -22,6 +22,7 @@ PINNED = {
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12, "rtx-pro-6000-server/bf16": 500e12,
                  "rtx-pro-6000-server/e4m3": 1000e12, "rtx-pro-6000-server/e2m1": 2000e12, "l40s-48gb/bf16": 362.05e12,
                  "l40s-48gb/e4m3": 733e12},
+    "deployments": {"dc-12500-machines-600s": (12500, 600)},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
     "subcircuit_templates": {"gemm-coordinate": ("K", "datatype", "semantics"), "attention-head": ("D", "BN", "semantics"), "rope-head": ("D",),
@@ -37,6 +38,7 @@ PINNED = {
               "l40s-48gb/e4m3": "L40S"},
     "input_sets": {"bench-instances-v1", "bench-instances-fp8-ada-v1", "bench-instances-bf16-hopper-v1", "bench-instances-fp8-hopper-v1",
                       "bench-instances-nvfp4-sm120-v1"},
+    "adversary": {"world-inference-2027": (9.36e30, 21224489795918368)},
 }
 
 
@@ -71,6 +73,20 @@ def test_ids_are_pinned_with_their_values() -> None:
     assert set(census.INPUT_SETS) == PINNED["input_sets"]
     assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
     assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
+    assert {d["id"]: (d["machines"], d["window_s"]) for d in census.raw("deployments")} == PINNED["deployments"]
+    assert {k: (a.total_flop, a.requests) for k, a in census.load("adversary").items()} == PINNED["adversary"]
+
+
+def test_the_adversary_resource_model_is_the_world_and_its_totals_follow_from_its_parts() -> None:
+    """The figure script's arithmetic: FLOP_REQ = 4500 * 2 * 49e9 and R = int(1e16*104/49) over a year."""
+    models = census.load("adversary")
+    assert [a.id for a in models.values() if a.role == "reference"] == ["world-inference-2027"]
+    for a in models.values():
+        assert a.flop_per_request == a.tokens_per_request * a.flop_per_active_param_per_token * a.active_params, a.id
+        assert a.total_flop == a.requests * a.flop_per_request and a.datatype in census.DATATYPES, a.id
+    world = models["world-inference-2027"]
+    assert world.requests == int(1e16 * 104 / 49) and world.monitoring_period_s == 365 * 86400
+    assert world.h100_hour_flop == 1979e12 * 3600 and world.model == "DeepSeek-V4-Pro"
 
 
 def test_a_datatype_displays_its_common_name_then_its_format_and_every_hardware_dtype_is_one() -> None:

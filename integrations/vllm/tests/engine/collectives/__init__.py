@@ -1,1 +1,1 @@
-"""tests.collectives: tests mirror the package"""
+"""tests.engine.collectives: tests mirror the package"""

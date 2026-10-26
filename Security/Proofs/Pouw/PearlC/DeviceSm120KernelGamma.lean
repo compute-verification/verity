@@ -1,7 +1,9 @@
 import Proofs.Pouw.PearlC.ChainOnlyGamma
 import Definitions.Pouw.PearlC.DevicePricesLoop
 import Definitions.Pouw.PearlC.DevicePrices
-import Models.Pouw.Guarantees.PearlC
+import Definitions.Pouw.Guarantees.PearlC
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records against the kernel as it runs (the price-twins lane's file; staged)
@@ -1863,50 +1865,122 @@ end Gamma
 
 end Pouw.PearlC
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast16Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1Cast16Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast16Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast16Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Cast16Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1Cast32p06ChainOnlyRev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06ChainOnlyRev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Cast32p06ChainOnlyRev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1ChainOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1Cast32p06Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast32p06Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast32p06Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Cast32p06Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1Cast8p72ChainOnlyRev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72ChainOnlyRev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Cast8p72ChainOnlyRev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1ChainOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384 : Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_16384 := @Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_16384 : Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1Cast8p72Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1Cast8p72Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1Cast8p72Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast16Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast16Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast16Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast16Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast16Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06ChainOnlyRev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06ChainOnlyRev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06ChainOnlyRev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1ChainOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast32p06Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast32p06Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast32p06Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast8Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast8Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72ChainOnlyRev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72ChainOnlyRev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72ChainOnlyRev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1ChainOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1_16384 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_16384 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1_8192 := @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1_8192 : Pouw.Guarantees.PearlC.GammaSm120v1LoopCast8p72Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v1LoopCast8p72Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cast16Cap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2Cast16Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cast16Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cast16Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2Cast16Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72Cap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2Cast8p72Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2Cast8p72Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2Cast8p72ChainOnlyCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2Cast8p72ChainOnlyCap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2Cast8p72ChainOnlyCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast16Cap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2LoopCast16Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast16Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast16Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2LoopCast16Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8Cap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2LoopCast8Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2LoopCast8Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72Cap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72Cap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72Cap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDev_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192 := @Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72ChainOnlyCap1000_8192
+theorem Pouw.SecurityProofs.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192 : Pouw.Guarantees.PearlC.GammaSm120v2LoopCast8p72ChainOnlyCap1000_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCGammaSm120v2LoopCast8p72ChainOnlyCap1000_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutPearlCDevChainOnly_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_16384 := @Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192 : Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_8192 := @Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1_8192 : Pouw.Guarantees.PearlC.SampledSm120v1Cast8p72Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v1Cast8p72Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120 sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_16384 := @Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_16384
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_16384 : Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_16384 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_16384 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)
 
-theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192 : Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_8192 := @Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_8192
+theorem Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1_8192 : Pouw.Guarantees.PearlC.SampledSm120v1LoopCast8p72Rev1_8192 :=
+  fun sha fetch salt sem hTT =>
+    @Pouw.PearlC.pearlCSampledSm120v1LoopCast8p72Rev1_8192 _ _ _ _ _ _ _ (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt) sem
+      (Pouw.PearlC.TTOutW1.ttOutTilePearlCDevRev1_of_w1 hTT)

@@ -1,4 +1,4 @@
-import Models.Accounting.Guarantees.Compose
+import Definitions.Accounting.Guarantees.Compose
 import Proofs.Accounting.TS.Drawn
 
 /-!

@@ -106,7 +106,9 @@ over all of them with pytest-xdist, whose workers load the guard too; each worke
 kept passes took longest (`longest`), so the run doesn't wait on a long test that started late. The parallel suites run one at a
 time, beside the others, which run side by side on as few of the processes as let them finish about when the longest of them
 does (`serial_slots`, from each suite's last duration); each lane goes longest first. Without pytest-xdist installed, a parallel
-suite runs in one process.
+suite runs in one process. Each test process's thread pools (OpenMP, so torch's, MKL, OpenBLAS, numexpr) get the CPUs divided by
+`--jobs` (`threads_per_process`) unless the environment already sets them: sized to the whole node, every xdist worker of ten
+lane runs at once ran 159-191 threads each (24 Oct, load 522 on cpu-5's 192 cores).
 
 `--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
 still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
@@ -167,7 +169,11 @@ RUNNER_PREFIX, RUNNER_ENV = "RESEARCH_", ("PYTHONPYCACHEPREFIX",)
 #: check.py's: what its steps get inside a recorded run in place of the RESEARCH_* that named the machine's store (`store_custody`)
 CUSTODY_ENV, STORE_REQUIRED_ENV = "CHECK_STORE_CUSTODY", "VERITY_STORE_REQUIRED"
 #: the suites whose tests run `lake` or what `lake build` builds in the Lean verifier: check runs them after its `lean-build`
-#: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both
+#: step (its `lean-suites`), and on its own this runs that build before them, so they run or skip alike in both. Lake builds a
+#: package's path requirements in their own `.lake`, so most packages' builds write the verifier's beside lean-build (main
+#: 14acc70d97a8: lean-build found `Flock/RecSparse.olean` gone while two suites built sampled-proofs-verifier from the pytest
+#: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
+#: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
               "verity-core-evaluate", "verity-core-firewall",
               "verity/core/service/vstar", "verity/core/service/sigma", "verity-core-sampled-proofs",
@@ -175,7 +181,8 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/core/protocols/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/core/protocols/pouw/lean/commit", "memory-challenger-lean", "benchmarks/pous",
               "verity/core/protocols/sampled_proofs", "verity/core/protocols/certifier", "verity-pouw-benchmarks",
-              "verity/core/primitives/requirement", "benchmarks/remote_session")
+              "verity/core/primitives/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "verity-network-e2e",
+              "benchmarks/live_verifier", "verity-network-traces", "verity-vllm")
 #: the toolchain `lean-toolchain` pins, through elan when `lake` is missing (as `ci-pod.sh` does)
 ELAN = ('command -v lake >/dev/null || command -v "$HOME/.elan/bin/lake" >/dev/null || { curl -sSf '
         'https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null; }; '
@@ -230,6 +237,15 @@ def default_jobs(meminfo: Path = Path("/proc/meminfo"), limit_gb: float | None =
         kb = next(int(ln.split()[1]) for ln in meminfo.read_text().splitlines() if ln.startswith("MemAvailable:"))
         limits.append(kb / 2**20)
     return min(n, max(1, int(min(limits) // TEST_PROCESS_GB))) if limits else n
+
+
+#: the thread-pool sizes a test process inherits, each left as the environment sets it
+THREAD_VARS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
+
+
+def threads_per_process(jobs: int) -> int:
+    """Each test process's thread pools: the CPUs this process may use shared by the ``jobs`` test processes that run at once."""
+    return max(1, cpus() // max(1, jobs))
 
 
 def _git(*args: str, env: dict | None = None, stdin: str | None = None) -> str:
@@ -658,6 +674,38 @@ def covered(path: str, paths: list[str], cut: list[str] = ()) -> bool:
     return _under(path, [p for p in paths if not inner or _under(p, inner)])
 
 
+class Unresolved(Exception):
+    """`--changed REV` names no commit here, even after fetching it; the message names the fix."""
+
+
+def _commit(rev: str) -> str:
+    return subprocess.run(["git", "rev-parse", "--verify", "-q", f"{rev}^{{commit}}"], cwd=ROOT, capture_output=True,
+                          text=True).stdout.strip()
+
+
+def changed_base(rev: str) -> str:
+    """The commit `--changed REV` names: a SHA, a branch, or REMOTE/BRANCH, which a tree `research run` ships may lack (proofs, 25
+    Oct: `git diff origin/main` exited 128 and no suite ran). A shipped tree's `origin` is the machine's repository
+    (<root>/git/verity.git, whose `main` launchers push), and a `--cwd clone` of it has the shipped tree as its `origin`, where
+    `origin/main` is itself a remote-tracking ref; so REMOTE/BRANCH is fetched as either into this tree's REMOTE/BRANCH. The
+    run's RESEARCH_SOURCE_SHA is no base: it is HEAD's own commit, from which the change is empty."""
+    if sha := _commit(rev):
+        return sha
+    remote, _, branch = rev.partition("/")
+    remotes = subprocess.run(["git", "remote"], cwd=ROOT, capture_output=True, text=True).stdout.split()
+    if branch and remote in remotes:
+        env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+        for src in (f"refs/heads/{branch}", f"refs/remotes/{remote}/{branch}"):
+            subprocess.run(["git", "fetch", "-q", "--no-tags", remote, f"+{src}:refs/remotes/{remote}/{branch}"], cwd=ROOT,
+                           capture_output=True, env=env)
+            if sha := _commit(rev):                 # a concurrent run of this tree may have written the ref, whatever this fetch did
+                return sha
+    tried = f", nor could it be fetched from {remote}" if branch and remote in remotes else ""
+    raise Unresolved(f"--changed {rev}: {ROOT} has no commit {rev}{tried} (a tree `research run` ships may hold no {rev}). "
+                     f"Pass main's SHA: `--changed $(git rev-parse origin/main)`, expanded in your own checkout, outside the job's "
+                     f"quotes")
+
+
 def merge_base(rev: str) -> str:
     """Where HEAD left ``rev``'s history, so `--changed origin/main` on a branch behind main is the branch's own change, not
     everything main gained since; ``rev`` itself when HEAD descends from it or the two share no history."""
@@ -701,18 +749,19 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
     return {v: k for v, k in reg.items() if held[v] == "absent"}
 
 
-def fetch_fixtures(fixtures: dict[str, str], logs: Path) -> set[str]:
-    """Fetch the entries (`research data fetch-fixtures`); returns the paths that are still missing or different afterwards."""
+def fetch_fixtures(fixtures: dict[str, str], log: Path) -> set[str]:
+    """Fetch the entries (`research data fetch-fixtures`), its output in `log`; returns the paths that are still missing or
+    different afterwards."""
     if not fixtures:
         return set()
-    log = logs / "fetch-fixtures.log"
     p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
                        cwd=ROOT, capture_output=True, text=True)
     log.write_text(p.stdout + p.stderr)
     try:
         rep = json.loads(p.stdout)
     except ValueError:
-        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}")
+        err = "\n".join("    " + line for line in p.stderr.strip().splitlines()[:5])
+        print(f"fetch-fixtures failed (rc {p.returncode}); log: {log}" + (f"\n{err}" if err else ""))
         return set(fixtures)
     bad = {e["path"] for e in rep["entries"] if e["status"] in ("missing", "stale")}
     blobs = rep["fetch"]["blobs"]
@@ -1367,9 +1416,16 @@ def _durations() -> dict[str, float]:
     return json.loads(f.read_text()) if f.exists() else {}
 
 
+#: how many of a suite's longest tests the guard gets, of which it starts the longest it collected at the heads of the workers'
+#: shares: a run of some of a suite's files, or one that reuses passes, collects few of the suite's longest
+#: (r20261025-202541-cb5f collected none of verity-vllm's 4 longest, and ran its own longest two back to back on one worker)
+HEAVY_CANDIDATES = 1000
+
+
 def longest(suite: Suite, n: int) -> list[str]:
-    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: what
-    the guard starts at the heads of the workers' shares (`heavy_first`). An order only, which no key or verdict reads."""
+    """The ``n`` tests of ``suite`` whose setup and call took longest when their passes were last kept (`PerTest`), longest first: of
+    which the guard starts the longest it collected at the heads of the workers' shares (`heavy_first`). An order only, which no
+    key or verdict reads."""
     d = per_test_dir(suite)
     last: dict[str, tuple[str, float]] = {}
     for p in d.glob("*.json") if d.is_dir() else ():
@@ -1545,11 +1601,13 @@ def store_custody() -> None:
 
 
 def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: int = 1, watch: list[str] = (),
-        reuse: list[str] = (), timeout_s: float = 0.0) -> Result:
+        reuse: list[str] = (), timeout_s: float = 0.0, threads: int = 0) -> Result:
     slug = suite.path.replace("/", "_") if suite.path != "." else "repository"
     log, report = logs / f"{slug}.log", logs / f"{slug}.json"
     report.unlink(missing_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith(RUNNER_PREFIX) and k not in RUNNER_ENV}
+    for var in THREAD_VARS if threads > 0 else ():
+        env.setdefault(var, str(threads))
     env.update(VERITY_SUITE_ROOT=str(ROOT), VERITY_SUITE_ALLOW=json.dumps(allowed), VERITY_SUITE_DENY=json.dumps(dropped(suite, allowed)),
                VERITY_SUITE_REPORT=str(report),
                VERITY_SUITE_WATCH=json.dumps(list(watch)), VERITY_SUITE_MARKDOWN="1" if markdown(suite) else "0",
@@ -1565,7 +1623,7 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
         env["VERITY_SUITE_REUSE"] = str(logs / f"{slug}.reuse.json")
     env.pop("VERITY_SUITE_HEAVY", None)
     (logs / f"{slug}.heavy.json").unlink(missing_ok=True)
-    if workers > 1 and (first := longest(suite, workers)):
+    if workers > 1 and (first := longest(suite, HEAVY_CANDIDATES)):
         (logs / f"{slug}.heavy.json").write_text(json.dumps(first))
         env["VERITY_SUITE_HEAVY"] = str(logs / f"{slug}.heavy.json")
     spread = ["-n", str(workers), *DIST] if workers > 1 else []
@@ -1895,9 +1953,14 @@ def main(argv: list[str] | None = None) -> int:
     args = (QUICK if a.quick else []) + extra
     tree = worktree()
     if a.changed:
-        base = merge_base(a.changed)
+        try:
+            rev = changed_base(a.changed)
+        except Unresolved as e:
+            print(f"suites: {e}", file=sys.stderr)
+            return 2
+        base = merge_base(rev)
         chosen = touched(chosen, pkgs, base, tree, locked())
-        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != a.changed else "")
+        since = f"{a.changed[:12]}" + (f" (its merge-base with HEAD, {base[:12]})" if base != rev else "")
         print(f"suites: the change from {since} touches {len(chosen)}: {', '.join(s.name for s in chosen) or 'none'}")
     build_lean = (not (a.list or a.explain or a.lean_built) and any(s.name in AFTER_LEAN for s in chosen)
                   and (flock_lean() / "lakefile.toml").exists())
@@ -1913,7 +1976,8 @@ def main(argv: list[str] | None = None) -> int:
         sweep_basetemps()
     # the repository's own suite keys on the whole tree but reads tracked files only, so it alone never makes a fetch
     needed = {p: art for p, art in fixtures.items() if any(covered(p, [x for x in ps if x != "."], cuts[s]) for s, ps in inputs.items())}
-    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, logs)
+    fetch_log = logs / f"fetch-fixtures-{os.getpid()}.log"            # check's pytest and lean-suites steps share `logs`
+    unfetched = set() if a.list or a.explain else fetch_fixtures(needed, fetch_log)
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
@@ -1948,8 +2012,8 @@ def main(argv: list[str] | None = None) -> int:
                if (a.fresh or not hit) and any(covered(p, [x for x in paths if x != "."], cuts[s]) for p in unfetched)]
     for s in blocked:
         print(f"failed  {s.name:28} its fixtures could not be fetched: "
-              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {logs / 'fetch-fixtures.log'})")
-        results.append(Result(s, "failed", log=logs / "fetch-fixtures.log"))
+              f"{', '.join(sorted(p for p in unfetched if covered(p, inputs[s], cuts[s])))[:300]} (log: {fetch_log})")
+        results.append(Result(s, "failed", log=fetch_log))
     todo = [(s, paths, keys, deps) for s, paths, keys, hit, deps in plan if (a.fresh or not hit) and s not in blocked]
     per = {s: PerTest(s, ids_of[s], env, [args] + ([extra] if a.quick else []), deps, tree)
            for s, _paths, _keys, deps in todo if not a.no_per_test}
@@ -2000,7 +2064,7 @@ def main(argv: list[str] | None = None) -> int:
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args, logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
-                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0)
+                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0, threads_per_process(jobs))
 
     def finish(fut) -> None:
         s, k, paths, deps = futures[fut]

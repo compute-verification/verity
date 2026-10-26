@@ -28,7 +28,7 @@ lm_head    the logits processor handed a stand-in LM head whose `quant_method.ap
 
 A module's arguments are never changed: the acquisition's hooks on it commit its call as the model made it (the
 embedding's token ids).  The pieces' bits are the whole call's when the GEMM computes each logit alone, as cuBLAS does for these shapes on the RTX PRO
-6000 (`tests/store/int8_store_gpu.py`).
+6000 (`tests/engine/int8_store_gpu.py`).
 """
 from __future__ import annotations
 

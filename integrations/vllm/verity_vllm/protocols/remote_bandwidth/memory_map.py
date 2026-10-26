@@ -47,8 +47,8 @@ would write a slot the line writes already waits for the next line, and every bl
 last line closed go in the next line.
 
 Lifetime.  No plan holds a block written after the codec seed L windows or more after the window its append joined
-(`audit.Params.lifetime`, ``lifetime`` here, 60 by default).  The map keeps the window each live written block's j
-joined (`joined`): the window open when its append is made, that of the first pass after it.  The verifier's is the
+(`audit.Params.lifetime`, ``lifetime`` here, the session's, or `LIFETIME`).  The map keeps the window each live written
+block's j joined (`joined`): the window open when its append is made, that of the first pass after it.  The verifier's is the
 window of the first root it receives after the append, which is that pass's or, if the pass is discarded at a window
 boundary, a later one, so the map's is never later.  Closing a line in window w re-keys every live written block that
 joined at w − L or before and is neither freed nor written in the line: the line frees its old j, which so leaves the
@@ -75,9 +75,13 @@ import numpy as np
 from verity.core.protocols.remote_bandwidth import audit, codec
 from verity.core.protocols.remote_bandwidth.memory_map import Change, Header, MemoryMapError, Replay, Step, Written, dumps, parse
 
+LIFETIME = audit.lifetime_windows(audit.WINDOW_NS, deferred=True)
+"""The lifetime cap a map keeps without the session's, in windows: the audit's at its stated window under deferred
+residency, 2."""
+
 
 def record(store: Any, path: str | Path | None = None, registration: bytes | None = None,
-           lifetime: int = audit.LIFETIME, on_line: Callable[[Change], None] | None = None,
+           lifetime: int = LIFETIME, on_line: Callable[[Change], None] | None = None,
            on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> MemoryMap:
     """Start ``store``'s memory map (`Store.record_memory_map`; ``store`` a `verity_vllm.protocols.remote_bandwidth.registry.Store`)."""
     if registration is None:
@@ -124,7 +128,7 @@ class MemoryMap:
     open one the pass after a line may fall in (1 for a serving session whose step can run past a boundary, its pass then
     the next window's first): a line re-keys for that window, so no block it leaves is stale there."""
 
-    def __init__(self, store: Any, header: Header, path: str | Path | None = None, lifetime: int = audit.LIFETIME,
+    def __init__(self, store: Any, header: Header, path: str | Path | None = None, lifetime: int = LIFETIME,
                  on_line: Callable[[Change], None] | None = None,
                  on_append: Callable[[int, tuple[int, ...], tuple[bytes, ...], list[bytes]], None] | None = None) -> None:
         if type(lifetime) is not int or lifetime < 1:

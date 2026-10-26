@@ -47,7 +47,6 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.remote_bandwidth import receipts as rb
-from verity.core.protocols.remote_bandwidth.audit import LIFETIME
 from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, SALT_BYTES, Plan
 from verity.ml.commitments import merkle_depth
 from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
@@ -440,7 +439,7 @@ class Store:
         b, bb = slot - r.info.first, r.info.block_bytes
         return r.codec.decode(r.backing.read(b * bb, bb), r.info.word_index(b))
 
-    def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = LIFETIME,
+    def record_memory_map(self, path: Any = None, registration: bytes | None = None, lifetime: int = mm.LIFETIME,
                           on_line: Any = None, on_append: Any = None) -> mm.MemoryMap:
         """Record each step's KV blocks as memory-map/v1 into ``path`` (the prover's own file) or kept, beside
         ``registration``, the remote audit's `Registration.digest`, which the session's first window chains from, under

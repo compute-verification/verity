@@ -84,7 +84,7 @@ from verity.ml.crypto.blake3 import blake3, keyed
 from verity.ml.crypto.turboshake import turboshake128
 from verity.ml.circuits.silicon import fp32
 
-from ..protocol import Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
+from ..protocol import CALL_RANGE, Certificate, Context, DomainError, Matmul, Shape, Tile, grid_tiles
 from ..registration import check_registration
 from ..serving import HASH_FORMATS
 from . import pearl_kw as P
@@ -109,6 +109,10 @@ HASHINGS = ("h0", "h3")
 ROW_SEEDED = tuple(h for h in HASHINGS if HASH_FORMATS[h].seed_a == "row")
 #: each hashing format's frame hash for the row and transcript trees (`verity.ml.commitments.merkle`), from the one table
 TREE_HASH = {h: HASH_FORMATS[h].tree_hash for h in HASHINGS}
+#: the per-row cap at a census k, as a multiple of ρ (Daniel's card a6872606, option (a)): there each credited row's debit
+#: is at most 4ρ times its cells' credit, the tile's still at most ρ (`pearlCTilesDevRev1RowCapAt` at ρr = 4ρ; γ rests on
+#: TT_OUT per tile at ρr, `pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`); at k >= k_min a row's cap is ρ, (C2)'s
+CENSUS_ROW_CAP = 4
 
 
 #: Forming v0 (#311 as ported) per operand element: the red team's 240–320 for #311's port (X-PC-2), at the upper end
@@ -160,9 +164,9 @@ def line_key(seed: bytes) -> bytes:
 def row_seed(salt: bytes, leaf: bytes, root_b: bytes, unit: int, row: int, hashing: str = "h3") -> bytes:
     """-h3's seed of row `row` of unit `unit`, whose E_A line is drawn from it alone: the one-row unit's seed_A over the
     row's 64-byte SHA-512 digest `leaf` (`row_digest`), H_"seed-A"(salt ‖ leaf ‖ root_B ‖ (unit · 2^32 + row) u64 LE)
-    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32.
-    `hash_h3.cuh`'s `s512_seeds` computes it."""
-    if not (0 <= unit < 1 << 32 and 0 <= row < 1 << 32):
+    (`s512`, 168 bytes after the label's block with root_B's 64), with the unit index and the row each below 2^32
+    (`CALL_RANGE`). `hash_h3.cuh`'s `s512_seeds` computes it."""
+    if not (0 <= unit < CALL_RANGE and 0 <= row < 1 << 32):
         raise ValueError(f"row_seed: unit {unit} and row {row} must each be below 2^32")
     return unit_seed_a(salt, leaf, root_b, unit << 32 | row, hashing)
 
@@ -450,9 +454,9 @@ def tickets(seed_a: bytes, checked: Checked, hashing: str = "h0") -> list[bytes]
 
 
 class PearlC:
-    """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain) and 64 x 64 tiles;
-    smaller bounds make a test instance.  ``hashing`` h3 names the scheme ``…-h3``: SHA-512 throughout (the module
-    docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
+    """Pearl-C on a device (`pearl_c_device`, the H100 by default): ``k_min`` = 1024 (Pearl's domain), and under forming v1
+    and -h3 the device record's `census_ks` below it (each row capped at 4ρ there, `row_cap_at`), and 64 x 64 tiles; smaller bounds make a test instance.  ``hashing`` h3
+    names the scheme ``…-h3``: SHA-512 throughout (the module docstring), each row of A drawing its E_A line from its own seed keyed on its SHA-512 row digest (`row_seeds`,
     `row_digest`), the work law checking the cap per row too.  The tree hash is `TREE_HASH[hashing]`, on the instance.  ``prices`` is the W1 price record that `wref`, `credit_of`, `job_cost` and the debit read, the
     device's own by default; another record marks the name ``…@<device>`` (the H100's atom at sm_120's prices is
     ``pearl-c-h100-v1@sm_120``)."""
@@ -471,6 +475,10 @@ class PearlC:
         self.name = ((NAME if forming == "v0" else f"pearl-c-{device.name}-v1") + ("" if hashing == "h0" else f"-{hashing}")
                      + ("" if prices == device.prices else f"@{prices.device}"))
         self.k_min, self.tile, self.forming, self.device, self.hashing, self.prices = k_min, tile, forming, device, hashing, prices
+        #: the ks below k_min the domain takes: the device record's census-passed ks, whose census ran §5's forming (v1)
+        #: under a row-capped format (-h3), where a row's cap there is `CENSUS_ROW_CAP`·ρ (`row_cap_at`)
+        self.census_ks = (tuple(k for k in device.census_ks if k < k_min)
+                          if forming == "v1" and HASH_FORMATS[hashing].row_cap else ())
         #: ρ, the device record's: the tile rule's debit cap and the credit's (1 − ρ) (`clear_work`)
         self.cap = device.cap
         self.commitment_hash = TREE_HASH[hashing]
@@ -494,6 +502,10 @@ class PearlC:
                         f"the {device.name} FP8 and BF16 mma steps are reproduced exactly ({device.atom.name}, "
                         f"{device.peel.name})",
                         *(f"stand-in: {s}" for s in device.standins))
+        if self.census_ks:
+            hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
+                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's debit within ρr of its cells' credit and the "
+                         f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
         self.certificate = Certificate(
             conjecture="tt-out",
             gamma0=None,
@@ -506,16 +518,24 @@ class PearlC:
             parameters=(("k_min", k_min), ("tile_m", tile[0]), ("tile_n", tile[1]), ("rank", R), ("window", device.window),
                         ("forming", forming), ("line_norm_f", self.line_norm), ("device", device.name),
                         ("atom", device.atom.name), ("peel", device.peel.name), ("g", device.g), ("hashing", hashing),
-                        ("prices", prices.device), ("cap", str(device.cap))),
+                        ("prices", prices.device), ("cap", str(device.cap)),
+                        ("census_ks", self.census_ks),
+                        *((("census_row_cap", str(CENSUS_ROW_CAP * device.cap)),) if self.census_ks else ())),
         )
+
+    def row_cap_at(self, k: int) -> Fraction:
+        """A credited row's debit cap at depth ``k``, as a share of its cells' credit: `CENSUS_ROW_CAP`·ρ at a census k,
+        else ρ.  The tile's cap is ρ at every k.  Only a row-capped format (`HashFormat.row_cap`) applies it."""
+        return CENSUS_ROW_CAP * self.cap if k in self.census_ks else self.cap
 
     def check(self, matmul: Matmul) -> None:
         """The domain: whole promotion groups, whole column tiles, and down the rows whole ticket subtiles (whole tiles, for
         a test instance's tile under 16 rows), so the last row tile may be partial (decode's 32 x 64 tile)."""
         s, d, rows = matmul.shape, self.device, min(self.tile[0], P.TILE)
-        if not (self.k_min <= s.k <= d.k_max and s.k % d.window == 0 and s.m % rows == 0 and s.n % self.tile[1] == 0
-                and s.m <= 1 << 24 and s.n <= 1 << 24):
-            raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= {d.k_max} with {d.window} | k (whole "
+        if not ((self.k_min <= s.k or s.k in self.census_ks) and s.k <= d.k_max and s.k % d.window == 0 and s.m % rows == 0
+                and s.n % self.tile[1] == 0 and s.m <= 1 << 24 and s.n <= 1 << 24):
+            also = f" or k in {', '.join(map(str, self.census_ks))} (the census's)" if self.census_ks else ""
+            raise DomainError(f"{self.name}: {s} is outside {self.k_min} <= k <= {d.k_max}{also} with {d.window} | k (whole "
                               f"promotion groups), {rows} | m, {self.tile[1]} | n, m, n <= 2^24")
 
     def check_registration(self, transforms: Sequence[str], curated: bool = False, needs_gamma_fold: bool = False) -> None:

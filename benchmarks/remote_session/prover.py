@@ -37,7 +37,9 @@ kvoverwrite:P   kv:P with serving ahead of the passes (--ahead), but its writes 
 ~~~
 
 In a paced session (the session message's `pace`, k: `audit.Pace`) the prover runs at most k passes under a coin, then
-waits for the next, and a window's first pass starts at its coin's arrival.
+waits for the next, and a window's first pass starts at its coin's arrival.  At one window in flight (the message's
+`in_flight`, 1) a pass whose window's boundary message came before its root is sent is dropped: the verifier would
+reject that root as out of turn.
 
 With serving ahead of the passes (`Ahead`: --ahead K for a kv session, or a serving backend's own), serving runs on
 its own thread, at most K steps past the pass in flight, and each pass takes the newest step it can: s, once serving
@@ -107,6 +109,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 from verity.core.protocols.remote_bandwidth import audit, coins, memory_map, receipts as rb  # noqa: E402
 from verity.core.protocols.remote_bandwidth import codec as rcodec  # noqa: E402
 from verity.core.protocols.remote_bandwidth import store as rstore  # noqa: E402
+from verity.core.protocols.remote_bandwidth import wire as rwire  # noqa: E402
 from verity.core.protocols.remote_bandwidth.store import PAYLOAD_LABEL, store_salt  # noqa: E402,F401
 
 import wire  # noqa: E402
@@ -330,7 +333,7 @@ class ServingTrace:
     (`ahead`, an `Ahead`), `run` is serving on its own thread and `take` the session's half at each pass."""
 
     def __init__(self, backend, registration: audit.Registration, pages: int, pool: int, rng: random.Random,
-                 lifetime: int = audit.LIFETIME, headroom: int = 0) -> None:
+                 lifetime: int, headroom: int = 0) -> None:
         N = registration.blocks
         pool = max(1, min(pool, N))
         self.slots = list(range(N - pool, N)) + list(range(N, N + max(1, pool // 4)))
@@ -635,6 +638,13 @@ class ProverSide:
                 self.jobs.task_done()
 
     def _open_window(self, t: int, draws: list) -> None:
+        """Window t's openings of `draws`, sent in parts. A window whose share of its draw is none
+        (`audit.Params.groups_per_coin` above 1) has nothing to open: the verifier accepted it at its draw's close."""
+        if not draws:
+            with self.lock:
+                for key in [key for key in self.kept if key[0] == t]:
+                    del self.kept[key]
+            return
         c0 = time.perf_counter_ns()
         by_pass = defaultdict(list)
         for k, (i, p) in enumerate(draws):
@@ -657,7 +667,7 @@ class ProverSide:
         del out
         c3, sent = time.perf_counter_ns(), 0
         for k in range(len(parts)):
-            body = wire.encode_openings(parts[k])
+            body = rwire.encode_openings(parts[k])
             self.conn.send({"type": "openings", "t": t, "part": k, "parts": len(parts), "n": len(parts[k])}, body)
             parts[k] = None
             sent += len(body)
@@ -708,8 +718,9 @@ class ProverSide:
 
     def session(self, head: dict, mode: str, fraction: float) -> dict:
         k, W, cap = head["k"], head["windows"], head.get("pace") or math.inf
+        one = head.get("in_flight") == 1
         commitment = wire.commitment_of(head["commitment"])
-        why = coins.layout_reason(commitment, k, W)
+        why = coins.layout_reason(commitment, k, W, head.get("groups_per_coin", 1))
         if why is not None:
             raise ValueError(f"the session's coins are not session {k}'s: {why}")
         N = self.backend.blocks
@@ -721,7 +732,7 @@ class ProverSide:
             if mode == "kvoverwrite" and self.ahead is None:
                 raise ValueError("a kvoverwrite session's serving runs ahead of its passes (ahead=K)")
             trace = ServingTrace(self.backend, self.registration, int(fraction), self.kv_pool,
-                                 random.Random(self.rng.getrandbits(64)), head.get("lifetime", audit.LIFETIME),
+                                 random.Random(self.rng.getrandbits(64)), head["lifetime"],
                                  self.kv_headroom)
             if self.ahead is not None:
                 trace.ahead = Ahead(self.ahead, self.fill)
@@ -730,7 +741,7 @@ class ProverSide:
         elif mode in ("serve", "servedrop"):
             if not hasattr(self.backend, "serving"):
                 raise ValueError(f"a {mode} session needs a backend that serves (a Store's: verity_vllm.protocols.remote_bandwidth.remote)")
-            trace = self.backend.serving(self.registration, head.get("lifetime", audit.LIFETIME))
+            trace = self.backend.serving(self.registration, head["lifetime"])
         if mode == "skip":
             pick = np.random.default_rng(self.rng.getrandbits(64))
             dropped = np.sort(pick.choice(N, size=round(fraction * N), replace=False)).astype(np.int64)
@@ -887,7 +898,7 @@ class ProverSide:
                 unsent = x.plan is not None and x.upto[0] > sent_appends
                 if unsent and not x.discard:
                     self._drain(pending)
-                    if not pending or (pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
+                    if not pending or (not one and pending[0][0]["type"] != "end" and pending[0][2] >= x.start):
                         if (gone := flush(x)) is not None:
                             ended, stopping = gone, True
                             discarded += 1 + len(inflight)
@@ -921,7 +932,7 @@ class ProverSide:
                     ended, stopping = msg, True
                     discarded += 1
                     continue
-                if stamp < x.start and not x.flushed:
+                if (stamp < x.start or one) and not x.flushed:
                     discarded += 1
                 else:
                     send(x, root, handle, seen)

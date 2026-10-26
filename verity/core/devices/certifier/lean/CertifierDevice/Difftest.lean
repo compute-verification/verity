@@ -88,7 +88,8 @@ def configOf (j : Json) : Except String (Config × Nat × Nat) := do
     windows := ← j.getObjValAs? Nat "windows", origin := ← j.getObjValAs? Nat "origin",
     slack := ← j.getObjValAs? Nat "slack", prover := ← proverOf (← j.getObjVal? "prover"),
     egressLink := ← j.getObjValAs? String "egress_link", ingressLink := ← j.getObjValAs? String "ingress_link",
-    salt := ← saltOf (← j.getObjVal? "salt"), served := ← servedOf (← j.getObjVal? "served") }
+    salt := ← saltOf (← j.getObjVal? "salt"), served := ← servedOf (← j.getObjVal? "served"),
+    ordinals := ← j.getObjValAs? Bool "ordinals", compact := ← j.getObjValAs? Bool "compact" }
   let start ← j.getObjValAs? Nat "start"
   c.check start
   pure (c, start, ← j.getObjValAs? Nat "position")

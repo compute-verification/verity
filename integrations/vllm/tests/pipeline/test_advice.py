@@ -1,6 +1,6 @@
 """`verity-vllm advice`: I1's advice of a run recorded on the stand-in scheduler (`tests.engine.fake_scheduler`) under varied
 traffic, its round trip, its windows, prefix-cache sources and resumes, and the refusals when the step trace and the Commit
-record disagree or a finish is one advice v0 can't say."""
+record disagree or a finish is one advice v0 can't say (an abort, which a Commit window's advice says)."""
 from __future__ import annotations
 
 import itertools
@@ -15,8 +15,9 @@ from verity.core.protocols.certifier import advice as I1
 from verity_vllm.config import UsageError
 from verity_vllm.engine import step_trace as ST
 from verity_vllm.pipeline import advice as ADV
+from verity_vllm.pipeline import window_advice as WA
 
-C = ADV.Compiler("test-compiler", "ab" * 64)
+C = ADV.registered_compiler("test-compiler", "ab" * 64)
 
 
 def _served(tmp_path, *, seed: int = 0, n: int = 12, gap: bool = True, **sched_kw):
@@ -122,10 +123,79 @@ def test_a_trace_without_a_clock_releases_each_output_at_its_step(tmp_path):
     assert list(a.release) == [o.step for o in I1.outputs(a)]
 
 
-def test_an_aborted_request_is_refused_since_advice_v0_has_no_abort(tmp_path):
-    _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 9, 9), FakeRequest("e1", [5] * 4, [6] * 3, 3)]}, abort_at={3: "e0"})
-    with pytest.raises(ValueError, match="request e0 finished by abort, which advice v0 can't say"):
+def test_an_aborted_request_is_a_commit_windows_finish_and_a_whole_sessions_refusal(tmp_path):
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 9, 9), FakeRequest("e1", [5] * 4, [6] * 6, 6)]}, abort_at={3: "e0"})
+    with pytest.raises(ValueError, match=r"request e0 finished by abort, which a whole session's advice \(I1 v0\) can't say"):
         ADV.write(tmp_path, compiler=C)
+    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+    a = ADV.from_trace(recs, io, carry=()).advice
+    # aborted after the step that sampled its third output (the stand-in schedules synchronously: no row past it)
+    assert [(q.id, q.output_len, q.finish) for q in a.requests] == [("user-e0", 3, "abort"), ("user-e1", 6, "length")]
+    assert a.version == WA.ABORTS and WA.decode(WA.encode(a)) == a and 0 not in {c.request for c in WA.close(a)}
+    step = next(r for r in recs if r["kind"] == "step" and r["step"] == 3)
+    step["rows"].append(["e0", 6, 1])                           # a row after the step it was freed at
+    with pytest.raises(ValueError, match=r"step 3: request e0 has a row 1 steps after it finished \(abort after step 2, outside"):
+        ADV.from_trace(recs, io, carry=())
+
+
+def _behind_a_long_prompt(tmp_path, abort_at: dict[int, str]) -> tuple[list[dict], dict]:
+    """e0's 40-token prompt takes the 16-token budget for three steps: aborted after the first, it is mid-prefill; e1, waiting
+    behind it, has never run."""
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 40, [6] * 3, 3), FakeRequest("e1", [5] * 4, [6] * 3, 3)]}, abort_at=abort_at)
+    return ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+
+
+def test_an_abort_mid_prefill_before_the_first_output_is_refused_by_name(tmp_path):
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e0"})
+    assert len(io["e0"]["output_ids"]) == 0 and any(row[0] == "e0" for r in recs if r["kind"] == "step" for row in r["rows"])
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == ("request e0 was aborted before its first output, which the advice refuses: an aborted request's "
+                            "Program ends at its last kept output, and it kept none")
+
+
+def test_a_request_aborted_before_it_is_ever_scheduled_is_dropped_from_the_advice_and_kept_in_the_commit_record(tmp_path):
+    """e1 has no row and no output, so the advice is e0's alone, a Commit window's and a whole session's alike, and the Commit
+    record keeps e1; a Commit record or a trace that gives e1 an output is refused."""
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e1"})
+    assert [r["reason"] for r in recs if r["kind"] == "finish" and r["request"] == "e1"] == ["abort"] and io["e1"]["output_ids"] == []
+    assert not any(row[0] == "e1" for r in recs if r["kind"] == "step" for row in r["rows"])
+    for carry in ((), None):
+        b = ADV.from_trace(recs, io, carry=carry)
+        assert [(q.id, q.output_len, q.finish) for q in b.advice.requests] == [("user-e0", 3, "length")] and b.dropped == ("e1",)
+        assert len(b.advice.release) == 3 and b.advice.version == 0
+    rep = ADV.write(tmp_path, compiler=C)
+    assert rep["roundtrip"] and rep["counts"]["requests"] == 1 and rep["counts"]["aborted_unscheduled"] == 1
+    assert [(q.id, q.output_len) for q in _advice(tmp_path).requests] == [("user-e0", 3)]
+    gone = "request e1 was aborted before it was ever scheduled, which the advice drops, and the trace emitted"
+    for e1, why in [({"output_ids": [6]}, "0 tokens for it, the Commit record 1, finished by abort"),
+                    ({"finish": {"reason": "abort", "stop_reason": None, "k": 2}}, "0 tokens for it, the Commit record 0, finished by abort after 2 ids"),
+                    ({"finish": {"reason": "length", "stop_reason": None}}, "0 tokens for it, the Commit record 0, finished by length")]:
+        with pytest.raises(ValueError) as e:
+            ADV.from_trace(recs, {**io, "e1": {**io["e1"], **e1}}, carry=())
+        assert str(e.value) == f"{gone} {why}"
+    next(r for r in recs if r["kind"] == "step" and r["step"] == 0)["emitted"]["e1"] = 1
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == f"{gone} 1 tokens for it, the Commit record 0, finished by abort"
+
+
+def test_a_request_that_arrived_and_never_ran_unaborted_is_refused(tmp_path):
+    recs, io = _behind_a_long_prompt(tmp_path, {1: "e1"})
+    recs = [r for r in recs if not (r["kind"] == "finish" and r["request"] == "e1")]
+    with pytest.raises(ValueError, match=r"^1 requests arrived and never ran: \['e1'\]$"):
+        ADV.from_trace(recs, io, carry=())
+
+
+def test_an_abort_of_a_request_waiting_after_a_preemption_is_refused_by_name(tmp_path):
+    _run(tmp_path, {0: [FakeRequest("e0", [5] * 4, [6] * 6, 6), FakeRequest("e1", [5] * 4, [6] * 6, 6)]}, preempt_at={2: "e0"},
+         abort_at={3: "e0"})
+    recs, io = ST.load(tmp_path / "step_trace.jsonl"), ADV.io_record(tmp_path / "requests.jsonl")
+    assert len(io["e0"]["output_ids"]) == 2 and "e0" in next(r for r in recs if r["kind"] == "step" and r["step"] == 2)["preempted"]
+    with pytest.raises(ValueError) as e:
+        ADV.from_trace(recs, io, carry=())
+    assert str(e.value) == ("request e0 was aborted after step 2 while it waited after a preemption, which the advice refuses: it "
+                            "has no row in the step it is freed at")
 
 
 def test_a_commit_record_whose_output_disagrees_with_the_trace_is_refused(tmp_path):
@@ -168,7 +238,9 @@ def test_the_command_writes_the_advice_and_exits_zero(tmp_path, capsys):
     rep = json.loads((out / "private" / "report.json").read_text())
     assert rep["T"] == 50 and rep["release"]["tau_s"] == 0.2
     assert rep["registration"] == json.loads((out / "registration.json").read_text())
-    assert rep["registration"]["binding"]["compiler"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
+    capped = ADV.registered_compiler(ADV.COMPILER, "ab" * 64)
+    assert rep["registration"]["binding"]["compiler"] == {"name": capped.name, "digest": capped.digest}
+    assert rep["registration"]["compiler"]["inner"] == {"name": ADV.COMPILER, "digest": "ab" * 64}
     private = out / "private"
     assert I1.from_json(json.loads((private / "advice.json").read_text())) == I1.decode((private / "advice.bin").read_bytes())
 

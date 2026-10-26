@@ -935,7 +935,7 @@ def test_an_address_makes_the_window_live_and_seeded_coins_with_one_are_refused(
             for name in (CO.CHALLENGER_ENV, CO.SESSION_ENV, CO.SECRET_ENV):
                 monkeypatch.delenv(name)
         with pytest.raises(ValueError, match=r"--gate research@gate: served_h1's own gated window is superseded; .*"
-                                             r"integrations/vllm/verity_vllm/protocol_options/pouw_h1\.py \(#3053\)"):
+                                             r"integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py \(#3053\)"):
             SV.main([*argv, "--gate", "research@gate"])
 
 

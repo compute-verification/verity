@@ -19,12 +19,13 @@ import pytest
 
 from tests.check.opened import commit_host_steps
 from tests.commit.test_binding_negatives import PD
-from verity_vllm.check import commit_tokens as CT, executed_prefix as EP
+from verity_vllm.check import commit_tokens as CT, executed_prefix as EPL
 from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay.linkage import boundary_linkage, linkage_horizon
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, executed_prefix as EP
 from verity_vllm.commit.opened import OpenedReader, UnverifiedUnlinked
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 C = CT.CommitTokens
 EOS, CAP, LAG, LAG_ROW = 2, 5, 1, 99
@@ -36,6 +37,8 @@ SAMPLED = {"r0": [11, 12, EOS, LAG_ROW], "r1": [21, 22, 23, 24, 25]}
 SERVED = {"r0": [11, 12, EOS], "r1": [21, 22, 23, 24, 25]}
 FINISH = {"r0": C.STOP, "r1": C.LENGTH}
 STOP = {"eos": [EOS], "lag": LAG, "declared_lag": LAG, "engine_lag": LAG, "async_scheduling": True}
+#: the identity coverage `commit.binding.coverage_check` writes, which a binding's execution extent sits beside
+COVERED = {"ok": True, "expected_n": 64, "bound_n": 64, "missing_n": 0, "ambiguous_n": 0}
 
 
 @dataclasses.dataclass
@@ -105,7 +108,7 @@ def named(problems: list[str], *parts: str) -> bool:
 
 
 def _no_match(w: World) -> dict:
-    return EP.link_to_match_account(w.epr, EP.load_match_account(None), order=ORDER, declared_lag=LAG, served_tokens=w.served)
+    return EPL.link_to_match_account(w.epr, EPL.load_match_account(None), order=ORDER, declared_lag=LAG, served_tokens=w.served)
 
 
 def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
@@ -117,9 +120,10 @@ def _match_dir(tmp_path, *, gm_verdict: str = "PASS") -> str:
     tok = {"lag": {"value": LAG, "async_scheduling": True},
            "requests": [{"request_id": u, "generated_token_ids": SERVED[r], "max_tokens": CAP, **{k: v for k, v in lens[r].items() if k != "cap"}}
                         for u, r in ORDER.items()]}
-    gm = {"verdict": gm_verdict, "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
+    gm = {"schema": GM_SCHEMA, "verdict": gm_verdict, "reasons": [], "failed_checks": [] if gm_verdict == "PASS" else ["G6"],
           "requests": [{"request_id": f"rec-{r}", "workload_request_id": u, "index": int(r[1:])} for u, r in ORDER.items()],
-          "checks": [{"id": "G6", "status": gm_verdict, "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
+          "checks": [{"id": "G6", "what": "chronology", "status": gm_verdict, "problems": [], "n_problems": 0,
+                      "lengths_by_request": {f"rec-{r}": v for r, v in lens.items()},
                       "lag": {"declared": LAG, "record_attests": LAG, "tokens_json_lag": LAG, "exercised": True, "variable_lag": False}}]}
     (row / "match" / "capture" / "tokens.json").write_text(json.dumps(tok))
     (row / "global_match.json").write_text(json.dumps(gm))
@@ -189,7 +193,7 @@ def test_a_full_row_that_committed_no_sampled_ids_is_decided_by_its_match_link_a
     assert cl["not_applied"] == "no committed runner.sampler/sampled_token_ids in the binding map: the Match link alone decides"
     assert f"Commit's token record (pair 0): not applied ({cl['not_applied']})" in capsys.readouterr().out
     # the facts of record rest on the Match link alone
-    cov = {"match_account_link": alone["match_account_link"], "commit_account_link": cl, "rows_past_the_stop": w.past}
+    cov = COVERED | {"match_account_link": alone["match_account_link"], "commit_account_link": cl, "rows_past_the_stop": w.past}
     f = EP.executed_prefix_facts(w.epr, {"coverage": cov}, {"result": True}, ARRIVALS, STOP)
     assert f["r0"]["linked"] is True and f["r0"]["lag_attested"] is True and f["r0"]["a_r_source"].startswith("match record ")
     # and alone means alone: a Match account that did not pass refuses the prefix, by its name only
@@ -453,7 +457,7 @@ def test_the_boundary_linkage_runs_over_the_same_executed_prefix_and_the_facts_l
     h0 = lk["horizon"]["r0"]
     assert h0["linked_steps"] == w.epr["requests"]["r0"]["executed_prefix_len"] == 4 and lk["horizon"]["r1"]["linked_steps"] == CAP
     assert h0["eos_of_record"]["verified"] and h0["eos_of_record"]["eos_step"] == 2 and h0["eos_of_record"]["placeholder_input_ids"] == [EOS]
-    binding = {"coverage": {"match_account_link": _no_match(w), "commit_account_link": link, "rows_past_the_stop": w.past}}
+    binding = {"coverage": COVERED | {"match_account_link": _no_match(w), "commit_account_link": link, "rows_past_the_stop": w.past}}
     f = EP.executed_prefix_facts(w.epr, binding, lk, ARRIVALS, STOP)
     assert f["r0"]["a_r"] == 3 and f["r0"]["a_r_source"].startswith(f"commit token record {link['record']['path']}")
     assert f["r0"]["a_r_source"].endswith("no Match record beside the Commit (a config run has no Match stage): the prefix is linked to the Commit's "
@@ -481,10 +485,32 @@ def test_with_a_match_record_beside_the_commit_both_links_hold():
     match = {"ok": True, "required": True, "match_dir": "/row/match", "lag_attested": True, "problems": [],
              "tokens_json": {"tokens_equal": {"r0": True, "r1": True}, "served_by_request": {"r0": 3, "r1": 5}, "path": "/row/match/capture/tokens.json", "sha256": "ef" * 32},
              "global_match": {"verdict": "PASS", "path": "/row/global_match.json", "sha256": "12" * 32}}
-    cov = {"match_account_link": match, "commit_account_link": link, "rows_past_the_stop": w.past}
+    cov = COVERED | {"match_account_link": match, "commit_account_link": link, "rows_past_the_stop": w.past}
     f = EP.executed_prefix_facts(w.epr, {"coverage": cov}, lk, ARRIVALS, STOP)
     assert f["r0"]["linked"] is True and f["r0"]["a_r_source"].startswith("match record /row/match/capture/tokens.json")
     bad = dict(link, ok=False, tokens_committed={"r0": False, "r1": True})
     assert EP.executed_prefix_facts(w.epr, {"coverage": dict(cov, commit_account_link=bad)}, lk, ARRIVALS, STOP)["r0"]["linked"] is False
     assert "Commit's token record" in CT.account_link_error(match, bad)
     assert EP.executed_prefix_facts(w.epr, {"coverage": dict(cov, match_account_link=dict(match, ok=False))}, lk, ARRIVALS, STOP)["r0"]["linked"] is False
+
+
+def test_an_id_with_a_nonzero_high_word_is_refused_where_it_is_read(tmp_path):
+    """The circuit's token id is a 32-bit word, and vLLM's int64 must be it zero-extended (`sampling_event.circuit_token_id`): r1 serves
+    and commits ids 2^32 above its own, which agree with each other, and is refused at the served list, at the opening, at the boundary
+    linkage and at the Match record's tokens.json; a negative id the same."""
+    hi = 1 << 32
+    sampled, served = {"r0": SAMPLED["r0"], "r1": [t + hi for t in SAMPLED["r1"]]}, {"r0": SERVED["r0"], "r1": [t + hi for t in SERVED["r1"]]}
+    w = world(sampled, served)
+    link = w.link()
+    assert named(refused(link), f"r1: (1) served token 0: token id {21 + hi} has a nonzero high word") and link["tokens_committed"]["r0"] is True
+    assert named(refused(world(sampled, SERVED).link()), "r1: (1) served token 0 not opened from the run root at engine step 0: the committed "
+                 f"sampled id: token id {21 + hi} has a nonzero high word")
+    lk = _linkage(w)
+    assert lk["result"] is False and any(u["request_id"] == "r1" and u["why"].startswith("the committed sampled id of step 0: token id")
+                                         for u in lk["unlinked"])
+    acc = EPL.load_match_account(_match_dir(tmp_path))
+    acc["tokens"]["requests"][1]["generated_token_ids"] = served["r1"]
+    m = EPL.link_to_match_account(w.epr, acc, order=ORDER, declared_lag=LAG, served_tokens=w.served)
+    assert named(m["problems"], "r1: the Match record's tokens.json served an id that is no circuit's: token id", "nonzero high word")
+    neg = {"r0": SERVED["r0"], "r1": [-1, *SERVED["r1"][1:]]}
+    assert named(refused(world({"r0": SAMPLED["r0"], "r1": neg["r1"]}, neg).link()), "r1: (1) served token 0: token id -1 has a nonzero high word")

@@ -6,7 +6,8 @@ The pinned digests are the served Builds of record on vy-glm53-s1 (one H200: cc 
 r20261018-062957-da83, Qwen3-30B-A3B r20261018-084657-c7f6, each Matched and Committed at that Build.  The served Commit with the
 predicted Build as Build of record passes for each: r20261018-105743-72a0, r20261018-115551-2b64 and r20261018-124350-5c89.  On
 vy-nebius-2 (one RTX PRO 6000: cc 12.0, 188 SMs) over the same SCHEDULE: Llama-3.2-1B r20261018-203256-0665 and Qwen3-8B
-r20261018-211943-d337, each Matched and Committed at that Build.  On vy-dc-b200 (one B200: cc 10.0, 148 SMs, the rows declaring FLASH_ATTN
+r20261018-211943-d337, each Matched and Committed at that Build, and Qwen3-30B-A3B r20261024-092345-d136 (its rows declaring
+moe_backend triton), Matched at that Build.  On vy-dc-b200 (one B200: cc 10.0, 148 SMs, the rows declaring FLASH_ATTN
 FA2) over the same SCHEDULE: Llama-3.2-1B r20261019-000009-d8e9, Qwen3-8B r20261019-000518-c3cc and Qwen3-30B-A3B r20261019-030238-74d0
 (its rows also declaring moe_backend triton), each Matched and Committed at that Build.  A library change that moves a Definition moves the traced digest too: trace the Build again (`served-match`), write
 its pin (`predict compiled-pin`) and pin both.
@@ -41,6 +42,8 @@ SCHEDULE = [{"request_id": f"r{i}", "arrive": a, "prompt_tokens": n, "max_tokens
      "ee8896c9db33aac5", "fba557acf341db86"),
     ("QWEN3_8B", RTX, "feb1c2906ea08bddd4c38b5fe402b203ac364ef888b1b4b9664b9c2011e3a33c4adc1b965b6049af37de659457d4e0784217f7be61ae420e962a11e3a09ebbc0",
      "c28dc3bf7e0ef088", "533721fc9d37833a"),
+    ("QWEN3_30B_A3B", RTX, "387b8559b378775070e037bd31fda88e4bdcd2595c18f15a542cfdad612b25470c47fc6cfdfff72652eff93bc30a4e04b2139b25447507f43aedd25053afecb3",
+     "64b37498fdee9cc0", "4605351dd36012fb"),
     ("LLAMA32_1B", B200, "3ab045d8848f451edcd5fc9d05cf81b7d6cfff82c5c7dc071b2109fe3c7c555d850dc864ed59922f7323f27552a9e26fbc53203c8f724de922b5f0bdd73d0688",
      "6e2fdc764358c78e", "f23f3e483d51b467"),
     ("QWEN3_8B", B200, "184dfca07df5ad5cfabb2179b16d3f6f4734c9aee02d6b5da429e11ba65758e225ee03717dac57e67725328dc12ebc96aa1d333d3bc5901b4a13914cd2ee5e1f",

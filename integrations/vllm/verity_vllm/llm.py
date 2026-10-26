@@ -35,6 +35,8 @@ SUPPORTED: dict[str, Supported] = {
                                                   "(default: vLLM's sizing)"),
     "enable_chunked_prefill": Supported(bool, None, "False holds a prefill that doesn't fit a step instead of cutting it into chunks "
                                                     "(default: vLLM's, on)"),
+    "enable_prefix_caching": Supported(bool, None, "True lets a request read another's cached KV blocks for a shared prefix "
+                                                   "(default: off)"),
     "enforce_eager": Supported(bool, True, "True runs eagerly; False compiles with torch.compile and CUDA graphs"),
     "execution": Supported((str, type(None)), None, "the execution label the engine is built for (engine.served.EXECUTIONS), which "
                                                     "sets its batch invariance and enforce_eager (default: bi-eager, or bi-compiled "
@@ -51,7 +53,8 @@ SUPPORTED: dict[str, Supported] = {
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
-ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "enable_chunked_prefill", "dtype",
+ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "enable_chunked_prefill",
+               "enable_prefix_caching", "dtype",
                "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend", "seed")
 #: Explicit overrides that can select kernels outside a protocol option's Build.
 KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
@@ -143,7 +146,7 @@ class LLM:
     ``model`` is a Hugging Face repo id and ``revision`` its full commit sha; both must be pinned in
     ``manifests/checkpoints.json`` with the snapshot on this host, else the constructor raises ``ValueError``.  The dtype,
     tokenizer, attention backend and the rest of the engine come from the pin's engine profile, as in every
-    ``verity-vllm`` stage; prefix caching is off.
+    ``verity-vllm`` stage; prefix caching is off unless ``enable_prefix_caching=True``.
 
     Supported options (keyword only; any other raises ``TypeError`` naming it and this list):
 
@@ -155,6 +158,8 @@ class LLM:
     * ``kv_cache_memory_bytes`` (int): the KV cache's size in bytes, in place of sizing it from free memory; default vLLM's
       sizing.
     * ``enable_chunked_prefill`` (bool): False holds a prefill that doesn't fit a step instead of cutting it; default vLLM's.
+    * ``enable_prefix_caching`` (bool): True lets a request read the KV blocks another computed for the same prefix; default
+      off.
     * ``enforce_eager`` (bool, default True): True runs eagerly; False compiles with torch.compile and CUDA graphs, in a
       fresh Inductor cache for this process.
     * ``execution`` (str): the execution label the engine is built for, a key of ``engine.served.EXECUTIONS``, which sets

@@ -26,10 +26,10 @@ def _param(*shape) -> nn.Parameter:
 class ToyRank(nn.Module):
     DERIVE_SOURCE = "verity-vllm/test-tp-toy-rank/v1"
 
-    def __init__(self, bus: CollectiveBus) -> None:
+    def __init__(self, bus: CollectiveBus, last: bool = False) -> None:
         super().__init__()
         W, r = bus.world, bus.rank
-        self.bus, self.VS = bus, V // W
+        self.bus, self.VS, self.last = bus, V // W, last
         self.start, self.end = r * self.VS, (r + 1) * self.VS
         self.embed = _param(self.VS, H)
         self.up = _param(FF // W, H)
@@ -47,7 +47,7 @@ class ToyRank(nn.Module):
         x = torch.ops.verity_tp.embedding_shard(prompt.reshape(-1), self.embed, self.start, self.end)
         x = self._reduce(x.view(*prompt.shape, H))
         h = self._reduce(F.linear(F.linear(x, self.up), self.down))
-        return self.bus.all_gather(F.linear(h, self.lm_head))
+        return self.bus.all_gather(F.linear(h[-1:] if self.last else h, self.lm_head))
 
 
 def embedding_shards(world: int, rank: int) -> list[dict]:
@@ -56,11 +56,12 @@ def embedding_shards(world: int, rank: int) -> list[dict]:
     return [{"module": "inner.embed", "START": rank * VS, "END": (rank + 1) * VS, "VS": VS, "H": H, "tp_rank": rank, "tp_size": world}]
 
 
-def rank_source(world: int, rank: int):
-    """(the rank's traced wrapper, its example inputs, the probed collectives, the toy model)."""
+def rank_source(world: int, rank: int, last: bool = False):
+    """(the rank's traced wrapper, its example inputs, the probed collectives, the toy model).  `last`: the logits of the last row
+    alone, as a request's prefill samples, so the rows before it end in units no output reads."""
     ensure_ops()
     bus = CollectiveBus(rank=rank, world=world)
-    inner = ToyRank(bus)
+    inner = ToyRank(bus, last)
     prompt = torch.empty(TOKENS, dtype=torch.int32, device="meta")
     bus.reset("probe")
     with torch.no_grad(), torch.device("meta"):
@@ -70,10 +71,10 @@ def rank_source(world: int, rank: int):
     return mod, inputs, record, inner
 
 
-def derive_rank(world: int, rank: int, session: list | None = None):
+def derive_rank(world: int, rank: int, session: list | None = None, last: bool = False, dead_free: bool = False):
     """Rank `rank`'s derive report, as `build._construct` derives it (profile mode, the vLLM rules, the rank coordinate)."""
-    mod, inputs, record, inner = rank_source(world, rank)
+    mod, inputs, record, inner = rank_source(world, rank, last)
     rep = derive_report(mod, inputs, mode="profile", profile="b1-eager-v3", rules=vllm_ruleset(), name="vLLMStep[ToyRank]",
-                        check_registry=True, rank=(world, rank), session=session)
+                        check_registry=True, rank=(world, rank), session=session, dead_free=dead_free)
     assert rep.ok, rep.unsupported
     return rep, mod, record, inner

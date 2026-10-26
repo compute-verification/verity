@@ -8,7 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
-from verity_vllm.protocols.linear.api import Arm, Control, Forward, LinearSite, PassSpec, Refused, Stack
+from verity_vllm.errors import Refused
+from verity_vllm.protocols.linear.api import Arm, Control, Forward, LinearSite, PassSpec, Stack
 
 SITES = (LinearSite(0, 0, "model.layers.0.self_attn.qkv_proj", 6144, 4096, "bf16"),
          LinearSite(1, 1, "model.layers.0.mlp.down_proj", 4096, 14336, "bf16", has_bias=True))

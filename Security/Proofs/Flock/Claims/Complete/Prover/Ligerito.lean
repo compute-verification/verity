@@ -132,19 +132,15 @@ def sendMsg (m : F256 × F256) : LP M Unit := do
   liftT (liftTM (absorbK m.1))
   liftT (liftTM (absorbK m.2))
 
-/-- A grinding nonce from the tape onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message. -/
-def powP (nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
+/-- A grinding nonce onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message: `0`, the only one the
+verifier accepts (R4), so the tape's nonces are unread. -/
+def powP (_nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
   let st ← get
-  let i := match kind with
-    | 0 => st.qn.size
-    | 1 => st.cn.size
-    | _ => st.cbn.size
-  let v := nonce kind i
   set (match kind with
-    | 0 => { st with qn := st.qn.push v }
-    | 1 => { st with cn := st.cn.push v }
-    | _ => { st with cbn := st.cbn.push v })
-  liftT (liftTM (pow v))
+    | 0 => { st with qn := st.qn.push 0 }
+    | 1 => { st with cn := st.cn.push 0 }
+    | _ => { st with cbn := st.cbn.push 0 })
+  liftT (liftTM (pow 0))
 
 /-- A challenge: fold the table and the weight at it; then the next message, after splitting when `split`. -/
 def challengeP (io : Asks M) (split : Bool) : LP M F256 := do

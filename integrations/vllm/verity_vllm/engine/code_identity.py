@@ -9,13 +9,14 @@ import json
 import os
 from typing import Any
 
+from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
 
 
 _VERITY_INDUCTOR_DIR_MARK = engine_env.INDUCTOR_DIR_MARK
 
 
-# [R16 compiled, rev F-r16-09] ELF sections of a cubin that the DEVICE DOES NOT READ: debug/line info, embedded PTX text, and the host-side
+# ELF sections of a cubin that the DEVICE DOES NOT READ: debug/line info, embedded PTX text, and the host-side
 # symbol/string tables.  The code identity is every OTHER section (deny-list, not a .text allow-list): .text.* (SASS), .nv.constant0.* (param
 # bank + compiler constants), .nv.constant2/3 (constant-memory data), .nv.global(.init) (initialised device globals), .rodata, .nv.info*, ...
 CUBIN_DENY_LIST: tuple[str, ...] = (".debug*", ".rel.debug*", ".rela.debug*", ".nv.debug*", ".nv_debug*", ".rel.nv_debug*", ".rela.nv_debug*", ".rel.nv.debug*",
@@ -65,7 +66,7 @@ def _elf_section_bytes(b: bytes) -> dict[str, bytes]:
 
 
 def cubin_sections(b: bytes) -> dict[str, str]:
-    """[R16 compiled] Per-section sha256 of a cubin (ELF), every section (deny-listed ones included, so that WHICH sections differ between
+    """Per-section sha256 of a cubin (ELF), every section (deny-listed ones included, so that WHICH sections differ between
     two cubins is on record).  {} if not an ELF."""
     import hashlib
 
@@ -91,7 +92,7 @@ def _split_path_strings(data: bytes) -> tuple[bytes, list[str]]:
 
 
 def cubin_section_detail(b: bytes) -> dict[str, dict[str, Any]]:
-    """[rev F-r16-09 (3)] For every NON-deny-listed section: sha256, size, sha256 of the bytes with absolute-path strings normalised
+    """For every NON-deny-listed section: sha256, size, sha256 of the bytes with absolute-path strings normalised
     (`residue_sha256`), and the path strings themselves -- so a cross-arm difference in device data can be DECODED from the record:
     residue equal + only path strings differ = per-process source path embedded in device data; anything else = not one specialization."""
     import hashlib
@@ -138,7 +139,7 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
     import base64
     import glob
 
-    root = os.environ.get("TRITON_CACHE_DIR") or os.path.join(os.path.expanduser("~"), ".triton", "cache")
+    root = settings.TRITON_CACHE_DIR or os.path.join(os.path.expanduser("~"), ".triton", "cache")
     cands = [os.path.join(root, str(h))]                          # Triton <= 3.3: <hex hash>/
     try:                                                           # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
         cands.append(os.path.join(root, base64.b32encode(bytes.fromhex(str(h))).decode().rstrip("=")))
@@ -157,7 +158,7 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
                     md = json.load(open(mj))
                     if isinstance(md, dict) and md.get("hash"):
                         idx[str(md["hash"])] = os.path.dirname(mj)
-                except Exception:  # noqa: BLE001
+                except (OSError, ValueError):
                     continue
             _TRITON_CACHE_INDEX[root] = idx
         d = idx.get(str(h))
@@ -179,14 +180,14 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
                 out["meta"] = {k: md.get(k) for k in ("name", "num_warps", "num_stages", "num_ctas", "cluster_dims", "enable_fp_fusion", "debug", "shared",
                                                       "ptx_version", "target", "maxnreg", "launch_cooperative_grid") if k in md}
                 break
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError):
             continue
     return out
 
 
 def _binary_identity(k: Any, cfg: Any = None) -> dict[str, Any]:
     """One compiled Triton binary: triton hash (source x signature/specialization x options x env), cubin sha256 (bytes), per-section
-    sha256 + code_sha256 (every section except CUBIN_DENY_LIST, rev F-r16-09) + code_sha256_normalized / section_detail (path strings in
+    sha256 + code_sha256 (every section except CUBIN_DENY_LIST) + code_sha256_normalized / section_detail (path strings in
     device data decoded), the compile metadata, and the autotune config it was compiled for."""
     import hashlib
 
@@ -217,14 +218,14 @@ def _binary_identity(k: Any, cfg: Any = None) -> dict[str, Any]:
 
 
 def loaded_code_objects() -> dict[str, Any]:
-    """[R15 compiled, Daniel M-0776 (3)] Identity of the Inductor code objects LOADED IN THIS PROCESS -- read from the running interpreter,
+    """Identity of the Inductor code objects LOADED IN THIS PROCESS -- read from the running interpreter,
     not from files: `torch._inductor.codecache.PyCodeCache` is the registry of every output-code module Inductor exec'd (torch >= 2.9:
     `modules` list + `modules_no_attr` by path; older: `cache` by content-hash key), and each `CachingAutotuner` bound in those modules is
     a compiled Triton kernel: its JIT source (`fn.src`), and the binaries the device runs (`compile_results[*].kernel` / `launchers[*].bin`:
     Triton's compiled-kernel `hash`, and the cubin bytes' sha256 while Inductor still holds them).  Digests: kernel_set_sha256 over the sorted
     {(kernel name, source sha256)}, binary_set_sha256 over the sorted binary identities (cubin sha256 or triton hash), module_keys_sha256.
 
-    [R16 unit B] per compiled binary: triton hash + cubin sha256 + per-ELF-section sha256 + code_sha256 (every section except CUBIN_DENY_LIST, rev F-r16-09) + compile metadata +
+    Per compiled binary: triton hash + cubin sha256 + per-ELF-section sha256 + code_sha256 (every section except CUBIN_DENY_LIST) + compile metadata +
     the autotune config it was compiled for (`compile_results[*]` = every candidate the process compiled; `launchers[*]` = the one(s) it
     EXECUTES after autotuning); `executed_set_sha256` over the sorted {(kernel, src sha, executed code id, executed config)} is the identity
     of the specialization the graphs replay.  Two processes running the same code objects differ in cubin BYTES when the debug/line-info
@@ -319,7 +320,7 @@ def loaded_code_objects() -> dict[str, Any]:
                 ks += 1
             mods.append({"key": key[-64:], "path": getattr(mod, "__file__", None), "kernels": ks})
         kset = sorted((k, v["src_sha256"]) for k, v in kernels.items())
-        # [R16 unit B] the EXECUTED specialization set: per kernel the code id(s) the launchers run (code_sha256 of the non-deny-listed sections when the
+        # the EXECUTED specialization set: per kernel the code id(s) the launchers run (code_sha256 of the non-deny-listed sections when the
         # cubin is readable, else the triton hash) x the executed autotune config -- the identity of what the CUDA graphs replay
         exec_set = sorted((k, v["src_sha256"], json.dumps([(e.get("id"), json.dumps(e.get("config"), sort_keys=True)) for e in v["executed"]], sort_keys=True))
                           for k, v in kernels.items())
@@ -337,7 +338,7 @@ def loaded_code_objects() -> dict[str, Any]:
                 "binary_kinds": sorted({b.split(":", 1)[0] for b in bins_all}),
                 "module_keys_sha256": _sha(json.dumps(sorted(m["key"] for m in mods))) if mods else None,
                 "kernel_names": sorted(kernels), "per_kernel": kernels, "modules_list": mods,
-                "triton_cache_dir": os.environ.get("TRITON_CACHE_DIR"),
+                "triton_cache_dir": settings.raw("TRITON_CACHE_DIR"),
                 "read_from": "torch._inductor.codecache.PyCodeCache (loaded modules) x CachingAutotuner.fn.src / compile_results[*].kernel + launchers[*].bin "
                              "(triton hash, cubin sha256 from asm or TRITON_CACHE_DIR/<hash>/*.cubin, per-ELF-section sha256, code_sha256 = every section "
                              "except CUBIN_DENY_LIST, code_sha256_normalized + section_detail.path_strings (absolute-path strings in device data decoded), "
@@ -347,8 +348,8 @@ def loaded_code_objects() -> dict[str, Any]:
 
 
 def loaded_code_objects_delta(start: dict[str, Any], end: dict[str, Any]) -> dict[str, Any]:
-    """[R16 unit B -- Daniel: repeated graph replay must be covered, not only compilation/warm-up] Compare two loaded_code_objects() snapshots of
-    ONE process (after engine build = compile + Inductor autotune + CUDA-graph capture, and after the last measured run): the graphs replay
+    """Compare two loaded_code_objects() snapshots of ONE process (after engine build = compile + Inductor autotune + CUDA-graph capture,
+    and after the last measured run), so that repeated graph replay is covered and not only compilation/warm-up: the graphs replay
     exactly the launchers that existed at capture, so an equal executed set + no new modules/kernels/binaries means the artifact identity
     recorded at build is the identity of every replayed step; anything new (a recompile, a re-tune, a new specialization) is named."""
     if not isinstance(start, dict) or not isinstance(end, dict) or start.get("error") or end.get("error"):
@@ -375,21 +376,21 @@ def loaded_code_objects_delta(start: dict[str, Any], end: dict[str, Any]) -> dic
 
 
 def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[str, Any]:
-    """[R15 compiled] Digest of the Inductor output code this process compiled (W1c's kernel identity: kernel_set_sha256 = sha256 of the sorted
+    """Digest of the Inductor output code this process compiled (W1c's kernel identity: kernel_set_sha256 = sha256 of the sorted
     {(kernel name, source sha256)}; call_set_sha256 over the pieces' launch programs), plus where it was read from.  Shared by the record
     path (RunHeader.compilation.generated_kernels) and commit_delta's versions.json so the two pins are comparable byte for byte."""
     try:
-        from verity_vllm.check import kernel_identity as KI
+        from verity_vllm.engine import kernel_identity as KI
 
-        ind = inductor_dir or os.environ.get("TORCHINDUCTOR_CACHE_DIR") or KI.inductor_cache_dir()
+        ind = inductor_dir or settings.TORCHINDUCTOR_CACHE_DIR or KI.inductor_cache_dir()
         doc = KI.collect(ind, KI.triton_cache_dir())
         gk = dict(doc["summary"])
         gk["inductor_cache_dir"] = ind
-        gk["per_process_cache_dir"] = os.environ.get(_VERITY_INDUCTOR_DIR_MARK) == "1"      # set by prepare_compiled_process_cache / compiled_commit.sh
+        gk["per_process_cache_dir"] = settings.raw(_VERITY_INDUCTOR_DIR_MARK) == "1"      # set by prepare_compiled_process_cache / compiled_commit.sh
         gk["pieces"] = [{"path": w["path"], "norm_sha256": w["norm_sha256"], "call_sha256": w["call_sha256"], "kernels": len(w["kernels"]),
                          "launches": w["launches"], "extern_calls": w["extern_calls"]} for w in doc["wrappers"]]
         gk["kernels"] = doc["kernels"]
-        gk["loaded"] = loaded_code_objects()                                       # [M-0776 (3)] the code objects this process actually loaded
+        gk["loaded"] = loaded_code_objects()                                       # the code objects this process actually loaded
         if gk["loaded"].get("kernel_names") is not None:
             gk["loaded"]["files_vs_loaded"] = {"in_files_not_loaded": sorted(set(doc["kernels"]) - set(gk["loaded"]["kernel_names"]))[:40],
                                                "loaded_not_in_files": sorted(set(gk["loaded"]["kernel_names"]) - set(doc["kernels"]))[:40]}

@@ -23,6 +23,10 @@ import Definitions.Accounting.Gates
 import Definitions.Accounting.Headline
 import Definitions.Accounting.HeadlineDc
 import Definitions.Accounting.Joint
+import Definitions.Accounting.JointBlocks
+import Definitions.Accounting.JointPeriod
+import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory
 import Definitions.Accounting.PerRun
@@ -45,6 +49,7 @@ import Definitions.Accounting.Remote.Deployed
 import Definitions.Accounting.Requirement
 import Definitions.Accounting.Requirement.Placed
 import Definitions.Accounting.Responder
+import Definitions.Accounting.Schedule
 import Definitions.Accounting.Served
 import Definitions.Accounting.Tag
 import Definitions.Accounting.TS
@@ -68,5 +73,6 @@ receipts bound to the matmul on two locations, the deployed bound receipt's sket
 run's guarantee per run is, PoUW's verdict, credits and help on one node of the actual circuit, stacking's carriers:
 device memory whose post-seed contents are a circuit's values, seen through its inputs and encodes, a declared
 circuit's requirement: the values its schedule keeps live and reads, by block, and when the audit's store and plans are
-its, the run tree of a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds
-on a declared circuit are proved over (`Gates`). -/
+its, a pass's layout as the verifier's plan of a schedule of counted bits (`ScheduleDeterministic`), the run tree of
+a prover's wipes that the memory cap's lifetime pool is over, and the gate model the lower bounds on a declared
+circuit are proved over (`Gates`). -/

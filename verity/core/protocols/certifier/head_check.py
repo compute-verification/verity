@@ -1,10 +1,11 @@
 """N2's check of one certified record head, zero-knowledge: the head committed at leaf 2 + direction of N2's root
 (`service.LinkWindows`) is the link-window's, complete, under the declared grid, and, where its end has an occupancy
 profile, its counts are the profile's; and the certificate's signed digest is the head's record digest salted by the
-certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v4), which runs on
-every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its circuit digest
-(`gate`), pinned in this module's sidecar and held to the Definition by circuit-check, and N2's verifier of record runs
-its `reference`, which the tests hold to the circuit.
+certifier. A Boolean Definition, the gated part of N2's proof unit (`service`'s `NetworkLinkWindow` v5, one per end),
+which runs on every link-window; its one output is the ok bit. That unit's Program holds it as one gate that names its
+circuit digest (`gate`), pinned in this module's sidecar and held to the Definition by circuit-check; N2's verifier of
+record reads its output from the unit's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`,
+which the tests hold to the circuit.
 
     NetworkHeadCheck_v2{L, T, COUNTS}
         (record, record_domain: Digest, link: Array<L, Byte>, direction: Array<1>, window: Array<64>,
@@ -34,8 +35,9 @@ its direction and window, the grid's T, r, B and τ_b, status 0 (complete) and t
 COUNTS, its T counts are the profile's row (`NetworkHeadCounts`). (4) The certificate signs this head: R, the record
 digest of the head (`NetworkRecordDigest`, `tagged_sha512` of the record tag and the head), salted by `salt_c` is
 `signed`, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ R) (`NetworkSignedDigest`). Two fields are free: the deadline byte,
-which the certificates' host-side check reads (`LinkWindows.verify`), and the frames root, which N3's design holds the
-window's frames to on every port-window that recorded frames (a prototype in the clear, not a proof-service unit).
+which N2's unit reads beside the head check for its public deadline bit (`service.OUTPUTS`), and the frames root,
+which N3's design holds the window's frames to on every port-window that recorded frames (a prototype in the clear,
+not a proof-service unit).
 
 `salt_c` is not committed: (4) holds it, up to a SHA-512 collision, to the one the certifier signed under, so the
 certificate binds the head the check opens, and the head leaf stays the head's bytes alone, the leaf N3 reads.
@@ -113,8 +115,9 @@ def grid_bytes(params: GridParams, parameters: bytes) -> bytes:
 
 # --- the circuit: traced parts ----------------------------------------------------------------------------------------
 
-def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str) -> CompositeDefinition:
-    """A Definition traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
+def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Callable, doc: str,
+          version: int = 1) -> CompositeDefinition:
+    """A Definition ``name_v{version}`` traced from ``build(C, S, *elements)`` once per binding of ``statics``."""
 
     @lru_cache(maxsize=None)
     def traced(*key) -> TR.Traced:
@@ -126,8 +129,9 @@ def _part(name: str, statics: tuple[str, ...], signature: Callable, build: Calla
         params, ret = signature(S)
         return TR.emit(traced(*(getattr(S, k) for k in statics)), [t for _, t in params], ret, B, *colls)
 
-    d = CompositeDefinition(name, 1, statics, signature, body, conformance="exact-model-tested", doc=doc)
+    d = CompositeDefinition(name, version, statics, signature, body, conformance="exact-model-tested", doc=doc)
     d.traced = traced  # type: ignore[attr-defined]
+    d.build = build  # type: ignore[attr-defined]  # C-Flock lowers an activation by it, not gate by gate
     return d
 
 

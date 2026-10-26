@@ -76,12 +76,16 @@ def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/c
 
 
 def committer_engine(llm: Any) -> SimpleNamespace:
-    """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from ``verity_vllm.LLM``'s public
-    names: the ``vllm.LLM``, its in-process model runner, the served model, and the pin's checkpoint (its geometry digest)."""
+    """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from the public names of the
+    harness's ``target.engine`` (``verity_vllm.LLM``, or for a local checkpoint the runner's stand-in, which has no pin):
+    the ``vllm.LLM``, its in-process model runner, the served model, and the checkpoint's repo and revision (into its
+    geometry digest), which are the pin's, or for a local checkpoint vLLM's model path with no revision."""
     from verity_vllm.engine import handle
 
-    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model,
-                           cp={"repo": llm.pin.model, "revision": llm.pin.revision})
+    pin = getattr(llm, "pin", None)
+    mc = llm.vllm.llm_engine.vllm_config.model_config
+    cp = {"repo": pin.model, "revision": pin.revision} if pin is not None else {"repo": mc.model, "revision": mc.revision}
+    return SimpleNamespace(llm=llm.vllm, runner=handle.model_runner(llm.vllm), model=llm.model, cp=cp)
 
 
 class CommitArm:
@@ -101,7 +105,7 @@ class CommitArm:
         return self
 
     def engine(self, target: Any) -> Any:
-        return target.engine._engine
+        return committer_engine(target.engine)
 
     def ready(self, target: Any) -> None:
         from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
@@ -216,9 +220,6 @@ class CompiledCommitArm(CommitArm):
         self.source = ServedCompiledSource(into=target.hooks)
         self.source.install_hooks()
         return self
-
-    def engine(self, target: Any) -> Any:
-        return committer_engine(target.engine)
 
     def attach(self, com: Any, engine: Any) -> None:
         self.source.note_engine(engine.model)

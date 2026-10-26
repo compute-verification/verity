@@ -8,8 +8,9 @@ calls go on, and the rest of the call runs on a main lane of the run's own at th
 stream by events on both sides (``deferred-caller`` leaves it on the caller's stream, #564's first cut).
 
 Under ``deferred-a`` A's tree goes beside the tile hashing too, where the kernel's pipeline splits A's commitment
-(`run.Pipeline`'s ``split_a``: ``rows_a``, pd_commit's mode 1, then ``tree_seed_a``, pd_tree), with hashing
-(`LaneCalls._aside`); a retained pass's record reads the tree once the call's side lane is done.  The main lane keeps the
+(`run.Pipeline`'s ``split_a``: ``rows_a``, pd_commit's mode 1, then ``tree_seed_a``, pd_tree; outside pd, where the pipeline
+has it, the same two steps over the generic kernels, A's level 0 among the tree's), with hashing (`LaneCalls._aside`,
+`splits_at`); a retained pass's record reads the tree once the call's side lane is done.  The main lane keeps the
 per-row keying forming reads (``row_seeds``: each real row's digest, seed, line key and E_A line), and A's tree builds
 A's levels, seed_A and line_a off it.  The padding rows (m₁₆ … the kernels' tile, outside the
 matmul) are the GEMM's alone: no tile leaf reads them (the leaves stop at m₁₆ rows) and y is served to m, so the split
@@ -33,6 +34,7 @@ format can't run is refused (`schedule_of`).
 from __future__ import annotations
 
 import functools
+import hashlib
 import struct
 from contextlib import nullcontext
 from typing import Any
@@ -40,23 +42,24 @@ from typing import Any
 from verity.core.protocols.pouw.serving import SCHEDULES, Schedule, StepIO, hash_format, schedule_refusals
 
 from verity_vllm.protocols.pouw.pearl_c.graphs import SLOT_BYTES
-from verity_vllm.protocols.pouw.pearl_c.host import _event
+from verity_vllm.protocols.pouw.pearl_c.host import _event, _stream
 
 #: each call step's group (`verity.core.protocols.pouw.serving.GROUPS`), which a schedule places on a lane.  The per-row
 #: keying forming reads (A's pads, each row's digest, each real row's seed) is ``row_seeds``; A's hm96 leaves, tree and
 #: unit seed are ``a_tree``.  ``commit_a`` (`run.Pipeline.FUSED`), which also writes each row's seed and E_A line, is
-#: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``
+#: ``row_seeds``, and so is ``rows_a``, its mode 1; ``tree_seed_a`` (A's levels, seed_A and line_a) is ``a_tree``;
+#: ``form_ep_a`` (E' and the forming in one launch) is ``forming``, and so is ``form_epw_a`` (those and A'F_B's windows)
 STEP_GROUPS = {"pad_a": "row_seeds", "rowdig_a": "row_seeds", "hash_rows_a": "a_tree", "tree_a": "a_tree", "seed_a": "a_tree",
                "seeds_a": "row_seeds", "lines_ea": "forming", "stats_a": "forming", "eprime_a": "forming", "form_a": "forming",
                "af": "cleanup", "pa": "cleanup", "gemm_pearlc": "cleanup", "hash_leaf": "tile_hash", "commit_a": "row_seeds",
-               "rows_a": "row_seeds", "tree_seed_a": "a_tree"}
+               "rows_a": "row_seeds", "tree_seed_a": "a_tree", "form_ep_a": "forming", "form_epw_a": "forming"}
 #: the steps this path can run on a side lane, with the per-call buffers they read and write (the constant keys and the pass's
 #: leaf buffer aside, which no later call rewrites): each shape rotates these, so a call never overwrites what the side lane
 #: still reads.  The tile hashing reads C~ and U; A's tree (``tree_seed_a``, only where the pipeline splits A's commitment,
-#: which then writes no padding rows' E_A lines) reads level 0 and the call's keys and writes the levels, seed_A and line_a.
-#: The screen runs on the main lane or the caller
+#: which then writes no padding rows' E_A lines) reads level 0 (outside pd, the row digests it hashes into level 0) and the
+#: call's keys and writes the levels, seed_A and line_a.  The screen runs on the main lane or the caller
 SIDE_IO = {"hash_leaf": StepIO("tile_hash", frozenset({"c", "u"}), frozenset({"segdig_t"})),
-           "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
+           "tree_seed_a": StepIO("a_tree", frozenset({"tree_a", "rowdig_a", "keys"}), frozenset({"tree_a", "seed_a", "line_a"}))}
 SIDE_GROUPS = frozenset(io.group for io in SIDE_IO.values())
 #: the rows (m₁₆) from which a call's A tree, where it is aside, runs on the side lane after the call's rather than on the
 #: call's own: on the H200 the own lane was the faster at m₁₆ 16 and the other at 64, at 7 of GLM-5.3's 8 dense shapes each
@@ -76,6 +79,42 @@ def splits(kernel: Any) -> bool:
     return "tree_seed_a" in getattr(kernel.run.Pipeline, "FUSED", {})
 
 
+def splits_at(kernel: Any, m16: int, n: int, k: int) -> bool:
+    """Whether `kernel`'s pipeline splits A's commitment at a shape: at pd's (`run.pd_variant`), and at every other where
+    it splits the generic kernels too (`run.Pipeline.FUSED_GENERIC`, a prefill's rows among them)."""
+    R = kernel.run
+    return splits(kernel) and (hasattr(R.Pipeline, "FUSED_GENERIC") or R.pd_variant(m16, n, k) is not None)
+
+
+def whole_options(entry: str, kernel: Any, whole_defer: bool, whole_defer_a: bool, whole_fork_stats: bool,
+                  whole_tree_sm: bool, lag_ends: bool = False, aside_ends: bool = False,
+                  whole_prefetch_b: bool = False, whole_shape_joins: bool = False) -> None:
+    """Refuse a whole capture's options, and a pass end's, where `kernel` or the others can't run them.  `whole_defer_a`
+    (with `whole_defer`, on a kernel whose pipeline splits A's commitment) also defers each call's A tree within a whole
+    capture (`pouw_pearl_c_graphs`), and `whole_fork_stats` (with `whole_defer`) runs each call's A scales there beside its
+    A commitment; `whole_tree_sm` (with `whole_defer_a`) launches the call's GEMMs beside its A tree with one persistent CTA
+    fewer, leaving the tree's CTA its SM; `whole_shape_joins` (with `whole_defer`) joins a call's side steps only before
+    the next call of its shape; `aside_ends` (with `lag_ends`) runs a lagged end's tile tree aside;
+    `whole_prefetch_b` (with `whole_defer`) prefetches each call's B̃ into L2 beside its A commitment (`run.Pipeline.prefetch_b`,
+    which writes nothing)."""
+    if whole_defer_a and not (whole_defer and splits(kernel)):
+        raise ValueError(f"{entry}: whole_defer_a defers A's tree within a deferred whole capture (whole_defer), on a kernel "
+                         f"whose pipeline splits A's commitment (`Pipeline.FUSED` tree_seed_a)")
+    if whole_fork_stats and not whole_defer:
+        raise ValueError(f"{entry}: whole_fork_stats forks A's scales within a deferred whole capture (whole_defer)")
+    if whole_shape_joins and not whole_defer:
+        raise ValueError(f"{entry}: whole_shape_joins joins the side steps of a deferred whole capture (whole_defer)")
+    if whole_tree_sm and not (whole_defer_a and hasattr(kernel.run.Pipeline, "beside")):
+        raise ValueError(f"{entry}: whole_tree_sm leaves a deferred A tree (whole_defer_a) its SM, on a kernel whose "
+                         f"pipeline's GEMMs take `Pipeline.beside`")
+    if aside_ends and not lag_ends:
+        raise ValueError(f"{entry}: aside_ends runs a lagged end's tree aside, and lag_ends is off")
+    if whole_prefetch_b and not whole_defer:
+        raise ValueError(f"{entry}: whole_prefetch_b prefetches within a deferred whole capture (whole_defer)")
+    if whole_prefetch_b and not hasattr(kernel.run.Pipeline, "prefetch_b"):
+        raise ValueError(f"{entry}: whole_prefetch_b runs the kernel's B̃ prefetch (`Pipeline.prefetch_b`), which it lacks")
+
+
 def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedule:
     """`name`'s schedule (`verity.core.protocols.pouw.serving.SCHEDULES`), refused where the scheme's format, this path or (when
     given) `kernel` can't run it: A's tree leaves the main lane only on a kernel whose pipeline splits A's commitment."""
@@ -92,18 +131,114 @@ def schedule_of(name: str | Schedule, scheme: Any, kernel: Any = None) -> Schedu
     return s
 
 
+def admitted(scheme: Any, kernel: Any) -> frozenset[str]:
+    """The schedules' names `schedule_of` admits for `scheme` on `kernel`."""
+    ok = set()
+    for name in SCHEDULES:
+        try:
+            schedule_of(name, scheme, kernel)
+        except ValueError:
+            continue
+        ok.add(name)
+    return frozenset(ok)
+
+
 class LaneCalls:
     """`PearlCDeviceRun`'s lanes, as its base class: the run's ``schedule``, ``main``, ``sides``, ``driver``, ``hashing``,
-    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``, ``_side_turn`` and
-    ``_side_cache``, and its
-    graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``)."""
+    ``cur``, ``kernel``, ``device``, ``nb``, ``keys``, ``uploads``, ``roots``, ``roots_buf``,
+    ``_side_turn`` and ``_side_cache``, and its
+    graph path's lane graphs (`GraphCalls._lane_graph`, ``_capture_lanes``, ``_offsets``); where a whole capture cuts a
+    call's steps (`_call_cuts`, `_call_tree`, `_call_stats`, from ``entry`` and `_call_names`); and a lagged end's readback
+    (`settle`: ``_lagged``, ``commits``) and tree aside (`_end_aside`: ``_end_side``, ``leaves``); and a call's A words
+    (`_stage_a`)."""
+
+    def _call_cuts(self, pipe: Any) -> tuple[int, int]:
+        """Where a deferred whole capture (`whole_defer`) splits `_call_steps`: after A's tree, beside which the call before's
+        tile hashing runs, and before the call's own tile hashing, which it forks."""
+        have = {name for name, _, _ in pipe.steps()}
+        groups = [STEP_GROUPS[x] for x in self._call_names(pipe) if x in have]
+        commit = ("row_seeds", "a_tree")
+        a = next((i for i, g in enumerate(groups) if g not in commit), len(groups))
+        b = next((i for i, g in enumerate(groups) if g == "tile_hash"), len(groups))
+        if any(g in commit for g in groups[a:]) or any(g != "tile_hash" for g in groups[b:]):
+            raise RuntimeError(f"{self.entry}: the call's steps {groups} don't start with A's commitment and end with the tile hashing")
+        return a, b
+
+    def _call_tree(self, pipe: Any) -> int | None:
+        """Where a deferred-a whole capture (`whole_defer_a`) forks A's tree from `_call_steps`: ``tree_seed_a``'s place, the
+        last of A's commitment's steps (`_call_cuts`' first cut is after it), or None where the pipeline doesn't split it."""
+        have = {name for name, _, _ in pipe.steps()}
+        present = [x for x in self._call_names(pipe) if x in have]
+        if "tree_seed_a" not in present:
+            return None
+        at = present.index("tree_seed_a")
+        if at + 1 != self._call_cuts(pipe)[0]:
+            raise RuntimeError(f"{self.entry}: the call's steps {present} don't end A's commitment with A's tree")
+        return at
+
+    def _call_stats(self, pipe: Any) -> int | None:
+        """Where a whole capture forking A's scales (`whole_fork_stats`) takes ``stats_a`` from `_call_steps`: its place, a
+        forming step, which `_call_cuts` holds between A's commitment and the tile hashing; or None where the call has none."""
+        have = {name for name, _, _ in pipe.steps()}
+        present = [x for x in self._call_names(pipe) if x in have]
+        return present.index("stats_a") if "stats_a" in present else None
+
+    def _split_whole(self, sh: Any) -> bool:
+        """Whether a call of `sh` splits A's commitment for a deferred-a whole capture (`whole_defer_a`, deferring): a call
+        that replays as a graph, at a shape the kernel's pd launches take (`_aside`'s rule)."""
+        return (self._defers_a() and self._graphed(sh.m16)
+                and self.kernel.run.pd_variant(sh.m16, sh.n, sh.k) is not None)
+
+    def settle(self) -> None:
+        """Complete a lagged end's readback (`end` with ``lag``), waiting for its copies: its commitment, in place."""
+        if self._lagged is None:
+            return
+        (out, done, (roots_a, root, flags), units, count), self._lagged = self._lagged, None
+        done.synchronize()
+        self._ended(out, roots_a.numpy().tobytes(), root.numpy().tobytes(), flags.tolist(), units, count)
+
+    def _end_aside(self, count: int, roots: Any, flags: Any) -> tuple[int, Any, list[Any]]:
+        """A lagged end's tile tree on a stream of its own (`aside_ends`), so the next step needn't wait for it: on the current
+        stream the pass's leaves are copied to the end's buffer, which `settle` left free, and A's roots and the flag counts
+        start back to the host; the end's stream waits for that.  Returns the copy's address, the stream and the readbacks."""
+        import torch
+        n = self.nb * count
+        if self._end_side is None or self._end_side[1].numel() < n:
+            self._end_side = (self._end_side[0] if self._end_side else torch.cuda.Stream(self.device),
+                              torch.empty(2 * n, dtype=torch.uint8, device=self.device))
+        side, staged = self._end_side
+        staged[:n].copy_(self.leaves[:n], non_blocking=True)
+        got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True) for t in (roots, flags)]
+        side.wait_stream(torch.cuda.current_stream())
+        return staged.data_ptr(), side, got
+
+    def _stage_a(self, sh: Any, x2: Any, m: int, filled: int) -> None:
+        """A call's A words on the current stream: x2's m rows widened to FP32 into ``sh.xa`` and its rows m to `filled` - 1
+        zeroed, in one launch where the kernel has widen_a and x2 is aligned, contiguous BF16; else torch's copy and fill.
+        Inside a whole capture forking A's scales (`GraphCalls._widen_later`) that launch is left to the call's `_into`
+        (``_widening``), which runs it beside A's commitment where the commitment reads x2 itself, else first."""
+        import torch
+        dev, k = self.kernel.dev, x2.shape[-1]
+        if (self.device.type == "cuda" and x2.dtype == torch.bfloat16 and x2.is_contiguous() and x2.data_ptr() % 16 == 0
+                and k % 8 == 0 and getattr(dev, "has", lambda _: False)("widen_a")):
+            if self._widen_later(sh):
+                self._widening = (sh, x2.data_ptr(), m, max(filled, m))
+                return
+            self.kernel.run.widen_a(dev, x2.data_ptr(), sh.xa.data_ptr(), m, max(filled, m), k, stream=_stream(self.device))
+            return
+        sh.xa[:m].copy_(x2)
+        if filled > m:
+            sh.xa[m:filled].zero_()
+
+    def _ended(self, out: dict[str, Any], roots_a: bytes, root: bytes, flags: list[int], units: int, count: int) -> None:
+        out.update(transcript_root=root.hex(), activation_roots=hashlib.sha512(roots_a).hexdigest(),
+                   failing_rows=int(flags[0]), unsure_rows=int(flags[1]))
+        self.commits.update(transcript_root=out["transcript_root"], units=units, tiles=count)
 
     def _aside(self, sh: Any) -> bool:
         """Whether a call of `sh` runs A's tree on the side lane (the module's docstring): the schedule moves ``a_tree``,
-        hashing is on, and the kernel's pipeline splits A's commitment at this shape (pd's)."""
-        R = self.kernel.run
-        return ("a_tree" in self.schedule.side and self.hashing and splits(self.kernel)
-                and R.pd_variant(sh.m16, sh.n, sh.k) is not None)
+        hashing is on, and the kernel's pipeline splits A's commitment at this shape (`splits_at`)."""
+        return "a_tree" in self.schedule.side and self.hashing and splits_at(self.kernel, sh.m16, sh.n, sh.k)
 
     def _side_groups(self, sh: Any) -> frozenset[str]:
         """The groups a call of `sh` runs on the side lane, with hashing: the schedule's, but A's tree only `_aside`."""
@@ -156,8 +291,9 @@ class LaneCalls:
             if cuda and ("keys" in rot or g is not None) and sh.done[j] is not None:   # the side lane may still read set j's keys
                 caller.wait_event(sh.done[j])
                 waited = True
+            stream = caller if self.uploads.cuda else None
             data = self._slot_data(w, sh, index) if g is not None else self.keys(self.roots[w], index, sh.m16)
-            self.uploads.put(keys, data, caller if self.uploads.cuda else None)
+            self.uploads.put(keys, data, stream)
         if cuda and main is not None:               # the main lane starts after the caller's x, y and keys
             main.event.record(caller)
             lane.wait_event(main.event)
@@ -180,9 +316,9 @@ class LaneCalls:
                     for f in side[:side_cut]:
                         f()
                 if g is None:
-                    size, nb = pipe.size["tree_a"], self.nb
+                    size, nb, p = pipe.size["tree_a"], self.nb, index - self.cur.base
                     with torch.cuda.stream(tl.stream) if cuda else nullcontext():
-                        self.roots_buf[nb * index:nb * (index + 1)].copy_(sh.buf("tree_a")[size - nb:size])
+                        self.roots_buf[nb * p:nb * (p + 1)].copy_(sh.buf("tree_a")[size - nb:size])
                 if cuda and apart:
                     to.tree_event.record(tl.stream)
             if side:

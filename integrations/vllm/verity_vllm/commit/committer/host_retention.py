@@ -67,10 +67,10 @@ class _HostWindows:
 
 
 class _HostRanges:
-    """[R17 fp8, R17-5] The raw bytes of one step retained on host as pinned BYTE RANGES of the step stream (retain=host with
+    """The raw bytes of one step retained on host as pinned BYTE RANGES of the step stream (retain=host with
     `VERITY_RETAIN_EXCLUDE`): the chunk-aligned interior of every tensor whose value family is excluded (the FA3 hidden M1 plane at
     3,545 tokens: 93 % of the prefill step) is NOT copied off the staging window -- those leaves open by REPLAY against the original
-    root (R17-5); every other chunk (module outputs, the boundary chunks an excluded tensor shares with its neighbours) is kept and
+    root; every other chunk (module outputs, the boundary chunks an excluded tensor shares with its neighbours) is kept and
     opens from host as before.  `ranges` = [(lo, hi, hv)] disjoint, sorted, hv a pinned uint8 view of exactly hi - lo bytes; a slice
     may span consecutive ranges (a window boundary splits one retained region in two) but never a gap: a gap is a KeyError, never
     zeros.  Same duck type as `_HostWindows` / the contiguous `keep` tensor."""

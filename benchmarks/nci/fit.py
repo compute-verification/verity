@@ -14,8 +14,10 @@ server window of whole wipe periods (``tiers.windows_bound``'s windows):
 * F2, state: a window of L seconds reads at most S = R_wipe + lambda_in L bits, lambda_in = sigma + tau + alpha F
   (``tiers.ingress``): the residual at the wipe that opens it and its intake. What crosses a later wipe inside it isn't
   novel; what crosses the one that opens it is, so a token carried across a wipe in the residual pays like one carried in.
-* F3, loss (empirical): every sequence's computation in a model that reaches the target loss L* depends on at least N*
-  updated weights beyond the registered models; ``n_star`` reads N* off a loss law, at no data limit unless given one.
+* F3, loss (empirical): every token's computation in a dense model that reaches the target loss L* depends on at least
+  N* updated weights beyond the registered models (``ReachSlots`` at token threads, which ASK-68 adopts for dense
+  recipes; false for a token-routed MoE, whose tokens use fewer); ``n_star`` reads N* off a loss law, at no data limit
+  unless given one. Each server's first window, which builds its weights from a seed, is charged (``left_out``).
 * F4, boundary (empirical): one window starts each token, from its id; any other window that does work on it reads at
   least w_e bits of its values: its hidden state crossing in and its gradient crossing back, or its context's keys and
   values, which cost more. An ensemble, whose members each start the token, is outside it.
@@ -165,6 +167,23 @@ def share(p: dict, rate: float) -> float:
     return rate * 2 / p["kappa"] / p["node_flops"]
 
 
+def left_out(p: dict, periods: int) -> float:
+    """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
+    over the horizon. That window builds its weights from a seed, so F1's weight half fails there (ASK-68), and
+    ``Nci.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
+    it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
+    first windows, of the threads started later, which do no work in a first window when every server starts with the
+    run. A server that joins later, or a recipe that seeds weights after a server's first window (progressive growth),
+    is outside it."""
+    return p["mfu"] * periods * p["wipe_s"] / (p["years"] * T.YEAR)
+
+
+def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
+    """The fit bound's cap on monitored efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
+    return share(p, rate) + left_out(p, periods)
+
+
 def closed_form(p: dict, wipe_bits: float) -> float:
     return 4 * wipe_bits * intake(p) / (p["kappa"] * p["d"] * p["b_w"] * p["b_a"] * p["node_flops"])
 
@@ -212,9 +231,9 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     S = state(p, R)
     declared = closed["declared"]
     fits = {k: fit_rate(p, R, N, w) for k, w in BOUNDARY.items()}
-    mu = {k: share(p, rate) for k, (rate, _) in fits.items()}
+    mu = {k: share(p, rate) + left_out(p, periods) for k, (rate, periods) in fits.items()}
     rate_train, periods_train = fit_rate(p, R, N, BOUNDARY["central"], B_TRAIN["central"])
-    mu_train = share(p, rate_train)
+    mu_train = share(p, rate_train) + left_out(p, periods_train)
     rep = replica(p, S, L, B_TRAIN["central"], fit)
     path = replica(p, S, L, B_TRAIN["central"], fit, PATH_GAIN["smalltalk"], PATH_MULTIPLIER["smalltalk"], 0.0)
     return {

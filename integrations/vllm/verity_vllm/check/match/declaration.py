@@ -8,16 +8,21 @@ import hashlib
 import json
 import os
 import re
+from collections.abc import Mapping
+from typing import Any
 
-from verity_vllm.check.match import batch_decomp as BD
+from verity_vllm.observe import capture_log as CL
+from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.records.fields import RecordError
+from verity_vllm.records.workload import Workload
 
 GP_SCHEMA = "cb-a/global-program/v1"
 
 
 def request_id_of(index: int) -> str:
-    """`r<k>` (COORD R15 ruling 2) -- the same function as global_program.request_id_of (kept local: this module must not import torch paths)."""
+    """`r<k>` -- the same function as global_program.request_id_of (kept local: this module must not import torch paths)."""
     return f"r{int(index)}"
 
 
@@ -34,26 +39,27 @@ def sha256_file(p: str) -> str:
 
 def component_shape(d: str) -> tuple[int, ...] | None:
     """(LP, T[, C]) of a component dir: a derive_step dir (`construction_manifest.json`) or a fold record standing in for one."""
-    return BD.derived_shape(d)
+    return DI.derived_shape(d)
 
 
 _VARIANT_RE = re.compile(r"^stoch-t(?P<t>[0-9.]+)-p(?P<p>[0-9.]+)(?:-k(?P<k>[0-9]+))?$")
 
 
-def manifest_sampling(wl: dict, variant: str | None = None) -> dict:
-    """The manifest's declared sampling policy as the header records it.  SOURCES, all read, none trusted alone [rev-pm M-0667 TIP N5]:
+def manifest_sampling(wl: Workload | Mapping[str, Any], variant: str | None = None) -> dict:
+    """The manifest's declared sampling policy as the header records it.  SOURCES, all read, none trusted alone:
     (1) `variants[variant]` -- the table the DRIVER consumes (vllm_adapter.load_workload) and the header records: the value of record;
     (2) the variant LABEL (greedy | stoch-t<T>-p<P>[-k<K>]) parsed; (3) explicit `sampling.{temperature,top_p,top_k}`; (4) `sweep.sampling_params`.
     When two sources disagree on a key the result carries `conflict` (G1 fails closed, named): a manifest whose label says p0.95 while
     its table -- the one the run used -- says 0.9 is not one declaration.  `variant` overrides the workload-level selection (per-request pin)."""
-    ms = dict(wl.get("sampling") or {})
-    v = variant or ms.get("variant") or (wl.get("sweep") or {}).get("sampling")
+    w = Workload.of(wl, "workload")
+    sweep = w.sweep or {}
+    v = variant or w.sampling_variant or sweep.get("sampling")
     per_key: dict[str, dict[str, object]] = {}   # key -> {source: value}
     def put(src: str, k: str, val) -> None:
         if val is not None:
             per_key.setdefault(k, {})[src] = val
-    table = (wl.get("variants") or {}).get(v) if isinstance(v, str) else None
-    if isinstance(table, dict):
+    table = w.variants.get(v) if isinstance(v, str) else None
+    if table is not None:
         for k in ("temperature", "top_p", "top_k"):
             put("variants_table", k, table.get(k))
     if v == "greedy":
@@ -62,7 +68,9 @@ def manifest_sampling(wl: dict, variant: str | None = None) -> dict:
         m = _VARIANT_RE.match(v)
         put("label", "temperature", float(m["t"])); put("label", "top_p", float(m["p"])); put("label", "top_k", int(m["k"] or 0))
     if variant is None:
-        for src, d in (("sampling", ms), ("sweep.sampling_params", (wl.get("sweep") or {}).get("sampling_params") or {})):
+        s = w.sampling
+        explicit = {} if s is None else {"temperature": s.temperature, "top_p": s.top_p, "top_k": s.top_k}
+        for src, d in (("sampling", explicit), ("sweep.sampling_params", sweep.get("sampling_params", {}))):
             for k in ("temperature", "top_p", "top_k"):
                 put(src, k, d.get(k))
     out: dict = {"variant": v} if v else {}
@@ -77,7 +85,7 @@ def manifest_sampling(wl: dict, variant: str | None = None) -> dict:
             if src in srcs:
                 out[k] = srcs[src]
                 break
-    if isinstance(v, str) and v != "greedy" and table is None and wl.get("variants") is not None:
+    if isinstance(v, str) and v != "greedy" and table is None:
         conflict.append(f"variant {v!r} is not in the manifest's `variants` table (the driver refuses such a manifest)")
     if conflict:
         out["conflict"] = conflict
@@ -88,23 +96,23 @@ def manifest_sampling(wl: dict, variant: str | None = None) -> dict:
 def mock_global_program(workload_path: str, component_dirs: list[str], eos_token_ids: list[int] | None = None, lag: int | None = None) -> dict:
     """The rooted workload Program's INTERFACE assembled from the declared workload and the Build's request components, so the
     global check can run before lane gprog's builder lands.  It reads the manifest and the components only -- never the record.
-    [R17-1] `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = a pre-R17-1 Program that
+    `lag` = the declared scheduler's post-EOS rows (0/1) the mock Program is specialized for; None = an older Program that
     declares no lag (G6 then fails by name on any EOS stop)."""
-    wl = json.load(open(workload_path))
-    sw = wl.get("sweep") or {}
-    arrive = sw.get("arrive_steps") or [0] * len(wl["requests"])
+    wl = Workload.load(workload_path)
     comps = {}
     for d in component_dirs:
         sh = component_shape(d)
         if sh is not None:
             comps.setdefault(sh, d)
     reqs = []
-    for i, r in enumerate(wl["requests"]):
-        lp, cap = len(r["prompt_token_ids"]), int(r["max_tokens"])
+    for i, r in enumerate(wl.requests):
+        if r.prompt_token_ids is None:
+            raise RecordError(wl.where, f"requests[{i}].prompt_token_ids", "is absent (a lengths-only plan): the Program declares each prompt")
+        lp, cap = len(r.prompt_token_ids), r.max_tokens
         T = cap - 1
-        reqs.append({"index": i, "request_id": request_id_of(i), "workload_request_id": r["request_id"], "prompt_len": lp, "max_tokens": cap, "T_bound": T,
-                     "arrive_step": int(r.get("arrive_step") if r.get("arrive_step") is not None else (arrive[i] if i < len(arrive) else 0)),
-                     "prompt_sha256": hashlib.sha256(json.dumps(r["prompt_token_ids"]).encode()).hexdigest()[:16],
+        reqs.append({"index": i, "request_id": request_id_of(i), "workload_request_id": r.request_id, "prompt_len": lp, "max_tokens": cap, "T_bound": T,
+                     "arrive_step": wl.arrive_step(i),
+                     "prompt_sha256": hashlib.sha256(json.dumps(list(r.prompt_token_ids)).encode()).hexdigest()[:16],
                      "component": {"dir": comps.get((lp, T)), "LP": lp, "T": T},
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
     from verity_vllm.pipeline.global_program import MODELLED_ENGINE
@@ -141,11 +149,11 @@ _LAG_STATIC_RE = re.compile(r",lag=(-?\d+)\}$")
 
 
 def workload_lag_static(desc: dict) -> int | None:
-    """[R17-1] the `lag` static of the workload Program AS THE CODEC WROTE IT, read from the descriptor (both places are inside the digest
+    """The `lag` static of the workload Program AS THE CODEC WROTE IT, read from the descriptor (both places are inside the digest
     program_digest verifies): the codec inlines a specialization's binding record into its spec id in static-parameter order
     (`Workload_v1{requests=[...],shared=[...],lag=1}`, verity.ml.circuits.codec._spec_id), so `desc["program_fn"]` ends in `,lag=<n>}` and the
     root id `Root[Workload_v1{...,lag=<n>}]_v1` carries the same suffix; the two must agree.  A descriptor whose root definition carries an
-    explicit `bindings.lag` (the mock form) is read from there.  None = a Program that declares no lag (every pre-R17-1 Build)."""
+    explicit `bindings.lag` (the mock form) is read from there.  None = a Program that declares no lag (every Build from before the static)."""
     ddefs = desc.get("definitions")
     root_id = desc.get("root")
     root_def = ddefs.get(root_id) if isinstance(ddefs, dict) and isinstance(root_id, str) else None
@@ -194,7 +202,9 @@ def relocate_components(derived: dict, artifact_path: str) -> dict:
 def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     """Lane gprog's `workload_program.json` (GP-01, `verity/workload-program/v1`) -> this checker's interface.  The rooted Program's
     component dirs come from `inputs.derived` ("lp,t" -> derive_step dir); its address map and chronology are carried through and
-    cross-checked (component digests, per-request instance counts, programmed steps)."""
+    cross-checked (component digests, per-request instance counts, programmed steps).  The manifest it was built from
+    (`workload_path`, else `inputs.manifest`) is read through the workload record, and one that declares no prompt for a request (a
+    lengths-only plan) is refused by name."""
     art = json.load(open(artifact_path))
     if not art.get("ok", True):
         raise ValueError(f"{artifact_path}: builder result not ok ({art.get('reason')}: {art.get('missing_derived')})")
@@ -231,13 +241,17 @@ def from_gprog(artifact_path: str, workload_path: str | None = None) -> dict:
     relocation = relocate_components(derived, artifact_path)
     derived = relocation["derived"]
     wl_path = workload_path or (art.get("inputs") or {}).get("manifest")
-    wl = json.load(open(wl_path)) if wl_path and os.path.exists(wl_path) else None
+    wl = Workload.load(wl_path) if wl_path and os.path.exists(wl_path) else None
+    declared = () if wl is None else wl.requests
+    for i, q in enumerate(declared):
+        if q.prompt_token_ids is None:
+            raise RecordError(wl.where, f"requests[{i}].prompt_token_ids", "is absent (a lengths-only plan): the Program declares each prompt")
     # prompts by manifest POSITION (the Program's r<k>); the manifest's own request_id is the workload (UUID) id
-    prompts = {request_id_of(i): r["prompt_token_ids"] for i, r in enumerate((wl or {}).get("requests", []))}
-    wl_uuids = {request_id_of(i): r.get("request_id") for i, r in enumerate((wl or {}).get("requests", []))}
+    prompts = {request_id_of(i): list(q.prompt_token_ids) for i, q in enumerate(declared)}
+    wl_uuids = {request_id_of(i): q.request_id for i, q in enumerate(declared)}
     amap = {r["request_id"]: r for r in (art.get("address_map") or {}).get("requests", [])}
     chron = {r["request_id"]: r for r in (art.get("chronology") or {}).get("requests", [])}
-    plan = PP.plan(wl) if wl is not None else None
+    plan = PP.plan(wl.dump()) if wl is not None else None
     reqs = []
     for r in art["requests"]:
         lp, cap = int(r["prompt_len"]), int(r["cap"])
@@ -285,7 +299,7 @@ ENGINE_FACT_KEYS = ("enforce_eager", "enable_prefix_caching", "enable_chunked_pr
 
 
 def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
-    """[COORD M-0213 / ruling 21 / DP-pad-02] how many rows the engine computes for a request AFTER its EOS sample.
+    """How many rows the engine computes for a request AFTER its EOS sample (DP-pad-02).
 
     vLLM's async scheduling (``async_scheduling=True``) schedules step t+1 before step t's sample is known, so a request whose
     sample at step t is an EOS is still forwarded once more at t+1 (a placeholder row whose input is the EOS and whose sample is
@@ -305,25 +319,27 @@ def eos_lag_rows(facts: dict) -> tuple[int | None, str]:
 
 
 def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
-    """The execution conditions the record attests, gathered from EVERY location a recorder writes them [rev-pm M-0261 / F-pm-21]:
+    """The execution conditions the record attests, gathered from EVERY location a recorder writes them:
     the production recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
     `RunHeader.profile.compilation` (vllm_adapter build_manifest); older/foreign headers put them at the top level; the run's
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
-    sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}} -- the caller FAILS on any disagreement and when nothing is attested."""
+    sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}, and unreadable: {location: error} only when a location is present
+    but unreadable} -- the caller FAILS on any disagreement, on an unreadable location and when nothing is attested."""
     from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
     prof = header.get("profile") if isinstance(header.get("profile"), dict) else {}
     ek_top = header.get("engine_kwargs") if isinstance(header.get("engine_kwargs"), dict) else {}
     ek_prof = prof.get("engine_kwargs") if isinstance(prof.get("engine_kwargs"), dict) else {}
     ek_ver: dict = {}
+    unreadable: dict[str, str] = {}
     if oracle_dir:
         vp = os.path.join(oracle_dir, "capture", "versions.json")
         if os.path.exists(vp):
             try:
                 v = json.load(open(vp))
                 ek_ver = v.get("engine_kwargs") if isinstance(v.get("engine_kwargs"), dict) else {}
-            except Exception:  # noqa: BLE001 -- an unreadable versions.json is not an attestation
-                ek_ver = {}
+            except Exception as e:  # noqa: BLE001 -- an unreadable versions.json is not an attestation
+                unreadable["capture/versions.json"] = repr(e)[:200]
     engine_sources = {"RunHeader.profile.engine_kwargs": ek_prof, "RunHeader.engine_kwargs": ek_top, "capture/versions.json engine_kwargs": ek_ver}
     comp_sources = {"RunHeader.profile.compilation": prof.get("compilation"), "RunHeader.compilation": header.get("compilation"),
                     "RunHeader.profile.engine_kwargs.compilation_config": ek_prof.get("compilation_config"),
@@ -357,6 +373,8 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
         # the recorder's compilation block also states enforce_eager (profile.compilation.enforce_eager) -- an engine fact
         if isinstance(blk, dict) and isinstance(blk.get("enforce_eager"), bool):
             take("enforce_eager", blk["enforce_eager"], src + ".enforce_eager")
+    if unreadable:
+        out["unreadable"] = unreadable
     return out
 
 
@@ -375,7 +393,7 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
     bad_conv = [r["request_id"] for r in gp["requests"] if r["request_id"] != request_id_of(r["index"])]
     if bad_conv:
         c.fail(f"global Program request ids are not r<k> at their manifest index (COORD R15 ruling 2): {bad_conv[:6]}")
-    hdr_reqs, param_of, parent_of = BD.request_params(header)
+    hdr_reqs, param_of, parent_of = CL.request_params(header)
     h_ids = [r["request_id"] for r in hdr_reqs]
     dup_h = [k for k, n in collections.Counter(h_ids).items() if n > 1]
     if dup_h:
@@ -399,8 +417,11 @@ def requests_declared(run: MatchRun) -> tuple[dict, list[dict], dict, list[str]]
         if g.get("prompt_sha256") and sha != g["prompt_sha256"]:
             c.fail(f"{r['request_id']}: record prompt != declared prompt (input association)")
         if wl is not None:
-            w = wl["requests"][g["index"]] if g["index"] < len(wl["requests"]) else None
-            if w is not None and list(w["prompt_token_ids"]) != list(r["prompt_token_ids"]):
+            w = wl.requests[g["index"]] if g["index"] < len(wl.requests) else None
+            if w is not None and w.prompt_token_ids is None:
+                c.fail(f"{r['request_id']}: the manifest has no prompt at position {g['index']} (a lengths-only plan): the record's prompt is "
+                       "tied to no declared one")
+            elif w is not None and list(w.prompt_token_ids) != list(r["prompt_token_ids"]):
                 c.fail(f"{r['request_id']}: record prompt != manifest prompt at position {g['index']}")
     c.info.update({"n_declared": len(g_ids), "n_record": len(h_ids), "record_ids_unknown": res["request_ids"]["unknown_ids"]})
     c.done()
@@ -433,6 +454,8 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
+    for src, err in (facts.get("unreadable") or {}).items():
+        c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
         c.fail("the workload Program declares no applicability.engine (pre-M-0063 artifact): the record's engine conditions cannot be "
                "checked against it -- rebuild the Program on a release carrying GP-01 applicability")
@@ -479,30 +502,31 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     return facts
 
 
-def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs: list[dict], g_ids: list[str]) -> dict | None:
+def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs: list[dict], g_ids: list[str]) -> Workload | None:
     """The workload manifest against the Program (ids, per-request fields, sha256) and the record header (the manifest the run was
-    captured with, seeds, sampling).  Returns the manifest, or None when the Program names none that exists here."""
-    wl_ids = None
+    captured with, seeds, sampling).  Returns the manifest, or None when the Program names none that exists here or it is not a
+    workload record (named)."""
     wl_path = (gp.get("workload") or {}).get("path")
     wl = None
     if wl_path and os.path.exists(wl_path):
-        wl = json.load(open(wl_path))
+        try:
+            wl = Workload.load(wl_path)
+        except RecordError as e:
+            c.fail(f"the workload manifest is not a workload record: {e}")
+            return None
         # the manifest's positions are the Program's r<k>; its request_id column is the workload (UUID) id the record uses
-        wl_ids = [request_id_of(i) for i, _ in enumerate(wl["requests"])]
+        wl_ids = [request_id_of(i) for i in range(len(wl.requests))]
         if sorted(wl_ids) != sorted(g_ids):
             c.fail(f"manifest requests {sorted(wl_ids)} != global Program requests {sorted(g_ids)}")
-        sw_arr = (wl.get("sweep") or {}).get("arrive_steps") or []
-        for i, w in enumerate(wl["requests"]):
+        for i, w in enumerate(wl.requests):
             g = G.get(request_id_of(i))
             if g is None:
                 continue
-            if g.get("workload_request_id") is not None and str(w.get("request_id")) != str(g["workload_request_id"]):
-                c.fail(f"{request_id_of(i)}: manifest workload request id {w.get('request_id')!r} != the Program's {g['workload_request_id']!r}")
+            if g.get("workload_request_id") is not None and w.request_id != str(g["workload_request_id"]):
+                c.fail(f"{request_id_of(i)}: manifest workload request id {w.request_id!r} != the Program's {g['workload_request_id']!r}")
             # [rev-pm M-0302 (a)] a manifest whose per-request fields were edited after the Build is named per request, not only by digest
-            w_lp = w.get("prompt_len") if w.get("prompt_len") is not None else len(w.get("prompt_token_ids") or ())
-            w_arr = w.get("arrive_step") if w.get("arrive_step") is not None else (sw_arr[i] if i < len(sw_arr) else 0)
-            for name, wv, gv in (("prompt_len", w_lp, g.get("prompt_len")), ("max_tokens", w.get("max_tokens"), g.get("max_tokens")),
-                                 ("arrive_step", w_arr, g.get("arrive_step"))):
+            for name, wv, gv in (("prompt_len", w.prompt_length, g.get("prompt_len")), ("max_tokens", w.max_tokens, g.get("max_tokens")),
+                                 ("arrive_step", wl.arrive_step(i), g.get("arrive_step"))):
                 if wv is not None and gv is not None and int(wv) != int(gv):
                     c.fail(f"{request_id_of(i)}: manifest {name}={int(wv)} != the Program's declared {name}={int(gv)} (manifest edited after the Build)")
         want = (gp.get("workload") or {}).get("sha256")
@@ -515,7 +539,7 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
         # passed G1 by ids/prompts/caps/arrivals alone; and per request the header's sampling fields are compared with the manifest's
         hw = (header.get("workload") or {}).get("sha256")
         # the driver (vllm_adapter.load_workload) hashes the manifest DOCUMENT canonically (sort_keys, compact separators), not the file
-        have_doc = hashlib.sha256(json.dumps(wl, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        have_doc = wl.doc_sha256
         c.info["header_workload_sha256"] = hw
         c.info["workload_doc_sha256"] = have_doc
         if not hw:
@@ -524,11 +548,11 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             c.fail(f"manifest of record differs from the header: RunHeader.workload.sha256 {hw[:16]} != manifest {have_doc[:16]} "
                    f"(canonical document; file {have[:16]}) -- the run was captured with another manifest [rev-pm M-0570]")
         hdr_by_id = {r["request_id"]: r for r in hdr_reqs}
-        for i, w in enumerate(wl["requests"]):
+        for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))
             if h is None:
                 continue
-            ws, hs = w.get("seed"), h.get("seed")
+            ws, hs = w.seed, h.get("seed")
             if ws is None and hs is not None:
                 c.fail(f"no declared seed for {request_id_of(i)} but the run header records seed={hs} [M-0570]")
             elif ws is not None and hs is None:
@@ -548,12 +572,12 @@ def _manifest_of_record(c: NamedCheck, gp: dict, G: dict, header: dict, hdr_reqs
             if not same:
                 c.fail(f"manifest of record declares sampling {k}={mv!r} but the run header records {k}={hv!r} [M-0570]")
         # a request pinning ANOTHER variant (vllm_adapter [ov-sampling]): its table entry vs the header's per-request fields
-        for i, w in enumerate(wl["requests"]):
+        for i, w in enumerate(wl.requests):
             h = hdr_by_id.get(request_id_of(i))
-            rv = w.get("variant")
+            rv = w.variant
             if h is None or (rv is None and h.get("variant") is None):
                 continue
-            r_s = manifest_sampling(wl, variant=str(rv)) if rv is not None else m_s
+            r_s = manifest_sampling(wl, variant=rv) if rv is not None else m_s
             for conf in (r_s.get("conflict") or []) if rv is not None else []:
                 c.fail(f"{request_id_of(i)}: manifest variant {rv!r} is not one declaration -- {conf} [M-0667 N5]")
             # [rev-pm BLOCKER M-0717 (i)] a manifest that pins a per-request variant against a header WITHOUT a per-request sampling

@@ -41,7 +41,10 @@ def _sr(result=True, grade="complete", *, rank=0, qp_ok=True, mismatch=0):
     """A rank's sampled-replay record as `driver.sampled_replay` writes it (population reconciled against Q(P) unless qp_ok is not True)."""
     pop = {"vus": 10, "strata_n": 3, "source": "rows", "by_family": {"Gemm_v1": 10}, "query_total": {"identities": 10}}
     if qp_ok is not None:
-        pop["query_checks"] = {"ok": qp_ok, **({} if qp_ok else {"vus_outside_query": {"n": 2, "first": [{"request_id": "r0", "step": 0, "op_path": "x", "member": "y"}]}})}
+        outside = [] if qp_ok else [{"request_id": "r0", "step": 0, "op_path": "x", "member": "y"}]
+        pop["query_checks"] = {"ok": qp_ok, "vus_outside_query": {"n": 2 * len(outside), "first": outside},
+                               **{k: {"n": 0, "first": []} for k in ("identities_without_rows", "rows_disagree")},
+                               "ranks": {"replay": [rank], "manifest": [rank], "equal": True}, "accounted": True, "unstated_families": []}
     return {"result": result, "grade": grade, "rank": rank, "why": None if result else f"rank {rank}: {grade}",
             "population": pop, "sample": {"picked": 4, "evaluated": 4, "equal": 4 - mismatch, "mismatch_n": mismatch, "not_evaluated_n": 0,
                                           "per_stratum": 2, "seed": SEED, "seed_source": "--replay-seed (targeted)"},
@@ -294,7 +297,7 @@ def _bmap(rank, root):
 
 def _cblock(rank, root, bmap):
     return {"run_root": root, "steps": 2, "leaves": 3, "bytes_bound": 516, "tensors": 2, "openings": {"n": 64, "verified": 64},
-            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True}}}
+            "classes": {}, "weight_registration": {"root": "ab" * 32}, "binding": {"map_digest": bmap["digest"], "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}}}
 
 
 def _in_process(fins):
@@ -562,7 +565,7 @@ def test_a_commit_that_deferred_nothing_is_refused(tmp_path):
 # ------------------------------------------------------------------------------------------------ the rank's process
 
 def _worker(tmp_path, cfg, bmap):
-    from verity_vllm.engine import rank_worker as W
+    from verity_vllm.pipeline.tp import rank_worker as W
 
     class Stub:
         _deferred_replay = W.TP2CaptureWorkerExtension._deferred_replay

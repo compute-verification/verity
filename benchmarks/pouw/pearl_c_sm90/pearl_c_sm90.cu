@@ -17,36 +17,63 @@
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
-// (run.py's PD_STAMPED, the profile's stamps)
+// (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit waits at its entry for the launch before it and lets the
+// call's forming launch behind it (pdl_entry); PD_SM90: hash_decode.cuh's PD_SM90_FORMS
 #define PD_VARIANT_LIST(X) X(851) X(979) X(883) X(1011)
+#define PD_PDL
+#define PD_SM90
 #include "../pearl_c_sm120/hash_decode.cuh"
 // A's commitment past decode's rows (run.py's chain "pl", PL_VARIANT)
 #include "hash_prefill.cuh"
 PL_INSTANCE(851)
 #include "acc.h"
 
-// the grouped calls' commitment and tile leaves (grouped.py), hash_decode.cuh's bodies unchanged: unit u's launch is the Args at
-// p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch (pd_commit's rows, pd_tiles' tiles).  The
-// Args are read through the read-only path, which ptxas reloads after PD_LOOP's called producer (pd_pserve_call); a plain
-// copy stays live across that call and spills (56 bytes of stack in pd_commit_g_851, r20261023-091751-b744)
-DEV Args pd_unit(const Args& g) {
-  const Args* __restrict__ s = reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * blockIdx.y);
+// the grouped calls' commitment, A's tree past pd_commit's mode 1, and tile leaves (grouped.py), hash_decode.cuh's bodies
+// unchanged: unit u's launch is the Args at p0 + u i0 (bytes), and CTA (x, u) is unit u's CTA x when x is inside its launch
+// (pd_commit's rows, pd_tree's one, pd_tiles' tiles or PD_GROUP's groups of them); pd_commit_g and pd_commit_gm take a
+// unit's filler rows' digest from its record (pd_commit_t's Z: they are zero rows).  The Args are read through the read-only
+// path, which ptxas reloads after PD_LOOP's called producer (pd_pserve_call); a plain copy stays live across that call and
+// spills (56 bytes of stack in pd_commit_g_851, r20261023-091751-b744)
+DEV Args pd_unit_at(const Args& g, uint32_t u) {
+  const Args* __restrict__ s = reinterpret_cast<const Args*>(g.p[0] + (uint64_t)g.i[0] * u);
   Args a;
   for (int j = 0; j < 16; j++) a.p[j] = __ldg(s->p + j);
   for (int j = 0; j < 16; j++) a.i[j] = __ldg(s->i + j);
   return a;
 }
+DEV Args pd_unit(const Args& g) { return pd_unit_at(g, blockIdx.y); }
 #define PD_GROUPED(V)                                                                                                    \
   extern "C" __global__ void __launch_bounds__(192) pd_commit_g_##V(const Args g) {                                    \
     const Args a = pd_unit(g);                                                                                           \
-    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V>(a);                                                                     \
+    if ((int)blockIdx.x < a.i[0]) pd_commit_t<V, true>(a, blockIdx.x);                                                   \
   }                                                                                                                      \
+  extern "C" __global__ void __launch_bounds__(128) pd_tree_g_##V(const Args g) { pd_tree_t<V>(pd_unit(g)); }          \
   extern "C" __global__ void __launch_bounds__(32) pd_tiles_g_##V(const Args g) {                                      \
     const Args a = pd_unit(g);                                                                                           \
     static_assert((V & PD_GROUP) == 0, "a CTA a tile");                                                                  \
     if ((int)blockIdx.x < (a.i[0] + 63) / 64 * (a.i[1] / 64)) pd_tiles_t<V>(a);                                          \
   }
 PD_GROUPED(851)
+// pd_tiles_g with PD_GROUP: CTA (x, u) unit u's CTA x of G tiles of a row block (pd_tiles_V's grid at G, cdiv(tiles a row,
+// G) a row block), their folds side by side on one warp: pd_tiles_g at PD_G, pd_tiles_gw at PD_GW, a quarter of the CTAs,
+// so a decode call's tile leaves hold fewer of the SMs the next call's pd_commit_gm takes whole
+constexpr int PD_GW = 16;
+#define PD_GROUPED_TILES(V, G, NAME)                                                                                     \
+  extern "C" __global__ void __launch_bounds__(32 * G) NAME##_##V(const Args g) {                                      \
+    const Args a = pd_unit(g);                                                                                           \
+    static_assert((V & PD_GROUP) != 0, "G tiles a CTA");                                                                 \
+    if ((int)blockIdx.x < (a.i[0] + 63) / 64 * ((a.i[1] / 64 + G - 1) / G)) pd_tiles_t<V, G>(a);                         \
+  }
+PD_GROUPED_TILES(979, PD_G, pd_tiles_g)
+PD_GROUPED_TILES(979, PD_GW, pd_tiles_gw)
+// pd_commit_g on a 1-D grid of the call's rows: CTA x is row map[x] & 0xFFFF of unit map[x] >> 16, the map (u32s) at p1, in
+// the order grouped.py gives (the units' rows apart on the SMs, their filler rows on the CTAs past the SMs)
+#define PD_GROUPED_ROWS(V)                                                                                               \
+  extern "C" __global__ void __launch_bounds__(192) pd_commit_gm_##V(const Args g) {                                   \
+    const uint32_t m = __ldg(reinterpret_cast<const uint32_t*>(g.p[1]) + blockIdx.x);                                    \
+    pd_commit_t<V, true>(pd_unit_at(g, m >> 16), (int)(m & 0xFFFFu));                                                    \
+  }
+PD_GROUPED_ROWS(851)
 
 // ---------------------------------------------------------------- formats (IEEE, nearest even, no FTZ)
 DEV float bf2f(uint32_t b) { return __uint_as_float((b & 0xFFFFu) << 16); }
@@ -85,11 +112,47 @@ DEV void mbar_wait_warp(uint32_t bar, uint32_t parity) {
   __syncwarp();
 }
 // the maps are written before the launch (run.py's encode_maps), so a prefetch is all they need
+// a launch behind the launch before it on its stream (run.py's PDL_KERNELS): every thread waits for that launch to complete
+// before it touches global memory that a launch since the weights' jobs writes, then lets the next launch start behind this
+// one; both are no-ops in a plain launch
+DEV void pdl_entry() { asm volatile("griddepcontrol.wait;\n\tgriddepcontrol.launch_dependents;" ::: "memory"); }
+// its two halves, for a kernel that reads the launch before it's output late (gemm_body's LATE)
+DEV void pdl_wait() { asm volatile("griddepcontrol.wait;" ::: "memory"); }
+DEV void pdl_launch() { asm volatile("griddepcontrol.launch_dependents;" ::: "memory"); }
+// run.py launches PDL_KERNELS programmatically only from a cubin with this kernel (PDL_MARK), whose PDL_KERNELS wait
+extern "C" __global__ void pdl_waits() {}
+// and PDL_ENTRY_KERNELS (widen_a, and hash_decode.cuh's pd_commit under PD_PDL) only from one with this (PDL_ENTRY_MARK)
+extern "C" __global__ void pdl_waits_entry() {}
+// run.py gives pd_commit a call's BF16 rows (p15, i5) only from a cubin with this (BF16_ROWS_MARK), whose pd_commit reads them
+extern "C" __global__ void pd_reads_bf16() {}
 DEV void tma_prefetch(const void* map) { asm volatile("prefetch.tensormap [%0];" ::"l"(map) : "memory"); }
 // box (c0 = byte offset along the depth, c1 = row) of `map` into dst, counted on bar
 DEV void tma_load(uint32_t dst, const void* map, uint32_t bar, int c0, int c1) {
   asm volatile("cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes [%0], [%1, {%3, %4}], [%2];" ::"r"(dst),
                "l"(map), "r"(bar), "r"(c0), "r"(c1)
+               : "memory");
+}
+// the same box under an L2 policy (createpolicy's): where a launch reads each B box once, its B stream goes first out of L2,
+// so a decode call's weights (25 to 117 MB at Llama-3.1-8B's linears) don't evict the next call's hashing code and tables
+DEV uint64_t l2_evict_first() {
+  uint64_t p;
+  asm volatile("createpolicy.fractional.L2::evict_first.b64 %0, 1.0;" : "=l"(p));
+  return p;
+}
+DEV uint64_t l2_evict_normal() {
+  uint64_t p;
+  asm volatile("createpolicy.fractional.L2::evict_normal.b64 %0, 1.0;" : "=l"(p));
+  return p;
+}
+DEV void tma_load_hint(uint32_t dst, const void* map, uint32_t bar, int c0, int c1, uint64_t policy) {
+  asm volatile("cp.async.bulk.tensor.2d.shared::cluster.global.mbarrier::complete_tx::bytes.L2::cache_hint"
+               " [%0], [%1, {%3, %4}], [%2], %5;" ::"r"(dst), "l"(map), "r"(bar), "r"(c0), "r"(c1), "l"(policy)
+               : "memory");
+}
+// the box into L2 alone: nothing reaches the CTA, and L2 is where every write lands, so it may run before griddepcontrol.wait
+DEV void tma_prefetch_l2(const void* map, int c0, int c1, uint64_t policy) {
+  asm volatile("cp.async.bulk.prefetch.tensor.2d.L2.global.tile.L2::cache_hint [%0, {%1, %2}], %3;" ::"l"(map), "r"(c0),
+               "r"(c1), "l"(policy)
                : "memory");
 }
 // registers per thread for the rest of the warpgroup's life (all 4 warps of the warpgroup execute it)
@@ -159,16 +222,22 @@ template <int NA> DEV void acc_fence(float* d) {
 //   PEARLC_S  PEARLC without storing C~ or U (only y): the call without hashing
 // GR (the grouped calls, grouped.py): A's rows are many units' one after another, and p12 holds each 64-row block's expert e
 // (int32); a tile's B and P_B rows are its expert's, rows e N + tn BN of the experts' stacked B side, and its columns' scales
-// cs + e N.  C~, U and y are A's rows by N, as without it.
-enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S };
-constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8;
+// cs + e N.  C~, U and y are A's rows by N, as without it.  i4 (live, 0 for all M): rows from live on are filler, whose
+// C~, U and y are not stored (their products are still computed, as a wgmma tile's 64 rows are one instruction's).  On
+// 64-row tiles with G = 4, each window's atoms are issued, into a second set of accumulators, before the window before it
+// is waited on, so its MMAs run while that one's sum is added; the same sums go into the total in the same order.
+// WIN (G = 4): a CTA a tile's window kb, its sum from +0 stored to slab kb of p2 (K / 128 slabs of M x N FP32), which
+// pa_w adds up as the other modes' total does.
+enum { M_PLAIN, M_CT, M_PEARLC, M_PEARLC_S, M_WIN };
+// a 64-row tile (one consumer warpgroup) keeps up to MAX_STAGES_64 stages in flight, the others MAX_STAGES
+constexpr int BK = 128, PEEL_ROW = 128, SMEM_BUDGET = 200 * 1024, MAX_STAGES = 8, MAX_STAGES_64 = 12;
 struct Maps { uint8_t a[128], b[128], pa[128], pb[128]; };
 
 template <int TM, int BN> struct Tile {
   static_assert((TM == 64 || TM == 128) && (BN == 32 || BN == 64 || BN == 128), "64 or 128 rows by 32, 64 or 128 columns");
-  static constexpr int NWG = TM / 64, NT = 128 * (NWG + 1);
+  static constexpr int NWG = TM / 64, NT = 128 * (NWG + 1), CAP = NWG == 1 ? MAX_STAGES_64 : MAX_STAGES;
   static constexpr uint32_t A_BYTES = TM * BK, STAGE = (TM + BN) * BK;
-  static constexpr int STAGES = SMEM_BUDGET / STAGE < MAX_STAGES ? SMEM_BUDGET / STAGE : MAX_STAGES;
+  static constexpr int STAGES = SMEM_BUDGET / STAGE < CAP ? SMEM_BUDGET / STAGE : CAP;
   // the stages from a 1,024-byte-aligned base (SWIZZLE_128B's period), then full[s] and empty[s]
   static constexpr int SMEM = 1024 + STAGES * STAGE + 16 * STAGES;
   static_assert(STAGE % 1024 == 0 && A_BYTES % 1024 == 0, "every box 1,024-byte aligned for SWIZZLE_128B");
@@ -192,10 +261,12 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   constexpr bool STORE_C = MODE == M_CT || MODE == M_PEARLC, STORE_U = MODE == M_PEARLC;
   static_assert(G == 0 || G == BK / 32, "a promotion window is one stage");
   static_assert(!PEEL || BN >= 64, "the peel's wgmma is n64 or n128");
+  static_assert(MODE != M_WIN || G != 0, "a window's sum is a promotion window's");
   extern __shared__ __align__(1024) uint8_t smem[];
   const uint32_t base = (sa(smem) + 1023) & ~1023u, bars = base + STAGES * T::STAGE;
-  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3];
-  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n, KB = K / BK;
+  const int M = a.i[0], N = a.i[1], K = a.i[2], group = a.i[3], live = a.i[4] ? a.i[4] : M;
+  const int KB = K / BK, wins = MODE == M_WIN ? KB : 1;
+  const int tiles_m = M / TM, tiles_n = N / BN, tiles = tiles_m * tiles_n * wins;
   const int tid = threadIdx.x, wg = tid / 128;
   const int* ex = reinterpret_cast<const int*>(a.p[12]);
   const auto b_row = [&](int tm) { return GR ? ex[tm * (TM / 64)] * N : 0; };
@@ -203,7 +274,28 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
     for (int s = 0; s < STAGES; s++) { mbar_init(bars + 8 * s, 1); mbar_init(bars + 8 * (STAGES + s), NWG * 4); }
     asm volatile("fence.mbarrier_init.release.cluster;" ::: "memory");
   }
+  // one row block: every B box is read once, by one tile
+  const bool once = tiles_m == 1;
+  const uint64_t first = l2_evict_first();
+  // under PDL the launch before this one may still be running: the first tile's first STAGES B boxes start toward L2 meanwhile
+  // (B is the weights, and the maps are written before the launch; GR's rows wait, as they read p12)
+  if (!GR && tid == NWG * 128 && (int)blockIdx.x < tiles) {
+    const Maps* maps = reinterpret_cast<const Maps*>(a.p[10]);
+    int tm, tn;
+    raster(blockIdx.x / wins, tiles_m, tiles_n, group, tm, tn);
+    const int k0 = MODE == M_WIN ? blockIdx.x % wins : 0, k1 = MODE == M_WIN ? k0 + 1 : min(KB, STAGES);
+    for (int kb = k0; kb < k1; kb++) tma_prefetch_l2(maps->b, kb * BK, tn * BN, once ? first : l2_evict_normal());
+  }
+  // LATE: of the launch before it (pa_w, or pa), a Pearl-C GEMM reads only P_A, which its producer alone loads, for each
+  // tile's peel; that thread waits there, so the windows run while that launch does.  Everything else it reads (A', B, the
+  // scales) launches before that one wrote, and they had completed when it passed its own entry wait (pa_w's pdl_entry; pa
+  // lets nothing start early)
+  constexpr bool LATE = PEEL && !GR;
   __syncthreads();
+  if constexpr (LATE)
+    pdl_launch();
+  else
+    pdl_entry();
 
   if (wg == NWG) {
     // the producer exits rather than returns: a path back would join its register budget with the consumers'
@@ -217,16 +309,20 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       uint32_t ph = 0;
       for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
         int tm, tn;
-        raster(t, tiles_m, tiles_n, group, tm, tn);
-        const int br = b_row(tm) + tn * BN;
-        for (int kb = 0; kb < KB + PEEL; kb++) {
+        raster(t / wins, tiles_m, tiles_n, group, tm, tn);
+        const int br = b_row(tm) + tn * BN, k0 = MODE == M_WIN ? t % wins : 0, k1 = MODE == M_WIN ? k0 + 1 : KB;
+        for (int kb = k0; kb < k1 + PEEL; kb++) {
           const uint32_t st = base + s * T::STAGE, full = bars + 8 * s;
           mbar_wait(bars + 8 * (STAGES + s), ph ^ 1);
           mbar_expect_tx(full, T::STAGE);
-          if (kb < KB) {
+          if (kb < k1) {
             tma_load(st, maps->a, full, kb * BK, tm * TM);
-            tma_load(st + T::A_BYTES, maps->b, full, kb * BK, br);
+            if (once)
+              tma_load_hint(st + T::A_BYTES, maps->b, full, kb * BK, br, first);
+            else
+              tma_load(st + T::A_BYTES, maps->b, full, kb * BK, br);
           } else {
+            if constexpr (LATE) pdl_wait();
             tma_load(st, maps->pa, full, 0, tm * TM);
             tma_load(st + T::A_BYTES, maps->pb, full, 0, br);
           }
@@ -244,7 +340,43 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
   float d[NA], total[NA];
   for (int t = blockIdx.x; t < tiles; t += gridDim.x) {
     int tm, tn;
-    raster(t, tiles_m, tiles_n, group, tm, tn);
+    raster(t / wins, tiles_m, tiles_n, group, tm, tn);
+    const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+    // y's scales, read before the windows so their latency is under them
+    float r0 = 0.0f, r1 = 0.0f, sc[NA / 2];
+    if constexpr (MODE == M_PLAIN || PEEL) {
+      const float* rs = reinterpret_cast<const float*>(a.p[7]);
+      const float* cs = reinterpret_cast<const float*>(a.p[8]) + b_row(tm);
+      r0 = rs[row];
+      r1 = rs[row + 8];
+#pragma unroll
+      for (int j = 0; j < NA / 4; j++) {
+        sc[2 * j] = cs[col0 + 8 * j];
+        sc[2 * j + 1] = cs[col0 + 8 * j + 1];
+      }
+    }
+    if constexpr (MODE == M_WIN) {
+      mbar_wait_warp(bars + 8 * s, ph);
+      const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
+      WG_FENCE;
+      qmma<BN>(d, desc_sw128(a0), desc_sw128(b0), 0);
+      qmma<BN>(d, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
+      qmma<BN>(d, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
+      qmma<BN>(d, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+      WG_COMMIT;
+      WG_WAIT(0);
+      acc_fence<NA>(d);
+      if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s));
+      if (++s == STAGES) { s = 0; ph ^= 1; }
+      float* W = reinterpret_cast<float*>(a.p[2]) + (size_t)(t % wins) * M * N;
+#pragma unroll
+      for (int j = 0; j < NA / 4; j++) {
+        const int col = col0 + 8 * j;
+        store2(W + (size_t)row * N + col, d[4 * j], d[4 * j + 1]);
+        store2(W + (size_t)(row + 8) * N + col, d[4 * j + 2], d[4 * j + 3]);
+      }
+      continue;
+    }
     if constexpr (G == 0) {
       for (int kb = 0; kb < KB; kb++) {
         mbar_wait_warp(bars + 8 * s, ph);
@@ -264,6 +396,43 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       if (lane == 0) mbar_arrive(bars + 8 * (STAGES + (s == 0 ? STAGES - 1 : s - 1)));
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = d[i];
+    } else if constexpr (NWG == 1) {
+      // windows kb (into d) and kb + 1 (into e) issued together, d's sum added while e's atoms run; each window's sum still
+      // goes into the total alone, in ascending k.  K / 128 is even (K is a multiple of 256).  No wgmma is in flight across
+      // the loop's back edge or issued or waited on in a branch, either of which ptxas serializes (C7514, C7518)
+      float e[NA];
+      const auto issue = [&](float* acc) {
+        mbar_wait_warp(bars + 8 * s, ph);
+        const uint32_t a0 = base + s * T::STAGE + wg * 64 * BK, b0 = base + s * T::STAGE + T::A_BYTES;
+        acc_fence<NA>(acc);
+        WG_FENCE;
+        qmma<BN>(acc, desc_sw128(a0), desc_sw128(b0), 0);
+        qmma<BN>(acc, desc_sw128(a0 + 32), desc_sw128(b0 + 32), 1);
+        qmma<BN>(acc, desc_sw128(a0 + 64), desc_sw128(b0 + 64), 1);
+        qmma<BN>(acc, desc_sw128(a0 + 96), desc_sw128(b0 + 96), 1);
+        WG_COMMIT;
+        acc_fence<NA>(acc);
+        if (++s == STAGES) { s = 0; ph ^= 1; }
+      };
+      const auto take = [&](float* acc, int st) {
+        acc_fence<NA>(acc);
+        if (lane == 0) mbar_arrive(bars + 8 * (STAGES + st));
+#pragma unroll
+        for (int i = 0; i < NA; i++) total[i] = __fadd_rn(total[i], acc[i]);
+      };
+      if (KB % 2) __trap();
+#pragma unroll
+      for (int i = 0; i < NA; i++) total[i] = 0.0f;
+      for (int kb = 0; kb < KB; kb += 2) {
+        const int sd = s;
+        issue(d);
+        const int se = s;
+        issue(e);
+        WG_WAIT(1);
+        take(d, sd);
+        WG_WAIT(0);
+        take(e, se);
+      }
     } else {
 #pragma unroll
       for (int i = 0; i < NA; i++) total[i] = 0.0f;
@@ -285,27 +454,24 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       }
     }
 
-    const int row = tm * TM + wg * 64 + 16 * (x / 32) + (x % 32) / 4, col0 = tn * BN + 2 * (x % 4);
+    const bool live0 = row < live, live1 = row + 8 < live;
     float* C = reinterpret_cast<float*>(a.p[2]);
     float* U = reinterpret_cast<float*>(a.p[3]);
     uint16_t* Y = reinterpret_cast<uint16_t*>(a.p[4]);
-    const float* rs = reinterpret_cast<const float*>(a.p[7]);
-    const float* cs = reinterpret_cast<const float*>(a.p[8]) + b_row(tm);
     if constexpr (MODE == M_PLAIN) {
-      const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
-        const float c0 = cs[col], c1 = cs[col + 1];
-        store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
-        store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
+        const float c0 = sc[2 * j], c1 = sc[2 * j + 1];
+        if (live0) store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
+        if (live1) store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
       }
     } else if constexpr (STORE_C) {
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
-        store2(C + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
-        store2(C + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
+        if (live0) store2(C + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
+        if (live1) store2(C + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
       }
     }
     if constexpr (PEEL) {
@@ -321,17 +487,16 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
       acc_fence<NA>(total);
       if (lane == 0) mbar_arrive(bars + 8 * (STAGES + s));
       if (++s == STAGES) { s = 0; ph ^= 1; }
-      const float r0 = rs[row], r1 = rs[row + 8];
 #pragma unroll
       for (int j = 0; j < NA / 4; j++) {
         const int col = col0 + 8 * j;
-        const float c0 = cs[col], c1 = cs[col + 1];
+        const float c0 = sc[2 * j], c1 = sc[2 * j + 1];
         if constexpr (STORE_U) {
-          store2(U + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
-          store2(U + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
+          if (live0) store2(U + (size_t)row * N + col, total[4 * j], total[4 * j + 1]);
+          if (live1) store2(U + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3]);
         }
-        store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
-        store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
+        if (live0) store_y(Y + (size_t)row * N + col, total[4 * j], total[4 * j + 1], r0, c0, c1);
+        if (live1) store_y(Y + (size_t)(row + 8) * N + col, total[4 * j + 2], total[4 * j + 3], r1, c0, c1);
       }
     }
   }
@@ -339,7 +504,7 @@ template <int MODE, int TM, int BN, int G, bool GR = false> DEV void gemm_body(c
 
 // G4: pearl-c-h100-v1 (pearl_c_device.H100); gemm_fast is the plain GEMM unpromoted.  The 128 x 128 tile; _n64: 128 x 64
 // (n a multiple of 64, not 128); _d: 64 x 64 (decode's few rows, m a multiple of 64, not 128); gemm_words: 128 x 32 and
-// gemm_words_d: 64 x 32, the 32-column words (A'F_B, B~F_A, G)
+// gemm_words_d: 64 x 32, the 32-column words (A'F_B, B~F_A, G); gemm_words_win_d: gemm_words_d's windows a CTA each (WIN)
 #define GEMM(NAME, MODE, TM, BN, G)                                                                                       \
   extern "C" __global__ void __launch_bounds__(Tile<TM, BN>::NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G>(a); } \
   extern "C" __global__ void NAME##_smem(int* out) { *out = Tile<TM, BN>::SMEM; }
@@ -360,6 +525,7 @@ GEMM(gemm_pearlc_d, M_PEARLC, 64, 64, 4)
 GEMM(gemm_pearlc_s_d, M_PEARLC_S, 64, 64, 4)
 GEMM(gemm_words, M_CT, 128, 32, 4)
 GEMM(gemm_words_d, M_CT, 64, 32, 4)
+GEMM(gemm_words_win_d, M_WIN, 64, 32, 4)
 // the grouped calls' chain and A'F_B (GR), on 64-row tiles: each unit's segment of A is a multiple of 64 rows
 #define GEMM_G(NAME, MODE, TM, BN, G)                                                                                     \
   extern "C" __global__ void __launch_bounds__(Tile<TM, BN>::NT, 1) NAME(const Args a) { gemm_body<MODE, TM, BN, G, true>(a); } \
@@ -469,21 +635,60 @@ extern "C" __global__ void eprime(const Args a) {
 // (8 rows by 4 column pairs) hit distinct banks, and leave as whole 128-byte rows.  MODE 0 is form_s5's cast (two codes per
 // cvt), 1 form_s5_scalar's (one code per cvt), its gate: both write the same codes.  GR (form_s5_g, the grouped calls): p3
 // holds the experts' F lines one after another (k x 32 each) and p5 each 64-row block's expert, whose lines the block takes.
+// EP (form_s5_ep, eprime in the same launch): p2 holds the rows' E codes, p5 beta and p6 the E' codes out; each block makes
+// its rows' E' as eprime does while staging them, and the blocks at depth 0 store them.  WORDS (form_s5_epw, with EP): each
+// block also makes gemm_words_win_d's tile for its rows and window kb = blockIdx.x, A'F_B's: its codes (staged again in core
+// matrices, a k32 atom each 2,048 bytes) by the 128 bytes of window kb of p7's 32 rows (the F_B^T lines, 32 x k; a k32 atom
+// each 1,024 bytes), four m64n32k32 atoms from +0 (scale-d 0 on the first), stored to slab kb of p8 (k / 128 slabs of rows x
+// 32 FP32) as gemm_words_win_d stores it: the same atoms over the same operands, in the same order
 constexpr int FORM_ROW = 144;
-template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
+template <int MODE, bool GR = false, bool EP = false, bool WORDS = false> DEV void form_body(const Args& a) {
+  static_assert(!(GR && EP), "p5 is GR's experts or EP's beta");
+  static_assert(!WORDS || EP, "the windows are form_s5_ep's");
   __shared__ __align__(128) uint8_t sE[64 * 32], sF[128 * 32];
   __shared__ __align__(16) uint8_t sO[64 * FORM_ROW];
   const int tid = threadIdx.x, t0 = blockIdx.x * 128, r0 = blockIdx.y * 64, k = a.i[1];
-  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
-  const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
-                     (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
-  *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) =
-      *reinterpret_cast<const uint4*>(E + (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2));
+  auto stage_f = [&] {
+    const uint8_t* F = reinterpret_cast<const uint8_t*>(a.p[3]) +
+                       (GR ? (size_t)reinterpret_cast<const int*>(a.p[5])[blockIdx.y] * k * 32 : 0);
 #pragma unroll
-  for (int j = 0; j < 2; j++) {
-    const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
-    *reinterpret_cast<uint4*>(sF + core(r, 16 * c)) = *reinterpret_cast<const uint4*>(F + (size_t)(t0 + r) * 32 + 16 * c);
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, r = idx / 2, c = idx % 2;
+      *reinterpret_cast<uint4*>(sF + core(r, 16 * c)) = *reinterpret_cast<const uint4*>(F + (size_t)(t0 + r) * 32 + 16 * c);
+    }
+  };
+  // The F lines (p3) and the windows' F_B^T bytes (p7) are a weight's, written by its job's launches when it is registered and
+  // by no launch since, so they are read before the wait, their latency under the launch before (GR's expert map, p5, after).
+  // The F_B^T bytes: line n's 16-byte chunk c, a warp's quarter on eight lines (n & 7) of one chunk, so its staging stores hit
+  // distinct banks
+  uint4 fb[2];
+  if constexpr (WORDS) {
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, n = 8 * (idx / 64) + idx % 8, c = (idx / 8) % 8;
+      fb[j] = *reinterpret_cast<const uint4*>(a.p[7] + (size_t)n * k + t0 + 16 * c);
+    }
   }
+  if constexpr (!GR) stage_f();
+  pdl_entry();
+  if constexpr (GR) stage_f();
+  const uint8_t* E = reinterpret_cast<const uint8_t*>(a.p[2]);
+  const size_t eo = (size_t)(r0 + tid / 2) * 32 + 16 * (tid % 2);
+  uint4 ev = *reinterpret_cast<const uint4*>(E + eo);
+  if constexpr (EP) {
+    const float beta = reinterpret_cast<const float*>(a.p[5])[r0 + tid / 2];
+    uint32_t w[4] = {ev.x, ev.y, ev.z, ev.w};
+#pragma unroll
+    for (int i = 0; i < 4; i++) {
+      uint32_t o = 0;
+#pragma unroll
+      for (int j = 0; j < 4; j++) o |= (uint32_t)e4m3(__fmul_rn(beta, e4m3f((uint8_t)(w[i] >> (8 * j))))) << (8 * j);
+      w[i] = o;
+    }
+    ev = make_uint4(w[0], w[1], w[2], w[3]);
+    if (blockIdx.x == 0) *reinterpret_cast<uint4*>(a.p[6] + eo) = ev;
+  }
+  *reinterpret_cast<uint4*>(sE + core(tid / 2, 16 * (tid % 2))) = ev;
   const float* x = reinterpret_cast<const float*>(a.p[0]);
   const float* alpha = reinterpret_cast<const float*>(a.p[1]);
   const int rA = 16 * (tid / 32) + (tid % 32) / 4, cA = 2 * (tid % 4);
@@ -517,16 +722,52 @@ template <int MODE, bool GR = false> DEV void form_body(const Args& a) {
     }
   }
   __syncthreads();
+  float w[16];
+  if constexpr (WORDS) {
+    // row r's 16-byte chunk c of the codes into atom c / 2's core matrices, a warp's quarter on eight rows (r & 7) of one
+    // chunk: distinct banks on both sides.  The atoms run while the codes leave
+    __shared__ __align__(128) uint8_t sA[4 * 64 * 32], sB[4 * 32 * 32];
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      const int idx = tid + 128 * j, r = 8 * (idx / 64) + idx % 8, c = (idx / 8) % 8;
+      *reinterpret_cast<uint4*>(sA + (c / 2) * 2048 + core(r, 16 * (c % 2))) = *reinterpret_cast<const uint4*>(sO + r * FORM_ROW + 16 * c);
+    }
+#pragma unroll
+    for (int j = 0; j < 2; j++) {
+      const int idx = tid + 128 * j, n = 8 * (idx / 64) + idx % 8, c = (idx / 8) % 8;
+      *reinterpret_cast<uint4*>(sB + (c / 2) * 1024 + core(n, 16 * (c % 2))) = fb[j];
+    }
+    asm volatile("fence.proxy.async.shared::cta;" ::: "memory");
+    __syncthreads();
+    WG_FENCE;
+    qmma<32>(w, desc_plain(sa(sA)), desc_plain(sa(sB)), 0);
+    qmma<32>(w, desc_plain(sa(sA + 2048)), desc_plain(sa(sB + 1024)), 1);
+    qmma<32>(w, desc_plain(sa(sA + 4096)), desc_plain(sa(sB + 2048)), 1);
+    qmma<32>(w, desc_plain(sa(sA + 6144)), desc_plain(sa(sB + 3072)), 1);
+    WG_COMMIT;
+  }
   uint8_t* out = reinterpret_cast<uint8_t*>(a.p[4]);
 #pragma unroll
   for (int j = 0; j < 4; j++) {
     const int idx = tid + 128 * j, r = idx / 8, c = idx % 8;
     *reinterpret_cast<uint4*>(out + (size_t)(r0 + r) * k + t0 + 16 * c) = *reinterpret_cast<const uint4*>(sO + r * FORM_ROW + 16 * c);
   }
+  if constexpr (WORDS) {
+    WG_WAIT(0);
+    acc_fence<16>(w);
+    float* W = reinterpret_cast<float*>(a.p[8]) + (size_t)blockIdx.x * a.i[0] * 32 + (size_t)(r0 + rA) * 32;
+#pragma unroll
+    for (int j = 0; j < 4; j++) {
+      store2(W + cA + 8 * j, w[4 * j], w[4 * j + 1]);
+      store2(W + 8 * 32 + cA + 8 * j, w[4 * j + 2], w[4 * j + 3]);
+    }
+  }
 }
 extern "C" __global__ void __launch_bounds__(128) form_s5(const Args a) { form_body<0>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_scalar(const Args a) { form_body<1>(a); }
 extern "C" __global__ void __launch_bounds__(128) form_s5_g(const Args a) { form_body<0, true>(a); }
+extern "C" __global__ void __launch_bounds__(128) form_s5_ep(const Args a) { form_body<0, false, true>(a); }
+extern "C" __global__ void __launch_bounds__(128) form_s5_epw(const Args a) { form_body<0, false, true, true>(a); }
 
 // the adopted quantizer (the model's FP8 path with PoUW off): codes = e4m3(alpha x) row-major, alpha from stats_s5.
 // p0 rows (FP32), p1 alpha, p2 out codes; i0 rows, i1 k.  One thread per 16 elements
@@ -546,20 +787,33 @@ extern "C" __global__ void quant_s5(const Args a) {
   *reinterpret_cast<uint4*>(reinterpret_cast<uint8_t*>(a.p[2]) + (size_t)row * k + t) = make_uint4(o[0], o[1], o[2], o[3]);
 }
 
-// ---------------------------------------------------------------- B's widening
+// ---------------------------------------------------------------- the widening
 // The one step from B's stored form to the FP32 rows the epoch commits (run.py's xb); everything after it reads those rows.
 // widen_bf16: BF16 words (rows x k) to FP32, exact.  widen_fp8_block: E4M3 codes (rows x k) times their 128 x 128 block's
 // FP32 scale (a checkpoint's weight_scale_inv: ceil(rows / 128) x ceil(k / 128), row-major), each product RN to FP32
 // (`pearl_c_sm90.run.widen`'s choice "fp8_block": a defined B, not the exact real one when code x scale doesn't fit FP32).
 // p0 source, p1 scales (widen_fp8_block), p2 out (rows x k FP32); i0 rows, i1 k (a multiple of 8).  A thread per 8 elements.
+// widen_a: a served call's A words (pouw_pearl_c_device's xa), widen_bf16's widening of its i0 rows, then rows i0 to i2 - 1
+// zero, in one launch; p2 out (i2 x k FP32).  A PDL_ENTRY_KERNELS launch (pdl_entry), so the call's pd_commit, launched
+// behind it, is resident when it completes.
+DEV void widen8(const uint4* src, uint4* out, size_t g) {
+  const uint4 v = src[g];
+  const uint32_t w[4] = {v.x, v.y, v.z, v.w};
+  out[2 * g] = make_uint4(w[0] << 16, w[0] & 0xFFFF0000u, w[1] << 16, w[1] & 0xFFFF0000u);
+  out[2 * g + 1] = make_uint4(w[2] << 16, w[2] & 0xFFFF0000u, w[3] << 16, w[3] & 0xFFFF0000u);
+}
 extern "C" __global__ void widen_bf16(const Args a) {
   const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
-  if (g >= (size_t)a.i[0] * a.i[1] / 8) return;
-  const uint4 v = reinterpret_cast<const uint4*>(a.p[0])[g];
-  const uint32_t w[4] = {v.x, v.y, v.z, v.w};
-  uint4* out = reinterpret_cast<uint4*>(a.p[2]) + 2 * g;
-  out[0] = make_uint4(w[0] << 16, w[0] & 0xFFFF0000u, w[1] << 16, w[1] & 0xFFFF0000u);
-  out[1] = make_uint4(w[2] << 16, w[2] & 0xFFFF0000u, w[3] << 16, w[3] & 0xFFFF0000u);
+  if (g < (size_t)a.i[0] * a.i[1] / 8) widen8(reinterpret_cast<const uint4*>(a.p[0]), reinterpret_cast<uint4*>(a.p[2]), g);
+}
+extern "C" __global__ void widen_a(const Args a) {
+  pdl_entry();
+  const size_t g = (size_t)blockIdx.x * blockDim.x + threadIdx.x, real = (size_t)a.i[0] * a.i[1] / 8;
+  uint4* out = reinterpret_cast<uint4*>(a.p[2]);
+  if (g < real)
+    widen8(reinterpret_cast<const uint4*>(a.p[0]), out, g);
+  else if (g < (size_t)a.i[2] * a.i[1] / 8)
+    out[2 * g] = out[2 * g + 1] = make_uint4(0, 0, 0, 0);
 }
 extern "C" __global__ void widen_fp8_block(const Args a) {
   const int rows = a.i[0], k = a.i[1];
@@ -623,6 +877,28 @@ extern "C" __global__ void pa(const Args a) {
   const int row = t / 64, e = t % 64;
   const uint16_t v = e < 32 ? e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e])
                             : f2bf(reinterpret_cast<const float*>(a.p[2])[row * 32 + e - 32]);
+  reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
+}
+
+// pa from A'F_B's windows (gemm_words_win_d's): each AF word their sum from +0, one FADD (RN) a window in ascending k, as
+// gemm_words_d's total, stored to p2 and into P_A as pa's.  p0 E'_A codes, p1 the windows (i1 slabs of rows x 32), p2 AF
+// words out, p3 out; i0 rows, i1 windows
+extern "C" __global__ void pa_w(const Args a) {
+  pdl_entry();
+  const int t = blockIdx.x * blockDim.x + threadIdx.x, rows = a.i[0], wins = a.i[1];
+  if (t >= rows * 64) return;
+  const int row = t / 64, e = t % 64;
+  uint16_t v;
+  if (e < 32) {
+    v = e4m3bf(reinterpret_cast<const uint8_t*>(a.p[0])[row * 32 + e]);
+  } else {
+    const float* w = reinterpret_cast<const float*>(a.p[1]) + row * 32 + e - 32;
+    float total = 0.0f;
+#pragma unroll 8
+    for (int kb = 0; kb < wins; kb++) total = __fadd_rn(total, w[(size_t)kb * rows * 32]);
+    reinterpret_cast<float*>(a.p[2])[row * 32 + e - 32] = total;
+    v = f2bf(total);
+  }
   reinterpret_cast<uint16_t*>(a.p[3])[(size_t)row * 64 + e] = v;
 }
 

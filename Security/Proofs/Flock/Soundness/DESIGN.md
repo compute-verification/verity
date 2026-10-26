@@ -277,7 +277,7 @@ strict time.
 | A9 | Per-claim ring switch, then batching | `7/|F|` per claim, plus `1/|F|` for the batch |
 | A10 | Packing on the 7 low address bits, `b_v = x^v` | `Arith.pack` / `unpack`; basis property in `Arith.Correct` |
 | A11 | GF(2^256) folds; stratified queries; out-of-domain sample at level 0; clear residual | Fold terms use `2^256`. Stratified sampling misses a far word with probability at most `(1−γ)^Q`, exactly as uniform sampling does (AM–GM per stratum). The level-0 sample is one more batched claim (`L₀/|F|`). |
-| A12 | Proof of work: nonces are messages, never checked | No grinding credit anywhere |
+| A12 | Proof of work: every nonce must be `0`, and the verifier refuses any other (R4, D21) | No grinding credit anywhere |
 | A13 | Label, statement digest and cap absorbed before the first coin | The statement is fixed before any coin |
 | A14 | Region claims at the link points, opened with `ab`, `c` | The link points are drawn once for both reps. Their term, `L₀·regions·(m_pts/2^128)^2`, is added once and not squared. |
 | A15 | `root_F = Σ` | Session check; no soundness term |

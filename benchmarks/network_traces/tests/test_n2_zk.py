@@ -1,28 +1,21 @@
-"""n2_zk's instances and rows on certifier-serve's runs on an injected clock (`n2_zk.virtual`, a stub endpoint): every
-honest head check passes its reference; window 0's egress head one count off, committed by the prover, fails on its
-counts and its signed digest; the extra run's egress heads fail on their counts alone. The adapter's rows carry the head
-check's arguments in its signature's order: around an identity of the head check's signature it returns them. The
-verifier's own ``pub`` row is the prover's. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls
-it, traces to its part's own gates. The scan of what the verifier received leaves out exactly the witness pieces the
-public circuit holds. Nothing here lowers or proves (`n2_zk.prove` does, on a node)."""
+"""n2_zk's link-windows on certifier-serve's runs on an injected clock (`n2_zk.virtual`, a stub endpoint): every honest
+link-window's output word is verdict 1 and deadline 1; window 0's egress head one count off, committed by the prover,
+fails on its counts and its signed digest; the extra run's egress heads fail on their counts alone, the late run's on
+their fields and counts. The verifier's own ``pub`` row, from public fields and the certificates alone, is the prover's,
+in whole u16 words. Each builder `n2_zk.builders` attaches, called as C-Flock's lowering calls it, traces to its part's
+own gates. The scan of what the verifier received leaves out exactly the witness pieces the public circuit holds.
+``--jobs`` is 1 unless given and 2 is refused, naming the rule (`n2_zk.ONE_SESSION`). Nothing here lowers or proves
+(`n2_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
 import importlib.util
 import sys
-from functools import cache
 from pathlib import Path
 from types import SimpleNamespace
 
-import numpy as np
 import pytest
-from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.ml.circuits.refs import Coll, concat
-from verity.ml.circuits.types import Array
-from verity.core.protocols.certifier import head_check as HC
 
 HERE = Path(__file__).resolve().parents[1]
 
@@ -42,41 +35,37 @@ n2 = _load()
 def runs(tmp_path_factory):
     out = tmp_path_factory.mktemp("n2zk")
     plan = n2.virtual(out, requests=8, tokens=4)
-    return {"plan": plan, "honest": n2.link_windows(out / "honest", stream=False),
-            "tampered": n2.link_windows(out / "honest", edit=n2.one_count, stream=False),
-            "extra": n2.link_windows(out / "extra", stream=False)}
+    return {"plan": plan, "honest": n2.link_windows(out / "honest"),
+            "tampered": n2.link_windows(out / "honest", edit=n2.one_count),
+            "extra": n2.link_windows(out / "extra"), "late": n2.link_windows(out / "late")}
 
 
-def _failed(inst) -> list[str]:
-    return [k for k, ok in HC.reference_parts(inst).items() if not ok]
-
-
-def test_honest_heads_pass_and_a_head_one_count_off_fails_on_its_counts(runs):
+def test_each_round_refuses_what_its_references_say(runs):
     honest = runs["honest"]
     assert len(honest.windows) == runs["plan"]["windows"] >= 2 and not honest.issuer_refused
     assert honest.lw.head_key(0)[2] == 1 and honest.lw.head_key(1)[2] == 0
-    assert all(c is not None and HC.reference(c) for x in honest.windows for c in x.checks)
-    for name in ("tampered", "extra"):
-        rd = runs[name]
-        assert n2.expected(name, [_failed(x.checks[0]) for x in rd.windows]), name
-        assert all(HC.reference(x.checks[1]) for x in rd.windows), name
+    assert all(x.word == 0b11 and x.expect == 1 for x in honest.windows)
+    for name in n2.ROUNDS:
+        assert n2.expected(name, runs[name]), name
+        assert (name == "honest") == all(x.expect for x in runs[name].windows), name
     e0, t0 = honest.windows[0].opening.records[0].head, runs["tampered"].windows[0].opening.records[0].head
     assert sum(a != b for a, b in zip(e0.counts, t0.counts)) == 1 and sum(t0.counts) == sum(e0.counts) + 1
-    assert runs["tampered"].windows[0].opening.records[0].certificate == honest.windows[0].opening.records[0].certificate
+    assert runs["tampered"].windows[0].certificates == honest.windows[0].certificates
 
 
-@cache
-def _identity(L: int, T: int, counts: int):
-    """A Definition of the head check's signature that returns its arguments' bits, in order."""
-    params, _ = HC.unit(L, T, bool(counts)).signature()
-    ret = Array(sum(t.leaves for _, t in params), BL.BIT)
-    return bind(CompositeDefinition("N2ZkIdentity", 1, (), lambda S: (tuple(params), ret),
-                                    lambda B, S, *args: Coll(ret, concat([a.refs for a in args])), register=False))
+def test_the_verifier_derives_the_provers_public_row(runs):
+    for name in n2.ROUNDS:
+        rd = runs[name]
+        lw = rd.lw
+        for x in rd.windows:
+            mine = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs)
+            assert lw.row(mine, "pub") == lw.row(x.args, "pub"), (name, x.window)
+            assert all(len(lw.row(x.args, r)) * 8 == lw.bits(r) and lw.bits(r) % 16 == 0 for r in n2.SVC.ROWS)
 
 
 @pytest.mark.slow
 def test_each_builder_traces_to_its_parts_gates_called_as_c_flock_calls_it():
-    statics = {"LmsEqual": (64,), "NetworkHeadFields": (3,), "NetworkHeadCounts": (2,)}
+    statics = {"LmsEqual": (64,)}
     for d in n2.builders():
         key = statics.get(d.name, ())
         S = SimpleNamespace(**dict(zip(d.statics, key)))
@@ -84,29 +73,6 @@ def test_each_builder_traces_to_its_parts_gates_called_as_c_flock_calls_it():
         build = (lambda C, *e, d=d, S=S: d.build(C, S, *e)) if d.statics else d.build
         got, want = TR.trace(build, [t for _, t in params], ret), d.traced(*key)
         assert (got.gates, got.outputs) == (want.gates, want.outputs), d.name
-
-
-def _bits(words: list[int]) -> list[int]:
-    return [(w >> j) & 1 for w in words for j in range(16)]
-
-
-def test_the_rows_hold_the_head_checks_arguments_and_the_verifier_derives_the_public_row(runs):
-    rows = n2.adapter("N2ZkIdentityRows", _identity)
-    for name in ("honest", "tampered"):
-        rd = runs[name]
-        for x in rd.windows:
-            for d, inst in enumerate(x.checks):
-                got = n2.rows_of(inst)
-                width = n2.row_bits(inst.unit)
-                assert {r: 16 * len(w) for r, w in got.items()} == width and all(v % 16 == 0 for v in width.values())
-                fn = bind(rows, L=inst.key[0], T=inst.key[1], COUNTS=int(inst.key[2]))
-                assert [t.leaves for _, t in fn.signature()[0]] == [width["pub"], width["wit"]]
-                args = [np.asarray([_bits(got[r])], dtype=np.uint8) for r in n2.ROWS]
-                out = np.asarray(evaluate_bits(fn, *args)).reshape(-1).tolist()
-                assert out == [b for a in HC.arguments(inst) for b in a], (name, x.window, d)
-                mine = n2.public_words(rd.lw, x.window, d, bytes.fromhex(x.root), x.opening.records[d].certificate.digest)
-                assert mine == got["pub"], (name, x.window, d)
-    assert HC.Shape(*runs["honest"].lw.head_key(0)[:2]).HL % 2 == 1
 
 
 def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
@@ -121,10 +87,24 @@ def _needles(blobs: dict[str, bytes]) -> dict[bytes, str]:
 
 def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     scan = SimpleNamespace(PIECE=16, needles=_needles, find=lambda data, t: {n: 1 for nd, n in t.items() if nd in data})
-    blobs, held = n2.blobs_of(runs["honest"], 0)
-    every = {b[o:o + 16] for b in blobs.values() for o in range(0, len(b) - 15, 16)}
-    head = blobs["head 0"][16:32]
+    blobs, held = n2.blobs_of(runs["honest"])
+    assert {k.rsplit(" ", 1)[0] for k in blobs} >= {"head egress", "head salt ingress", "certifier salt egress",
+                                                     "record salt ingress", "sibling 1 egress"}
+    assert any(len(b) % 16 for b in blobs.values())  # a head's tail (403 bytes), which only the last pieces cover
+    every = {b[o:o + 16].ljust(16, b"\0") for b in blobs.values()
+             for o in [*range(0, len(b) - 15, 16)] + [len(b) - 16, len(b) - len(b) % 16] * (len(b) % 16 > 0)}
+    head = blobs["head egress 0"][16:32]
     kept, held_kept, out = n2.public_pieces(scan, blobs, held, b"g 1 2\n" + bytes(16).hex().encode() + b"\n" + head)
     assert out == sorted(x.hex() for x in every & {bytes(16), head})
     assert set(kept.values()) == every - {bytes(16), head} and len(kept) == len(set(kept.values()))
-    assert held_kept == {k for k in kept if k.split(" @")[0] in held} and held_kept
+    tails = {f"{k} @{len(blobs[k]) - len(blobs[k]) % 16}" for k in held if len(blobs[k]) % 16}
+    assert tails and tails <= set(kept)  # a zero-padded tail is scanned for, but no instance file holds it as it is
+    assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
+
+
+def test_jobs_is_one_firewalled_session_at_a_time(monkeypatch):
+    monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
+    argv = ["prove", "--run", "r", "--out", "o", "--dry"]
+    assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
+    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+        n2.main([*argv, "--jobs", "2"])

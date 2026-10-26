@@ -12,10 +12,10 @@ Its soundness (i) is in fork form and states no bits. The recursion's knowledge 
 (`Security/Definitions/Claims/Recursion.lean`), is at `Claims.Recursion.lam`: about 65 bits per SHA-512 call at the
 deployed shape (`m = 35`, weight `coverW`), below the 100-bit floor under every weight (ASK-73). Route 2C's bound λ₂
 (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but
-`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open:
-`PartChecksB`, `PartOpensB` (at staged V\* statements) and `DecompB` (`RecDeploy.ksLin2_deployed_full`, at `recTr`, a
-model of the coin server's record that lists every inner round, and the last round's pieces at the parts that commit the
-earlier rounds).
+`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from a premise still open:
+`DecompB` at what each V\* part's circuit accepts (`PartAccepts`)
+(`RecDeploy.ksLin2_deployed_partAccepts`, at the coin server's record read by `recRead`; `PartChecksB` is no premise of
+its own, `VStarB.exists_chk_iff`).
 Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`).
 
@@ -102,13 +102,13 @@ code, **L** rec-lean.
 | b2 | `FlockC3.Compose.vbridge_c3` | `C3/Compose/Bridge.lean` | 120 | b1, `HTape`; `vbridge_of_family`'s VCommits/VDecodes/VFull parts | W (after b1) |
 | h1 | `FlockC3.VStarList.stacked_of_openingShape`, `claims_of_stackedShape` | `C3/VStarList/Statements.lean` | 25, 25 | `Except` unfolding of `checkOpeningShape`, `checkStackedShape` | W |
 | h2 | `FlockC3.VStarList.vstarParsesScoped_of_list` (gap 4(c), proved: the parse and the scope are the event's); with gap 2, `mReg_of_list` (the list's `rec-opening` units are at `m = (holoAt st hp).cls.shape.mReg`, `claims = STACKED_CLAIMS`; no `hpad`, since `mReg` is padded to `PAD_TO`, and `ℓ`'s range is `ellOk_of_sparseRange`'s) | `C3/VStarList/Statements.lean`, `Shape.lean`, `Range.lean` | 400 | `HmRow.parse` of `circuitFile`'s output (a write-then-parse fact), gap 2 for the holo statements | C (gap 2) + W |
-| c1 | (c)'s `hpl` generalization: drop `sh.holo = false` / `holoOf c = .ok false` from `lincheck_of_residuals_holo` (`Algebra/Holo.lean`), `zclc_of_residuals`, `prog_of_zclc` (`Runs/ZcLc.lean`), `run_of_algebra`, `run_of_frames` (`Runs/Rep.lean`), `prog_of_algebra` (`Runs/Prog.lean`), `rs_of_residuals` (`Runs/Rs.lean`), `ligerito_of_residuals_at`, `hlg_of_residuals`, `hlg_of_frames` (`Runs/Lg.lean`), `ligerito_of_residuals`, `ringSwitch_of_residuals`, `zerocheck_of_residuals`, `lincheck_of_residuals`, `build_eval`, `residuals_eq_run`, `buildRes_spec`, `buildAll_spec`, `coefOps_spec`, `prodOps_spec` (`Algebra/`), `decode_part`, `ResZeroAt` (`AlgHolds.lean`), `decode_checkR`, `decode_partR`, `ResZeroAtL` (`ResLayer.lean`), `decode_check` (`ResUnit.lean`), with `check_part_holo` beside `check_part` for the hidden units' net | `VBridge/` (in place, under VBridge G's names) | 600 | none; `check_refuses_plain_on_holo`, `shape?_holo` and `atomOp_plain` stay (plain facts) | W |
+| c1 | (c)'s holo runs, done beside VBridge's plain chain rather than in place. The stages that run no program already take either shape: `lincheck_of_residuals_dec`, `lincheck_of_residuals_hw`, `zclc_of_residuals_dec`, `check_part_holo`, `decode_check_holo`, `decode_part_holo`, `decode_checkR_holo`, `decode_partR_holo`, `algebraHolds_of_decodeH` and `algebraHolds_of_decodeLH`. `prog_of_zclc`, `prog_of_algebra`, `run_of_algebra`, `run_of_frames` and `runs_of_files` keep `sh.holo = false`, because they conclude the plain `repProg`, which has no `h` round and checks the lincheck at `comb`, not `comb + h`. Their holo analogues conclude `holoRepProg`: `holoProg_of_zclc`, `holoRs_of_residuals` and `holoHlg_of_frames` (`C3/HoloValues/`), then `unitFrames_holo`, `framesOfVals_holo'` and `repUnitOfAlg_holoVals` (`C3/Reps/`) | `VBridge/`, `C3/HoloValues/`, `C3/Reps/Frames.lean`, `C3/Reps/HoloVals.lean` | proved | | |
 
 a1's 500–800 (rounds 1–3) counted only the composition: the plain chain under `compiled_runs_sound` (`table_sound`'s
 oracle count and `CompiledL`'s lockstep, about 3,500 lines) has no holographic analogue yet, so a1o and a1l are new.
 
-So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W),
-c1 (W); h2 builds on #1847's list.
+So these start at once: a1s and a1r (a W each, against their stubs alone), a1's assembly (L), h1 (W), b1 → b2 (W);
+h2 builds on #1847's list.
 
 v1, closed (round 20): verify ⇒ `SparseRangeOk`. `acceptsC3_of_verify` (`C3/VStarList/Accepts.lean`) concludes all of
 `AcceptsC3` from the verifier's acceptance at both setups: each runs check 5's range check on the inner files first

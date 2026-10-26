@@ -14,9 +14,9 @@ round) and the reader is the record's own total reader (`recRead`), that holds a
 The difftest on the honest fixtures (`test_lean_rec_record.py`) ties `recTr` to the coin server's record: `recordFullW`
 writes `rec_live.record_bytes`' bytes up to the link points, and the rounds `recRead` shows are round 0 from the link
 and the recorded rounds, each message the schedule's count of commit strings (`nAtSched`), one fewer than the inner
-verifier's rounds. What stays open at the dense form is `PartChecksB` and `PartOpensB` at
+verifier's rounds. What stays open at the dense form is `PartChecksBV` and `PartOpensB` at
 `showsPart recRead`/`cmtTr recRead` (the staged V\* statements), `DecompB`, and the readers' `ReadersTrue`
-(`ReadersLogCollS` is proved at `IVStar`, `readersLogCollS_ivstar`).
+(the inner verifier's own calls are searched at each draw's coins, `callsLogCollAt_deployRec`).
 
 The reader is not vacuous: `recRead_honest` reads an honest three-round run back, and `Flock.Test.RecRecord`'s
 `#guard`s run `readRecord` on the plain session's honest record bytes. Neither witnesses the open premises, which no
@@ -42,7 +42,7 @@ theorem recRead_honest (c₀ c₁ c₂ : Coin) (m₀ m₁ m₂ : Msg) (a : Flock
 
 /-- **`KSLin2` at the deployment's dense statements, at the model of the coin server's record (`recTr`)**:
 `ksLin2_deployed_open` at the brings whose transcript is `recTr aux nOf hd rest`, read by `recRead`, with
-`ReadsBackB` from `readsBack_recTr`. What stays open at the dense form is `PartChecksB` and `PartOpensB` at
+`ReadsBackB` from `readsBack_recTr`. What stays open at the dense form is `PartChecksBV` and `PartOpensB` at
 `showsPart recRead`/`cmtTr recRead`, and `DecompB`; then the readers' two facts. This bounds no number by itself: those
 premises are open. -/
 theorem ksLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -57,8 +57,8 @@ theorem ksLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecord.
     let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart recRead bR) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsPart recRead bR) (cmtTr recRead) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -85,8 +85,8 @@ theorem bitsLin2_deployed_rec (b : Brings) (aux : Msg → ℕ → Flock.RecRecor
     let bL : Brings := { bR with rd := L.readers }
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart recRead bR) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsPart recRead bR) (cmtTr recRead) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart recRead bR) (cmtTr recRead) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →

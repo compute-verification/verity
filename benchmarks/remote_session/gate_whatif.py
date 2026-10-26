@@ -231,8 +231,8 @@ def row_at(s: dict, reg: dict, rec: Record, rtt_ns: int, host_bytes: int, rates:
     return {"rtt_ms": rtt_ns / 1e6, "series": t, "L_verifier_ms": al.q(al.group_l(v["windows_seen"])),
             "L_auditor_ms": al.q(al.group_l(a["windows_seen"])), "passes_s": (t["A"][-1] - t["R"][0]) / 1e9,
             "pass_ms": al.q(rec.pure if passes is None else passes), "waits": waits(rec, t, rtt_ns),
-            "shares_verifier_clock": al.shares(v, reg, host_bytes, rates),
-            "shares_auditor_clock": al.shares(a, reg, host_bytes, rates)}
+            "shares_verifier_clock": al.shares(v, reg, host_bytes, rates, clock="replay"),
+            "shares_auditor_clock": al.shares(a, reg, host_bytes, rates, clock="replay")}
 
 
 def identity(rec: Record, at_r0: dict, row: dict) -> dict:

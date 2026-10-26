@@ -133,9 +133,14 @@ class Serving:
     each step's blocks complete, its closed lines' releases (`released`), and `plan`, every block the record holds
     live, registered and written: an appended block joins it once its write is recorded, after its encode has landed
     (deferred residency; `encoded`).  A step that runs past a boundary ``moves`` its pass into the next window
-    (`ProverSide`), so the map re-keys a window ahead (`MemoryMap.ahead`)."""
+    (`ProverSide`), so the map re-keys a window ahead (`MemoryMap.ahead`), which needs a lifetime cap of at least 2
+    windows: at 1, every line would re-key every live block, those the line before re-keyed among them."""
 
     def __init__(self, backend: StoreBackend, registration: audit.Registration, lifetime: int) -> None:
+        if type(lifetime) is not int or lifetime < 2:
+            raise ValueError(f"a serving session's lifetime cap is at least 2 windows, not {lifetime!r}: its map "
+                             "re-keys a window ahead, so at 1 every line re-keys every live block; give the verifier "
+                             "--lifetime 2 or more, or leave it to its default under the hello's deferred residency")
         self.backend, self.store, self.lifetime = backend, backend.store, lifetime
         self._events: list[tuple] = []
         self.map = self.store.record_memory_map(
@@ -252,7 +257,10 @@ class StoreBackend:
     """`ProverSide`'s backend over ``store``, whose engine steps ``engine(s)`` runs (the module's docstring).  Its
     passes are the driver's reference over its `audit.Store` (`receipts.receipter` over each plan's blocks, its tree
     `receipts.tree`), hiding salts from ``randbytes``; ``path`` is the memory map's file (None: kept in memory).  With
-    ``device`` (`KvDevice`) the store's blocks are encoded on the GPU (`DeviceEncoded`)."""
+    ``device`` (`KvDevice`) the store's blocks are encoded on the GPU (`DeviceEncoded`).  An appended block is resident
+    once its encode lands (`deferred`, which the hello says), so the verifier refuses it a lifetime of one window."""
+
+    deferred = True
 
     def __init__(self, store: Store, engine: Callable[[int], None], *, randbytes: Callable[[int], bytes] = os.urandom,
                  path: str | Path | None = None, read_bytes_per_s: float = 1e12, device: KvDevice | None = None) -> None:

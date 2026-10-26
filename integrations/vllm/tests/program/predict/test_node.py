@@ -19,7 +19,7 @@ from verity_vllm.pipeline import registration_log as RL
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.node import build_node_program, check_ranks
 from verity_vllm.program.predict.phi import Phi
-from tests.predict.test_predict import GLM53, TINY, _phi, _row_phi
+from tests.program.predict.test_predict import GLM53, TINY, _phi, _row_phi
 
 _spec = importlib.util.spec_from_file_location(
     "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
@@ -120,6 +120,7 @@ def test_check_ranks_holds_each_ranks_run_of_the_body_to_its_own_program():
         check_ranks(phi, node, LP=4, T=1)
 
 
+@pytest.mark.slow
 def test_the_node_reads_only_its_prompt_besides_theta():
     """One IU over the node's computation: its novel reads are the prompt's 4 x 32 bits; the rank Programs' are their peers' too."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), "request", LP=4, T=2)
@@ -140,12 +141,22 @@ def test_a_world_of_one_has_no_node_program():
         build_node_program(_phi(TINY), "step")
 
 
+def _first_layers(phi: Phi, n: int) -> Phi:
+    """`phi` with its checkpoint's config cut to the first `n` layers."""
+    hf = phi.hf_config
+    hf.update(num_hidden_layers=n, indexer_types=hf["indexer_types"][:n], mlp_layer_types=hf["mlp_layer_types"][:n])
+    return Phi.from_json({**phi.to_json(), "model": {**phi.model, "hf_config": hf}})
+
+
 @pytest.mark.slow
 def test_glm53_tp8_node_step_is_its_ranks_joined(tmp_path):
-    """GLM-5.3 B1's eight ranks at TP8 (`predict.dsa`): the node's step is each rank's pinned step Program (records.json) joined at
-    the decoder's collectives, the FlashInfer fused all-reduce + norm (`peers.rows`), the routed all-reduce (`peers.whole`) and the
-    logits gather, which the TP2 Llama test cannot reach. About 2 min: eight rank steps and the node's, bodies only."""
-    phi = _row_phi(GLM53, "GLM53", tmp_path)
+    """GLM-5.3 B1's eight ranks at TP8 (`predict.dsa`): the node's step is each rank's step Program joined at the decoder's
+    collectives, the FlashInfer fused all-reduce + norm (`peers.rows`), the routed all-reduce (`peers.whole`) and the logits
+    gather, which the TP2 Llama test cannot reach. The checkpoint is cut to its first 4 layers, which hold every kind of layer the
+    78 repeat (dense MLP with a full indexer, then MoE with a shared one), so the join is checked at each kind of collective without
+    building all 78 (769 s on 12 workers)."""
+    phi = _first_layers(_row_phi(GLM53, "GLM53", tmp_path), 4)
+    assert phi.hf_config["mlp_layer_types"] == ["dense"] * 3 + ["sparse"] and phi.hf_config["indexer_types"][3] == "shared"
     node = build_node_program(phi, "step", M=1, pos0=8, with_desc=False)
     ranks = [build_program(_at(phi, r), "step", M=1, pos0=8, with_desc=False) for r in range(8)]
     _joined(node, ranks, check_leaves=False)

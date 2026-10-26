@@ -18,6 +18,7 @@ import pytest
 from verity.core.protocols.remote_bandwidth import audit, codec, memory_map
 from verity.core.protocols.remote_bandwidth.memory_map import MemoryMapError, Replay
 from verity_vllm.protocols.remote_bandwidth.interface import Append, PageLayout
+from verity_vllm.protocols.remote_bandwidth.memory_map import LIFETIME
 from verity_vllm.protocols.remote_bandwidth.registry import ArrayBacking, Store
 
 from .test_registry import CODEC, RECEIPT
@@ -410,7 +411,7 @@ def test_the_map_needs_4096_byte_blocks_registered_first_and_increasing_steps():
 PAGE0, PAGE1 = [3, 4, 5, 6, 19, 20, 21, 22], [7, 8, 9, 10, 23, 24, 25, 26]
 
 
-def deferred(s: Store, lifetime: int = audit.LIFETIME):
+def deferred(s: Store, lifetime: int = LIFETIME):
     """A map in a session: each append to ``sent`` as (first, digests, payloads), its encode landing when the test
     says (`MemoryMap.encoded`)."""
     sent: list = []

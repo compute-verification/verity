@@ -1,7 +1,7 @@
 import Proofs.Flock.Soundness.ZK.SHVZK
 import Proofs.Flock.Soundness.ZK.Masking
 import Proofs.Flock.Soundness.Assumptions
-import Proofs.Flock.Soundness.Model.LigeritoPad
+import Definitions.Flock.LigeritoPad
 
 /-!
 # Zero knowledge: the reference prover is complete, and C-Flock ZK's level-0 padding is onto

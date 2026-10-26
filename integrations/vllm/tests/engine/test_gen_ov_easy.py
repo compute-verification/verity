@@ -28,7 +28,7 @@ from verity_vllm.engine.profiles import vllm_d9105ea80_sm89_eager_qwen15 as Q15
 L = importlib.import_module("verity_vllm.engine.profiles.derived_LLAMA32_1B")
 Q = importlib.import_module("verity_vllm.engine.profiles.derived_QWEN05")
 B7 = importlib.import_module("verity_vllm.engine.profiles.derived_B7")
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 
 REPO = Path(__file__).resolve().parents[2]
 MANIFEST = REPO / "manifests" / "checkpoints.json"
@@ -71,10 +71,11 @@ def test_config_json_copy_is_the_pinned_hub_file():
 
 
 def test_case_b7_is_the_contracts_pinned_7b_role_no_manifest_change():
-    """`verity_vllm.engine.engine_profile.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
+    """`verity_vllm.engine.profiles.cases.CASES["B7"]` names the repo; `checkpoint_for("B7")` resolves to the frozen entry above."""
     sys.path.insert(0, str(REPO / "vllm-poc"))
     from verity_vllm.engine import engine_profile as adapter_profile
-    assert adapter_profile.CASES["B7"] == {"repo": B7.REPO_ID}
+    from verity_vllm.engine.profiles.cases import CASES
+    assert CASES["B7"] == {"repo": B7.REPO_ID}
     entry = adapter_profile.load_checkpoints(MANIFEST)[B7.REPO_ID]
     assert entry["revision"] == B7.REVISION and entry["downloaded"]
 
@@ -206,6 +207,7 @@ def test_workload_file():
 
 # --- the sealed driver resolves the case to the profile module; the engine arg reaches every GPU stage -----------------------
 
+@pytest.mark.slow
 def test_run_config_dry_run_resolves_b7_and_forwards_the_engine_arg():
     out = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "match", "--case", "B7", "--workload", WORKLOAD, "--out", "/r/RUN",
                           "--cards-dir", "/r/cards", "--python-gpu", "/pod/py311", "--python-cpu", "/pod/py312", "--checkpoint-dir", "/ck/snap",

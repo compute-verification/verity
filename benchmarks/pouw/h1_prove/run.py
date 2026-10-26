@@ -317,7 +317,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
         raise SystemExit(f"call {call}'s registered file: {why}")
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
-        got = {p: (e["value"], e["reads"][u]) for p, e in doc["ports"].items()}
+        got = {p: (e["value"], CC.port_reads(e)[u]) for p, e in doc["ports"].items()}
         if got != want:
             raise SystemExit(f"unit {u}: the registered reads {got} are not the window's {want}")
     path.write_text(json.dumps(doc))

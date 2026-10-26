@@ -45,7 +45,7 @@ from verity_vllm.engine import engine_profile as prof, env as engine_env, handle
 prof.apply_env()
 
 from verity_vllm.engine import vllm_adapter as va
-from verity_vllm.engine.rank_worker import EXTENSION
+from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 from verity_vllm.pipeline.tp import target as TT
 
 
@@ -137,7 +137,7 @@ def main(args: Options) -> None:
     cp = prof.checkpoint_for(case, args.checkpoints)
     if args.verify_weights:
         prof.verify_local_weights(cp)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(args.max_num_seqs)
     kw.update(target_kw)
@@ -183,7 +183,7 @@ def main(args: Options) -> None:
         print(f"[tp2] live inventory of ranks {sorted(inv['ranks'])} -> {args.inventory_out}", flush=True)
 
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[tp2] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
 

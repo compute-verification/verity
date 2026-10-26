@@ -1,54 +1,63 @@
-"""N2's head checks proved in zero knowledge beside N2's verdict of record, on a certifier-serve run: each link-window's
-head checks (`head_check.NetworkHeadCheck_v2`, the gated part of N2's unit, `service.LinkWindows`) proved by C-Flock
-`prove --zk` behind the Lean firewall and held by the Lean verifier, through the one-stage audit as
-`benchmarks/one_stage/a8.py` proves its openings. The stream's verdict of record is still N2's host verify, which reads
-the opening (`link_windows`), and the proved template is the row adapter, not the Program N2 registers.
+"""N2's verdict of record from zero-knowledge proofs of N2's registered unit, on a certifier-serve run: each link-window
+committed, registered on the link's own stream (`service.LinkWindows.stream`, the proof service's `Stream`), selected
+(Selection All: its one unit, no coins), its unit (`NetworkLinkWindow_v5`, both ends' head checks on their pinned gate
+ids) proved by C-Flock `prove --zk` behind the Lean firewall, delivered, and decided by `LinkWindows.outcome`: the
+verifier's own Lean `verify --zk` of the proof, the proof's public row opened to the verifier's own copy and its output
+row read. No host check reads the opening; `--debug-clear` adds the in-the-clear comparison to each verdict, which
+decides nothing.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
-    python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] --bin flock-circuit --lean flock-verify
-      --out DIR [--points 1] [--dry]
+    python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
+      --lean flock-verify --out DIR [--jobs 1] [--debug-clear] [--dry]
 
-* **The run.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
-  `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes one on an injected clock
-  against a stub endpoint that answers at once (certifier-serve's tests' run), honest and `extra`, with fresh keys.
-* **Instances** (`link_windows`). The run's `LinkWindows`, rebuilt as `certifier_serve.check` builds it; per link-window
-  its certified records committed (`LinkWindows.commit`, fresh salts), registered on the link's stream, selected
-  (Selection All) and each end's head check taken under the registered root (`LinkWindows.head_checks`).
-* **Rows** (`NetworkHeadCheckRows`). C-Flock's statement takes u16 rows, and the head check's parameters are no whole
-  number of u16 words (`direction` is one bit, and an odd L makes the head an odd number of bytes). The adapter takes
-  two rows, ``pub`` (the head check's public inputs in its signature's order: the registered root, the link-window's
-  domain, the link, the end, the window, the end's grid, its profile's row and the certificate's signed digest) and
-  ``wit`` (the head, its leaf's salt, its two siblings and the certifier's salt), each zero-padded to whole words,
-  slices them into `NetworkHeadCheck_v2{L, T, COUNTS}`'s arguments and calls it unchanged: its one output, ``o0``, is
-  the head check's. Nothing reads the padding. `rows_of` encodes an instance's rows from `head_check.arguments`.
-* **Members.** One statement per (round, end), a template of n units, n the run's windows: ``honest`` both ends;
-  ``tampered``, the egress end of the honest records with window 0's head one count off (one frame more in its first
-  bucket that has room), committed by the prover under its own root, its certificate still the original's, so its
-  counts and its signed digest refuse it; and with ``--extra``, the egress end of certifier-serve's ``extra`` run (the
-  shim wrote one event more, the certifier certified it), which only its counts refuse. Each member is registered,
-  every unit drawn by the verifier's Lean (`flock-verify draw --stratified n`), proved `prove --zk` behind the firewall
-  (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition --program`.
-* **What the verifier opens.** Of each unit its ``pub`` row, to its own copy (`public_words`, from the link's public
-  fields, the registered root and the certificate's signed digest), and its verdict row ``o0``, under the salts the
-  prover sends for those two rows; never ``wit``. A link-window's head checks pass when both ends' units open with
-  verdict 1. What the verifier received is scanned for every piece of every head, head salt, sibling and certifier salt
-  (`a8.received`) but the pieces the public circuit holds (`public_pieces`); the prover's instance file, which holds the
-  heads, is the control.
-* **Cost** (``--points``): sessions on the honest members whose verifier draws its first k units, behind the firewall
-  (`a8.cost`), for the prover's time and proof bytes per unit.
+* **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
+  `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
+  against a stub endpoint that answers at once (certifier-serve's tests' run), honest, extra and late, with fresh keys.
+* **Members.** One stream each, over all of the run's link-windows: ``honest``; ``tampered``, the honest records with
+  window 0's egress head one count off (`one_count`), committed by the prover under its own root, the certificates still
+  the certifier's; with ``--extra``, certifier-serve's ``extra`` run (the shim wrote one event more and the certifier
+  certified it); with ``--late``, its ``late`` run. The prover's references (`head_check.reference_parts`, and the unit's
+  output word by the gates' references, `LinkWindows.outputs`) say beforehand which windows each member's proofs refuse
+  (`expected`).
+* **The statement** (`stager`, `stage`). One circuit, `LinkWindows.proof_unit` lowered once (the registered unit with each
+  gate the Definition its pinned digest names), bound to the registered partition and Program. Each link-window is a
+  statement of its own with one instance, unit 0: rows ``pub`` and ``wit`` (`LinkWindows.layout`, `LinkWindows.row`) and
+  the output row ``o0``, the verdict and deadline bits. The lowering evaluates every instance at once, held to the prover's
+  reference and to the IR reference; each statement's salts come from a key of its own, and the verifier's opening of its
+  ``pub`` and ``o0`` rows is checked on the staged public file before anything is proved.
+* **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the firewall on
+  the statement (the server serving the stream's draw), deliver, and the outcome of record. Per window: prove (the
+  session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
+  included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
+  another: outer proofs go through the firewall one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
+* **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
+  (the salted root, nothing of the certificates) and the draw; the two certificates' public fields, from the certifier,
+  the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
+  hiding commitment), its session files, and the salts of the ``pub`` and ``o0`` rows with the output word; and the
+  outcome record. Its own: the circuit file's SHA-512 (its lowering, which prover and verifier share here), the Program's
+  descriptor and the partition object. Never the opening (records, heads, leaf salts, siblings, the certifier's salt)
+  nor the ``wit`` row's salt. Every file there is scanned for every piece of every head, leaf salt, sibling and
+  certifier salt of the member (`a8.received`) but the pieces the public circuit or a window's ``pub`` row holds
+  (`public_pieces`), which the verifier has whatever the witness, and a member fails on a ``leaked`` piece under the
+  rule every zero-knowledge driver's scan follows (`leak_scan.scan`); the prover's instance files, which hold the heads,
+  are the control.
 """
 from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
+import gc
 import hashlib
 import json
 import os
 import secrets
+import shutil
+import socket
 import sys
 import tempfile
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -58,89 +67,45 @@ ONE_STAGE = HERE.parent / "one_stage"
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
-from verity.ml.circuits import boolean as BL  # noqa: E402
-from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.ml.circuits.types import Array  # noqa: E402
-from verity.core.protocols.certifier import head_check as HC  # noqa: E402
+import leak_scan as LS  # noqa: E402
+from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 
-PUBLIC = ("record", "record_domain", "link", "direction", "window", "grid", "profile", "signed")
-ROWS = ("pub", "wit")
 ENDS = ("egress", "ingress")
-OPENED = ("o0", "pub")
+ROUNDS = ("honest", "tampered", "extra", "late")
+#: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
+ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
+#: what the verifier receives per link-window, by file (`member`)
+RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
+            "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
+            "pub-1.bin": "the statement's public file", "session-*": "the session's files",
+            "delivered.json": "the pub and o0 rows' salts and the output word", "outcome.json": "the outcome record"}
 
 
 def log(msg: str) -> None:
     print(f"N2ZK {time.strftime('%H:%M:%SZ', time.gmtime())} {msg}", flush=True)
 
 
-# --- the rows ---------------------------------------------------------------------------------------------------------
-
-def row_bits(fn) -> dict[str, int]:
-    """Each row's bits for the head check `fn`: its parameters' (``pub`` the public ones), padded to whole u16 words."""
-    params, _ = fn.signature()
-    bits = {r: sum(t.leaves for n, t in params if (n in PUBLIC) == (r == "pub")) for r in ROWS}
-    return {r: 16 * -(-b // 16) for r, b in bits.items()}
+#: the verifier of record's own Lean runs (`proofs.verify`'s findings and refusal), by the proof's public file, so each
+#: window records what decided it: a rejected outcome's public outputs are the service's, which say nothing
+LEAN_RUNS: dict[str, tuple] = {}
 
 
-def adapter(name: str, inner) -> CompositeDefinition:
-    """A Definition on two bit rows, ``pub`` and ``wit`` (`row_bits`), that slices them into the arguments of
-    ``inner(L, T, COUNTS)`` (a Definition of the head check's signature) and returns its output."""
+def _record_lean_runs(PF) -> None:
+    verify = PF.verify
 
-    def signature(S):
-        fn = inner(S.L, S.T, S.COUNTS)
-        bits = row_bits(fn)
-        return tuple((r, Array(bits[r], BL.BIT)) for r in ROWS), fn.signature()[1]
+    def recorded(proof, **kw):
+        out = verify(proof, **kw)
+        LEAN_RUNS[str(proof.public)] = out
+        return out
 
-    def body(B, S, pub, wit):
-        fn = inner(S.L, S.T, S.COUNTS)
-        refs, at, args = {"pub": HC._refs(pub), "wit": HC._refs(wit)}, dict.fromkeys(ROWS, 0), []
-        for n, t in fn.signature()[0]:
-            r = "pub" if n in PUBLIC else "wit"
-            args.append(HC._coll(t, refs[r][at[r]:at[r] + t.leaves]))
-            at[r] += t.leaves
-        return B.call(fn, *args)
-
-    return CompositeDefinition(name, 1, ("L", "T", "COUNTS"), signature, body, conformance="exact-model-tested",
-                               register=False, doc=f"{name}: the head check on two u16-word rows, pub (its public inputs) "
-                                                   "and wit (its witness), each zero-padded; the padding is read by nothing")
-
-
-NetworkHeadCheckRows = adapter("NetworkHeadCheckRows", lambda L, T, counts: HC.unit(L, T, bool(counts)))
-
-
-def unit(key: tuple[int, int, int]):
-    """The adapter around `head_check.unit(L, T, COUNTS)`."""
-    L, T, counts = key
-    return bind(NetworkHeadCheckRows, L=L, T=T, COUNTS=int(counts))
-
-
-def _words(bits: list[int]) -> list[int]:
-    return [sum(b << j for j, b in enumerate(bits[k:k + 16])) for k in range(0, len(bits), 16)]
-
-
-def rows_of(inst: HC.Instance) -> dict[str, list[int]]:
-    """The instance's ``pub`` and ``wit`` rows as u16 words: its arguments' bits (`head_check.arguments`) in order,
-    little-endian, zero-padded."""
-    params, _ = inst.unit.signature()
-    bits: dict[str, list[int]] = {r: [] for r in ROWS}
-    for (n, _t), a in zip(params, HC.arguments(inst)):
-        bits["pub" if n in PUBLIC else "wit"] += a
-    width = row_bits(inst.unit)
-    return {r: _words(b + [0] * (width[r] - len(b))) for r, b in bits.items()}
-
-
-def public_words(lw: LinkWindows, window: int, direction: int, root: bytes, signed: bytes) -> list[int]:
-    """The ``pub`` row the verifier derives itself: the registered `root`, the link-window's domain, the link, the end,
-    the window, the end's grid and its profile's row, and `signed`, the certificate's signed digest."""
-    L, T, _ = lw.head_key(direction)
-    profile = lw.occupancy[direction]
-    blank = HC.Instance(root, lw.domain(window).domain_id, lw.link.encode("utf-8"), direction, window, lw.grid(direction),
-                        None if profile is None else tuple(profile[window]), signed, bytes(HC.Shape(L, T).HL),
-                        bytes(HC.SALT.leaves // 8), (bytes(64), bytes(64)), bytes(64), T)
-    return rows_of(blank)["pub"]
+    if not hasattr(verify, "recorded"):
+        recorded.recorded = True
+        PF.verify = recorded
 
 
 # --- the run's link-windows -------------------------------------------------------------------------------------------
@@ -157,40 +122,51 @@ def link(run: Path) -> tuple[LinkWindows, dict]:
     return lw, plan
 
 
-def link_windows(run: Path, edit=None, stream: bool = True, clock=time.monotonic) -> SimpleNamespace:
-    """Every link-window of the run with both certified records: its opening (fresh salts) and each end's head check
-    under its root. With `stream`, on N2's stream as certifier-serve's check takes it: registered, selected (Selection
-    All), and its outcome of record decided before the next registration, which the stream requires, by N2's verifier of
-    record on the host (`LinkWindows.outcome`, with the Lean audit), its verdict kept as ``host``; without, each root is
-    the commitment's own (`LinkWindows.root`). ``edit(lw, w, pair)``: the (egress, ingress) records the prover commits in
-    place of the certified ones."""
+def link_windows(run: Path, edit=None, clock=None) -> SimpleNamespace:
+    """Every link-window of the run with both certified records, as the prover holds it before it registers: its opening
+    (fresh salts), the root it commits (`LinkWindows.root`), the unit's arguments under that root (None where the unit
+    takes no instance), each end's head check's failed parts (`head_check.reference_parts`) and the unit's output word by
+    the gates' references (`LinkWindows.outputs`); and the certifier's certificates, which the verifier receives from
+    the certifier. ``edit(lw, w, pair)``: the records the prover commits in place of the certified ones. ``expect``: the
+    verdict the verifier of record should reach on an honest proof of the opening.
+
+    With ``clock``, for a report on runs nothing is proved for (network_e2e), also on N2's stream as certifier-serve's
+    check takes it: each link-window registered (``digest``), selected (Selection All) and decided before the next by
+    `LinkWindows.unproved_outcome`, in the clear (``host``), and the link's network verdict (``network``)."""
     lw, plan = link(run)
     syncs = [ClockSync(d, Fraction(r)) for d, r in plan["syncs"]]
-    st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock) \
-        if stream else None
     certified, refused = cs.read_certified(run / "certified.jsonl")
-    out, previous = [], None
+    out = []
     for w in range(plan["windows"]):
         pair = certified.get((Direction.EGRESS, w)), certified.get((Direction.INGRESS, w))
         if None in pair:
             break
+        certificates = tuple(r.certificate for r in pair)
         if edit is not None:
             pair = edit(lw, w, pair)
         opening = lw.commit(w, *pair)
-        x = SimpleNamespace(window=w, opening=opening, digest=None, drawn=None, host=None)
-        if st is None:
-            x.root = lw.root(opening)
-        else:
-            reg = lw.register(st, lw.registration(opening, previous))
+        root = bytes.fromhex(lw.root(opening))
+        insts = lw.head_checks(opening, root)
+        args = lw.arguments(opening, root, syncs)
+        word = lw.outputs(opening, root, syncs) if args is not None else None
+        others = lw.certified(w, certificates) and w < len(syncs) and syncs[w] in lw.sync_set
+        out.append(SimpleNamespace(
+            window=w, opening=opening, root=root, insts=insts, args=args, word=word, certificates=certificates,
+            failed={e: None if i is None else [k for k, ok in HC.reference_parts(i).items() if not ok]
+                    for e, i in zip(ENDS, insts)},
+            expect=int(word == 0b11 and others), statement=None))
+    rd = SimpleNamespace(lw=lw, plan=plan, syncs=syncs, windows=out, issuer_refused=refused, advice=None)
+    if clock is not None:
+        st = lw.stream(budget=plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins, clock=clock)
+        previous = None
+        for x in out:
+            reg = lw.register(st, lw.registration(x.opening, previous))
             previous = x.digest = reg.digest
             draw = st.select(reg)
-            x.root, x.drawn = reg.record["roots"][0]["root"], dict(draw.draw)
-            outcome = st.deliver(draw, [lw.session(opening, draw)]) or lw.outcome(st, draw, opening, syncs)
+            outcome = st.deliver(draw, [lw.session(x.opening, draw)]) or lw.unproved_outcome(st, draw, x.opening, syncs)
             x.host = {"accepted": outcome.accepted, "codes": list(outcome.verdict.codes), "public": dict(outcome.public)}
-        x.checks = lw.head_checks(opening, bytes.fromhex(x.root))
-        out.append(x)
-    return SimpleNamespace(lw=lw, plan=plan, windows=out, issuer_refused=refused,
-                           network=lw.network_verdict(st, plan["windows"]) if st is not None else None)
+        rd.network = lw.network_verdict(st, plan["windows"])
+    return rd
 
 
 def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRecord]):
@@ -205,6 +181,54 @@ def one_count(lw: LinkWindows, w: int, pair: tuple[CertifiedRecord, CertifiedRec
     t = t if t is not None else next(t for t, n in enumerate(counts) if n < r)
     counts[t] += 1
     return CertifiedRecord(replace(egress.head, counts=tuple(counts)), egress.salt, egress.certificate), ingress
+
+
+def expected(name: str, rd: SimpleNamespace) -> bool:
+    """Whether the member's references are its round's: every unit takes an instance, and its verdict bit is 1 exactly
+    where no part fails; honest, none fails and every window accepts; tampered, window 0's egress head fails its counts
+    and its signed digest only (its signed digest alone on the advice profile, whose counts the unit leaves to N2's
+    advised unit); extra, egress heads fail their counts alone, on one window or more; late, egress heads
+    fail their fields and counts, on one window or more. The ingress heads fail nothing, and every negative member
+    refuses one window or more."""
+    xs = rd.windows
+    if not xs or any(x.word is None for x in xs) or any(bool(x.word & 1) != (not x.failed["egress"] and not
+                                                                            x.failed["ingress"]) for x in xs):
+        return False
+    if any(x.failed["ingress"] for x in xs):
+        return False
+    eg = [x.failed["egress"] for x in xs]
+    if name == "honest":
+        return all(x.expect for x in xs)
+    if name == "tampered":
+        advice = (rd.plan.get("occupancy") or {}).get("kind") == cs.ADVICE
+        return eg[0] == (["signed"] if advice else ["counts", "signed"]) and not any(eg[1:])
+    allowed = {"extra": ([], ["counts"]), "late": ([], ["fields", "counts"])}[name]
+    return all(f in allowed for f in eg) and allowed[1] in eg
+
+
+def blobs_of(rd: SimpleNamespace) -> tuple[dict[str, bytes], set[str]]:
+    """The witness pieces the verifier must not receive: each head, its leaf's salt, its siblings, the certifier's salt,
+    and the records' leaf salts; the heads are what the prover's instance files hold as they are."""
+    blobs, held = {}, set()
+    for x in rd.windows:
+        for d, (end, inst) in enumerate(zip(ENDS, x.insts)):
+            if inst is None:
+                continue
+            blobs[f"head {end} {x.window}"] = inst.head
+            held.add(f"head {end} {x.window}")
+            blobs[f"head salt {end} {x.window}"] = inst.salt
+            blobs[f"certifier salt {end} {x.window}"] = inst.salt_c
+            blobs[f"record salt {end} {x.window}"] = x.opening.salts[d]
+            for k, s in enumerate(inst.path):
+                blobs[f"sibling {k} {end} {x.window}"] = s
+    return blobs, held
+
+
+#: The scan's one cutter (`leak_scan.public_pieces`: each row cut whole, less the pieces the staged circuit holds, such
+#: as a head's empty buckets, sixteen zero bytes), under the name the drivers that import this module call. The held
+#: blobs are fields of the ``wit`` row (``fields``): an advised head, 157 + L + 4T bytes, ends off a 16-byte boundary,
+#: and the instance holds its salt after it, never its zero-padded last chunk.
+public_pieces = functools.partial(LS.public_pieces, fields=True)
 
 
 # --- a run on an injected clock ---------------------------------------------------------------------------------------
@@ -240,7 +264,8 @@ def _virtual_run(run: Path, plan: dict, report: dict, url: str, upstream: tuple,
                       proxy_args={"challenger_key": challenger.public_key(), "signer": certifier})
 
 
-def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra"), height: int = 6) -> dict:
+def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest", "extra", "late"),
+            height: int = 6) -> dict:
     """certifier-serve's run on an injected clock against `_endpoint`, one per strategy under `out`, with fresh LMS keys
     of `height` in a scratch directory that is removed. Returns the plan."""
     keys = Path(tempfile.mkdtemp(prefix="n2-zk-keys-"))
@@ -267,350 +292,352 @@ def virtual(out: Path, requests: int = 40, tokens: int = 4, strategies=("honest"
         return asyncio.run(go())
     finally:
         challenger.close()
-        import shutil
-
         shutil.rmtree(keys)
 
 
-# --- staging, the sessions and the verifier ---------------------------------------------------------------------------
+# --- the statement ----------------------------------------------------------------------------------------------------
 
 def _one_stage():
     sys.path.insert(0, str(ONE_STAGE))
     import a0
-    import a7
     import a8
     import numpy as np
-    from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
-    from verity.ml.circuits.codec import canonical_json, encode_program
+    from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
     from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+    from verity_flock import circuit as FC
     from verity_flock import class_statement as CS
 
-    return SimpleNamespace(a0=a0, a7=a7, a8=a8, np=np, D=D, P=P, R=R, V=V, canonical_json=canonical_json,
-                           encode_program=encode_program, V2=V2, CS=CS)
+    return SimpleNamespace(a0=a0, a8=a8, np=np, P=P, PF=PF, V2=V2, FC=FC, CS=CS)
 
 
 def builders() -> tuple:
-    """Give the traced parts the head check calls that carry no builder (`head_check._part`'s and
-    `gates.lms._leaf_definition`'s; `frame_v3._part` and `boolean.trace.definition` keep one) the builder their trace was
-    taken from, so C-Flock lowers each activation by it, commits included (`ir_lower._boolean_activation`, which calls
-    ``build(C, S, *e)`` for a part with statics and ``build(C, *e)`` without). Gate by gate their linear forms grow without
-    bound: one SHA-512 compression passes 1 GB, the unit 108 GB in 3.5 minutes. Returns the parts."""
+    """Give the traced parts the head check calls that carry no builder (`gates.lms._leaf_definition`'s; `head_check`'s,
+    `frame_v3._part` and `boolean.trace.definition` keep one) the builder their trace was taken from, so C-Flock lowers
+    each activation by it, commits included (`ir_lower._boolean_activation`, which calls ``build(C, S, *e)`` for a part
+    with statics and ``build(C, *e)`` without). Gate by gate their linear forms grow without bound: one SHA-512
+    compression passes 1 GB. Returns the parts."""
     from verity.ml.commitments.gates import lms
     from verity.ml.commitments.gates.sha512 import compress_gadget
 
     parts = ((lms.Sha512Compress, lambda C, *e: compress_gadget(C, list(e[:8]), list(e[8:24]))),
-             (lms.LmsEqual, lms._build_equal), (HC.NetworkHeadFields, HC._build_fields),
-             (HC.NetworkHeadCounts, HC._build_counts))
+             (lms.LmsEqual, lms._build_equal))
     for d, build in parts:
         if getattr(d, "build", None) is None:
             d.build = build
     return tuple(d for d, _ in parts)
 
 
-def stager(M, key: tuple[int, int, int], end: str, n: int, out: Path) -> SimpleNamespace:
-    """One end's statement program and partition (one template, n units) and its stager (the unit lowered once, its
-    traced parts by their builders, `builders`)."""
-    import gc
-
+def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
+    """The one circuit: `LinkWindows.proof_unit` lowered once on rows ``pub`` and ``wit`` with output row ``o0``, bound
+    to the registered partition and Program, which are written beside it as the verifier's own. Its ports are
+    `service.PORTS`, each the length the verifier opens (`LinkWindows.bits`)."""
     builders()
-    defn = unit(key)
-    bits = row_bits(HC.unit(key[0], key[1], bool(key[2])))
-    rows = [(r, M.V2, bits[r], [r]) for r in ROWS]
-    program = M.P.mixed_population_program([(defn, n)])
-    query = M.P.template_instances_query([defn])
-    part = M.P.partition(program, query)
+    rows = [(r, M.V2, lw.bits(r), list(lw.layout[r])) for r in SVC.ROWS]
     out.mkdir(parents=True, exist_ok=True)
-    (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
-    (out / "program.json").write_bytes(M.canonical_json(M.encode_program(program)))
-    bound = {"partition": M.P.digest(part), "program": part["program"]}
+    (out / "partition.json").write_text(json.dumps(lw.partition, sort_keys=True))
+    (out / "program.json").write_bytes(lw.program)
+    bound = {"partition": M.P.digest(lw.partition), "program": lw.partition["program"]}
     t, was = time.time(), gc.isenabled()
     gc.disable()
     try:
-        st = M.CS.UnitStager(defn, f"unit/n2-head-{end}", rows, [(M.V2, (0,))], circuit=out / "circuit.txt", bind=bound)
+        st = M.CS.UnitStager(lw.proof_unit, "unit/n2-link-window", rows, [(M.V2, (0,))], circuit=out / "circuit.txt",
+                             bind=bound)
         st.pin
     finally:
         if was:
             gc.enable()
-    (tid, base, cnt), = M.P.ranges(program, query)
-    assert tid == M.P.template_id(defn) and cnt == n
-    return SimpleNamespace(defn=defn, key=key, end=end, rows=rows, program=program, query=query, n=n, base=base, st=st,
-                           out=out, lower_s=round(time.time() - t, 1), partition_file=out / "partition.json",
-                           program_file=out / "program.json")
-
-
-def stage(M, sg: SimpleNamespace, insts: list[HC.Instance], name: str, salt_key: bytes) -> dict:
-    """One member's statement on its end's stager: instance i's rows (`rows_of`), every row under a salt from the
-    prover's ``salt_key``."""
-    t0 = time.time()
-    st, n, out = sg.st, len(insts), sg.out / f"stage-{name}"
+    got = [(p.name, p.n_bits) for p in st.ports]
+    if got != [(p, lw.bits(p)) for p in SVC.PORTS] or st.out_words != [1]:
+        raise SystemExit(f"the statement's rows {got} are not the ones the verifier opens "
+                         f"{[(p, lw.bits(p)) for p in SVC.PORTS]}")
     k_log = st.meta["k_log"]
-    nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
-    if not 25 <= k_log + nbl <= M.a7.M_MAX:
-        raise SystemExit(f"{name}: m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
-    words = [rows_of(i) for i in insts]
-    data = {r: M.np.asarray([w[r] for w in words], dtype=M.np.uint16) for r in ROWS}
-    set_name = f"{st.iset.name}-{name}"
-    got = st.stage(data, out, salt_key, indices=range(sg.base, sg.base + n), set_name=set_name)
-    (out / "inst.bin").rename(out / f"inst-{n}.bin")
-    (out / "pub.bin").rename(out / f"pub-{n}.bin")
-    (out / "tables").mkdir(exist_ok=True)
-    os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
-         "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"], "salts": got["salts"],
-         "ports": st.ports, "oks": [int(x) for x in M.np.asarray(got["outs"]["o0"])[:, 0]],
-         "partition_file": sg.partition_file, "program_file": sg.program_file, "stage_s": round(time.time() - t0, 1)}
-    m["header"] = M.a0.public_header(out, n)
-    return m
+    if not 25 <= k_log + 3 <= 35:
+        raise SystemExit(f"m = {k_log} + 3 is outside 25 .. 35 (--zk and flock-circuit's shape)")
+    return SimpleNamespace(st=st, lw=lw, out=out, circuit=out / "circuit.txt", partition_file=out / "partition.json",
+                           program_file=out / "program.json", lower_s=round(time.time() - t, 1), k_log=k_log,
+                           circuit_sha512=M.PF.file_sha512(out / "circuit.txt"))
 
 
-TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_sent", "wire_recv", "k_log", "nbl",
-          "dense_m", "units", "ands_per_vu", "prover", "gpu")
+def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: bytes, out: Path) -> dict:
+    """Every link-window's statement on the one circuit, one instance each, unit 0. The lowering evaluates all of their
+    rows at once (`Lowering.evaluate`), which must satisfy every unit and give the prover's output words, held to the IR
+    reference in one batch (`UnitStager.reference_check`); then each statement's files are written as `UnitStager.stage`
+    writes them (`circuit.write`), under salts from a key of the statement's own (`circuit.stage_salts` derives them from
+    the key and the set's content, which every statement shares). The verifier's opening of each staged ``pub`` and
+    ``o0`` row is checked on its public file. Sets each window's ``statement``."""
+    np, st = M.np, sg.st
+    items = [(name, x) for name, mb in members.items() for x in mb.windows]
+    rows = {r: np.stack([np.frombuffer(members[name].lw.row(x.args, r), "<u2") for name, x in items])
+            for r in SVC.ROWS}
+    t = time.time()
+    flat = np.concatenate([rows[r] for r in st.row_ports], axis=1)
+    got, _cut, ok = st.low.evaluate(flat.astype(np.uint64))
+    if int(ok) != (1 << len(items)) - 1:
+        raise SystemExit("a unit is unsatisfied on its rows")
+    o0 = got.astype(np.uint16)[:, :1]
+    words = [int(w) for w in o0[:, 0]]
+    if words != [x.word for _, x in items]:
+        raise SystemExit(f"the lowering's output words {words} are not the prover's references {[x.word for _, x in items]}")
+    eval_s, t = round(time.time() - t, 1), time.time()
+    st.reference_check(rows, {"o0": o0})
+    ref_s, t = round(time.time() - t, 1), time.time()
+    for k, (name, x) in enumerate(items):
+        lw = members[name].lw
+        d = out / name / f"w{x.window:03d}" / "statement"
+        iset = SimpleNamespace(**{**vars(st.iset), "name": f"{st.iset.name}-{name}-w{x.window}"})
+        key = hashlib.sha512(secret + f"row salts/{name}/{x.window}".encode()).digest()[:32]
+        salts = M.FC.stage_salts(iset, 0, 1, st.ports, key)
+        d.mkdir(parents=True, exist_ok=True)
+        M.FC.write(st.text, iset, 0, 1, d / "inst-1.bin", d / "pub-1.bin", key,
+                   rows={r: rows[r][k:k + 1] for r in SVC.ROWS}, outs={"o0": o0[k:k + 1]}, salts=salts,
+                   public_words={}, digests=(st.pin, st.class_sha512), indices=[0], meta=st.meta)
+        (d / "tables").mkdir(exist_ok=True)
+        os.link(sg.circuit, d / "circuit.txt")
+        bcs = SVC._commitments(d / "pub-1.bin", 0)
+        mine = lw.public_arguments(x.window, x.root, x.certificates, members[name].syncs, members[name].advice)
+        if not (bcs and mine is not None and lw.row(mine, "pub") == lw.row(x.args, "pub")
+                and SVC._opens(lw.row(mine, "pub"), lw.bits("pub"), salts["pub"][0], bcs["pub"])
+                and SVC._opens(SVC.output_row(words[k]), SVC.OUT_BITS, salts["o0"][0], bcs["o0"])):
+            raise SystemExit(f"{name} window {x.window}: the staged pub or o0 row doesn't open to the verifier's own")
+        x.statement = SimpleNamespace(dir=d, salts={"pub": salts["pub"][0], "o0": salts["o0"][0]}, output=words[k])
+    return {"statements": len(items), "evaluate_s": eval_s, "reference_s": ref_s, "write_s": round(time.time() - t, 1)}
 
 
-def audit_member(M, a, sg, m: dict, rd: SimpleNamespace, d: int, out: Path, port: int) -> dict:
-    """Member m registered, drawn by the verifier's Lean (every unit), proved --zk behind the firewall and held by Lean;
-    then the verifier's side: each unit's ``pub`` row opened to its own copy (`public_words`) and its verdict row read.
-    Writes what the verifier received under ``out / "verifier"``."""
-    a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
-    out.mkdir(parents=True, exist_ok=True)
-    n, name = m["n"], m["name"]
-    want, roots = {}, []
-    fv = m["header"]["frame_v3"]
-    for p_, w in a7.frame_ports(m["set"], m["meta"], n).items():
-        want[f"{name}/{p_}"] = w
-        roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
-    leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
-    win = {"kind": "stand-in", "of": f"N2's {ENDS[d]} head checks of the link-windows of a certifier-serve run (n2_zk.py)",
-           "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
-           "link": "head_check: each unit's public record input is the link-window's registered N2 root"}
-    rec = R.record(sg.program, sg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer)
-    (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, sg.program, sg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json(),
-              f"statement/{name}": a7.statement_checks(m, rec, want)}
-    receipt = R.receipt(rec, "one-stage-e2e verifier (n2_zk.py)")
-    res: dict = {"checks_before_draw": {c: v["ok"] for c, v in checks.items()}}
-    if not all(v["ok"] for v in checks.values()):
-        return {**res, "checks": checks, "accepted": False}
-    p = a0.run([a.lean, "draw", "--program", str(sg.program_file), "--partition", str(sg.partition_file), "--stratified",
-                str(n)], out / "draw.log")
-    lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
-    local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
-    sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=firewall(M, m))
-    draw_t = (record or {}).get("unit_draw") or {}
-    v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
-    verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
-                                        and (live or {}).get("roots") == fv["roots"] and v.ok,
-                                        "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}}
-    lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
-    verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
-    proved = a0.proved_units(m["header"], live or {})
-    timing = {x: (live or {}).get(x) for x in TIMING}
-    statement = {name: {"session_s": proc["wall_s"], **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest",
-                                                                                          "sigma")},
-                        "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
-    sessions = [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
-    result = V.audit_record(rec, receipt, lean_draw, rec["law"], sorted(proved), (live or {}).get("instances", 0), statement,
-                            verdicts, a.delta, sessions=sessions, served=sorted(m["base"] + u for u in draw_t.get("units", [])),
-                            session_roots={f"{name}/{p_}": r for p_, r in ((live or {}).get("roots") or {}).items()})
-    (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
-
-    held = set(proved) if result.get("accepted") else set()
-    port_ = {x.name: x for x in m["ports"]}
-    bcs = a7.public_bcs(m["dir"] / f"pub-{n}.bin", m["ports"])
-    units, sent = [], []
-    for i, x in enumerate(rd.windows):
-        record_ = x.opening.records[d]
-        mine = public_words(rd.lw, x.window, d, bytes.fromhex(x.root), record_.certificate.digest)
-        word = m["oks"][i]
-        opened = ((m["base"] + i) in held and a7.opens(port_["pub"], mine, m["salts"]["pub"][i], bcs[i]["pub"])
-                  and a7.opens(port_["o0"], [word], m["salts"]["o0"][i], bcs[i]["o0"]))
-        units.append({"window": x.window, "unit": m["base"] + i, "verdict": "malformed" if not opened
-                      else "accept" if word == 1 else "reject"})
-        sent.append({"unit": m["base"] + i, "window": x.window, "verdict": word,
-                     **{f"salt/{r}": m["salts"][r][i].hex() for r in OPENED}})
-
-    vdir = out / "verifier"
-    vdir.mkdir(exist_ok=True)
-    for f in (out / "registration.json", sg.partition_file, sg.program_file, m["dir"] / "circuit.txt",
-              m["dir"] / f"pub-{n}.bin", sdir / "draw.json", out / "audit.json"):
-        os.link(f, vdir / f.name)
-    for f in sorted((sdir / "sessions").rglob("*")):
-        if f.is_file():
-            os.link(f, vdir / f"session-{f.parent.name}-{f.name}")
-    (vdir / "openings.json").write_text(json.dumps(sent, indent=1))
-    (vdir / "n2.json").write_text(json.dumps([{"window": x.window, "registration": x.digest, "root": x.root,
-                                               "signed": x.opening.records[d].certificate.digest.hex()}
-                                              for x in rd.windows], indent=1))
-    proofs = (live or {}).get("proof_bytes") or []
-    return {**res, "accepted": bool(result.get("accepted")), "units": units,
-            "audit": {x: result.get(x) for x in ("accepted", "complete", "wrong_units")},
-            "verdicts": {x: y.get("accepted") for x, y in verdicts.items()}, "why": {x: y.get("why") for x, y in verdicts.items()},
-            "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
-            "per_unit": {"prove_total_s": _per(timing.get("prove_total_s"), n), "e2e_s": _per(timing.get("e2e_s"), n),
-                         "proof_bytes": _per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": _per(lv.get("verify_s"), n)},
-            "opened_rows": list(OPENED)}
-
-
-def _per(x, n: int):
-    return None if x is None else round(x / n, 3)
-
-
-def firewall(M, m: dict) -> dict:
-    """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``)."""
+def firewall(M, sg: SimpleNamespace) -> dict:
+    """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``) on the
+    statement's partition and Program."""
     if not os.environ.get("FC_FIREWALL_LEAN"):
         raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
-    return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
+    return {"FC_FIREWALL": "1", **M.a0.firewall_env({"partition_file": sg.partition_file,
+                                                     "program_file": sg.program_file})}
 
 
-def expected(name: str, failed: list[list[str]]) -> bool:
-    """Whether each link-window's failed head-check parts are the round's: none when honest; tampered, window 0's
-    counts and signed digest only; extra, the counts alone on at least one window."""
-    if name == "honest":
-        return not any(failed)
-    if name == "tampered":
-        return failed[0] == ["counts", "signed"] and not any(failed[1:])
-    return all(f in ([], ["counts"]) for f in failed) and ["counts"] in failed
+def one_session(jobs: int) -> None:
+    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the firewall alone
+    (`ONE_SESSION`); any other count is refused before anything runs."""
+    if jobs != 1:
+        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
 
 
-def blobs_of(rd: SimpleNamespace, d: int) -> tuple[dict[str, bytes], set[str]]:
-    """The witness pieces the verifier must not receive: each head, its leaf's salt, its siblings and the certifier's
-    salt; the heads are what the prover's instance file holds as they are."""
-    blobs, held = {}, set()
-    for x in rd.windows:
-        inst = x.checks[d]
-        blobs[f"head {x.window}"] = inst.head
-        held.add(f"head {x.window}")
-        blobs[f"head salt {x.window}"] = inst.salt
-        blobs[f"certifier salt {x.window}"] = inst.salt_c
-        for k, s in enumerate(inst.path):
-            blobs[f"sibling {k} {x.window}"] = s
-    return blobs, held
+# --- the rounds -------------------------------------------------------------------------------------------------------
+
+def _certificate(c) -> dict:
+    return {k: (v.hex() if isinstance(v, bytes) else getattr(v, "code", v)) for k, v in asdict(c).items()}
 
 
-def public_pieces(a8, blobs: dict[str, bytes], held: set[str], public: bytes) -> tuple[dict[str, bytes], set[str], list[str]]:
-    """`blobs` cut into the scan's aligned pieces (`a8.needles`'s), each distinct piece once under its first name
-    (``"<blob> @<offset>"``), less the pieces `public` holds raw or as hex. `public` is the staged circuit, which the
-    stager writes from the Definition before any instance, so what it holds the verifier has whatever the witness: a head's
-    empty buckets are sixteen zero bytes, which the circuit holds too. Returns the pieces to scan for, the held ones (pieces
-    of a blob in `held`) and the excluded pieces' hex."""
-    pieces: dict[str, bytes] = {}
-    seen: set[bytes] = set()
-    for name, b in blobs.items():
-        for o in range(0, len(b) - a8.PIECE + 1, a8.PIECE):
-            x = b[o:o + a8.PIECE]
-            if x not in seen:
-                seen.add(x)
-                pieces[f"{name} @{o}"] = x
-    out = {pieces[k] for k in a8.find(public, a8.needles(pieces))}
-    kept = {k: x for k, x in pieces.items() if x not in out}
-    return kept, {k for k in kept if k.rsplit(" @", 1)[0] in held}, sorted(x.hex() for x in out)
+def _free_port() -> int:
+    """A loopback port the OS has free now. A pool's slots share a machine, so a fixed port collides across runs."""
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def other_subset(drawn: dict) -> list[int]:
+    """A K-subset of the period's windows that isn't the draw's: the first K the draw didn't hold, then drawn ones
+    from the start where it left fewer than K (none other at K = n)."""
+    held = set(drawn["units"])
+    return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
+
+
+def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
+           coins=None, forge=None) -> dict:
+    """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
+    firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
+    verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
+    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
+
+    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
+    advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the draw of
+    record: the Lean verifier of record's (``--lean``) draw on the coins the period draw read (`service.lean_draw`),
+    which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
+    on the session once the draw has read them, and the result's ``segment`` is what they released. ``forge``, a
+    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a draw object
+    listing them (`other_subset`), which is what ``period.json`` then holds."""
+    lw = rd.lw
+    k = getattr(a, "draw", 0) or None
+    stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
+                       coins=cs._no_coins, clock=time.monotonic)
+    env, av = firewall(M, sg), SimpleNamespace(bin=a.bin, lease=[], gpu=False)
+    vdir = out / "verifier"
+    vdir.mkdir(parents=True, exist_ok=True)
+    drawn, windows, segment = None, rd.windows, None
+    if k is not None:
+        try:
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
+                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+        finally:
+            if callable(getattr(coins, "drawn", None)):
+                segment = coins.drawn()
+        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
+            f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        if forge is not None:
+            drawn = {**drawn, "units": forge(drawn)}
+            log(f"{name}: the prover proves windows {drawn['units']} instead")
+        (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
+        windows = [rd.windows[u] for u in drawn["units"]]
+    previous, rows = None, []
+    for j, x in enumerate(windows):
+        wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
+        reg = lw.register(stream, lw.registration(x.opening, previous), drawn)
+        previous = reg.digest
+        if reg.record["roots"][0]["root"] != x.root.hex():
+            raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
+        draw = stream.select(reg)
+        if list(draw.units) != [0]:
+            raise SystemExit(f"{name} window {x.window}: the stream drew {list(draw.units)}, not the one unit")
+        sdir = wdir / "session"
+        m = {"dir": x.statement.dir, "n": 1, "pin": sg.st.pin}
+        record, live, proc = M.a8.session(av, m, sdir, [0], port + j if port else _free_port(), env=env)
+        sessions = tuple(sorted(p.parent for p in (sdir / "sessions").glob("*/session.json")))
+        delivered = SVC.Delivered(M.PF.Proof(sg.circuit, x.statement.dir / "pub-1.bin", sessions), x.statement.salts,
+                                  x.statement.output)
+        late = stream.deliver(draw, delivered.sessions())
+        t = time.time()
+        outcome = late or lw.outcome(stream, draw, x.certificates, rd.syncs, delivered,
+                                     circuit_sha512=sg.circuit_sha512, opening=x.opening if a.debug_clear else None,
+                                     advice=rd.advice)
+        verify_s = round(time.time() - t, 1)
+        body = stream.records[-1]
+        verdict = (body.get("audit") or {}).get("verdicts", {}).get(SVC.VERIFIER) or {}
+        findings, refused = LEAN_RUNS.get(str(delivered.proof.public), (None, "no Lean run"))
+        args = lw.public_arguments(x.window, x.root, x.certificates, rd.syncs, rd.advice)
+        proof = {"lean_accepted": refused is None and bool(findings) and all(f.accepted for f in findings),
+                 "refused": refused, "proved": refused is None and lw.proved(findings or [])
+                 and all(list(f.units) == [0] for f in findings),
+                 "opened_word": None if args is None else SVC._opened(delivered, 0, lw.row(args, "pub"), lw.bits("pub")),
+                 "certified": lw.certified(x.window, x.certificates)}
+        files = {"registration.json": reg.record, "draw.json": dict(draw.draw),
+                 "certificates.json": [_certificate(c) for c in x.certificates],
+                 "syncs.json": [[s.delta, str(s.rho)] for s in rd.syncs], "outcome.json": body,
+                 "delivered.json": {"salts": {r: s.hex() for r, s in x.statement.salts.items()},
+                                    "output": x.statement.output}}
+        for f, v in files.items():
+            (vdir / f"{pre}{f}").write_text(json.dumps(v, indent=1, sort_keys=True, default=str))
+        os.link(x.statement.dir / "pub-1.bin", vdir / f"{pre}pub-1.bin")
+        for f in sorted((sdir / "sessions").rglob("*")):
+            if f.is_file():
+                os.link(f, vdir / f"{pre}session-{f.parent.name}-{f.name}")
+        proofs = live.get("proof_bytes") or []
+        row = {"window": x.window, "registration": reg.digest, "accepted": outcome.accepted,
+               "public": verdict.get("public"), "service_public": dict(outcome.public), "late": late is not None,
+               "decided_by": verdict.get("decided_by"), "proof": proof,
+               "expect": x.expect, "word": x.word, "failed": x.failed,
+               "prove": {"session_s": proc["wall_s"], "prove_total_s": live.get("prove_total_s"),
+                         "e2e_s": live.get("e2e_s"), "proof_bytes": sum(proofs) if proofs else None,
+                         "k_log": live.get("k_log"), "prover_accepted": live.get("accepted"),
+                         "max_child_rss_gb": proc["max_child_rss_gb"], "cpu_s": proc["cpu_s"]},
+               "verify_s": verify_s, "server_verdict": ((record or {}).get("verdict") or {}).get("accepted"),
+               **({"clear": verdict["clear"]} if "clear" in verdict else {})}
+        row["as_expected"] = (row["accepted"] == bool(x.expect) and not row["late"] and row["decided_by"] == "proof"
+                              and proof["proved"] and proof["opened_word"] == x.word and proof["certified"]
+                              and row["public"] == {"verdict": x.expect, "deadline": x.word >> 1 & 1}
+                              | lw._advice_output(rd.advice))
+        rows.append(row)
+        log(f"{name} window {x.window}: {'accept' if outcome.accepted else 'reject'} public {row['public']}"
+            f"{' LATE' if late else ''}, Lean {'proved' if proof['proved'] else 'NOT proved'}, output word "
+            f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
+            f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
+            f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
+    network = lw.network_verdict(stream, rd.plan["windows"], drawn)
+    if drawn is not None:
+        sel = network["selection"]
+        log(f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+            f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
+                                                   "the windows proved are the draw of record's"))
+    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
+            **({} if segment is None else {"segment": segment})}
+
+
+def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
+    """The scan of what the verifier received for every window's witness pieces, leaving out the pieces the public
+    circuit or a received window's ``pub`` row holds; `received`, the windows the verifier got (a sampled period's
+    drawn ones), by default every one. The control (the prover's instance files) is to hold every held piece but a
+    head's zero-padded last chunk, which `public_pieces` (``fields``) leaves out of the held ones since a head inside
+    its row never shows it (``padded_tails`` counts them); the scan of what the verifier received still looks for
+    those."""
+    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows
+                    if x.args is not None and (received is None or x.window in received))
+    raw, held_blobs = blobs_of(rd)
+    blobs, held, public = public_pieces(M.a8, raw, held_blobs, sg.circuit.read_bytes() + rows)
+    tails = {f"{k} @{len(b) - len(b) % M.a8.PIECE}" for k, b in raw.items() if k in held_blobs and len(b) % M.a8.PIECE}
+    control = out / "prover-instances.bin"
+    with open(control, "wb") as f:
+        for x in rd.windows:
+            f.write((x.statement.dir / "inst-1.bin").read_bytes())
+    got = M.a8.received(out / "verifier", control, blobs, held)
+    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"]),
+            "padded_tails": len(tails & blobs.keys())}
 
 
 def prove(a) -> int:
-    M = _one_stage()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    secret = os.urandom(32)
-    summary: dict = {"run": str(a.run), "extra": a.extra and str(a.extra)}
+    summary: dict = {"run": str(a.run), "extra": a.extra and str(a.extra), "late": a.late and str(a.late),
+                     "debug_clear": a.debug_clear, "received": RECEIVED}
     t = time.time()
-    rounds = {"honest": (link_windows(Path(a.run)), ENDS), "tampered": (link_windows(Path(a.run), edit=one_count), ("egress",))}
-    if a.extra:
-        rounds["extra"] = (link_windows(Path(a.extra)), ("egress",))
-    lw, n = rounds["honest"][0].lw, len(rounds["honest"][0].windows)
-    summary["link"] = {"name": lw.link, "windows": n, "keys": {e: lw.head_key(d) for d, e in enumerate(ENDS)},
-                       "profile": rounds["honest"][0].plan["occupancy"]["kind"],
-                       "planned_windows": rounds["honest"][0].plan["windows"]}
+    members = {"honest": link_windows(Path(a.run)), "tampered": link_windows(Path(a.run), edit=one_count)}
+    for name in ("extra", "late"):
+        if getattr(a, name):
+            members[name] = link_windows(Path(getattr(a, name)))
+    members = {k: v for k, v in members.items() if k in a.rounds}
+    lw0 = next(iter(members.values())).lw
+    summary["link"] = {"name": lw0.link, "unit": lw0.unit.id, "keys": {e: lw0.head_key(d) for d, e in enumerate(ENDS)},
+                       "program": lw0.partition["program"], "partition": P.digest(lw0.partition),
+                       "gates": [g.id for g in lw0.gates()], "pinned": all(HC.pinned(g) for g in lw0.gates()),
+                       "windows": {k: len(v.windows) for k, v in members.items()},
+                       "planned_windows": {k: v.plan["windows"] for k, v in members.items()}}
     summary["instances_s"] = round(time.time() - t, 1)
-    summary["host"] = {name: {"windows": [{"window": x.window, "registration": x.digest, **(x.host or {})} for x in rd.windows],
-                              "network": rd.network} for name, (rd, _) in rounds.items()}
-    for name, h in summary["host"].items():
-        log(f"{name}: N2's host verdict of record per link-window "
-            f"{[(x.get('accepted'), x.get('codes')) for x in h['windows']]}, network {(h['network'] or {}).get('accepted')}")
-    members = {}
-    for name, (rd, ends) in rounds.items():
-        if len(rd.windows) != n:
-            raise SystemExit(f"{name}: {len(rd.windows)} link-windows with both records, the honest run's {n}")
-        for d, end in enumerate(ENDS):
-            if end not in ends:
-                continue
-            insts = [x.checks[d] for x in rd.windows]
-            if any(i is None for i in insts):
-                raise SystemExit(f"{name} {end}: a link-window the unit takes no instance of: "
-                                 f"{[x.window for x, i in zip(rd.windows, insts) if i is None]}")
-            parts = [HC.reference_parts(i) for i in insts]
-            members[f"{name}-{end}"] = SimpleNamespace(round=name, d=d, end=end, rd=rd, insts=insts, parts=parts,
-                                                       ref=[int(all(p.values())) for p in parts])
-            log(f"{name} {end}: {n} link-windows, the head check's reference {members[f'{name}-{end}'].ref}, failed parts "
-                f"{[[k for k, ok in p.items() if not ok] for p in parts]}")
-    for k, mb in members.items():
-        failed = [[x for x, ok in p.items() if not ok] for p in mb.parts]
-        if not expected(mb.round, failed):
-            raise SystemExit(f"{k}: the head checks' failed parts {failed} are not the {mb.round} round's")
-    summary["reference"] = {k: {"ref": mb.ref, "failed": [[x for x, ok in p.items() if not ok] for p in mb.parts]}
-                            for k, mb in members.items()}
+    for name, rd in members.items():
+        if rd.lw.partition != lw0.partition or rd.lw.program != lw0.program:
+            raise SystemExit(f"{name}: its link's registered unit is not the honest run's")
+        summary.setdefault("members", {})[name] = {
+            "reference": [{"window": x.window, "word": x.word, "expect": x.expect, "failed": x.failed} for x in rd.windows],
+            "issuer_refused": rd.issuer_refused}
+        log(f"{name}: {len(rd.windows)} link-windows, words {[x.word for x in rd.windows]}, expected verdicts "
+            f"{[x.expect for x in rd.windows]}, failed parts {[x.failed for x in rd.windows if any(x.failed.values())]}")
+        if not expected(name, rd):
+            raise SystemExit(f"{name}: the references are not the {name} round's")
+    if not summary["link"]["pinned"]:
+        raise SystemExit(f"a gate names no pinned circuit digest: {summary['link']['gates']}")
     if a.dry:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         log("dry: done")
         return 0
 
-    salt_key = hashlib.sha512(secret + b"row salts").digest()[:32]
-    stagers, staged = {}, {}
-    for k, mb in members.items():
-        if mb.end not in stagers:
-            stagers[mb.end] = sg = stager(M, lw.head_key(mb.d), mb.end, n, out / f"stager-{mb.end}")
-            summary.setdefault("stagers", {})[mb.end] = {"key": sg.key, "lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"],
-                                                         "vus_per_block": sg.st.meta["vus_per_block"], "pin": sg.st.pin,
-                                                         "rows": {r: b for r, _s, b, _p in sg.rows}}
-            log(f"stager {mb.end}: {sg.defn.id}, {sg.lower_s} s, k_log {sg.st.meta['k_log']}, pin {sg.st.pin[:16]}")
-        m = stage(M, stagers[mb.end], mb.insts, k, salt_key)
-        if m["oks"] != mb.ref:
-            raise SystemExit(f"{k}: the staged verdict words {m['oks']} are not the reference's {mb.ref}")
-        staged[k] = m
-        summary.setdefault("members", {})[k] = {"n": n, "ands": m["ands"], "unit_nnz": m["unit_nnz"], "stage_s": m["stage_s"],
-                                                "k_log": m["meta"]["k_log"], "pin": m["pin"], "verdict_words": m["oks"]}
-        log(f"staged {k}: {n} units, {m['ands']} ANDs, k_log {m['meta']['k_log']}, verdicts {m['oks']}, {m['stage_s']} s")
+    M = _one_stage()
+    M.PF.executable = lambda: Path(a.lean)
+    _record_lean_runs(M.PF)
+    sg = stager(M, lw0, out / "stager")
+    summary["stager"] = {"unit": lw0.proof_unit.id, "lower_s": sg.lower_s, "k_log": sg.k_log, "pin": sg.st.pin,
+                         "circuit_sha512": sg.circuit_sha512, "bits": {p: lw0.bits(p) for p in SVC.PORTS},
+                         "ands": sg.st.low.layout.counts["ands"]}
+    log(f"stager: {lw0.proof_unit.id}, {sg.lower_s} s, k_log {sg.k_log}, {summary['stager']['ands']} ANDs, "
+        f"pin {sg.st.pin[:16]}")
+    summary["staging"] = stage(M, sg, members, os.urandom(32), out)
+    log(f"staged: {summary['staging']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
-    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1)
+    def go(k: int, name: str) -> tuple[str, dict]:
+        res = member(M, a, sg, name, members[name], out / name, a.port + 100 * k if a.port else 0)
+        res["received"] = _member_scan(M, sg, members[name], out / name)
+        return name, res
+
+    done = dict(go(k, name) for k, name in enumerate(members))
     ok = True
-    for j, (k, mb) in enumerate(members.items()):
-        m, sg = staged[k], stagers[mb.end]
-        res = audit_member(M, av, sg, m, mb.rd, mb.d, out / k, a.port + j)
-        blobs, held, public = public_pieces(M.a8, *blobs_of(mb.rd, mb.d), (m["dir"] / "circuit.txt").read_bytes())
-        res["received"] = {**M.a8.received(out / k / "verifier", m["dir"] / f"inst-{n}.bin", blobs, held),
-                           "public_pieces": public}
-        summary["members"][k].update(res)
-        verdicts = [u["verdict"] for u in res.get("units", [])]
-        good = (res["accepted"] and all(res["verdicts"].values()) and verdicts == ["accept" if r else "reject" for r in mb.ref]
-                and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"])
+    for name, res in done.items():
+        rec = res["received"]
+        good = (all(r["as_expected"] for r in res["windows"]) and res["network"]["accepted"] == (name == "honest")
+                and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
-        log(f"member {k}: proofs {res['verdicts']}, audit {res['audit']}, units {verdicts}, per unit {res['per_unit']}, "
-            f"verifier received {res['received']['verifier_bytes']} bytes, witness pieces found there: "
-            f"{res['received']['verifier_found'] or 'none'} (of {len(blobs)}; {len(public)} the public circuit holds, "
-            f"left out), control {res['received']['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-
-    table = {}
-    for name in rounds:
-        for i in range(n):
-            row = {mb.end: summary["members"][k]["units"][i]["verdict"] for k, mb in members.items()
-                   if mb.round == name and summary["members"][k].get("units")}
-            table.setdefault(name, []).append({"window": i, **row, "head_checks": "pass" if row and all(
-                v == "accept" for v in row.values()) else "fail"})
-    summary["windows"] = table
-    log("windows: " + json.dumps(table))
-
-    if a.points:
-        summary["cost"] = {}
-        for end in ENDS:
-            k = f"honest-{end}"
-            if k in staged:
-                rows = M.a8.cost(av, staged[k], out / "cost" / end, a.port + 20 + 10 * ENDS.index(end))
-                summary["cost"][end] = rows
-                ok &= all(r["accepted"] for r in rows) and all(r["lean"]["accepted"] for r in rows if "lean" in r)
+        summary["members"][name].update(res, ok=good)
+        log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
+            f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
+            f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
+            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the public "
+            f"circuit holds left out), leaked {rec['leaked'] or 'none'}, structured {rec['structured'] or 'none'}, "
+            f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
     summary["ok"] = ok
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     log("done: " + ("ok" if ok else "FAILED"))
@@ -620,26 +647,32 @@ def prove(a) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="n2_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    v = sub.add_parser("virtual", help="certifier-serve's honest and extra runs on an injected clock, stub endpoint")
+    v = sub.add_parser("virtual", help="certifier-serve's honest, extra and late runs on an injected clock, stub endpoint")
     v.add_argument("--out", required=True, type=Path)
     v.add_argument("--requests", type=int, default=40)
     v.add_argument("--tokens", type=int, default=4)
-    p = sub.add_parser("prove", help="the run's head checks proved --zk and held by Lean")
+    p = sub.add_parser("prove", help="each link-window's unit proved --zk and decided by N2's verifier of record")
     p.add_argument("--run", required=True, type=Path, help="the honest run's directory")
     p.add_argument("--extra", type=Path, help="certifier-serve's extra run of the same plan")
+    p.add_argument("--late", type=Path, help="certifier-serve's late run of the same plan")
+    p.add_argument("--rounds", default=",".join(ROUNDS), help="the members to run, comma-separated")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
-    p.add_argument("--port", type=int, default=7681)
-    p.add_argument("--delta", type=float, default=2.0 ** -20)
-    p.add_argument("--points", default="", help="cost points: the k drawn units of each session, comma-separated")
+    p.add_argument("--port", type=int, default=0,
+                   help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
+    p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (ONE_SESSION); more "
+                                                       "is refused")
+    p.add_argument("--debug-clear", action="store_true",
+                   help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
     a = ap.parse_args(argv)
     if a.command == "virtual":
         plan = virtual(a.out, a.requests, a.tokens)
         log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
         return 0
-    a.points = [int(x) for x in a.points.split(",") if x]
+    one_session(a.jobs)
+    a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     return prove(a)

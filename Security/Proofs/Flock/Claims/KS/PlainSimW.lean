@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.PlainThird
 import Proofs.Flock.Claims.KS.ForkSlack
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The deployed events a simulator's bounds read
@@ -43,6 +44,10 @@ theorem plainRoot_of_first {Ω τ : Type} {P : Claims.Prover Ω} {x : Claims.Msg
 def plainEv₁ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (s : Fin ((V false).k x) → Coin) : Prop :=
   (Claims.run sha512 P (V false) x ω s).out = .acc ∧ Claims.TiedColl sha512 (Claims.run sha512 P (V false) x ω s).vLog
 
+/-- **An accepting run with a collision among the verifier's calls**: the one-run event the third bound reads. -/
+def plainEv₁K (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (s : Fin ((V false).k x) → Coin) : Prop :=
+  (Claims.run sha512 P (VK keep) x ω s).out = .acc ∧ Claims.TiedColl sha512 (Claims.run sha512 P (VK keep) x ω s).vLog
+
 /-- **An accepting fork with a collision among the verifier's calls in its two runs**, at the fork's coin
 `plainJ … r ℓ`: the event the second bound reads. -/
 def plainForkEv {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) {m k0 : ℕ}
@@ -54,6 +59,17 @@ def plainForkEv {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables fa
     Claims.TiedColl sha512 ((Claims.run sha512 P (V false) x ω s).vLog ++
       (Claims.run sha512 P (V false) x ω (Claims.forkCoins (plainJ (tables_head_one h) hsch r ℓ) s s')).vLog)
 
+/-- **An accepting fork with a collision among the verifier's calls in its two runs**, at the fork's coin
+`plainJ … r ℓ`: the event the second bound reads. -/
+def plainForkEvK (keep : Bool → Bool) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h : tables false x = [(spec, st)]) {m k0 : ℕ}
+    {l₀ l₁ : Accounting.Level} {rest : List Accounting.Level} {ext : ℕ}
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) {Ω : Type} (P : Claims.Prover Ω)
+    (r : Fin 2) (ℓ : Fin (l₀ :: l₁ :: rest).length) (ω : Ω) (s s' : Fin ((V false).k x) → Coin) : Prop :=
+  (Claims.run sha512 P (VK keep) x ω s).out = .acc ∧
+    (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (x := x) (tables_head_one h) hsch r ℓ) s s')).out = .acc ∧
+    Claims.TiedColl sha512 ((Claims.run sha512 P (VK keep) x ω s).vLog ++
+      (Claims.run sha512 P (VK keep) x ω (Claims.forkCoins (plainJ (x := x) (tables_head_one h) hsch r ℓ) s s')).vLog)
+
 /-- **A live event at `P'`'s outcome gives an accepting run of `P` with a collision**: wherever `pL` holds at the live
 outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `V false` accepts `P` at `Φ (u, r')` with a collision
 among its calls (`plainEv₁`). -/
@@ -61,6 +77,14 @@ def PlainClashRun {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) 
     (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
     (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
   ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → plainEv₁ P x ω (Φ (u, r'))
+
+/-- **A live event at `P'`'s outcome gives an accepting run of `P` with a collision**: wherever `pL` holds at the live
+outcome of `P'` at the tape `(ω, u)` and the live coins `r'`, `VK keep` accepts `P` at `Φ (u, r')` with a collision
+among its calls (`plainEv₁`). -/
+def PlainClashRunK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mPts : ℕ) (N : Claims.Msg → ℕ)
+    (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts) {τ : Type} (P' : Claims.Prover (Ω × τ))
+    (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin) (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → plainEv₁K keep P x ω (Φ (u, r'))
 
 /-- **A live event at `P'`'s outcome gives an accepting run of `P` whose reps open two different columns at one
 position, or a collision**: `PlainClashRun` with a self-clash at level 0 asked without the hashes (`plainRawCols`).

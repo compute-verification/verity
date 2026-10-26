@@ -27,7 +27,7 @@ covers check (`RecVStar.checkCovers`). So:
   what it reads there is what the JSON readers read (`checkReads_ok`).
 * `sparse_of_acceptsC3`: `AcceptsC3` names a RecSparse shape (`checkInnerStmt`), so `hcoins_of_acceptsC3`: at an
   accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
-  against, never `--rec-inner-coins`'s record, which `checkAtC3` refuses there.
+  against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
 -/
 
 namespace FlockC3.VStarList
@@ -92,7 +92,7 @@ theorem sparse_of_acceptsC3 (h : AcceptsC3 ish st tr record reg) : ish.sparse.is
 
 /-- **Check 5's source at an accepted candidate-3 session is the files of its record**, `_hcoins`'s form at the record
 `r`: `AcceptsC3` at `r` names a RecSparse shape (`sparse_of_acceptsC3`), where `checkInner` refuses every source but
-the inner statement's files (`files_of_checkInner`: `--rec-inner-coins` is refused there), and the verifier holds the
+the inner statement's files (`files_of_checkInner`: a `Source.coins` is refused there), and the verifier holds the
 inner transcript against its source's record (`hrec`: `verify` reads it as `recCoins.map (·.record)`), so the files'
 record is `r`. -/
 theorem hcoins_of_acceptsC3 {coins : String → Option RecCoins.Source} {r : String}

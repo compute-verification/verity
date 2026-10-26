@@ -95,6 +95,7 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h

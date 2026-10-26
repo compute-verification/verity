@@ -194,8 +194,9 @@ theorem small_exec_code (dv : W1Device) (h : Positive dv) :
 
 /-! ## The counterexample -/
 
-/-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`. -/
-def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done⟩
+/-- Unit 0's activation word `(0, 0)` moved into its ticket word `(0, 0)`: two nodes of text, within W1's bound. -/
+def copyAct : Prog := ⟨fun _ => [], fun _ => .op (.mov (ticketAt 0 0 0) (actAt 0 0 0)) .done,
+  fun _ => by norm_num [W1.Code.size]⟩
 
 /-- What `copyAct` commits, on every oracle. -/
 abbrev copyTranscript (dv : W1Device) (salt : List ℕ) (U : Workload) (act : ℕ → Codes) : Transcript :=

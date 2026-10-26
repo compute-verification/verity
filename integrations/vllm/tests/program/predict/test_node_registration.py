@@ -25,7 +25,7 @@ from verity_vllm.program.predict.common import _arr_shape
 from verity_vllm.program.predict import node_registration as NR
 from verity_vllm.program.predict.node import build_node_program, node_parameters
 from tests.pipeline.test_cpu_replay import _shard
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 
 _spec = importlib.util.spec_from_file_location(
     "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
@@ -128,6 +128,7 @@ def _manifest(d, sha=None):
     return str(p)
 
 
+@pytest.mark.slow
 def test_the_nodes_theta_registers_from_each_ranks_commit_and_passes_the_full_check(commit):
     """Two spawned rank processes, on the pinned checkpoint: the log passes `check_baseline`, and each rank's θ parameter i is
     `registered_rows.commit` of the tensor that rank registered under its field i's name, under the salts written to --salts and

@@ -90,6 +90,7 @@ def assert_same_files(real: str, relabeled: str) -> None:
             assert a[name] == b[name], name
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("W", [2, 4])
 def test_every_relabeled_rank_writes_the_bytes_its_full_derive_writes(W, tmp_path):
     t = RB.template_rank(W)
@@ -133,6 +134,19 @@ def test_a_relabel_leaves_the_template_derivation_as_it_was(tmp_path):
                                       json.dumps(T.derive_rank(W, r)[0].descriptor, sort_keys=True))))
     plain = T.derive_rank(W, t)[0]
     assert (json.dumps(plain.to_json(), default=str), json.dumps(plain.descriptor, sort_keys=True)) == blob, "a session changes no byte"
+
+
+def test_a_dead_free_template_relabels_each_rank_to_its_dead_free_derive():
+    """`--dead-free` (a TP rank's request in the registered compiler's form): rank 1 written from rank 0's derivation is rank 1's own
+    dead-free derive, without the reduces of the rows no logit reads, which the derive of record keeps."""
+    from verity_vllm.program.prune import dead_units
+    sess: list = []
+    T.derive_rank(2, 0, session=sess, last=True, dead_free=True)
+    rep = relabel.rank_report(sess[0], 1, shards=relabel.shard_map(T.embedding_shards(2, 0), T.embedding_shards(2, 1)))
+    real, kept = T.derive_rank(2, 1, last=True, dead_free=True)[0], T.derive_rank(2, 1, last=True)[0]
+    assert json.dumps(rep.descriptor, sort_keys=True) == json.dumps(real.descriptor, sort_keys=True)
+    body = kept.program.fn.body
+    assert not dead_units(real.program.fn.body) and "AllReduce2_v1" in {body.nodes[i].fn.id.split("{")[0] for i in dead_units(body)}
 
 
 def test_the_relabel_refuses_what_it_cannot_rewrite(monkeypatch):

@@ -21,7 +21,7 @@ from typing import Any, Protocol
 from verity_vllm.engine.env import INDUCTOR_DIR_MARK
 
 from verity_bench.vllm import result as result_format
-from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_window, is_h1, plugin, protocols_config,
+from verity_bench.vllm.arms import (H1, Arm, Target, build_bound, h1_config, is_h1, plugin, protocols_config,
                                     window_steps)
 from verity_bench.vllm.presets import SAMPLING, Preset, SweepPoint
 
@@ -44,6 +44,9 @@ WARMUP_AGREEMENT = 0.05
 INT8_EXACT_SCOPE = "all"
 INT8_EXACT_PARTS = ("linears", "attention")
 INT8_EXACT_QUANTIZATION, INT8_EXACT_ATTENTION_BACKEND = "verity_int8", "CUSTOM"
+# S of the H1 window `verity_vllm.LLM` opens at the build, before the engine knows its points: the first run's
+# `reinstall` closes it unserved and opens that run's own
+H1_OPENING_STEPS = 1
 
 
 def t95(df: int) -> float:
@@ -666,8 +669,6 @@ class _DirectLLM:
 
         runner = handle.model_runner(llm)
         self.vllm, self.model = llm, runner.get_model()
-        # commit_arm.py still reads verity_vllm.LLM's private `_engine`: its committer takes the whole engine.
-        self._engine = SimpleNamespace(llm=llm, model=self.model)
         self.engine_record = {"engine_overrides": dict(engine_overrides)}
         self.protocols = None
 
@@ -702,12 +703,20 @@ def _pass_totals(run: Any) -> dict[str, int]:
 def _pearl_c_gate(run: Any) -> dict[str, Any]:
     """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
     (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
-    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control."""
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control. Its ``coins`` are the
+    installed run's: a live session's (``challenger``, its salt epoch ``pass_index`` and the root its salt coin follows,
+    `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
+    ``in-process``."""
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+    from verity.core.protocols.pouw.salt import epoch_open_root
 
     check = PearlCArm()
     check.run, check.schedule = run, run.schedule.name
+    c = run.commits
+    check.coins = ({"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
+                    "salt_after": epoch_open_root(bytes.fromhex(c["weights_root"]), c["pass_index"]).hex()}
+                   if c.get("coin_source", "in-process") != "in-process" else {"source": "in-process"})
     check.weights = {w: x.tensor for w, x in run.weights.items()}
     got = check.gate(None)
     # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
@@ -870,7 +879,8 @@ class _VllmEngine:
                     raise ValueError(f"{arm.id}: the pouw setting 'rows' (T, {rows}) is the engine's "
                                      f"max_num_batched_tokens ({engine.get('max_num_batched_tokens')})")
                 self.h1 = {"config": config, "rows": rows, "windows": []}
-            elif arm.protocols:
+                config = h1_config(config, H1_OPENING_STEPS)
+            if arm.protocols:
                 engine["protocols"] = ",".join(arm.protocols)
                 if config:
                     engine["protocols_config"] = config
@@ -932,46 +942,28 @@ class _VllmEngine:
         return info if self.pearl_c is None else {**info, "pearl_c": _pass_totals(self.pearl_c)}
 
     def _run(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
-        """One run; an H1 arm's in its own window, installed before the clock starts and closed after it stops."""
+        """One run; an H1 arm's in its own window, opened before the clock starts (`verity_vllm.LLM.reinstall`, S the run's
+        step bound, `window_steps`) and closed after it stops."""
 
         if self.h1 is None:
             return self._serve(point, phase)
-        self._open_window(point)
+        from verity_vllm.protocols import pouw
+
+        start = time.perf_counter()
+        self.llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))
+        install_s = time.perf_counter() - start
+        run = pouw.h1_run(H1)
         try:
             tokens, out = self._serve(point, phase)
         finally:
-            window = self._close_window(point, phase)
+            start = time.perf_counter()
+            self.llm.close()
+            window = {"point": point.id, "phase": phase, **h1_summary(run), "install_s": round(install_s, 3),
+                      "close_s": round(time.perf_counter() - start, 3)}
+            self.h1["windows"].append(window)
         if phase == "measure":
             out = {**out, "extras": {**out["extras"], "h1_window": window}}
         return tokens, out
-
-    def _open_window(self, point: SweepPoint) -> None:
-        """H1's window for one run of `point`: S its steps' bound (`window_steps`), and the epoch the window's index."""
-
-        from verity_vllm import protocols as PO
-        from verity_vllm.engine import handle
-
-        steps = window_steps(point, self.h1["rows"])
-        config = h1_window(self.h1["config"], handle.model_runner(self.llm.vllm), steps, len(self.h1["windows"]))
-        ctx = PO.Context(stage="serve", enabled=self.arm.protocols, world=1, enforce_eager=True,
-                         settings=PO.load_settings(config))
-        start = time.perf_counter()
-        self.llm.protocols = PO.install(self.llm.model, ctx)
-        self.h1["install_s"] = time.perf_counter() - start
-
-    def _close_window(self, point: SweepPoint, phase: str) -> dict[str, Any]:
-        from verity_vllm.protocols import pouw
-
-        run = pouw.h1_run(H1)
-        start = time.perf_counter()
-        try:
-            self.llm.protocols.close()
-        finally:
-            self.llm.protocols = None
-        window = {"point": point.id, "phase": phase, **h1_summary(run),
-                  "install_s": round(self.h1["install_s"], 3), "close_s": round(time.perf_counter() - start, 3)}
-        self.h1["windows"].append(window)
-        return window
 
     def _serve(self, point: SweepPoint, phase: str) -> tuple[dict[str, tuple[int, ...]], dict[str, Any]]:
         import torch

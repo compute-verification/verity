@@ -16,13 +16,28 @@ then admits the step (`H1Run.admit`): one round a step, its root over every rank
 holder draws. The salt and key reach the ranks before the first forward (`Holder._push`). The pull blocks the engine
 core until the previous step has run everywhere, so steps don't overlap in a pipeline under H1.
 
-Refused here: ``served`` (`pouw_h1_served.Served`, whose b/<K> needs every linear's weight in one process)."""
+With ``served`` (`pouw_h1_served.Served`) the window's registered tables are the holder's: step s's A table of K holds
+every call of K in step s, rank-major, so at TP > 1 each K's table spans the ranks, and ``b/<K>`` every rank's linears of
+K. Each rank ships each call's A rows and scales, its z/y records and, once, its weight with the call (`RankRun`'s
+``ship``), and the holder's one `Served` registers them as one process would (`ingest`). It registers the window's own
+``b/<K>``: the period's registration of a rank's shards (`Weights`, a registry) is refused here, since no public rule
+slices the pinned checkpoint into shards yet.
+
+With ``commit`` (ROOTS1, VLLM-81) the Commit runs on every rank (`acquire.h1_commit.RankCommit`, the engine's
+``worker_extension_cls`` then: the committer and the int8 source on the rank's model), and the rank's tap (`RankTap`)
+ships what it acquired to the holder: each H1 linear's x_q and s_a at its site, renamed to the window's name of the linear (``…qkv_proj@tp1/row_quant``),
+and the embedding's input ids. The holder's one `pouw_h1_commit.CommitTap` takes them before the calls (`feed`), so its
+AROW of each (step, K) is every rank's calls' rows, call after call, as the window's A table is. The input ids are the
+first rank's (the one holding linear 0), one ``ids@<s>`` a round for the window; another rank's ids at the same engine
+step that differ are refused."""
 from __future__ import annotations
 
 import importlib
 import os
-from dataclasses import asdict
+from dataclasses import asdict, dataclass, field
 from typing import Any, Mapping, Sequence
+
+import numpy as np
 
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
@@ -32,44 +47,95 @@ from verity.core.protocols.sampled_proofs.challenger import LiveRecord
 from verity_vllm.engine import int8_ranks  # noqa: F401  (a worker registers the int8 parts before it builds its model)
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import commit as CT
 from verity_vllm.protocols.pouw.h1 import hooks as PHK
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 ENTRY = f"pouw:{PH.SCHEME}"
 EXTENSION = "verity_vllm.protocols.pouw.h1.ranks.RankExtension"
+#: with ``install``'s ``commit``: `RankExtension` with the Commit on each rank (in ``acquire``, which builds the int8 source)
+COMMIT_EXTENSION = "verity_vllm.acquire.h1_commit.RankCommit"
 #: the module of Model Runner V2, whose `sort_batch_req_ids` orders a step's rows (`pouw_h1_requests.batch_order`)
 MRV2 = "vllm.v1.worker.gpu.model_runner"
 
 
 class RankRun(PH.H1Run):
     """One rank's side of the window: the calls of its linears [lo, hi) of the window's L, each at its global index
-    s·L + w with its tables, under the salt the holder pushes (`RankExtension.h1rank_open`). Its first linear starts the
-    rank's next step; rounds, admission and coins are the holder's."""
+    s·L + w with its tables, under the salt the holder pushes (`RankExtension.h1rank_open`). A linear the rank's step
+    already holds starts its next step (`H1Run.record`); rounds, admission and coins are the holder's. With ``ship`` each
+    call's rows go to the holder's `Served` with it (`shipped`): its A rows and scales and its z/y records on the host, and
+    its weight and scales when the call's weight is not the one last shipped for its linear."""
 
     def __init__(self, entry: str, modules: Mapping[int, str], shapes: Sequence[tuple[int, int]], rows: int, steps: int,
-                 lo: int, hi: int, key: bytes) -> None:
+                 lo: int, hi: int, key: bytes, ship: bool = False) -> None:
         super().__init__(entry, None, modules, shapes, rows, steps, key=key, opener=self._unpushed)
-        self.lo, self.hi = int(lo), int(hi)
+        self.lo, self.hi, self.ship = int(lo), int(hi), bool(ship)
+        self.shipped: dict[int, dict[str, Any]] = {}
+        self._held: dict[int, Any] = {}
 
     def _unpushed(self, _root: bytes) -> Any:
         raise RuntimeError(f"{self.entry}: rank [{self.lo}, {self.hi}) used the window's salt before its holder pushed it")
 
-    def _index(self, s: int, w: int) -> int:
-        return s * len(self.shapes_) + w
-
     def _close_rounds(self, through: int) -> None:
         return None
 
-    def record(self, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, z: Any = None) -> PH.Call | None:
-        if w == self.lo and self.lo:
-            self.step += 1
-            self.last = w - 1
-        return super().record(w, a, s_a, weight, weight_scale, z)
+    def _call(self, s: int, w: int, a: Any, s_a: Any, weight: Any, weight_scale: Any, records: Any = None,
+              zy: Any = None) -> PH.Call:
+        call = super()._call(s, w, a, s_a, weight, weight_scale, records, zy)
+        if self.ship and self.commit:
+            new = weight is not None and self._held.get(w) is not weight
+            if new:
+                self._held[w] = weight
+            self.shipped[call.index] = {
+                "a": None if a is None else np.array(PH.numpy_of(a)),
+                "s_a": None if s_a is None else np.array(PH.numpy_of(s_a)), "records": records,
+                "weight": np.array(PH.numpy_of(weight)) if new else None,
+                "weight_scale": np.array(PH.numpy_of(weight_scale)) if new and weight_scale is not None else None}
+        return call
 
     def rows_since(self, sent: int) -> list[dict[str, Any]]:
-        """The calls from the `sent`-th on, each with its tables, its credit verdict and what its listeners bound."""
+        """The calls from the `sent`-th on, each with its tables, its credit verdict, what its listeners bound and, with
+        ``ship``, its rows (``served``)."""
         return [{"call": asdict(c), "tables": self.tables.get(c.index), "verdict": self.verdicts.get(c.index),
-                 "bound": self.bound.get(c.index)} for c in self.calls[sent:]]
+                 "bound": self.bound.get(c.index), **({"served": self.shipped.pop(c.index, None)} if self.ship else {})}
+                for c in self.calls[sent:]]
+
+
+@dataclass
+class RankTap(CT.CommitTap):
+    """A rank's tap on its Commit (`acquire.h1_commit.RankCommit.h1rank_commit`): what the holder's `pouw_h1_commit.CommitTap` reads of what
+    the Commit acquired, each H1 linear's x_q (``/0``) and s_a (``/1``) at its site and the embedding's input ids, copied
+    to the host with the engine step, each site under the window's name of its linear (``names``: the rank's module name,
+    or a routed expert's H1 name ``prefix.expert.projection``, to the window's), kept until the holder's next pull
+    (`drain`)."""
+
+    names: dict[str, str] = field(default_factory=dict)
+    out: list[tuple[str, int, np.ndarray]] = field(default_factory=list)
+
+    def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
+        if self.embed is not None and name == f"{self.embed}/in":
+            self.out.append((name, int(step), np.array(CT._host(t))))
+            return
+        op, _, port = name.rpartition("/")
+        module = op.removesuffix("/row_quant")
+        if module != op and port in ("0", "1"):
+            self.out.append((f"{CT.site(self.names.get(module, module))}/{port}", int(step), np.array(CT._host(t))))
+
+    def drain(self) -> list[tuple[str, int, np.ndarray]]:
+        out, self.out = self.out, []
+        return out
+
+
+def feed(tap: CT.CommitTap, acquired: Sequence[tuple[str, int, Any]], first: bool) -> None:
+    """One rank's acquisitions (`RankTap.drain`) into the window's tap, in the order the rank acquired them: its sites' x_q
+    and s_a, and with ``first`` (the rank holding linear 0) the input ids, which every other rank's at the same engine
+    step must equal (refused otherwise)."""
+    ids = f"{tap.embed}/in"
+    for name, step, t in acquired:
+        if name != ids or first:
+            tap.take(name, t, int(step))
+        elif (got := tap._ids.get(int(step))) is None or not np.array_equal(got, np.asarray(t).reshape(-1).astype(np.int64)):
+            tap.refused.append(f"engine step {step}: a rank's input ids are not the first rank's")
 
 
 def wire_rank(run: RankRun, hooks: Any, layers: list[Any], rows: int) -> None:
@@ -107,12 +173,12 @@ class RankExtension:
                 "decode_query_len": int(self.model_runner.decode_query_len)}  # type: ignore[attr-defined]
 
     def h1rank_install(self, entry: str, los: Mapping[tuple[int, int], int], shapes: Sequence[Sequence[int]],
-                       modules: Mapping[int, str], rows: int, steps: int, key: bytes) -> dict[str, Any]:
-        """This rank's `RankRun` from linear ``los[(pp, tp)]`` on, its hooks wired; returns its weights' roots by global
-        index (`pouw_h1.weight_root`, as `pouw.commit_weights`)."""
+                       modules: Mapping[int, str], rows: int, steps: int, key: bytes, ship: bool = False) -> dict[str, Any]:
+        """This rank's `RankRun` from linear ``los[(pp, tp)]`` on, its hooks wired (``ship``: its calls' rows go to the
+        holder's `Served`); returns its weights' roots by global index (`pouw_h1.weight_root`, as `pouw.commit_weights`)."""
         _, layers = self._h1rank_layers()
         lo = int(los[self._h1rank_rank()])
-        run = RankRun(entry, modules, [tuple(s) for s in shapes], rows, steps, lo, lo + len(layers), key)
+        run = RankRun(entry, modules, [tuple(s) for s in shapes], rows, steps, lo, lo + len(layers), key, ship=ship)
         hooks = Hooks(tag=f"{entry}/rank{lo}")
         wire_rank(run, hooks, layers, rows)
         self._h1rank = {"run": run, "hooks": hooks, "sent": 0}
@@ -123,19 +189,39 @@ class RankExtension:
         self._h1rank["run"]._salt = bytes(salt)
 
     def h1rank_rows(self) -> dict[str, Any]:
-        """The rank's calls since the last pull, its refusals so far and whether its calls came in layer order."""
+        """The rank's calls since the last pull, its refusals so far, whether each step's calls came in its first step's
+        order and, with the Commit, what it acquired since (`RankTap.drain`)."""
         st = self._h1rank
         run: RankRun = st["run"]
         out = run.rows_since(st["sent"])
         st["sent"] = len(run.calls)
+        commit = st.get("commit")
         return {"lo": run.lo, "rows": out, "refused": list(run.refused), "order_ok": run.order_ok,
-                "unopened": run._unopened}
+                "unopened": run._unopened, **({"acquired": commit[1].drain()} if commit is not None else {})}
 
-    def h1rank_release(self) -> None:
+    def h1rank_release(self) -> dict[str, Any] | None:
+        """With the Commit, the rank's committer finalized and closed, then its hooks removed: newest first, as the Commit's
+        source wraps a routed expert's ``apply`` over H1's (`hooks.Patch.uninstall`). Returns the rank's Commit (its run
+        root, tensors and errors), else None."""
         st = getattr(self, "_h1rank", None)
-        if st is not None:
-            st["hooks"].uninstall()
+        if st is None:
+            return None
+        out = None
+        try:
+            if (commit := st.get("commit")) is not None:
+                com, tap = commit
+                try:
+                    rc = com.finalize()
+                    out = {"lo": st["run"].lo, "run_root": rc.run_root.hex(), "name": com.name,
+                           **{k: rc.extra.get(k) for k in ("expected_tensors", "committed_tensors", "errors_n")},
+                           "errors": [str(e)[:300] for e in (rc.extra.get("errors") or [])][:8]}
+                finally:
+                    com.close()
+                    tap.untap()
+        finally:
             self._h1rank = None
+            st["hooks"].uninstall()
+        return out
 
 
 def executor_of(llm: Any) -> Any:
@@ -165,6 +251,7 @@ class Holder:
         self.ranks: dict[int, dict[str, Any]] = {}
         self.pushed = False
         self.pulls = 0
+        self.committed: dict[int, dict[str, Any]] = {}
 
     def _push(self) -> None:
         if not self.pushed and self.run._salt is not None:
@@ -172,13 +259,21 @@ class Holder:
             self.pushed = True
 
     def pull(self) -> int:
-        """Every rank's calls since the last pull, taken in index order (`ingest`); returns how many."""
-        outs = self.executor.collective_rpc("h1rank_rows")
+        """Every rank's calls since the last pull, taken in index order (`ingest`), after what each rank's Commit acquired
+        is in the window's tap (`feed`, first rank first); returns how many."""
+        outs = sorted(self.executor.collective_rpc("h1rank_rows"), key=lambda o: o["lo"])
         self.pulls += 1
         rows = []
         for o in outs:
             self.ranks[o["lo"]] = {k: o[k] for k in ("refused", "order_ok", "unopened")}
             rows += o["rows"]
+        tap = None if self.run.served is None else self.run.served.tap
+        if tap is not None:
+            got = [o.get("acquired") or [] for o in outs]
+            if len(steps := {int(x[1]) for a in got for x in a}) > 1:
+                tap.refused.append(f"one pull held engine steps {sorted(steps)}: the window's tap keeps one step a site")
+            for i, a in enumerate(got):
+                feed(tap, a, first=i == 0)
         ingest(self.run, rows)
         return len(rows)
 
@@ -203,17 +298,21 @@ class Holder:
             self.run.close()
 
     def finish(self) -> None:
+        """`close`, the window finished, and every rank's hooks released; with the Commit, each rank's committer
+        finalized (``committed``, by first linear)."""
         try:
             self.close()
             self.run.finish()
         finally:
             self.hooks.uninstall()
-            self.executor.collective_rpc("h1rank_release")
+            outs = self.executor.collective_rpc("h1rank_release")
+            self.committed = {o["lo"]: o for o in outs or () if o is not None}
 
 
 def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
     """Rank calls into the holder's `run`, in index order, as `H1Run._call` takes them: each call, its tables, verdict and
-    bindings; a round closes with its step's last linear."""
+    bindings, and with ``served`` its rows registered (`pouw_h1_served.Served.commit`); a round closes with its step's last
+    linear."""
     last = len(run.shapes_) - 1
     for r in sorted(rows, key=lambda r: r["call"]["index"]):
         c = PH.Call(**r["call"])
@@ -223,7 +322,14 @@ def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
         for into, key in ((run.tables, "tables"), (run.verdicts, "verdict"), (run.bound, "bound")):
             if r.get(key):
                 into[c.index] = dict(r[key])
-        run.step, run.last = c.step, c.layer
+        if run.served is not None and run.commit:
+            got = r.get("served")
+            if got is None:
+                run.served.refused.append(f"call {c.index}: its rank shipped no rows for the window's registered tables")
+                got = {}
+            run.tables.setdefault(c.index, {})["registered"] = run.served.commit(
+                run, c, got.get("a"), got.get("s_a"), got.get("weight"), got.get("weight_scale"), got.get("records"))
+        run.step = c.step
         run.details["calls"] = run.commits["calls"] = len(run.calls)
         if c.layer == last:
             run._close_rounds(c.step)
@@ -231,14 +337,24 @@ def ingest(run: PH.H1Run, rows: Sequence[Mapping[str, Any]]) -> None:
 
 def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any = None, opener: Any = None,
             admission: str = RQ.ROUND0, transcript_dir: str | None = None, key: bytes | None = None,
-            entry: str = ENTRY, executor: Any = None) -> Holder:
+            entry: str = ENTRY, executor: Any = None, served: Any = None,
+            commit: Mapping[str, Any] | None = None) -> Holder:
     """H1 on an engine built with ``worker_extension_cls`` = `EXTENSION`: the ranks' layout gathered, each rank's `RankRun`
     installed, the window's salt from ``coins`` (an in-process `pouw.coins.Challenger`, as `pouw._install_h1` without a
     challenger) over every rank's weight roots, or opened by ``opener`` at round 0 (the challenger's), and the executor's
     ``execute_model`` wrapped (`Holder.admitting`). ``rounds`` is the round coins' `LiveRecord`, its draw family the
-    window's draw coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``)."""
+    window's draw coin when ``coins`` are given. A module is named by its rank at TP > 1 (``…qkv_proj@tp1``). ``served``
+    (`pouw_h1_served.Served`, without the period's `Weights` or a registry) registers the window's tables from the rows
+    the ranks ship; ``commit`` (with ``served``, at PP 1, the engine's ``worker_extension_cls`` `COMMIT_EXTENSION`)
+    puts the Commit on every rank, its keywords `acquire.h1_commit.RankCommit.h1rank_commit`'s, and ``served``'s tap is the
+    window's `pouw_h1_commit.CommitTap`."""
     if (coins is None) == (opener is None):
         raise ValueError(f"{entry}: the window's salt is from coins or opened by its opener, one of the two")
+    if served is not None and (served.weights is not None or served.registry is not None):
+        raise ValueError(f"{entry}: a period's registered weights or a registry across ranks: no public rule slices the "
+                         "checkpoint into the ranks' shards, so the window registers its own b/<K>")
+    if commit is not None and served is None:
+        raise ValueError(f"{entry}: the Commit's values tie to the window's registered tables, so it needs served")
     if llm is not None:
         importlib.import_module(MRV2)
     executor = executor if executor is not None else executor_of(llm)
@@ -246,6 +362,8 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     if len({o["decode_query_len"] for o in layout}) != 1:
         raise ValueError(f"{entry}: the ranks' runners disagree on decode_query_len")
     tp = len({o["tp"] for o in layout})
+    if commit is not None and len({o["pp"] for o in layout}) > 1:
+        raise ValueError(f"{entry}: the Commit across pipeline stages: a later stage acquires no input ids")
     los, shapes, modules = {}, [], {}
     for o in layout:
         lo = los[(o["pp"], o["tp"])] = len(shapes)
@@ -255,7 +373,8 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     key = key if key is not None else os.urandom(32)
     roots = {}
     for o in executor.collective_rpc("h1rank_install", kwargs={"entry": entry, "los": los, "shapes": shapes,
-                                                               "modules": modules, "rows": rows, "steps": steps, "key": key}):
+                                                               "modules": modules, "rows": rows, "steps": steps, "key": key,
+                                                               "ship": served is not None}):
         roots |= {int(w): bytes.fromhex(r) for w, r in o["roots"].items()}
     if sorted(roots) != list(range(len(shapes))):
         raise RuntimeError(f"{entry}: the ranks' weight roots cover {len(roots)} of {len(shapes)} linears")
@@ -269,7 +388,12 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
                    **({"round_coins": rounds.challenger.commitment.to_json()} if rounds is not None else {})}
     source = PH.CHALLENGER if opener is not None else "in-process"
     run = PH.H1Run(entry, salt, modules, shapes, rows, steps, transcript_dir=transcript_dir, rounds=rounds, key=key,
-                   draw=draw, admission=admission, coin_source=source, opener=opener)
+                   draw=draw, admission=admission, coin_source=source, opener=opener, served=served)
+    if commit is not None:
+        embeds = {o["embed"] for o in executor.collective_rpc("h1rank_commit", kwargs=dict(commit))}
+        if len(embeds) != 1:
+            raise RuntimeError(f"{entry}: the ranks' Commits acquire input ids at {sorted(map(str, embeds))}, not one module")
+        served.tap = CT.CommitTap(embed=embeds.pop())
     run.commits.update(weights_root=weights_root(roots).hex(), coin_source=source, **commits,
                        ranks=[{"pp": o["pp"], "tp": o["tp"], "first_linear": los[(o["pp"], o["tp"])],
                                "linears": len(o["shapes"])} for o in layout])
@@ -280,4 +404,5 @@ def install(llm: Any, *, rows: int, steps: int, coins: Any = None, rounds: Any =
     return holder
 
 
-__all__ = ["ENTRY", "EXTENSION", "Holder", "RankExtension", "RankRun", "executor_of", "ingest", "install", "wire_rank"]
+__all__ = ["COMMIT_EXTENSION", "ENTRY", "EXTENSION", "Holder", "RankExtension", "RankRun", "RankTap", "executor_of", "feed", "ingest", "install",
+           "wire_rank"]

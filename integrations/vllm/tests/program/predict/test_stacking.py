@@ -12,12 +12,12 @@ import random
 
 import pytest
 
-from tests.predict.test_predict import FIX, _phi
+from tests.program.predict.test_predict import FIX, _phi
 from verity.ml.circuits import stacking as P
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.program import Program
 from verity_vllm.program.predict.build import build_program
-from verity_vllm.program.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
+from verity.ml.definitions.registry.dsv4_qnorm_insert import f32_to_u32_rz_byte
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 WGMMA = "HopperBF16WgmmaDot16_v1"
@@ -46,12 +46,12 @@ def test_the_quantizers_range_rule_holds_on_its_evaluator():
 
 
 @pytest.mark.parametrize("model,wrapper,kw,digest,steps,affine,units,lifetime", [
-    ("llama32-1b", "step", dict(M=1, pos0=8), "773b545605765fe9", 1, 135168,
-     {"roundings": 78513996, "compare_select": 385277, "gathers": 17, "folds": 0}, 1),
-    ("llama32-1b", "request", dict(LP=3, T=2), "6861bab5ba6ed6d2", 3, 675840,
-     {"roundings": 359262334, "compare_select": 1161975, "gathers": 85, "folds": 0}, 2),
-    ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "98a180a562abf1d6", 1, 1632256,
-     {"roundings": 197328044, "compare_select": 1041597, "gathers": 3090, "folds": 0}, 1),
+    ("llama32-1b", "step", dict(M=1, pos0=8), "5e34739ca3f59dda", 1, 135168,
+     {"roundings": 78513484, "compare_select": 385277, "gathers": 17, "folds": 0}, 1),
+    ("llama32-1b", "request", dict(LP=3, T=2), "cdf004e855f279a4", 3, 665468,
+     {"roundings": 351786258, "compare_select": 1570701, "gathers": 85, "folds": 0}, 2),
+    ("qwen3-30b-a3b", "step", dict(M=1, pos0=8), "d12a2b4c96ad1b35", 1, 1632256,
+     {"roundings": 197326508, "compare_select": 1041597, "gathers": 3090, "folds": 0}, 1),
 ])
 def test_a_bf16_program_is_refused_for_its_tensor_core_steps(model, wrapper, kw, digest, steps, affine, units, lifetime):
     """Roundings: each tensor-core step is one, beside the FP elementwise ops; the bf16 widenings are free affine maps.

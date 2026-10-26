@@ -20,6 +20,9 @@ rows of the window Program's linears of that K, and `weights_root`, their fold, 
   `_weights` checks.
 * `weights_root` is credit's fold of the roots: `tagged` of ``verity/pouw/h1/weights/v1`` and each ``K, root`` by
   ascending K.
+* **Chunk rows.** Past `CHUNK_MAX` codes a row of K is `chunks` (K) = n leaves, leaf n·r + c chunk c's K/n codes and
+  the row's s_w (`leaf_words` (K) words), and credit's `_weights` reads ``<prefix>b/<K>`` as n·Σn such leaves.
+  `weights_roots` and `entry` still commit whole rows, so at such a K their entry is not yet the one credit accepts.
 """
 from __future__ import annotations
 
@@ -58,6 +61,34 @@ _SALT_BLOCKS = _INST.salt_bytes // chacha20.BLOCK_BYTES
 def b_words(k: int) -> int:
     """A B row's 16-bit words: its K int8 codes, then the 4 bytes of its f32 s_w."""
     return (k + 5) // 2
+
+
+#: the largest K an H1 lane is proved at whole, and a chunk's largest: K = 4096's lane fills C-Flock's 2^27 block
+CHUNK_MAX = 4096
+#: a chunk is whole blocks of its rows' and columns' noise streams (`circuit.seeds.BLOCK_BITS`, 512 bits)
+CHUNK_ALIGN = 512
+
+
+def chunks(k: int) -> int:
+    """The chunks an H1 lane at contraction ``k`` is proved in (`h1zy.lane_statements`), and so the chunk rows a table at
+    ``k`` commits each row as (`h1zy.chunk_leaves`): 1, the whole lane, at K <= `CHUNK_MAX`; past it the least n >= 2
+    whose chunks K / n are at most `CHUNK_MAX` entries and a multiple of `CHUNK_ALIGN`. ValueError at a K with no such n.
+    `PouwCheck.Chunks.chunks` is its Lean twin."""
+    k = int(k)
+    if k < 1:
+        raise ValueError(f"K = {k}: a lane is proved only at a positive K")
+    if k <= CHUNK_MAX:
+        return 1
+    for n in range(-(-k // CHUNK_MAX), k // CHUNK_ALIGN + 1):
+        if k % (n * CHUNK_ALIGN) == 0:
+            return n
+    raise ValueError(f"K = {k}: no n splits it into chunks of at most {CHUNK_MAX} entries that are whole {CHUNK_ALIGN}-bit "
+                     f"noise blocks")
+
+
+def leaf_words(k: int) -> int:
+    """A leaf's 16-bit words at K: one chunk's K / `chunks` (K) codes, then the row's f32 s_w."""
+    return b_words(k // chunks(k))
 
 
 def value(prefix: str, k: int) -> str:
@@ -269,5 +300,5 @@ def weights_root(roots: Mapping[int, bytes]) -> bytes:
     return tagged(WEIGHTS_TAG, *(p for k in sorted(roots) for p in (k, roots[k])))
 
 
-__all__ = ["B_NONCE", "CHUNK_BYTES", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words", "chunk_bits", "entry", "ks",
-           "row_bytes", "row_words", "value", "weights_root", "weights_roots"]
+__all__ = ["B_NONCE", "CHUNK_ALIGN", "CHUNK_BYTES", "CHUNK_MAX", "DEFAULT_WORKERS", "SCHEMA", "WEIGHTS_TAG", "b_words",
+           "chunk_bits", "chunks", "entry", "ks", "leaf_words", "row_bytes", "row_words", "value", "weights_root", "weights_roots"]

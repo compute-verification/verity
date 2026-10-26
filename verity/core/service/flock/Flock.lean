@@ -2,6 +2,7 @@ import Flock.Field
 import Flock.Hash
 import Flock.Bytes
 import Flock.Canon
+import Flock.Norm
 import Flock.Schedule
 import Flock.Proof
 import Flock.Transcript
@@ -49,10 +50,12 @@ import Flock.HmRow
 import Flock.Desc
 import Flock.RecVStar
 import Flock.ProvedScope
+import Flock.PortRoots
 import Flock.Registered
 import Flock.RegKnown
 import Flock.KnownRead
 import Flock.JsonKeys
+import Flock.RecordText
 import Flock.Keccak
 import Flock.RecCoins
 import Flock.RecSetup

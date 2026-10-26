@@ -6,10 +6,10 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity_vllm.engine import build as B  # noqa: E402
-from verity_vllm.program.frontend.target_profile import TargetProfile  # noqa: E402
+from verity_vllm.engine import build as B
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
-from tests.protocol_options import pouw_h1_gpu as G  # noqa: E402
+from tests.protocols import pouw_h1_gpu as G
 
 
 class _Built(Exception):

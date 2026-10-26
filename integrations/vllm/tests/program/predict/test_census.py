@@ -17,7 +17,7 @@ from functools import lru_cache
 
 import pytest
 
-from tests.predict.test_predict import FIX, TINY, _phi
+from tests.program.predict.test_predict import FIX, TINY, _phi
 from tests.program import test_derive_neutrality as GLM
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity.ml.circuits.census import PRODUCTS, SILICON, NoBooleanWork, census, family, step_ends
@@ -29,8 +29,8 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import Program, is_input
 from verity.ml.circuits.requirement import census_gates, census_schedule, from_census, upper_bound
 from verity_vllm.program.predict.build import build_program, model_shape
-from verity_vllm.program.boolean import boolean_version, lift
-from verity_vllm.program.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
+from verity.ml.definitions.boolean import boolean_version, lift
+from verity.ml.definitions.registry import b1, b1_tp2, cublas_bf16 as CB, tp_allreduce as TA
 from verity_vllm.query.required import SAMPLING_EVENTS
 
 CFG = json.loads((FIX / "llama32-1b.config.json").read_text())
@@ -75,14 +75,14 @@ def _served(c: dict, *families: str) -> int:
 
 def test_step_census_and_requirement():
     r, c, req, rc = _views(CFG, "step", M=1, pos0=8)
-    assert r.digest.startswith("773b545605765fe9")
-    assert c["digest"] == "da1b33c78fc679ce93080e349be4bdb78be214866db1f01d8c7397e85a49653bd69d09d1d25cd13b21a6b685f85ec0822fdef5013fd04d6cb687d8bfaa1f8741"
+    assert r.digest.startswith("5e34739ca3f59dda")
+    assert c["digest"] == "31fc5a4003fd5b059049f0e46aee1bc36db3a7103b532987c36450650b7f581f881e5ba7fbb21b7a5255dec50e30f62ac4d5280a703d08f66ed31758cbf2669a"
     gemms = [e for e in c["classes"].values() if e["family"] == "Gemm_v2"]
     assert all(e["served_macs"] == e["statics"]["K"] * e["statics"]["N"] for e in gemms)
     assert _served(c, "Gemm_v2") == LINEAR
     assert c["totals"]["served_macs"] == LINEAR + _served(c, "Attention_v5")
     assert _by_precision(c) == {"mac:bf16": LINEAR + _served(c, "Attention_v5")}  # every product a BF16 tensor-core step's
-    assert (c["totals"]["classes"], c["totals"]["values"], c["totals"]["tail_atoms"], c["totals"]["receipt_folds"]) == (57, 394, 0, 0)
+    assert (c["totals"]["classes"], c["totals"]["values"], c["totals"]["tail_atoms"], c["totals"]["receipt_folds"]) == (56, 394, 0, 0)
     assert c["selects"]["gates"] == [2048] and c["selects"]["bits"] == [2048 * 16]  # the row's embedding: H bf16 gathers
     assert rc["totals"]["inputs"]["run"] == {"gates": 1, "bits": 32}  # the token id
     w = _base(rc) + ROW
@@ -95,9 +95,9 @@ def test_request_census_and_requirement():
     """The row's request Program, about 30 s: the only test of a Program with values across steps (each layer's K and V rows a
     step's attention produces and every later step's reads), which the step and the toys in `ml/circuits` cannot show at scale."""
     r, c, req, rc = _views(CFG, "request", LP=256, T=31)
-    assert r.digest.startswith("2d98d37bd481d2a0")
-    assert c["digest"] == "27716ab911c7bfd8ab2290a9de9750eb6a41de86c543565549614ff9753dfebbbd073f4ca35a9ed9652f05327dc4701cc516900f645001dec62444614c25a086"
-    assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 761
+    assert r.digest.startswith("5a5902e7f950612d")
+    assert c["digest"] == "1c29fa44e74d4fa6b275b5d4a9363f8c33469fbfb6a226846f60c723bbdeed6b3324d502edc49bcec99d385c1fb1b2b31f7e8d62bf837857c2f3a33888dd6617"
+    assert len(c["steps"]["ends"]) == 32 and c["totals"]["classes"] == 2641
     assert _by_precision(c) == {"mac:bf16": c["totals"]["served_macs"]}
     base, got = _base(rc), req.to_json()
     # prefill reads rotary rows 0-255 and decode step t row 255 + t; a step holds the rows of its own and later positions,
@@ -129,10 +129,12 @@ def test_glm53_dsa_served_macs_by_precision(served):
     assert _by_precision(dsa) == {"mac:bf16": 9984, "mac:fp8": 1536}
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("wrapper,kw", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 3})])
 def test_the_census_path_is_the_expansion_on_tiny(wrapper, kw):
     """`TINY`'s step and a request of four prompt rows and three decode steps (105 k and 181 k gates): `from_census` gives the
-    explicit expansion's live gates and bounded reads at every step."""
+    explicit expansion's live gates and bounded reads at every step. About 70 s for the request: only the request has more than
+    one step, so only it shows the census path's live gates and reads across decode steps."""
     P, c = _registered(build_program(_phi(TINY), wrapper, **kw))
     by_census, by_gates = from_census(c), upper_bound(P, census_schedule(c))
     for t in range(by_gates.steps):
@@ -215,8 +217,7 @@ def test_a_cublas_gemm_counts_its_k16_step_parts_as_tc():
 #: and the fused all-reduce + RMSNorm at their descriptors there, and the embedding shard over 16 rows (the served 19360 x 6144
 #: table is a 119M-leaf input)
 GLM53_TP8 = [P.const(32, 1), P.const(32, 0x11F), bind(b1.ResidualAdd, N=6144), bind(b1_tp2.EmbeddingShard, VS=16, H=2, START=16),
-             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True),
-                          marks=pytest.mark.slow)]
+             pytest.param(bind(TA.AllReduceRmsNormMnnvl, WORLD=8, N=6144, SHOT=1, CLUSTER=8, EPS=1e-5, FMA=True), marks=pytest.mark.slow)]
 
 
 @pytest.mark.parametrize("fn", GLM53_TP8, ids=descriptor_id)

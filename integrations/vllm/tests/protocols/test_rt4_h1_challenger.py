@@ -47,8 +47,8 @@ from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import challenger as PHC  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
 
-from tests.protocol_options import challenger_host as CH  # noqa: E402
-from tests.protocol_options import test_pouw_h1 as T  # noqa: E402
+from tests.protocols import challenger_host as CH  # noqa: E402
+from tests.protocols import test_pouw_h1 as T  # noqa: E402
 
 PRIVATE, KEY = CH.challenger_key(1, H=5)
 COMMIT_A, COMMIT_B = "ca" * 64, "cb" * 64
@@ -776,6 +776,7 @@ def test_coins_held_in_the_serving_process_are_no_session_and_credit_nothing(tmp
     assert "coins from a challenger the verifier doesn't hold" in auditor.trusted(local)
 
 
+@pytest.mark.slow
 def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
     """RT4-INT-21: pouw-serve's ``--challenger`` and ``--session`` are the pouw settings ncp-v2's salt comes from, one
     never without the other; ncp-v2 accepts the setting and ncp-v1 doesn't."""
@@ -792,7 +793,7 @@ def test_pouw_serve_and_ncp_v2_take_the_auditor_hosts_challenger():
     remote = {"pouw": {"challenger": T.AUDITOR, "session": T.SESSION}}
     assert not any("challenger" in r or "session" in r for r in refused("pouw:ncp-v2", remote))
     assert any("needs 'session'" in r for r in refused("pouw:ncp-v2", {"pouw": {"challenger": T.AUDITOR}}))
-    assert any("'challenger' is eps1-sm120-h1fx1 and ncp-v2's" in r for r in refused("pouw:ncp-v1", remote))
+    assert any("'challenger' is for eps1-sm120-h1fx1, ncp-v2," in r for r in refused("pouw:ncp-v1", remote))
 
 
 class _NcpLinear:

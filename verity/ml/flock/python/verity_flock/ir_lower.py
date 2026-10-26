@@ -54,7 +54,7 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
@@ -250,7 +250,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
-    `verity_vllm.program.registry.sampling_boolean.traced_family` traces it)."""
+    `verity.ml.definitions.registry.sampling_boolean.traced_family` traces it)."""
     s = getattr(g, "scope", None)
     while s is not None:
         d = getattr(s.spec, "defn", s.spec)
@@ -491,6 +491,21 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     in_widths = [_leaf_width(target, p) if k == "leaf" else width[K[p]] for k, p in ins[0]]
     ret_gates = [rets[p] if k == "ret" else K[p] for k, p in outs[0]]
     return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
+
+
+def whole(target) -> Units:
+    """``target``'s one-call Program as ONE unit: its live gates, every input leaf a port and every output leaf a return, for a
+    template whose gate graph is not identical components (a parse whose fields read different bytes of one body)."""
+    _prog, call = standalone(target)
+    args, rets = list(call.args), list(call.returns)
+    gates = live_gates(call)
+    local = {g.index: k for k, g in enumerate(gates)}
+    port = {a: j for j, a in enumerate(args)}
+    sig = tuple((g.prim.id, tuple(("g", local[o]) if o in local else ("in", port[o]) for o in g.operands)) for g in gates)
+    in_widths = [_leaf_width(target, p) for p in range(len(args))]
+    width = {**dict(zip(args, in_widths)), **{g.index: g.prim.ret.w for g in gates}}
+    return Units(target, in_widths, [width[r] for r in rets], [[("leaf", p) for p in range(len(args))]],
+                 [[("ret", p) for p in range(len(rets))]], sig, gates, args, rets)
 
 
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.circuits.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
@@ -1148,7 +1163,7 @@ def write_tables(out_dir) -> dict:
     :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity_vllm.program.kernels import fa2_relation, rms_relation
+    from verity.ml.definitions.numerics import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

@@ -20,7 +20,8 @@ def _sr(rank: int, *, ok, outside: int = 0, without_rows: int = 0, unreachable: 
     chk = {"vus_outside_query": {"n": outside, "first": _first(rank) if outside else []},
            "identities_without_rows": {"n": without_rows, "first": _first(rank, 0) if without_rows else []},
            "rows_disagree": {"n": 0, "first": []}, "ranks": {"replay": [rank], "manifest": [0, 1], "equal": True}, "accounted": True,
-           "unstated_families": [], "executed_prefix_rule": {"applied": True, "faults": [], "evaluated_past_stop": {"n": 0, "first": []}}, "ok": ok}
+           "unstated_families": [], "executed_prefix_rule": {"applied": True, "faults": [], "evaluated_past_stop": {"n": 0, "first": []},
+                                                             "manifest_cut_before_classification": {"n": 0, "first": []}}, "ok": ok}
     if unreachable is not None:                              # [reqval 83dbe5bfd] the cause named beside the two symptoms (int-5)
         chk["identities_unreachable_by_alias"] = {"n": unreachable, "first": _first(rank, 0)[:1] if unreachable else [], "alias_entries": 0}
     pop = {"vus": 8067, "scope": "Q_module_v1(P) = 8067 identities (...)"}

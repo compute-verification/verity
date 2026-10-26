@@ -171,11 +171,12 @@ def _end(s: Session, **changes) -> dict:
 
 
 def _reserved(rng: random.Random, sid: str, body: dict) -> list[tuple[str, str | None, dict]]:
-    """Session `sid`'s reserve, then its open with `body` carrying the reserve's request, by its prover, inside its
-    minutes; `_bind` names the reserve's seq in the open once the ledger is laid out."""
+    """Session `sid`'s reserve, then its open with `body` carrying the reserve's request (`challenger.RESERVED`, those of
+    them `body` names), by its prover, inside its minutes; `_bind` names the reserve's seq in the open once the ledger
+    is laid out."""
     minutes = rng.choice([1, 30, 720])
     start = f"2026-10-{rng.randint(10, 28)}T{rng.randrange(24):02d}:{rng.randrange(60):02d}:{rng.randrange(60):02d}Z"
-    asked = {**{k: body[k] for k in ("by", "for") if k in body}, "minutes": minutes}
+    asked = {**{k: body[k] for k in Ch.RESERVED if k in body}, "minutes": minutes}
     opened = Ch.later(start, rng.randint(0, minutes))
     return [("reserve", sid, {**asked, "started_utc": start, "expires_utc": Ch.later(start, minutes)}),
             ("open", sid, {**body, **asked, "opened_by": LANE, "started_utc": opened})]
@@ -213,10 +214,11 @@ def ledger_events(rng: random.Random, window: dict, s: Session, *, reserved: boo
                                                 "key_sha512": hashlib.sha512(s.pub).hexdigest(), **(period or {})}))
         if rng.random() < 0.5:
             roots = {sid: b["window"]["root"] for kind, sid, b in events if kind == "open"}
-            windows = [{"root": roots[sid], "session": sid, "complete": True}
+            ended = {sid: b.get("complete") is True for kind, sid, b in events if kind == "end"}
+            windows = [{"root": roots[sid], "session": sid, "complete": ended[sid]}
                        for kind, sid, b in events if kind == ("reserve" if reserved else "open")]
             events.append(("period-close", None, {"period": name, "lane": LANE, "by": LANE, "windows": windows,
-                                                  "complete": True}))
+                                                  "complete": all(w["complete"] for w in windows)}))
     return _bind(events)
 
 
@@ -459,10 +461,10 @@ def honest_salt(rng: random.Random) -> tuple[dict, Session]:
 
 
 def salt_ledger(rng: random.Random, window: dict, s: Session, reserved: bool = True, k: int = 0,
-                opened: dict | None = None) -> list[str]:
-    """The auditor's ledger opening session `s` for `window` (its open's body changed by `opened`), every session
-    reserved first unless not `reserved`, signed under key `k`."""
-    events = ledger_events(rng, window, s, reserved=reserved, opened=opened)
+                opened: dict | None = None, **end) -> list[str]:
+    """The auditor's ledger opening session `s` for `window` (its open's body changed by `opened`, its end's by `end`),
+    every session reserved first unless not `reserved`, signed under key `k`."""
+    events = ledger_events(rng, window, s, reserved=reserved, opened=opened, **end)
     return ledger_lines(events, _key(k), leaves_of(events, s.sid))
 
 

@@ -218,6 +218,7 @@ def main(args: Options) -> None:
 
     from verity_vllm.acquire.install import IncompletePlan
     from verity_vllm.acquire.stage import MANIFEST_ENV, plan_at_stage
+    from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
 
     man_path = args.acquisition_manifest or os.environ.get(MANIFEST_ENV) or None
     try:
@@ -230,7 +231,7 @@ def main(args: Options) -> None:
 
     tw = None
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         with tl.span("prep.warmup_control"):
             _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[m1] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
@@ -247,14 +248,14 @@ def main(args: Options) -> None:
     else:
         tl.start("work.capture_run")
         snap = parse_steps(args.snapshot_steps)
-        header = va.make_header(eng, wl, adapter_revision=revision, wheel_sha256=args.wheel_sha256, vllm_commit=args.vllm_commit,
-                                extra_notes={"argv": sys.argv, "snapshot_steps": sorted(snap), "weights_verified": bool(args.verify_weights),
-                                             "protocols": protocol_entries})
-        cfg = va.ObserverConfig(mode="record", reenter=not args.no_reenter, triton=not args.no_triton,
-                                module_hooks=not args.no_module_hooks, write_log=True, snapshot_steps=snap,
-                                snapshot_dir=out if snap else None, snapshot_max_bytes=args.snapshot_max_bytes,
-                                snapshot_max_bytes_op=args.snapshot_max_bytes_op)
-        cap = va.Capture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
+        header = make_header(eng, wl, adapter_revision=revision, wheel_sha256=args.wheel_sha256, vllm_commit=args.vllm_commit,
+                             extra_notes={"argv": sys.argv, "snapshot_steps": sorted(snap), "weights_verified": bool(args.verify_weights),
+                                          "protocols": protocol_entries})
+        cfg = ObserverConfig(mode="record", reenter=not args.no_reenter, triton=not args.no_triton,
+                             module_hooks=not args.no_module_hooks, write_log=True, snapshot_steps=snap,
+                             snapshot_dir=out if snap else None, snapshot_max_bytes=args.snapshot_max_bytes,
+                             snapshot_max_bytes_op=args.snapshot_max_bytes_op)
+        cap = Capture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
         cap.install()
         print(f"[m1] observer installed: {len(cap.roots)} roots, profile_id={header.profile_id}, "
               f"reenter impls={header.notes.get('reenter_impls')}", flush=True)

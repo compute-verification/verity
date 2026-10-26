@@ -110,7 +110,8 @@ needs_flock = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("
 def gpu_env(tmp_path: Path, count: int = 3) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if k != "RESEARCH_RUN_DIR"}
     return {**env, "GPU_LEASE_DIR": str(tmp_path / "gl"), "GPU_LEASE_COUNT": str(count), "RESEARCH_RUN_ID": "r-test",
-            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl")}
+            "GPU_LEASE_USAGE_LOG": str(tmp_path / "lease-usage.jsonl"), "GPU_LEASE_UTIL_LOG": str(tmp_path / "util-*.jsonl"),
+            "GPU_LEASE_PREEMPT_GRACE_S": "0", "GPU_LEASE_PREEMPT_GRACE_MAX_S": "0"}
 
 
 @needs_flock

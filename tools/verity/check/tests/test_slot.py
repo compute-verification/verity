@@ -45,8 +45,10 @@ def outside_a_run(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def outside_a_slot(monkeypatch):
-    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once."""
+    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
+    `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
     monkeypatch.delenv("CHECK_SLOT", raising=False)
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
 def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
@@ -535,6 +537,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-1")
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "6b3d704c8" * 4 + "abcd")
     monkeypatch.chdir(tmp_path)
     real, tickets = SLOT.join, []
 
@@ -552,7 +555,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     with pytest.raises(Exec) as e:
         SLOT.main(["--by", "lander", "--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
-    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "by": "lander"}
+    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "commit": "6b3d704c8" * 4 + "abcd", "by": "lander"}
     who = tmp_path / "check-a.who"
     assert tickets == [me] and json.loads(who.read_text()) == me and stat.S_IMODE(who.stat().st_mode) == 0o664
     assert sorted(p.name for p in tmp_path.iterdir()) == ["check-a.lock", "check-a.who", SLOT.LINE, "slots"]
@@ -717,6 +720,26 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
+def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_only_when_there_is_none(tmp_path, monkeypatch):
+    """CI-164: n2's and cpu-1's default pools are all only=trains, and the refusal sent a lane check to another machine though
+    each has a lane pool beside it (`gpu/slots`, `research/slots`)."""
+    (tmp_path / "slots").write_text("d 0 only=trains\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
+    with pytest.raises(SystemExit) as e:
+        SLOT.main(["--", "check.py"], now=lambda: NOW)
+    assert "a lane check runs on another machine" in str(e.value) and "research run --on vy-nebius-cpu-K" in str(e.value)
+    for name, text in (("gpu", "g 1\n"), ("trains", "t 2 only=trains\n"), ("gpu.bak-20261024", "b 2\n")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "slots").write_text(text)
+    with pytest.raises(SystemExit) as e:
+        SLOT.main(["--", "check.py"], now=lambda: NOW)
+    msg = str(e.value)
+    assert f"CHECK_SLOTS={tmp_path / 'gpu' / 'slots'} python3 tools/verity/check/slot.py" in msg
+    assert "another machine" not in msg and "trains/slots" not in msg and ".bak-" not in msg
+    assert "research run --on vy-nebius-cpu-K" in msg
+
+
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("repo_check_priority", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
@@ -854,6 +877,8 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
     monkeypatch.undo()                                                             # undoes any_core's pin too
+    monkeypatch.delenv("CHECK_SLOT", raising=False)                               # and outside_a_slot's
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))

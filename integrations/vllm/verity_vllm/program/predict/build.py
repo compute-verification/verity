@@ -37,6 +37,7 @@ from verity.ml.circuits.defs import Builder, CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, Record, Type, Value
+from verity_vllm.program.prune import dead_free as dead_free_form
 
 from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
@@ -50,6 +51,7 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
             ("request", "greedy"): ("verity-vllm/greedy-request/v1", "vLLMRequest"),
             ("step", "stochastic"): ("verity-vllm/stochastic-engine-step/v1", "vLLMStep"),
             ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
+CACHED_SRC = "verity-vllm/cached-greedy-request/v1"  # `vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`, with a cached prefix
 I64 = Value(64)
 
 
@@ -412,8 +414,17 @@ class _Model:
         n += 1 if C.embed_scale else 0
         self.cos_sin = W[n]
         self.hist: list[tuple[list, list]] = [([], []) for _ in range(C.NL)]
+        self.cached = 0
         self.lp_of: dict[int, int] = {}
         self.plus_one: dict[int, Coll] = {}
+
+    def open_with(self, prefix: Coll, C: int) -> None:
+        """Every layer's history opens with its rows of `prefix` (`rules.vllm_bindings.kv_prefix`: bf16 [NL, 2, C, KVH*D], keys then values)."""
+        rl = self.C.KVH * self.C.D
+        for L, (kh, vh) in enumerate(self.hist):
+            kh += [prefix.refs.slice(((2 * L) * C + j) * rl, ((2 * L) * C + j + 1) * rl) for j in range(C)]
+            vh += [prefix.refs.slice(((2 * L + 1) * C + j) * rl, ((2 * L + 1) * C + j + 1) * rl) for j in range(C)]
+        self.cached = C
 
     def call(self, fn, *args) -> Coll:
         return self.B.call(fn, *args)
@@ -472,9 +483,10 @@ class _Model:
             k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
             P0 = len(kh)
-            if P0 == 0:
-                self.lp_of[L] = M
-            own_rows = M if P0 == 0 else 1
+            prefill = P0 == self.cached
+            if prefill:
+                self.lp_of[L] = P0 + M
+            own_rows = M if prefill else 1
             launch_sq = own_rows
             for i in range(M):
                 kh.append(k[i].refs)
@@ -482,7 +494,7 @@ class _Model:
             attn = []
             for i in range(M):
                 P = P0 + i + 1
-                fn = S.attention(P, i if P0 == 0 else 0, own_rows, launch_sq)
+                fn = S.attention(P, i if prefill else 0, own_rows, launch_sq)
                 pa = _ptypes(fn)
                 attn.append(self.call(fn, Coll(pa[0], q[i].refs), Coll(pa[1], concat(kh[:P])), Coll(pa[2], concat(vh[:P]))))
             o = self.collective(S.all_reduce, [self.call(S.o, Coll(po[0], attn[i].refs), Coll(po[1], lw["o"].refs)) for i in range(M)])
@@ -679,13 +691,13 @@ def launch_batch(phi: Phi, LP: int, T: int) -> list | None:
 
 
 def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
-          batch: list | None) -> list[Coll]:
+          batch: list | None, C: int = 0) -> list[Coll]:
     """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
-    prefill of LP rows, then T decodes, each fed the previous sample."""
+    prefill of LP rows (rows C.. after a cached prefix of C), then T decodes, each fed the previous sample."""
     if wrapper == "step":
         hid = model.forward(rows, pos0)
         return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
-    hid = model.forward(rows, 0)
+    hid = model.forward(rows[C:], C)
     toks = [model.sample(hid[-1], 0, int(LP) - 1, policy)]
     for s in range(int(T)):
         if batch is not None:
@@ -696,15 +708,24 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
 
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
-                  with_desc: bool = True) -> BuildResult:
+                  with_desc: bool = True, C: int = 0, dead_free: bool = False) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
-    `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples)."""
+    `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
+    first C prompt rows are a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose every layer's key and
+    value rows a `prefix` input holds after the request's own; the prefill computes rows C..LP-1. A request on one rank drops its dead
+    units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
+    `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread."""
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
-    world, rank = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0))
+    world, rank, C = int(phi.tp.get("world", 1)), int(phi.tp.get("rank", 0)), int(C)
+    if C and (wrapper, kind, world, type(net)) != ("request", "greedy", 1, _Decoder):
+        raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
+                            f"(the cached greedy request on one rank of the dense or fused-MoE decoder only)")
+    if C and not 0 < C < int(LP):
+        raise Unexpressible(f"vocabulary cannot express: a cached prefix of {C} rows for a prompt of {LP} (0 < C < LP)")
     wrec = Record(*net.leaves())
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
@@ -717,6 +738,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     words = sum(net.schedule_words(r) for r in passes) if hasattr(net, "schedule_words") else 0
     if words:
         params.append(("schedule", Array(words, I32)))       # `vllm_meta.ScheduledWithPeers`
+    if C:
+        params.append(("prefix", _arr((net.C.NL, 2, C, net.C.KVH * net.C.D), 16)))   # `vllm_meta.prefix_input`
     n_user = len(params)
     if world > 1:
         # `vllm_meta.WithPeers`: world - 1 peer Inputs per collective of each forward pass, in call order
@@ -741,24 +764,23 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
             raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
                                 f"requests), whose kernel choices the {net.model_class} decoder reads at its own rows")
         model.launch = _Launch(batch)
+    if C:
+        model.open_with(Coll(params[n_user - 1][1], Affine("p", n_user - 1, 0, params[n_user - 1][1].leaves)), C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]
-    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch)
-    if wrapper == "step":
-        out = Coll(Array(1, I32), toks[0].refs)
-    else:
-        out = Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
+    toks = drive(model, wrapper, rows, M=M, pos0=pos0, LP=LP, T=T, policy=policy, batch=batch, C=C)
+    out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs) or peers.k != words:
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs, the aligns {peers.k} of {words} schedule words")
     B.ret_type = out.type
-    body = B.finish(out)
+    body = dead_free_form(B.finish(out))[0] if wrapper == "request" and (world == 1 or dead_free) else B.finish(out)
     t_body = time.time()
-    src_class, derive_name = WRAPPERS[(wrapper, kind)]
+    src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
     if world > 1:
         src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({})).hexdigest()[:16]}
-    from verity_vllm.program.replay import replayer
+    from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="predicted: a switched row's, checked by its trace (predict.aot)",
                                register=False)

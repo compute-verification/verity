@@ -162,12 +162,11 @@ theorem rowsReg_eq_portRead (hS : ∀ u, s.ServedRegistered u)
 
 /-- **Under the complete check every port row of a drawn unit is registered and opens at its registered root**: at
 an outcome flock-verify `--zk --registered` accepts, a drawn unit `u` whose registrant reads its served roots' rows
-(`ServedRegistered`), in a circuit that names each port once and whose every port is a port of `own`
-(`Flock.Registered.checkComplete`), reads `u`'s row of every port `q` (each input port and output row, so whatever an
+(`ServedRegistered`), in a circuit whose every port is a port of `own` (`Flock.Registered.checkComplete`; acceptance
+has the circuit name each port once), reads `u`'s row of every port `q` (each input port and output row, so whatever an
 output's cone reads, the lane index included) as a registered read through `own`'s port of `q`'s name (`ownPort`), and
 every registered read of `u` opens the root `own` holds there (`ReadsX.Checked`, through `regPathsHJ`). -/
-theorem portRow_opens (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q')
-    (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {S : Finset (Fin s.n)} {R : s.Reg}
+theorem portRow_opens (hcomp : _root_.Flock.Registered.checkComplete s.c s.own = .ok ()) {S : Finset (Fin s.n)} {R : s.Reg}
     {o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))}
     (hacc : LiveAcceptsZKR s.I s.own (R, S, s.wr S R o)) {u : Fin s.n} (hu : u ∈ S) (hS : s.ServedRegistered u)
     (q : Fin s.c.ports.size) :
@@ -179,7 +178,7 @@ theorem portRow_opens (hN : ∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s
   obtain ⟨hmem, hname⟩ := FlockC3.Compose.portOf_spec hn
   exact ⟨(hS.1 _).2 ⟨q, rfl, hn⟩, hmem, hname, (hS.2 q hn).1,
     checked_of_acceptsHJ s.I s.ht s.own s.dj s.y₀ s.hc s.hU s.hpub s.hscope s.hTags _ hacc (s.rdU u)
-      (s.ownReadsHJ_of_served hN hacc hu hS)⟩
+      (s.ownReadsHJ_of_served hacc hu hS)⟩
 
 end Flock.SoundAtBridge.RowsSession
 
@@ -259,7 +258,8 @@ theorem k_of_check {T : PouwWindow.Lanes.Tile} (h : T.check = .ok ()) : 32 ∣ T
   by_cases h1 : T.k % 32 = 0
   · refine ⟨Nat.dvd_of_mod_eq_zero h1, Nat.lt_of_not_le fun h2 => ?_⟩
     have h2' : 131072 ≤ T.k := h2
-    simp [h1, h2'] at h
+    have h3 : ¬T.k < 64 := by omega
+    simp [h1, h2', h3] at h
     cases h
   · simp [h1] at h
     cases h
@@ -378,9 +378,9 @@ theorem Accounting.TS.Lanes.leafLanes_soundAt {Ω : Type} [Fintype Ω] {S nπ K 
         obtain ⟨ks, hm⟩ := hO x w i k
         have hm' : (ok, ks) ∈ known x w i k ++ Flock.KnownRead.fullRows (sess x w i k).own (full x w i k) :=
           Array.mem_append.2 (Or.inl hm)
-        obtain ⟨hN, hex⟩ := names_of_check (hacc k).2.2.2.1 hm'
+        obtain ⟨-, hex⟩ := names_of_check (hacc k).2.2.2.1 hm'
         obtain ⟨reg, hf, -⟩ := FlockC3.RegLevels.checkKnownAll_ok (hacc k).2.1 hm
-        exact ⟨hN, hex _ _ hm', reg, Array.mem_toList_iff.1 (List.mem_of_find?_eq_some hf),
+        exact ⟨hex _ _ hm', reg, Array.mem_toList_iff.1 (List.mem_of_find?_eq_some hf),
           by simpa using List.find?_some hf⟩
       have hR : CheckedRel (sess x w i k) (out x w i k) ok (openedReg (sess x w i k)) := by
         by_contra hR
@@ -479,16 +479,16 @@ served tile, `LeafChecks` from the 33 circuits computing their pieces' compositi
 receipt the committed rows decode to (`leafOf`, `receiptOf`), whose agreement with the decodes `decodes_of_checks`
 gives from acceptance. -/
 theorem Accounting.SecurityProofs.TS.LeafLanesSound : Accounting.Guarantees.TS.LeafLanesSound := by
-  intro Ω _ S nπ K nw sess₀ op sess out salts chain pub roots place right δ hCR hLaw hδ hδ0 hL hC
+  intro Ω _ S nπ K nw sess₀ op sess out salts pub roots place right δ hCR hLaw hδ hδ0 hL hC
   exact leafLanes_soundAt sess out (fun x w i k => knownOf (pub x w i) (salts x w i k) k)
     (fun _ _ _ k => PouwWindow.Lanes.readFull (servedTile K) (k.map Fin.val))
     (fun x w i k => PouwWindow.Lanes.ownOf (roots x w i) (place x w i) (servedTile K) (k.map Fin.val)) "o0"
-    (dqOf Pouw.H1Zy.zyDequant) (partOf chain)
+    (dqOf Pouw.H1Zy.zyDequant) (partOf (laneChain K nw))
     (decL K nw (servedTile K)) (decC nw (servedTile K)) pub (fun x w i => receiptOf nw (servedTile K) (sess x w i))
     (fun x w i => leafOf K (servedTile K) (sess x w i)) right δ hCR hLaw
     (fun x w i k h => (sess₀ x w i k).servedRegistered_canon (op x w i k) (PouwWindow.Lanes.checkOneRead_ok h))
     (fun x w i k => ⟨#[(PouwWindow.Lanes.okRow, salts x w i k "o0")], by
       cases k <;> simp [knownOf, PouwWindow.Lanes.knownRows]⟩) hδ hδ0
-    (fun x w i => leafChecks_of_computes (servedTile K) chain Pouw.H1Zy.zyDequant (sess x w i) (laneComputes_of_lowers (hL x w i))
+    (fun x w i => leafChecks_of_computes (servedTile K) (laneChain K nw) Pouw.H1Zy.zyDequant (sess x w i) (laneComputes_of_lowers (hL x w i))
       (combineComputes_of_lowers (hC x w i)))
     (decodes_of_checks (roots := roots) (place := place))

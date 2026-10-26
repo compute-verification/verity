@@ -73,3 +73,16 @@ def test_a_trace_without_its_header_is_refused(tmp_path):
     (tmp_path / "t.jsonl").write_text('{"kind": "step", "step": 0}\n')
     with pytest.raises(ValueError, match="not a verity-vllm/step-trace/v1 step trace"):
         ST.load(tmp_path / "t.jsonl")
+
+
+def test_max_model_len_is_the_schedulers_where_its_scheduler_config_no_longer_holds_it():
+    """vLLM 0.11 moved ``max_model_len`` off the scheduler config; the served rows' statics read it (r20261024-153219-5c1b)."""
+    sched = SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=4),
+                            cache_config=SimpleNamespace(block_size=16, num_gpu_blocks=100), max_model_len=512)
+    assert ST.scheduler_config(sched)["max_model_len"] == 512
+    sched.scheduler_config.max_model_len = 256
+    assert ST.scheduler_config(sched)["max_model_len"] == 256
+    del sched.max_model_len
+    sched.vllm_config = SimpleNamespace(model_config=SimpleNamespace(max_model_len=1024))
+    del sched.scheduler_config.max_model_len
+    assert ST.scheduler_config(sched)["max_model_len"] == 1024

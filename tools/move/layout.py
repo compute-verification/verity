@@ -16,14 +16,16 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), and the
   `Path(__file__).parents[N]` anchors of a moved file;
 - modules: import statements (split when their names now live in different modules, made absolute when a relative one no
-  longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`, `module:attr`, docs);
+  longer resolves), `from M import n` in strings, and every dotted name (`-m`, `import_module`, `module:attr`, docs). A
+  module whose own row keeps its name (a [paths] row with old == new) stays where it is when its package moves;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
 A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
 no dotted name and no lone quoted word in one is rewritten. A tracked file that a `.gitignore` matches stays tracked where
-it moves. It appends [paths] to research's `moves.json` (once), whose recorded moves it never rewrites.
+it moves. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
+moves recorded there.
 
 It fails on a rewritten reference to a directory the map splits across destinations (`backends/flock/` to `verity/ml/flock/`
 with its `verifier/lean/` to `verity/core/service/flock/`): the rewrite follows the larger part, so a gate that named the
@@ -265,13 +267,17 @@ class Run:
         return moves
 
     def move(self, moves: list[tuple[str, str]]):
+        landing = {n for _, n in moves}
+        aside = {o: f"{o}.moving" for o, _ in moves if o in landing and not self.dry}
+        for old, tmp in aside.items():                      # a file another one lands on leaves first
+            os.rename(self.root / old, self.root / tmp)
         for old, new in moves:
             self.moved[new] = old
             if self.dry:
                 continue
             dst = self.root / new
             dst.parent.mkdir(parents=True, exist_ok=True)
-            os.rename(self.root / old, dst)
+            os.rename(self.root / aside.get(old, old), dst)
         if not self.dry:
             for p in self.dropped:
                 (self.root / p).unlink()
@@ -523,9 +529,11 @@ class Run:
                 token = m.group("p")
                 stripped = token.rstrip("/.,")
                 first = stripped.split("/")[0]
-                if first in {"packages", "protocols", "backends", "benchmarks", "census", "fixtures", "tests", "tools",
+                if first in {"packages", "protocols", "backends", "benchmarks", "census", "fixtures", "tools",
                              "integrations", "verity", "catalog", "kernels", "experimental", "archive", "infra"}:
                     return token
+                if first == "tests" and self._member_of(old) is None:
+                    return token                        # the root's tests/; a distribution's own is relative to it
                 new = self._map_relative(stripped, path, old, plain=True)
                 if new is None or new == stripped:
                     return token
@@ -898,7 +906,7 @@ class Run:
                 continue
             full = f"{m_old}.{a.name}"
             nf = self.L.module(full)
-            if nf != full and nf in self.new_modules and a.name not in self.binds.get(m_old, ()):
+            if (nf != full or full in self.L.modules) and nf in self.new_modules and a.name not in self.binds.get(m_old, ()):
                 parent, _, leaf = nf.rpartition(".")
                 asname = a.asname or (a.name if leaf != a.name else None)
                 if not parent:
@@ -949,7 +957,7 @@ class Run:
                 name, _, alias = it.partition(" as ")
                 name, alias = name.strip(), alias.strip()
                 full = self.L.module(f"{mod}.{name}")
-                if full != f"{mod}.{name}" and full in self.new_modules:
+                if (full != f"{mod}.{name}" or f"{mod}.{name}" in self.L.modules) and full in self.new_modules:
                     parent, _, leaf = full.rpartition(".")
                     asn = alias or (name if leaf != name else "")
                     groups.setdefault(parent, []).append(leaf + (f" as {asn}" if asn else ""))
@@ -988,6 +996,11 @@ class Run:
                 return name
             head = ".".join(name.split(".")[:k])
             if "." not in head and not head.startswith("verity_"):
+                return name
+            # `from pkg import facts`, which the import passes left naming `pkg` because `pkg.facts` is still there
+            if re.search(r"(?:^|[^\w.])from\s+$", m.string[max(0, m.start() - 40):m.start()]) and \
+                    (first := re.match(r"\s+import\s+\(?\s*([A-Za-z_]\w*)", m.string[m.end():])) and \
+                    f"{name}.{first.group(1)}" in self.new_modules:
                 return name
             new = self.L.module(name)
             if new == name:
@@ -1144,7 +1157,12 @@ class Run:
         path = self.L.file(MOVES) or MOVES
         if (text := self._read(path)) is None:
             raise SystemExit(f"{path}: research's record of the layout moves is missing")
-        doc, entry = json.loads(text), {"paths": dict(self.L.data["paths"])}
+        def here(old: str, new: str) -> bool:
+            if old.endswith("/"):
+                return any(p.startswith(old) for p in self.tracked_old) or any(p.startswith(new) for p in self.new_files)
+            return old in self.tracked_old or new in self.new_files
+        # a row for a file an open branch adds (its restack needs the row) names a path this tree lacks until it lands
+        doc, entry = json.loads(text), {"paths": {o: n for o, n in self.L.data["paths"].items() if here(o, n)}}
         if entry not in doc["moves"]:
             doc["moves"].append(entry)
             self.texts[path] = json.dumps(doc, indent=2) + "\n"

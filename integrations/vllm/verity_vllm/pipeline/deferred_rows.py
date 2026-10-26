@@ -6,7 +6,7 @@ window the in-Commit hook writes, into ``O``.  A slim bundle holds the replay's 
 The window is a ``stand-in`` (core's ``registration.KINDS``), not ``served``: serving's commitment is the record's roots, under the
 scheme the record was committed in (``commitment``: the store's, whose run root and folded step roots `cpu_replay.of_record` holds
 to the run root of record; ``rows-sha512`` by default, ``vllm-v1`` an older record's), and these rows are committed afterwards from
-the bundle in trees of their own (`commit.serving_rows`: a ``frame-v3-sha512`` tree per port, fresh salts), so their roots are a fresh
+the bundle in trees of their own (`ml.windows.rows`: a ``frame-v3-sha512`` tree per port, fresh salts), so their roots are a fresh
 commitment whose link to serving's is provenance (`stand_in`: ``of`` the record's commitment and run root, the bundle's manifest
 digest and this command, and ``link``).  A SHA-512 record does not make it ``served``: these roots are not the record's, whatever its
 hash.  A window is ``served`` when its roots are serving's own, made before any draw (the in-Commit hook's, `serving_rows.readers`); a
@@ -51,12 +51,21 @@ def of_record(bundle: str | os.PathLike, row_dir: str, required_manifest: str | 
     and the replay's arrivals, and ``commitment``, the scheme the record was committed in (the store's: its run root and its step
     roots folded are the run root of record, 32 bytes under vllm-v1 and 64 under rows-sha512).  A slim bundle holds the replay's
     picks only: refused.  The Definitions the Build bound are not held to this tree's: no row is evaluated here, and the one-stage
-    proof is over the verifier's own template."""
+    proof is over the verifier's own template.  A served window's bundle (`serve_seal.seal_window`) names no Programs: its
+    Programs are the registered compiler's for the window's advice, so it opens with none (``programs`` empty, each request's
+    arrival its first step in the window), and ``manifest`` is the alias table it sealed (the bench row's ``op_path_aliases``,
+    which `opening.CommittedStore` resolves a shared module's layer-N path through), or None when it sealed none."""
     b = RB.open_bundle(bundle)
     ctx, bdir = b["context"], Path(b["path"])
     if ctx.get("slim"):
         raise CPU.Refused(f"{bdir} is a slim bundle: it holds the replay's picks, not every unit of the population")
     _rows, row, _verdict, store, run = CPU.of_record(b, bdir.parent, awaiting=False)
+    if (sw := ctx.get("served_window")):
+        aliases = sw.get("op_path_aliases")
+        return SimpleNamespace(bundle=b, ctx=ctx, bdir=bdir, out=bdir.parent, pair=int(ctx["pair"]), row=row, store=store, run=run,
+                               commitment=store.commit_scheme, manifest=None if aliases is None else {"op_path_aliases": aliases},
+                               loaded={}, digests={}, programs={}, program_dirs={},
+                               arrivals={str(q["request_id"]): int(q["arrive_step"]) for q in ctx["requests"]})
     o = SimpleNamespace(row_dir=row_dir, replay_workers=None, required_manifest=required_manifest)
     args = CPU.replay_args(o, ctx)
     _path, man = CPU.manifest_of(o, ctx, args)

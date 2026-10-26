@@ -72,7 +72,7 @@ eight items:
    `2^-128` target under every weight (ASK-73): its KS is stated and proved at that level, not at the floor. Route 2C's
    bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`, about
    165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from
-   premises still open: `PartChecksB`, `PartOpensB` and `DecompB`
+   premises still open: `PartChecksBV`, `PartOpensB` and `DecompB`
    (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces at the
    parts that commit the earlier rounds). Holo statements are candidate 3's own model, and
    `BitsLin2` at the dense statements follows from it (`bitsLin2On_of_ksLin2On`).
@@ -414,7 +414,8 @@ error and no other; and the inputs of the SHA-512 evaluations the V* setup makes
 statement's bytes), none by default; the inputs of the SHA-512 evaluations the inner verifier's setup makes at an
 inner statement (`innerSetup`, reading no message and no coin: the inner statement's own), none by default; and the
 inputs of the SHA-512 evaluations the inner verifier makes on the inner messages the outer witnesses give, at an oracle
-(`innerCalls`, reading no coin), none by default. -/
+and the run's coins (`innerCalls`, the compiled verifier's coins, whose first are the inner session's), none by
+default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -437,7 +438,7 @@ structure Deploy (Coin : Type) where
   δc : (Msg → Msg) → Msg → ℝ
   setup : Msg → List Msg := fun _ => []
   innerSetup : Msg → List Msg := fun _ => []
-  innerCalls : (Msg → Msg) → Msg → List Flock.Wit → List Msg := fun _ _ _ => []
+  innerCalls : (Msg → Msg) → Msg → (ℕ → Coin) → List Flock.Wit → List Msg := fun _ _ _ _ => []
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 
@@ -666,7 +667,7 @@ it is about 65.2 bits per SHA-512 call at the deployed shape (one inner table at
 `coverW`, ASK-72; 69.4 at `C_DE`'s weight), the third term binding: below the 100-bit floor and the `2^-128` target
 under every weight (ASK-73). Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
 (`RecDeploy.lamLin2_deployed_ge_dep`, about 165.8), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksB`, `PartOpensB` and `DecompB`
+`RecDeploy.DenseAt`) only follows from premises still open: `PartChecksBV`, `PartOpensB` and `DecompB`
 (`RecDeploy.ksLin2_deployed_full`, at the coin server's record, which reads back, and the last round's pieces
 at the parts that commit the earlier rounds). Holo statements are candidate 3's own model, and `BitsLin2` at the dense
 statements follows from it (`bitsLin2On_of_ksLin2On`). -/
@@ -903,7 +904,7 @@ The deployed V* never reads the inner session's framed transcript. It binds what
 * never in the run: the rows, the salts and the proof files, hidden values of V*'s parts.
 
 The firewall drops the rest of a round's framed bytes: the domain and labels (constants), the proof-of-work nonces
-(never checked, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
+(each `0`, the only one the verifier accepts, R4: with live coins grinding buys nothing) and the statement digest (a function of the statement). So
 the inner verifier `E*`'s views run at is one over that representation (`Bound.IVStar`): an element-level inner Flock
 (`Bound.DE`, at plain SHA-512 leaves), each round message before its last committed as rows under hm96 at the pinned
 key, its last message their openings with the element-level last message. `KSBound` is the recursion's KS there, and
@@ -1087,10 +1088,11 @@ collides on the salt hashes and a different row, at one salt, on the row digests
 committed (Flock's Merkle binding at plain leaves). At the deployment those steps are the code side's (`nextE`), so
 (P4) is a premise of the bound record, not a consequence of `Binds`.
 
-**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` is false at the deployed
-bound record (`RecDeploy.lastBinds_deployed_rejects`). The deployed plain verifier reads the record's text only through
-`Json.parse`, so the same last message with a trailing space in the record is decided alike, with the same calls, while
-`final` reads the two apart. It stays stated because the route as first proved (`RecDeploy.KSBoundRoute`) reads it. -/
+**Superseded** by `LastBindsEC` with `LastCoinFree` (card ef47c02e, 19 Oct): `LastBinds` was false at the deployed
+bound record before S0, as the deployed plain verifier read the record's text only through `Json.parse`, so the same
+last message with a trailing space in the record was decided alike, with the same calls, while `final` reads the two
+apart. S0 refuses that text (`RecDeploy.LastGap.check_space`). It stays stated because the route as first proved
+(`RecDeploy.KSBoundRoute`) reads it. -/
 def Bound.LastBinds (H : Msg → Msg) (Bd : Bound Coin Col T) : Prop :=
   ∀ (x : Msg) (as as' : List Msg) (cs cs' : List Coin), as.length = Bd.DE.V.k x → as'.length = as.length →
     cs.length = as.length → cs'.length = as.length → as.dropLast = as'.dropLast → cs.dropLast = cs'.dropLast →

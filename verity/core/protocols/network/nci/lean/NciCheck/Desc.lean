@@ -37,23 +37,35 @@ computed in the decoder's order (callees first) and shared by every activation:
 
 A body's references are resolved through its nodes' outputs with the callees' `ret`: a batch whose members' returns
 make one run maps any piece by one affine map, whole members of any other batch become one segment of copies, and a
-pass-through goes back through the node's arguments. Per IU, its reads are those segments with the IU's own nodes and θ's
-taken out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
+pass-through goes back through the node's arguments. A root node's reads are those segments, copies all alike as one and
+one copy piece by piece, so that each names one node's gates: whole members returning leaves of several shared arguments
+are one copy of pieces of as many nodes (`Seg.split`). Per IU, its reads are those with the IU's own nodes and θ's taken
+out, and its novel reads the width of their union (`novelWidth`): copies of one frame that nothing else meets are
 counted as copies times one copy's width.
 
-What is still walked member by member or element by element, so not bounded by the description: a batch member whose
-return has a pass-through, a read with stride other than 1 into a composite's batch output that isn't one run, a strided
-read of a call's or a scan's output, and segments of copies that overlap other reads of the same IU (expanded copy by
-copy). Serve_v1 meets none of them, at word level or on bits.
+Pass-throughs are taken in closed form in the number of members and iterations: whole members of a batch returning what
+its members share are one member's return, repeated (and a stride of whole members one leaf's); those returning a run
+of a mapped argument's row are one piece of rows of the argument; a part of an argument every member or iteration reads
+is one piece of rows (`memberRows`); a scan's final carry, and the carry each iteration reads from the one before, are
+followed back through the step's return (`carry`, `carriesRead`: a run returned in place is the initial carry's, any
+other leaf a chain of positions to where it leaves the carry or to its cycle, `Chain`), never iteration by iteration.
+What has no closed form here is walked one by one up to `WALK` and refused past it (`unwalked`, with what it would have
+walked): the members of a batch whose returns are none of those, strided reads of a call's, scan's or batch's output
+that aren't, a scan's ys read iteration by iteration, and chains longer than `WALK`. Still walked unbounded: the leaves
+of a strided piece taken through a parameter (`throughArg`), and segments of copies that overlap other reads of the
+same IU (expanded copy by copy, `novelWidth`). Serve_v1 meets none of the walks, at word level or on bits.
 
 ## Refusals
 
-In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it), `not-topological`
+In the order checked: `instance` and `params` (`NciCheck.parse`), `program` (the decoder refuses it, or a reference
+reads a leaf at another width than it was committed with, `E_REINTERPRET`: `NciCheck.decodeProgram`), `not-topological`
 (a body names a later node, `Prog.orderViolation`), `program` (the root's offsets are not its layout, a body calls the
 root or holds an input node outside the root's: `rootLaidOut`, `inputsAtRoot`, which the decoder never gives), `program`
-(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; or a body calling a
-Definition decoded after it, or a Definition not as the decoder gives it, which the decoder never gives: `walkable`), `program` (a reference the layout can't resolve:
-the output of a scan of no iterations), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
+(a `walkBound` past half of `Flock.Steps.FUEL`, past which `Prog.gate`'s walk can run out of steps; a scan of no
+iterations with output leaves, read or not; or a body calling a Definition decoded after it, a Definition not as the
+decoder gives it, or a root with parameters, which the decoder never gives: `walkable`), `program` (a reference the
+layout can't resolve), `unwalked` (what `analyze` would walk one by one past `WALK`; its `message` says what and how
+many), then θ entry by entry (`theta-unknown`: not a root node, `theta-not-input`,
 `theta-not-registered`: an input node bound per run, `theta-duplicate`), then the owners (`owner-length`: not one per root
 node; node by node `owner-entry`, `input-in-iu`, `gate-in-no-iu`), then
 `empty-iu`. `NciCheck.evaluate` checks the order gate by gate, so it gives a verdict on a program in which a node reads
@@ -185,8 +197,8 @@ def ivsOf (qs : Array Piece) : Array (Nat × Nat) :=
   | (out, none) => out
 
 /-- `reps` copies of one member's pieces `ps` (`len` positions), copy `m`'s gates `m * shift` after copy 0's: the output
-of a batch whose members' return isn't one run, read by whole members. Only gates repeat: `ps` names no leaf when
-`reps > 1`. -/
+of a batch whose members' return isn't one run, read by whole members. Leaves never shift: `ps` names a leaf with
+`reps > 1` only when `shift = 0`, every copy alike (members returning what they share, `down`). -/
 structure Seg where
   ps : Array Piece
   len : Nat
@@ -197,6 +209,18 @@ structure Seg where
 def Seg.one (q : Piece) : Seg := { ps := #[q], len := q.count }
 
 def Seg.count (s : Seg) : Nat := s.reps * s.len
+
+/-- `s` as a set of gates and leaves: copies all alike (`shift = 0`) as one. -/
+def Seg.alike (s : Seg) : Seg := if s.reps > 1 && s.shift == 0 then { s with reps := 1 } else s
+
+/-- `s` as reads, each of one node's gates: copies all alike as one (`alike`), and one copy piece by piece. A copy's
+pieces can name different nodes' outputs (a batch member returning leaves of several arguments its members share), and a
+read is kept, and its IU found, by its first piece. Copies that shift stay one read, since they lie in one node: they
+name only gates of one batch's members (`down` makes them from whole members returning their own gates, and `fromCallee`
+offsets a callee's into one member), and copies naming leaves never shift. -/
+def Seg.split (s : Seg) : Array Seg :=
+  let s := s.alike
+  if s.reps == 1 then s.ps.map .one else #[s]
 
 def shiftGates (δ : Int) (ps : Array Piece) : Array Piece :=
   ps.map fun q => match q.tgt with
@@ -324,6 +348,89 @@ def memberSpans (a : Arg) (m lo hi : Nat) : Array (Nat × Nat) :=
       let e := min hi ((q + 1) * L)
       if s < e then some ((q * d + m) * L + (s - q * L), (q * d + m) * L + (e - q * L)) else none
 
+/-- The most members, iterations or rows `analyze` walks one by one. A description of a few hundred bytes names `2^52` of
+them, so a walk it can't summarize past this is refused (`unwalked`). -/
+def WALK : Nat := 2 ^ 20
+
+/-- How a refusal of a walk past `WALK` starts: `evaluate` gives it as `unwalked`, with the rest as its reason. -/
+def UNWALKED : String := "unwalked: "
+
+/-- A refusal of walking `n` of `what` one by one, past `WALK`. -/
+def walkAtMost (what : String) (n : Nat) : Except String Unit :=
+  if n > WALK then throw s!"{UNWALKED}{what}: {n} of them, past the {WALK} this verifier walks one by one" else pure ()
+
+/-- `q` as one row when its rows are consecutive (`rowStride` one row's span): the same elements in the same order. -/
+def Piece.flat (q : Piece) : Piece :=
+  if q.rows ≤ 1 then q
+  else if q.len == 1 then { q with stride := q.rowStride, len := q.rows, rows := 1, rowStride := 0 }
+  else if q.rowStride == q.len * q.stride then { q with len := q.rows * q.len, rows := 1, rowStride := 0 }
+  else q
+
+/-- Position `j` of a return, as a piece of one element. -/
+def retAt (r : PS) (j : Nat) : Option Piece := ((r.slice j (j + 1))[0]?).bind (·.ps[0]?)
+
+/-- Scan step return position `j` followed back through the iterations: `hist[0] = j`, each next position the carry leaf
+(parameter 0) the one before returns, which the iteration before returns; then `exit`, the piece `hist`'s last position
+returns when it is no carry leaf, else none and the next position is `hist[cyc]`, the positions a cycle. -/
+structure Chain where
+  hist : Array Nat
+  exit : Option Piece
+  cyc : Nat := 0
+
+/-- Position `j` of step return `r`, followed (`Chain`) over at most `WALK` positions. -/
+def chainOf (r : PS) (j : Nat) : Except String Chain := do
+  let mut hist := #[j]
+  let mut seen : Std.HashMap Nat Nat := ({} : Std.HashMap Nat Nat).insert j 0
+  for _ in [0:WALK] do
+    let some q := retAt r hist.back! | throw "program"
+    match q.tgt with
+    | .ref true 0 =>
+      let nx := q.base.toNat
+      match seen[nx]? with
+      | some s => return { hist, exit := none, cyc := s }
+      | none =>
+        seen := seen.insert nx hist.size
+        hist := hist.push nx
+    | _ => return { hist, exit := some q }
+  throw s!"{UNWALKED}a scan's carry leaves passed from iteration to iteration: more than {WALK} of them"
+
+/-- Position `t` of the chain: `hist[t]`, or past it around the cycle. -/
+def Chain.at (ch : Chain) (t : Nat) : Nat :=
+  if t < ch.hist.size then ch.hist[t]! else ch.hist[ch.cyc + (t - ch.cyc) % (ch.hist.size - ch.cyc)]!
+
+/-- Return positions `[a, b)` of `r` as runs, each `(lo, hi, id)`: `id` when the step returns the run in place as its
+carry (parameter 0's leaves `[lo, hi)`), which every iteration then passes through from the scan's initial carry. -/
+def carryRuns (r : PS) (a b : Nat) : Array (Nat × Nat × Bool) := Id.run do
+  let mut out := #[]
+  let mut p := a
+  for s in r.slice a b do
+    if s.reps > 1 then
+      out := out.push (p, p + s.count, false)
+      p := p + s.count
+    else
+      for q in s.ps do
+        let id := q.tgt == .ref true 0 && q.rows ≤ 1 && q.base == (p : Int) && (q.stride == 1 || q.len ≤ 1)
+        out := out.push (p, p + q.count, id)
+        p := p + q.count
+  return out
+
+/-- Positions of an argument given as a piece (`base`, `stride`, `rows`, `rowStride` over the argument's positions, its
+target unread), as one piece of the body when the argument is one piece of one row holding them all. -/
+def throughPS (ap : PS) (q : Piece) : Option Piece :=
+  match ap.segs with
+  | #[s] => match s.ps with
+    | #[p] =>
+      if s.reps > 1 || p.rows > 1 || q.count == 0 then none else
+      let first : Int := q.base + (if q.stride < 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
+        (if q.rowStride < 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0)
+      let hi : Int := q.base + (if q.stride > 0 then ((q.len - 1 : Nat) : Int) * q.stride else 0) +
+        (if q.rowStride > 0 then ((q.rows - 1 : Nat) : Int) * q.rowStride else 0)
+      if first < 0 || hi ≥ (p.len : Int) then none
+      else some { tgt := p.tgt, base := p.base + q.base * p.stride, stride := q.stride * p.stride, len := q.len,
+                  rows := q.rows, rowStride := q.rowStride * p.stride }
+    | _ => none
+  | _ => none
+
 mutual
 
 /-- The pieces of body references `q`, resolved (§7) down through the nodes they name until a gate of the activation or a
@@ -335,10 +442,12 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
     | .gate _ | .ref true _ => return #[.one q]
     | .ref false k =>
       if q.count == 0 then return #[]
+      let q := q.flat
       let node ← c.node k
       let o : Int := c.body.offsets[k]!
       let callee := c.P.defs[node.fn]!
       let byRow (_ : Unit) : Except String (Array Seg) := do
+        walkAtMost "rows of a read resolved row by row" q.rows
         let mut out := #[]
         for x in q.rowsOf do out := out ++ (← down c fuel x)
         return out
@@ -364,22 +473,62 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
         else if q.stride == 1 then
           let a := q.base.toNat
           let b := a + q.len
-          -- the whole members between `m0` and `m1` as copies of one member's return, when it names gates only
+          -- the whole members between `m0` and `m1` at once, the cut ones at either end each through its return
           let (m0, m1) := ((a + L - 1) / L, b / L)
+          let ends (mid : Array Seg) : Except String (Array Seg) := do
+            let mut out := #[]
+            if a < m0 * L then out := out ++ (← fromCallee c fuel k (a / L) (a % L) L)
+            out := out ++ mid
+            if m1 * L < b then out := out ++ (← fromCallee c fuel k m1 0 (b - m1 * L))
+            return out
+          -- a member returns gates only: copies of one member's return
           let gatesOnly := r.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
             | .gate _ => true
             | _ => false
           if gatesOnly && m0 + 1 < m1 then
-            let mut out := #[]
-            if a < m0 * L then out := out ++ (← fromCallee c fuel k (a / L) (a % L) L)
-            out := out.push { ps := shiftGates (o + m0 * G) (r.segs.flatMap (·.ps)), len := L, reps := m1 - m0, shift := G }
-            if m1 * L < b then out := out ++ (← fromCallee c fuel k m1 0 (b - m1 * L))
-            return out
+            return ← ends #[{ ps := shiftGates (o + m0 * G) (r.segs.flatMap (·.ps)), len := L, reps := m1 - m0, shift := G }]
+          -- a member returns leaves of arguments the members share: every member returns the same, resolved once
+          let shared := r.segs.all fun s => s.reps ≤ 1 && s.ps.all fun g => match g.tgt with
+            | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
+            | _ => false
+          if shared && m0 + 1 < m1 then
+            let one ← fromCallee c fuel k m0 0 L
+            if one.all (·.reps ≤ 1) then
+              return ← ends #[{ ps := one.flatMap (·.ps), len := L, reps := m1 - m0, shift := 0 }]
+          -- a member returns one run of a mapped argument's leaves within one row of its axis: the whole members' are
+          -- that run in each member's row, one piece of rows
+          if m0 + 1 < m1 && r.segs.size == 1 && r.segs[0]!.reps ≤ 1 && r.segs[0]!.ps.size == 1 then
+            let g := r.segs[0]!.ps[0]!
+            if let .ref true i := g.tgt then
+              if let some (d, Li) := (node.args[i]?.bind (·.dims)) then
+                let lo := g.base.toNat
+                if Li > 0 && g.rows ≤ 1 && (g.stride == 1 || g.len ≤ 1) && g.len == L && lo / Li == (lo + L - 1) / Li then
+                  let qb := lo / Li
+                  let p : Piece := { tgt := .gate 0, base := (((qb * d + m0) * Li + (lo - qb * Li) : Nat) : Int),
+                                     stride := 1, len := L, rows := m1 - m0, rowStride := (Li : Int) }
+                  if let some bp := throughPS (c.arg k i) p then
+                    return ← ends (← down c fuel bp)
+          walkAtMost "members of a batch read one by one" ((b - 1) / L + 1 - a / L)
           let mut out := #[]
           for m in [a / L:(b - 1) / L + 1] do
             out := out ++ (← fromCallee c fuel k m (max a (m * L) - m * L) (min b ((m + 1) * L) - m * L))
           return out
         else
+          -- a stride of whole members reads leaf `j` of every `stride / L`-th member: copies of one member's leaf
+          if q.len > 1 && q.stride % (L : Int) == 0 && q.base ≥ 0 then
+            let j := q.base.toNat % L
+            let m0 := q.base.toNat / L
+            let leaf := r.slice j (j + 1)
+            if leaf.all (·.reps ≤ 1) then
+              let ps := leaf.flatMap (·.ps)
+              if ps.all fun g => match g.tgt with | .gate _ => true | _ => false then
+                return #[{ ps := shiftGates (o + m0 * G) ps, len := 1, reps := q.len, shift := q.stride / L * G }]
+              if ps.all fun g => match g.tgt with
+                  | .ref true i => (node.args[i]?.map (·.dims.isNone)).getD false
+                  | _ => false then
+                let one ← fromCallee c fuel k m0 j (j + 1)
+                if one.all (·.reps ≤ 1) then return #[{ ps := one.flatMap (·.ps), len := 1, reps := q.len, shift := 0 }]
+          walkAtMost "leaves of a batch's output read one by one" q.len
           let mut out := #[]
           for t in [0:q.len] do
             out := out ++ (← down c fuel { q with base := q.at t, stride := 1, len := 1 })
@@ -395,14 +544,27 @@ def down (c : Ctx) : Nat → Piece → Except String (Array Seg)
       | .scan =>
         if node.n == 0 then throw "a scan with no iterations has no output to read"
         if q.rows > 1 then return ← byRow ()
-        let .tuple #[carry, y] := callee.ret | throw "a scan step returns (carry, y)"
-        let cl := carry.leaves
+        let .tuple #[ct, y] := callee.ret | throw "a scan step returns (carry, y)"
+        let cl := ct.leaves
         let yl := y.leaves
         let mut out := #[]
+        if q.stride == 1 then
+          -- the final carry's leaves together, then the ys iteration by iteration
+          let (a, b) := (q.base.toNat, q.base.toNat + q.len)
+          if a < cl then out := out ++ (← carry c fuel k (node.n - 1) a (min b cl))
+          if cl < b && yl > 0 then
+            let (lo, hi) := (max a cl - cl, b - cl)
+            walkAtMost "iterations of a scan whose ys are read one by one" ((hi - 1) / yl + 1 - lo / yl)
+            for m in [lo / yl:(hi - 1) / yl + 1] do
+              out := out ++ (← fromCallee c fuel k m (cl + max lo (m * yl) - m * yl) (cl + min hi ((m + 1) * yl) - m * yl))
+          return out
+        walkAtMost "leaves of a scan's output read one by one" q.len
         for t in [0:q.len] do
           let j := (q.at t).toNat
-          let (m, jj) := if j < cl then (node.n - 1, j) else ((j - cl) / yl, cl + (j - cl) % yl)
-          out := out ++ (← fromCallee c fuel k m jj (jj + 1))
+          if j < cl then out := out ++ (← carry c fuel k (node.n - 1) j (j + 1))
+          else
+            let (m, jj) := ((j - cl) / yl, cl + (j - cl) % yl)
+            out := out ++ (← fromCallee c fuel k m jj (jj + 1))
         return out
 termination_by structural fuel _ => fuel
 
@@ -416,7 +578,22 @@ def fromCallee (c : Ctx) : Nat → Nat → Nat → Nat → Nat → Except String
     let o : Int := c.body.offsets[k]! + m * callee.gates
     let mut out := #[]
     for s in (c.memo[node.fn]!).ret.slice a b do
-      if s.reps > 1 then out := out.push { s with ps := shiftGates o s.ps }
+      if s.reps > 1 then
+        if s.ps.all fun g => match g.tgt with | .gate _ => true | _ => false then
+          out := out.push { s with ps := shiftGates o s.ps }
+        else
+          -- copies naming leaves are all alike (`Seg`): one resolved, repeated
+          if s.shift != 0 then throw "program"
+          let mut one := #[]
+          for g in s.ps do
+            match g.tgt with
+            | .gate _ => one := one.push (.one { g with base := o + g.base })
+            | .ref false _ => throw "program"
+            | .ref true i => one := one ++ (← throughArg c fuel k m i g)
+          if one.all (·.reps ≤ 1) then out := out.push { ps := one.flatMap (·.ps), len := s.len, reps := s.reps }
+          else
+            walkAtMost "copies of a member's return read one by one" s.reps
+            for _ in [0:s.reps] do out := out ++ one
       else
         for g in s.ps do
           match g.tgt with
@@ -447,7 +624,7 @@ def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except Stri
       | .scan =>
         if i == 0 then
           if m == 0 then out := out ++ (← one lo hi)
-          else out := out ++ (← fromCallee c fuel k (m - 1) lo hi)
+          else out := out ++ (← carry c fuel k (m - 1) lo hi)
         else if i ≤ node.nxs then
           let L := (a.dims.map (·.2)).getD 0
           out := out ++ (← one (m * L + lo) (m * L + hi))
@@ -455,6 +632,29 @@ def throughArg (c : Ctx) : Nat → Nat → Nat → Nat → Piece → Except Stri
       | .batch =>
         for (s, e) in memberSpans a m lo hi do out := out ++ (← one s e)
       | _ => out := out ++ (← one lo hi)
+    return out
+termination_by structural fuel _ _ _ _ => fuel
+
+/-- Carry leaves `[a, b)` that iteration `m` of scan node `k` returns, followed back through the iterations before it
+(`chainOf`) to where they leave the carry and resolved there: a gate, an `xs` or shared parameter of an iteration, or the
+scan's initial carry. A run the step returns in place (`carryRuns`) is the initial carry's in every iteration. -/
+def carry (c : Ctx) : Nat → Nat → Nat → Nat → Nat → Except String (Array Seg)
+  | 0, _, _, _, _ => throw "references nest deeper than this verifier follows"
+  | fuel + 1, k, m, a, b => do
+    let node ← c.node k
+    let r := (c.memo[node.fn]!).ret
+    let init (lo hi : Nat) : Except String (Array Seg) :=
+      throughArg c fuel k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo }
+    let mut out := #[]
+    for (lo, hi, id) in carryRuns r a b do
+      if id then out := out ++ (← init lo hi)
+      else
+        walkAtMost "carry leaves of a scan followed one by one" (hi - lo)
+        for j in [lo:hi] do
+          let ch ← chainOf r j
+          let e := ch.hist.size - 1
+          if ch.exit.isSome && e ≤ m then out := out ++ (← fromCallee c fuel k (m - e) ch.hist[e]! (ch.hist[e]! + 1))
+          else out := out ++ (← init (ch.at (m + 1)) (ch.at (m + 1) + 1))
     return out
 termination_by structural fuel _ _ _ _ => fuel
 
@@ -473,9 +673,90 @@ def argSpans (node : Node) (i m : Nat) (used : Ivs) : Array (Nat × Nat) :=
     else used
   | _ => used
 
+/-- The positions of argument `i` of node `k` its members read, each `used` of its parameter (`argSpans`), all members at
+once: per used run (and row of a batch's mapped axis) one piece of rows, a member a row, as a piece of the body
+(`throughPS`); none when the argument isn't one piece. -/
+def memberRows (c : Ctx) (node : Node) (k i : Nat) (used : Ivs) : Except String (Option (Array Piece)) := do
+  let a := node.args[i]!
+  let mut out := #[]
+  for (lo, hi) in used do
+    let rows : Array Piece ← match node.form, a.dims with
+      | .scan, _ =>
+        let L := (a.dims.map (·.2)).getD 0
+        pure #[{ tgt := .gate 0, base := (lo : Int), stride := 1, len := hi - lo, rows := node.members,
+                 rowStride := (L : Int) }]
+      | .batch, some (d, L) =>
+        if L == 0 then pure #[] else do
+        let (q0, q1) := (lo / L, (hi + L - 1) / L)
+        walkAtMost "rows of a mapped axis a batch member reads" (q1 - q0)
+        pure <| (Array.range (q1 - q0)).filterMap fun q' =>
+          let q := q0 + q'
+          let (s, e) := (max lo (q * L), min hi ((q + 1) * L))
+          if s < e then some { tgt := .gate 0, base := ((q * d * L + (s - q * L) : Nat) : Int), stride := 1,
+                               len := e - s, rows := node.members, rowStride := (L : Int) } else none
+      | _, _ => pure #[]
+    for p in rows do
+      match throughPS (c.arg k i) p with
+      | some bp => out := out.push bp
+      | none => return none
+  return some out
+
+/-- What scan node `k`'s iterations after the first read of their carry, `used` of its step's parameter 0: return
+positions `used` of every iteration but the last, all at once. A run returned in place is the initial carry's. Any other
+position is followed back (`Chain`) for every iteration: the initial carry's leaves the chain reaches within the
+iterations before it leaves (or around its cycle), and where it leaves: a gate of the node (which `nodeReads` drops), a
+shared parameter (one read for every iteration) or an `xs` one (a row per iteration, one piece of rows when the argument
+is one piece). -/
+def carriesRead (c : Ctx) (k : Nat) (used : Ivs) : Except String (Array Seg) := do
+  let node ← c.node k
+  let fuel := Flock.Steps.FUEL
+  let r := (c.memo[node.fn]!).ret
+  let T := node.n - 1
+  let init (lo hi : Nat) : Except String (Array Seg) :=
+    throughArg c fuel k 0 0 { tgt := .ref true 0, base := lo, stride := 1, len := hi - lo }
+  let mut out := #[]
+  for (a, b) in used do
+    for (lo, hi, id) in carryRuns r a b do
+      if id then out := out ++ (← init lo hi)
+      else
+        walkAtMost "carry leaves of a scan followed one by one" (hi - lo)
+        for j in [lo:hi] do
+          let ch ← chainOf r j
+          let e := ch.hist.size - 1
+          -- iteration `t - 1 < T` reads the initial carry's leaf `ch.at t` while `t ≤ e` (always, around a cycle)
+          let upto := if ch.exit.isSome then min T e else T
+          let mut seen : Std.HashSet Nat := {}
+          for t in [1:min upto e + 1] do seen := seen.insert ch.hist[t]!
+          if upto > e then
+            if upto - e ≥ ch.hist.size - ch.cyc then
+              for t in [ch.cyc:ch.hist.size] do seen := seen.insert ch.hist[t]!
+            else
+              for t in [e + 1:upto + 1] do seen := seen.insert (ch.at t)
+          for l in seen.toArray.qsort (· < ·) do out := out ++ (← init l (l + 1))
+          -- where it leaves the carry, in iterations `0 .. T - e`
+          if let some q := ch.exit then
+            if e < T then
+              match q.tgt with
+              | .gate _ => pure ()
+              | .ref false _ => throw "program"
+              | .ref true i =>
+                if 1 ≤ i && i ≤ node.nxs then
+                  let L := ((node.args[i]?.bind (·.dims)).map (·.2)).getD 0
+                  let p : Piece := { tgt := .gate 0, base := q.base, stride := 1, len := 1, rows := T - e,
+                                     rowStride := (L : Int) }
+                  match throughPS (c.arg k i) p with
+                  | some bp => out := out ++ (← down c fuel bp)
+                  | none =>
+                    walkAtMost "iterations of a scan reading an xs row through its carry, one by one" (T - e)
+                    for it in [0:T - e] do out := out ++ (← fromCallee c fuel k it ch.hist[e]! (ch.hist[e]! + 1))
+                else out := out ++ (← fromCallee c fuel k 0 ch.hist[e]! (ch.hist[e]! + 1))
+  return out
+
 /-- What node `k`'s gates read outside the node, resolved in the body: every argument of a primitive (or of a batch of one
-with members); for a composite callee, the positions its `used` names, member by member unless every member reads its
-whole argument; and for a scan, an iteration's carry read from the one before it, through that one's pass-throughs. -/
+with members); for a composite callee, the positions its `used` names, all members at once (`memberRows`, else member by
+member) unless every member reads its whole argument; and for a scan, an iteration's carry read from the one before it,
+through that one's pass-throughs (`carriesRead`). Copies of one member's return that are all alike are one read, and one
+copy's pieces each a read (`Seg.split`). -/
 def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   let node ← c.node k
   let callee := c.P.defs[node.fn]!
@@ -491,7 +772,7 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
   if callee.prim then
     if node.form == .batch && node.n == 0 then return #[]
     for i in [0:node.args.size] do out := out ++ (← resolve i (whole i))
-    return out
+    return out.flatMap Seg.split
   if node.members == 0 then return #[]
   let used := (c.memo[node.fn]!).used
   for i in [0:node.args.size] do
@@ -506,14 +787,16 @@ def nodeReads (c : Ctx) (k : Nat) : Except String (Array Seg) := do
     else if !perMember then out := out ++ (← resolve i u)
     else if u.covers lv then out := out ++ (← resolve i (whole i))
     else
-      for m in [0:node.members] do out := out ++ (← resolve i (argSpans node i m u))
-  if node.form == .scan then
-    for m in [1:node.n] do
-      for (lo, hi) in used[0]?.getD #[] do out := out ++ (← fromCallee c fuel k (m - 1) lo hi)
+      match ← memberRows c node k i u with
+      | some ps => for p in ps do out := out ++ (← down c fuel p)
+      | none =>
+        walkAtMost "members of a node reading part of a mapped argument, one by one" node.members
+        for m in [0:node.members] do out := out ++ (← resolve i (argSpans node i m u))
+  if node.form == .scan && node.n ≥ 2 then out := out ++ (← carriesRead c k (used[0]?.getD #[]))
   let lo : Int := c.body.offsets[k]!
   let hi : Int := c.body.offsets[k + 1]!
-  -- a segment's gates are one node's
-  return out.filter fun s => match s.ps[0]? with
+  -- a read's gates are one node's
+  return (out.flatMap Seg.split).filter fun s => match s.ps[0]? with
     | some q => match q.tgt with
       | .gate _ => !(lo ≤ q.base && q.base < hi)
       | _ => true
@@ -707,12 +990,21 @@ depth `H`: each step goes down into an activation, up out of one, or to the scan
 where an earlier one was. -/
 def walkBound (P : Prog) : Nat := ((activations P)[P.root]! + 1) * ((depths P)[P.root]! + 2)
 
+/-- Every reference `Flock.Program.resolve` follows from an activation of the walk ends at a gate: the root has no
+parameters (the decoder's refusal), and no scan of no iterations has output leaves, which `resolve` refuses to read. A
+scan of no iterations carrying a value is refused here wherever it is, read or not; `analyze` would refuse it only where
+a gate's operand reaches it. -/
+def resolvable (P : Prog) : Bool :=
+  (P.defs[P.root]!).body.params.isEmpty && (List.range P.defs.size).all fun d =>
+    (P.defs[d]!).prim || (P.defs[d]!).body.nodes.all fun n => n.form != .scan || n.n != 0 || n.out.leaves == 0
+
 /-- The walk is within `Flock.Steps.FUEL`, with room for `Prog.gate`'s descent. Past it a Program of a few hundred bytes
 can need more steps than `Prog.gate` takes: a gate reading the carry of a scan of `2^32` iterations, each a scan of
 `2^32` identity steps, needs `2^64`. There `NciCheck.evaluate` refuses the gate (`program`), and this check, which
 summarizes each Definition once, would give a verdict. The walk also reads every body as the decoder lays it out
-(`bodiesLaidOut`). -/
-def walkable (P : Prog) : Bool := calleesFirst P && bodiesLaidOut P && walkBound P ≤ Flock.Steps.FUEL / 2
+(`bodiesLaidOut`), and every reference it resolves ends at a gate (`resolvable`). -/
+def walkable (P : Prog) : Bool :=
+  calleesFirst P && bodiesLaidOut P && (resolvable P && walkBound P ≤ Flock.Steps.FUEL / 2)
 
 /-- Per IU `u < n`, its number of gates: those of its root nodes, root node `k` (in IU `own[k]`) holding gates
 `[offs[k], offs[k + 1])`. -/
@@ -754,17 +1046,19 @@ def intoOf (offs : Array Nat) (own : Array (Option Nat)) (theta : Array Bool) (r
         if s.count == 0 || own[k']! == some u || theta[k']! then into else into.modify u (·.push s)) into)
     (Array.replicate n #[])
 
+/-- `analyze`'s refusal as `evaluate` gives it: a walk past `WALK` as itself (`unwalked: ` and the reason), any other as
+`program`. -/
+def analyzeCode (e : String) : String := if e.startsWith UNWALKED then e else "program"
+
 def evaluate (j : Json) : Except String Json := do
   let i ← parse j
-  let P ← match decode i.program.toUTF8 with
-    | .ok P => pure P
-    | .error _ => throw "program"
+  let P ← decodeProgram i.program
   if P.orderViolation.isSome then throw "not-topological"
   if !(rootLaidOut P && inputsAtRoot P) then throw "program"
   if !walkable P then throw "program"
   let reads ← match analyze P with
     | .ok r => pure r
-    | .error _ => throw "program"
+    | .error e => throw (analyzeCode e)
   let body := (P.defs[P.root]!).body
   let K := body.nodes.size
   let offs := body.offsets
@@ -783,10 +1077,16 @@ def evaluate (j : Json) : Except String Json := do
   let r := (Array.range n).map fun u => (size[u]!, novelWidth into[u]!)
   return verdict (P.defs[P.root]!).gates r (failure i.gamma i.num i.den r)
 
-/-- `evaluate`, with a refusal as `NciCheck.refusal` writes it. -/
+/-- A refusal of `j` as JSON: `unwalked` with its reason as the `message`, else as `NciCheck.refusalOf` writes it. -/
+def refusal (j : Json) (code : String) : Json :=
+  if code.startsWith UNWALKED then
+    Json.mkObj [("error", Json.str "unwalked"), ("message", Json.str ((code.drop UNWALKED.length).toString))]
+  else NciCheck.refusalOf j code
+
+/-- `evaluate`, with a refusal as `refusal` writes it. -/
 def check (j : Json) : Json :=
   match evaluate j with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 end NciCheck.Desc

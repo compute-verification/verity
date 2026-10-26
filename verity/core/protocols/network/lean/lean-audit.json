@@ -3,7 +3,8 @@
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid), audited under NetworkCheck"
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) and of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), audited under NetworkCheck"
  },
  "runs": {
   "NetworkCheck.DifftestMain": {
@@ -28,10 +29,20 @@
    "except": [],
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
+  "NetworkCheck.Period": {
+   "imports": ["NetworkCheck.Check", "CoreProtocol.Profile", "Flock.Public"],
+   "except": [],
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
+  },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
    "except": [],
    "why": "the check over raw, committed and certified records is code: v2's check, and the difftest server's line protocol for its verdicts, no Mathlib and nothing of Security"
+  },
+  "NetworkCheck.LinkWindow": {
+   "imports": ["NetworkCheck.Certificate", "Lms.Verify", "Flock.Hm96", "Flock.Canon", "Identity.Tagged"],
+   "except": [],
+   "why": "N2's link-window verdict of record is code: the certificate's encodings, the LMS verifier, C-Flock's hm96 row commitment and canonical JSON, and core's identity hash, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {
@@ -208,6 +219,6 @@
   }
  },
  "dependencies": {
-  "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"
+  "toolchain": "fec936bfc3065f35f26f422997e1681d36a48b4386cf9e31b18420381a0ad65c"
  }
 }

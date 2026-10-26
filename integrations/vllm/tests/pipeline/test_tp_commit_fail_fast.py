@@ -88,6 +88,7 @@ def test_the_commit_stops_after_its_first_failed_run_and_says_which_runs_it_did_
     assert not (out / "value_check.json").exists()
 
 
+@pytest.mark.slow
 def test_all_pairs_runs_every_pair_and_the_value_check_after_a_failed_run(tmp_path, monkeypatch):
     rc, events, out = _commit(tmp_path, monkeypatch, "--all-pairs")
     assert rc == 1 and not any(e.startswith("stop after") for e in events)

@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import sys
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
@@ -31,6 +32,8 @@ from verity.ml.circuits.codec import canonical_json, encode_program, program_dig
 from verity.ml.circuits.program import Program
 from verity_numerical.bench.input_sets import InputSet
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+
+import r2_population as R2
 
 HERE = Path(__file__).resolve().parent
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -159,7 +162,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the draw, coins, the verdict) and `prove`.
     `draw_file`: the server serves the verifier's own draw from that file (`--draw-file`) instead of sampling one. `zk`: both
-    sides run the masked protocol (`--zk`), the only one under which the Lean verifier accepts a subset draw. `env`: added to
+    sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset draw at hidden outputs and one table
+    (verifier PROTOCOL §16.15). `env`: added to
     both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
@@ -206,11 +210,13 @@ def firewall_env(st: dict) -> dict:
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
 
 
-def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify") -> dict:
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
+                flags: Sequence[str] = ()) -> dict:
     """The verifier of record: Lean `flock-verify verify` on the session's record, with the circuit and the public file
     held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
     `hold_registered`) when the statement reads registered values; `zk`, a `--zk` session's. `log` names its logs under
-    `out` (a negative's own, beside the honest verdict's)."""
+    `out` (a negative's own, beside the honest verdict's). `flags`: more of `verify`'s (a plain session's ``--coins os
+    --stratified K``)."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -227,7 +233,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     bound += ["--registered", keys.get(Path(reads[0]).name, "")] if reads else []
     t = time.time()
     p = run([lean, "verify", "--statement", STATEMENT_ID, "--archive", str(archive), "--circuit", keys.get("circuit.txt", ""),
-             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), "--session", str(sessions[-1].parent)],
+             "--public", keys.get(f"pub-{n}.bin", ""), *bound, *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)],
             out / f"{log}.log")
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
     v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"}
@@ -427,7 +433,7 @@ def main() -> int:
     neg["registration-root-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], first: "00" * 64}, header["instances"])
     neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, P.population_program(template, n - 1), query, law, SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
                 leaf_layer=leaf_layer)
@@ -444,7 +450,7 @@ def main() -> int:
         a.lean_verify, st, n, out / "session", out / "neg-public-body", rec,
         lambda r, digest: V.check(r, program, query, law, SCHEME, want, leaf_layer=digest))
     if a.bind:
-        other_part = P.digest(P.partition(P.population_program(template, n - 1), query))
+        other_part = P.digest(P.partition(R2.program([(template, n)], mixed=False), query))
         b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])
         neg["statement-binds-another-partition"] = {"refused": not b["ok"], "each": b["each"]}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}

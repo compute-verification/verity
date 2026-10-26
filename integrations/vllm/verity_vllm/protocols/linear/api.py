@@ -1,6 +1,6 @@
 """The linear-site interface: what computes y at a linear layer, where its weight comes from, and the one object vLLM's
 ``quant_method.apply`` calls.  It imports neither vLLM nor torch, so executors and sources are tested on the CPU with
-stand-ins (`tests/linear`), and only the module that finds the sites in a vLLM model touches vLLM.
+stand-ins (`tests/protocols/linear`), and only the module that finds the sites in a vLLM model touches vLLM.
 
 * A `LinearExecutor` computes each call's y: a PoUW scheme (Pearl-C, ncp-v2), or nothing, in which case vLLM's own
   ``apply`` does.  It declares what it can't compose with (``keeps_weight_state``), which weight formats it reads, which
@@ -18,6 +18,8 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol
+
+from verity_vllm.errors import Refused
 
 Tensor = Any
 
@@ -124,12 +126,6 @@ class Arm:
     spec: PassSpec = field(default_factory=PassSpec)
 
 
-class Refused(ValueError):
-    def __init__(self, reasons: Sequence[str]) -> None:
-        self.reasons = tuple(reasons)
-        super().__init__("linear stack refused: " + "; ".join(self.reasons))
-
-
 class _WithWeight:
     """The layer vLLM's own ``apply`` sees under a source: the source's weight, and every other attribute the layer's."""
 
@@ -182,7 +178,7 @@ class Stack:
                              f"{self.executor.name if self.executor is not None else 'none'}")
         bad = self.refusals(arm.spec) if arm is not None else []
         if bad:
-            raise Refused(bad)
+            raise Refused(bad, "linear stack")
         self.active = arm
 
     @property
@@ -206,7 +202,7 @@ class Stack:
         spec = self.active.spec if spec is None else spec
         bad = self.refusals(spec)
         if bad:
-            raise Refused(bad)
+            raise Refused(bad, "linear stack")
         self._pass = self.executor.begin(spec)
         try:
             yield self._pass
@@ -241,5 +237,5 @@ class Stack:
         return self._pass.call(site, x, layer.weight if weight is None else weight, bias)
 
 
-__all__ = ["Arm", "Control", "ExecutorPass", "Forward", "LinearExecutor", "LinearSite", "PassSpec", "Refused", "Shard", "Stack",
+__all__ = ["Arm", "Control", "ExecutorPass", "Forward", "LinearExecutor", "LinearSite", "PassSpec", "Shard", "Stack",
            "Tensor", "WeightReader", "WeightSource"]

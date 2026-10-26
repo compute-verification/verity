@@ -27,7 +27,7 @@ from tests.pipeline.test_gpu_lease import fake_lease, released
 from tests.pipeline.test_row import TP_DENSE, _tp_row
 from verity_vllm.acquire.committer_api import StepCommitment
 from verity_vllm.engine import hooks
-from verity_vllm.engine.rank_worker import TP2CaptureWorkerExtension as _cls
+from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension as _cls
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.pipeline.tp import lease as TPL
 
@@ -248,8 +248,8 @@ def lease(tmp_path, monkeypatch):
     ranks = [_Rank(r, ev, locks) for r in (0, 1)]
     yield SimpleNamespace(ev=ev, watched=watched, smi=smi, locks=locks, started=started, holder=holder, ranks=ranks, llm=_LLM(ranks, ev),
                           cuda=GL.DRIVER, note=lambda: json.loads((tmp_path / "gpu_lease.released").read_text()))
-    for p in hooks.live():
-        if p.owner is _WorkerProc:
+    for p in reversed(hooks.live()):                  # ranks share this process, so their patches stack; release them newest first,
+        if p.owner is _WorkerProc:                    # which separate processes never need
             p.uninstall()
     for fd in fds if held else []:                    # a release closed them, and their numbers may be another file's by now
         os.close(fd)
@@ -426,6 +426,7 @@ def _run(tmp_path: Path, script: str) -> tuple[int, dict, str]:
     return rc, rec, log.read_text()
 
 
+@pytest.mark.slow
 def test_the_tp_commit_takes_every_gpu_at_once_and_gives_them_back_together_while_it_runs(tmp_path):
     seen = tmp_path / "seen"
     rc, rec, log = _run(tmp_path, f"from tests.pipeline.test_tp_gpu_lease import LAST, stand_ins\nev, llm = stand_ins({str(tmp_path)!r})\n"

@@ -222,6 +222,7 @@ def run(plan: str, *, windows: int = 2, window_ns: int = 5, samples: int = 4096,
     return r, results[0], s, backend
 
 
+@pytest.mark.slow
 def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     r, p, s, backend = run("serve", windows=3)
     assert r["accepted"] and p["accepted"] and r["failure"] is None
@@ -260,6 +261,7 @@ def test_an_honest_store_session_is_accepted_with_its_frees_re_keys_and_steps():
     assert agree["agrees"] and agree["held_appended"] > 0 and agree["held_wrong"] == []
 
 
+@pytest.mark.slow
 def test_a_completed_block_is_uncredited_until_its_encode_lands_and_resident_from_the_step_after():
     """Deferred residency end to end: each step's completed blocks go out as one append once the step has run, and
     their coin comes back before the next step runs (one pass in flight), when the device encodes them.  The map
@@ -298,6 +300,7 @@ def test_a_pass_whose_plan_holds_a_block_not_yet_encoded_is_refused():
     assert b.run_pass(bytes(64), plan)[1][3] == plan
 
 
+@pytest.mark.slow
 def test_a_session_on_an_engine_whose_steps_were_numbered_before_it_adopts_its_first_step():
     """The Commit's binder numbers the engine's steps from its first run; a session after its runs takes the next."""
     r, p, s, backend = run("serve", at=40)
@@ -329,6 +332,7 @@ class Device:
         return out
 
 
+@pytest.mark.slow
 def test_a_session_whose_store_is_encoded_on_the_device_is_accepted_and_each_encode_gated():
     r, p, _, backend = run("serve", device=(d := Device()))
     assert r["accepted"] and p["accepted"]
@@ -446,6 +450,7 @@ def lockstep(tmp_path, monkeypatch, run_steps: int, windows: int = 2, setup: Cal
     return rec, seen[0], cs, steps
 
 
+@pytest.mark.slow
 def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_with_it(tmp_path, monkeypatch):
     """Each pass's engine step is the run's next step: the session's steps are the run's first steps, from its first,
     and the run's steps after the session are unaudited and in no map line."""
@@ -463,6 +468,7 @@ def test_the_commits_session_runs_in_lockstep_with_its_run_and_its_map_stops_wit
     assert json.loads((tmp_path / "remote_session.json").read_text())["run"] == run
 
 
+@pytest.mark.slow
 def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_run(tmp_path, monkeypatch):
     """The run's work between `begin` and its first step, and that step, pass 0's, are in no window: the session is
     registered by then, and arms its first window (the verifier's first coin follows `armed`) once the step has run,
@@ -479,6 +485,7 @@ def test_the_commits_session_arms_its_first_window_once_its_runs_first_step_has_
     assert steps[0] == rec["memory_map"]["first_step"] == 0
 
 
+@pytest.mark.slow
 def test_a_paced_commits_session_runs_a_step_a_coin_and_tags_each_pass_with_its_step(tmp_path, monkeypatch):
     """At ``--paced 1:…`` each window is one pass under a coin of its own, its engine step inside it (no pass moves into
     the next window); the session's record tags each pass with the step the verifier's record has for it, a step of
@@ -529,12 +536,14 @@ def test_a_commits_session_that_fails_is_recorded_rejected_and_its_run_goes_on_u
         cs.begin()
 
 
+@pytest.mark.slow
 def test_a_store_session_whose_prover_seeds_without_the_appends_head_is_rejected():
     r, p, _, backend = run("serve", backend=HeadlessBackend)
     assert not r["accepted"] and not p["accepted"] and all(h is None for h in backend.heads)
     assert r["failure"]["failure"] == "receipt-path"
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("backend", [ZeroCoinBackend, StaleCoinBackend])
 def test_a_store_session_whose_prover_encodes_its_appends_under_another_coin_is_rejected(backend):
     r, p, _, b = run("serve", backend=backend)
@@ -556,6 +565,7 @@ def test_a_store_session_whose_prover_re_sends_an_append_is_rejected_with_coin(m
     assert sent and not r["accepted"] and not p["accepted"] and r["failure"]["failure"] == "coin"
 
 
+@pytest.mark.slow
 def test_a_store_session_whose_prover_appends_after_the_last_close_is_rejected_with_coin(monkeypatch):
     """An append sent after the verifier's last `close`, before the prover's `closed`: no root follows its coin."""
 
@@ -570,6 +580,7 @@ def test_a_store_session_whose_prover_appends_after_the_last_close_is_rejected_w
     assert r["failure"]["t"] == 1
 
 
+@pytest.mark.slow
 def test_a_store_session_whose_prover_withholds_an_appended_block_is_rejected():
     r, p, _, _ = run("servedrop:1")
     assert not r["accepted"] and not p["accepted"]
@@ -586,7 +597,9 @@ def test_a_verifier_address_is_host_port_and_a_store_serves_one_session():
     reg = audit.register(bytes(32), b"n", b.blocks, b.payload_root(b"n"), P512, nonce=bytes(32))
     b.encode(reg)
     b.begin_session()
-    b.serving(reg, 1)
+    with pytest.raises(ValueError, match="at least 2 windows"):
+        b.serving(reg, 1)
+    b.serving(reg, 2)
     with pytest.raises(RuntimeError, match="one session"):
         b.begin_session()
 
@@ -620,11 +633,39 @@ def test_a_second_registration_of_a_live_node_is_refused_with_the_verifiers_reas
     assert registry.refused == {b"test-node": 1} and registry.drawn(b"test-node") == 1
 
 
+def test_a_serving_store_defers_residency_so_a_lifetime_of_one_window_is_refused():
+    """The store's appended blocks are resident once their encodes land, and its map re-keys a window ahead, so at
+    L = 1 every line would re-key every live block: its hello says `deferred`, and a verifier of lifetime 1 answers it
+    `bye` before drawing a registration."""
+    registry, s = audit.Registry(), store()
+    b = remote.StoreBackend(s, engine(s))
+    lsock = wire.listen("127.0.0.1", 0)
+    address = f"127.0.0.1:{lsock.getsockname()[1]}"
+    raised = []
+
+    def prover() -> None:
+        try:
+            remote.prove(b, address, node=b"test-node", codec=P512, log=lambda m: None)
+        except remote.Refused as e:
+            raised.append(e)
+
+    th = threading.Thread(target=prover, daemon=True)
+    th.start()
+    sock, _ = lsock.accept()
+    lsock.close()
+    with verifying(sock, PassClock(), windows=1, window_ns=5, samples=64, registry=registry, lifetime=1) as v:
+        with pytest.raises(ValueError, match="at least 2 windows"):
+            v.register()
+        th.join()
+    (e,) = raised
+    assert "at least 2 windows" in e.why and registry.drawn(b"test-node") == 0
+
+
 FAILING = '''
 import os
 from pathlib import Path
 
-from tests.store import test_remote_session as T
+from tests.protocols.remote_bandwidth import test_remote_session as T
 
 
 def deliberate(*a, **kw):
@@ -661,6 +702,7 @@ def test_no_verifier_process_is_left():
 '''
 
 
+@pytest.mark.slow
 def test_a_failing_test_leaves_no_verifier_process(tmp_path):
     """A pytest whose tests fail with the Lean verifier's process live (the verifier's session raising on the test's
     thread, its registration raising on `lockstep`'s verifier thread, which hung the suite while the prover waited on

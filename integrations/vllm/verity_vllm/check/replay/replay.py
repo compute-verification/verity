@@ -38,13 +38,13 @@ C. `tier_c` — **end to end, pod only**.  The same engine over all steps with N
 Resource discipline (DESIGN §11): one `Replayer` holds one instance's transcript at a time; `computed` outputs are
 freed once their last consumer (in body order) has been replayed.  Measured on the laptop (2026-09-16), M1: fold +
 Program 2.1 s / 0.19 GB, plus 0.51 GB once per process when the first RMSNorm gate lazily loads the MUFU tables
-(`verity_vllm.program.kernels.rms_relation.tables`); a decode-step instance costs 0.01 s (RoPE, norms) to 5.2 s
+(`verity.ml.definitions.numerics.rms_relation.tables`); a decode-step instance costs 0.01 s (RoPE, norms) to 5.2 s
 (`Gemm_v1{K=576,N=3072}`); tier A k=2 30 s / 1.0 GB, tier B on 2 of 30 layers of a decode step 23 s / 0.85 GB
 (`max_rss_gb` in the reports is the process high-water mark, that baseline included).  Torch-free.  Words are
 encodings (Python ints of the bit pattern) exactly as `compare_subcircuits` passes them.
 
 Evaluators (h4).  `--evaluator gates|twins|auto` (default `auto`) selects how tiers B and C evaluate an instance:
-`gates` is `evaluate_call` on the registered body; `twins` uses the twin kernel of `verity_vllm.program.kernels.twins`
+`gates` is `evaluate_call` on the registered body; `twins` uses the twin kernel of `verity.ml.definitions.numerics.twins`
 wherever one claims the specialization; `auto` uses a twin only after core `self_check` passed on >= 3 random instances
 of the specialization, else the gates.  A twin that declines an operand (non-finite words outside its exact domain)
 falls back to the gates for that instance.  Every per-instance entry records `evaluator` ("gates" | "twins") and
@@ -69,6 +69,7 @@ from dataclasses import dataclass
 from verity.ml.circuits.evaluate import evaluate_call
 from verity_vllm.config import UsageError, option
 from verity_vllm.program.frontend.rules.family import _field_intervals
+from verity_vllm.program.sampling_event import circuit_token_id
 from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.refs import runs
 
@@ -135,7 +136,7 @@ class Replayer:
         self.self_checks: dict[str, dict] = {}           # spec id -> the self-check record that admitted / rejected its twin
         self.evaluator_counts: Counter = Counter()       # "twins" / "gates" over the instances evaluated by `replay_node`
         if evaluator != "gates" and chain:
-            from verity_vllm.program.kernels.twins import preload
+            from verity.ml.definitions.numerics.twins import preload
             preload()                                    # tables + models before the per-instance allocations (tiers B/C)
         self.vals = Values(result, store, weights)
         self.by_node: dict[int, dict] = self.vals.by_node
@@ -290,7 +291,7 @@ class Replayer:
         return np.array(got, dtype=np.uint64)
 
     def twin_of(self, k: int):
-        """The admitted twin (`verity_vllm.program.kernels.twins`) of root instance `k`'s specialization as (twin_id, its
+        """The admitted twin (`verity.ml.definitions.numerics.twins`) of root instance `k`'s specialization as (twin_id, its
         instance form, the statics), or None (the gates), per `self.evaluator`.  The first instance of a spec runs the
         twin's self-check (`twins.admit`) and records it in `self.self_checks`; `auto` falls back to the gates on a
         failed check, `twins` raises for every instance of that spec (loud), `gates` never uses a twin."""
@@ -303,7 +304,7 @@ class Replayer:
             if isinstance(tw, str):
                 raise RuntimeError(tw)
             return tw
-        from verity_vllm.program.kernels import kernel_registry as KR, twins
+        from verity.ml.definitions.numerics import kernel_registry as KR, twins
         spec, tw = m["_spec"], None
         if KR.covers(spec, twins.KERNEL) is None:
             rec = twins.admit(spec, n=self.self_check_n, seed=self.seed)
@@ -322,7 +323,7 @@ class Replayer:
         tw = self.twin_of(k)
         ev: dict[str, Any] = {"evaluator": "gates", "twin_id": tw[0] if tw is not None else None}
         if tw is not None:
-            from verity_vllm.program.kernels.kernel_registry import Declined
+            from verity.ml.definitions.numerics.kernel_registry import Declined
             try:
                 got = np.asarray(tw[1](*arrays, **tw[2]), dtype=np.uint64)
             except Declined as e:
@@ -371,7 +372,7 @@ class Replayer:
         if pi == self.W:
             return self._weight_words_at(leaves)
         toks = self.r.requests[pi]["prompt_token_ids"]
-        return np.array([int(toks[int(l)]) & 0xFFFFFFFF for l in leaves], dtype=np.uint64)
+        return np.array([circuit_token_id(toks[int(l)]) for l in leaves], dtype=np.uint64)
 
     def gate_words(self, gates: Iterable[int]) -> list[int]:
         """Encodings of root gates: Input gates from the parameters, other gates from the producing root instance's
@@ -1023,7 +1024,7 @@ class Options:
     safetensors: str | None = option("--safetensors", default=None, help="glob of the checkpoint's model*.safetensors (default: HF cache of the profile's model)")
     cos_sin: str | None = option("--cos-sin", default=None, help="uint16 .npy of the rotary cos_sin table (default: <snapshots>/cos_sin_cache.npy, else the B0 fixture)")
     progress: bool = option("--progress", default=False, action="store_true", help="print progress every 50 instances (tiers b, c)")
-    evaluator: str = option("--evaluator", default="auto", choices=EVALUATORS, help="tiers b, c: gates (evaluate_call), twins (verity_vllm.program.kernels.twins wherever one exists; a failed self-check is " "an error), auto (a twin after its self-check passed, else gates; default)")
+    evaluator: str = option("--evaluator", default="auto", choices=EVALUATORS, help="tiers b, c: gates (evaluate_call), twins (verity.ml.definitions.numerics.twins wherever one exists; a failed self-check is " "an error), auto (a twin after its self-check passed, else gates; default)")
     self_check_n: int = option("--self-check-n", type=int, default=3, help="random instances per specialization in the twin self-check (>= 3)")
     out: str = option("--out")
 
@@ -1038,7 +1039,7 @@ def main(a: Options) -> int:
 
     t0 = time.time()
     if a.evaluator != "gates" and a.tier in ("b", "c"):
-        from verity_vllm.program.kernels.twins import preload
+        from verity.ml.definitions.numerics.twins import preload
         preload()      # MUFU tables + C++ models before the Program and the checkpoint are resident (lower high-water mark)
     profile = load_profile(a.profile)
     repo = (profile.config or {}).get("model")

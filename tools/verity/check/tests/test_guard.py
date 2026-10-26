@@ -308,6 +308,43 @@ def test_under_a_recorded_check_a_skip_for_an_unreachable_store_fails(tmp_path, 
         assert (r.status, r.counts["failed"], r.counts["error"], r.counts["skipped"]) == ("passed", 0, 0, 3), log
 
 
+def _ours_and_theirs(tmp_path: Path) -> Path:
+    """`mine`, a package in the suite's tree on its tests' `sys.path`, whose `needs` imports a distribution nobody installs."""
+    mine = tmp_path / "pkg" / "tests" / "mine"
+    mine.mkdir()
+    (mine / "__init__.py").write_text("")
+    (mine / "needs.py").write_text("import no_such_distribution_7f1c  # noqa: F401\n")
+    return mine.parent
+
+
+@pytest.mark.parametrize("workers", [1, 2])
+def test_an_importorskip_of_a_module_of_ours_that_moved_fails(tmp_path, monkeypatch, workers):
+    """pytest skips on the `ModuleNotFoundError` a moved module raises, so a test that importorskips a module of ours passed as a
+    skip once it moved. The guard fails it, and still skips a missing third-party package, one a module of ours needs included."""
+    if workers > 1:
+        pytest.importorskip("xdist")
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (_ours_and_theirs(tmp_path) / "test_imports.py").write_text(
+        "import pytest\n\n"
+        "def test_moved():\n    pytest.importorskip('mine.moved', reason='not merged yet')\n\n"
+        "def test_third_party():\n    pytest.importorskip('no_such_distribution_7f1c')\n\n"
+        "def test_ours_needing_a_third_party():\n    pytest.importorskip('mine.needs')\n\n"
+        "def test_ours_present():\n    assert pytest.importorskip('mine').__name__ == 'mine'\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", workers)
+    log = r.log.read_text()
+    assert (r.status, r.counts["passed"], r.counts["failed"], r.counts["skipped"]) == ("failed", 5, 1, 2), log
+    assert "mine.moved is not importable, and mine is this checkout's" in log
+
+
+def test_a_module_level_importorskip_of_a_module_of_ours_that_moved_fails_collection(tmp_path, monkeypatch):
+    S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
+    (_ours_and_theirs(tmp_path) / "test_collected.py").write_text(
+        "import pytest\n\npytest.importorskip('mine.gone')\n\n\ndef test_never_runs():\n    pass\n")
+    r = S.run(suite, ["pkg"], [], tmp_path / "logs", 1)
+    log = r.log.read_text()
+    assert r.status == "failed" and "mine.gone is not importable" in log, log
+
+
 def test_a_suite_without_the_guards_report_fails(tmp_path, monkeypatch):
     S, suite = _suite(tmp_path, monkeypatch, reads_outside=False)
     r = S.run(suite, ["pkg"], ["-p", "no:verity_suite_guard"], tmp_path / "logs")

@@ -585,11 +585,11 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 }
 
 /// M2's committed coin schedule: the session's stream (the link points), then every table's two reps, in table order (a
-/// subtree per table and rep); 256 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
+/// subtree per table and rep); 512 rounds of at most 512 coins each (a RoPE rep uses 100 rounds, at most 218 coins in one).
 fn coin_spec_of(tables: &[String]) -> flock_live::coin_tree::Spec {
     use flock_live::coin_tree::{SESSION, Spec};
     let streams = std::iter::once(SESSION.to_string()).chain(tables.iter().flat_map(|t| [rep_stream(t, 0), rep_stream(t, 1)])).collect();
-    Spec { streams, rounds_log: 8, block: 512 }
+    Spec { streams, rounds_log: 9, block: 512 }
 }
 
 /// A test harness's fixed verifier coins: M0's step-0 seed, or under M2 the committed schedule's random tape.
@@ -2096,6 +2096,12 @@ fn eq256(r: &[flock_field::F256]) -> Vec<flock_field::F256> {
 /// each rep's pair of extra lanes (`[0, 1]`; `[0, 0]` reads a session whose reps share rep 0's pair).
 fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
     -> Result<[Vec<F128>; 2], String> {
+    session_relations_q(st, inst, proofs, coins, points, pairs).map(|(r, _)| r)
+}
+
+/// `session_relations`, with the level-1 positions each rep opened and the number both opened.
+fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[Vec<F128>], points: &[Vec<F128>], pairs: [usize; 2])
+    -> Result<([Vec<F128>; 2], [usize; 3]), String> {
     use flock_core::pcs::ligerito::zk::{lane_codeword, pad_codeword};
     use flock_field::F256;
     let lc = pcs_of(st, LigeritoProfile::Fast100).ligerito_prover_config()?;
@@ -2174,7 +2180,7 @@ fn session_relations(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &[V
             .flat_map(|j| (app(n, F256::new(r0[2 * j], r0[2 * j + 1])) + F256::new(r1[2 * j], r1[2 * j + 1])).coordinates())
             .collect::<Vec<_>>()
     }).collect();
-    Ok([level0, level1])
+    Ok(([level0, level1], [q1[0].len(), q1[1].len(), common.len()]))
 }
 
 /// `zkstat --zk --n N`: N real sessions (fresh prover seeds) against one verifier coin seed, N simulated transcripts from those
@@ -4369,8 +4375,12 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
     if name == "zk_session_relations_vary_with_the_seed" {
         // red-team-m1-zk F1: under one verifier coin seed, the two cross-rep functionals are the same for any two prover seeds
         // when the reps share level 0's extra lanes and their padding (a prover folding rep 0's pair in both reps, which the
-        // verifier rejects); with a pair per rep they differ in every word
-        let rel = |shared_pair: bool| -> Result<[Vec<F128>; 2], String> {
+        // verifier rejects); with a pair per rep they differ in every word. The level-1 functional exists only at the
+        // positions both reps open at level 1, which the coins draw for each rep independently: on some statements
+        // (RMSNormTriton_v5 at N 2048, under each of 16 tapes) the reps share none, and there is no level-1 relation to leak.
+        // So level 1 is checked at every shared position, and each rep must have opened level-1 positions: an empty level-1
+        // functional is then a disjoint draw, never a record that lost its queries
+        let rel = |shared_pair: bool| -> Result<([Vec<F128>; 2], [usize; 3]), String> {
             let s0 = Arc::new(Mutex::new(server(st, inst)));
             fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
             let plan = Plan { gpu, zk_shared_pair: shared_pair, ..Plan::default() };
@@ -4380,20 +4390,31 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
             }
             let rec = s0.lock().unwrap_or_else(PoisonError::into_inner).record_json();
             let coins: Vec<Vec<F128>> = (0..2).map(|r| record_coins(&rec, &rep_stream(TABLE, r))).collect();
-            session_relations(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
+            session_relations_q(st, inst, &proofs, &coins, &record_points(&rec), if shared_pair { [0, 0] } else { [0, 1] })
         };
-        let equal = |shared_pair: bool| -> Result<(Vec<usize>, Vec<usize>), String> {
-            let (a, b) = (rel(shared_pair)?, rel(shared_pair)?);
-            Ok(((0..2).map(|k| a[k].iter().zip(&b[k]).filter(|(x, y)| x == y).count()).collect(), a.iter().map(|x| x.len()).collect()))
-        };
-        return match (equal(false), equal(true)) {
-            (Ok((eq, len)), Ok((eq_shared, len_shared))) => {
-                let pass = (0..2).all(|k| len[k] > 0 && eq[k] == 0 && eq_shared[k] == len_shared[k]);
-                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair",
+        let sessions = (|| Ok::<_, String>([rel(false)?, rel(false)?, rel(true)?, rel(true)?]))();
+        return match sessions {
+            Ok([(a, qa), (b, qb), (sa, qsa), (sb, qsb)]) => {
+                let words_equal = |x: &[Vec<F128>; 2], y: &[Vec<F128>; 2]| -> Vec<usize> {
+                    (0..2).map(|k| x[k].iter().zip(&y[k]).filter(|(u, w)| u == w).count()).collect()
+                };
+                let (eq, eq_shared) = (words_equal(&a, &b), words_equal(&sa, &sb));
+                let (len, len_shared): (Vec<usize>, Vec<usize>) = ((0..2).map(|k| a[k].len()).collect(), (0..2).map(|k| sa[k].len()).collect());
+                let lengths_agree = (0..2).all(|k| b[k].len() == len[k] && sb[k].len() == len_shared[k]);
+                // the coins alone draw the positions: one tape, the same positions in both sessions of each kind
+                let same_draws = qa == qb && qsa == qsb;
+                let level1_read = [(&a, qa), (&b, qb), (&sa, qsa), (&sb, qsb)].iter()
+                    .all(|(r, q)| q[0] > 0 && q[1] > 0 && (q[2] == 0 || !r[1].is_empty()));
+                let pass = lengths_agree && same_draws && level1_read
+                    && len[0] > 0 && eq[0] == 0 && len_shared[0] > 0 && eq_shared[0] == len_shared[0]
+                    && eq[1] == 0 && eq_shared[1] == len_shared[1];
+                json!({"case": name, "gpu": gpu, "expect": "the functionals differ in every word across two prover seeds, and are equal if the reps share a pair; level 1 at every level-1 position both reps opened",
                        "pass": pass, "f256_values": [len[0] / 2, len[1] / 2], "f128_words_equal": eq, "shared_pair_words_equal": eq_shared,
-                       "shared_pair_words": len_shared})
+                       "shared_pair_words": len_shared, "level1_positions": [qa[0], qa[1]], "level1_shared_positions": qa[2],
+                       "shared_pair_level1_shared_positions": qsa[2], "lengths_agree": lengths_agree, "same_draws": same_draws,
+                       "level1_read": level1_read})
             }
-            (Err(e), _) | (_, Err(e)) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
+            Err(e) => json!({"case": name, "gpu": gpu, "pass": false, "why": e}),
         };
     }
     if name.starts_with("tables_") || name == "zk_tables_share_no_randomness" {
@@ -4734,7 +4755,10 @@ fn with_tail(text: &str) -> (String, String) {
 /// honest session's record and proofs re-verified offline under each, then with rep 0's lincheck `z_partial` or first round
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
-/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept.
+/// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under
+/// `--zk` the lincheck is the zk replay's (`zk_veil::replay` folds its own comb; `FC_LINCHECK` is not read), so there is one
+/// mode: the proofs are re-encoded with their `InnerProof`, and each alteration must be refused by the inner proof's batched
+/// constraint.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -4742,11 +4766,18 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     if !verified(&v) || proofs.len() != 2 {
         return json!({"case": "lincheck_modes_agree", "accepted": v["accepted"], "pass": false, "why": v["why"]});
     }
+    let zk = is_zk(st);
     let alter = |f: &dyn Fn(&mut R1csProofLigerito)| -> Vec<Vec<u8>> {
         let mut ps = proofs.clone();
-        let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
-        f(&mut p);
-        ps[0] = bincode::serialize(&(c, p)).unwrap();
+        if zk {
+            let (c, mut p, i): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p, i)).unwrap();
+        } else {
+            let (c, mut p): (Commitment, R1csProofLigerito) = bincode::deserialize(&ps[0]).unwrap();
+            f(&mut p);
+            ps[0] = bincode::serialize(&(c, p)).unwrap();
+        }
         ps
     };
     let reencoded = alter(&|_| {}) == proofs;
@@ -4763,7 +4794,9 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         }
         r
     };
-    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let modes: &[sverify::Lincheck] =
+        if zk { &[sverify::Lincheck::Partial] } else { &[sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both] };
+    let name = |m: sverify::Lincheck| if zk { "zk replay".to_string() } else { format!("{m:?}") };
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
@@ -4771,18 +4804,24 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
             Ok(mut s) => {
                 let f = s.finish();
                 let reps = f["reps"].as_array().cloned().unwrap_or_default();
-                json!({"mode": format!("{m:?}"), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
+                json!({"mode": name(m), "accepted": f["accepted"], "why": f["why"], "without_refusal": f["without_refusal"],
                        "verify_s": f["verify_s"], "phases": reps.iter().map(|r| r["timing"]["phases"].clone()).collect::<Vec<_>>()})
             }
-            Err(e) => json!({"mode": format!("{m:?}"), "accepted": false, "why": e}),
+            Err(e) => json!({"mode": name(m), "accepted": false, "why": e}),
         }
     }).collect())).collect();
     let all = |what: &str, ok: &dyn Fn(&Value) -> bool| runs.iter().filter(|r| r.0 == what).all(|r| r.1.iter().all(ok));
     let same_why = runs.iter().all(|r| r.1.iter().all(|x| in_scope(x)["why"] == in_scope(&r.1[0])["why"]));
-    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains("sumcheck-final"));
+    let refusal = if zk { "zk inner: the batched constraint fails" } else { "sumcheck-final" };
+    let lincheck_rejects = |x: &Value| !verified(x) && in_scope(x)["why"].as_str().is_some_and(|w| w.contains(refusal));
     let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
-    json!({"case": "lincheck_modes_agree", "expect": "flat, partial and both: the same verdict on honest and altered lincheck proofs",
+    let expect = if zk {
+        "the zk replay: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
+    } else {
+        "flat, partial and both: the same verdict on honest and altered lincheck proofs"
+    };
+    json!({"case": "lincheck_modes_agree", "expect": expect,
            "gpu": gpu, "accepted": v["accepted"], "reencoded_identical": reencoded, "same_why": same_why,
            "runs": runs.iter().map(|(w, r)| json!({"proofs": w, "modes": r})).collect::<Vec<_>>(), "pass": pass})
 }
@@ -5619,7 +5658,7 @@ fn serve_on(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>
         let rec = s.record_json();
         let d = out.join(&id);
         std::fs::create_dir_all(&d).unwrap();
-        std::fs::write(d.join("session.json"), serde_json::to_string_pretty(&rec).unwrap()).unwrap();
+        std::fs::write(d.join("session.json"), flock_live::record_text::canonical_json(&rec)).unwrap();
         for ((t, r), b) in s.proofs() {
             std::fs::write(d.join(format!("{}.bin", rep_stream(t, *r).replace('/', "."))), b).unwrap();
         }

@@ -41,8 +41,10 @@ SLOT_PATHS = ("tools/verity/check/slot.py",)
 #: `proofs` pool, 13 Oct), so a lane's runs never queue behind the merge checks
 POOL = re.compile(r"CHECK_SLOTS=/workspace/research/locks/[A-Za-z0-9_-]+/slots")
 #: `research run --pool NAME`'s pools: `research` is any lane's research runs, where `research run --on auto` spills (INF-27,
-#: cpu-1's /workspace/research/locks/research/slots: 8-53 since 19 Oct, cores no check slot holds), `proofs` is proofs' Lean pool
-POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots"}
+#: cpu-1's /workspace/research/locks/research/slots: 8-53 since 19 Oct, cores no check slot holds), `proofs` is proofs' Lean pool,
+#: `network` is network-accounting's proving pool (cpu-1, cpu-2, cpu-4, cpu-5 and node 1 hold one)
+POOLS = {"research": "/workspace/research/locks/research/slots", "proofs": "/workspace/research/locks/proofs/slots",
+         "network": "/workspace/research/locks/network/slots"}
 #: how long a timed `research run --pool` waits in its pool's line for a slot by default (slot.py --wait-max; `--pool-wait`): an
 #: hour lost proofs' runs their place in a saturated pool each hour (INF-153)
 POOL_WAIT_S = 14400

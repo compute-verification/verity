@@ -2,6 +2,8 @@ import NciCheck.Check
 import NciCheck.Difftest
 import NciCheck.Desc
 import NciCheck.DescDifftest
+import NciCheck.DescLiveness
+import NciCheck.DescFuzz
 import NciCheck.Baseline
 import NciCheck.BaselineDifftest
 
@@ -16,7 +18,13 @@ deployment's registration log registers and never an earlier run's output, again
 (`NciCheck.Baseline`, CMP-66; `NciCheck.BaselineDifftest` holds it to the Python reference).
 `NciCheck.check` is the same check gate by gate, with the input format and its mapping to the definition's circuit in
 `NciCheck.Check`'s docstring, kept as the reference: `NciCheck.Difftest` holds it to the Python reference, and
-`NciCheck.DescDifftest` holds `NciCheck.Desc` to it and to the Python reference. Code: it reads the Program with C-Flock's
+`NciCheck.DescDifftest` holds `NciCheck.Desc` to it and to the Python reference, `NciCheck.DescLiveness` to it on
+Program shapes past anything `NciCheck.Desc` walks one by one, and `NciCheck.DescFuzz` decides on generated Programs the
+statements their agreement rests on, and the agreement itself. Code: it reads the Program with C-Flock's
 decoder (`Flock.Program`) and imports nothing else but Lean core. It stays experimental until its agreement with the
 definition is proved.
+
+C-Flock's decoder doesn't check that a reference reads a leaf at the width it was committed with, which the
+Python codec refuses as it decodes (`E_REINTERPRET`), so every Program the check reads goes through
+`NciCheck.decodeProgram`, which refuses one that doesn't, with a message.
 -/

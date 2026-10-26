@@ -21,7 +21,7 @@ import ast
 import re
 from pathlib import Path
 
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 
 BENCH = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
 DELTA = BENCH.parents[0] / "pipeline" / "commit.py"
@@ -68,7 +68,7 @@ def test_canary_flipweight_regex_matches_the_verdict_text_of_a_pin_fail():
     why = "1 served weight(s) differ from the checkpoint of record: model.layers.0.self_attn.qkv_proj.weight"
     wp = {"result": False, "why": why, "root_of_record": "ab" * 32, "compared": 303, "mismatched": [{"served_name": "model.layers.0.self_attn.qkv_proj.weight"}],
           "missing": [], "unpinned": []}
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 1}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}
     # (a) the dense path: commit_delta sets value_correspondence.result False and names the component -> "weights_pin: <why>"

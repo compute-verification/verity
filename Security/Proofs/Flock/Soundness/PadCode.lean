@@ -1,6 +1,6 @@
 import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.LigeritoLevels
-import Proofs.Flock.Soundness.Accounting.Padded
+import Definitions.Flock.Accounting.Padded
 
 /-!
 # The padded level-0 code: `RS[2^d, k]` on the first `k` novel-basis monomials

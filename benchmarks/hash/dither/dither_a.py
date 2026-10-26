@@ -133,8 +133,11 @@ YCMP_ENV = "DITHER_YCMP"
 # (one process: the arm's worker is a daemon); a path saves their records there for `lane_refs.py PATH` after serving
 LANE_REFS_ENV = "DITHER_LANE_REFS"
 # "N,K,MMAX=CFG+..." (exactlin's Cfg text): call (N, K)'s GEMM config in place of exactlin.pick's at the M its CONFIGS
-# entry (MMAX, ..) takes.  A split K's int32 partial sums add up to the same z, so z and y are the same bits
+# entry (MMAX, ..) takes, a CFG's ":gG" its tile group (`mm_group`).  A split K's int32 partial sums add up to the same z,
+# so z and y are the same bits
 MM_CFG_ENV = "DITHER_MM_CFG"
+# the units' stream priority (torch's: lower runs first; default 0, below the serving stream's -1 under DITHER_SO_PRIO)
+UNITS_PRIO_ENV = "DITHER_SO_UNITS_PRIO"
 UNIT = (32, 32)     # (UR, UC): the receipts' units; a narrower down_proj unit changes only this
 H1R_BLOCK, H1R_SPLIT = 3, 4     # h1r_launch's versions: a unit a block, a unit six warps
 M32 = DO.M32
@@ -201,6 +204,23 @@ def _dithera_epilogue(acc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, offs_m, o
 
 
 @triton.jit
+def _tile(pid, T, N, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, GROUP_M: tl.constexpr):
+    # launch pid's (row tile, column tile): row-major, or GROUP_M row tiles a group with its column tiles outer, so the
+    # CTAs resident at once share a few weight tiles over GROUP_M activation tiles (the same tiles in another order)
+    num_pid_n = tl.cdiv(N, BLOCK_N)
+    if GROUP_M == 1:
+        pid_m = pid // num_pid_n
+        pid_n = pid % num_pid_n
+    else:
+        per = GROUP_M * num_pid_n
+        first = (pid // per) * GROUP_M
+        size = tl.minimum(tl.cdiv(T, BLOCK_M) - first, GROUP_M)
+        pid_m = first + (pid % per) % size
+        pid_n = (pid % per) // size
+    return pid_m, pid_n
+
+
+@triton.jit
 def _rows_written(S_ptr, T, m):
     # the rows whose z/y records a step writes: all T, or with S[2] > 0 (DITHER_DEAD_ONCE) those below max(m, S[2]),
     # the rows at or past S[2] holding a row past m's records already
@@ -211,12 +231,10 @@ def _rows_written(S_ptr, T, m):
 @triton.jit
 def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, ws_ptr, cnt_ptr, M, N, K, T, stride_am,
                stride_bn, stride_cm, BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr,
-               SPLIT_K: tl.constexpr, ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
+               SPLIT_K: tl.constexpr, ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr, GROUP_M: tl.constexpr = 1):
     # exactlin_scaled_mm over T rows: a row tile at or past M multiplies nothing and stores only its zero z rows
     pid = tl.program_id(0)
-    num_pid_n = tl.cdiv(N, BLOCK_N)
-    pid_m = pid // num_pid_n
-    pid_n = pid % num_pid_n
+    pid_m, pid_n = _tile(pid, T, N, BLOCK_M, BLOCK_N, GROUP_M)
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     TW = _rows_written(S_ptr, T, m)
@@ -263,11 +281,10 @@ def dithera_mm(a_ptr, b_ptr, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, 
 @triton.jit
 def dithera_mm_tma(a_desc, b_desc, sa_ptr, sb_ptr, c_ptr, z_ptr, y_ptr, d_ptr, S_ptr, M, N, K, T, stride_cm,
                    BLOCK_M: tl.constexpr, BLOCK_N: tl.constexpr, BLOCK_K: tl.constexpr, WARP_SPECIALIZE: tl.constexpr,
-                   ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr):
-    pid = tl.program_id(0)
-    num_pid_n = tl.cdiv(N, BLOCK_N)
-    off_m = (pid // num_pid_n) * BLOCK_M
-    off_n = (pid % num_pid_n) * BLOCK_N
+                   ZL: tl.constexpr, UR: tl.constexpr, UC: tl.constexpr, GROUP_M: tl.constexpr = 1):
+    pid_m, pid_n = _tile(tl.program_id(0), T, N, BLOCK_M, BLOCK_N, GROUP_M)
+    off_m = pid_m * BLOCK_M
+    off_n = pid_n * BLOCK_N
     m = tl.load(S_ptr + 1)
     flags = tl.load(S_ptr + 3)
     acc = tl.zeros((BLOCK_M, BLOCK_N), dtype=tl.int32)
@@ -337,6 +354,11 @@ def dithera_fault(dst_ptr, S_ptr, at_ptr, L, bit, BLOCK: tl.constexpr):
         tl.store(dst_ptr + at, v ^ bit, mask=i < L)
 
 
+def mm_group(text: str) -> int:
+    """A $DITHER_MM_CFG config's tile group, its ":gG" (`_tile`; exactlin's Cfg.parse ignores it), else 1."""
+    return next((int(r[1:]) for r in text.split(":")[1:] if r[:1] == "g"), 1)
+
+
 def _piecewise() -> bool:
     """Whether vLLM is capturing or running piecewise graphs (its forward context's mode); unknown counts as yes."""
     try:
@@ -357,8 +379,12 @@ class Side:
         """The arm's parts no ruling has taken in (`forms.UNADOPTED_PARTS`)."""
         return ()
 
+    def adopted(self) -> tuple[str, ...]:
+        """The arm's parts a ruling has taken in (`forms.ADOPTED_PARTS`)."""
+        return ()
+
     def label(self) -> dict:
-        return F.form_of("dither-a", self.z, self.in_order, self.unadopted())
+        return F.form_of("dither-a", self.z, self.in_order, self.unadopted(), self.adopted())
 
     def __init__(self, win: DO.Window, unit: str, h1u: str | None, z: str = "row", ao: str = "", pt: bool = False):
         if unit not in UNITS:
@@ -373,7 +399,7 @@ class Side:
         self.ycmp: torch.Tensor | None = None
         # under YCMP_ENV each capture's calls refused by the byte compare and by the roots' (`y_leaves`)
         self.ycmp_at: dict[str, dict] = {}
-        self.side = torch.cuda.Stream(device=dev)
+        self.side = torch.cuda.Stream(device=dev, priority=int(os.environ.get(UNITS_PRIO_ENV) or 0))
         self.fork, self.join = torch.cuda.Event(), torch.cuda.Event()
         if pt:
             win.tree_streams = (torch.cuda.Stream(device=dev), torch.cuda.Stream(device=dev))
@@ -394,7 +420,7 @@ class Side:
             self.u_rec: set[int] = set()
         self.work = EL.Workspace(dev)
         self.arch = EL.arch(dev.index)
-        self.mm_cfg = {tuple(int(v) for v in nk.split(",")): EL.Cfg.parse(c)
+        self.mm_cfg = {tuple(int(v) for v in nk.split(",")): (EL.Cfg.parse(c), mm_group(c))
                        for nk, c in (e.split("=") for e in os.environ.get(MM_CFG_ENV, "").split("+") if e)}
         self.stage = torch.empty_like(win.plan.out)
         self.at = torch.tensor([win.plan.offs[w][0] for w in range(win.L)], dtype=torch.int64, device=dev)
@@ -494,12 +520,12 @@ class Side:
         win = self.win
         M, k = xq.shape
         n = wt.shape[0]
-        cfg = None
+        cfg, group = None, 1
         if self.mm_cfg:
             mmax = next((m for m, _ in EL.CONFIGS.get(self.arch, {}).get((n, k), ()) if M <= m), None)
-            cfg = self.mm_cfg.get((n, k, mmax))
+            cfg, group = self.mm_cfg.get((n, k, mmax), (None, 1))
         cfg = cfg or EL.pick(M, n, k, self.arch)
-        self.cfgs[(n, k, M)] = str(cfg)
+        self.cfgs[(n, k, M)] = str(cfg) + (f":g{group}" if group > 1 else "")
         bm, bn, bk, warps, stages, split, tma = cfg
         if self.zy:
             z, yl = self.zy[w].view(torch.int32), self.zy[w].view(torch.int16)
@@ -512,8 +538,8 @@ class Side:
             from triton.tools.tensor_descriptor import TensorDescriptor
             dithera_mm_tma[(tiles,)](TensorDescriptor.from_tensor(xq, [bm, bk]), TensorDescriptor.from_tensor(wt, [bn, bk]),
                                      s_a, s_w, y, z, yl, d, win.S, M, n, k, win.t, y.stride(0), BLOCK_M=bm, BLOCK_N=bn,
-                                     BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, ZL=self.zl, UR=ur, UC=uc, num_warps=warps,
-                                     num_stages=stages, **EL.OPTS)
+                                     BLOCK_K=bk, WARP_SPECIALIZE=tma == 2, ZL=self.zl, UR=ur, UC=uc, GROUP_M=group,
+                                     num_warps=warps, num_stages=stages, **EL.OPTS)
             return
         if split > 1:
             assert M * n <= self.work.ws.numel() and tiles <= self.work.cnt.numel(), (M, n, tiles)
@@ -522,7 +548,7 @@ class Side:
             ws, cnt = y, y
         dithera_mm[(tiles, split)](xq, wt, s_a, s_w, y, z, yl, d, win.S, ws, cnt, M, n, k, win.t, xq.stride(0),
                                    wt.stride(0), y.stride(0), BLOCK_M=bm, BLOCK_N=bn, BLOCK_K=bk, SPLIT_K=split, ZL=self.zl,
-                                   UR=ur, UC=uc, num_warps=warps, num_stages=stages, **EL.OPTS)
+                                   UR=ur, UC=uc, GROUP_M=group, num_warps=warps, num_stages=stages, **EL.OPTS)
 
     def ycommit(self, w: int, y: torch.Tensor, s_w: torch.Tensor) -> None:
         """On the serving stream after call w's GEMM: the served y into the call's y records, dq(0, +0, s_w) past m

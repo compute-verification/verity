@@ -12,9 +12,10 @@ DIR``, DIR ``--checkpoint``); on vy-challenger-1 that registration is infra's. I
 circuit file with the auditor's lowering (`pouw_h1_circuits.build`: K's template lowered as ``h1_prove/stage.py``
 lowers it, bound to the Program and its partition), unless ``--circuits DIR`` names a built directory. Then it opens
 the lane's period (`period_open_argv`: ``period-open --name P --cap 1 --circuit DIGEST --draw-k K --model MODEL
---circuit-files FILES``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
-open's ``draw_k``, and FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
-against, `credit.committed_files`), reserves the window's session (``reserve --peer PEER --scheme S --families
+--circuit-files FILES --length LENGTH``, which signs the registration's W, K the proof service's committed draw K, `declared_draw_k`, which core's credit reads as the
+open's ``draw_k``, FILES ``{"k<K>": SHA-512}``, each stratum's file's, which core's credit verifies statements
+against, `credit.committed_files`, and LENGTH `FILL`'s fixed length, `fill_length`, which core's credit holds the
+window's served rows to, `credit.committed_length`), reserves the window's session (``reserve --peer PEER --scheme S --families
 F``), and serves
 `pouw_h1.FILL` (Llama-3.1-8B int8, 64 in flight, T = 64, S = 18) with ``pouw_h1_gpu.py --workload fill --served
 --model MODEL --circuit DIGEST --challenger AT --session RESERVE --gate GATE`` (the window's b/<K> salted with the key the
@@ -55,16 +56,16 @@ tree must be one with the model registry, #3204, on main from dbf3a75e31, archiv
 its ``model-register`` reads, and ``--checkpoint`` the pinned LLAMA31_8B_INT8 snapshot on the node):
 
     git archive --format=tar.gz -o gate-tree.tgz COMMIT verity benchmarks/live_challenger \\
-      integrations/vllm/manifests/checkpoints-int8.json
+      integrations/vllm/manifests/checkpoints-int8.json integrations/torch_loop/manifests/checkpoints-int8.json
     git rev-list --first-parent origin/main > main.txt
     research run --on vy-nebius-2 --project verity --source . --cwd source --send gate-tree.tgz --send main.txt \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
-      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --main $RESEARCH_RUN_DIR/inputs/main.txt \\
+      -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --main $RESEARCH_RUN_DIR/inputs/main.txt \\
       --tree $RESEARCH_RUN_DIR/inputs/gate-tree.tgz --commit COMMIT --checkpoint SNAPSHOT_DIR'
 
 Each stratum's circuit file is the long CPU step at the 32 × 32 tile, so build it once as its own run and send it with
-``--circuits DIR``: ``python -m tests.protocol_options.pouw_h1_circuits --program PROGRAM_DIR --out $OUT``.
+``--circuits DIR``: ``python -m tests.protocols.pouw_h1_circuits --program PROGRAM_DIR --out $OUT``.
 
 **The live run** is the same command with the gate vy-challenger-1's, over the lane's own gate key (INF-170, on
 vy-nebius-2), the auditor's pin (art:d12f85becc), the declared Program's ``window-program.meta.json`` sent (a
@@ -74,7 +75,7 @@ its circuit files' directory (``--circuits``), and no ``--tree``:
     research run --on vy-nebius-2 --project verity --source . --cwd source --send window-program.meta.json \\
       --mem-gb 300 --mem-wait 600 --declared-output 'out/*' -- bash -lc 'cd integrations/vllm && \\
       PYTHONPATH=$PWD/../..:$PWD HF_HOME=/workspace/hf /workspace/jobs/venv312/bin/python \\
-      -m tests.protocol_options.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
+      -m tests.protocols.pouw_h1_rehearsal --out $OUT --gpu-lease 90 --program $RESEARCH_RUN_DIR/inputs \\
       --circuits $RESEARCH_RUN_DIR/inputs/circuits \\
       --gate "ssh -i $HOME/.local/state/vllm-gate/id_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84" \\
       --peer vy-nebius-2 --at 127.0.0.1:7811 --period vllm-h1-live-1 \\
@@ -132,7 +133,7 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import served as SV
-    from tests.protocol_options.pouw_h1_gpu import layout_of
+    from tests.protocols.pouw_h1_gpu import layout_of
     d.mkdir(parents=True, exist_ok=True)
     shapes, modules = declaration(layers)
     t0 = time.monotonic()
@@ -177,15 +178,25 @@ def declared_draw_k(layers: int = 32) -> int:
     return PHC.draw_k(SV.declared_layout(shapes, modules, PH.FILL.rows, PH.FILL.steps))
 
 
+def fill_length() -> dict:
+    """The fixed length `pouw_h1.FILL` serves (``--length``, `credit.LENGTH_FIELD`): each of its requests' public
+    max_tokens, every one admitted at step 0 and run to its cap (``ignore_eos``, the public-cap done source)."""
+    from verity_vllm.protocols.pouw import h1 as PH
+    return {"max_tokens": [PH.FILL.max_tokens] * PH.FILL.slots, "stop": "fixed"}
+
+
 def period_open_argv(name: str, cap: int, circuit: str, draw_k: int, model: str | None,
                      circuit_files: dict[str, str]) -> list[str]:
     """The gate's ``period-open`` of period `name`: its cap, its circuit (the declared Program's digest), its draw K,
-    its model when it serves the registered weights (``--model``, whose registration's weights' root the open signs;
-    never a ``--weights-root`` of the prover's), and each stratum's circuit file's SHA-512 (``--circuit-files``,
-    `pouw_h1_circuits.build`'s ``files``)."""
+    the served tables' rows T (``--rows``, `pouw_h1.FILL`'s), its model when it serves the registered weights
+    (``--model``, whose registration's weights' root the open signs; never a ``--weights-root`` of the prover's), each
+    stratum's circuit file's SHA-512 (``--circuit-files``, `pouw_h1_circuits.build`'s ``files``) and the fixed length
+    its window serves (``--length``, `fill_length`)."""
+    from verity_vllm.protocols.pouw import h1 as PH
     return ["period-open", "--name", name, "--cap", str(cap), "--circuit", circuit, "--draw-k", str(draw_k),
-            *(["--model", model] if model else []),
-            "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":"))]
+            "--rows", str(PH.FILL.rows), *(["--model", model] if model else []),
+            "--circuit-files", json.dumps(circuit_files, sort_keys=True, separators=(",", ":")),
+            "--length", json.dumps(fill_length(), sort_keys=True, separators=(",", ":"))]
 
 
 class Gate:
@@ -195,7 +206,7 @@ class Gate:
         self.argv, self.log = argv, []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
-        from tests.protocol_options.pouw_h1_gpu import gate_argv
+        from tests.protocols.pouw_h1_gpu import gate_argv
         p = subprocess.run(gate_argv(self.argv, args), capture_output=True)
         return p.returncode, p.stdout + (p.stderr if p.returncode else b"")
 
@@ -249,7 +260,7 @@ def serve(a: argparse.Namespace, gate: Gate, reserved: dict[str, Any], out: Path
     prover = PV.private(Path(a.prover_root) / reserved["session"])
     scratch = Path(tempfile.mkdtemp(prefix="h1-handoff-"))
     holder = HO.Holder(scratch / "stream.sock")
-    gpu = [sys.executable, "-m", "tests.protocol_options.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
+    gpu = [sys.executable, "-m", "tests.protocols.pouw_h1_gpu", "--workload", "fill", "--out", str(out)]
     argv = [*gpu, *(["--served", "--model", MODEL, "--circuit", circuit] if a.served else []),
             "--challenger", a.at_addr, "--session", json.dumps(reserved),
             "--gate", shlex.join(gate.argv), "--at", a.pin_at, "--by", a.pin_by, "--prover-dir", str(prover),
@@ -331,7 +342,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
     (`trusted_rounds_reason`), else on its tree (`session_reason`), under the host's pins log's heads `pins` and the
     verifier's own first-parent history of main `main`; its credit over `descriptor`, the period's circuit's bytes
     (`program_bytes`)."""
-    from tests.protocol_options import pouw_h1_gpu as GPU
+    from tests.protocols import pouw_h1_gpu as GPU
     wfile = None
     if window is not None:
         out.mkdir(parents=True, exist_ok=True)
@@ -501,7 +512,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
         if not doc["model"]["ok"]:
             doc["gate_log"] = gate.log
             return doc
-    from tests.protocol_options import pouw_h1_circuits as PC
+    from tests.protocols import pouw_h1_circuits as PC
     try:
         doc["circuits"] = PC.build(pdir, Path(a.circuits) if a.circuits else out / "circuits")
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
@@ -588,7 +599,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--gate", help="the live gate's command (ssh ... research@vy-challenger-1); default: a local gate of --tree")
-    ap.add_argument("--tree", help="infra's tree (git archive COMMIT verity benchmarks/live_challenger, gzipped)")
+    ap.add_argument("--tree", help="infra's tree (git archive COMMIT of local_gate.ARCHIVE's paths, gzipped)")
     ap.add_argument("--commit", help="the commit --tree is (the local gate's pinned commit)")
     ap.add_argument("--coins", choices=("lean", "stub"), default="lean")
     ap.add_argument("--peer", default="local", help="the serving node's name in the gate's peers")

@@ -5,16 +5,23 @@ input token ids, layer 0's input. Core's credit holds each to the Commit's value
 * **The Commit** (`acquire.h1_commit.attach`): the committer (`commit.committer.native_host.NativeHostCommitter`, with no Build, so not a
   Commit of record) with the int8 source (`acquire.h1_commit.H1Source`) at each linear H1 records, at the linear's
   Int8RowQuant_v1 site `site(module)` at every engine step (`Sites`: no Build names its fx node), a routed expert's by
-  its H1 name (VLLM-80: under its call, an idle expert's zero rows too), and the
-  embedding's input, which the committer acquires as ``<embed>/in``, the step's input token ids. `CommitTap` wraps the
+  its H1 name (VLLM-80: under its call, an idle expert's zero rows too), and the embedding's input, which the committer
+  acquires as ``<embed>/in``, the step's input token ids (at the model's forward where vLLM gathers the embedding
+  fused, `acquire.h1_commit.fused_embed`). `CommitTap` wraps the
   committer's acquire and keeps a host copy of what the Commit acquired at each engine step: each site's x_q (``/0``)
   and s_a (``/1``), and the ids.
+* **The server's Commit** (`acquire.h1_commit.tap`): on serve-openai's rows-sha512 collector H1 builds no committer.
+  The tap reads each linear's x_q and s_a where the bench row's int8 source acquires them, under the manifest's op path
+  ``<module>/<fx node>`` (``ops``, read as `site(module)`), and a step's ids at its step-input port (``port``,
+  `served_record.StepInputPort`), whose T ids it reads up to the step's scheduled tokens, so they carry no CUDA graph's
+  padding.
 * **Its values** (`CommitTap.arow`, `CommitTap.input_ids`): call c = (s, w)'s rows are the Commit's x_q and s_a of
   linear w's site at the engine step H1's step s maps to, in H1's table form (`pouw_h1_served.Served.a_words`), and its
-  AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`), registered
-  as `credit.commit_rows` of (s, K); round s's input ids are the Commit's ``<embed>/in`` at that engine step
-  (`pouw_h1_served.ids_words`), registered as `credit.commit_ids` of s. Layer 0's call maps s to the next engine step
-  the Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
+  AROW of step s and K is those of step s's calls of K, call after call in call order (`Served.step_calls`) whatever
+  order the forward ran them in, registered as `credit.commit_rows` of (s, K) once they are all in; round s's input ids
+  are the Commit's ``<embed>/in`` at that engine step (`pouw_h1_served.ids_words`), registered as `credit.commit_ids`
+  of s. Step s's first call to come, whichever linear its forward runs first, maps s to the next engine step the
+  Commit acquired (an empty call's to none). When the rows are the window's, the Commit registers the window's own
   tree, one commitment; rows off them make a tree of the Commit's own under the same domain and salts, at another root.
 * **The record** (`CommitTap.record`, the commitment's ``commit``, `CommitTap.hex`): a ``verity/registration/v2`` record
   (one-stage's `registration`) of those values, with what the tap refused, its canonical JSON in hex as
@@ -74,9 +81,13 @@ def _same(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
 @dataclass
 class CommitTap:
     """What the Commit acquired, kept for H1 (`tap` on a committer, `attach`), and the Commit's values built from it.
-    ``embed`` is the module whose input the committer acquires as the step's token ids."""
+    ``embed`` is the module whose input the committer acquires as the step's token ids; ``port`` the name its step-input
+    port acquires them under instead, T ids zero past the step's scheduled tokens; ``ops`` the Commit's op path of a
+    site, ``<module>/<fx node>``, by which it acquires the site's x_q and s_a, -> the site (`site`)."""
 
     embed: str | None = None
+    port: str | None = None
+    ops: dict[str, str] = field(default_factory=dict)
     refused: list[str] = field(default_factory=list)
     #: the Commit's registered entries by its name of them (`credit.commit_rows`, `credit.commit_ids`), and where it
     #: acquired each; how many are trees of the Commit's own (rows off the window's)
@@ -88,20 +99,24 @@ class CommitTap:
     #: site -> [engine step, x_q, s_a] the Commit acquired last; engine step -> its ids; H1 step -> engine step
     _x: dict[str, list[Any]] = field(default_factory=dict)
     _ids: dict[int, np.ndarray] = field(default_factory=dict)
+    #: the engine steps whose ids are the port's, cut to the step's scheduled tokens, so no graph padding is left to drop
+    _bare: set[int] = field(default_factory=set)
     _steps: dict[int, int | None] = field(default_factory=dict)
-    #: each open step A table's rows as the Commit acquired them so far (one block a call, in call order) and where
-    _rows: dict[str, list[np.ndarray]] = field(default_factory=dict)
-    _at: dict[str, list[tuple[int, int | None, str, int]]] = field(default_factory=dict)
+    #: each open step A table's rows as the Commit acquired them so far (one block a call, by call) and where
+    _rows: dict[str, dict[int, np.ndarray]] = field(default_factory=dict)
+    _at: dict[str, dict[int, tuple[int, int | None, str, int]]] = field(default_factory=dict)
     _last: int = -1
     _com: Any = None
 
     def tap(self, com: Any) -> None:
         """Wrap ``com``'s acquire (the committer's ``_acquire(name, tensor, job)``, which every source calls) so each
-        tensor it acquires is also `take`'n."""
+        tensor it acquires is also `take`'n, with the step's scheduled tokens where the committer has them (its
+        ``_plan_shape``, set before the step's forward)."""
         orig = com._acquire
 
         def acquire(name: str, t: Any, job: Any) -> Any:
-            self.take(name, t, int(job.step))
+            n = int((getattr(com, "_plan_shape", None) or (0,))[0])
+            self.take(name, t, int(job.step), n or None)
             return orig(name, t, job)
         com._acquire, self._com = acquire, com
 
@@ -110,12 +125,21 @@ class CommitTap:
             vars(self._com).pop("_acquire", None)
             self._com = None
 
-    def take(self, name: str, t: Any, step: int) -> None:
-        """One tensor the Commit acquired at engine step ``step``: a site's x_q or s_a, or the embedding's input ids."""
+    def take(self, name: str, t: Any, step: int, n: int | None = None) -> None:
+        """One tensor the Commit acquired at engine step ``step``: a site's x_q or s_a, or the step's input ids, the
+        embedding's input or the port's first ``n``, the step's scheduled tokens."""
         if self.embed is not None and name == f"{self.embed}/in":
             self._ids[step] = _host(t).reshape(-1).astype(np.int64)
             return
+        if self.port is not None and name == self.port:
+            if n is None:
+                self.refused.append(f"engine step {step}: the port's input ids with no count of the step's scheduled tokens")
+                return
+            self._ids[step] = _host(t).reshape(-1)[:n].astype(np.int64)
+            self._bare.add(step)
+            return
         op, _, port = name.rpartition("/")
+        op = self.ops.get(op, op)
         if not op.endswith("/row_quant") or port not in ("0", "1"):
             return
         if port == "0":
@@ -127,7 +151,7 @@ class CommitTap:
             self.refused.append(f"{op}: an s_a at engine step {step} with no x_q")
 
     def _engine_step(self, call: Any) -> int | None:
-        if call.layer == 0 and call.step not in self._steps and call.m:
+        if call.step not in self._steps and call.m:
             got = self._x.get(site(call.module))
             j = got[0] if got is not None and got[0] > self._last else None
             self._steps[call.step] = j
@@ -142,10 +166,10 @@ class CommitTap:
         self.values[name], self.where[name] = {**reg.entry(), "value": name}, dict(where)
 
     def arow(self, run: Any, served: Any, call: Any, value: str, words: np.ndarray | None) -> None:
-        """Call ``call``'s rows of the Commit's AROW of its step and K: the Commit's rows of its site at its step. At the
-        step's last call of K (``words``, the window's step A table ``value`` whole, else None) its value
-        `credit.commit_rows` of (step, K) is the step's calls' rows call after call: the window's tree of ``value`` when
-        they are its ``words``, else the Commit's own."""
+        """Call ``call``'s rows of the Commit's AROW of its step and K: the Commit's rows of its site at its step. Once the
+        step's calls of K are all in, in whichever order they came (``words``, the window's step A table ``value``
+        whole, else None), its value `credit.commit_rows` of (step, K) is the step's calls' rows call after call in call
+        order: the window's tree of ``value`` when they are its ``words``, else the Commit's own."""
         j, s = self._engine_step(call), site(call.module)
         got = self._x.get(s)
         codes, scales = np.zeros((0, call.k), np.int8), np.zeros(0, "<f4")
@@ -159,24 +183,29 @@ class CommitTap:
         if len(codes) > served.m:
             self.refused.append(f"call {call.index}: the Commit's {len(codes)} rows are past its {served.m} slots")
             codes, scales = codes[:served.m], scales[:served.m]
-        self._rows.setdefault(value, []).append(served.a_words(call, codes, scales))
-        self._at.setdefault(value, []).append((call.index, j, s, len(codes)))
-        if call.index != served.step_calls(call.index)[-1]:
+        rows, cs = self._rows.setdefault(value, {}), served.step_calls(call.index)
+        rows[call.index] = served.a_words(call, codes, scales)
+        self._at.setdefault(value, {})[call.index] = (call.index, j, s, len(codes))
+        if len(rows) < len(cs):
             return
-        mine, at = np.concatenate(self._rows.pop(value)), self._at.pop(value)
+        rows, got = self._rows.pop(value), self._at.pop(value)
+        mine, at = np.concatenate([rows[c] for c in cs]), [got[c] for c in cs]
         same = words is not None and np.array_equal(mine, words) and value in served.registered
         reg = served.registered[value] if same else served.a_tree(run, call, mine)
         self._put(CR.commit_rows(call.step, call.k), reg, same,
                   {"round": call.step, **{f: [x[i] for x in at] for i, f in enumerate(("calls", "steps", "sites", "rows"))}})
 
-    def ids_at(self, r: int) -> list[int]:
+    def ids_at(self, r: int, pad: int = 0) -> list[int]:
         """Round r's input ids: the Commit's ids of the engine step H1's step r maps to (none for a step it acquired
-        nothing at)."""
+        nothing at), less the last ``pad``, the positions a CUDA graph padded the step with (`pouw_h1.Call.pad`), which
+        the port's never hold."""
         j = self._steps.get(r)
         got = self._ids.get(j) if j is not None else None
         if j is not None and got is None:
             self.refused.append(f"step {r}: the Commit acquired no input ids at engine step {j}")
-        self.round_ids[r] = [] if got is None else [int(t) for t in got]
+        if j in self._bare:
+            pad = 0
+        self.round_ids[r] = [] if got is None else [int(t) for t in got][:len(got) - pad]
         return self.round_ids[r]
 
     def input_ids(self, run: Any, served: Any, r: int, ids: Sequence[int]) -> None:
@@ -279,4 +308,12 @@ def roots1(run: Any) -> dict[str, Any]:
             "steps": {str(s): j for s, j in sorted(tap._steps.items())}}
 
 
-__all__ = ["CommitTap", "Sites", "UNTIED", "digest", "ids_reason", "record_of", "roots1", "site", "untied"]
+def calls_root(salt: bytes, manifest: Sequence[Mapping[str, Any]], served: bytes | None = None,
+               commit: str | None = None) -> bytes:
+    """`pouw_h1.H1Run.calls_root` over the manifest rows `manifest`, the served trees' digest `served` when the window has them,
+    and the digest of its Commit record `commit` (hex, `pouw_h1_commit.digest`) when it has one: core's
+    `credit.calls_root`, the one place the record is bound. ValueError on a record `credit.commit_of` refuses."""
+    return CR.calls_root(salt, manifest, served, None if commit is None else digest(commit))
+
+
+__all__ = ["CommitTap", "Sites", "UNTIED", "calls_root", "digest", "ids_reason", "record_of", "roots1", "site", "untied"]

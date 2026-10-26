@@ -18,7 +18,7 @@ from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import build_program
 
-from tests.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import TINY, _phi
 
 AOT = {"comparison": "r20261018-001500-aaaa", "trace": "art:" + "5" * 64}
 
@@ -82,6 +82,7 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
     assert not (tmp_path / "out" / "descriptor.json.gz").exists()
 
 
+@pytest.mark.slow
 def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path, monkeypatch):
     d = tmp_path / "row"
     (d / "build" / "rank0" / "build_step").mkdir(parents=True)

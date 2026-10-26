@@ -7,9 +7,12 @@
   against the epoch's coin commitment as the challenger published it (``--coins``, not the pass's copy), as the salt coin,
   opened after the weights' root, and the salt must be the manifest's.  A pass recorded before epoch coins (a v1 manifest)
   carries a beacon instead, and is read only with ``--recorded`` (`Epoch.unverified`, a salt that claims nothing).
+- **The call indices** are each below 2^32 and none twice (`credit.passes_distinct`: ``call-range``, ``repeated-call``);
+  `served_passes.py` holds a run's passes of one salt to distinct indices too.
 - **The records** (each matmul's real rows, width and excluded rows; each weight's excluded rows) are the manifest's.
   Their root must be the one the pass published before any draw.
-- **The draws' source** is `os.urandom(32)`, the verifier's own, drawn here after the transcript is fixed: a
+- **The draws' source** is 32 bytes of the Lean verifier of record's coins (`pouw.verifier.coins`, `IO.getRandomBytes`,
+  `uniform/io-getrandombytes`), the verifier's own, drawn here after the transcript is fixed: a
   `clear_work.RecordedDraw` of round 1, after the commitment's 0.
 - **The prover only opens.** Each opening's value and path come from the pass's files: A's rows and tree levels per call,
   B's rows and tree levels per weight, the tile tree.  Each is checked against the published roots.  Under ``hm96-sha512``
@@ -47,7 +50,9 @@ from verity.core.protocols.pouw.audit import (
     hm96_salt,
     opened_value,
 )
+from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw.coins import CoinCommitment
+from verity.core.protocols.pouw.credit import passes_distinct
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c_work as PW
 from verity_vllm.protocols.pouw import pearl_c as PD
@@ -179,6 +184,10 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
            "replay": "batch" if fast else "scalar"}
     try:
         PD.manifest_schema(man, recorded)
+        why = passes_distinct([man])
+        if why is not None:
+            out["refused"] = list(why)
+            raise ValueError(": ".join(why))
         scheme = PD.scheme_of(man["scheme"], **{k: tuple(v) if isinstance(v, list) else v for k, v in man.get("instance", {}).items()})
         matmuls = tuple(Matmul(u["index"], Shape(u["m"], u["k"], u["n"]), u["weight"]) for u in man["matmuls"])
         epoch, out["salt"] = PD.manifest_epoch(man, coins, recorded)
@@ -196,7 +205,7 @@ def verify(path: Path, draws: int, jobs: int, commit: str, source: bytes | None 
         verifier = Verifier(CW._TileRuleView(scheme), epoch)
         if len(verifier.refs) != c["count"]:
             raise ValueError(f"the commitment counts {c['count']} tiles; the workload has {len(verifier.refs)}")
-        source = os.urandom(32) if source is None else source
+        source = PV.coins(32) if source is None else source
         key = CW.replay_key(CW.RecordedDraw(1, source), transcript.commitment.root, bytes.fromhex(man["records_root"]), epoch.salt)
         ids = {(ref.matmul, ref.tile.rows[0], ref.tile.cols[0]): ref.id for ref in verifier.refs}
         picks = CW.draw(scheme, records, key, draws)

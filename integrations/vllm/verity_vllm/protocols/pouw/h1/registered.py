@@ -16,9 +16,15 @@ salts, ``b || c`` strings, tree and entry, computed from the rows' NumPy words i
   rows and a window holds a few hundred bytes a row (its ``b || c`` and about two tree nodes, as Python bytes), where
   Python ints held some 36 bytes a word. The period's `Weights` keeps its rows, two bytes a word, for `Weights.matches`.
 
+* **On the GPU** (VLLM-79): where this process has CUDA, `commit` hashes the same strings, leaves and levels on the device
+  (`pouw_h1_registered_device`, `pouw_cuda/registered_rows.cu`), a thread a row and a node, and only the domain id and
+  the result's bytes touch the host (`path`, `MODE`), and `public_salts` derives a public table's salts there. The
+  NumPy path above is the reference the device is held to
+  (``tests/protocols/test_pouw_h1_registered_device.py``) and the fallback everywhere else.
+
 `commit` returns a `registered.Registered` whose ``rows`` and ``salts`` are those sequences; everything `Served`,
 `ServedTree.of`, `registered.verify_read` and the record read of it (``root``, ``levels``, ``bcs``, ``entry()``,
-``path``) is what `Registered.commit` gives over the same rows and salts (``tests/protocol_options/
+``path``) is what `Registered.commit` gives over the same rows and salts (``tests/protocols/
 test_pouw_h1_registered.py`` holds it to core's on small windows).
 """
 from __future__ import annotations
@@ -42,6 +48,8 @@ from verity.ml.crypto import chacha20
 
 _INST = hm96.SHA512
 _FRAME = b"veritor/protocol/merkle/frame/v3\0"
+#: `commit`'s path (`path`): ``"auto"``, ``"gpu"`` or ``"numpy"``, set by the caller that configures the run
+MODE = "auto"
 #: rows a salt pass, rows a digest task
 _SALTED, _ROWS = 1 << 16, 1 << 11
 
@@ -143,24 +151,69 @@ class Rows(Sequence):
         return tuple(int(v) for v in self.words[j])
 
 
+def path() -> str:
+    """Where `commit` hashes, `MODE`'s choice: ``"gpu"`` (`pouw_h1_registered_device`, refused where it can't run),
+    ``"numpy"``, or by default ``"auto"``, the GPU where this process has CUDA through torch and the kernels build for its
+    device, else NumPy. Both register the same bytes; NumPy is the reference."""
+    mode = MODE
+    if mode not in ("auto", "gpu", "numpy"):
+        raise ValueError(f"MODE={mode!r}: auto, gpu or numpy")
+    if mode != "auto":
+        return mode
+    from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+    return "gpu" if D.available() else "numpy"
+
+
 def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, keep_rows: bool = False,
            row_salts: bytes | None = None, **binding: Any) -> G.Registered:
     """`registered.Registered.commit(program, value, rows, salts, schema=SCHEMA_V2, **binding)` of ``words`` ``(n, W)``
     u16, ``rows`` their rows and ``salts`` row j's `audit.hm96_salt(key, nonce, j)`, or with ``row_salts`` (n salts
     concatenated, each used once) those, ``key`` and ``nonce`` unread. ``binding``: the domain's other arguments
-    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none."""
+    (``window``, ``produced``, ``session``). ``keep_rows``: hold the rows (`Rows`), else none. Hashed where `path` says."""
     words = np.asarray(words)
     if words.ndim != 2 or not words.shape[0] or not words.shape[1] or words.dtype != np.uint16:
         raise ValueError("a registered value is at least one row of 16-bit words, every row the same width")
     n, w = words.shape
     dom = G.domain(program, value, w, n, G.WORD_BITS, **binding)
-    ys = salts(key, nonce, n) if row_salts is None else bytes(row_salts)
-    fixed = None if row_salts is None else tuple(ys[192 * j:192 * (j + 1)] for j in range(n))
-    if fixed is not None and (len(ys) != 192 * n or len(set(fixed)) != n):
+    given = None if row_salts is None else bytes(row_salts)
+    fixed = None if given is None else tuple(given[192 * j:192 * (j + 1)] for j in range(n))
+    if fixed is not None and (len(given) != 192 * n or len(set(fixed)) != n):
         raise ValueError(f"one {_INST.salt_bytes}-byte salt per row, never reused")
+    if path() == "gpu":
+        from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+        bcs, levels = D.device_commit(words, key, nonce, given, dom.domain_id)
+    else:
+        bcs, levels = _numpy(words, key, nonce, given, dom.domain_id)
+    return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
+                        rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
+                        salts=Salts(key, nonce, n) if fixed is None else fixed,
+                        bcs=bcs, levels=levels, schema=G.SCHEMA_V2, **binding)
+
+
+def public_salts(head: bytes, first: int, n: int) -> bytes:
+    """Positions ``first`` .. ``first + n - 1``'s public row salts concatenated, each ``SHA-512(head || u64be(position) ||
+    u8(i))`` for i = 0, 1, 2 (`core_check.public_row_salt`, ``head`` its domain, context length and context), on the
+    device where `path` says, else with `hashlib`."""
+    if n < 1 or first < 0 or first + n > 1 << 64:
+        raise ValueError(f"{n} public salts from position {first}: at least one, every position a u64")
+    if path() == "gpu":
+        from verity_vllm.protocols.pouw.h1 import registered_device as D
+
+        return D.device_public_salts(head, first, n)
+    return b"".join(hashlib.sha512(head + u.to_bytes(8, "big") + bytes([i])).digest()
+                    for u in range(first, first + n) for i in range(_INST.salt_bytes // 64))
+
+
+def _numpy(words: np.ndarray, key: bytes, nonce: int, given: bytes | None,
+           domain_id: bytes) -> tuple[tuple[bytes, ...], tuple[tuple[bytes, ...], ...]]:
+    """`commit`'s ``b || c`` strings and tree levels from NumPy and `hashlib`: the reference."""
+    n = words.shape[0]
+    ys = salts(key, nonce, n) if given is None else given
     b = (row_digests(words) ^ np.frombuffer(batch.masks(_INST, _INST.default_key, ys), np.uint8).reshape(n, 64)).tobytes()
     salt_h, leaf_h = hashlib.sha512(_INST.salt_prefix), hashlib.sha512(_INST.leaf_prefix(_INST.default_key))
-    frame, schema = _Frame(dom.domain_id), _part(G.SCHEMA_V2.encode())
+    frame, schema = _Frame(domain_id), _part(G.SCHEMA_V2.encode())
     bcs, leaves = [], []
     for j in range(n):
         h = salt_h.copy()
@@ -171,10 +224,7 @@ def commit(program: str, value: str, words: np.ndarray, key: bytes, nonce: int, 
         u = _uint(j)
         bcs.append(bc)
         leaves.append(frame._h(frame.leaf, u + u + schema + _part(g.digest())))
-    return G.Registered(program=program, value=value, words=int(w), word_bits=G.WORD_BITS,
-                        rows=Rows(np.ascontiguousarray(words) if keep_rows else None, n),
-                        salts=Salts(key, nonce, n) if fixed is None else fixed,
-                        bcs=tuple(bcs), levels=frame.levels(leaves), schema=G.SCHEMA_V2, **binding)
+    return tuple(bcs), frame.levels(leaves)
 
 
-__all__ = ["Rows", "Salts", "commit", "row_digests", "salts"]
+__all__ = ["MODE", "Rows", "Salts", "commit", "path", "public_salts", "row_digests", "salts"]

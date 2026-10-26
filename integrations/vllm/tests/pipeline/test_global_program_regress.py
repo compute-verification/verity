@@ -20,14 +20,12 @@ DECISIONS-3 §1/§2).  CPU only, toy request Programs (the same lowering / codec
      Projection must carry `input_base`).  Independent regression of `global`'s fix lane/r16-global 47bcf9bcf (R16 M-0023): this
      file DEPENDS on that unit — on the pre-fix tree the fixture raises '+1 weights expected' (measured 04:21Z) and with the fix
      it PASSes (measured against 47bcf9bcf's batch_decomp.py 04:24Z).  Integrate after / together with 47bcf9bcf.
-  6. THE DERIVED S READS THE PROGRAM'S ACTIVITY (COORD M-0169 / M-0571 (3); LIFTING-REVIEW P-6 / attack A9) — GM-01 G6's
-     `sampler_geometry_check` evaluates S_t = SplitsFor_v1(|live(t)|, num_SMs) with |live(t)| = the record's logits rows at t.  That
-     count is admissible ONLY because the rest of G6 pins it to the Program's activity — request r live at t iff
-     arrive_r <= t <= arrive_r + n_r - 1 with n_r = committed tokens up to and including the first declared EOS, capped — in both
-     directions (a missing row: 'declared schedule not exercised'; a row after the EOS: 'execution past EOS').  The tests pin that
-     contract on a real passing record and on the async-scheduling placeholder row (DP-pad-02 / F-pad-16): the S check alone is
-     self-consistent with the inflated observed batch, so if G6's placeholder rule ever moves (a LAG ruling), the S live count must
-     move WITH it or this file fails.  Independent regression of lane/r16-global 7aa472c07.
+  6. S READS NO ACTIVITY (COORD M-0169; CIR-87 (1)) — GM-01 G6's `sampler_geometry_check` holds every launch to the registered
+     S = SplitsFor_v1(1, num_SMs) the served engine pins, whatever the live batch; G6 alone pins the record's rows to the Program's
+     activity — request r live at t iff arrive_r <= t <= arrive_r + n_r - 1 with n_r = committed tokens up to and including the first
+     declared EOS, capped — in both directions (a missing row: 'declared schedule not exercised'; a row after the EOS: 'execution past
+     EOS').  The tests pin that on a real passing record and on the async-scheduling placeholder row (DP-pad-02 / F-pad-16), and that
+     vLLM's own batch-derived S is refused.
 """
 
 from __future__ import annotations
@@ -43,6 +41,7 @@ from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.pipeline import global_program as gp
 from verity_vllm.program import workload as W
+from verity_vllm.records import workload as WL
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.ml.circuits.program import Program
@@ -228,10 +227,12 @@ def _derived_dir(tmp_path, LP, T, execution="bi-eager"):
 
 
 def _manifest(tmp_path, reqs, name="workload.json", **extra):
+    """A workload record (`records.workload`) of `reqs`, its greedy sampling block holding `extra`, on an eager row."""
     p = tmp_path / name
-    json.dump({"requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
+    json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
+               "requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
                              "arrive_step": r.get("arrive", 0)} for i, r in enumerate(reqs)],
-               "sampling": {"temperature": 0.0, **extra}, "execution": "bi-eager"}, open(p, "w"))
+               "sampling": {"variant": "greedy", "temperature": 0.0, **extra}, "sweep": {"execution": "bi-eager"}}, open(p, "w"))
     return str(p)
 
 
@@ -599,9 +600,10 @@ from verity_vllm.check.match import global_match as gm  # noqa: E402
 from verity_vllm.check.match import sampler_geometry as SG  # noqa: E402
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture
-from verity_vllm.program.registry.topp_geometry import splits_for  # noqa: E402
+from verity.ml.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
 
-NSM = 4   # a num_SMs at which S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
+NSM = 4   # a num_SMs at which vLLM's own S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
+S_REG = registered_splits(NSM)   # 4: the split count the pinned engine launches at every batch
 
 # this section regresses global's derived-S unit (lane/r16-global 7aa472c07): on a tree without it there is nothing to regress -- named skip
 _needs_derived_s = pytest.mark.skipif(not hasattr(SG, "sampler_geometry_check"),
@@ -675,12 +677,11 @@ def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: st
 
 @_needs_derived_s
 @pytest.mark.parametrize("form", _S_FORMS)
-def test_derived_s_live_count_is_the_programs_activity_on_every_step_of_a_passing_record(memory, tmp_path, form):
-    """On a record GM-01 PASSES, the row count the S check reads at every engine step equals the Program's activity (declared arrival x
-    committed tokens, truncated at the verified EOS) -- not the declared-to-cap schedule: r1 (cap 4) stops on EOS at event 1, so steps
-    2 and 3 of its declared schedule are NOT live.  An S launched for the declared schedule at step 2 (2 live -> S=2 at 4 SMs) is
-    refused by name; the S of the activity (1 live -> S=4) passes; and the step the declaration programs but no request is active at
-    (step 3) is not a step of the record at all."""
+def test_the_registered_s_holds_on_every_step_of_a_passing_record_whatever_its_activity(memory, tmp_path, form):
+    """On a record GM-01 PASSES, the record's row count at every engine step equals the Program's activity (declared arrival x committed
+    tokens, truncated at the verified EOS) -- not the declared-to-cap schedule: r1 (cap 4) stops on EOS at event 1, so steps 2 and 3 of
+    its declared schedule are NOT live, and step 3 is not a step of the record at all.  S reads none of it (CIR-87 (1)): the registered
+    S = SplitsFor_v1(1, 4 SMs) = 4 passes at 2 live rows as at 1, and vLLM's own batch-derived S (2 live -> S=2) is refused by name."""
     gpd, oracle = TGM.assemble([TGM.R0, TGM.R1_EOS], tmp_path)
     res = gm.check(gpd, oracle)
     assert res["verdict"] == "PASS", res["reasons"]
@@ -693,13 +694,14 @@ def test_derived_s_live_count_is_the_programs_activity_on_every_step_of_a_passin
     declared = gp.declared_live_counts([{"arrive_step": g["arrive_step"], "cap": g["max_tokens"]} for g in gpd["requests"]])
     assert declared == [2, 2, 2, 1] and declared[2] == 2 != activity[2] == 1 and 3 not in observed and declared[3] == 1
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
-    ok_fold, ok_es = _topp_fold_for(observed, {s: splits_for(activity[s], NSM) for s in observed}, form)
+    ok_fold, ok_es = _topp_fold_for(observed, {s: S_REG for s in observed}, form)
     ok = SG.sampler_geometry_check(gsm, ok_fold, ok_es, rec["steps"], rec["sampler_batch"])
-    assert ok["problems"] == [] and ok["info"]["checked_steps"] == 3 and ok["info"]["live_to_S"] == {"live=1:S=4": 1, "live=2:S=2": 2}
-    # (-) the launch geometry of the DECLARED schedule at step 2 (as if r1 were still live): S=2 where the activity says S=4
-    bad_fold, bad_es = _topp_fold_for(observed, {s: splits_for(declared[s], NSM) for s in observed}, form)
+    assert ok["problems"] == [] and ok["info"]["checked_steps"] == 3 and ok["info"]["live_to_S"] == {"live=1:S=4": 1, "live=2:S=4": 2}
+    # (-) an unpinned launch at vLLM's S of the batch it ran (2 rows at steps 0 and 1 -> S=2): refused by name at both
+    bad_fold, bad_es = _topp_fold_for(observed, {s: splits_for(observed[s], NSM) for s in observed}, form)
     bad = SG.sampler_geometry_check(gsm, bad_fold, bad_es, rec["steps"], rec["sampler_batch"])
-    assert len(bad["problems"]) == 1 and "'step': 2" in bad["problems"][0] and "'expected_S': 4" in bad["problems"][0] and "'fold_S': [2]" in bad["problems"][0]
+    assert len(bad["problems"]) == 1 and bad["info"]["steps_with_mismatch"] == 2
+    assert "'step': 0" in bad["problems"][0] and "'registered_S': 4" in bad["problems"][0] and "'fold_S': [2]" in bad["problems"][0]
 
 
 R1_PLACEHOLDER = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11, 504], "cap": 4}   # EOS at event 1, then vLLM async scheduling's placeholder row
@@ -709,11 +711,10 @@ R1_PLACEHOLDER = {"id": "r1", "prompt": [4, 6], "sampled": [8, 11, 504], "cap": 
 @pytest.mark.parametrize("form", _S_FORMS)
 def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fails_g6_and_s_alone_would_not_see_it(memory, tmp_path, form):
     """DP-pad-02 / F-pad-16 (exec M-0140 on cp-r1): with async scheduling vLLM computes ONE more step for a request after its EOS and
-    samples a token there (504 on the pod).  That row is in the engine's sampler batch -- so the launch's S is consistent with the
-    OBSERVED row count -- but it is not the Program's lag-0 activity (a_r = 2).  Contract: (1) GM-01 FAILS the record at G6 by name
-    (execution past EOS, n_r 3 > a_r 2) so the S check never certifies it; (2) the S check ALONE, fed the observed rows, reports no
-    problem -- its soundness is joint with G6's activity pinning, not its own; (3) the S of the Program's activity at the placeholder
-    step differs from the launch's, so a checker reading the Program's activity values would refuse it unaided.  Under R17-1 (DP-pad-02
+    samples a token there (504 on the pod).  That row is in the engine's sampler batch but it is not the Program's lag-0 activity
+    (a_r = 2).  Contract: (1) GM-01 FAILS the record at G6 by name (execution past EOS, n_r 3 > a_r 2) so the S check never certifies
+    it; (2) the S check ALONE reports no problem -- the pinned launch's S is the registered one whatever the batch (CIR-87 (1)), so
+    only G6's activity pinning sees the row.  Under R17-1 (DP-pad-02
     (b) as Daniel ruled it; supersedes the ruling-21 reader) the placeholder rule is the PROGRAM'S declared LAG, which the record's
     attestation must agree with: this Program declares LAG 0 (the toy preamble attests async_scheduling False), so the record is a lag-0
     execution and the contract above stands; the LAG-1 Program on the attested-True reading of the same record is the next test."""
@@ -734,15 +735,10 @@ def test_a_placeholder_row_after_the_verified_eos_is_not_activity_the_record_fai
     activity = _program_activity(gpd, _transcripts(oracle), set(gpd["stop_rule"]["eos_token_ids"]))
     assert observed == {0: 2, 1: 2, 2: 2} and activity == {0: 2, 1: 2, 2: 1}       # the phantom row inflates step 2 only
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
-    # (2) the launch's S for the batch the engine actually ran (2 rows at step 2 -> S=2): the S check alone is satisfied
-    launch_fold, launch_es = _topp_fold_for(observed, {s: splits_for(observed[s], NSM) for s in observed}, form)
+    # (2) the pinned launch's S is the registered one whatever batch the engine ran: the S check alone is satisfied, and only G6 sees the row
+    launch_fold, launch_es = _topp_fold_for(observed, {s: S_REG for s in observed}, form)
     alone = SG.sampler_geometry_check(gsm, launch_fold, launch_es, rec["steps"], rec["sampler_batch"])
-    assert alone["problems"] == [] and alone["info"]["live_to_S"] == {"live=2:S=2": 3}
-    # (3) the S the Program's activity prescribes at step 2 (1 live -> S=4) is not the launch's: an activity-reading check refuses by name
-    assert splits_for(activity[2], NSM) == 4 != splits_for(observed[2], NSM) == 2
-    act_fold, act_es = _topp_fold_for(observed, {s: splits_for(activity[s], NSM) for s in observed}, form)
-    vs = SG.sampler_geometry_check(gsm, act_fold, act_es, rec["steps"], rec["sampler_batch"])
-    assert len(vs["problems"]) == 1 and "'step': 2" in vs["problems"][0] and "'fold_S': [4]" in vs["problems"][0]
+    assert alone["problems"] == [] and alone["info"]["live_to_S"] == {"live=2:S=4": 3}
     # and the SampleEnd's own batch at the placeholder step is the inflated one -- the record is self-consistent, only the Program disagrees
     assert rec["sampler_batch"].get(2) in (None, 2)
 
@@ -755,14 +751,13 @@ _needs_lag_rule = pytest.mark.skipif(not (hasattr(TGM, "_set_async_scheduling") 
 @_needs_derived_s
 @_needs_lag_rule
 @pytest.mark.parametrize("form", _S_FORMS)
-def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activity_and_the_s_live_count_moves_with_it(memory, tmp_path, form):
+def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activity(memory, tmp_path, form):
     """R17-1 / DP-pad-02 (b): the SAME placeholder record under the LAG-1 Program (the workload Program's declared specialization
     parameter), attesting async_scheduling True with the driver's word for an EOS stop (generated_token_ids ends at the EOS, finish_step
     = the EOS step, the lag sample reported nowhere): G6 PASSES and the lag row IS r1's declared activity at step 2 (active internal
     computation: VUs required, sampled token not served; the lifted Program's lag-1 live: live_s iff no EOS at an event <= s-2;
-    LIFTING-REVIEW PAD-05).  served_output_len 2, executed_prefix_len 3.  The S relation reads that activity, in both directions: the
-    live count at step 2 is 2 (S=2 at 4 SMs) and the lag-0 activity's S (1 live -> 4) is now the one REFUSED by name -- exactly the move
-    the previous test's contract predicted.  One recorded fact, consumed by Build and Match alike, no inference: the attestation
+    LIFTING-REVIEW PAD-05).  served_output_len 2, executed_prefix_len 3.  The live count at step 2 is 2, and the registered S holds
+    there as everywhere.  One recorded fact, consumed by Build and Match alike, no inference: the attestation
     flipped to False on the very same record FAILS by name (the LAG-0 header on the LAG-1 Program; G1 + G6) before any S is certified,
     and the unattested record is refused by name rather than read as lag 0 or lag 1."""
     gpd, oracle = TGM.assemble([TGM.R0, R1_PLACEHOLDER], tmp_path, lag=1)
@@ -782,13 +777,9 @@ def test_under_an_attested_async_scheduler_the_placeholder_row_is_declared_activ
     lag0, lag1 = _program_activity(gpd, tr, eos, lag=0), _program_activity(gpd, tr, eos, lag=1)
     assert observed == lag1 == {0: 2, 1: 2, 2: 2} and lag0 == {0: 2, 1: 2, 2: 1}   # the placeholder row is activity under lag 1 only
     gsm = dict(gpd, sampler_geometry={"num_sms": NSM})
-    ok_fold, ok_es = _topp_fold_for(observed, {s: splits_for(lag1[s], NSM) for s in observed}, form)
+    ok_fold, ok_es = _topp_fold_for(observed, {s: S_REG for s in observed}, form)
     ok = SG.sampler_geometry_check(gsm, ok_fold, ok_es, rec["steps"], rec["sampler_batch"])
-    assert ok["problems"] == [] and ok["info"]["checked_steps"] == 3 and ok["info"]["live_to_S"] == {"live=2:S=2": 3}
-    # (-) the lag-0 activity's S at the placeholder step (1 live -> S=4) is refused: under the attested lag the row counts
-    bad_fold, bad_es = _topp_fold_for(observed, {s: splits_for(lag0[s], NSM) for s in observed}, form)
-    bad = SG.sampler_geometry_check(gsm, bad_fold, bad_es, rec["steps"], rec["sampler_batch"])
-    assert len(bad["problems"]) == 1 and "'step': 2" in bad["problems"][0] and "'expected_S': 2" in bad["problems"][0] and "'fold_S': [4]" in bad["problems"][0]
+    assert ok["problems"] == [] and ok["info"]["checked_steps"] == 3 and ok["info"]["live_to_S"] == {"live=2:S=4": 3}
     # one recorded fact: the same record attesting False (a LAG-0 header) is not an execution of the LAG-1 Program -- FAIL by name (G1 + G6);
     # unattested it is refused by name, no default; the rule stays the Program's (eos_lag_rows 1), never re-read from the trace or the header
     TGM._set_async_scheduling(oracle, False)

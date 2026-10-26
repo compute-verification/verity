@@ -18,17 +18,16 @@ code side makes. Here both are read at the intended choice.
 `sha512_row_prefix(1, 16, n_words) ‖ row`, its first block `Flock.HmRow.rowPrefix` of a fixed 128 bytes, so the row is
 the rest (`binds_deployed`).
 
-**(P4) fails** where the element-level verifier's steps are the deployed plain verifier's (`FlockDeploy.V false`) and
-`final` keeps `DE`'s last message as it is, which "per earlier round, its rows with their salts, then `DE`'s last
-message" does. That last message is `Final.encode` of the statement, the record's text and the proof files, and the
-verifier reads the record's text only through `Json.parse` (`Record.decodeWith`, `liveOf`, `recordDraw`). The text
-with one trailing space parses alike (`JsonTrailingSpace`, Lean's parser ends every value with `ws` before `eof`), so it
-is another last message that `final` reads differently and `IVStar` decides alike, with the same calls
-(`ivstar_congr_snoc`). (P4) then asks a collision among the calls of one accepted decision
-(`lastBinds_forces_collision`, `lastBinds_deployed_forces_collision`): at an oracle with no collision among those calls,
-(P4) at the deployed record leaves `IVStar` accepting nothing whose last message fits its length words
-(`lastBinds_deployed_rejects`), where an honest run is accepted. `LastBinds`' statement modulo `final` covers bytes
-`final` ignores, not bytes `DE`'s verifier ignores.
+**(P4) failed before S0** where the element-level verifier's steps are the deployed plain verifier's (`FlockDeploy.V
+false`) and `final` keeps `DE`'s last message as it is. That last message is `Final.encode` of the statement, the
+record's text and the proof files, and the verifier read the record's text only through `Json.parse`
+(`Record.decodeWith`, `liveOf`, `recordDraw`: `LastGap.decodeWith_congr`, `liveOf_congr`, `recordDraw_congr`). The
+text with one trailing space parses alike (`JsonTrailingSpace`, Lean's parser ends every value with `ws` before
+`eof`), so it was another last message that `final` reads differently and `IVStar` decided alike, with the same calls.
+S0 closes that: the checks end with `RecordText.check`, which accepts a record only as `printT` of what it parses to,
+so the checks accept one text per record (`LastGap.checks_record_eq`) and refuse the trailing-space one
+(`LastGap.check_space`). `lastBinds_self` is what (P4) asks of a decision wherever the element-level verifier takes
+another last message alike.
 
 `JsonTrailingSpace` is a hypothesis, not a lemma: `Json.parse`'s `anyCore` is `partial`, so the kernel doesn't see its
 body. The rest is proved. -/
@@ -68,16 +67,6 @@ theorem binds_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
 `anyCore` ends with `ws`. A hypothesis because `anyCore` is `partial`. -/
 def JsonTrailingSpace : Prop :=
   ∀ (r : String) (j : Json), Json.parse r = .ok j → Json.parse (r ++ " ") = .ok j
-
-/-- **`final` reads any last element-level message with the same openings**: what "per earlier round, its rows with
-their salts, then `DE`'s last message" asks of an encoding. -/
-def FinalFree {S : Type} (final : Msg → Option (List (List (Msg × S)) × Msg)) : Prop :=
-  ∀ a os last, final a = some (os, last) → ∀ last', ∃ a', final a' = some (os, last')
-
-/-- **A last message fits its length words** (8 bytes each), with one byte to spare in the record's. -/
-def FitsSpace (f : FlockDeploy.Final) : Prop :=
-  f.stmt.length < 2 ^ 64 ∧ (f.record ++ " ").toUTF8.size < 2 ^ 64 ∧ f.proofs.size < 2 ^ 64 ∧
-    ∀ b ∈ f.proofs, b.size < 2 ^ 64
 
 end RecDeploy
 
@@ -266,32 +255,6 @@ theorem verifyWithM_congr {M : Type → Type} [Monad M] [MonadExceptOf String M]
   unfold _root_.Flock.verifyWithM
   rw [decodeWith_congr hs spec h]
 
-theorem checks_congr_record {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {x : Msg}
-    {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)}
-    {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Json.parse r' = Json.parse r) :
-    FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r', ps⟩ =
-      FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r, ps⟩ := by
-  unfold FlockDeploy.checks
-  simp only [recordDraw_congr h, liveOf_congr spec h]
-
-theorem decisionAt_congr_record {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
-    {sts : Array _root_.Flock.Stmt} {x : Msg} {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin}
-    {mids : List (Msg × FlockDeploy.Coin)} {st : Msg} {ps : Array ByteArray} {r r' : String}
-    (h : Json.parse r' = Json.parse r) :
-    FlockDeploy.decisionAt false s spec sts x link c₁ mids ⟨st, r', ps⟩ =
-      FlockDeploy.decisionAt false s spec sts x link c₁ mids ⟨st, r, ps⟩ := by
-  unfold FlockDeploy.decisionAt FlockDeploy.verdictM
-  simp only [Bool.false_eq_true, ↓reduceIte, verifyWithM_congr Claims.Hashes.oc spec (FlockDeploy.tabsOf sts) ps h,
-    checks_congr_record h]
-
-theorem decision_congr_record {s : FlockDeploy.Ins} {x : Msg} {link : List ByteArray × List ByteArray}
-    {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)} {st : Msg} {ps : Array ByteArray}
-    {r r' : String} (h : Json.parse r' = Json.parse r) :
-    FlockDeploy.decision false s x link c₁ mids ⟨st, r', ps⟩ =
-      FlockDeploy.decision false s x link c₁ mids ⟨st, r, ps⟩ := by
-  unfold FlockDeploy.decision
-  simp only [decisionAt_congr_record h]
-
 theorem append_space_ne (r : String) : r ++ " " ≠ r := by
   intro h
   have hl := congrArg String.length h
@@ -299,122 +262,26 @@ theorem append_space_ne (r : String) : r ++ " " ≠ r := by
   have h1 : (" " : String).length = 1 := by decide
   omega
 
-/-- **The deployed plain verifier's last step takes another last message alike**: where it accepts the last message
-`l`, the same message with one trailing space in the record's text (`Final.encode`) is another one, at which its step
-is the same program. -/
-theorem next_snoc_space (H : Msg → Msg) (hws : JsonTrailingSpace) {x : Msg} {ms₀ : List Msg} {l : Msg}
-    {cs : List FlockDeploy.Coin} (hfits : ∀ f, FlockDeploy.finalOf l = some f → FitsSpace f)
-    (h : ((FlockDeploy.next false x (ms₀ ++ [l]) cs).eval H).1 = .acc) :
-    ∃ l', l' ≠ l ∧ FlockDeploy.next false x (ms₀ ++ [l']) cs = FlockDeploy.next false x (ms₀ ++ [l]) cs := by
-  cases hact : FlockDeploy.act false x (ms₀ ++ [l]) cs with
-  | rej =>
-    rw [FlockDeploy.next_rej H hact] at h
-    cases h
-  | coin c =>
-    rw [FlockDeploy.next_coin H hact] at h
-    cases h
-  | decide s spec sts link c₁ mids f =>
-    obtain ⟨spec', sts', -, -, hc⟩ := (FlockDeploy.next_decide H hact).1 h
-    obtain ⟨lv, hlv, -⟩ := FlockDeploy.checks_custody hc
-    obtain ⟨j, _, _, hj, _⟩ := Claims.Bridge.Custody.liveOf_ok hlv
-    have hf : FlockDeploy.finalOf l = some f := by
-      have h1 := FlockDeploy.KS.act_decide_final hact
-      rw [List.getLast?_concat] at h1
-      exact h1
-    have hfit := hfits f hf
-    obtain ⟨a₁, rest, crest, -, hcs, -⟩ := FlockDeploy.KS.act_decide_mids hact
-    obtain ⟨_, -, hlink⟩ := FlockDeploy.KS.act_decide_link hact
-    have hs := FlockDeploy.act_decide hact
-    obtain ⟨st, r, ps⟩ := f
-    have hj' : Json.parse r = .ok j := hj
-    have hp : Json.parse (r ++ " ") = Json.parse r := by rw [hws r j hj', hj']
-    have hf' : FlockDeploy.finalOf (FlockDeploy.Final.encode ⟨st, r ++ " ", ps⟩) = some ⟨st, r ++ " ", ps⟩ :=
-      FlockComplete.finalOf_encode hfit.1 hfit.2.1 hfit.2.2.1 hfit.2.2.2
-    refine ⟨FlockDeploy.Final.encode ⟨st, r ++ " ", ps⟩, ?_, ?_⟩
-    · intro he
-      rw [he, hf] at hf'
-      injection hf' with hf''
-      injection hf'' with _ hr _
-      exact append_space_ne r hr.symm
-    · subst hcs
-      cases ms₀ with
-      | nil =>
-        exfalso
-        have h0 : l.head? = some 0 := FlockDeploy.linkOf_head hlink
-        rw [FlockDeploy.finalOf_head hf] at h0
-        exact absurd h0 (by decide)
-      | cons m ms₁ =>
-        have hlink' : FlockDeploy.linkOf m = some link := hlink
-        have e1 := FlockComplete.act_final_any (a₁ := m) (rest := ms₁ ++ [l]) (c₁ := c₁) (crest := crest) hs
-          (List.getLast?_concat (l := m :: ms₁)) hf hlink'
-        have e2 := FlockComplete.act_final_any (a₁ := m) (rest := ms₁ ++ [FlockDeploy.Final.encode ⟨st, r ++ " ", ps⟩])
-          (c₁ := c₁) (crest := crest) hs (List.getLast?_concat (l := m :: ms₁)) hf' hlink'
-        rw [List.dropLast_concat] at e1
-        rw [List.dropLast_concat] at e2
-        show FlockDeploy.next false x (m :: (ms₁ ++ [FlockDeploy.Final.encode ⟨st, r ++ " ", ps⟩])) (c₁ :: crest) =
-          FlockDeploy.next false x (m :: (ms₁ ++ [l])) (c₁ :: crest)
-        simp only [FlockDeploy.next, e1, e2, decision_congr_record hp]
+/-! ## S0 refuses a second text of one record -/
+
+/-- **The checks accept one text per record**: two records that parse alike, both accepted with the rest of the last
+message the same, are one text (S0, `Flock.RecordText.check_inj`). -/
+theorem checks_record_eq {zk : Bool} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec} {x : Msg}
+    {link : List ByteArray × List ByteArray} {c₁ : FlockDeploy.Coin} {mids : List (Msg × FlockDeploy.Coin)}
+    {st : Msg} {ps : Array ByteArray} {r r' : String} (h : Json.parse r' = Json.parse r)
+    (hc : FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r, ps⟩ = .ok ())
+    (hc' : FlockDeploy.checks zk s spec x link c₁ mids ⟨st, r', ps⟩ = .ok ()) : r' = r :=
+  _root_.Flock.RecordText.check_inj (Claims.Bridge.Custody.checks_canonical hc')
+    (Claims.Bridge.Custody.checks_canonical hc) h
+
+/-- **S0 refuses the trailing-space record**: where the record's text is accepted, the same text with one trailing
+space, which `Json.parse` reads alike (`JsonTrailingSpace`), is refused. Before S0 the deployed verifier decided the two
+alike, which refuted `Bound.LastBinds` at the deployed bound record. -/
+theorem check_space (hws : JsonTrailingSpace) {r : String} (hc : _root_.Flock.RecordText.check r = .ok ()) :
+    _root_.Flock.RecordText.check (r ++ " ") ≠ .ok () := by
+  intro h'
+  obtain ⟨j, hj, -⟩ := _root_.Flock.RecordText.check_ok hc
+  exact append_space_ne r (_root_.Flock.RecordText.check_inj h' hc (by rw [hws r j hj, hj]))
 
 end RecDeploy.LastGap
 
-namespace RecDeploy
-
-open Claims (Msg Out OC)
-
-/-- **(P4) asks a collision among one accepted decision's calls**, at any bound record whose element-level verifier's
-steps are the deployed plain verifier's and whose `final` is free in `DE`'s last message, wherever the record's text
-takes a trailing space (`JsonTrailingSpace`) and the decision's last message fits its length words. -/
-theorem lastBinds_forces_collision {Col T : Type} [DecidableEq Col]
-    (Bd : Claims.Recursion.Bound FlockDeploy.Coin Col T) (H : Msg → Msg)
-    (hV : Bd.DE.V.next = FlockDeploy.next false) (hws : JsonTrailingSpace) (hfree : FinalFree Bd.final)
-    (hP4 : Bd.LastBinds H) {x : Msg} {as : List Msg} {cs : List FlockDeploy.Coin}
-    (hk : as.length = Bd.DE.V.k x) (hcs : cs.length = as.length)
-    (hfits : ∀ os last f, Bd.final (as.getLastD []) = some (os, last) → FlockDeploy.finalOf last = some f →
-      FitsSpace f)
-    (hacc : ((Bd.IVStar.next x as cs).eval H).1 = .acc) :
-    ∃ q ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst,
-      ∃ q' ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst, Claims.Collision H q q' := by
-  refine Claims.Recursion.LastGap.lastBinds_self Bd H hfree hP4 hk hcs (fun os last hfin hl => ?_) hacc
-  rw [hV] at hl ⊢
-  exact LastGap.next_snoc_space H hws (ms₀ := os.map fun o => Bd.join (o.map Prod.fst))
-    (fun f hf => hfits os last f hfin hf) hl
-
-/-- **(P4) at the deployed bound record asks a collision of one accepted decision**: at the deployed plain verifier's
-steps (`FlockDeploy.V false`), every columns, weights, join, rows' digest input and `final` free in `DE`'s last
-message. -/
-theorem lastBinds_deployed_forces_collision (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (H : Msg → Msg) (hws : JsonTrailingSpace) (hfree : FinalFree final) :
-    let Bd := bdDeployed rel (FlockDeploy.V false).next colsE wE join rowIn final w
-    Bd.LastBinds H → ∀ (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin), as.length = Bd.DE.V.k x →
-      cs.length = as.length →
-      (∀ os last f, Bd.final (as.getLastD []) = some (os, last) → FlockDeploy.finalOf last = some f →
-        FitsSpace f) →
-      ((Bd.IVStar.next x as cs).eval H).1 = .acc →
-      ∃ q ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst,
-        ∃ q' ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst, Claims.Collision H q q' := by
-  intro Bd hP4 x as cs hk hcs hfits hacc
-  exact lastBinds_forces_collision Bd H rfl hws hfree hP4 hk hcs hfits hacc
-
-/-- **(P4) at the deployed bound record rejects every collision-free decision**: where the oracle has no collision
-among a decision's calls and its last message fits its length words, `IVStar` doesn't accept it. An honest run is
-such a decision at SHA-512, so (P4) is false there wherever `IVStar` accepts an honest run. -/
-theorem lastBinds_deployed_rejects (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
-    (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (H : Msg → Msg) (hws : JsonTrailingSpace) (hfree : FinalFree final) :
-    let Bd := bdDeployed rel (FlockDeploy.V false).next colsE wE join rowIn final w
-    Bd.LastBinds H → ∀ (x : Msg) (as : List Msg) (cs : List FlockDeploy.Coin), as.length = Bd.DE.V.k x →
-      cs.length = as.length →
-      (∀ os last f, Bd.final (as.getLastD []) = some (os, last) → FlockDeploy.finalOf last = some f →
-        FitsSpace f) →
-      (∀ q ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst,
-        ∀ q' ∈ ((Bd.IVStar.next x as cs).eval H).2.map Prod.fst, H q = H q' → q = q') →
-      ((Bd.IVStar.next x as cs).eval H).1 ≠ .acc := by
-  intro Bd hP4 x as cs hk hcs hfits hinj hacc
-  obtain ⟨q, hq, q', hq', hne, heq⟩ :=
-    lastBinds_forces_collision Bd H rfl hws hfree hP4 hk hcs hfits hacc
-  exact hne (hinj q hq q' hq' heq)
-
-end RecDeploy

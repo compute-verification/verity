@@ -172,7 +172,7 @@ def request_component(r, canon: dict):
     `canon` (one dict a composition)."""
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import workload as W
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
     params = [(name, repr(t)) for name, t in r.program.fn.signature()[0]]
     return W.request_component(r.desc, REGISTRY, params, canon=canon, digest=r.digest)
@@ -262,7 +262,7 @@ def equivalence(pred_program, traced_desc: dict) -> dict:
     from verity.ml.circuits.codec import decode_program
     from verity.ml.circuits.defs import REGISTRY
     from verity_vllm.program import descriptor_equivalence as DE
-    from verity_vllm.program.registry.catalog import load as load_registry
+    from verity.ml.definitions.registry.catalog import load as load_registry
     load_registry()
     t0 = time.time()
     try:
@@ -385,20 +385,30 @@ UNSTAMPED = "unstamped"
 
 
 def code_version() -> str:
-    """The predictor's code: a digest of every source file of the two packages a predicted Program is built from (`verity`,
-    `verity_vllm`).  A namespace package's portions are hashed as one tree, by path under the package, and only those holding a
-    module, so neither sys.path order nor a directory that joined the namespace from the cwd moves it."""
+    """The predictor's code: a digest of the files git tracks in the two packages a predicted Program is built from (`verity`,
+    `verity_vllm`), as they are on disk.  Only tracked files count (`git ls-files`), so a file a test, a build or a run writes into
+    a package's tree (a `.lake`, a cache, a report) never moves it; an edit to a tracked file does.  A namespace package's portions
+    are hashed as one tree, by path under the package, and only those holding a module, so neither sys.path order nor a directory
+    that joined the namespace from the cwd moves it.  A portion outside a git checkout is refused: nothing says which of its files
+    are source."""
     import pkgutil
-    from pathlib import Path
+    import subprocess
+    from pathlib import Path, PurePosixPath
 
     import verity
     import verity_vllm
     h = hashlib.sha256()
     for pkg in (verity, verity_vllm):
-        roots = [Path(r).resolve() for r in pkg.__path__ if any(pkgutil.iter_modules([r]))]
-        for rel, p in sorted((p.relative_to(root), p) for root in roots for p in root.rglob("*")):
-            if p.is_file() and "__pycache__" not in p.parts:
-                h.update(f"{pkg.__name__}/{rel.as_posix()}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
+        files = []
+        for root in (Path(r).resolve() for r in pkg.__path__ if any(pkgutil.iter_modules([r]))):
+            ls = subprocess.run(["git", "-C", str(root), "ls-files", "-z"], capture_output=True)
+            if ls.returncode:
+                raise RuntimeError(f"code_version: {root} is not in a git checkout, so its tracked files aren't known; run from a "
+                                   f"checkout (research ships one) ({ls.stderr.decode(errors='replace').strip()})")
+            files += [(PurePosixPath(rel), root / rel) for rel in ls.stdout.decode().split("\0") if rel]
+        for rel, p in sorted(files):
+            if p.is_file():
+                h.update(f"{pkg.__name__}/{rel}\0".encode() + hashlib.sha256(p.read_bytes()).digest())
     return h.hexdigest()[:16]
 
 

@@ -1,6 +1,6 @@
 import Mathlib
 import Definitions.Pouw.RelativeSecurityJ10R
-import Models.Pouw.Guarantees.RelativeSecurity
+import Definitions.Pouw.Guarantees.RelativeSecurity
 import Proofs.Pouw.RelativeSecurity
 
 /-!
@@ -17,6 +17,9 @@ the chain, the product-deficit games and their luck 0.854, reads the frame only 
 int8 wrap moves a value by a multiple of 256, so mod 2 it is `Σ_j (A + x_j)(W + U_j + y_j)` (`map_jS8`), whose
 two-sided part is `⟨x, y⟩`. `U` reads neither side of any frame, and the earlier segments' increments read no bit of
 segment `t`'s frame, so no plane weight enters: any ring map onto `F₂` does.
+
+The floors per prover take the same chain one adversary and one value of its coins at a time
+(`roundsSlice_of_stagedPJ`, `roundsSlice_of_overlapPJ`) into `serviceFloorPerProver_of_slices`.
 -/
 
 namespace Pouw.RelativeSecurity
@@ -226,18 +229,27 @@ def RoundsHypJStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w s, (prog w s).ChargePureJ φ (word w s)) ∧
         κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **Staged one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_stagedP` on the call design,
-`RoundsHyp` at `p = 0.854` with `F₀ = St κ L n n' B` and no slack. -/
-theorem roundsHyp_of_stagedPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L B n' : ℕ}
-    {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJStP Mc S R St Vmax δb δz κ n L B n' φ) (hSt : 0 < St)
-    (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S (JStage St n L B n') R (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+/-- `roundsHyp_of_stagedPJ` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
+`acc`, charge `cost` and breaks named, and `RoundsHypJStP`'s cost line at that slice. -/
+theorem roundsSlice_of_stagedPJ {R St : ℕ} {Vmax κ : ℝ} {n L B n' : ℕ} {φ : ZMod (2 ^ 32) →+* ZMod 2}
+    (P : StagedPlay (DCells n n' B) (JBits n L B n') (ZMod (2 ^ 32)) St R) (acc : Paths (JStage St n L B n') R → Prop)
+    (cost : Paths (JStage St n L B n') R → ℝ) (Bind ZK : Fin R → Paths (JStage St n L B n') R → Prop)
+    (V : Paths (JStage St n L B n') R → ℝ) (hacc : ∀ x, acc x → P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x)
+    (hV : ∀ x, V x ≤ Vmax)
+    (hK : ∀ x, ∃ (N : Fin R → Fin St → ℕ) (prog : ∀ w s, SlpG (JBits n L B n') (ZMod (2 ^ 32)) (N w s))
+        (aq : Fin R → Fin St → Fin n → Fin B → Fin L → ZMod (2 ^ 32))
+        (wq : Fin R → Fin St → Fin B → Fin L → Fin n' → ZMod (2 ^ 32))
+        (word : ∀ w s, DCells n n' B → Fin (N w s)),
+        (∀ w s j, (prog w s).isProd j = true → OneSided ((prog w s).prod j)) ∧
+        (∀ w s c, P.errAt x w s c =
+          fun z => (prog w s).val z (word w s c) - jPrefix (aq w s) (wq w s) c.1 c.2.1 c.2.2.val z) ∧
+        (∀ w s, (prog w s).ChargePureJ φ (word w s)) ∧
+        κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ cost x)
+    (hSt : 0 < St) (hκ : 0 ≤ κ) :
+    RoundsSlice (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax acc cost Bind ZK := by
   classical
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
-  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
-  refine ⟨P.gameP jFrame φ, Bind, ZK, V, (P.gameP jFrame φ).expBound_of_staged (by norm_num)
-    (P.game_stagedP (fun c => jFrame_injective c) φ), hB, hZ,
+  refine ⟨P.gameP jFrame φ, V, (P.gameP jFrame φ).expBound_of_staged (by norm_num)
+    (P.game_stagedP (fun c => jFrame_injective c) φ),
     fun x hx => (hacc x hx).imp_left (P.accepts_gameP jFrame φ x).mpr, hV, fun x => ?_⟩
   obtain ⟨N, prog, aq, wq, word, hOk, hE, hpure, hcharge⟩ := hK x
   set C : ℝ := ((n * n' * B : ℕ) : ℝ)
@@ -271,7 +283,21 @@ theorem roundsHyp_of_stagedPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δ
     _ ≤ κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x := by
       gcongr with w _ s
       exact hprod w s
-    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+    _ ≤ cost x := hcharge
+
+/-- **Staged one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_stagedP` on the call design,
+`RoundsHyp` at `p = 0.854` with `F₀ = St κ L n n' B` and no slack (`roundsSlice_of_stagedPJ`, slice by slice). -/
+theorem roundsHyp_of_stagedPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L B n' : ℕ}
+    {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJStP Mc S R St Vmax δb δz κ n L B n' φ) (hSt : 0 < St)
+    (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (JStage St n L B n') R (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  obtain ⟨G, V', hG, hacc', hV', hcost⟩ := roundsSlice_of_stagedPJ P
+    (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+    (fun x => Mc.charge M (e.symm x, r)) Bind ZK V hacc hV hK hSt hκ
+  exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 /-- **The window's overlapped calls, one-sided operands of any form, under J10-R**, a named hypothesis:
 `RoundsHypKOvP` on the call design (`OJSpot`), its targets `jPrefix` and charging purity across calls at `jFrame`. -/
@@ -296,19 +322,29 @@ def RoundsHypJOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w, (prog w).ChargePureAtJ φ (word w)) ∧
         κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **Overlapping one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_overlapP` on the call
-design, `RoundsHyp` at `p = 0.854` with `F₀ = κ L C`, `C` the round's cell-blocks over all its calls. -/
-theorem roundsHyp_of_overlapPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
-    {L : ℕ} {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJOvP Mc S R St Vmax δb δz κ n L B n' φ) (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S (OJSpot St n L B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
-      δz := by
+/-- `roundsHyp_of_overlapPJ` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
+`acc`, charge `cost` and breaks named, and `RoundsHypJOvP`'s cost line at that slice. -/
+theorem roundsSlice_of_overlapPJ {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St → ℕ} {L : ℕ}
+    {φ : ZMod (2 ^ 32) →+* ZMod 2}
+    (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => JBits (n t) L (B t) (n' t)) (ZMod (2 ^ 32)) R)
+    (acc : Paths (OJSpot St n L B n') R → Prop) (cost : Paths (OJSpot St n L B n') R → ℝ)
+    (Bind ZK : Fin R → Paths (OJSpot St n L B n') R → Prop) (V : Paths (OJSpot St n L B n') R → ℝ)
+    (hacc : ∀ x, acc x → P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (hV : ∀ x, V x ≤ Vmax)
+    (hK : ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (OJBits St n L B n') (ZMod (2 ^ 32)) (N w))
+        (aq : Fin R → ∀ t, Fin (n t) → Fin (B t) → Fin L → ZMod (2 ^ 32))
+        (wq : Fin R → ∀ t, Fin (B t) → Fin L → Fin (n' t) → ZMod (2 ^ 32))
+        (word : ∀ w, OCells St n n' B → Fin (N w)),
+        (∀ w j, (prog w).isProd j = true → OneSidedAtJ ((prog w).prod j)) ∧
+        (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
+          jPrefix (aq w c.1) (wq w c.1) c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
+        (∀ w, (prog w).ChargePureAtJ φ (word w)) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ cost x)
+    (hκ : 0 ≤ κ) :
+    RoundsSlice (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax acc cost Bind ZK := by
   classical
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
-  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
   let fr : (c : OCells St n n' B) → Fin L ⊕ Fin L → JBits (n c.1) L (B c.1) (n' c.1) := fun c => jFrame c.2
-  refine ⟨P.gameP fr φ, Bind, ZK, V, RoundGame.expBound_of_pathBound _
-    ((P.gameP fr φ).pathBound_of_passBound (P.passBound_gameP (fun c => jFrame_injective c.2) φ)), hB, hZ,
+  refine ⟨P.gameP fr φ, V, RoundGame.expBound_of_pathBound _
+    ((P.gameP fr φ).pathBound_of_passBound (P.passBound_gameP (fun c => jFrame_injective c.2) φ)),
     fun x hx => (hacc x hx).imp_left (P.accepts_gameP fr φ x).mpr, hV, fun x => ?_⟩
   obtain ⟨N, prog, aq, wq, word, hOk, hE, hpure, hcharge⟩ := hK x
   set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
@@ -350,7 +386,22 @@ theorem roundsHyp_of_overlapPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax �
       refine (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans ?_
       rw [← expect_mul_left]
       exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
-    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+    _ ≤ cost x := hcharge
+
+/-- **Overlapping one-sided calls give the window's cost line** under J10-R: `roundsHyp_of_overlapP` on the call
+design, `RoundsHyp` at `p = 0.854` with `F₀ = κ L C`, `C` the round's cell-blocks over all its calls
+(`roundsSlice_of_overlapPJ`, slice by slice). -/
+theorem roundsHyp_of_overlapPJ {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+    {L : ℕ} {φ : ZMod (2 ^ 32) →+* ZMod 2} (h : RoundsHypJOvP Mc S R St Vmax δb δz κ n L B n' φ) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (OJSpot St n L B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
+      δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  obtain ⟨G, V', hG, hacc', hV', hcost⟩ := roundsSlice_of_overlapPJ P
+    (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+    (fun x => Mc.charge M (e.symm x, r)) Bind ZK V hacc hV hK hκ
+  exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 end Pouw.RelativeSecurity
 
@@ -387,5 +438,37 @@ theorem OverlapFloorKOneSidedJ10R : Pouw.Guarantees.RelativeSecurity.OverlapFloo
     (274 * Real.log 2)
   rw [mul_zero, sub_zero, card_oCells] at h
   exact ModelB.ServiceFloor.mono h (by linarith [ModelB.exp_parity_274])
+
+theorem StagedFloorKOneSidedJ10RPerProver :
+    Pouw.Guarantees.RelativeSecurity.StagedFloorKOneSidedJ10RPerProver := by
+  intro Mc S R St n L B n' e run sha fb fz cb db cz dz δb βb δz βz κ Vmax hSt hκ hC _ hβb _ hβz hS hK hP
+  have hF₀ : 0 < (St : ℝ) * (κ * L * ((n * n' * B : ℕ) : ℝ)) := by
+    rw [mul_assoc]; exact mul_pos (by exact_mod_cast hSt) (mul_pos hκ (by exact_mod_cast hC))
+  have h := serviceFloorPerProver_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
+    fb fz (fun Ω' _ M hcom r => by
+      obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
+      exact ⟨(run Ω' M r).Bind, (run Ω' M r).ZK, hB, hZ, roundsSlice_of_stagedPJ (φ := toF2) (run Ω' M r).play
+        _ _ _ _ (run Ω' M r).V hacc (fun x => (hP Ω' M hcom r x).1) (fun x =>
+          ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).aq x, (run Ω' M r).wq x, (run Ω' M r).word x,
+            (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩)
+        hSt hκ.le⟩)
+    (by norm_num) hF₀ hβb hβz cb db cz dz (274 * Real.log 2) ModelB.exp_parity_274
+  rwa [mul_zero, sub_zero] at h
+
+theorem OverlapFloorKOneSidedJ10RPerProver :
+    Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver := by
+  intro Mc S R St L n B n' e run sha fb fz cb db cz dz δb βb δz βz κ Vmax hκ hC _ hβb _ hβz hS hK hP
+  have hF₀ : 0 < κ * L * (Fintype.card (OCells St n n' B) : ℝ) := by
+    rw [mul_assoc, card_oCells]; exact mul_pos hκ (by exact_mod_cast hC)
+  have h := serviceFloorPerProver_of_slices (p := 427 / 500) (sl := 0) (Vmax := Vmax) (δb := δb) (δz := δz) e sha
+    fb fz (fun Ω' _ M hcom r => by
+      obtain ⟨hB, hZ, hacc⟩ := hS Ω' M hcom r
+      exact ⟨(run Ω' M r).Bind, (run Ω' M r).ZK, hB, hZ, roundsSlice_of_overlapPJ (φ := toF2) (run Ω' M r).play
+        _ _ _ _ (run Ω' M r).V hacc (fun x => (hP Ω' M hcom r x).1) (fun x =>
+          ⟨(run Ω' M r).N x, (run Ω' M r).prog x, (run Ω' M r).aq x, (run Ω' M r).wq x, (run Ω' M r).word x,
+            (hK Ω' M hcom r x).1, (hK Ω' M hcom r x).2.1, (hK Ω' M hcom r x).2.2, (hP Ω' M hcom r x).2⟩)
+        hκ.le⟩)
+    (by norm_num) hF₀ hβb hβz cb db cz dz (274 * Real.log 2) ModelB.exp_parity_274
+  rwa [mul_zero, sub_zero, card_oCells] at h
 
 end Pouw.SecurityProofs.RelativeSecurity

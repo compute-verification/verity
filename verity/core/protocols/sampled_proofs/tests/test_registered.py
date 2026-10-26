@@ -73,7 +73,7 @@ def _registered(prog: Program) -> G.Registered:
 def _record(prog: Program, reg: G.Registered, **kw):
     part = P.partition(prog, Q)
     n = P.units(prog, Q)
-    ports = {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
+    ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
              for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", n))}
     roots = [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
     return R.record(prog, Q, LAW, SCHEME, roots, SERVED, registered=[reg.entry()], **kw), ports
@@ -250,6 +250,23 @@ def test_a_bit_row_value_is_its_leaves_bit_row_under_its_ports_schema(schema, wo
         G.Registered.commit(prog, "W", rows, salts, word_bits, "hm96-sha512/row/v3")
 
 
+def test_a_row_seg_table_one_token_a_row_is_what_the_embedding_read_opens():
+    """`gates.embedding`'s read at a hidden position (`EmbeddingRead_v1`) reads a table registered here under
+    ``hm96-sha512/row-seg/v1`` with one token a row (``words = H``): each row opens at its token's position under the
+    registration's root and domain id, and at no other token's."""
+    from verity.ml.commitments.gates import embedding as E
+
+    V, H = 5, 3
+    rows = [[(7919 * t + 31 * j) & 0xFFFF for j in range(H)] for t in range(V)]
+    salts = [bytes([t + 1]) * 192 for t in range(V)]
+    reg = G.Registered.commit(P.program_digest(_program()), "W", rows, salts, schema=G.SCHEMA_SEG)
+    dom, D = reg.domain.domain_id, merkle_depth(V)
+    for t in range(V):
+        path = [reg.path(t)[64 * k:64 * (k + 1)] for k in range(D)]
+        assert E.reference(V, t, reg.root, dom, rows[t], salts[t], path) == (rows[t], 1)
+        assert E.reference(V, (t + 1) % V, reg.root, dom, rows[t], salts[t], path)[1] == 0
+
+
 def test_the_verifiers_reads_file_names_a_bit_row_values_format():
     """`row_schema` is the reads file's key for a value read by a bit-row port (`schemas`), absent for `row/v1`, so a v1
     file is the bytes it was. A bit row is its leaves' bits: W's two 8-bit leaves are one u16 word of a `row/v2` row, where
@@ -321,7 +338,8 @@ def test_a_parameter_of_several_rows_reads_each_at_its_own_port():
                        schemas={"A": G.SCHEMA_V2})
     port = {"value": "A", "root": reg.root.hex(), "leaves": 4, "words": K // 2, "word_bits": 16,
             "domain": reg.domain.domain_id.hex(), "row_schema": G.SCHEMA_V2}
-    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2]}, "a1": {**port, "reads": [1, 3]}}}
+    assert doc == {"format": G.READS, "ports": {"a0": {**port, "reads": [0, 2], "param": "a[0]"},
+                                                "a1": {**port, "reads": [1, 3], "param": "a[1]"}}}
     for p, reads in (("a0", [0, 2]), ("a1", [1, 3])):
         for u, r in enumerate(reads):
             assert G.verify_read(reg.domain, reg.root, r, reg.bcs[r], reg.path(r), G.SCHEMA_V2)
@@ -726,7 +744,7 @@ def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
     prog = _seeded(bits)
     q = P.template_instance_query(bind(SEEDED, BITS=bits).id)
     part, n = P.partition(prog, q), P.units(prog, q)
-    ports = {p: {"leaves": n, "domain": R.served_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
+    ports = {p: {"leaves": n, "domain": R.window_domain(part["program"], P.digest(part), p, s, n, "r-registered")}
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
@@ -973,7 +991,7 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     reg = _registered(prog)
     first, ports = _record(prog, reg)
     part = P.partition(prog, Q)
-    dom = R.served_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
+    dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
     earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom},
                                               {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
@@ -1042,7 +1060,7 @@ def test_r7_reuses_an_earlier_records_registered_value():
             R.check(rec, prog, Q, **kw, outputs=bad)
 
 
-#: an AROW row table's port (`verity_vllm.commit.serving_rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
+#: an AROW row table's port (`verity.ml.windows.rows.RowTable.port`: `row-table/<engine step>/<op_path>`)
 ROW_TABLE = "row-table/3/model.layers.0.mlp.down_proj"
 
 
@@ -1053,7 +1071,7 @@ def test_pouw_roots_reads_an_arow_row_table_root():
     _, check, w, _ = _seeded_case()
     prog, q = check["program"], check["query"]
     part = P.partition(prog, q)
-    dom = R.served_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
+    dom = R.window_domain(part["program"], P.digest(part), ROW_TABLE, "hm96-sha512/row-seg/v1", 5, "r-registered")
     ports = {**check["ports"], ROW_TABLE: {"leaves": 5, "domain": dom}}
     sup = {"pouw.roots": [[{"port": ROW_TABLE}, {"value": "W"}]] * 2}
     check = {**check, "ports": ports, "supplied": sup}

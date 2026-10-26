@@ -367,6 +367,7 @@ theorem setupH_merkle_untyped {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h0 at h
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   extract_lets (config := { underBinder := false, onlyGivenNames := true }) h1 at h
@@ -429,6 +430,7 @@ theorem setupH_merkle_typed {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
   obtain ⟨hk, h⟩ := ite_throw_ok' h
   simp (config := { zeta := false }) only [jpD] at h
   (have hh := except_bind_ok h; clear h; obtain ⟨pin, hpin, h⟩ := hh)
+  (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)
   (have hh := except_bind_ok h; clear h; obtain ⟨_, -, h⟩ := hh)

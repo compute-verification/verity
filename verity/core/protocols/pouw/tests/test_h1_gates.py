@@ -14,7 +14,7 @@ census/v1's own MAC counters agree with the Lean on every row:
   the Lean's served MACs are those of the served role (`roleOf`), and no gate of the tile with MACs has that role.
 
 Every class of the tile is listed (Rows.lean's `classed_h1Rows`, `h1Classes`) but its bodies, and property/v1 reads it, as
-it does v3's and v4's.
+it does v3's, v4's, v5's and v6's.
 """
 from __future__ import annotations
 
@@ -36,12 +36,13 @@ pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.seg
 ROWS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 #: the lanes' Boolean segment dots, s8-family steps in property/v1's table (`PouwSegDot0` is `PouwSegDot` from 0)
 LANE = ("PouwSegDot_v2", "PouwSegDot0_v2")
-#: the tile's versions on this tree: v1, the one-stream v3 and the gated v4 (#2902's)
-TILES = {v: d for v, d in ((1, H.PouwH1Tile), (3, getattr(H, "PouwH1Tile3", None)), (4, getattr(H, "PouwH1Tile4", None)))
+#: the tile's versions on this tree: v1, the one-stream v3, the gated v4 (#2902's) and J10-R's v5 and v6 (v1's and v3's
+#: under call-scope noise, #3403's)
+TILES = {v: d for v, d in ((1, H.PouwH1Tile), *((v, getattr(H, f"PouwH1Tile{v}", None)) for v in (3, 4, 5, 6)))
          if d is not None}
-#: a tile's classes that are bodies, not primitives: v1's exact accumulator (`EXACT`, whose type v3 and v4 take and never
-#: call); the tile is its Program's root, not a class of its census
-BODIES = {v: {"GemmAccumulatorS8_v2"} if v == 1 else set() for v in TILES}
+#: a tile's classes that are bodies, not primitives: v1's and v5's exact accumulator (`EXACT`, whose type v3, v4 and v6
+#: take and never call); the tile is its Program's root, not a class of its census
+BODIES = {v: {"GemmAccumulatorS8_v2"} if v in (1, 5) else set() for v in TILES}
 #: Lean's budgeted classes in property/v1's names
 BUDGETED = {"rounding": "roundings", "compareSelect": "compare_select", "fold": "folds"}
 
@@ -111,8 +112,8 @@ def test_h1_tile_is_classed(v):
     input by its id) but its `BODIES`, and property/v1 refuses no gate of it as unlisted; v1's are Lean's `h1Classes` in
     theirs (the seeds' `PouwUnitSeeds_v2` and `PouwNoiseBlock_v2`, which `h1Dag` reads as the salt, too). Its dots are on
     bits, so the pass reads them down to their 1-bit gates and proves no s8-family window of the tile (`family` 0). Slow
-    on a process's first tile (see `test_h1_census`); v3's and v4's catch a primitive of their one stream or dead-tile
-    mask that the registry lacks, which v1 never calls."""
+    on a process's first tile (see `test_h1_census`); v3's, v4's, v5's and v6's catch a primitive of their one stream,
+    dead-tile mask or call seeds and block counter that the registry lacks, which v1 never calls."""
     doc = tile_census(4, 16, 64, v)
     fams = {cl["family"] for cl in doc["classes"].values()}
     assert {f for f in fams if P.class_of(f) is None and input_id(f) is None} == BODIES[v]

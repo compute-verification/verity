@@ -42,7 +42,7 @@ def KSBoundRouteMerged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -54,7 +54,8 @@ def KSBoundRouteMerged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock
 `Bound.KS_of_plainKSAbort_binds` at `deployRecC` for `KS_of_flockKS_binds`, which reads (P1) at `DE` directly and
 `DE`'s weight at most `w` for the bridge and (P3). -/
 theorem ksBoundRoute_merged (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) : KSBoundRouteMerged rel relO b L := by
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) : KSBoundRouteMerged rel relO b L := by
   intro nextE colsE wE join rowIn final w Bd D bL hP1 hBinds hw hEC hCF hF hst hT hL hRRP decI hdec
   obtain ⟨decC, hRP, hshapes⟩ := hst
   let I := Claims.Recursion.Inner.ofFlock Bd.deploy decI
@@ -67,7 +68,7 @@ theorem ksBoundRoute_merged (rel relO : _root_.Flock.Readable.Parsed → _root_.
     intro shape hs
     obtain ⟨chk, shows, cmt, hHe, hSh, hCk, hOp, hDc⟩ := hshapes shape hs
     exact vstarAccepts_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) shape decC chk shows cmt hplay
-      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRRP
+      (hRP decI) (hHe decI) (hSh decI) hCk hOp hDc hRows hRRP
   have hA := innerAcceptsColl_bound FlockDeploy.sha512 I ivScope b L (deployZkRec relO) hT
     (hacc _ (by simp)) (hacc _ (by simp)) (hacc _ (by simp))
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
@@ -90,7 +91,8 @@ theorem ksBoundRoute_merged (rel relO : _root_.Flock.Readable.Parsed → _root_.
 
 /-- **The route at `γ`'s weight `DE`'s own** (`w := wE`), where `KSBoundRouteMerged`'s weight premise holds. -/
 theorem ksBoundDeployed_merged_wE (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
-    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (b : Brings) (L : Claims.Recursion.VStarB.LayoutB)
+    (hRows : L.ReadsRows FlockDeploy.sha512) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)
     (rowIn : Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) :
     let Bd := bdDeployed rel nextE colsE wE join rowIn final wE
@@ -108,7 +110,7 @@ theorem ksBoundDeployed_merged_wE (rel relO : _root_.Flock.Readable.Parsed → _
           (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape) ∧
           (∀ decI, Claims.Recursion.VStarB.VstarShowsB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L shape
             decC shows cmt) ∧
-          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows chk s) ∧
+          (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt chk s) ∧
           (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
           Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
     ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
@@ -116,7 +118,7 @@ theorem ksBoundDeployed_merged_wE (rel relO : _root_.Flock.Readable.Parsed → _
     ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
     KSBoundDeployed rel relO b L nextE colsE wE join rowIn final wE :=
   fun hP1 hBinds hEC hCF hF hst hT hL hRRP =>
-    ksBoundRoute_merged rel relO b L nextE colsE wE join rowIn final wE hP1 hBinds (fun _ => le_rfl) hEC hCF hF hst
-      hT hL hRRP
+    ksBoundRoute_merged rel relO b L hRows nextE colsE wE join rowIn final wE hP1 hBinds (fun _ => le_rfl) hEC hCF hF
+      hst hT hL hRRP
 
 end RecDeploy

@@ -82,7 +82,8 @@
         "infra/cluster/",
         "tools/agent-guard/",
         "tools/research/",
-        ".cursor/"
+        ".cursor/",
+        ".python-version"
       ],
       "branch_suffixes": [
         "558b",
@@ -99,7 +100,10 @@
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct; generation 3 bc-8f4b652b finishes its workers and stops)",
+      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+      "lineage": [
+        "bc-8f4b652b"
+      ],
       "remit": "Proofs: Lean, red team, C-Flock, backend sweeps, consolidation and the merge trains.",
       "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
       "usergroup": "S0CAGBJTJF4",
@@ -129,8 +133,8 @@
         "benchmarks/sampling_plan/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
-        "Security/Models/Hash/",
-        "Security/Proofs/Hash/"
+        "Security/Proofs/Hash/",
+        "verity/core/protocols/interface/"
       ],
       "branch_suffixes": [
         "95d4",
@@ -206,7 +210,7 @@
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; its research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac), which posts as it too: the machine model, the Lean accounting statements and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; the research work is @compute-research's",
       "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
@@ -217,17 +221,19 @@
       "owns": [
         "verity/core/protocols/pouw/",
         "Security/Definitions/Pouw/",
-        "Security/Models/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
-        "Security/Models/Nci/",
+        "Security/Definitions/Nci/",
         "Security/Proofs/Nci/",
+        "benchmarks/all_protocols/",
         "benchmarks/pouw/",
         "benchmarks/pouw/machine_model/",
         "benchmarks/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
         "benchmarks/nci/",
+        "benchmarks/e2e_h200/",
+        "benchmarks/e2e_demo/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
         "integrations/vllm/verity_vllm/protocols/pouw/circuit.py",
@@ -243,6 +249,7 @@
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
         "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
+        "integrations/torch_loop/",
         "fixtures/bench-instances/",
         "fixtures/redteam/",
         "fixtures/redteam-3/",
@@ -254,18 +261,18 @@
         "Security/Definitions/Accounting/PouwWork.lean",
         "Security/Definitions/Accounting/TS.lean",
         "Security/Definitions/Accounting/TS/",
-        "Security/Models/Accounting/Assumptions/PouwFloor.lean",
-        "Security/Models/Accounting/Assumptions/PouwWork.lean",
-        "Security/Models/Accounting/Assumptions/Sheet.lean",
-        "Security/Models/Accounting/Assumptions/Stages.lean",
-        "Security/Models/Accounting/Assumptions/TS.lean",
-        "Security/Models/Accounting/Guarantees/CoinFlow.lean",
-        "Security/Models/Accounting/Guarantees/FillerLuck.lean",
-        "Security/Models/Accounting/Guarantees/HMu.lean",
-        "Security/Models/Accounting/Guarantees/PouwWork.lean",
-        "Security/Models/Accounting/Guarantees/Sheet.lean",
-        "Security/Models/Accounting/Guarantees/TS.lean",
-        "Security/Models/Accounting/Guarantees/TS/",
+        "Security/Definitions/Accounting/Assumptions/PouwFloor.lean",
+        "Security/Definitions/Accounting/Assumptions/PouwWork.lean",
+        "Security/Definitions/Accounting/Assumptions/Sheet.lean",
+        "Security/Definitions/Accounting/Assumptions/Stages.lean",
+        "Security/Definitions/Accounting/Assumptions/TS.lean",
+        "Security/Definitions/Accounting/Guarantees/CoinFlow.lean",
+        "Security/Definitions/Accounting/Guarantees/FillerLuck.lean",
+        "Security/Definitions/Accounting/Guarantees/HMu.lean",
+        "Security/Definitions/Accounting/Guarantees/PouwWork.lean",
+        "Security/Definitions/Accounting/Guarantees/Sheet.lean",
+        "Security/Definitions/Accounting/Guarantees/TS.lean",
+        "Security/Definitions/Accounting/Guarantees/TS/",
         "Security/Proofs/Accounting/ChainWork.lean",
         "Security/Proofs/Accounting/CoinFlow.lean",
         "Security/Proofs/Accounting/CoinFlow/",
@@ -291,6 +298,13 @@
       ]
     },
     {
+      "handle": "compute-research",
+      "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
+      "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
+      "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
+      "usergroup": "S0CBZ2L8542"
+    },
+    {
       "handle": "memory-accounting",
       "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
       "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
@@ -302,7 +316,6 @@
       "linear": "MEM",
       "owns": [
         "Security/Definitions/Pous/",
-        "Security/Models/Pous/",
         "Security/Proofs/Pous/",
         "benchmarks/bandwidth/",
         "benchmarks/codec_tensor/",
@@ -350,28 +363,27 @@
         "Security/Definitions/Accounting/Requirement.lean",
         "Security/Definitions/Accounting/Responder.lean",
         "Security/Definitions/Accounting/Window.lean",
-        "Security/Models/Accounting/Assumptions/EncodeChain.lean",
-        "Security/Models/Accounting/Assumptions/RateAudit.lean",
-        "Security/Models/Accounting/Assumptions/RateAuditDeployed.lean",
-        "Security/Models/Accounting/Assumptions/Remote.lean",
-        "Security/Models/Accounting/Guarantees/Bandwidth.lean",
-        "Security/Models/Accounting/Guarantees/Bandwidth/",
-        "Security/Models/Accounting/Guarantees/BandwidthAudit.lean",
-        "Security/Models/Accounting/Guarantees/BoundReceipt.lean",
-        "Security/Models/Accounting/Guarantees/BoundSketch.lean",
-        "Security/Models/Accounting/Guarantees/Capacity.lean",
-        "Security/Models/Accounting/Guarantees/Gates.lean",
-        "Security/Models/Accounting/Guarantees/Memory.lean",
-        "Security/Models/Accounting/Guarantees/RateAudit.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditDeployed.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditHorizon.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditNamed.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditPartial.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditRemote.lean",
-        "Security/Models/Accounting/Guarantees/RateAuditSketch.lean",
-        "Security/Models/Accounting/Guarantees/Remote.lean",
-        "Security/Models/Accounting/Guarantees/Requirement.lean",
-        "Security/Models/Accounting/Guarantees/Responder.lean",
+        "Security/Definitions/Accounting/Assumptions/EncodeChain.lean",
+        "Security/Definitions/Accounting/Assumptions/RateAudit.lean",
+        "Security/Definitions/Accounting/Assumptions/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/Assumptions/Remote.lean",
+        "Security/Definitions/Accounting/Guarantees/Bandwidth.lean",
+        "Security/Definitions/Accounting/Guarantees/Bandwidth/",
+        "Security/Definitions/Accounting/Guarantees/BandwidthAudit.lean",
+        "Security/Definitions/Accounting/Guarantees/BoundReceipt.lean",
+        "Security/Definitions/Accounting/Guarantees/BoundSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/Capacity.lean",
+        "Security/Definitions/Accounting/Guarantees/Gates.lean",
+        "Security/Definitions/Accounting/Guarantees/Memory.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAudit.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditDeployed.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditHorizon.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditNamed.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditPartial.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditRemote.lean",
+        "Security/Definitions/Accounting/Guarantees/RateAuditSketch.lean",
+        "Security/Definitions/Accounting/Guarantees/Requirement.lean",
+        "Security/Definitions/Accounting/Guarantees/Responder.lean",
         "Security/Proofs/Accounting/Bandwidth.lean",
         "Security/Proofs/Accounting/Bandwidth/",
         "Security/Proofs/Accounting/BandwidthAudit.lean",
@@ -415,7 +427,6 @@
         "verity/core/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
-        "Security/Models/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
         "benchmarks/network_traces/",
         "benchmarks/network_e2e/",
@@ -518,7 +529,7 @@
         "tools/research/tests/slack_routing_vectors.json",
         "tools/research/src/research/linear.py",
         "tools/research/tests/test_linear.py",
-        "integrations/slack-events/"
+        "infra/slack-events/"
       ],
       "branch_suffixes": [
         "b252",
@@ -547,7 +558,7 @@
       "owns": [
         "AGENTS.md",
         "README.md",
-        "DESIGN.md",
+        "ARCHITECTURE.md",
         ".agents/skills/",
         "tests/",
         "fixtures/",
@@ -590,6 +601,7 @@
       "linear": "BENCH",
       "owns": [
         "benchmarks/harness/",
+        "benchmarks/recursion_e2e/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py"
@@ -613,7 +625,8 @@
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
       "owns": [
-        "benchmarks/hash/"
+        "benchmarks/hash/",
+        "benchmarks/torch_gpu/"
       ],
       "branch_suffixes": [
         "15ad"
@@ -632,7 +645,9 @@
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
-      "owns": [],
+      "owns": [
+        "benchmarks/rho/"
+      ],
       "branch_suffixes": [
         "4207"
       ],
@@ -643,6 +658,45 @@
         "If a lab hides some of its GPUs from monitoring, how much protection is left?",
         "What would have to improve for the slowdown to go from about 30x to over 1,000x?"
       ]
+    },
+    {
+      "handle": "counters",
+      "holder": "the counters coordinator (bc-163d178a-a74a-59de-8ea7-6e320c7891ef), a new slice launched from top's charter",
+      "remit": "Trusted event counters: which few counted event streams (bits moved, core steps) make each security goal provable.",
+      "charter": "Daniel, 2026-10-25 8:14 PM PDT (a new slice, via top)",
+      "usergroup": "S0CCWGJBEJU",
+      "owns": [],
+      "branch_suffixes": [
+        "91ef"
+      ],
+      "examples": [
+        "If we could trust one hardware counter in a datacenter, which should it be, and what would it settle?",
+        "Does counting the bits a GPU sends to its host make the memory or network guarantee provable?",
+        "Which security goals would trusted tensor-core step counts settle, and which would still need proofs?",
+        "How do our guarantees change as a physical rate bound, such as CUDA-core to tensor-core bandwidth, gets looser?",
+        "Could a retrofit to today's GPUs give us any of these counters, or does it take new silicon?"
+      ]
+    },
+    {
+      "handle": "soundness",
+      "holder": "the soundness coordinator (bc-d2745108-9b89-5c53-8137-de8e75809c4d), a new slice launched from top's charter, split from proofs to own the Full proofs project",
+      "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every leg it rests on, and their composition.",
+      "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
+      "owns": [
+        "verity/core/protocols/onsite/",
+        "verity/core/protocols/remote/"
+      ],
+      "branch_suffixes": [
+        "9c4d"
+      ],
+      "examples": [
+        "Is there one theorem that says the whole verifier is sound, and what does it still assume?",
+        "Which legs of the soundness theorem are proved, and which are still premises?",
+        "If the verifier accepts a period, what exactly does that guarantee about the work, memory and network claims?",
+        "When will Verity.Soundness be on main with no leg left as a hypothesis?",
+        "Does the theorem cover the code that actually runs, or a model of it?"
+      ],
+      "usergroup": "S0CBTDSL95M"
     }
   ]
 }

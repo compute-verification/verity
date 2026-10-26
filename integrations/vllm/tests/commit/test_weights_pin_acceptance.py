@@ -180,7 +180,7 @@ def test_shared_weights_are_one_registered_input_across_request_subcircuits(tmp_
 def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_and_the_verdict_names_the_pin(checkpoint, tmp_path):
     """[BRIEF §4A] wrong registered root (shard sha != checkpoints.json pin; no entry) and wrong checkpoint context (another repo / revision /
     Program) each FAIL by name with the honest served model; commit_verdict carries the pin's outcome into the row text (ok / missing / mismatch)."""
-    from verity_vllm.check.verdict import commit_verdict
+    from verity_vllm.check.commit_pass import commit_verdict
 
     d, man, t = checkpoint
     prog, fields = _program()
@@ -199,7 +199,7 @@ def test_wrong_registered_root_and_wrong_checkpoint_context_are_refused_by_name_
     assert "revision" in WR.check(rec, live, checkpoint_of_record={"repo": "test/tiny", "revision": "0123456789ab"})["why"]
     assert "!= Program of record" in WR.check(rec, live, program_digests_of_record={"e" * 128})["why"]
     # the verdict text: ok -> PASS; mismatch / wrong context -> 'weights of record: <named cause>'; not run -> 'weights unpinned (MAN-09)'
-    bnd = {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 8}}
+    bnd = {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": 8}}
     base = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64}, "binding": bnd,
             "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
             "sampled_replay": {"result": True, "grade": "complete"}, "boundary_linkage": {"result": True, "pairs": 6, "linked": 6}}

@@ -437,6 +437,7 @@ theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : Lis
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
   obtain ⟨_, -, hc⟩ := FlockSoundness.Refine.ebind_ok hc
+  obtain ⟨_, hc, -⟩ := FlockSoundness.Refine.ebind_ok hc
   cases hd : s.read.draw with
   | none => simp [hd, Flock.ProvedScope.drawLaw] at hc
   | some d => exact ⟨d, rfl⟩
@@ -912,7 +913,8 @@ theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
     FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims ∧
       innerOk r.w.inner = .ok () := by
-  unfold readX at h
+  replace h := readXPre_of_readX h
+  unfold readXPre at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
   obtain ⟨w, -, ri, hri, sh, -, pa, -, dims, hdims, vs, -, h⟩ := h
   split_ifs at h with hl

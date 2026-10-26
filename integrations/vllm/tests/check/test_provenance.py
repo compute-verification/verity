@@ -277,6 +277,7 @@ def test_toy_fold_journal_is_reproduced():
     assert rep["status"] == "fail" and rep["n_mismatch"] == 1 and rep["mismatches"][0]["seq"] == victim["seq"]
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(not M1.exists(), reason="golden M1 log not present")
 def test_m1_exhaustive_provenance():
     from verity_vllm.check.fold_compare import fold_log, load_profile

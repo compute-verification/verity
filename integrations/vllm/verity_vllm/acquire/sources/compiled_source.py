@@ -1,6 +1,6 @@
-"""R15 lane `compiled`: graph-replay-safe acquisition for `Execution=compiled` rows (vLLM torch.compile + CUDA graphs, enforce_eager=False).
+"""Graph-replay-safe acquisition for `Execution=compiled` rows (vLLM torch.compile + CUDA graphs, enforce_eager=False).
 
-Why the eager collector cannot see anything here (M-0055, F-dse-12 at rc3): vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
+Why the eager collector cannot see anything here: vLLM compiles `LlamaModel.forward` with Dynamo `fullgraph=True`
 (`support_torch_compile`) and replays the Inductor-compiled pieces as CUDA graphs.  The committer's module-forward wrappers are installed AFTER
 the model was compiled, so Dynamo's guards were already skipped (`TorchCompileWrapperWithCustomDispatcher`) and the wrappers are never traced;
 during graph replay no Python runs at all.  Result at rc3: 1 of 189 required tensors per step (the sampled ids), Commit FAIL.
@@ -40,6 +40,7 @@ from typing import Any
 
 import torch
 
+from verity_vllm import settings
 from verity_vllm.engine import env as engine_env, hooks
 
 OP_NS = "verity"
@@ -93,7 +94,7 @@ def compile_settings(llm: Any = None, runner: Any = None) -> dict[str, Any]:
             out["torch"] = torch.__version__
     except Exception as e:  # noqa: BLE001
         out["error"] = repr(e)[:200]
-    out["compile_cache_disabled"] = os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1"
+    out["compile_cache_disabled"] = settings.raw("VLLM_DISABLE_COMPILE_CACHE") == "1"
     return out
 
 
@@ -186,7 +187,7 @@ class CompiledGraphSource:
 
     def __init__(self, rows: int = 512, fault: str | None = None) -> None:
         self.rows = int(rows)
-        self.fault = (os.environ.get("VERITY_FAULT", "") if fault is None else fault).strip()
+        self.fault = (settings.VERITY_FAULT if fault is None else fault).strip()
         self.c: Any = None
         self.names: list[str] = []
         self.id_of: dict[str, int] = {}

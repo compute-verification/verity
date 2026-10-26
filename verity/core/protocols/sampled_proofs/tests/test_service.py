@@ -57,7 +57,7 @@ def _stream(spec=None, budget=2, clock=None, coins=b"\x07", sampler=None) -> S.S
 
 def _ports(n: int) -> dict:
     part = P.partition(P.population_program(PAIR, n), QUERY)
-    return {p: {"leaves": leaves, "domain": R.served_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
+    return {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, SCHEMA, leaves, RUN)}
             for p, leaves in (("x", n), ("out", 2 * n))}
 
 

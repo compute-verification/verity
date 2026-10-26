@@ -39,6 +39,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit draw (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, drawn after the prover's message; under `--zk`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
 | `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its draw file the one `flock-verify draw` printed for the verifier's own draw (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each draw of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
+| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each draw of the law | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
@@ -151,7 +152,7 @@ coins.
     the key is fresh for each session.
   - *N* counts every leaf committed under the session's key, opened or not: `|streams| · 2^rounds_log`
     (`CoinTree::build`; the `SHA-512(PAD)` padding is no leaf). flock-circuit's schedule (`coin_spec_of`) has the
-    session's stream plus two reps per table at `rounds_log = 8`: `N = (1 + 2J)·256`, so `N·2^-256 < 2^-246` at J = 1.
+    session's stream plus two reps per table at `rounds_log = 9`: `N = (1 + 2J)·512`, so `N·2^-256 < 2^-245` at J = 1.
   - *What the bound needs.* The salts are uniform and independent, one per leaf, never reused. The key is independent
     of the salts, drawn after the prover's nonce, and never reused across sessions. Both come from `/dev/urandom`, which
     is A6's source, not A3's. A5's snapshot caveat (The platform, under A5) applies to the draw at `Hello`. The
@@ -255,8 +256,7 @@ That rests on `prf/sha-512` and the seed commitment's hiding, and the headline t
 only for runs on per-round OS coins: a session whose identity names `live-os`, or a bench point with `coins: live-os`.
 The identity and a bench point's `coins` say which mode ran. flock-verify replays the recorded coins, so that they were
 the verifier's own OS draws, each drawn after the prover's message, is the record's custody (`PROTOCOL.md` §17.2) and
-A6, which no check of the record establishes. At `--zk` the custody is a named `Prop`, `Assumptions.Zk.RecordCustodyZK`
-(`live-verifier`), which `zk_session_sound_custody` takes as `hCust`.
+A6, which no check of the record establishes. The custody is `live-verifier`, named in every mode (the table above).
 
 ## Premises the lock lists by name
 
@@ -281,7 +281,7 @@ Zero knowledge's coverage (closed by the refusal): `Composed.zk_session_view` ho
 prover doesn't refuse (`refused_coins` in `flock-circuit.rs`; `CoinedSetup.Admits`: `β ≠ 0`, the mask slot's rank
 `128·k`, `ρ₀, ρ₁` independent over F128, and no zerocheck outer coin `1`; the verifier also checks `β` and `ρ`), and
 there is no other kind of coin vector. At an outer coin `r_j = 1` (`inv 0 = 0` in the residual round) the honest pads
-miss the inner proof's constraint by a witness-dependent amount that the view would show (`ZK/Table.lean`'s inner
+miss the inner proof's constraint by a witness-dependent amount that the view would show (`Definitions/Flock/ZK/Table.lean`'s inner
 proof), so the prover refuses it: `zk_veil::Masking` stops as the coin opens, before anything that depends on it is
 sent, reading only the coin. That costs completeness at most `(m − 13)·2^-128` per rep under uniform coins
 (`ZkEveryCoin.outer_one_le`), and no statement charges it. `ZkEveryCoin.zk_session_view_all` holds at every coin vector,

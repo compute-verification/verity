@@ -244,7 +244,7 @@ def _program(a: argparse.Namespace) -> Any:
 
     TG.load_registries()
     if a.model == "tiny":
-        from verity_vllm.program.registry import b1
+        from verity.ml.definitions.registry import b1
         return Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2))
     return one_call(TG.definition(a.definition))
 

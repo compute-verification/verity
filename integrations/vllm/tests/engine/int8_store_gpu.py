@@ -19,7 +19,7 @@
     cd integrations/vllm; PY=/workspace/jobs/venv312/bin/python3     # PYTHONPATH=.:../..:../../tools/research/src
     nvcc -O3 -gencode arch=compute_120a,code=sm_120a -std=c++17 -Xcompiler -fPIC -shared \\
         -DKV_FIELD=1024 -DKV_MASK=1 -DKV_FOLD6=1 -DKV_QHEADS=32 -o /tmp/paged.so ../../benchmarks/vllm_encoded/paged.cu
-    $PY tests/store/int8_store_gpu.py --paged-so /tmp/paged.so --out DIR
+    $PY tests/engine/int8_store_gpu.py --paged-so /tmp/paged.so --out DIR
 """
 from __future__ import annotations
 

@@ -21,10 +21,10 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation.reference import standalone_call
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_tp_allreduce as BA
-from verity_vllm.program.registry import tp_allreduce as TA
-from verity_vllm.program.registry import tp_allreduce_check as K
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_tp_allreduce as BA
+from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_check as K
 
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x807F, 0x0080, 0x8080, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80,
                      0xFF80, 0x7FC0, 0x7F81, 0xFFFF], np.uint16)
@@ -139,6 +139,7 @@ def test_multimem_coordinate_is_the_kernels_sum(seed: int, tree, ftz: bool) -> N
     assert (got == want).all()
 
 
+@pytest.mark.slow
 def test_multimem_rows_are_the_kernels_sums() -> None:
     """SIZE = 136 at WORLD 8 is 32-element slices, the last owner's empty: each slice at its owner's tree."""
     rng = np.random.default_rng(3)
@@ -248,6 +249,7 @@ def test_pinned_counts_and_digests(target) -> None:
     assert back.gates == prog.gates and codec.program_digest(codec.encode_program(back)) == digest
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("target", [
     bind(BA.AllReduceMultimem, WORLD=4, SIZE=32, TREES=(((0, 1), (2, 3)),) * 2 + (TA.chain(4),) * 2, FTZ=True),
     bind(BA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)], ids=lambda t: t.id)

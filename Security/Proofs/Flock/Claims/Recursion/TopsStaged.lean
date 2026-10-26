@@ -15,7 +15,7 @@ staging off the run (`StagedB`, `stagedB_deployRec_part`) and needs no `RunPairs
 layout whose held rounds have no pieces, as `layoutBTops`'s don't (`heldWhole_layoutBTops`). `HeldB` comes from
 `heldB_layoutBTops` at `schedMatches_dense`, `capPorts` and `rowsCover`, and the decoder and calls premises from
 `canonicalProofFiles` and `plainCallsBindOrSlack_sha512`. What stays open at the dense form is the last round's pieces
-(`FinPieces`), `PartChecksB` and `PartOpensB` at the coin server's transcript read by a reader `untr` at the V\*
+(`FinPieces`), `PartChecksBV` and `PartOpensB` at the coin server's transcript read by a reader `untr` at the V\*
 statements staged as V\* stages them (`showsPart`, `cmtTr`), `DecompB`, the readers' `ReadersTrue`, and `untr` reading
 that transcript back at an accepted run's inner rounds (`ReadsBackB`).
 `bitsLin2_deployed_staged` is its `BitsLin2On` form (`bitsLin2On_of_ksLin2On`, `sessionAccepts`). At `finOpen`,
@@ -59,7 +59,7 @@ theorem heldWhole_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNe
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops`, with the staging read off the run**:
 `ksLin2_deployed_plain_parts` at `layoutBTops`, with `HeldB` from `heldB_layoutBTops` and `HeldWhole` from
 `heldWhole_layoutBTops`. What stays at the dense form is
-`FinPieces`, `PartChecksB` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and
+`FinPieces`, `PartChecksBV` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and
 `untr` reading the coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
 open. -/
 theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -74,8 +74,8 @@ theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Ms
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
@@ -83,8 +83,8 @@ theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Ms
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation b L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro L Bd D bL hrb hP hRT
-  refine ksLin2_deployed_plain_parts b L (heldWhole_layoutBTops fin) wE join final w canonicalProofFiles
-    plainCallsBindOrSlack_sha512 untr hrb ?_ hRT
+  refine ksLin2_deployed_plain_parts b L (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl)
+    (heldWhole_layoutBTops fin) wE join final w canonicalProofFiles plainCallsBindOrSlack_sha512 untr hrb ?_ hRT
   intro shape hsh
   obtain rfl := List.mem_singleton.1 hsh
   obtain ⟨hF, chk, hPC, hPO, hD⟩ := hP _ hsh
@@ -107,8 +107,8 @@ theorem bitsLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (
     (∀ shape ∈ [Claims.Recursion.Form.Dense],
       FinPieces fin shape ∧
       ∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, Claims.Recursion.VStarB.PartChecksB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
-          L shape (showsPart untr b) chk s) ∧
+        (∀ s, Claims.Recursion.VStarB.PartChecksBV FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
+          L shape (showsPart untr b) (cmtTr untr) chk s) ∧
         (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation)
           L shape (showsPart untr b) (cmtTr untr) s) ∧
         Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →

@@ -5,6 +5,7 @@
     lib.build(st, step)                          # domains, segments, leaves, levels on the current stream; step (1,) int32
     st.root(i)                                   # table i's root: 8 int64 big-endian words, a device view
     lib.build(lib.union([st, st2]), step)        # both sets in one h1c_build (`Union`), into each set's own buffers
+    tl = Tail(lib, mid, rnd); tl.pre(step); tl.levels()  # build(mid), build(rnd) of given tables, split at the leaves
 
 A table's domain is `commit.domain(fields, count, kind)`, with `splice` naming the fields that move with the step (each
 a s + b), so a step's sequence is the same launches with the step read from the device.  Its label is `lab[0]` + str(s)
@@ -53,7 +54,8 @@ class _Tab(C.Structure):
     _fields_ = [("data", C.c_void_p), ("tail", C.c_void_p), ("stride", C.c_longlong), ("tail_stride", C.c_longlong),
                 ("lab", C.c_void_p * 2), ("lab_len", C.c_int * 2), ("labs", C.c_int), ("len", C.c_int), ("body", C.c_int),
                 ("count", C.c_int), ("depth", C.c_int), ("dm", _Dom), ("dom", C.c_void_p), ("level", C.c_void_p),
-                ("segs", C.c_void_p), ("root", C.c_void_p), ("xd", C.c_void_p), ("rlive", C.c_void_p), ("rbw", C.c_int)]
+                ("segs", C.c_void_p), ("root", C.c_void_p), ("xd", C.c_void_p), ("rlive", C.c_void_p), ("rbw", C.c_int),
+                ("tdiv", C.c_int)]
 
 
 def words(b: bytes) -> np.ndarray:
@@ -112,8 +114,9 @@ class Tab:
     stride: int = 0
     body: int = 0
     length: int = 0
-    tail: torch.Tensor | None = None     # then length - body bytes at tail + i tail_stride
+    tail: torch.Tensor | None = None     # then length - body bytes at tail + (i // chunks) tail_stride
     tail_stride: int = 0
+    chunks: int = 1                      # rows a tail: a K row's n chunk leaves (`weights.chunks`) share its scale
     lab: tuple = ("", "")                 # lab[0] + str(s) + lab[1], or lab[0] alone (labs False)
     labs: bool = True
     out: int | None = None               # where the root goes (a device address), else the set's own
@@ -133,6 +136,8 @@ def dead_x(rows: list[bytes], dev) -> torch.Tensor:
 
 
 class Set:
+    lvf: int | None = None      # its own level schedule (`H1C.set`); None the build's H1C_LVF
+
     def __init__(self, tabs: list[Tab], dev):
         self.tabs, self.n = tabs, len(tabs)
         blobs, offs = [], {}
@@ -182,6 +187,9 @@ class Set:
             x.data = t.data.data_ptr() if t.data is not None else None
             x.tail = t.tail.data_ptr() if t.tail is not None else None
             x.stride, x.tail_stride = t.stride, t.tail_stride
+            if t.chunks < 1 or t.count % t.chunks:
+                raise ValueError(f"table {i}: {t.count} rows are no whole number of {t.chunks}-leaf rows")
+            x.tdiv = t.chunks
             for j in range(2):
                 x.lab[j], x.lab_len[j] = base + offs[t.lab[j].encode()], len(t.lab[j].encode())
             x.labs = int(t.labs)
@@ -229,15 +237,66 @@ class Union:
         self.dev = torch.frombuffer(bytearray(bytes(self.host)), dtype=torch.uint8).to(dev)
 
 
+class Tail:
+    """`H1C.build(mid)` then `H1C.build(rnd)`, rnd's leaves mid's roots (or written before `levels`), split at the
+    leaves (h1c.cu's h1c_tail): `pre(step)` what reads no leaf (domains, pads, each level's Snap), `levels()` every
+    level of both in one launch.  Every table of both sets is given (no rows); an H1C_NMID build's.  With host_root,
+    `levels` writes rnd's roots into pinned host memory too, then its launch's number: `root(i)` spins on that number,
+    so the host reads the root once the launch has written it, with no copy and no wait on the stream."""
+
+    def __init__(self, c: H1C, mid: Set, rnd: Set, host_root: bool = False):
+        lib = c.lib
+        if not hasattr(lib, "h1c_tail") or not lib.h1c_tail_words():
+            raise RuntimeError("this h1c library has no h1c_tail (an H1C_HB=1 H1C_NMID=1 build has)")
+        lib.h1c_tail_pre.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p,
+                                     C.c_void_p, C.c_void_p]
+        lib.h1c_tail.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_int] + [C.c_void_p] * 3 + [C.c_uint64, C.c_void_p]
+        self.lib, self.mid, self.rnd = lib, mid, rnd
+        self.snaps = torch.empty((mid.n + rnd.n) * lib.h1c_tail_words(), dtype=torch.int64, device=c.dev)
+        self.done = torch.zeros(1, dtype=torch.int32, device=c.dev)
+        self.root_host = torch.zeros(8 * rnd.n + 1, dtype=torch.int64).pin_memory() if host_root else None
+        self.root_np = self.root_host.numpy() if host_root else None
+        self.seq = 0
+
+    def pre(self, step: torch.Tensor) -> None:
+        rc = self.lib.h1c_tail_pre(C.addressof(self.mid.host), self.mid.dev.data_ptr(), self.mid.n,
+                                   C.addressof(self.rnd.host), self.rnd.dev.data_ptr(), self.rnd.n, step.data_ptr(),
+                                   self.snaps.data_ptr(), torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_tail_pre returned {rc}")
+
+    def levels(self) -> None:
+        hr = self.root_host.data_ptr() if self.root_host is not None else None
+        self.seq += 1
+        rc = self.lib.h1c_tail(self.mid.dev.data_ptr(), self.mid.n, self.rnd.dev.data_ptr(), self.rnd.n,
+                               self.snaps.data_ptr(), self.done.data_ptr(), hr, self.seq,
+                               torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_tail returned {rc}")
+
+    def root(self, i: int) -> bytes:
+        """rnd's table i's root from host memory (host_root), as the last `levels` launch wrote it: the caller has
+        waited for that launch to be under way, since this spins on its number holding the GIL."""
+        n = len(self.root_np) - 1
+        while int(self.root_np[n]) != self.seq:
+            pass
+        return unwords(self.root_np[8 * i:8 * i + 8])
+
+
 class H1C:
     def __init__(self, path: str, key: bytes, dev=None):
         dev = dev or torch.device("cuda")
         self.lib = C.CDLL(path)
         self.lib.h1c_build.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p]
+        self.build_lv = getattr(self.lib, "h1c_build_lv", None)
+        if self.build_lv is not None:
+            self.build_lv.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_int, C.c_void_p]
         self.lib.h1c_const.argtypes = [C.c_void_p]
         self.lib.h1c_a_init.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_int, C.c_void_p]
         self.lib.h1c_a_step.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_int] + [C.c_void_p] * 4
         self.lib.h1c_a_call.argtypes = [C.c_void_p] * 8 + [C.c_int, C.c_void_p]
+        if hasattr(self.lib, "h1c_put"):
+            self.lib.h1c_put.argtypes = [C.c_void_p, C.c_void_p, C.c_int, C.c_void_p]
         sz = (C.c_int * 3)()
         self.lib.h1c_sizes(sz)
         if tuple(sz) != (C.sizeof(_Const), C.sizeof(_Dom), C.sizeof(_Tab)):
@@ -271,14 +330,32 @@ class H1C:
             raise RuntimeError(f"h1c_a_form({f}) returned {rc}")
         self.a_form = f
 
-    def set(self, tabs: list[Tab]) -> Set:
-        return Set(tabs, self.dev)
+    def set(self, tabs: list[Tab], lvf: int | None = None) -> Set:
+        """One launch set; `lvf` its own level schedule (`h1c_build_lv`: levels from lvf up in one block a table on an
+        H1C_HB build, < 0 every level its own launch), None the build's H1C_LVF.  The roots are the same at every lvf."""
+        if lvf is not None and self.build_lv is None:
+            raise RuntimeError("this libh1c has no h1c_build_lv (built before it): rebuild it from h1c.cu")
+        st = Set(tabs, self.dev)
+        st.lvf = lvf
+        return st
 
     def union(self, sets: list[Set]) -> Union:
         return Union(sets, self.dev)
 
+    def put(self, src: torch.Tensor, dst: torch.Tensor) -> None:
+        """src (contiguous, on the device) into dst (pinned host memory, as many bytes) by a kernel on the current
+        stream, not a copy engine's DMA, so it waits on no other stream's transfers (h1c_put)."""
+        n = src.numel() * src.element_size()
+        if not (src.is_cuda and src.is_contiguous() and dst.is_pinned() and dst.is_contiguous()
+                and dst.numel() * dst.element_size() == n):
+            raise ValueError("h1c put: a contiguous device tensor into pinned host memory of its size")
+        rc = self.lib.h1c_put(src.data_ptr(), dst.data_ptr(), n, torch.cuda.current_stream().cuda_stream)
+        if rc:
+            raise RuntimeError(f"h1c_put returned {rc}")
+
     def build(self, st: Set | Union, step: torch.Tensor, domains: bool = True) -> None:
-        rc = self.lib.h1c_build(C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(),
-                                int(domains), torch.cuda.current_stream().cuda_stream)
+        args = (C.addressof(st.host), st.dev.data_ptr(), st.n, step.data_ptr(), self.btab.data_ptr(), int(domains))
+        lvf, stream = getattr(st, "lvf", None), torch.cuda.current_stream().cuda_stream
+        rc = self.lib.h1c_build(*args, stream) if lvf is None else self.build_lv(*args, lvf, stream)
         if rc:
             raise RuntimeError(f"h1c_build returned {rc}")

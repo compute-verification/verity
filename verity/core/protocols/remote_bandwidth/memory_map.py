@@ -56,7 +56,7 @@ step that reached it until a later write, and the writer records no free of it. 
 the verifier checks that no plan held it, so it was never written.
 
 Lifetime.  No plan holds a written block L windows or more after the window its append joined (`audit.Params.lifetime`,
-an hour at the stated window), so every block written leaves the credited store within L.  A block the writer keeps
+the windows in 30 s), so every block written leaves the credited store within L.  A block the writer keeps
 longer (a prefix cache's) is re-keyed: its payload appended again, the same `d_j` at the store's next fresh index
 under a fresh coin, so the device encodes it anew under a fresh bound key.  A re-key's free is the one exception to a
 free at its values' last structural reader: the re-key's step frees the slot, releasing the old index, and the new
@@ -96,6 +96,10 @@ did and the device has since encoded, and its frees are of blocks whose values' 
 released in between is in neither; it refuses a step at or before one already applied or taken.  That a pass's plan
 holds every complete block the circuit reads at its step is the plan's proof unit's to check, against this record and
 the circuit's requirement, inside zero knowledge.
+
+The schedule.  `schedule` turns the map into the schedule the prover publishes (each block's write and free, the
+appends' extents and the passes' steps, `schedule.py`), from which the verifier computes every pass's plan and which it
+requires before it credits an appended block (`audit.Session.scheduled`): the plans `take` gives are that schedule's.
 """
 
 from __future__ import annotations
@@ -107,6 +111,7 @@ from dataclasses import dataclass
 from verity.ml.commitments import MerkleTree
 
 from . import audit
+from . import schedule as _schedule
 from .codec import BLOCK_BYTES
 from .receipts import DIGEST_BYTES
 
@@ -335,3 +340,31 @@ class Replay:
         out = _runs(self._added), _runs(self._removed)
         self._added, self._removed, self.taken = set(), set(), step
         return out
+
+
+def schedule(head: Header, steps: Iterable[Step], appends: Sequence[tuple[int, int]],
+             passes: Sequence[int]) -> _schedule.Schedule:
+    """The schedule the prover publishes for `Session.scheduled` (`schedule.Schedule`), from its memory map: each
+    registered block's free, each appended block's write and free (a block's free is the step that freed its slot or
+    wrote over it), the appended blocks grouped as the session's `appends` (first, count) went out, and the passes'
+    steps.  A block the map never writes (withdrawn, or appended and not encoded by the map's end) is never resident.
+    The map is held to memory-map/v1 as `Replay` holds it (`MemoryMapError`).  A prover whose plans are `Replay.take`'s
+    sends the plans this schedule gives."""
+    replay, write, free = Replay(head), {}, {}
+    for s in steps:
+        for slot in [*s.freed, *(w.slot for w in s.written)]:
+            if (j := replay.holds(slot)) is not None:
+                free[j] = s.step
+        replay.apply(s)
+        write.update((w.index, s.step) for w in s.written)
+    registered: list[list[int]] = []
+    for j in sorted(j for j in free if j < head.blocks):
+        if registered and registered[-1][0] + registered[-1][1] == j and registered[-1][2] == free[j]:
+            registered[-1][1] += 1
+        else:
+            registered.append([j, 1, free[j]])
+    return _schedule.Schedule(
+        tuple((f, c, e) for f, c, e in registered),
+        tuple(tuple((write[j], free.get(j)) if j in write else None for j in range(first, first + count))
+              for first, count in appends),
+        tuple(passes))

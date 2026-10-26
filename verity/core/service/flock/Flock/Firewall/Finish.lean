@@ -238,29 +238,56 @@ theorem eqTablePar_eq (r : Array F128) : eqTablePar r = eqTable r := by
   have hi := Array.mem_range.1 hi
   rw [getElem!_eq _ (by simpa using hi), Array.getElem_map, F128.mul_add_one, getElem!_eq t hi]
 
-/-- `switchVec` as compiled code computes it: byte `j`'s buckets of the table (`byteBuckets`), one task to a byte, then
+/-- `switchVec`'s sums over the words `lo, …, lo + n − 1`: byte `j`'s buckets (`byteBuckets`), then
 `s[8j + i] = Σ_{b < 256, bit_i(b)} buckets_j[b]`. -/
-def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
-  let eY := eqTablePar (c.x.extract 1 c.x.size)
-  let bs := ((Array.range 16).map fun j => Task.spawn fun _ => byteBuckets g eY j).map Task.get
+def switchPart (g e : Array F128) (lo n : Nat) : Array F128 :=
+  let bs := (Array.range 16).map fun j => byteBuckets g e j lo n
   (Array.range 128).map fun v => sumF 256 fun b => if b.testBit (v % 8) then (bs[v / 8]!)[b]! else 0
+
+theorem switchPart_get (g e : Array F128) (lo n : Nat) {v : Nat} (hv : v < 128) :
+    (switchPart g e lo n)[v]! = sumF n fun y => if (g[lo + y]!).bit v then e[lo + y]! else 0 := by
+  unfold switchPart
+  rw [getElem!_range_map _ hv, getElem!_range_map _ (show v / 8 < 16 by omega)]
+  have h := (byteBuckets_go g e (v / 8) lo (by omega) (show v % 8 < 8 by omega) n).2
+  rwa [show 8 * (v / 8) + v % 8 = v by omega] at h
+
+/-- `switchVec` as compiled code computes it: `switchPart` of each `2^14` words in a task, the parts added. -/
+def switchVecFast (g : Array F128) (c : Claim) : Array F128 :=
+  let eY := eqTable (c.x.extract 1 c.x.size)
+  let a := eY.size / 16384
+  let ps := ((Array.range a).map fun i => Task.spawn fun _ => switchPart g eY (16384 * i) 16384).map Task.get
+  let r := switchPart g eY (16384 * a) (eY.size - 16384 * a)
+  (Array.range 128).map fun v => sumF a (fun i => (ps[i]!)[v]!) + r[v]!
 
 theorem switchVec_eq_fast (g : Array F128) (c : Claim) : switchVec g c = switchVecFast g c := by
   unfold switchVec switchVecFast
-  rw [eqTablePar_eq]
+  generalize eqTable (c.x.extract 1 c.x.size) = e
   apply Array.map_congr_left
   intro v hv
   have hv := Array.mem_range.1 hv
-  rw [Array.map_map, getElem!_range_map _ (show v / 8 < 16 by omega)]
-  have h := (byteBuckets_go g (eqTable (c.x.extract 1 c.x.size)) (v / 8) (by omega) (show v % 8 < 8 by omega)
-    (eqTable (c.x.extract 1 c.x.size)).size).2
-  rw [show 8 * (v / 8) + v % 8 = v by omega] at h
-  exact h.symm
+  rw [switchPart_get _ _ _ _ hv]
+  have hp : (sumF (e.size / 16384) fun i =>
+      (((Array.range (e.size / 16384)).map fun i => Task.spawn fun _ => switchPart g e (16384 * i) 16384).map
+        Task.get)[i]![v]!) =
+      sumF (e.size / 16384) fun i => sumF 16384 fun y => if (g[16384 * i + y]!).bit v then e[16384 * i + y]! else 0 :=
+    sumF_congr fun i hi => by
+      rw [Array.map_map, getElem!_range_map _ hi]
+      exact switchPart_get _ _ _ _ hv
+  rw [hp]
+  conv => lhs; rw [← Nat.add_sub_cancel' (Nat.mul_div_le e.size 16384)]
+  rw [sumF_add, sumF_blocks]
+
+theorem tasks_get {α β : Type} (f : α → β) (xs : Array α) :
+    (xs.map fun x => Task.spawn fun _ => f x).map Task.get = xs.map f := by
+  rw [Array.map_map]
+  rfl
 
 /-- `basisVals` as compiled code computes it: each claim's `γ_k·Φ_k(eq(z_k, y))` from the byte tables of
-`γ_k·eq(rpp_k, ·)` (`mul_sumF`, `byteTable_sum`), in tasks of `2^12` points. -/
+`γ_k·eq(rpp_k, ·)` (`mul_sumF`, `byteTable_sum`), in tasks of `2^12` points. Each claim's tables are a task of their own,
+`eqTable` serial in it: `eqTablePar`'s tasks inside them only contend for the same cores. -/
 def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
-  let tabs := sws.map fun sw => (eqTablePar sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·)))
+  let tabs := (sws.map fun sw => Task.spawn fun _ =>
+    (eqTable sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·)))).map Task.get
   let k := min l 12
   parRangeS (fun y => tabs.foldl (fun acc (ez, tb) =>
       let v := ez[y]!
@@ -268,10 +295,11 @@ def basisValsFast (sws : Array Switched) (l : Nat) : Array F128 :=
 
 theorem basisVals_eq_fast (sws : Array Switched) (l : Nat) : basisVals sws l = basisValsFast sws l := by
   unfold basisVals basisValsFast
-  rw [parRangeS_eq, ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
+  rw [tasks_get fun sw : Switched => (eqTable sw.z, byteTable ((eqTable sw.rpp).map (sw.gamma * ·))), parRangeS_eq,
+    ← Nat.pow_add, Nat.sub_add_cancel (Nat.min_le_left _ _)]
   apply Array.map_congr_left
   intro y _
-  simp only [Array.foldl_map, eqTablePar_eq]
+  simp only [Array.foldl_map]
   congr 1
   funext acc sw
   rw [← byteTable_sum, mul_sumF]

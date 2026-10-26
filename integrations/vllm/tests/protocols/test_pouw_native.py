@@ -40,6 +40,7 @@ def three_strips():
     return call, PN.Native(call, "ncp-v2"), PC.evaluate_ir("ncp-v2", call)
 
 
+@pytest.mark.slow
 def test_every_unit_is_the_programs_outputs_numbering_and_wiring(three_strips):
     call, nat, (c, tr) = three_strips
     tp, units = c.partition, CP.units(call.shape, PC.kind_of("ncp-v2"))
@@ -53,6 +54,7 @@ def test_every_unit_is_the_programs_outputs_numbering_and_wiring(three_strips):
         assert flat == [tr[g] for g in tp.inputs(u)], (u, role, where)
 
 
+@pytest.mark.slow
 def test_every_y_unit_is_the_weight_programs_outputs_numbering_and_wiring(three_strips):
     call = three_strips[0]
     c, tr = PC.evaluate_weight_ir("ncp-v2", call)
@@ -64,6 +66,7 @@ def test_every_y_unit_is_the_weight_programs_outputs_numbering_and_wiring(three_
     assert list(evaluate(nw.template(1), *nw.args(1))) == [int(v) for v in nw.outputs(1)]
 
 
+@pytest.mark.slow
 def test_the_commit_is_the_ir_commit_and_the_reference(three_strips):
     call, _nat, _ir = three_strips
     nat, ir = PN.commit_call(0, "ncp-v2", call), PC.commit_call_ir(0, "ncp-v2", call)

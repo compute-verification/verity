@@ -92,7 +92,7 @@ def test_a_served_window_registers_what_core_would(monkeypatch):
     period's weights: every registered value's entry, the window's served digest and each call's manifest row are the
     same as with core's `Registered.commit` registering them."""
     torch = pytest.importorskip("torch")
-    from tests.protocol_options import test_pouw_h1_served as T
+    from tests.protocols import test_pouw_h1_served as T
     from verity_vllm.protocols.pouw.h1 import served as SV
 
     def window():

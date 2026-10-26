@@ -19,13 +19,13 @@ from __future__ import annotations
 import pytest
 
 from verity_vllm.check.c2_rules import _complete_replay_population_gap, _form_b_selector_coverage
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
-from verity_vllm.program.kernels.rows import EVALUATORS
+from verity.ml.definitions.numerics.rows import EVALUATORS
 
 
 def _bnd(n_req):
-    return {"context": {"ok": True}, "coverage": {"ok": True}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
+    return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
 BASE = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
