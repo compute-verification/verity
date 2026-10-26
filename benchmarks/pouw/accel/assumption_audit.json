@@ -49,10 +49,10 @@
    "source": "floors: *PerProver",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:79",
    "premise": "N1, 'X-RO commitments'",
-   "class": "C-RO",
-   "deployed": "confirmed C-RO: N1 is the hiding of hm96 leaves (the coin stays hidden from hello to release; Properties/Pouw/LiveSalt.lean:54), which collision resistance doesn't give",
+   "class": "C",
+   "deployed": "N1 is hm96 leaf hiding: Claims.Hm96Hiding (Security/Definitions/Claims/Hm96.lean:33), one of C-Flock's named assumptions in Flock.Guarantees.Claims (StrictBirthday, ExpectedCR, Hm96Hiding, JsonSpec). It is proved by the leftover hash lemma (δ₁ ≤ 2^-193 at all but 2^-64 of keys) plus the hash-derived-key CRS step, with no random oracle",
    "owner": null,
-   "removal": "Daniel confirms (R-ACCEL-3); or fold it into C-Flock's zero knowledge if that claim covers the same leaves"
+   "removal": "none beyond C-Flock's own claims. The 'X-RO' label in the PoUW docstrings is stale and should name Hm96Hiding"
   },
   {
    "id": "StagedPlay-form",
@@ -411,9 +411,9 @@
    "premise": "key rule |a0 ∓ a1⁻¹ mod 2²⁴| ≥ 32 suffices (decision 65); sufficiency empirical",
    "class": "D",
    "kind": "claim about the fold and the adversary's error",
-   "deployed": "assumed",
+   "deployed": "the H200 headline design dither-1s-li-l32 does NOT use the route: its [mand.fold] rests on these premises. The LI-CP-W designs (dither-2s-licpw-redux-*) do. Whether J10-R's StagedPins is that PIN is J10R-CREDIT's open check (coordinator, 03:00Z)",
    "owner": "FOLD-LUCK (CMP pending)",
-   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+   "removal": "protocol choice: LI-CP-W, a warp checkpoint a segment with pinned openings, under which li needs none of the four: Accounting.Guarantees.TS.LiSegmentsBind from Pouw.Guarantees.Receipt.LiCheckpointWordInjective, LiHalfBijective and LiCheckpointLowBit (#2352, merged 17 Oct, 52b921c40f); LiWindowUnbound shows one checkpoint a window isn't enough"
   },
   {
    "id": "LI.RT",
@@ -422,9 +422,9 @@
    "premise": "(RT): no root of the error reaches several rows; open, no lemma removes it (RS-E-REF IX.3)",
    "class": "D",
    "kind": "claim about the fold and the adversary's error",
-   "deployed": "assumed",
+   "deployed": "the H200 headline design dither-1s-li-l32 does NOT use the route: its [mand.fold] rests on these premises. The LI-CP-W designs (dither-2s-licpw-redux-*) do. Whether J10-R's StagedPins is that PIN is J10R-CREDIT's open check (coordinator, 03:00Z)",
    "owner": "FOLD-LUCK (CMP pending)",
-   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+   "removal": "protocol choice: LI-CP-W, a warp checkpoint a segment with pinned openings, under which li needs none of the four: Accounting.Guarantees.TS.LiSegmentsBind from Pouw.Guarantees.Receipt.LiCheckpointWordInjective, LiHalfBijective and LiCheckpointLowBit (#2352, merged 17 Oct, 52b921c40f); LiWindowUnbound shows one checkpoint a window isn't enough"
   },
   {
    "id": "LI.G3",
@@ -433,9 +433,9 @@
    "premise": "(G₃): the chain's algebraic no-cancellation at the key rule; proved at one MMA (r11 Thm 1), open for chains",
    "class": "D",
    "kind": "claim about the fold and the adversary's error",
-   "deployed": "assumed",
+   "deployed": "the H200 headline design dither-1s-li-l32 does NOT use the route: its [mand.fold] rests on these premises. The LI-CP-W designs (dither-2s-licpw-redux-*) do. Whether J10-R's StagedPins is that PIN is J10R-CREDIT's open check (coordinator, 03:00Z)",
    "owner": "FOLD-LUCK (CMP pending)",
-   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+   "removal": "protocol choice: LI-CP-W, a warp checkpoint a segment with pinned openings, under which li needs none of the four: Accounting.Guarantees.TS.LiSegmentsBind from Pouw.Guarantees.Receipt.LiCheckpointWordInjective, LiHalfBijective and LiCheckpointLowBit (#2352, merged 17 Oct, 52b921c40f); LiWindowUnbound shows one checkpoint a window isn't enough"
   },
   {
    "id": "LI.HO_U",
@@ -444,9 +444,9 @@
    "premise": "(HO_U): no hand-off joins words whose rows or columns are equal or complementary; (HO) fails in serving",
    "class": "D",
    "kind": "claim about the fold and the adversary's error",
-   "deployed": "assumed",
+   "deployed": "the H200 headline design dither-1s-li-l32 does NOT use the route: its [mand.fold] rests on these premises. The LI-CP-W designs (dither-2s-licpw-redux-*) do. Whether J10-R's StagedPins is that PIN is J10R-CREDIT's open check (coordinator, 03:00Z)",
    "owner": "FOLD-LUCK (CMP pending)",
-   "removal": "proof about the fold; or protocol change: pinned openings + a checkpoint a segment, under which li needs none of (RT), (G₃), (HO) (LiHalfBijective, LiCheckpointWordInjective, LiCheckpointLowBit, proved)"
+   "removal": "protocol choice: LI-CP-W, a warp checkpoint a segment with pinned openings, under which li needs none of the four: Accounting.Guarantees.TS.LiSegmentsBind from Pouw.Guarantees.Receipt.LiCheckpointWordInjective, LiHalfBijective and LiCheckpointLowBit (#2352, merged 17 Oct, 52b921c40f); LiWindowUnbound shows one checkpoint a window isn't enough"
   },
   {
    "id": "J10R.H1-twins",
@@ -464,7 +464,7 @@
    "file": "branch cursor/compute-research-j10r-credit-ea24 @79c5a21ad5, Security/Properties/Pouw/PeriodJ10R.lean:343",
    "premise": "the check's drawn tiles are the stratified draw coin's",
    "class": "F",
-   "deployed": "code fact of the challenger's stratified draw",
+   "deployed": "a code fact once the verifier draws tiles in the sampling block's stratified draw; a deployment gap until then",
    "owner": null,
    "removal": "code fact"
   },
@@ -633,6 +633,47 @@
    "deployed": "hypothesis of RingKCount",
    "owner": "O-CHARGE",
    "removal": "proof in the model over the excluded programs"
+  },
+  {
+   "id": "ReceiptLuckAt.L64",
+   "source": "BET-COVERAGE (inbox 02:55Z)",
+   "file": "note:compute-research/20261026T0136Z-draft-accel-bet-coverage",
+   "premise": "a ReceiptLuckAt at L = 64, which folding at L = 64 needs to reach 94–100% coverage",
+   "class": "D",
+   "kind": "a new claim that needs Daniel",
+   "deployed": "not stated in Lean",
+   "owner": "FOLD-LUCK (CMP-134); Daniel to rule",
+   "removal": "proof about the fold at L = 64, or don't fold at 64"
+  },
+  {
+   "id": "J10R.SharedNoiseLucks",
+   "source": "H1J10RCheckedCreditPeriod (coordinator 03:00Z)",
+   "file": "branch cursor/compute-research-j10r-credit-ea24",
+   "premise": "the shared-noise lucks of per-call noise",
+   "class": "D",
+   "deployed": "named by J10R-CREDIT",
+   "owner": "FOLD-LUCK (CMP-134)",
+   "removal": "proof about the fold/noise"
+  },
+  {
+   "id": "J10R.TileStratumEscape",
+   "source": "H1J10RCheckedCreditPeriod (coordinator 03:00Z)",
+   "file": "branch cursor/compute-research-j10r-credit-ea24",
+   "premise": "TileStratumEscape",
+   "class": "T",
+   "deployed": "named by J10R-CREDIT",
+   "owner": "J10R-CREDIT (CMP-127)",
+   "removal": "a lemma to prove"
+  },
+  {
+   "id": "J10R.PerStratumProjection",
+   "source": "H1J10RCheckedCreditPeriod (coordinator 03:00Z)",
+   "file": "branch cursor/compute-research-j10r-credit-ea24",
+   "premise": "the per-stratum projection",
+   "class": "T",
+   "deployed": "named by J10R-CREDIT",
+   "owner": "J10R-CREDIT (CMP-127)",
+   "removal": "a lemma to prove"
   }
  ],
  "lock": {
