@@ -38,11 +38,11 @@ calls**: each verdict accepts with SHA-512 answered only within its own log, and
 both pass one rep on one session, where one decoded proof is one file (`decodeProof_read`), so two openings collide
 (`plainE_calls_tied`'s second half, at a parsed value). -/
 theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claims.Msg}
-    {link link' : List ByteArray × List ByteArray} {c₁ c₁' : Coin} {mids : List (Claims.Msg × Coin)}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)}
     {fj fj' : FinalJ} {j j' : Json} {F F' : Array ByteArray} {L₁ L₂ : List (Claims.Msg × Claims.Msg)}
     (hV : verifyJWithMK id (hashesIn (L₁.map Prod.fst)) spec (tabsOf sts) j F = .ok ())
     (hV' : verifyJWithMK id (hashesIn (L₂.map Prod.fst)) spec (tabsOf sts) j' F' = .ok ())
-    (hck : checksAtJ s spec x link c₁ mids fj j = .ok ()) (hck' : checksAtJ s spec x link' c₁' mids fj' j' = .ok ())
+    (hck : checksAtJ s spec x link c₁ mids fj j = .ok ()) (hck' : checksAtJ s spec x link c₁ mids fj' j' = .ok ())
     (hsu : s.setup = .ok (spec, sts)) (hpf : F ≠ F') : Claims.TiedColl sha512 (L₁ ++ L₂) := by
   obtain ⟨-, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checksAtJ_ok hck
   obtain ⟨-, lv', hlv', hcu'⟩ := Claims.Bridge.Custody.checksAtJ_ok hck'
@@ -130,9 +130,9 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
 among their calls**, at SHA-512. -/
 theorem filesR_tied {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as' : List Claims.Msg}
     {cs cs' : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    {link link' : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
+    {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f f' : FinalP}
     (ha : actR rd x as cs = .decide s spec sts link c₁ mids f)
-    (ha' : actR rd x as' cs' = .decide s spec sts link' c₁ mids f')
+    (ha' : actR rd x as' cs' = .decide s spec sts link c₁ mids f')
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
     (hne : filesAt (tabsOf sts) (pointsOf spec c₁) f.ps ≠ filesAt (tabsOf sts) (pointsOf spec c₁) f'.ps) :
     Claims.TiedColl sha512 (((nextR rd x as cs).eval sha512).2 ++ ((nextR rd x as' cs').eval sha512).2) := by
@@ -154,7 +154,7 @@ theorem streams_getD_coins {A B : Array (Array Flock.Round)}
   unfold Array.getD
   by_cases hk : k < A.size
   · have hk' : k < B.size := hsz ▸ hk
-    rw [dif_pos hk, dif_pos hk']
+    simp only [hk, hk', ↓reduceDIte]
     have hkA : k < (A.toList.map (fun s => s.toList.map Round.coins)).length := by simpa using hk
     have e := List.getElem_of_eq h hkA
     simp only [List.getElem_map, Array.getElem_toList] at e
@@ -162,7 +162,7 @@ theorem streams_getD_coins {A B : Array (Array Flock.Round)}
     simp only [List.getElem?_map, Array.getElem?_toList] at e2
     exact e2
   · have hk' : ¬ k < B.size := hsz ▸ hk
-    rw [dif_neg hk, dif_neg hk']
+    simp only [hk, hk', ↓reduceDIte]
 
 /-- `nextR`'s run of table `j` where the step decides, the table is set up and its extra claims read. -/
 theorem runOfR_decide {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
@@ -231,7 +231,8 @@ theorem colsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
     | error e => rw [runOfR_none_x ha hlv hst hx, runOfR_none_x ha' hlv' hst (by rw [hP]; exact hx)]
     | ok extras =>
       rw [runOfR_decide ha hlv hst hx, runOfR_decide ha' hlv' hst (by rw [hP]; exact hx), ← hF]
-      simp only [Claims.Flock.plainRunCols, List.flatMap_cons, List.flatMap_nil, key]
+      simp only [Claims.Flock.plainRunCols, Claims.Flock.ZkRun.plainShape, List.flatMap_cons, List.flatMap_nil,
+        key]
 
 end FlockDeploy.KS
 
@@ -246,8 +247,9 @@ theorem rColsBind_sha512 (rd : Claims.Msg → Option FinalP) : RColsBind FlockDe
   intro x ms l l' cs hk _ hacc hacc' hne
   obtain ⟨s, spec, sts, link, c₁, mids, f, ha⟩ := FlockDeploy.KS.actR_of_acc hacc
   obtain ⟨s', spec', sts', link', c₁', mids', f', ha'⟩ := FlockDeploy.KS.actR_of_acc hacc'
-  obtain ⟨rfl, rfl, rfl, -, rfl, rfl⟩ :=
+  obtain ⟨e₁, e₂, e₃, e₄, e₅, e₆⟩ :=
     FlockDeploy.KS.nextR_shared (FlockDeploy.KS.ms_ne_nil_of_actR hk ha) ha ha'
+  subst s' spec' sts' link' c₁' mids'
   by_cases hF : FlockDeploy.filesAt (FlockDeploy.tabsOf sts) (FlockDeploy.pointsOf spec c₁) f.ps =
       FlockDeploy.filesAt (FlockDeploy.tabsOf sts) (FlockDeploy.pointsOf spec c₁) f'.ps
   · exact absurd (FlockDeploy.KS.colsR_of_files ha ha' hacc hacc' hF) hne

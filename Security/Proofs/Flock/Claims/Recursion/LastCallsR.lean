@@ -495,8 +495,9 @@ theorem rCallsBind_sha512 (rd : Claims.Msg → Option FinalP) : RCallsBind Flock
   intro x ms l l' cs hk _ _ hacc hacc' hne
   obtain ⟨s, spec, sts, link, c₁, mids, f, ha⟩ := FlockDeploy.KS.actR_of_acc hacc
   obtain ⟨s', spec', sts', link', c₁', mids', f', ha'⟩ := FlockDeploy.KS.actR_of_acc hacc'
-  obtain ⟨rfl, rfl, rfl, -, rfl, rfl⟩ :=
+  obtain ⟨e₁, e₂, e₃, e₄, e₅, e₆⟩ :=
     FlockDeploy.KS.nextR_shared (FlockDeploy.KS.ms_ne_nil_of_actR hk ha) ha ha'
+  subst s' spec' sts' link' c₁' mids'
   by_cases hF : FlockDeploy.filesAt (FlockDeploy.tabsOf sts) (FlockDeploy.pointsOf spec c₁) f.ps =
       FlockDeploy.filesAt (FlockDeploy.tabsOf sts) (FlockDeploy.pointsOf spec c₁) f'.ps
   · exact absurd (FlockDeploy.KS.callsR_of_files ha ha' hacc hacc' hF) hne
