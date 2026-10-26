@@ -60,7 +60,7 @@ lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks
 cheat = { value = 0, low = 0, high = 0.01, source = "sampled proofs at q = 1 (tiers T1-T4)", status = "assumed" }
 wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, a wipe every 24 h", status = "ruled" }
 residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "memory-accounting r20261026-003454-bfd2: 10 GB per H200 today; low: Daniel's 5 GB", status = "measured" }
-ingress = { value = 1.1e6, unit = "bit/s", low = 1e5, high = 1e7, source = "2e16 requests/yr / 4.42e7 servers = 14.3 requests/s x 4,500 tokens x 17 bits", status = "derived" }
+ingress = { value = 1.1e6, unit = "bit/s", low = 1e5, high = 1e7, source = "2e16 requests/yr / 4.42e7 servers = 14.3 requests/s x 4,500 tokens x 17 bits; the same as I_cert = phi x mfu_serve / phi_F = 1.583e16 x 0.4 / (2 x 49e9 / 17 FLOP/bit) = 1.10e6 (the count is sized at mfu_serve; at full use, as in the training lane's reference-DC model art:dee8d74e220884143c40b6d7d28acdf13c358f1de84c5f0df2ea7bf525bf4e83, 2.75e6)", status = "derived" }
 side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e7, source = "ruling: Daniel 25 Oct, 1 kb/s per server, swept", status = "ruled" }
 
 [regime.reference-onsite-nvl72]
@@ -73,7 +73,7 @@ lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks
 cheat = { value = 0, low = 0, high = 0.01, source = "sampled proofs at q = 1 (tiers T1-T4)", status = "assumed" }
 wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruling: Daniel 25 Oct, a wipe every 24 h", status = "ruled" }
 residual_bits = { value = 8e10, unit = "bit/device", low = 4e10, high = 1.6e11, source = "the H200 figure (memory-accounting r20261026-003454-bfd2), not measured on GB200", status = "assumed" }
-ingress = { value = 2.5e7, unit = "bit/s", low = 2.5e6, high = 2.5e8, source = "2e16 requests/yr / 1.94e6 racks = 327 requests/s x 4,500 tokens x 17 bits", status = "derived" }
+ingress = { value = 2.5e7, unit = "bit/s", low = 2.5e6, high = 2.5e8, source = "2e16 requests/yr / 1.94e6 racks = 327 requests/s x 4,500 tokens x 17 bits; the same as I_cert = phi x mfu_serve / phi_F = 3.6e17 x 0.4 / (2 x 49e9 / 17 FLOP/bit) = 2.50e7 (the count is sized at mfu_serve; at full use, as in the training lane's reference-DC model art:dee8d74e220884143c40b6d7d28acdf13c358f1de84c5f0df2ea7bf525bf4e83, 6.24e7)", status = "derived" }
 side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e7, source = "ruling: Daniel 25 Oct, 1 kb/s per server, a rack taken as one server", status = "assumed" }
 
 [regime.reference-remote]
