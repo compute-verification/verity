@@ -115,15 +115,27 @@ def refusal(code: str, wire: int | None = None) -> dict:
 def reference(j):
     if set(_obj(j, "an instance")) != {"templates", "cuts", "wires", "queries"}:
         raise D.Reject("an instance is {templates, cuts, wires, queries}")
-    templates = {tid: _template(t) for tid, t in _obj(j["templates"], "templates").items()}
-    cuts = {tid: {p: _nat(k, "a cut") for p, k in _obj(kv, "a template's cuts").items()}
-            for tid, kv in _obj(j["cuts"], "cuts").items()}
-    wires = [_wire(w) for w in _list(j["wires"], "wires")]
     queries = []
     for q in _list(j["queries"], "queries"):
         if len(_list(q, "a query")) != 4:
             raise D.Reject("a query is [template, unit, port, row]")
         queries.append((_str(q[0], "template"), _nat(q[1], "unit"), _str(q[2], "port"), _nat(q[3], "row")))
+    got = expand(j)
+    if got.get("ok") is False:
+        return got
+    entries, wires = got["entries"], got["wires"]
+    return {"ok": True, "wired_rows": len(entries), "wired_bits": sum(b for _, b in entries.values()),
+            "spans": [[min(writers(w, x) for x in range(units(w))), max(writers(w, x) for x in range(units(w)))]
+                      for w in wires],
+            "lookups": [entries[q][0] if q in entries else None for q in queries]}
+
+
+def expand(j):
+    """The circuit's refusal, or every covered reader row with its writer and bits (``entries``) and the wires."""
+    templates = {tid: _template(t) for tid, t in _obj(j["templates"], "templates").items()}
+    cuts = {tid: {p: _nat(k, "a cut") for p, k in _obj(kv, "a template's cuts").items()}
+            for tid, kv in _obj(j["cuts"], "cuts").items()}
+    wires = [_wire(w) for w in _list(j["wires"], "wires")]
 
     for tid, kv in cuts.items():
         if tid not in templates:
@@ -153,10 +165,32 @@ def reference(j):
             if row in entries:
                 return refusal("overlap")
             entries[row] = ([w["writer"], writers(w, x), w["out"]], 16 * (templates[w["reader"]][1][w["port"]][0] // k))
-    return {"ok": True, "wired_rows": len(entries), "wired_bits": sum(b for _, b in entries.values()),
-            "spans": [[min(writers(w, x) for x in range(units(w))), max(writers(w, x) for x in range(units(w)))]
-                      for w in wires],
-            "lookups": [entries[q][0] if q in entries else None for q in queries]}
+    return {"entries": entries, "wires": wires}
+
+
+def reference_drawn(j):
+    """The drawn units' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
+    if set(_obj(j, "an instance")) != {"templates", "cuts", "wires", "drawn", "reads", "writes"}:
+        raise D.Reject("an instance is {templates, cuts, wires, drawn, reads, writes}")
+    drawn, reads, writes = set(), {}, {}
+    for d in _list(j["drawn"], "drawn"):
+        if len(_list(d, "a drawn unit")) != 2:
+            raise D.Reject("a drawn unit is [template, unit]")
+        drawn.add((_str(d[0], "template"), _nat(d[1], "unit")))
+    for d in _list(j["reads"], "reads"):
+        if len(_list(d, "a read")) != 5:
+            raise D.Reject("a read is [template, unit, port, row, string]")
+        reads.setdefault((_str(d[0], "t"), _nat(d[1], "u"), _str(d[2], "p"), _nat(d[3], "r")), _str(d[4], "s"))
+    for d in _list(j["writes"], "writes"):
+        if len(_list(d, "a write")) != 4 or not _int(d[1]):
+            raise D.Reject("a write is [template, unit, out, string]")
+        writes.setdefault((_str(d[0], "t"), d[1], _str(d[2], "o")), _str(d[3], "s"))
+    got = expand(j)
+    if got.get("ok") is False:
+        return got
+    rows = [(q, tuple(wr)) for q, (wr, _) in got["entries"].items() if q[:2] in drawn]
+    bad = sorted(q for q, wr in rows if not (q in reads and wr in writes and reads[q] == writes[wr]))
+    return {"ok": True, "accepted": not bad, "checked": len(rows), "bad": [list(q) for q in bad]}
 
 
 # --- strategies ------------------------------------------------------------------------------------------------------
@@ -227,15 +261,50 @@ def instances(draw, broken: bool = False):
     return j
 
 
+@st.composite
+def drawn_instances(draw, broken: bool = False):
+    """An instance of `instances` with some units drawn, and public strings for most of their wired rows and writers,
+    mostly equal, some another string or missing."""
+    j = draw(instances())
+    del j["queries"]
+    got = expand(j) if not broken else {"ok": False}
+    drawn = [[draw(st.sampled_from(NAMES)), draw(st.integers(0, 9))] for _ in range(draw(st.integers(0, 4)))]
+    reads, writes = [], []
+    if got.get("ok") is not False:
+        for q, (wr, _) in got["entries"].items():
+            if draw(st.integers(0, 2)):
+                drawn.append(list(q[:2]))
+            s = draw(st.sampled_from(["s", "s", "s", "t"]))
+            if draw(st.integers(0, 9)):
+                reads.append([*q, s])
+            if draw(st.integers(0, 9)):
+                writes.append([*wr, draw(st.sampled_from(["s", s]))])
+    j |= {"drawn": drawn, "reads": reads, "writes": writes}
+    if broken:
+        j[draw(st.sampled_from(["drawn", "reads", "writes", "wires"]))] = draw(JSON)
+    return j
+
+
 INPUTS = st.one_of(*[instances() for _ in range(6)], instances(broken=True), JSON)
+DRAWN_INPUTS = st.one_of(*[drawn_instances() for _ in range(6)], drawn_instances(broken=True), JSON)
 WIRES = D.Port(PIECES, "wires", reference, INPUTS, package=PACKAGE, of_record="lean")
 WIRES_UNROLLED = D.Port(PIECES, "wires_unrolled", reference, INPUTS, package=PACKAGE, of_record="lean")
+
+WIRES_DRAWN = D.Port(PIECES, "wires_drawn", reference_drawn, DRAWN_INPUTS, package=PACKAGE, of_record="lean")
+WIRES_DRAWN_UNROLLED = D.Port(PIECES, "wires_drawn_unrolled", reference_drawn, DRAWN_INPUTS, package=PACKAGE,
+                              of_record="lean")
 
 pieces = D.server_fixture(WIRES)
 
 
 @pytest.mark.parametrize("port", [WIRES, WIRES_UNROLLED], ids=["wires", "wires_unrolled"])
 def test_a_wires_piece_agrees(pieces, port):
+    stats = D.run(port, examples=1500, server=pieces)
+    assert stats.outputs > 1000 and stats.rejects > 0, stats
+
+
+@pytest.mark.parametrize("port", [WIRES_DRAWN, WIRES_DRAWN_UNROLLED], ids=["wires_drawn", "wires_drawn_unrolled"])
+def test_a_drawn_wires_piece_agrees(pieces, port):
     stats = D.run(port, examples=1500, server=pieces)
     assert stats.outputs > 1000 and stats.rejects > 0, stats
 
@@ -285,3 +354,21 @@ def test_an_overlap_is_refused(pieces):
     assert reference(j) == refusal("overlap")
     for fn in ("wires", "wires_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(refusal("overlap")))
+
+
+def test_the_drawn_check_reads_only_drawn_units(pieces):
+    """The gather with unit 1 drawn: its three wired rows are checked; unit 0's row that is not its writer's is not."""
+    j = _gather()
+    del j["queries"]
+    j |= {"drawn": [["A", 1]],
+          "reads": [["A", 1, "k", 0, "s3"], ["A", 1, "k", 1, "s4"], ["A", 1, "k", 2, "s5"], ["A", 0, "k", 0, "bad"]],
+          "writes": [["G", u, "o0", f"s{u}"] for u in range(6)]}
+    want = {"ok": True, "accepted": True, "checked": 3, "bad": []}
+    assert reference_drawn(j) == want
+    for fn in ("wires_drawn", "wires_drawn_unrolled"):
+        assert pieces.call(fn, j) == ("output", D.canonical(want))
+    j["drawn"] = [["A", 0], ["A", 1]]
+    want = {"ok": True, "accepted": False, "checked": 6, "bad": [["A", 0, "k", 0], ["A", 0, "k", 1], ["A", 0, "k", 2]]}
+    assert reference_drawn(j) == want
+    for fn in ("wires_drawn", "wires_drawn_unrolled"):
+        assert pieces.call(fn, j) == ("output", D.canonical(want))

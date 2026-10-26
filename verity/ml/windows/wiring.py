@@ -2,8 +2,11 @@
 one ``(port, out, writers)`` per wire) reads, unit by unit, other units' output rows: its unit i's ``port`` row is global unit
 ``writers[i]``'s ``out`` row, committed under that row's salt, so the two rows' ``b || c`` are one string.  Lean's links hold
 inside one statement; these join statements (one coordinate's K-chunks, chunk c's ``acc`` chunk c - 1's output; split partials,
-a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, before the draw
-(`check`), and a drawn unit's input is the committed output of the unit that wrote it."""
+a combine unit's ``in<j>.s`` split s's), so the verifier holds them on the public bodies the leaf layer binds, and a drawn unit's input is the committed output of
+the unit that wrote it.  A unit whose wired row is not its writer's row is faulty in the wired flattening (its outputs
+are not its Definition's on its writers' committed outputs), so the verifier holds the wires of the units it draws
+(`check_drawn`, `SampledProofs.Wires.Summary.drawnOk` in Lean, whose `drawnOk_iff` makes it the expanded check on the
+drawn units); `check`, every unit's, is the reference."""
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
@@ -76,6 +79,30 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
                 got = _strings(publics, wm, o)
                 if got is None or not np.array_equal(mine[sel], got[theirs]):
                     bad[m.key] = f"its {p} strings are not the {o} strings of {wm.key}'s units that wrote them"
+                    break
+            if m.key in bad:
+                break
+    return bad
+
+
+def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any) -> dict[str, str]:
+    """`check` on the drawn units alone (``units``, global unit indices): each drawn unit's wired rows' ``b || c`` are its
+    writers' output rows', work proportional to the drawn units.  ``{member: why}``; empty when every drawn wire holds."""
+    drawn = np.unique(np.asarray(list(units), dtype=np.int64))
+    bad: dict[str, str] = {}
+    for m in members:
+        local = drawn[(drawn >= m.base) & (drawn < m.base + m.n)] - m.base
+        if not m.wired or not len(local):
+            continue
+        for p, o, ws in m.wired:
+            mine = _strings(publics, m, p)
+            if mine is None:
+                bad[m.key] = f"its public body is not {m.n} units of {len(m.all_rows)} strings"
+                break
+            for wm, sel, theirs in _writers(members, np.asarray(ws, dtype=np.int64)[local]):
+                got = _strings(publics, wm, o)
+                if got is None or not np.array_equal(mine[local][sel], got[theirs]):
+                    bad[m.key] = f"a drawn unit's {p} strings are not the {o} strings of the {wm.key} units that wrote them"
                     break
             if m.key in bad:
                 break
