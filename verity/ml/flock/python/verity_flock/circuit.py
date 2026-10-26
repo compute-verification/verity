@@ -64,6 +64,7 @@ from pathlib import Path
 import numpy as np
 
 from . import ir_lower as IL
+from . import rec_budget as RB
 
 FORMAT = "flock-circuit"
 STATEMENT = "verity/flock-circuit"
@@ -894,7 +895,8 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     every instance's refs (u32 LE, instance-major, ports in order) after the ``b || c``: the refs show which instances read
     equal rows, so this dedupe suits rows whose equality is the program's structure (``tables`` below is value-independent). An
     output row is its instance's own
-    (its table the instances' output rows in order, never deduplicated, so equal outputs stay apart). ``rows`` and ``outs``
+    (its table the instances' output rows in order, never deduplicated, so equal outputs stay apart). A table of more than
+    ``rec_budget.MAX_INNER_ROWS`` rows is refused, as the verifier refuses it in a V* session's inner statement. ``rows`` and ``outs``
     (``{port: (n, words)}``) replace the set's range as the instances' words.
 
     ``tables`` and ``refs`` (``{port: (R_p, words)}``, ``{port: (n,)}``, input ports): the shared-row tables and refs as given,
@@ -973,6 +975,8 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows, meta.get("out_row_ports"))}
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
+        if why := RB.inner_rows({p.name: len(rows[p.name]) for p in ports}):
+            raise ValueError(why)
     if salts is None:
         salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):

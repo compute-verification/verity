@@ -3,7 +3,9 @@
 `MAX_INSTANCES` instances, pass, as does a level's registration (`rec-acc` of 2048 rows, its tops, its `2 q` openings'
 coefficients); one port more, one leaf past `2^MAX_DEPTH`, or one instance more is refused, each by its own message.
 V\*'s list of `MAX_STATEMENTS` statements passes and one more is refused (`count`); a shape `RecVStar.statements` refuses
-(claims not two and two per region) is left to the checks that run it. Without an inner shape nothing is refused.
+(claims not two and two per region) is left to the checks that run it. Without an inner shape nothing is refused. A
+shared-row table of `MAX_INNER_ROWS` rows passes and one row more is refused (`innerRows`), and a per-instance file passes;
+`test_rec_budget.py` gives its mirror the same counts.
 -/
 import Flock.RecBudget
 
@@ -53,5 +55,19 @@ def whyC (n : Nat) : Option String :=
   some "refused: V*'s list at the verifier's inner shape holds 4097 statements, more than 4096: the recursion's call bound covers no more"
 #guard (statements none).toOption == some ()
 #guard (statements (some { inner with claims := 9 })).toOption == some ()
+
+def shared (counts : Option (Array Nat)) : Stmt :=
+  { (default : Stmt) with pub := { (default : Public) with tables := counts.map fun c => { counts := c, starts := #[], refs := #[] } } }
+
+def whyI (counts : Option (Array Nat)) : Option String :=
+  match innerRows (shared counts) with
+  | .ok () => none
+  | .error e => some e
+
+#guard whyI none == none
+#guard whyI (some #[510, MAX_INNER_ROWS]) == none
+#guard whyI (some #[510, MAX_INNER_ROWS + 1]) ==
+  some ("refused: the inner statement's public file has a shared-row table of more than 268435456 rows: " ++
+    "the recursion's call bound covers no more")
 
 end Flock.Test.RegBudget

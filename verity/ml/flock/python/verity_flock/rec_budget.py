@@ -1,14 +1,16 @@
 """The Lean verifier's caps on a V* session's registered reads (`Flock.RecBudget`), for the stagers: a V* session's
 ``registered.json`` names at most `MAX_PORTS` ports, each of a tree of at most `MAX_DEPTH` levels (`regs`), and its table
 holds at most `MAX_INSTANCES` instances (`table`); V*'s list at the inner shape holds at most `MAX_STATEMENTS` statements
-(`count`). `verify` refuses a session past any of them, so a stager refuses to write one (`check`), with the verifier's
-message."""
+(`count`); and a shared-row public file's tables hold at most `MAX_INNER_ROWS` rows each (`inner_rows`), which `verify`
+holds the inner statement's files to. `verify` refuses a session past any of them, so a stager refuses to write one
+(`check`, `circuit.write`), with the verifier's message."""
 from __future__ import annotations
 
 MAX_INSTANCES = 65536
 MAX_PORTS = 4096
 MAX_DEPTH = 64
 MAX_STATEMENTS = 4096
+MAX_INNER_ROWS = 2**28
 TAIL = "the recursion's call bound covers no more"
 
 
@@ -41,6 +43,14 @@ def count(statements: int) -> str | None:
     """`RecBudget.count` on V*'s list of ``statements`` statements: its refusal, or None."""
     if statements > MAX_STATEMENTS:
         return (f"refused: V*'s list at the verifier's inner shape holds {statements} statements, more than {MAX_STATEMENTS}: "
+                f"{TAIL}")
+    return None
+
+
+def inner_rows(shared_rows: dict[str, int] | None) -> str | None:
+    """`RecBudget.innerRows` on a public file's header ``shared_rows`` (none: a per-instance file): its refusal, or None."""
+    if shared_rows and any(r > MAX_INNER_ROWS for r in shared_rows.values()):
+        return (f"refused: the inner statement's public file has a shared-row table of more than {MAX_INNER_ROWS} rows: "
                 f"{TAIL}")
     return None
 

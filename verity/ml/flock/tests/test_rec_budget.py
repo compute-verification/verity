@@ -4,9 +4,11 @@ caps sit far above every deployed V* session at every `fast100` schedule: a tabl
 later level's RecCap over both reps' `2 · 2^cap` tops, RecCap's `2^cap`), a part's ports (its row ports, at most
 `MAX_REGIONS`, with `v` and `out`) and the deepest registered tree (`rec-acc`'s chain of every opening, both reps' and R's);
 and V*'s list, the recursion's parts (each level's RecOpen, the algebra's parts, RecCap at each later level and over level
-0's cap), at every `fast100` m of the deployed class's claims."""
+0's cap), at every `fast100` m of the deployed class's claims. A shared-row file past `MAX_INNER_ROWS` rows a table is
+refused by the mirror and never written (`circuit.write`)."""
 from __future__ import annotations
 
+import pytest
 from verity_flock import rec_algebra as A
 from verity_flock import rec_budget as RB
 from verity_flock import rec_residuals as RR
@@ -32,6 +34,29 @@ def test_the_mirror_refuses_what_the_lean_guards_refuse():
     assert RB.count(10) is None and RB.count(RB.MAX_STATEMENTS) is None
     assert RB.count(RB.MAX_STATEMENTS + 1) == (
         f"refused: V*'s list at the verifier's inner shape holds 4097 statements, more than 4096: {TAIL}")
+    assert RB.inner_rows(None) is None and RB.inner_rows({"a": 510, "b": RB.MAX_INNER_ROWS}) is None
+    assert RB.inner_rows({"a": 510, "b": RB.MAX_INNER_ROWS + 1}) == (
+        f"refused: the inner statement's public file has a shared-row table of more than 268435456 rows: {TAIL}")
+
+
+def test_a_shared_row_file_past_the_inner_row_cap_is_not_written(monkeypatch):
+    """`circuit.write` refuses a shared-row file whose table is past `MAX_INNER_ROWS` with the verifier's message, before
+    hashing any row. A file past the real cap (2^28 rows' 128-byte `b || c`, 32 GiB) is more than a test can hand the
+    verifier, so the cap is lowered here, and `Flock/Test/RegBudget.lean`'s guards hold the two sides' messages to each other
+    on the same counts."""
+    from types import SimpleNamespace
+
+    import numpy as np
+    from verity_flock import circuit as FC
+
+    monkeypatch.setattr(RB, "MAX_INNER_ROWS", 2)
+    meta = {"ports": [["x", 4, 0]], "input_ports": 1, "out_ports": []}
+    why = f"refused: the inner statement's public file has a shared-row table of more than 2 rows: {TAIL}"
+    assert RB.inner_rows({"x": 2}) is None and RB.inner_rows({"x": 3}) == why
+    with pytest.raises(ValueError) as e:
+        FC.write("", SimpleNamespace(subcircuit=None, name="s"), 0, 1, None, None, meta=meta, outs={}, share_rows=True,
+                 tables={"x": np.zeros((3, 4), np.uint16)}, refs={"x": [0]}, salts={"x": [bytes(FC.SALT_BYTES)] * 3})
+    assert str(e.value) == why
 
 
 def test_log2ceil_is_the_verifiers():
