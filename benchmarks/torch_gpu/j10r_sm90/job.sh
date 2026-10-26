@@ -4,7 +4,8 @@
 #   cpu    build, then fixtures.py expected into $OUT/fixtures (uv sync first; FIX_ARGS, JOBS default 30)
 #   gpu    (vy-dc-h200-3) check.py, then bench.py, on the libraries sent (LIBS, default $RESEARCH_RUN_DIR/inputs, with
 #          expected.npz and fixtures.json): j10r_ref.so as the fallback, every h1u_*.so as an h1u build (and its _sm
-#          launch). Operands are generated before the lease, in a scratch directory removed at exit.
+#          launch), s8_simple.py (#4472's, sent) as the bench's plain arm. Operands are generated before the lease, in a
+#          scratch directory removed at exit.
 #
 #   research run --on vy-nebius-cpu-4 --as kernels-kp2dec --project verity --source . --cwd source -- \
 #     env CHECK_SLOTS=/workspace/research/locks/kernels/slots python3 tools/verity/check/slot.py --by kernels -- \
