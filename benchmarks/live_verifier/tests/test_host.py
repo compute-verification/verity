@@ -9,6 +9,7 @@ and `replay` replays it through both verifiers."""
 from __future__ import annotations
 
 import argparse
+import fcntl
 import gzip
 import hashlib
 import io
@@ -594,3 +595,82 @@ def test_a_run_through_the_stub_verifier_leaves_verifier_pys_record_which_fetch_
     gz.write_bytes(gzip.compress(raw.replace(b'"events"', b'"events" ', 1)))
     tampered = H.replay_run(svc, RUN, now=lambda: T1)
     assert tampered["rc"] == 1 and tampered["gz_sums"] == {f"{name}.gz": False} and not tampered["sums_match"]
+
+
+def party(svc, words, units: Units | None = None, *, key=LANE, out=b'{"listening": 47611}\n{"signed": "x"}\n', rc=0):
+    """`words` sent by `key`; the party's run is recorded, and prints `out` and exits `rc`."""
+    ran: list[list[str]] = []
+
+    def run(argv, sink, log):
+        ran.append(argv)
+        sink.write(out)
+        log.write_bytes(out)
+        return rc
+    got = call(svc, words, units, key=key, party=run)
+    return got, ran
+
+
+def test_a_party_runs_its_module_from_the_pinned_tree_as_auditor_with_its_own_device_and_port(svc):
+    (rc, out), ran = party(svc, ["wipe_party", "--reads", "1024", "--native", "--threads", "16"])
+    assert rc == 0 and out == b'{"listening": 47611}\n{"signed": "x"}\n'
+    assert ran == [["runuser", "-u", "auditor", "--", "/usr/bin/env", "-i", "PYTHONDONTWRITEBYTECODE=1",
+                    "HOME=/var/lib/vy-verifier", "PATH=/usr/bin:/bin", "/usr/bin/python3", "-s", "-E",
+                    "-m", "verity.core.protocols.pous.wipe_party", "--device", str(svc.parties / "wipe"),
+                    "--listen", "0.0.0.0:47611", "--reads", "1024", "--streamer", "build", "--threads", "16"]]
+    reqs = [json.loads(ln) for ln in (svc.parties / "wipe" / "requests.jsonl").read_text().splitlines()]
+    assert [(r["verb"], r["by"], r.get("rc")) for r in reqs] == [("wipe_party", LANE, None), ("wipe_party", LANE, 0)]
+    assert (svc.parties / "wipe" / "log" / reqs[0]["log"]).read_bytes() == out
+    (rc, _), ran = party(svc, ["challenger_party"])
+    assert rc == 0 and ran[0][-6:] == ["-m", "verity.core.protocols.pous.challenger_party", "--device",
+                                       str(svc.parties / "pous"), "--listen", "0.0.0.0:47610"]
+
+
+@pytest.mark.parametrize("words, why", [
+    (["wipe_party", "--egress-bits", "8"], "got '--egress-bits'"),
+    (["wipe_party", "--device", "/tmp/x"], "got '--device'"),
+    (["wipe_party", "--listen", "0.0.0.0:1"], "got '--listen'"),
+    (["wipe_party", "--reads", "0"], "--reads takes an integer"),
+    (["wipe_party", "--reads", "2152", "--reads", "8"], "got '--reads'"),
+    (["wipe_party", "--threads", "8"], "give --native too"),
+    (["wipe_party", "--streamer", "/tmp/s"], "got '--streamer'"),
+    (["challenger_party", "--reads", "8"], "challenger_party takes no flags"),
+])
+def test_a_party_is_refused_any_flag_its_whitelist_lacks_before_it_starts(svc, words, why):
+    got, ran = party(svc, words)
+    assert why in refused(got) and ran == []
+
+
+def test_a_read_only_key_starts_no_party_and_a_party_waits_for_every_unit_and_its_own_last_session(svc):
+    for verb in ("wipe_party", "challenger_party"):
+        got, ran = party(svc, [verb], key="-")
+        assert "this key reads only" in refused(got) and ran == []
+    units = Units()
+    assert call(svc, PACED, units)[0] == 0
+    got, ran = party(svc, ["wipe_party"], units)
+    assert "a party session waits for no unit" in refused(got) and ran == []
+    svc.parties.mkdir(exist_ok=True)
+    with open(svc.parties / "wipe.lock", "a") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        got, ran = party(svc, ["wipe_party"])
+        assert "serving another session" in refused(got) and ran == []
+        assert party(svc, ["challenger_party"])[0][0] == 0
+
+
+def test_party_key_prints_only_the_public_half_made_on_the_host(svc):
+    asked: list[list[str]] = []
+
+    def keygen(argv):
+        asked.append(argv)
+        return "ab" * 32
+    rc, out = call(svc, ["party_key", "pous"], key="-", keygen=keygen)
+    assert rc == 0 and json.loads(out) == {"party": "pous", "verb": "challenger_party", "public_key": "ab" * 32}
+    assert asked[0][-3:] == ["-c", H.KEYGEN, str(svc.parties / "pous")] and asked[0][:3] == ["runuser", "-u", "auditor"]
+    assert "party_key" in refused(call(svc, ["party_key", "/etc"], key="-", keygen=keygen))
+    assert "not a public key" in refused(call(svc, ["party_key", "wipe"], key="-", keygen=lambda a: "Traceback"))
+
+
+def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
+    """The parties run on the host's python3 (`-s -E`), where no package is installed: the modules resolve in the tree."""
+    code = "import verity.core.protocols.pous.wipe_party, verity.core.protocols.pous.period; print('ok')"
+    p = subprocess.run([sys.executable, "-S", "-s", "-E", "-c", code], capture_output=True, text=True, cwd=ROOT)
+    assert p.returncode == 0 and p.stdout.strip() == "ok", p.stderr[-2000:]
