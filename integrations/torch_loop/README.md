@@ -16,6 +16,14 @@ committed row longer than one SHA-512 block.
   `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
   It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the
   commit that code is at; the audit runs it from its own checkout of that commit (`--table ARGV...`: the verifier's entry).
+- Registered weights (`--registered`, opt-in): `serve --commit-weights OPENING --pin PIN` commits the weights once, before
+  any run (`loop.commit_weights`), the pin naming checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The circuit then reads each
+  unit's `wrow` and `sw` from them at public positions (`interface.Read`), so they are no free input: 1,081,344 of the
+  2,162,688 input bits of the default shape stay free. With it on, the members' private bodies are shared-row.
+- Committed activations (CMP-91): each window commits its `x` and `sx` rows, one a (request, step, layer), under domains
+  binding the run root (`TorchLoop.commit_activations`). Their entries are in the registration's window, fixed before the
+  draw, and their salts in the window's `activations-private.json`. No read of them is declared, so they leave the free
+  count as it is.
 - `verity_torch_loop/checkpoint.py`, `checkpoint/` and `manifests/checkpoints-int8.json`: the loop's model as the int8
   checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The auditor's gate (`benchmarks/live_challenger/models.py`) registers that role
   to sign the loop's weights root.
@@ -24,7 +32,13 @@ committed row longer than one SHA-512 block.
   - The manifest entry pins each file's size and sha256 and lists `linears`, the loop's op paths in order.
   - `python -m verity_torch_loop.checkpoint` writes the files, and `--check` checks them.
   - The gate reads this manifest only once its `MANIFEST` names it; today that is vLLM's alone.
-- `tests/`: the loop's outputs are the Definition's, unit by unit; core's registration check passes the written window and
+- `verity_torch_loop/pouw.py` (`serve.py --pouw h1`): the loop's PoUW window, every linear served as split-K tiles of the
+  H1 tile PoUW's verifier pins (`core_check.TILES`, `PouwH1Tile_v1` at K = 64, 4 × 8), whose exact z gives the loop's own
+  output; written to `DIR/pouw` under a one-stage registration in PoUW's window form, at all-protocols' PoUW parameters.
+  `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
+  `core_check` and Lean's `pouw-check`. Its gaps are in `pouw.py`'s docstring.
+- `tests/`: the loop's outputs are the Definition's, unit by unit; its H1 tiles carry its linears and core's PoUW check
+  registers its PoUW window; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
@@ -33,7 +47,9 @@ committed row longer than one SHA-512 block.
 - End to end: `benchmarks/prove_path/run.sh` with `PP_TORCH_LOOP=1` audits the honest and the tampered window from their
   records alone, against the registered circuit (`records_audit.py audit --circuit SHA512`) and against the compiler's
   output (`--opening`, `--compilers`): live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of record,
-  each tampered window refused.
+  each tampered window refused. `PP_TORCH_LOOP_REGISTERED=1` serves the registered weights, audits against their pin
+  (`records_audit.py --registered PIN`) and adds an arm serving other weights, which Lean's registered reads refuse
+  (r20261025-220011-057f).
 - `verity_torch_loop/weights.py`: the demo's seeded weights and their registration root (CMP-95 interface 1), for any
   decoder shape (the H200 demo's frozen shape, Phase 1's CPU model): a SHA-512 counter generator from (seed, tensor, row)
   to every tensor, the weights stream's layout (`manifest`), and each tensor as a registered value of core's for the
@@ -98,3 +114,14 @@ What it doesn't cover:
   knowledge is `Flock.Guarantees.ZeroKnowledgeHidden`, honest-verifier at each fixed coin vector. What keeps it from a
   claim: the hiding gap at hm96-sha512's pinned key is not proved small, and `avoidsMask` is a hypothesis that no check
   implies yet.
+
+## The decoder (CMP-92)
+
+`verity_torch_loop/transformer.py` is the demo's standard workload: a 2-layer decoder-only transformer (width 128, 2 heads
+of 64, MLP 512, byte vocabulary, context 32, greedy decoding). Its static matmuls are `ScaledMmS8Coordinate_v1{K=128|512}`
+units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64, DOT=HopperBF16WgmmaDot16_v1}` units over the KV cache
+(`--bf16-dot ampere`: `AmpereBF16TcDot16_v2`), computed through the Definition's kernel. PV's 32 positions are padded with
++0 to 64, since C-Flock pins a unit through a row of more than one SHA-512 block. RMSNorm, softmax, ReLU, the quantizer,
+the adds and argmax run in torch, and are not units until their Definitions land (CIR-100). `serve_transformer.py` writes
+its window as `serve.py` writes the MLP's, `tests/test_transformer.py` covers both, and `benchmarks/prove_path/run.sh`
+with `PP_TORCH_DECODER=1` audits it. The plan, counts and wiring: `note:compute-accounting/20261025T2154Z-report-allp-xfmr`.
