@@ -555,8 +555,8 @@ theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims
   obtain ⟨v, c₁', r₀, rss, fl, link', pf, hv', hc₁, hr₀, hrss, hlk, hpf, hdd⟩ := decR_some hd
   rw [hset] at hv'
   obtain rfl := Option.some.inj hv'
-  simp only [List.head?_cons, Option.some.injEq, List.headD_cons, List.tail_cons, List.dropLast_concat] at hc₁ hr₀
-    hrss hpf
+  simp only [List.head?_cons, Option.some.injEq, List.headD_cons] at hc₁ hr₀
+  simp only [List.tail_cons, List.dropLast_concat] at hrss hpf
   obtain ⟨-, -, -, hlink, hc1, hmids, -⟩ := DecR.mk.inj hdd
   simp only [List.tail_cons, List.dropLast_concat] at hmids
   subst link'
