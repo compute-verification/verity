@@ -219,6 +219,10 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
     def python(module, argv, log=None):
         calls.append((module, list(argv)))
         log.with_suffix(".log").write_text('POUW {"verdict": "accept", "W": 262144}\n')
+        tree = Path(argv[argv.index("--out") + 1])
+        tree.mkdir(parents=True, exist_ok=True)
+        (tree / "pouw.json").write_text('{"verdict": "accept"}')
+        (tree / "rows.bin").write_bytes(b"prover's")
         return Namespace(returncode=0)
 
     d = period(tmp_path)
@@ -237,12 +241,14 @@ def test_pouw_h1_audits_before_the_legs(tmp_path, monkeypatch):
     assert argv[argv.index("--circuit") + 1] == "77" * 64 and argv[argv.index("--window") + 1] == str(d / "pouw")
     assert "--forged" not in argv
     assert r["pouw_audit"] == {"rc": 0, "line": {"verdict": "accept", "W": 262144}}
+    kept = sorted(f.name for f in (tmp_path / "out").rglob("*") if f.is_file())
+    assert "pouw.json" in kept and "rows.bin" not in kept
 
 
 @pytest.mark.slow
 def test_the_loop_window_keeps_only_public_files(tmp_path):
     a = Namespace(law="subset:2", cap=8, requests="3", steps=1, tamper={0}, node="test-node", tools={"x": "y"},
-                  pouw=None, delta="1/100")
+                  pouw=None, delta="1/100", session_jobs=4)
     d, loop = RN.loop_window(0, "test", a, tmp_path / "scratch", tmp_path / "out")
     kept = sorted(f.name for f in (tmp_path / "out" / "window").iterdir())
     assert "registration.json" in kept and "circuit.json" in kept and "period.json" in kept

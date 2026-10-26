@@ -5,7 +5,11 @@
 * the per-window figure beside it is ``IntegrityPeriod``'s least threshold at δ/T a window, exact, and it grows with T;
 * a window that rejects rejects the monitoring period, and with no accepted window nothing is scaled;
 * the deployment is read from the census, and a missing one names where to add it;
-* the summary line leads with the week, the month and the year at both δ.
+* the summary line leads with the week, the month and the year at both δ;
+* space pools to a count (#4418's ``pooledShort``): at p = 1% + 2^-128 a machine-week of 60 s windows certifies at least
+  9,948 of its 10,080 at δ = 1% and 1,000 machine-years 520,337,076 of 5.256·10⁸, memory's published figures;
+* bandwidth fails over a period with probability ``T · eps``, not ``eps``;
+* communication pays each window's own terms every window and the faulty units once (#4367).
 """
 from __future__ import annotations
 
@@ -81,3 +85,60 @@ def test_the_line_leads_with_every_period_at_both_deltas():
     assert set(lead) == {"observed", "week", "month", "year", "composed"}
     assert set(lead["year"]) == {"1/100", "1/1000000"}
     assert lead["year"]["1/100"]["pooled"] == 73 and lead["year"]["1/100"]["per_window"] > 73
+
+
+MEMORY_P = Fraction(1, 100) + Fraction(1, 2**128)
+
+
+@pytest.mark.parametrize("t, delta, certified", [(10_080, Fraction(1, 100), 9_948), (10_080, Fraction(1, 10**6), 9_923),
+                                                 (525_600, Fraction(1, 100), 520_124),
+                                                 (525_600_000, Fraction(1, 100), 520_337_076),
+                                                 (525_600_000, Fraction(1, 10**6), 520_332_005)])
+def test_space_pools_to_memorys_count(t, delta, certified):
+    assert t - M.short_windows(t, MEMORY_P, delta) + 1 == certified
+
+
+def resource(name: str, quantity: dict | None, verdict: str = "accept", protocol: str | None = None) -> dict:
+    return {"verdict": verdict, "quantity": quantity if verdict == "accept" else None, "protocol": protocol}
+
+
+def test_the_space_row_certifies_a_count_of_the_periods_windows():
+    dep = {"id": "one-machine-60s", "machines": 1, "window_s": 60}
+    r = M.space([resource("space", {"certified": True, "eps": str(MEMORY_P), "s_bits": 4096})] * 2, dep)
+    assert r["periods"]["week"]["windows"] == 10_080
+    assert r["periods"]["week"]["1/100"]["certified_windows_at_least"] == 9_948
+    assert r["periods"]["week"]["1/100"]["uncovered_at_most"] == "0.0131"
+    assert r["statement"]["pr"] == 4418 and "FixedBefore" in r["statement"]["hypothesis"]
+    assert M.space([resource("space", None, "reject")], dep)["periods"] is None
+
+
+def test_bandwidth_fails_with_t_times_eps():
+    dep = {"id": "one-machine-60s", "machines": 1, "window_s": 60}
+    eps = Fraction(2**24 + 64, 2**64)
+    r = M.bandwidth([resource("bandwidth", {"eps": str(eps), "q_bytes": 1 << 20})], dep)
+    assert float(r["periods"]["week"]["except_with"]) == pytest.approx(float(10_080 * eps), rel=1e-3)
+    assert r["periods"]["year"]["vacuous"] is False and r["periods"]["week"]["q_bytes_each"] == 1 << 20
+
+
+def test_communication_pays_the_faulty_units_once():
+    public = {"K": 1000, "cells": 3, "schedules": 7, "eps": "1/100", "windows": 2,
+              "audits": [{"free": 0, "jitter": 10, "faulty_sets": 400, "faulty_bits": 580, "units": 1024, "drawn": 64,
+                          "wrong_units": 36, "delta": "1/100"}]}
+    r = M.communication([resource("communication", public, protocol=M.CERTIFIER)], DEP)
+    week = r["periods"]["week"]
+    t = week["windows"]
+    pooled = week["1/100"]["pooled"]
+    assert pooled["every_window_bits"] == 20 and pooled["faulty_units_at_most"] == 74
+    assert pooled["faulty_once_bits"] == 74 * (16 + math.ceil(math.log2(t * 1024 + 1)))
+    assert pooled["K_bits"] == 20 * t + pooled["faulty_once_bits"] < week["per_window"]["K_bits"] == 1000 * t
+    assert "hesc" in r["statement"]["conditional"]
+    other = M.communication([resource("communication", {"K": 1}, protocol="verity/network-certificate/v4")], DEP)
+    assert other["periods"] is None
+
+
+def test_the_line_carries_each_resource_row_the_run_has():
+    rep = report(0, "accept")
+    rep["protocols"]["space"] = resource("space", {"certified": True, "eps": "1/100", "s_bits": 8})
+    rep["protocols"]["bandwidth"] = resource("bandwidth", None, "missing")
+    lead = M.lead(M.monitoring([rep], DEP))
+    assert set(lead["space"]["week"]) == {"1/100", "1/1000000"} and lead["bandwidth"] == {"verdict": "missing"}
