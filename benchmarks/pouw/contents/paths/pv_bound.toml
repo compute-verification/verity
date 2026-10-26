@@ -1,0 +1,4 @@
+order = 373
+path = "`theory/pv_bound.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST-2's pricing of PV with O bound (R-ACCEL-8) as a v2 round through nofold.v2_round: the prover's routes at A = B = 0 (O-route, zero digits, skip, tiles, lookups) against the tensor slack, per card at the world model and by context (note:compute-research/20261026T0440Z-draft-accel-algo-cost-2)"
