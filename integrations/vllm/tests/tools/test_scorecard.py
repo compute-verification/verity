@@ -38,7 +38,7 @@ def _toy(root: Path) -> Path:
                                 '        return y\n\n\ndef _g():\n    pass\n')
     _write(root, f"{pkg}/b/__init__.py", 'import os\nfrom os import environ\nenviron["VERITY_B"] = "1"\n'
                                          'if "VERITY_C" in environ:\n    pass\nos.environ.setdefault("VERITY_D", "0")\n')
-    _write(root, f"{pkg}/envs.py", '"""Settings."""\nimport os\nX = os.environ.get("VERITY_X")\n')
+    _write(root, f"{pkg}/settings.py", '"""Settings."""\nimport os\nX = os.environ.get("VERITY_X")\n')
     body = "".join(f"    x{i} = {i}\n" for i in range(120))
     _write(root, f"{pkg}/big.py", '"""Big."""\n\n\ndef _long():\n' + body + "".join(f"Y{i} = {i}\n" for i in range(330)))
     _write(root, f"{pkg}/tests/test_skipped.py", "import os\nos.environ['VERITY_T'] = '1'\n")
@@ -71,7 +71,7 @@ def test_each_number_on_a_toy_tree(tmp_path: Path) -> None:
     pkg = {"modules": 5, "modules_undocumented": 1, "public_defs": 2, "undocumented": 1, "functions": 2, "untyped": 1}
     assert card["docs_types"] == {"package": pkg, "interface": {**pkg, "modules": 3}}
     e = card["settings"]
-    assert e["settings_module"] == "verity_vllm/envs.py"
+    assert e["settings_module"] == "verity_vllm/settings.py"
     assert (e["sites"], e["reads"], e["writes"], e["modules"], e["variables"]) == (4, 2, 2, 2, 4)
     assert e["by_module"] == {"verity_vllm/b/__init__.py": 3, "verity_vllm/a.py": 1}
 
@@ -82,7 +82,7 @@ def test_the_cli_prints_the_card_and_its_json(tmp_path: Path) -> None:
                                     capture_output=True, text=True, check=True).stdout
     assert json.loads(run("--json")) == SC.scorecard(root)
     text = run()
-    assert "distinct modules imported" in text and "p99_demo" in text and "verity_vllm/envs.py" in text
+    assert "distinct modules imported" in text and "p99_demo" in text and "verity_vllm/settings.py" in text
 
 
 def test_env_uses_names_the_variable_and_the_mode() -> None:

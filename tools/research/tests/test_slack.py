@@ -32,7 +32,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training"]
+           "console", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "counters"]
 
 
 class FakeSlack:
@@ -1086,7 +1086,28 @@ def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, regist
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 09:30:00Z @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+
+
+@pytest.mark.parametrize("text,stamped", [
+    ("compute-research 13:07Z: outcome 1 MET", "compute-research 13:07Z (sent 13:22Z): outcome 1 MET"),
+    ("*compute-accounting 11:45Z* (quiet): x", "*compute-accounting 11:45Z* (sent 13:22Z) (quiet): x"),
+    ("top 00:15Z, how this works", "top 00:15Z (sent 13:22Z), how this works"),
+    ("<!subteam^S1|@ci> infra 13:00Z: free", "<!subteam^S1|@ci> infra 13:00Z (sent 13:22Z): free"),       # --to's tag first
+    ("@top comms 13:21Z: on track", None),                                     # within 2 min of the send
+    ("can node 2 take a job by 20:00Z?", None), ("infra, outcomes by 18:40Z:", None),   # deadlines, not headers
+    ("The 13:00Z checkpoint is late", None), ("comms 23:59Z: late", "comms 23:59Z (sent 13:22Z): late"),
+])
+def test_a_hand_typed_header_time_gets_the_real_send_time_beside_it(text, stamped):
+    """26 Oct: hand-typed times in posts ran up to 15 min off, which misordered MEM-69's salts (top, TOP-90)."""
+    now = datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc)
+    assert slack.stamp_time(text, now) == (stamped or text)
+
+
+def test_send_stamps_a_hand_typed_header_time(fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc))
+    assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra 13:00Z: node 2 is free")[0] == 0
+    assert "infra 13:00Z (sent 13:22Z): node 2 is free" in fake.messages[COORD][-1]["text"]
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
@@ -1860,12 +1881,18 @@ def test_a_decided_card_rings_tops_inbox_once_with_its_question_outcome_and_aske
     assert run(capsys, "ask-daniel", "status", "43")[0] == 1 and len(bells(fake, top)) == 1          # pending rings no one
 
 
-def test_status_404_says_no_card_has_that_id(route, registry, capsys):
+def test_status_404_says_no_card_has_that_id_and_a_prefix_is_looked_up_in_ask_daniel(route, fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime.fromtimestamp(1700000100, timezone.utc))
     route.answer = (404, {"error": "not_found"})
     rc, _, err = run(capsys, "ask-daniel", "status", "1790800000.000100")
-    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err and "prefix" not in err
+    assert rc == 2 and "HTTP 404: no card has that ID" in err and "not the card's Slack ts" in err
     rc, _, err = run(capsys, "ask-daniel", "status", "81f010d2")
-    assert rc == 2 and "looks up no prefix" in err and "its mention in the card's thread also ends with" in err
+    assert rc == 2 and "no card in #ask-daniel's last 14 days has an ID starting 81f010d2" in err
+    whole = "81f010d2-1111-2222-3333-444455556666"
+    card = fake.add(ASK, text="a decision for you", username="infra", bot_id=BOT, reply_count=1)
+    fake.add(ASK, text=f"<@UDANIEL> a decision for you: ship it? `{whole}`", username="infra", bot_id=BOT, thread_ts=card["ts"])
+    run(capsys, "ask-daniel", "status", "81f010d2")                                   # TOP-90 row 31: posts show 8 hex
+    assert route.requests[-1][:2] == ("GET", f"/api/agent-approvals/{whole}")
 
 
 def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_card(route, registry, capsys):
@@ -2552,23 +2579,33 @@ def test_an_announcement_to_every_handle_refuses_leading_names(registry, capsys)
     assert run(capsys, "announce", "--as", "infra", "--dry-run", "--text", "@lean @ci daily wasters")[0] == 2
 
 
-def test_a_handle_named_past_the_start_is_refused_since_nothing_rings_it(registry, capsys):
+def test_a_handle_named_past_the_start_posts_with_a_note_that_it_isnt_rung(registry, capsys):
+    """Refusing such a post cost re-sends (TOP-90 row 30); it posts, and the sender is told which names weren't woken."""
     reply = ["reply", "--as", "top", "--thread", "1700000000.000001", "--dry-run", "--text"]
     rc, _, err = run(capsys, *reply, "@proofs stack point is 4. @lean, rebase onto it")
-    assert rc == 2 and "names @lean past its start" in err and "Move them to the start" in err
+    assert rc == 0 and "names @lean past its start, so they aren't rung" in err and "move them to the start" in err
     rc, _, err = run(capsys, *reply, "@proofs two things:\ncompute-accounting: your ask is open\n- @lean: rebase")
-    assert rc == 2 and "names @lean @compute-accounting past its start" in err
-    for bad in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
-        assert run(capsys, *reply, bad)[0] == 2, bad
-    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")[0] == 2
+    assert rc == 0 and "names @lean @compute-accounting past its start" in err
+    for late in ("@proofs compute-accounting: 98c5 is yours", "@proofs the slot is #1574 (9987, 2000). lean: stack on 8cf4. done"):
+        rc, _, err = run(capsys, *reply, late)
+        assert rc == 0 and "aren't rung" in err, late
+    rc, _, err = run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild? not @lean")
+    assert rc == 0 and "names @lean past its start" in err
     for ok in ("@proofs @lean stack point is 4", "@proofs stack point is 4; lean rebases onto it",
                "@proofs run `research msg read --as @lean`", "@proofs\n> @lean said 4\nagreed", "top: @top is me",
                "@proofs mail a@lean.example", "@proofs @lean stack point is 4. @lean, rebase", "lean: stack point is 4",
                "@proofs note: the slot is 4"):
-        assert run(capsys, *reply, ok)[0] == 0, ok
-    assert run(capsys, "send", "--as", "top", "--to", "@ci", "--dry-run", "--text", "can @ci rebuild?")[0] == 0
-    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "@ci, can you rebuild")[0] == 0
-    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")[0] == 2
+        rc, _, err = run(capsys, *reply, ok)
+        assert rc == 0 and "aren't rung" not in err, ok
+    rc, _, err = run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild for @lean")
+    assert rc == 0 and "names @lean past its start" in err
+
+
+def test_an_ask_with_two_to_owners_is_refused_with_the_send_that_reaches_both(registry, capsys):
+    """TOP-90 row 29: `ask --to @a --to @b` kept only @b."""
+    rc, _, err = run(capsys, "ask", "--as", "top", "--to", "@ci", "--to", "@lean", "--dry-run", "--text", "rebuild")
+    assert rc == 2 and "an ask goes to one owner" in err and "send --as ME --to @ci @lean" in err
+    assert run(capsys, "ask", "--as", "top", "--to", "@ci", "--dry-run", "--text", "rebuild")[0] == 0
 
 
 def test_an_fyi_from_the_starter_wakes_only_its_to_names(fake, registry, routes_dirs, capsys):

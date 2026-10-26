@@ -58,7 +58,8 @@ and then it is swept; without it the sweep runs before anyone pushes, finds noth
 same commit goes to vy-nebius-cpu-4's bare repository, whose main its builds check out (`vy-lean-sandbox checkout`): a plain
 push over the ssh `research run --on` uses, bounded by MIRROR_TIMEOUT_S. One that fails is a line with the command that reruns
 it, and the merge stands; $RESEARCH_MERGE_MIRROR names another machine, and empty skips it.
-These after-landing steps (the spec DM, the mirror, `after_land`, and one line per landing in the merge thread: what it merged
+These after-landing steps (the spec DM, the mirror, `after_land`, the Lean cache publish when a Lean package changed,
+`lean_publish`, and one line per landing in the merge thread: what it merged
 and its `Checked:` run, `report_landings`; a `landed` label on each run a landing's trailer names, `label_landed`) follow the remote's main, not the push: AFTER_LAND_REF on the
 remote is the main they last ran for, and every `research merge` that can change something (all but --dry-run, --mirror,
 --canary and --guard-push) catches them up, once, for whatever landed past it since, however it was pushed (`caught_up`).
@@ -1554,6 +1555,50 @@ def push_mirror(repo: Path, sha: str, name: str, target=None, run=subprocess.run
     return True
 
 
+#: infra's Lean cache publisher on the control pod: `SCRIPT SHA` fast-forwards vy-nebius-cpu-4's bare main to SHA and starts
+#: vy-lean-cache-daily there (a no-op while one runs), exits 0 once started and logs to LEAN_PUBLISH_LOG; $RESEARCH_LEAN_PUBLISH
+#: names another script, and empty skips it
+LEAN_PUBLISH, LEAN_PUBLISH_ENV, LEAN_PUBLISH_LOG, LEAN_PUBLISH_TIMEOUT_S = (
+    "/data/infra/lean_publish.sh", "RESEARCH_LEAN_PUBLISH", "/data/drive/lean-publish.log", 120)
+
+
+def lean_publish(repo: Path, start: str, tip: str, log=print, run=subprocess.run, clock=time.monotonic) -> bool:
+    """Start the Lean cache's publish of ``tip`` when what landed since ``start`` touches a Lake package's lock or Lean sources
+    (`queue.lean_change`), with one line in ``log`` saying whether it started, why not, and the seconds the script took to start.
+    It waits only for the script's start, bounded by LEAN_PUBLISH_TIMEOUT_S, and nothing raises: the landing stands either way."""
+    from .queue import lean_change
+
+    script, what = os.environ.get(LEAN_PUBLISH_ENV, LEAN_PUBLISH).strip(), f"research merge: the Lean cache publish of {tip[:12]}"
+    if not script:
+        log(f"{what} is off (${LEAN_PUBLISH_ENV} is empty)")
+        return False
+    try:
+        touched = lean_change(repo, tip, base=start)
+    except Exception as e:                                      # noqa: BLE001: a diff that can't be read skips only the publish
+        log(f"{what} not started: {start[:12]}..{tip[:12]} can't be diffed ({type(e).__name__}: {e})")
+        return False
+    if not touched:
+        log(f"{what} not started: {start[:12]}..{tip[:12]} touches no Lean package")
+        return False
+    if not Path(script).is_file():
+        log(f"{what} not started: {script} is absent")
+        return False
+    t0 = clock()
+    try:
+        r = run([script, tip], cwd=repo, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=LEAN_PUBLISH_TIMEOUT_S)
+        why = None if r.returncode == 0 else f"exited {r.returncode}: {' '.join((r.stderr or r.stdout or '').split())[-300:]}"
+    except subprocess.TimeoutExpired:
+        why = f"no exit within {LEAN_PUBLISH_TIMEOUT_S} s"
+    except Exception as e:                                      # noqa: BLE001: a script that can't run fails only the publish
+        why = f"{type(e).__name__}: {e}"
+    took = clock() - t0
+    if why:
+        log(f"{what} not started: {script} {why} ({took:.1f} s); its log is {LEAN_PUBLISH_LOG}; rerun: {script} {tip}")
+        return False
+    log(f"{what} started by {script} in {took:.1f} s; its minutes and bytes are in {LEAN_PUBLISH_LOG}")
+    return True
+
+
 #: `sh -c` around the after-landing command: run it (``$2``...) in its worktree ``$0``, then remove that from ``$1``'s repository
 AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree remove --force "$0"; exit $s'
 
@@ -1627,8 +1672,8 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
               runs: dict[str, str] | None = None) -> str | None:
     """Run the after-landing steps once for what landed on ``remote``'s main since AFTER_LAND_REF there (or ``since``, main before
     the caller's own push, when the remote has no marker yet): push main's tip to node 1's mirror, start ``tool``'s `after_land`
-    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), post each
-    landing to the merge thread
+    on the tip, with the attempt ``runs`` names for it (a later landing's `post_train.py` tests the ones before it too), start the
+    Lean cache publish when what landed touches a Lean package (`lean_publish`), post each landing to the merge thread
     (`report_landings`) and label the runs each one names (`label_landed`), then move the marker to the tip.  The spec DM
     (`spec_alert`) goes over SPEC_ALERTED_REF..tip (AFTER_LAND_REF's start when that marker is new) and moves its marker only
     when it was sent, so a failed DM is retried by every later run until it goes.  Without a marker or ``since`` it only sets
@@ -1677,6 +1722,7 @@ def caught_up(repo: Path, remote: str, tool: str = "check", since: str = "", log
             push_mirror(repo, tip, name)
         after_land(repo, tool, tip, log=log, attempt=(runs or {}).get(tip, ""))
         if remote == "origin":
+            lean_publish(repo, start, tip, log=log)
             report_landings(repo, start, tip, log=log, runs=runs)
             label_landed(repo, start, tip, log=log, runs=runs)
     if _move(repo, remote, AFTER_LAND_REF, mark, tip, log) and not start:
