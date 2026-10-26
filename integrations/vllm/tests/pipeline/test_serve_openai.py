@@ -141,6 +141,34 @@ def test_command_is_registered_and_defaults_to_the_setting_that_fits_the_certifi
         cli.parse("serve-openai", ["--out", "/tmp/x"], environ={})
 
 
+def test_the_engine_schedules_as_the_rows_workload_program_is_specialized_for_and_is_refused_otherwise(tmp_path):
+    """The bench row's Build declares the scheduler its workload Program models (``build_workload/workload_program.json``'s
+    ``applicability.engine.async_scheduling``): the engine is built with it, not with vLLM's default (on); a row without the
+    declaration is refused before the model loads, and an engine that resolved another value (or none) is refused by name."""
+    (man := tmp_path / "manifest.json").write_text("{}")
+    opts = cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--required-manifest", str(man)], environ={})
+    with pytest.raises(cli.UsageError, match="the row's Build has no workload Program"):
+        so.row_scheduling(opts)
+    (wp := tmp_path / so.WORKLOAD_PROGRAM).parent.mkdir()
+    wp.write_text(json.dumps({"applicability": {"engine": {"enforce_eager": True}}}))
+    with pytest.raises(cli.UsageError, match="async_scheduling None, not a boolean"):
+        so.row_scheduling(opts)
+    wp.write_text(json.dumps({"applicability": {"engine": {"enforce_eager": True, "async_scheduling": False}}}))
+    assert (row := so.row_scheduling(opts)) == {"async_scheduling": False, "source": str(wp)}
+    assert so.engine_options(opts, row)["async_scheduling"] is False and "async_scheduling" not in so.engine_options(opts)
+    assert so.row_scheduling(cli.parse("serve-openai", ["--model", "m", "--revision", "r", "--no-commit"], environ={})) is None
+
+    def engine(resolved: bool | None) -> SimpleNamespace:
+        return SimpleNamespace(llm_engine=SimpleNamespace(vllm_config=SimpleNamespace(
+            scheduler_config=SimpleNamespace(async_scheduling=resolved))))
+
+    assert so.scheduling_refusal(row, engine(False)) is None and so.scheduling_refusal(None, engine(True)) is None
+    for resolved in (True, None):
+        why = so.scheduling_refusal(row, engine(resolved))
+        assert why.startswith(f"async_scheduling: the engine resolved {resolved}, and the bench row's workload Program is "
+                              "specialized for False (LAG 0") and str(wp) in why
+
+
 @pytest.mark.parametrize("precision, parts, scope", [("verity_int8", ("linears",), "linears"),
                                                      ("int8_exact", ("linears", "attention"), "all"), ("pin", ("linears",), None)])
 def test_every_precision_registers_the_verity_int8_method_before_the_engine(precision, parts, scope):
