@@ -95,6 +95,7 @@ theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.Gf
   · obtain ⟨gs', hgs', hp⟩ := FlockVBridge.PartS.bind_ok hp
     rw [hg] at hgs'
     cases hgs'
+    dsimp only at hp
     rw [hj] at hp
     dsimp only at hp
     obtain ⟨S2, -, hp⟩ := FlockVBridge.PartS.bind_ok hp
@@ -124,6 +125,18 @@ theorem comb_of_row {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : A
     exact ⟨cb, hcb⟩
   · rename_i hn
     exact absurd (by rw [hsz]; exact ha) hn
+
+theorem comb_ok {inn : RecCoins.Inner} {r : ℕ} {rep : RecCoins.Rep} {cb : Array _root_.Flock.F128}
+    (h : inn.comb r rep = .ok cb) : inn.combOf r rep.info = .ok cb ∧ cb.size = 64 := by
+  unfold RecCoins.Inner.comb at h
+  cases hc : inn.combOf r rep.info with
+  | error e => simp [hc, bind, Except.bind] at h
+  | ok c0 =>
+    by_cases h64 : c0.size = 64
+    · simp [hc, h64, bind, Except.bind, pure, Except.pure] at h
+      subst h
+      exact ⟨rfl, h64⟩
+    · simp [hc, h64, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
 theorem comb_of_rows {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : Array _root_.Flock.Claim}
     {vs : Array ℕ} {rows : Array (Array ℕ)} (h : residualRowsOf inn sh extras vs = .ok rows) {r : ℕ} (hr : r < 2)
@@ -237,10 +250,10 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
   have hnv : nv = vs.size := part_nv hpart hgs hj
   -- the copy's instance
   have hn : instOf sts[0].c o g = o + g := inst_eq_add hg hn2
-  have hr2 : o + g < 2 := hn ▸ hn2
+  have hr2 : o + g < 2 := by rw [← hn]; exact hn2
   rw [hn]
   -- the row's bits, at the rep's coins
-  obtain ⟨-, hbits⟩ := FlockC3.RegLevels.rows_vOf hrr
+  obtain ⟨-, hbits⟩ := FlockC3.RegLevels.rows_vOf (inn := inn) (sh := sh) (extras := extras) (vs := vs) hrr
   obtain ⟨rep, hrep, hbit⟩ := hbits (o + g) hr2
   obtain ⟨-, V, hV, hvOf⟩ := FlockC3.RegLevels.rep_ok hrep
   have hI := OpenLower.staged_innerAt (b := b) (s := s) (c := c) hst hd hB
@@ -260,7 +273,7 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
   have hexR : Rows.extrasRead v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c) = extras := by
     unfold Rows.extrasRead
     rw [← hext, hex]
-    rfl
+    all_goals rfl
   have hsch' : fast100 (tabsOf v.2.2)[0]!.m = some sch := by rw [← hm]; exact hsch
   have hsR : algFields (Rows.shapeRead v.2.1 v.2.2 ((List.range (Bk (xIOf x))).map c)) = algFields sh := by
     unfold Rows.shapeRead
@@ -285,28 +298,18 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
   have hCk : vs.any (· ≥ rep.v.size - 64) = true → inn.comb (o + g) rep = .ok combR := by
     intro ha
     obtain ⟨cb, hcb⟩ := comb_of_rows hrr hr2 hrep ha
+    obtain ⟨hc0, h64⟩ := comb_ok hcb
     rw [hcb]
     congr 1
-    have hcb' := hcb
-    unfold RecCoins.Inner.comb at hcb'
-    obtain ⟨c0, hc0, hcb'⟩ := FlockVBridge.PartS.bind_ok hcb'
-    split at hcb'
-    · cases hcb'
-    · rename_i h64
-      have h64' : c0.size = 64 := by simpa only [bne_iff_ne, ne_eq, Decidable.not_not] using h64
-      have e1 : cb = c0 := by
-        simp only [pure, Except.pure, Except.ok.injEq] at hcb'
-        exact hcb'.symm
-      rw [e1, ← hcR]
-      rw [hcomb] at hc0
-      dsimp only at hc0
-      obtain ⟨lins, hlins⟩ := FlockVBridge.Family.residualLins_of_verifierRows hrow
-      unfold Rows.combRead
-      rw [OpenLower.residualLins_congr hsR, hlins]
-      dsimp only
-      rw [hc0]
-      dsimp only
-      rw [if_pos h64']
+    rw [← hcR]
+    simp only [hcomb] at hc0
+    obtain ⟨lins, hlins⟩ := FlockVBridge.Family.residualLins_of_verifierRows hrow
+    unfold Rows.combRead
+    rw [OpenLower.residualLins_congr hsR, hlins]
+    dsimp only
+    rw [hc0]
+    dsimp only
+    rw [if_pos h64]
   have hgs' := hgs
   unfold residualGroups at hgs'
   obtain ⟨S0, hS0, hg0⟩ := FlockVBridge.PartS.bind_ok hgs'
@@ -319,12 +322,14 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
     symm
     apply FlockVBridge.AccChain.eq_of_bitOf
     intro t ht
-    rw [FlockVBridge.bitOf_ofBits _ ht, getD_nat]
+    rw [FlockVBridge.bitOf_ofBits _ ht]
+    beta_reduce
+    rw [getD_nat]
     have hb := hbit combR hCk (128 * e + t) (by omega)
     rw [show (128 * e + t) / 16 = 8 * e + t / 16 by omega, show (128 * e + t) % 16 = t % 16 by omega] at hb
     rw [hb, FlockVBridge.wbit, show (128 * e + t) / 128 = e by omega, show (128 * e + t) % 128 = t by omega,
       FlockVBridge.Decode.sub_lt _ _ e he, hvOf combR]
-    rfl
+    all_goals rfl
   · rw [if_neg he, resVOf_none (hVall combR) hS0 hg0 hj (Nat.le_of_not_lt he)]
 
 end RecDeploy.ResLower
