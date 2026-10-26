@@ -45,7 +45,7 @@ theorem setupHidden_mPts_drawnP {d : Json}
   rfl
 
 /-- **`m_pts` from the circuit and the draw's proved count at `own`** (`setupHidden_mPts_of_proved`). -/
-theorem setupHidden_mPts_of_provedP {c : Circuit} {d : Json} {N₀ : ℕ} (hc : HmOut.parse tags cf tables = .ok c)
+theorem setupHidden_mPts_of_provedP {c : Flock.Circuit} {d : Json} {N₀ : ℕ} (hc : HmOut.parse tags cf tables = .ok c)
     (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program own = .ok st) :
     st.mPts = mPtsOf c.g N₀ := by
