@@ -3026,8 +3026,9 @@ class Driver:
             elif b.get("suite") and not b.get("unclear"):
                 b["unclear"] = True
             elif b.get("suite"):
-                self._bisected(drive, pl, b, None, f"its run {' '.join(run['ids'])} of {c[:12]} ended twice naming {b['suite']} "
-                                                   "neither passed nor failed")
+                self._bisected(drive, pl, b, None, f"its run {' '.join(run['ids'])} of {c[:12]} ended twice "
+                                                   f"({'lost' if lost else ', '.join(map(str, rcs))}) neither passing nor "
+                                                   f"failing {b['suite']}")
                 return
             elif not lost and any(rc == 0 for rc in rcs) and not self._unrun(run["ids"], b["steps"]):
                 b["good"] = run["i"]
