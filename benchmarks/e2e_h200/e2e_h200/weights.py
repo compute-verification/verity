@@ -26,7 +26,7 @@ class Weights:
         self.nbytes = SW.stream_bytes(shape)
 
     def array(self, name: str) -> np.ndarray:
-        """A tensor whole: s8 codes (N, K) int8, scales (N,) f32, bf16 words (gains (H,), ``tok`` (V, H), ``pos`` (H, C))."""
+        """A tensor whole: s8 codes (N, K) int8, scales (N,) f32, bf16 words (gains (H,), ``tok`` (H, V), ``pos`` (H, C))."""
         a = SW.generate(self.shape, self.seed, name)
         return a.reshape(-1) if self.t[name].rows == 1 else a
 

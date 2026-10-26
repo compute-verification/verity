@@ -65,7 +65,7 @@ class Driver:
         self.sw = {n: torch.from_numpy(np.ascontiguousarray(store.load(f"{n}.scale"))).to(dev) for n in names}
         self.gain = {n: from_words(store.load(n), dev)
                      for n in [f"l{i}.{k}" for i in range(shape.layers) for k in ("attn_norm", "mlp_norm")] + ["final_norm"]}
-        self.tok = from_words(store.load("tok"), dev)    # (V, H): row v is token v's embedding
+        self.tok = from_words(np.ascontiguousarray(store.load("tok").T), dev)    # (V, H): row v is token v's embedding
         self.pos = from_words(np.ascontiguousarray(store.load("pos").T), dev)    # (C, H)
         self.eps = torch.tensor([EPS], dtype=torch.int32).view(torch.float32)[0].to(dev)
         self.staging = {k: torch.empty(w.dims[f"l0.{k}"], dtype=torch.int8, device=dev) for k in LINEARS}

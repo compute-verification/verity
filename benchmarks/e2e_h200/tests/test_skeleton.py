@@ -45,6 +45,13 @@ def replayer(weights, d, results):
     return Replayer(TINY, weights, d.steps, [r.tokens_in for r in results])
 
 
+def test_tok_is_one_coordinate_a_row_and_the_driver_reads_token_rows(weights, honest):
+    tok = weights.array("tok")
+    assert tok.shape == (TINY.width, TINY.vocab)
+    v = int(PROMPTS[0, 0])
+    assert np.array_equal(honest[0].tok[v].view(torch.int16).numpy().view(np.uint16), tok[:, v])
+
+
 def test_every_unit_of_every_step_replays(weights, honest):
     d, results = honest
     rp = replayer(weights, d, results)

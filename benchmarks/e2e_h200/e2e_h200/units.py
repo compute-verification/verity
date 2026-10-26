@@ -158,7 +158,7 @@ class Replayer:
 
         def replay(b: int, _: int):
             tok = int(self.tokens[step][b])
-            col, pos = self._gain("tok")[tok], self._gain("pos")[:, t]
+            col, pos = self._gain("tok")[:, tok], self._gain("pos")[:, t]
             return [np.array([tok], np.uint16), col, pos], self.u16(step, "embed", b), RP.bf16_add(col, pos)
         return Family("embed", RP.key_of("EmbeddingRow_v1", {"V": sh.vocab}), ROW, 1, replay)
 

@@ -10,7 +10,7 @@ blocked sums), every bf16 rounding RNE. NaN words are not modelled: no op here m
                codes = clamp(rne(RN(x / scale)), -128, 127)
     s8_linear  ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}: the exact s32 sum, then bf16(RN(RN(f32(acc) * sx) * sw))
     add        Bf16AddRow_v1{N}: bf16(RN(a + b))
-    embed      the embedding row: bf16(RN(tok[token] + pos[:, t]))
+    embed      the embedding row: bf16(RN(tok[:, token] + pos[:, t]))
     argmax     the argmax row: the first index of the greatest logit
 
 The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and a float64 matmul in row chunks on the CPU (exact: integers below 2^53): the stand-in for

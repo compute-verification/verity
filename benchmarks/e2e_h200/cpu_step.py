@@ -372,7 +372,7 @@ class Step:
         if t >= s.context:
             raise ValueError(f"position {t} is past the context {s.context}")
         self._label = {"pos": t, "layer": None}
-        tok_w, pos_w = self.w["tok"].T, self.w["pos"]
+        tok_w, pos_w = self.w["tok"], self.w["pos"]
         toks = np.asarray(toks, np.uint16)
         col = np.tile(tok_w, (b, 1))
         pos = np.tile(pos_w[:, t], b)
