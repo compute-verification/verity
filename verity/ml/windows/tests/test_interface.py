@@ -512,6 +512,36 @@ def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_und
         twice.close()
 
 
+def test_a_wired_member_reading_a_registered_row_is_checked_through_its_refs():
+    """`chain` with each layer's ``w`` a registered row: every member is a shared-row member, its wired ``x`` a table of its
+    units' own rows, and the wiring check reads a unit's string through its ref, the row its statement reads. The verifier
+    derives the same members, a wire moved to other writers is refused, and so is a ref moved to another unit's row."""
+    ins, outs = chain_values()
+    layer = REQUESTS * STEPS
+    w = Held("w", ins[1][::layer].reshape(LAYERS, 256))
+    read = I.Read(GID, "w", "w", at=0, radix=(LAYERS, layer), base=0, step=(256, 0))
+    circuit = replace(chain(), registered=I.Registered({"w": LAYERS * 256}, reads=(read,)))
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    ms = win.window.members
+    assert [(m.base, m.tables, m.wired) for m in ms] == [
+        (0, (("x", 2), ("w", 1)), ()), (2, (("x", 2), ("w", 1)), (("x", "o0", (4, 5)),)),
+        (4, (("x", 2), ("w", 1)), (("x", "o0", (0, 1)),)), (6, (("x", 2), ("w", 1)), (("x", "o0", (2, 3)),))]
+    win.record(GEMM, ins, outs)
+    c = win.close(salt_key=bytes(32))
+    publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
+    assert WI.check(ms, publics) == {} and WI.check_drawn(ms, publics, range(8)) == {}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert I.window_of_record(doc, LAW, {GID: GEMM}.__getitem__).members == ms
+    moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in ms]
+    assert set(WI.check(moved, publics)) == {m.key for m in ms if m.wired}
+    body, at = bytearray(publics[ms[1].key]), WI.BC_BYTES * sum(CS.port_leaves(ms[1]).values())
+    body[at:at + 4] = (1).to_bytes(4, "little")
+    assert list(WI.check_drawn(ms, {**publics, ms[1].key: bytes(body)}, [2])) == [ms[1].key]
+    with pytest.raises(ValueError, match="own rows"):
+        CS.Window(win.window.program, win.window.query, LAW, RUN,
+                  (*ms[:1], replace(ms[1], tables=(("x", 1), ("w", 1))), *ms[2:]))
+
+
 def test_the_boundary_is_carried_as_given():
     b = {"format": "verity/boundary/v1", "egress": {"template": GID}}
     win = I.Window(I.Circuit("b", ((GEMM, 2),), boundary=b), RUN, LAW, 2)
