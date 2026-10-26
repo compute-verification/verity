@@ -75,7 +75,7 @@ theorem hh_of_fit {mask : ℕ → ℕ → Bool} {g : Circuit → _root_.VStar.In
     obtain ⟨hT1, hT2⟩ := hT st c src pin hp hsrc hpi
     unfold witFin
     rw [vstarWit_eq hp hsrc hpi, hmsg i hlt]
-    dsimp only
+    try dsimp only
     unfold Claims.Recursion.VStarB.readSegs
     refine flatMap_fit _ _ _ _ hlen.symm fun k ha hb => ?_
     obtain ⟨nm, q, n, ps, rw, hsk, hq, hrw, hps, hrk⟩ := hks k hb
