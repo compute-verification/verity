@@ -13,6 +13,7 @@ import Proofs.Accounting.ChainWork
 import Proofs.Accounting.Prob
 import Proofs.Accounting.Joint
 import Proofs.Accounting.JointBlocks
+import Proofs.Accounting.JointBlocks.Honest
 import Proofs.Accounting.JointPeriod
 import Proofs.Accounting.JointBridge.BandwidthOfRemoteLinePeriod
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod

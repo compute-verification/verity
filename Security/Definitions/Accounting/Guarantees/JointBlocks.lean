@@ -1,4 +1,4 @@
-import Definitions.Accounting.JointBlocks
+import Definitions.Accounting.JointBlocks.Honest
 
 /-!
 # The joint guarantee over a horizon of server-time blocks and the wipes between them (trusted)
@@ -35,6 +35,10 @@ Demo A (Daniel's ruling of 25 Oct) is PoUW, sampled proofs and network accountin
 composed theorem, the blocks' per-period guarantees for those three audits with no wipe or memory term, the instance of
 `JointHorizonBlocksLegs` (any set of the audits). Memory accounting (PoUS, PoUB, the wipe and the memory and wipe terms)
 joins at M4 through `JointHorizonBlocks`.
+
+`JointHorizonBlocks`'s honest lemma (`JointHorizonBlocksHonest`) shows its hypotheses hold at the honest deployed
+horizon (`Accounting.Honest.honest`), and its nontrivial lemma (`JointHorizonBlocksNontrivial`) that its conclusion
+fails under verdicts that accept everything (`Accounting.Honest.idleBlocks`).
 -/
 
 namespace Accounting.Guarantees
@@ -71,6 +75,40 @@ def JointHorizonBlocks : Prop :=
     Pouw.pr (fun ξ => (∃ b a, (s.block b).accepts a ξ ∧ ¬ (s.block b).Holds (c b) p a ξ) ∨
         (∃ b, (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives ξ) ∨
         (∃ b, (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ)) ≤
+      ∑ b, ∑ a, δ b a + ∑ b, εWipe b + ∑ b, δPous b
+
+/-- **`JointHorizonBlocks`'s honest lemma: its hypotheses hold at the honest deployed horizon, at error 0.** At
+`Accounting.Honest.honest` (one H200 of `vy-dc-h200-2`, the honest wipe of `r20261026-003454-bfd2`, P2's deployed
+store and read deadline; any op and link rates, circuit, partition, inputs, number of blocks, block length, bits moved
+and price), every verdict accepts on every coin, every audit of every block has its per-period guarantee at the honest
+node's certificates (`Accounting.Honest.certs`) and error 0, and the wipes' survivor bounds and the blocks' memory terms
+fail with probability 0. Proof: `Accounting.SecurityProofs.JointHorizonBlocksHonest`. -/
+def JointHorizonBlocksHonest : Prop :=
+  ∀ (rate : Op → ℕ) (cap : Unit → ℕ) (C : Verity.Circuit) (n : ℕ) (P : Verity.Partition C n) (v : C.Transcript)
+    (B L E : ℕ) (p : Price),
+    (∀ ξ, (∀ b x, ((Honest.honest rate cap P v B L E).block b).accepts x ξ) ∧
+      ∀ b, ((Honest.honest rate cap P v B L E).wipe b).accepts ξ) ∧
+    (∀ b x, ((Honest.honest rate cap P v B L E).block b).Sound (Honest.certs rate L E p) p x 0) ∧
+    (∀ b, Pouw.pr (fun ξ => ((Honest.honest rate cap P v B L E).wipe b).accepts ξ ∧
+      ¬ ((Honest.honest rate cap P v B L E).wipe b).Survives ξ) ≤ 0) ∧
+    (∀ b, Pouw.pr (fun ξ => ((Honest.honest rate cap P v B L E).block b).accepts .pous ξ ∧
+      ¬ (Honest.honest rate cap P v B L E).MemoryTerm b ξ) ≤ 0)
+
+/-- **`JointHorizonBlocks`'s nontrivial lemma: its conclusion fails for verdicts that accept everything.** At
+`Accounting.Honest.idleBlocks`, a node that does nothing on the deployed device under verdicts that accept everything,
+claimed at the honest node's certificates, PoUB's claim fails on every coin of every block of positive length, so for
+any errors summing to less than 1, the probability that some accepted claim fails is above their sum. Proof:
+`Accounting.SecurityProofs.JointHorizonBlocksNontrivial`. -/
+def JointHorizonBlocksNontrivial : Prop :=
+  ∀ (rate : Op → ℕ) (cap : Unit → ℕ) (C : Verity.Circuit) (n : ℕ) (P : Verity.Partition C n) (v : C.Transcript)
+    (B L E : ℕ) (p : Price) (δ : Fin B → Audit → ℝ) (εWipe δPous : Fin B → ℝ),
+    0 < B → 0 < L → ∑ b, ∑ a, δ b a + ∑ b, εWipe b + ∑ b, δPous b < 1 →
+    ¬ Pouw.pr (fun ξ => (∃ b a, ((Honest.idleBlocks rate cap P v B L E).block b).accepts a ξ ∧
+          ¬ ((Honest.idleBlocks rate cap P v B L E).block b).Holds (Honest.certs rate L E p) p a ξ) ∨
+        (∃ b, ((Honest.idleBlocks rate cap P v B L E).wipe b).accepts ξ ∧
+          ¬ ((Honest.idleBlocks rate cap P v B L E).wipe b).Survives ξ) ∨
+        (∃ b, ((Honest.idleBlocks rate cap P v B L E).block b).accepts .pous ξ ∧
+          ¬ (Honest.idleBlocks rate cap P v B L E).MemoryTerm b ξ)) ≤
       ∑ b, ∑ a, δ b a + ∑ b, εWipe b + ∑ b, δPous b
 
 /-- **The joint guarantee over a horizon of `B` server-time blocks, for a set of the audits.** On any device and any

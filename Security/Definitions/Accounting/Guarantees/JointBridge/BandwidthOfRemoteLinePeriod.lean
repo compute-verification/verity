@@ -1,4 +1,5 @@
 import Definitions.Accounting.JointBridge.BandwidthOfRemoteLinePeriod
+import Definitions.Accounting.JointBlocks.Honest
 
 /-!
 # PoUB's per-period guarantee, from the remote bandwidth audit's (trusted)
@@ -16,6 +17,8 @@ model and which the joint guarantee no longer takes.
 
 Proved by `Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLinePeriod :
 Accounting.Guarantees.Bridge.BandwidthOfRemoteLinePeriod` (`Proofs.Accounting.JointBridge.BandwidthOfRemoteLinePeriod`).
+Its honest lemma (`BandwidthOfRemoteLinePeriodHonest`) and nontrivial lemma (`BandwidthOfRemoteLinePeriodNontrivial`)
+are stated at `Accounting.Honest`'s instances (`Proofs.Accounting.JointBlocks.Honest`).
 -/
 
 namespace Accounting.Guarantees.Bridge
@@ -38,5 +41,28 @@ def BandwidthOfRemoteLinePeriod : Prop :=
     RealizesBandwidthOfRemoteLinePeriod r c X acc credit readBits →
     (∀ ξ, Pouw.pr (fun x => acc ξ x ∧ readBits ξ x < credit ξ x) ≤ δ) →
     r.Sound c p .poub δ
+
+/-- **`BandwidthOfRemoteLinePeriod`'s honest lemma: its hypotheses hold at the honest deployed session, at error 0.**
+At each block of the honest deployed horizon (`Accounting.Honest.honest`) as long as the honest remote bandwidth
+session of `r20261026-180902-bc3d` (`Accounting.Honest.sessionSpan` ticks), with the bandwidth certificate the bits that
+session credited as read (`Accounting.Honest.sessionCerts`), the period realizes a session that accepts and whose line
+credits as read exactly the bits the node read from its registered store, and the session's bound holds at error 0.
+Proof: `Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLinePeriodHonest`. -/
+def BandwidthOfRemoteLinePeriodHonest : Prop :=
+  ∀ (rate : Op → ℕ) (cap : Unit → ℕ) (C : Verity.Circuit) (n : ℕ) (P : Verity.Partition C n) (v : C.Transcript)
+    (B E : ℕ) (p : Price) (b : Fin B),
+    Nonempty (RealizesBandwidthOfRemoteLinePeriod ((Honest.honest rate cap P v B Honest.sessionSpan E).block b)
+      (Honest.sessionCerts rate E p) Bool (fun _ _ => True) (fun _ _ => (Honest.sessionBits : ℝ))
+      (fun _ _ => (Honest.sessionBits : ℝ))) ∧
+    Pouw.pr (fun _ : Bool => True ∧ (Honest.sessionBits : ℝ) < Honest.sessionBits) ≤ 0
+
+/-- **`BandwidthOfRemoteLinePeriod`'s nontrivial lemma: its conclusion fails for a PoUB verdict that accepts
+everything.** At each block of positive length of `Accounting.Honest.idleBlocks`, a node that reads nothing under
+verdicts that accept everything, claimed at the honest node's certificates, PoUB's per-period guarantee fails at every
+error below 1. Proof: `Accounting.SecurityProofs.Bridge.BandwidthOfRemoteLinePeriodNontrivial`. -/
+def BandwidthOfRemoteLinePeriodNontrivial : Prop :=
+  ∀ (rate : Op → ℕ) (cap : Unit → ℕ) (C : Verity.Circuit) (n : ℕ) (P : Verity.Partition C n) (v : C.Transcript)
+    (B L E : ℕ) (p : Price) (b : Fin B) (δ : ℝ), 0 < L → δ < 1 →
+    ¬ ((Honest.idleBlocks rate cap P v B L E).block b).Sound (Honest.certs rate L E p) p .poub δ
 
 end Accounting.Guarantees.Bridge
