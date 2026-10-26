@@ -16,7 +16,7 @@ def _producer(P: C.Prog, t) -> int | None:
 
 
 def _producers(P: C.Prog, t) -> list[int]:
-    """Every producer instance of a canonical N source, record form or [R17 mfast] progression."""
+    """Every producer instance of a canonical N source, record form or progression."""
     from verity_vllm.program.compact import n_producers
     return n_producers(P.steps, t)
 

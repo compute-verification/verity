@@ -49,7 +49,7 @@ class PeerReads:
         return parts
 
     def _peer_srcP(self, p: tuple, unfold: bool) -> list[tuple]:
-        """[R17 D90 x mfast] `_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
+        """`_peer_src` over a progression of reads of one peers Input node: uniform ("PEER", k, (lo', hi'), (dL, dH), c)
         iff every run's [lo, hi) lies inside the SAME field (the whole span does: fields are disjoint and sorted), else the record's
         per-run answer (a run outside every field or spanning two is ("PEER?", ..) run by run)."""
         import bisect
