@@ -2271,7 +2271,8 @@ class LakeBuild:
             return (f"this machine keeps no warm Lean tree (no `build` pool in {self.slots}; an agent VM builds nothing): "
                     f"`ready --on MACHINE` builds them on {PREFLIGHT_LEAN_ON}")
         if rc is None:
-            return f"its build {where} was still going after {left:.0f} s{': ' + text if text else ''}"
+            return (f"its build {where} hadn't ended after {left:.0f} s (a wait in its pool's line counts){': ' + text if text else ''}"
+                    if where != "here" else f"its build here was still going after {left:.0f} s{': ' + text if text else ''}")
         doc = next((ln[len(LEAN_BUILD_LINE):] for ln in reversed(text.splitlines()) if ln.startswith(LEAN_BUILD_LINE)), None)
         try:
             doc = json.loads(doc) if doc is not None else None
