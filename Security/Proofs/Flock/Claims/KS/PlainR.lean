@@ -375,7 +375,6 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
     obtain ⟨c₀, cs', rfl⟩ : ∃ c₀ cs', cs = c₀ :: cs' := by
       rcases cs with _ | ⟨c₀, cs'⟩
       · exfalso
-        trace_state
         simp only [List.length_nil, zero_add] at hl
         have h2 : 2 ≤ as.length := by rw [hk]; exact Nat.le_add_right _ _
         omega
