@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+from verity_vllm import settings
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
@@ -256,7 +257,7 @@ def main(args: Options) -> int:
     versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "effective_execution": va.effective_execution_doc(llm), "target": TT.as_json(target), "served": served,
-                "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))},
+                "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT", "HIDDEN_GPU"))}),
                 "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo,
                 "root_combination": f"tp_run_root = {'SHA-512' if rows else 'SHA-256'}(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": root_tag.decode(), "commit_scheme": args.commit_scheme,
