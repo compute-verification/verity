@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.DeployChecked
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # `hrest`'s base checks: the verdict's other checks hold off any witnesses
@@ -150,7 +151,7 @@ theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (ro
     proofs) (k := "unit_draw") (v := spec.unitDraw.getD Json.null) (by simp [FlockComplete.JsonRT.recordList])]
   cases spec.unitDraw with
   | none => rfl
-  | some d => cases d <;> rfl
+  | some d => cases d <;> first | rfl | exact congrArg some (FlockDeploy.norm_norm _).symm
 
 /-- **Rebuilding one side keeps the draw check** where the other side's draw is already rebuilt. -/
 theorem drawEq_map_norm {a b : Option Json} (hb : ∀ e, b = some e → Flock.norm e = e) (h : drawEq a b = true) :

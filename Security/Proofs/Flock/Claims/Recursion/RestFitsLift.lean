@@ -28,18 +28,16 @@ open FlockSoundness.Discharge.Exec (chunks closes chunks_flatten repFrames repFr
 noncomputable instance instFintypeF128 : Fintype F128 :=
   Fintype.ofEquiv (UInt64 × UInt64) ⟨fun a => ⟨a.1, a.2⟩, fun a => (a.lo, a.hi), fun _ => rfl, fun _ => rfl⟩
 
-theorem card_UInt64 : Fintype.card UInt64 = 2 ^ 64 := by
-  rw [← FinEnum.card_eq_fintypeCard]
-  rfl
+theorem card_UInt64 : Fintype.card UInt64 = 2 ^ 64 :=
+  (FinEnum.card_eq_fintypeCard (α := UInt64)).symm.trans rfl
 
-theorem card_UInt8 : Fintype.card UInt8 = 2 ^ 8 := by
-  rw [← FinEnum.card_eq_fintypeCard]
-  rfl
+theorem card_UInt8 : Fintype.card UInt8 = 2 ^ 8 :=
+  (FinEnum.card_eq_fintypeCard (α := UInt8)).symm.trans rfl
 
 theorem card_F128 : Fintype.card F128 = 2 ^ 128 := by
   rw [Fintype.card_congr (⟨fun a => (a.lo, a.hi), fun a => ⟨a.1, a.2⟩, fun _ => rfl, fun _ => rfl⟩ :
     F128 ≃ UInt64 × UInt64), Fintype.card_prod, card_UInt64]
-  norm_num
+  all_goals norm_num
 
 theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
   cases x
@@ -47,15 +45,20 @@ theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
   cases h
   rfl
 
+/-- An element's 16 bytes. -/
+def toVec (a : F128) : List.Vector UInt8 16 := ⟨a.toBytes.data.toList, FlockSoundness.Refine.toBytes_length a⟩
+
+theorem toVec_inj : Function.Injective toVec := fun a b h => by
+  have e : a.toBytes.data.toList = b.toBytes.data.toList := congrArg Subtype.val h
+  exact FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 e))
+
+theorem card_F128_vec : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) := by
+  rw [card_vector, card_F128, card_UInt8]
+  all_goals norm_num
+
 /-- **Any 16 bytes are an element's.** -/
 theorem toBytes_surj (l : List UInt8) (hl : l.length = 16) : ∃ a : F128, a.toBytes.data.toList = l := by
-  let f : F128 → List.Vector UInt8 16 := fun a => ⟨a.toBytes.data.toList, FlockSoundness.Refine.toBytes_length a⟩
-  have hf : Function.Injective f := fun a b h =>
-    FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 (congrArg Subtype.val h)))
-  have hc : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) := by
-    rw [card_vector, card_F128, card_UInt8]
-    norm_num
-  obtain ⟨a, ha⟩ := ((Fintype.bijective_iff_injective_and_card f).2 ⟨hf, hc⟩).2 ⟨l, hl⟩
+  obtain ⟨a, ha⟩ := ((Fintype.bijective_iff_injective_and_card toVec).2 ⟨toVec_inj, card_F128_vec⟩).2 ⟨l, hl⟩
   exact ⟨a, congrArg Subtype.val ha⟩
 
 /-- **Any whole 16-byte blocks are some elements' bytes.** -/
@@ -100,7 +103,9 @@ theorem cutLens_map {α β : Type} (f : α → β) : ∀ (ns : List ℕ) (l : Li
     cutLens ns (l.map f) = (cutLens ns l).map (List.map f)
   | [], _ => rfl
   | n :: ns, l => by
-    simp only [cutLens, List.map_cons, List.map_take, List.map_drop, cutLens_map f ns (l.drop n)]
+    have ih := cutLens_map f ns (l.drop n)
+    rw [List.map_drop] at ih
+    simp only [cutLens, List.map_cons, List.map_take, ih]
 
 /-! ## The values a rep's frames absorb, by count -/
 
@@ -308,7 +313,7 @@ theorem realize {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ}
   have hlen : ∀ d : Slots q, (vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2)).length = W.length :=
     fun d => by rw [vals_repFrames_length (fill_sizes hq d) hk hL, hW, vals_repFrames_length hq hk hL]
   let f : Slots q → List.Vector F128 W.length := fun d => ⟨_, hlen d⟩
-  have hf : Function.Injective f := fun a b h => fill_inj hq hk hL (congrArg Subtype.val h)
+  have hf : Function.Injective f := fun a b h => fill_inj (d₀ := d₀) hq hk hL (congrArg Subtype.val h)
   have hc : Fintype.card (Slots q) = Fintype.card (List.Vector F128 W.length) := by
     rw [card_vector, hW, vals_repFrames_length hq hk hL]
     simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin, hq.r1ab, hq.r1c, hq.zcRounds, hq.lcRounds,
@@ -366,8 +371,7 @@ theorem ligFrames_blank (sch : Flock.Schedule) (T : F128) (cap : Array ByteArray
     (ligFrames sch T cap { l with recursiveCaps := R }).map blank = (ligFrames sch T cap l).map blank := by
   have hlv : ((List.range' 0 (sch.levels.size - 1)).flatMap (levelFr sch { l with recursiveCaps := R })).map blank =
       ((List.range' 0 (sch.levels.size - 1)).flatMap (levelFr sch l)).map blank := by
-    rw [List.map_flatMap, List.map_flatMap]
-    exact congrArg _ (funext fun i => levelFr_blank sch l R i)
+    simp only [List.map_flatMap, levelFr_blank]
   unfold ligFrames
   rw [chFr_congr (p := { l with recursiveCaps := R }) (p' := l) rfl]
   simp only [List.map_append, List.map_cons, hlv]
@@ -453,7 +457,7 @@ theorem rowsAt_lift {s : RecVStar.SchedRound} {rs rs' : List ByteArray} {vs' : L
   obtain ⟨h1, ⟨pad', hpad', h2⟩, h3⟩ := h
   have hl : rs.length = rs'.length := by simpa using congrArg List.length hs
   have hd : (rs.drop s.2.1.toList.sum).map ByteArray.size = (rs'.drop s.2.1.toList.sum).map ByteArray.size := by
-    rw [← List.map_drop, ← List.map_drop, hs]
+    rw [List.map_drop, List.map_drop, hs]
   cases hb : s.2.2.2
   · rw [h3 hb]
     refine ⟨[], rfl, by rw [hl, h1], ⟨[], rfl, ?_⟩, fun _ => rfl⟩
@@ -540,7 +544,7 @@ theorem fitsLift : FitsLift := by
         hsj, FlockDeploy.vals_length_skel]
     · rw [← hfl, hv]
   obtain ⟨R, hR⟩ : ∃ R : Array (Array ByteArray), R.toList.map Array.toList = topGroups c.sched rows :=
-    ⟨((topGroups c.sched rows).map List.toArray).toArray, by simp [List.map_map]⟩
+    ⟨((topGroups c.sched rows).map List.toArray).toArray, by simp [List.map_map, Function.comp_def]⟩
   have hb := FlockDeploy.chunksOf_withCaps c p₀ R T
   have hlb : (chunksOf c (withCaps p₀ R) T).length = (chunksOf c p₀ T).length := by
     simpa using congrArg List.length hb
@@ -572,7 +576,8 @@ theorem fitsLift : FitsLift := by
   · intro j hj
     have hj' : j < (chunksOf c p' T').length := by rw [h.rounds, ← hlen]; exact hj
     show RowsAt (c.sched.getD j default) (rows.getD j []) (vals ((chunksOf c (withCaps p₀ R) T).getD j []))
-    rw [hvb j, ← FlockDeploy.getD_map_nil vals rfl, hv₀, List.getD_eq_getElem _ _ (by simpa using hj'),
+    rw [hvb j, ← FlockDeploy.getD_map_nil vals rfl, hv₀,
+      List.getD_eq_getElem ((List.range (chunksOf c p' T').length).map g) [] (by simpa using hj'),
       List.getElem_map, List.getElem_range]
     exact (hg j).2 hj
 
