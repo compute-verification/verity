@@ -7,7 +7,8 @@ import Proofs.Flock.Claims.Recursion.BindsDeployed
 # The deployed parameters of the bound record at `nextR` (U8)
 
 The bound record at the recursive verifier, `bdDeployed rel (nextR rdR) cols wER joinR rowInDeployed finalR wR`, at
-V\*'s bound layout `layoutBTops (finOpen (restR elem))`, fixes every choice the code side makes:
+V\*'s bound layout `layR elem` (`layoutBTops (finOpen (restR elem))` with the output rows' calls, `outsCalls`), fixes
+every choice the code side makes:
 
 * **The weights** (ASK-72): `DE`'s is the deployed plain record's (`wER`), `γ`'s at `IVStar` its cover (`wR`,
   `wCover`). **The join** is `FlockDeploy.joinR`, the rows' digest input `rowInDeployed`.
@@ -25,6 +26,11 @@ V\*'s bound layout `layoutBTops (finOpen (restR elem))`, fixes every choice the 
   then the trailer, constant bytes at the last part (`trailerPiece`). `elem` is the one choice still open: the
   pieces at the `rec-open` level parts' hidden rows and siblings. `ElemFramed elem` is the fact it is to meet: its
   pieces read as `encLast` of the statement and some openings at every witness.
+* **The output rows' calls** (`outsCalls`): a level part's `out` and a RecCap's `out` register the same rows as
+  RecCap's `top` (`RecVStar.checkShared`), but no message carries a level's `out` row, so a level's climb binds to
+  its cap only through the two slots' hm96 calls. `layR` records them for every instance (`outCalls`, the row at its
+  output bits, `outRowForms`) beside `layoutBTops`' calls (`layR_calls`). The locked statements read the calls only
+  through their count's cap (`lamLin2_deployed_ge`: any `L`, `n ≤ 2^55`).
 -/
 
 namespace RecDeploy.DeployedR
@@ -185,10 +191,51 @@ noncomputable abbrev bdR : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) 
   bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rdR)
     (FlockDeploy.deployPlainTrim _root_.Flock.Readable.relation).cols wER FlockDeploy.joinR rowInDeployed finalR wR
 
-/-- V\*'s deployed bound layout, at `elem`. -/
+/-! ## The output rows' calls -/
+
+/-- **Output port `q`'s row at instance `n`**, at forms: word `k` bit `t` (row bit `16 k + t`) the output bit
+`HmOut.outCol` places it at in the instance's block and VU, where `k` is within the port's run of output words
+(`HmOut.outGroup`), and zero past it (`HmOut.delta`'s forced zero). -/
+def outRowForms (c : Circuit) (q n : ℕ) : List HmNets.Lin :=
+  (List.range (16 * (c.ports.getD q default).words)).map fun i =>
+    if i / 16 < (HmOut.outGroup c (q - HmOut.nIn c)).2.2.2 then
+      HmNets.Lin.var (n / c.g * 2 ^ c.kLog +
+        (HmOut.outCol c (n % c.g) ((HmOut.outGroup c (q - HmOut.nIn c)).2.2.1 + i / 16) + i % 16))
+    else ⟨[], false⟩
+
+/-- **Output port `q`'s hm96 calls at instance `n`**: `hmCalls` with the row at its output bits (`outRowForms`), the
+salt's `SHA-512(p_salt ‖ y) = c`, then the row's `SHA-512(rowIn row) = d`. -/
+def outCalls (c : Circuit) (q n : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  [(Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512),
+    ((c.ports[q]?.map fun p => (HmRow.rowPrefix p.words).data.toList).getD [], outRowForms c q n, hmDigest c q n)]
+
+/-- Port `out`'s calls at each of `k` instances; none at a circuit with no port `out`. -/
+def outPortCalls (c : Circuit) (k : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  match c.ports.findIdx? (·.name == "out") with
+  | some q => (List.range k).flatMap (outCalls c q)
+  | none => []
+
+/-- **The output rows' calls at part `s`**: port `out`'s at each instance of a level part (`.recOpen _ _ _ n`, its `n`
+openings, whose climbs' tops `RecCoins.checkOpenTops` registers) and of a RecCap (`.cap _ N`, its `N` nodes). -/
+def outsCalls (r : XR) (s : ℕ) : List (Msg × List HmNets.Lin × List HmNets.Lin) :=
+  match (RecVStar.statements r.shape).toOption.bind (·[s]?), r.w.parts[s]?.bind partCircuit with
+  | some (.recOpen _ _ _ n), some c => outPortCalls c n
+  | some (.cap _ N), some c => outPortCalls c N
+  | _, _ => []
+
+/-- **V\*'s deployed bound layout, at `elem`**: `layoutBTops (finOpen (restR elem))`, with every part's output rows'
+calls recorded too (`outsCalls`), so that the level parts' `out` rows bind to RecCap's `top` rows across parts. -/
 abbrev layR (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) :
     Claims.Recursion.VStarB.LayoutB :=
-  layoutBTops (finOpen (restR elem))
+  { layoutBTops (finOpen (restR elem)) with
+    shaAt := fun x s => (layoutBTops (finOpen (restR elem))).shaAt x s ++ ((readX x).map fun r => outsCalls r s).getD [] }
+
+theorem layR_calls (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (x : Msg) (s : ℕ)
+    (w : Claims.Flock.Wit) : (layR elem).calls x s w = (layoutBTops (finOpen (restR elem))).calls x s w ++
+      (((readX x).map fun r => outsCalls r s).getD []).map fun p =>
+        (p.1 ++ Claims.Recursion.VStarB.readForms w p.2.1, Claims.Recursion.VStarB.readForms w p.2.2) := by
+  unfold Claims.Recursion.VStarB.LayoutB.calls
+  exact List.map_append ..
 
 /-! ## The readers read what they're laid at -/
 
