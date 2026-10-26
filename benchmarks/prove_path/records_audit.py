@@ -466,11 +466,12 @@ def audit(a: argparse.Namespace) -> int:
         row["ok"] = row["forged"]["ok"] and ordered
     else:
         row["ok"] = ok and ordered and (compiled is None or compiled["ok"])
+        if a.flip_proofs and (s.get("audit") or {}).get("accepted"):
+            pe = row["proof_edits"] = proof_edits(a.lean, out / "window", mine.members, out / "proof-edits", a.flip_proofs)
+            row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
+            print("PROOF-EDITS " + json.dumps({x: pe.get(x) for x in ("edits", "refused", "member", "session")}))
     if a.challenger:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
-    if a.flip_proofs and not a.forged and (s.get("audit") or {}).get("accepted"):
-        pe = row["proof_edits"] = proof_edits(a.lean, out / "window", mine.members, out / "proof-edits", a.flip_proofs)
-        row["ok"] = row["ok"] and pe["edits"] > 0 and pe["refused"] == pe["edits"]
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
     print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
@@ -478,9 +479,7 @@ def audit(a: argparse.Namespace) -> int:
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
                                      "definitions": row["definitions"], "loaded": row["loaded"],
                                      "leak": {k: row["leak"][k] for k in ("other_inputs", "advice_bits", "bound")},
-                                     **({"forged": row["forged"]} if a.forged else {}),
-                                     **({"proof_edits": {x: row["proof_edits"].get(x) for x in ("edits", "refused", "member")}}
-                                        if "proof_edits" in row else {})}, sort_keys=True, default=str))
+                                     **({"forged": row["forged"]} if a.forged else {})}, sort_keys=True, default=str))
     return 0 if row["ok"] else 1
 
 

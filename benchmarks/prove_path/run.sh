@@ -264,7 +264,7 @@ elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
         ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged --flip-proofs $flips "${CH[@]}" \
         --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name-$tag > $O/$name/$tag/audit.log 2> $O/$name/$tag/audit.err \
         || rc=1
-      grep '^RECORDS' $O/$name/$tag/audit.log | cut -c1-6000; tail -25 $O/$name/$tag/audit.err
+      grep -E '^(RECORDS|PROOF-EDITS)' $O/$name/$tag/audit.log | cut -c1-6000; tail -25 $O/$name/$tag/audit.err
       keep $name-$tag
     done
     return $rc
