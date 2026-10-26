@@ -174,6 +174,7 @@ import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowEAcc
 import Proofs.Flock.Claims.Recursion.VerdictRowEAccR
 import Proofs.Flock.Claims.Recursion.VerdictRowEJoint
+import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Proofs.Flock.Claims.Recursion.VPiecesDeployed
 import Proofs.Flock.Claims.Recursion.VerdictRowL
 import Proofs.Flock.Claims.Recursion.RoundCounts
