@@ -158,7 +158,8 @@ theorem length_inPairs (f : ℕ → ℕ) : ∀ n, ((List.range n).map fun j => i
   | 0 => rfl
   | n + 1 => by
       rw [List.range_succ, List.map_append, List.flatten_append, List.length_append, length_inPairs f n]
-      simp [inPair] <;> omega
+      simp [inPair]
+      omega
 
 theorem toUInt8_toNat (n : ℕ) : n.toUInt8.toNat = n % 2 ^ 8 := by
   rw [Nat.toUInt8, UInt8.toNat_ofNat']
@@ -275,6 +276,7 @@ theorem inVal_public {c : Circuit} {pi : HmIn.Ports} {pub : Public} {b k jj i : 
     (hk : k < c.unitRange.count) (hi : c.instOf pub.n b (k / c.upv) = some i)
     (hq : (pi.leaves.getD (k % c.upv) #[]).getD jj (-1) = q) (hq0 : 0 ≤ q) :
     inVal c pi pub b k jj = pub.outputs.getD (i * pi.words + q.toNat) 0 := by
-  simp [inVal, hk, hi, hq, hq0]
+  simp only [inVal, hk, ↓reduceIte, hi]
+  rw [hq, if_pos hq0]
 
 end FlockSoundness.Discharge.Layout
