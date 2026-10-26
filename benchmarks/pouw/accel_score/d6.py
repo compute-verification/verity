@@ -968,11 +968,29 @@ def report(D: dict) -> str:
                          + (" / ".join(pct(v, 1) for v in f["rtp"].values()) if xp == 0 else "—")
                          + f" | {cy:.2e} / {f['eps_year'] * cy:.1e} / {f['hid'].get(0.25, 0.0) * cy:.1e} |")
     L.append("")
-    L.append("μ¹ moves the price onto the tensor pipe and the joint facets, so plain INT8 work beside the claim is "
-             "valued at about its time. What μ¹ values below its time is lane work (ALU, FMA, register file) beside "
-             "the claim, which the world's FP8 model doesn't count. The cost is the credited share with nothing "
-             "beside (x = 0): pub(μ¹) values the credited rounds' lane work below μ°. Whether the claim moves to μ¹ "
-             "is Daniel's call (19:00Z); the coordinator recommends it.\n")
+
+    def span(vals, d=0):
+        lo, hi = min(vals), max(vals)
+        return pct(lo, d) if f"{lo:.{d + 2}f}" == f"{hi:.{d + 2}f}" else f"{pct(lo, d)}–{pct(hi, d)}"
+
+    def unit_ratio(card, x):
+        return [B[HEADLINE, card, m, x]["unit"]["at_served"] / B[HEADLINE, card, m, x]["unit"]["alone"]
+                for m in models]
+
+    def pub_ratio(card):
+        return [B[HEADLINE, card, m, 1.0]["pub"] / B[HEADLINE, card, m, 0.0]["pub"] for m in models]
+
+    h, t = vc.CARDS
+    L.append(f"A plain INT8 MAC beside the claim is valued at {span(unit_ratio(h, 0.0))} of its standalone time by "
+             f"μ° on the {h} and {span(unit_ratio(t, 0.0))} on the {t}, and at {span(unit_ratio(h, 1.0))} and "
+             f"{span(unit_ratio(t, 1.0))} by μ¹, where the joint facets bind. So μ¹ removes most of the {t}'s hidden "
+             f"work and less than half of the {h}'s, whose ALU still binds at μ¹. The cost is the credited share with "
+             f"nothing beside (x = 0): pub(μ¹) is {span(pub_ratio(h))} of pub(μ°) on the {h} and "
+             f"{span(pub_ratio(t))} on the {t}, because μ¹ values the credited rounds' lane work below μ°. With the "
+             "honest period at x = 1, credit at μ° reads above its x = 0 share: the credited rounds' own price falls "
+             "at μ¹'s duals while their credit stays at pub(μ°), so the rise is the beside work's time counted in the "
+             "claim (the hidden work again), not a gain. Whether the claim moves to μ¹ is Daniel's call (19:00Z); the "
+             "coordinator recommends it.\n")
     L.append("**Tensor units at μ_t, a labelled sensitivity, not a claim (12:02Z reversed 08:24Z's tensor-unit "
              "claim).** Credited FP8 FLOP is twice the tensor MACs of "
              "the cheapest public route at the tensor-only price μ_t: every lane is free, so it counts only work the "
