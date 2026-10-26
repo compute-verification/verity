@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.BoundDeploy
+import Proofs.Flock.Claims.Recursion.PartAcceptsSetup
 import Proofs.Flock.Claims.Recursion.DeployInputs
 import Proofs.Flock.Verifier.Registered
 

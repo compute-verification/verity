@@ -1,6 +1,9 @@
 import Proofs.Flock.Claims.Recursion.BoundRouteMergedLin
 import Proofs.Flock.Claims.Recursion.KSLin2
-import Proofs.Flock.Claims.Recursion.InnerLogFree
+import Proofs.Flock.Claims.Recursion.LastBindsEC
+import Proofs.Flock.Claims.Recursion.CallsAgree
+import Proofs.Flock.Claims.Recursion.VStarCross
+import Proofs.Flock.Claims.Recursion.SetupCalls
 
 /-!
 # `KSLin2` at the deployment (route 2C)
@@ -123,43 +126,8 @@ theorem ksLin2_of_C {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero 
       try exact Iff.rfl
   exact hE.trans_le h
 
-/-- `accAtI_C` with the inner setup's calls searched: `withSetup` changes `calls` only. -/
-theorem accAtI_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
-    (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H) {Ω : Type} (P : Prover Ω) (x : Msg) :
-    Claims.Recursion.accAtI H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x =
-      Claims.Recursion.accAtI H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO
-        P x :=
-  accAtI_C H Bd decI ivScope b DO decO hCF P x
-
-/-- `PrFCI_C` with the inner setup's calls searched. -/
-theorem PrFCI_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
-    (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H) (Cp : Claims.Recursion.Caps Coin) {Ω : Type}
-    [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) (M : ℕ) :
-    Claims.Recursion.PrFCI H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M =
-      Claims.Recursion.PrFCI H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp
-        P x M := by
-  have h := accAtI_C_setup H Bd decI ivScope b DO decO hCF P x
-  unfold Claims.Recursion.PrFCI Claims.Recursion.FCI Claims.Recursion.opensAtI
-  rw [h]
-  try rfl
-
-/-- `PrF0I_C` with the inner setup's calls searched. -/
-theorem PrF0I_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] (H : Msg → Msg) (Bd : Bound Coin Col T)
-    (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings) (DO : Claims.Flock.Deploy Coin Col' T')
-    (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H) {Ω : Type} [Fintype Ω] [Nonempty Ω]
-    (P : Prover Ω) (x : Msg) (R : ℕ) :
-    Claims.Recursion.PrF0I H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x R =
-      Claims.Recursion.PrF0I H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P
-        x R := by
-  have h := accAtI_C_setup H Bd decI ivScope b DO decO hCF P x
-  unfold Claims.Recursion.PrF0I Claims.Recursion.F0I
-  rw [h]
-  try rfl
-
-/-- **`ksLin2_of_C` with the inner setup's calls searched, at the V finders**: the finders read the calls at
-`withSetup H` on both sides, and the inner view only through `accAtI` (`PrFCI_C_setup`, `PrF0I_C_setup`). -/
+/-- **`ksLin2_of_C` at the V finders**: the finders read the calls at each draw's coins (`Deploy.callsAt`), which are
+the same at both records, and the inner view only through `accAtI` (`PrFCI_C`, `PrF0I_C`). -/
 theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] [Zero Col'] (H : Msg → Msg)
     (Bd : Bound Coin Col T) (decI : List (ℕ × Col) → List T) (ivScope : Msg → Bool) (b : Brings)
     (DO : Claims.Flock.Deploy Coin Col' T') (decO : List (ℕ × Col') → List T') (hCF : Bd.LastCoinFree H)
@@ -171,17 +139,17 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
         Real.sqrt (Claims.Recursion.γ (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) x *
           Claims.PrB H (deployRecC Bd ivScope b).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (deployRecC Bd ivScope b) x) + 1) *
-          Claims.Recursion.PrBinnerV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO
+          Claims.Recursion.PrBinnerV H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO
             P x +
         4 * Cp.width (Claims.Recursion.xI (deployRecC Bd ivScope b) x) *
-          (Claims.Recursion.PrFCI H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp
+          (Claims.Recursion.PrFCI H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO Cp
             P x M + 1 / ((M : ℝ) + 1)) +
-        4 * (Claims.Recursion.PrF0I H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P
+        4 * (Claims.Recursion.PrF0I H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P
             x R +
           (((Inner.ofFlock Bd.deploy decI).k (Claims.Recursion.xI (deployRecC Bd ivScope b) x) : ℝ) + 1) /
             ((R : ℝ) + 1)) +
         Claims.Recursion.βdev2 (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (Claims.Recursion.PrFdevV H ((deployRecC Bd ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P
+          (Claims.Recursion.PrFdevV H (deployRecC Bd ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO P
             x M + 1 / ((M : ℝ) + 1))) :
     Claims.PrBad H (deployRec Bd.IVStar ivScope b).V
         (Claims.Recursion.R (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI))
@@ -190,20 +158,19 @@ theorem ksLin2_of_C_setup {Col' T' : Type} [DecidableEq Col] [DecidableEq Col'] 
         Real.sqrt (Claims.Recursion.γ (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) x *
           Claims.PrB H (deployRec Bd.IVStar ivScope b).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (Claims.Recursion.xI (deployRec Bd.IVStar ivScope b) x) + 1) *
-          Claims.Recursion.PrBinnerV H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
+          Claims.Recursion.PrBinnerV H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
             decO P x +
         4 * Cp.width (Claims.Recursion.xI (deployRec Bd.IVStar ivScope b) x) *
-          (Claims.Recursion.PrFCI H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
+          (Claims.Recursion.PrFCI H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
             decO Cp P x M + 1 / ((M : ℝ) + 1)) +
-        4 * (Claims.Recursion.PrF0I H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
+        4 * (Claims.Recursion.PrF0I H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
             decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (Claims.Recursion.xI (deployRec Bd.IVStar ivScope b) x) : ℝ) + 1) /
             ((R : ℝ) + 1)) +
         Claims.Recursion.βdev2 (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (Claims.Recursion.PrFdevV H ((deployRec Bd.IVStar ivScope b).withSetup H) (Inner.ofFlock Bd.deploy decI) DO
+          (Claims.Recursion.PrFdevV H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO
             decO P x M + 1 / ((M : ℝ) + 1)) := by
-  rw [PrFCI_C_setup H Bd decI ivScope b DO decO hCF Cp P x M, PrF0I_C_setup H Bd decI ivScope b DO decO hCF P x R]
-    at h
+  rw [PrFCI_C H Bd decI ivScope b DO decO hCF Cp P x M, PrF0I_C H Bd decI ivScope b DO decO hCF P x R] at h
   have hE : Claims.PrBad H (deployRec Bd.IVStar ivScope b).V
       (Claims.Recursion.R (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI))
       (Claims.Recursion.E H (deployRec Bd.IVStar ivScope b) (Inner.ofFlock Bd.deploy decI) DO decO) x P =
@@ -333,8 +300,8 @@ theorem vstarAcceptsV_bound {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 _ _
-      exact (hrd i (by omega)).trans (hshs.2 i hi1).symm
+    · exact Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_eq fun i hi1 _ =>
+        (hrd i (by omega)).trans (hshs.2 i hi1).symm
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd
@@ -375,11 +342,10 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
             (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec relO) L shape shows cmt s) ∧
             Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape chk) →
       ReadersTrue FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
-      Bd.StepsLogFree FlockDeploy.sha512 →
       ReadersRunPlayed FlockDeploy.sha512 Bd.IVStar bL (deployZkRec relO) →
       Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt rel b L) Bd (deployZkRec relO) Cp DenseAt := by
-  intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hst hT hL hRRP decI hdI decO hdO x hx Ω _ _
-    P M R
+  intro nextE colsE wE join rowIn final w Bd D bL hKS hBinds hEC hCF hF hst hT hRRP decI hdI decO hdO x hx Ω _ _ P
+    M R
   obtain ⟨decC, hRP, hshapes⟩ := hst
   let I := Claims.Recursion.Inner.ofFlock Bd.deploy decI
   let ivScope := (FlockDeploy.deployPlain rel).scopeCheck
@@ -395,8 +361,7 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
   have hTc := callsTrue FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
   have hA := Claims.Recursion.innerAcceptsCollAtV_of_dense (refuses I.V ivScope bL FlockDeploy.sha512) hTc
     (hacc _ (by simp)) hx
-  have hLc := callsLogCollS FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hT
-    (readersLogCollS_ivstar hL bL (deployZkRec relO))
+  have hLc := callsLogCollAt_deployRec FlockDeploy.sha512 I ivScope bL (deployZkRec relO)
   have hFk := forksBindAt_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hEC hCF hTc hLc
     (fun decO x Ω P ω r c ws hg => readersRun_played FlockDeploy.sha512 I ivScope bL (deployZkRec relO) hplay hT hRRP
       hg) x hA
@@ -404,9 +369,9 @@ theorem ksLin2_route (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.R
     (congrArg (FlockDeploy.decCoin _) (bdDeployed_ans rel nextE colsE wE join rowIn final w c)).trans
       (Function.leftInverse_invFun Claims.Bridge.coin_bytes_injective c)
   have hM := roundsMargin_deployRec FlockDeploy.sha512 I ivScope bL fun x => V_k_pos_flock false x
-  have hLn := callsLogColl_C_setup FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hLc
+  have hLn := callsLogCollAt_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF hLc
   have hAn := innerAcceptsCollAtV_C FlockDeploy.sha512 Bd decI ivScope bL (deployZkRec relO) hCF x hA
-  have hbody := Claims.Recursion.Bound.ksLin2_of_flockLin_binds_setup (Bd := Bd) (decI := decI)
+  have hbody := Claims.Recursion.Bound.ksLin2_of_flockLin_binds (Bd := Bd) (decI := decI)
     (H := FlockDeploy.sha512) (D := deployRecC Bd ivScope bL) (DO := deployZkRec relO) (decO := decO) (P := P)
     (x := x) FlockDeploy.decCoin Cp hF hKS hdI hdO hdecC hBinds (refuses I.V ivScope bL FlockDeploy.sha512)
     (innerRounds I ivScope bL) (sessionNums I.V ivScope bL relO) (tableErrNonneg I.V ivScope bL)
