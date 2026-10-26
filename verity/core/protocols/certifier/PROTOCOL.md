@@ -257,7 +257,7 @@ as a `Spec` of its own (`service.LinkWindows`, one per link):
   service: the service has no public kind for them), the declared syncs, and from the prover the statement's public
   file, its sessions, the circuit file and the salts of ``pub`` and ``o0`` with the output word; never the opening nor
   ``wit``'s salt. The outcome passes the registered root as the session's. A proof after `proof_deadline` is the
-  service's `late`. On a plain or served link the verdict of record is the Lean's (`NetworkCheck.LinkWindow`,
+  service's `late`. On a plain, served or warden link the verdict of record is the Lean's (`NetworkCheck.LinkWindow`,
   `service.OF_RECORD`), with the Python beside it as the reference; the README has the gap list and the replay. The verdict reads no frames, so its claim is counts only: the egress head's counts are the
   profile's (and the ingress head's, where that end declares one), which puts the link's timing at the profile. The
   egress grid is the head's counts filled with its frames in order, and the head's digest binds both, so the frames
