@@ -17,12 +17,12 @@ The slot tree is the fixture shape `verity/slot-tree/fixture-v0` until kernels p
 item 3): per server-time block, per step, per slot, a frame-v3-sha512 tree over the slot's committed rows; a step's tree
 over its slots' roots; a block's tree over its steps' roots.
 
-    python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration REG.json]
-    python -m verity_e2e_demo.replay_bundle fixture --out tests/fixtures --scratch "$(mktemp -d)"
+    python -m verity_e2e_demo.replay_bundle fixture --out DIR --scratch "$(mktemp -d)"
+    python -m verity_e2e_demo.replay_bundle check DIR/drawn-unit-bundle.json [--registration SCRATCH/registration.json]
 
-The fixture `tests/fixtures/drawn-unit-bundle.{json,bin}` is the torch loop's window (two requests, one step, both
-linears, width 128: 512 units) with four drawn units, its weights registered as core's registered values under a test
-salt key. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows.
+The fixture (`fixture` writes it as `drawn-unit-bundle.{json,bin}`) is the torch loop's window (two requests, one step,
+both linears, width 128: 512 units) with four drawn units, its weights registered as core's registered values under a test
+salt key. It is built in seconds, so it isn't tracked: the suite builds it and pins its SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows.
 
 ## The block record (`verity/block-record/v1`)
 
