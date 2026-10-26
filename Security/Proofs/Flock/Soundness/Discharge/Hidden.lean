@@ -25,6 +25,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegV2
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegPort
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegTgt
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFit
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegFitP
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 
 /-!
@@ -80,6 +81,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
   in a satisfying witness of the untyped statement (`Any.seg_bc_tgt`);
 * `Wide.SegFit`: `Wide.Fit`'s output-row lemmas with only the output rows unsegmented (`Any.PadRow`, `Any.OutRowsS`), an
   input row of any kind (`Any.msg_copyF`, `Any.sat_flatF`);
+* `Wide.SegFitP`: those at public inputs, off the unit input rows `HmIn.delta` drops (`unitIn_of_drop`,
+  `Any.msg_copyFP`, `Any.sat_flatFP`);
 * `Wide.FitS`: the rows the hidden-output headlines cover, each unsegmented (`Any.PadRow`) or a `sha512/row-seg/v1` row
   of any mix (`Any.RowsFitS`), and a row's `b ‖ c` under its own bytes (`Any.rowMsg`, `Any.row_bc_tgtS`);
 * `Wide.V2`: the V2 statements (`outputs_committed_v2'`, `outputs_binding_v2_of`);
