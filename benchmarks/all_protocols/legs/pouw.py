@@ -22,12 +22,13 @@ window, which also gives the parameters' ``live``, else seeded), the period's ru
 declared range `H1_RANGE` and the fixed length the period's labels give. A registration made at anything else is
 refused by the check.
 
-**Without one**, the case is the integrity window's under parameters naming the loop's own template with its work per
-unit (K MACs), coins live with ``live`` exactly when ``<period_dir>/salt.json`` exists, ε = 1/1000 at δ = 2^-40, and
-the evidence ``<period_dir>/answers/sampled-proofs.json`` when the
-sampled-proofs leg wrote it. PoUW's verifier of record pins its tile templates (FP8 Pc8 tiles and the salted H1 tile at
-K = 64), so it refuses ``ScaledMmS8Coordinate_v1{K=128}`` at its parameters, before it reads the registration or the
-evidence: no W is certified.
+**Without one** the period has no PoUW window, and the leg raises `NoWindow` (the runner's ``--pouw h1`` writes one),
+which the runner records as the work row's error, so the composed verdict waits on work instead of rejecting. The
+integrity window is not PoUW's to answer, under any law of the integrity plan (``subset:K``, or ``--tie``'s
+``work:K``). It is one-stage's: its registration carries none of PoUW's items (`core_check.REGISTERED`) and no
+context, and its template ``ScaledMmS8Coordinate_v1{K=128}`` is none of the tiles PoUW's verifier of record pins (FP8
+Pc8 tiles and the salted H1 tile at K = 64). So `verity/pouw/v1` refuses it at its parameters, which would reject an
+honest period by reject dominance.
 """
 from __future__ import annotations
 
@@ -41,12 +42,8 @@ from fractions import Fraction
 from pathlib import Path
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import window as Wd
 
-EPS = "1/1000"
-DELTA = str(CR.DELTA)
-ANSWERS = "answers/sampled-proofs.json"
 LEAN_ENV = "VERITY_POUW_CHECK"
 H1_DIR = "pouw"
 [H1_TEMPLATE] = [n for n in CC.TILES if n.startswith("PouwH1Tile_v1{")]
@@ -75,15 +72,8 @@ def served(period_dir: Path) -> dict:
             "max_tokens": [len(steps[r]) for r in order]}
 
 
-def params(period_dir: Path, work: dict) -> dict:
-    """The verifier's parameters for crediting the integrity window's work, at the loop's own template."""
-    rec = json.loads((period_dir / "registration.json").read_text())
-    live = _live(period_dir)
-    check = {**({Wd.COINS: "live"} if live is not None else {}), "entries": 2, "scheme": CC.SCHEME,
-             "template": work["template"], "tile_work": work["k"]}
-    return {"check": check, "context": rec["window"]["run"], "delta": DELTA, "eps": EPS, "grid_bits": Wd.GRID_BITS,
-            "length": {"max_tokens": work["max_tokens"], "stop": Wd.STOP_FIXED}, "query": rec["query"],
-            "range": [1, rec["population"]], **({LIVE_PARAM: live} if live is not None else {})}
+class NoWindow(ValueError):
+    """The period has no PoUW window (module docstring)."""
 
 
 def _live(d: Path) -> dict | None:
@@ -114,10 +104,10 @@ def case(period_dir: Path) -> tuple[dict, dict]:
     """The period's case for `verity/pouw/v1` and what the loop served."""
     work = served(period_dir)
     h1 = period_dir / H1_DIR
-    if (h1 / "registration.json").exists():
-        rec, answers, p = json.loads((h1 / "registration.json").read_text()), h1 / "answer.json", h1_params(period_dir, work)
-    else:
-        rec, answers, p = json.loads((period_dir / "registration.json").read_text()), period_dir / ANSWERS, params(period_dir, work)
+    if not (h1 / "registration.json").exists():
+        raise NoWindow(f"the period has no PoUW window ({H1_DIR}/registration.json; the runner's --pouw h1 writes it), "
+                       "and its integrity window is one-stage's, which PoUW refuses under any law")
+    rec, answers, p = json.loads((h1 / "registration.json").read_text()), h1 / "answer.json", h1_params(period_dir, work)
     evidence = CC.line(json.loads(answers.read_text())).encode() if answers.exists() else b""
     return {"commitment": CC.line(rec).encode().hex(), "evidence": evidence.hex(), "params": p}, work
 
@@ -167,10 +157,9 @@ def leg(period_dir: Path, node: str, out: Path) -> dict:
     out.mkdir(parents=True, exist_ok=True)
     (out / "pouw.case.json").write_text(CC.line(c) + "\n")
     (out / "pouw.answer.json").write_text(line + "\n")
-    h1 = (period_dir / H1_DIR / "registration.json").exists()
-    evidence = (period_dir / H1_DIR / "answer.json") if h1 else (period_dir / ANSWERS)
+    evidence = period_dir / H1_DIR / "answer.json"
     w = (answer["public"] or {}).get("work")
-    detail = {"node": node, "protocol": CC.ID, "window": "h1" if h1 else "integrity", "served": work,
+    detail = {"node": node, "protocol": CC.ID, "window": "h1", "served": work,
               "certified_work": w, "W": w["credited"] if w else 0, "quotes": quotes(c, answer),
               "evidence": str(evidence.relative_to(period_dir)) if evidence.exists() else None,
               "answered_by": ["core_check"] + (["pouw-check"] if lean is not None else [])}
