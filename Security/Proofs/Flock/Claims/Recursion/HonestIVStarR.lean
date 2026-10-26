@@ -295,10 +295,10 @@ theorem ivstarR_honest_run (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
   refine (bdC rel rd cols wE joinR rowIn final w).run_honest_acc sha512_out64 hfin hk hn hcs ?_
   refine agrees_bdR sha512 rel rd cols wE joinR rowIn final w
     (ms := (bdC rel rd cols wE joinR rowIn final w).opened os last) hx
-    (by have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last; omega) (fun j hj => ?_) hacc
-  have hj' : j < os.length := by
-    have := (bdC rel rd cols wE joinR rowIn final w).opened_length os last
-    omega
+    (hcs.trans (hk.symm.trans ((bdC rel rd cols wE joinR rowIn final w).opened_length os last).symm))
+    (fun j hj => ?_) hacc
+  have hj' : j < os.length := Nat.lt_of_add_lt_add_right
+    (lt_of_lt_of_eq hj ((bdC rel rd cols wE joinR rowIn final w).opened_length os last))
   exact ⟨_, ((bdC rel rd cols wE joinR rowIn final w).opened_getElem os last hj').trans rfl⟩
 
 /-! ## The honest session -/
