@@ -10,7 +10,8 @@ accepts only when every component accepts and its commitment binds their digests
   of onsite's components is still a stub (`onsite_components` reads `Core.Onsite.components`), since a stub answers for
   the stub, not for the protocol;
 * otherwise onsite's own executable decides on the legs' cases (`onsite_check`, ``onsite check PARAMS COMMITMENT
-  EVIDENCE``), and its answer is the composed verdict.
+  EVIDENCE [BLOB ...]``, the blobs the files integrity's audit on the proofs reads), and its answer is the composed
+  verdict.
 
 Given onsite's executable, the runner runs ``onsite check`` every period, whatever it decides: each port on its leg's
 case, each stub on a case with no statement yet (`STUB_CASE`, undecided), and a port whose leg wrote no case on one its
@@ -51,9 +52,9 @@ def onsite_components(source: str | None = None) -> list[str]:
     """`Core.Onsite.components` as written in ``CoreOnsite.lean``: each entry's Lean name (``Stub.pouw``, or a port's
     ``Pouw.Core.protocol``)."""
     text = ONSITE.read_text() if source is None else source
-    m = re.search(r"def components : List Protocol :=\s*\[([^\]]*)\]", text)
+    m = re.search(r"def components : List (?:Blob)?Protocol :=\s*\[([^\]]*)\]", text)
     if m is None:
-        raise ValueError("CoreOnsite.lean has no `def components : List Protocol := [...]`")
+        raise ValueError("CoreOnsite.lean has no `def components : List BlobProtocol := [...]`")
     return [x.strip() for x in m.group(1).split(",") if x.strip()]
 
 
@@ -84,14 +85,16 @@ def onsite_inputs(cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, 
 
 
 def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapping[str, str]) -> dict[str, Any]:
-    """``onsite check`` on the components' cases (`onsite_inputs`): its answer line, parsed."""
+    """``onsite check`` on the components' cases (`onsite_inputs`), with every blob file a case names (``blobs``, the
+    files integrity's audit on the proofs reads) after them: its answer line, parsed."""
     params, commitment, evidence = onsite_inputs(cases, digests)
+    blobs = [str(b) for i in sorted(cases) for b in cases[i].get("blobs") or ()]
     with tempfile.TemporaryDirectory() as d:
         files = []
         for name, data in (("params.json", params), ("commitment.bin", commitment), ("evidence.json", evidence)):
             (Path(d) / name).write_bytes(data)
             files.append(str(Path(d) / name))
-        p = subprocess.run([exe, "check", *files], capture_output=True, text=True, check=False)
+        p = subprocess.run([exe, "check", *files, *blobs], capture_output=True, text=True, check=False)
     if p.returncode not in (0, 1, 2):
         raise RuntimeError(f"onsite check exited {p.returncode}: {p.stderr[-2000:]}")
     return json.loads(p.stdout.strip().splitlines()[-1])
@@ -99,12 +102,13 @@ def onsite_check(exe: str, cases: Mapping[str, Mapping[str, Any]], digests: Mapp
 
 #: The ports `Core.Onsite.components` may name, by their Lean names: the leg each answers for and its protocol id.
 PORTS = {
-    "SampledProofs.OneStage.protocol": ("sampled-proofs", "verity/sampled-proofs/one-stage/v1"),
+    "SampledProofs.OneStageZk.protocol": ("sampled-proofs", "verity/sampled-proofs/one-stage/v2"),
     "PouwCheck.protocol": ("pouw", "verity/pouw/v1"),
     "NetworkCheck.Check.protocol": ("certifier", "verity/network-certificate/v4"),
     "NetworkCheck.Period.protocol": ("certifier", "verity/certifier/v0"),
     "PousCheck.RunProtocol.protocol": ("pous", "verity/pous/p2/v4/run"),
     "RemoteAudit.Protocol.protocol": ("bandwidth", "verity/remote-bandwidth/v0"),
+    "MemoryChallenger.WipeProtocol.protocol": ("wipe", "verity/wipe/v0"),
 }
 #: A stub's case with no statement yet (`Core.Example.protocol`: none of its one unit drawn), so it is undecided: a stub
 #: never accepts or rejects for the protocol it stands for. Its 32-byte root is its own digest.
