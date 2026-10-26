@@ -1,13 +1,15 @@
-"""The protocols every period is audited by, and the one interface their legs share.
+"""The protocols every window is audited by, and the one interface their legs share.
 
 A leg is ``benchmarks/all_protocols/legs/<component>.py`` (``-`` as ``_``) defining
 
     leg(period_dir: Path, node: str, out: Path) -> dict
 
-``period_dir`` is the period's loop records: the window `verity_torch_loop.serve` wrote (``registration.json``,
-``circuit.json``, ``window.json``, ``index.json``, the value files, ``serve.json``), with ``period.json`` (`PERIOD`: the
-period's index, the circuit the verifier registered before the loop ran, the run root it published, the law and member
-cap, the built tools, the prover's environment) and ``answers/<component>.json``, the answers of the legs that ran before
+``period_dir`` is the window's loop records: the window `verity_torch_loop.serve` wrote (``registration.json``,
+``circuit.json``, ``window.json``, ``index.json``, the value files, ``serve.json``; with ``--pouw h1`` PoUW's window in
+``pouw/``), with ``period.json`` (`PERIOD`, its name kept for the legs written against it: the window's index as
+``window``, its place in this run as ``period`` (what a leg serving one session a run indexes it by), the circuit
+the verifier registered before the loop ran, the run root it published, the law, each window's δ and the member cap,
+the built tools, the prover's environment) and ``answers/<component>.json``, the answers of the legs that ran before
 it (in `TABLE`'s order: integrity first, which PoUW's evidence reads). ``node`` is the machine the loop ran on. ``out`` is
 the leg's own directory, kept in the run's ``$OUT``.
 
@@ -53,8 +55,9 @@ TABLE: tuple[Entry, ...] = (
     Entry("integrity", "sampled-proofs", "compute-accounting"),
     Entry("work", "pouw", "compute-accounting"),
     Entry("space", "pous", "memory-accounting"),
-    Entry("bandwidth", "bandwidth", "memory-accounting", onsite=False),
+    Entry("bandwidth", "bandwidth", "memory-accounting"),
     Entry("communication", "certifier", "network-accounting"),
+    Entry("wipe", "wipe", "memory-accounting", onsite=False),
 )
 
 
@@ -76,7 +79,7 @@ def leg_of(component: str, legs_dir: Path = LEGS_DIR) -> LegFn | None:
 
 
 def period_of(period_dir: Path) -> dict[str, Any]:
-    """The period's ``period.json``."""
+    """The window's ``period.json``."""
     return json.loads((period_dir / PERIOD).read_text())
 
 

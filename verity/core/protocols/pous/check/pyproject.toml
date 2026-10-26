@@ -21,9 +21,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # memory challenger's verdict (`band_gpu/memory_challenger.py`), and drives its strict audit against the harness's responder.
 # `test_run.py` holds `PousCheck.Run` to `run.py`: `lake` builds the memory challenger's Lean package and LMS's through the
 # path requires, and the test draws its sessions with that package's `tests/mc_cases.py`, which signs with the PoUS tests'
-# test signer, read by path. `test_verdict_difftest.py` holds `PousCheck.Verdict` to `verdict_circuit.py`'s Definition,
-# compiled and run by `verity.ml.circuits`' evaluator. `test_run_protocol.py` holds `PousCheck.RunProtocol` (onsite's
-# PoUS component) to `run.py` and the period hook (`period.py`) on the same sessions and on the hook's own periods.
+# test signer, read by path. `test_run_protocol.py` holds `PousCheck.RunProtocol` (onsite's PoUS component) to `run.py`
+# and the period hook (`period.py`) on the same sessions and on the hook's own periods. `test_verdict_difftest.py` holds
+# `PousCheck.Verdict` to `verdict_circuit.py`'s Definition, compiled and run by `verity.ml.circuits`' evaluator.
 # Of `verity` and the difftest harness (whose Lean `lake` builds too), what the tests import: these in place of both trees.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",

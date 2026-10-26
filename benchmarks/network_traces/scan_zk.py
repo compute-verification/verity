@@ -664,6 +664,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         roots.append({"port": f"scan/{kind}", "root": reg.root.hex(), "leaves": len(reg.rows), "domain": d})
     for r in warden_roots(at):
         want[r["port"]] = {"leaves": r["leaves"], "domain": r["domain"]}
+        schemas[r["port"]] = WR.SCHEMA
         roots.append(r)
     leaf_layer = hashlib.sha512(M.canonical_json(publics)).hexdigest()
     k = sum(m["n"] for m in members) if k is None else k

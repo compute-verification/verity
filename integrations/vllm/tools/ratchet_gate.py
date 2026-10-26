@@ -9,17 +9,18 @@ them (a branch's own commits against its merge base, or against the merge of its
 ratchet is a shrink-only allowlist under ``integrations/vllm/tests`` (``**/allowlists/*.json`` or ``**/*allowlist*.json``
 holding an ``entries`` list), known by its slug, its file's name less a rule number (``p10_size.json`` and ``size.json`` are
 both ``size``), so a moved or renamed allowlist is still compared; one the change adds starts at its own count and is not
-compared.  A change is judged when it touches a ratchet or a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
-code), and passes when:
+compared.  A change is judged when it touches a ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
+code) or the ruff lint's: ``integrations/vllm/ruff.toml`` and the ruff the root ``dev`` group pins.  It passes when:
 
 * no ratchet its base has holds more entries after it than before;
 * no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
-  In a temporary worktree of the change's top, ``tests/lint/`` is replaced by the base's, each allowlist there holding the
-  top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose code or allowlist
-  changed (every lint's, if the shared code did) run without pytest.  So loosening a lint to drop its entries (raising P10's
-  cap, skipping a kind, deleting the lint) fails, naming each violation the base's lint still finds, while tightening one
-  passes once the change fixes what it finds.
+  In a temporary worktree of the change's top, ``tests/lint/`` and ``ruff.toml`` are replaced by the base's, each allowlist
+  there holding the top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose
+  code or allowlist changed (every lint's, if the shared code did) run without pytest, the ruff lint with the base's pin.
+  So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
+  fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
+  finds.
 
 A ``# noqa`` is an exception too (the vLLM coordinator, 25 Oct 11:20Z, under that delegation), held by count with no
 allowlist, and every change is judged by it: in the ``*.py`` files it touches under ``integrations/vllm``, a change may add
@@ -29,12 +30,14 @@ that moves with its code counts as kept, and deleting a stale ``noqa`` pays for 
 Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR title starts ``Revert``) and a pure move that
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
-It runs on git, in the repository of the current directory, and runs no code but the base's (its lints, and BASE's
-move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head as it admits the
-PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the sync onto
-`next` leaves the PR out).  Before marking a branch, run ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.
-Exit 0 when every change passes, 1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints can't
-run.  ``--json`` prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
+It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
+and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head as it
+admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
+sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
+the base's pin, else on one ``uv run --with`` gives the pin.  Before marking a branch, run
+``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
+(with the fix), 2 on a usage or git error, or when the base's lints can't run (the ruff lint, with no ``uv``).  ``--json``
+prints `KIND`, whose ``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
@@ -47,6 +50,7 @@ import subprocess
 import sys
 import tempfile
 import tokenize
+import tomllib
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
@@ -55,6 +59,10 @@ KIND = "vllm-ratchet-gate/v2"
 INTEGRATION = "integrations/vllm"
 TESTS = f"{INTEGRATION}/tests/"
 LINT = f"{TESTS}lint"
+#: the ruff lint (``test_ruff.py``, by its slug), its config, and the pyproject whose ``dev`` group pins its ruff
+RUFF_LINT = "ruff"
+RUFF_CONFIG = f"{INTEGRATION}/ruff.toml"
+PYPROJECT = "pyproject.toml"
 MOVE_CHECK = "tools/verity/check/move_check.py"
 QUEUE_SUBJECT = re.compile(r"^Queue: #(\d+) ?(.*)$")
 RULE_NUMBER = re.compile(r"^p\d+_")
@@ -277,6 +285,30 @@ def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str
     return grown, fix
 
 
+def ruff_pin(rev: str) -> str | None:
+    """The ruff requirement the root ``dev`` group pins at ``rev`` (``ruff==0.17.2``), or None."""
+    try:
+        doc = tomllib.loads(git("show", f"{rev}:{PYPROJECT}"))
+    except (GitError, tomllib.TOMLDecodeError):
+        return None
+    dev = doc.get("dependency-groups", {}).get("dev", [])
+    return next((d for d in dev if isinstance(d, str) and re.split(r"[\s=<>!~;\[]", d, maxsplit=1)[0] == "ruff"), None)
+
+
+def python_for(pin: str | None, slugs: list[str] | None) -> list[str]:
+    """The isolated Python the base's lints run on: this one, unless the ruff lint is to run and this Python's ruff isn't
+    the base's ``pin``, when ``uv run --with`` makes one that has it."""
+    if pin is None or (slugs is not None and RUFF_LINT not in slugs):
+        return [sys.executable, "-I"]
+    r = subprocess.run([sys.executable, "-m", "ruff", "--version"], capture_output=True, text=True)
+    if r.returncode == 0 and pin.startswith("ruff==") and r.stdout.split() == ["ruff", pin.removeprefix("ruff==").strip()]:
+        return [sys.executable, "-I"]
+    uv = shutil.which("uv")
+    if uv is None:
+        raise GitError(f"the base's ruff lint runs {pin}, which {sys.executable} lacks, and there is no `uv` to provide it")
+    return [uv, "run", "--no-project", "--quiet", "--python", sys.executable, "--with", pin, "--", "python", "-I"]
+
+
 def noqa_lines(rev: str, path: str) -> list[tuple[int, str]]:
     """(line number, stripped line) of each line of ``path`` at ``rev`` whose comment is a ``noqa`` (none when it isn't
     there).  Only comments count, so a docstring that mentions one doesn't; a file ``tokenize`` refuses is read by line."""
@@ -326,22 +358,26 @@ def lint_selection(touched: list[str]) -> list[str] | None:
     code = [f for f in touched if is_lint_code(f)]
     if any(not PurePosixPath(f).name.startswith("test_") for f in code):
         return None
-    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{LINT}/") and is_ratchet(f)})
+    return sorted({slug(f) for f in code} | {slug(f) for f in touched if f.startswith(f"{LINT}/") and is_ratchet(f)}
+                  | ({RUFF_LINT} if {RUFF_CONFIG, PYPROJECT} & set(touched) else set()))
 
 
 def base_lints(c: Change, slugs: list[str] | None, after: dict[str, list]) -> tuple[list[str], list[dict]]:
     """(the lints run, their failures): the base's lint code run on the change's tree against its allowlists."""
     if not git("ls-tree", "--name-only", c.lo, "--", LINT).strip():
         return [], []
+    python = python_for(ruff_pin(c.lo), slugs)
     with tempfile.TemporaryDirectory(prefix="ratchet-gate-") as d:
         tree = Path(d) / "tree"
         git("worktree", "add", "-q", "--detach", str(tree), c.hi)
         try:
             shutil.rmtree(tree / LINT, ignore_errors=True)
             git("-C", str(tree), "checkout", "-q", c.lo, "--", LINT)
+            if git("ls-tree", "--name-only", c.lo, "--", RUFF_CONFIG).strip():
+                git("-C", str(tree), "checkout", "-q", c.lo, "--", RUFF_CONFIG)
             for p in (tree / LINT / "allowlists").glob("*.json"):
                 p.write_text(json.dumps({"entries": after.get(slug(p.name), [])}))
-            r = subprocess.run([sys.executable, "-I", "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d,
+            r = subprocess.run([*python, "-c", RUNNER, str(tree / LINT), json.dumps(slugs)], cwd=d,
                                capture_output=True, text=True)
         finally:
             git("worktree", "remove", "--force", str(tree))
@@ -368,11 +404,13 @@ def violations(failures: list[dict]) -> list[str]:
 
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
-    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f)))
+    c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f == RUFF_CONFIG
+                                                 or f == PYPROJECT and ruff_pin(c.lo) != ruff_pin(c.hi)))
     new_noqa, c.noqa_added, c.noqa_removed = noqa_change(c.lo, c.hi, diff)
     noqa = [f"{c.noqa_added} `# noqa` line(s) added, {c.noqa_removed} removed"] if c.noqa_added or c.noqa_removed else []
     if not c.touched and not noqa:
-        c.verdict, c.why = "untouched", f"changes no ratchet, no lint code under {LINT}/ and no `# noqa`"
+        c.verdict, c.why = "untouched", (f"changes no ratchet, no lint code under {LINT}/, no {RUFF_CONFIG}, no ruff pin and "
+                                         f"no `# noqa`")
         return
     grown, added, bad, found = [], [], [], []
     if c.touched:

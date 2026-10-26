@@ -4,9 +4,9 @@ Python mirror, through the difftest harness's `ProtocolPort`.
 The mirror and the generator are `period_case.py`'s: `reference` (its `answer`) checks a period in the core interface's
 answer format, `build` makes a period with one change (`EXPECT`, each aimed at one path of the check, or malformed
 parameters, commitments, evidence and cases) in the clock form or, for a change named `rows-…`, the rows form, and
-`case` a small period of either form aimed at a verdict or at a decoding failure (`KINDS`). This module re-exports what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it
-draws onsite's certifier cases from `build` and answers them with `reference`
-(`verity/core/protocols/composition/tests/reference.py`)."""
+`case` a small period of either form aimed at a verdict or at a decoding failure (`KINDS`). This module re-exports
+what the composition's difftest reads of it (`reference`, `build`, `EXPECT`): it draws onsite's certifier cases from
+`build` and answers them with `reference` (`verity/core/protocols/composition/tests/reference.py`)."""
 
 from __future__ import annotations
 
@@ -91,9 +91,10 @@ def test_a_mirror_that_skips_the_rows_check_is_caught(server, monkeypatch):
     """A mirror that doesn't read the row registrations accepts a rows-form period whose rows a key other than the
     deployment key signed, and Lean rejects it."""
     monkeypatch.setattr(PC, "_rows_check", lambda p, w, d, doc: None)
-    with pytest.raises(D.Mismatch) as x:
-        D.run(dataclasses.replace(PORT, inputs=cases(("rows-reg-key",))), examples=20, server=server)
-    assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
+    for n in range(2):
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, build("rows-reg-key", n, small=True), server)
+        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT)
 
 
 #: The rows form's refusals the period must make, each with what Lean's reason and the mirror's say.
@@ -142,8 +143,9 @@ def test_a_small_period_reaches_its_verdict(server):
 
 @pytest.mark.parametrize("form", FORMS)
 def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
-    """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they
-    fail (a digest only once the commitment decodes); an accepted period's eps is its audits' and scans' deltas summed,
+    """`case(kind, seed, form)` reaches its kind's verdict for each kind, the ones that fail to decode refused where
+    they fail (a digest only once the commitment decodes); an accepted period's eps is its audits' and scans' deltas
+    summed,
     and its profile names no sync; in the clock form its evidence holds each clock certificate alone, and in the rows
     form each link-window's three records' certificates and two row registrations, with one scan a link-window and no
     schedules term; `cases(seed, form)` is one of each with its answer; and Lean gives every one of them the mirror's
@@ -158,7 +160,8 @@ def test_each_kind_of_case_is_answered_as_lean_answers(server, form):
     assert all(isinstance(x["K"], int) and x["eps"] == str(sum(
         (Fraction(t["delta"]) for t in x["audits"] + x.get("scans", [])), Fraction(0))) for x in accepted)
     assert all(sorted(a["profile"]) == ["link", "windows"] for (k, _), a in answers.items() if k == ACCEPT)
-    shown = [w for (k, _), c in drawn.items() if k == ACCEPT for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
+    shown = [w for (k, _), c in drawn.items() if k == ACCEPT
+             for w in json.loads(bytes.fromhex(c["evidence"]))["windows"]]
     if form == "clock":
         assert all(sorted(w["clock"]) == PC.CERTIFICATE_KEYS for w in shown)
         assert all("scans" not in x for x in accepted)
@@ -188,10 +191,10 @@ def test_the_bound_counts_what_it_says():
 
 
 def test_the_rows_forms_bound_counts_what_it_says():
-    """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): no schedules term under its one schedule, 7 cells
-    on one connection, the audit above, and over 3 link-windows one scan of 20 units drawn at δ = 1/15 with at most 3
-    wrong (1351 sets), 1 free input and jitter below 2 over 2 steps; and eps over the audit's δ = 1/10 and the scans'
-    1/15 and 1/6."""
+    """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): no schedules term under its one schedule, 7
+    cells on one connection, the audit above, and over 3 link-windows one scan of 20 units drawn at δ = 1/15 with at
+    most 3 wrong (1351 sets), 1 free input and jitter below 2 over 2 steps; and eps over the audit's δ = 1/10 and the
+    scans' 1/15 and 1/6."""
     p = Params(((0, 3),), (7,), 0, 2, "a", None, b"", "", None, 3, WardenParams(), (1, 2))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [Facts(20, 5, Fraction(1, 15), 3)])
     (scan,) = out["scans"]
