@@ -357,4 +357,47 @@ theorem recursiveKSAt_nontrivial (rd : Msg → Option FinalP)
         RecDeploy.rowInDeployed final w Claims.GS.plainDecodeRD hin hO hn hS (n := 0) (by norm_num) (v := 0)
         (by norm_num)))
 
+/-- **`RecursiveKS` at the verifier that accepts everything**: `RecursiveKSAtAll` at the deployed reader, for every
+other field of the brings and every record the coin server keeps. -/
+def RecursiveKSAll : Prop :=
+  ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
+    RecursiveKSAtAll RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR RecDeploy.DeployedR.wER
+      RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest
+
+/-- **A false statement in the deployed scope**, `recursiveKS_nontrivial`'s premise: brings, a coin-server record and
+a dense statement with no witness in the relation, in the deployed scope as `RecDeploy.lamLin2_deployed_ge_dep` takes
+it (`PlainIn` at its inner statement, `PartIn` at each staged V\* part, at most `2^16` parts and `2^56` inner setup
+inputs). A statement of the deployment, not a claim: no proof exhibits one at the deployed parser, which reads only
+through `jsonOf` (`recursiveKSAtAll_of_readX_none`). -/
+def FalseInScope : Prop :=
+  ∃ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) (x : Msg)
+    (s : FlockDeploy.Ins) (spec : _root_.Flock.SessionSpec) (sts : Array _root_.Flock.Stmt),
+    RecDeploy.DenseAt x ∧
+    (∀ v, ¬ Claims.Recursion.R
+      ((RecDeploy.recBoundAt _root_.Flock.Readable.relation
+        { RecDeploy.deployedB b with tr := RecDeploy.recTr aux nOf hd recRest }
+        (RecDeploy.DeployedR.layR RecDeploy.OpenRows.elemR)).record
+        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+          RecDeploy.DeployedR.wR).IVStar)
+      (Claims.Recursion.Inner.ofFlock
+        (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR RecDeploy.DeployedR.rdR)
+          (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation RecDeploy.DeployedR.rdR).cols
+          RecDeploy.DeployedR.wER FlockDeploy.joinR RecDeploy.rowInDeployed RecDeploy.DeployedR.finalR
+          RecDeploy.DeployedR.wR).deploy Claims.GS.plainDecodeRD) x v) ∧
+    FlockDeploy.PlainIn (RecDeploy.xIOf x) s spec sts ∧
+    (∀ j < RecDeploy.nS x, ∃ i spec' sts',
+      RecDeploy.PartIn (RecDeploy.staged (RecDeploy.deployedB b).st x (RecDeploy.pick (RecDeploy.deployedB b).st x j) j)
+        i spec' sts') ∧
+    RecDeploy.nS x ≤ 2 ^ 16 ∧ (RecDeploy.innerSetupIns (RecDeploy.xIOf x)).length ≤ 2 ^ 56
+
+/-- **`RecursiveKS`'s nontrivial lemma, at the guarantee** (LEAN-66): `RecursiveKS` is false at the verifier that
+accepts everything wherever the deployment has a false statement in scope (`FalseInScope`). -/
+theorem recursiveKS_nontrivial (h : FalseInScope) : ¬ RecursiveKSAll := by
+  obtain ⟨b, aux, nOf, hd, recRest, x, s, spec, sts, hD, hR, hin, hO, hn, hS⟩ := h
+  exact fun hK => recursiveKSAt_nontrivial _ _ _ _ _ _ aux nOf hd recRest hD hR hin hO hn hS (hK b aux nOf hd recRest)
+
 end Flock.Guarantees
