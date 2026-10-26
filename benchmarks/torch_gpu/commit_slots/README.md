@@ -195,7 +195,8 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   from 8 to 88 (20.73 s on 8 SMs, 4.18 on 40, 2.62 on 64), 176 on all 132, its roots the uncapped commit's. Beside the
   served step on every SM, the least overhead is the commit at high priority on 64 SMs: a step of 4.343 s, +1.046 s
   over serving alone (3.298 s in that run), 1.10 times CMP-149's 0.95 s, against +1.095 s for the uncapped commit at low
-  priority in the same run. From 56 to 88 SMs it stays at +1.05 to +1.10 s. Below 48 SMs the commit alone outlasts the
+  priority in the same run; three later runs repeat it at +1.071, +1.076 and +1.099 s. From 56 to 88 SMs it stays at
+  +1.05 to +1.10 s. Below 48 SMs the commit alone outlasts the
   forward. SM clocks stay at 1,980 MHz with no clock event reason in every run; the high and equal runs from 56 to 88
   SMs draw 619 to 641 W median against the 700 W limit, and no sample exceeds 697.9 W, so power never binds.
 - **The forward on the other SMs** (`:Nr`) is worse at every N (run r20261026-181159-8f26; `serve:shared:3:Nr` is the
@@ -203,7 +204,10 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   against 3.274 s on all 132. And when the commit lags, torch's allocator, at 146.3 of 150.1 GB, frees its cache for
   the next group's tables (2.08 GB at 4,096 slots), waiting on every stream: at 40 SMs (the commit alone 4.173 s, the
   forward alone 4.182 s) a step takes 6.984 s with 92 such retries in 3 steps, and at 8 SMs 23.288 s with 69. At 64,
-  with none, it takes 5.297 s, the forward alone's time and 0.10 s. The partitions themselves run at once
+  with none, it takes 5.297 s, the forward alone's time and 0.10 s. The forward's host waiting on the side stream's reads
+  before it allocates (`--host-lag`, run r20261026-182023-2b8d) leaves 84 to 100 retries (6.878 s at 40 SMs): a table
+  `record_stream`'d to the side stream is released at that stream's tail when the forward frees it, not at its read, so
+  only freeing it after the read (or reusing a ring of buffers) avoids them. The partitions themselves run at once
   (`green_probe.py`, runs r20261026-174052-c188 and r20261026-180440-47aa): the commit on 40 or 64 SMs and int8 GEMMs
   on the others overlap 0.91 to 0.93 (1 at once, 0 in turns), 0.88 to 0.90 coupled as today's loop couples them, and
   0.08 sharing every SM in one context.
