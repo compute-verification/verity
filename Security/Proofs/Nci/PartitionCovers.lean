@@ -2,9 +2,9 @@ import Definitions.Nci.Guarantees.PartitionCovers
 import Proofs.Core.Circuit
 
 /-!
-# Proof of Lemma A.1: a `(c, k)`-partition's completed blocks cover the circuit
+# Proof of Lemma A.1: a `(c, k)`-partition's completed proof blocks cover the circuit
 
-Block `u`'s completion `I ∪ in(I)` with inputs `in(I)` is a subcircuit: a gate of `I` reads only gates of `I ∪ in(I)`,
+Proof block `u`'s completion `I ∪ in(I)` with inputs `in(I)` is a subcircuit: a gate of `I` reads only gates of `I ∪ in(I)`,
 and a source in it is in `in(I)`, since every gate of `I` is an operation gate and so reads some gate (positive fan-in).
 It computes exactly `I`, so the completions compute every operation gate.
 -/
@@ -13,7 +13,7 @@ namespace Nci.SecurityProofs
 
 open Verity Nci.Covering Finset
 
-/-- Block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
+/-- Proof block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
 def completion {d : Declaration} {B : ℕ} (P : Partition d.D B)
     (hfan : ∀ g, d.D.isInput g = false → (d.D.reads g).Nonempty) (u : Fin B) : Subcircuit d.D where
   gates := P.gates u ∪ d.D.into (P.gates u)
