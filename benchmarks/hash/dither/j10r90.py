@@ -10,9 +10,11 @@ A and B are `operand`'s, a counter hash of (seed, row, column) that `verify` reg
 call's first position from random.Random(SEED). The first --lib is the base.
 
 check (on the GPU): z = torch._int_mm(A, B^T) against the float64 product on every cell (exact: |z| <= 2^30); then each
-build, under 0xA5 over its receipts and row workspace: seeds (kh_seeds_j10r) and units (kh_units_multi_j10r): no poison
-left, every word of every unit equal to the base build's, the sampled units' receipts (the unit grid's corners, its
-middle and random) equal to j10r_units.call_receipts' and their seeds to seeds.call_seed and receipt_seed; the same call
+build, under 0xA5 over its receipts and row workspace: seeds (kh_seeds_j10r) and units (kh_units_multi_j10r): no word
+left unwritten (`unwritten`: a word still 0xA5A5A5A5 is run again under 0x5A5A5A5A), every word of every unit equal to
+the base build's, the sampled units' receipts (the unit grid's corners, its middle, random, and every unit with a word
+the units write as 0xA5A5A5A5, up to 8) equal to j10r_units.call_receipts' and their seeds to seeds.call_seed and
+receipt_seed; the same call
 by kh_units_multi_j10r_sm on every SM equal on every word; the no-write control (zero units) refused; one bit of the row
 workspace moving exactly row block 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
 faults, through the rows and units launches alone). The sampled units' receipts (every build) and z tiles go to
@@ -61,6 +63,7 @@ LINEARS = {"q": (16384, 16384), "kv": (128, 16384), "o": (16384, 16384), "up": (
 LAYER = ("q", "kv", "o", "up", "down")
 MS = (4096, 16384)
 POISON = -1515870811  # 0xA5A5A5A5 as s32
+POISON2 = 0x5A5A5A5A
 T = 32
 SEED = 0x90A
 M32 = 0xFFFFFFFF
@@ -168,6 +171,38 @@ def z_check(a: torch.Tensor, b: torch.Tensor, picks: list[int]) -> tuple[dict, n
     return {"cells": cells, "bad_cells": bad}, tiles
 
 
+def unwritten(o: torch.Tensor, run) -> tuple[int, int]:
+    """(words of `o` a launch leaves unwritten, words it writes as POISON): `run` under POISON, then, only if some word
+    holds it, under POISON2. About 2^-32 of the words a launch writes are POISON, so a fixed poison alone flags written
+    words at these sizes; a written word is the same value in both runs, so only an unwritten one holds each run's
+    poison. `o` ends as the last run's."""
+    o.fill_(POISON)
+    run()
+    torch.cuda.synchronize()
+    idx = (o == POISON).nonzero(as_tuple=True)
+    if not idx[0].numel():
+        return 0, 0
+    o.fill_(POISON2)
+    run()
+    torch.cuda.synchronize()
+    left = int((o[idx] == POISON2).sum())
+    return left, int(idx[0].numel()) - left
+
+
+def poison_units(lib, a: torch.Tensor, b: torch.Tensor, c: dict, most: int = 8) -> list[int]:
+    """The first `most` units whose receipt, written by `lib`'s units launch, holds a POISON word: check samples them
+    too, so the twin and verify's Definition check the words the poison count can't."""
+    import unitsbench as U
+    jc = JCall(lib, a, b, c)
+    o = torch.full((jc.units, int(lib.h.kh_words(c["k"]))), POISON, dtype=torch.int32, device="cuda")
+    jc.seed()
+    U.MultiJ10R(lib, [(jc, b, o)]).run()
+    torch.cuda.synchronize()
+    units = (o == POISON).any(dim=1).nonzero().flatten()[:most].tolist()
+    del o, jc
+    return units
+
+
 def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: list[int], ref_t: torch.Tensor) -> dict:
     import unitsbench as U
     mu = U.MultiJ10R(lib, [(jc, jc.b, out)])
@@ -178,13 +213,19 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
         for w in m.rws:
             w.fill_(0xA5)
 
+    def launch(m, seeded: bool = False):
+        def go() -> None:
+            for w in m.rws:
+                w.fill_(0xA5)
+            if seeded:
+                jc.seed()
+            m.run()
+        return go
+
     pk = torch.tensor(picks, device="cuda")
     jc.jseeds.fill_(0x5A5A5A5A5A5A5A5)
-    poison(out, mu)
-    jc.seed()
-    mu.run()
-    torch.cuda.synchronize()
-    r: dict = {"units": jc.units, "words": out.shape[1], "poison_left": int((out == POISON).sum()),
+    left, as_poison = unwritten(out, launch(mu, seeded=True))
+    r: dict = {"units": jc.units, "words": out.shape[1], "poison_left": left, "written_as_poison": as_poison,
                "bad_words": int((out[pk] != ref_t).sum()),
                "vs_base_bad_words": None if first is None else int((out != first).sum())}
     sd = jc.jseeds[pk].cpu().numpy()
@@ -195,10 +236,7 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
     keep = out.clone()
     out2 = torch.empty_like(out)
     ms = U.MultiJ10R(lib, [(jc, jc.b, out2)], sm=True)
-    poison(out2, ms)
-    ms.run()
-    torch.cuda.synchronize()
-    r["sm_poison_left"] = int((out2 == POISON).sum())
+    r["sm_poison_left"], r["sm_written_as_poison"] = unwritten(out2, launch(ms))
     r["sm_vs_units_bad_words"] = int((out2 != keep).sum())
     del out2, ms
     poison(out, mu)
@@ -256,13 +294,15 @@ def check(args) -> int:
         a = operand_all(c["a_seed"], c["m"], c["k"])
         b = operand_all(c["b_seed"], c["n"], c["k"])
         picks = picks_of(c, args.picks)
+        hits = poison_units(libs[names[0]], a, b, c)
+        picks += [u for u in hits if u not in picks]
         zr, tiles = z_check(a, b, picks)
         arrays[f"{key}.z"] = tiles
         salt, ra, rb = secrets(c)
         t1 = time.time()
         ref = J10R.call_receipts(a, b, salt, c["base"], ra, rb, only=picks)
         ref_t = torch.from_numpy(ref.view(np.int32)).to("cuda")
-        rec = {**c, "picks": picks, "z": zr, "ref_s": round(time.time() - t1, 2), "gates": {}}
+        rec = {**c, "picks": picks, "poison_units": hits, "z": zr, "ref_s": round(time.time() - t1, 2), "gates": {}}
         first = None
         for nm in names:
             jc = JCall(libs[nm], a, b, c)
@@ -370,14 +410,9 @@ def time_(args) -> int:
                 e1.synchronize()
                 ms_[k].append(e0.elapsed_time(e1))
                 mhz[k].append(clock.sm())
-        for _, o, _ in keep.values():
-            o.fill_(POISON)
-        for nm in names:
-            arms[nm]()
-        torch.cuda.synchronize()
+        left = {nm: unwritten(keep[nm][1], arms[nm])[0] for nm in names}
         o0 = keep[names[0]][1]
         same = {nm: int((keep[nm][1] != o0).sum()) for nm in names[1:]}
-        left = {nm: int((keep[nm][1] == POISON).sum()) for nm in names}
         wbad = None
         if W:
             yw.fill_(-1)
