@@ -26,7 +26,7 @@ class Weights:
         self.nbytes = SW.stream_bytes(shape)
 
     def array(self, name: str) -> np.ndarray:
-        """A tensor whole: s8 codes (N, K) int8, scales (N,) f32, bf16 words (gains (H,), ``tok`` (H, V), ``pos`` (H, C))."""
+        """A tensor whole: s8 codes (N, K) int8, scales (N,) f32, bf16 words (gains (H,), ``tok`` (V, H), ``pos`` (H, C))."""
         a = SW.generate(self.shape, self.seed, name)
         return a.reshape(-1) if self.t[name].rows == 1 else a
 
@@ -46,9 +46,11 @@ class Weights:
         return SW.stream(self.shape, self.seed, start, stop)
 
     def manifest(self) -> dict:
-        return {"generator": SW.FORMAT, "program": SW.program(self.shape, self.seed), "shape": asdict(self.shape),
+        return {"generator": SW.FORMAT, "model": SW.model_id(self.shape, self.seed), "shape": asdict(self.shape),
                 "stream_bytes": self.nbytes, "seed_is_test_seed": self.seed == SW.TEST_SEED}
 
-    def registration_digest(self, salt_key: bytes = SW.TEST_SALT_KEY, workers: int = 1) -> str:
-        """`SW.registration_digest` under ``salt_key`` (the test key by default: the prover's own key gives the real one)."""
-        return SW.registration_digest(self.shape, self.seed, SW.root(self.shape, self.seed, salt_key, workers=workers))
+    def registration_digest(self, salt_key: bytes = SW.TEST_SALT_KEY, program=SW.TEST_PROGRAM, workers: int = 1) -> str:
+        """`SW.registration_digest` for the reading ``program`` under ``salt_key`` (by default the test reader and key: the
+        step's Program and the prover's own key give the real one)."""
+        roots = SW.root(self.shape, self.seed, salt_key, program, workers=workers)
+        return SW.registration_digest(self.shape, program, roots)
