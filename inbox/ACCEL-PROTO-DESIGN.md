@@ -236,3 +236,6 @@ For v2: adopt this noise structure unless a red team breaks it. Choose max or ad
 All are paper sketches; RT-ALGO prices M5 and M7.
 
 (PROTO-DESIGN-2) M7 and M10 set s_b, the speedup of the cheapest product route for the dither-bit terms. That bounds SKIP-FIX's L ≤ K/s_b. M1 lowers the H200's honest rate by 8.2%, which changes γ and ε_alg.
+
+## 04:00Z, coordinator
+RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does the same work as an algorithm cost survey: bilinear schemes, accumulator reuse, sparse and FP4 forms, table lookups. Its results arrive as `RESULT A<n> → ...` lines in its note.

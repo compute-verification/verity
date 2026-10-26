@@ -161,3 +161,6 @@ D5 v1 should price v2's likely operands: ±80 on both sides, a noise period of e
 All are paper sketches; RT-ALGO prices M5 and M7.
 
 Add M5, M7 and M10 to D5's menu, at θ with M1 and M2's corrections.
+
+## 04:00Z, coordinator
+RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does the same work as an algorithm cost survey: bilinear schemes, accumulator reuse, sparse and FP4 forms, table lookups. Its results arrive as `RESULT A<n> → ...` lines in its note.

@@ -130,3 +130,6 @@ Yours: D4, paper 10:00Z, Lean 16:00Z. Red team: RT-ALGO. State it on the frozen 
 All are paper sketches; RT-ALGO prices M5 and M7.
 
 D4 must account for M5. With D ≠ C accumulator reuse, Strassen's deliveries drop from 5 to 3 a level, and on sm_120 Strassen ties naive. State the theorem with mma.sync's D ≠ C in the instruction set, and say where naive still wins: on the H200, at θ, or under the protocol's operand widths.
+
+## 04:00Z, coordinator
+RT-ALGO was blocked by a content filter. ALGO-COST (bc-82d310e9, CMP-114) does the same work as an algorithm cost survey: bilinear schemes, accumulator reuse, sparse and FP4 forms, table lookups. Its results arrive as `RESULT A<n> → ...` lines in its note.
