@@ -40,6 +40,7 @@ import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.Flock.Guarantees
 import Definitions.Accounting.Assumptions.Remote
 import Definitions.Accounting.Assumptions.RemoteOutside
+import Definitions.Accounting.Assumptions.Wipe
 import Definitions.Accounting.Guarantees
 import Definitions.Hash.Guarantees
 

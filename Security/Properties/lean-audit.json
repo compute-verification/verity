@@ -25,6 +25,7 @@
   "Properties.SampledProofs.Halt",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
+  "Properties.Pous.Wipe",
   "Properties.Pous.EndToEnd",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
@@ -39,6 +40,9 @@
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
+  "Accounting.Assumptions.StreamedReads": {
+   "owner": "@memory-accounting"
+  },
   "Accounting.Remote.Draw.Assumptions.Counted": {
    "owner": "@memory-accounting",
    "digest": "a8ae94ed79b221dba199d5216232dfcbfdba8e97ead1d4501176191e60b12c62"
@@ -259,8 +263,13 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity"
    ],
-   "except": [],
+   "except": ["Properties.Pous.Wipe"],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
+  },
+  "Properties.Pous.Wipe": {
+   "imports": ["Definitions.Accounting.Assumptions.Wipe", "MemoryChallenger.WipeProtocol"],
+   "except": [],
+   "why": "an accepted wipe's survivor bound is stated against the wipe protocol's check (`MemoryChallenger.WipeProtocol`) and core's device and its wipe (`Definitions.Core.Blocks`), through the streamed wipe's vocabulary and premise on that device (`Definitions.Accounting.Wipe`, `Definitions.Accounting.Assumptions.Wipe`), never a proof"
   },
   "Properties.Identity": {
    "imports": ["Identity.Tagged"],
@@ -1938,6 +1947,9 @@
    "signature": ["Properties.SampledProofs.noAcceptAfterHalt : Properties.SampledProofs.NoAcceptAfterHalt"],
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
+  },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
+   "owner": "@memory-accounting"
   }
  },
  "shape": {
@@ -1955,6 +1967,10 @@
    },
    "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
     "function": "MemoryChallenger.verdict",
+    "outcome": "accept"
+   },
+   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
+    "function": "MemoryChallenger.WipeProtocol.check",
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
