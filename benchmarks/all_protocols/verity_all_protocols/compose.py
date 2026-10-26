@@ -7,8 +7,9 @@ each component's own ``answer`` on that component's case and decides, reject fir
 onsite whatever the others answer; otherwise onsite accepts only when every component accepts and its commitment binds
 their digests and the registration's. So the runner decides:
 
-* **reject** as soon as the registration check or one leg's protocol rejects: onsite rejects whatever the others would
-  answer;
+* **reject** as soon as the registration check or one leg's protocol rejects, or the registration check accepted a
+  registration other than the one sampled proofs' leg committed to (`COMMITTER_LEAN`; one registration digest in both,
+  `mismatch`): onsite rejects whatever the others would answer;
 * **pending-ports** while onsite can't decide the rest: the registration check or a leg is missing or failed, it or a
   leg has no case for its port, or one of onsite's components is still a stub (`onsite_components` reads
   `Core.Onsite.components`), since a stub answers for the stub, not for the protocol;
@@ -20,7 +21,8 @@ Given onsite's executable, the runner runs ``onsite check`` every period, whatev
 its leg's case, each port on its leg's case, each stub on a case with no statement yet (`STUB_CASE`, undecided), and a
 port or registration check whose leg wrote no case on one its decoders refuse (`NO_CASE`). Its answer is ``answer``,
 where each case came from is ``inputs`` (the registration's under its id), and ``agree`` says onsite rejected on the
-registration's case if its check rejected it, and on every leg whose own case rejected.
+registration's case if its check rejected it, on the registration's digest if it isn't sampled proofs' case's, and
+otherwise on every leg whose own case rejected.
 
 A protocol outside onsite's components (`table.Entry.onsite` false) is reported beside the composition, and a rejection
 there rejects the composed verdict too (no accounting accepts over a refused audit), but its acceptance can't complete it.
@@ -45,6 +47,9 @@ ONSITE = ROOT / "verity" / "core" / "protocols" / "onsite" / "CoreOnsite.lean"
 PROTOCOL = "verity/onsite/v0"
 #: onsite's registration check (`Core.Onsite.protocol`'s, `onsite_registration`): NCI's check of record, its Lean name
 REGISTRATION, REGISTRATION_LEAN = "verity/nci/v1", "NciCheck.Protocol.protocol"
+#: the component whose commitment is the registration the registration check checks (`Core.Onsite.protocol`'s,
+#: `onsite_registration`): sampled proofs' one-stage audit, whose commitment is the run's registration record
+COMMITTER_LEAN = "SampledProofs.OneStage.protocol"
 #: the network certifier's period check, whose public carries K and eps
 CERTIFIER = "verity/certifier/v0"
 #: a proof unit's outputs are at most 16 bits (`NetworkCheck.Period`'s faulty bits, `16 · b`)
@@ -64,14 +69,23 @@ def onsite_components(source: str | None = None) -> list[str]:
     return [x.strip() for x in m.group(1).split(",") if x.strip()]
 
 
-def onsite_registration(source: str | None = None) -> str:
-    """The Lean name of `Core.Onsite.protocol`'s registration check as written in ``CoreOnsite.lean``
-    (``registered "verity/onsite/v0" R components``)."""
+def onsite_registration(source: str | None = None) -> tuple[str, str]:
+    """The Lean names of `Core.Onsite.protocol`'s registration check and of the component whose commitment is the
+    registration, as written in ``CoreOnsite.lean`` (``registered "verity/onsite/v0" R S.id components``)."""
     text = ONSITE.read_text() if source is None else source
-    m = re.search(r"def protocol : Protocol := registered \"" + re.escape(PROTOCOL) + r"\" (\S+) components", text)
+    m = re.search(r"def protocol : Protocol :=\s*registered \"" + re.escape(PROTOCOL)
+                  + r"\" (\S+) (\S+)\.id components", text)
     if m is None:
-        raise ValueError(f"CoreOnsite.lean has no `def protocol : Protocol := registered \"{PROTOCOL}\" R components`")
-    return m.group(1)
+        raise ValueError(f"CoreOnsite.lean has no `def protocol : Protocol := registered \"{PROTOCOL}\" R S.id "
+                         "components`")
+    return m.group(1), m.group(2)
+
+
+def mismatch(registration: str, committed: str | None) -> str:
+    """Onsite's reason when the registration check checked the registration digest ``registration`` and sampled proofs'
+    case committed to ``committed`` (`Core.Composition.mismatch`; hex, None when its case has no digest)."""
+    return (f"registration: {REGISTRATION} checked {registration}, {PORTS[COMMITTER_LEAN][1]} committed "
+            f"{committed or 'no digest'}")
 
 
 def stub_component(name: str) -> str | None:
@@ -184,6 +198,7 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
     out: dict[str, Any] = {"protocol": PROTOCOL, "registration": REGISTRATION, "onsite_components": onsite,
                            "stubs": stubs, "outside_onsite": sorted(n for n, c in components.items() if c is None),
                            **({"policy": reg["policy"]["label"]} if isinstance(reg.get("policy"), dict) else {})}
+    component, committer = PORTS[COMMITTER_LEAN]
     got = None
     if exe is not None:
         cs, digests, source, legs = onsite_cases(rows, components, cases, onsite)
@@ -196,11 +211,18 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
         reason = got.get("reason") or ""
         if reg.get("verdict") == "reject":
             agree = got["verdict"] == "reject" and reason.startswith(f"registration: {REGISTRATION} reject: ")
+        elif (reg.get("verdict") == "accept" and registration_case is not None and committer in digests
+              and digests[committer] != rdigest):
+            agree = got["verdict"] == "reject" and reason == mismatch(rdigest, digests[committer] or None)
         else:
             agree = all(got["verdict"] == "reject" and f"{pid} reject: " in reason
                         for pid, n in legs.items() if rows[n].get("verdict") == "reject")
         out.update(inputs=source, answer=got, agree=agree)
     rejected = sorted(n for n, r in rows.items() if r.get("verdict") == "reject")
+    leg = next((n for n, c in components.items() if c == component), None)
+    committed = (rows.get(leg) or {}).get("commitment") if leg is not None else None
+    if reg.get("verdict") == "accept" and reg.get("commitment") and committed and committed != reg["commitment"]:
+        rejected = [f"the registration, which {leg}'s leg did not commit to", *rejected]
     if reg.get("verdict") == "reject":
         rejected = ["the registration check", *rejected]
     if rejected:
@@ -288,6 +310,7 @@ def communication(reports: Sequence[Mapping[str, Any]], period_s: float, spans: 
     return out
 
 
-__all__ = ["CERTIFIER", "HORIZON_CONDITION", "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL", "REGISTRATION",
-           "REGISTRATION_LEAN", "STUB_CASE", "bind", "communication", "component_of", "composed", "fleet", "horizon_leak",
-           "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs", "onsite_registration", "stub_component"]
+__all__ = ["CERTIFIER", "COMMITTER_LEAN", "HORIZON_CONDITION", "NO_CASE", "OUT_BITS", "PORTS", "PROTOCOL",
+           "REGISTRATION", "REGISTRATION_LEAN", "STUB_CASE", "bind", "communication", "component_of", "composed",
+           "fleet", "horizon_leak", "mismatch", "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs",
+           "onsite_registration", "stub_component"]

@@ -3,11 +3,12 @@ reference (`reference.py`: the trial's composition rule with top's reject domina
 core interface and the components' own Python). Hypothesis draws each component's case to accept, reject, be undecided or
 fail to decode (from its own difftest's generator: PoUW's `pouw_check_cases`, sampled proofs' `changed_audits`, the
 network certifier's period `build`; space's and bandwidth's from the small periods of their hooks, `periods.py`), and
-onsite's registration case from NCI's `cases`, then often breaks the composition's own inputs (a component dropped,
-unknown, repeated or out of order, a case under other params, a wrong or short commitment, non-canonical or malformed
-evidence; onsite's registration under another id or other params, its digest unbound, or left out) or the case itself (a
-field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly: the
-components' certified quantities and profiles among them."""
+onsite's registration case from NCI's declarations (on sampled proofs' own registration record and log, mostly, else on
+NCI's own, which onsite refuses: one registration digest in both), then often breaks the composition's own inputs (a
+component dropped, unknown, repeated or out of order, a case under other params, a wrong or short commitment,
+non-canonical or malformed evidence; onsite's registration under another id or other params, its digest unbound, or
+left out) or the case itself (a field missing or not hex, not an object), and every field of the outcome but its reason
+must agree exactly: the components' certified quantities and profiles among them."""
 
 from __future__ import annotations
 
@@ -88,6 +89,24 @@ def component_case(draw, C, kind: str | None) -> dict:
             "digest": bytes.fromhex(digest) if digest else root}
 
 
+@st.composite
+def registration_case(draw, committed: dict) -> dict:
+    """NCI's case, as `component_case` gives it, on the registration ``committed`` (the committing component's case)
+    commits to: an honest declaration with its θ and provenance dropped, which reads the record only through the log's
+    chain, on that case's record and log, so that one registration digest is in both when the record chains; one time in
+    four, NCI's own declaration on its own record at any verdict, which a registered composition refuses."""
+    if draw(st.integers(0, 3)) == 0:
+        return draw(component_case(R.NCI_CHECK, None))
+    s = R.NCI.split(draw(st.sampled_from(R.NCI.seeds()[0])))
+    log = committed["params"].get("log", []) if isinstance(committed["params"], dict) else []
+    params = {**s["params"], "log": log}
+    evidence = canonical({**s["evidence"], "theta": [], "provenance": []}).encode()
+    digest = R.NCI_CHECK.answer({"commitment": committed["root"].hex(), "evidence": evidence.hex(),
+                                 "params": params})["commitment"]
+    return {"id": R.NCI_CHECK.id, "params": params, "root": committed["root"], "evidence": evidence,
+            "digest": bytes.fromhex(digest) if digest else committed["root"]}
+
+
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every component's case standing,
 #: and so the way to a rejection that no component's own explains.
 MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-case", "swap-params", "swap-cases",
@@ -107,8 +126,8 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
     """One case of `product`: its components' cases (one time in six every one aimed at acceptance, one in six every one
     but one that is aimed at undecided, so that a product of five reaches its binding breaks and its undecided verdict,
     and each at any verdict otherwise), then at most one break of the composition's own inputs. A registered
-    composition's case carries its registration's too, aimed at acceptance five times in six, with at most one break of
-    its own (`REGISTRATION_MUTATIONS`)."""
+    composition's case carries its registration's too (`registration_case`, on the registration the committing
+    component's case commits to three times in four), with at most one break of its own (`REGISTRATION_MUTATIONS`)."""
     registered = product if isinstance(product, R.Registered) else None
     product = registered.product if registered else product
     mode = draw(st.integers(0, 5))
@@ -153,7 +172,7 @@ def composite(draw, product: R.Product | R.Registered) -> dict:
         params = draw(JSON)
     body: dict = {"components": entries}
     if registered:
-        reg = draw(component_case(registered.registration, draw(st.sampled_from([R.ACCEPT] * 5 + [R.REJECT]))))
+        reg = draw(registration_case(cases[[C.id for C in product.components].index(registered.committer)]))
         rm = draw(st.sampled_from(REGISTRATION_MUTATIONS))
         rnamed = {"id": reg["id"], "params": reg["params"]}
         rentry = {"commitment": reg["root"].hex(), "evidence": reg["evidence"].hex(), "id": reg["id"],
@@ -266,7 +285,8 @@ class Trial(R.Product):
 def test_a_reference_without_reject_dominance_is_caught(onsite_server, recorded):
     """The difftest tells top's rule from the trial's: the case it shrinks to has a component that rejects and one that
     is undecided, under a commitment that binds their digests."""
-    trial = R.Registered(R.ONSITE.id, R.ONSITE.registration, Trial(R.ONSITE.id, R.ONSITE.product.components))
+    trial = R.Registered(R.ONSITE.id, R.ONSITE.registration, R.ONSITE.committer,
+                         Trial(R.ONSITE.id, R.ONSITE.product.components))
     with pytest.raises(D.Mismatch) as e:
         D.run(D.ProtocolPort("onsite", trial.answer, ONSITE.inputs, package=PROTOCOLS / "onsite"), examples=1000,
               server=onsite_server)

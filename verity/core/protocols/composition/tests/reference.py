@@ -235,12 +235,14 @@ class Product:
 
 @dataclass(frozen=True)
 class Registered:
-    """`Core.Composition.registered id R components`: the registration check ``registration`` on the registration's case
-    first, a refusal refusing the whole, then ``product`` of the components on the rest, under the commitment's first 64
-    bytes; the rest of the commitment is the registration's digest."""
+    """`Core.Composition.registered id R s components`: the registration check ``registration`` on the registration's
+    case first, a refusal refusing the whole, then ``product`` of the components on the rest, under the commitment's
+    first 64 bytes; the rest of the commitment is the registration's digest, which the component ``committer`` must have
+    committed to once the cases fit the composition (one registration digest in both)."""
 
     id: str
     registration: Ported
+    committer: str
     product: Product
 
     def params(self, j: Any) -> tuple[tuple[str, str], list[tuple[str, str]]]:
@@ -277,6 +279,14 @@ class Registered:
             return REJECT, f"registration: {R.id} {a['verdict']}: {a.get('reason') or ''}"
         if a["commitment"] != d.hex():
             return REJECT, "the commitment does not bind the registration's digest"
+        answers = self.product.run(ps, ev)
+        if isinstance(answers, str):
+            return REJECT, answers
+        # A component's answer carries its digest exactly when its commitment decodes and it doesn't reject before;
+        # where `committedBy` has a digest the answer doesn't, the component rejects, and so does the composition.
+        got = next((x["commitment"] for i, x in answers if i == self.committer), None)
+        if got != d.hex():
+            return REJECT, f"registration: {R.id} checked {d.hex()}, {self.committer} committed {got or 'no digest'}"
         return self.product.check(ps, b, ev)
 
     def answer(self, case: Any) -> dict:
@@ -298,5 +308,5 @@ class Registered:
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their components in the order of their ids, onsite's after its
 #: registration check, NCI's.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Registered("verity/onsite/v0", NCI_CHECK,
+ONSITE = Registered("verity/onsite/v0", NCI_CHECK, SAMPLED_PROOFS.id,
                     Product("verity/onsite/v0", (CERTIFIER, POUS, POUW, BANDWIDTH, SAMPLED_PROOFS)))
