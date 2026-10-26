@@ -43,8 +43,8 @@ theorem built_tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) : Built
 each position up to the committed constant. -/
 theorem tmpl_net_rows (tu : TmplUnit) :
     tu.net.a.rows = tu.net.useful ∧ tu.net.b.rows = tu.net.useful ∧ tu.net.useful = tu.net.constPos + 1 := by
-  obtain ⟨-, -, -, -, hat, -⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
-  obtain ⟨-, -, hu, hcp, -, ha, hb, -, -, -, -, -, hp, -, -⟩ := Net.ofRowsAt_ok hat
+  obtain ⟨_, _, -, -, hat, -⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
+  obtain ⟨_, -, hu, hcp, -, ha, hb, -, -, -, -, -, hp, -, -⟩ := Net.ofRowsAt_ok hat
   have hi := (Net.posOk_parts hp).2.1
   rw [ofRows_rows ha, ofRows_rows hb, Net.placed_size, Net.placed_size, hi, hu, hcp]
   exact ⟨rfl, rfl, rfl⟩
