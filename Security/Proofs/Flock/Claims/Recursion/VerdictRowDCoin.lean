@@ -272,8 +272,9 @@ theorem readPs_blocks {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
       rw [List.getElem_map, List.getElem_map, hms, framesOf, List.length_map, hT.rounds,
         cutLens_getD_length _ _ hc.2.symm, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h₂, Option.getD_some]
     dsimp only
-    rw [← hL, cutLens_map_length, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_map]
-    cases (rs.map Prod.snd)[k]? <;> rfl
+    rw [← hL, cutLens_map_length, List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD]
+    simp only [List.getElem?_map]
+    cases rs[k]? <;> rfl
   · rw [if_neg hc] at h
     cases h
 
@@ -348,7 +349,8 @@ theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
   obtain ⟨hssz, hF⟩ := forall₂_getElem (FlockDeploy.forall₂_of_array_mapM hR hmap)
   simp only [Array.size_map] at hssz hF
   have hk₀ : k < recs₀.size := by omega
-  have hname : ∀ (t : ℕ) (ht : t < sess.streams.size), (sess.streams[t]).name = (spec.repStreams[t]'(by omega)).2.2 := by
+  have hname : ∀ (t : ℕ) (ht : t < sess.streams.size),
+      (sess.streams[t]).name = (spec.repStreams[t]'(by omega)).2.2 := by
     intro t ht
     have h1 := (hF t (by omega) ht).1
     simp only [Array.getElem_map, str_mapStream, hrec₀ t (by omega), str_streamObj] at h1
@@ -372,8 +374,12 @@ theorem coins_of_decode (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array 
   have hrs' := (Except.ok.inj hrs).symm
   obtain ⟨hrsz, hRj⟩ := forall₂_getElem hRd
   have hSk : k < S.size := by omega
-  obtain ⟨hSksz, hSn⟩ := recStreams_get (spec := spec) (sts := sts) (ms := ms) (cs := cs) (k := k) (by rw [hSd]; exact hSk)
-  rw [hSd] at hSksz hSn
+  have hSksz : S[k].size = ((cutLens (repLens spec sts) ms).getD k []).length := by
+    subst hSd
+    exact (recStreams_get hSk).1
+  have hSn : ∀ j < S[k].size, (S[k][j]!).n = ((RecDeploy.repSchedAt spec sts[k / 2]!).getD j default).1 := by
+    subst hSd
+    exact (recStreams_get hSk).2
   have hrsS : rs.size = S[k].size := by rw [hrs']; simp
   -- the offset of rep `k`'s rounds
   have hoffk : off spec.repStreams[k].2.2 = ((repLens spec sts).take k).sum := by
@@ -434,7 +440,7 @@ theorem verifierRows_comb (sh : Shape) (rounds : Array (Array F128)) (extras : A
     | error e => rfl
     | ok b =>
       dsimp only
-      split <;> simp_all [Functor.map, Except.map]
+      split <;> rfl
 
 /-! ## The reader -/
 
