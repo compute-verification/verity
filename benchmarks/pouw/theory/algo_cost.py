@@ -144,6 +144,10 @@ def describe(path: Path, m: int, k: int, n: int, R: dict) -> None:
     print(f"   s_A={sA} terms {sorted(tA)}; s_B={sB} terms {sorted(tB)}; products with both sides summed {both}")
     print(f"   sum(f_p - 1)={sum(fp) - rank}; criterion R + 0.5(s_A+s_B) = {crit:.1f} vs 1.2 mkn = {1.2 * m * k * n:.1f} "
           f"(standard {m * k * n}); tensor price at +-{U} with 2:4 passes {cost:.2f} = {cost / (m * k * n):.3f}x standard")
+    adds = sum(R[min(t, 8)][1] for t in tA + tB if t > 1) / (m * k * n)
+    print(f"   lanes route (idle lanes, A8): tensor {rank / (m * k * n):.3f}, {adds:.4f} correction adds a MAC; "
+          f"RTX PRO 6000 port {8 * adds:.2f} lanes {6 * adds:.2f}; H200 port {32 * adds:.2f} lanes {24 * adds:.2f} "
+          f"(before staging and divergence)")
 
 
 def main(argv: list[str]) -> None:
