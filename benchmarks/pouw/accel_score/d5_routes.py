@@ -14,8 +14,17 @@ sys.path.insert(0, os.environ.get("PUBLIC_BEST_DIR", str(Path(__file__).resolve(
 import public_best as pb  # noqa: E402
 
 
-def job(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route=True, zhd=True):
+def job(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route=True, zhd=True, digits=(2, 2), comps=None):
+    """D5's tile job with every route at A = B = 0. digits: the peels' base-128 digits of Z_X and Y_W (nofold's dz, dy;
+    D5 fixes 2 + 2); the zero-high-digit route keeps one digit of Y_W. comps: SHA-512 compressions a MAC (nofold's word
+    model), which sets the hash scale over D5's 32-bit words instead of `hash_scale`."""
+    L = t * Lp
+    if comps is not None:
+        hash_scale = comps / pb.comps_per_mac(L)
     L, zleaf, sha, peels, dense, honest = pb._tile_honest(card, t, Lp, K, n, v, hash_scale)
+    dz, dy = digits
+    peels = (peels[0], (dz + dy) * Lp / K, peels[2])
+    honest = pb.price(card, dense, L, n, pb.TOKENS, beside=False, items=(peels, sha))
     dense_m = pb.Method("dense", dense, items=(peels,))
     best = pb.price_methods(card, [dense_m], L, n, pb.TOKENS, beside=True, items=(sha,))
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
@@ -34,10 +43,10 @@ def job(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route=True, zhd=True):
     if o_route:
         ms.append(pb.Method("o_route", dense, fixed=bc_fixed(bit)))
     if zhd:
-        ms.append(pb.Method("zhd", dense, items=((peels[0], peels[1] * 3 / 4, peels[2]),)))
+        ms.append(pb.Method("zhd", dense, items=((peels[0], (dz + 1) * Lp / K, peels[2]),)))
     hull = pb.price_methods(card, ms, L, n, pb.TOKENS, beside=True, items=(sha,))
     return dict(c_opt=min(1.0, hull.c / best.c), eps_alg=1 - best.c / honest.c, mix=hull.mix, best=best,
-                honest=honest)
+                honest=honest, hull=hull)
 
 
 def job_at(card, t, Lp, K, n, bit, depth, v, alu, **kw):

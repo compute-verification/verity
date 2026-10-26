@@ -199,17 +199,18 @@ def v2_scan(budget: float = 0.004) -> None:
                   + "; ".join(cells))
 
 
-# CALIB's θ (#4513 at 188907341d), priced per SM-clock and stated at the tensor clock (SMs × MHz): ρ₈ INT8 MACs a
+# CALIB's θ (#4513 at 188907341d), priced per SM-clock and stated at the tensor clock (SMs × MHz; the H200's at the
+# 1980 MHz boost, M14, which leaves every per-SM-clock ratio as it was): ρ₈ INT8 MACs a
 # SM-clock, and SHA-512 compressions a SM-clock at the paper ceiling with IMAD.HI (38.29 SM-clocks a compression on
 # the H200, 38.11 on sm_120), today's kernel (0.018327, 0.018129 a SM-clock) and hashcat's structured mode (0.020717,
 # 0.020646), so c_sha = today / hashcat is 0.885 and 0.878.
-THETA = {"H200": (4096, 132, 1830e6, 1 / 38.29, 0.018327, 0.020717),
+THETA = {"H200": (4096, 132, 1980e6, 1 / 38.29, 0.018327, 0.020717),
          "RTX PRO 6000": (1024, 188, 2617e6, 1 / 38.11, 0.018129, 0.020646)}
 V2_CARDS = {
     # name: (INT8 dense MAC/s, SHA-512 compressions/s at the ceiling, tensor MACs per ALU op, s_b)
     # RT-MODEL M2's 59.2 ALU op on the H200. s_b: b1 wgmma 8× on the H200; on the RTX PRO 6000 ALGO-COST A7's depth-2
     # Strassen in exact 0/1 FP4, c_bit = 0.5·(7/8)² (0.26 with emulated b1 on the ALU alongside).
-    "H200": (4096 * 132 * 1830e6, 132 * 1830e6 / 38.29, 59.2, 8),
+    "H200": (4096 * 132 * 1980e6, 132 * 1980e6 / 38.29, 59.2, 8),
     "RTX PRO 6000": (1024 * 188 * 2617e6, 188 * 2617e6 / 38.11, 8, 1 / (0.5 * (7 / 8) ** 2)),
 }
 SHA_BUILT = {c: sms * hz * today for c, (_, sms, hz, _, today, _) in THETA.items()}
@@ -228,6 +229,7 @@ TILES = {"H200": 2, "RTX PRO 6000": 4}
 C_T = {("H200", 2): 2.502, ("H200", 3): 2.548, ("RTX PRO 6000", 4): 2.539}
 RHO_V2 = 4                     # Z_X Uᵀ and V Y_Wᵀ, two base-128 digits each; Z_X = Σ_s (X_s + V)π_sᵀ absorbs (VΠ)Uᵀ
 M_PREFILL = 8192               # tokens a prefill call
+B_STREAMED = True              # P2 (06:20Z): the certifier streams b (P's too); the other coins are seed-expanded here
 EPS_ALG_V2 = 0.005             # budget on the deployed kernel's gap at A = B = 0, per credited shape
 SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATTN's served static shapes
     "frozen": [(16384, 16512, 1), (16384, 16384, 1), (16384, 65536, 1), (65536, 16384, 1)],
@@ -266,7 +268,8 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     g_hash = per_comp * per_bit * (S * word_bits + 32) / K
     g_a = per_comp * per_bit * 8 / N if commit_a else 0.0
     side = m + N if weight_coins else m
-    coin_bits = side * K + 8 * side * Lp + (K * math.log2(Lp) if weight_coins else 0)
+    dither = (side - m if B_STREAMED else side) * K
+    coin_bits = dither + 8 * side * Lp + (K * math.log2(Lp) if weight_coins else 0)
     g_coin = per_comp * coin_bits / (512 * m * N * K)
     g_rm = (dz + dy) * Lp / K
     g_wrap = c_op * (P_W + P_X_AT[u_x]) / 2
@@ -275,7 +278,8 @@ def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFI
     c_t = 2 if tiles == 1 else C_T.get((card, tiles), min(C_T.values()))
     saved = max(0.0, (dy - 1) * Lp, g_rm * K - K / s_b, L - K / s_b, K + g_rm * K - K / s_b - c_t * K / tiles)
     a_nw = alu - g_wrap
-    return {"L": L, "tiles": tiles, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a,
+    return {"L": L, "tiles": tiles, "S": S, "digits": (dz, dy), "comps": (g_hash + g_a + g_coin) / per_comp,
+            "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a,
             "coin": g_coin, "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K),
             "T": tensor, "A_nw": a_nw, "saved": saved / K,
             "eps_ovl": min(saved / K, max(0.0, tensor - a_nw)) / max(tensor, a_nw)}
@@ -406,7 +410,7 @@ def world_macs(m: dict) -> tuple[dict, float, float, float, float]:
 
 
 def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, frozen: bool = False, p1: bool = False,
-                 **kw) -> dict:
+                 picks: dict | None = None, **kw) -> dict:
     """v2's static rounds with tiles, picked under overlapped accounting: MAC-weighted tensor, ALU without wraps, wraps,
     the tensor saving at A = B = 0, and the worst shape's pipe maximum. `frozen` fixes the card's tile count (TILES)."""
     tot = T = A = W = S = 0.0
@@ -419,6 +423,9 @@ def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, froze
             r = min((v2_round(card, K, N, K, 16, tiles=K // Lp, **kw) for Lp in range(64, K + 1, 64) if K % Lp == 0),
                     key=lambda r: r["gamma_max"])
             r = {**r, "saved": 0.0}
+        elif picks and (card, K, N) in picks:
+            t, Lp = picks[card, K, N]
+            r = v2_round(card, K, N, t * Lp, 16, tiles=t, **kw)
         else:
             r = v2_pick(card, K, N, 16, budget, tile_set=tile_set, overlap=True, **kw)
         w = K * N * reps
@@ -428,17 +435,26 @@ def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, froze
     return {"T": T / tot, "A_nw": A / tot, "wrap": W / tot, "saved": S / tot, "worst": worst}
 
 
-def pv_pipes(card: str, m: dict, hist: dict, budget: float, built: bool = False) -> tuple[float, float, float]:
+def pv_bucket(n: int) -> int:
+    return max(64, 64 * round(n / 64))
+
+
+def pv_pipes(card: str, m: dict, hist: dict, budget: float, built: bool = False,
+             picks: dict | None = None) -> tuple[float, float, float]:
     """R-ACCEL-8's attention: PV credited as a v2 round with O bound (COVER-ATTN's PV design), K = n attended keys,
     N = d_v, the weight side (Ṽ's dither and noise) streamed once a key, so a call expands only P̃'s side. Picked
     like a static shape (overlapped) at each n rounded to 64; MAC-weighted (tensor, ALU without wraps, A = B = 0
     saving) a PV MAC."""
-    picks, w, T, A, S = {}, 0.0, 0.0, 0.0, 0.0
+    rounds, w, T, A, S = {}, 0.0, 0.0, 0.0, 0.0
     for n, c in hist.items():
-        nb = max(64, 64 * round(n / 64))
-        if nb not in picks:
-            picks[nb] = v2_pick(card, nb, m["dv"], 16, budget, overlap=True, weight_coins=False, built=built)
-        r, x = picks[nb], c * n
+        nb = pv_bucket(n)
+        if nb not in rounds:
+            if picks and (card, nb, m["dv"]) in picks:
+                t, Lp = picks[card, nb, m["dv"]]
+                rounds[nb] = v2_round(card, nb, m["dv"], t * Lp, 16, tiles=t, weight_coins=False, built=built)
+            else:
+                rounds[nb] = v2_pick(card, nb, m["dv"], 16, budget, overlap=True, weight_coins=False, built=built)
+        r, x = rounds[nb], c * n
         w, T, A, S = w + x, T + x * r["T"], A + x * r["A_nw"], S + x * r["saved"]
     return T / w, A / w, S / w
 
@@ -451,7 +467,8 @@ def lookup_alu(card: str, hist: dict) -> float:
     return min(c_op * 8 / g * (1 + 2 ** g / (n / 2)) for g in range(2, LOOKUP_G_MAX + 1))
 
 
-def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, cards=None, **kw) -> list[dict]:
+def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, cards=None, picks: dict | None = None,
+             **kw) -> list[dict]:
     """v2 static (tiles) plus PV with O bound at the world model, the period's tensor and ALU pipes overlapped.
 
     R-ACCEL-8 (credited work is the useful product): static and PV rounds are credited; QKᵀ (both passes of the
@@ -466,8 +483,8 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
         for m in WORLD:
             hist, st, qk, pv, ix = world_macs(m)
             tot = st + qk + pv + ix
-            s = static_pipes(card, m["name"], budget, max_tiles, built=built, **kw)
-            pv_t, pv_a, pv_s = pv_pipes(card, m, hist, budget, built=built)
+            s = static_pipes(card, m["name"], budget, max_tiles, built=built, picks=picks, **kw)
+            pv_t, pv_a, pv_s = pv_pipes(card, m, hist, budget, built=built, picks=picks)
             T = st * s["T"] + pv * pv_t + qk * (1 + SOFTMAX_PASS) + ix
             A_nw = st * s["A_nw"] + pv * pv_a
             Wr = st * s["wrap"] + pv * a_wrap
