@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "F32SumPart_v1{G=64}": {
+   "and": 49944,
+   "type": "fd64d740b899d77ae1b2381a56a32b0172c643eacd3e736c4bfc161a692463d5d15230302e5ef60b1a62a2a1a7c98d0fee05aa8199507a8c60b5a8e65ee61cc3"
+  },
+  "RmsNormRecip_v1{N=16384,G=2,EPS=1e-05}": {
+   "and": 6354,
+   "type": "36fa08c55462efc36c9c63c433e713b4f6ac47627960ecf28ceef69f501457ffb1132c7a22c905898c8386e48fd1253526bac6ef21e519ebfd2263bc66ad860e"
+  }
+ }
+}
