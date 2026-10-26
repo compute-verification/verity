@@ -14,6 +14,9 @@ per component. The copy's `acc0` and `acc1` are rows of the outer witness's own 
 * **Two chains with one step** (`chainHolds_off`): two chains that carry row D's running sums (`Top.ChainHolds`) differ
   along each rep's run of table `t`'s chain by one constant per component, since each step (`consTerm`) adds one term
   to both (`off_of_steps`), and the rep's pieces step every position of its run (`pos_split`).
+* **P3 from a chain at the ends** (`accPorts_of_chain`): at a dense decision, a copy whose accumulator ports read a
+  chain that carries row D's sums at its rep's ends reads `elemReadC (Top.accRC rd key)` plus one offset per component.
+  What's left for `AccPorts` is that chain: the outer witness's `rec-acc` rows, which the copy reads at its ends.
 -/
 
 namespace RecDeploy.ResLower
@@ -150,5 +153,108 @@ theorem chainHolds_off {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ �
   dsimp only at hA' hB'
   rw [hs, hpos] at hA' hB'
   exact ⟨_, _, _, hA', hB'⟩
+
+/-! ## The copy's accumulators against `accRC`'s -/
+
+open Flock.RecAlgebra (el rounds) in
+theorem el_append_right {a b : Array F128} {j : ℕ} (h : a.size ≤ j) : el (a ++ b) j = el b (j - a.size) := by
+  unfold el
+  rw [Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_append_right h]
+
+open Flock.RecAlgebra (el) in
+theorem el_four (a b c d : F128) :
+    el #[a, b, c, d] 0 = a ∧ el #[a, b, c, d] 1 = b ∧ el #[a, b, c, d] 2 = c ∧ el #[a, b, c, d] 3 = d :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+open Flock.RecAlgebra (el rounds) FlockDeploy (tabsOf) in
+/-- **P3 from a chain at the copy's ends**: at a dense decision, a copy whose accumulator ports read a chain `W` that
+carries row D's running sums at its rep's ends (`D.accE` at `W`: `acc0` the run's first row, `acc1` its last) reads
+`elemReadC (Top.accRC rd key)` there plus one offset per component, `W`'s minus `chainC`'s at the run's start
+(`chainHolds_off`). The accumulator ports are `w`'s last four (`hjb`). -/
+theorem accPorts_of_chain {rd : Msg → Option FinalP} {key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ} {X : Msg}
+    {ms : List Msg} {cs : List Coin} (D : Rows.DecAt rd X ms cs) (cls : FlockSoundness.Discharge.Recursion.HClass)
+    {xo : Msg} {sto : Claims.Recursion.Stmt} (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form)
+    (hx : X = xIOf xo) {W : ℕ → ℕ → Array F128} (hW : Top.ChainHolds rd key X ms cs W) (kk : ℕ × ℕ × ℕ × ℕ)
+    (hn : kk.2.1 + kk.2.2.1 < 2) (copy : ℕ → F128)
+    (hjb : ∀ e j, elemPort X kk.1 e = some j → accBase X ≤ j → j < accBase X + 4)
+    (hends : ∀ e j, elemPort X kk.1 e = some j → accBase X ≤ j →
+      copy e = el (D.accE (fun _ _ => W) (kk.2.1 + kk.2.2.1)) (j - accBase X)) :
+    ∃ δ : ℕ → F128, ∀ e j, elemPort X kk.1 e = some j → accBase X ≤ j →
+      copy e = Rows.elemReadC (Top.accRC rd key) X ms cs kk e + δ ((j - accBase X) % 2) := by
+  obtain ⟨jj, o, g, u⟩ := kk
+  dsimp only at hn hjb hends ⊢
+  obtain ⟨hT1, -⟩ := D.tables_of_dense hst hf hx
+  have h0 : 0 < D.sts.size := by omega
+  have hG := D.rowG cls (fun _ => #[]) hst hf hx h0
+  obtain ⟨v, c₁, r₀, rss, fl, link, pf, hv, -, -, -, -, -, -, hd⟩ := Rows.decR_last D.dec
+  obtain ⟨hsp, hsts⟩ := D.setup_eq
+  have hdt : D.sts = v.2.2 := by rw [hsts, hd]
+  have hsh : D.sh cls 0 = Rows.shapeNoCoin v.2.1 v.2.2 := by
+    rw [D.sh_eq cls _ hG h0, hsp, hsts, hd]
+  have hbase : accBase X = (rounds (Rows.shapeNoCoin v.2.1 v.2.2)).flatten.size := by
+    simp only [accBase, hv]
+  have hlen : (Rows.framesRead X ms (o + g)).length = accBase X := by
+    have h := D.framesRead_length cls hst hf hx h0 ⟨o + g, hn⟩
+    have e : 2 * 0 + (⟨o + g, hn⟩ : Fin 2).val = o + g := by simp
+    rw [e, hsh] at h
+    rw [h, hbase]
+  have hex : ∃ ch, Top.ChainHolds rd key X ms cs ch := ⟨W, hW⟩
+  have hC : Top.ChainHolds rd key X ms cs (Top.chainC rd key X ms cs) := by
+    have hc : Top.chainC rd key X ms cs = Classical.choose hex := by rw [Top.chainC, dif_pos hex]
+    rw [hc]
+    exact Classical.choose_spec hex
+  have ht : 0 < v.2.2.size := by rw [← hdt]; exact h0
+  have off : ∀ c < 2, ∀ p ≤ Rows.nOpen (Rows.schOf X 0),
+      (W 0 ((o + g) * Rows.nOpen (Rows.schOf X 0) + p))[c]! =
+        (Top.chainC rd key X ms cs 0 ((o + g) * Rows.nOpen (Rows.schOf X 0) + p))[c]! +
+          ((W 0 ((o + g) * Rows.nOpen (Rows.schOf X 0)))[c]! +
+            (Top.chainC rd key X ms cs 0 ((o + g) * Rows.nOpen (Rows.schOf X 0)))[c]!) :=
+    fun c hc => chainHolds_off hW hC hv ht hn hc
+  have hN : Rows.nOpen ((fast100 (tabsOf D.sts)[0]!.m).getD default) = Rows.nOpen (Rows.schOf X 0) := by
+    rw [hdt]
+    simp only [Rows.schOf, hv]
+  have hE : ∀ chainAt : Msg → List Msg → ℕ → ℕ → Array F128, D.accE chainAt (o + g) =
+      #[(chainAt X ms 0 ((o + g) * Rows.nOpen (Rows.schOf X 0)))[0]!,
+        (chainAt X ms 0 ((o + g) * Rows.nOpen (Rows.schOf X 0)))[1]!,
+        (chainAt X ms 0 ((o + g) * Rows.nOpen (Rows.schOf X 0) + Rows.nOpen (Rows.schOf X 0)))[0]!,
+        (chainAt X ms 0 ((o + g) * Rows.nOpen (Rows.schOf X 0) + Rows.nOpen (Rows.schOf X 0)))[1]!] := by
+    intro chainAt
+    have h2 : (o + g) / 2 = 0 := by omega
+    have h3 : (o + g) % 2 = o + g := by omega
+    unfold Rows.DecAt.accE
+    rw [h2, h3, hN]
+  have hacc : Top.accRC rd key X ms cs = D.accE (fun x' ms' => Top.chainC rd key x' ms' cs) := accR_eq _ D
+  refine ⟨fun c => (W 0 ((o + g) * Rows.nOpen (Rows.schOf X 0)))[c]! +
+    (Top.chainC rd key X ms cs 0 ((o + g) * Rows.nOpen (Rows.schOf X 0)))[c]!, ?_⟩
+  intro e j he hj
+  have hc4 := hjb e j he hj
+  have hpa : Rows.portAt (Rows.shapeNoCoin v.2.1 v.2.2) jj e = some j := by
+    unfold elemPort at he
+    rw [hv] at he
+    exact he
+  have hr : Rows.elemReadC (Top.accRC rd key) X ms cs (jj, o, g, u) e =
+      el (Top.accRC rd key X ms cs (o + g)) (j - accBase X) := by
+    unfold Rows.elemReadC
+    rw [hv]
+    dsimp only
+    rw [hpa]
+    dsimp only
+    rw [el_append_right (by rw [List.size_toArray, hlen]; exact hj), List.size_toArray, hlen]
+  rw [hends e j he hj, hr, hacc, hE, hE]
+  obtain ⟨c, hc, hcj⟩ : ∃ c, c < 4 ∧ j - accBase X = c := ⟨_, by omega, rfl⟩
+  rw [hcj]
+  rcases (by omega : c = 0 ∨ c = 1 ∨ c = 2 ∨ c = 3) with rfl | rfl | rfl | rfl
+  · rw [(el_four _ _ _ _).1, (el_four _ _ _ _).1]
+    have h := off 0 (by decide) 0 (Nat.zero_le _)
+    rw [Nat.add_zero] at h
+    exact h
+  · rw [(el_four _ _ _ _).2.1, (el_four _ _ _ _).2.1]
+    have h := off 1 (by decide) 0 (Nat.zero_le _)
+    rw [Nat.add_zero] at h
+    exact h
+  · rw [(el_four _ _ _ _).2.2.1, (el_four _ _ _ _).2.2.1]
+    exact off 0 (by decide) _ le_rfl
+  · rw [(el_four _ _ _ _).2.2.2, (el_four _ _ _ _).2.2.2]
+    exact off 1 (by decide) _ le_rfl
 
 end RecDeploy.ResLower
