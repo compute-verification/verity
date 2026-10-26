@@ -8,7 +8,7 @@ import Proofs.Flock.Claims.Recursion.BoundForks
 same draw is bounded linearly (`Pr_bad_le_lin`). At each inner round `j` it misses `P_I` at most as often as a link at
 the fork at `j` succeeds, plus `1/(M+1)` (`Pr_plur_fork_lin`), and where a link succeeds, two extractions forked at `j`
 open round `j` differently, so their calls collide wherever the inner rounds' forks bind (`ForksBind`, `linkOut_coll`):
-at the deployed records directly (`RecDeploy.forksBind_nf`), and wherever the played rounds' openings are recorded
+at the deployed records directly (`RecDeploy.forksBind_C`), and wherever the played rounds' openings are recorded
 (`forksBind_of_opening`).
 
 The deviation finder `Fdev` (`Definitions.Claims.RecursionLin`) draws the round `j` uniformly, then a tape, a prefix, a
