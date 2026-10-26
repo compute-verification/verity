@@ -1,5 +1,4 @@
 import Proofs.Flock.Claims.Complete.Json.Decode
-import Proofs.Flock.Claims.Recursion.NextCs
 
 /-!
 # The honest record's checks at a value alike it
@@ -11,14 +10,12 @@ checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `
 * **Alike objects by lookup** (`same_mkObj`): a well-formed object (`WfObj`) is alike an object of distinct keys when
   each of that object's keys looks up a value alike its own and no other key looks up anything.
 * **A printable value is alike itself** (`same_of_good`).
-* **In-place maps keep a well-formed object** (`wfObj_mapKey`).
 -/
 
 namespace FlockComplete.JsonRT
 
 open Flock Transcript FlockComplete
 open Lean (Json JsonNumber)
-open FlockDeploy (mapKey)
 
 /-! ## Alike objects by lookup -/
 
@@ -26,10 +23,6 @@ open FlockDeploy (mapKey)
 def WfObj (j : Json) : Prop := ∃ n : Std.TreeMap.Raw String Json, j = .obj n ∧ n.WF
 
 theorem wfObj_mkObj (l : List (String × Json)) : WfObj (Json.mkObj l) := ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩
-
-theorem wfObj_mapKey {j : Json} (h : WfObj j) (k : String) (g : Json → Json) : WfObj (mapKey k g j) := by
-  obtain ⟨n, rfl, hn⟩ := h
-  exact ⟨_, rfl, ⟨⟨Std.DTreeMap.Internal.Impl.WF.map hn.out.out⟩⟩⟩
 
 theorem same_of_good : ∀ {j : Json}, Good j → Same j j
   | _, .null => .null
@@ -44,10 +37,16 @@ theorem same_of_good : ∀ {j : Json}, Good j → Same j j
 
 theorem getObjVal?_obj (n : Std.TreeMap.Raw String Json) (k : String) (v : Json) :
     (Json.obj n).getObjVal? k = .ok v ↔ n.get? k = some v := by
-  simp only [Json.getObjVal?]
+  unfold Json.getObjVal?
   cases n.get? k with
-  | none => exact ⟨fun h => by cases h, fun h => by cases h⟩
-  | some w => exact ⟨fun h => by cases h; rfl, fun h => by cases h; rfl⟩
+  | none =>
+    constructor
+    · intro h; cases h
+    · intro h; cases h
+  | some w =>
+    constructor
+    · intro h; cases h; rfl
+    · intro h; cases h; rfl
 
 theorem getObjVal?_mkObj_ne {l : List (String × Json)} {k : String} (hk : (l.map Prod.fst).contains k = false)
     (v : Json) : (Json.mkObj l).getObjVal? k ≠ .ok v := by
