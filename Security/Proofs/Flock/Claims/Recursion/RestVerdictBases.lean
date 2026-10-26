@@ -2,6 +2,8 @@ import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.Complete.Shaped
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 
 /-!
 # `hrest`'s base checks at `nextR`
@@ -21,7 +23,7 @@ messages and the coins. This file says which of them the inner statement fixes a
 * **`.shaped` is not the statement's** (`holdsR_shaped_of`): `ProofShaped` reads the Ligerito openings, which
   `absorbedFrom` takes from the last message's proof. Every length a rep's frames read is `FitsRep`'s (`decR_fits`),
   and the initial cap is the cap (`decR_initialCap`); the openings' levels and the file's size are `hopen`, which the
-  part that reads the last message gives.
+  part that reads the last message gives. The digests' width is the setup's (`decR_hashLen`, `holdsR_shaped`).
 * **At `hrest`'s form** (`baseElem_holds`, `restBases_fixed`): a base check that holds at every message list as long
   as the coins is `IVStar`'s `elem` check at every message and coin.
 -/
@@ -200,6 +202,55 @@ theorem holdsR_shaped_of {x : Msg} {ms : List Msg} {cs : List Coin}
       hsz.yr, hfin, hsz.messages, hsz.queryNonces, hsz.oodValues, hsz.claimNonces, hsz.consistencyNonces, hT.nonces⟩
     rw [hinit]
     exact ⟨hsz.cap, hsz.capEach⟩
+
+/-- **Each decided proof's digests have positive width** at a statement with no public inputs: every table the setup
+returns is `setupOne`'s (`setupTables_setupOne`), whose scheme is registered (`setupOne_scheme`), and each registered
+scheme's digest is 32 or 64 bytes. -/
+theorem decR_hashLen {x : Msg} {as : List Msg} {cs : List Coin} {d : DecR} (h : decR rd x as cs = some d)
+    (hpi : d.s.read.publicInputs = none) (k : ℕ) (hk : k < d.f.ps.size) :
+    0 < (shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) k).hashLen := by
+  obtain ⟨-, -, -, -, hps, -⟩ := FlockDeploy.decR_fits h
+  obtain ⟨⟨s, spec, sts⟩, c₁, r₀, rss, fl, link, pf, h1, -, -, -, -, -, rfl⟩ := FlockDeploy.decR_some h
+  dsimp only at hpi hk hps ⊢
+  have hs : s.setup = .ok (spec, sts) := (FlockDeploy.setupOf_some h1).2
+  have h' := FlockDeploy.Ins.setup_read (zk := false) hs
+  unfold Readable.Read.setup at h'
+  rw [hpi] at h'
+  have hj : k / 2 < sts.size := by omega
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne h'
+  obtain ⟨dr, hone, -⟩ := hall (k / 2) hj
+  have hm := (FlockComplete.JsonRT.setupOne_scheme hone).1
+  show 0 < (tabsOf sts)[k / 2]!.merkle.digestLen
+  unfold FlockDeploy.tabsOf
+  rw [getElem!_pos (sts.map Setup.ofCircuit) (k / 2) (by rw [Array.size_map]; exact hj), Array.getElem_map]
+  show 0 < sts[k / 2].merkle.digestLen
+  simp only [MerkleScheme.all, List.mem_cons, List.not_mem_nil, or_false] at hm
+  rcases hm with e | e | e | e <;> rw [e] <;> decide
+
+/-- **Each decided proof is shaped for its file** at an inner statement the recursive reader parses, where its openings
+fit their levels and its file a `u64` (`hopen`): the scope check leaves no public inputs, so the digests have positive
+width (`decR_hashLen`). -/
+theorem holdsR_shaped {x : Msg} {st : Claims.Recursion.Stmt} (hx : parse x = some st) {ms : List Msg}
+    {cs : List Coin}
+    (hopen : ∀ d : DecR, decR rd (xIOf x) ms cs = some d → ∀ (k : ℕ) (hk : k < d.f.ps.size),
+      let sh := shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) k
+      let lvl := fun (i : ℕ) => sh.sched.levels.getD i default
+      let lg := d.f.ps[k].ligerito
+      (FlockVBridge.Family.encodeProof sh d.f.ps[k]).size < 2 ^ 64 ∧
+        FlockSoundness.Discharge.ZkView.LevelOk sh (lvl 0) (2 ^ (lvl 0).lanes) lg.initialProof ∧
+        lg.recursiveProofs.size = sh.sched.levels.size - 1 - 1 ∧
+        (∀ (i : ℕ) (h : i < lg.recursiveProofs.size),
+          FlockSoundness.Discharge.ZkView.LevelOk sh (lvl (i + 1)) 16 lg.recursiveProofs[i]) ∧
+        FlockSoundness.Discharge.ZkView.LevelOk sh (lvl (sh.sched.levels.size - 1)) 16
+          ⟨lg.finalProof.rows, lg.finalProof.siblings, lg.finalProof.salts⟩) :
+    holdsR FlockDeploy.sha512 rd .shaped (xIOf x) ms cs := by
+  obtain ⟨s₀, spec₀, sts₀, h₀, hck, -⟩ := parse_innerOk hx
+  refine holdsR_shaped_of rd (fun d hd k hk => decR_hashLen rd hd ?_ k hk) hopen
+  obtain ⟨⟨s, spec, sts⟩, _, _, _, _, _, _, h1, -, -, -, -, -, rfl⟩ := FlockDeploy.decR_some hd
+  rw [h₀] at h1
+  simp only [Option.some.injEq, Prod.mk.injEq] at h1
+  obtain ⟨rfl, -, -⟩ := h1
+  exact Claims.Bridge.Custody.publicInputs_none_of_check hck
 
 end Bases
 
