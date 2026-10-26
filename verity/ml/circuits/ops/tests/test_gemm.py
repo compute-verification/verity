@@ -326,18 +326,103 @@ def test_the_pv_row_is_the_padded_coordinate_on_each_of_v_s_columns() -> None:
         assert sum(ret.leaf_widths()) == 1024
 
 
+def test_the_padded_pv_row_is_the_pv_row_at_its_key_count() -> None:
+    """At each key count n in {1, 2, 5, 17, 31, 32} of T = 32 (K = 32, D = 64), on the reference:
+
+    - `PvRow_v1{T=32}` on p padded with +0 words and V padded with all-zero key rows is `PvRow_v1{T=n}` on the first n keys,
+      word for word (both are `GemmCoordinate_v2{K=32}` on the same operands), but one inf word in an absent key's V row
+      makes that dim 0x7FFF on every head (+0 x inf is a NaN product), so that padding is exact only on zero rows;
+    - `PvRowPad_v1{T=32}` at n is `PvRow_v1{T=n}` whatever the absent keys hold, here inf p words and inf and NaN V words,
+      on the reference and on its kernel."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.kernels import tc as KT
+
+    heads, D, T = 8, 64, 32
+    coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
+    xs, ws = KT.sample_tc(np.random.default_rng(37), heads * D, E.batch.signature_of(coord)[0])
+    p, v = xs[:heads], ws.reshape(heads, D, 32).transpose(0, 2, 1)
+    rows = lambda a: [np.ascontiguousarray(a[:, t]) for t in range(T)]  # noqa: E731
+    full = bind(G.PvRow, T=T, K=32, D=D, **G.GEMM_HOPPER)
+    masked = bind(G.PvRowPad, T=T, K=32, D=D, **G.GEMM_HOPPER)
+    for n in (1, 2, 5, 17, 31, 32):
+        want = E.evaluate_batch(bind(G.PvRow, T=n, K=32, D=D, **G.GEMM_HOPPER), p[:, :n], *rows(v)[:n],
+                                kernel="reference").reshape(heads, D)
+        keep = np.arange(T) < n
+        p0, v0 = np.where(keep, p, 0).astype(p.dtype), np.where(keep[None, :, None], v, 0).astype(v.dtype)
+        assert np.array_equal(E.evaluate_batch(full, p0, *rows(v0), kernel="reference").reshape(heads, D), want), n
+        if n < T:
+            inf = v0.copy()
+            inf[:, n, 0] = 0x7F80
+            got = E.evaluate_batch(full, p0, *rows(inf), kernel="reference").reshape(heads, D)
+            assert (got[:, 0] == 0x7FFF).all() and np.array_equal(got[:, 1:], want[:, 1:]), n
+        junk_p, junk_v = p.copy(), v.copy()
+        junk_p[:, n:] = 0x7F80
+        junk_v[:, n:, 0], junk_v[:, n:, 1] = 0x7F80, 0x7FC0
+        counts = np.full(heads, n, np.uint16)
+        got = E.evaluate_batch(masked, junk_p, *rows(junk_v), counts, kernel="reference").reshape(heads, D)
+        assert np.array_equal(got, want), n
+        assert np.array_equal(E.evaluate_batch(masked, junk_p, *rows(junk_v), counts).reshape(heads, D), want), n
+    params, ret = masked.signature()
+    assert [(name, sum(t.leaf_widths())) for name, t in params] == [("p", 512), *((f"v{t}", 1024) for t in range(T)), ("n", 16)]
+    assert sum(ret.leaf_widths()) == 1024
+
+
+def test_the_padded_pv_row_keeps_the_keys_under_its_unsigned_count() -> None:
+    """`PvRowPad_v1{T=4}` keeps key t exactly when t < n, n unsigned: with p all 1.0 and key t's V row 2^t, the output is
+    2^min(n, 4) - 1 in every dim, on its kernel at every u16 n and on the reference at n = 0..9 and at 0x7FFF, 0x8000,
+    0x8001 and 0xFFFF (words whose i32 widening `Bf16ToF32_v1` makes negative)."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+
+    T, D = 4, 2
+    pad = bind(G.PvRowPad, T=T, K=32, D=D, **G.GEMM_HOPPER)
+    prefix = np.array([0x0000, 0x3F80, 0x4040, 0x40E0, 0x4170])  # +0, 1, 3, 7, 15
+    for kernel, counts in ((None, np.arange(1 << 16)), ("reference", np.array([*range(10), 0x7FFF, 0x8000, 0x8001, 0xFFFF]))):
+        counts = counts.astype(np.uint16)
+        p = np.full((len(counts), T), 0x3F80, np.uint16)
+        vs = [np.full((len(counts), D), (127 + t) << 7, np.uint16) for t in range(T)]
+        got = E.evaluate_batch(pad, p, *vs, counts, **({"kernel": kernel} if kernel else {})).reshape(len(counts), D)
+        assert np.array_equal(got, np.repeat(prefix[np.minimum(counts, T)][:, None], D, axis=1)), kernel
+
+
+def test_the_padded_pv_row_reads_its_key_count_as_a_position() -> None:
+    """`PvRowPad`'s n is a position port (`KEY_COUNT`), so it is a run input declared kind position passed through untouched:
+    a unit over it builds, and a Program that computes n, or passes an input it doesn't declare a position, is refused."""
+    from verity.ml.circuits.ports import PortError
+    from verity.ml.circuits.program import Program
+
+    pad = bind(G.PvRowPad, T=2, K=32, D=64, **G.GEMM_HOPPER)
+    assert G.PvRowPad.ports is G.KEY_COUNT and G.KEY_COUNT.params["n"].kind == "position"
+    Program(pad)
+    sig = pad.signature()
+    computed = CompositeDefinition("PvRowPadComputedCount", 1, (), lambda S: sig,
+                                   lambda B, S, *args: B.call(pad, *args[:-1], B.call(P.F32ToBf16Rn, B.call(P.Bf16ToF32, args[-1]))),
+                                   ports=G.KEY_COUNT, register=False)
+    with pytest.raises(PortError, match="E_PORT_KIND.*parameter 'n'.*never computes its position"):
+        Program(computed)
+    undeclared = CompositeDefinition("PvRowPadUndeclaredCount", 1, (), lambda S: sig, lambda B, S, *args: B.call(pad, *args),
+                                     register=False)
+    with pytest.raises(PortError, match="E_PORT_KIND.*parameter 'n'.*reads a run input"):
+        Program(undeclared)
+
+
 def test_the_padded_row_split_and_pv_forms_refuse_t_r_and_d_outside_their_range() -> None:
     for T in (0, -1, 33):
         with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
             bind(G.GemmCoordinatePad, T=T, K=32, **G.GEMM_HOPPER)
-        with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
-            bind(G.PvRow, T=T, K=32, D=64, **G.GEMM_HOPPER)
+        for pv in (G.PvRow, G.PvRowPad):
+            with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
+                bind(pv, T=T, K=32, D=64, **G.GEMM_HOPPER)
     for R in (0, 3, 256):
         with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
             bind(G.ScaledMmS8CoordinateRows, K=128, R=R, **G.GEMM_SM90_S8)
     for D in (0, -64):
-        with pytest.raises(ValueError, match=re.escape(f"D={D} is not a head width")):
-            bind(G.PvRow, T=8, K=32, D=D, **G.GEMM_HOPPER)
+        for pv in (G.PvRow, G.PvRowPad):
+            with pytest.raises(ValueError, match=re.escape(f"D={D} is not a head width")):
+                bind(pv, T=8, K=32, D=D, **G.GEMM_HOPPER)
 
 
 # ---- the K a Definition binds ---------------------------------------------------------------------------------------------
@@ -345,12 +430,12 @@ def test_the_padded_row_split_and_pv_forms_refuse_t_r_and_d_outside_their_range(
 #: each GEMM Definition, its step width k and the rest of a binding
 FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE),
             (G.GemmCoordinatePad, 16, {"T": 1, **G.GEMM_HOPPER}), (G.PvRow, 16, {"T": 1, "D": 2, **G.GEMM_HOPPER}),
-            (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
+            (G.PvRowPad, 16, {"T": 1, "D": 2, **G.GEMM_HOPPER}), (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
             (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
             (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
-S8_FAMILIES = FAMILIES[8:]
+S8_FAMILIES = FAMILIES[9:]
 
 
 @pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])
