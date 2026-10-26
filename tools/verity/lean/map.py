@@ -20,8 +20,9 @@
     modules of each tree import each one's modules.
 
 `--moves MAP.toml` maps the tree as a move map would leave it: the dotted entries of its `[words]` (the
-`tools/move/*_map.toml` form, `"Definitions.Accounting.Device" = "Definitions.Core.Device"`) rename modules by their
-longest prefix, with every import of them, before anything is counted; a module whose new root is another package's
+`tools/move/*_map.toml` form, `"Definitions.Accounting.Device" = "Definitions.Core.Device"`) rename modules where a
+word starts at a part of the name, as `rename.py` does, with every import of them, before anything is counted; a module
+whose new root is another package's
 (`Proofs.` to `Definitions.`) moves into it. So a proposed move shows the cycles it leaves before anyone runs it.
 
 A module belongs to the deepest package directory that holds its file, and takes its name from that package's `srcDir`.
@@ -259,9 +260,16 @@ def read_moves(path: Path) -> dict[str, str]:
 
 
 def apply_moves(pkgs: dict[str, Package], mods: dict[str, Module], moves: dict[str, str]) -> dict[str, Module]:
-    """The modules renamed by ``moves`` (longest prefix), their imports with them; a module whose new root is another
-    package's moves into that package, and its file to its new name's path there."""
-    rename = lambda n: (moves[p] + n[len(p):]) if (p := longest(n, moves)) else n
+    """The modules renamed by ``moves``, their imports with them; a module whose new root is another package's moves into
+    that package, and its file to its new name's path there. A word renames where it starts at a part of the name, as
+    `rename.py` renames it in an import (`Properties.X` in `Proofs.Properties.X` too), the leftmost and then the longest."""
+    def rename(n: str) -> str:
+        parts = n.split(".")
+        for i in range(len(parts)):
+            if p := longest(".".join(parts[i:]), moves):
+                return ".".join([*parts[:i], moves[p] + ".".join(parts[i:])[len(p):]])
+        return n
+
     home = {}
     for m in mods.values():
         home.setdefault(m.name.split(".")[0], m.package)
