@@ -46,7 +46,7 @@ theorem callsLogCollAt_deployRec : Claims.Recursion.CallsLogCollAt H (deployRec 
   intro e he
   rw [innerRun_deployRec] at he
   refine List.mem_append_right _ (List.mem_map.2 ⟨e.1, List.mem_append_right _ (List.mem_map.2 ⟨e, he, rfl⟩), ?_⟩)
-  exact Prod.ext rfl (Claims.run_logs H _ _ _ _ _).2 e he
+  exact Prod.ext rfl ((Claims.run_logs H _ _ _ _ _).2 e he)
 
 end Readers
 
