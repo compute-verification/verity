@@ -79,6 +79,7 @@ theorem readX_listed {x : Msg} {r : XR} (h : readX x = some r) :
   subst h'
   obtain ⟨h1, h2⟩ := not_or.1 hl
   obtain ⟨h2, h3⟩ := not_or.1 h2
+  obtain ⟨h3, -⟩ := not_or.1 h3
   exact ⟨vs, toOption_eq_some hvs, not_not.1 h1, by simpa using h2, by simpa using h3⟩
 
 /-- **A part's circuit has each port its statement registers under a `rec-c<k>`**, where `portsNamed` passes. -/
