@@ -141,6 +141,7 @@ import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Recursion.NextR
 import Proofs.Flock.Claims.Recursion.VerdictRows
 import Proofs.Flock.Claims.Recursion.VerdictRowG
+import Proofs.Flock.Claims.Recursion.VerdictRowR
 import Proofs.Flock.Claims.Recursion.VerdictParts
 import Proofs.Flock.Claims.Recursion.NextRHonest
 import Proofs.Flock.Claims.Recursion.NextRFits
