@@ -163,6 +163,11 @@ A spec-level reference for network accounting's timing channel:
   the sender's unit opens a cell's row as its output and the receiver's as its input, and the verifier places each
   read, the (connection, cell) the Program's units' wiring pins (`Units`, whose digest the port's value names), with
   the warden's wiring (`PROTOCOL.md`, "The warden's cells as rows"; `benchmarks/network_traces/warden_zk.py`);
+- the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows under the
+  domain the verifier derives for the reading program's pinned value (``out`` by default), with the certifier's fresh
+  salts, and signs the head for the egress link-window; `check_out` reads the public record for the link-window it
+  expects and returns the root to pin, or refuses by name (`REFUSALS`), so the output units' rows are registered reads
+  of the certifier's root rather than a comparison in the clear;
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
   whose unit ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the warden's row, and its u16 verdict, whose bit 0 is the slots' presence) and of

@@ -877,6 +877,8 @@ def test_a_twin_that_holds_a_slot_after_its_pair_was_claimed_or_can_t_claim_it_l
     assert ("twin p2's claim can't be written here (PermissionError: twins), and no twin runs without it: rerun the check"
             in capsys.readouterr().err)
     monkeypatch.undo()                                                             # undoes any_core's pin too
+    monkeypatch.delenv("CHECK_SLOT", raising=False)                               # and outside_a_slot's
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
     monkeypatch.setattr(SLOT, "allowed", lambda: set(range(1024)))
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: pytest.fail("CMD ran"))

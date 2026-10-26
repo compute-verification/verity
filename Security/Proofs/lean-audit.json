@@ -33,6 +33,7 @@
   "Proofs.Properties.Identity",
   "Proofs.Properties.Evaluate",
   "Proofs.Properties.NetworkRecords",
+  "Proofs.Properties.NetworkPeriod",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.Pous.TimedAudit",

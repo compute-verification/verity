@@ -12,8 +12,11 @@ both ``size``), so a moved or renamed allowlist is still compared; one the chang
 compared.  A change is judged when it touches a ratchet, a ``*.py`` file under ``integrations/vllm/tests/lint/`` (the lints'
 code) or the ruff lint's: ``integrations/vllm/ruff.toml`` and the ruff the root ``dev`` group pins.  It passes when:
 
-* no ratchet its base has holds more entries after it than before;
-* no entry's recorded ``count`` grows (an entry is its fields less ``count``; P10's count is a size in lines); and
+* in each ratchet, no kind whose entries record counts (an entry's ``count``: typed_records' or-empty per package, P07's)
+  holds more in total after it than before.  A key may rise, or a new one appear, when the same kind's other keys fall by
+  at least as much, so a move from one package to another passes (the vLLM coordinator, 26 Oct);
+* among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
+  more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
   In a temporary worktree of the change's top, ``tests/lint/`` and ``ruff.toml`` are replaced by the base's, each allowlist
   there holding the top's entries for its slug (none for a deleted one), and the ``test_no_new*`` tests of each lint whose
@@ -31,8 +34,8 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head as it
-admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
+and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
+at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
 sync onto `next` leaves the PR out).  The lints run on the Python that runs it, the ruff lint too when that Python's ruff is
 the base's pin, else on one ``uv run --with`` gives the pin.  Before marking a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
@@ -72,6 +75,8 @@ NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
+#: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
+MEASURES = {"size"}
 
 #: Run as ``python -I -c RUNNER LINT_DIR SLUGS`` (SLUGS a JSON list, or null for every lint): imports the lint directory as a
 #: package of its own, so no other file of the tree runs, with a stand-in for pytest (its marks), and calls each selected
@@ -205,6 +210,7 @@ class Change:
     fix: list[str] = field(default_factory=list)
     noqa_added: int = 0
     noqa_removed: int = 0
+    pooled: list[str] = field(default_factory=list)
 
     @property
     def name(self) -> str:
@@ -213,7 +219,7 @@ class Change:
     def doc(self) -> dict:
         return {"name": self.name, "commit": self.hi, "base": self.lo, "pr": self.pr, "verdict": self.verdict, "why": self.why,
                 "before": self.before, "after": self.after, "touched": self.touched, "lints": self.lints, "fix": self.fix,
-                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed}
+                "noqa_added": self.noqa_added, "noqa_removed": self.noqa_removed, "pooled": self.pooled}
 
 
 def merge_base(base: str, top: str) -> str:
@@ -270,19 +276,46 @@ def is_pure_move(c: Change, base: str) -> bool:
         return subprocess.run([sys.executable, str(p), c.lo, c.hi], capture_output=True).returncode == 0
 
 
-def growth(before: dict[str, list], after: dict[str, list], paths: dict[str, str]) -> tuple[list[str], list[str]]:
-    """(each grown ratchet and each grown count, the entries that grew it): what the change adds, against its base."""
-    grown, fix = [], []
+def counted_kinds(s: str, entries: list) -> set:
+    """The kinds of ratchet ``s`` whose counts pool: each kind one of ``entries`` (before and after) records a count in."""
+    return set() if s in MEASURES else {e.get("kind") for e in entries if isinstance(e, dict) and "count" in e}
+
+
+def growth(before: dict[str, list], after: dict[str, list],
+           paths: dict[str, str]) -> tuple[list[str], list[str], list[str]]:
+    """(each grown ratchet, count and pooled kind; the entries that grew it, or the keys that moved in a grown kind; each
+    kind a key rose in whose total didn't grow): what the change adds, against its base."""
+    grown, fix, pooled = [], [], []
     for s in sorted(before):
-        was = {key(e): count(e) for e in before[s]}
         now = after.get(s, [])
-        if len(now) > len(before[s]):
-            grown.append(f"{paths[s]} {len(before[s])} -> {len(now)} entries")
-            fix += [f"{paths[s]}: new {key(e)}" for e in now if key(e) not in was]
-        for e in now:
+        kinds = counted_kinds(s, before[s] + now)
+
+        def in_pool(e: object) -> bool:
+            return isinstance(e, dict) and e.get("kind") in kinds
+
+        sites, now_sites = [e for e in before[s] if not in_pool(e)], [e for e in now if not in_pool(e)]
+        was = {key(e): count(e) for e in sites}
+        if len(now_sites) > len(sites):
+            outside = f" outside its counted kinds ({', '.join(sorted(map(str, kinds)))})" if kinds else ""
+            grown.append(f"{paths[s]} {len(sites)} -> {len(now_sites)} entries{outside}")
+            fix += [f"{paths[s]}: new {key(e)}" for e in now_sites if key(e) not in was]
+        for e in now_sites:
             if count(e) > was.get(key(e), count(e)):
                 grown.append(f"{paths[s]} count {was[key(e)]} -> {count(e)} for {key(e)}")
-    return grown, fix
+        for kind in sorted(kinds, key=str):
+            lo, hi = Counter(), Counter()
+            for side, entries in ((lo, before[s]), (hi, now)):
+                for e in entries:
+                    if in_pool(e) and e.get("kind") == kind:
+                        side[key(e)] += count(e)
+            moved = sorted((k for k in lo.keys() | hi.keys() if lo[k] != hi[k]), key=lambda k: (lo[k] - hi[k], k))
+            total = f"{paths[s]} {kind} {sum(lo.values())} -> {sum(hi.values())} in total"
+            if sum(hi.values()) > sum(lo.values()):
+                grown.append(total)
+                fix += [f"{paths[s]}: {k} {lo[k]} -> {hi[k]}" for k in moved]
+            elif any(hi[k] > lo[k] for k in moved):
+                pooled.append(f"{total} over {len(moved)} moved key(s)")
+    return grown, fix, pooled
 
 
 def ruff_pin(rev: str) -> str | None:
@@ -418,7 +451,7 @@ def judge(c: Change, base: str) -> None:
         after, now_at, bad = ratchets(c.hi)
         c.before = sum(len(v) for v in before.values())
         c.after = sum(len(after.get(s, [])) for s in before)
-        grown, added = growth(before, after, {**was_at, **now_at})
+        grown, added, c.pooled = growth(before, after, {**was_at, **now_at})
     noqa_grows = c.noqa_added > c.noqa_removed
     if c.touched and not (grown or bad or noqa_grows):
         slugs = lint_selection(c.touched)
@@ -427,7 +460,7 @@ def judge(c: Change, base: str) -> None:
             found = violations(failures)
     if not (grown or bad or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
-            ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + noqa
+            ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
         return
     if is_revert(c):
@@ -440,8 +473,9 @@ def judge(c: Change, base: str) -> None:
     if bad:
         c.why = f"leaves {', '.join(bad)} unreadable as an allowlist (a JSON object with an `entries` list)"
     elif grown:
-        c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count (fix the new code; "
-                 f"an entry may move with the violation it allows, within its ratchet)")
+        c.why = (f"grows {'; '.join(grown)}: no change adds a ratchet exception or raises a recorded count, past what the same "
+                 f"kind's other counts lose (fix the new code; an entry may move with the violation it allows, within its "
+                 f"ratchet, and a count with its findings, within its kind)")
         c.fix = added[:CHEAPEST] + ([f"... and {len(added) - CHEAPEST} more"] if len(added) > CHEAPEST else [])
     elif noqa_grows:
         c.why = (f"adds {c.noqa_added} `# noqa` line(s) under {INTEGRATION}/ and removes {c.noqa_removed}: a noqa is an "

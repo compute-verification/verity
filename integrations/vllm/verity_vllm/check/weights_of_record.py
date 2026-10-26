@@ -864,7 +864,7 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
 def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_manifest: str | None, argv: list[str] | None, *,
                           supersedes: str | None = None) -> dict[str, Any]:
     """[Record repairs are LOGGED DERIVATIONS] the provenance line of a record written by this CLI: tool, the code that
-    ran it (the repo's HEAD when this file sits in a git tree, else null), the SOURCE FILES the derivation read (the Program's instances.json.gz
+    ran it (the repo's HEAD when this file sits in a git tree, else null, with `code_source` naming what failed), the SOURCE FILES the derivation read (the Program's instances.json.gz
     + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (row_pod moves a
     stale / pre-MAN-09c record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
     import subprocess
@@ -872,6 +872,7 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
 
     code = None
     code_source = None
+    unread: list[str] = []
     try:
         # the release tree on a pod has no .git: ship.sh's EXPORT.json names the shipped commit (experiment.code_version reads it first,
         # then git); the int-1 wave-1 records carried code null for that reason (exec r16_0413 build_request/weights_of_record.json)
@@ -881,15 +882,19 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
         code, code_source = cv.get("commit") or None, cv.get("source")
         if code and cv.get("dirty_patch_sha256"):
             code_source = f"{code_source} (dirty patch {str(cv['dirty_patch_sha256'])[:12]})"
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
         code = None
+        unread.append(f"code_version raised {type(e).__name__}: {e}")
     if code is None:
         try:
             here = os.path.dirname(os.path.abspath(__file__))
             code = subprocess.run(["git", "-C", here, "rev-parse", "HEAD"], capture_output=True, text=True, timeout=5).stdout.strip() or None
             code_source = "git" if code else None
-        except Exception:  # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             code = None
+            unread.append(f"git rev-parse raised {type(e).__name__}: {e}")
+    if unread:
+        code_source = (f"git ({'; '.join(unread)})" if code else f"unreadable: {'; '.join(unread)}")[:240]
     return {"tool": "verity_vllm.check.weights_of_record", "code": code, "code_source": code_source, "at": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
             "sources": {"program_dir": os.path.abspath(program_dir), "program_files": ["instances.json.gz", "result.json"],
                         "checkpoint_dir": os.path.abspath(checkpoint_dir), "checkpoints_manifest": os.path.abspath(checkpoints_manifest) if checkpoints_manifest else "repo default"},
