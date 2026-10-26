@@ -22,7 +22,11 @@
 #                        labels, or fM, one label past f·M; a cheat's run expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
 #   --egress-bits N      the network certifier's egress count over the session, which a challenger here signs
-#                        (default: UNCOUNTED, the bound vacuous)
+#                        (default: UNCOUNTED, the bound vacuous); a challenger on its own host signs the count its
+#                        --challenger-command starts it with
+#   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names
+#                        uncounted (repeatable); the control link (`control`: the default route's NIC, which ssh and
+#                        research run reach the node by) is always named, and the challenger's from the connection made
 #   --threads T          the native streamer's threads when the challenger runs here (default: every CPU)
 #   --store cuda|host    host: the CPU stand-in, host memory for the device (no GPU)
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
@@ -32,8 +36,10 @@
 #
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
 # Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, lake-build.log, period.json, wipe.json,
-# wipe.case.json, summary.json. Scratch (the challenger's key and session log, the built streamer) is a mktemp -d,
-# removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
+# wipe.case.json, summary.json. summary.json's t0 and t1 are the session's window on the challenger's clock (the prover
+# connected, the session signed), and its `uncertified` what the bound doesn't cover (the placement's links and
+# undeclared tiers, an uncounted egress). Scratch (the challenger's key and session log, the built streamer) is a
+# mktemp -d, removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
 set -euo pipefail
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)
@@ -45,13 +51,14 @@ if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
-  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS=
+  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS= LINKS=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) DRY=1 ;;
       --simulated) SIMULATED=1 ;;
       --egress-bits) EGRESS=$2; shift ;;
+      --link) LINKS="$LINKS$2"$'\n'; shift ;;
       --foreign-gb) FOREIGN=$2; shift ;;
       --expect) EXPECT=$2; shift ;;
       --segments) SEGMENTS=$2; shift ;;
@@ -73,6 +80,10 @@ else
     echo "demo.sh: --challenger, --challenger-address and --challenger-command go together"; exit 2
   fi
   [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
+  [ -n "$EGRESS" ] && [ -n "$CH" ] && {
+    echo "demo.sh: --egress-bits reaches only a challenger here; the one on $CH signs the count its --challenger-command starts it with"; exit 2; }
+  read -r CTRL_DEV CTRL_SRC < <(ip -o route get 1.1.1.1 2>/dev/null | sed -nE 's/.* dev ([^ ]+).* src ([^ ]+).*/\1 \2/p') || true
+  CTRL_MBPS=$(cat "/sys/class/net/${CTRL_DEV:-none}/speed" 2>/dev/null || echo)
   [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }
   [ "$DRY" = 1 ] && [ -z "$SEGMENTS" ] && SEGMENTS=64
   S=$(mktemp -d)
@@ -94,15 +105,26 @@ else
   fi
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
-    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" <<'EOF'
+    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" "${CTRL_DEV:-}" "${CTRL_SRC:-}" \
+    "$CTRL_MBPS" "$LINKS" <<'EOF'
 import json, shlex, sys
 from fractions import Fraction
-path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress = sys.argv[1:]
+(path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress, dev, src, mbps,
+ specs) = sys.argv[1:]
+links = [] if not dev else [{"name": "control", "to": "outside", "via": f"{dev} {src}: the node's own NIC (ssh, research run)",
+                             "mbps": int(mbps) if mbps.strip().isdigit() and int(mbps) > 0 else None}]
+for spec in filter(None, specs.splitlines()):
+    name, _, rest = spec.partition("=")
+    to, _, via = rest.partition("@")
+    if not (name and to and via):
+        sys.exit(f"demo.sh: --link is NAME=TO@VIA, not {spec!r}")
+    links.append({"name": name, "to": to, "via": via})
 doc = {"tools": json.loads(tools),
        "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(reserve) << 30,
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
-                "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress)}}
+                "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress),
+                "links": links}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))
