@@ -127,9 +127,18 @@ theorem baseSetup_of_build {tags0 : Flock.Tags} {circuitB pubB : ByteArray} {dra
       circuitB pubB (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))) [] 1 draw partition program registered =
         .ok (spec, sts))
     (r : Flock.Readable.Read)
-    (hI : r.I = { tags := tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1))), circuitFile := circuitB,
-      publicFile := pubB, coins := .tree (Flock.Zk.coinSpec (tags0.tableNames 1)), count := 1, tables := [], partition,
-      program, work := none, stratified := none, closure := none })
+    (hI : r.I =
+      { tags := tags0.withCoins (.tree (Flock.Zk.coinSpec (tags0.tableNames 1)))
+        circuitFile := circuitB
+        publicFile := pubB
+        coins := .tree (Flock.Zk.coinSpec (tags0.tableNames 1))
+        count := 1
+        tables := []
+        partition := partition
+        program := program
+        work := none
+        stratified := none
+        closure := none })
     (hzk : r.zk = true) (hdraw : r.draw = draw) (hpi : r.publicInputs = none) :
     r.tags.hm96Rows = true ∧ r.setup = .ok (spec, sts) ∧
       (∀ st ∈ sts, Flock.checkRegistered st registered = .ok () ∧ FlockDeploy.noIdentifier st = .ok ()) ∧
