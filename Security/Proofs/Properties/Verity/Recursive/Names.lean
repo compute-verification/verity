@@ -153,7 +153,7 @@ theorem shapeOf_ok {cB pB : ByteArray} {P : Json} {prog : ByteArray} {i : RecVSt
     have hv := innerOf_eta hI
     simp only [bind, Except.bind, pure, Except.pure, Except.mapError] at h
     repeat' split at h
-    all_goals first | (cases h; done) | (cases h; rw [hI, hv])
+    all_goals first | (cases h; done) | (cases h; first | exact congrArg Except.ok hv.symm | rw [hv] | rw [hI, hv])
 
 /-- `innerOf` at a public inner circuit is dense: no holo, no RecSparse shape, no stacked shape. -/
 theorem innerOf_dense {cB pB : ByteArray} {pa : Option Json} {pr : Option ByteArray} {v : RecVStar.Inner}
