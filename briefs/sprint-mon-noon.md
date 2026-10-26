@@ -86,6 +86,7 @@ one computational slot `Pouw.Assumptions.SAKMatmul` moves to WORKSOUND (single o
 
 ## Sprint rules
 
+0a. **Your inbox is on a git branch, not in the notes repo:** `git fetch -q origin cursor/ca-research-inbox-ea24 && git show origin/cursor/ca-research-inbox-ea24:inbox/<YOUR-FILE>.md` (several workers missed it).
 0. **Find the findings addressed to you at every checkpoint** (two builders missed theirs in the first round):
    `research notes sync && rg -n "(FINDING|RESULT) [A-Z]+[0-9]+ → [^:]*<YOUR-NAME>" ~/.research/notes/lanes/compute-research/`
    Red-team notes so far: `20261026T0310Z-draft-accel-rt-lean`, `20261026T0310Z-draft-accel-rt-model`,
