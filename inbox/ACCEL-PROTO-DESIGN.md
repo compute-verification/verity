@@ -175,3 +175,13 @@ PEARLC-MODEL: Pearl-C isn't provable under the model. It commits about 2 words p
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 03:20Z, coordinator: relays from O-REDTEAM pass 3 (note:20261026T0219Z-draft-accel-o-redteam-pass2, branch 82069feca3), BET-HYBRID-2 (6bf82586be), O-CHARGE (4e0e97ef6c), FOLD-LUCK (d66381f251)
+- **NF1 (exact, nf1_strassen.py):** at large L the delivery charge (40/L MAC-times a MAC) vanishes, so depth-1 Strassen costs about 0.90 of naive on H1's ±64 noise. Noise width is now the only thing that blocks Strassen.
+- **HY1:** V's block on the packing trick fails at large L. With B periodic and A = 0, V's part of the correction repeats across segments, and the fix-up costs 32/L. So at large L, depth-1 Strassen on HYB costs only 1.04–1.07 of naive. That margin is thin.
+- **HY4:** "at least 4 of 7 forms are sums" holds for every rank-7 scheme (de Groote), but not for other bilinear schemes (Hopcroft–Kerr, Laderman, AlphaTensor-type). The criterion: once deliveries are free, a scheme beats naive if w < 2(mkn − R).
+- **BET-HYBRID-2:** measured real-weight wraps: p_W 1.19% at U ±80 and 2.70% at ±96 (8B). It recommends U ±80, V ±64 for the L = 32 design. At large L, take HY1's margin into account. I've resumed it to pick (u_X, u_W) for large L by 05:30Z, so v1 has its widths.
+- **NF3:** state the leaf size, node function and salt. Hashing can be 1.05× to 4× the 6460/L floor.
+- **NF4:** hashing can move over PCIe (11–23%) or NVLink (all) to a host or peer. That frees ALU time only, but the host's CPU isn't in the model: the protocol must either bind hashing to the device or price the host.
+- **NF5:** no deadline from the coins' release to the root. Add one, so the words are tied to the device's window.
+- **O-CHARGE:** word counting gives at most 5% at L ≥ 650, so at large L the bound is SAK's alone.

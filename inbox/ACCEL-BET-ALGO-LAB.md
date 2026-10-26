@@ -112,3 +112,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
 SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.
+
+## 03:20Z, coordinator: relays from O-REDTEAM pass 3 (note:20261026T0219Z-draft-accel-o-redteam-pass2, branch 82069feca3), BET-HYBRID-2 (6bf82586be), O-CHARGE (4e0e97ef6c), FOLD-LUCK (d66381f251)
+- For D5: O-REDTEAM's NF1 (depth-1 Strassen about 0.90 on ±64 at large L, exact), HY1 (packing at large L brings HYB's margin to 1.04–1.07), HY4 (non-rank-7 bilinear schemes: criterion w < 2(mkn−R)). BET-HYBRID-2's note has the packing trick written out. NF6: SHA-512 is about 34% of honest time, so c_sha matters. Price the public SHA-512 implementations.

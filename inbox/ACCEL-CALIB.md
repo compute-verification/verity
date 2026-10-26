@@ -158,3 +158,7 @@ file has your deliverable, its deadline, and the red team that will attack it. R
 directly and post `FINDING <id> → <you>` lines; answer each in your note within an hour (fixed / refuted / open).
 
 Yours: θ table for D3 by 08:00Z (PR), with run ids or data-sheet citations per entry, and every arithmetic/reduction unit RT-UNITS lists (texture, atomics, TMA reductions, DSMEM, NVLink reductions, RT cores on the RTX PRO 6000, copy/video engines). Measured SHA-512 rate per card next to the best public SHA-512 figure you can cite (for c_sha).
+
+## 03:20Z, coordinator: relays from O-REDTEAM pass 3 (note:20261026T0219Z-draft-accel-o-redteam-pass2, branch 82069feca3), BET-HYBRID-2 (6bf82586be), O-CHARGE (4e0e97ef6c), FOLD-LUCK (d66381f251)
+- Owed to O-CHARGE: the accumulator-write rates of the unrated mma.sync shapes on sm_90, and the prices of IMAD.WIDE, the uniform datapath and memory-side adds.
+- Owed to RT-UNITS: host links (PCIe and NVLink to a host) and host CPU compute, if a host can take hashing work off the device (NF4).
