@@ -478,7 +478,7 @@ def records_tree() -> Path:
 #: `--records`' kept passes, beside its trees: `<inputs_key>.json` for each package whose records passed on those inputs, the
 #: newest `PASSES_KEPT` of them
 PASSES, PASSES_KEPT = "passes", 4000
-PASS_SCHEMA = "lean-records-pass/v1"
+PASS_SCHEMA = "lean-records-pass/v2"
 SELF = "tools/verity/lean/lean_changed.py"
 LOCK = "lean-audit.json"
 
@@ -502,12 +502,14 @@ def read_here(f: str) -> bytes | None:
 
 
 def inputs_key(pkg: str, files: list[str], read=read_here, locks: dict[str, bytes] | None = None) -> str:
-    """What a records run of ``pkg`` reads (`closure_inputs`), each file by its path and content: ``read`` gives a path's bytes
-    (None: absent), and ``locks`` ({path: bytes}) stands in for some, the record a run wrote in place of the committed one."""
+    """``pkg`` and what a records run of it reads (`closure_inputs`), each file by its path and content: ``read`` gives a path's
+    bytes (None: absent), and ``locks`` ({path: bytes}) stands in for some, the record a run wrote in place of the committed one.
+    Two packages can read the same files (`Security` and `Security/Properties`, each in the other's `closure`), and one's pass
+    says nothing of the other's records."""
     locks = locks or {}
     got = {f: "-" if (b := locks[f] if f in locks else read(f)) is None else hashlib.sha256(b).hexdigest()
            for f in closure_inputs(pkg, files)}
-    return hashlib.sha256(json.dumps([PASS_SCHEMA, sorted(got.items())]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([PASS_SCHEMA, pkg, sorted(got.items())]).encode()).hexdigest()
 
 
 def passes_dir() -> Path:
