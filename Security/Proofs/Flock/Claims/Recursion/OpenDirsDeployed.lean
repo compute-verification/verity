@@ -346,7 +346,7 @@ theorem four_lt_nIn {c : Circuit} {L H : ℕ} (hr : RecOpen.rowsOk c L H = true)
     4 < HmOut.nIn c := by
   unfold RecOpen.outsOk at ho
   simp only [Bool.and_eq_true, decide_eq_true_eq] at ho
-  obtain ⟨-, -, he⟩ := ho
+  obtain ⟨-, he⟩ := ho
   show 4 < c.ports.size - c.outRowPorts.size
   generalize c.ports.size - c.outRowPorts.size = k at he ⊢
   have hs := congrArg Array.size he
