@@ -25,19 +25,12 @@ open FlockSoundness.Discharge.Exec (chunks closes chunks_flatten repFrames repFr
 
 /-! ## Bytes -/
 
-noncomputable instance instFintypeF128 : Fintype F128 :=
-  Fintype.ofEquiv (UInt64 × UInt64) ⟨fun a => ⟨a.1, a.2⟩, fun a => (a.lo, a.hi), fun _ => rfl, fun _ => rfl⟩
-
-theorem card_UInt64 : Fintype.card UInt64 = 2 ^ 64 :=
-  (FinEnum.card_eq_fintypeCard (α := UInt64)).symm.trans rfl
-
 theorem card_UInt8 : Fintype.card UInt8 = 2 ^ 8 :=
   (FinEnum.card_eq_fintypeCard (α := UInt8)).symm.trans rfl
 
 theorem card_F128 : Fintype.card F128 = 2 ^ 128 := by
-  rw [Fintype.card_congr (⟨fun a => (a.lo, a.hi), fun a => ⟨a.1, a.2⟩, fun _ => rfl, fun _ => rfl⟩ :
-    F128 ≃ UInt64 × UInt64), Fintype.card_prod, card_UInt64]
-  all_goals norm_num
+  rw [Fintype.card_congr FlockSoundness.Discharge.ZkEveryCoin.f128Equiv, Fintype.card_prod, Fintype.card_fin,
+    ← pow_add]
 
 theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
   cases x
@@ -301,6 +294,13 @@ theorem fill_inj {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ
   simp only [Prod.mk.injEq, F256.mk.injEq] at hi
   exact Prod.ext (Prod.ext hi.1.1 hi.1.2) (Prod.ext hi.2.1 hi.2.2)
 
+theorem pow_count (N m k e k0 L x : ℕ) :
+    N * (N ^ 64 * (N ^ 64 * ((N * N) ^ (m - 6) * (N * (N * ((N * N) ^ (k - 6) * (N ^ 64 *
+      ((N ^ 128) ^ (2 + e) * ((N * N * (N * N)) ^ (k0 + 8 + 7 * L) * (N ^ (1 + (2 * L + 2)) *
+        N ^ 2 ^ (x + 1))))))))))) =
+    N ^ (64 + 64 + 2 * (m - 6) + 2 + 2 * (k - 6) + 64 + 128 * (2 + e) + (4 * k0 + 36 + 30 * L + 2 ^ (x + 1))) := by
+  ring
+
 /-- **As many slots as absorbed values**, counted as `F128`s. -/
 theorem card_slots {st : Setup} {sch : Flock.Schedule} {e : ℕ} {q : Proof} (hq : ProofSizes (shapeOf st sch e) q)
     (hL : 2 ≤ sch.levels.size) :
@@ -312,7 +312,7 @@ theorem card_slots {st : Setup} {sch : Flock.Schedule} {e : ℕ} {q : Proof} (hq
   have h7 : sch.levels.size - 1 - 1 = sch.levels.size - 2 := by omega
   simp only [shapeOf, h7, h2]
   generalize Fintype.card F128 = N
-  ring
+  exact pow_count N st.m st.kLog e sch.k0 (sch.levels.size - 2) sch.ext
 
 /-- The absorbed values at the slots `d`, as a vector of their count. -/
 def slotVals (st : Setup) (sch : Flock.Schedule) (d₀ : ByteArray) (e : ℕ) (q : Proof) (n : ℕ)
