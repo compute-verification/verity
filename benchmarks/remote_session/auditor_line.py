@@ -77,21 +77,23 @@ Each session's `sketch` is its δs at the outside-compute factor F its verifier 
 and `sketch_outside` every F the run's sessions were charged at.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
-`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its five
+`error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its six
 parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
-commitment's hiding terms n·2^-191, δs, the sketch's, and the draw's rejection Σ_t k_t/2^64, k_t the session's
-`samples` (the hiding and the rejection added to the total of a record whose ledger didn't charge them), plus the
-windows' PRF advantages by name (`NAMED_TERMS`, claim prf/sha-512), which have no number and are in no total. The
-line at each T, and the line of record over every T (`credit`'s `error`), fail with at most the sum of their credited
-sessions' totals: the least share is read off whichever session the run made least, so the union bound holds where a
-maximum wouldn't.
+commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
+draw's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
+total of a record whose ledger didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim
+prf/sha-512), which have no number and are in no total. The line at each T, and the line of record over every T
+(`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
+whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
 **Conditional on** (`conditional_on`, `CONDITIONAL_ON`). The line's statement (`LineHeld`) takes `NoOutsideCompute`,
 statement C in full, as a premise that no record of the run discharges, so a line says it is conditional on it, until
 certifiers cover the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
-the store and computes the receipts, breaks that premise alone. The `memory-line-of-record` label names what the file
-names (`line_label`: `lean conditional on NoOutsideCompute`), and `research data label` refuses one that doesn't.
+the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
+as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
+grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
+NoOutsideCompute, binding-split`), and `research data label` refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -144,6 +146,7 @@ sys.path.insert(0, str(HERE.parents[1]))
 import challengers as CH  # noqa: E402
 import lean_verifier as lv  # noqa: E402
 import verifier as V  # noqa: E402
+import wire  # noqa: E402
 from verity.core.protocols.certifier import audit as caudit  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402
@@ -180,10 +183,19 @@ CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full (Accounting.Remote.Held.Assumptions.NoOutsideCompute, a premise of LineHeld): no device "
     "outside the node computes on a registered block or a receipt during the session; assumed until certifiers cover "
     "the gate node's boundary (certifier-coverage) and certify that nothing but the verifier's messages entered it over "
-    "the credited span")}
-"""The premises of the line's statement that no record of the run discharges, each with what it says: a line
-(`auditor_line.json`'s `conditional_on`, `credit.md`) is conditional on them unless a lockdown grounds them
-(`GROUNDED`), and the `memory-line-of-record` label names exactly the file's (`vocab.check_line_of_record`)."""
+    "the credited span"),
+    "binding-split": (
+    "the receipts' binding term (ledger.binding, Accounting.Guarantees.Remote.ReceiptsBindingOfCR) is charged with "
+    "split_t, the chance that two runs of the prover from window t's cut on independent openings coins root the window "
+    "differently, taken as 0; the deployed prover holds the coin commitment and may compute a window's roots from it, "
+    "so that holds only once the verifier sends it no commitment to a window's openings coin before its roots "
+    "(PROTOCOL.md §8)")}
+"""What the line's error rests on that no record of the run discharges, each with what it says: the premises of its
+statement and the gaps in its charge (`GAPS`). A line (`auditor_line.json`'s `conditional_on`, `credit.md`) is
+conditional on them, `NoOutsideCompute` unless a lockdown grounds it (`GROUNDED`), and the `memory-line-of-record`
+label names exactly the file's (`vocab.check_line_of_record`)."""
+GAPS = ("binding-split",)
+"""The gaps in the line's charge (`CONDITIONAL_ON`'s), which every line is conditional on, grounded or not."""
 LOCKDOWN = "ProviderLockdown"
 GROUNDED = {LOCKDOWN: (
     "the provider's lockdown of the gate node (Accounting.Remote.Held.Assumptions.ProviderLockdown, under "
@@ -421,23 +433,25 @@ def session_error(session: dict) -> dict:
     """An accepted session's failure probability, the chance its line credits more than the node held: `total`, the
     memory line's δ as the ledger computed it (`ledger.memory`'s `Line.delta`, every form's in the record's
     `declared`), read and never recomputed, so it charges whatever the ledger does (the F the node states among it);
-    beside it its five parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
-    2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_sketch`, δs, and `delta_rejection`, the
-    draw's Σ_t k_t/2^64. A record that carries the parts (verifier.json's `delta`) must sum to the total as the ledger
-    adds them, or there is no line (`Disagree`); one written before them gives the profile δ from its windows
-    (`recorded_windows`) and the slack from its passes at the slack its ledger was charged at (its `inputs`'
-    `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger that didn't charge the
-    hiding or the rejection (no such part) has it added to its total: the hiding from its windows
-    (`recorded_windows`, as `ledger.hiding` reads them), the rejection at its windows' requested draws (the session's
-    `samples` in each, as `ledger.rejection` reads them off the record's `samples`). Each in floats and exact beside
-    them (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
+    beside it its six parts (`ledger.delta_parts`): `delta_profile`, the windows' profile δ, `delta_slack`, AuditRO's
+    2^-slack a pass, `delta_hiding`, the coin commitment's Σ_t hide_t, `delta_binding`, the receipts' binding term,
+    `delta_sketch`, δs, and `delta_rejection`, the draw's Σ_t k_t/2^64. A record that carries the parts (verifier.json's
+    `delta`) must sum to the total as the ledger adds them, or there is no line (`Disagree`); one written before them
+    gives the profile δ from its windows (`recorded_windows`) and the slack from its passes at the slack its ledger was
+    charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
+    that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
+    from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
+    (`recorded_binding`, as `ledger.binding` reads them), reading F·C off the record's sketch term (`sketch_failure`),
+    so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
+    `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
+    (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total."""
     lg = session["ledger"]
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
     total = Fraction(totals.pop())
-    hiding = rejection = None
+    hiding = binding = rejection = None
     if (d := lg.get("delta")) is not None:
         added = 0.0
         for n in ledger.DELTA_PARTS:
@@ -447,6 +461,8 @@ def session_error(session: dict) -> dict:
         profile, slack, sketch = (Fraction(d[n]) for n in ("profile", "slack", "sketch"))
         if "hiding" in d:
             hiding = Fraction(d["hiding"])
+        if "binding" in d:
+            binding = Fraction(d["binding"])
         if "rejection" in d:
             rejection = Fraction(d["rejection"])
     else:
@@ -456,14 +472,45 @@ def session_error(session: dict) -> dict:
     if hiding is None:
         hiding = Fraction(ledger.hiding_over(len(V.recorded_windows(session)[0])))
         total += hiding
+    if binding is None:
+        binding = recorded_binding(session)
+        total += binding
     if rejection is None:
         windows = len(V.recorded_windows(session)[0])
         rejection = Fraction(windows * session["samples"], 2 ** ledger.REJECTION_LOG2)
         total += rejection
-    exact = {"delta_profile": profile, "delta_slack": slack, "delta_hiding": hiding, "delta_sketch": sketch,
-             "delta_rejection": rejection, "total": total}
+    exact = {"delta_profile": profile, "delta_slack": slack, "delta_hiding": hiding, "delta_binding": binding,
+             "delta_sketch": sketch, "delta_rejection": rejection, "total": total}
     return {**{k: float(x) for k, x in exact.items()}, "exact": {k: line.text(x) for k, x in exact.items()},
             "log2_total": timing.log2(exact["total"]), "named_terms": NAMED_TERMS}
+
+
+def recorded_append_coins(session: dict) -> int | None:
+    """The append coins an accepted session's coin commitment reserved: its record's (`append_coins`), or, before the
+    record kept them, what its challenger released when it released every coin it committed to (`complete`); None
+    when neither says."""
+    if "append_coins" in session:
+        return session["append_coins"]
+    end = (session.get("challenger") or {}).get("end") or {}
+    return end["released"].get(coins.APPEND, 0) if end.get("complete") and "released" in end else None
+
+
+def recorded_binding(session: dict) -> Fraction:
+    """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its
+    windows, the most receipts a window of it can have (`ledger.window_receipts`, at its pace's k, its registered
+    blocks and, when its append coins aren't recorded (`recorded_append_coins`), the codec's `max_blocks`) and its
+    draw cap `samples`, F·C the queries its sketch term (`sketch_failure`) charged; 0 for a record with no sketch
+    term, which states no C."""
+    sf = (session.get("ledger") or {}).get("sketch_failure")
+    if not sf:
+        return Fraction(0)
+    public = session["record"]["public"]
+    pace = public["pace"]
+    appends = recorded_append_coins(session)
+    L = ledger.window_receipts(None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), public["blocks"],
+                               1 if appends is None else appends, wire.codec_named(public["codec"]).max_blocks)
+    return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), L, session["samples"],
+                                        sf.get("outside", 1) * sf["compressions"]))
 
 
 def union_error(rows: list[dict]) -> dict:
@@ -650,10 +697,10 @@ def lockdown_check(lockdown: dict | None, span: list[str] | None) -> dict:
 def conditional_on(rows: list[dict]) -> dict:
     """What the line is conditional on (`CONDITIONAL_ON`, `GROUNDED`): the assumption each credited session's
     `NoOutsideCompute` rests on (`no_relay`), or each gate session's when none is credited, `NoOutsideCompute` with
-    none."""
+    none; then the gaps in its charge (`GAPS`)."""
     xs = [r for r in rows if r["credit"]["ok"]] or rows
     names = sorted({r["no_relay"]["conditional_on"] for r in xs if "no_relay" in r}) or ["NoOutsideCompute"]
-    return {n: {**CONDITIONAL_ON, **GROUNDED}[n] for n in names}
+    return {n: {**CONDITIONAL_ON, **GROUNDED}[n] for n in [*names, *GAPS]}
 
 
 def line_label(doc: dict) -> str:
@@ -1035,7 +1082,7 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
                    + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-slack + Σ_t hide_t + δs + Σ_t k_t/2^64) summed over the credited sessions, "
+                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited sessions, "
                       "beside "
                       "Σ_t Adv(prf t) (claim prf/sha-512), named and in no total"
                       if row["error"]["sessions"] else ""))

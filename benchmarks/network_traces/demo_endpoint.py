@@ -30,7 +30,8 @@ Commit window and writes ``summary.json``.
   ``engine.engine_kwargs.max_model_len``, the address, the run id), ``advice_trace.jsonl`` (`verity_vllm.engine.step_trace`'s
   schema: the scheduler's configuration, each request's arrival, each step's rows, emitted tokens and finishes, each
   Commit window's open and close, with unix clock readings), ``requests.jsonl`` (one line a finished request: its
-  engine id, ``user``, prompt and streamed ids, finish) and ``windows.jsonl`` (one line a closed Commit window: its run id
+  engine id, ``user``, the warden's release headers on it when it has them, prompt and streamed ids, finish, and the
+  clock at its arrival, first token and finish) and ``windows.jsonl`` (one line a closed Commit window: its run id
   and run root). A Commit window opens at the first step after the engine was idle and closes when it is idle again or
   after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run root
   is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``) of
@@ -169,6 +170,8 @@ class Request:
     finish: dict | None = None
     windows: set = field(default_factory=set)
     queue: asyncio.Queue | None = None
+    release: list | None = None                 # the warden's release headers on it (N, run hex), when it has them
+    times: dict = field(default_factory=dict)   # the clock's readings at its arrive record, first token and finish
 
     @property
     def known(self) -> int:
@@ -221,13 +224,15 @@ class Scheduler:
             return "no ignore_eos or min_tokens"
         return None
 
-    def add(self, body: dict, queue: asyncio.Queue | None = None) -> Request:
+    def add(self, body: dict, queue: asyncio.Queue | None = None, release: list | None = None) -> Request:
         q = Request(f"cmpl-{secrets.token_hex(8)}", f"cmpl-{secrets.token_hex(8)}", body.get("user"), list(body["prompt"]),
-                    body["max_tokens"], {k: body.get(k) for k in SAMPLING}, self.arrivals, queue=queue)
+                    body["max_tokens"], {k: body.get(k) for k in SAMPLING}, self.arrivals, queue=queue, release=release)
         self.arrivals += 1
         self.waiting.append(q)
-        self.emit({"kind": "arrive", "request": q.rid, "before_step": self.scheduled, "prompt_len": len(q.prompt),
-                   "eos_token_id": min(self.eos) if self.eos else None, "sampling": q.sampling})
+        rec = {"kind": "arrive", "request": q.rid, "before_step": self.scheduled, "prompt_len": len(q.prompt),
+               "eos_token_id": min(self.eos) if self.eos else None, "sampling": q.sampling}
+        self.emit(rec)
+        q.times["arrived"] = rec["t"]
         return q
 
     def busy(self) -> bool:
@@ -282,9 +287,14 @@ class Scheduler:
         self.finished += [q for q, _ in got if q.finish is not None]
         self.scheduled += 1
         self.window_steps_done += 1
-        self.emit({"kind": "step", "step": step, "T": sum(n for _, _, n in rows), "order": "runner",
-                   "rows": [[q.rid, start, n] for q, start, n in rows], "new": [q.rid for q in new], "resumed": [],
-                   "cache_hit": {}, "preempted": [], "emitted": emitted, "finished": finished})
+        rec = {"kind": "step", "step": step, "T": sum(n for _, _, n in rows), "order": "runner",
+               "rows": [[q.rid, start, n] for q, start, n in rows], "new": [q.rid for q in new], "resumed": [],
+               "cache_hit": {}, "preempted": [], "emitted": emitted, "finished": finished}
+        self.emit(rec)
+        for q, _ in got:
+            q.times.setdefault("first_token", rec["t"])
+            if q.finish is not None:
+                q.times["finished"] = rec["t"]
         return got
 
     def open(self) -> None:
@@ -315,9 +325,9 @@ class Scheduler:
         with open(self.out / "requests.jsonl", "a") as fh:
             for q in self.finished:
                 fh.write(json.dumps({"http_id": q.http_id, "engine_id": q.rid, "user": q.user, "arrival": q.arrival,
-                                     "admitted": q.admitted, "prompt_ids": q.prompt, "streamed_ids": q.out,
-                                     "ingress": {"brought": q.sampling}, "finish": q.finish,
-                                     "windows": sorted(q.windows)}) + "\n")
+                                     "release": q.release, "admitted": q.admitted, "prompt_ids": q.prompt,
+                                     "streamed_ids": q.out, "ingress": {"brought": q.sampling}, "finish": q.finish,
+                                     "windows": sorted(q.windows), "times": q.times}) + "\n")
         self.finished = []
 
 
@@ -329,6 +339,8 @@ def sse(doc: dict | str) -> bytes:
 
 
 class Server:
+    protocol = "demo_endpoint (vLLM's completion chunks, token_ids)"
+
     def __init__(self, sched: Scheduler) -> None:
         self.sched, self.wake, self.served, self.refused = sched, asyncio.Event(), 0, 0
 
@@ -398,21 +410,34 @@ class Server:
         await writer.drain()
 
 
-async def serve(a: argparse.Namespace) -> dict:
-    engine = engine_of(a.engine, a.seed)
-    sched = Scheduler(engine, a.out, eos=[int(x) for x in a.eos.split(",")] if a.eos else [],
-                      max_num_seqs=a.max_num_seqs, budget=a.max_num_batched_tokens, window_steps=a.window_steps,
-                      run_id=a.run_id)
-    server = Server(sched)
-    listener = await asyncio.start_server(server, a.host, a.port)
-    host, port = listener.sockets[0].getsockname()[:2]
-    record = {"address": [host, port], "served_model_name": engine.name, "engine": {
+def scheduler(a: argparse.Namespace, engine: Engine, clock: Callable[[], float] = time.time) -> Scheduler:
+    """The scheduler `parser`'s arguments ``a`` give ``engine``."""
+    return Scheduler(engine, a.out, eos=[int(x) for x in a.eos.split(",")] if a.eos else [],
+                     max_num_seqs=a.max_num_seqs, budget=a.max_num_batched_tokens, window_steps=a.window_steps,
+                     run_id=a.run_id, clock=clock)
+
+
+def serve_record(a: argparse.Namespace, sched: Scheduler, server: Server, address: Sequence) -> dict:
+    """``serve.json``: the engine, its context (``engine_kwargs.max_model_len``), the EOS ids, the address, the run id."""
+    engine = sched.engine
+    return {"address": list(address), "served_model_name": engine.name, "engine": {
         "kind": "demo_endpoint", "spec": a.engine, "seed": a.seed, "engine_kwargs": {
             "max_model_len": engine.context, "max_num_seqs": a.max_num_seqs,
             "max_num_batched_tokens": a.max_num_batched_tokens, "enable_prefix_caching": False}},
         "eos_token_ids": sorted(sched.eos), "window_steps": a.window_steps, "idle_close_steps": 1, "admit": "arrival",
-        "step_rows": "runner", "run_id": a.run_id, "protocol": "demo_endpoint (vLLM's completion chunks, token_ids)"}
-    (a.out / "serve.json").write_text(json.dumps(record, indent=1))
+        "step_rows": "runner", "run_id": a.run_id, "protocol": server.protocol}
+
+
+async def serve(a: argparse.Namespace, engine: Engine | None = None,
+                server_of: Callable[[Scheduler], Server] = Server) -> dict:
+    """Serve until SIGTERM or SIGINT, under `parser`'s arguments ``a``: ``engine`` (default ``a.engine``'s) through the
+    scheduler, the HTTP side ``server_of``'s."""
+    engine = engine or engine_of(a.engine, a.seed)
+    sched = scheduler(a, engine)
+    server = server_of(sched)
+    listener = await asyncio.start_server(server, a.host, a.port)
+    host, port = listener.sockets[0].getsockname()[:2]
+    (a.out / "serve.json").write_text(json.dumps(serve_record(a, sched, server, (host, port)), indent=1))
     print(json.dumps({"listening": f"http://{host}:{port}", "model": engine.name, "context": engine.context}), flush=True)
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()

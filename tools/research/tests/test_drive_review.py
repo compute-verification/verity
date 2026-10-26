@@ -1172,3 +1172,45 @@ def test_a_hand_lean_check_is_followed_and_covers_as_drives_own(world, monkeypat
     assert h.tick().startswith("landed #1"), world.logs
     assert _main(world) == top and len(h.launched) == 1
     assert any(f"the Lean check {rid} of {top[:12]} passed" in s for s in world.logs), world.logs
+
+
+def _passed_hand_check(world, monkeypatch) -> tuple[Review, str, str]:
+    """A Review whose hand Lean check of `next`'s one member (a lock change, unreviewed, so it stays on `next`) passed: (it, the
+    commit, the run that passed)."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    h.tick()
+    top = _tip(world)
+    h.d.hand_lean(top, "ci")
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    h.tick()
+    assert h.d.q.load_state()["drive"]["lean"][top]["state"] == "passed" and _tip(world) == top, world.logs
+    return h, top, rid
+
+
+def test_lean_check_refuses_a_commit_whose_recorded_lean_check_passed_naming_its_run(world, monkeypatch):
+    """infra's review of #4670 (26 Oct 11:04Z): a hand check at a commit drive records as passed replaced the pass with a pending
+    check, so what it covered waited again."""
+    from research.merge import DRIVE_ENV
+
+    h, top, rid = _passed_hand_check(world, monkeypatch)
+    with pytest.raises(QueueError, match=f"of {top[:12]} \\(#1\\) already passed: run {rid} \\(run ids {rid}\\); a deliberate "
+                                         "rerun takes --again"):
+        h.d.hand_lean(top, "ci")
+    monkeypatch.setenv(DRIVE_ENV, "1")
+    argv = ["lean-check", top, "--workdir", str(h.q.workdir), "--remote", str(world.origin), "--repo", "o/r", "--store",
+            str(world.tmp / "store"), "--rules", str(world.dev / "ci" / "queue.toml"), "--on", "m1", "--by", "ci"]
+    assert Q.main(argv) == 1
+    rec = h.d.q.load_state()["drive"]["lean"][top]
+    assert len(h.launched) == 1 and (rec["state"], rec["run"]) == ("passed", rid)
+
+
+def test_lean_check_again_replaces_a_passed_record_with_a_pending_hand_check(world, monkeypatch):
+    h, top, rid = _passed_hand_check(world, monkeypatch)
+    rec = h.d.hand_lean(top, "ci", again=True)
+    assert h.launched == [(top, "m1", False), (top, "m1", False)]
+    (again,) = [r for r in h.lean_ids() if r != rid]
+    assert h.d.q.load_state()["drive"]["lean"][top] == rec and "run" not in rec
+    assert (rec["ids"], rec["state"], rec["hand"], rec["by"]) == ([again], None, True, "ci")
