@@ -15,7 +15,7 @@ break binding. This file gives the step from the sampling relation to that form,
   (its committed inputs and outputs) to the value `openedOf` reads.
 * `unbound`: the units wrong in `openedOf`'s transcript, or with a wire of their `io` that doesn't open to it;
   `card_unbound_lt_of_relS`: `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer than `K₀` of them.
-* `correct_of_not_unbound`: where each wire opens to one value (`Unique`, the negation of a break), a unit
+* `correct_of_not_unbound`: where each wire opens to one value (`OpensUnique`, the negation of a break), a unit
   outside `unbound` is correct in every transcript its `io` opens to.
 * `card_badIn_lt_of_relS`, R4's form: where openings are unique, every transcript the commitment opens to (`OpensTo`)
   has fewer than `K₀` bad units (`badIn`: wrong in it, or with a wire of their `io` that doesn't open to it).
@@ -35,7 +35,7 @@ def OpensAt (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H
   else ∃ o : Opening Bool, o.pos = posOf C g ∧ Cm.Opens H roots o = true ∧ o.val = v
 
 /-- **Each wire opens to one value** under `roots`. -/
-def Unique (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H : Claims.Msg → Claims.Msg)
+def OpensUnique (C : FlockSoundness.Audit.Circuit) (κ : Fin C.N → Option Bool) (H : Claims.Msg → Claims.Msg)
     (Cm : Commitment Bool) (roots : List Claims.Msg) : Prop :=
   ∀ (g : Fin C.N) (v v' : Bool), OpensAt C κ H Cm roots g v → OpensAt C κ H Cm roots g v' → v = v'
 
@@ -62,7 +62,7 @@ theorem unique_of_openings {κ : Fin C.N → Option Bool} {H : Claims.Msg → Cl
     {roots : List Claims.Msg}
     (hU : ∀ o o' : Opening Bool, o.pos = o'.pos → Cm.Opens H roots o = true → Cm.Opens H roots o' = true →
       o.val = o'.val) :
-    Unique C κ H Cm roots := by
+    OpensUnique C κ H Cm roots := by
   intro g v v' h h'
   unfold OpensAt at h h'
   split_ifs at h h'
@@ -195,7 +195,7 @@ theorem ofBool_getLsbD_zero (x : BitVec 1) : BitVec.ofBool (x.getLsbD 0) = x := 
 outside `unbound` is correct in any transcript `T` each wire of whose `io` opens to `T`'s bit there. -/
 theorem correct_of_not_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) (val : ℕ → Option Bool)
-    (hU : Unique C κ H Cm roots) {u : Fin n} (hu : u ∉ unbound P κ H Cm roots val)
+    (hU : OpensUnique C κ H Cm roots) {u : Fin n} (hu : u ∉ unbound P κ H Cm roots val)
     {T : (Verity.Circuit.ofAudit C).Transcript}
     (hT : ∀ g : Fin C.N, g ∈ (Verity.Partition.ofAudit P).io u → OpensAt C κ H Cm roots g ((T g).getLsbD 0)) :
     (Verity.Partition.ofAudit P).Correct T u := by
@@ -228,7 +228,7 @@ noncomputable def badIn {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ :
 
 theorem badIn_subset_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (H : Claims.Msg → Claims.Msg) (Cm : Commitment Bool) (roots : List Claims.Msg) (val : ℕ → Option Bool)
-    (hU : Unique C κ H Cm roots) {T : (Verity.Circuit.ofAudit C).Transcript} (hT : OpensTo P κ H Cm roots T) :
+    (hU : OpensUnique C κ H Cm roots) {T : (Verity.Circuit.ofAudit C).Transcript} (hT : OpensTo P κ H Cm roots T) :
     badIn P κ H Cm roots T ⊆ unbound P κ H Cm roots val := by
   classical
   intro u hu
@@ -246,7 +246,7 @@ theorem badIn_subset_unbound {n : ℕ} (P : FlockSoundness.Audit.Partition C n) 
 `δ = C(n − K₀, kd)/C(n, kd)` leaves every transcript the commitment opens to with fewer than `K₀` bad units. -/
 theorem card_badIn_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
-    (Cm : Commitment Bool) (w : Wit) (hU : Unique C κ H Cm roots)
+    (Cm : Commitment Bool) (w : Wit) (hU : OpensUnique C κ H Cm roots)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ kd desc q roots) (partOf P) w)
     {T : (Verity.Circuit.ofAudit C).Transcript} (hT : OpensTo P κ H Cm roots T) :
     (badIn P κ H Cm roots T).card < K₀ :=
