@@ -196,8 +196,8 @@ theorem accR_cols {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Pr
   dsimp only at hu
   rw [hx] at hu
   cases hd : decR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
-      (((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin) with
-  | none => simp [hd, Claims.Flock.lookCol] at hu
+      ((Claims.run sha512 P (VR rd) x ω r).msgs.map (RecDeploy.outCoin ∘ Prod.snd)) with
+  | none => simp [hd] at hu
   | some d =>
     simp only [hd] at hu
     cases hrr : runOfDecR d 0 with
@@ -227,7 +227,7 @@ theorem cutLens_length {α : Type} : ∀ (ns : List ℕ) (l : List α), (cutLens
 
 /-- **`readPs` reads one round message per opened round**: each rep's frames are as many as its block of rows
 (`FitsRep.rounds`), and the blocks cut all the rounds (`cutLens_flatten`). -/
-theorem readPs_length {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ : List ByteArray}
+theorem readPs_length {spec : SessionSpec} {sts : Array _root_.Flock.Stmt} {c₁ : Coin} {r₀ : List ByteArray}
     {rss : List (List ByteArray)} {cs : List Coin} {fl : FinalP} {pf : Array Flock.Proof × List Claims.Msg}
     (h : readPs spec sts c₁ r₀ rss cs fl = some pf) : pf.2.length = rss.length := by
   unfold readPs at h
@@ -261,7 +261,7 @@ theorem readPs_length {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r�
 proof, at `verifyJWithMK` and `liveOfJ`): where `liveOfJ` reads the link's points of the session's count, there are
 two rep streams per table, and stream `k` (table `k / 2`'s rep `k % 2`) has `repRounds false spec sts[k / 2]`
 rounds. -/
-theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
+theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array _root_.Flock.Stmt}
     {j : Lean.Json} {proofs : Array ByteArray} {lv : Live}
     (hv : verifyJWithMK keep hs spec (tabsOf sts) j proofs = .ok ()) (hl : liveOfJ spec j = .ok lv)
     (hpn : lv.points.size = spec.points) :
@@ -299,7 +299,7 @@ theorem streams_size_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec :
   have hx : extras.size = sts[k / 2]!.regions.size * sess.points.size := FlockDeploy.extraClaims_size hex
   rw [hlen, hys, hsize]
   unfold repRounds
-  simp only [Bool.false_eq_true, ↓reduceIte, hf]
+  simp only [Bool.false_eq_true, ↓reduceIte]
   rw [hx, hpts, hpn, Nat.mul_comm]
   rfl
 
@@ -372,10 +372,12 @@ theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (V
       | some (_, spec, sts) => 2 + rounds false spec sts | none => 1) at hk
     rw [hso] at hk
     dsimp only at hk
+    have hcl : 0 < cs.length := by
+      rw [hk] at hl
+      omega
     obtain ⟨c₀, cs', rfl⟩ : ∃ c₀ cs', cs = c₀ :: cs' := by
       rcases cs with _ | ⟨c₀, cs'⟩
-      · simp only [List.length_nil, zero_add] at hl
-        omega
+      · exact absurd hcl (Nat.lt_irrefl 0)
       · exact ⟨c₀, cs', rfl⟩
     have ha : ∀ t, as.getLast? ≠ some (0 :: t) := fun t hlast => by
       have hcoin : act false x as (c₀ :: cs' ++ [c]) = .coin c := by
