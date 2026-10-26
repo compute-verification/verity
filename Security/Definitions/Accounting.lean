@@ -25,7 +25,7 @@ import Definitions.Accounting.HeadlineDc
 import Definitions.Accounting.Joint
 import Definitions.Accounting.JointBlocks
 import Definitions.Accounting.JointPeriod
-import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+import Definitions.Accounting.JointBridge.BandwidthOfRemoteLinePeriod
 import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Definitions.Accounting.Localization
 import Definitions.Accounting.Memory
