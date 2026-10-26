@@ -50,15 +50,19 @@ blocks, and the deployed point's rounds, limit and block size, bound to `binding
 def commitmentOfAt (N : ℕ) (session binding : ByteArray) (v : ByteArray × ByteArray) : SessionCommitment :=
   ⟨session, v.1, v.2, N, K, LIMIT_NS, q.blockBytes, binding⟩
 
-set_option exponentiation.threshold 20000 in
-/-- **A server in the ring model at `N` blocks**: `Server` with `schAt N` in place of `sch`. `pre` is all that survives
-setup, `S` bits, fixed before the memory challenger's coins are drawn; `step sc W pp j σ i` answers round `j`'s index
-`i` from the state `σ`, what is public and the one session commitment `sc`, within `(D, Q, L)`. -/
-structure ServerAt (N : ℕ) [NeZero N] (S D Q L : ℕ) : Type where
-  pre : Preprocessor (schAt N) S
-  step : SessionCommitment → Bits (schAt N).n → Bits (schAt N).t → ℕ → Bits S → Fin (schAt N).B →
-    Prog (ringRO N 16448 (2 ^ 16448 - 21065)) (Bits (schAt N).ℓ × Bits S)
+/-- **A server in the ring model for a scheme `sch`**: `Server`'s fields over any scheme in the ring model. `pre` is all
+that survives setup, `S` bits, fixed before the memory challenger's coins are drawn; `step sc W pp j σ i` answers round
+`j`'s index `i` from the state `σ`, what is public and the one session commitment `sc`, within `(D, Q, L)`. It is
+stated over the scheme, not at `N`, because Lean's structure command unfolds `N * 16432` with `N` free. -/
+structure RingServer {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (S D Q L : ℕ) : Type where
+  pre : Preprocessor sch S
+  step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
+    Prog (ringRO B w p) (Bits sch.ℓ × Bits S)
   bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
+
+set_option exponentiation.threshold 20000 in
+/-- **A server in the ring model at `N` blocks**: `Server` with `schAt N` in place of `sch`. -/
+abbrev ServerAt (N : ℕ) [NeZero N] (S D Q L : ℕ) : Type := RingServer (schAt N) S D Q L
 
 /-- **The server passes the session at `N` blocks**: `Passes` with `N` in place of `2^19`. The code's sampler reads
 index `I j` from stream `j` at `N` blocks (`uniformOn N`), the code builds the coin tree over those indices
