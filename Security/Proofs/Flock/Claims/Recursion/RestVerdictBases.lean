@@ -83,7 +83,7 @@ theorem actR_decide_setup {rd : Msg → Option FinalP} {x : Msg} {as : List Msg}
     {mids : List (Msg × Coin)} {f : FinalP} (h : actR rd x as cs = .decide s spec sts link c₁ mids f) :
     setupOf false x = some (s, spec, sts) ∧ decR rd x as cs = some ⟨s, spec, sts, link, c₁, mids, f⟩ := by
   have hd := FlockDeploy.actR_decide h
-  obtain ⟨v, -, -, -, -, -, -, hv, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
+  obtain ⟨v, c₁', r₀, rss, fl, link', pf, hv, -, -, -, -, -, he⟩ := FlockDeploy.decR_some hd
   obtain ⟨hs, hspec, hsts, -⟩ := DecR.mk.inj he
   subst hs hspec hsts
   exact ⟨hv, hd⟩
@@ -142,9 +142,9 @@ theorem checksAtJ_ok_of {s : FlockDeploy.Ins} {spec : SessionSpec} {x : Msg} {li
     | none => rw [h] at hN; cases hN
     | some _ => rfl
   unfold checksAtJ
-  simp only [hS, beq_self_eq_true, hD, hL, hC, hQ, hN', FlockDeploy.Custody.check_true, bind, Except.bind, pure,
-    Except.pure, Bool.false_eq_true, ↓reduceIte]
-  rfl
+  simp only [hS, beq_self_eq_true, hD, hL, hC, hQ, hN', Record.check, bind, Except.bind, pure, Except.pure,
+    Bool.false_eq_true, ↓reduceIte]
+  try rfl
 
 /-- **The honest record's draw is its session's `unitDraw`**, as `drawOfJ` reads it. -/
 theorem drawOfJ_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray) (rootB : Array ByteArray)
