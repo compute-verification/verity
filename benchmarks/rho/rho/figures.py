@@ -1,0 +1,547 @@
+"""Figures of ρ: what `analysis` finds, drawn. Matplotlib is imported only when a figure is drawn.
+
+Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
+(`tests/test_repository.py` forbids tracked renders):
+
+* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the declared block's
+  compute and at the serving block's (a location between two wipes), and where each becomes vacuous.
+* `brackets`: ρ's bracket per scenario and family: the lower end from the bounds at each status, the upper from the
+  attacks.
+* `dark`: ρ against the dark share, per scenario.
+* `phase`: ρ over pairs of parameters (`PHASES`), with its contours and frontier at each target.
+* `tornado`: each scenario's tornado.
+* `vulnerability`: each parameter's plausible range against ρ across a window around it, and where ρ crosses each target.
+* `corner`: ρ as the ranged parameters move to their adversarial ends one at a time, down to all at once.
+
+Scenario names here are defaults: a figure falls back to the first scenario that has what it needs, and skips itself
+(saying so in `render`'s result) when none does.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+from collections.abc import Callable, Iterable, Sequence
+from itertools import pairwise
+from pathlib import Path
+from typing import Any
+
+from rho import analysis, lean
+from rho.analysis import LO, STATUSES, Metric
+from rho.classes import Outside
+from rho.params import Registry
+from rho.scenario import build, evaluate
+from rho.theorem import Budget
+
+WINDOWED = "onsite-h200-kimi"
+#: (default scenario, x, y): each axis a `(table, field)` of the scenario's choice of that table
+PHASES = (
+    ("onsite-h200-kimi", ("regime", "residual_bits"), ("regime", "wipe_s")),
+    ("onsite-h200-kimi", ("regime", "side"), ("regime", "ingress")),
+    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "dark")),
+)
+STATUS_COLORS = {"proved": "#1a9850", "conditional": "#2c7bb6", "draft": "#f28e2b", "absent": "#999999",
+                 "outside": "#cccccc"}
+TARGET_STYLES = ((":", "#7b3294"), ("--", "#d7191c"), ("-.", "#404040"))
+CONTOUR_STYLES = (("k", "solid"), ("#08306b", "dashed"), ("#54278f", "dashdot"))
+DPI = 130
+
+
+def _plt() -> Any:
+    import matplotlib
+
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    return plt
+
+
+def jsonable(x: Any) -> Any:
+    """`x` with every non-finite float spelled out (`"inf"`, `"-inf"`, None for NaN), so the JSON is standard."""
+    if isinstance(x, float) and not math.isfinite(x):
+        return None if math.isnan(x) else ("inf" if x > 0 else "-inf")
+    if isinstance(x, dict):
+        return {str(k): jsonable(v) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return [jsonable(v) for v in x]
+    return x
+
+
+def _save(fig: Any, out: Path, stem: str, data: dict) -> list[Path]:
+    out.mkdir(parents=True, exist_ok=True)
+    png, js = out / f"{stem}.png", out / f"{stem}.json"
+    fig.savefig(png, dpi=DPI, bbox_inches="tight")
+    _plt().close(fig)
+    js.write_text(json.dumps(jsonable(data), indent=1) + "\n")
+    return [png, js]
+
+
+def _logspace(a: float, b: float, n: int) -> list[float]:
+    return [a * (b / a) ** (i / (n - 1)) for i in range(n)]
+
+
+def _span(p: Any, v: float, n: int, widen: float) -> list[float]:
+    a, b = analysis.window(p, widen)
+    return _logspace(a, b, n) if a > 0 else [a + (b - a) * i / (n - 1) for i in range(n)]
+
+
+def _finite(v: float) -> float:
+    return v if math.isfinite(v) else math.nan
+
+
+def _pick(names: Sequence[str], default: str, ok: Callable[[str], bool]) -> str | None:
+    for n in ([default] if default in names else []) + list(names):
+        if ok(n):
+            return n
+    return None
+
+
+def _key(registry: Registry, scenario: str, axis: tuple[str, str]) -> str | None:
+    table, field = axis
+    choice = registry.get(f"scenario.{scenario}.{table}")
+    key = f"{table}.{choice}.{field}"
+    return key if choice is not None and key in registry else None
+
+
+def _unit(registry: Registry, key: str) -> str:
+    u = registry.param(key).unit
+    return f" ({u})" if u else ""
+
+
+def _short(key: str) -> str:
+    """`regime.onsite.wipe_s` → `onsite.wipe_s`: the table's name and the field."""
+    parts = key.split(".")
+    return ".".join(parts[1:]) if len(parts) > 2 else key
+
+
+def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
+    for t, (ls, c) in zip(targets, TARGET_STYLES * len(targets), strict=False):
+        (ax.axhline if axis == "y" else ax.axvline)(t, ls=ls, c=c, lw=1, label=f"target ρ = {t:g}")
+
+
+def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
+               targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
+    """Each class's per-block slowdown `κC / (2 a(C, k))` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
+    declared block's compute `Γ` and (for a regime with a serving block) at the serving block's compute, with the
+    declared policy's `k` and the serving block's input `K` marked. Below 1 a class is vacuous: it lets the block run
+    unthrottled."""
+    points = 6 * grid + 1
+    plt = _plt()
+    names = list(names or registry.names("scenario"))
+    name = _pick(names, WINDOWED, lambda n: hasattr(build(registry, n).regime, "budget")) or (names[0] if names else None)
+    if name is None:
+        return []
+    s = build(registry, name)
+    fam = s.families[min(family, len(s.families) - 1)]
+    p = fam.profile(s.model, s.run)
+    gamma, k_policy = s.context.policy.gamma, s.context.policy.k
+    win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
+    panels = [("the declared block's compute Γ", gamma)]
+    if win is not None:
+        panels.append(("the serving block's compute Φ·Δτ·MFU", win.compute))
+    ks = _logspace(1e4, 1e13, points)
+    data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
+                  "window_k": win.inputs if win else None,
+                  "slowdown": "κC / (2 a(C, k)); 0 where the statement's premise fails (no cap), ∞ where a = 0",
+                  "panels": []}
+    fig, axes = plt.subplots(1, len(panels), figsize=(6.4 * len(panels), 5.2), sharey=True, squeeze=False)
+    lines: dict[str, Any] = {}
+    top = 10.0
+    for ax, (title, compute) in zip(axes[0], panels, strict=True):
+        full = p.kappa * compute / 2
+        panel: dict = {"title": title, "compute": compute, "classes": {}, "attacks": {}, "outside": {}}
+        for i, arg in enumerate((*s.bounds, *s.attacks)):
+            try:
+                a = arg.allowance(p)
+            except Outside as e:
+                panel["outside"][arg.name] = str(e)
+                continue
+
+            def per_block(k: float, a: Any = a, compute: float = compute, full: float = full) -> float:
+                n = a(Budget(compute, k))
+                return full / n if n > 0 else math.inf
+
+            ys = [per_block(k) for k in ks]
+            status = lean.weakest(arg.cites)
+            if arg.side == "attack":
+                j = next((j for j, y in enumerate(ys) if math.isfinite(y)), None)
+                first = None
+                if j is not None:
+                    first = ks[0] if j == 0 else analysis.crossing(
+                        lambda k, f=per_block: float(math.isfinite(f(k))), 0.5, ks[j - 1], ks[j])
+                panel["attacks"][arg.name] = {"status": status, "first_finite_k": first, "slowdown": ys}
+                if first is not None:
+                    lines[f"attack {arg.name}"] = ax.axvline(
+                        first, c="k", ls=(0, (1, 2)), lw=1.2,
+                        label=f"attack {arg.name} ({status}): ρ_block = {per_block(first * 1.0001):.3g} from k = "
+                              f"{first:.2g}")
+                continue
+            vacuous = next((j for j, y in enumerate(ys) if y <= 1), None)
+            k_vac = None
+            if vacuous is not None:
+                k_vac = ks[0] if vacuous == 0 else analysis.crossing(per_block, 1.0, ks[vacuous - 1], ks[vacuous])
+            j = next((j for j, y in enumerate(ys) if y == 0), None)
+            fails = None if j is None else ks[0] if j == 0 else analysis.crossing(
+                lambda k, f=per_block: float(f(k) == 0), 0.5, ks[j - 1], ks[j])
+            panel["classes"][arg.name] = {"status": status, "slowdown": ys, "vacuous_from_k": k_vac,
+                                          "premise_fails_from_k": fails,
+                                          "at_declared_k": per_block(k_policy),
+                                          "at_window_k": per_block(win.inputs) if win else None}
+            color = f"C{i % 10}"
+            line, = ax.plot(ks, [y if y > 0 else math.nan for y in ys], c=color, lw=1.8,
+                            ls="--" if status == "draft" else "-", label=f"{arg.name} ({status})")
+            lines.setdefault(arg.name, line)
+            if k_vac is not None:
+                ax.plot([k_vac], [1.0], "o", c=color, ms=5, mec="k", mew=0.5)
+            if fails is not None:
+                last = max((k for k, y in zip(ks, ys, strict=True) if k < fails), default=None)
+                if last is not None:
+                    ax.plot([last], [per_block(last)], "x", c=color, ms=8, mew=2)
+            if win is not None and compute == win.compute and per_block(win.inputs) > 1:
+                ax.annotate(f"{arg.name}: {per_block(win.inputs):.3g} at K", (win.inputs, per_block(win.inputs)),
+                            xytext=(-8, 0), textcoords="offset points", ha="right", va="center", fontsize=8,
+                            color=color, weight="bold", bbox={"fc": "white", "alpha": 0.85, "lw": 0, "pad": 1})
+            top = max([top, *(y for y in ys if math.isfinite(y))])
+        ax.axhspan(1e-3, 1, color="#eeeeee", zorder=0)
+        ax.text(1.3e4, 0.3, "vacuous: the block may run unthrottled", fontsize=8, color="#555555", va="center")
+        ax.axhline(1, c="#888888", lw=0.8)
+        lines["declared k"] = ax.axvline(k_policy, c="#2c7bb6", lw=1, ls="-.",
+                                         label=f"declared policy k = {k_policy:.2g} bits")
+        if win is not None:
+            lines["window K"] = ax.axvline(win.inputs, c="#d7191c", lw=1, ls="-.",
+                                           label=f"serving block K = {win.inputs:.2g} bits")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlim(ks[0], ks[-1])
+        ax.set_xlabel("block's novel input budget k (bits)")
+        ax.set_title(f"at {title}\nC = {compute:.3g} FLOP", fontsize=10)
+        ax.grid(True, which="major", alpha=0.3)
+        data["panels"].append(panel)
+    axes[0][0].set_ylim(1e-2, top * 3)
+    axes[0][0].set_ylabel("per-block slowdown κC / (2 a(C, k))")
+    fig.legend(lines.values(), [h.get_label() for h in lines.values()], loc="lower center",
+               ncol=min(4, len(lines)), fontsize=8, bbox_to_anchor=(0.5, -0.02 - 0.035 * math.ceil(len(lines) / 4)))
+    fig.suptitle(f"Training classes per block: {s.model.name}, family {fam.name} (× = premise fails, ○ = vacuous)",
+                 fontsize=11)
+    return _save(fig, out, "class-vs-k", data)
+
+
+def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
+             targets: Sequence[float] = (10.0, 100.0), grid: int = 30) -> list[Path]:
+    """ρ's bracket for each scenario and family: each bound and attack alone (colored by status), the lower end from
+    the bounds and cuts at each status or stronger, and the bar from `lo` (every bound at once) to `hi` (the best
+    attack)."""
+    plt = _plt()
+    names = list(names or registry.names("scenario"))
+    rows: list[dict] = []
+    for name in names:
+        r = analysis.result(registry, name)
+        by_status = {st: evaluate(analysis.restrict(r.scenario, st)) for st in STATUSES[:3]}
+        for i, f in enumerate(r.families):
+            rows.append({"scenario": name, "family": f.family, "lo": f.lo, "hi": f.hi,
+                         "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
+                         "bounds": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.bounds],
+                         "attacks": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.attacks],
+                         "contradictions": list(f.contradictions)})
+    finite = [v for row in rows for v in (row["lo"], row["hi"], *row["lo_by_status"].values(),
+                                          *(e["rho"] for e in row["bounds"] + row["attacks"]))
+              if v and math.isfinite(v) and v > 0]
+    xmax = max(finite + list(targets)) * 3
+    fig, ax = plt.subplots(figsize=(9, 1.2 + 1.1 * len(rows)))
+    seen: set[str] = set()
+
+    def label(text: str) -> str:
+        if text in seen:
+            return "_"
+        seen.add(text)
+        return text
+
+    def edge(v: float) -> float:
+        return v if math.isfinite(v) else xmax
+
+    def num(v: float) -> str:
+        return f"{v:.3g}" if math.isfinite(v) else ("∞" if v > 0 else "—")
+
+    for y, row in enumerate(reversed(rows)):
+        ax.plot([edge(row["lo"]), edge(row["hi"])], [y, y], c="#bbbbbb", lw=10, solid_capstyle="butt", zorder=1,
+                label=label("bracket [lo, hi]"))
+        for e in row["bounds"]:
+            if not math.isnan(e["rho"]):
+                ax.plot(edge(e["rho"]), y + 0.25, "o", ms=5, c=STATUS_COLORS[e["status"]], alpha=0.8, zorder=3,
+                        label=label(f"a bound alone ({e['status']})"))
+        for st, v in row["lo_by_status"].items():
+            ax.plot(edge(v), y, "D", ms=9, c=STATUS_COLORS[st], mec="k", zorder=4,
+                    label=label(f"lo from {', '.join(STATUSES[:STATUSES.index(st) + 1])} bounds and cuts"))
+        for e in row["attacks"]:
+            if not math.isnan(e["rho"]):
+                ax.plot(edge(e["rho"]), y - 0.25, "v", ms=8, c=STATUS_COLORS[e["status"]], mec="k", zorder=3,
+                        label=label(f"an attack ({e['status']})"))
+        by = ", ".join(f"{st} {num(v)}" for st, v in row["lo_by_status"].items())
+        ax.text(xmax * 1.05, y, f"ρ ∈ [{num(row['lo'])}, {num(row['hi'])}]\nlo by status: {by}", va="center",
+                fontsize=8)
+    _targets(ax, targets, "x")
+    ax.set_yticks(range(len(rows)), [f"{r['scenario']}\n{r['family']}" for r in reversed(rows)], fontsize=9)
+    ax.set_xscale("log")
+    ax.set_xlim(0.8, xmax)
+    ax.set_ylim(-0.7, len(rows) - 0.3)
+    ax.set_xlabel("ρ (slowdown to the target run; ∞ drawn at the right edge)")
+    ax.set_title("ρ's bracket: lower end from bounds by status, upper end from attacks", fontsize=11)
+    ax.grid(True, axis="x", which="major", alpha=0.3)
+    ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.25 / len(rows)), ncol=3)
+    return _save(fig, out, "brackets", {"rows": rows, "targets": list(targets)})
+
+
+def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
+         grid: int = 30) -> list[Path]:
+    """ρ (lower end solid, upper dashed) against the dark share `d` (`grid + 11` points), per scenario, with `m/d`, the
+    most the dark pool alone allows."""
+    points = grid + 11
+    plt = _plt()
+    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "dark"))]
+    if not names:
+        return []
+    p0 = registry.param(_key(registry, names[0], ("fleet", "dark")))
+    ds = _logspace(min(1e-4, p0.low / 10), 0.5, points)
+    data: dict = {"d": ds, "scenarios": {}}
+    fig, ax = plt.subplots(figsize=(8, 5.2))
+    ms = set()
+    for i, name in enumerate(names):
+        key = _key(registry, name, ("fleet", "dark"))
+        lo = analysis.sweep(registry, name, key, ds, LO)
+        hi = analysis.sweep(registry, name, key, ds, analysis.HI)
+        base = analysis.result(registry, name)
+        m = min(f.profile.efficiency for f in base.families)
+        ms.add(m)
+        data["scenarios"][name] = {"key": key, "lo": [v for _, v in lo], "hi": [v for _, v in hi], "m": m,
+                                   "base_d": registry[key], "base_lo": base.lo, "base_hi": base.hi}
+        c = f"C{i % 10}"
+        ax.plot(ds, [_finite(v) for _, v in lo], c=c, lw=2, label=f"{name}: lo")
+        ax.plot(ds, [_finite(v) for _, v in hi], c=c, lw=1.2, ls="--", label=f"{name}: hi")
+        ax.plot([registry[key]], [base.lo], "o", c=c, mec="k")
+    for m in sorted(ms):
+        ax.plot(ds, [m / d for d in ds], c="k", lw=0.8, ls=(0, (1, 1)), label=f"m/d (dark pool alone, m = {m:g})")
+    ax.axvspan(p0.low, p0.high, color="#fde0dd", alpha=0.6, zorder=0, label=f"plausible d ({_short(p0.key)})")
+    _targets(ax, targets)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.set_xlabel("dark share d (adversary's compute outside every monitored region)")
+    ax.set_ylabel("ρ")
+    ax.set_title("ρ against the dark share, per scenario (• at today's d)", fontsize=11)
+    ax.grid(True, which="major", alpha=0.3)
+    ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    return _save(fig, out, "dark", data)
+
+
+def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
+          grid: int = 30, metric: Metric = LO, specs: Iterable = PHASES) -> list[Path]:
+    """ρ over each pair of parameters in `specs` (a window around both plausible ranges), with its contours at each
+    target (from the grid) and the frontier (by bisection, dots), today's values (★) and the plausible box (dashed)."""
+    from matplotlib.colors import LogNorm
+    from matplotlib.lines import Line2D
+
+    plt = _plt()
+    names = list(names or registry.names("scenario"))
+    panels = []
+    for default, x, y in specs:
+        def ok(n: str, x: tuple = x, y: tuple = y) -> bool:
+            kx, ky = _key(registry, n, x), _key(registry, n, y)
+            return bool(kx and ky and registry.param(kx).ranged and registry.param(ky).ranged)
+
+        name = _pick(names, default, ok)
+        if name is None:
+            continue
+        kx, ky = _key(registry, name, x), _key(registry, name, y)
+        px, py = registry.param(kx), registry.param(ky)
+        xs, ys = _span(px, px.value, grid, 0.5), _span(py, py.value, grid, 0.5)
+        z = analysis.phase(registry, name, kx, xs, ky, ys, metric)
+        fronts = {t: analysis.frontier(registry, name, kx, xs, ky, ys[0], ys[-1], t, metric) for t in targets}
+        panels.append({"scenario": name, "x": kx, "y": ky, "xs": xs, "ys": ys, "rho": z,
+                       "base": [px.value, py.value], "box": [[px.low, px.high], [py.low, py.high]],
+                       "frontier": {str(t): f for t, f in fronts.items()}})
+    if not panels:
+        return []
+    vals = [v for p in panels for row in p["rho"] for v in row if math.isfinite(v) and v > 0]
+    norm = LogNorm(vmin=max(min(vals), 1.0) if vals else 1, vmax=max(vals + [max(targets) * 10]))
+    fig, axes = plt.subplots(1, len(panels), figsize=(5.6 * len(panels), 5.0), squeeze=False, layout="constrained")
+    for ax, p in zip(axes[0], panels, strict=True):
+        z = [[_finite(v) for v in row] for row in p["rho"]]
+        flat = [v for row in z for v in row if not math.isnan(v)]
+        mesh = ax.pcolormesh(p["xs"], p["ys"], z, norm=norm, cmap="RdYlGn", shading="nearest")
+        levels = [t for t in sorted(targets) if flat and min(flat) < t < max(flat)]
+        handles = []
+        for i, t in enumerate(targets):
+            c, ls = CONTOUR_STYLES[i % len(CONTOUR_STYLES)]
+            if t in levels:
+                ax.contour(p["xs"], p["ys"], z, levels=[t], colors=c, linewidths=1.4, linestyles=ls)
+            pts = [(xv, yv) for xv, yv in p["frontier"][str(t)] if yv is not None]
+            ax.plot([q[0] for q in pts], [q[1] for q in pts], "o", c="white", mec=c, mew=1.2, ms=4)
+            handles.append(Line2D([], [], c=c, ls=ls, marker="o", mfc="white", mec=c, ms=4, label=f"ρ = {t:g}"))
+        ax.legend(handles=handles, fontsize=8, loc="lower left", framealpha=0.85)
+        p["not_reached"] = [t for t in targets if t not in levels]
+        if p["not_reached"] and flat:
+            ax.text(0.02, 0.98, "\n".join(f"ρ {'<' if max(flat) < t else '>'} {t:g} everywhere here "
+                                          f"({min(flat):.3g} to {max(flat):.3g})" for t in p["not_reached"]),
+                    transform=ax.transAxes, va="top", fontsize=8, bbox={"fc": "white", "alpha": 0.8, "lw": 0})
+        (xl, xh), (yl, yh) = p["box"]
+        ax.plot([xl, xh, xh, xl, xl], [yl, yl, yh, yh, yl], c="k", ls="--", lw=1)
+        ax.plot([p["base"][0]], [p["base"][1]], "*", c="white", mec="k", ms=14)
+        for axis, vals_ in (("x", p["xs"]), ("y", p["ys"])):
+            if vals_[0] > 0:
+                (ax.set_xscale if axis == "x" else ax.set_yscale)("log")
+        ax.set_xlabel(_short(p["x"]) + _unit(registry, p["x"]))
+        ax.set_ylabel(_short(p["y"]) + _unit(registry, p["y"]))
+        ax.set_title(p["scenario"], fontsize=10)
+    fig.colorbar(mesh, ax=axes[0].tolist(), label="ρ (lower end)" if metric is LO else "ρ", shrink=0.9)
+    fig.suptitle("ρ over pairs of parameters: contours from the grid and frontier dots by bisection at the targets, "
+                 "★ today's values, dashed box the plausible ranges", fontsize=10)
+    return _save(fig, out, "phase", {"metric": getattr(metric, "__name__", str(metric)), "targets": list(targets),
+                                     "panels": panels})
+
+
+def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
+            grid: int = 30, top: int = 10, metric: Metric = LO) -> list[Path]:
+    """Each scenario's tornado (those where some parameter moves ρ): ρ at each parameter's low and high ends."""
+    plt = _plt()
+    names = list(names or registry.names("scenario"))
+    swings = {n: analysis.tornado(registry, n, None, metric)[:top] for n in names}
+    swings = {n: s for n, s in swings.items() if s}
+    if not swings:
+        return []
+    fig, axes = plt.subplots(len(swings), 1, figsize=(9, 0.9 + 0.42 * sum(len(s) for s in swings.values())
+                                                      + 0.8 * len(swings)), squeeze=False)
+    for ax, (name, ss) in zip(axes[:, 0], swings.items(), strict=True):
+        base = ss[0].base
+        for y, s in enumerate(reversed(ss)):
+            for v, c, lab in ((s.at_low, "#2c7bb6", "at the range's low end"), (s.at_high, "#d7191c",
+                                                                               "at the range's high end")):
+                v = _finite(v)
+                ax.barh(y, v - base, left=base, height=0.6, color=c, alpha=0.8, label=lab if y == 0 else "_")
+                if v > 0 and base > 0 and abs(math.log10(v / base)) > 0.02:
+                    ax.annotate(f"{v:.3g}", (v, y), xytext=(3 if v > base else -3, 0), textcoords="offset points",
+                                ha="left" if v > base else "right", va="center", fontsize=7)
+        ax.axvline(base, c="k", lw=1)
+        _targets(ax, targets, "x")
+        ax.set_yticks(range(len(ss)), [f"{_short(s.key)}  [{s.low:.3g}, {s.high:.3g}]{_unit(registry, s.key)}"
+                                       for s in reversed(ss)], fontsize=8)
+        ax.set_xscale("log")
+        ax.set_xlabel("ρ (lower end)" if metric is LO else "ρ")
+        ax.set_title(f"{name}: ρ = {base:.3g} at today's values", fontsize=10)
+        ax.grid(True, axis="x", which="major", alpha=0.3)
+        ax.legend(fontsize=8, loc="lower right")
+    fig.tight_layout()
+    return _save(fig, out, "tornado", {"scenarios": {n: [vars(s) for s in ss] for n, ss in swings.items()}})
+
+
+def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = None,
+                  targets: Sequence[float] = (10.0, 100.0), grid: int = 30, top: int = 12,
+                  metric: Metric = LO) -> list[Path]:
+    """For each parameter that moves ρ: ρ across a window around its plausible range (the colored strip of `grid + 1`
+    points, on the plausible range's own scale: 0 its low end, 1 its high end), the range (black box), today's value (|)
+    and where ρ crosses each target (filled inside the range)."""
+    points = grid + 1
+    from matplotlib.colors import LogNorm
+
+    plt = _plt()
+    names = list(names or registry.names("scenario"))
+    found = {}
+    for n in names:
+        swings = analysis.tornado(registry, n, None, metric)[:top]
+        if swings:
+            found[n] = analysis.margins(registry, n, targets, metric=metric, points=points, swings=swings)
+    if not found:
+        return []
+    from matplotlib.lines import Line2D
+
+    vals = [v for ms in found.values() for m in ms for _, v in m.samples if math.isfinite(v) and v > 0]
+    norm = LogNorm(vmin=max(min(vals), 1.0), vmax=max(vals + [max(targets) * 10]))
+    fig, axes = plt.subplots(len(found), 1, squeeze=False, layout="constrained",
+                             figsize=(11, 1.6 + 0.55 * sum(len(m) for m in found.values()) + 0.9 * len(found)))
+    markers = ("D", "o", "s")
+    xlo, xhi = -3.0, 4.0
+    for ax, (name, ms) in zip(axes[:, 0], found.items(), strict=True):
+        for y, m in enumerate(reversed(ms)):
+            p = registry.param(m.key)
+            us = [analysis.position(p, v) for v, _ in m.samples]
+            edges = [us[0]] + [(a + b) / 2 for a, b in pairwise(us)] + [us[-1]]
+            mesh = ax.pcolormesh(edges, [y - 0.32, y + 0.32], [[_finite(v) for _, v in m.samples]], norm=norm,
+                                 cmap="RdYlGn")
+            ax.plot([0, 1, 1, 0, 0], [y - 0.36, y - 0.36, y + 0.36, y + 0.36, y - 0.36], c="k", lw=1.2)
+            ax.plot([analysis.position(p, m.value)] * 2, [y - 0.42, y + 0.42], c="k", lw=2.2)
+            for i, t in enumerate(targets):
+                for xv in m.crossings[t]:
+                    if xv is None:
+                        continue
+                    u = analysis.position(p, xv)
+                    shown = min(max(u, xlo + 0.08), xhi - 0.08)
+                    marker = markers[i % 3] if shown == u else ("<" if u < xlo else ">")
+                    ax.plot([shown], [y], marker, ms=7, mec="k", mew=1,
+                            c=TARGET_STYLES[i % 3][1] if 0 <= u <= 1 else "white")
+                    ax.annotate(f"ρ={t:g} at {xv:.2g}", (shown, y + (0.36 if i % 2 == 0 else -0.36)), fontsize=6.5,
+                                ha="center", va="bottom" if i % 2 == 0 else "top")
+        ax.set_yticks(range(len(ms)), [f"{_short(m.key)}\n[{m.low:.3g}, {m.high:.3g}]{_unit(registry, m.key)}"
+                                       for m in reversed(ms)], fontsize=7.5)
+        ax.set_ylim(-0.6, len(ms) - 0.1)
+        ax.set_xlim(xlo, xhi)
+        ax.set_xlabel("position relative to the plausible range (0 = low end, 1 = high end; log scale for positive "
+                      "ranges; ◁ ▷ beyond the view)")
+        ax.set_title(f"{name}: ρ = {analysis.at(registry, name, None, metric):.3g} at today's values", fontsize=10)
+    handles = [Line2D([], [], marker=markers[i % 3], ls="", mec="k", c=TARGET_STYLES[i % 3][1], ms=7,
+                      label=f"ρ = {t:g} crossed inside the plausible range") for i, t in enumerate(targets)]
+    handles += [Line2D([], [], marker=markers[i % 3], ls="", mec="k", c="white", ms=7,
+                       label=f"ρ = {t:g} crossed outside it") for i, t in enumerate(targets)]
+    handles += [Line2D([], [], c="k", lw=1.2, label="plausible range"), Line2D([], [], c="k", lw=2.2, ls="",
+                                                                               marker="|", ms=12, label="today")]
+    axes[0][0].legend(handles=handles, fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
+    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="ρ (lower end)" if metric is LO else "ρ",
+                 location="bottom", shrink=0.5)
+    fig.suptitle("How far each parameter is from where ρ crosses a target: ρ along a window around its plausible range",
+                 fontsize=11)
+    return _save(fig, out, "vulnerability", {
+        "targets": list(targets),
+        "scenarios": {n: [{"key": m.key, "value": m.value, "low": m.low, "high": m.high, "window": m.window,
+                           "samples": m.samples, "crossings": {str(t): c for t, c in m.crossings.items()}}
+                          for m in ms] for n, ms in found.items()}})
+
+
+def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
+           grid: int = 30, metric: Metric = LO) -> list[Path]:
+    """Each scenario's adversarial corner (`analysis.corner`): ρ as its ranged parameters move to their worse ends one
+    at a time, the worst alone first, down to all of them at once."""
+    plt = _plt()
+    names = list(names or registry.names("scenario"))
+    found = {n: c for n in names if (c := analysis.corner(registry, n, metric=metric)).path}
+    if not found:
+        return []
+    widths = [2.5 + 0.42 * len(c.path) for c in found.values()]
+    fig, axes = plt.subplots(1, len(found), figsize=(sum(widths), 5.6), squeeze=False, layout="constrained",
+                             gridspec_kw={"width_ratios": widths})
+    for ax, (name, c) in zip(axes[0], found.items(), strict=True):
+        ys = [c.base] + [v for _, v in c.path]
+        ax.plot(range(len(ys)), ys, "o-", c="#d7191c", mec="k", ms=5)
+        for i, v in enumerate(ys):
+            ax.annotate(f"{v:.3g}", (i, v), xytext=(0, 6), textcoords="offset points", ha="center", fontsize=7)
+        ax.set_xticks(range(len(ys)), ["today"] + [f"{_short(k)} → {c.values.get(k, math.nan):.3g}" for k, _ in c.path],
+                      rotation=60, ha="right", fontsize=7.5)
+        _targets(ax, targets)
+        ax.set_yscale("log")
+        ax.set_ylabel("ρ (lower end)" if metric is LO else "ρ")
+        note = "" if c.joint == c.rho else f" (all at once: {c.joint:.3g})"
+        ax.set_title(f"{name}: {c.base:.3g} today → {c.rho:.3g} at the corner{note}", fontsize=10)
+        ax.grid(True, which="major", alpha=0.3)
+        ax.legend(fontsize=8, loc="upper right")
+    fig.suptitle("The adversarial corner: each ranged parameter moved to the worse end of its plausible range, "
+                 "cumulatively", fontsize=11)
+    return _save(fig, out, "corner", {"targets": list(targets), "scenarios": {
+        n: {"base": c.base, "rho": c.rho, "joint": c.joint, "values": dict(c.values), "path": c.path}
+        for n, c in found.items()}})
+
+
+FIGURES = {"class-vs-k": class_vs_k, "brackets": brackets, "dark": dark, "phase": phase, "tornado": tornado,
+           "vulnerability": vulnerability, "corner": corner}
+
+
+def render(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
+           grid: int = 30, only: Iterable[str] | None = None) -> dict[str, list[Path]]:
+    """Every figure (or those named in `only`) into `out`, `grid` setting how densely each samples: figure name → the
+    files it wrote (none: skipped, because no scenario has what it needs)."""
+    return {fig: FIGURES[fig](registry, Path(out), names, targets, grid) for fig in only or FIGURES}

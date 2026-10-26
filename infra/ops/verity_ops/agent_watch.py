@@ -90,7 +90,8 @@ says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages,
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
 
-An agent that works but says nothing is **silent**: a coordinator or a worker ACTIVE for `SILENT_S` (90 min) with no note of
+An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator for
+`COORD_SILENT_S` (60 min, its record's `owner` top, whom the relay rings), with no note of
 its (a note whose `origin:` names it, new or changed by its mtime) and no push to its branches. Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
 head ending in its id's last four characters (a coordinator's `cursor/...-1037`); pushes are read every `HEADS_EVERY_S` with
@@ -98,7 +99,9 @@ head ending in its id's last four characters (a coordinator's `cursor/...-1037`)
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
+worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
+as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
 
 When a `research run` on a node ends, its sender learns of it only by polling, and a worker that ended its turn to wait never
 does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, deployed as `/data/agent-watch/nodes.json`: the
@@ -107,7 +110,8 @@ read over one ssh (`RUNS_READER`, host, port, user and runs root from the node's
 records each once as **run_ended** for whoever sent it (the request's `submitted_by`, else the command's `--by`, else the job's
 lane): a coordinator's own handle, or a former one's (`lineage`), a worker's launcher's (its coordinator resumes it with Task:
 Cursor refuses a run on a worker), or its parent's when the watch learned it from a Task call, else the lane's (`--by`, the
-job's lane, or a handle `submitted_by` names) when that is a handle. The runs of one read whose sender no handle owns are one
+job's lane, or a handle `submitted_by` names) when that is a handle, else the handle of the branch whose head the run's tree was
+(`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). The runs of one read whose sender no handle owns are one
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring @infra once; a run whose handle
 `quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
@@ -179,6 +183,9 @@ UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
+AGENTS_PAGE = 50            # GET /v1/agents page size: 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
+SWEEP_READS_S = 12 * 60     # a sweep's reads stop after this long (a sweep takes ~6 min; with reads near their 60 s timeout, one
+#                             took 24 min, 26 Oct, and the cloud watch alerts after 20 min without a finished sweep)
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
 WORKER_RELAUNCH_S = 20 * 60 # a worker still idle this long after its coordinator was rung for it: relaunched fresh
 RELAUNCH_EVERY_S = 6 * 3600 # an agent is relaunched at most once in this long
@@ -246,7 +253,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -270,7 +277,10 @@ WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-lo
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
+COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to @top (TOP-90 row 37: memory-accounting hung 01:47-04:39Z)
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
+NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to @top (top, 26 Oct: nine workers ACTIVE
+                                # with no step for 30-64 h, each rung twice as silent and then by no one)
 HEADS_EVERY_S = 5 * 60          # the branch heads (`git ls-remote --heads`) are read this often
 HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart from none: nobody is judged silent
 RUN_ENDS_EVERY_S = 5 * 60       # the nodes' ended runs are read this often (nodes.json `every_s`)
@@ -558,9 +568,27 @@ for n in names:
                 "ended": tr[-1].get("t_utc"), "mtime": mtime, "submitted_by": req.get("submitted_by") or "",
                 "by": cmd[cmd.index("--by") + 1] if "--by" in cmd[:-1] else "", "lane": own.get("lane") or "",
                 "job": own.get("job") or "", "stage": comp.get("stage") or "", "command": " ".join(cmd)[:200],
-                "cancelled_by": by, "cancel_reason": why})
+                "cancelled_by": by, "cancel_reason": why, "tree": comp.get("tree_sha") or ""})
 print(json.dumps(out))
 '''
+
+
+#: how long `read_heads` remembers which branch a pushed sha was the head of (`Watch.branch_of`)
+HEADS_SHA_KEEP_S = 2 * 86400
+
+
+def branch_handle(branch: str, registry: Path | None, handles: set[str]) -> str | None:
+    """The handle a branch belongs to, for a run whose sender no route knows (TOP-90 row 21, 25 Oct: seven workers traced by
+    hand from tree to branch to lane): the registry's `branch_suffixes` of a handle naming the branch's last `-` part, else a
+    handle the branch's name starts with after `cursor/` (`cursor/kernels-kp2s8-8c40`), the longest such."""
+    if not branch:
+        return None
+    suffix = branch.rsplit("-", 1)[-1]
+    for h in read_json(registry).get("handles") or [] if registry else []:
+        if suffix in (h.get("branch_suffixes") or []) and str(h.get("handle")) in handles:
+            return str(h["handle"])
+    name = branch.split("/", 1)[-1]
+    return max((x for x in handles if name.startswith(x + "-")), key=len, default=None)
 
 
 def machine(machines_d: Path, name: str) -> dict | None:
@@ -638,11 +666,13 @@ def started(x: dict) -> bool:
 
 
 class Api:
-    """Cursor's Cloud Agents API, v1."""
+    """Cursor's Cloud Agents API, v1. Past `reads_until` (by `clock`), a GET raises TimeoutError without asking; POSTs, the
+    watch's actions, always go."""
 
-    def __init__(self, key: str, base: str = API, timeout: float = 60):
+    def __init__(self, key: str, base: str = API, timeout: float = 60, clock: Callable[[], float] = time.monotonic):
         self.auth = "Basic " + base64.b64encode(f"{key}:".encode()).decode()
-        self.base, self.timeout = base, timeout
+        self.base, self.timeout, self.clock = base, timeout, clock
+        self.reads_until: float | None = None
 
     def _req(self, method: str, path: str, body: dict | None = None, headers: dict | None = None):
         data = json.dumps(body).encode() if body is not None else None
@@ -653,7 +683,11 @@ class Api:
 
     def get(self, path: str, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
-        with urllib.request.urlopen(self._req("GET", path + q), timeout=self.timeout) as r:
+        timeout = self.timeout
+        if self.reads_until is not None:
+            if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
+                raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
+        with urllib.request.urlopen(self._req("GET", path + q), timeout=timeout) as r:
             return json.load(r)
 
     def post(self, path: str, body: dict | None = None) -> dict:
@@ -663,7 +697,7 @@ class Api:
     def agents(self) -> Iterator[dict]:
         cursor = None
         while True:
-            page = self.get("/v1/agents", limit=100, cursor=cursor, includeArchived="false")
+            page = self.get("/v1/agents", limit=AGENTS_PAGE, cursor=cursor, includeArchived="false")
             yield from page.get("items") or []
             cursor = page.get("nextCursor")
             if not cursor:
@@ -1179,6 +1213,9 @@ class Watch:
             elif first is not None and t - first >= UNREADABLE_S and self.once(run + "#unreadable", t):
                 self.record("unreadable", r, status=f"HTTP {e.code}", since=iso(first), minutes=int((t - first) // 60))
             return None
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"{iso(self.clock())} run {run} of {a['id']}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            return None
         if info.get("status") in TERMINAL:
             self.final[run] = info
         return info
@@ -1302,12 +1339,14 @@ class Watch:
                               "while the heads are stale", t)
             return
         old, new = self.heads.get("heads") or {}, {}
+        shas = {k: v for k, v in (self.heads.get("shas") or {}).items() if isinstance(v, list) and v[1] >= t - HEADS_SHA_KEEP_S}
         for line in out.splitlines():
             sha, _, ref = line.strip().partition("\t")
             if ref.startswith("refs/heads/") and sha:
                 b = ref[len("refs/heads/"):]
                 new[b] = old[b] if isinstance(old.get(b), list) and old[b][0] == sha else [sha, t]
-        self.heads = {"t0": self.heads.get("t0", t), "t": t, "heads": new}
+                shas.setdefault(sha, [b, t])
+        self.heads = {"t0": self.heads.get("t0", t), "t": t, "heads": new, "shas": shas}
         write_atomic(self.heads_path, (json.dumps(self.heads, sort_keys=True) + "\n").encode())
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
@@ -1335,14 +1374,22 @@ class Watch:
                 self.silent.pop(agent)
                 s, changed = None, True
             n = s["rings"] if s else 0
-            if n >= SILENT_RINGS or t - last < SILENT_S * (n + 1):
+            coord = agent in self.coords
+            if n >= SILENT_RINGS:
+                if s and not s.get("no_step") and t - last >= NO_STEP_S:
+                    s["no_step"] = True
+                    changed = True
+                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(last), hours=int((t - last) // 3600),
+                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top")
+                continue
+            if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
             self.silent[agent] = {"from": last, "rings": n + 1}
             changed = True
             self.record("silent", Run(agent, k["run"], k["name"]), since=iso(last), minutes=int((t - last) // 60),
                         active_minutes=int((t - k["since"]) // 60), window=n + 1, lane=k["lane"],
                         branches=sorted(b for b in mine if b in heads) or sorted(mine),
-                        **({"handle": k["handle"]} if k["handle"] else {}))
+                        **({"handle": k["handle"]} if k["handle"] else {}), **({"owner": "top"} if coord else {}))
         if changed:
             self.save()
 
@@ -1439,6 +1486,15 @@ class Watch:
         self.ends = st
         write_atomic(self.ends_path, (json.dumps(st, sort_keys=True) + "\n").encode())
 
+    def branch_of(self, sha: str) -> str:
+        """The branch whose head was ``sha`` when `read_heads` saw it (kept `HEADS_SHA_KEEP_S`), or ""."""
+        if not sha:
+            return ""
+        got = (self.heads.get("shas") or {}).get(sha)
+        if isinstance(got, list) and got:
+            return str(got[0])
+        return next((b for b, v in (self.heads.get("heads") or {}).items() if isinstance(v, list) and v[0] == sha), "")
+
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
                  quiet: set[str] = frozenset()) -> dict | None:
         """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
@@ -1469,6 +1525,8 @@ class Watch:
             handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or self.names.get(agent, ""))
         elif lane:
             handle, role, name = lane, "lane", ""
+        elif h := branch_handle(self.branch_of(str(row.get("tree") or "")), self.registry, handles):
+            handle, role, name = h, "lane", ""
         else:
             handle, role, name = "", "unknown", ""
         if handle in quiet:
@@ -2026,6 +2084,7 @@ def main(argv: list[str] | None = None) -> int:
         watch.sweep(lambda r: None)
         return 0
     while True:
+        api.reads_until = api.clock() + SWEEP_READS_S
         try:
             watch.sweep(lambda r: follow(watch, r))
         except (urllib.error.URLError, OSError, ValueError) as e:

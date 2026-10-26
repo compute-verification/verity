@@ -62,5 +62,13 @@
    "branch": "Build cuda_13.0.r13.0/compiler.36424714_0",
    "args": "-arch sm_90a -m 64"
   }
+ ],
+ "units_softmax90": [
+  {
+   "tool": "ptxas",
+   "version": "Cuda compilation tools, release 13.0, V13.0.88",
+   "branch": "Build cuda_13.0.r13.0/compiler.36424714_0",
+   "args": "-v -arch sm_90a -m 64 -fmad false"
+  }
  ]
 }
