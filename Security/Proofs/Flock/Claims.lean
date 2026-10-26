@@ -141,6 +141,8 @@ import Proofs.Flock.Claims.Recursion.NextShaS17
 import Proofs.Flock.Claims.Recursion.NextShaDec
 import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Recursion.NextR
+import Proofs.Flock.Claims.Recursion.DecodeTiesVals
+import Proofs.Flock.Claims.Recursion.DecodeTiesW
 import Proofs.Flock.Claims.Recursion.VerdictRows
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictRowE
