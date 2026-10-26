@@ -179,7 +179,8 @@ theorem keeps_h1 (context format program partition : String) (bytes : ByteArray)
 
 /-- **The deployed check accepts H1's honest window at the leg's parameters**: on the loop's honest registration and
 any one-stage answer citing it that accepted 24 ascending distinct units below 144 at the rule's profile, it publishes
-level 39's work (`N = 144`), `K′ = 24` and those units. -/
+level 39's work (`N = 144`), `K′ = 24` and those units. The window's coins are seeded (`h1Check` names no mode) and
+the answer carries no salt, so `SaltKept` holds by computation. -/
 theorem check_h1 (context format program partition : String) (bytes : ByteArray) (units : Array Nat)
     (hu : UnitsOk units 24 144) :
     protocol.check (h1Params context) (h1Reg context format program partition bytes)
@@ -187,14 +188,14 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
       .accept ⟨h1Check, Work.at 3 39, h1Fixed.sampling, [2, 2, 2, 2], none, units⟩ (h1Profile program partition) :=
   Properties.Pouw.Check.acceptMeans_complete _ _ _ h1Fixed _ ⟨.subset 24, 144, units⟩
     (keeps_h1 context format program partition bytes)
-    ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩
+    ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ rfl
 
 /-- **`DrawIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
 (the loop's 128 real tiles), publishes the population `N = 144` and the draw size `K′ = 24`. -/
 theorem numbers_h1 (context : String) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :
     pub.work.n = 144 ∧ pub.sampling.k = 24 := by
-  obtain ⟨f, draw, hk, -, rfl⟩ := Properties.Pouw.Check.acceptMeans _ _ _ _ _ hc
+  obtain ⟨f, draw, hk, -, -, rfl⟩ := Properties.Pouw.Check.acceptMeans _ _ _ _ _ hc
   obtain ⟨-, -, -, hlv, -, -, hw, hs, -⟩ := hk
   have h39 : f.work.level = 39 := Option.some.inj (hlv.symm.trans hl)
   have hw' : f.work = Work.at 3 39 := by rw [hw, h39]; rfl
