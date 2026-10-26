@@ -28,7 +28,7 @@ eyeball review, and the full check runs after landing); `land` below, and drive'
                                                    --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
-                                                   with --on on vy-nebius-cpu-1), naming the PR on `next` that owns it;
+                                                   with --on on vy-nebius-cpu-3), naming the PR on `next` that owns it;
                                                    --no-preflight skips it (the lander's)
     research queue drive (--on MACHINE | --config PATH [--config-from-tree]) [--max-running N] [--train-size N] [--marked-after TS]
                          [--first N,...] [--defer STEPS] [--[no-]regenerate-locks] [--per-pr-shadow N]
@@ -1913,9 +1913,12 @@ PREFLIGHT_MIN_FREE = 0.25
 #: 5 minutes, and a warm tree rebuilds a few changed modules and their importers in a minute or two (TOP-90 row 58)
 PREFLIGHT_LEAN_MODULES = 40
 PREFLIGHT_LEAN_S = 180.0
-#: where the Lean step builds for `ready --on` when this machine keeps no warm Lean tree: `verity lean try`'s node and pool, whose
-#: `build` Lean slots keep their trees warm
-PREFLIGHT_LEAN_ON, PREFLIGHT_LEAN_POOL = "vy-nebius-cpu-1", "research"
+#: where the Lean step builds for `ready --on` when this machine keeps no warm Lean tree (infra's placement, 26 Oct 14:44Z: cpu-3's
+#: `build` Lean slots, its research pool the least loaded; cpu-1's pool is congested).  The one place to move it
+PREFLIGHT_LEAN_ON = "vy-nebius-cpu-3"
+#: the `research run` pool it takes there: none, as `verity lean try --on vy-nebius-cpu-3` runs, since the node's `build` Lean slots
+#: are the gate; a node without them would take its `research` pool
+PREFLIGHT_LEAN_POOL: str | None = None
 #: the merged tree's builder (`lean_changed.py --build FILE...`, on a `build` Lean slot's warm tree), and its last line's prefix
 LEAN_BUILDER, LEAN_BUILD_LINE = "tools/verity/lean/lean_changed.py", "lean-build: "
 #: `lean_slot.py`'s SLOTS: a machine whose file lists a `build` pool keeps warm Lean trees; an agent VM has none
@@ -2318,9 +2321,9 @@ class LakeBuild:
     """The Lean step's builds (`Preflight._lean`): the tree's `LEAN_BUILDER` (`lean_changed.py --build FILE...`), which builds the
     files' modules on the warm tree of a node's `build` Lean slot as `verity lean try` builds one, and ends with one
     `LEAN_BUILD_LINE`.  It runs here when this machine's Lean slot file (``slots``) lists a `build` pool, in a process group
-    killed at the step's deadline; else, given ``on`` (`ready --on`), as a `research run` of the tree there (``pool``, a slot
-    named for ``by``), bounded by the same deadline; else not at all, and says so: an agent VM builds nothing (AGENTS.md,
-    "Tests"), and its preflight never starts a run unasked."""
+    killed at the step's deadline; else, given ``on`` (`ready --on`: `PREFLIGHT_LEAN_ON`), as a `research run` of the tree there
+    on its `build` Lean slot, or in ``pool`` (a slot named for ``by``) when one is given, bounded by the same deadline; else not
+    at all, and says so: an agent VM builds nothing (AGENTS.md, "Tests"), and its preflight never starts a run unasked."""
     on: str | None = None
     pool: str | None = PREFLIGHT_LEAN_POOL
     by: str | None = None
