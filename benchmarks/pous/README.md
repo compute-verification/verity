@@ -141,3 +141,9 @@ default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, ta
 research run --on <RTX PRO 6000 node> --project verity --source . --cwd source --campaign streamed-wipe \
   -- bash benchmarks/pous/streamed_wipe/run.sh
 ~~~
+
+`band_wipe/` is one band-fill wipe of a GPU under `Pous.Guarantees.SecureErasureMeetsFamily`: the prover fills the device's
+free memory with the band under the memory challenger's fresh salt (`band_gpu`'s `band_chain` kernel) and answers from it
+with the native responder; the memory challenger, on another machine, runs the signed sessions of 2152 reads at the
+guarantee's 1.449 ms limit and judges them against the reference encoder. A cheat mode keeps foreign bytes in every 19th
+block and recomputes a challenged one. `run.sh`'s header has the launch forms; `challenger.py`'s docstring has the steps.
