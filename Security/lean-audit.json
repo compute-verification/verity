@@ -2751,6 +2751,9 @@
    "assumptions": [],
    "type_hash": "9c51b9643d2338efb76b1fb71c237e7e91a2aa0a1cff5a71cc0797723a71b639"
   },
+  "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": {
+   "owner": "@lean"
+  },
   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": {
    "owner": "@lean",
    "signature": [
@@ -3301,10 +3304,16 @@
    "type_hash": "f3e44a6b16ecd753748997a80b92bf2bc8c54f0f629c514f20c1a3f9133ed37c"
   },
   "Accounting.SecurityProofs.JointHorizonBlocksA": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonBlocksA : Accounting.Guarantees.JointHorizonBlocksA"],
+   "assumptions": [],
+   "type_hash": "44fa6ebcc2dd58e4949f72a01d94cf019d868d99eaada13ae4c6a98b07b80d3c"
   },
   "Accounting.SecurityProofs.JointHorizonBlocksLegs": {
-   "owner": "@lean"
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.JointHorizonBlocksLegs : Accounting.Guarantees.JointHorizonBlocksLegs"],
+   "assumptions": [],
+   "type_hash": "68dde909d4760fe6bf5586fa1e9c403148c9c10907160757d962f5fdfdba5159"
   },
   "Accounting.SecurityProofs.JointPerRun": {
    "owner": "@memory-accounting",
@@ -10513,9 +10522,6 @@
    "signature": ["Verity.SecurityProofs.SoundMono : Verity.Guarantees.SoundMono"],
    "assumptions": [],
    "type_hash": "093cd4e683f144b86a3751c7eb7ad611c970d0e583757f8db4091beb488e3217"
-  },
-  "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": {
-   "owner": "@lean"
   }
  },
  "shape": {
@@ -12744,6 +12750,8 @@
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
@@ -13539,11 +13547,17 @@
    "guarantees": ["Accounting.SecurityProofs.CovertResidual", "Accounting.SecurityProofs.Joint"]
   },
   "Definitions.Accounting.Guarantees.JointBlocks": {
-   "digest": "924d6a0f5f457dba832c879f213047adc65b80feff0a393ccd6b72d35e79c570",
+   "digest": "e20a8b898619a36d3f269089d18212bec683737e37bd87e176f025d8ccc341ee",
    "definitions": {
-    "Accounting.Guarantees.JointHorizonBlocks": "5821543be7c4950777feb80573f5762d9c9ab740ac878155676591eb79d06ae4"
+    "Accounting.Guarantees.JointHorizonBlocks": "5821543be7c4950777feb80573f5762d9c9ab740ac878155676591eb79d06ae4",
+    "Accounting.Guarantees.JointHorizonBlocksA": "c1f730bea4fe4aed554f0272d955127720cfa2a88f0333840a833a258fdfefb6",
+    "Accounting.Guarantees.JointHorizonBlocksLegs": "977fc500292ef7b2e29f3b344209f12e2d27dcb936c31439ae6a2e3f2885be7a"
    },
-   "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocks"]
+   "guarantees": [
+    "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs"
+   ]
   },
   "Definitions.Accounting.Guarantees.JointPeriod": {
    "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
@@ -14476,6 +14490,8 @@
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
@@ -14553,6 +14569,8 @@
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod"
    ]
   },
@@ -17369,6 +17387,8 @@
     "Accounting.SecurityProofs.Fit",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod",
     "Accounting.SecurityProofs.Localization",
     "Accounting.SecurityProofs.PouwLocalOff",
@@ -17727,6 +17747,8 @@
     "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPeriod",
     "Nci.Cover.SecurityProofs.CoverTraining",
     "Nci.Cover.SecurityProofs.CoverTrainingAligned",
@@ -23275,6 +23297,8 @@
     "Accounting.SecurityProofs.Joint",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
+    "Accounting.SecurityProofs.JointHorizonBlocksA",
+    "Accounting.SecurityProofs.JointHorizonBlocksLegs",
     "Accounting.SecurityProofs.JointPerRun",
     "Accounting.SecurityProofs.JointPerRunPriced",
     "Accounting.SecurityProofs.JointPeriod",
