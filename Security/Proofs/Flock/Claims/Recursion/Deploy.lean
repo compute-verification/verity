@@ -16,7 +16,8 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   statement's bytes (a `FlockDeploy.Raw` encoding: its circuit, public and partition files), the verifier's own inner
   shape (`--rec-inner`) and bindings (`--rec-bindings`), the circuit registration, and per V* part its Flock statement.
   V*'s shared rows (`--rec-rows`) are no part of `x`: they are staged (below). `parse` and `scopeCheck` are the
-  deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
+  deployed parser's (`Flock.RecScope.parseOf`, `scopeCheckOf`) at
+  `decodeR`: what `readX` reads (it refuses unless the inner statement's dimensions read, `RecVStar.innerOf`, Flock's
   plain verifier sets the inner statement up, its statement check passes and it carries a draw, `innerOk`, and there is
   one part per V*
   statement of the verifier's inner shape, `RecVStar.statements`), as the verifier's inner
