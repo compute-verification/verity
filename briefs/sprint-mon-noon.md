@@ -61,7 +61,7 @@ by data sheet, and the table says so.
 >
 > **Before you report that a Lean head builds (RT-LEAN-2, 08:40Z):** run one probe that imports the package root, e.g. `import Proofs.Pouw`. A single-file `lean try` builds only that file's imports, so it can pass while the package root fails.
 >
-> **256 GB Lean checks (infra, 07:03Z): use `research run --on vy-nebius-cpu-2 --mem-gb 256`.** It has 837 GB free and runs to 28 Oct 06:00Z. vy-nebius-2 and -3 stop at about 08:00Z, so don't use them. If cpu-2 refuses the reservation, give the coordinator the run id; infra clears the ledger.
+> **256 GB Lean checks (infra, 07:03Z; ledger cleared 09:19Z): use `research run --on vy-nebius-cpu-2 --mem-gb 256 --mem-wait 1800`.** Live reservations hold 830 GB, so 256 GB fits once the train check or proofs' p5 ends, and `--mem-wait` queues you for it. A full `Security` check peaked at 95 GiB for NAIVE-STRASSEN-2, so ask for 160 GB when that's enough. It has 837 GB free and runs to 28 Oct 06:00Z. vy-nebius-2 and -3 stop at about 08:00Z, so don't use them. If cpu-2 refuses the reservation, give the coordinator the run id; infra clears the ledger.
 
 ## Who builds what, and who red-teams it
 
