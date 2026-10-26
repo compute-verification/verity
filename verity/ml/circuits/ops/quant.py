@@ -20,11 +20,13 @@ a public power of two from 16 to 262,144 bits):
 A subnormal amax can give a subnormal or zero scale, and an infinite one an infinite scale; both are torch's (x / 0 is ±inf, so
 127 or -128, and 0 / 0 or inf / inf NaN, so 0), and the bf16 outputs of a finite linear never reach them.
 
-**The units.** A row is one ``QuantRowS8_v1`` unit while its N * 8 + 32 output bits fit the widest class (N <= 32,764). A wider
-row is ``RowAbsMax_v1`` over the whole row (one unit, or a tree of them), then one ``QuantChunkS8_v1`` a chunk, each reading the
-chunk and that amax; chunk k's codes are the row's codes k * N .. k * N + N - 1, and every chunk's scale is the row's. In the
-torch loop ``RELU`` is true on the up_proj -> down_proj edge and false on down_proj -> the next step's up_proj, which has no
-ReLU; the units of a row take the same ``RELU``.
+**The units.** A row is one ``QuantRowS8_v1`` unit while its N * 8 + 32 output bits fit the widest class (N <= 32,764) and the
+unit fits the proof system's block. A wider row is ``RowAbsMax_v1`` over the whole row, then one ``QuantChunkS8_v1`` a chunk,
+each reading the chunk and that amax; chunk k's codes are the row's codes k * N .. k * N + N - 1, and every chunk's scale is the
+row's. The amax can be taken in parts: a part's amax is its own ReLU and magnitude, so ``RowAbsMax_v1{m + j, RELU}`` over the
+last part's m values and the other j parts' amaxes is the row's (a combine that reads a part's values, for a proof system that
+refuses a unit all of whose rows are short). In the torch loop ``RELU`` is true on the up_proj -> down_proj edge and false on
+down_proj -> the next step's up_proj, which has no ReLU; the units of a row take the same ``RELU``.
 """
 from __future__ import annotations
 
