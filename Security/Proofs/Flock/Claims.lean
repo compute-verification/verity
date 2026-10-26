@@ -163,6 +163,10 @@ import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowL
 import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.VerdictLoop
+import Proofs.Flock.Claims.KS.PlainR
+import Proofs.Flock.Claims.Recursion.LastBindsR
+import Proofs.Flock.Claims.Recursion.KSLin2R
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
