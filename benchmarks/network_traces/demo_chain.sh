@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The network certifier leg of the one-H200 demo by the certifier-only path: the demo's endpoint (demo_endpoint.py, its
+# Network accounting for the one-H200 demo by the certifier-only path: the demo's endpoint (demo_endpoint.py, its
 # engine behind the OpenAI API, writing serve-openai's records), the certifier rehearsal against it on varied traffic
 # (certifier_serve.py rehearse, honest and the tampers), the rehearsal kept as the gate keeps a certifier run
 # (request.json, out/, end.json with each file's SHA-512, as auditor.certifier_run writes them), then chain_record.sh on

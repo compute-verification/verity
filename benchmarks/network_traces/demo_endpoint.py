@@ -35,7 +35,7 @@ Commit window and writes ``summary.json``.
   after ``--window-steps`` steps, so a request may run in two windows (the carry `window_chain.join` binds). Its run root
   is a hiding commitment (`verity.ml.commitments.advice` rows under fresh salts, kept in ``served_rows/w<k>.json``) of
   the tokens it served, one row a sampled token: (step, request, position, token). It stands in for the serving loop's
-  own Commit (HASH-7's per-slot trees), which the network certifier's leg doesn't read.
+  own Commit (HASH-7's per-slot trees), which network accounting doesn't read.
 """
 from __future__ import annotations
 
