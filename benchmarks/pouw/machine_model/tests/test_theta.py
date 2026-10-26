@@ -84,6 +84,11 @@ def test_every_unit_has_a_verdict_and_the_bounded_ones_a_share():
         assert all(u.gap for u in t.units.values() if u.verdict == "open")
     rt = T.theta(SM120).units["rt"]
     assert rt.verdict == "open" and T.share(T.theta(SM120), rt, "sheet") == pytest.approx(386.2 / 1024)
+    for data, cps in ((SM90, 4.79e9), (SM120, 7.13e9)):
+        t = T.theta(data)
+        host = t.units["host.cpu"]
+        assert host.verdict == "open" and "κ" in host.gap
+        assert T.share(t, host, "measured") == pytest.approx(64e9 / 128 / cps, rel=2e-3)
 
 
 def test_sha512_against_the_public_figures():
@@ -131,6 +136,7 @@ def test_the_command_and_the_render(capsys):
     assert "280.89 / 128.01 = 2.194" in out
     assert "texture: texture filtering: 4 texture units a SM; ≤ 16 against tensor.s8.k32: 0.39% / 0.39%" in out
     assert "c_sha ≤ 0.885" in out
+    assert "    mma.sync m16n8k32 s8: 128.0 / 84.0\n" in out and "    mma.sync m16n8k4 tf32: 256.0 / 256.0*\n" in out
     assert main(["theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
     assert main(["render", "theta"]) == 0

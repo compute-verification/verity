@@ -61,6 +61,12 @@ def run(args) -> int:
         dropped = f"; left out, unmeasured: {', '.join(b.dropped)}" if b.dropped else ""
         print(f"  {reading:13} {b.words:.1f} words = {b.bits:.0f} bits; c = {b.rho8:g} / {b.bits:.0f} = {b.c:.4f}; "
               f"at {_mix(b.mix)}{_filled(b.filled)}{dropped}")
+    print("  each writer alone, register words a SM-clock (rate / per · words; the LP adds issue and the joint rows), "
+          "sheet / measured (* the sheet's, for want of a run):")
+    for w in t.writers:
+        xs = [t.at(w.rate, rd) for rd in T.READINGS]
+        print(f"    {w.name}: " + " / ".join("none" if v is None else f"{v / w.per * w.words:.1f}{'*' if f else ''}"
+                                             for v, f in xs))
     best = min(hs, key=lambda f: f.r_min)
     print(f"\nr_H against r_min, lane instructions a committed word of each fold's classes; the least r_min here is "
           f"{best.fold}'s {best.r_min:g}, the fold's own count (no lower bound proves it)")

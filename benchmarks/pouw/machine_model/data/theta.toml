@@ -669,6 +669,15 @@ source = "CPG Table 7, CC 12.0: 64 lanes a SM-clock for 32-bit shifts and logic;
 measured = 0.018129
 runs = "7.13 G compressions/s (r20261016-110413-c5d1, commit_gpu README) over 188 SMs at the node's 2,092 MHz lock; r20261016-110829-a28e 6.94 G/s"
 
+[[rate]]
+key = "host.link"
+what = "the host link, PCIe Gen5 x16, one direction, whole GPU: the card's one port off the card (the host CPUs and the NICs sit behind it)"
+unit = "B/s"
+sheet = 64e9
+grade = "data sheet"
+source = "WP Table 1 'PCI Express Interface Gen 5' (x16); PCIe 5.0's 32 GT/s a lane, 128b/130b, on 16 lanes: 63.0 GB/s each way, 64 the rounded figure"
+gap = "a pinned device-to-host cudaMemcpy bandwidth test on an RTX PRO 6000 (GPU queue)"
+
 [[unit]]
 key = "tensor"
 what = "tensor cores, every format and shape the card has (INT8, FP8, MXFP8, NVFP4/MXFP4, FP16/BF16, TF32, FP64; 2:4 sparse INT8)"
@@ -803,6 +812,23 @@ what = "compressible memory (CU_MEM_ALLOCATION_COMP_GENERIC) and the card's loss
 verdict = "open"
 why = "computes nothing, but a compressible operand (a degenerate workload's zeros) may move faster than hbm and l2.read price; the matmul words aren't bandwidth-bound at served K, so this reaches P2's bandwidth prices only; whether CC 12.0 reports generic compression is unchecked"
 gap = "a bandwidth probe of a compressible allocation of zeros against a plain one on the RTX PRO 6000 (GPU queue)"
+
+[[unit]]
+key = "host.link"
+what = "the host link: PCIe Gen5 x16 to the host CPUs and the NICs; the card has no NVLink at all"
+verdict = "none"
+rates = ["host.link"]
+why = "moves bytes and adds nothing; it bounds what host.cpu can take off the card"
+
+[[unit]]
+key = "host.cpu"
+what = "the host's CPUs (or any machine behind the NICs), hashing words the card sends them (NF4)"
+verdict = "open"
+rates = ["host.link", "sha512"]
+bound = 0.00127131
+against = "sha512"
+why = "the host computes every compression of data it holds, so what bounds it is the words' bytes, not compressions: host.link's 64e9 B/s carry 0.5e9 · κ compressions' worth of words a second, which at κ = 1 is 0.5e9 / (188 SMs · 2,092 MHz, sha512's measured clock) = 0.00127131 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to the hashing's own share of device time"
+gap = "κ, the receipt's compressions a 128 B of words: about 1 for a long run of words a leaf, 2 for a binary tree over 128-B leaves (PROTO-DESIGN's no-fold receipt fixes it); a pinned device-to-host copy test for host.link (GPU queue)"
 
 [[public]]
 impl = "hashcat 7.1.2 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"

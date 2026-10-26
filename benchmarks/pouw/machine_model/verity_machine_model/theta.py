@@ -60,7 +60,7 @@ REDUCTIONS = {"smem.atom": ADDING[5], "l2.red": ADDING[6], "dsmem.red": ADDING[7
               "nvls.red": ADDING[9]}
 # Every arithmetic or reduction unit RT-UNITS (CMP-139) lists; each θ has a `[[unit]]` for each, with its verdict.
 UNITS = ("tensor", "dp4a", "imad", "alu", "fp32", "fp64", "sfu", "uniform", "texture", "smem.atomics", "l2.atomics",
-         "tma.reduce", "dsmem", "nvlink.reduce", "copy", "video", "rt", "clocks", "compression")
+         "tma.reduce", "dsmem", "nvlink.reduce", "copy", "video", "rt", "clocks", "compression", "host.link", "host.cpu")
 VERDICTS = {
     "priced": "a θ rate the model prices",
     "route": "an adding route d reads (an upper bound where no run has timed it)",
