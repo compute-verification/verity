@@ -873,7 +873,7 @@ def main() -> None:
         ap.error("--no-autotune is a compiled mode")
 
     import vllm
-    from verity_vllm.engine.engine_profile import get_model_runner, get_scheduler
+    from verity_vllm.engine import handle
     from verity_vllm.engine.hooks import Hooks
     from vllm import LLM, SamplingParams
     from vllm.inputs import TokensPrompt
@@ -925,7 +925,7 @@ def main() -> None:
     llm = LLM(**kw)
     startup_s = time.perf_counter() - t0
     log(f"engine up in {startup_s:.1f} s")
-    runner = get_model_runner(llm)
+    runner = handle.model_runner(llm)
     model = unwrap(runner.model)
     hf = llm.llm_engine.vllm_config.model_config.hf_config
     cache = llm.llm_engine.vllm_config.cache_config
@@ -934,7 +934,7 @@ def main() -> None:
                    if getattr(m, "attn_backend", None) is not None})
     rec: list = []
     window = Window(args.profile_steps)
-    recorder(hooks, get_scheduler(llm), rec, window)
+    recorder(hooks, handle.scheduler(llm), rec, window)
 
     props = torch.cuda.get_device_properties(0)
     result = {
