@@ -19230,6 +19230,19 @@
     "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
   },
+  "Definitions.Pous.Guarantees.StreamedWipeFamily": {
+   "digest": "2e77205c5cf1dac9755796b9ce97b04d16e4c17f29813ef351cc77c5ff21a0a5",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets141GB": "c3e59d657f70b16898dd73c5f783734567e50c7735ddc33c99b8e27ef540a0d6",
+    "Pous.Guarantees.StreamedWipeMeets96GiB": "5951e52db4f1ad96cba36cb8b378ec6ec3843ecbb86e01ad5fe80635e4faf2b4",
+    "Pous.Guarantees.StreamedWipeMeetsFamily": "22b9227c1e11fab0db4952eba36c2eefee86cb32567512d80710a2b1318f9384"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+   ]
+  },
   "Definitions.Pous.Model.Audit": {
    "digest": "ae9ed577afee6873bd59d0b44e3a7daa4019bdf0958b65f2ec852459c09a026e",
    "definitions": {
@@ -33655,21 +33668,12 @@
    "guarantees": ["Pous.SecurityProofs.SecureErasureMeets96GiB", "Pous.SecurityProofs.SecureErasureMeetsFamily"]
   },
   "Models.Pous.Guarantees.StreamedWipe": {
-   "digest": "e4b0123383dd563ea74851548a079fbf7bb2ac076a969386ec5fe5c37eb0f8be",
+   "digest": "c984cc236c27a63dbd712cc69657597f482f450718cc277d46d59d27ef7c282f",
    "definitions": {
     "Pous.Guarantees.StreamedWipe": "bf4e4c3f5bba7f3e6ad8aa8f6fcb7c5be2a1f4432092641f1213a918e60f1676",
-    "Pous.Guarantees.StreamedWipeMeets141GB": "c3e59d657f70b16898dd73c5f783734567e50c7735ddc33c99b8e27ef540a0d6",
-    "Pous.Guarantees.StreamedWipeMeets2600GB": "2fe28ace401346f9cfd93b710cc10c4c9e7ac627f1ac2fe3fb98e51a313dc57b",
-    "Pous.Guarantees.StreamedWipeMeets96GiB": "5951e52db4f1ad96cba36cb8b378ec6ec3843ecbb86e01ad5fe80635e4faf2b4",
-    "Pous.Guarantees.StreamedWipeMeetsFamily": "22b9227c1e11fab0db4952eba36c2eefee86cb32567512d80710a2b1318f9384"
+    "Pous.Guarantees.StreamedWipeMeets2600GB": "2fe28ace401346f9cfd93b710cc10c4c9e7ac627f1ac2fe3fb98e51a313dc57b"
    },
-   "guarantees": [
-    "Pous.SecurityProofs.StreamedWipe",
-    "Pous.SecurityProofs.StreamedWipeMeets141GB",
-    "Pous.SecurityProofs.StreamedWipeMeets2600GB",
-    "Pous.SecurityProofs.StreamedWipeMeets96GiB",
-    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
-   ]
+   "guarantees": ["Pous.SecurityProofs.StreamedWipe", "Pous.SecurityProofs.StreamedWipeMeets2600GB"]
   },
   "Models.Pouw.Assumptions.Deadline": {
    "digest": "efde32e6e0055ddbe420d8f4b410840f185cbf92a03b58e3e2e3c54dcbf0cd03",

@@ -1,3 +1,4 @@
+import Definitions.Pous.Guarantees.StreamedWipeFamily
 import Proofs.Pous.StreamedWipe.Deployed
 
 /-!
