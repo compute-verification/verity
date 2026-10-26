@@ -215,8 +215,8 @@ def listening(port: int) -> bool:
 
 def await_listener(port: int, polls: int = 300) -> int | None:
     """The polls (one a second, at most `polls`) until `port` listens here (`listening`), or None: the live challenger
-    reaches the serving node through ``ssh -R`` once the gate's open has answered, and a probe connect would take the
-    place of the session's one client."""
+    reaches the serving node through its certifier coin link once the gate's open has answered, and a probe connect
+    would take the place of the session's one client."""
     for i in range(polls):
         if listening(port):
             return i

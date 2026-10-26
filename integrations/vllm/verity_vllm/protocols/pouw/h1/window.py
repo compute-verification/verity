@@ -14,8 +14,8 @@ over W (`EPOCHS`), its salt coin opened after R (`salt_session`); its salt is `a
 the gate's open answer, and opens its salt after the weights' root. Round s's coin opens after round s's root
 (`pouw_h1.H1Run`); `finish` closes the session once the window has finished. The host opens a salt coin only after the
 root its session was opened on (serve.py's ``--root``, RT4-INT-24), H1's R. The challenger is auditor-trusted
-(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it through ``ssh -R``
-on its own 127.0.0.1.
+(`trusted-host`): it runs on a machine the prover doesn't control, and the serving process reaches it on its own
+127.0.0.1, through its certifier coin link.
 
 A reserve joins its lane's open period, and a Pearl-C salt-only session is a window H1's checks refuse
 (`window.live_epoch_reason`), so one reserved in an H1 period (`H1_PERIOD`) is a wasted session whose period earns
@@ -41,7 +41,7 @@ from verity_vllm.protocols.pouw.h1 import challenger as PHC
 #: what else the gate's reserve answer carries beside its ``session`` (H1's and Pearl-C's ``session``, `reserved_of`)
 RESERVE_FIELDS = ("seq", "peer", "by", "for", "expires_utc", "period")
 #: how many times a session the gate has just opened is tried, a second apart, while it refuses connections (the
-#: auditor host's ``ssh -R`` to this machine not up yet)
+#: session's port on this machine not up yet)
 TRIES = 120
 #: Pearl-C's salt epochs: how many this process has asked the gate to open on each weights' root W (hex).  The next one
 #: over W is numbered that count, k (a manifest's ``pass_index``), and opens on `salt.epoch_open_root` of W and k, so a

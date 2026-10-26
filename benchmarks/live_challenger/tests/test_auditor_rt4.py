@@ -46,6 +46,7 @@ SECRET = bytes(range(32))
 def host(tmp_path) -> A.Host:
     (tmp_path / "var" / "sessions").mkdir(parents=True)
     (tmp_path / "peers").write_text("# peers\nvy-challenger-1 research@10.0.0.1\nvy-nebius-1 research@10.0.0.2\n")
+    (tmp_path / "coin-ports").write_text("vy-nebius-1 7811-7899\n")
     (tmp_path / "pins.jsonl").write_text(A.pin_line(PIN, "d" * 40, "2026-10-20T09:00:00Z") + "\n")
     return A.Host(root=tmp_path / "var", peers=tmp_path / "peers", pins=tmp_path / "pins.jsonl")
 
@@ -99,8 +100,6 @@ def serve(host, signer, session, client, tmp_path, monkeypatch) -> dict:
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
     body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
     argv = A.serve_argv(host, session, body)
-    i = argv.index("--peer")
-    del argv[i:i + 2]
     argv[argv.index("--port") + 1] = "0"
     argv = [sys.executable, str(HERE / "stub_serve.py"), *argv[2:], "--params", "4,4", "--keygen-workers", "1"]
     out = host.sessions / session / "out"
