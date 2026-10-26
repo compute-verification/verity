@@ -5,6 +5,7 @@ served tree may be: `row/v1`, and `row/v2` and `row-seg/v1` bit rows (the circui
 v2 or a segmented row). The verifier writes its own `--registered` file from the tree as the service holds it
 (`served.json`), with `register_served` on its own program, and `flock-verify verify --zk --registered` accepts the session
 on it, its verdict naming that program's digest (the partition's), and refuses it on the same file with the tree's root changed, or a bit row's port with its words or width changed.
+Under `--zk --ks-form` only the row/v2 session is accepted (`Flock.PortRoots`).
 A plain session of the row/v1 stage (`PLAIN`: no `--zk`, the verifier's own stratified draw) is accepted on that file too,
 and refused with the root changed and without `--registered`.
 Each verify sets up an m = 25 table (about 10 s), so the module is slow; it is the one test of `register_served`'s file on
@@ -118,6 +119,28 @@ def test_a_bit_row_port_whose_words_and_width_are_not_its_rows_is_refused(fx, tm
         (tmp_path / f"{name}.json").write_text(json.dumps(doc))
         bad = _verify(fx, tmp_path / f"{name}.json")
         assert bad["accepted"] is False and f"not {SR.VALUE}'s registered {want}" in bad["why"], (name, bad)
+
+
+def test_ks_form_accepts_row_v2_files_and_refuses_v1_and_segmented_rows(fx, tmp_path):
+    """`--zk --ks-form` holds the files to the form `SampledKSLiveV3` covers (`Flock.PortRoots.checkOf`): the session whose
+    rows are all unsegmented `row/v2` rows is accepted as under `--zk`, and the same session at a `row/v1` circuit or one
+    whose `cs` is a `row-seg/v1` row is refused for its rows, though `--zk` alone accepts both. `--ks-form` without `--zk`
+    is a usage error."""
+    import served_registered as SR
+
+    schema, fx = fx
+    program, query = SR.program()
+    tree = ServedTree(**json.loads((fx / "stage" / "served.json").read_text()))
+    reg = register_served(program, query, [tree]).write(tmp_path / "registered.json")
+    v = _verify(fx, reg, ("--zk", "--ks-form"))
+    if schema == G.SCHEMA_V2:
+        assert v["accepted"] is True, v
+    else:
+        assert v["accepted"] is False and "not an unsegmented sha512/row/v2 row" in v["why"], v
+    p = subprocess.run([str(BIN), "verify", "--ks-form", "--statement", STATEMENT, "--circuit", str(fx / "stage" / "circuit.txt"),
+                        "--public", str(fx / "stage" / "pub-32.bin"), "--session", str(fx / "session")],
+                       capture_output=True, text=True, check=False)
+    assert p.returncode == 2 and "--ks-form goes with --zk" in p.stderr, p.stderr
 
 
 @pytest.fixture(scope="module")
