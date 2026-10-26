@@ -1872,6 +1872,7 @@
   "Definitions.Pouw",
   "Definitions.Pouw.Assumptions",
   "Definitions.Pouw.Guarantees",
+  "PouwCheck.WindowSalt",
   "Definitions.Pous",
   "Definitions.Pous.Assumptions",
   "Definitions.Pous.Guarantees",
@@ -2473,7 +2474,8 @@
   }
  },
  "reads_exempt": {
-  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+  "PouwWindow.Rounds": "PoUW window's rounds code, read by `Accounting.SecurityProofs.JointHorizonBlocksDeployed` through `PouwCheck.outcome`'s window salt (`PouwCheck.windowSaltCheck`): the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `roundKey`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec, as in the Properties lock (CMP-81)"
  },
  "trees": {
   "definitions": ["Definitions", "Models"],
