@@ -31,7 +31,7 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
     refine ⟨_, _, by assumption, by assumption, ?_⟩
     refine List.Forall₂.imp (fun t p h hnull => ?_) (Claims.Bridge.Custody.mapM_forall₂ (by assumption))
     beta_reduce at h
-    dsimp only at h
+    try dsimp only at h
     obtain ⟨p', hp', h⟩ := ebind_ok h
     rw [if_pos hnull] at hp'
     simp only [pure, Except.pure, Except.ok.injEq] at hp'
@@ -41,10 +41,7 @@ theorem decodeJWithK_publics (keep : Bool → Bool) (hs : Hashes Flock.V) {spec 
       simp only [pure, Except.pure, Except.ok.injEq] at h
       first | exact h.symm | exact h
 
-theorem isNull_mkObj_nil (t : String) : Record.isNull (Json.mkObj []) t = true := by
-  first
-  | rfl
-  | (unfold Record.isNull; simp [Json.mkObj, Json.getObjVal?])
+theorem isNull_mkObj_nil (t : String) : Record.isNull (Json.mkObj []) t = true := rfl
 
 /-- **The verdict's record keeps the reader's link `publics`.** -/
 theorem fld_link_jAt {H : Claims.Msg → Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
@@ -87,7 +84,7 @@ theorem publics_empty (D : DecAt rd x ms cs) : (D.sess.publics.all fun p => p.si
   rw [Record.decodeJWith_eq_decodeJWithK] at hdec
   obtain ⟨l, pubs, hl, hp, hF⟩ := FlockDeploy.decodeJWithK_publics id _ hdec
   obtain ⟨l₀, hl₀, hpub⟩ := FlockDeploy.fld_link_jAt hl
-  obtain ⟨-, -, -, -, -, hj, -⟩ := FlockDeploy.decR_frames D.dec
+  obtain ⟨r₀, rss, ms', -, -, hj, -⟩ := FlockDeploy.decR_frames D.dec
   rw [hj, FlockDeploy.recJ, FlockDeploy.fld_recordObj_link] at hl₀
   injection hl₀ with hl₀
   subst hl₀
