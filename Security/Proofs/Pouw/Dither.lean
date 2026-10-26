@@ -1,5 +1,6 @@
 import Definitions.Pouw.Guarantees.Dither
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.ShaRealize
 
 /-!
 # The no-fold Dither protocol's work-soundness: the headline's proof
@@ -15,9 +16,13 @@ import Proofs.Pouw.RelativeSecurity
   - A round's factor reads only the coins up to that round, and is frozen at 1 on a round whose oracle and advice
     are bad for `ShaSpeed` (`roundF`), so the rounds' product is a supermartingale over the fresh coins
     (`expect_prod_rounds`), and Markov bounds the luck by `δ` (`prob_rounds_le`).
-  - The union bound adds the service's `κ_S`, the extraction's `κ_x(A)`, the bad oracles' `κ_sha(A)` and the
-    degenerate dithers' `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off those events the rounds meet the work floor
-    (`floor_of_rounds`), and `FreedOfFloor` turns it into freed compute.
+  - The union bound adds the service's `κ_S`, the extraction's `κ_x(A)` on runs within the cap (a run that fits
+    makes at most `Q` oracle calls, `calls_le_of_fits`), the bad oracles' `κ_sha(A)` and the degenerate dithers'
+    `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off those events the rounds meet the work floor (`floor_of_rounds`), and
+    `FreedOfFloor` turns it into freed compute.
+* `WorkSoundNoFold`: `WorkSound` on the no-fold round with `ExtractAdv` from
+  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at the budget `⌈Q⌉ + V`.
+* `FleetSound`: the union bound over the units, each unit's event sliced at the other units' coins.
 -/
 
 namespace Pouw.SecurityProofs.Dither
@@ -592,5 +597,41 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
   · refine (prob_or5_le _ _ _ _ _).trans ?_
     have := add_le_add (add_le_add (add_le_add (add_le_add (hserv A) E2) E3) E4) E5
     linarith
+
+/-- `Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`: `WorkSound` with `ExtractAdv` from `ExtractOfRealize` at
+the budget `⌈Q⌉ + V`. -/
+theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
+  intro G nf k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κsha κdmm κdsha Badv V X D _ _ _ _ _
+    E eo rD pl dirs ξw ξl hreg hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hshaPub hcap hopens hG1 hG2 hG3 horc hP1 hP2
+    hsak hsha hout hserv himp hR A
+  have hx := Pouw.SecurityProofs.ShaRealize.ExtractOfRealize G nf k reg Q X D E eo rD pl dirs ξw ξl
+    (fun _ => ⌈Q⌉₊ + V) (fun _ _ => ⌈Q⌉₊ + V) (fun _ => Badv) hopens horc hR
+  refine (WorkSound G (noFoldRound nf) k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha
+    (fun _ => Badv) (fun _ r => k * ξw r + (⌈Q⌉₊ + V : ℕ) * ξl r)
+    (fun _ => (((⌈Q⌉₊ + V) * (⌈Q⌉₊ + V) + ∑ _w : Fin k, (⌈Q⌉₊ + V) * (2 * (⌈Q⌉₊ + V) + 1) : ℕ) : ℝ) /
+      Fintype.card D) (fun _ => κsha) hreg hdual hpos hH hη hδ hδ1 hβ hK
+    (fun _ r => add_nonneg (mul_nonneg (Nat.cast_nonneg _) (hξw r)) (mul_nonneg (Nat.cast_nonneg _) (hξl r))) hκd
+    hshaPub hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hx A).trans (le_of_eq ?_)
+  simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+
+/-- `Definitions.Pouw.Guarantees.Dither.FleetSound`: the union bound over the units, each unit's event sliced at the
+other units' coins. -/
+theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
+  intro G P k N Obs verdict dev Pd ε C κ hκ hunit A
+  classical
+  refine le_trans (prob_mono (q := fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) =>
+      ∃ u ∈ (Finset.univ : Finset (Fin N)), (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
+        ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧ ¬ (Pd u).FreedWithin 1 z (ε u) (C u))
+      fun ox ⟨u, hu⟩ => ⟨u, Finset.mem_univ u, hu⟩) ((prob_exists_le _ _).trans (Finset.sum_le_sum fun u _ => ?_))
+  let e : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) ≃
+      (P.Orc × (Fin k → P.Draw × P.Chk)) × ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) :=
+    ((Equiv.refl P.Orc).prodCongr (Equiv.piSplitAt u fun _ => Fin k → P.Draw × P.Chk)).trans
+      (Equiv.prodAssoc _ _ _).symm
+  let F : (P.Orc × (Fin k → P.Draw × P.Chk)) × ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prop :=
+    fun b => (A u b.2).Passes (verdict u) (dev u) b.1.1 b.1.2 ∧
+      ∃ z, (Pd u).Fits ((A u b.2).workUse b.1.1 b.1.2) z ∧ ¬ (Pd u).FreedWithin 1 z (ε u) (C u)
+  calc prob _ = prob (fun ox => F (e ox)) := rfl
+    _ = prob F := by rw [prob_equiv e]; simp only [Equiv.apply_symm_apply]
+    _ ≤ κ u := prob_le_of_slices F (hκ u) fun y => hunit u (A u y)
 
 end Pouw.SecurityProofs.Dither

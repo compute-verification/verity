@@ -266,7 +266,8 @@ coins or on any later coin.
 round `w + 1`'s coins go out. Calls that overlap in time but whose coins went out separately are separate rounds, in
 the order their coins went out, and a prover that runs them concurrently is a prover whose `work w` reads only what
 round `w`'s dither and the state allow. The rounds of a period are one sequence in that order: a fleet whose units'
-coins aren't serialized is one prover per unit (RT-PROTO-2 P16, open: the per-unit corollary). -/
+coins aren't serialized is one prover per unit (RT-PROTO-2 P16; the fleet's bound is
+`Definitions.Pouw.Guarantees.Dither.FleetSound`). -/
 structure Prover (G : Accel) (P : RoundProto) (k : ℕ) where
   St : Type
   start : St
