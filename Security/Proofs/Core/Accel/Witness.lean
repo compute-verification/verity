@@ -465,6 +465,30 @@ theorem execOp_direct {ι : Type} {m : Machine ι} (o : m.Op) (src : Fin (m.nIn 
         (m.eval o (fun i => (src i).readIn (m.inStore o i) M) i)) M := by
   simp [Machine.execOp, Machine.Operand.writeIn, Machine.Operand.locIn]
 
+theorem loc_eq_iff {ι : Type} {m : Machine ι} (s s' : m.Store) (q q' : ℕ) :
+    m.loc s q = m.loc s' q' ↔ s = s' ∧ q % m.size s = q' % m.size s' := by
+  constructor
+  · intro h
+    obtain rfl : s = s' := congrArg Sigma.fst h
+    exact ⟨rfl, congrArg Fin.val (eq_of_heq (Sigma.mk.inj h).2)⟩
+  · rintro ⟨rfl, h⟩
+    simp only [Machine.loc, h]
+
 end Writes
+
+/-! ## Copies -/
+
+theorem copy_exec (s t : Store) (len : ℕ) (h : Avail (.copy s t len)) (a b : ℕ)
+    (M : (machine x cap oracle).Mem) :
+    instrExec (copyN s t len h a b).instr M =
+      (List.finRange len).foldl (fun M' (i : Fin len) => Function.update M'
+        ((machine x cap oracle).loc t (b + i.val)) (M ((machine x cap oracle).loc s (a + i.val)))) M := by
+  simp only [instrExec, Ins.instr, copyN]
+  refine (execOp_direct (m := machine x cap oracle) ⟨.copy s t len, h⟩ _ (fun i => b + i.val) M).trans ?_
+  congr 1
+  funext M' i
+  have hi : (i : ℕ) < len := i.isLt
+  simp [Card.machine, machine, Op.eval, getD, Op.outStore, Op.inStore, Op.nIn, Machine.Operand.readIn,
+    Machine.Operand.locIn, hi]
 
 end Verity.Accel.H200.Resident
