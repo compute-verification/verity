@@ -84,8 +84,8 @@ theorem UnitAt.tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) (hu : 
       le := fun x hx => (by rw [ep, hu, hcp]; rw [el, hc0] at hx; exact hle x hx)
       inputs := fun x hx => (by rw [ep]; rw [hu, hiw] at hx; exact hinp x hx)
       comp := fun x hx1 hx2 => ?_
-      row_a := fun x _ hx2 hlog j => ?_
-      row_b := fun x _ hx2 hlog j => ?_ }
+      row_a := fun x hx2 hlog j => ?_
+      row_b := fun x hx2 hlog j => ?_ }
   · rw [ep, hu, hcp, hiw]
     beta_reduce
     rw [hu, hiw] at hx1
