@@ -40,8 +40,10 @@ BACKENDS = ("slots", "reference", "host", "device")
 #: groups the forward may run ahead of the side stream's row reads: an added group's tables stay allocated until the side
 #: stream has read them, so without a bound a commit slower than the forward holds the whole step's values
 LAG = 2
-#: `slots_gpu.Plan`'s ``leaf_minb``, the leaf kernel's blocks an SM (0: the build's default, 1)
-LEAF_MINB = 2
+#: `slots_gpu.Plan`'s ``leaf_minb``, the leaf kernel's blocks an SM (0: the build's default, 1). FAMILIES' layout takes 0: on
+#: an H200 at 512 slots 2 is slower (9.62 s a step against 9.29 s); CIR-113's shared rows take 2 (4.44 s against 4.62 s at
+#: 4,096 slots; run r20261026-172441-2bcc)
+LEAF_MINB = 0
 
 
 def tables(shape: Shape) -> list[list[Table]]:
