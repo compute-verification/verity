@@ -183,6 +183,8 @@ theorem streams_ns_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
   cases hfind'
   have hx : extras.size = sts[k / 2]!.regions.size * sess.points.size := FlockDeploy.extraClaims_size hex
   have hsch : Claims.Flock.plainSched sts[k / 2]!.m = schs[k / 2] := by
+    have e7 : (Setup.ofCircuit sts[k / 2]!).m = sts[k / 2]!.m := rfl
+    rw [e7] at hf
     simp only [Claims.Flock.plainSched, hf, Option.getD_some]
   have hmap : lv.streams[k].toList.map Round.n = y.rounds.toList.map Round.n := by
     rw [← getElem!_pos lv.streams k hk]
@@ -298,7 +300,7 @@ theorem plainR_levelCols_queried {rd : Claims.Msg → Option FinalP} {Ω : Type}
   obtain ⟨-, -, -, -, -, hmids, -⟩ := hdd
   rw [hmids] at hm
   obtain ⟨-, hb⟩ := List.getElem?_zip_eq_some.1 hm
-  obtain ⟨-, hget⟩ := List.getElem?_eq_some_iff.1 hb
+  obtain ⟨_, hget⟩ := List.getElem?_eq_some_iff.1 hb
   simp only [List.getElem_dropLast, List.getElem_tail, List.getElem_map, List.getElem_range] at hget
   obtain ⟨-, hns⟩ := streams_ns_plainJ id _ hv hlv hpn
   have hnr := hns r (by omega)
