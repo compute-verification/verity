@@ -256,7 +256,7 @@ _UNDEFINED_RETURN_NOTED: set[str] = set()
 
 
 def _defined_tensor_list(rec: Recorder, name: str, out: Any) -> Any:
-    """[R13 hopper] An op whose `Tensor[]` return carries UNDEFINED tensors (vLLM's FA3 `_vllm_fa3_C.fwd` returns `[out, softmax_lse,
+    """An op whose `Tensor[]` return carries UNDEFINED tensors (vLLM's FA3 `_vllm_fa3_C.fwd` returns `[out, softmax_lse,
     out_accum, lse_accum]` with the last two undefined when `num_splits == 1`) surfaces them here as `None`; handing that list back to
     the dispatcher fails its `Tensor[]` cast (`pushPyOutToStack`: "Unable to cast Python instance of type list"), so the op cannot run
     under any TorchDispatchMode.  The recorded outputs (`enc_out`, encoded before this) keep the `None`s; only what is RETURNED to the

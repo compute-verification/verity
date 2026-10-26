@@ -3,7 +3,7 @@
     stock(L) = 128 R_cap L / E + R_in L        bytes
     f        = stock(L) / M_dyn
 
-This is `Security/Models/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
+This is `Security/Definitions/Accounting/Guarantees/Stacking.lean`'s C = 8 R_in life + 1024 (c_rho reads) life / E in bits, read in
 bytes: c_rho reads, the budgeted units the audit allows a second, is the honest Program's rate R_cap; E is the units an encode of
 one 1024-bit word costs (E / 128 a byte); L is a carrier's lifetime in seconds and R_in the node's run-input bytes a second. f
 past 1 means the stock outgrows the pool: no KV is credited.
@@ -42,7 +42,9 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 #: E, the units an encode of one 1024-bit word costs, each over 3 rounds of 1,021 squarings: proved (8 units a squaring; counting
-#: proves 8 to 24), conjectured (EncodeChainHardness at 2^-40), and the red team's cheapest construction (160 a squaring under
+#: proves 8 to 24), conjectured (SquaringFloor and ChainSum at 2^-40 before data products were priced; in nonlinear
+#: units they price 1,145,562, read only against caps that count data products too), and the red team's cheapest
+#: construction (160 a squaring under
 #: #2420, 128 while hole B is open)
 E_WORD = {"proved": 8 * 3 * 1021, "conjectured": 364_497, "red team (#2420)": 160 * 3 * 1021,
           "red team, hole B open": 128 * 3 * 1021}

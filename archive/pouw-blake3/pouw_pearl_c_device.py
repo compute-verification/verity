@@ -733,7 +733,7 @@ class PearlCDeviceRun(GraphCalls):
 
 
 class PearlCExecutor:
-    """A `PearlCDeviceRun` behind `verity_vllm.linear.api.LinearExecutor`, the one object a `Stack` computes a site's y with.
+    """A `PearlCDeviceRun` behind `verity_vllm.protocols.linear.api.LinearExecutor`, the one object a `Stack` computes a site's y with.
     Its weight state is B̃, formed once per install, so it can't sit behind a source that forbids weight state (POUS); it reads
     BF16 weights; its controls are the poison byte and omitted step groups (by step name, as `PearlCDeviceRun.omit` takes
     them); its schedules are those `schedule_of` admits for its scheme."""

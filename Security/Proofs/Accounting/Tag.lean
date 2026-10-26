@@ -8,7 +8,7 @@ import Proofs.Accounting.Tag.SketchExact
 /-!
 # The block tags' guarantees
 
-Each statement of `Models/Accounting/Guarantees/Tag.lean` and `Models/Accounting/Guarantees/Sketch.lean`, proved:
+Each statement of `Definitions/Accounting/Guarantees/Tag.lean` and `Definitions/Accounting/Guarantees/Sketch.lean`, proved:
 
 * `Tag/Basic.lean`: `p = 2^31 − 1` is prime, uniform probabilities as counts, the sparse root count;
 * `Tag/PolyHash.lean`: the polynomial hash's non-collision, unpredictability, fold, digest and Horner loop;

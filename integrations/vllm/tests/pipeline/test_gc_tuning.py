@@ -36,6 +36,13 @@ def _probe(env_value: str | None) -> dict:
     return json.loads(out)
 
 
+def _interpreter_default() -> list[int]:
+    """A bare fresh interpreter's own thresholds, the A/B's baseline: CPython 3.14 moved them from (700, 10, 10) to (2000, 10, 10)."""
+    import json
+    probe = "import gc, json; print(json.dumps(gc.get_threshold()))"
+    return json.loads(subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True, check=True).stdout)
+
+
 @pytest.mark.parametrize("value,expect", [
     (None, list(gc_tuning.TUNED)),          # unset -> tuned
     ("", list(gc_tuning.TUNED)),            # empty -> tuned
@@ -46,7 +53,7 @@ def _probe(env_value: str | None) -> dict:
 ])
 def test_env_contract_in_a_fresh_interpreter(value, expect):
     r = _probe(value)
-    assert r["before"] == [700, 10, 10], "CPython default thresholds are the baseline of the A/B"
+    assert r["before"] == _interpreter_default(), "the interpreter's default thresholds are the baseline of the A/B"
     if expect is None:
         assert r["ret"] is None and r["after"] == r["before"]
     else:

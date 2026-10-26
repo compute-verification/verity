@@ -31,8 +31,8 @@ from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.serve_admit import Delta
-from verity_vllm.predict.phi import Phi
-from verity_vllm.predict.steps import Registered, compile_steps
+from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.predict.steps import Registered, compile_steps
 
 C = ADV.registered_compiler("test-compiler", "ab" * 64)
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -47,7 +47,8 @@ class SchedEngine:
     """vLLM's ``LLMEngine`` as the loop drives it, its decisions the stand-in scheduler's: each ``step`` schedules (whole prompts at
     a request's first step, else one decode), runs the scheduled rows through the runner in Model Runner V2's order under vLLM's
     internal ids ``<engine id>-<8 hex>``, and returns each emitted token as a DELTA output under the engine id. The client of a prompt
-    in ``abort_after`` goes away once it has that many outputs (``client_goes``, called in the step that emitted the last)."""
+    in ``abort_after`` goes away once it has that many outputs (``client_goes``, called in the step that emitted the last, or as the
+    engine takes the request for 0)."""
 
     def __init__(self, runner: Runner, abort_after: dict[tuple[int, ...], int] | None = None) -> None:
         self.runner, self.sched, self.n, self.slot, self.engine_id = runner, FakeScheduler(budget=256, max_seqs=4), 0, {}, {}
@@ -60,6 +61,8 @@ class SchedEngine:
         self.runner.sampler.sampling_states.seeds.gpu[self.n % 64] = params["seed"]
         outputs = [3 + (sum(ids) + 7 * k) % 200 for k in range(params["max_tokens"])]
         self.sched.add_request(FakeRequest(rid, ids, outputs, params["max_tokens"], sampling_params=SimpleNamespace(**params)))
+        if self.abort_after.get(tuple(ids)) == 0:
+            self.client_goes(request_id)
 
     def abort_request(self, ids: list[str]) -> None:
         self.sched.finish_requests([r for r, e in self.engine_id.items() if e in ids], "FINISHED_ABORTED")
@@ -109,9 +112,9 @@ class Server:
         self.trace = sc.advice_trace(out, self.engine.sched)
         self.windows = sc.CommitWindows(Committer(self.runner), out, run_id="t", window_steps=window_steps, eos_ids=[Tokenizer.eos_token_id],
                                         clock=lambda: 0.0, wall=lambda: 0.0, marks=self.trace.window)
-        self.loop = so.EngineLoop(self.engine, self.windows)
+        self.loop, self.admitted = so.EngineLoop(self.engine, self.windows), {}
         self.server = so.Server(proto=proto.PlainProtocol(True), served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={},
-                                submit=self.loop.submit, abort=self.loop.abort, clock=lambda: 7)
+                                submit=self.submit, abort=self.loop.abort, clock=lambda: 7)
         self.http = so.HttpThread(self.server, "127.0.0.1", 0)
         self.engine_thread = threading.Thread(target=self.loop.run, daemon=True)
 
@@ -129,11 +132,15 @@ class Server:
         self.http.shutdown()
         self.trace.uninstall()
 
+    def submit(self, adm: Any) -> None:
+        self.admitted[adm.engine_id] = adm
+        self.loop.submit(adm)
+
     def client_goes(self, engine_id: str) -> None:
         """The request's client goes away: its abort is queued, so the loop takes it before the next step, as it takes a
         disconnect's, and its stream ends."""
         self.loop.abort(engine_id)
-        self.loop.live[engine_id].deliver(Delta([], "", error="the client went away"))
+        self.admitted[engine_id].deliver(Delta([], "", error="the client went away"))
 
     def post(self, path: str, body: dict) -> tuple[int, bytes]:
         req = urllib.request.Request(self.url + path, json.dumps(body).encode(), {"content-type": "application/json"})
@@ -367,3 +374,41 @@ def test_a_request_its_client_aborts_is_freed_after_its_step_and_every_window_it
     assert held == q["windows"]
     assert [p for start, n, _ in sorted(placed) for p in range(start, start + n)] == list(range(9 + k - 1))
     assert sum(x for *_, x in placed) == k
+
+
+QUEUED = _body(8, 7, 4, "na-q")
+
+
+def test_a_request_its_client_aborts_before_it_is_ever_scheduled_is_in_no_windows_advice_and_passes_as_an_abort_after_0(tmp_path):
+    """na-q's client goes away as the engine takes it, so the loop aborts it before the next step: the trace holds its arrival and
+    the abort and no row of it, and its Commit record, an abort after 0 ids in no window, passes. Every window's advice is written
+    without it, follows the last and compiles; so does the advice of the whole trace taken as one window, which holds its arrival
+    and drops it. The second wave closes a window after the abort, whenever na-q came."""
+    with Server(tmp_path, window_steps=3, abort_after={tuple(QUEUED["prompt"]): 0}) as s:
+        serve_concurrently(s, [OTHER, QUEUED])
+        serve_concurrently(s, WAVES[1])
+    reqs = {r["user"]: r for r in records(tmp_path, "requests.jsonl")}
+    q, e = reqs["na-q"], reqs["na-q"]["engine_id"]
+    recs = ST.load(tmp_path / ST.SERVED)
+    assert [(r["kind"], r.get("reason")) for r in recs if r.get("request") == e] == [("arrive", None), ("finish", "abort")]
+    assert not any(row[0] == e for r in recs if r["kind"] == "step" for row in r["rows"])
+    assert (q["finish"]["reason"], q["finish"]["k"], q["streamed_ids"], q["windows"]) == ("abort", 0, [], [])
+    assert q["check"]["passed"] and s.windows.summary()["passed"], q["check"]
+    ran = s.windows.check(sc.Ledger(q["http_id"], e, q["prompt_ids"], q["ingress"], q["user"], streamed=[],
+                                    finish={"reason": "length", "stop_reason": None}, finished=True))
+    assert ran["problems"] == ["no committed row"]
+    rep = ADV.write(tmp_path, compiler=C)
+    assert rep["refused"] == {} and rep["open"] == [] and all(r.get("request") != e for w in ADV.windows_of(recs)[0].values() for r in w)
+    bodies, last = {b["user"]: b for b in (OTHER, QUEUED, *WAVES[1])}, None
+    for w in sorted(map(int, rep["windows"])):
+        data = (tmp_path / "advice" / f"w{w}" / "private" / "advice.bin").read_bytes()
+        a = WA.decode(data)
+        if last is not None:
+            WA.follows(last, a)
+        last = a
+        assert "na-q" not in {x.id for x in a.requests}
+        compile_steps(REG, data, {x.id: bodies[x.id] for x in a.requests})
+    whole = ADV.from_trace(recs, ADV.io_record(tmp_path / "requests.jsonl"), carry=())
+    assert whole.dropped == (e,) and sorted(x.id for x in whole.advice.requests) == ["na-4", "na-5", "na-7"]
+    assert len(whole.advice.release) == sum(len(r["streamed_ids"]) for r in reqs.values())
+    compile_steps(REG, WA.encode(whole.advice), {x.id: bodies[x.id] for x in whole.advice.requests})

@@ -1,4 +1,4 @@
-import Models.Nci.Guarantees.CoverAdditive
+import Definitions.Nci.Guarantees.CoverAdditive
 import Proofs.Nci.Covering
 import Proofs.Nci.Cover.Additive
 
