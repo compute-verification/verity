@@ -70,6 +70,28 @@ def best_form_cost(p: float, c_op: float) -> float:
     return min(form_cost(p), 0.5 + c_op * leftover, c_op * p)
 
 
+def strassen_overlapped(lane_load: float, pX: float, pW: float, lane_per_add: float, c_op: float = 8,
+                        port_per_add: float = 8, staging: float = 0.22) -> tuple[float, int, int]:
+    """Depth-1 Strassen under G2's per-resource maximum, in units of the standard product's tensor time (A8).
+
+    lane_load is the honest program's own lane time (hashing) over its tensor time. Each of the five summed forms a side
+    goes either to one 2:4 pass with lane leftovers (tensor) or to sparse adds on the lanes (lane_per_add MAC-times an
+    add, port_per_add MAC-times of shared-memory port an add). Returns the cheapest (time, X forms on 2:4, W forms on 2:4).
+    """
+    def leftover(p: float) -> float:
+        return (4 * p**3 * (1 - p) + 2 * p**4) / 4
+
+    best = (float("inf"), 0, 0)
+    for jx in range(6):
+        for jw in range(6):
+            tensor = (7 + 0.5 * (jx + jw)) / 8
+            adds = ((5 - jx) * pX + (5 - jw) * pW) / 8
+            lanes = lane_load + lane_per_add * adds + c_op * (jx * leftover(pX) + jw * leftover(pW)) / 8
+            port = port_per_add * adds + staging * tensor
+            best = min(best, (max(tensor, lanes, port), jx, jw))
+    return best
+
+
 STRASSEN_NU = [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
 WINOGRAD_NU = [(1, 1), (1, 1), (4, 1), (1, 4), (2, 2), (3, 3), (2, 2)]
 
