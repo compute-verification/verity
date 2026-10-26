@@ -3,7 +3,7 @@
 A spatial unit is the machines behind network certifiers. The question is how much a covert sender can move across its
 boundary through **when** frames leave, once the content and order of every frame are fixed by the declared Program.
 This package is the reference for the answer, in the terms of its Lean analysis `NetTiming` (`Security/`: the
-areas `Definitions/NetworkCertifier`, `Models/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
+areas `Definitions/NetworkCertifier`, `Definitions/NetworkCertifier` and `Proofs/NetworkCertifier`, whose `README.md` has the modelling choices). The
 tests mirror some of its statements by name; the Tests section lists which. The certifier program (`lean/`, the Lake
 package `certifier_program`, Lean core only) is the code the difftest runs, proved equal to the analysis's definitions.
 
@@ -1192,16 +1192,11 @@ requests, whose frames are a function of the prompt's length alone), for every p
   holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
   certificate beside its egress record, so it needs no head change
   ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
-- **Named gap: the clock's opening** (owned by network-accounting). What the certifier signs is witness, so a window's
-  clock certificate signs its sync salted (`certificate.clock_commitment`), and the verifier reads the sync only
-  through the opening, the sync and `salt_c`, against that digest (`advised.SignedClocks`). Until N2's advised unit
-  opens it, the verifier of record opens it on the host, as the in-the-clear check opens a record
-  (`CertifiedRecord.verify`): on an accepted window the sync it reads is the declared one, a public output already,
-  and on a refused one it reads the sync the certifier ran. Design: the unit takes each window's clock opening as
-  witness, checks it against the certificate's signed digest (the clock digest and its salted digest, two SHA-512s
-  of a few blocks, as the head check computes a head's signed digest), and computes the floor from the opened syncs
-  inside the unit, so the floor leaves the public row; the verifier then reads no sync. It changes N2's advised unit, its pinned digest and its public
-  row, so it lands with that unit's change.
+- **Named gap: the clock's opening** (owned by network-accounting). A window's clock certificate signs its sync salted
+  (`certificate.clock_commitment`), and until N2's advised unit opens it the verifier of record opens it on the host
+  (`advised.SignedClocks`), so on a refused window it reads the sync the certifier ran. Closing it is a circuit change
+  to N2's advised unit, with its `circuit-check` report, not a Lean one: the design is in
+  [protocol/clock-certificate.md](protocol/clock-certificate.md) ("The opening is on the host").
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
@@ -1427,7 +1422,7 @@ the `8·B·N` bits read.
 ## The schedule's declared bound and the coins
 
 The two terms of the charge that the capacity bounds leave open, the content advice `A_c` and the coins (D7), are fixed in
-the trusted text: the last section of `Security/Models/NetworkCertifier/Guarantees.lean`'s documentation.
+the trusted text: the last section of `Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation.
 
 ## Advice for arbitrary serving: what it can carry
 
@@ -1441,7 +1436,7 @@ ingress counts and the advice. The advice's length is the leak, charged as `A_c`
 
 This section is that claim's red team, written as its parts are drafted: the advice codec (`advice.py`, with `encode`,
 `decode` and `bits`), N2's advice mode (`advised`), the I/O tie unit (`io_tie`) and the compiler
-(`verity_vllm.predict.compile_steps`). Nothing in it is proved. It gives the argument, every assumption the argument
+(`verity_vllm.program.predict.compile_steps`). Nothing in it is proved. It gives the argument, every assumption the argument
 rests on, what each attack costs under the design as drafted, the adversarial cases each part's tests must carry, and
 what the drafts do with them.
 
@@ -1503,7 +1498,7 @@ Each assumption, and what breaks without it:
   digest before the run. It reads nothing the prover chooses later.
   - The row's pin and the device pin (`predict.compiled`'s kernel configurations, autotune winners, cuBLAS routes and
     fused-MoE configurations) are registered items. The prover chooses them before the run, so they cost their size
-    once, like a hidden profile list (`Security/Models/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
+    once, like a hidden profile list (`Security/Definitions/NetworkCertifier/Guarantees.lean`, "The declaration"), unless the
     auditor fixes them from a reference device of its own.
   - The circuits are the exact silicon semantics. There is no tolerance: a band of t accepted values on a checked value
     frees log2 t bits there. No input names a reduction order, an atomic's interleaving or an autotune choice.
@@ -2233,7 +2228,7 @@ them.
   - **What it costs.** The protocol fixes the salt frame's place in the queue and its bytes, so it adds nothing to the
     ingress count `(r_in + 1)^T`. Its release into the block carries the certifier's coins, which no outside party
     chooses and nothing X sends can change, so it costs 0 bits by the argument the trusted text makes for the
-    challenger's coins (D7, `Security/Models/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
+    challenger's coins (D7, `Security/Definitions/NetworkCertifier/Guarantees.lean`). That text states the exemption for coin
     openings on a coin link, and doesn't name the certifier's salt yet.
 - **Back from maintenance** (`Proxy(start=k, position=p)`) is off by default, and with it off every record, wire and
   verdict is as above.
