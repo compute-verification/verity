@@ -1138,7 +1138,7 @@ theorem StackedSessionConservationSketchDeployed :
 theorem StackedSessionConservationRelay : Accounting.Guarantees.StackedSessionConservationRelay := by
   intro n P N b h ρ S Lall L q r s d G lam m τ rounds cRoot F Rin cρ reads life E T M cost Fc k B es εnum εden tier
     δ Ω Ca Ch _ _ enc choose slot A dbar dw hn hP hN hb hrc hdw hE0 hbytes hKB hW hF hSq hCs hEle hε hk hp hp4 hK C
-  have hE := SecurityProofs.Gates.encodeBound_of hSq hCs hEle hε hk hp hp4
+  have hE : Gates.EncodeBound Fc k B E εnum εden := SecurityProofs.Gates.encodeBound_of hSq hCs hEle hε hk hp hp4
   choose K hside hL hbud using hK
   have hC : ∀ w η j ι c Es R O, (K w η j ι c).inputs Es R O + (K w η j ι c).encoded Es R O ≤ C := by
     intro w η j ι c Es R O
