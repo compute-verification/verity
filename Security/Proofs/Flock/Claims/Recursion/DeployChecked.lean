@@ -129,17 +129,17 @@ theorem innerOk_iff {inner : Msg} : innerOk inner = .ok () ↔
       · cases hd : s.read.draw with
         | none =>
           rw [hd] at h
-          first | cases h | exact absurd h nofun
+          cases h
         | some _ => rfl
       · cases ht : drawTiedB s spec sts with
         | false =>
           cases hd : s.read.draw with
           | none =>
             rw [hd] at h
-            first | cases h | exact absurd h nofun
+            cases h
           | some _ =>
             rw [hd, ht] at h
-            first | cases h | exact absurd h nofun
+            cases h
         | true => rfl
     · rintro ⟨s', spec', sts', hs', hc, hd, ht⟩
       rw [hs] at hs'
