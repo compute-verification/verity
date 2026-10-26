@@ -51,6 +51,16 @@ def test_no_alternative_comes_near_the_reference(words):
     assert min(c["issue"] for c in cols.values()) > 2.8
 
 
+def test_crt_strassen_trades_tensor_for_lanes(words):
+    """CRT (three residue products for four slice products) cuts general depth-1 Strassen's tensor work from 2.5 to
+    2.125 of the reference's, and Garner's lift puts it on the IMAD pipe at over 20 times the reference's time."""
+    rows, ref = words
+    cols = {r.name: r.cols(ref) for r in rows}
+    crt, sl = cols["(a) CRT Strassen depth 1, general"], cols["(a) Strassen depth 1, general"]
+    assert (crt["tensor"], sl["tensor"]) == (pytest.approx(2.125), pytest.approx(2.5))
+    assert crt["bind"] == "IMAD" and crt["time"] > 20
+
+
 def test_li_has_nothing_under_the_menus_cp_red2(folds):
     """cp-red2 (3 LOP3 and 2 REDG a segment) balances ALU and issue at 134/128, 1.47% under cp-seg4's 136/128: the
     figure `machine_model/tests/test_eps.py` pins for the design's menu (0.014706). LI's own fold is 1 lane instruction

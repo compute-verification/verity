@@ -68,6 +68,8 @@ ROUTES: list[tuple[str, bool, Callable[[D.Instance], REF.Run]]] = [
     ("(a) Strassen depth 2, A = B = 0", False, lambda i: ST.run(i, 2, seed=FSEED)),
     ("(a) Strassen depth 1, general", True, lambda i: ST.run(i, 1, seed=FSEED)),
     ("(a) Strassen depth 2, general", True, lambda i: ST.run(i, 2, seed=FSEED)),
+    ("(a) CRT Strassen depth 1, general", True, lambda i: ST.run(i, 1, seed=FSEED, crt=True)),
+    ("(a) CRT Strassen depth 2, general", True, lambda i: ST.run(i, 2, seed=FSEED, crt=True)),
     ("(b) packed IMAD, two 16-bit fields", False, lambda i: P.fields(i, seed=FSEED)),
     ("(b) packed IMAD.WIDE polynomial, w 12", False, lambda i: P.poly(i, seed=FSEED)),
     ("(b) IDP4A, general", True, lambda i: P.idp4a(i, seed=FSEED)),
