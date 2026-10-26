@@ -192,11 +192,11 @@ def flipped(src: Path, out: Path) -> dict:
     return {"file": big.name, "bytes": len(b), "byte": at, "bit": 0}
 
 
-def verify(fv: str, d: Path, out: Path) -> dict:
+def verify(fv: str, sd: dict, out: Path) -> dict:
     import a0
 
     try:
-        return a0.lean_verify(fv, {"dir": d}, 1, out, zk=True)
+        return a0.lean_verify(fv, sd, 1, out, zk=True)
     except Exception as ex:  # a timeout or a crash of the verifier is a verdict this record keeps
         return {"accepted": False, "why": f"{type(ex).__name__}: {ex}"[:600]}
 
@@ -217,6 +217,9 @@ def main() -> int:
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
 
+    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.ml.circuits.codec import canonical_json, encode_program
+
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     rec: dict = {"key": a.key, "out": str(out)}
@@ -227,9 +230,15 @@ def main() -> int:
         row_bytes=sorted({b // 8 for _r, _s, b, _p in in_rows}), cpus=len(os.sched_getaffinity(0)))
 
     d = out / "stage"
+    d.mkdir(parents=True, exist_ok=True)
+    program = P.mixed_population_program([(fn, 1)])
+    part = P.partition(program, P.template_instances_query([fn]))
+    (d / "partition.json").write_text(json.dumps(part, sort_keys=True))
+    (d / "program.json").write_bytes(canonical_json(encode_program(program)))
     t = time.time()
     with K.no_cyclic_gc():
-        st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", in_rows, out_rows, circuit=d / "circuit.txt", reads="inline", stage_ands="auto")
+        st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", in_rows, out_rows, circuit=d / "circuit.txt", reads="inline", stage_ands="auto",
+                           bind={"partition": P.digest(part), "program": part["program"]})
     m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     say(rec, "built", seconds=round(time.time() - t, 1), ands=c["ands"], unit_rows=c.get("rows"), k_log=m["k_log"], unit_log=m["unit_log"],
         vus_per_block=m["vus_per_block"], pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size)
@@ -240,7 +249,7 @@ def main() -> int:
     words = row_words(fn, in_rows, vals)
     t = time.time()
     with K.no_cyclic_gc():
-        got = st.stage(words, d, os.urandom(32))
+        got = st.stage(words, d, os.urandom(32), indices=[0])
     for f in ("inst", "pub"):
         (d / f"{f}.bin").rename(d / f"{f}-1.bin")
     IL.write_tables(d / "tables")
@@ -252,7 +261,7 @@ def main() -> int:
         inst_bytes=(d / "inst-1.bin").stat().st_size, pub_bytes=(d / "pub-1.bin").stat().st_size)
     if not all(twin.values()):
         return 1
-    pin = st.pin
+    sd = {"dir": d, "pin": st.pin, "partition_file": d / "partition.json", "program_file": d / "program.json"}
     del st, got
     say(rec, "released", rss_now_gb=release())
 
@@ -260,20 +269,19 @@ def main() -> int:
     fc = timed_bin(a.bin, sys.executable, a.timed, tdir, "flock-circuit")
     fv = timed_bin(a.lean, sys.executable, a.timed, tdir, "flock-verify")
     t = time.time()
-    record, live = a0.session(fc, {"dir": d, "pin": pin}, 1, "subset:1", free_port(), out / "session", zk=True,
-                              prove_timeout=4 * 3600)
+    record, live = a0.session(fc, sd, 1, "subset:1", free_port(), out / "session", zk=True, prove_timeout=4 * 3600)
     live = live or {}
     say(rec, "proved", seconds=round(time.time() - t, 1), accepted=live.get("accepted"), why=live.get("why"),
         **{k: live.get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"), prove=peak(times(tdir, "prove")), serve=peak(times(tdir, "serve")))
-    v = verify(fv, d, out / "session")
+    v = verify(fv, sd, out / "session")
     say(rec, "verified", **v, lean=peak(times(tdir, "verify")))
     ok = bool(live.get("accepted")) and v["accepted"]
     if ok:
         for f in tdir.glob("verify-*.time"):
             f.rename(f.with_name("honest-" + f.name))
         flip = flipped(out / "session", out / "flipped")
-        nv = verify(fv, d, out / "flipped")
+        nv = verify(fv, sd, out / "flipped")
         say(rec, "flipped", **flip, accepted=nv["accepted"], why=nv.get("why"), verify_s=nv.get("verify_s"), lean=peak(times(tdir, "verify")))
         ok = not nv["accepted"]
     say(rec, "done", ok=ok, cgroup_peak_gb=cgroup_peak_gb(),
