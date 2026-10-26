@@ -69,11 +69,12 @@
    "source": "floors: Overlap*",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:221",
    "premise": "the round's run is straight-line over every draw's bits (E3); the service doesn't check it",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "unchecked",
    "owner": "BET-K-DISCHARGE",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "uniform-draw",
@@ -90,55 +91,60 @@
    "source": "floor of record StagedFloorKOneSided(+PerProver, J10R)",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:189",
    "premise": "every adversary's stage is a straight-line ring program, products one-sided, charge-pure",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "unchecked: no check refuses a run outside it",
    "owner": "BET-K-DISCHARGE (ring fragment); O-CHARGE (LOP3, IMAD packing, shifts)",
-   "removal": "proof in the model over the whole ISA"
+   "removal": "proof in the model over the whole ISA",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "KScopeAffine",
    "source": "StagedFloorK(+PerProver)",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:159",
    "premise": "products of two bit-affine operands, row-pure, straight-line ring",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "unchecked",
    "owner": "BET-K-DISCHARGE; O-CHARGE",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "KScopeOverlap*",
    "source": "Overlap floors",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:293,325",
    "premise": "KScope's twins per draw",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "unchecked",
    "owner": "BET-K-DISCHARGE; O-CHARGE",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "ChargeVF3j16",
    "source": "every staged floor",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:207",
    "premise": "machine charge ≥ κ·products − V, with V ≤ Vmax (P1 at VF3j-16 prices, P4: B_θ complete)",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "unchecked",
    "owner": "O-CHARGE; BET-K-DISCHARGE",
-   "removal": "proof in the model; prices stay as θ"
+   "removal": "proof in the model; prices stay as θ",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "ChargeVF3j16Overlap",
    "source": "every overlap floor",
    "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean:339",
    "premise": "ChargeVF3j16 with stages overlapping",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "unchecked",
    "owner": "O-CHARGE",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "J10R-twins",
@@ -246,11 +252,12 @@
    "source": "H1CheckedCreditPeriod; TS headlines",
    "file": "Security/Definitions/Accounting/Assumptions/TS.lean:197",
    "premise": "(H-μ) at μ = ¾: deficient words unpredictable from the cheater's view",
-   "class": "D",
+   "class": "D-decision",
    "kind": "computational ('the cheater hasn't computed the product') where the view shares the skipped value's coins; L where the value is fresh coin bits (CoinPointMass, proved)",
    "deployed": "conjectured",
    "owner": "O-CHARGE (CMP-111), through its per-product bound",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "ReceiptLuckAt",
@@ -290,11 +297,12 @@
    "source": "WORD-WORK (CMP-102)",
    "file": "Security/Definitions/Accounting/Assumptions/CreditedWords.lean (ca-word-work-ea24)",
    "premise": "each fixed word cost m priced MACs (Theorem O at tile scale)",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "assumed",
    "owner": "O-CHARGE / DITHER-THM",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "HelpWithinCertifier",
@@ -322,11 +330,12 @@
    "source": "H-μ⁺",
    "file": "Security/Definitions/Accounting/HMu.lean:74",
    "premise": "(H-μ) where the view correlates with the skipped value",
-   "class": "D",
+   "class": "D-decision",
    "kind": "computational",
    "deployed": "conjectured",
    "owner": "FOLD-LUCK (CMP pending)",
-   "removal": "proof in the model; a SHA-512-keyed fold reclasses it C-RO (R-ACCEL-3)"
+   "removal": "proof in the model; a SHA-512-keyed fold reclasses it C-RO (R-ACCEL-3)",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "HMuPlus.Inj",
@@ -344,11 +353,12 @@
    "source": "honest-design TOML dither-1s-li-l32 [mand.fold]; TS FoldOpt/FoldOptFoldedAt",
    "file": "Security/Definitions/Accounting/Assumptions/TS.lean:121-139",
    "premise": "LI at 1 lane instruction a word is the cheapest fold",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic; per-word kernel is a mechanical fact (fold_opt.py), the multi-round residual is assumed",
    "deployed": "assumed",
    "owner": "FOLD-SAT (r_min); ABSORB-THM (multi-round)",
-   "removal": "SMT fact + proof in the model"
+   "removal": "SMT fact + proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "FILL-OPT",
@@ -376,11 +386,12 @@
    "source": "BET-BANDWIDTH; brief 4(c)",
    "file": "note:compute-research/20261026T0122Z-draft-accel-bet-bandwidth",
    "premise": "every accepted run writes each committed word into a register",
-   "class": "D",
+   "class": "D-decision",
    "kind": "algorithmic",
    "deployed": "not in Lean",
    "owner": "ABSORB-THM; FOLD-SAT (cost form)",
-   "removal": "proof in the model"
+   "removal": "proof in the model",
+   "decision": "covered by the barrier decision: Daniel's open choice (03:00Z) among (A) one narrow named computational assumption (symmetric algorithmic knowledge for the off-tensor-core part), (B) SHA-512 per word as a random oracle, (C) credit only the provable floor, (D) a new protocol; not a per-row defect"
   },
   {
    "id": "TT_OUT",
@@ -628,6 +639,1179 @@
   "Security/lean-audit.json": 468,
   "Security/Properties/lean-audit.json": 21,
   "@compute-accounting": 195,
-  "classified_here": "the chain rows only; the 195 @compute-accounting records are next turn (docstring heads extracted, not yet classified)"
- }
+  "classified_here": "all 195 @compute-accounting records, in lock_records (role premise or pred; by each declaration's docstring, read through a line index)"
+ },
+ "lock_records": {
+  "Accounting.Assumptions.CircuitCarriers": {
+   "role": "premise",
+   "class": "out",
+   "note": "memory/rate sketch",
+   "file": "Security/Definitions/Accounting/Assumptions/Stacking.lean"
+  },
+  "Accounting.Assumptions.Compose.GuessLuckAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134)",
+   "file": "Security/Definitions/Accounting/Assumptions/Compose.lean"
+  },
+  "Accounting.Assumptions.Compose.SeedExtractedAt": {
+   "role": "premise",
+   "class": "C-RO",
+   "note": "seeded path only; Fiat–Shamir is out under live coins",
+   "file": "Security/Definitions/Accounting/Assumptions/Compose.lean"
+  },
+  "Accounting.Assumptions.Compose.SeedLuckAt": {
+   "role": "premise",
+   "class": "out",
+   "note": "seeded path (Fiat–Shamir), out under live coins",
+   "file": "Security/Definitions/Accounting/Assumptions/Compose.lean"
+  },
+  "Accounting.Assumptions.Compose.WholeEntropyAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134)",
+   "file": "Security/Definitions/Accounting/Assumptions/Compose.lean"
+  },
+  "Accounting.Assumptions.PouwDetection": {
+   "role": "premise",
+   "class": "L",
+   "note": "live-coin draw",
+   "file": "Security/Definitions/Accounting/Assumptions/PouwWork.lean"
+  },
+  "Accounting.Assumptions.PouwFloorOff": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/PouwFloor.lean"
+  },
+  "Accounting.Assumptions.PouwHelpBound": {
+   "role": "premise",
+   "class": "L",
+   "note": "network certifiers, trusted-nebius-host",
+   "file": "Security/Definitions/Accounting/Assumptions/PouwWork.lean"
+  },
+  "Accounting.Assumptions.PouwLuck": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134)",
+   "file": "Security/Definitions/Accounting/Assumptions/PouwWork.lean"
+  },
+  "Accounting.Assumptions.SteeredLayout": {
+   "role": "premise",
+   "class": "out",
+   "note": "memory/rate sketch",
+   "file": "Security/Definitions/Accounting/Assumptions/Stacking.lean"
+  },
+  "Accounting.Assumptions.TS.BindingForkAt": {
+   "role": "premise",
+   "class": "C",
+   "note": "SHA-512 CR at a fork",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.CountsFixed": {
+   "role": "premise",
+   "class": "D",
+   "note": "J10R-CREDIT (CMP-127), with UnitFixed",
+   "file": "Security/Definitions/Accounting/Assumptions/TS/Fixed.lean"
+  },
+  "Accounting.Assumptions.TS.FacetCeilings": {
+   "role": "premise",
+   "class": "P",
+   "note": "measured facet rates",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.FanIn": {
+   "role": "premise",
+   "class": "P",
+   "note": "ISA",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.FillOpt": {
+   "role": "premise",
+   "class": "D",
+   "note": "BET-FOLD (CMP-128) / FOLD-SAT (CMP-131)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.FoldOpt": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.FoldOptFoldedAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.LinSteer": {
+   "role": "premise",
+   "class": "D",
+   "note": "false as stated (LinSteerFalse); retire if no guarantee reads it; unowned",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.LuckAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134); ¾ and 0.854 proved on their scopes",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ModesRun": {
+   "role": "premise",
+   "class": "F",
+   "note": "protocol structure UnitFixed is claimed under",
+   "file": "Security/Definitions/Accounting/Assumptions/TS/Fixed.lean"
+  },
+  "Accounting.Assumptions.TS.NoSum": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.OperandHMu": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ProofSoundAt": {
+   "role": "premise",
+   "class": "C",
+   "note": "C-Flock EndToEndHiddenDrawn",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ProofsPin": {
+   "role": "premise",
+   "class": "F",
+   "note": "pinning of the Definitions; J10R-CREDIT (one-description rule)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ProofsSound": {
+   "role": "premise",
+   "class": "C",
+   "note": "plus H-μ⁺ binding (FOLD-LUCK)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ReceiptLuckAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.RightFixed": {
+   "role": "premise",
+   "class": "T",
+   "note": "Lemma E1(c), proved on paper",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ScalarRoute": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.ServedChecksHold": {
+   "role": "premise",
+   "class": "F",
+   "note": "computed by a check",
+   "file": "Security/Proofs/Accounting/TS/Session/Assumptions.lean"
+  },
+  "Accounting.Assumptions.TS.SheetClock": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SheetDispatch": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SheetPipe": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SheetSemantics": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SheetSmem": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SheetTensor": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SheetWords": {
+   "role": "premise",
+   "class": "P",
+   "note": "data sheet A1–A7",
+   "file": "Security/Definitions/Accounting/Assumptions/Sheet.lean"
+  },
+  "Accounting.Assumptions.TS.SideUnits": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.StageLuck": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134)",
+   "file": "Security/Definitions/Accounting/Assumptions/Stages.lean"
+  },
+  "Accounting.Assumptions.TS.UnitFixed": {
+   "role": "premise",
+   "class": "D",
+   "note": "J10R-CREDIT (CMP-127)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.WholeLuckAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134)",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.Assumptions.TS.WindowLaw": {
+   "role": "premise",
+   "class": "L",
+   "note": "live coins at the window",
+   "file": "Security/Proofs/Accounting/TS/Session/Assumptions.lean"
+  },
+  "Accounting.Assumptions.TS.WordsWritten": {
+   "role": "premise",
+   "class": "P",
+   "note": "ISA",
+   "file": "Security/Definitions/Accounting/Assumptions/TS.lean"
+  },
+  "Accounting.CoinFlow.Program.Desc": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/CoinFlow.lean"
+  },
+  "Accounting.Compose.Declared.Wf": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.Fits": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.LayerCommitted": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.ModelScope": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.PerTile": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.Period.EveryWindow": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/ComposePeriod.lean"
+  },
+  "Accounting.Compose.PrefixOf": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/ComposePeriod.lean"
+  },
+  "Accounting.Compose.Scope": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.ScopeSeeded": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.SplitRate": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.SplitStages.LuckAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134); ¾ and 0.854 proved on their scopes",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Compose.WorkAt": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Compose.lean"
+  },
+  "Accounting.Filler.FillBlocks": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.FullFill": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.FullPinnedFill": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.ParityBalanced": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.PinnedFillBlocks": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.Products": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.SpotFill": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Filler.SpotPinnedFill": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/Filler.lean"
+  },
+  "Accounting.Guarantees.B1": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D) (TT(γ₀))",
+   "file": "Security/Definitions/Accounting/Guarantees/Bridges.lean"
+  },
+  "Accounting.HMu.SkipRound.HMuPlus": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/HMu.lean"
+  },
+  "Accounting.RateSketch.LifetimeCapped": {
+   "role": "pred",
+   "class": "out",
+   "note": "",
+   "file": "Security/Definitions/Accounting/Carrier.lean"
+  },
+  "Accounting.Requirement.Placement.Deadlines": {
+   "role": "pred",
+   "class": "out",
+   "note": "",
+   "file": "Security/Definitions/Accounting/Carrier.lean"
+  },
+  "Accounting.TS.Anatomy.Split": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Routes.lean"
+  },
+  "Accounting.TS.Dataflow.Sees": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/FanIn.lean"
+  },
+  "Accounting.TS.DrawnLayer.BindingAt": {
+   "role": "pred",
+   "class": "C",
+   "note": "binding at δ_bind, read as a hypothesis",
+   "file": "Security/Definitions/Accounting/TS/Drawn.lean"
+  },
+  "Accounting.TS.DrawnLayer.Covers": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Drawn.lean"
+  },
+  "Accounting.TS.DrawnLayer.JointSound": {
+   "role": "pred",
+   "class": "C",
+   "note": "",
+   "file": "Security/Definitions/Accounting/TS/Drawn.lean"
+  },
+  "Accounting.TS.DrawnLayer.Of": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Drawn.lean"
+  },
+  "Accounting.TS.DrawnLayer.Pins": {
+   "role": "pred",
+   "class": "F",
+   "note": "",
+   "file": "Security/Definitions/Accounting/TS/Drawn.lean"
+  },
+  "Accounting.TS.DrawnLayer.WriterReads": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Drawn.lean"
+  },
+  "Accounting.TS.DuoCPUnits.same": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.Fx1CPUnits.same": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.IsCert": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Machine.lean"
+  },
+  "Accounting.TS.LiUnits.same": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.Model.RouteDominated": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Accounting/TS/Routes.lean"
+  },
+  "Accounting.TS.Model.Wf": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Routes.lean"
+  },
+  "Accounting.TS.ProofLayer.BindingAt": {
+   "role": "pred",
+   "class": "C",
+   "note": "binding at δ_bind, read as a hypothesis",
+   "file": "Security/Definitions/Accounting/TS/ProofLayer.lean"
+  },
+  "Accounting.TS.ProofLayer.Of": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/ProofLayer.lean"
+  },
+  "Accounting.TS.ProofLayer.Pins": {
+   "role": "pred",
+   "class": "F",
+   "note": "",
+   "file": "Security/Definitions/Accounting/TS/ProofLayer.lean"
+  },
+  "Accounting.TS.ProofLayer.SoundAt": {
+   "role": "pred",
+   "class": "C",
+   "note": "",
+   "file": "Security/Definitions/Accounting/TS/ProofLayer.lean"
+  },
+  "Accounting.TS.ReceiptGame.CaseA": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.ReceiptGame.CondReceiptLuck": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/SharedNoise.lean"
+  },
+  "Accounting.TS.ReceiptGame.CubeOperands": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.ReceiptGame.OperandLuck": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.ReceiptGame.Pinned": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.ReceiptGame.ReceiptLuck": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.ReceiptGame.WrongWords": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Receipt.lean"
+  },
+  "Accounting.TS.RoundGame.BudgetAt": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Play.lean"
+  },
+  "Accounting.TS.SampledWindow.LuckAt": {
+   "role": "premise",
+   "class": "D",
+   "note": "FOLD-LUCK (CMP-134); ¾ and 0.854 proved on their scopes",
+   "file": "Security/Definitions/Accounting/TS/Stages.lean"
+  },
+  "Accounting.TS.SampledWindow.Priced": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Stages.lean"
+  },
+  "Accounting.TS.Tile.TileComputes": {
+   "role": "premise",
+   "class": "F",
+   "note": "a circuit computes its Definition",
+   "file": "Security/Proofs/Accounting/TS/Session/Tile/Computes.lean"
+  },
+  "Accounting.TS.WordLayer.Bound": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Claims/Recursion.lean"
+  },
+  "Accounting.TS.WordLayer.Computed": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Fixed.lean"
+  },
+  "Accounting.TS.WordLayer.Fixed": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Accounting/TS/Fixed.lean"
+  },
+  "Nci.Assumptions.ActivationChained": {
+   "role": "premise",
+   "class": "out",
+   "note": "NCI, algorithmic (D outside the PoUW chain)",
+   "file": "Security/Definitions/Nci/Assumptions/Covering.lean"
+  },
+  "Nci.Assumptions.ActivationChainedAt": {
+   "role": "premise",
+   "class": "out",
+   "note": "NCI",
+   "file": "Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean"
+  },
+  "Nci.Assumptions.BaselineRegistered": {
+   "role": "premise",
+   "class": "F",
+   "note": "NCI",
+   "file": "Security/Definitions/Nci/Assumptions/Baseline.lean"
+  },
+  "Nci.Assumptions.ParameterHard": {
+   "role": "premise",
+   "class": "out",
+   "note": "NCI, algorithmic",
+   "file": "Security/Definitions/Nci/Assumptions/Covering.lean"
+  },
+  "Nci.Assumptions.ParameterHardAt": {
+   "role": "premise",
+   "class": "out",
+   "note": "NCI",
+   "file": "Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean"
+  },
+  "Nci.Covering.Covers": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Nci/Covering.lean"
+  },
+  "Pouw.Adversary.Bounded": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Game/Defs.lean"
+  },
+  "Pouw.Adversary.BoundedBy": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Game/Deadline.lean"
+  },
+  "Pouw.Assumptions.ChargeVF3j16": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ChargeVF3j16J10R": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ChargeVF3j16Overlap": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ChargeVF3j16OverlapJ10R": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.HonestClock": {
+   "role": "premise",
+   "class": "D",
+   "note": "false at SHA-512; DITHER-THM (CMP-116)",
+   "file": "Security/Definitions/Pouw/Assumptions/Deadline.lean"
+  },
+  "Pouw.Assumptions.KScopeAffine": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.KScopeOneSided": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.KScopeOneSidedJ10R": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.KScopeOverlapAffine": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.KScopeOverlapOneSided": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.KScopeOverlapOneSidedJ10R": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundOverlap": {
+   "role": "premise",
+   "class": "D",
+   "note": "false at SHA-512; DITHER-THM (CMP-116)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundOverlapJ10R": {
+   "role": "premise",
+   "class": "D",
+   "note": "false at SHA-512; DITHER-THM (CMP-116)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundOverlapJ10RPerProver": {
+   "role": "premise",
+   "class": "C",
+   "note": "C (+C-RO via N1)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundOverlapPerProver": {
+   "role": "premise",
+   "class": "C",
+   "note": "C (+C-RO via N1)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundStaged": {
+   "role": "premise",
+   "class": "D",
+   "note": "false at SHA-512; DITHER-THM (CMP-116)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundStagedJ10R": {
+   "role": "premise",
+   "class": "D",
+   "note": "false at SHA-512; DITHER-THM (CMP-116)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundStagedJ10RPerProver": {
+   "role": "premise",
+   "class": "C",
+   "note": "C (+C-RO via N1)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.ServiceSoundStagedPerProver": {
+   "role": "premise",
+   "class": "C",
+   "note": "C (+C-RO via N1)",
+   "file": "Security/Definitions/Pouw/Assumptions/RelativeSecurity.lean"
+  },
+  "Pouw.Assumptions.TT": {
+   "role": "premise",
+   "class": "D",
+   "note": "false at SHA-512; DITHER-THM (CMP-116)",
+   "file": "Security/Definitions/Pouw/Assumptions/Game.lean"
+  },
+  "Pouw.Barrier.CheapPoint": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Barrier/Defs.lean"
+  },
+  "Pouw.Dimension.Assumptions.A2_algebraicSufficiency": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean"
+  },
+  "Pouw.Dimension.Assumptions.Machine": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean"
+  },
+  "Pouw.Dimension.Assumptions.Machine.Prog": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Claims/Sampling.lean"
+  },
+  "Pouw.Dimension.Assumptions.Machine.cost": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Word.lean"
+  },
+  "Pouw.Dimension.Assumptions.Machine.outputs": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Properties/CertifierDevice.lean"
+  },
+  "Pouw.Dimension.Assumptions.wordSet": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/Dimension/Assumptions.lean"
+  },
+  "Pouw.Dimension.MinRankGe": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Dimension/Lift.lean"
+  },
+  "Pouw.Eps1.ClassP": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D) (a program class)",
+   "file": "Security/Definitions/Pouw/Eps1/M3.lean"
+  },
+  "Pouw.Eps1.Prog.Computes": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Eps1/M3.lean"
+  },
+  "Pouw.Eps1.Prog.WordLocal": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Eps1/M3.lean"
+  },
+  "Pouw.Fp8Atom.H1T.DistinctLiveH1T": {
+   "role": "premise",
+   "class": "F",
+   "note": "a fact of the unit circuit",
+   "file": "Security/Definitions/Pouw/Assumptions/Fp8Atom/H1TAssumptions.lean"
+  },
+  "Pouw.FpG1.Leaves.Fp8": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/FpG1/H1.lean"
+  },
+  "Pouw.FpG1.Leaves.W4a8": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/FpG1/H1.lean"
+  },
+  "Pouw.Gγ": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Game/Defs.lean"
+  },
+  "Pouw.InInt32": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Basic/Mat.lean"
+  },
+  "Pouw.InInt7": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Basic/Mat.lean"
+  },
+  "Pouw.NCP.Assumptions.TTNCP": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/NCP/Assumptions.lean"
+  },
+  "Pouw.NCP.Assumptions.TTNCP_U": {
+   "role": "premise",
+   "class": "D",
+   "note": "covered by the barrier decision (A)/(B)/(C)/(D)",
+   "file": "Security/Definitions/Pouw/Assumptions/NCP/RouteUAssumptions.lean"
+  },
+  "Pouw.NCP.InNoise6": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Protocol.lean"
+  },
+  "Pouw.NCP.Params.QueryBound": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Protocol.lean"
+  },
+  "Pouw.NCP.Relation.CheckpointIndependent": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Relation.lean"
+  },
+  "Pouw.NCP.SignedPerm": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Defs.lean"
+  },
+  "Pouw.NCP.Unsigned": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/RouteU.lean"
+  },
+  "Pouw.NCP.Word.NzNCP": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Word.lean"
+  },
+  "Pouw.NCP.Word.Valid": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/NCP/Word.lean"
+  },
+  "Pouw.PearlC.Adversary.BoundedBy": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/PearlC/Deadline.lean"
+  },
+  "Pouw.PearlC.Assumptions.HonestClock": {
+   "role": "premise",
+   "class": "L",
+   "note": "the auditor device's clock",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/Deadline.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOut": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOut.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutFp4Sm120W1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutFp4W1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainCapW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCap.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevChainOnlyW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutChainOnlyW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1ChainOnlyW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutChainOnlyW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevRev1W1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevUOnlyW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCDevW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutPearlCH100Rev1W1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTile": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOut.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTileFp4Sm120W1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutFp4W1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevChainCapW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCap.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1W1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCDevW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1W1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TTOutW1": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean"
+  },
+  "Pouw.PearlC.Assumptions.TileProofSound": {
+   "role": "premise",
+   "class": "C",
+   "note": "C-Flock",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean"
+  },
+  "Pouw.PearlC.Assumptions.TileProofSoundAll": {
+   "role": "premise",
+   "class": "C",
+   "note": "open obligation from C-Flock soundness",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/HiddenTile.lean"
+  },
+  "Pouw.PearlC.CodeSeedNoise": {
+   "role": "premise",
+   "class": "C-RO",
+   "note": "noise from the oracle",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean"
+  },
+  "Pouw.PearlC.CorrectU": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean"
+  },
+  "Pouw.PearlC.CostModel.RelabelClosed": {
+   "role": "premise",
+   "class": "P",
+   "note": "cost-model closure",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean"
+  },
+  "Pouw.PearlC.CostModel.SplitClosed": {
+   "role": "premise",
+   "class": "P",
+   "note": "cost-model closure",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean"
+  },
+  "Pouw.PearlC.FlockTile.TileReadBinds": {
+   "role": "premise",
+   "class": "C",
+   "note": "open obligation",
+   "file": "Security/Proofs/Pouw/PearlC/FlockTile/Audit.lean"
+  },
+  "Pouw.PearlC.FlockTile.TileReadSound": {
+   "role": "premise",
+   "class": "C",
+   "note": "open obligation from C-Flock",
+   "file": "Security/Proofs/Pouw/PearlC/FlockTile/Audit.lean"
+  },
+  "Pouw.PearlC.GγSampled": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/PearlC/Tile.lean"
+  },
+  "Pouw.PearlC.GγU": {
+   "role": "premise",
+   "class": "D",
+   "note": "PEARLC-MODEL",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean"
+  },
+  "Pouw.PearlC.PearlCDevice.RowLocal": {
+   "role": "premise",
+   "class": "F",
+   "note": "device record",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean"
+  },
+  "Pouw.PearlC.RowSeedNoise": {
+   "role": "premise",
+   "class": "F",
+   "note": "layout",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean"
+  },
+  "Pouw.PearlC.TileCheck.Accepts": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/PearlC/TileCheck.lean"
+  },
+  "Pouw.PearlC.WinsU": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean"
+  },
+  "Pouw.PearlC.Workload.InDomain": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/PearlC/Game.lean"
+  },
+  "Pouw.PearlC.chainCreditDev": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCap.lean"
+  },
+  "Pouw.PearlC.correctSetU": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/TTOutUOnly.lean"
+  },
+  "Pouw.PearlC.pearlCProtocolDevChainCap": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCap.lean"
+  },
+  "Pouw.PearlC.pearlCTilesDevChainCap": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Assumptions/PearlC/DeviceChainCap.lean"
+  },
+  "Pouw.RelativeSecurity.CubeQuad": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/RelativeSecurity.lean"
+  },
+  "Pouw.Workload.InDomain": {
+   "role": "pred",
+   "class": "pred",
+   "note": "a predicate a statement reads",
+   "file": "Security/Definitions/Pouw/Game/Defs.lean"
+  }
+ },
+ "decision_note": "D-decision rows (and lock records whose note says 'covered by the barrier decision') rest on Theorem B (ABSORB-THM, O-BITS): a proved work bound over the full ISA, LOP3 included, would be an explicit superlinear Boolean circuit lower bound. They are not removable one by one; Daniel's decision covers them."
 }
