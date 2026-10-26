@@ -327,6 +327,14 @@ def test_a_tool_package_that_predates_the_queue_is_told_apart(tmp_path):
     assert remote.knows_gpus(None) and remote.knows_gpus(Path(remote.__file__).parent) and not remote.knows_gpus(pkg)
 
 
+def _node_2_read(monkeypatch) -> None:
+    """`--on auto` with node 2's share read and no pool read, so the job is queued there (research.auto)."""
+    from research import auto
+
+    share = {"share": 48, "claims": 0, "waiters": 0, "free": 48, "fits": True}
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {auto.AUTO_NODE: {"share": share}})
+
+
 def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypatch, capsys):
     """`research run --on auto` (18 Oct, remote by default): --queue pinned to vy-nebius-2 (its Verity share, whole cores of its own
     inside the check slots), from the checkout it runs in, as project verity and kind agent-test, which gives what the run doesn't
@@ -341,6 +349,7 @@ def test_on_auto_is_the_queue_onto_node_2_from_this_checkout(tmp_path, monkeypat
         raise remote.Refused("placement reached")
 
     monkeypatch.setattr(remote, "queue_placement", place)
+    _node_2_read(monkeypatch)
     from research import cli as C
     cwds = []
     real = C._run_queued
@@ -376,6 +385,7 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
         raise remote.Refused("placement reached")
 
     monkeypatch.setattr(remote, "queue_placement", place)
+    _node_2_read(monkeypatch)
     repo = tmp_path / "repo"
     for path, body in {".": '[project]\nname = "verity"\n[tool.pytest.ini_options]\n',
                        "integrations/vllm": '[project]\nname = "verity_vllm"\n[tool.pytest.ini_options]\n'

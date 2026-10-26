@@ -2,7 +2,7 @@
 name: friction
 description: >
   What to do when a tool, rule, check or step gets in your way in Verity: fix it yourself, ask the owner or your
-  coordinator when you can't tell, take only money past a budget line, keys and claims to Daniel, record a ruling as a
+  coordinator when you can't tell, take only keys, access and claims to Daniel (spend is its lead's call), record a ruling as a
   rule where the next agent will read it, or leave a short friction note when you can't fix it now. Holds the standing
   rulings that AGENTS.md and the other skills don't state (what an agent may change without asking, and protocol and
   claim rulings), and the `kind: friction` note format with its `severity: incident` flag. Use when you worked around
@@ -47,8 +47,8 @@ in-flight files, or deletes others' work. Check `AGENTS.md`, the owning skill an
 follow one if it covers the case. Otherwise ask the owner of what the change touches, or your coordinator when owners
 disagree or you can't tell who owns it (a handle holder: `research msg send --to @HANDLE`; a worker: its report to the
 coordinator that launched it). Give the case, the change and your recommendation in a few lines, and prepare the change
-meanwhile. Only spend past a budget line, keys and access, and claims (what a guarantee says or rests on) go on to Daniel,
-through `.agents/skills/asking-daniel/SKILL.md`.
+meanwhile. Only keys and access, and claims (what a guarantee says or rests on) go on to Daniel, through
+`.agents/skills/asking-daniel/SKILL.md`. Spend, a short budget line included, is the call of the lead whose line pays (13 Oct).
 
 For a new rule, gate or required review, price it first with `.agents/skills/process-design/SKILL.md`.
 
@@ -133,9 +133,11 @@ Keys and access:
 
 Landing:
 
-- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the whole
-  check before a landing. A PR that changes a `lean-audit.json` lock keeps its Lean check first, and reviewers are agents ci
-  staffs, never the PR's owner. Drive does it with `land = "review"` (AGENTS.md "Checking and merging").
+- (24 Oct 06:05Z) PRs land on an eyeball review, and the full check runs after landing; `main` no longer passes the
+  whole check before a landing. A PR that changes a `lean-audit.json` lock, or Lean that runs as code (outside
+  `Security/`), keeps its Lean check first; Lean proofs alone land on the verdict and are checked after landing, a
+  failure reverting them (25 Oct 11:19 PM PDT). Reviewers are agents ci staffs, never the PR's owner. Drive does it with
+  `land = "review"` (AGENTS.md "Checking and merging").
 - (25 Oct 09:40Z, delegated to the vLLM coordinator) The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).

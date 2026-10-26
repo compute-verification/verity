@@ -78,6 +78,13 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
+  - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
+    starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
+    decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
+    C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
+    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
+    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity_torch_loop.weights`),
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
@@ -140,4 +147,14 @@ default). `bench.py`'s docstring lists the steps; `run.sh` builds for sm_120, ta
 ~~~bash
 research run --on <RTX PRO 6000 node> --project verity --source . --cwd source --campaign streamed-wipe \
   -- bash benchmarks/pous/streamed_wipe/run.sh
+~~~
+
+`wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
+band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
+`D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
+it next to honest, naive-cheat and broken-premise provers (`K` on the prover's node, an undeclared tier), all judged by the
+Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if any prover ends other than expected:
+
+~~~bash
+research run --on <CPU node> --project verity --source . --cwd clone -- bash benchmarks/pous/wipe_resume/run.sh
 ~~~
