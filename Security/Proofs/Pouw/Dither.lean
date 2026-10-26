@@ -22,7 +22,8 @@ import Proofs.Pouw.ShaRealize
     `k (κ_dmm + κ_dsha)` (`prob_round_le`). Off those events the rounds meet the work floor (`floor_of_rounds`), and
     `FreedOfFloor` turns it into freed compute.
 * `WorkSoundNoFold`: `WorkSound` on the no-fold round with `ExtractAdv` from
-  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at the budget `⌈Q⌉ + V`.
+  `Proofs.Pouw.ShaRealize.ExtractOfRealize` at the budget `(k + 1)(⌈Q⌉ + V)` and the schedule
+  `τ_w = (w + 1)(⌈Q⌉ + V)` (`sum_segments`).
 * `FleetSound`: the union bound over the units, each unit's event sliced at the other units' coins.
 -/
 
@@ -597,21 +598,37 @@ theorem WorkSound : Pouw.Guarantees.Dither.WorkSound := by
     have := add_le_add (add_le_add (add_le_add (add_le_add (hserv A) E2) E3) E4) E5
     linarith
 
+/-- The segmented schedule's sum: `Σ_{i < n} (2 (i + 1) M + 1) = n ((n + 1) M + 1)`. -/
+theorem sum_segments (M n : ℕ) : ∑ i : Fin n, (2 * (((i : ℕ) + 1) * M) + 1) = n * ((n + 1) * M + 1) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [Fin.sum_univ_castSucc]
+    simp only [Fin.val_castSucc, Fin.val_last]
+    rw [ih]
+    ring
+
 /-- `Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`: `WorkSound` with `ExtractAdv` from `ExtractOfRealize` at
-the budget `⌈Q⌉ + V`. -/
+the budget `q = (k + 1)(⌈Q⌉ + V)` and the schedule `τ_w = (w + 1)(⌈Q⌉ + V)`, whose extraction term
+`q² + Σ_w q (2 τ_w + 1)` is `q² + k q (q + 1)` (`sum_segments`). -/
 theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
   intro G nf k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κsha κdmm κdsha Badv V X D _ _ _ _ _
     E eo rD pl dirs ξw ξl hreg hdual hpos hH hη hδ hδ1 hβ hK hξw hξl hκd hcap hopens hG1 hG2 hG3 horc hP1 hP2
     hsak hsha hout hserv himp hR A
   have hx := Pouw.SecurityProofs.ShaRealize.ExtractOfRealize G nf k reg Q X D E eo rD pl dirs ξw ξl
-    (fun _ => ⌈Q⌉₊ + V) (fun _ _ => ⌈Q⌉₊ + V) (fun _ => Badv) hopens horc hR
+    (fun _ => (k + 1) * (⌈Q⌉₊ + V)) (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) hopens horc hR
+  have hk : ∑ w : Fin k, (k + 1) * (⌈Q⌉₊ + V) * (2 * (((w : ℕ) + 1) * (⌈Q⌉₊ + V)) + 1) =
+      k * ((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V) + 1)) := by
+    rw [← Finset.mul_sum, sum_segments]
+    ring
   refine (WorkSound G (noFoldRound nf) k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho pubmm pubsha η δ β K κS Q κdmm κdsha
-    (fun _ => Badv) (fun _ r => k * ξw r + (⌈Q⌉₊ + V : ℕ) * ξl r)
-    (fun _ => (((⌈Q⌉₊ + V) * (⌈Q⌉₊ + V) + ∑ _w : Fin k, (⌈Q⌉₊ + V) * (2 * (⌈Q⌉₊ + V) + 1) : ℕ) : ℝ) /
+    (fun _ => Badv) (fun _ r => k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) : ℕ) * ξl r)
+    (fun _ => (((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V)) +
+        ∑ w : Fin k, (k + 1) * (⌈Q⌉₊ + V) * (2 * (((w : ℕ) + 1) * (⌈Q⌉₊ + V)) + 1) : ℕ) : ℝ) /
       Fintype.card D) (fun _ => κsha) hreg hdual hpos hH hη hδ hδ1 hβ hK
     (fun _ r => add_nonneg (mul_nonneg (Nat.cast_nonneg _) (hξw r)) (mul_nonneg (Nat.cast_nonneg _) (hξl r))) hκd
     hcap hG1 hG2 hG3 hP1 hP2 hsak hsha hout hserv himp hx A).trans (le_of_eq ?_)
-  simp only [Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul]
+  simp only [hk]
 
 /-- `Definitions.Pouw.Guarantees.Dither.FleetSound`: the union bound over the units, each unit's event sliced at the
 other units' coins. -/

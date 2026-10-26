@@ -69,9 +69,10 @@ the exchanged bits, and the walk and log the extraction adds.
 The cap (L39): the challenger times both of a round's phases, `work` from the dither to the commitment and `answer`
 from the check coins to the answer deadline `τ_ans` (RT-LEAN-2 I1), so on the event bounded the rounds' work and
 answers fit the devices, and by (G3) they make at most `Q` oracle calls (`calls_le_of_fits` in the proof);
-`ExtractAdv` is needed only there. `WorkSoundNoFold` reads it at the query budget
-`⌈Q⌉ + V` for every prover, so `ε` and `κ` are one bound. The rounds of a period are one sequence; a fleet whose
-units' coins aren't serialized is one prover per unit (`FleetSound`, RT-PROTO-2 P16).
+`ExtractAdv` is needed only there. `WorkSoundNoFold` reads it at one query budget and
+schedule for every prover, `k + 1` segments of `⌈Q⌉ + V` queries, so `ε` and `κ` are one bound. The rounds of a
+period are one sequence; a fleet whose units' coins aren't serialized is one prover per unit (`FleetSound`,
+RT-PROTO-2 P16).
 
 Open (stated so the red team can aim at them):
 * the split of a program's use into a words part and a commitment part is `ExtractAdv`'s cost clause (the
@@ -114,19 +115,26 @@ def WorkSound : Prop :=
 oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than assumed. The oracle is a uniform table
 `eo : nf.Orc ≃ (X → D)` under which the verifier's opening check is the Merkle path check, programs reach it only
 through their calls (`Accel.OracleCalls`), and the realization premise `ShaRealize` holds on runs within the cap `Q` at
-the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: work and answers are
-both timed (the answer deadline `τ_ans`, I1), so a run within the cap makes at most `Q` calls in its rounds' work and
-answers, and its distinct queries, with the verifier's, are at most `q`, those of an answer that reaches a later root
-among them. The premise still asks every prover's words program, on the advice and the dither alone, to be the walk
-over its log; a prover whose words or tree read an oracle answer of the round has none at one `B_adv`, so on a
+one query budget and schedule for every prover. Work and answers are both timed (the answer deadline `τ_ans`, I1), so
+a run within the cap makes at most `Q` calls in its rounds' work and answers, and the verifier evaluates at most `V`
+points. The log is `k + 1` segments of `M = ⌈Q⌉ + V` queries: segment `w` holds the calls and the verifier's
+evaluations between round `w − 1`'s root and round `w`'s (an answer's calls that reach a later root among them),
+padded with dummy queries, and the last segment holds those after the last root. So the budget is `q = (k + 1) M`, and
+round `w`'s root comes after the first `τ_w = (w + 1) M` answers, so the walk of round `w` reads only the queries
+before its root. At `τ_w = q` it would also read the queries after the root, which depend on the round's check coins
+and later ones, while the words program reads advice fixed before them: a prover that commits a constant root and
+opens it on a path its check coin picks has no realization at a `q` below the coin's range (WORKSOUND-WIT's WIT1,
+CMP-136 6dbe5998). The premise still asks every prover's words program, on the advice and the dither alone, to be the
+walk over its log; a prover whose words or tree read an oracle answer of the round has none at one `B_adv`, so on a
 machine with such a prover the premise is false and this statement is vacuous (the walk's oracle reach,
 `Definitions.Pouw.Assumptions.ShaRealize`'s Open), and `WorkSound`, at each prover's own bounds, is the one to cite.
 With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
-`κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`.
-The log's term `μ · q ξl / C` is `Q` log entries' upkeep against the credited cost: at `Q = cap_r / callUse_r` it is
-about `(μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log entry's upkeep is small next to a call
-(`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
+`κ = δ + κ_S + (q² + k q (q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`; the
+extraction's term is `ExtractOfRealize`'s `(q² + Σ_w q (2 τ_w + 1)) / |D|` at this schedule.
+The log's term `μ · q ξl / C` is `(k + 1) M` log entries' upkeep against the credited cost, the padding included: at
+`Q = cap_r / callUse_r` it is about `(k + 1) (μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log
+entry's upkeep is small next to a call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
     (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
@@ -146,13 +154,16 @@ def WorkSoundNoFold : Prop :=
       (fun _ => κsha) →
     OutsourceWithinEgress G μ β → ServiceSound G (noFoldRound nf) k reg verdict dev κS →
     ImportWithinCertifier G (noFoldRound nf) k verdict dev K →
-    ShaRealize G nf k reg Q E eo rD pl dirs ξw ξl (fun _ => ⌈Q⌉₊ + V) (fun _ _ => ⌈Q⌉₊ + V) (fun _ => Badv) →
+    ShaRealize G nf k reg Q E eo rD pl dirs ξw ξl (fun _ => (k + 1) * (⌈Q⌉₊ + V))
+      (fun _ w => ((w : ℕ) + 1) * (⌈Q⌉₊ + V)) (fun _ => Badv) →
     FreedSound G (noFoldRound nf) k verdict dev Pd 1
       (fun _ => epsWorkSound (fun w => Hmm (reg w) + Hsha (reg w) + Ho (reg w)) (fun w => pubmm (reg w))
           (fun w => pubsha (reg w)) η δ β K +
-        (∑ r, μ r * (k * ξw r + (⌈Q⌉₊ + V : ℕ) * ξl r)) / ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
+        (∑ r, μ r * (k * ξw r + ((k + 1) * (⌈Q⌉₊ + V) : ℕ) * ξl r)) /
+          ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)))
       (∑ r, μ r * (1 * Pd.hon r))
-      (fun _ => δ + κS + (((⌈Q⌉₊ + V) * (⌈Q⌉₊ + V) + k * ((⌈Q⌉₊ + V) * (2 * (⌈Q⌉₊ + V) + 1)) : ℕ) : ℝ) /
+      (fun _ => δ + κS + (((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V)) +
+            k * ((k + 1) * (⌈Q⌉₊ + V) * ((k + 1) * (⌈Q⌉₊ + V) + 1)) : ℕ) : ℝ) /
           Fintype.card D + κsha + k * (κdmm Badv + κdsha Badv))
 
 /-- **A fleet of units, each its own period** (RT-PROTO-2 P16: the rounds of units whose coins aren't serialized are

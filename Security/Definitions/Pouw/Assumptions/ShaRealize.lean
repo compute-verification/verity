@@ -30,18 +30,23 @@ commitments (R-ACCEL-3, pending Daniel) and its realization, not a premise of it
   own timed use plus `k · ξw + q A · ξl`. Programs reach the oracle only through calls (`Accel.OracleCalls`, a device
   premise of `ShaRealize`), so the log can be the prover's calls. The challenger times both of a round's phases,
   `work` up to the commitment and `answer` up to the answer deadline `τ_ans` (RT-LEAN-2 I1), so the cap bounds every
-  call of the rounds, and an answer's calls that reach a later root are in the log; at `q = ⌈Q⌉ + V`, `V` the
-  verifier's evaluations, the log has room for them all (L39).
+  call of the rounds, and an answer's calls that reach a later root are in the log. One budget and schedule serve
+  every prover (L39): `k + 1` segments of `⌈Q⌉ + V` queries, `V` the verifier's evaluations, one ending at each root
+  and one after the last, so `q = (k + 1)(⌈Q⌉ + V)` and `τ_w = (w + 1)(⌈Q⌉ + V)`.
 
 The modelling choices, each a hypothesis or a clause RT-LEAN can check:
 * **(N1) distinct queries**: `QueryLog.fresh`. A repeat needs no query, so `q` counts distinct SHA-512 inputs.
 * **(N2) `q` includes the verifier's evaluations**: `Realization`'s clause that every point an accepted opening's check
-  hashes is a logged query. The verifier's evaluations are appended to the log as queries after the prover's own
-  (an evaluation at a point nobody queried is a fresh uniform answer either way).
+  hashes is a logged query. Round `w`'s evaluations enter the log as queries after its answer and before the next
+  round's coins, so a later query may read them (an evaluation at a point nobody queried is a fresh uniform answer
+  either way).
 * **(N3) each prover's own query budget `q A` and schedule `τ A`**: `q A` bounds `A`'s distinct commitment-path
-  SHA-512 inputs over the period, with the verifier's evaluations, on runs within the cap `Q`; `τ A w` bounds the
-  queries before round `w`'s root (padding with dummy queries is free in the analysis). A prover with more queries has
-  a larger `q A`, and so a larger `ξ A` and `κx A`; at the cap, `q A = ⌈Q⌉ + V` is one budget for every prover
+  SHA-512 inputs over the period, with the verifier's evaluations, on runs within the cap `Q`. Round `w`'s root comes
+  after the log's first `τ A w` queries and before the rest: the queries before the root, padded with dummy queries
+  (free in the analysis). The walk of round `w` reads only those, so `τ A w` must not reach past the root: the queries
+  after it depend on the round's check coins and later ones, which `Mw w`'s advice doesn't carry (WORKSOUND-WIT's
+  WIT1, CMP-136 6dbe5998). A prover with more queries has a larger `q A`, and so a larger `ξ A` and `κx A`; at the
+  cap, `k + 1` segments of `⌈Q⌉ + V` queries are one budget and schedule for every prover
   (`Definitions.Pouw.Guarantees.Dither.WorkSoundNoFold`).
 
 Open:
