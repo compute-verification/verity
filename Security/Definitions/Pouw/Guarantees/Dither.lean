@@ -128,14 +128,18 @@ CMP-136 6dbe5998). The premise still asks every prover's words program, on the a
 walk over its log; a prover whose words or tree read an oracle answer of the round has none at one `B_adv`, so on a
 machine with such a prover the premise is false and this statement is vacuous (the walk's oracle reach,
 `Definitions.Pouw.Assumptions.ShaRealize`'s Open), and `WorkSound`, at each prover's own bounds, is the one to cite.
-With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every prover, every prover gets the same bound:
-`ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
+Its premises all hold at once on a machine whose programs pay for the whole table to read the oracle
+(`Proofs.Pouw.NoFoldWitness`, with `ε` and `κ` below 1), and there the honest prover is past the cap: on the current
+`Machine` no provable law says which part of an input is the oracle, so no witness in Lean can do better (which
+input is the oracle, the same Open). With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every
+prover, every prover gets the same bound: `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`; the
 extraction's term is `ExtractOfRealize`'s `(q² + Σ_w q (2 τ_w + 1)) / |D|` at this schedule.
 The log's term `μ · q ξl / C` is `(k + 1) M` log entries' upkeep against the credited cost, the padding included
 (the padding's upkeep, `Definitions.Pouw.Assumptions.ShaRealize`'s Open): at `Q = cap_r / callUse_r` it is about
 `(k + 1) (μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log entry's upkeep is small next to a
-call (`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
+call (`Accel.shaPub`). At a period whose `μ` prices what that upkeep uses (DRAM or issue), it is past 1 at realistic
+`k`, and so the bound is trivial there (RT-LEAN-3, CMP-136 05eaa885); `WorkSound` charges each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
     (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)

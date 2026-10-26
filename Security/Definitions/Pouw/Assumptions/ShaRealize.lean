@@ -68,11 +68,20 @@ Open:
   prover. `WorkSound`, at each prover's own `Badv A` and `ξ A`, still holds for it, at whatever bound its own
   `ExtractAdvAt` gives. Letting `Mw w` read the oracle through priced calls closes this, and changes what SAK(matmul)
   and SHA-512's speed quantify over.
+* **Which input is the oracle** (WORKSOUND-WIT's WIT2, CMP-136 cec1a02f). `Machine.Alg` is a function of types, and
+  Lean can't prove `Orc × J = Orc × J' → J = J'`, so no provable law of a machine says which part of a program's
+  input is the oracle. On programs built from arbitrary functions the provable `OracleCalls` laws charge the whole
+  table or nothing, so within the cap no program reads the oracle, and an honest prover, which reads it to commit,
+  is past the cap. `Proofs.Pouw.NoFoldWitness` meets every premise of `WorkSoundNoFold` on such a machine, with its
+  honest prover past the cap. An oracle-relative machine (`eval` reading the oracle beside the input, programs as
+  query trees) fixes this and the walk's oracle reach together.
 * **The padding's upkeep.** The cost clause charges `ξl` for each of the log's `q` positions, so at one schedule for
   every prover the dummy queries that pad its segments are charged too, and the log's term in `WorkSoundNoFold`'s `ε`
   is `k + 1` times the calls'. Charging only the logged calls and evaluations (a count of entries beside `q`), or
   letting each root come at a stopping time of the log instead of a fixed position (`QueryLog.root_dep`, with
-  `extract_of_ro_roots` over it), would remove the factor.
+  `extract_of_ro_roots` over it), would remove the factor, but not the term: at one budget for every prover it
+  stays near `μ · Q ξl / C`, which is past 1 at a period that prices what a log entry's upkeep uses (RT-LEAN-3's
+  price, CMP-136 05eaa885).
 -/
 
 namespace Pouw.Assumptions
