@@ -4,7 +4,7 @@
 # tree's root; keeps atoms.json, atoms.log, frontier.json and frontier.md in $OUT. PY=PATH names a Python with numpy, else a
 # venv with numpy is built in a scratch directory the job removes.
 #
-#   research run --on vy-nebius-cpu-1 --pool research --source . --project verity --cpus 4 --mem-gb 16 --timeout 2h \
+#   research run --on vy-nebius-cpu-1 --pool research --as LANE --source . --project verity --mem-gb 16 --timeout 2h \
 #     -- bash benchmarks/stacked_share/frontier_job.sh
 set -euo pipefail
 SRC=$(pwd)
