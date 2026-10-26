@@ -175,3 +175,14 @@ def test_a_subcircuit_joins_the_registration_and_the_draw(params):
     assert toy.served == 2
     assert {u.family for u in rp.draw(1, 1, b"t")} >= {"sub:toy.argmax"}
     assert [b["name"] for b in rp.registration(1)["blocks"]] == ["model", "toy"]
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="no CUDA device")
+def test_cuda_seq_sum_is_the_hosts():
+    from e2e_h200 import ops as O
+    g = torch.Generator().manual_seed(11)
+    x = torch.randn(300, 4099, generator=g) * torch.exp2(torch.randint(-140, 40, (300, 4099), generator=g).float())
+    x[0], x[1, ::2], x[2] = 1e-45, -x[1, 1::2][:2050], torch.tensor([3.0e38, -3.0e38] * 2050)[:4099]
+    host = O.seq_sum(x)
+    assert O._seq_sum_kernel() is not None
+    assert torch.equal(O.seq_sum(x.cuda()).cpu().view(torch.int32), host.view(torch.int32))

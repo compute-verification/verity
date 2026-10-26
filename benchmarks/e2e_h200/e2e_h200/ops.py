@@ -2,7 +2,7 @@
 unit in circuits' plan (CMP-92, comment af6de1f1 as revised 23:30Z to size classes, sections 1 and 1b): every f32 op one IEEE
 round to nearest (torch's elementwise kernels, no fast math, no FMA across separate ops), division and sqrt correctly
 rounded through f64 (`div_rn`, `sqrt_rn`), every reduction sequential in ascending index from +0 (`seq_sum`, never torch's
-blocked sums), every bf16 rounding RNE. NaN words are not modelled: no op here makes one from finite inputs.
+blocked sums: a Triton kernel on CUDA, numpy on the host), every bf16 rounding RNE. NaN words are not modelled: no op here makes one from finite inputs.
 
     rmsnorm    RmsNormRow_v1{N, EPS}: s = sum_i RN(x_i^2) from +0, mean = RN(s / N), rs = RN(1 / RN(sqrt(RN(mean + eps)))),
                out_j = bf16(RN(w_j * bf16(RN(x_j * rs))))
@@ -18,7 +18,9 @@ kernels' KP2-S8 GEMM until it is handed over.
 """
 from __future__ import annotations
 
+import functools
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 import torch
@@ -46,9 +48,40 @@ def sqrt_rn(a: torch.Tensor) -> torch.Tensor:
     return torch.sqrt(a.to(torch.float64)).to(torch.float32)
 
 
+@functools.lru_cache(maxsize=1)
+def _seq_sum_kernel() -> Any:
+    """A Triton kernel summing each row in ascending index from +0, one lane a row, each step one ``add.rn.f32`` (no FTZ, no
+    contraction), or None without Triton."""
+    try:
+        import triton
+        import triton.language as tl
+    except ImportError:
+        return None
+
+    @triton.jit
+    def kernel(x, out, rows, n, stride, BLOCK: tl.constexpr):
+        r = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        live = r < rows
+        base = x + r.to(tl.int64) * stride
+        acc = tl.zeros((BLOCK,), tl.float32)
+        for i in range(n):
+            v = tl.load(base + i, mask=live, other=0.0)
+            acc = tl.inline_asm_elementwise("add.rn.f32 $0, $1, $2;", "=r,r,r", [acc, v], dtype=tl.float32, is_pure=True,
+                                            pack=1)
+        tl.store(out + r, acc, mask=live)
+    return kernel
+
+
 def seq_sum(x: torch.Tensor) -> torch.Tensor:
-    """(B, N) f32 -> (B,): the sum in ascending index from +0, by numpy's ``add.accumulate`` on the host (sequential, unlike
-    every torch and numpy sum)."""
+    """(B, N) f32 -> (B,): the sum in ascending index from +0 (sequential, unlike every torch and numpy sum): on CUDA a
+    Triton kernel (`_seq_sum_kernel`), else numpy's ``add.accumulate`` on the host."""
+    k = _seq_sum_kernel() if x.is_cuda else None
+    if k is not None:
+        x = x.contiguous().to(torch.float32)
+        out = torch.empty(x.shape[0], dtype=torch.float32, device=x.device)
+        block = 32
+        k[(-(-x.shape[0] // block),)](x, out, x.shape[0], x.shape[1], x.stride(0), BLOCK=block)
+        return out
     a = x.detach().to("cpu", torch.float32).numpy()
     s = np.add.accumulate(a, axis=1, dtype=np.float32)[:, -1] + np.float32(0)
     return torch.from_numpy(np.ascontiguousarray(s, dtype=np.float32)).to(x.device)
