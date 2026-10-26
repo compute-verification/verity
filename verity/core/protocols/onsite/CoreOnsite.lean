@@ -12,7 +12,6 @@ import CoreComposition.Cases
 import NetworkCheck.Period
 import PousCheck.RunProtocol
 import PouwCheck.Period
-import PouwCheck.Protocol
 import RemoteAudit.Protocol
 import SampledProofs.OneStage
 
@@ -45,8 +44,8 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.published.isNone && allRefused.profile.isNone
 #guard allRefused.reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
 #guard components.all fun P => (allRefused.reason.map (contains · s!"{P.id} reject: params: ")).getD false
--- remote's components alone are not onsite's
-#guard (answer [refused PouwCheck.protocol, refused SampledProofs.OneStage.protocol]).reason ==
+-- a part of onsite's components is not onsite's
+#guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStage.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
 
 end Core.Onsite
