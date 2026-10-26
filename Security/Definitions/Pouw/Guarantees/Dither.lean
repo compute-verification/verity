@@ -152,18 +152,22 @@ verdict `verdict u` on its transcript and its devices' readings `dev u`. One ora
 draws its own coins, which reach no other machine before that unit has them. Unit `u`'s prover `A u` may read every
 other unit's coins, past and future (a coalition of units at its worst); what other units compute for it is work it
 exchanges with machines outside its devices, which the network certifier counts. If every unit's period is
-`(1 − ε_u)`-work-sound at one bound `κ_u ≥ 0` for every prover (`WorkSoundNoFold`), the probability over the oracle and
-every unit's coins that some unit's period is accepted while it frees more than `ε_u C_u` is at most `Σ_u κ_u`. Each
-unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the fleet `δ` for the luck, with `k` rounds a unit. -/
+`(1 − ε_u(A))`-work-sound but with probability `κ_u(A)` for every prover `A` (`WorkSound`, or `WorkSoundNoFold` at
+one bound for every prover), and `κ_u(A u y) ≤ κmax_u` at every value `y` of the other units' coins, the probability
+over the oracle and every unit's coins that some unit's period is accepted while it frees more than
+`ε_u(A u y) C_u` is at most `Σ_u κmax_u`. Each unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the
+fleet `δ` for the luck, with `k` rounds a unit. -/
 def FleetSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Verdict P k Obs)
-    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε C κ : Fin N → ℝ),
-    (∀ u, 0 ≤ κ u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (fun _ => ε u) (C u) (fun _ => κ u)) →
+    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε κ : Fin N → Prover G P k → ℝ)
+    (C κmax : Fin N → ℝ),
+    (∀ u, 0 ≤ κmax u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (ε u) (C u) (κ u)) →
     ∀ A : (u : Fin N) → ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prover G P k,
+      (∀ u y, κ u (A u y) ≤ κmax u) →
       prob (fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) => ∃ u,
         (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
           ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧
-            ¬ (Pd u).FreedWithin 1 z (ε u) (C u)) ≤ ∑ u, κ u
+            ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u)) ≤ ∑ u, κmax u
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy

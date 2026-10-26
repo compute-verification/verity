@@ -611,11 +611,12 @@ theorem WorkSoundNoFold : Pouw.Guarantees.Dither.WorkSoundNoFold := by
 /-- `Definitions.Pouw.Guarantees.Dither.FleetSound`: the union bound over the units, each unit's event sliced at the
 other units' coins. -/
 theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
-  intro G P k N Obs verdict dev Pd ε C κ hκ hunit A
+  intro G P k N Obs verdict dev Pd ε κ C κmax hκ hunit A hA
   classical
   refine le_trans (prob_mono (q := fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) =>
       ∃ u ∈ (Finset.univ : Finset (Fin N)), (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
-        ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧ ¬ (Pd u).FreedWithin 1 z (ε u) (C u))
+        ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧
+          ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u))
       fun ox ⟨u, hu⟩ => ⟨u, Finset.mem_univ u, hu⟩) ((prob_exists_le _ _).trans (Finset.sum_le_sum fun u _ => ?_))
   let e : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) ≃
       (P.Orc × (Fin k → P.Draw × P.Chk)) × ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) :=
@@ -623,9 +624,9 @@ theorem FleetSound : Pouw.Guarantees.Dither.FleetSound := by
       (Equiv.prodAssoc _ _ _).symm
   let F : (P.Orc × (Fin k → P.Draw × P.Chk)) × ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prop :=
     fun b => (A u b.2).Passes (verdict u) (dev u) b.1.1 b.1.2 ∧
-      ∃ z, (Pd u).Fits ((A u b.2).workUse b.1.1 b.1.2) z ∧ ¬ (Pd u).FreedWithin 1 z (ε u) (C u)
+      ∃ z, (Pd u).Fits ((A u b.2).workUse b.1.1 b.1.2) z ∧ ¬ (Pd u).FreedWithin 1 z (ε u (A u b.2)) (C u)
   calc prob _ = prob (fun ox => F (e ox)) := rfl
     _ = prob F := by rw [prob_equiv e]; simp only [Equiv.apply_symm_apply]
-    _ ≤ κ u := prob_le_of_slices F (hκ u) fun y => hunit u (A u y)
+    _ ≤ κmax u := prob_le_of_slices F (hκ u) fun y => (hunit u (A u y)).trans (hA u y)
 
 end Pouw.SecurityProofs.Dither
