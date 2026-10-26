@@ -26,8 +26,9 @@ bits a covert sender in the server can move through the network certifier in the
      "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
 each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
-horizon `k`), each network certifier connection's cell cap over the period (`cap_c`), the session's window the period
-starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many periods),
+monitoring period `k`), each network certifier connection's cell cap over the period (`cap_c`), the session's window
+the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
+periods),
 the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
 (32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
@@ -98,7 +99,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
   for another window's rows is refused); and the answer is one-stage's for that registration's digest, accepted with
   one level drawn `subset:k` or stratified, and its `bound`;
-* audit `i`: the answer is one-stage's for its registration's digest, accepted with one level drawn `subset:k`.
+* audit `i`: the answer is one-stage's for its registration's digest, accepted with one level drawn `subset:k` or
+  stratified (a work law's draw is stratified), and its `bound`.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -107,7 +109,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
      "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
 
 with `b` the audit's bound on wrong units at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
-`⌈log2 Σ_{j ≤ b} C(N, j)⌉` (the possible faulty sets of a uniform `subset:k` draw: every set of at most `b` units),
+`⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` units, which holds the sets a `subset:k` or a stratified draw leaves
+possible; `drawn` is the draw's `k`, or its `Σ k` stratified),
 `faulty_bits` = `16 · b` (a proof unit's outputs are at most 16 bits), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of
 the terms. The schedules term counts every assignment of a sync of Σ_sync to the `m` link-windows, so it is the same
 whichever syncs the certifier ran them under, and needs none of them. `eps` is the probability that `K` fails to bound
@@ -156,7 +159,7 @@ def failReasons : List String := ["late", "limit", "upstream", "ingress", "malfo
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
 
-/-- A compute audit's layout terms: its free inputs it doesn't register, and its horizon. -/
+/-- A compute audit's layout terms: its free inputs it doesn't register, and its monitoring period. -/
 structure Audit where
   free : Nat
   steps : Nat
@@ -530,15 +533,14 @@ def holds (reg : Registration) (r : Rows) : Bool :=
 def records (link : String) : Array (String × Direction) :=
   #[(link, .ingress), (link, .egress), (link ++ "-fails", .egress)]
 
-/-- An accepted scan's or audit's facts: one level drawn `subset:k` (or stratified, where `stratified`), and its
-bound. -/
-def factsOf (what : String) (stratified : Bool) (prof : Core.Integrity) (pub : Json) : Found Facts := do
+/-- An accepted scan's or audit's facts: one level drawn `subset:k` or stratified (a work draw's profile is stratified,
+its `Σ k_s` drawn), and its bound. -/
+def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
     | some (.subset k) => pure k
-    | some (.stratified ss) =>
-      if stratified then pure (ss.foldl (fun n st => n + st.k) 0) else refuse s!"{what}: profile: not a subset draw"
-    | _ => refuse s!"{what}: profile: not a subset draw"
+    | some (.stratified ss) => pure (ss.foldl (fun n st => n + st.k) 0)
+    | _ => refuse s!"{what}: profile: not a subset or stratified draw"
   match Flock.J.nat pub "bound" "public" with
   | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := b }
   | .error e => refuse s!"{what}: {e}"
@@ -557,13 +559,13 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (reg 
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
   unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"
   let (prof, pub) ← answered what reg x.answer
-  factsOf what true prof pub
+  factsOf what prof pub
 
 /-- Audit `i`'s findings, and on acceptance its facts. -/
 def auditCheck (i : Nat) (reg : Registration) (a : Core.Answer) : Found Facts := do
   let what := s!"audit {i}"
   let (prof, pub) ← answered what reg a
-  factsOf what false prof pub
+  factsOf what prof pub
 
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x

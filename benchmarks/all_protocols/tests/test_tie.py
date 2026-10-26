@@ -7,9 +7,11 @@
   records_audit's ``--registered`` list;
 * the runner reads a relay run's out record and witness as the network certifier wrote them (`certify_out`) and its
   key and session off its deployment, and refuses a link-window the certifier signed no out record for;
-* a tied loop period (the runner's ``loop_period`` on relay runs whose out records the certifier's own `certify_out`
-  wrote from the stub's outputs): ``period.json`` names the tie and the period's pins, every output unit's ``o0`` row
-  opens the pinned root, and on a relay with one output byte changed exactly the row it changed doesn't (slow).
+* the runner ties only under a work law (``--tie`` defaults to ``work:64`` and refuses any other law);
+* a tied window of the toy (the runner's ``loop_window`` on relay runs whose out records the certifier's own
+  `certify_out` wrote from the stub's outputs): ``period.json`` names the tie and the window's pins, every output unit's
+  ``o0`` row opens the pinned root, and on a relay with one output byte changed exactly the row it changed doesn't
+  (slow).
 """
 from __future__ import annotations
 
@@ -120,8 +122,8 @@ def test_the_runner_reads_the_certifiers_out_record_witness_and_device_off_the_r
 
 
 def test_the_tie_draws_under_a_work_law_and_refuses_any_other(tmp_path, monkeypatch, capsys):
-    """a5 proves the output class only beside a streamed work draw, so a ``--tie`` run under ``subset:2`` would reject
-    every period: the runner defaults ``--tie`` to ``work:64`` and refuses any other law before it relays."""
+    """a5 proves the output class only beside a streamed work draw, so a ``--tie`` run under a subset law would reject
+    every window: the runner defaults ``--tie`` to ``work:64`` and refuses any other law before it relays."""
     base = ["--out", str(tmp_path / "out"), "--tools", str(tmp_path / "missing.json")]
     for law in ("subset:2", "stratified:4", "bernoulli:1/2"):
         with pytest.raises(SystemExit) as x:
@@ -137,9 +139,9 @@ def test_the_tie_draws_under_a_work_law_and_refuses_any_other(tmp_path, monkeypa
         raise SystemExit(0)
 
     monkeypatch.setattr(RN, "serve", serve)
-    for argv, law in ((["--tie"], "work:64"), (["--tie", "--law", "work:4"], "work:4"), ([], "subset:2")):
+    for argv, law in ((["--tie"], "work:64"), (["--tie", "--law", "work:4"], "work:4"), ([], "subset:64")):
         with pytest.raises(SystemExit):
-            RN.main([*base, *argv, "--periods", "1"])
+            RN.main([*base, *argv, "--windows", "1"])
         assert laws.pop() == law
 
 
@@ -163,12 +165,13 @@ def _unopened(d: Path, period: dict) -> list[int]:
 
 
 @pytest.mark.slow
-def test_a_tied_period_opens_every_output_row_and_a_changed_byte_does_not(tmp_path, monkeypatch):
+def test_a_tied_window_opens_every_output_row_and_a_changed_byte_does_not(tmp_path, monkeypatch):
     honest = responses([3])
     relays = {"honest": honest, "byte": [bytes.fromhex(ar.other_hex(honest[0].hex().encode()).decode())]}
     monkeypatch.setattr(TIE, "load", lambda name: Namespace(relayed=lambda rec, strategy, i: (i, relays[strategy])))
-    a = Namespace(law="work:4", cap=8, requests="3", steps=STEPS, tamper=set(), node="test-node", tools={}, periods=2,
-                  weights=None, tie=True, tie_tamper={1}, relay={"h": H, "steps": STEPS, "dir": str(tmp_path / "s")})
+    a = Namespace(law="work:4", delta="1/100", cap=8, requests="3", steps=STEPS, tamper=set(), node="test-node",
+                  tools={}, windows=2, start=0, session_jobs=1, pouw=None, weights=None, tie=True, tie_tamper={1},
+                  relay={"h": H, "steps": STEPS, "dir": str(tmp_path / "s")})
     program = RN.serve([*RN.shape_of(0, "test", a), "--circuit-only"])["program"]
     signer = cs.signer(tmp_path / "key", 4)
     try:
@@ -179,10 +182,10 @@ def test_a_tied_period_opens_every_output_row_and_a_changed_byte_does_not(tmp_pa
     finally:
         signer.close()
     for i, strategy, bad in ((0, "honest", []), (1, "byte", [0])):
-        d, _ = RN.loop_period(i, "test", a, tmp_path / f"s{i}", tmp_path / f"p{i}")
+        d, _ = RN.loop_window(i, "test", a, tmp_path / f"s{i}", tmp_path / f"w{i}")
         p = T.period_of(d)
         assert {k: p["tie"][k] for k in ("value", "port", "stratum", "strategy", "window")} == {
             "value": "out", "port": "o0", "stratum": "output class", "strategy": strategy, "window": i}
-        assert p["registered"] == str(tmp_path / f"p{i}" / "pin.json") and p["prover_env"] == {}
+        assert p["registered"] == str(tmp_path / f"w{i}" / "pin.json") and p["prover_env"] == {}
         assert RA.output_class(json.loads((d / "circuit.json").read_text())) == [[H, 2 * H]]
         assert _unopened(d, p) == bad

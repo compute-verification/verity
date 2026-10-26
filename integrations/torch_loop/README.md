@@ -42,7 +42,13 @@ committed row longer than one SHA-512 block.
   - The manifest entry pins each file's size and sha256 and lists `linears`, the loop's op paths in order.
   - `python -m verity_torch_loop.checkpoint` writes the files, and `--check` checks them.
   - The gate reads this manifest only once its `MANIFEST` names it; today that is vLLM's alone.
-- `tests/`: the loop's outputs are the Definition's, unit by unit; core's registration check passes the written window and
+- `verity_torch_loop/pouw.py` (`serve.py --pouw h1`): the loop's PoUW window, every linear served as split-K tiles of the
+  H1 tile PoUW's verifier pins (`core_check.TILES`, `PouwH1Tile_v1` at K = 64, 4 × 8), whose exact z gives the loop's own
+  output; written to `DIR/pouw` under a one-stage registration in PoUW's window form, at all-protocols' PoUW parameters.
+  `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
+  `core_check` and Lean's `pouw-check`. Its gaps are in `pouw.py`'s docstring.
+- `tests/`: the loop's outputs are the Definition's, unit by unit; its H1 tiles carry its linears and core's PoUW check
+  registers its PoUW window; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
@@ -97,13 +103,19 @@ for every live prover,
 Pr[`flock-verify` accepts and at least K₀ of the 256 units are wrong] ≤ C(256 − K₀, 64) / C(256, 64) + ε_ks + δ_link.
 
 The first term is 0.42 at K₀ = 3 (the profile's 2 at δ = 0.5), 0.096 at K₀ = 8, 0.0085 at K₀ = 16 and 4.9 × 10⁻⁵ at
-K₀ = 32. The draw on the gate's coins is `Select.select`'s, and the theorem covers it through A6
-(`uniform/flock-coin-server`). The statement's named assumptions are hypotheses: A3 (the verifier's bytes are uniform),
-`live-verifier` (with A6 for the coin server's coins), `cr/sha-512` and `ecr/sha-512`. What it doesn't cover:
+K₀ = 32. The statement's named assumptions are hypotheses: A3 (the verifier's bytes are uniform), `live-verifier`
+(with `uniform/flock-coin-server` for the coin server's coins), `cr/sha-512` and `ecr/sha-512`.
 
-- `live-verifier`, a hypothesis. It says the draw a5 serves the session (its share of the gate challenger's draw) is the
-  one `flock-verify draw` printed. That premise is not proved for the served path. A3 is read here of the gate
-  challenger's bytes, an auditor device under `trusted-host`.
+The draw on the gate's coins is `Select.select`'s. A6 (`Security/Proofs/Flock/Claims/Sampling/Select/OS.lean`,
+`Properties.SampledProofs.SecurityProofs`) proves it is the theorem's subset draw on the same bytes:
+- `drawUnits_subset_runOS`, with no hypotheses: the code's subset draw equals `Law.runOS f (.subset k) n`.
+- `select_subset_runOS`: an accepted `Select.select` at a subset:k rule checks every unit of that draw.
+- `select_subset_escape_le`: under A3 alone, Pr[accepted and a set B escapes] ≤ `(Law.subset n k).escape B`.
+
+What it doesn't cover:
+
+- The record's custody, which `live-verifier` still takes as a hypothesis: that the record `flock-verify` reads is the
+  coin server's. A3 is read here of the gate challenger's bytes, an auditor device under `trusted-host`.
 - The checks a5 and `records_audit.py` make outside the session (R1 to R7, the receipt, the registration fixed before the
   draw), which the bound does not need.
 - The chain from this bound into `Claims.Sampling.KS` (the "session verdict ⇒ Flock KS" row that
