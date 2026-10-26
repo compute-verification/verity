@@ -36,13 +36,17 @@ noncomputable section
 (`rowsOk`). -/
 theorem findIdx_dirs {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
     c.ports.findIdx? (·.name == "dirs") = some 4 := by
+  have hnm : ∀ j < 5,
+      ((Flock.RecOpen.rows L H)[j]!).1 = (#["row", "aux", "acc", "coef", "dirs"] : Array String)[j]! := by
+    intro j hj
+    interval_cases j <;> rfl
   obtain ⟨h4, hn4, -⟩ := FlockC3.RegLevels.rowsOk_get h (show 4 < 5 by decide)
   refine Array.findIdx?_eq_some_iff_getElem.2 ⟨h4, ?_, fun j hj => ?_⟩
-  · simp only [hn4]
-    decide
+  · exact (congrArg (· == "dirs") (hn4.trans (hnm 4 (by decide)))).trans (by decide)
   · obtain ⟨hj', hnj, -⟩ := FlockC3.RegLevels.rowsOk_get h (show j < 5 by omega)
-    simp only [hnj]
-    interval_cases j <;> decide
+    intro hc
+    have e := (congrArg (· == "dirs") (hnj.trans (hnm j (by omega)))).symm.trans hc
+    interval_cases j <;> exact absurd e (by decide)
 
 /-- **Port `dirs` starts at the position columns**: the words of the four rows before it are `idxCol`'s offset. -/
 theorem words_pre {c : Circuit} {L H : ℕ} (h : RecOpen.rowsOk c L H = true) :
