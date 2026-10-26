@@ -3065,7 +3065,10 @@
    "type_hash": "99a6dd943ff4b0f93d32cee23f1a9a0b38c571fcde163c3b96d9fbaf700c32d9"
   },
   "Accounting.SecurityProofs.Gates.EncodeChainRefuted": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted : Accounting.Guarantees.Gates.EncodeChainRefuted"],
+   "assumptions": [],
+   "type_hash": "8d77a81116cefbba9ece553211efa41bd1aca9497500487ccfb33ab4c42746af"
   },
   "Accounting.SecurityProofs.Gates.EncodeCost": {
    "owner": "@memory-accounting",
@@ -12399,6 +12402,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
     "Accounting.SecurityProofs.Gates.SquaringCarry",
@@ -12605,6 +12609,7 @@
     "Accounting.SecurityProofs.Gates.DeclaredWindow",
     "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.Exp2Lut127Range",
     "Accounting.SecurityProofs.Gates.F32ToS8RziRange",
@@ -31316,6 +31321,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
@@ -31944,6 +31950,13 @@
     "Accounting.SecurityProofs.Gates.SquaringUnits",
     "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
+  },
+  "Models.Accounting.Guarantees.GatesBitwise": {
+   "digest": "11bf9ade6456b8e9875feeb541fbca8b8fab63db904bdc9515603832d9dcc060",
+   "definitions": {
+    "Accounting.Guarantees.Gates.EncodeChainRefuted": "34f205a158aa075674d9945f3302b515802336831d6bc535a60b883391d0ec0a"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
   },
   "Models.Accounting.Guarantees.HMu": {
    "digest": "b08f25418b8b3ef93f63d5d8f7b9c510362dcaae40b3dd50eac0975a13776b68",
