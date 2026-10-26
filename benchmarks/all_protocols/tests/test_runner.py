@@ -83,7 +83,7 @@ OUTSIDE = tuple(dataclasses.replace(e, onsite=False) if e.name == "bandwidth" el
 def test_a_rejecting_audit_rejects_though_it_is_no_onsite_component(tmp_path):
     r = decide(tmp_path, integrity=fake("accept"), bandwidth=fake("reject"), table=OUTSIDE)
     assert r["composed"]["verdict"] == "reject"
-    assert r["composed"]["outside_onsite"] == ["bandwidth"]
+    assert r["composed"]["outside_onsite"] == ["bandwidth", "wipe"]
 
 
 def onsite_exe(tmp_path: Path, verdict: str = "accept", reason: str | None = None) -> Path:
@@ -114,7 +114,7 @@ def test_missing_legs_are_never_verdicts(tmp_path):
     assert {x["verdict"] for x in missing.values()} == {"missing"}
     assert {n: x["owner"] for n, x in missing.items()} == {
         "work": "compute-accounting", "space": "memory-accounting", "bandwidth": "memory-accounting",
-        "communication": "network-accounting"}
+        "communication": "network-accounting", "wipe": "memory-accounting"}
     assert r["composed"]["verdict"] == "pending-ports"
     assert r["protocols"]["integrity"]["quantity"] == {"bound": 1}
     assert r["protocols"]["integrity"]["delta"] == "1/2"
@@ -202,7 +202,8 @@ def test_the_table_names_every_onsite_component_once():
                       "RemoteAudit.Protocol.protocol", "SampledProofs.OneStage.protocol"], "onsite's components changed"
     named = sorted(e.component for e in T.TABLE if e.onsite)
     assert named == sorted(C.component_of(x)[0] for x in onsite)
-    assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 5
+    assert len({e.name for e in T.TABLE}) == len({e.component for e in T.TABLE}) == len(T.TABLE) == 6
+    assert len(named) == 5
     assert T.TABLE[0].name == "integrity", "integrity runs first: PoUW's evidence is its answer"
 
 
