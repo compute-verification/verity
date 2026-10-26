@@ -8,6 +8,7 @@
    "imports": [
     "CoreComposition.Cases",
     "CoreComposition.Stubs",
+    "NciCheck.Protocol",
     "NetworkCheck.Check",
     "PouwCheck.Protocol",
     "SampledProofs.OneStage"

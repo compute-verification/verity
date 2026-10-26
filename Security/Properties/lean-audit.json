@@ -36,7 +36,8 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
-  "Properties.Composition"
+  "Properties.Composition",
+  "Properties.Nci.Protocol"
  ],
  "proved_in": ["../Proofs"],
  "assumptions": {
@@ -161,6 +162,7 @@
   "NciCheck.Check",
   "NciCheck.Baseline",
   "NciCheck.Desc",
+  "NciCheck.Protocol",
   "Flock",
   "Properties.CertifierDevice",
   "CertifierDevice",
@@ -230,6 +232,7 @@
     "Definitions.Nci.Assumptions.Baseline",
     "NciCheck.Check",
     "NciCheck.Baseline",
+    "NciCheck.Protocol",
     "Properties.Nci"
    ],
    "except": [],
@@ -429,6 +432,9 @@
    "signature": ["NciCheck.Properties.SecurityProofs.Decodes : NciCheck.Properties.Decodes"],
    "assumptions": [],
    "type_hash": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd"
+  },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "owner": "@network-accounting"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "owner": "@network-accounting",
@@ -2987,6 +2993,10 @@
    },
    "Properties.Pouw.LiveSalt.acceptMeans": {
     "function": "PouwCheck.liveSaltCheck",
+    "outcome": "accept"
+   },
+   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+    "function": "NciCheck.Protocol.check",
     "outcome": "accept"
    }
   },
