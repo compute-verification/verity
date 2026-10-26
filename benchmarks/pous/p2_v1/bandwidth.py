@@ -2,22 +2,27 @@
 `verity.core.protocols.remote_bandwidth.p2_party`, whose verifier runs on another host.
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
-    bandwidth.py registration --store ENC --node NODE --out FILE
+    bandwidth.py registration --store ENC --node NODE --layout F --out FILE
     bandwidth.py session --store ENC --layout F --lib DIR --node NODE --out DIR
                  (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
                  [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
                  [--skip-layer L] [--expect accept|reject] [--device cuda] [--ref-decode]
+
+**The plan.** A pass reads the units of the registration's plan (`p2_party.plan_of`), which the verifier holds and sends
+with it: `tensor_plan`, the units holding a tensor's block, so not the store's padding past the last tensor (MEM-72:
+it is PoUS's, and the decode never reads it). `registration --layout` writes it into the registration.
 
 **The step.** Each pass of the session is one engine step's weight reads: every tensor of the store, in block order, from
 its segment files onto the device (`full.Segments`, kernels' reader) and through kernels' staging decode
 (`stage.decode_matrix`) into a staging buffer, as a forward step reads them. The decode reads each chunk's rows from
 `stage.Store.decode_rows`; `SketchedStore` sketches those same device rows under the pass's seed just before they go to
 the decode kernel (`Sketch.add`: π of each block by an exact int8 matmul against its four offsets' signs, summed into
-its unit's σ), so the receipts are of the bytes the decode read. Blocks of no tensor (the store's tail) are read and
-sketched alone, so every unit is covered. Then y = SHA512(prefix ‖ u64be g ‖ σ_g) for every unit on the device
-(`receipts_of`, a torch SHA-512 after the prefix's midstate; a sample held to hashlib and to `p2.Sketcher` each pass), and
-the pass's receipt tree (`ReceiptTree`, `receipts.tree`'s, in worker processes). The sketch is a pass of its own over
-the chunk's rows, not fused into the decode kernel, so each byte is read from HBM twice.
+its unit's σ), so the receipts are of the bytes the decode read. Blocks of no tensor up to the plan's last unit (the
+head's last unit's tail) are read and sketched alone, so every unit of the plan is covered. Then y = SHA512(prefix ‖
+u64be g ‖ σ_g) for every unit of the plan on the device (`receipts_of`, a torch SHA-512 after the prefix's midstate; a
+sample held to hashlib and to `p2.Sketcher` each pass), and the pass's receipt tree (`ReceiptTree`, `receipts.tree`'s,
+in worker processes). The sketch is a pass of its own over the chunk's rows, not fused into the decode kernel, so each
+byte is read from HBM twice.
 
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_party --stdio` on
 the auditor's host; on one host, the module itself, which certifies nothing), reaches `p2_party --listen` at
@@ -238,9 +243,11 @@ class Sketch:
         self.seen.index_add_(0, j // UNIT, t.ones(n, dtype=t.int32, device=self.device))
         self.blocks += n
 
-    def covered(self) -> int:
-        """The units of every block sketched exactly once; each is four."""
-        return int((self.seen == UNIT).sum())
+    def covered(self, runs: Sequence[tuple[int, int]] | None = None) -> int:
+        """The units (of `runs`, or all) of every block sketched exactly once; each is four."""
+        if runs is None:
+            return int((self.seen == UNIT).sum())
+        return sum(int((self.seen[f:f + c] == UNIT).sum()) for f, c in runs)
 
 
 def sketched_store(S: Any):
@@ -286,25 +293,32 @@ class RefDecode:
 
 # --- the receipt tree and PoUS's vk paths, in worker processes ---------------------------------------------------------
 
+def _domain(seed: bytes, runs: tuple, blocks: int) -> tuple[Any, int]:
+    """The receipt tree's domain under the plan `runs` of a store of `blocks` units, and the plan's positions: a
+    worker's task carries the plan's runs, as a `Plan` doesn't pickle."""
+    plan = receipts.Plan(runs, blocks)
+    return receipts.domain(seed, plan), plan.length
+
+
 def _leaves(args: tuple) -> bytes:
-    seed, units, lo, hi, ys, salts = args
-    d = receipts.domain(seed, receipts.Plan.whole(units))
+    seed, runs, blocks, lo, hi, ys, salts = args
+    d, n = _domain(seed, runs, blocks)
     out = bytearray()
     for c in range(lo, hi):
-        a, b = (PER_LEAF * c - PER_LEAF * lo) * DIGEST, (min(PER_LEAF * (c + 1), units) - PER_LEAF * lo) * DIGEST
+        a, b = (PER_LEAF * c - PER_LEAF * lo) * DIGEST, (min(PER_LEAF * (c + 1), n) - PER_LEAF * lo) * DIGEST
         out += d.leaf(c, c, receipts.SCHEMA, receipts.hidden(ys[a:b], salts[SALT * (c - lo):SALT * (c - lo + 1)]))
     return bytes(out)
 
 
 def _pads(args: tuple) -> bytes:
-    seed, units, lo, hi = args
-    d = receipts.domain(seed, receipts.Plan.whole(units))
+    seed, runs, blocks, lo, hi = args
+    d, _ = _domain(seed, runs, blocks)
     return b"".join(d.pad(r) for r in range(lo, hi))
 
 
 def _nodes(args: tuple) -> bytes:
-    seed, units, level, lo, below = args
-    d = receipts.domain(seed, receipts.Plan.whole(units))
+    seed, runs, blocks, level, lo, below = args
+    d, _ = _domain(seed, runs, blocks)
     return b"".join(d.node(level, lo + k, below[2 * DIGEST * k:2 * DIGEST * k + DIGEST],
                            below[2 * DIGEST * k + DIGEST:2 * DIGEST * (k + 1)]) for k in range(len(below) // (2 * DIGEST)))
 
@@ -314,27 +328,27 @@ def _run(pool: ProcessPoolExecutor | None, fn, tasks: list[tuple]) -> list[bytes
 
 
 class ReceiptTree:
-    """`receipts.tree(seed, Plan.whole(units), ys, salts)` built level by level in `pool`'s processes: its `root`, and
-    `path(c)`, leaf c's siblings from the leaf up, as `MerkleTree.open(c).path`."""
+    """`receipts.tree(seed, plan, ys, salts)` built level by level in `pool`'s processes: its `root`, and `path(c)`,
+    leaf c's siblings from the leaf up, as `MerkleTree.open(c).path`."""
 
     CHUNK = 1 << 14
 
-    def __init__(self, seed: bytes, units: int, ys: np.ndarray, salts: bytes,
+    def __init__(self, seed: bytes, plan: receipts.Plan, ys: np.ndarray, salts: bytes,
                  pool: ProcessPoolExecutor | None = None) -> None:
-        n = receipts.leaves(units)
-        if ys.shape != (units, DIGEST) or len(salts) != SALT * n:
-            raise ValueError(f"{units} receipts in {n} leaves")
-        raw, C = ys.tobytes(), self.CHUNK
-        tasks = [(seed, units, lo, min(n, lo + C), raw[PER_LEAF * DIGEST * lo:PER_LEAF * DIGEST * min(n, lo + C)],
+        L, n = plan.length, receipts.leaves(plan.length)
+        if ys.shape != (L, DIGEST) or len(salts) != SALT * n:
+            raise ValueError(f"{L} receipts in {n} leaves")
+        raw, C, p = ys.tobytes(), self.CHUNK, (seed, plan.runs, plan.blocks)
+        tasks = [(*p, lo, min(n, lo + C), raw[PER_LEAF * DIGEST * lo:PER_LEAF * DIGEST * min(n, lo + C)],
                   salts[SALT * lo:SALT * min(n, lo + C)]) for lo in range(0, n, C)]
         width = 1 << merkle_depth(n)
         level = b"".join(_run(pool, _leaves, tasks))
-        level += b"".join(_run(pool, _pads, [(seed, units, lo, min(width, lo + C)) for lo in range(n, width, C)]))
+        level += b"".join(_run(pool, _pads, [(*p, lo, min(width, lo + C)) for lo in range(n, width, C)]))
         self.levels = [level]
         depth = 0
         while len(level) > DIGEST:
             pairs = len(level) // (2 * DIGEST)
-            tasks = [(seed, units, depth, lo, level[2 * DIGEST * lo:2 * DIGEST * min(pairs, lo + C)])
+            tasks = [(*p, depth, lo, level[2 * DIGEST * lo:2 * DIGEST * min(pairs, lo + C)])
                      for lo in range(0, pairs, C)]
             level = b"".join(_run(pool, _nodes, tasks))
             self.levels.append(level)
@@ -435,6 +449,21 @@ def pieces(lay: Any, total: int) -> list[Piece]:
     return out
 
 
+def tensor_plan(layout: dict, units: int) -> receipts.Plan:
+    """The plan of the units holding a block of a tensor of `layout` (the store's layout JSON, or the toy's, which holds
+    it as `layout`), in store order, in a store of `units` units: not the store's padding past them (MEM-72)."""
+    doc = layout.get("layout", layout)
+    cols = doc["tensor_columns"]
+    f, n = cols.index("first_block"), cols.index("blocks")
+    spans: list[list[int]] = []
+    for a, b in sorted((r[f] // UNIT, -(-(r[f] + r[n]) // UNIT)) for r in doc["tensors"]):
+        if spans and a <= spans[-1][1]:
+            spans[-1][1] = max(spans[-1][1], b)
+        else:
+            spans.append([a, b])
+    return receipts.Plan(tuple((a, b - a) for a, b in spans), units)
+
+
 class Engine:
     """One engine step's weight reads through kernels' staging decode (module docstring), its rows sketched."""
 
@@ -457,12 +486,17 @@ class Engine:
             raise ValueError("the layout's store is not the registration's")
         self.store, self.lib, self.chunk, self.readers = store, lib, chunk, readers
         self.registration, self.skip_layer = registration, skip_layer
-        self.units = registration.blocks
-        self.pieces = pieces(self.lay, UNIT * self.units)
         self.Sketched = sketched_store(S)
+        self.serve(receipts.Plan.whole(registration.blocks))
+
+    def serve(self, plan: receipts.Plan) -> None:
+        """Each step from now on reads `plan`'s units: the store's blocks up to its last unit's, every tensor's."""
+        self.plan = plan
+        self.units = max(f + c for f, c in plan.runs)
+        self.pieces = pieces(self.lay, UNIT * self.units)
 
     def step(self, seed: bytes) -> tuple[Any, dict]:
-        """One step under `seed`: every unit's σ on the device, and the step's timings."""
+        """One step under `seed`: σ on the device of every unit up to the plan's last, and the step's timings."""
         torch, F, S = self.torch, self.F, self.S
         bps = self.lay.params.blocks_per_segment
         sk = Sketch(torch, seed, self.registration.rows, self.units, self.device)
@@ -492,11 +526,11 @@ class Engine:
                 times["decode_s"] += time.perf_counter() - b
                 del rows
         times["step_s"] = time.perf_counter() - t0
-        times["covered_units"] = sk.covered()
+        times["covered_units"] = sk.covered(self.plan.runs)
         times["sketched_blocks"] = sk.blocks
         times["int_mm"] = sk.int_mm and sk.checked
-        if self.skip_layer is None and times["covered_units"] != self.units:
-            raise RuntimeError(f"the step sketched {times['covered_units']} of {self.units} units whole")
+        if self.skip_layer is None and times["covered_units"] != self.plan.length:
+            raise RuntimeError(f"the step sketched {times['covered_units']} of the plan's {self.plan.length} units whole")
         return sk.sigma, times
 
     def unit_bytes(self, g: int) -> bytes:
@@ -517,38 +551,43 @@ class Prover:
     def hold(self, registration: dict, commitment: coins.LiveCommitment) -> None:
         if p2_party.registration_of(registration) != self.registration:
             raise ValueError("the verifier's registration is not this store's")
+        self.engine.serve(p2_party.plan_of(registration, self.registration))
         self.commitment = commitment
 
     def _spot(self, seed: bytes, sigma: Any, ys: np.ndarray) -> int:
-        """A few units' σ held to `p2.Sketcher` on the unit's bytes from the store and their y to hashlib: the first,
-        the last and `spot` drawn from the seed."""
-        U, rows = self.registration.blocks, self.registration.rows
+        """A few positions' σ held to `p2.Sketcher` on their unit's bytes from the store and their y to hashlib: the
+        plan's first, its last and `spot` drawn from the seed."""
+        plan, rows = self.engine.plan, self.registration.rows
         rng = np.random.default_rng(int.from_bytes(seed[:8], "big"))
-        units = sorted({0, U - 1, *rng.integers(0, U, self.spot).tolist()})
+        positions = sorted({0, plan.length - 1, *rng.integers(0, plan.length, self.spot).tolist()})
         sk = p2.Sketcher(seed, rows)
         bad = 0
-        for g in units:
+        for p in positions:
+            g = plan.block(p)
             got = bytes(sigma[g].cpu().numpy().astype("<i4").tobytes())
             if self.engine.skip_layer is None and got != sk.sketch(self.engine.unit_bytes(g)):
                 bad += 1
-            if bytes(ys[g]) != sk.receipt(g, got):
+            if bytes(ys[p]) != sk.receipt(g, got):
                 bad += 1
         if bad:
-            raise RuntimeError(f"{bad} of {len(units)} spot units' σ or y are not the reference's")
-        return len(units)
+            raise RuntimeError(f"{bad} of {len(positions)} spot units' σ or y are not the reference's")
+        return len(positions)
 
     def run(self, challenge: coins.LiveOpening, t: int, i: int, previous: bytes) -> bytes:
         seed = receipts.seed(coins.coin(challenge), i, previous)
+        plan = self.engine.plan
         t0 = time.perf_counter()
         sigma, times = self.engine.step(seed)
         a = time.perf_counter()
-        ys = receipts_of(self.engine.torch, seed, sigma)
+        parts = [receipts_of(self.engine.torch, seed, sigma[f:f + c], first=f) for f, c in plan.runs]
+        ys = parts[0] if len(parts) == 1 else np.concatenate(parts)
+        del parts
         b = time.perf_counter()
         spotted = self._spot(seed, sigma, ys)
         del sigma
         c = time.perf_counter()
-        salts = os.urandom(SALT * receipts.leaves(self.registration.blocks))
-        tree = ReceiptTree(seed, self.registration.blocks, ys, salts, self.pool)
+        salts = os.urandom(SALT * receipts.leaves(plan.length))
+        tree = ReceiptTree(seed, plan, ys, salts, self.pool)
         d = time.perf_counter()
         self.passes[t, i] = (ys, salts, tree)
         rec = {"window": t, "pass": i, **times, "receipts_s": round(b - a, 3), "spot_units": spotted,
@@ -560,16 +599,17 @@ class Prover:
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
         t0 = time.perf_counter()
-        blocks = sorted({UNIT * p + b for _, p in draws for b in range(UNIT)})
+        plan = self.engine.plan
+        blocks = sorted({UNIT * plan.block(p) + b for _, p in draws for b in range(UNIT)})
         paths = self.vk.paths(blocks)
         out = []
         for i, p in draws:
             ys, salts, tree = self.passes[t, i]
-            c = p // PER_LEAF
-            unit = self.engine.unit_bytes(p)
+            c, g = p // PER_LEAF, plan.block(p)
+            unit = self.engine.unit_bytes(g)
             out.append(p2.Opening(i, p, tuple(unit[BLOCK * b:BLOCK * (b + 1)] for b in range(UNIT)),
-                                  tuple(paths[UNIT * p + b] for b in range(UNIT)),
-                                  ys[PER_LEAF * c:min(PER_LEAF * (c + 1), self.registration.blocks)].tobytes(),
+                                  tuple(paths[UNIT * g + b] for b in range(UNIT)),
+                                  ys[PER_LEAF * c:min(PER_LEAF * (c + 1), plan.length)].tobytes(),
                                   salts[SALT * c:SALT * (c + 1)], tree.path(c)))
         for key in [k for k in self.passes if k[0] <= t]:
             del self.passes[key]
@@ -579,16 +619,16 @@ class Prover:
         return out
 
 
-def registration_file(reg: p2.Registration, path: Path) -> None:
-    path.write_text(json.dumps(p2_party.registration_json(reg), indent=1, sort_keys=True) + "\n")
+def registration_file(reg: p2.Registration, path: Path, plan: receipts.Plan | None = None) -> None:
+    path.write_text(json.dumps(p2_party.registration_json(reg, plan), indent=1, sort_keys=True) + "\n")
 
 
 # --- the toy as an encoded store ---------------------------------------------------------------------------------------
 
 def toy(out: Path) -> p2.Registration:
     """The toy's C* (`store-toy/`) as an encoded store under `out/store` (`setup.json`, `store.json`, `seg/`, `rows/`)
-    and `out/layout.json`, with the verifier's registration of it (PoUS's setup decoding C* to the committed W) in
-    `out/registration.json`: what `session --ref-decode` serves at fixture scale."""
+    and `out/layout.json`, with the verifier's registration of it (PoUS's setup decoding C* to the committed W) and its
+    tensors' plan in `out/registration.json`: what `session --ref-decode` serves at fixture scale."""
     from p2_v1 import serve as SV
     from p2_v1 import store as ST
 
@@ -616,7 +656,7 @@ def toy(out: Path) -> p2.Registration:
     leaves = [V.leaf_hash(params, salt, j, c_star[BLOCK * j:BLOCK * (j + 1)]) for j in range(params.blocks)]
     (root / "store.json").write_text(json.dumps({"commitment": doc["commitment"], "salt": doc["salt"],
                                                  "source": doc["source"], "root": V.MerkleTree(leaves).root.hex()}))
-    registration_file(reg, out / "registration.json")
+    registration_file(reg, out / "registration.json", tensor_plan(doc["layout"], reg.blocks))
     return reg
 
 
@@ -726,7 +766,8 @@ def session(a: argparse.Namespace) -> int:
         record = {"verdict": "missing", "reason": "the party's stdout held no answer"}
     line = verdict_line(answer, a.expect, record)
     verifier = (f"party {a.party} at {a.party_host}" if a.party else a.verifier or f"tcp {a.connect}")
-    doc = {"answer": answer, "request": request, "registration": p2_party.registration_json(reg), "steps": prover.steps,
+    doc = {"answer": answer, "request": request, "registration": p2_party.registration_json(reg, engine.plan),
+           "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
            "verifier_rc": rc, "verifier": verifier, "verifier_record": record, "prover_host": socket.gethostname(),
            "skip_layer": a.skip_layer, "store": str(a.store), "device": a.device, "verdict_line": line}
@@ -743,6 +784,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     r = sub.add_parser("registration")
     r.add_argument("--store", type=Path, required=True)
     r.add_argument("--node", required=True)
+    r.add_argument("--layout", type=Path, required=True, help="the store's layout JSON, whose tensors' units are the plan")
     r.add_argument("--out", type=Path, required=True)
     s = sub.add_parser("session")
     s.add_argument("--store", type=Path, required=True, help="the encoded store's directory, read only")
@@ -775,8 +817,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.command == "registration":
         reg = registration_of_store(a.store, a.node.encode())
-        registration_file(reg, a.out)
-        print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "root": reg.root.hex()}))
+        plan = tensor_plan(json.loads(a.layout.read_text()), reg.blocks)
+        registration_file(reg, a.out, plan)
+        print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "plan_units": plan.length,
+                          "root": reg.root.hex()}))
         return 0
     if (a.party is None) != (a.party_host is None):
         ap.error("--party and --party-host go together")

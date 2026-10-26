@@ -1,8 +1,9 @@
 """The remote bandwidth session's prover over the P2 store (`p2_v1/bandwidth.py`): SHA-512's midstate and the device's
 receipts held to hashlib and `p2.Sketcher`, the sketch of stored rows held to the unit sketch, the receipt tree built in
-worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, and the toy's
-store served through kernels' staging decode (P2's reference on the CPU) to `p2_party`'s verifier in its own process:
-accepted honest, rejected when the prover skips a layer's reads."""
+worker processes held to `receipts.tree`, PoUS's vk paths from row digests held to the verifier's tree, the plan of a
+layout's tensors' units (the tracked registration's, the real layout's: MEM-72), and the toy's store served through
+kernels' staging decode (P2's reference on the CPU) to `p2_party`'s verifier in its own process: accepted honest, under
+the toy's plan or one of fewer units, and rejected when the prover skips a layer's reads."""
 from __future__ import annotations
 
 import hashlib
@@ -25,7 +26,7 @@ from p2_v1 import bandwidth as B
 
 from verity.core.protocols.pous import verifier as V
 from verity.core.protocols.pous.schemes.p2 import P2Params
-from verity.core.protocols.remote_bandwidth import p2, receipts
+from verity.core.protocols.remote_bandwidth import p2, p2_party, receipts
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
 
@@ -56,23 +57,24 @@ def test_the_sketch_of_stored_rows_is_the_unit_sketch() -> None:
     sk.add(t[:7], 0)
     sk.add(t[7:], 7)
     assert sk.covered() == units and sk.blocks == 4 * units
+    assert sk.covered(((0, 2), (3, 2))) == 4
     ref = p2.Sketcher(SEED, 16)
     for g in range(units):
         assert sk.sigma[g].numpy().astype("<i4").tobytes() == ref.sketch(rows[4 * g:4 * g + 4].tobytes())
 
 
-@pytest.mark.parametrize("units", [8, 16 * 40 + 5])
-def test_the_receipt_tree_is_receipts_tree(units, monkeypatch) -> None:
+@pytest.mark.parametrize(("units", "runs"), [(8, None), (16 * 40 + 5, None), (16 * 40 + 5, ((100, 500), (0, 50)))])
+def test_the_receipt_tree_is_receipts_tree(units, runs, monkeypatch) -> None:
+    plan = receipts.Plan.whole(units) if runs is None else receipts.Plan(runs, units)
     rng = np.random.default_rng(units)
-    ys = rng.integers(0, 256, (units, 64), dtype=np.uint8)
-    n = receipts.leaves(units)
+    ys = rng.integers(0, 256, (plan.length, 64), dtype=np.uint8)
+    n = receipts.leaves(plan.length)
     salts = rng.integers(0, 256, n * receipts.SALT_BYTES, dtype=np.uint8).tobytes()
-    plan = receipts.Plan.whole(units)
     ref = receipts.tree(SEED, plan, [bytes(y) for y in ys],
                         [salts[192 * c:192 * (c + 1)] for c in range(n)])
     monkeypatch.setattr(B.ReceiptTree, "CHUNK", 4)
     with ProcessPoolExecutor(2, mp_context=mp.get_context("fork")) as pool:
-        got = B.ReceiptTree(SEED, units, ys, salts, pool)
+        got = B.ReceiptTree(SEED, plan, ys, salts, pool)
     assert got.root == ref.commitment.root
     assert all(got.path(c) == ref.open(c).path for c in range(n))
 
@@ -97,6 +99,33 @@ def test_vk_paths_from_row_digests_are_the_verifiers(tmp_path) -> None:
         B.VkPaths(tmp_path, params, salt, bytes(64))
 
 
+def test_the_plan_is_the_units_holding_a_tensors_block() -> None:
+    cols = ["name", "layer", "n", "k", "offset", "size", "first_block", "blocks", "staging_offset"]
+    rows = [[name, 0, 0, 0, 0, 0, first, blocks, 0] for name, first, blocks in
+            (("a", 0, 6), ("b", 6, 2), ("c", 8, 3), ("d", 21, 1))]
+    plan = B.tensor_plan({"layout": {"tensor_columns": cols, "tensors": rows}}, 10)
+    assert plan == receipts.Plan(((0, 3), (5, 1)), 10)
+
+
+def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> None:
+    """MEM-72: a pass over mem69-v2 reads the units of the 209 tensors' blocks, not the 12,745 blocks of padding past
+    lm_head (PoUS's, which the decode never reads): the 3,186 units wholly padding are out, lm_head's last unit, three
+    of its blocks and one of padding, in."""
+    from p2_v1 import store as ST
+
+    doc = ST._dump(ST.build(ST.MQA16K).to_json())
+    assert hashlib.sha512(doc.encode()).hexdigest() == ST.LAYOUT_SHA512
+    layout = json.loads(doc)
+    tracked = json.loads((HERE / "p2_v1" / "bandwidth-mem69-v2.json").read_text())
+    reg = p2_party.registration_of(tracked)
+    plan = p2_party.plan_of(tracked, reg)
+    assert plan == B.tensor_plan(layout, reg.blocks) == receipts.Plan(((0, 17_003_406),), reg.blocks)
+    cols = layout["tensor_columns"]
+    end = max(r[cols.index("first_block")] + r[cols.index("blocks")] for r in layout["tensors"])
+    assert (len(layout["tensors"]), end, reg.codec.blocks - end) == (209, 68_013_623, 12_745)
+    assert (reg.blocks - plan.length, 4 * plan.length - end) == (3_186, 1)
+
+
 def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_layer_rejected(tmp_path) -> None:
     reg = B.toy(tmp_path / "toy")
     assert B.registration_of_store(tmp_path / "toy" / "store", reg.node) == reg
@@ -109,7 +138,7 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     assert B.main(base + ["--out", str(tmp_path / "honest"), "--expect", "accept"]) == 0
     doc = json.loads((tmp_path / "honest" / "session.json").read_text())
     a = doc["answer"]
-    assert a["verdict"] == "accept" and a["receipts"] == 2 * 2 * reg.blocks
+    assert a["verdict"] == "accept" and a["receipts"] == 2 * 2 * reg.blocks and a["plan_units"] == reg.blocks
     assert a["q_bytes"] == (a["receipts"] - a["wrong_at_most"]) * p2.UNIT_BYTES
     assert [s["covered_units"] for s in doc["steps"]] == [reg.blocks] * 4
     assert doc["verdict_line"].startswith("BW VERDICT accept") and doc["verdict_line"].endswith("PASS")
@@ -117,6 +146,25 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
                           "--expect", "reject"]) == 0
     a = json.loads((tmp_path / "cheat" / "session.json").read_text())["answer"]
     assert a["verdict"] == "reject" and a["failure"] == "receipt"
+
+
+def test_a_registration_whose_plan_is_fewer_units_is_what_each_pass_reads(tmp_path) -> None:
+    """The verifier's plan, sent with its registration, is what the prover reads and commits: the toy's units 0, 1 and
+    4 to 6, every receipt drawn, accepted with those receipts alone."""
+    reg = B.toy(tmp_path / "toy")
+    doc = json.loads((tmp_path / "toy" / "registration.json").read_text())
+    assert doc["plan"] == [[0, reg.blocks]]
+    path = tmp_path / "fewer.json"
+    path.write_text(json.dumps(doc | {"plan": [[0, 2], [4, 3]]}))
+    verifier = f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party --registration {path} --stdio"
+    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+                   "--node", reg.node.decode(), "--registration", str(path), "--verifier", verifier, "--device", "cpu",
+                   "--ref-decode", "--samples", "64", "--window-s", "0.001", "--deadline-s", "0.001", "--workers", "2",
+                   "--chunk", "5", "--out", str(tmp_path / "fewer"), "--expect", "accept"]) == 0
+    doc = json.loads((tmp_path / "fewer" / "session.json").read_text())
+    a = doc["answer"]
+    assert a["verdict"] == "accept" and (a["units"], a["plan_units"], a["receipts"]) == (reg.blocks, 5, 2 * 2 * 5)
+    assert [s["covered_units"] for s in doc["steps"]] == [5] * 4 and doc["registration"]["plan"] == [[0, 2], [4, 3]]
 
 
 def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_path) -> None:

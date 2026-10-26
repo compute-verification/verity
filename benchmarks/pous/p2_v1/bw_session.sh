@@ -12,7 +12,8 @@
 # ends with the verifier's own record of the answer (`bandwidth.py session --party`). Or CONNECT=HOST:PORT reaches a
 # `p2_party --listen --sessions 2` already listening, the cheat at CHEAT_CONNECT (by default the same listener), with
 # TUNNEL ('SSH_OPTIONS USER@HOST') through `ssh -L` to TUNNEL's host, CONNECT then the address there. The registration
-# the verifier holds is the tracked bandwidth-mem69-v2.json, and the store must be it. ENC is only ever read. The lib
+# the verifier holds is the tracked bandwidth-mem69-v2.json, and the store must be it, its plan the layout's tensors'
+# units (MEM-72: not the padding past lm_head). ENC is only ever read. The lib
 # is kernels' build: p2lib.tar from the run's inputs (LIB_SHA256), else that build's out/ on this host (BUILD), else
 # build.sh's in scratch, each held to its MANIFEST.sha256 and its sources to the kernels' build's
 # (LIB_SOURCES_SHA256); the layout is CMP-95 item 2's (LAYOUT_SHA512), from the run's inputs or kernels' run KSTAGE's
@@ -71,11 +72,13 @@ cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/
 so=$(sha256sum < "$S/lib/lib/libp2v1.so" | cut -c1-64)
 echo "lib from $LIB_FROM: libp2v1.so $so (kernels' build's: $([ "$so" = "$LIB_SO_SHA256" ] && echo same || echo other)); layout $LAYOUT" \
   > "$O/inputs.txt"
-"$PY" "$D/bandwidth.py" registration --store "$ENC" --node "$NODE" --out "$O/registration.json" > "$O/registration.log" 2>&1 \
+"$PY" "$D/bandwidth.py" registration --store "$ENC" --node "$NODE" --layout "$LAYOUT" --out "$O/registration.json" \
+  > "$O/registration.log" 2>&1 \
   && "$PY" - "$REG" "$O/registration.json" <<'EOF'
 import json, sys
 a, b = (json.load(open(p)) for p in sys.argv[1:])
-sys.exit(0 if a == b else f"the store's registration {b['digest'][:16]} is not the tracked {a['digest'][:16]}")
+sys.exit(0 if a == b else f"the store's registration {b['digest'][:16]}, plan {b.get('plan')}, is not the tracked "
+                          f"{a['digest'][:16]}, plan {a.get('plan')}")
 EOF
 step registration $?
 "$PY" "$D/bandwidth.py" toy "$S/toy" > "$O/toy.log" 2>&1 \
