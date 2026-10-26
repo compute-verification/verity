@@ -128,7 +128,9 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 
 /-- **The H200 SXM's table.** A program's code is at most HBM's bytes over 16-byte instructions; the coarse device's
 rates are the tensor core's s8 MACs, the 132 · 128 FP32 lanes, and HBM's bits a tick rounded up
-(4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). -/
+(4.8 · 10¹² · 8 / 1.98 · 10⁹ = 19,393.9). θ's floors: `sync ≥ 1` (the tensor pipe's peak is the data sheet's, which
+`wgmma` reaches, so no MMA form beats it), `b1 ≥ 1/8` (CALIB, CMP-115; the A100's binary peak is 8 × its INT8 peak)
+and `madHi ≥ 1` (the IMAD pipe's 64 lanes a SM-clock, DS-90). -/
 def card : Card where
   size := size
   size_pos := by intro s; cases s <;> decide
@@ -142,6 +144,7 @@ def card : Card where
   tc := 132 * 4096
   cuda := 132 * 128
   bw := 19394
+  floors x := 1 ≤ x.sync ∧ 1 / 8 ≤ x.b1 ∧ 1 ≤ x.madHi
 
 /-- **The H200 SXM** as an accelerator, its open parameters `x`. -/
 def machine {ι : Type} (x : Open) (cap : ι → ℕ) (oracle : ℕ) : Machine ι := card.machine x cap oracle

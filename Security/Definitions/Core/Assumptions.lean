@@ -73,4 +73,32 @@ block-scaled NVF4 and MXF4 (pinned in Python only), mixed f8f6f4 pairings, f16, 
 def AccelProductForm (x : Accel.Open) : Prop :=
   ∀ fa fb sat k, Accel.ProductForm fa fb k (x.dot fa fb sat k)
 
+/-- **`card-within-accel(card)`**: the card can do no more than its accelerator model, the refinement direction (a
+theorem about `c.machine` reaches the card only through it). `can f t` says the card, running any code on its units
+other than the exclusions below, takes every content `M` of its stores to `f M` within `t` ticks of the instance's
+clock. Then the card's true open parameters are some `x` meeting θ's floors (`c.floors`) with the product form
+(`AccelProductForm x`), and some program of `c.machine x` does the same on every content within `t` ticks, meeting
+G1 and G2 (`Machine.Fits`). So a theorem that holds over the instance at every `x` meeting the floors and the product
+form holds on the card: the open parameters are not a premise of their own, θ's floors and the product form are
+the whole of what is assumed about them.
+
+**Exclusions**, each a unit `can` doesn't use because it can't compute a committed word or a hash more cheaply than
+the model prices (the reasons are rows of the coverage table, `Accel/README.md`): the video and JPEG engines
+(fixed-function codecs on pixel formats); sm_120's RT cores (FP32 ray-box and ray-triangle tests); the texture path's
+filtering (FP interpolation at 8-bit fractional weights); the copy engines (moves only, at device memory's and the
+host link's bandwidth, which the model prices); and compute data compression (U7: the committed words are noised
+and incompressible; a method bound by device memory or L2 on compressible data of its own is outside the claim).
+
+**Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until
+each is added with its rate: 2:4-sparse MMA and its metadata selector, DMMA, `HFMA2` and `f16` accumulators, vector
+atomics and reductions (`red.v4`, `redux.sync`), TMA bulk reductions (`cp.reduce.async.bulk`), NVSwitch `multimem`
+reductions, and the shuffle pipe. The node's host CPUs and its host and peer links are other devices of the period
+(RT-PROTO P9, RT-UNITS U9), not units of the card. -/
+def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
+    Prop :=
+  ∃ x : Accel.Open, c.floors x ∧ AccelProductForm x ∧
+    ∀ f t, can f t → ∃ (P : (c.machine x cap oracle).Prog ℕ) (sched : List (List ℕ)), sched.length ≤ t ∧
+      ∀ σ : (c.machine x cap oracle).State ℕ, (∀ θ, σ.pc θ = 0) →
+        Accel.Machine.Fits P σ sched ∧ (Accel.Machine.run P σ sched).1.mem = f σ.mem
+
 end Verity.Assumptions

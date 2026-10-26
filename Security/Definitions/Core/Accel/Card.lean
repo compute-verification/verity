@@ -122,8 +122,15 @@ structure Card where
   tc : ℕ
   cuda : ℕ
   bw : ℕ
+  /-- θ's floors on the open parameters: what a data sheet or a cited measurement bounds each one by. The card's
+  true parameters are some `Open` meeting them (`Assumptions.CardWithinAccel`), so a theorem over the instance holds at
+  every `Open` that does. -/
+  floors : Open → Prop
 
 namespace Card
+
+/-- The card's stores' contents: a word at every location (`Machine.Mem` of `machine` at any parameters). -/
+abbrev Mem (c : Card) : Type := (Σ s : Store, Fin (c.size s)) → Word
 
 variable (c : Card) (x : Open)
 

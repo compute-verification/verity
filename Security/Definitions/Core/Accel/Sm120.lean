@@ -110,7 +110,9 @@ def captured (fa fb : Fmt) (sat : Bool) (k : ℕ) : Option Dot :=
 
 /-- **The RTX PRO 6000's table.** A program's code is at most GDDR7's bytes over 16-byte instructions; the coarse
 device's rates are the tensor core's s8 MACs, the 188 · 128 FP32 lanes, and GDDR7's bits a tick rounded up
-(1597 · 10⁹ · 8 / 2.43 · 10⁹ = 5,257.6). -/
+(1597 · 10⁹ · 8 / 2.43 · 10⁹ = 5,257.6). θ's floors: `madHi ≥ 1` (the IMAD pipe's 64 lanes a SM-clock, DS-120).
+`b1` has no floor until CALIB measures it, so a theorem that needs `b1`'s price on this card takes it as a
+hypothesis. -/
 def card : Card where
   size := size
   size_pos := by intro s; cases s <;> decide
@@ -124,6 +126,7 @@ def card : Card where
   tc := 188 * 1024
   cuda := 188 * 128
   bw := 5258
+  floors x := 1 ≤ x.madHi
 
 /-- **The RTX PRO 6000 (sm_120)** as an accelerator, its open parameters `x`. -/
 def machine {ι : Type} (x : Open) (cap : ι → ℕ) (oracle : ℕ) : Machine ι := card.machine x cap oracle
