@@ -611,13 +611,14 @@ def recorded_inputs(session: dict, registration: dict, *, host_bytes: int, rates
     the record's times must be, or another, `line.CLOCKS`), against its HBM and `host_bytes`, at `rates`
     (`recorded_rates`), with its S_chip at least the auditor's (`recorded_chip_bytes`); with `transcript`, the
     session's (`lean_verifier.Transcript`'s file), from which the Lean makes the record itself. Refused unless the
-    record is of `registration`."""
+    record is of `registration` (`wire.registration_json`'s form), which the inputs name as the Lean reads one, so
+    that the line refuses a record not of it too (`line.unregistered`)."""
     mem, record = session["ledger"]["memory"], lean_record(session)
     if record["registration"] != registration["digest"]:
         raise ValueError(f"the Lean's record is of registration {record['registration'][:16]}…, not "
                          f"{registration['digest'][:16]}…")
     return line.record_inputs_json(
-        record, samples=session["samples"],
+        record, registration=lv.registration_json(wire.registration_of(registration)), samples=session["samples"],
         seen=record_seen(mem, session["windows_seen"], record, block_bytes=mem["block_bytes"]),
         per=session["pace"]["groups"], block_bytes=mem["block_bytes"], chip_bytes=recorded_chip_bytes(mem),
         node_bytes=mem["hbm_bytes"] + host_bytes, delta=session["delta"], rates=rates, clock=clock, session=transcript)
