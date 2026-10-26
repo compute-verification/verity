@@ -60,7 +60,7 @@ def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteA
   Record.check (drawEq (drawOfJ f.j) s.read.draw) "live: the record's draw is not the statement's"
   custody spec (← liveOfJ spec j') link c₁ mids
   s.read.check
-  if s.read.draw.isNone then ProvedScope.drawLaw false s.read.tags none
+  if s.read.draw.isNone then ProvedScope.drawLaw false s.read.tags false none
 
 /-- **The decision at a session at the parsed value**: the plain verdict and custody's reading at the coin-substituted
 value. -/

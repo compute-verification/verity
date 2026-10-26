@@ -174,8 +174,8 @@ theorem stmtOkZk (S : Claims.JsonSpec printJ Flock.canon) : StmtOkZk H rel := by
   have hdl := Ins.setup_drawLaw (setupOf_some c.setup).2 c.ready_parts.2.1
   rw [hdd, hz] at hdl
   simp only [ProvedScope.drawLaw, hD] at hdl
-  have hlw : ProvedScope.lawWhy true c.s.read.tags D = none := by
-    cases e : ProvedScope.lawWhy true c.s.read.tags D with
+  have hlw : ProvedScope.lawWhy true c.s.read.tags false D = none := by
+    cases e : ProvedScope.lawWhy true c.s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   obtain ⟨t, ht⟩ := draw_parse hdraw hdd

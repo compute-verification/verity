@@ -2460,46 +2460,6 @@
  "reads_exempt": {
   "Flock": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
  },
- "trees": {
-  "definitions": ["Definitions", "Models"],
-  "properties": ["Properties"],
-  "proofs": ["Proofs", "Proofs.Properties"],
-  "except": {
-   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
-   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
-   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
-  }
- },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
@@ -6806,12 +6766,14 @@
     "            And (FlockSoundness.Discharge.FailClosed.SoundZ I ⋯ hn) (FlockSoundness.Discharge.FailClosed.ViewZ I))",
     "          (FlockSoundness.Discharge.FailClosed.SoundZJ I ⋯))",
     "        (FlockSoundness.Discharge.FailClosed.SoundExec I ⋯))",
-    "    (∀ (own : Array Flock.Registered.Port) (t : FlockSoundness.Discharge.Exec.Transcript),",
-    "      FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR zk I own t →",
-    "        Or (Eq I.tags.hiddenOutputs Bool.true) (FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts zk I t))"
+    "    (And",
+    "      (∀ (own : Array Flock.Registered.Port) (t : FlockSoundness.Discharge.Exec.Transcript),",
+    "        FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR zk I own t →",
+    "          Or (Eq I.tags.hiddenOutputs Bool.true) (FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts zk I t))",
+    "      (FlockSoundness.Discharge.FailClosed.SoundExecJ I))"
    ],
    "assumptions": [],
-   "type_hash": "2c623e6706e2d70ad49c711576d725e23984b5c5e89e77d44a7b5a4d7881b689"
+   "type_hash": "1d75a921e41b7b41d9c3d00afc7c507a637bae7cd795b20d40e40b11c02814a4"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": {
    "owner": "@proofs",
@@ -31226,20 +31188,28 @@
    ]
   },
   "Flock.ProvedScope": {
-   "digest": "bb609a1809f55ce81e22c569a04b1d13c82c6fbd6ff37576ce3eb32f15d7d446",
+   "digest": "e17871ef222175ed80157ce994b3d9855ed09038b3eef60c14b2225fca6fa94d",
    "definitions": {
+    "Flock.ProvedScope.NO_PROGRAM": "c1e8296485c16b9065ec7619c59042d2c85b28a452c8a0fc69bb424a18799cd8",
     "Flock.ProvedScope.bitRows": "d74e0d1cd6dda8ca99a69595e7e2c1c076d95dbafbd867f2238ae2c3b9e6b92c",
     "Flock.ProvedScope.check": "c98d2f435b2dbf07191656c8183ed6f07d414d7d4b4262b054ba545dd9ea6781",
+    "Flock.ProvedScope.checkP": "e206d0a738b8b303798e3d26096f7c0b19e8cc83716ca08f6d732849d6f8b063",
     "Flock.ProvedScope.circuitOf": "b4bbc8168c248d09707374581525d03c462e798bf01ec0eee5d65fb67bff1b98",
     "Flock.ProvedScope.fillLoop": "b76e1873b944ade24a984ea0e32c2699ca4632cd1492cf549641abd3d3e79250",
     "Flock.ProvedScope.fillPass": "7e6dc4a97f16b52358f3255954784462175147e7cb8290f8dc5c802a54414f57",
     "Flock.ProvedScope.firstFailure": "394dab4e3e36878321b89b1a9539d1ee066ccda3688e02c6fe5b680eec1044c2",
     "Flock.ProvedScope.foldRow": "8fcc6746b16071789b026c5385ebb287745ea33745f310c0390a2ac60873150b",
     "Flock.ProvedScope.leafOk": "ea451e4d24f59860510fe86cbf4c64817c58f0c34e2ffc91406602d90e0df98c",
+    "Flock.ProvedScope.metaProgram": "72c68f2d9672db2822e71f17a3c20be4a7a994e1c1f99290c7f14471d7120db3",
     "Flock.ProvedScope.outReads": "f5b8fd482b2d8d287cfd34ae370e42f8a9e4b4135da0b76fe67c499b9db03a5b",
+    "Flock.ProvedScope.plainTablesWhy": "f90f97b3984b1e061b6b22a156494cfe232a458da127d26fecd8a194bcfb6d44",
     "Flock.ProvedScope.portBits": "585baabbbd824e4325f37df6e5e83ddf55708ce02e603de7b541bb45922686ff",
     "Flock.ProvedScope.portMask": "23714665ca3e9816a87625c4e344cde88005a983ea0fdf701132d4a6650c1ca5",
     "Flock.ProvedScope.portReadsB": "c68fe911ec7b47605079bc5e6aaec87d0953330395799dc50815c1ff29ac00e7",
+    "Flock.ProvedScope.programDigest": "1cd43da27254e24846c2718e359c58bd97937b14fc8e647e564d9d1ac1c60c6b",
+    "Flock.ProvedScope.programDigest._sparseCasesOn_1": "0bf4ead58c8fa7a6fc75468625eb9ee3f90dd70e04550e2a38103d2999bd4ef8",
+    "Flock.ProvedScope.programP": "e8e4e9a4db44551aab0b1e905d2ace0b389f9b37e048f24c64349b62bc212e04",
+    "Flock.ProvedScope.programWhyP": "9b50fdf87e2278edd273bd40a4ac8cffb5faeea6a2b71d83e9968dd72e94a3f9",
     "Flock.ProvedScope.publicOf": "1cf3af4729961209d3a2cdfe2a31f3ff7351b6b5c7d6380bc22d521c590ad6da",
     "Flock.ProvedScope.refusal": "825013eb2e7fcf7cf668deb72b0a838e2af81bbac7061848510c14e2a42ac571",
     "Flock.ProvedScope.scopeOk": "eb7436b3a4d9fccbfa5fc528f8a9d1f2f320f5b20afd5f81b920f71a6eb3c51c",
@@ -37608,8 +37578,11 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements": {
-   "digest": "37a8f16f5d4bff57db083a901e484d4226b2573abd4a64b62854fbe387d052b9",
+   "digest": "64f3028682b78df8eade638642e2207b719d599aa4b019fbd3eb0d9554b1c487",
    "definitions": {
+    "FlockSoundness.Discharge.DecodeZLJ.RecordsLiveJ": "64bd4fdc520653cb23689f3d2f327106a6c899e8104a9d456f4c7d227a9e471a",
+    "FlockSoundness.Discharge.DecodeZLJ.decJ": "22f9924bfa2c969f2eb7141100a554431409574d7509bec356b7fff6a7dafb10",
+    "FlockSoundness.Discharge.DecodeZLJ.nXT": "8e435ae6b8b360b904806bf4d9cef02627b98c3fad95e9cccf4e3372d7f39597",
     "FlockSoundness.Discharge.DecodeZLJ.partJson": "3de4ddc4f67e6140c995b3c430def38006a5698eb4906e0538923603e09a5bc6"
    },
    "guarantees": [
@@ -38058,7 +38031,7 @@
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
-   "digest": "e5ee73e7b38e8da6357f7a0253c73f13d7c304800061109fdd1ddb87cc33f774",
+   "digest": "191f686e9854e73d8d3a53828ccb74e11fc624d60996ff9bc36721c434373665",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts": "ea5c4b6ca5cb51a75d8a57cd78a7f966035c1f7a2d7386f108d2540319c2cd29",
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
@@ -38069,6 +38042,7 @@
     "FlockSoundness.Discharge.FailClosed.SoundExecHRG": "093e8f08e05b5fde0559273158d46862b18f1e5341a8cd7c86967106ca2cd911",
     "FlockSoundness.Discharge.FailClosed.SoundExecHRU": "f8d145fa71dd8ad0e44c6354f6eec64d3c90f3e6b47f4e12bf77eebb1b8758e9",
     "FlockSoundness.Discharge.FailClosed.SoundExecHU": "0a5d4b5b9f2a6a849549e57458e8969703fffe28e537e4ce2bfeca4027513537",
+    "FlockSoundness.Discharge.FailClosed.SoundExecJ": "ded5e66ad45478781ca06927a0a2cfc3042b791ccbc01e2d8bcf52855f77d5c2",
     "FlockSoundness.Discharge.FailClosed.SoundZ": "9d263b73d7fbf5b40bac07d7b5cf6d7efed1120b3baac5938ebc4db0065c4907",
     "FlockSoundness.Discharge.FailClosed.SoundZH": "ce8a783761d1547fe7c0ed6052a572143ea42cbfe4ea2053c87a039be6cef8ca",
     "FlockSoundness.Discharge.FailClosed.SoundZHG": "b2aad17dd36a21525ed4be0ca0e113c300f54d2c802118052aafb857dccbb657",
@@ -38116,14 +38090,17 @@
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_public_ties"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.Scope": {
-   "digest": "c1d90b96d53baeaaecb91d67ad509c78b8cd6a619d0d7dc058e51e4c2b9a7380",
+   "digest": "991c2ba16a1d9c46083af660261fc38bf5862751b7bbddb20b7fee06c66e5f90",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.Checks": "eda713d1d07071a528ea802b80991007f49b88dfdbd6c694aa10f3a2ce228f03",
+    "FlockSoundness.Discharge.FailClosed.ProgramOfCircuit": "35c54daec0e4140b1c3e26cef7ee54500fa7288035dc1abac992955ceda7c49e",
     "FlockSoundness.Discharge.FailClosed.Scope": "8aec8e05d974d42be354371eb37ffd20edfb7a84878df379f45dfd2193511bfe",
+    "FlockSoundness.Discharge.FailClosed.ScopeP": "d0d7baee13f136dababf7a9c1ae13c6d987d80da4fb110dc5f6e15861e5b40eb",
     "FlockSoundness.Discharge.FailClosed.ScopeR": "dbb60c4cc8ce9b3ce42cc864ddc891dec215f6d739409c06a4e0cc318808dc9a",
     "FlockSoundness.Discharge.FailClosed.ScopeZ": "0d56eaaa795626cbf5348f99f7459708fe5d4797bbfd2b3f73b4b916a06f4cd9",
     "FlockSoundness.Discharge.FailClosed.ScopeZR": "9919bdb3c42ffeda77e584b1c81ca2012512c6cf96814f7208140ed13c273f83",
     "FlockSoundness.Discharge.FailClosed.Verifies": "cca3f1db8b7481f9aa7765f8b8dc2cb84efa5813c649c285b00fda873eee24a5",
+    "FlockSoundness.Discharge.FailClosed.VerifiesP": "f0aeb1f94dedadc8c56a55bc9bebc6b96219e5923c533dbd4fe3d9d34b4d4a42",
     "FlockSoundness.Discharge.FailClosed.VerifiesZK": "c352b6c9752c485032605b30dd1af93b6a8819fa10d23e2849d2cf608737bc30",
     "FlockSoundness.Discharge.FailClosed.circ": "edf27317c73a838a51348c840fd654468ed09c3cf0d8e4d21f3583a0115cda82",
     "FlockSoundness.Discharge.FailClosed.circS": "07a801ce8d78a82db07c654e04b2579d29eee95f19112f81b1869ec400532e61",
@@ -39505,6 +39482,21 @@
     "FlockVBridge.keyProg_parse"
    ]
   },
+  "Proofs.Flock.Soundness.Discharge.PlainJ.Defs": {
+   "digest": "987fcb2ce0c866b40eb6fb5f36a745ece083eac1bd5eb5ac5399f79ac4f08e90",
+   "definitions": {
+    "FlockSoundness.Discharge.PlainJ.DrawOkPJ": "f14a0430f001afa18284c35cc1c18f58e1ddbf66d6b6802ef6da8d863b033ad7",
+    "FlockSoundness.Discharge.PlainJ.inputsPJ": "64ed98e70ecc44e85120f1ffdc0daff7fd6757957505995493eb6c72ebcec42f",
+    "FlockSoundness.Discharge.PlainJ.layPJ": "48f536184a53a9be3feceedd20ebc64cda5e4b0dc779f78f94e70f81d14b045a",
+    "FlockSoundness.Discharge.PlainJ.opnPJ": "692f73299d70a4a0f9cf4010fa04b8260aee744c48760beb83031e0a4257066d",
+    "FlockSoundness.Discharge.PlainJ.planPJ": "279e41d5a1b37d51d8ffe58df1cef2a1f05ae0db62a988646a23e79a7bd97479",
+    "FlockSoundness.Discharge.PlainJ.rsPJ": "d09bb582a5832474e4eb07740ee73dc088cee83223eba99ad0f81f33600e0ebe",
+    "FlockSoundness.Discharge.PlainJ.sitesPJ": "fba4e7ea6bf4ef8033e62b1f0bda714cb37e67a997c80175b98edb5a1f7d61ed",
+    "FlockSoundness.Discharge.PlainJ.tabPJ": "9174dc325d2a179b364246f2f176c7be8f6b320419f1878fa09d3f03e3b06cd7",
+    "FlockSoundness.Discharge.PlainJ.tablePJ": "8bb888017dd476590d6a8dcd5fdb5bb7ca75f5bf6c833e565433d184c15b641a"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+  },
   "Proofs.Flock.Soundness.Discharge.PlainReg.BindH": {
    "digest": "2afa0020747b9ce7ce735b5798b48eaafa8a2aa37be91593d3757b69ece66ff7",
    "definitions": {
@@ -39549,6 +39541,16 @@
     "Flock.SecurityProofs.RecursiveRanRegistered",
     "Flock.SecurityProofs.RecursiveRanRegisteredExec"
    ]
+  },
+  "Proofs.Flock.Soundness.Discharge.Tables.Session": {
+   "digest": "d5d3f5f8c5171812630e7358300cf04adaa17a02354479fea7ae334f0fb00a9e",
+   "definitions": {
+    "FlockSoundness.Discharge.Tables.DecodesOnJ": "a5aeb23551bd7c673ee9031c6fc7af23ad3f251d1124c8381bac1ae908d8362f",
+    "FlockSoundness.Discharge.Tables.liveOfJ": "c5ef933d1cf86277788e374a1eac11e1f30632ea575cdd305ebe0d56c9353b9c",
+    "FlockSoundness.Discharge.Tables.simAuditJ": "fdacab2355d9e73a7ae59aee4be2ccab46a0a66fc79953053dfdddfaa94dad17",
+    "FlockSoundness.Discharge.Tables.simSessJ": "3539396aec073db190d9d3d52d9f3dd13bee6a32a5b242262bc50020a2738440"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Proofs.Flock.Soundness.Discharge.Tables.Sim": {
    "digest": "e9ecd8f6315ff1f79296fcb237101a5e966c6bd786b6f267c4aa89efe85b59a2",
@@ -43283,5 +43285,45 @@
   "plausible": "266681444eb79c332dec9abe5201b0811a5963e7093a906ee4455f0825de2559",
   "proofwidgets": "a896c5603e3bbf2a048ae4a2a2f9ab3108b6388beadf83510d5ab71388be4a5f",
   "toolchain": "ac912485d6144e796a0ebeed7f311b2d1f8f564afa836716dd453d4e65d1fe67"
+ },
+ "trees": {
+  "definitions": ["Definitions", "Models"],
+  "properties": ["Properties"],
+  "proofs": ["Proofs", "Proofs.Properties"],
+  "except": {
+   "Proofs.Flock.Verifier": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Level3": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Soundness": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.VBridge": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Recursive": "the recursive audit's model, on C-Flock's; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEnd": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndDrawn": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegistered": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.ZeroKnowledgeHidden": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Pouw.PearlC.FlockTile": "the PoUW × C-Flock statement reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT); lean's Q3 ruling, 6 Oct",
+   "Proofs.Flock.Claims": "the claims' witnesses (LEAN-26) read C-Flock's deployed records (FlockDeploy, the radius decoders, the readable relation) and the toy records a claim fails at, which are in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Deploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployPlainCode": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusDeploy": "the deployed plain record's radius decoder (`Claims.GS.plainDecodeRD`), at which the claims' `meets` witnesses (LEAN-26) state the list-decoding spec; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.GS.RadiusFamily": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Scope.Readable": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.ZkDecodeFlock": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Flock": "a toy outer Flock record (`Claims.Witness.Flock.ksD`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Recursion": "the toy recursion records and inner protocols (`ksR`, `compR`, `effR`, `accI`, `noI`, ...), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.Shared": "a toy oracle (`Claims.Witness.constH`), read only by the claims' `fails` witnesses (LEAN-26), which state that a claim is false there; under C-Flock's exception: C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Witnesses.RecursionMeets": "the toy statements of each inner shape (`denseStmt`, `sparseStmt`), at which the claims' `meets` witnesses (LEAN-26) show the readable scope non-empty; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.DeployInputs": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.NumbersDeploy": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.Deploy": "the claims' meets witnesses state antecedents at the recursion's deployed record (`RecDeploy.deployRec`, `Brings`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Recursion.DeployInputs": "the claims' meets witnesses state antecedents at the recursion's deployed record's inputs (`RecDeploy.RecIns`, `setupO`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Claims.Complete.Ready": "the claims' meets witnesses state antecedents at Flock's deployed records (`deployPlain`, `deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.Masked": "the masked guarantees state Flock's claims at its deployed masked records (`deployZk`, `zkDeployed`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.EndToEndRegisteredRows": "C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SoundAtBridge": "the bridge from C-Flock's rows link to the proof layer reads C-Flock's definitions, which are still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Accounting.TS.Session": "the named premises and the statement of #2855's proof layer read through its C-Flock sessions (Accounting.Guarantees.TS.SessionSoundAt) read #2909's RowsSession, which is in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)",
+   "Proofs.Flock.SessionLoop": "the session loop's guarantee states Flock's zero knowledge at the loop's release (`LeanRelease.ofLoop`) and the deployed masked record (`deployZk`), still in Proofs; C-Flock is excepted until proofs extracts its spec (Daniel, 4 Oct 1:30 PM PDT)"
+  }
  }
 }
