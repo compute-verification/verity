@@ -3,6 +3,7 @@ import Proofs.Flock.Claims.Recursion.LayoutBAcc
 import Proofs.Flock.Claims.Recursion.RowSlots
 import Proofs.Flock.Claims.Recursion.OpenPieces
 import Proofs.Flock.VBridge.AccUnits
+import Proofs.Flock.Soundness.Discharge.Hm.Row
 
 /-!
 # Row E's running sums at a level copy, through the chain's commits
@@ -13,7 +14,7 @@ those terms on its `acc_out` output (`LevelOuts`: `OpenOuts`' bytes from `outCol
 at the chain's row `p + 1` (`rec_outer.stage`'s reads file: `acc_out` reads `rec-acc` at `p + 1`, as `acc` reads it at
 `p`). `layoutBAcc` reads row `p` as its owner holds it (`chainAt_held`), and `acc_out` is no holding there, since
 `rowHidden` reads input columns only. This file ties the copy's columns to the chain through the rows' commits, the
-argument of `rowsAgree_of_commits`, with no output-port layout:
+argument of `rowsAgree_of_commits`, with `acc_out` read at its recorded row call, not as a slot:
 
 * `VStarB.commit_agree`: two recorded evaluations of a frame of `v` and of `v'` whose digests climb to one root, with
   every climb input among the evaluations and no collision among them, have `v = v'` (`rowsAgree_of_commits`' core:
@@ -29,9 +30,17 @@ argument of `rowsAgree_of_commits`, with no output-port layout:
   the two rows' roots (`chainAt_commit` twice), with no collision among the evaluations `l`.
 
 The commits' premises are `rowsAgree_of_commits`' at the chain's rows, plus the copy's own two: its `acc` and `acc_out`
-rows' recorded evaluations, in `l`. `layoutBAcc`'s recorded calls (`layoutBTops`' `shaAt`: the `rec-c<k>` ports' and
-the caps') don't yet hold the chain ports' hm96 evaluations, so at `l = L.allCalls x ws ++ vcalls H b xs` those
-premises wait on a layout that records them.
+rows' recorded evaluations, in `l`. `layoutBAcc` records the chain ports' hm96 evaluations (`accCalls`), so they come
+off its calls:
+
+* `accFrame`, `accFrame_inj`: a row's hm96 input, its `sha512/row/v1` prefix then the row, injective in the row.
+* `accCommit_layoutBAcc`: every held slot's row evaluation is among its holder's calls, to the slot's digest
+  (`accDig`), which is `rowsAgree_of_commits`' `hC`; `rowsAgree_layoutBAcc` is `rowsAgree_of_commits` at `layoutBAcc`.
+* `accHolds_layoutBAcc_recorded`: `accHolds_layoutBAcc` with its four commit premises off the calls, where the copy's
+  bytes are what its witness reads at its `acc` holding and its `acc_out` row.
+
+What stays open is the climbs: each digest's climb to its row's registered root, its inputs among the evaluations, and
+the climbs' steps apart (`VStar.StepsApart`).
 -/
 
 namespace Claims.Recursion.VStarB
@@ -93,8 +102,12 @@ theorem elemsOf_accOut {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (h
     intro t ht
     have hq : t / 128 < 2 := by omega
     rw [hb t (by omega)]
-    simp only [FlockVBridge.bitL_rowBytes, FlockVBridge.wbit, FlockVBridge.getD_toList]
-    rw [pair_elemsOf hq]
+    simp only [FlockVBridge.bitL_rowBytes, FlockVBridge.wbit]
+    have hget : [elemsOf b.data.toList 2 0, elemsOf b.data.toList 2 1].getD (t / 128) 0 =
+        elemsOf b.data.toList 2 (t / 128) := by
+      rcases (by omega : t / 128 = 0 ∨ t / 128 = 1) with h | h <;> rw [h] <;>
+        generalize elemsOf b.data.toList 2 0 = e0 <;> generalize elemsOf b.data.toList 2 1 = e1 <;> rfl
+    rw [hget]
     unfold elemsOf
     rw [if_pos hq, FlockVBridge.bitOf_ofBits _ (Nat.mod_lt _ (by omega)), Nat.div_add_mod]
   rw [← pair_elemsOf hk]
@@ -220,6 +233,136 @@ theorem accHolds_layoutBAcc {H : Msg → Msg} {l : List (Msg × Msg)} (hT : ∀ 
   exact accHolds_of_copy sideAt coefAt (chainAt rest) q x _ cs hO hLA hrow hcf hbi hszi hbo hszo
     (chainAt_commit rest hT hnc hinj hin₀ ho₀ hw₀ hv₀ hli hci hc₀ hapi hcli hcl₀ hini hin0 _)
     (chainAt_commit rest hT hnc hinj hin₁ ho₁ hw₁ hv₁ hlo hco hc₁ hapo hclo hcl₁ hino hin1 _)
+
+/-! ## The commits off `layoutBAcc`'s recorded calls -/
+
+/-- **A row's hm96 input**: the `sha512/row/v1` prefix at `σ`'s length in words, then the row. -/
+def accFrame (v σ : Msg) : Msg := (HmRow.rowPrefix σ.length).data.toList ++ v
+
+/-- Every prefix is 128 bytes, so `accFrame` is injective in the row. -/
+theorem accFrame_inj : ∀ v σ v' σ', accFrame v σ = accFrame v' σ' → v = v' := fun v σ v' σ' h => by
+  have hl : ∀ k, (HmRow.rowPrefix k).data.toList.length = 128 := fun k => by
+    rw [Array.length_toList]
+    exact FlockSoundness.Discharge.Hm.size_rowPrefix k
+  unfold accFrame at h
+  exact (List.append_inj h (by rw [hl, hl])).2
+
+/-- **Slot `σ`'s digest at part `s`**: its holding's port's hm96 digest (`hmDigest`), read off `s`'s witness; empty
+where `s` holds no such slot or has no witness. -/
+def accDig (x : Msg) (ws : List Claims.Flock.Wit) (σ s : ℕ) : Msg :=
+  (ws[s]?.bind fun w => (readX x).bind fun r => (accHoldAt r s σ).bind fun e =>
+    (e.1.ports.findIdx? (·.name == e.2.1)).map fun q => readForms w (hmDigest e.1 q e.2.2)).getD []
+
+/-- **Every held slot's commit is among its holder's recorded calls** (`rowsAgree_of_commits`' `hC`): the row's
+evaluation at its holding (`rowCall_held`), framed by `accFrame` at the port's words, to the slot's digest
+(`accDig`), where each holding's port is the circuit's. -/
+theorem accCommit_layoutBAcc {x : Msg} {ws : List Claims.Flock.Wit}
+    (hq : ∀ (r : XR) (s : ℕ) (c : Circuit) (h : String × ℕ), readX x = some r →
+      r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s → (c.ports.findIdx? (·.name == h.1)).isSome = true) :
+    ∀ σ s w v, ws[s]? = some w → (layoutBAcc rest).rowHeld x s w σ = some v →
+      ∃ σ', (accFrame v σ', accDig x ws σ s) ∈ (layoutBAcc rest).calls x s w := by
+  intro σ s w v hw hv
+  simp only [LayoutB.rowHeld, Option.map_eq_some_iff] at hv
+  obtain ⟨segs, hseg, rfl⟩ := hv
+  change ((readX x).bind fun r => accRowAt r s σ) = some segs at hseg
+  obtain ⟨r, hr, hseg⟩ := Option.bind_eq_some_iff.1 hseg
+  rw [accRowAt_eq] at hseg
+  obtain ⟨⟨c, h⟩, he, rfl⟩ := Option.map_eq_some_iff.1 hseg
+  obtain ⟨hc, hh⟩ := accHoldAt_spec he
+  have hh' := mem_accHeld hh
+  obtain ⟨qa, hqa⟩ := Option.isSome_iff_exists.1 (hq r s c h hr hc hh')
+  obtain ⟨hlt, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqa
+  refine ⟨List.replicate (c.ports[qa]'hlt).words 0, ?_⟩
+  have hd : accDig x ws σ s = readForms w (hmDigest c qa h.2) := by
+    simp [accDig, hw, hr, he, hqa]
+  rw [hd]
+  unfold accFrame
+  rw [List.length_replicate]
+  exact rowCall_held rest hr hc hh' hqa (Array.getElem?_eq_getElem hlt) w
+
+/-- **The parts agree on the chain's rows, or two evaluations collide** (`rowsAgree_of_commits` at `layoutBAcc`): the
+commits are the recorded calls (`accCommit_layoutBAcc`) and every held slot's owner holds it (`layoutBAcc_owner`). What
+stays open is each holding's climb from its digest (`accDig`) to the row's registered root, with its inputs among the
+verifier's evaluations and the climbs' steps apart. -/
+theorem rowsAgree_layoutBAcc {H : Msg → Msg} {x : Msg} {ws : List Claims.Flock.Wit} {b : Brings} {xs : List Msg}
+    (hT : ∀ e ∈ (layoutBAcc rest).allCalls x ws, H e.1 = e.2) (hws : ws.length = nS x)
+    (hq : ∀ (r : XR) (s : ℕ) (c : Circuit) (h : String × ℕ), readX x = some r →
+      r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s → (c.ports.findIdx? (·.name == h.1)).isSome = true)
+    (path : ℕ → ℕ → List (Msg → Msg)) (root : ℕ → Msg)
+    (hclimb : ∀ σ s w v, ws[s]? = some w → (layoutBAcc rest).rowHeld x s w σ = some v →
+      Claims.Recursion.VStar.chainH H (path σ s) (accDig x ws σ s) = root σ)
+    (hin : ∀ σ s w v, ws[s]? = some w → (layoutBAcc rest).rowHeld x s w σ = some v →
+      ∀ u ∈ Claims.Recursion.VStar.chainIns H (path σ s) (accDig x ws σ s), ∃ xO ∈ xs, u ∈ b.setup xO)
+    (hapart : ∀ σ s t, Claims.Recursion.VStar.StepsApart (path σ s) (path σ t)) :
+    (layoutBAcc rest).RowsAgree x ws ∨ (Claims.findColl ((layoutBAcc rest).allCalls x ws ++ vcalls H b xs)).isSome :=
+  LayoutB.rowsAgree_of_commits hT accFrame accFrame_inj (accDig x ws) (accCommit_layoutBAcc rest hq) path root
+    hclimb hin hapart (layoutBAcc_owner rest hws)
+
+/-- **A piece holds its running sum at `layoutBAcc`'s chain, off the recorded calls** (`accHolds_layoutBAcc`): the
+copy's part `s` (circuit `c`, witness `w`) holds the chain at its unit `u`'s `acc`, port `qa`, and has the output port
+`acc_out`, port `qo`, the bytes `bi` and `bo` are what its witness reads at those rows, and `l` holds `layoutBAcc`'s
+calls. The copy's two row calls are recorded (`rowCall_held`, `outCall_held`), and so are the two rows' owners'
+(`accCommit_layoutBAcc`), so the four commit premises go; the climbs from the four digests stay. -/
+theorem accHolds_layoutBAcc_recorded {H : Msg → Msg} {l : List (Msg × Msg)} (hT : ∀ e ∈ l, H e.1 = e.2)
+    (hnc : (Claims.findColl l).isSome = false) {x : Msg} {ws : List Claims.Flock.Wit}
+    (hl : ∀ e ∈ (layoutBAcc rest).allCalls x ws, e ∈ l)
+    (hq : ∀ (r : XR) (s : ℕ) (c : Circuit) (h : String × ℕ), readX x = some r →
+      r.w.parts[s]?.bind partCircuit = some c → h ∈ accHeld r s → (c.ports.findIdx? (·.name == h.1)).isSome = true)
+    (sideAt : Msg → List Msg → OpenPiece → OpenSide) (coefAt : Msg → List Coin → OpenPiece → Array F128)
+    (q : OpenPiece) (cs : List Coin) {v : ℕ → Bool} {LANES HH : ℕ} (hO : Flock.Readable.LevelOuts v LANES HH)
+    (hLA : LANES = 2 ^ ((sideAt x ((layoutBAcc rest).msgs x ws) q).sch.levels[q.level]!).lanes)
+    (hrow : Flock.Readable.openRow v LANES =
+      (openAt (sideAt x ((layoutBAcc rest).msgs x ws) q).lig
+        ((sideAt x ((layoutBAcc rest).msgs x ws) q).sch.levels.size - 1) q.level).1[q.query]!)
+    (hcf : Flock.Readable.openCoefs v LANES HH = coefAt x cs q)
+    {r : XR} (hr : readX x = some r) {s : ℕ} {c : Circuit} (hc : r.w.parts[s]?.bind partCircuit = some c)
+    {w : Claims.Flock.Wit} (hw : ws[s]? = some w) {u : ℕ} (hh : ("acc", u) ∈ accHeld r s)
+    {qa qo : ℕ} (hqa : c.ports.findIdx? (·.name == "acc") = some qa)
+    (hqo : c.ports.findIdx? (·.name == "acc_out") = some qo)
+    {bi bo : ByteArray} (hbi : ColsHold v (128 * LANES + 1024 * max 1 ((HH + 1) / 2)) bi) (hszi : 32 ≤ bi.size)
+    (hbo : ColsHold v (outCol LANES HH + 1024) bo) (hszo : 32 ≤ bo.size)
+    (hbi' : bi.data.toList = readSegs w (accSegs c ("acc", u)))
+    (hbo' : bo.data.toList = readForms w (accOutForms c qo u))
+    {pin : ℕ} (hpin : pin = chainPos (sideAt x ((layoutBAcc rest).msgs x ws) q).sch q.rep q.level q.query)
+    {i₀ off₀ o₀ : ℕ} {w₀ : Claims.Flock.Wit} {v₀ : Msg}
+    (hin₀ : accIn rest x (Nat.pair pin 0) = some (i₀, off₀))
+    (ho₀ : (layoutBAcc rest).rowOwner x (Nat.pair pin 0) = some o₀) (hw₀ : ws[o₀]? = some w₀)
+    (hv₀ : (layoutBAcc rest).rowHeld x o₀ w₀ (Nat.pair pin 0) = some v₀) {ri : Msg}
+    {fsi gs₀ : List (Msg → Msg)} (hapi : Claims.Recursion.VStar.StepsApart fsi gs₀)
+    (hcli : Claims.Recursion.VStar.chainH H fsi (readForms w (hmDigest c qa u)) = ri)
+    (hcl₀ : Claims.Recursion.VStar.chainH H gs₀ (accDig x ws (Nat.pair pin 0) o₀) = ri)
+    (hini : ∀ u' ∈ Claims.Recursion.VStar.chainIns H fsi (readForms w (hmDigest c qa u)), u' ∈ l.map Prod.fst)
+    (hin0 : ∀ u' ∈ Claims.Recursion.VStar.chainIns H gs₀ (accDig x ws (Nat.pair pin 0) o₀), u' ∈ l.map Prod.fst)
+    {i₁ off₁ o₁ : ℕ} {w₁ : Claims.Flock.Wit} {v₁ : Msg}
+    (hin₁ : accIn rest x (Nat.pair (pin + 1) 0) = some (i₁, off₁))
+    (ho₁ : (layoutBAcc rest).rowOwner x (Nat.pair (pin + 1) 0) = some o₁) (hw₁ : ws[o₁]? = some w₁)
+    (hv₁ : (layoutBAcc rest).rowHeld x o₁ w₁ (Nat.pair (pin + 1) 0) = some v₁) {ro : Msg}
+    {fso gs₁ : List (Msg → Msg)} (hapo : Claims.Recursion.VStar.StepsApart fso gs₁)
+    (hclo : Claims.Recursion.VStar.chainH H fso (readForms w (hmDigest c qo u)) = ro)
+    (hcl₁ : Claims.Recursion.VStar.chainH H gs₁ (accDig x ws (Nat.pair (pin + 1) 0) o₁) = ro)
+    (hino : ∀ u' ∈ Claims.Recursion.VStar.chainIns H fso (readForms w (hmDigest c qo u)), u' ∈ l.map Prod.fst)
+    (hin1 : ∀ u' ∈ Claims.Recursion.VStar.chainIns H gs₁ (accDig x ws (Nat.pair (pin + 1) 0) o₁),
+      u' ∈ l.map Prod.fst) :
+    accHolds sideAt coefAt (chainAt rest) q x ((layoutBAcc rest).msgs x ws) cs := by
+  obtain ⟨hla, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqa
+  obtain ⟨hlo, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqo
+  have hci : (accFrame bi.data.toList (List.replicate (c.ports[qa]'hla).words 0),
+      readForms w (hmDigest c qa u)) ∈ l := by
+    refine hl _ (LayoutB.mem_allCalls hw ?_)
+    unfold accFrame
+    rw [List.length_replicate, hbi']
+    exact rowCall_held rest hr hc hh hqa (Array.getElem?_eq_getElem hla) w
+  have hco : (accFrame bo.data.toList (List.replicate (c.ports[qo]'hlo).words 0),
+      readForms w (hmDigest c qo u)) ∈ l := by
+    refine hl _ (LayoutB.mem_allCalls hw ?_)
+    unfold accFrame
+    rw [List.length_replicate, hbo']
+    exact outCall_held rest hr hc hh hqo (Array.getElem?_eq_getElem hlo) w
+  obtain ⟨σ₀, hc₀⟩ := accCommit_layoutBAcc rest hq _ _ _ _ hw₀ hv₀
+  obtain ⟨σ₁, hc₁⟩ := accCommit_layoutBAcc rest hq _ _ _ _ hw₁ hv₁
+  exact accHolds_layoutBAcc rest hT hnc accFrame_inj sideAt coefAt q cs hO hLA hrow hcf hbi hszi hbo hszo hpin
+    hin₀ ho₀ hw₀ hv₀ hci (hl _ (LayoutB.mem_allCalls hw₀ hc₀)) hapi hcli hcl₀ hini hin0
+    hin₁ ho₁ hw₁ hv₁ hco (hl _ (LayoutB.mem_allCalls hw₁ hc₁)) hapo hclo hcl₁ hino hin1
 
 end Commits
 
