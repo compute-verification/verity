@@ -436,24 +436,26 @@ theorem scheduleDeterministic_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a 
   dsimp only
   rw [hstep]
 
-/-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, under
-`ScheduleLayoutGap`.** `a` is the cap the session's parameters committed before its first coin
-(`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it is the same at every prefix and coin. -/
-theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
-    {pos : Pfx → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
-    {layout : Pfx → Y → Fin N ↪ Fin T × Fin M} (gap : ScheduleLayoutGap pos appended sent layout)
-    (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
-      (passes[idx c]?).map Prod.snd = some (sent c y)) :
-    ∃ steer : Pfx → Y → Pous.Bits (a + 1), Accounting.Assumptions.SteeredLayout layout steer :=
-  have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
-  steered_of_scheduleDeterministic (scheduleDeterministic_of_checked (idx := idx) gap checked)
-
 /-- **`ScheduleLayoutGap` holds of the verifier's layout**: `sessionLayout` is `codeLayout` of the session's appends and
 the runs the pass sent, at every prefix and coin. -/
 theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt : Pfx → Fin N ↪ Fin T × Fin M)
     (appended sent : Pfx → Y → Array (ℕ × ℕ)) :
     ScheduleLayoutGap (fun c => codeLayout blocks (dflt c)) appended sent (sessionLayout blocks dflt appended sent) :=
   fun _ _ => rfl
+
+/-- **The check's acceptance at the committed cap `a` gives `SteeredLayout` at `a + 1` bits, at the verifier's own
+layout** (`sessionLayout`, where `ScheduleLayoutGap` holds by definition, `scheduleLayoutGap_code`). `a` is the cap
+the session's parameters committed before its first coin (`audit.Params.schedule_cap`, `audit.Ledger.steering`), so it
+is the same at every prefix and coin. -/
+theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : Pfx → ℕ}
+    {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
+    (checked : ∀ c y, ∃ sc passes b, Schedule.check sc blocks a passes (appended c y) = .ok b ∧
+      (passes[idx c]?).map Prod.snd = some (sent c y)) :
+    ∃ steer : Pfx → Y → Pous.Bits (a + 1),
+      Accounting.Assumptions.SteeredLayout (sessionLayout blocks dflt appended sent) steer :=
+  have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
+  steered_of_scheduleDeterministic
+    (scheduleDeterministic_of_checked (idx := idx) (scheduleLayoutGap_code blocks dflt appended sent) checked)
 
 /-! ## The verifier's layout is where it checks -/
 
@@ -512,15 +514,11 @@ theorem whole_prefix (blocks : ℕ) : PrefixSums #[blocks] ((#[(0, blocks)] : Ar
   rfl
 
 theorem planBlocks : PlanBlocks := by
-  refine ⟨fun runs blocks pl h => ?_, fun blocks p hp => ?_⟩
-  · obtain ⟨b, rs, ends⟩ := pl
-    have he : ends = RemoteAudit.endsOf rs := make_ends h
-    subst he
-    exact planBlocks_of b rs _ (endsOf_prefix rs)
-  · obtain ⟨hlen, hget⟩ := planBlocks_of blocks #[(0, blocks)] #[blocks] (whole_prefix blocks)
-    refine hget p ?_
-    rw [hlen, length_runBlocks]
-    simpa using hp
+  refine ⟨fun runs blocks pl h => ?_, fun blocks => planBlocks_of blocks #[(0, blocks)] #[blocks] (whole_prefix blocks)⟩
+  obtain ⟨b, rs, ends⟩ := pl
+  have he : ends = RemoteAudit.endsOf rs := make_ends h
+  subst he
+  exact planBlocks_of b rs _ (endsOf_prefix rs)
 
 /-- A tile's position's second coordinate is its block. -/
 theorem snd_of_tileAt {blocks : ℕ} {appends runs : Array (ℕ × ℕ)} {i t m : ℕ}
@@ -540,7 +538,7 @@ theorem snd_of_tileAt {blocks : ℕ} {appends runs : Array (ℕ × ℕ)} {i t m 
       · exact congrArg some (Prod.mk.inj (Option.some.inj h)).2
 
 theorem codeLayoutTiles : CodeLayoutTiles := by
-  intro N T M blocks extent dflt appends runs pl hmake hN hpos i
+  intro N T M blocks extent appends runs pl hmake dflt hN hpos i
   obtain ⟨hlen, hget⟩ := planBlocks.1 runs extent pl hmake
   have hdist := (planReadsDistinct runs extent pl hmake).2
   choose t m hspec using hpos

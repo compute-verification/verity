@@ -109,15 +109,16 @@ noncomputable def sessionLayout {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dfl
 def PlanBlocks : Prop :=
   (∀ (runs : Array (Int × Int)) (blocks : ℕ) (pl : Plan), Plan.make? runs blocks = some pl →
     pl.length = (runBlocks pl.runs).length ∧ ∀ p < pl.length, (runBlocks pl.runs)[p]? = some (pl.block p)) ∧
-  ∀ blocks p, p < blocks → (runBlocks (Plan.whole blocks).runs)[p]? = some ((Plan.whole blocks).block p)
+  ∀ blocks, (Plan.whole blocks).length = (runBlocks (Plan.whole blocks).runs).length ∧
+    ∀ p < (Plan.whole blocks).length, (runBlocks (Plan.whole blocks).runs)[p]? = some ((Plan.whole blocks).block p)
 
 /-- **Where a plan of `N` blocks has positions in `Fin T × Fin M`, the verifier's layout is them.** Of a plan the
 verifier makes (`Plan.make?`) whose runs hold `N` blocks, each with a position below `(T, M)`, `codeLayout` puts each
 tile `i` at its block's position (`tileAt`): the plan's runs are disjoint, so its blocks, the positions' second
 coordinates, are distinct. -/
 def CodeLayoutTiles : Prop :=
-  ∀ (N T M blocks extent : ℕ) (dflt : Fin N ↪ Fin T × Fin M) (appends : Array (ℕ × ℕ)) (runs : Array (Int × Int))
-    (pl : Plan), Plan.make? runs extent = some pl → (runBlocks pl.runs).length = N →
+  ∀ (N T M blocks extent : ℕ) (appends : Array (ℕ × ℕ)) (runs : Array (Int × Int)) (pl : Plan),
+    Plan.make? runs extent = some pl → ∀ dflt : Fin N ↪ Fin T × Fin M, (runBlocks pl.runs).length = N →
     (∀ i < N, ∃ t m, tileAt blocks appends pl.runs i = some (t, m) ∧ t < T ∧ m < M) →
     ∀ i : Fin N, tileAt blocks appends pl.runs i =
       some (((codeLayout blocks dflt appends pl.runs i).1 : ℕ), ((codeLayout blocks dflt appends pl.runs i).2 : ℕ))
