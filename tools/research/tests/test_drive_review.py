@@ -1385,6 +1385,68 @@ def _passed_hand_check(world, monkeypatch) -> tuple[Review, str, str]:
     return h, top, rid
 
 
+def test_a_passed_lean_check_of_a_reviewed_prefix_lands_it_though_a_new_head_below_conflicts_and_its_own_commit_failed(
+        world, monkeypatch):
+    """26 Oct 18:55Z: ci's hand check of b43f74a3 passed over S1's 124 reviewed PRs, and in the same tick #4745's new head, below
+    it, rebuilt `next` from 51 up and conflicted: the pass left `next` with its commit, and nothing landed.  Below it, #4439's
+    own commit had failed its Lean check, which also held everything above it though the pass checked the tree that lands."""
+    _registry(world, "lane-1")
+    h = Review(world, monkeypatch, nonlean_first=False)
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}", "x.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    own, _, top = (m.commit for m in h.q.chain())
+    assert h.launched == [(top, "m1", False)]
+    h.run_state[h.lean_ids()[0]] = ("done", 1, None)
+    h.tick()
+    assert h.launched[1] == (own, "m1", False), h.launched
+    h.run_state[h.lean_ids()[1]] = ("done", 1, None)
+    h.tick()
+    assert [p for p in h.posts if "of its own commit" in p and "@lane-1" in p], h.posts
+    h.d.hand_lean(top, "ci")
+    (rid,) = h.lean_ids()[2:]
+    world.gh.put(2, world.change({"b.txt": "2\n", "x.txt": "2\n"}))       # a new head that conflicts with #1, marked ready
+    old = h.q.chain()
+    assert not h.tick().startswith("landed") and h.q.chain() == old, world.logs
+    h.clock += 600
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    out = h.tick()
+    assert out.startswith("landed #3"), (out, world.logs)
+    assert _main(world) == top and len(h.launched) == 3
+    assert any(f"the Lean check {rid} of {top[:12]} passed" in s for s in world.logs), world.logs
+
+
+def test_a_passed_lean_check_holds_next_until_it_lands_and_an_ejection_below_it_rebuilds_next(world, monkeypatch):
+    h = Review(world, monkeypatch, baseline=False, nonlean_first=False)    # nothing lands before `main`'s own run
+    world.gh.put(1, world.change({"pkg/lean-audit.json": "{}"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    world.gh.put(3, world.change({"c.txt": "3\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.tick()
+    one, two, top = (m.commit for m in h.q.chain())
+    admitted = world.gh.prs[2].head
+    h.d.hand_lean(top, "ci")
+    (rid,) = h.lean_ids()
+    h.run_state[rid] = ("done", 0, None)
+    h.evidence = [_steps_run(world.tmp, rid, {LEAN_STEP: "passed"})]
+    assert h.tick().startswith("nothing lands before")
+    h.q.first = (3,)
+    world.gh.put(2, world.change({"b.txt": "two\n"}))                      # its owner pushes, and marks the new head
+    h.tick()
+    assert [m.commit for m in h.q.chain()] == [one, two, top], world.logs  # the pass keeps them, `--first` too
+    world.gh.ready.discard((2, world.gh.prs[2].head))
+    world.gh.ready.discard((2, admitted))                                  # #2 ejected, both heads
+    h.q.first = ()
+    h.tick()
+    chain = h.q.chain()
+    assert [m.pr for m in chain] == [1, 3] and chain[0].commit == one and top not in {m.commit for m in chain}, world.logs
+
+
 def test_lean_check_refuses_a_commit_whose_recorded_lean_check_passed_naming_its_run(world, monkeypatch):
     """infra's review of #4670 (26 Oct 11:04Z): a hand check at a commit drive records as passed replaced the pass with a pending
     check, so what it covered waited again."""
