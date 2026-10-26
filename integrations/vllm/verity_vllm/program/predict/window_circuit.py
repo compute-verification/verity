@@ -94,9 +94,9 @@ class WindowClass:
         return self.prompt + self.outputs - 1
 
 
-#: the class of record, the certifier run of record's envelope: at most 4 requests a window, each of at most 1,024
-#: prompt ids and 64 outputs
-CLASS_OF_RECORD = WindowClass(4, 1024, 64)
+#: the class of record, the certifier run of record's envelope: at most 8 requests a window (the endpoint's
+#: ``--window-requests 8``, its max_num_seqs), each of at most 1,024 prompt ids and 64 outputs
+CLASS_OF_RECORD = WindowClass(8, 1024, 64)
 
 
 #: the most keys an attention head reads through one `AllGather_v1{T, D}`, until v19's per-key-block cut is wired

@@ -1,7 +1,7 @@
 """The padded size of a window class's circuit (V3b), at a class too large to lower: its units, ANDs and m.
 
 `window_circuit.class_circuit` lowers the class Program once a request. At the class of record
-(`window_circuit.CLASS_OF_RECORD`: 4 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a head reaches
+(`window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a head reaches
 1,087 keys, past the `window_circuit.KEYS` one gather reads until `AttentionHead_v19` (#4263) binds, and a Program is
 some 46M units. So the size is a projection (`project`) from an exact
 lowering of one Program of the same registration at a small probe class:
