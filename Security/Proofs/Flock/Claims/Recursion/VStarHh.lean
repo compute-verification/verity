@@ -26,39 +26,45 @@ open Claims.Recursion.VStarB (readForms formBit)
 theorem ofFn_xor (d : Fin 64 → UInt8) (y : Salt) :
     List.ofFn (asX d + maskX y) = List.ofFn (fun i : Fin 64 => d i ^^^ maskOf y i) := rfl
 
+theorem xorBytes_ofFn (D K : List UInt8) (d m : Fin 64 → UInt8) (hDl : D.length = 64) (hKl : K.length = 64)
+    (hD : ∀ i : Fin 64, d i = D.getD i.val 0) (hK : ∀ i : Fin 64, m i = K.getD i.val 0) :
+    FlockSoundness.Merkle.xorBytes D K = List.ofFn (fun i : Fin 64 => d i ^^^ m i) := by
+  apply List.ext_getElem (by rw [FlockSoundness.Merkle.xorBytes, List.length_zipWith, hDl, hKl, List.length_ofFn]; rfl)
+  intro i h1 h2
+  have hi : i < 64 := by rw [List.length_ofFn] at h2; exact h2
+  have hiD : i < D.length := by omega
+  have hiK : i < K.length := by omega
+  rw [List.getElem_ofFn, hD, hK]
+  simp only [FlockSoundness.Merkle.xorBytes, List.getElem_zipWith, List.getD_eq_getElem?_getD,
+    List.getElem?_eq_getElem hiD, List.getElem?_eq_getElem hiK, Option.getD_some]
+
+theorem digestOf_getD (ws : Array ℕ) (i : Fin 64) :
+    digestOf ws i = (FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 (rowMsg ws))).getD i.val 0 := by
+  unfold digestOf
+  exact congrArg (fun l : List UInt8 => l.getD i.val 0) (sha512_eq (rowMsg ws))
+
+theorem maskOf_getD (y : Salt) (i : Fin 64) :
+    maskOf y i = (FlockSoundness.Refine.K512.mask (List.ofFn y)).getD i.val 0 := by
+  unfold maskOf
+  rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, VStarTrace.get!_eq, List.getD_eq_getElem?_getD,
+    Array.getElem?_toList] <;> rfl
+
 /-- **hm96's commit string of a row's message is the inner prover's leaf**: `SHA-512(rowMsg) ⊕ M·y`, then `c`. -/
 theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
     FlockSoundness.Binding.commitString (rowMsg ws) (List.ofFn y) =
       hmLeaf (asX (digestOf ws) + maskX y, saltH FlockDeploy.sha512 y) := by
-  have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
+  have hsp : Claims.toMsg Hm96.Default512.saltPrefix = FlockSoundness.Refine.K512.saltPrefix := by
     unfold FlockSoundness.Refine.K512; rfl
+  have hKl : (FlockSoundness.Refine.K512.mask (List.ofFn y)).length = 64 := by
+    rw [FlockSoundness.Refine.K512.mask_len]; rfl
   unfold FlockSoundness.Binding.commitString hmLeaf saltH
   dsimp only
   refine congrArg₂ HAppend.hAppend ?_ ?_
   · rw [ofFn_xor]
-    have hl := length_xorMask (rowMsg ws) (List.ofFn y)
-    have hd := FlockSoundness.Discharge.Hm.length_digBytes (FlockSoundness.Refine.H512 (rowMsg ws))
-    have hk := FlockSoundness.Refine.K512.mask_len (List.ofFn y)
-    apply List.ext_getElem (by rw [hl, List.length_ofFn])
-    intro i h1 h2
-    have hi : i < 64 := by rw [hl] at h1; exact h1
-    simp only [List.getElem_ofFn, FlockSoundness.Merkle.xorBytes, List.getElem_zipWith]
-    refine congrArg₂ HXor.hXor ?_ ?_
-    · unfold digestOf
-      rw [sha512_eq]
-      simp only [List.getD_eq_getElem?_getD, Option.getD_some, List.getElem?_eq_getElem
-        (show i < (FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 (rowMsg ws))).length by
-          rw [hd]; exact hi)]
-    · unfold maskOf
-      have hM : i < (Hm96.Default512.mask ⟨Array.ofFn y⟩).data.size := by
-        have := hk
-        rw [FlockSoundness.Refine.K512_mask, List.toArray_ofFn, Array.length_toList] at this
-        have hL : FlockSoundness.Refine.K512.L = 64 := rfl
-        omega
-      rw [FlockSoundness.Refine.K512_mask, VStarTrace.get!_eq, List.toArray_ofFn]
-      simp only [Array.getElem_toList, Array.getElem?_eq_getElem hM, Option.getD_some]
+    exact xorBytes_ofFn (FlockSoundness.Binding.digBytes (FlockSoundness.Refine.H512 (rowMsg ws)))
+      (FlockSoundness.Refine.K512.mask (List.ofFn y)) (digestOf ws) (maskOf y)
+      (FlockSoundness.Discharge.Hm.length_digBytes _) hKl (digestOf_getD ws) (maskOf_getD y)
   · rw [hsp, sha512_eq]
-    rfl
 
 /-- **The port's row prefix is the placed row's**, where `TraceOk` holds: its rows are of the port's words. -/
 theorem rowPfx_of_traceOk {c : Circuit} {pin : _root_.VStar.In.PartIn} (h : VStarTrace.TraceOk c pin) {nm : String}

@@ -95,7 +95,9 @@ theorem cap_ports {l N : ℕ} {c : Circuit} (h : RecVStar.checkParsed (.cap l N)
 
 theorem capPort_cap {c : Circuit} {p0 p1 : _root_.Flock.Port} (hp : c.ports = #[p0, p1]) (h0 : p0.name = "top") :
     capPort c = some 0 := by
-  simp [capPort, hp, h0]
+  unfold capPort
+  rw [hp]
+  exact Array.findIdx?_eq_some_iff_getElem.2 ⟨by simp, by simp [h0], fun j hj => absurd hj (by omega)⟩
 
 /-! ## Round 0 -/
 
@@ -153,9 +155,7 @@ theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
     rw [hrr, List.map_map]
     apply List.map_congr_left
     intro n _
-    show (wordsBytes ((fitRow 32 ((I.rows w ρ.1 []).getD n #[]) ++ Array.replicate 32 0).extract 0 32),
-      saltBytes (ρ.2 0 n)) = _
-    rw [extract_top]
+    simp only [Function.comp_apply, extract_top]
   have hsrc : srcOf (I.fit x) x w ρ hist = some { (I.fit x).rest w ρ.1 hist with
       msgs := msgsOf rs (roundRows (I.fit x) w ρ hist), tops := topsOf rs (roundRows (I.fit x) w ρ hist) } := by
     simp [srcOf, hr, hrs]

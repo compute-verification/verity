@@ -95,7 +95,7 @@ theorem portRow_ownRows {nm : String} {rows : Array (Array ℕ)} {salts : Array 
     {rest : Array (String × VStar.In.PortIn)} {n : ℕ} (hn : n < rows.size) (hs : n < salts.size) :
     portRow (#[(nm, VStar.In.ownRows rows salts)] ++ rest) nm n = some ⟨rows[n], salts[n]⟩ := by
   have hz : n < (rows.zip salts).size := by rw [Array.size_zip]; exact Nat.lt_min.2 ⟨hn, hs⟩
-  simp [portRow, VStar.In.ownRows, Array.find?_append, Array.getElem?_range, hn, Array.getElem?_map,
+  simp [portRow, VStar.In.ownRows, Array.find?_append, hn, Array.getElem?_map,
     Array.getElem?_eq_getElem hz, Array.getElem_zip]
 
 end RecDeploy.VStarBuild
