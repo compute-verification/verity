@@ -12,16 +12,15 @@ rest)` and the coin server's record (`recTr`), which reads nothing of the column
 
 At the deployed reader's steps and trimmed columns (`stepsBase_R`):
 
-* `KSFlockLin` at `DE` is `ksFlockLin_R` (U3), from the reader's bound wherever some run accepts (`PlainRdInR`) and
-  the level caps' prefix (`CapPrefixR`);
+* `KSFlockLin` at `DE` is `ksFlockLin_R` (U3), from the reader's bound wherever some run accepts (`PlainRdInR`);
 * `LastBindsEC` is `lastStepBinds_R` carried to the trimmed columns (`lastStepBinds_RT`), from the reader's columns
   half and calls half, both proved at SHA-512 (`rColsBind_sha512`, `rCallsBind_sha512`);
 * `LastCoinFree` holds at any columns (`lastCoinFree_R`).
 
 The inner verifier's calls need nothing of the steps: the finders search them at each draw's coins
 (`callsLogCollAt_deployRec`), so `StepsLogFree` is not among them. So `ksLin2_deployedR_partAccepts` and
-`bitsLin2_deployedR_partAccepts` are the B corollaries at the deployed reader, reopened on `PlainRdInR`, `CapPrefixR`
-and `DecompB` at `PartAccepts`. This bounds no number by itself: those premises are open.
+`bitsLin2_deployedR_partAccepts` are the B corollaries at the deployed reader, reopened on `PlainRdInR` and `DecompB`
+at `PartAccepts`. This bounds no number by itself: those premises are open.
 -/
 
 namespace RecDeploy
@@ -149,15 +148,14 @@ theorem lastBindsEC_RT (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Read
   Bound.lastBindsEC_of_lastStep (binds_deployed rel _ _ wE join final w) (lastStepFree_of_R _ rd _ rfl)
     (lastStepBinds_RT rel rd wE join rowInDeployed final w h)
 
-/-- **`StepsBaseC` at the deployed reader's steps and trimmed columns** (U6): `KSFlockLin` from `PlainRdInR` and
-`CapPrefixR` (`ksFlockLin_R`), `LastBindsEC` from the reader's last-message binding at SHA-512 (`rColsBind_sha512`,
+/-- **`StepsBaseC` at the deployed reader's steps and trimmed columns** (U6): `KSFlockLin` from `PlainRdInR`
+(`ksFlockLin_R`), `LastBindsEC` from the reader's last-message binding at SHA-512 (`rColsBind_sha512`,
 `rCallsBind_sha512`), and `LastCoinFree` at any columns. -/
 theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List Msg → Msg)
     (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (hcp : FlockDeploy.KS.CapPrefixR rd) :
+    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x) :
     StepsBaseC (nextR rd) (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE join final w :=
-  ⟨ksFlockLin_R rd wE join final w hIn hcp,
+  ⟨ksFlockLin_R rd wE join final w hIn,
     lastBindsEC_RT _ rd wE join final w (rLastBinds_of (rColsBind_sha512 rd) (rCallsBind_sha512 rd)),
     lastCoinFree_R _ rd _ wE join rowInDeployed final w FlockDeploy.sha512⟩
 
@@ -165,14 +163,13 @@ theorem stepsBase_R (rd : Msg → Option FinalP) (wE : Msg → ℝ) (join : List
 
 /-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)`, the coin server's record
 (`recTr`) and the deployed reader's steps and trimmed columns**: `ksLin2_stepsC_partAccepts` at `stepsBase_R`. What
-stays open: `DecompB` at `PartAccepts`, `PlainRdInR` and `CapPrefixR`. -/
+stays open: `DecompB` at `PartAccepts` and `PlainRdInR`. -/
 theorem ksLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (hcp : FlockDeploy.KS.CapPrefixR rd) :
+    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x) :
     let bR : Brings := { b with tr := recTr aux nOf hd recRest }
     let L := layoutBTops (finOpen rest)
     let Bd := bdDeployed _root_.Flock.Readable.relation (nextR rd)
@@ -185,7 +182,7 @@ theorem ksLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   ksLin2_stepsC_partAccepts _ _ b aux nOf hd recRest rest wE join final w
-    (stepsBase_R rd wE join final w hIn hcp)
+    (stepsBase_R rd wE join final w hIn)
 
 /-- **`BitsLin2` at the same choice**: `bitsLin2_stepsC_partAccepts` at `stepsBase_R`. It reads `StrictBirthday` and
 `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployedR_partAccepts`'s open premises: a bound on a
@@ -195,8 +192,7 @@ theorem bitsLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
-    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x)
-    (hcp : FlockDeploy.KS.CapPrefixR rd) :
+    (hIn : ∀ x, ¬ Claims.Flock.NoAcc FlockDeploy.sha512 (FlockDeploy.VR rd) x → FlockDeploy.KS.PlainRdInR rd x) :
     let bR : Brings := { b with tr := recTr aux nOf hd recRest }
     let L := layoutBTops (finOpen rest)
     let Bd := bdDeployed _root_.Flock.Readable.relation (nextR rd)
@@ -209,6 +205,6 @@ theorem bitsLin2_deployedR_partAccepts (rd : Msg → Option FinalP) (b : Brings)
     Claims.Recursion.BitsLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt :=
   bitsLin2_stepsC_partAccepts _ _ b aux nOf hd recRest rest wE join final w
-    (stepsBase_R rd wE join final w hIn hcp)
+    (stepsBase_R rd wE join final w hIn)
 
 end RecDeploy
