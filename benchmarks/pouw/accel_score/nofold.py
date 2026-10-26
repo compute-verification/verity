@@ -159,6 +159,46 @@ def v1_leaks() -> None:
         print(f"  {name}: MAC-weighted leak {acc / tot:.2%} (v1 budgeted e = {E_V1:.2%})")
 
 
+LEAF_BLOCKS = 8                                             # SHA-512 blocks in one hiding leaf
+LEAF_DATA_BITS = LEAF_BLOCKS * 1024 - 128 - 129             # one 128-bit salt, SHA-512's minimum padding
+TREE = 1 + (16 * 512 + 1024) / 1024 / 15 / LEAF_BLOCKS      # 16-ary tree, node = SHA-512 of 16 child digests
+
+
+def hash_c(name: str, word_bits: int) -> float:
+    """γ_hash·L: compressions a word over the card's INT8 rate at η, with NF3's leaf, salt and node function."""
+    mac, sha, _ = CARDS[name]
+    return ETA * mac * TREE * word_bits * LEAF_BLOCKS / (LEAF_DATA_BITS * sha)
+
+
+def v2_scan(budget: float = 0.004) -> None:
+    """Route (b): O bound to the words; per shape the L (a multiple of 64) of least γ whose leak is within `budget`.
+
+    leak = max(2L, ρL − K/s_b)/(γK): the zero high digits and the bit route to O (FINDING PD2-1).
+    """
+    print(f"\nv2 route (b): leaf {LEAF_BLOCKS} blocks + salt, 16-ary tree (x{TREE:.3f}), leak budget {budget:.2%}")
+    for name in CARDS:
+        mac, sha, c_op = CARDS[name]
+        for wb in (32, 16, 8):
+            c = hash_c(name, wb)
+            a = 1 + A_COMMIT * c / C + c_op * HYB_P / 2
+            tot = gw = lw = 0.0
+            cells = []
+            for shape, K, N in STATIC:
+                best = None
+                for L in range(64, K + 1, 64):
+                    g = a + c / L + HYB_RHO * L / K
+                    leak = max(2 * L, HYB_RHO * L - K / S_B[name]) / (g * K)
+                    if leak <= budget and (best is None or g < best[1]):
+                        best = (L, g, leak)
+                L, g, leak = best
+                tot += K * N
+                gw += K * N * g
+                lw += K * N * leak
+                cells.append(f"{shape} L {L} g {g:.2f} leak {leak:.2%}")
+            print(f"  {name:13} {wb:2}-bit words C {c:6.0f}: static gamma {gw / tot:5.2f}, leak {lw / tot:.2%}; "
+                  + "; ".join(cells))
+
+
 def main() -> None:
     print(f"C = {C:.0f} (leaves only, data sheet: {C_LEAF:.0f}); words 4 B, tree x2, plain at eta {ETA}")
     print("\ncoordinator's points (unchecked peel), gamma = 1 + A + C/L + L/K:")
@@ -221,3 +261,4 @@ if __name__ == "__main__":
     main()
     v1()
     v1_leaks()
+    v2_scan()
