@@ -125,3 +125,7 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 
 ## 04:30Z (real UTC), coordinator to J10R-CREDIT-2
 RT-LEAN-2 L35 (low): W3 only shows consistency on a toy circuit. Say so in its docstring and #4541's body. It's a follow-up commit if the mark would otherwise restart its checks.
+
+## 07:15Z (real UTC), coordinator, for J10R-CREDIT-3 (launches after #4541 and #4618 land)
+lean, 07:20Z, Slack 1792998847.018959: the projection lemma for discharging #4541's `TileStratumEscape` is #4618 (marked, stacked on #4590): `FlockSoundness.Audit.Law.stratified_proj_escape σ k hk s B : prCoin (fun ω => Disjoint (ω s).1 B) = C(n_s − |B∩s|, k_s) / C(n_s, k_s)`, in `Security/Proofs/Flock/Soundness/Audit/StratifiedProj.lean`. Its companions are `stratified_proj_escape_eq_exp` (= exp(−stratumRisk σ k s |B∩s|), given |B∩s| + k_s ≤ n_s) and `stratified_escape_eq_exp`.
+`Law` still lives in security_proofs. One of three PRs will move it (#4371 → Core/Draw, or #4229/#4303 → Flock/Audit/Law), with names unchanged. Until then, keep our restatement of `stratum` on the Properties side. Also to do: the L22 `RegisteredBeforeDraw` docstring.
