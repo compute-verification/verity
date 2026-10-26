@@ -1,25 +1,32 @@
 """serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit window's H1 window
 taps the server's own rows-sha512 Commit (its step-input port and the bench row's int8 source) and ties at ROOTS1, on the
-epoch's in-process coins, which credit nothing; `CommitWindows` opens the arm once the committer is installed and closes it
-before the committer comes off, its outcome the window's line; and the flags are refused before the model loads where
-the server can't serve them."""
+epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor host's
+challenger, which the auditor's ledger opens and ends for it; `CommitWindows` opens the arm once the committer is
+installed and closes it before the committer comes off, its outcome the window's line; and the flags are refused before
+the model loads where the server can't serve them."""
 from __future__ import annotations
 
 import json
+import shlex
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import torch
 
+from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity_vllm.engine import engine_profile
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import commit_coins as CC
 from verity_vllm.pipeline import serve_h1 as SH
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
+from tests.pipeline.test_commit_coins import GATE, KEY, PEER, _Auditor
 from tests.pipeline.test_serve_openai import CERTIFIER_BODY, Serving, records, serve_concurrently
+from tests.protocols import challenger_host as CH
 from tests.protocols.test_pouw_h1 import Runner, _so
 from tests.protocols.test_pouw_h1_commit import K, ROWS, STEPS, Committer, Linear, Model, _ids, _manifest_sites, _served_commit
 from tests.protocols.test_pouw_h1_served import _unit
@@ -86,6 +93,76 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
     idle = arm.close(2)
     assert (idle["tied"], idle["steps_served"], idle["gate"]["gate_passed"]["rows"]) == (None, 0, 0), "it served no step"
     assert arm.summary() == {"windows": 3, "tied": 2, "untied": [], "gate_passed_rows": 0}
+    srv.src.uninstall()
+
+
+class _GateAuditor(_Auditor):
+    """`test_commit_coins._Auditor` answering ``status`` as infra's gate does, with the session's open and end entries;
+    `settle` (the arm's wait between polls) ends each session whose client has closed it, as serve.py's exit does."""
+
+    def run(self, argv: list[str]) -> tuple[int, str]:
+        words = shlex.split(argv[-1])
+        if words[0] != "status":
+            return super().run(argv)
+        self.argv.append(argv)
+        entries = {e["kind"]: e for e in map(json.loads, self.gate.lines) if e["session"] == words[1]}
+        return 0, json.dumps({"session": words[1], "commitment": self.sessions[words[1]].get("commitment"),
+                              "open": entries.get("open"), "end": entries.get("end")})
+
+    def settle(self, _seconds: float) -> None:
+        for sid, s in self.sessions.items():
+            if "thread" in s and not s.get("ended"):
+                self.end(sid)
+                s["ended"] = True
+
+
+def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, monkeypatch):
+    """``--challenger-gate`` and ``--challenger-peer``: each window reserves a session of its own (H1's scheme and
+    families for S rounds, as this peer), round 0 opens it on the window's open root once its port listens, and the
+    window's close waits for its end entry, closed and complete. The window's salt, round and draw coins are that
+    session's, its record carries the session without its secret, and the verifier's check of the record against the
+    auditor's ledger (`pouw_h1_challenger.session_reason`) passes."""
+    srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
+    ports: list[int] = []
+    sessions = SH.GateSessions(CC.Gate(GATE, auditor.run), PEER, STEPS, wait=auditor.settle,
+                               listens=lambda port: ports.append(port) or True)
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
+    assert (arm.describe()["coins"], arm.describe()["peer"]) == ("challenger", PEER)
+    pins, main = [CH.write_pins(tmp_path / "pins.jsonl")], list(CH.MAIN)
+    sids = []
+    for w, prompts in enumerate(PROMPTS):
+        arm.open(w)
+        run = srv.serve(prompts, w)
+        out = arm.close(w)
+        sid = out["session"]["session"]
+        sids.append(sid)
+        assert out["tied"] and out["coin_source"] == PH.CHALLENGER and out["gate"]["gate_passed"]["rows"] > 0, out
+        assert {k: out["session"][k] for k in ("window", "peer", "port", "listen_polls", "unopened", "closed", "end")} == {
+            "window": w, "peer": PEER, "port": 7811, "listen_polls": 0, "unopened": None, "closed": {"closed": True},
+            "end": {"opened": True, "rc": 0, "closed": True, "complete": True}}
+        record = json.loads((tmp_path / "h1" / f"w{w}" / PH.CALLS_FILE).read_text())
+        given = record["commitment"]["session"]
+        assert given["session"] == sid and "secret" not in given
+        assert record["commitment"]["coins"] == record["commitment"]["round_coins"]
+        ledger = PHC.Ledger.load(auditor.heads(), KEY, pins=pins, main=main)
+        assert PHC.session_reason(record["commitment"], ledger, lambda s: tmp_path / s if s == sid else None) is None
+        assert run.details["challenger"] == {"closed": True}
+    assert len(set(sids)) == 2 and ports == [7811, 7811]
+    reserves = [shlex.split(a[-1]) for a in auditor.argv if shlex.split(a[-1])[0] == "reserve"]
+    assert reserves == [["reserve", "--peer", PEER, "--scheme", PHC.SCHEME, "--families", PHC.families(STEPS)]] * 2
+    srv.src.uninstall()
+
+
+def test_a_window_whose_reserve_the_gate_refuses_installs_nothing(tmp_path, monkeypatch):
+    """The gate refuses the window's reserve: its open raises the refusal before any tap or hook goes on, so the Commit
+    serves on and the window's line carries the error."""
+    srv = _Server(monkeypatch)
+    sessions = SH.GateSessions(CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "--peer 'x': one of []"}))), PEER,
+                               STEPS, wait=lambda s: pytest.fail("no poll"), listens=lambda p: pytest.fail("no port"))
+    arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path, unit=_unit(), sessions=sessions)
+    with pytest.raises(CoinError, match="the challenger gate refused reserve"):
+        arm.open(0)
+    assert "_acquire" not in vars(srv.com) and "execute_model" not in vars(srv.runner) and arm.close(0) is None
     srv.src.uninstall()
 
 
@@ -170,6 +247,10 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert refusal("--protocols-config", "{}") == "--protocols-config without --protocols"
     assert "the server's own" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"rows": 64}}))
     assert "one gate session a window" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"challenger": "h:1"}}))
+    gate = ("--challenger-gate", GATE, "--challenger-peer", PEER)
+    assert refusal(*h1, *gate) is None
+    assert "go together" in refusal(*h1, *gate[:2]) and "go together" in refusal(*h1, *gate[2:])
+    assert "needs --protocols" in refusal(*gate)
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")

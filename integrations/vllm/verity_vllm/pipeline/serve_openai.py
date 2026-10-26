@@ -6,7 +6,7 @@
         [--required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO | --scheme vllm-v1 --of-record RUN] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
-        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON]]
+        [--protocols pouw:eps1-sm120-h1fx1 [--protocols-config JSON] [--challenger-gate CMD --challenger-peer NAME]]
 
 It serves what network-accounting's certifier sends (`benchmarks/network_traces/certifier_serve.py`): ``/v1/models``,
 ``/tokenize`` and ``/v1/completions``, the prompt as token ids or text, streamed as vLLM's own server streams it (one
@@ -76,8 +76,9 @@ finish, and ``summary.json`` counts the requests and checks, the seals, and the 
 it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 ``--protocols pouw:eps1-sm120-h1fx1`` serves PoUW H1 on this server's own Commit, one H1 window a Commit window
-(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``; its coins are in-process, so no window
-credits anything yet.
+(`serve_h1`), each window's H1 outcome its ``windows.jsonl`` line's ``pouw_h1``. With ``--challenger-gate`` and
+``--challenger-peer`` each window's coins come from a session of its own on the auditor host's challenger, reserved
+through infra's gate (`serve_h1.GateSessions`); without them they are in-process, and no window credits anything.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -222,6 +223,14 @@ class Options:
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
+                                         help="with --protocols: the auditor host's challenger gate, its command as one string "
+                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
+                                              "session of its own there and draws its coins from it (serve_h1.GateSessions); "
+                                              "without it they are in-process and credit nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
+                                         help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
+                                              "challenger reaches the server (ssh -R)")
 
 
 # ---------------------------------------------------------------------------------------------------------------- engine loop
@@ -693,7 +702,7 @@ def main(opts: Options) -> int:
 
         if opts.protocols:
             arm = SH.H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
-                               config=SH.config_of(opts.protocols_config))
+                               config=SH.config_of(opts.protocols_config), sessions=SH.sessions_of(opts))
         warmed = SS.warm_pool(com, opts.seal_warm_gb)
         sealer = SS.Sealer(int(opts.seal_hold_gb * SS.GB)) if opts.seal and opts.seal_off_loop else None
         windows = CommitWindows(com, out, run_id=opts.run_id, window_steps=opts.window_steps, idle_close_steps=opts.idle_close_steps,
