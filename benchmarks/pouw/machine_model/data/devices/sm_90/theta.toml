@@ -963,15 +963,18 @@ against = "sha512"
 why = "the host computes every compression of data it holds, so what bounds it is the words' bytes, not compressions: host.link's 64e9 B/s carry 0.5e9 · κ compressions' worth of words a second, which at κ = 1 is 0.5e9 / (132 SMs · 1,980 MHz, sha512's measured clock) = 0.00191307 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to the hashing's own share of device time. NVLink peers are cards the audit counts"
 gap = "κ, the receipt's compressions a 128 B of words: about 1 for a long run of words a leaf, 2 for a binary tree over 128-B leaves (PROTO-DESIGN's no-fold receipt fixes it); a pinned device-to-host copy test for host.link (GPU queue)"
 
-# A compression's lane instructions, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU pipe,
-# of which `rotates` rotations or shifts (two SHF each) and `adds` 2-input 64-bit adds (two IADD3 each) may go to IMAD.
+# The built kernel's SASS a compression, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU
+# pipe, `imad` on the IMAD pipe, `other` elsewhere; `rotates` rotations or shifts (two SHF each) and `adds` 2-input
+# 64-bit adds (built as `add_form`) may go to IMAD.
 [sha512_mix]
-alu = 3536
-other = 0
+alu = 3400
+imad = 152
+other = 56
 rotates = 864
-adds = 88
-overlap = "θ's joint rows: IADD3 and IMAD issue together under JI90_0 (d 21.6 measured); rotations on IMAD untimed on the H200"
-source = "RT-UNITS U1 (note:compute-research/20261026T0320Z-draft-accel-rt-units): a generic compression in the plain form, 80 rounds of 28 lane instructions (12 SHF, 8 LOP3, 8 IADD3), 64 schedule words of 20 (12 SHF, 4 LOP3, 4 IADD3) and a feed-forward of 16 IADD3: 1728 SHF, 896 LOP3, 912 IADD3, with 864 rotations and shifts and 88 2-input adds"
+adds = 152
+add_form = "IADD3 + IMAD.X"
+overlap = "θ's joint rows: IADD3 and IMAD issue together under JI90_0 (d 21.6 measured); the moves untimed on the H200"
+source = "commit_gpu's default build on sm_90 (r20261018-062010-1c6b, note:hash/20261018T0632Z-draft-intpipe §1; RT-UNITS' reading, note:compute-research/20261026T0320Z-draft-accel-rt-units 'SHA-512 schedules'): 3,608 instructions, SHF 1,728 (864 rotations and shifts), LOP3 912, IADD3(.X) 760, 152 IMAD.X (the carry halves of 152 2-input adds), 56 other"
 
 [[public]]
 impl = "hashcat 6.2.6-850 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"

@@ -264,13 +264,13 @@ def _theta(data: Path) -> str | None:
                          s.public.source]
                         for s in T.sha(t)])]
     if t.sha_mix is not None:
-        cs = [(shared, T.sha_ceiling(t, rd, shared)) for shared in (False, True) for rd in T.READINGS]
+        cs = [T.sha_ceiling(t, rd, hi) for hi in (True, False) for rd in T.READINGS]
         out += ["### SHA-512's ceiling on the card's pipes (`[sha512_mix]`, an LP over ALU, IMAD and issue)",
-                _table(["ALU and IMAD", "reading", "SM-clocks a compression", "ALU alone", "rotations to IMAD",
-                        "adds to IMAD", "a SM-clock", "ours over it"],
-                       [["one pool" if shared else "apart", c.reading, f"{c.clocks:.2f}", f"{c.alu_only:.2f}",
-                         f"{c.rotates:.0f}", f"{c.adds:.0f}", f"{c.rate:.6f}", f"{ours / c.rate:.3f}"]
-                        for shared, c in cs]),
+                _table(["IMAD.HI", "reading", "SM-clocks a compression", "as built", "rotations by IMAD.HI",
+                        "rotations by SHF", "adds to IMAD", "a SM-clock", "ours over it"],
+                       [["yes" if c.hi else "no", c.reading, f"{c.clocks:.2f}", f"{c.built:.2f}", f"{c.hi_rotates:.0f}",
+                         f"{c.shf_rotates:.0f}", f"{c.adds:.0f}", f"{c.rate:.6f}", f"{ours / c.rate:.3f}"]
+                        for c in cs]),
                 f"Mix: {t.sha_mix['source']}. ALU and IMAD on it: {t.sha_mix['overlap']}."]
     return "\n\n".join(out)
 

@@ -150,12 +150,13 @@ def _sha(t: T.Theta) -> None:
     if t.sha_mix is None:
         return
     m = t.sha_mix
-    print(f"  the card's ceiling for the mix ({m['alu']} ALU instructions, {m['rotates']} rotations and {m['adds']} "
-          f"2-input adds IMAD can take; {m['source']}): an LP over ALU, IMAD and issue")
-    for shared in (False, True):
+    print(f"  the card's ceiling for the built kernel ({m['alu']} ALU, {m.get('imad', 0)} IMAD, {m.get('other', 0)} other "
+          f"instructions; {m['rotates']} rotations and {m['adds']} adds ({m['add_form']}) IMAD can take; "
+          f"{m['source']}): an LP over ALU, IMAD and issue")
+    for hi in (True, False):
         for reading in T.READINGS:
-            c = T.sha_ceiling(t, reading, shared)
-            print(f"    {'one pool' if shared else 'apart':8} {reading:8} {c.clocks:.2f} SM-clocks (ALU alone "
-                  f"{c.alu_only:.2f}; {c.rotates:.0f} rotations, {c.adds:.0f} adds to IMAD) = {c.rate:.6f}; ours over it "
-                  f"{r.measured / c.rate:.3f}")
+            c = T.sha_ceiling(t, reading, hi)
+            print(f"    {'IMAD.HI' if hi else 'no IMAD.HI':10} {reading:8} {c.clocks:.2f} SM-clocks (built "
+                  f"{c.built:.2f}; rotations {c.hi_rotates:.0f} by IMAD.HI, {c.shf_rotates:.0f} by SHF, {c.adds:.0f} adds "
+                  f"to IMAD) = {c.rate:.6f}; ours over it {r.measured / c.rate:.3f}")
     print(f"    ALU and IMAD on this mix: {m['overlap']}")

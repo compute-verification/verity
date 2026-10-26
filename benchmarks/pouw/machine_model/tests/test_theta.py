@@ -115,14 +115,19 @@ def test_the_seed_the_clock_split_and_strassen_at_the_no_fold_l():
 
 
 def test_sha512_ceiling_on_the_card_pipes():
-    h = T.sha_ceiling(T.theta(SM90), "sheet")
-    rotations = (3536 - 2 * 88 - 3 * 88) / 7   # ALU (3536 − 2r − 176)/64 against IMAD (5r + 264)/64
-    assert h.alu_only == pytest.approx(3536 / 64) and h.adds == pytest.approx(88)
-    assert h.rotates == pytest.approx(rotations) and h.clocks == pytest.approx(5 * rotations / 64 + 264 / 64)
+    t = T.theta(SM90)
+    h = T.sha_ceiling(t, "sheet")
+    rotations = (3400 - 4 * 152) / 7   # ALU (3400 − 152 − 2r)/64 against IMAD (152 + 2 · 152 + 5r)/64
+    assert h.built == pytest.approx(3400 / 64) == pytest.approx(1 / t.rates["sha512"].sheet, rel=1e-4)
+    assert h.adds == pytest.approx(152) and h.shf_rotates == pytest.approx(0)
+    assert h.hi_rotates == pytest.approx(rotations) and h.clocks == pytest.approx((456 + 5 * rotations) / 64)
+    assert T.sha_ceiling(t, "sheet", hi=False).clocks == pytest.approx((3400 - 152 - 698) / 64)   # RT-UNITS' 39.84
     r = T.theta(SM120)
-    apart, pool = T.sha_ceiling(r, "sheet"), T.sha_ceiling(r, "sheet", shared=True)
-    assert apart.clocks == pytest.approx(5 * 3415 / 7 / 64) and pool.rotates == 0
-    assert pool.rate == pytest.approx(r.rates["sha512"].sheet, abs=1e-6)
+    with_hi, without = T.sha_ceiling(r, "sheet"), T.sha_ceiling(r, "sheet", hi=False)
+    assert with_hi.clocks == pytest.approx(5 * 3415 / 7 / 64) and without.hi_rotates == 0
+    assert without.shf_rotates + without.adds == pytest.approx(3415 / 4)   # each ALU −1, IMAD +3
+    assert without.clocks == pytest.approx(3 * 3415 / 4 / 64)
+    assert 1 / T.sha_ceiling(r, "measured", hi=False).clocks * 188 * 2.092e9 == pytest.approx(9.82e9, rel=1e-3)
 
 
 def test_the_rules_refuse_a_missing_unit_or_an_unbounded_one(tmp_path):
@@ -161,7 +166,7 @@ def test_the_command_and_the_render(capsys):
     assert "c_sha ≤ 0.885" in out
     assert "    mma.sync m16n8k32 s8: 128.0 / 84.0\n" in out and "    mma.sync m16n8k4 tf32: 256.0 / 256.0*\n" in out
     assert "ρ₈ / (issue · 128 words) = 8.00 / 8.00" in out and "least adding d 18.29 → 16.90" in out
-    assert "apart    sheet    38.68 SM-clocks" in out and "L = 8192: sheet 0.02232" in out
+    assert "IMAD.HI    sheet    38.29 SM-clocks" in out and "L = 8192: sheet 0.02232" in out
     assert main(["theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
     assert main(["render", "theta"]) == 0

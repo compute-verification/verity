@@ -31,9 +31,10 @@ value, and the sheet's where no run has one, which the result lists as filled).
   open (with the run that would settle it), none, a clock or bandwidth scale, or absent.
 - `sha`: SHA-512, our measured compressions a SM-clock against each public implementation's figure (`[[public]]`) read
   at its card's highest clock, the lowest per-clock reading it can have; ours over it, at most 1, is c_sha's reading.
-  `sha_ceiling`: the most a compression of `[sha512_mix]` gets from the card's pipes, an LP over ALU, IMAD and issue
-  with rotations and 2-input adds movable to IMAD, the ALU and IMAD apart or as one pool: the rate a `ShaSpeed`
-  premise is stated at, since no instruction schedule of that mix beats it.
+  `sha_ceiling`: the most a compression of `[sha512_mix]` (the built kernel's SASS) gets from the card's pipes, an LP
+  over ALU, IMAD and issue with RT-UNITS' three exact moves to IMAD (a rotation as IMAD.HI + IMAD + IMAD.WIDE, or as
+  SHF + IMAD + IMAD.WIDE; a 2-input 64-bit add as IMAD.WIDE + IMAD), with and without IMAD.HI: the rate a `ShaSpeed`
+  premise is stated at, since no schedule built from those moves beats it.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.
 """
@@ -67,6 +68,8 @@ ADDING = ("IADD3, two deliveries a lane instruction", "IADD3, one delivery a lan
           "IADD3 and IMAD under issue, with TMA bulk reductions beside them")
 REDUCTIONS = {"smem.atom": ADDING[5], "l2.red": ADDING[6], "dsmem.red": ADDING[7], "tma.red": ADDING[8],
               "nvls.red": ADDING[9]}
+# A 2-input 64-bit add as the kernel was built: its ALU instructions, IMAD instructions and instructions.
+ADD_FORMS = {"IADD3 + IADD3.X": (2, 0, 2), "IADD3 + IMAD.X": (1, 1, 2), "IADD.64": (1, 0, 1)}
 # Every arithmetic or reduction unit RT-UNITS (CMP-139) lists; each θ has a `[[unit]]` for each, with its verdict.
 UNITS = ("tensor", "dp4a", "imad", "alu", "fp32", "fp64", "sfu", "uniform", "texture", "smem.atomics", "l2.atomics",
          "tma.reduce", "dsmem", "nvlink.reduce", "copy", "video", "rt", "clocks", "compression", "host.link", "host.cpu")
@@ -274,10 +277,18 @@ def check(t: Theta) -> list[str]:
     if t.sha_mix is not None:
         if "sha512" not in t.rates:
             out.append("[sha512_mix] needs the `sha512` rate its ceiling is read against")
-        if missing := [k for k in ("alu", "rotates", "adds", "overlap", "source") if k not in t.sha_mix]:
+        m = t.sha_mix
+        if missing := [k for k in ("alu", "rotates", "adds", "add_form", "overlap", "source") if k not in m]:
             out.append(f"[sha512_mix] lacks {', '.join(missing)}")
-        elif 2 * (t.sha_mix["rotates"] + t.sha_mix["adds"]) > t.sha_mix["alu"]:
-            out.append("[sha512_mix]: the movable rotates and adds take two ALU instructions each, more than `alu`")
+        elif m["add_form"] not in ADD_FORMS:
+            out.append(f"[sha512_mix] add_form {m['add_form']!r} is none of {', '.join(ADD_FORMS)}")
+        else:
+            a, i, _ = ADD_FORMS[m["add_form"]]
+            if 2 * m["rotates"] + a * m["adds"] > m["alu"]:
+                out.append(f"[sha512_mix]: the movable rotates (two SHF each) and adds ({m['add_form']}) take more "
+                           f"than `alu`")
+            if i * m["adds"] > m.get("imad", 0):
+                out.append(f"[sha512_mix]: {m['adds']} adds as {m['add_form']} need that many IMAD in `imad`")
     return out
 
 
@@ -553,35 +564,37 @@ def sha(t: Theta) -> list[ShaReading]:
 @dataclass(frozen=True)
 class ShaCeiling:
     reading: str
-    alu_only: float         # SM-clocks a compression with every instruction on the ALU pipe
+    built: float            # SM-clocks a compression as the kernel was built (no move)
     clocks: float           # the LP's SM-clocks a compression
-    rotates: float          # rotations moved to IMAD at the optimum
-    adds: float             # 2-input 64-bit adds moved
-    shared: bool            # ALU and IMAD read as one pool
+    hi_rotates: float       # rotations moved as IMAD.HI + IMAD + IMAD.WIDE at the optimum
+    shf_rotates: float      # rotations moved as SHF + IMAD + IMAD.WIDE
+    adds: float             # 2-input 64-bit adds moved to IMAD.WIDE + IMAD
+    hi: bool                # IMAD.HI allowed
 
     @property
     def rate(self) -> float:
         return 1 / self.clocks
 
 
-def sha_ceiling(t: Theta, reading: str, shared: bool = False) -> ShaCeiling | None:
+def sha_ceiling(t: Theta, reading: str, hi: bool = True) -> ShaCeiling | None:
     """The fewest SM-clocks a compression of `[sha512_mix]` takes on the card's pipes: an LP over ALU, IMAD and issue in
-    which a rotation (two SHF) may go to IMAD as IMAD.HI + IMAD + IMAD.WIDE (disjoint parts, so no carry) and a 2-input
-    64-bit add (two IADD3) as IMAD.WIDE + IMAD. `shared` reads ALU and IMAD as one pool, as commit_gpu measured on sm_120
-    (U8). None without a mix."""
+    which a rotation or shift (two SHF) may go to IMAD as IMAD.HI + IMAD + IMAD.WIDE (ALU −2, one more instruction) or
+    SHF + IMAD + IMAD.WIDE (ALU −1, one more), each a sum of disjoint bit ranges, so no carry, and a 2-input 64-bit add
+    (built as `add_form`) as IMAD.WIDE + IMAD. Without `hi` no rotation uses IMAD.HI. None without a mix."""
     m = t.sha_mix
     if m is None:
         return None
-    a, i, hi, w = (t.at(k, reading)[0] for k in ("alu.lop3", "imad", "imad.hi", "imad.wide"))
+    a, i, h, w = (t.at(k, reading)[0] for k in ("alu.lop3", "imad", "imad.hi", "imad.wide"))
     lanes = LANES * t.at("issue", reading)[0]
-    rot, add = 1 / hi + 1 / i + 1 / w, 1 / w + 1 / i     # IMAD SM-clocks a moved rotation, a moved add
-    if shared:                                            # rows over (rotations, adds, T)
-        rows, rhs = [[rot - 2 / a, add - 2 / a, -1]], [-m["alu"] / a]
-    else:
-        rows, rhs = [[-2 / a, -2 / a, -1], [rot, add, -1]], [-m["alu"] / a, 0]
-    rows.append([1 / lanes, 0, -1])
-    rhs.append(-(m["alu"] + m.get("other", 0)) / lanes)
-    s = linprog([0, 0, 1], A_ub=rows, b_ub=rhs, bounds=[(0, m["rotates"]), (0, m["adds"]), (0, None)], method="highs")
+    alu, imad, n = m["alu"], m.get("imad", 0), m["alu"] + m.get("imad", 0) + m.get("other", 0)
+    add_alu, add_imad, add_n = ADD_FORMS[m["add_form"]]
+    rows = [[-2 / a, -1 / a, -add_alu / a, -1],                                   # over (R-hi, R-shf, adds, T)
+            [1 / h + 1 / i + 1 / w, 1 / i + 1 / w, 1 / w + 1 / i - add_imad / i, -1],
+            [1 / lanes, 1 / lanes, (2 - add_n) / lanes, -1],
+            [1, 1, 0, 0]]
+    rhs = [-alu / a, -imad / i, -n / lanes, m["rotates"]]
+    bounds = [(0, m["rotates"] if hi else 0), (0, m["rotates"]), (0, m["adds"]), (0, None)]
+    s = linprog([0, 0, 0, 1], A_ub=rows, b_ub=rhs, bounds=bounds, method="highs")
     if s.status != 0:
         raise SystemExit(f"SHA-512's LP ({reading}): {s.message}")
-    return ShaCeiling(reading, m["alu"] / a, s.x[2], s.x[0], s.x[1], shared)
+    return ShaCeiling(reading, max(alu / a, imad / i, n / lanes), s.x[3], s.x[0], s.x[1], s.x[2], hi)
