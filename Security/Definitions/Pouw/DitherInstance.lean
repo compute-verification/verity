@@ -232,6 +232,11 @@ instance instFintypeHostRes : Fintype HostRes where
   elems := {.amx, .sha}
   complete r := by cases r <;> simp
 
+/-- **A card's share of its node's hosts**, in units a second (CALIB, #4513 at `188907341d`, θ's `host.cpu` rows). -/
+structure HostRow where
+  amx : ℝ
+  sha : ℝ
+
 /-- A row's hosts for `n` cards as other devices: AMX and SHA-512 at `n` times the row's rates, and `mem` bits. -/
 noncomputable def HostRow.others (h : HostRow) (n : ℕ) (mem : ℝ) : Others where
   Res := HostRes
@@ -239,11 +244,6 @@ noncomputable def HostRow.others (h : HostRow) (n : ℕ) (mem : ℝ) : Others wh
     | .amx => n * h.amx
     | .sha => n * h.sha
   mem := mem
-
-/-- **A card's share of its node's hosts**, in units a second (CALIB, #4513 at `188907341d`, θ's `host.cpu` rows). -/
-structure HostRow where
-  amx : ℝ
-  sha : ℝ
 
 /-- **The period's devices count the cards' hosts** (RT-UNITS U9, the coordinator's 06:18Z decision): the other
 devices have an AMX and a SHA-512 resource for the `n` cards' hosts, at least `n` times the row's rates. So the honest
