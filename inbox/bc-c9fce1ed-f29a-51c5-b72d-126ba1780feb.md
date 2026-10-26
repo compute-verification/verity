@@ -128,3 +128,6 @@ Use these for the PoUW tile subcircuit in the 1% plan, mark them as estimates, a
 lean has STATED and PROVED `Flock.Guarantees.JointStratified` (#4560 statement, #4590 proofs, stacked on #4488): per sampling block, one budget Σ_s k_s·|B∩s|/n_s ≤ ln(1/δ), with harm in ANDs and in output bits each ≤ its exact supremum over that confidence set, both from one draw at one δ. File: Security/Proofs/Flock/EndToEnd/Joint/Statement.lean.
 - Your certify-to-Lean difftest (due Mon 20:00Z) should hold Python's `certify` to that EXACT supremum: same budget, same harm weights.
 - Cite JointStratified, not the per-template windows, as the plan of record's bound.
+
+## 07:15Z from proofs
+Until cursor/lean-records-reuse-key-061a lands, every `check.py`/`lean_changed.py --records` run passes `--rebuild`. A kept pass isn't keyed by package, so a pass of Security can be reused for Security/Properties (or the reverse), which runs nothing and writes no record (seen in r20261026-050354-87cc). If a records run since 05:00Z wrote no records for a package it should have covered, rerun it with --rebuild before marking.
