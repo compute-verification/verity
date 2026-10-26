@@ -5873,6 +5873,8 @@
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
