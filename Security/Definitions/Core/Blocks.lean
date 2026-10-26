@@ -30,11 +30,11 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
   state block `b` starts from; the spot reads are public. What the prover kept off the device (the egress, NVMe, the
   network) can come back after the wipe over the side channels: `Accounting.Device.cap` limits that per tick, and no
   wipe bounds it.
-* **The wipe's survivor bound** (`Wipe.SurvivorBound foreignBits ε`), the pair an accepted verdict of the deployed wipe
-  publishes (`foreign_bits = ⌈fill/19⌉ + E` at `eps = 2^-128`): foreign content of at least `foreignBits` bits, plus the
-  state the fill leaves out (`Wipe.unfilled`: the on-chip state and the store the fill doesn't reach), is read back from
-  the device's state when the fill ends, the egress and the spot reads, with the challenger accepting, with probability
-  at most `ε`.
+* **The wipe's survivor bound** (`Wipe.SurvivorBound foreignBits ε`), at the pair the wipe's protocol publishes with an
+  accepted verdict: foreign content of at least `foreignBits` bits, plus the state the fill leaves out (`Wipe.unfilled`:
+  the on-chip state and the store the fill doesn't reach), is read back from the device's state when the fill ends, the
+  egress and the spot reads, with the challenger accepting, with probability at most `ε`. `ε` may depend on the
+  adversary's moves, so it can carry the labels' PRF advantage.
 
 **One GPU, one store** (Daniel's rulings of 25 Oct): the device is one GPU, and its one store is the GPU's HBM
 (`Accounting.Device.mem`, M). The model has no host store.
@@ -158,24 +158,29 @@ prover kept off the device (the egress among it) and sends back over a side chan
 def Separates {Y Z : Type} (next : Device.State d → Ω → Ch → Y → Z) : Prop :=
   ∃ g : s.State d b → Ch → Y → Z, ∀ σ ω c y, next σ ω c y = g (w.start σ ω c) c y
 
-/-- **The wipe's survivor bound** at `foreignBits` and `ε`, the pair an accepted verdict of the deployed wipe publishes
-(`foreign_bits = ⌈fill/19⌉ + E` at `eps = 2^-128`, `E` the egress), in the streamed-label wipe's game
-(`Pous.StreamedWipe`): for every `S_φ` of at least `foreignBits` bits plus the state the fill leaves out (`unfilled`:
-the on-chip state and the store the fill doesn't reach), every way `hold` that the device's state at the boundary holds
-foreign content `z` of `S_φ` bits, and every way `keep` of reading it back from the device's state when the fill ends,
-the egress and the spot reads, the probability over a uniform `z`, a uniform seed and uniform spot reads that the memory
-challenger accepts and `keep` gives back `z` is at most `ε`. The probability is the value of a draw with no prover move
+/-- **The wipe's survivor bound** at `foreignBits` and `ε`, in the streamed-label wipe's game (`Pous.StreamedWipe`):
+for every `S_φ` of at least `foreignBits` bits plus the state the fill leaves out (`unfilled`: the on-chip state and the
+store the fill doesn't reach), every way `hold` that the device's state at the boundary holds foreign content `z` of
+`S_φ` bits, and every way `keep` of reading it back from the device's state when the fill ends, the egress and the spot
+reads, the probability over a uniform `z`, a uniform seed and uniform spot reads that the memory challenger accepts and
+`keep` gives back `z` is at most `ε S_φ hold keep`. The probability is the value of a draw with no prover move
 (`Game.value` on `Game.draw`). At `foreignBits = f · fill + 2λ` the threshold is `Accounting.BlockWipe.Survives`'s.
 
 `z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
 block `b` starts from is a function of, besides the carried value, which, once bound to the committed transcript, is
 fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip bits may survive any wipe.
 
-The bound is a parameter. `Pous.Guarantees.SecureErasureMeetsFamily` is the proved family bound underneath it, and
-`Pous.Guarantees.StreamedWipe` the streamed game's proved bound. The bridge from an accepted verdict to this bound is
-memory-accounting's, in a package that sees both, and it has to account for the labels' PRF advantage, which the
-published `eps` leaves out. -/
-def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ) (ε : ℝ≥0∞) : Prop :=
+**The pair is the protocol's.** `foreignBits` and `ε` are what the wipe's protocol publishes with an accepted verdict
+(the streamed wipe's verdict publishes `foreign_bits = ⌈fill/19⌉ + E`, `E` the egress), not constants of this
+definition. `ε` is a function of the adversary's moves (`S_φ`, `hold`, `keep`), so it can cover the wipe's own error,
+the labels' PRF advantage against the distinguisher those moves make (the standard-model term, as
+`Pous.Guarantees.StreamedWipe` adds `Pous.StreamedWipe.prfAdvantage`), and `δ_net` once the network certifier's count of
+the egress enters (NET-78). A constant `ε` reads the labels as ideal. `Pous.Guarantees.SecureErasureMeetsFamily` is the
+proved family bound underneath, and `Pous.Guarantees.StreamedWipe` the streamed game's proved bound. The bridge from an
+accepted verdict to this bound is memory-accounting's, in a package that sees both. -/
+def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ)
+    (ε : (S_φ : ℕ) → ((Fin S_φ → Bool) → Device.State d) →
+      (Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool) → ℝ≥0∞) : Prop :=
   ∀ S_φ : ℕ, foreignBits + w.unfilled ≤ S_φ →
     ∀ (hold : (Fin S_φ → Bool) → Device.State d)
       (keep : Device.State d → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool),
@@ -183,7 +188,7 @@ def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreign
         (fun x : (Fin S_φ → Bool) × Ω × Ch =>
           w.accepts (hold x.1) x.2.1 x.2.2 ∧
             keep (w.filled (hold x.1) x.2.1).1 (w.filled (hold x.1) x.2.1).2 x.2.2 = x.1)
-        (Game.draw _) ≤ ε
+        (Game.draw _) ≤ ε S_φ hold keep
 
 end Wipe
 

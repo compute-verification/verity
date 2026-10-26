@@ -5,7 +5,7 @@ import Proofs.Core.Game.Basic
 # A wipe that meets the boundary's definitions
 
 `Wipe.blank` clears the device's whole state, sends nothing out and always accepts. It separates
-(`Wipe.blank_separates`), and meets the survivor bound at `2^-128` for every `foreignBits ≥ 128`
+(`Wipe.blank_separates`), and meets the survivor bound at the constant `2^-128` for every `foreignBits ≥ 128`
 (`Wipe.blank_survivorBound`), so `Wipe.Separates` and `Wipe.SurvivorBound` hold together on some wipe of every device.
 -/
 
@@ -31,9 +31,10 @@ theorem Wipe.blank_separates {Y : Type} :
   ⟨fun st _ _ => st, fun _ _ _ _ => rfl⟩
 
 theorem Wipe.blank_survivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {foreignBits : ℕ}
-    (h : 128 ≤ foreignBits) : (Wipe.blank d s b Ω Ch).SurvivorBound foreignBits (2⁻¹ ^ 128) := by
+    (h : 128 ≤ foreignBits) : (Wipe.blank d s b Ω Ch).SurvivorBound foreignBits fun _ _ _ => 2⁻¹ ^ 128 := by
   classical
   intro S hS hold keep
+  show _ ≤ (2⁻¹ : ℝ≥0∞) ^ 128
   have hS' : 128 ≤ S := by omega
   set P : (Fin S → Bool) × Ω × Ch → Prop := fun x =>
     (Wipe.blank d s b Ω Ch).accepts (hold x.1) x.2.1 x.2.2 ∧
