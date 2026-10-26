@@ -29,6 +29,12 @@ committed row longer than one SHA-512 block.
   output; written to `DIR/pouw` under a one-stage registration in PoUW's window form, at all-protocols' PoUW parameters.
   `verity_torch_loop/pouw_audit.py` audits it from its records (`records_audit.py`'s audit) and answers it with
   `core_check` and Lean's `pouw-check`. Its gaps are in `pouw.py`'s docstring.
+- `verity_torch_loop/percall.py` (CMP-126): per-call-noise PoUW over every static INT8 linear of a decode step (the H200
+  demo's shape or ALLP-H200's `small`), as J10-R's one-stream tile `PouwH1Tile_v6` (4 × 8, K split into chunk-calls of
+  K_unit ≤ 8192, the most C-Flock's range holds) over S rows of each linear. It plans the block (`plan`: units, W, K′ and
+  ε at δ = 1% and 1e-6), writes the window from a step's operands (`stand_in`, or `from_tables` on ALLP-H200's driver)
+  and audits it (`percall audit`, `pouw_audit`'s one-stage audit). `verity/pouw/v1` pins no v6 tile, so its verdict is a
+  reject until one is pinned; its gaps are in its docstring.
 - `tests/`: the loop's outputs are the Definition's, unit by unit; its H1 tiles carry its linears and core's PoUW check
   registers its PoUW window; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
