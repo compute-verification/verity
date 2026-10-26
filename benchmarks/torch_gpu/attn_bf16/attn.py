@@ -36,8 +36,9 @@ GROUP = {"s16": 16, "h16": 16, "h8": 8}
 #: the s16 kernels' most keys a query sees, and PV's largest K
 S16_KEYS = 32
 #: each op's launch: (tiling, warps a block, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
-#: serve; run.py's timing sweeps the alternatives
-LAUNCH = {"qk": ("s16", 4, 4), "pv": ("s16", 4, 4)}
+#: serve; run.py's timing sweeps the alternatives (r20261026-010803-0f9f on the H200 at the frozen shape: QK^T fastest with
+#: every group of a sequence in one warp, PV with 4 warps of 4 groups, at M = 4,096, 12,288 and 20,480 within 3%)
+LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 4, 4)}
 
 
 def serves(tiling: str, G: int, T: int, kpv: int) -> bool:
@@ -77,6 +78,23 @@ _DRIVER = {"cuGetErrorString": [C.c_int, C.POINTER(C.c_char_p)], "cuDeviceGet": 
            "cuModuleGetFunction": [C.POINTER(C.c_void_p), C.c_void_p, C.c_char_p],
            "cuLaunchKernel": [C.c_void_p, *[C.c_uint] * 7, C.c_void_p, C.POINTER(C.c_void_p), C.POINTER(C.c_void_p)]}
 _MODULES: dict[int, tuple] = {}
+_CONSTS: dict[tuple, tuple] = {}
+
+
+def _consts(dev, B: int, T: int) -> tuple:
+    """(lens of T each, nq of 1 each) for B sequences on ``dev``, made once outside a CUDA graph's capture (inside one, a
+    tensor first filled there would hold its words only once the graph replays)."""
+    import torch
+
+    key = (dev.index, B, T)
+    got = _CONSTS.get(key)
+    if got is None:
+        got = (torch.full((B,), T, dtype=torch.int32, device=dev), torch.ones((B,), dtype=torch.int32, device=dev))
+        if not torch.cuda.is_current_stream_capturing():
+            if len(_CONSTS) >= 256:
+                _CONSTS.clear()
+            _CONSTS[key] = got
+    return got
 
 
 def _lib():
@@ -185,9 +203,8 @@ def _launch(op: str, x, kv, out, lens, kpv: int, warps: int | None) -> None:
     if not (B and H and T):
         return
     dev = x.device
-    if lens is None:
-        lens = torch.full((B,), T, dtype=torch.int32, device=dev)
-    nq = torch.ones((B,), dtype=torch.int32, device=dev)
+    full, nq = _consts(dev, B, T)
+    lens = full if lens is None else lens
     tiling, w, per = LAUNCH[op]
     if not serves(tiling, G, T, kpv):
         tiling = next(t for t in ("h16", "h8", "q8") if serves(t, G, T, kpv))
