@@ -10,7 +10,7 @@ consequence of the run accepting:
 * the run's staging sets up (`stagedSetsUp_run`): an accepted run stages every part (`stagedPart_run`), so each part's
   statement staged at the run's inner and staging rounds passes the recursive setup;
 * the honest witness satisfies each part's tables there: the named premise `HonestWitSatisfies`, V\*'s gate-level
-  completeness at the run, witnessed outside Lean.
+  completeness at the run, witnessed outside Lean by the deployed V\* difftest.
 
 `vstar_complete_run_setup_at` is `vstar_complete_run_setup` at the run, from those two, with no inner-acceptance
 hypothesis: `InnerAccepts` was read only by the two builder facts.
@@ -38,7 +38,8 @@ witness the reference prover hands part `s`'s session (`RefParts.wit` at the run
 of `sts` (`TablesSat`: each fits the first table's blocks, and its share of the witness's hidden values satisfies its
 model statement). Not proved in Lean: it is the gate-level completeness of V\*'s part circuits, which compute the inner
 verifier's checks. It is witnessed outside Lean by a satisfaction check of the honest witness against each part's
-circuit in the deployed V\* difftest. -/
+circuit in the deployed V\* difftest (CAPLOWER's). Witness run: none passing yet; its run id or `art:` id goes here,
+and in the lock's witnesses entry, when it passes. -/
 def HonestWitSatisfies (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (x : Msg) (w : Claims.Flock.Wit)
     (ω : Tape b) (r : Fin ((V IV b.st).k x) → Coin) : Prop :=
   ∀ s < nS x, ∀ i spec sts,
