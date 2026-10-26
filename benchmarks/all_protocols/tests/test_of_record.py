@@ -145,6 +145,29 @@ def test_a_gate_needs_its_peer_key_record_and_main_line(tmp_path, capsys):
     assert "--pouw-gate needs --peer, --challenger-key and --main" in err
 
 
+def test_pouws_draw_goes_to_the_gate_the_salt_came_from(tmp_path, monkeypatch):
+    """The window's ``period.json`` carries ``--pouw-gate``'s gate, and PoUW's audit draws on it (records_audit's
+    ``--challenger``), not on the verifier's own coins."""
+    d = tmp_path / "w0"
+    d.mkdir()
+    gate = {"challenger": "gate:research@204.12.178.84", "peer": "vy-nebius-cpu-4", "challenger_key": "/k.json",
+            "main": "/main.txt", "gate_key": "/g"}
+    tools = {k: k for k in ("m0-pythonpath", "flock-circuit", "flock-verify", "flock-firewall")}
+    (d / "period.json").write_text(json.dumps({"tools": tools, "run_root": "ef" * 64, "prover_env": {},
+                                               "pouw": {"mode": "h1", "circuit": "cd" * 64, "gate": gate}}))
+    seen = []
+
+    def python(module, argv, log=None):
+        seen.append(list(argv))
+        log.with_suffix(".log").write_text("")
+        return type("P", (), {"returncode": 0})()
+
+    monkeypatch.setattr(RN, "_python", python)
+    RN.pouw_audit(d, tmp_path / "out")
+    [argv] = seen
+    assert {argv[argv.index(f"--{k.replace('_', '-')}") + 1] for k in gate} == set(gate.values())
+
+
 def test_a_run_of_record_refuses_windows_audited_at_once(tmp_path, capsys):
     assert "one firewalled session at a time on the run" in refused(tmp_path, capsys, "--jobs", "2")
 

@@ -238,7 +238,11 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
         "tools": a.tools,
         "pouw": {"mode": a.pouw, "circuit": registered.get("pouw"),
                  **({"verifier": {"challenger_key": json.loads(Path(a.challenger_key).read_text()),
-                                  "main": str(Path(a.main).resolve())}} if getattr(a, "pouw_gate", None) else {})}
+                                  "main": str(Path(a.main).resolve())},
+                     "gate": {"challenger": f"gate:{a.pouw_gate}", "peer": a.peer,
+                              "challenger_key": str(Path(a.challenger_key).resolve()), "main": str(Path(a.main).resolve()),
+                              **({"gate_key": a.gate_key} if a.gate_key else {})}}
+                    if getattr(a, "pouw_gate", None) else {})}
         if a.pouw else None,
         "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
         "mode": getattr(a, "mode", None),
@@ -254,14 +258,17 @@ def loop_window(index: int, run: str, a: argparse.Namespace, scratch: Path, out:
 def pouw_audit(period_dir: Path, out: Path) -> dict[str, Any]:
     """PoUW's audit of the window's H1 window (``verity_torch_loop.pouw_audit``, ALLP-H1LOOP's), before the legs: it writes
     ``<window>/pouw/answer.json``, which PoUW's leg reads; its proving tree stays in scratch, and only its ``pouw.json`` and
-    log are kept in ``out``. -> its rc and ``POUW`` line."""
+    log are kept in ``out``. Under ``--pouw-gate`` its draw is on that gate's coins (``period.json``'s ``pouw.gate``).
+    -> its rc and ``POUW`` line."""
     p = json.loads((period_dir / PERIOD).read_text())
     t = p["tools"]
     out.mkdir(parents=True, exist_ok=True)
     argv = ["--window", str(period_dir / "pouw"), "--circuit", p["pouw"]["circuit"], "--run", p["run_root"],
             "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
             "--firewall", t["flock-firewall"], "--out", str(period_dir.parent / f"{period_dir.name}-pouw"),
-            *(["--forged"] if p.get("prover_env") else [])]
+            *(["--forged"] if p.get("prover_env") else []),
+            *(x for k, v in sorted(((p.get("pouw") or {}).get("gate") or {}).items())
+              for x in (f"--{k.replace('_', '-')}", v))]
     r = _python("verity_torch_loop.pouw_audit", argv, out / "pouw-audit")
     kept = period_dir.parent / f"{period_dir.name}-pouw" / "pouw.json"
     if kept.exists():
