@@ -184,3 +184,8 @@ The dated text is note:lean/20261020T1000Z-report-lean-proofs-rulings-archive.
 - A changed guarantee needs no reviewer and no approval: the landing DM is the check. A guarantee that only moved
   (`--moved`) isn't listed in it.
 - Probability and games are our own minimal definitions over Mathlib's `PMF`; soundness bridges to VCVio where needed.
+- What a physical region can read is not a separate premise. It follows from annotating the actual circuit's regions and
+  assuming causality in time and space: `width_into_region_le` (a location reads in a window at most its state at the
+  window's start plus what crossed its boundary), `Links` and `Covered` in `Security/Definitions/Accounting/Physical.lean`.
+  A bound per server and time window is stated on `Accounting.Placed` with `WindowsAt`, as `ThreadedRuntime` and
+  `DampenerWindowsCap` are, with no channel-completeness premise (ASK-141).
