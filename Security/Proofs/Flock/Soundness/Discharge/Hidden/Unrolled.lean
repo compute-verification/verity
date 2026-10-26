@@ -222,19 +222,19 @@ theorem outCol_tmpl {tags : Tags} {cf : ByteArray} {tables : List (String × Byt
   rw [hd, hin _ hi]
 
 /-- **Δ's committed key with a unit output column moved by `f`**: every other key is the same. -/
-def _root_.FlockSoundness.Discharge.Aliased.Src.atUnit (u : ℕ) (f : ℕ → ℕ) : Src → Src
+def _root_.FlockSoundness.Discharge.Aliased.Src.atUnit (u : ℕ) (f : ℕ → ℕ) : Aliased.Src → Aliased.Src
   | .wire m i col => .wire m i (if m = u then f col else col)
   | s => s
 
-theorem atUnit_id (u : ℕ) (s : Src) : s.atUnit u id = s := by
-  cases s <;> simp [Src.atUnit]
+theorem atUnit_id (u : ℕ) (s : Aliased.Src) : s.atUnit u id = s := by
+  cases s <;> simp [Aliased.Src.atUnit]
 
-theorem atUnit_zero {u : ℕ} {f : ℕ → ℕ} {s : Src} : s.atUnit u f = .zero ↔ s = .zero := by
-  cases s <;> simp [Src.atUnit]
+theorem atUnit_zero {u : ℕ} {f : ℕ → ℕ} {s : Aliased.Src} : s.atUnit u f = .zero ↔ s = .zero := by
+  cases s <;> simp [Aliased.Src.atUnit]
 
-theorem atUnit_msg {u : ℕ} {f : ℕ → ℕ} {s : Src} {q byte bit : ℕ} :
+theorem atUnit_msg {u : ℕ} {f : ℕ → ℕ} {s : Aliased.Src} {q byte bit : ℕ} :
     s.atUnit u f = .msg q byte bit ↔ s = .msg q byte bit := by
-  cases s <;> simp [Src.atUnit]
+  cases s <;> simp [Aliased.Src.atUnit]
 
 theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
     (hsz : cs.unitNet < cs.nets.size) (hg : n.inGroups = cs.unit.inGroups)
@@ -270,9 +270,9 @@ theorem srcAt_unrolled {cs : Circuit} {n : Net} {pos : Array ℕ} {k p t : ℕ}
           rw [hw]; exact List.mem_cons_self ..
         obtain ⟨hmem, hd⟩ := List.mem_filter.1 hm
         obtain ⟨hj, htw⟩ := hwire w hmem (of_decide_eq_true hd)
-        simp only [hw, Src.atUnit, getD_set_unit _ _ _ _ hsz]
+        simp only [hw, Aliased.Src.atUnit, getD_set_unit _ _ _ _ hsz]
         by_cases hu : w.src.1 = cs.unitNet
-        · simp only [hu, ↓reduceIte, Src.wire.injEq, true_and]
+        · simp only [hu, ↓reduceIte, Aliased.Src.wire.injEq, true_and]
           have eu : (cs.nets.getD cs.unitNet default).2 = cs.unit := rfl
           rw [hu, eu] at hj htw
           show ((portCols cs.unit.outGroups).getD w.src.2.2 default).1 + t = _
