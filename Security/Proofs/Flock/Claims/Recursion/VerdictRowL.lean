@@ -182,7 +182,7 @@ theorem rowL_fc (hG : D.RowG cls acc i) (hk : 2 * i + r < D.d.f.ps.size)
 
 theorem getElem!_map_getD (l : List (List ByteArray)) (j : ℕ) :
     (l.map (·.foldl (· ++ ·) ByteArray.empty))[j]! = (l.getD j []).foldl (· ++ ·) ByteArray.empty := by
-  rw [getElem!_def, List.getElem?_map, List.getD_eq_getElem?_getD]
+  rw [List.getElem!_eq_getElem?_getD, List.getElem?_map, List.getD_eq_getElem?_getD]
   cases l[j]? <;> rfl
 
 /-- **Row L's `cap`**: the proof's cap, joined, is the session's `root_B` of table `i`, where the session's `root_B`
