@@ -36,7 +36,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
-    - `kernels` (with `hash_gpu/`): fast code, each kernel checked against its Definition.
+    - `kernels`: fast code, each kernel checked against its Definition.
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
