@@ -189,6 +189,14 @@
    "digest": "c544c23ea38c13d6556539c583cc11377c475b9188ff6cfb170dc5b5cd662edcd90cdac6980d25053caa6403e520d3fdb8e3043639a186093bd08b2a15ac5996",
    "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
   },
+  "TemplateInstances_v0|N=3|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
+   "digest": "37bdf2956f4b4f100feb41b897190e9992952cf0b00a69eb47fcc787df9205bf192608c047308910ad2183b24ad728fc4600e5130f70569963d23b60287f1d9c",
+   "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
+  },
+  "TemplateInstances_v0|N=3|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
+   "digest": "af5466f60352bcea06c379ba389a1d2de8e95b03c33e2a048755b84c940dd7a4c8e1217748bb6f2c9f0ca58e2b78c6866cfbd96918bc7fb6fd15a0ce2296e6db",
+   "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
+  },
   "TemplateInstances_v0|N=3|S32ByteCarry_v2": {
    "digest": "2e856741cdbc5ca0ca7ebd33b150e7bc94a85dabd071f6c5de1d560e6c8890d088ef543436274383bafd3578f26373a3a0703a38b48dfb578c15dcf5b3d1972e",
    "id_sha512": "4366093a44f4aad45a4d3b82b9cd90ada4f9768cea5eb380088b22749c9e2e9eac9d1a467c3a21bed5bc68aab6bd9dee527c5976ffc78e4ccc482ae386e588ef"
@@ -440,6 +448,14 @@
   "TemplateInstances_v1|N=1|PlanShard_v1{S=32,GAPS=2}": {
    "digest": "4bc43b6f24ac472fa6a246fe4f7248f1556883e7df8253bd4ebe08c590f4565d952bf3bbfda2abdffbf30999628a5ee3309787cba9dc73bc999c5807e7f900da",
    "id_sha512": "6594ecb6b1d9e3e60cdb18bf5033e4a64e30ada3608b8e4f6f58fdad29a7cba80502c840bace59f72274048caa1e1a18770d87b9ca637e05b2f2505abf94f2f7"
+  },
+  "TemplateInstances_v1|N=1|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
+   "digest": "e533968510a3d38ba55b232de03056898caea22e458a10aa6057cd81b9a2cf948d6d3ad9c5ab8595d270a59857e7046f30d6f2fec8b13d9e8780696f7ce66e31",
+   "id_sha512": "a30946ede0ecd107d238ed4fca4a25fa9b15f0feba21b8b157c1b70815ff1136f152d4fcad8575e800499607a96a4782704784baaecf54099c9924ea48c1b324"
+  },
+  "TemplateInstances_v1|N=1|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
+   "digest": "64923519faa4e5883edfecfbb77580025b92b65d63987ace05c92de19eef8df5ab6cecd820fc56ca95475b42ce4079939b1611f1a22b00c9649efce8ad7f0f1b",
+   "id_sha512": "e65f0e7e678d1f3b88a8cde794817c8c94461b4ac884ff130894bc85dc16bc9cc2bfc5ce984eaac7b9d71e322798ba8a6f54a19de63dd41b82c0c2aedd285d13"
   },
   "TemplateInstances_v1|N=1|S32ByteCarry_v2": {
    "digest": "996beb3957f52433a3a9bd729a64d487edd0f7d809a69fb6243d0c277ed6832ba771d81f96bbcbb96c1d68e27c76f26b02eca409e143dfe8d9e9107de8c523ba",
@@ -693,6 +709,14 @@
    "digest": "159f65892d8ed1f8724d755749102f1e305405d302f7d2f531838982c24a77b242dc9ef6e2d79ea6920629a281b9e1e6baedcf325ee63610254ee342805360d7",
    "id_sha512": "0fa000c45958172b0ec23d267b4ec94d3dd6c84f6e6bc1d734ca5173a09fe9d73d6fc3b21d035cf4fb58bf8fd14b9aee61cb36f4744fb9daf95945cfb333003a"
   },
+  "TemplateInstances_v1|N=3|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
+   "digest": "6dcf36cd350dc2af59870db70abd5cf3752e1668b2d888523c34519feb3f480b1c91ce230474f7c97f9d9a3dbbde569bbb4913b0b01c95ae32c5853de1ad0712",
+   "id_sha512": "91d3f100924cff1c9844ca2e21034ab94976d2a1c69763ab0e9f1b8353714711c56ef48ec62b1e917a9b79fbd0bac794c30f71b787bf915b60413e9569a6fd1b"
+  },
+  "TemplateInstances_v1|N=3|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
+   "digest": "ef61fe602e92c7d27fdca73f67975fbcbb9944b09cfb3a80e532d26a4bf32ce758518e79d961174714497f26369489cb2a33e983e911cbbb73e104555353e2e5",
+   "id_sha512": "d43408fe72db1cb3676e1c4806b3deea9b593afda23ac7e745e055aaeb8128102bf2732fe149630374e8ff0913e81f61568847cb22e4bd4a7f17c72eec22ecb3"
+  },
   "TemplateInstances_v1|N=3|S32ByteCarry_v2": {
    "digest": "6908c9950e94cb847ad3bfaeeea6c182991f60a32446c123691a458463a6742973696852c4753b1dc1c73eb15619d2097c5f5f1a82a15ebb5e227d3f8d374478",
    "id_sha512": "21f635689c553363e46db4b07e6f54b95ee952fe2936e464b4d18088041dd36f34636647af319eec53a53cddb5a6f6d622fbdec902bbe62fb1eec06812274713"
@@ -773,10 +797,6 @@
    "digest": "ce48ba17488803e6cb584a37a97d7843d7dce26f61abefb37c1c49be609562596ef9427bd924b936ed05a5123918d2195ba939adb6232fa03edcdb0ba8c4478b",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
-  "TemplatePopulations_v0|1,2|DotBf16_v3{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|Gemm_v3{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}": {
-   "digest": "7e49fb01dc8f3fb6076105040ec735f6a411a03ff78683f58dcbecaf52b9ae3c2fa3231a4a7e4d45d267ec93e4eeb80bfbfd8f06865508d86cdbd751cadda4b8",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
   "TemplatePopulations_v0|1,2|GemmAccumulatorS8_v1{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|ScaledMmS8Coordinate_v1{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
    "digest": "9339389bb68a35ab4f64446080ef9021337b71fae05bb1b1fd627feddf8d7f924f4cbebc5fca098963c03ce8c0a0f0fd1ea9ff65a1a0574de2802f64e7d1e8d6",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
@@ -819,10 +839,6 @@
   },
   "TemplatePopulations_v0|1,2|GemmCoordinate_v2{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}|GemmCoordinate_v2{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
    "digest": "4b724c3b947cdeeca0ff0f7e2996616c2b78c8a5fba493eaf37c42b62441456d481f0b9c50ffee8e6bb5076493ccd4b183a6d710283ef8212349fa205e66479f",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
-  "TemplatePopulations_v0|1,2|GemmCoordinate_v2{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|Gemm_v2{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": {
-   "digest": "5862a924a6c2098625f265af418bd19b6f3b6be63199ac60c7b2f12fc8e329b1ac4d51204bed64163dd7e2e5a91c654c1e606e71992a465ac3cbaef940188efe",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
   "TemplatePopulations_v0|1,2|GemmCoordinate_v3{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}|GemmCoordinate_v3{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
@@ -905,14 +921,6 @@
    "digest": "96505282bbd9156db56e1ae89777583abbe422ffa379cf4a1f74587e7929089d6e28bce61168f4f2212e70ee7092d7ef3e8800984fc68dea7b0d24c6dd924e55",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
-  "TemplatePopulations_v0|1,2|MoePairGemmW_v1{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|S8Dot_v1{K=64,L=64,T0=\"zero\",C=null,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"},A=[-127,127],B=[-127,127],TAIL=[],TDOT=null,NOISE=\"none\",LIMBS=\"none\",COMMIT=\"final\"}": {
-   "digest": "ba0cae321afc4d229bc49f4859cfe58a2c87cbb6d58a8b4b276aaa452971b6edc72424f5ef0bf13e88866cd8c618c7ff91c39a2cc8aa87e0968cf248403db261",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
-  "TemplatePopulations_v0|1,2|MoePairGemmW_v2{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|BlackwellU8S8ImmaDot32_v2": {
-   "digest": "7a4982412885d3573a60fdee9086b34b1ddadb241e241408c0e67420232c193929d5987e468ecda51e70a0fe58ebbba07cb20984e17387544700721ed1a44c43",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
   "TemplatePopulations_v0|1,2|MoePairGemm_v1{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|MoePairGemmW_v1{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
    "digest": "5379a2d04a6a89e440c86b711f21363857357c97dd88659b774b54b955c02387f44c7a90a0da3559dd70001f8700406616ee7b5da95cab62559fb3009a10298b",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
@@ -941,12 +949,24 @@
    "digest": "393c5cf8c58358c4cd7c88be906fd30d7bd2d67f4bebcde43cfecb9592b3dd15c384cad418fe82dd1d7d3a93330224988520e0ffb8ca3e1383160062388381f8",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
-  "TemplatePopulations_v0|1,2|S32ByteCarry_v2|S32ClampS8_v2": {
-   "digest": "707de2312cf473f67ecc7c6aeb3c08df44efc9d617a529e0bfd04be29f4499fc7d4e2742e5d6ce67f82e73ec8d324f77b819fefb07c4ef92b6de83392a684c42",
+  "TemplatePopulations_v0|1,2|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|Gemm_v2{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": {
+   "digest": "990b0a7026d2ef10d5f69d53c8eb8d8692058ad5913a9460c9291d80452f2645dff0416d939830e65daee1c75ab1dc51fd5f8cdf81cec70cf23c0772dab882d0",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
-  "TemplatePopulations_v0|1,2|S32ClampRest_v2|DotBf16_v2{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": {
-   "digest": "3a770cfc10256a5c48e723a37f0c4794b7b17d6c30969112c4515a2b053dfe93a635f39c767d524c5a96fac4f30fcc6c9a972c5e231a7c1dd73eb002daf9054a",
+  "TemplatePopulations_v0|1,2|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|Gemm_v3{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}": {
+   "digest": "5b9c19f50b43c795c7851112b3565691582950d9e43535dd7e09a8c9b4d10b055516b35b959aa7b368b0f0d30c7bc5f10ffff132ab66e1618e6e7b6bb8c82a05",
+   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
+  },
+  "TemplatePopulations_v0|1,2|PvRow_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
+   "digest": "dd9f1c5fcd1d969435090ce208cfc2de36ebe28198117e56589a4c45782db7daf6156109c037c1f39d97403196914fb8bdc322c5a9e3d4d02dd6a4dc7e97c4ee",
+   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
+  },
+  "TemplatePopulations_v0|1,2|PvRow_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
+   "digest": "9de32be29e596a56b719a4c413b498e53f97a654bff59155ea4bc0a105957763461f9b7cd749cfc95c6f5ce245c618cce094f2484133f902a10b6c9407f555e5",
+   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
+  },
+  "TemplatePopulations_v0|1,2|S32ByteCarry_v2|S32ClampS8_v2": {
+   "digest": "707de2312cf473f67ecc7c6aeb3c08df44efc9d617a529e0bfd04be29f4499fc7d4e2742e5d6ce67f82e73ec8d324f77b819fefb07c4ef92b6de83392a684c42",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
   "TemplatePopulations_v0|1,2|S32ClampS8_v2|S32ClampRest_v2": {
@@ -989,14 +1009,6 @@
    "digest": "0427726221d37e3328795346f90b9cc0ab7f3b25ccc9555d7c40fda34d73ac9008447ea096f2dfc45c0c19bd160043a163f0d81b6da2ad7eb699c5ae53cffef3",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
   },
-  "TemplatePopulations_v0|1,2|ScaledMmS8Coordinate_v1{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
-   "digest": "4113d40a50b9b08eead59ed7b856a3cfca60a73d566eca653cdae6a69b164f3306d2e1ca3c51eae7294d1917acf002756d6f97951d0f4fc00082a999bb89254c",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
-  "TemplatePopulations_v0|1,2|ScaledMmS8Coordinate_v2{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}": {
-   "digest": "f1dee25a0160e9a93b0178012b0f68041fa6f1e6d6e8bede17c9863a8d8973b577ca58fd908e74f8f08e9f8028e7640df652793f64174a0b8f581215b1612588",
-   "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
-  },
   "TemplatePopulations_v0|1,2|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|KvCacheAppendE4m3_v1": {
    "digest": "3043534ecf7d1ba950feea290ab3422a52264758d4cc4ec7dc3ad8633d7b397dba159747737e820932b81547fad4f3f7e14ee86d6d76fe37e17b71003a69b879",
    "id_sha512": "9aff5b44d8d7abecee686807bf7241ca5b4ecdd881cbe0e525e854e8e7e0a657a5442eb817e66b33fbe27facb8bfdc4f45fe0c8b9007cdfe0bd16932df50004e"
@@ -1020,10 +1032,6 @@
   "TemplatePopulations_v1|1,2|DotBf16_v3{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}|DotBf16_v3{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
    "digest": "2514c18a6018fd4e9c701077796837ba4c879032460d298a8bb6a39ac96583372c882a21e70a8f8f2a9a546bcb94f4ad7f6e28e001c846e8a42ff7eb5bbc8db2",
    "id_sha512": "094765d443011d5bce0626b144152e9ef75d8faeea72792530a476a8a3a250f66a2f70907ae6f65f7a2092a78a6a30ffb11797654442512ac6d034dd72e5bd1a"
-  },
-  "TemplatePopulations_v1|1,2|DotBf16_v3{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|Gemm_v3{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}": {
-   "digest": "a52d980bec125cde2351d1a9e8aee2c3cc3dbc028402cda09123638ec4ad6ca92e79a441350bc0696dedfb285e974d22141a3a77a04b82a5f7510d2db37e312f",
-   "id_sha512": "0f8b86f9529fff4c31abaf5715ea618deaedc0ac7261a14769c487e65f94ea97ca085e8f1b0fdbb2dc825aeb5ee6f5669b09a3ab2659e6b2306a8879de7942a1"
   },
   "TemplatePopulations_v1|1,2|GemmAccumulatorS8_v1{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|ScaledMmS8Coordinate_v1{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
    "digest": "6ca1c0d13b4ff77f7861d52e2e4f09003dbb0735d772883469ac0bd0938ddd4c53f0e1ac4a6a97b9609adfad760c3f584f643868e4784df64b80b88e6127bcdb",
@@ -1068,10 +1076,6 @@
   "TemplatePopulations_v1|1,2|GemmCoordinate_v2{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}|GemmCoordinate_v2{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
    "digest": "2475031127bf2114cfc624f5ecb8e11373b4ad8965c8a288e666c4e863effb3e25f0d39270b45b5515f3fb1cfcd648dc9da030f0996f7ade5d620f2b06c3b9e3",
    "id_sha512": "5fb2e264ffa0ee0801aa78d21b566bf7bab5f889d7641087cba008a5b5b6c88fe80b0e2dbd1d8630aa472c97840c3301494d87c482a5672ca69d8f0facfd9913"
-  },
-  "TemplatePopulations_v1|1,2|GemmCoordinate_v2{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|Gemm_v2{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": {
-   "digest": "6546e46736d7d5b36c1b1251efea0c7ddaa59f8080f27c3cf9a595ad378cdc1f8f84d90badfb01249da14df0d9c58b0cf845100570c9cfe9033aecbdffe65855",
-   "id_sha512": "13bef5fa37c6889c4138770287ef0436cf6642d54710a6a41cf11eb0dfb3bec4adb9aa58d2a2a7860c71d6e203d5654de336bacd4f3da1dea1408358a5203782"
   },
   "TemplatePopulations_v1|1,2|GemmCoordinate_v3{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}|GemmCoordinate_v3{K=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
    "digest": "63a1d4682127ac176bbec4f05f4407ee1da77e87667f1d60fcd3800e31eb31c15b9199fce5fbd13891a3482fcd252b4c96c3acf531e11ba9475ac95989ccb5fc",
@@ -1153,14 +1157,6 @@
    "digest": "f58c24528f3bf6aba4f8930b2567c8f16fe7496bcb262e58e7787af17fa51ca5c4792728caf6866b3fe0e0d6d366e1df45883bd3aa7f2d437b0b016755ea0373",
    "id_sha512": "5f6b4791081100c1c4362ed7fdcbf3cf97661044a40910c58105c079afc96f17fcbc522d3ed17e566b78bb783c4582001ff484449f0b4e37010eced3fce15a74"
   },
-  "TemplatePopulations_v1|1,2|MoePairGemmW_v1{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|S8Dot_v1{K=64,L=64,T0=\"zero\",C=null,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"},A=[-127,127],B=[-127,127],TAIL=[],TDOT=null,NOISE=\"none\",LIMBS=\"none\",COMMIT=\"final\"}": {
-   "digest": "72d96809c7e26e3526a1c3614ac4a81178fb17c204a58127e52835165def17fe5c711abaa0e6e48ff3fa45eb10ad81e591253970ce72578cf6b29aceb6ad7250",
-   "id_sha512": "5102fd9b67b10804c992736d3141a9511f221c5243fe6516d53f60d4a566c3c595d7a453a16972fd2c60cd003a2beae345df950ca21def8c8e2f82a2fb6701c1"
-  },
-  "TemplatePopulations_v1|1,2|MoePairGemmW_v2{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|BlackwellU8S8ImmaDot32_v2": {
-   "digest": "a03c82098edc05d6da23dea1d3a5c74bb5d35def53c9afb31333e98dc76971896b2039f155ee37f635f904279c38e56877053f4306e4601904e3e2ba0b3837ef",
-   "id_sha512": "8817c1597d9a0ec81b868c38ec6366b5a51e70e3ac2e40f16cc957a026a675330b483f51cab4f51ec2b917246daa6aa1b30dd5f63304340a358b8a3506a80679"
-  },
   "TemplatePopulations_v1|1,2|MoePairGemm_v1{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|MoePairGemmW_v1{E=3,K=16,N=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
    "digest": "55019eadb7983b61bcc52bd5b30cc38bcd8757756b35bb3061e26ee7935fe12380afd74589c8435859251ce60b01abc0e990fd7c8990af1f2c2c5f1cda8b0afb",
    "id_sha512": "380e32403c0b09667f66659b551bc7c79cf3b0735ce68311c71bf4ee47ffcc8adba485956f1c6c9528904ba64af160eca23a2cb6cce63dfe717b43f594853f48"
@@ -1189,13 +1185,25 @@
    "digest": "0f59b19fe2b8cbeb7f81368816a71675af40063b8d16765b39f4f740103be8dfef493bd22d5cf3b2258b109af9d0431d8ad6f235897f9f855c597544b3acc1ea",
    "id_sha512": "8dab38ee9e933a58f7b205569d95f3e3fda988194c7a12acc2a36dd12a61e36ae1702533c02bd799ce0d9dcc461c30c6c5bc23b755e3100ec047c395cdc5ef37"
   },
+  "TemplatePopulations_v1|1,2|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|Gemm_v2{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": {
+   "digest": "fa4134052ea6c70eafbc7e1a5f2391ce91b86977c0f7cdc4b92f34fb4cd335b327df7e32d8c3a8c7083ffc62050183387c9f354ee1a879029481da84e71c0b5d",
+   "id_sha512": "5945b068979d824910e06761d9cca2143558dad173bd06d796b80ed11fff1b882daba1eb45e5f2b9d1ffa15a4c015006909ef29ef683cb21cd869a7b7312a16c"
+  },
+  "TemplatePopulations_v1|1,2|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|Gemm_v3{K=32,N=3,DOT={\"fn\":\"AmpereBF16TcDot16_v3\"}}": {
+   "digest": "c8bf56f0061de61ecf30cf243695898c4ab0eee17b5dec097b3a7513c0079dd71d412cedde056bd5446ce8c2b727db824aa5f4c51fd288093235718a1147416f",
+   "id_sha512": "9df62ed2709f8a7c068c106d18211a43b645fe541f473ba980c49b22708f12d67f8a637383a4e207471a5097a3a494b1208f4e2ca4849b85a41f64e7eb0ee99b"
+  },
+  "TemplatePopulations_v1|1,2|PvRow_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}|PvRowPad_v1{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}": {
+   "digest": "6eab2eae369afee57c8b7b7b18361298fc3eece257241d082f4339e0421e0e4585700f2f8eea66d40fb35313bb3109525fa19d26c560479241b971eb72c87880",
+   "id_sha512": "b361bc93a59badf50e0c9849edcd1a32fa56512a65282f9f1290e768ae8af1461fce067dd39f3c1d039c3ae9cc8cbfac1a8abee99f77191ca96c9c3a59be9392"
+  },
+  "TemplatePopulations_v1|1,2|PvRow_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}|PvRowPad_v2{T=32,K=32,D=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}": {
+   "digest": "c632e9c9ed1c650004a7b21fb8acdb96f817fab995099377034e61c0a11fb2d09797b6f5245f4e9e9b793e6ec20a5bca4569ffabcd656ecc56896d3918deb4f9",
+   "id_sha512": "5edc4cea7c878bcee32867b62054154444fb4e3fb9f77ae17f8f199ce468ff2dd644018c321cc0c8366ec7120dbfb712ced37a895fcb47280e416998610f1020"
+  },
   "TemplatePopulations_v1|1,2|S32ByteCarry_v2|S32ClampS8_v2": {
    "digest": "b66cd47852f92d1f8b60bdc3e39e17c443e570c02f7ffcb8e558f6db2aca525f492498b45b81fc32b87c91a7d21bc0dd8221e1f624733bdaafec2e36d0f21a4d",
    "id_sha512": "ee7f58876e8bbc8b097f785e670fb171db4de631517cf1146ee631e3147448caa202d21485686e6d116008520c3709117aadaf56bfdf192cd49205ba0c776fe4"
-  },
-  "TemplatePopulations_v1|1,2|S32ClampRest_v2|DotBf16_v2{K=64,DOT={\"fn\":\"AmpereBF16TcDot16_v2\"}}": {
-   "digest": "322b682d87a0b25be7c26ce2cbaddf2b229cfb82da2f6b44d330951c2ed800f2fa4826218c9fcf371fc5123a6f2b76fd20f714ea27acb6be3a47524f0ad19a76",
-   "id_sha512": "b9e4df879d695d20d2f832329492982e0689473c588b39275f0d0783722db217941f6c46a4910c75c4599628d6e8ab757b3be6124f9d2dda67a274cbf073ea70"
   },
   "TemplatePopulations_v1|1,2|S32ClampS8_v2|S32ClampRest_v2": {
    "digest": "130df13bbe3d987a75f4a386bbd61a261515ac7c2cbd3ea6e52c282ffec3fe2f3821319248bcb8855b9e6fc5a52ccdda60521238d517baf1dbf0e84646324378",
@@ -1236,14 +1244,6 @@
   "TemplatePopulations_v1|1,2|S8Matmul_v2{N=3,K=64,L=64,T0=\"zero\",C=null,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"},A=[-127,127],B=[-127,127],TAIL=[],TDOT=null,NOISE=\"none\",LIMBS=\"none\",COMMIT=\"final\"}|LimbSplit_v2{FORM=\"bytes\",N=3,Y=[-8355711,8355711]}": {
    "digest": "528faa2e101cd672a78f0396af464b450694ea219461796e9c310ddc4650f9cc1e6c27573f829d19bdb02bba941ed6c33e82f81722c8faff46ced40f348cbbc4",
    "id_sha512": "234a695512c98f1a2980ebb472093138fc149fea9503fecf889e6f85736d0d88dd5780c317ff56462729badf26cf42000751dd2f833ebc2f89445a2fb903f83a"
-  },
-  "TemplatePopulations_v1|1,2|ScaledMmS8Coordinate_v1{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}": {
-   "digest": "06aeef9b4ac978504a03c2fcf57ed41f856657301deb760acb5e364b2819621a00ec8386022410b1a389966d75c0cdb6f6bc19aaf03fa7a4af9aa002b42385e6",
-   "id_sha512": "08cca099cd42d762cb73329663608c2d3fdb12478a75c79f081daf94a997bbb73af7779e30ecc1186e012843b33edbdd79bc344fc4f7e5937727e3e39a647168"
-  },
-  "TemplatePopulations_v1|1,2|ScaledMmS8Coordinate_v2{K=64,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}|ScaledMmS8_v2{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v2\"}}": {
-   "digest": "d1673dc388aa5ed9fa5faa34a2c1984e6a350a8e46a0e600f1278760d5e2cb05916db4860414bc071700b88d77b80cde5fe847bd739c2487c84003a732d62042",
-   "id_sha512": "f0ec4007c44c7ca5b608b76407d0440ae2915fa0157062bc867114b9be320af28408466562c633c9b7ad68c4171044f6533414966024e791a15ff5dd62f23b63"
   },
   "TemplatePopulations_v1|1,2|ScaledMmS8_v1{K=64,N=3,DOT={\"fn\":\"BlackwellS8ImmaDot32_v1\"}}|KvCacheAppendE4m3_v1": {
    "digest": "113b39c5532b3562bedccafbab7d1db439fe3b6b69f475892e98edcda9cc5033ead0f3a43e3587c5931dadb056308b7b76169764374d43653f16e9a345270f60",
