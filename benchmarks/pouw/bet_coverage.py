@@ -207,7 +207,7 @@ def lane_chunk_s() -> float:
 def evaluate(d: Design, u: float) -> dict:
     macs = M * MACS_PER_TOKEN
     comp: dict[str, float] = {}
-    keys = draw_s = 0.0
+    keys = draw_s = key_comp = 0.0
     pop = 0
     inst: dict[int, int] = {}
     for _, n, k, cnt in LINEARS:
@@ -215,6 +215,8 @@ def evaluate(d: Design, u: float) -> dict:
         for p, v in parts.items():
             comp[p] = comp.get(p, 0.0) + cnt * units * v
         kk = d.chunk or k
+        if d.seg is not None:
+            key_comp += cnt * units * HT.Layout(*d.tile, kk).lanes
         keys += cnt * M * n * k * key_mac_times(kk)
         drawn = cnt * units * ((d.tile[0] // 4) * (d.tile[1] // 8) * HZ.chunks(kk) if d.draw == "lane-chunk" else 1)
         inst[kk] = instances(d, kk)
@@ -227,7 +229,8 @@ def evaluate(d: Design, u: float) -> dict:
     total = h + (proj or 0.0)
     kmax = max(k // HZ.chunks(k) for k in inst)
     return {"design": d.name, "title": d.title, "compressions_per_mac": per_mac,
-            "compressions_per_mac_total": sum(per_mac.values()), "hash_mac_times": h, "lane_floor_mac_times": floor,
+            "compressions_per_mac_total": sum(per_mac.values()), "key_compressions_per_mac": key_comp / macs,
+            "hash_mac_times": h, "lane_floor_mac_times": floor,
             "lane_projected_mac_times": proj, "f_side": min(1.0, (GAMMA - 1) * P / total),
             "f_one": min(1.0, (GAMMA - 1) / max(total / P - 1, 1e-9)),
             "f_side_floor": None if floor is None else min(1.0, (GAMMA - 1) * P / (h + floor)),
@@ -292,7 +295,8 @@ def v5v6_row(row: dict) -> dict:
     noise = row["compressions_per_mac"]["noise"]
     out = {"units": units, "range_log2": math.log2(units), "commit_bytes": {"z": z, "receipts": receipts},
            "a_row_bytes": sum(cnt * M * k for _, n, k, cnt in LINEARS), "sha_s": row["compressions_per_mac_total"]
-           * macs / SHA_RATE, "noise_sha_s": noise * macs / SHA_RATE, "noise_over_plain": noise
+           * macs / SHA_RATE, "key_compressions_per_mac": row["key_compressions_per_mac"],
+           "key_sha_s": row["key_compressions_per_mac"] * macs / SHA_RATE, "noise_sha_s": noise * macs / SHA_RATE, "noise_over_plain": noise
            * MAC_TIMES_PER_COMPRESSION / P, "hbm_commit_s": 2 * (z + receipts) / HBM_BPS, "t_linears_s": t_lin,
            "unit_ands": {k: 32 * (1_912_609 + 11_297 * k) for k in (16_384, 65_536)}, "chunk_ands": 1_912_609
            + 11_297 * 4096}
@@ -409,8 +413,10 @@ def markdown(rep: dict) -> str:
     v = rep["v5v6"]
     out += ["", f"v5/v6 a step (one sampling block): {v['units']:,} units (range 2^{v['range_log2']:.2f}); commit z "
             f"{v['commit_bytes']['z']:.3e} B + receipts {v['commit_bytes']['receipts']:.3e} B (A rows, integrity's, "
-            f"{v['a_row_bytes']:.3e} B); SHA-512 {v['sha_s']:.2f} s a step at full coverage, of it noise "
-            f"{v['noise_sha_s']:.3f} s ({v['noise_over_plain']:.1%} of plain); HBM for the commit {v['hbm_commit_s']:.2f} s "
+            f"{v['a_row_bytes']:.3e} B); SHA-512 {v['sha_s']:.2f} s a step at full coverage (noise "
+            f"{v['noise_sha_s']:.3f} s, {v['noise_over_plain']:.1%} of plain), and the lanes' fold keys "
+            f"{v['key_compressions_per_mac']:.2e} a MAC, {v['key_sha_s']:.2f} s more (lane work); HBM for the commit "
+            f"{v['hbm_commit_s']:.2f} s "
             f"(not in γ); linears {v['t_linears_s']:.2f} s; a unit {v['unit_ands'][16_384]:.3e} ANDs at K = 16,384, "
             f"{v['unit_ands'][65_536]:.3e} at 65,536; a lane chunk {v['chunk_ands']:.3e}", "",
             "| source | γ full, linears (side / one) | f at γ ≤ 10, linears | γ full, 3.7 s step | γ full, 7.5 s step | "
