@@ -44,7 +44,9 @@ theorem colsRV_runOfRV (rd : Claims.Msg → Option FinalP) (v : Claims.Seen) (j 
   unfold colsRV runOfRV
   cases ((v.msgs.map Prod.fst).getLast?).bind rd with
   | none => rfl
-  | some fl => cases decR rd fl.stmt (v.msgs.map Prod.fst) ((v.msgs.map Prod.snd).map outCoin) <;> rfl
+  | some fl =>
+    dsimp only
+    cases decR rd fl.stmt (v.msgs.map Prod.fst) ((v.msgs.map Prod.snd).map outCoin) <;> rfl
 
 end FlockDeploy
 
