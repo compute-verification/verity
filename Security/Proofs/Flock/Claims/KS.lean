@@ -71,6 +71,7 @@ import Proofs.Flock.Claims.KS.PlainDrawJMove
 import Proofs.Flock.Claims.KS.PlainDrawJRun
 import Proofs.Flock.Claims.KS.PlainDrawJCols
 import Proofs.Flock.Claims.KS.PlainDrawRCols
+import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainDrawK
 import Proofs.Flock.Claims.KS.PlainDrawAccK
 import Proofs.Flock.Claims.KS.PlainDrawDecK
