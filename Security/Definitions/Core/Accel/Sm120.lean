@@ -9,7 +9,9 @@ f_max = 2430 MHz (the hardware's maximum, which the prover may set: SPEC's P1, n
 Architecture whitepaper v1.1, Appendix A, Table 4, the same 188-SM GB202). These are data-sheet placeholders until
 CALIB (CMP-115) measures them.
 
-**Stores** (32-bit words): the register file, 64 Ki registers an SM (whitepaper: a 256 KB register file an SM);
+**Stores** (32-bit words): the register file, 64 Ki registers an SM (whitepaper: a 256 KB register file an SM), plus
+the uniform registers (63 a warp at 48 warps, 3024 words), the predicates (7 bits a thread at 1536 threads, 336 words)
+and the uniform predicates (7 bits a warp, 11 words), 3371 words an SM on top (RT-MODEL M4);
 shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory an SM); L2, 128 MB (whitepaper Table
 4), taken as 128 MiB; GDDR7, 96 GB (product page, 'GPU Memory 96 GB GDDR7'), taken as 96 GiB.
 
@@ -65,7 +67,7 @@ namespace Verity.Accel.Sm120
 
 /-- The words of each store. -/
 def size : Store → ℕ
-  | .reg => 188 * 65536
+  | .reg => 188 * (65536 + 3371)
   | .smem => 188 * 32768
   | .l2 => 128 * 2 ^ 20 / 4
   | .dram => 96 * 2 ^ 30 / 4

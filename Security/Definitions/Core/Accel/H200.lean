@@ -9,7 +9,9 @@ footnote 2 'GPU Peak Clock and GPU Boost Clock are synonymous'; the driver's max
 note:20261017T0452Z-draft-eps1-dc; `Accounting.TS.Sheets.H200.fmaxMHz`). Every per-SM figure is over the 132 SMs
 (whitepaper Table 3, H100 SXM5). These are data-sheet placeholders until CALIB (CMP-115) measures them.
 
-**Stores** (words of 32 bits): the register file, 64 Ki registers an SM ('Register File Size / SM 256 KB'); shared
+**Stores** (words of 32 bits): the register file, 64 Ki registers an SM ('Register File Size / SM 256 KB'), plus the
+uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and
+the uniform predicates (7 bits a warp, 14 words), 4494 words an SM on top (RT-MODEL M4); shared
 memory with L1, 256 KB an SM ('Combined L1 Cache / Shared Memory 256 KB'; shared memory alone is configurable to
 228 KB, so the pool is the larger); L2, 50 MB ('L2 Cache Size 50 MB'), taken as 50 MiB; HBM3e, 141 GB (H200 data
 sheet, nvidia.com/en-us/data-center/h200, 'GPU Memory 141GB'), taken as 141 GiB, above the 143,771 MiB the driver
@@ -56,8 +58,9 @@ Every other dot is `Open.dot`. `wgmma` `.s8` at m64n64k32, m64n128k32 and m64n25
 
 **Where the instance is coarser than the card** (each lets a program do more): the pools of `Card`; a `wgmma` charged
 one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `imad` lane (it takes two); FP32 lane
-functions charged an issue slot's share only; uniform registers pooled with the register file. A cross-lane move is
-`SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the `alu`.
+functions charged an issue slot's share only; uniform registers and predicates in the register store. A cross-lane
+move is `SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the
+`alu`.
 
 **2:4 sparse MMAs** (`mma.sp`, `wgmma.mma_async.sp`, PTX ISA 9.0 §9.7.14.6 and §9.7.15.6): at the dense forms'
 shapes and twice their `k`, at the same tensor units a real product (so twice the logical rate: CALIB's
@@ -80,7 +83,7 @@ namespace Verity.Accel.H200
 
 /-- The words of each store. -/
 def size : Store → ℕ
-  | .reg => 132 * 65536
+  | .reg => 132 * (65536 + 4494)
   | .smem => 132 * 65536
   | .l2 => 50 * 2 ^ 20 / 4
   | .dram => 141 * 2 ^ 30 / 4
