@@ -13,7 +13,7 @@ the slots of Theorem O and ABSORB, which are the model's (`Definitions.Pouw.Dith
 * `ImportWithinCertifier`: an accepted period imported at most `K` bits, the network certifier's count.
 
 Neither says anything about which algorithms a prover runs, nor what an accepted run's rounds cost: that is
-ABSORB's slot (`Pouw.Dither.Absorb`), a theorem to be proved in the model.
+ABSORB's slot (`Pouw.Dither.Absorb`), whose standing is Daniel's open decision.
 -/
 
 namespace Pouw.Assumptions
@@ -34,7 +34,7 @@ every value `r` of its own coins:
 
 It assumes nothing of SHA-512 (`ecr/sha-512` enters only the floor's bound, `breakBound`) and nothing of the
 adversary's algorithms: a round program is any program of `G`, fixed before its round's coins. What the rounds cost
-beside the run is not here: ABSORB's slot (`Pouw.Dither.Absorb`) states it, as a theorem to be proved in the model.
+beside the run is not here: ABSORB's slot (`Pouw.Dither.Absorb`) states it.
 A service whose fold is sound only under an empirical premise (KLI₂₄ for the li fold) does not meet this form. -/
 def ServiceSoundDither (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
     (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders G.Mc S R)

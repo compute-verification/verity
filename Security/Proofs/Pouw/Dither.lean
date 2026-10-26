@@ -13,9 +13,9 @@ import Proofs.Pouw.RelativeSecurity
   of `StagedFloorKOneSidedPerProver` and `DitherWorkSound` are one form.
 * `honest_witness` (rule I): an honest prover of today's Dither round (`L = 32`, U in `±1, …, ±64`, placement
   `t mod 32`, on a `1 × 32 × 1` instance) over a one-round period meets every hypothesis of `DitherWorkSound` at `c = 1`
-  and is accepted on every coin, its rounds and its whole run each at priced cost `k H`. The model (`flat`) prices every program at least one honest
-  round, so Theorem O holds in it at `c = 1`; it witnesses that the premises hold together with an honest run, not that
-  Theorem O holds in a real model (O-CHARGE, O-BITS).
+  and is accepted on every coin, its rounds and its whole run each at priced cost `k H`. The model (`flat`) prices
+  every program at least one honest round, so Theorem O and ABSORB hold in it at `c = 1`; it witnesses that the
+  premises hold together with an honest run, not that Theorem O or ABSORB holds in a real model.
 -/
 
 namespace Pouw.SecurityProofs.Dither

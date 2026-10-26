@@ -17,9 +17,9 @@ The final guarantee of the ACCEL program (`Models.Pouw.Guarantees.Dither.DitherW
 * **Theorem O's slot** (`TheoremO`): a statement about the model alone, to be proved in it (O-CHARGE, CMP-111;
   O-BITS, CMP-112), never an assumption about algorithms;
 * **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), **ABSORB's slot**
-  (`Absorb`: the rounds an accepted run is cut into are pieces of it, a theorem to be proved in the model, ABSORB-THM,
-  never an assumption), its priced floors, on the rounds (`RoundsFloor`) and on the whole run (`WorkFloor`,
-  `WorkSound`), and the error `epsDither`;
+  (`Absorb`: the rounds an accepted run is cut into are pieces of it; a named slot whose standing is Daniel's open
+  decision, never an unnamed premise), its priced floors, on the rounds (`RoundsFloor`) and on the whole run
+  (`WorkFloor`, `WorkSound`), and the error `epsDither`;
 * **freed compute** (`Period`, `Period.FreedWithin`): R-ACCEL-1's definition, kept in this one place.
 -/
 
@@ -174,12 +174,14 @@ Theorem O's constant must hold against it: the rounds' floor counts only what th
 
 **This is a theorem to be proved in the model, not an assumption.** It is true or false of `G` and `P` alone, with
 nothing about which algorithms anyone runs: O-CHARGE (CMP-111) and O-BITS (CMP-112) prove it, and the constant they
-reach is the guarantee's model slack `1 − c`. Where it holds, `c H` is at most the cost of every program that always
-passes, so at `H` the honest kernel's priced cost of a round, `c ≤ 1` is the honest kernel's share of the model's
-optimum. Theorem K's floor of record (`StagedFloorKOneSided`) reaches the same period floor on its scope, at the
-parity luck `η = 0.146` and `c H = St κ L n n' B` (`ChargeVF3j16`'s charge); outside that scope Theorem O holds on
-paper only, at `c ≥ 1 − δ` given CoincCharged_θ and at `c = ¼` without it (VF3e/VF3f price LDS.128 and LDG.128 at 8
-MACs a word against the honest kernel's 32). -/
+reach is the guarantee's model slack `1 − c`. A round program outputs its transcript, so Theorem O is a counting
+statement (per-word costs of each instruction class, and the ring count for the tensor cores), outside ABSORB-THM's
+barrier. The barrier sits in whether an accepted run is cut into such programs (`Absorb`). Where Theorem O holds,
+`c H` is at most the cost of every program that always passes, so at `H` the honest kernel's priced cost of a round,
+`c ≤ 1` is the honest kernel's share of the model's optimum. Theorem K's floor of record (`StagedFloorKOneSided`)
+reaches the same period floor on its scope, at the parity luck `η = 0.146` and `c H = St κ L n n' B`
+(`ChargeVF3j16`'s charge); outside that scope Theorem O holds on paper only, at `c ≥ 1 − δ` given CoincCharged_θ and
+at `c = ¼` without it (VF3e/VF3f price LDS.128 and LDG.128 at 8 MACs a word against the honest kernel's 32). -/
 def TheoremO (G : Accel) (P : RoundProto) (p : G.Res → ℝ) (c η β H : ℝ) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 → ∀ (a : P.Inst) (M : G.Mc.Alg P.Draw P.Tr), roundMoment G P p c η β H a M ≤ 1
 
@@ -237,12 +239,17 @@ verifier accepts, the rounds' uses of each resource sum to at most the run's, an
 run's. The cut is at the commitments, so the rounds are disjoint stretches of the period's devices' time (rounds are
 period-wide epochs: round `w`'s transcript is committed before round `w + 1`'s first coin).
 
-**This is a theorem to be proved in the model, not an assumption** (ABSORB-THM). The theorem is that some analysis
-map meets it beside `Models.Pouw.Assumptions.ServiceSoundDither`: that every accepted run computes the transcripts it
-commits to (through the hash and the fold) within its own resources. It is true or false of `G`, the service and the
-protocol, over every program of `G`, and says nothing of which algorithms a prover runs. It carries the floor's whole
-link to the adversary: without it, an analysis could cut any accepted run into honest rounds, and the floor would read
-nothing of the run. -/
+**This is ABSORB, the one statement beyond the model's parameters, the cryptography and the live coins that the
+guarantee rests on, and its standing is Daniel's open decision.** What is to hold is that some analysis map meets it
+beside `Models.Pouw.Assumptions.ServiceSoundDither`: every accepted run computes the transcripts it commits to (through
+the hash and the fold) within its own resources. It is a statement over every program of `G`, true or false of `G`,
+the service and the protocol. ABSORB-THM's Theorem B shows that proving it over the full instruction set would be an
+explicit superlinear circuit lower bound. It may become a named computational assumption, follow from SHA-512 as a
+random oracle at a cost in overhead, or be dropped for the unconditional floor alone. Until Daniel rules, it is a
+slot, never an unnamed premise. It carries the floor's whole link to the adversary: without it, an analysis could cut
+any accepted run into honest rounds, and the floor would read nothing of the run. This is ABSORB's cut form. It
+implies the cost form (every committed word is written into a register) wherever the model charges a program's output
+words, and it is the weakest form this route needs, because Theorem O reads a round program's whole cost. -/
 def Absorb (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
     (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) : Prop :=
   G.G1 → G.G2 → G.P1 → G.P2 →

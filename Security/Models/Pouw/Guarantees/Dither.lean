@@ -8,10 +8,10 @@ The ACCEL program's final guarantee (CMP-116, DITHER-THM), on the accelerator mo
 the freed-compute bound it gives (R-ACCEL-1).
 
 * `DitherWorkSound`: under the device premises (G1, G2, P1, P2), Theorem O's statement in the model at the constant
-  `c` and ABSORB's (two theorems to be proved in the model, never assumptions), the proof service's soundness per
-  prover (`ServiceSoundDither`: C-Flock sound and zero knowledge, SHA-512 only through each adversary's finders, live
-  coins from the auditor's challenger) and the network certifier's import count (`ImportWithinCertifier`), a monitoring
-  period of `k` rounds is `(1 − ε)`-work-sound at every price vector, with
+  `c` (a theorem to be proved in the model) and ABSORB's (a named slot, its standing Daniel's open decision), the
+  proof service's soundness per prover (`ServiceSoundDither`: C-Flock sound and zero knowledge, SHA-512 only through
+  each adversary's finders, live coins from the auditor's challenger) and the network certifier's import count
+  (`ImportWithinCertifier`), a monitoring period of `k` rounds is `(1 − ε)`-work-sound at every price vector, with
   `ε = (1 − c) + D/k + β K/(k H)`: model slack, sampling luck, network import. The floor holds on the rounds the
   adversary's run is credited for (`RoundsFloor`) and so on its whole run (`WorkSound`). Each adversary's error is its
   own (`breakBound` at the luck `e^{−η D}`).
@@ -22,7 +22,9 @@ the freed-compute bound it gives (R-ACCEL-1).
 (`KScopeOneSided`, `KScopeAffine`: which programs a prover runs) and on `ChargeVF3j16` (what the machine charges a
 product). `DitherWorkSound` takes neither: its premises are the device model, the service and the network certifier,
 its constant `c` is Theorem O's, a statement about the model that O-CHARGE (CMP-111) and O-BITS (CMP-112) prove, and
-what an accepted run's rounds cost beside the run is ABSORB's, a statement about the model that ABSORB-THM proves.
+what an accepted run's rounds cost beside the run is ABSORB's, a named slot. ABSORB-THM's Theorem B shows that
+proving ABSORB over the full instruction set would be an explicit superlinear circuit lower bound, so its standing is
+Daniel's open decision.
 WORD-WORK's per-word premise (`WordCostsMacs`, CMP-102) is replaced the same way: the credit it multiplies by MACs a
 word is here a priced cost, read off the model. The map from the old floors and from #4363's
 `H1CheckedCreditPeriod` is in the note (note:compute-research/20261026T0130Z-draft-accel-dither-thm).
@@ -48,8 +50,9 @@ The three terms: the model's slack `1 − c` (Theorem O's constant; 0 where the 
 the sampling luck `D/k` (at `δ = e^{−η D}`, `D = ln(1/δ)/η`, with `η = 1 − p` at the per-round luck `p`), and the
 network import `β K/(k H)`. `H` is free, so the statement holds at the honest kernel's priced cost of a round, where
 it reads as `(1 − ε)`-work-soundness, and Theorem O at `c` forces `c H` below every always-passing program's cost.
-No premise is about algorithms: Theorem O and ABSORB are theorems of the model, proved or not, the device premises are
-data sheets', and the rest are the service's cryptography, the auditor's live coins and the network certifier. -/
+Beside the data sheets' device premises, the service's cryptography, the auditor's live coins and the network
+certifier, the statement reads two statements over every program of the model. Theorem O is a theorem to be proved.
+ABSORB is the one place a premise about all programs can enter, held in a named slot until Daniel rules. -/
 def DitherWorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (S : Service) (k : ℕ) (e : S.Seed ≃ Paths (P.Draw × P.Chk) k)
     (run : PeriodMap G S P k) (p : G.Res → ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders G.Mc S k)
@@ -68,8 +71,9 @@ complementary slackness). Any strategy credited the same `W`, whose credited par
 fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`, with `X` its rounds'
 use `PeriodPlay.use`: the rounds' floor `RoundsFloor` of `DitherWorkSound` at the price vector `λ_r ∝ μ_r ρ_r`), frees
 at most `ε C` with `C = μ · cap`, the period's devices at the dual price. The floor on the whole run (`WorkSound`) is
-not enough here: it would count the other work `z` toward the credited part's floor. Counting one resource alone (tensor-core time) is the floor at one vertex of the simplex, which is the
-dual price only where that resource binds every job. -/
+not enough here: it would count the other work `z` toward the credited part's floor. Counting one resource alone
+(tensor-core time) is the floor at one vertex of the simplex, which is the dual price only where that resource binds
+every job. -/
 def FreedOfFloor : Prop :=
   ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
     (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →
