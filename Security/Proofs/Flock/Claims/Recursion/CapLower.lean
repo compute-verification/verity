@@ -104,6 +104,7 @@ theorem commit_bind {l : List (Msg × Msg)} (hT : ∀ e ∈ l, FlockDeploy.sha51
 /-- **Two hm96 slots with one commit string hold one row**, wherever both output their commit strings
 (`SlotCommits`), their rows are hashed under one prefix (`rowPfx`: ports of one word count), and both slots' calls
 (`hmCalls`) are among true evaluations `l` with no collision. -/
+set_option maxRecDepth 20000 in
 theorem slot_rows_eq {c c' : Circuit} {nm nm' : String} {q q' n n' : ℕ} {w w' : Claims.Flock.Wit}
     (h : SlotCommits c nm q n w) (h' : SlotCommits c' nm' q' n' w') (hpfx : rowPfx c q = rowPfx c' q')
     (hcm : readForms w (hmCommit c q n) = readForms w' (hmCommit c' q' n'))
