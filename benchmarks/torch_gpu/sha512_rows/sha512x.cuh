@@ -8,9 +8,13 @@
 //
 // V picks the pipe of each sigma's shifts, two bits each (S0 | S1 << 2 | s0 << 4 | s1 << 6): 0 funnel shifts on the integer
 // ALU, 1 the high half of each rotation and shift as mul.hi / mad.lo by 2^k on the FMA pipe and the low half a funnel shift,
-// 2 both halves on the FMA pipe. On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a balanced V
-// issues more than one integer pipe's worth a cycle. The multiply form is commit_gpu's rotr_fma; the power of two comes from
-// constant memory so ptxas can't fold the multiply back into a shift. On the host every V is the plain function.
+// 2 both halves on the FMA pipe, 3 three instructions a rotation (rotr3: mul.hi and mul.lo of the high word into an aligned
+// pair, then one mad.wide.u32 of the low word onto it), or with V's bit 9 set, rotr3 with its mul.hi as a funnel shift.
+// V's bit 8 issues each two-input 64-bit add (the round's d + t1, the schedule's last term, the feed-forward) on the FMA pipe
+// as mad.wide.u32 and mad.lo by 1 (add2), where ptxas would take an IADD3 for the low word. On sm_90 IMAD issues to the FMA
+// pipe, beside the ALU's SHF, LOP3 and IADD3, so a balanced V issues more than one integer pipe's worth a cycle. The
+// multiply form is commit_gpu's rotr_fma; the multiplier (a power of two, or 1) comes from constant memory so ptxas can't
+// fold the multiply back into a shift or an add. On the host every V is the plain function.
 //
 // ROLL = 1 runs rounds 16..79 as a loop of 16-round bodies (a quarter of the code: a lone warp otherwise waits on
 // instruction fetch), 0 straight-line.
@@ -93,13 +97,58 @@ __device__ __forceinline__ u32 madlo(u32 y, u32 m, u32 t) {
   asm("mad.lo.u32 %0, %1, %2, %3;" : "=r"(r) : "r"(y), "r"(m), "r"(t));
   return r;
 }
+// rotr3 of (hi:lo) by n (0 < n < 32), m = 2^(32 - n): c = (hi * m mod 2^32 : hi >> n) and r = lo * m + c, so r's low word is
+// (lo << (32 - n)) + (hi >> n) and its high word (lo >> n) + (hi << (32 - n)), each a sum of disjoint bit ranges: r is the
+// rotation with its words swapped, and clo = hi >> n is also x >> n's high word. MODE 7 takes clo from a funnel shift.
+template <int MODE, int n>
+__device__ __forceinline__ void rotr3(u32 lo, u32 hi, u32& rlo, u32& rhi, u32& clo) {
+  const u32 m = POW2[32 - n];
+  if constexpr (MODE == 7) {
+    clo = hi >> n;
+  } else {
+    clo = mulhi(hi, m);
+  }
+  u64 r;
+  asm("{\n\t.reg .u32 ch;\n\t.reg .u64 c;\n\t"
+      "mul.lo.u32 ch, %2, %3;\n\t"
+      "mov.b64 c, {%4, ch};\n\t"
+      "mad.wide.u32 %0, %1, %3, c;\n\t}"
+      : "=l"(r) : "r"(lo), "r"(hi), "r"(m), "r"(clo));
+  rlo = (u32)r;
+  rhi = (u32)(r >> 32);
+}
 #endif
 
-// x rotated right by N (0 < N < 64, N != 32), its shifts on the pipe MODE names
+// a + b, with A = 1 on the device as mad.wide.u32(a.lo, 1, b) and mad.lo(a.hi, 1, its high word): both on the FMA pipe
+template <int A>
+SX_HD u64 add2(u64 a, u64 b) {
+#ifdef __CUDA_ARCH__
+  if constexpr (A != 0) {
+    u64 r;
+    asm("{\n\t.reg .u32 al, ah, rl, rh;\n\t.reg .u64 t;\n\t"
+        "mov.b64 {al, ah}, %1;\n\t"
+        "mad.wide.u32 t, al, %3, %2;\n\t"
+        "mov.b64 {rl, rh}, t;\n\t"
+        "mad.lo.u32 rh, ah, %3, rh;\n\t"
+        "mov.b64 %0, {rl, rh};\n\t}"
+        : "=l"(r) : "l"(a), "l"(b), "r"(POW2[0]));
+    return r;
+  }
+#endif
+  return a + b;
+}
+
+// x rotated right by N (0 < N < 64, N != 32), its shifts on the pipe MODE names (0 to 3, or 7: rotr3 with a funnel shift)
 template <int MODE, int N>
 SX_HD u64 rotr(u64 x) {
 #ifdef __CUDA_ARCH__
-  if constexpr (MODE != 0) {
+  if constexpr (MODE == 3 || MODE == 7) {
+    u32 lo = (u32)x, hi = (u32)(x >> 32);
+    if constexpr (N > 32) { const u32 t = lo; lo = hi; hi = t; }
+    u32 rlo, rhi, clo;
+    rotr3<MODE, N > 32 ? N - 32 : N>(lo, hi, rlo, rhi, clo);
+    return (u64)rlo << 32 | rhi;
+  } else if constexpr (MODE != 0) {
     u32 lo = (u32)x, hi = (u32)(x >> 32);
     if constexpr (N > 32) { const u32 t = lo; lo = hi; hi = t; }
     constexpr int n = N > 32 ? N - 32 : N;
@@ -116,7 +165,11 @@ SX_HD u64 rotr(u64 x) {
 template <int MODE, int N>
 SX_HD u64 shr(u64 x) {
 #ifdef __CUDA_ARCH__
-  if constexpr (MODE != 0) {
+  if constexpr (MODE == 3 || MODE == 7) {
+    u32 rlo, rhi, clo;
+    rotr3<MODE, N>((u32)x, (u32)(x >> 32), rlo, rhi, clo);
+    return (u64)clo << 32 | rhi;
+  } else if constexpr (MODE != 0) {
     const u32 lo = (u32)x, hi = (u32)(x >> 32), m = POW2[32 - N];
     const u32 rhi = mulhi(hi, m);
     const u32 rlo = MODE == 2 ? madlo(hi, m, mulhi(lo, m)) : __funnelshift_r(lo, hi, N);
@@ -133,18 +186,36 @@ template <int M> SX_HD u64 s1(u64 w) { return rotr<M, 19>(w) ^ rotr<M, 61>(w) ^ 
 SX_HD u64 ch(u64 e, u64 f, u64 g) { return g ^ (e & (f ^ g)); }
 SX_HD u64 maj(u64 a, u64 b, u64 c) { return (a & b) | (c & (a | b)); }
 
+// the MODE of the sigma whose two bits of V start at bit B
+template <int V, int B>
+constexpr int sigma_mode() {
+  return ((V >> B) & 3) == 3 && ((V >> 9) & 1) ? 7 : (V >> B) & 3;
+}
+
+// schedule word j (w16 = word j - 16, updated in place) from words j - 2, j - 7 and j - 15
+template <int A, int m0, int m1>
+SX_HD u64 next_word(u64& w16, u64 w2, u64 w7, u64 w15) {
+  if constexpr (A != 0) {
+    w16 = add2<A>(w16 + s1<m1>(w2) + w7, s0<m0>(w15));
+  } else {
+    w16 += s1<m1>(w2) + w7 + s0<m0>(w15);
+  }
+  return w16;
+}
+
 template <int V, int ROLL>
 SX_HD void compress(u64* st, u64* W) {
-  constexpr int M0 = V & 3, M1 = (V >> 2) & 3, m0 = (V >> 4) & 3, m1 = (V >> 6) & 3;
+  constexpr int M0 = sigma_mode<V, 0>(), M1 = sigma_mode<V, 2>(), m0 = sigma_mode<V, 4>(), m1 = sigma_mode<V, 6>();
+  constexpr int A = (V >> 8) & 1;
   const u64* K = kconst();
   u64 a = st[0], b = st[1], c = st[2], d = st[3], e = st[4], f = st[5], g = st[6], h = st[7];
 #define SX_ROUND(a, b, c, d, e, f, g, h, kw)                                                                               \
   do {                                                                                                                     \
     const u64 t1_ = (h) + S1<M1>(e) + ch(e, f, g) + (kw);                                                                  \
-    (d) += t1_;                                                                                                            \
+    (d) = add2<A>((d), t1_);                                                                                               \
     (h) = t1_ + S0<M0>(a) + maj(a, b, c);                                                                                  \
   } while (0)
-#define SX_W(j) (W[(j) & 15] += s1<m1>(W[((j) + 14) & 15]) + W[((j) + 9) & 15] + s0<m0>(W[((j) + 1) & 15]))
+#define SX_W(j) next_word<A, m0, m1>(W[(j) & 15], W[((j) + 14) & 15], W[((j) + 9) & 15], W[((j) + 1) & 15])
   // rounds tk .. tk + 7 on schedule words tw .. tw + 7; wf(j) is round j's word
 #define SX_EIGHT(tk, tw, wf)                                                                                               \
   SX_ROUND(a, b, c, d, e, f, g, h, K[(tk) + 0] + wf((tw) + 0));                                                            \
@@ -180,7 +251,8 @@ SX_HD void compress(u64* st, u64* W) {
 #undef SX_EIGHT
 #undef SX_W
 #undef SX_ROUND
-  st[0] += a; st[1] += b; st[2] += c; st[3] += d; st[4] += e; st[5] += f; st[6] += g; st[7] += h;
+  st[0] = add2<A>(st[0], a); st[1] = add2<A>(st[1], b); st[2] = add2<A>(st[2], c); st[3] = add2<A>(st[3], d);
+  st[4] = add2<A>(st[4], e); st[5] = add2<A>(st[5], f); st[6] = add2<A>(st[6], g); st[7] = add2<A>(st[7], h);
 }
 
 }  // namespace sx

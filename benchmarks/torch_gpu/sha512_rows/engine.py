@@ -71,11 +71,14 @@ class LeafArgs(ctypes.Structure):
 
 
 def variant_flags(name: str) -> tuple[str, ...]:
-    """``-DSX_V``/``-DSX_ROLL`` for a variant name: the modes of S0, S1, s0 and s1 (0 to 2), and ``s`` for straight-line."""
+    """``-DSX_V``/``-DSX_ROLL`` for a variant name: the modes of S0, S1, s0 and s1 (0 to 4; sha512x.cuh's modes, 4 being
+    mode 3 with its mul.hi a funnel shift, so 3 and 4 don't mix), ``w`` for the two-input adds on the FMA pipe, and ``s``
+    for straight-line."""
     digits, roll = (name[:-1], 0) if name.endswith("s") else (name, 1)
-    if len(digits) != 4 or any(c not in "012" for c in digits):
-        raise ValueError(f"a variant is four digits 0-2 and an optional 's', not {name!r}")
-    v = sum(int(c) << (2 * i) for i, c in enumerate(digits))
+    digits, wide = (digits[:-1], 1) if digits.endswith("w") else (digits, 0)
+    if len(digits) != 4 or any(c not in "01234" for c in digits) or ("3" in digits and "4" in digits):
+        raise ValueError(f"a variant is four digits 0-4 (not both 3 and 4), an optional 'w' and an optional 's', not {name!r}")
+    v = sum(min(int(c), 3) << (2 * i) for i, c in enumerate(digits)) | wide << 8 | ("4" in digits) << 9
     return (f"-DSX_V={v}", f"-DSX_ROLL={roll}")
 
 

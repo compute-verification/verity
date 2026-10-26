@@ -136,29 +136,39 @@ struct Variant {
   const char* name;
   RowKernel k;
 };
-// V's digits are the modes of S0, S1, s0 and s1 (sha512x.cuh); a trailing "s" is ROLL = 0
-#define SXR_V(a, b, c, d) ((a) | (b) << 2 | (c) << 4 | (d) << 6)
+// V's digits are the modes of S0, S1, s0 and s1 (sha512x.cuh; 4 is mode 3 with V's bit 9, so 3 and 4 don't mix), a "w" the
+// two-input adds on the FMA pipe (bit 8), and a trailing "s" ROLL = 0 (engine.variant_flags)
+constexpr int sxr_v(int a, int b, int c, int d, int w = 0) {
+  return (a > 3 ? 3 : a) | (b > 3 ? 3 : b) << 2 | (c > 3 ? 3 : c) << 4 | (d > 3 ? 3 : d) << 6 | w << 8 |
+         (a == 4 || b == 4 || c == 4 || d == 4) << 9;
+}
 const Variant VARIANTS[] = {
     {"pouw", k_rows<Pouw>},
-    {"0000", k_rows<Sx<SXR_V(0, 0, 0, 0), 1>>},
-    {"2000", k_rows<Sx<SXR_V(2, 0, 0, 0), 1>>},
-    {"1100", k_rows<Sx<SXR_V(1, 1, 0, 0), 1>>},
-    {"2200", k_rows<Sx<SXR_V(2, 2, 0, 0), 1>>},
-    {"2210", k_rows<Sx<SXR_V(2, 2, 1, 0), 1>>},
-    {"2220", k_rows<Sx<SXR_V(2, 2, 2, 0), 1>>},
-    {"2202", k_rows<Sx<SXR_V(2, 2, 0, 2), 1>>},
-    {"2211", k_rows<Sx<SXR_V(2, 2, 1, 1), 1>>},
-    {"2221", k_rows<Sx<SXR_V(2, 2, 2, 1), 1>>},
-    {"2222", k_rows<Sx<SXR_V(2, 2, 2, 2), 1>>},
-    {"2122", k_rows<Sx<SXR_V(2, 1, 2, 2), 1>>},
-    {"2112", k_rows<Sx<SXR_V(2, 1, 1, 2), 1>>},
-    {"1111", k_rows<Sx<SXR_V(1, 1, 1, 1), 1>>},
-    {"1122", k_rows<Sx<SXR_V(1, 1, 2, 2), 1>>},
-    {"0000s", k_rows<Sx<SXR_V(0, 0, 0, 0), 0>>},
-    {"2220s", k_rows<Sx<SXR_V(2, 2, 2, 0), 0>>},
-    {"2211s", k_rows<Sx<SXR_V(2, 2, 1, 1), 0>>},
+    {"0000", k_rows<Sx<sxr_v(0, 0, 0, 0), 1>>},
+    {"2000", k_rows<Sx<sxr_v(2, 0, 0, 0), 1>>},
+    {"1100", k_rows<Sx<sxr_v(1, 1, 0, 0), 1>>},
+    {"2200", k_rows<Sx<sxr_v(2, 2, 0, 0), 1>>},
+    {"2210", k_rows<Sx<sxr_v(2, 2, 1, 0), 1>>},
+    {"2220", k_rows<Sx<sxr_v(2, 2, 2, 0), 1>>},
+    {"2202", k_rows<Sx<sxr_v(2, 2, 0, 2), 1>>},
+    {"2211", k_rows<Sx<sxr_v(2, 2, 1, 1), 1>>},
+    {"2221", k_rows<Sx<sxr_v(2, 2, 2, 1), 1>>},
+    {"2222", k_rows<Sx<sxr_v(2, 2, 2, 2), 1>>},
+    {"2122", k_rows<Sx<sxr_v(2, 1, 2, 2), 1>>},
+    {"2112", k_rows<Sx<sxr_v(2, 1, 1, 2), 1>>},
+    {"1111", k_rows<Sx<sxr_v(1, 1, 1, 1), 1>>},
+    {"1122", k_rows<Sx<sxr_v(1, 1, 2, 2), 1>>},
+    {"0000w", k_rows<Sx<sxr_v(0, 0, 0, 0, 1), 1>>},
+    {"0033", k_rows<Sx<sxr_v(0, 0, 3, 3), 1>>},
+    {"0033w", k_rows<Sx<sxr_v(0, 0, 3, 3, 1), 1>>},
+    {"0333w", k_rows<Sx<sxr_v(0, 3, 3, 3, 1), 1>>},
+    {"0044w", k_rows<Sx<sxr_v(0, 0, 4, 4, 1), 1>>},
+    {"0444w", k_rows<Sx<sxr_v(0, 4, 4, 4, 1), 1>>},
+    {"4444w", k_rows<Sx<sxr_v(4, 4, 4, 4, 1), 1>>},
+    {"0000s", k_rows<Sx<sxr_v(0, 0, 0, 0), 0>>},
+    {"2220s", k_rows<Sx<sxr_v(2, 2, 2, 0), 0>>},
+    {"2211s", k_rows<Sx<sxr_v(2, 2, 1, 1), 0>>},
 };
-#undef SXR_V
 constexpr int NVAR = sizeof(VARIANTS) / sizeof(VARIANTS[0]);
 
 }  // namespace
@@ -169,8 +179,10 @@ int sxr_variants() { return NVAR; }
 const char* sxr_variant_name(int i) { return i >= 0 && i < NVAR ? VARIANTS[i].name : nullptr; }
 const char* sxr_default() {
   static char name[8];
-  const int v = SX_V;
-  snprintf(name, sizeof name, "%d%d%d%d%s", v & 3, (v >> 2) & 3, (v >> 4) & 3, (v >> 6) & 3, SX_ROLL ? "" : "s");
+  const int v = SX_V, f = v >> 9 & 1;
+  auto digit = [&](int b) { return (v >> b & 3) + (f && (v >> b & 3) == 3); };
+  snprintf(name, sizeof name, "%d%d%d%d%s%s", digit(0), digit(2), digit(4), digit(6), v >> 8 & 1 ? "w" : "",
+           SX_ROLL ? "" : "s");
   return name;
 }
 

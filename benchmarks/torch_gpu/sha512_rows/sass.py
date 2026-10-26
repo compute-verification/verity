@@ -11,6 +11,12 @@ import sys
 from collections import Counter
 
 
+def variant_name(v: int, roll: int) -> str:
+    """The name engine.variant_flags reads back as ``-DSX_V=v -DSX_ROLL=roll``."""
+    digits = "".join(str((v >> (2 * i) & 3) + ((v >> 2 * i & 3) == 3 and v >> 9 & 1)) for i in range(4))
+    return digits + ("w" if v >> 8 & 1 else "") + ("" if roll else "s")
+
+
 def counts(lib: str) -> dict[str, dict[str, int]]:
     out = subprocess.run(["cuobjdump", "-sass", lib], capture_output=True, text=True, check=True).stdout
     res: dict[str, dict[str, int]] = {}
@@ -20,8 +26,7 @@ def counts(lib: str) -> dict[str, dict[str, int]]:
             continue
         m = re.search(r"SxILi(\d+)ELi(\d)E", name)
         if m:
-            v, roll = int(m.group(1)), int(m.group(2))
-            key = "".join(str((v >> (2 * i)) & 3) for i in range(4)) + ("" if roll else "s")
+            key = variant_name(int(m.group(1)), int(m.group(2)))
         else:
             key = "pouw" if "Pouw" in name else name
         ops = Counter()
