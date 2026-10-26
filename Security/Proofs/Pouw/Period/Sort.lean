@@ -1,5 +1,5 @@
 import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.Accounting.Remote.Sort
 
 /-!
 # `Array.qsort` sorts strings
