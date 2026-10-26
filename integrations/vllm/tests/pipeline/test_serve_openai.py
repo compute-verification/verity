@@ -556,6 +556,26 @@ def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(t
     assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
 
 
+def test_each_request_records_when_it_was_received_submitted_admitted_and_first_streamed(tmp_path):
+    """The wall-clock stamps that tell late bytes (``received``) from a hold before the engine (``submitted``,
+    ``admitted``), on one clock the server, the engine loop and the windows share."""
+    ticks, lock = iter(range(1, 1_000_000)), threading.Lock()
+
+    def clock() -> float:
+        with lock:
+            return float(next(ticks))
+
+    s = Serving(tmp_path)
+    s.server.clock = s.loop.clock = s.windows.wall = clock
+    with s:
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3]))[0] == 200
+    (rec,) = records(tmp_path, "requests.jsonl")
+    order = ["head", "received", "submitted", "admitted", "first_token"]
+    assert set(rec["times"]) == set(order), rec["times"]
+    stamps = [rec["times"][k] for k in order]
+    assert stamps == sorted(stamps) and len(set(stamps)) == len(stamps), rec["times"]
+
+
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
 def test_a_window_closes_at_idle_once_it_holds_idle_close_steps(tmp_path, idle_close_steps, windows):
     with Serving(tmp_path, idle_close_steps=idle_close_steps) as s:
