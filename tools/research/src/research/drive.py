@@ -57,8 +57,9 @@ Review landing (`land = "review"`; Daniel, 24 Oct 06:05Z: PRs land on an eyeball
 A tick syncs `next` as above, then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` through the same landing steps.  Two gates cut the
-prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source of a package that
-has one: `queue.lean_change`) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
+prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
+of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked after
+landing, Daniel 25 Oct 11:19 PM PDT) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
 (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it as for a train's
 check), or any recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
 the locks on top.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what

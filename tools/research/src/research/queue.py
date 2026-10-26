@@ -539,14 +539,22 @@ LEAN_LOCK = "lean-audit.json"
 LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json")
 
 
+#: the analysis tree: a Lean change only here that touches no lock is proofs, which lands on its land verdict and is checked after
+#: landing, a failure reverting it (Daniel, 25 Oct 11:19 PM PDT); Lean anywhere else runs as code (C-Flock's verifier and the ZK
+#: server, the PoUS grader, the certifier program, the NCI check, the remote audit's verifier) and keeps its Lean check first
+LEAN_PROOFS_TREE = "Security/"
+
+
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     """Whether ``commit``'s own change (against its first parent, or ``base``) waits for a Lean check before a review landing: it
-    touches a lock, or a Lean source of a Lake package that has one, so neither a guarantee's statement nor a definition it reads
-    reaches `main` without its record (the after-landing lean-audit, `--no-regenerate`, fails on a record difference)."""
+    touches a lock, so neither a guarantee's statement nor a definition it reads reaches `main` without its record (the
+    after-landing lean-audit, `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a
+    Lake package that has a lock, Lean that runs as code.  A change to `Security/`'s Lean alone is proofs: it lands on its
+    verdict, and the after-landing lean-audit reverts it on a failure."""
     files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK for f in files):
         return True
-    if not (lean := [f for f in files if f.endswith(LEAN_SOURCES)]):
+    if not (lean := [f for f in files if f.endswith(LEAN_SOURCES) and not f.startswith(LEAN_PROOFS_TREE)]):
         return False
     pkgs = {str(Path(f).parent) for f in _out(repo, "ls-tree", "-r", "--name-only", commit).splitlines() if Path(f).name == LEAN_LOCK}
     return any(p == "." or f.startswith(p + "/") for f in lean for p in pkgs)
