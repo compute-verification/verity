@@ -65,7 +65,8 @@ theorem capSlots_flat_length (r : XR) (rs : Array RecVStar.SchedRound) (j : ℕ)
     apply List.ext_getElem (by simp)
     intro i h1 h2
     have hi : i < ((rs.getD (j % rs.size) default).2.1).size := by simpa using h1
-    simp [capSlotsAt, capSlots, Array.getD_eq_getD_getElem?, hi]
+    have hi' : i < (rs[j % rs.size]?.getD default).2.1.size := by simpa [Array.getD_eq_getD_getElem?] using hi
+    simp [capSlotsAt, capSlots, Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi']
   rw [e]
 
 /-- **A stream round's row slot sits past its tops' slots.** -/
