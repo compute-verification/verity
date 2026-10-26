@@ -177,6 +177,7 @@ import Proofs.Flock.Claims.Recursion.RestLive
 import Proofs.Flock.Claims.Recursion.RestRead
 import Proofs.Flock.Claims.Recursion.RestReadR
 import Proofs.Flock.Claims.Recursion.RestReadsAt
+import Proofs.Flock.Claims.Recursion.RestElemR
 import Proofs.Flock.Claims.Recursion.RestVerdictBases
 import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Proofs.Flock.Claims.Recursion.RestVerdictDraw
