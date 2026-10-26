@@ -36,9 +36,9 @@
 #   PP_TORCH_FROZEN=1: the torch loop's decode step at the frozen H200 shape (verity_torch_loop.serve_frozen: width 16,384, MQA,
 #     MLP 65,536, every matmul coordinate a unit), one window per template, each audited from its records alone against the
 #     circuit registered before it ran, under PP_LAW (default subset:64, per window) in members of PP_TORCH_LOOP_CAP units
-#     (default 16384; PP_TORCH_FROZEN_CAPS a tag's own, default "s8-mlp=512": a member's drawn units are one --zk session,
-#     about 110 GB per 2^30 drawn bits, and a down projection's unit is 2^27), committed by PP_TORCH_FROZEN_WORKERS
-#     processes (default 16); then the tampered step (every output's
+#     (default 16384; PP_TORCH_FROZEN_CAPS a tag's own, default "s8-width=1024 s8-mlp=256": C-Flock refuses a member past
+#     m = log2(blocks) + k_log = 35, and the s8 units are k_log 25 and 27, one a block), committed by
+#     PP_TORCH_FROZEN_WORKERS processes (default 16); then the tampered step (every output's
 #     bit 0 flipped), whose drawn units Lean must refuse, on PP_TORCH_FROZEN_TAMPERED tags (default all; "none" skips it);
 #     W per block and pooled (frozen_w) into $O/w.json. PP_ONLY=honest|forged runs one arm. PP_TORCH_LOOP_SHAPE: more
 #     serve_frozen.py flags (--layers, --position, --tags, --keep).

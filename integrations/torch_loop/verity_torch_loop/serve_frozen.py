@@ -34,7 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--law", default="subset:64")
     ap.add_argument("--cap", type=int, default=16384, help="units a member at most")
     ap.add_argument("--cap-of", action="append", default=[], metavar="TAG=N",
-                    help="a tag's own cap: a member's drawn units are one --zk session, whose memory grows with them")
+                    help="a tag's own cap: C-Flock refuses a member past m = log2(blocks) + k_log = 35")
     ap.add_argument("--layers", type=int, default=1)
     ap.add_argument("--position", type=int, default=len(PROMPT) - 1)
     ap.add_argument("--prompt", default=PROMPT)
