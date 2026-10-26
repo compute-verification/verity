@@ -162,6 +162,7 @@ import Proofs.Pouw.PearlC.PeelExists
 import Proofs.Pouw.PearlC.PeelExists4
 import Proofs.Pouw.PearlC.TileCheckWords
 import Proofs.Pouw.Pool
+import Proofs.Pouw.PoolWitness
 import Proofs.Pouw.Prob
 import Proofs.Pouw.QTree
 import Proofs.Pouw.Receipt
