@@ -9,7 +9,7 @@ import json
 import os
 import re
 
-from verity_vllm.check.match import capture_log as CL
+from verity_vllm.observe import capture_log as CL
 from verity_vllm.check.match import derived_index as DI
 from verity_vllm.check.match.match_run import MatchRun, NamedCheck
 from verity_vllm.program import prefix_plan as PP
@@ -310,21 +310,23 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     the production recorder nests the effective LLM(**kw) under `RunHeader.profile.engine_kwargs` and the compilation facts under
     `RunHeader.profile.compilation` (vllm_adapter build_manifest); older/foreign headers put them at the top level; the run's
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
-    sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}} -- the caller FAILS on any disagreement and when nothing is attested."""
+    sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}, and unreadable: {location: error} only when a location is present
+    but unreadable} -- the caller FAILS on any disagreement, on an unreadable location and when nothing is attested."""
     from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
     prof = header.get("profile") if isinstance(header.get("profile"), dict) else {}
     ek_top = header.get("engine_kwargs") if isinstance(header.get("engine_kwargs"), dict) else {}
     ek_prof = prof.get("engine_kwargs") if isinstance(prof.get("engine_kwargs"), dict) else {}
     ek_ver: dict = {}
+    unreadable: dict[str, str] = {}
     if oracle_dir:
         vp = os.path.join(oracle_dir, "capture", "versions.json")
         if os.path.exists(vp):
             try:
                 v = json.load(open(vp))
                 ek_ver = v.get("engine_kwargs") if isinstance(v.get("engine_kwargs"), dict) else {}
-            except Exception:  # noqa: BLE001 -- an unreadable versions.json is not an attestation
-                ek_ver = {}
+            except Exception as e:  # noqa: BLE001 -- an unreadable versions.json is not an attestation
+                unreadable["capture/versions.json"] = repr(e)[:200]
     engine_sources = {"RunHeader.profile.engine_kwargs": ek_prof, "RunHeader.engine_kwargs": ek_top, "capture/versions.json engine_kwargs": ek_ver}
     comp_sources = {"RunHeader.profile.compilation": prof.get("compilation"), "RunHeader.compilation": header.get("compilation"),
                     "RunHeader.profile.engine_kwargs.compilation_config": ek_prof.get("compilation_config"),
@@ -358,6 +360,8 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
         # the recorder's compilation block also states enforce_eager (profile.compilation.enforce_eager) -- an engine fact
         if isinstance(blk, dict) and isinstance(blk.get("enforce_eager"), bool):
             take("enforce_eager", blk["enforce_eager"], src + ".enforce_eager")
+    if unreadable:
+        out["unreadable"] = unreadable
     return out
 
 
@@ -434,6 +438,8 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
                                                                      "decide (MOE-01 ids = indexed-read); nothing declared, nothing assumed"})
     for k, (a, b, sa, sb) in facts["disagreements"].items():
         c.fail(f"the record's own sources disagree on {k}: {a!r} ({sa}) vs {b!r} ({sb}) -- the record does not attest one execution")
+    for src, err in (facts.get("unreadable") or {}).items():
+        c.fail(f"the record's {src} is present but unreadable ({err}): its engine conditions cannot be read, fail closed")
     if not app.get("engine"):
         c.fail("the workload Program declares no applicability.engine (pre-M-0063 artifact): the record's engine conditions cannot be "
                "checked against it -- rebuild the Program on a release carrying GP-01 applicability")

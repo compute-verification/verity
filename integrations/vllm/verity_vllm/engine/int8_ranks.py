@@ -9,8 +9,9 @@ registers what ``VERITY_INT8_PARTS`` names when it is imported, before the rank 
 """
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
+
+from verity_vllm import settings
 
 ENV = "VERITY_INT8_PARTS"
 PARTS = ("attention", "linears")
@@ -30,15 +31,15 @@ def register(parts: Iterable[str]) -> list[str]:
         from verity_vllm.engine import int8_attention_vllm
         int8_attention_vllm.register()
     if parts:
-        os.environ[ENV] = ",".join(parts)
+        settings.put(ENV, ",".join(parts))
     else:
-        os.environ.pop(ENV, None)
+        settings.unset(ENV)
     return parts
 
 
 def register_from_env() -> list[str]:
     """Register what ``VERITY_INT8_PARTS`` names in this process (a rank's); returns it."""
-    return register(p for p in os.environ.get(ENV, "").split(",") if p)
+    return register(settings.get(ENV))
 
 
 class Int8Ranks:
