@@ -34,8 +34,8 @@ open Claims (Msg)
 open FlockDeploy (Coin FinalP nodeOf)
 open Claims.Recursion.VStarB
 open FlockVBridge.Family (bytesAt outCol)
-open RecDeploy.OpenLower (Joint StagedAt AtPieces AtOpened ownQR ownQR_some copyR copyAtR schAt sideAtR OpenCopyR
-  CopyBitsR CopyTopR openPieces_computesA)
+open RecDeploy.OpenLower (Joint StagedAt AtPieces AtOpened ownQR ownQR_some copyR copyAtR schAt sideAtR sideLevel
+  OpenCopyR CopyBitsR CopyTopR openPieces_computesA)
 
 /-! ## `DecompB` with the parts' joint collision escape -/
 
@@ -200,15 +200,16 @@ def CapTopNC (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → Op
             (((sideAtR rd (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).d -
               ((sideAtR rd (Claims.Recursion.xI D x) ms' q).sch.levels[q.level]!).cap)) ByteArray.empty
 
-/-- **The cap tie from the binding and the reader**, the level part's siblings below the cap, `HH`, being the side's
-level's `d − c` (`OpenCopyR`, `OpenCopy`'s second conjunct). -/
+/-- **The cap tie from the binding and the reader**, at the deployed reader's statements at the dense form: the level
+part's siblings below the cap, `HH`, are the side's level's `d − c` (`sideLevel`). -/
 theorem capTop_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
-    (hO : OutBindR H D shape untr b cmt L Bd pieces posAt) (hS : SideCapR H D shape untr b cmt L Bd rd pieces posAt)
-    (hC : OpenCopyR H D shape untr b cmt L Bd rd pieces) : CapTopNC H D shape untr b cmt L Bd rd pieces posAt := by
+    (hP : ∀ x, D.parse x = parse x) (hD : ∀ f, shape f → Claims.Recursion.Form.Dense f)
+    (hO : OutBindR H D shape untr b cmt L Bd pieces posAt) (hS : SideCapR H D shape untr b cmt L Bd rd pieces posAt) :
+    CapTopNC H D shape untr b cmt L Bd rd pieces posAt := by
   intro x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht hnc os last hfin hl
   obtain ⟨r', ss', hr', hss', s', N', c', w', hs', hc', hw', hlt, hcap⟩ :=
     hS x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht os last hfin hl
-  have hHH := ((hC x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht).2.2.2 os last hfin hl).2.1
+  obtain ⟨-, hHH⟩ := sideLevel D shape rd hP hD hx hf hr hss hsv ho (Bd.opened os last)
   dsimp only
   rw [← hHH]
   exact (hO x st hx hf c ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht hnc r' ss' hr' hss' s' N' c' w'
