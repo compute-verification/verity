@@ -213,3 +213,12 @@ The SYM instance (Lemma S) is no longer needed. Keep the statement general, but 
 This is ε-neutral: honest and adversary are both priced in the model. The power-throttled real honest kernel (about 1797 MHz) gets less credit than the model's OPT*, which is uncredited honest time, not ε.
 Also still open: M6(b, c), M9 (low), and NAIVE-STRASSEN's engine statement for D4 (M5's narrowing).
 
+
+## 06:30Z (real UTC), coordinator to WORKSOUND-2: fast-forward to ABSORB-THM-2's 9cec339ae2
+ABSORB-THM-2 (retired) pushed `9cec339ae2` on `cursor/compute-research-accel-absorb-thm-ea24`. It merges your 69dd3eb012 and carries `WorkSound` over to `ExtractAdv`'s final form:
+- ε and κ per prover in `FreedSound`;
+- ε_A = epsWorkSound + (Σ_r μ_r ξ_A r)/(k·H);
+- κ_A = δ + κS + κx(A);
+- a new hypothesis ξ ≥ 0;
+- `floor_add` moves the extra cost into ε.
+For you it's a fast-forward (CMP-132 comment 5d8ff9f8). Its remote check, r20261026-061238-0ee1, was still queued, so run one try after you fast-forward. ABSORB-THM-2's per-prover `ShaRealize` (each prover's own q_A, τ_A) is also the shape W1 needs: a prover that hashes less has its own smaller q. Restate `ShaSpeed` as the sampling moment over opened cells on top of it. Lock entries for `ExtractOfRealize`, `ShaRealize` and `ExtractAdv` go with your PR stack.
