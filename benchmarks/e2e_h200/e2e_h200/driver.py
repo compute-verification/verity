@@ -299,6 +299,8 @@ class Driver:
         c0 = self._tick(sec, "forward", c0)
         roots = self.committer.finish(st)
         self._tick(sec, "commit_wait" if self.committer.streams else "commit", c0)
+        if roots.seconds is not None:
+            sec["commit_gpu"] = roots.seconds
         out = nxt.cpu().numpy().astype(np.int64)
         res = StepResult(st.step, int(positions[0]), np.asarray(tokens).copy(), out, roots.root, roots.tables,
                          self.value_bytes(n), sec, slots, positions, roots.slot_roots, st.salt_key)
