@@ -237,10 +237,10 @@ theorem msgsOf_getElem? (rs : Array RecVStar.SchedRound) (rr : ℕ → List _roo
 theorem srcOf_eq {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : I.Tape} {hist : List (Msg × Msg)} {r : XR}
     {rs : Array RecVStar.SchedRound} (hr : readX x = some r) (hrs : repSched r.shape = some rs)
     {src : _root_.VStar.In.Src} (hsrc : srcOf I x w ρ hist = some src) :
-    src = { I.rest w ρ.1 hist with msgs := msgsOf rs (roundRows I w ρ hist),
-      tops := topsOf rs (roundRows I w ρ hist) } := by
-  have e : srcOf I x w ρ hist = some { I.rest w ρ.1 hist with msgs := msgsOf rs (roundRows I w ρ hist),
-      tops := topsOf rs (roundRows I w ρ hist) } := by
+    src = { I.rest w ρ.1 hist with
+      msgs := msgsOf rs (roundRows I w ρ hist), tops := topsOf rs (roundRows I w ρ hist) } := by
+  have e : srcOf I x w ρ hist = some { I.rest w ρ.1 hist with
+      msgs := msgsOf rs (roundRows I w ρ hist), tops := topsOf rs (roundRows I w ρ hist) } := by
     simp [srcOf, hr, hrs]
   rw [e] at hsrc
   exact (Option.some.inj hsrc).symm
