@@ -18,7 +18,7 @@ Marks:
 - **coarse**: a model opcode that does at least as much, at no more units;
 - **over-approximated**: an exact integer version at the unit's rate and in its register layout. It equals the unit on
   its format's exact integers once the card's float codes are read as those integers (`Card.decode`, the encoding
-  `Assumptions.CardWithinAccel` refines up to, RT-LEAN-2 L30). Use out of that range is outside the claim;
+  `Assumptions.CardWithinAccel` refines up to, RT-LEAN-2 L30). Use out of that range is outside the claim on the contents where it occurs;
 - **missing**: not in the model.
 
 Where the two cards differ, a row says which. Otherwise it holds for both.

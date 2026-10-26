@@ -30,7 +30,8 @@ tensor core, is in the set as an **exact integer version**, at the unit's rate a
 the integers the unit computes exactly (its format's exact range), the version computes the same values, read and
 written as two's-complement integers where the card holds float codes. `Card.decode` is that reading of the card's
 registers, and `Assumptions.CardWithinAccel` is a refinement up to it (RT-LEAN-2 L30). Out of range the version reads
-an operand as zero and keeps its result's low bits where the unit rounds; such uses are outside the claim. These are:
+an operand as zero and keeps its result's low bits where the unit rounds; such uses are outside the claim on the
+contents where they occur (`CardWithinAccel`'s per-input scope limit). These are:
 DMMA (`Op.dmma`, exact on operands within FP64's ±2^53, each element two words); the FP64 lanes (`Lane.dfma`,
 likewise; `DADD` and `DMUL` are it with `b = 1` or `c = 0`); `HFMA2` (`Lane.hfma2`, each half exact on integers
 within f16's ±2048, both halves in one word; `HADD2`, `HMUL2` and the `bf16` forms, exact within ±256, likewise); the
