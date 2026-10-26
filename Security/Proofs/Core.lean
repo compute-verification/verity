@@ -25,6 +25,7 @@ import Proofs.Core.TC
 import Proofs.Core.Fp32
 import Proofs.Core.Accel.Principles
 import Proofs.Core.Accel.Float
+import Proofs.Core.Accel.Decode
 import Proofs.Core.Accel.Witness
 
 /-!
