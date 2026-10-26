@@ -900,5 +900,21 @@ def openings (params commitment evidence : ByteArray) (bs : Core.Blobs) : V (Arr
 #guard (rowsTerms #[⟨0, 0⟩] #[⟨1, 1, ⟨1, 10⟩, 0⟩] ⟨0, 0⟩ #[⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 2
   ).eps.toString == "1/3"
 #guard (rowsTerms #[] #[] ⟨0, 0⟩ #[] #[] 1 1).schedules == 0
+-- a clock-form link-window that carries an answer is refused by name, whatever else it carries
+#guard match windowOf (Json.mkObj [("answer", Json.mkObj [("verdict", Json.str "accept")]),
+    ("certificates", Json.arr #[])]) "a link-window" with
+  | .error r => r == "a link-window: answer: the check runs one-stage v2 on the link-window's proof itself and takes no " ++
+      "answer for it"
+  | .ok _ => false
+-- the auditor's one-stage v2 parameters carry no ports: each link-window's is its served domain
+#guard match oneStageOf (Json.mkObj [("ports", Json.mkObj [])]) with
+  | .error r => r == "one_stage: ports are each link-window's own (its served domain), which the check derives"
+  | .ok _ => false
+#guard match saltsOf (Json.mkObj [("o0", Json.str "00"), ("pub", Json.str "00")]) "salts" with
+  | .error r => r == "salts: a salt is 192 bytes"
+  | .ok _ => false
+#guard (withKey (Json.mkObj [("a", toJson 1), ("b", toJson 2)]) "a" (toJson 3)).getObjValD "a" == toJson 3 &&
+  (withKey (Json.mkObj [("a", toJson 1), ("b", toJson 2)]) "a" (toJson 3)).getObjValD "b" == toJson 2 &&
+  withKey (toJson 1) "a" (toJson 3) == toJson 1
 
 end NetworkCheck.Period
