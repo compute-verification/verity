@@ -207,17 +207,17 @@ def owner (F : Flow N) (stop : Finset (Fin N)) (t : Fin N) : Option (Fin N) :=
   if t ∈ stop then some t else
     match F.free t with
     | none => none
-    | some j => if h : t < j then owner F stop j else none
+    | some j => if _h : t < j then owner F stop j else none
 termination_by N - t.val
-decreasing_by have := j.isLt; have : t.val < j.val := h; omega
+decreasing_by have := j.isLt; have : t.val < j.val := _h; omega
 
 theorem owner_of_mem (F : Flow N) {stop : Finset (Fin N)} {t : Fin N} (h : t ∈ stop) :
     owner F stop t = some t := by
-  rw [owner, if_pos h]
+  rw [owner, ite_eq_left h]
 
 theorem owner_of_free (F : Flow N) {stop : Finset (Fin N)} {t j : Fin N} (h : t ∉ stop) (hj : F.free t = some j)
     (hlt : t < j) : owner F stop t = owner F stop j := by
-  rw [owner, if_neg h]
+  rw [owner, ite_eq_right h]
   simp [hj, hlt]
 
 /-- A slot's owner is no earlier than the slot. -/
@@ -230,9 +230,9 @@ theorem owner_le (F : Flow N) (stop : Finset (Fin N)) {o : Fin N} (t : Fin N) (h
     intro t hm h
     rw [owner] at h
     by_cases hs : t ∈ stop
-    · rw [if_pos hs] at h
+    · rw [ite_eq_left hs] at h
       exact le_of_eq (Option.some_injective _ h)
-    · rw [if_neg hs] at h
+    · rw [ite_eq_right hs] at h
       rcases hf : F.free t with _ | j
       · simp [hf] at h
       · by_cases hlt : t < j
@@ -261,16 +261,16 @@ theorem prodPart_sum (P : SlpG V R N) (S : Finset (Fin N)) (s : Fin N)
     refine Finset.sum_congr rfl fun k _ => ?_
     have hk : (Fin.castLEEmb s.isLt.le k) = ⟨k.val, k.isLt.trans s.isLt⟩ := rfl
     rw [hk]
-    simp only [G, mu, dif_pos k.isLt]
+    simp only [G, mu, dite_eq_left k.isLt]
     by_cases hp : P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true
     · by_cases hl : P.lin s k = 0
       · simp [hl]
-      · rw [if_pos (hS k hp hl)]
+      · rw [ite_eq_left (hS k hp hl)]
         simp [hp]
     · simp [hp]
   have e2 : ∑ k ∈ univ.map (Fin.castLEEmb s.isLt.le), G k = ∑ k, G k := by
     refine Finset.sum_subset (Finset.subset_univ _) fun k _ hk => ?_
-    have hks : ¬k.val < s.val := fun hks => hk (Finset.mem_map.mpr ⟨⟨k.val, hks⟩, Finset.mem_univ _, rfl⟩)
+    have hks : ¬k < s := fun hks => hk (Finset.mem_map.mpr ⟨⟨k.val, hks⟩, Finset.mem_univ _, rfl⟩)
     simp [G, mu, hks]
   rw [e1, e2, Finset.sum_ite_mem, Finset.univ_inter]
 
@@ -306,6 +306,7 @@ noncomputable def delSet (P : SlpG V R N) (F : Flow N) : Finset (Σ j : Fin N, F
   univ.filter fun e : Σ j : Fin N, Fin j.val =>
     P.isProd e.1 = false ∧ P.lin e.1 e.2 ≠ 0 ∧ F.free ⟨e.2.val, e.2.isLt.trans e.1.isLt⟩ ≠ some e.1
 
+omit [Fintype V] in
 theorem deliveries_eq (P : SlpG V R N) (F : Flow N) : deliveries P F = (delSet P F).card := rfl
 
 open Classical in
@@ -334,7 +335,7 @@ theorem walk (P : SlpG V R N) (F : Flow N) (hF : F.WF P) (stop : Finset (Fin N))
   by_cases hd : ∃ k : Fin s.val, P.lin s k ≠ 0 ∧ F.free ⟨k.val, k.isLt.trans s.isLt⟩ ≠ some s
   · obtain ⟨k, hl, hf⟩ := hd
     exact Or.inl ⟨⟨s, k⟩, by simp [delSet, hs, hl, hf], ho⟩
-  push_neg at hd
+  simp only [not_exists, not_and, not_not] at hd
   have hS : ∀ k : Fin s.val, P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true → P.lin s k ≠ 0 →
       (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∈ ownProds P F stop o := by
     intro k hp hl
@@ -832,7 +833,7 @@ theorem ringKCount_of_rank (hR : PrefixDiffRank) : RingKCount := by
   intro R _ φ n L np B n' w p₀ hw pc vq N P F hF hA word hword
   classical
   rcases Nat.eq_zero_or_pos L with hL | hL
-  · exact ⟨(certified pc vq w P word).card, 0, rfl, by rw [hL, zero_mul]; exact Nat.zero_le _, Nat.zero_le _⟩
+  · exact ⟨(certified pc vq w P word).card, 0, rfl, by subst hL; simp, Nat.zero_le _⟩
   set cert := certified pc vq w P word with hcert
   have hcertE : ∀ e ∈ cert, Certified pc vq w P word e := fun e he => by simpa [hcert, certified] using he
   have hinj := word_injOn hR φ w p₀ hw hL pc vq P word
@@ -846,7 +847,7 @@ theorem ringKCount_of_rank (hR : PrefixDiffRank) : RingKCount := by
     intro k
     by_cases hk : P.isProd k = true
     · obtain ⟨A, Bo, h⟩ := hA k hk
-      exact ⟨(A, Bo), fun _ z => by rw [SlpG.val, if_pos hk]; exact h z⟩
+      exact ⟨(A, Bo), fun _ z => by rw [SlpG.val, ite_eq_left hk]; exact h z⟩
     · exact ⟨(⟨0, 0⟩, ⟨0, 0⟩), fun h => absurd h hk⟩
   choose AB hAB using hAB
   have hsum : ∀ (lam : Fin N → R) (o : Fin N) z, ∑ k ∈ ownProds P F stop o, lam k * P.val z k =
