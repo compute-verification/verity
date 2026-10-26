@@ -1,5 +1,5 @@
-"""The skeleton at ALLP-IFACE's tiny shape on the CPU: every unit of a step replays bit for bit, the driver's rows equal the
-replay lane's independent `cpu_step`, a tampered table doesn't replay, the commit backends agree, the store's layout stages
+"""The skeleton at ALLP-IFACE's tiny shape and at MINI (every level of circuits' FAMILIES map) on the CPU: every unit of a step
+replays bit for bit, the driver's rows equal the replay lane's independent `cpu_step`, a tampered table doesn't replay, the commit backends agree, the store's layout stages
 every tensor, and `run.py` writes its record and bundle."""
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from e2e_h200 import store as STO
 from e2e_h200.commit import Committer, fixture_salt, fixture_secrets
 from e2e_h200.driver import Driver
 from e2e_h200.legs import pous_spot_reads, wipe_reload
-from e2e_h200.shape import SMALL, TINY
+from e2e_h200.shape import MINI, SMALL, TINY
 from e2e_h200.store import GeneratorStore, P2Store
 from e2e_h200.units import Replayer
 from e2e_h200.weights import Weights
@@ -26,8 +26,13 @@ PROMPTS = np.array([list(b"hi"), list(b"ok")])
 TAMPER = "l0.wup"
 
 
-def drive(store, backend="reference", tamper=None, device="cpu"):
-    d = Driver(TINY, store, BATCH, Committer(backend, *fixture_secrets("test")), device, clock=lambda: 0.0, tamper=tamper)
+#: each shape and the `cpu_step` forms of its map: RMSNorm's chunk and the chunks a group sums
+FORMS = {TINY.name: CS.Forms(rms_chunk=TINY.width, rms_group=1, amax_chunk=16, part_fanin=2, pv_k=32),
+         MINI.name: CS.Forms(rms_chunk=32, rms_group=2, amax_chunk=16, part_fanin=2, pv_k=32)}
+
+
+def drive(store, backend="reference", tamper=None, device="cpu", shape=TINY):
+    d = Driver(shape, store, BATCH, Committer(backend, *fixture_secrets("test")), device, clock=lambda: 0.0, tamper=tamper)
     return d, d.run(PROMPTS, STEPS)
 
 
@@ -41,8 +46,15 @@ def honest(weights):
     return drive(GeneratorStore(weights))
 
 
-def replayer(weights, d, results):
-    return Replayer(TINY, weights, d.steps, [r.tokens_in for r in results])
+@pytest.fixture(scope="module", params=[TINY, MINI], ids=lambda s: s.name)
+def shaped(request):
+    """(shape, weights, driver, results) at the tiny shape and at MINI."""
+    w = Weights(request.param)
+    return (request.param, w) + drive(GeneratorStore(w), shape=request.param)
+
+
+def replayer(weights, d, results, shape=TINY):
+    return Replayer(shape, weights, d.steps, [r.tokens_in for r in results])
 
 
 def test_tok_is_one_coordinate_a_row_and_the_driver_reads_token_rows(weights, honest):
@@ -52,29 +64,28 @@ def test_tok_is_one_coordinate_a_row_and_the_driver_reads_token_rows(weights, ho
     assert np.array_equal(honest[0].tok[v].view(torch.int16).numpy().view(np.uint16), tok[:, v])
 
 
-def test_every_unit_of_every_step_replays(weights, honest):
-    d, results = honest
-    rp = replayer(weights, d, results)
+def test_every_unit_of_every_step_replays(shaped):
+    shape, weights, d, results = shaped
+    rp = replayer(weights, d, results, shape)
     units = [u for s in range(STEPS) for u in rp.every(s)]
-    assert len({u.template.split("{")[0] for u in units}) == 9
+    assert len({u.template.split("{")[0] for u in units}) == 11
     assert [u.doc() for u in units if not u.ok][:3] == []
 
 
-def test_a_draw_covers_every_family(weights, honest):
-    d, results = honest
-    rp = replayer(weights, d, results)
+def test_a_draw_covers_every_family(shaped):
+    shape, weights, d, results = shaped
+    rp = replayer(weights, d, results, shape)
     units = rp.draw(STEPS - 1, 2, b"test")
     assert {u.family for u in units} == {f.name for f in rp.families(STEPS - 1)} and all(u.ok for u in units)
 
 
-def test_driver_rows_equal_cpu_step(honest):
-    """The replay lane's `cpu_step` (16-bit unit forms, written apart from the driver) at forms whose RMSNorm sum is one
-    sequential chunk: the same bytes out, and every residual row and logit row equal."""
+def test_driver_rows_equal_cpu_step(shaped):
+    """The replay lane's `cpu_step` (16-bit unit forms, written apart from the driver) at the shape's map's RMSNorm chunks
+    and groups: the same bytes out, and every residual row and logit row equal."""
     from verity_torch_loop import weights as SW
-    st = CS.Step(TINY, lambda n: SW.generate(TINY, SW.TEST_SEED, n), batch=BATCH,
-                 forms=CS.Forms(rms_chunk=TINY.width, rms_group=1, amax_chunk=16, part_fanin=2, pv_k=32))
+    shape, _, d, results = shaped
+    st = CS.Step(shape, lambda n: SW.generate(shape, SW.TEST_SEED, n), batch=BATCH, forms=FORMS[shape.name])
     out = CS.decode(st, [b"hi", b"ok"], STEPS - 1)
-    d, results = honest
     assert out == [bytes(PROMPTS[b].tolist()) + bytes(int(r.tokens_out[b]) for r in results[1:]) for b in range(BATCH)]
     rows = 0
     for u in st.rec.t.values():

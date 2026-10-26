@@ -18,7 +18,8 @@ A directory whose `.custody` marker (store.custody) says `preserved: true` and w
 RUN_EXPIRY after the marker's `verified_utc`; priority `normal`. Nothing is written for it, and a sidecar always wins.
 
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
-then the oldest expiry, until it is under low-pct. A path qualifies only with a valid record (explicit or implicit) recorded on
+then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
+a disk out of inodes refuses every write as one out of blocks does (vy-dc-h200, 26 Oct: inodes at 100%, blocks at 32%). A path qualifies only with a valid record (explicit or implicit) recorded on
 this node that is expired, `low` or `normal`, and preserved or regenerable; a preserved path also needs its artifact to hold every
 file now under it at its size, and the artifact PRESERVED on the remote, checked just before the deletion (`store_check`); and no
 file in the job-script directories may name it (`JobScripts`). An implicit record also needs its marker to still vouch for the run
@@ -76,6 +77,12 @@ TS = "%Y-%m-%dT%H:%M:%SZ"
 NAME_CHAR = r"[\w.-]"
 
 disk_usage = shutil.disk_usage
+
+
+def inode_usage(path: Path) -> tuple[int, int]:
+    """(total, used) inodes of the filesystem holding `path`; (0, 0) where it doesn't count them."""
+    st = os.statvfs(path)
+    return st.f_files, st.f_files - st.f_ffree
 
 
 class RecordError(ValueError):
@@ -662,9 +669,11 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
        force: bool = False, apply: bool = False, jobs_dirs: Sequence[Path | str] | None = None, depth: int = 2,
        now: Callable[[], datetime] = utc_now, usage: Callable[[Path], Any] = shutil.disk_usage,
        remote_check: Callable[[str, Path], str | None] | None = None, in_use: Callable[[Path], str | None] | None = None,
-       node: str | None = None, store_root: str | None = None) -> dict[str, Any]:
+       node: str | None = None, store_root: str | None = None,
+       inodes: Callable[[Path], tuple[int, int]] | None = None) -> dict[str, Any]:
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
-    DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root)`; `in_use` None is `JobScripts(jobs_dirs)`."""
+    DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root)`; `in_use` None is `JobScripts(jobs_dirs)`;
+    `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone."""
     if policy not in POLICIES:
         raise ValueError(f"unknown policy {policy!r} (have: {', '.join(POLICIES)})")
     if low_pct > high_pct:
@@ -672,9 +681,15 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     root = Path(os.path.abspath(root))
     t, node = now(), node or socket.gethostname()
     total, used, _ = usage(root)
-    pct = 100 * used / total if total else 100.0
+    itotal, iused = inodes(root) if inodes else (0, 0)
+
+    def fullness() -> float:
+        return max(100 * used / total if total else 100.0, 100 * iused / itotal if itotal else 0.0)
+
+    pct = fullness()
     plan: dict[str, Any] = {"schema": "research/retention-gc/v0", "policy": POLICY, "root": str(root), "node": node, "now": fmt_utc(t),
                             "apply": apply, "force": force, "high_pct": high_pct, "low_pct": low_pct, "pct_before": round(pct, 2),
+                            "inodes_pct_before": round(100 * iused / itotal, 2) if itotal else None,
                             "acting": force or pct > high_pct, "actions": [], "freed_bytes": 0, "errors": []}
     if not plan["acting"]:
         plan["pct_after"] = plan["pct_before"]
@@ -716,13 +731,15 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             continue
         if not apply:
             used -= row.bytes
-            pct = 100 * used / total if total else 100.0
+            iused -= row.files
+            pct = fullness()
             acts.append(Action(row, "delete", "would delete: " + _why_deletable(row.record, False), round(pct, 2)))
             plan["freed_bytes"] += row.bytes
             continue
         err = _delete(root, p)
         total, used, _ = usage(root)
-        pct = 100 * used / total if total else 100.0
+        itotal, iused = inodes(root) if inodes else (0, 0)
+        pct = fullness()
         acts.append(Action(row, "delete", "deleted: " + _why_deletable(row.record, bool(row.record.get("preserved"))), round(pct, 2), err))
         if not err:
             plan["freed_bytes"] += row.bytes
@@ -1070,7 +1087,8 @@ def main(argv: list[str]) -> int:
         jobs = [d for d in DEFAULT_JOBS_DIRS if d.is_dir()] + [Path(d) for d in ns.jobs_dir]
         try:
             plan = gc(ns.root, policy=ns.policy, high_pct=ns.high_pct, low_pct=ns.low_pct, force=ns.force, apply=ns.apply,
-                      now=utc_now, usage=disk_usage, remote_check=store_check(ns.store), in_use=JobScripts(jobs, ns.root))
+                      now=utc_now, usage=disk_usage, remote_check=store_check(ns.store), in_use=JobScripts(jobs, ns.root),
+                      inodes=inode_usage)
         except ValueError as e:
             print(f"research retention gc: {e}", file=sys.stderr)
             return 2

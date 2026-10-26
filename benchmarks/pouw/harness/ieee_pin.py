@@ -17,7 +17,7 @@ runs on an sm_90 card; no suffix, sm_120a), and one run's toolkits share one tar
 - every pinned build passes the gate (against the pins with this run's numeric pending) with every sequence (`SEQUENCES`)
   and every pinned subroutine covered, and every control fails it.
 Then `gpu-lease 1 --wait` runs every binary (this script's --run) on the one GPU it leases, whose UUID each binary must
-report, and releases it. A pinned build passes when every check of `CASES` ran all its cases (and skipped only division by
+report, and releases it. A pinned build passes when every check of `CASES` (and `UNITS_CASES` on an sm_90 card) ran all its cases (and skipped only division by
 zero or overflow), none differs from its reference, and every float check saw subnormal inputs and, but for sqrt,
 subnormal outputs; a control must differ somewhere. Writes $RESEARCH_RUN_DIR/ieee-pin.json (--out); exits 0 only if every
 toolkit passed.
@@ -59,14 +59,17 @@ PINNED = [[], ["-fmad=false"]]
 CONTROLS = [["--use_fast_math"], ["-ftz=true"], ["-prec-div=false", "-prec-sqrt=false"]]
 SEQUENCES = {"rcp-fast-path", "sqrt-fast-path", "div-fast-path", "int-seed"}
 DEFAULT_HOMES = {"13.0.1": "/usr/local/cuda"}
-LEASE_MINUTES = 15
+LEASE_MINUTES = 30
 _ALL, _HOST = 1 << 32, (1 << 24) - 2 + (1 << 25)
 #: each check ieee_pin.cu prints, and how many inputs it covers (cases plus skipped)
 CASES = {"rcp": _ALL, "sqrt": _ALL, "div": _ALL, "cdiv3": _ALL, "cdiv": _ALL, "u16": _ALL, "u16_call": _ALL, "u32": _ALL,
          "s32": _ALL, "u32n": _ALL, "u64": 1 << 30, "s64": 1 << 30, "host_rcp": _HOST, "host_sqrt": _HOST,
          "host_div": _HOST, "host_cdiv3": _HOST}
-FLOAT = {"rcp", "sqrt", "div", "cdiv3", "cdiv", "host_rcp", "host_sqrt", "host_div", "host_cdiv3"}
-SQRT = {"sqrt", "host_sqrt"}  # a square root is never subnormal
+#: the checks of the bodies ptxas builds for kernels' units.cu (ieee_pin.cu's units_checks), which only an sm_90 card runs
+UNITS_CASES = {"units_sqrt": _ALL, "units_rms_mean": _ALL, "units_rms_rs": _ALL, "units_soft_one": _ALL,
+               "units_soft_div": _ALL}
+FLOAT = {"rcp", "sqrt", "div", "cdiv3", "cdiv", "host_rcp", "host_sqrt", "host_div", "host_cdiv3", *UNITS_CASES}
+SQRT = {"sqrt", "host_sqrt", "units_sqrt"}  # a square root is never subnormal
 
 
 class PinFailed(RuntimeError):
@@ -179,7 +182,8 @@ def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]
         return problems
     if run.get("exit") != 0:
         problems.append(f"exit {run.get('exit')}: {run.get('stderr', '')[-300:]}")
-    for name, n in CASES.items():
+    cases = {**CASES, **(UNITS_CASES if sm == ARCHS["sm_90a"] else {})}
+    for name, n in cases.items():
         c = checks.get(name)
         if c is None:
             problems.append(f"no {name} check")
@@ -191,7 +195,7 @@ def judge_run(run: dict, control: bool, sm: int = ARCHS["sm_120a"]) -> list[str]
         if name in FLOAT and (c["skipped"] or not c["subnormal_in"] or (name not in SQRT and not c["subnormal_out"])):
             problems.append(f"{name}: {c['subnormal_in']} subnormal inputs, {c['subnormal_out']} subnormal outputs, "
                             f"{c['skipped']} skipped")
-    extra = sorted(set(checks) - set(CASES))
+    extra = sorted(set(checks) - set(cases))
     if extra:
         problems.append(f"unknown checks {extra}")
     return problems

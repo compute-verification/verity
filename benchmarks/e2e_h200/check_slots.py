@@ -9,8 +9,7 @@ the state mod 256. A row read from another request, a stale row or a converted b
     python check_slots.py --device cuda --out "$OUT"     # 1,024 slots, 52 layers, ctx 32, head 64; writes slots-check.json
 
 It runs the batched path on the device and on the CPU, compares every finished request's bytes and every step's rows
-(SHA-512 of each step's ``rows().words``), compares a sample of requests' rows with the per-request reference, and opens
-sampled K/V rows of one step through the stand-in commit.
+(SHA-512 of each step's ``rows().words``), and compares a sample of requests' rows with the per-request reference.
 """
 from __future__ import annotations
 
@@ -26,7 +25,7 @@ import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from e2e_h200.slots import Finished, Request, SlotKV, SlotShape, StepPlan, StepRows, commit_step, verify_row  # noqa: E402
+from e2e_h200.slots import Finished, Request, SlotKV, SlotShape, StepPlan, StepRows  # noqa: E402
 
 P = 2**31 - 1
 A = 1103515245
@@ -90,9 +89,9 @@ def requests(shape: SlotShape, n: int, seed: int = 0) -> list[Request]:
     return [Request(1000 + i, bytes(data[i].tolist())) for i in range(n)]
 
 
-def run(kv: SlotKV, reqs: Sequence[Request], on_step: Callable[[StepPlan, StepRows], int] | None = None,
+def run(kv: SlotKV, reqs: Sequence[Request], on_step: Callable[[StepPlan, StepRows], None] | None = None,
         on_begin: Callable[[SlotKV, StepPlan], None] | None = None) -> dict[int, Finished]:
-    """Serve ``reqs`` through ``kv`` until idle. ``on_step`` sees each step's rows and returns the KV rows' base index."""
+    """Serve ``reqs`` through ``kv`` until idle. ``on_step`` sees each step's rows."""
     kv.submit(reqs)
     done: dict[int, Finished] = {}
     while not kv.idle:
@@ -100,9 +99,9 @@ def run(kv: SlotKV, reqs: Sequence[Request], on_step: Callable[[StepPlan, StepRo
         if on_begin:
             on_begin(kv, plan)
         tokens = toy_step(kv, plan)
-        rows = kv.rows()
-        base = on_step(plan, rows) if on_step else 0
-        done.update((f.seq, f) for f in kv.end(tokens, base))
+        if on_step:
+            on_step(plan, kv.rows())
+        done.update((f.seq, f) for f in kv.end(tokens))
     return done
 
 
@@ -113,32 +112,26 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--layers", type=int, default=52)
     ap.add_argument("--requests", type=int, default=3 * 1024)
     ap.add_argument("--sample", type=int, default=48, help="requests checked row by row against the per-request reference")
-    ap.add_argument("--commit-slots", type=int, default=4, help="slots of one step committed through the stand-in and opened")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
     shape = SlotShape(slots=a.slots, layers=a.layers)
     reqs = requests(shape, a.requests)
-    result: dict = {"shape": shape.__dict__ | {"steps": shape.steps, "rows": shape.rows}, "device": a.device,
-                    "torch": torch.__version__, "requests": len(reqs)}
+    result: dict = {"shape": shape.__dict__ | {"steps": shape.steps}, "device": a.device, "torch": torch.__version__,
+                    "requests": len(reqs)}
     if a.device.startswith("cuda"):
         result["gpu"] = torch.cuda.get_device_name(0)
 
-    def serve(device: str, keep: set[int]) -> tuple[SlotKV, dict[int, Finished], list[str], dict, dict, float]:
+    def serve(device: str, keep: set[int]) -> tuple[SlotKV, dict[int, Finished], list[str], dict, float]:
         kv = SlotKV(shape, device)
         digests: list[str] = []
         kept: dict[tuple[int, int], torch.Tensor] = {}
-        step_rows: dict[int, StepRows] = {}
-        commit_step_at = shape.steps + 3
 
-        def on_step(plan: StepPlan, rows: StepRows) -> int:
+        def on_step(plan: StepPlan, rows: StepRows) -> None:
             w = rows.words.cpu()
             digests.append(hashlib.sha512(w.numpy().tobytes() + rows.slots.cpu().numpy().tobytes()).hexdigest())
             for i, (seq, p) in enumerate(zip(rows.seqs, rows.positions.tolist())):
                 if seq in keep:
-                    kept[seq, p] = w[i].reshape(shape.layers, 2, shape.head_dim)
-            if plan.step == commit_step_at:
-                step_rows[plan.step] = StepRows(rows.step, rows.slots.cpu(), rows.seqs, rows.positions.cpu(), w)
-            return 0
+                    kept[seq, p] = w[i]
 
         if device.startswith("cuda"):
             torch.cuda.synchronize()
@@ -146,10 +139,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         done = run(kv, reqs, on_step)
         if device.startswith("cuda"):
             torch.cuda.synchronize()
-        return kv, done, digests, kept, step_rows, time.perf_counter() - t0
+        return kv, done, digests, kept, time.perf_counter() - t0
 
     sample = {r.seq for r in reqs[:: max(1, len(reqs) // a.sample)][: a.sample]}
-    kv, done, digests, kept, step_rows, secs = serve(a.device, sample)
+    kv, done, digests, kept, secs = serve(a.device, sample)
     reused = sorted({f.slot for f in done.values()})
     hosts = {j: sum(f.slot == j for f in done.values()) for j in reused}
     result["device_run"] = {"steps": kv.step + 1, "seconds": round(secs, 3), "finished": len(done),
@@ -158,7 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ok = len(done) == len(reqs)
 
     if a.device != "cpu":
-        _, cdone, cdigests, _, _, csecs = serve("cpu", set())
+        _, cdone, cdigests, _, csecs = serve("cpu", set())
         same_bytes = all(cdone[s].generated == done[s].generated and cdone[s].slot == done[s].slot for s in done)
         result["cpu_run"] = {"seconds": round(csecs, 3), "same_generated_and_slots": same_bytes,
                              "same_step_row_digests": cdigests == digests, "steps": len(cdigests)}
@@ -173,32 +166,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             bad.append(seq)
     result["reference"] = {"requests": len(sample), "mismatched": bad}
     ok &= not bad
-
-    (step, sr), = step_rows.items()
-    in_sample = [i for i, s in enumerate(sr.seqs) if s in sample]
-    pick = (in_sample or list(range(len(sr.seqs))))[: a.commit_slots]
-    t0 = time.perf_counter()
-    c = commit_step(step, (sr.slots[pick], sr.words[pick]), slots=shape.slots, run="check-slots", salt_key=bytes(32))
-    commit_secs = time.perf_counter() - t0
-    opened = 0
-    for i in pick:
-        seq, slot, p = sr.seqs[i], int(sr.slots[i]), int(sr.positions[i])
-        want = kept.get((seq, p))
-        for layer in range(shape.layers):
-            for ref in kv.refs(seq, layer, p):
-                if ref.step != step:
-                    continue
-                for r in range(ref.rows):
-                    o = c.open(slot, ref.index + r)
-                    good = verify_row(o, c.root, slots=shape.slots, row_bits=c.row_bits, run="check-slots")
-                    if want is not None:
-                        span = slice(r * shape.row_words, (r + 1) * shape.row_words)
-                        good &= o.words.tolist() == want[ref.layer, ref.kind, span].tolist()
-                    ok &= good
-                    opened += 1
-    result["stand_in_commit"] = {"step": step, "slots": len(pick), "rows_per_slot": shape.rows, "seconds": round(commit_secs, 3),
-                                 "rows_opened_and_verified": opened, "against_reference": bool(in_sample),
-                                 "root": c.root.hex()}
     result["ok"] = bool(ok)
     text = json.dumps(result, indent=2)
     print(text)
