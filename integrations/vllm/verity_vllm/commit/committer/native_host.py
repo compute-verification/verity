@@ -1524,7 +1524,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
     def _acquire_impl(self, name: str, t: Any, job: _StepJob) -> None:
         t0 = time.perf_counter()
         if self._rt is not None and t.is_contiguous():
-            return self._acquire_fast(name, t, job, t0)
+            return self._acquire_by_cudart(name, t, job, t0)
         src = t.detach()
         if not src.is_contiguous():
             src = src.contiguous()          # a device copy: counted under acquisition (bytes noted)
@@ -1567,10 +1567,10 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafScheme
         self.spans.add("acquisition", (t1 - t0) + (time.perf_counter() - t2), step=job.step)
         self.spans.add("movement", t2 - t1, step=job.step, nbytes=nbytes)
 
-    # ---- fast acquisition: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered on the
-    # compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).  Bit
-    # semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
-    def _acquire_fast(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
+    # ---- acquisition by libcudart: no torch ops on the serving thread at all -- the snapshot is one cudaMemcpyAsync (D2D, stream-ordered
+    # on the compute stream) issued through libcudart via ctypes on raw data pointers (~2 us CPU instead of ~15-20 us for slice+view+copy_).
+    # Bit semantics identical to the arena copy (the value check compares the committed bytes with hook-time clones).
+    def _acquire_by_cudart(self, name: str, t: Any, job: _StepJob, t0: float) -> None:
         nbytes = t.numel() * t.element_size()
         if nbytes == 0:
             return
