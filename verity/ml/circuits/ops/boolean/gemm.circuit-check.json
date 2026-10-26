@@ -68,6 +68,14 @@
    "and": 13356,
    "type": "15a6c2b7d902bd0a86b4fad6a43bdf36ac7581f32044ba1434bfcb9c9921cfe26ad48803ed1c7441118fe92030da9f07b7a4bca9419e2b87e511ab55c2784cef"
   },
+  "GemmCoordinatePad_v2{T=1,K=32,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 1692,
+   "type": "1984efddc2d33478fa04b0495cd527834d022f32bf77e089f7ed6b4545e263d15092118a9aa54859ed7bcb3f460826904bb7483c47c9a6bcabf6e04ae3137488"
+  },
+  "GemmCoordinatePad_v2{T=17,K=32,DOT=HopperBF16WgmmaDot16_v2}": {
+   "and": 8827,
+   "type": "d3fc93490b2dc024c64aca89761aabc36deee99774b68992e7c9fd738133b2ef9b7b85d3c00052d7f905f31afc53c466c4c4fe32f26c673d649e6e900466406c"
+  },
   "GemmCoordinate_v3{K=32,DOT=AmpereBF16TcDot16_v3}": {
    "and": 16294,
    "type": "5fb31094b0eb7c0d3c7fd813eb2578a0f5a08f16a88c98be26ab8c6165e4626e0a199142438f9e1b4d0c2e263dbcbc4c1a670d18262b81873981cb42d109177c"
@@ -107,6 +115,10 @@
   "S32ToF32Rn_v2": {
    "and": 368,
    "type": "78e2d362b7c6e44e80d36f19ac52657a956cf00187551c712f77c49da550c2b2ad1bc6cbe63c90169369e4a5fed11842fdccb4a3d0d378e715ec1b97bd80a0d7"
+  },
+  "ScaledMmS8CoordinateRows_v2{K=64,R=2,DOT=BlackwellS8ImmaDot32_v2}": {
+   "and": 13556,
+   "type": "b1be73b5fc559d01db34c5d90594afc1f722ef10c8a8009f6c2a46f8180f98a0ee1c0457b0a734cca2c49b76b6662357490683c1165c41afe5b93cd3363054dd"
   },
   "ScaledMmS8Coordinate_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}": {
    "and": 13556,

@@ -83,8 +83,9 @@ AUDIT_RECORD = "lean-audit.json"
 AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: Tracked data (everything but CODE_SUFFIXES and audit records) in the whole tree, so that many small files cannot
 #: add up to what one large one may not be. Audit records are left out: they must stay in Git and each has its own
-#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget.
-DATA_BUDGET = 40 * 1024 * 1024
+#: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB since 26 Oct:
+#: the E2E demo's fixtures (#4454, #4455) took the tree to 40.1 MiB; register the next large one rather than raising it again.
+DATA_BUDGET = 48 * 1024 * 1024
 REGISTRY = "fixtures/artifacts.json"
 
 

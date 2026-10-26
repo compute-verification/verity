@@ -1,4 +1,4 @@
-"""cb_a.global_match/v1 -- the GLOBAL Match of a batched execution against one rooted workload Program (R14 lane gmatch, GM-01): the
+"""cb_a.global_match/v1 -- the GLOBAL Match of a batched execution against one rooted workload Program (GM-01): the
 runtime match check of record.  Glossary (Draft 3 §12): a fold 'instance' is a Call, 'attribution' is occurrence resolution, and the
 capture log (RunHeader / StepStart / SampleEnd / StepLink rows) is execution evidence.
 
@@ -42,11 +42,11 @@ and establishes (each a named check with PASS / FAIL and evidence; the verdict i
 Time unit of the chronology: the ENGINE STEP (one model forward), counted from 0 = the first forward of the run.  Ordering
 convention: programmed dependencies and step indices only -- no statement about elapsed time is made or implied.
 
-Request identity [R15 COORD ruling 2]: the Program, the workload manifest and every check name requests `r<k>` (k = manifest position).
+Request identity: the Program, the workload manifest and every check name requests `r<k>` (k = manifest position).
 The record (RunHeader / StepStart rows / tokens.json / fold meta) names them by the manifest's UUID -- the id vLLM served them
 under; the checker maps those through the global Program's `workload_request_id` table (G1 verifies the UUID set == manifest).
 
-Within-step order [R15 DECISION M-0021 -> COORD ruling M-0177]: `within_step="dag"` (DEFAULT of record from r15-int-2) compares
+Within-step order: `within_step="dag"` (the DEFAULT of record) compares
 a request's step as an order-insensitive Merkle DAG multiset with structural canonical addresses; `within_step="sequence"` (the r14-v1
 verdicts) compares it as X-09's instance SEQUENCE (spec + wiring by position). The other criterion's verdict is recorded beside the
 verdict of record (`alternate_verdict`) and never merged into it. The dag criterion uses X-09's chunked-prefill Merkle multiset
@@ -125,11 +125,11 @@ def check(gp: dict, oracle_dir: str, log_path: str | None = None, tokens_path: s
           within_step: str = DEFAULT_WITHIN_STEP, record_alternate: bool = True,
           _loaded: dict | None = None, tokens_optional: bool = False) -> dict:
     """`_loaded` = {"oracle": SEQ.Prog, "components": {dir: SEQ.Prog}} decoded once by this process and shared with the X-09 run and
-    the alternate-criterion run ([R15 global, GM-01 memory]: the fold Prog is read-only after load; decoding it three times per
+    the alternate-criterion run (the fold Prog is read-only after load; decoding it three times per
     invocation -- check, X-09, alternate -- put GM-01's peak RSS at 87 GB on the B16 1024/128 record). The criteria are unchanged.
 
-    [R17 mprof] MATCH_IMPL=fast (BRIEF s5): the same body over global_match_fast's compute-once operations (`match_ops`); the outermost
-    call releases their caches when it returns or raises (rev F-r17-06), the nested alternate-criterion call keeps them."""
+    MATCH_IMPL=fast: the same body over global_match_fast's compute-once operations (`match_ops`); the outermost
+    call releases their caches when it returns or raises, the nested alternate-criterion call keeps them."""
     fast = GMF.enabled()
     ops = match_ops(fast)
     if not fast:
@@ -279,8 +279,8 @@ IMPL_DEFAULT = "fast"
 
 
 def impl_module(name: str | None = None):
-    """[R17 mfast, COORD R17-7.2] The checker implementation `MATCH_IMPL` selects: `fast` (`cb_a.global_match_fast`: the same criteria
-    with compute-once memoisation, compact operand progressions and forked per-request legs -- the Match of record since R17
+    """The checker implementation `MATCH_IMPL` selects: `fast` (`cb_a.global_match_fast`: the same criteria
+    with compute-once memoisation, compact operand progressions and forked per-request legs -- the Match of record
     (`sweep/row_pod.sh` exports it for every row) and the CLI's default) or `record` (this module's un-memoised single-process body:
     the audit checker the differential harness compares against).  Both expose `check(gp, oracle_dir, log_path, tokens_path, run_x09,
     within_step, record_alternate)` with the same result schema; the differential harness (`verity_vllm.pipeline.match_diff`) runs

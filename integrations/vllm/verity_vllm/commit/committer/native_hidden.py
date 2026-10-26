@@ -222,8 +222,8 @@ class NativeHiddenM1Source(HiddenM1Source):
         if self._tel_fh is not None:
             try:
                 self._tel_fh.close()
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception as e:  # noqa: BLE001
+                self.c.errors.append(f"fa2 tap telemetry close: {e!r}"[:200])
             self._tel_fh = None
 
 

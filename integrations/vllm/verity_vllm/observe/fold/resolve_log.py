@@ -1,7 +1,7 @@
 """Resolve a raw observation log against a pinned profile (lane L3; torch-free).
 
     uv run verity-vllm resolve-log data/logs/m1.jsonl.gz \
-        [--profile vllm_d9105ea80_sm89_eager] [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
+        --profile vllm_d9105ea80_sm89_eager [--step N] [--dump-trees] [--max-depth 6] [--out PATH] [--strict]
 
 Per step: `StepContext` (header, StepStart, SampleEnd, StepLinks, Roots by allocation — the weight/buffer Roots of the
 preamble plus the step's prompt-row Roots —, the profile's C, the profile), `resolve_step`, and the op histogram with
@@ -32,9 +32,6 @@ from verity_vllm.observe.fold.patterns import GEMM_TARGET_SCRATCH_KEY, X01_SCRAT
 from verity_vllm.observe.fold.resolver import (Compute, Group, Profile, Resolution, ResolutionError, ResolutionReport, StepContext, Transparent,
                                                external_buffers, spec_module, Unsupported, resolve_step)
 from verity_vllm.observe.fold.tree import StepEvents, TreeNode, step_events
-
-DEFAULT_PROFILE = "vllm_d9105ea80_sm89_eager"
-
 
 def load_profile(name: str) -> tuple[Profile, Any]:
     mod_name = name if "." in name else f"verity_vllm.engine.profiles.{name}"
@@ -373,7 +370,7 @@ def report_markdown(rep: dict) -> str:
 @dataclass(frozen=True, kw_only=True)
 class Options:
     log: str = option("log")
-    profile: str = option("--profile", default=DEFAULT_PROFILE)
+    profile: str = option("--profile", help="the profile to resolve against: a module of verity_vllm.engine.profiles, or a dotted path")
     step: int | None = option("--step", type=int, default=None, help="resolve (and dump) only this step")
     dump_trees: bool = option("--dump-trees", default=False, action="store_true")
     max_depth: int = option("--max-depth", type=int, default=6)

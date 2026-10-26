@@ -69,7 +69,7 @@ def _engine_main(args) -> None:
     env_flags = {**prof.apply_env(), **served.apply(wl["execution"])}
     engine_env.step_timeout(args.rpc_timeout)
     cp = prof.checkpoint_for(case, args.checkpoints)
-    kw = prof.engine_kwargs(cp, replay=False, enforce_eager=True, tensor_parallel_size=args.tp)
+    kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw["enable_prefix_caching"] = False
     kw["max_num_seqs"] = int(args.max_num_seqs)
     kw.update(parse_engine_args(args.engine_arg))
@@ -87,7 +87,7 @@ def _engine_main(args) -> None:
                                                     "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[tp2match:{args.arm}] warm-up {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)
     if instrumented:
