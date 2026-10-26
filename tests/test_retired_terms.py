@@ -56,8 +56,9 @@ PENDING: dict[str, str] = {
 
 
 def scanned(files: list[str]) -> list[str]:
+    """Every file but `archive/`, the Lean, PENDING and this one, which names the terms to find them."""
     return sorted(f for f in files if not f.startswith("archive/") and not f.endswith((".lean", "lean-audit.json"))
-                  and f not in PENDING)
+                  and f not in PENDING and f != "tests/test_retired_terms.py")
 
 
 def _read(f: str) -> str | None:
