@@ -11,6 +11,7 @@ into the protocol's params, commitment and evidence, then at most one change (`M
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
 import shutil
@@ -238,6 +239,7 @@ def test_each_change_takes_its_path():
     assert out["profile"] == {"gates": verdict["gates"], "ius": verdict["ius"]} and out["public"] == {}
 
 
+@pytest.mark.slow
 def test_the_nci_protocol_agrees_with_the_reference(server):
     """Lean and the reference agree on every case, and every change takes its path at least once."""
     SEEN.clear()
@@ -248,3 +250,10 @@ def test_the_nci_protocol_agrees_with_the_reference(server):
     missed = [m for m, (_, kind) in EXPECT.items() if kind != "code" and not by_path[(m, kind)]]
     assert not missed, (missed, by_path)
     assert stats.counts.get("accept", 0) > 10 and stats.counts.get("reject", 0) > 100, stats
+
+
+def test_each_verdict_is_the_references(server):
+    """A short run over three paths, a complying division, a failing one and a refused declaration: both verdicts."""
+    port = dataclasses.replace(PORT, inputs=cases(("honest", "noncompliant", "refused")))
+    stats = D.run(port, examples=30, server=server)
+    assert all(stats.counts.get(v) for v in ("accept", "reject")), stats

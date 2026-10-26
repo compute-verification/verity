@@ -3,7 +3,8 @@ vendored from #1036's trial, over the harness's framing of the core interface (`
 `Core.Protocol.case` and `answer` decode a case), mirrors of the stub components, and each ported component's own Python:
 PoUW's `core_check.case` (`verity/pouw/v1`), the network certificate check's difftest's `reference`
 (`verity/network-certificate/v4`, the certifier's `Audit`, `verity/core/protocols/network/tests/test_network_check_protocol.py`),
-and for sampled proofs' one-stage audit
+NCI's protocol difftest's `reference` (`verity/nci/v1`, `nci_reference`'s `check_baseline`,
+`verity/core/protocols/network/tests/test_nci_protocol.py`), and for sampled proofs' one-stage audit
 (`verity/sampled-proofs/one-stage/v1`) `one_stage` behind the protocol's decoders, its difftest's `answer`
 (`verity/core/service/sampled_proofs/tests/test_difftest.py`). Each component's own difftest holds its Lean to that
 Python; this one holds the composition of them.
@@ -72,6 +73,9 @@ POUW_CASES = module("pouw_check_cases", CORE / "protocols/pouw/lean/check/tests/
 #: The network certificate check's difftest: `reference` is the certifier's `Audit` behind the protocol's decoders, and
 #: `cases` draws certified spatial units, honest or with one change.
 NETWORK = module("network_check_difftest", CORE / "protocols/network/tests/test_network_check_protocol.py")
+#: NCI's protocol difftest: `reference` is `check_baseline` behind the protocol's decoders, and `cases` draws
+#: declarations, honest or with one change.
+NCI = module("nci_protocol_difftest", CORE / "protocols/network/tests/test_nci_protocol.py")
 
 
 def trial_verdict(verdicts: list[str]) -> str:
@@ -132,6 +136,7 @@ class Ported:
     answer: Callable[[Any], dict]
 
 
+NCI_CHECK = Ported("verity/nci/v1", NCI.reference)
 NETWORK_CHECK = Ported("verity/network-certificate/v4", NETWORK.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
 SAMPLED_PROOFS = Ported("verity/sampled-proofs/one-stage/v1", ONE_STAGE.answer)
@@ -245,4 +250,4 @@ def stub_ids(*names: str) -> tuple[Stub, ...]:
 #: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their ported components and the stubs that stand in for the
 #: rest, in the order of their ids.
 REMOTE = Product("verity/remote/v0", (POUW, SAMPLED_PROOFS))
-ONSITE = Product("verity/onsite/v0", (NETWORK_CHECK, POUW, SAMPLED_PROOFS, *stub_ids("bandwidth", "pous")))
+ONSITE = Product("verity/onsite/v0", (NCI_CHECK, NETWORK_CHECK, POUW, SAMPLED_PROOFS, *stub_ids("bandwidth", "pous")))

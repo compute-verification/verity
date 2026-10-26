@@ -2,7 +2,7 @@
 reference (`reference.py`: the trial's composition rule with top's reject dominance, over the harness's framing of the
 core interface, mirrors of the stub components and the ported components' own Python). Hypothesis draws each component's
 case to accept, reject, be undecided or fail to decode (a ported component's from its own difftest's generator: PoUW's
-`pouw_check_cases`, sampled proofs' `changed_audits`), then often breaks the composition's own inputs (a component dropped, unknown, repeated or
+`pouw_check_cases`, sampled proofs' `changed_audits`, the network check's and NCI's `cases`), then often breaks the composition's own inputs (a component dropped, unknown, repeated or
 out of order, a case under other params, a wrong or short commitment, non-canonical or malformed evidence) or the case
 itself (a field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly."""
 
@@ -74,6 +74,10 @@ NC = R.NETWORK
 NETWORK_CASES = {R.ACCEPT: ("honest", "shuffled", "extra"), R.UNDECIDED: ("missing", "refused", "deadline")}
 NETWORK_CASES[R.REJECT] = tuple(m for m in NC.MUTATIONS if m != "case" and not any(m in v for v in NETWORK_CASES.values()))
 
+#: NCI's changes by the verdict they aim at. NCI is never undecided, so a case aimed there is an honest one.
+NCI_CASES = {R.ACCEPT: ("honest",), R.UNDECIDED: ("honest",),
+             R.REJECT: tuple(m for m in R.NCI.MUTATIONS if m != "honest")}
+
 
 @st.composite
 def ported_case(draw, C: R.Ported, kind: str) -> dict:
@@ -84,6 +88,8 @@ def ported_case(draw, C: R.Ported, kind: str) -> dict:
         case = R.POUW_CASES.instance(draw(st.randoms(use_true_random=False)), name)
     elif C is R.NETWORK_CHECK:
         case = draw(NC.cases(NETWORK_CASES[kind]))
+    elif C is R.NCI_CHECK:
+        case = draw(R.NCI.cases(NCI_CASES[kind]))
     else:
         case = OS._case(draw(ONE_STAGE_CASES[kind]))
     root = bytes.fromhex(case["commitment"])
@@ -110,9 +116,9 @@ MUTATIONS = [None] * 20 + ["drop-param", "drop-case", "unknown-param", "unknown-
 
 @st.composite
 def composite(draw, product: R.Product) -> dict:
-    """One case of `product`: its components' cases (every one aimed at acceptance a third of the time, each at any verdict
-    otherwise), then at most one break of the composition's own inputs."""
-    every = draw(st.sampled_from([R.ACCEPT, None, None]))
+    """One case of `product`: its components' cases (every one aimed at acceptance a quarter of the time, at undecided a
+    quarter, each at any verdict otherwise), then at most one break of the composition's own inputs."""
+    every = draw(st.sampled_from([R.ACCEPT, R.UNDECIDED, None, None]))
     cases = [draw(component_case(C, every)) for C in product.components]
     named = [{"id": c["id"], "params": c["params"]} for c in cases]
     entries = [{"commitment": c["root"].hex(), "evidence": c["evidence"].hex(), "id": c["id"], "params": c["params"]}
