@@ -78,15 +78,15 @@ theorem eps_nonneg (params : RemoteAudit.Session.Params) (g : ℕ) : 0 ≤ Remot
   positivity
 
 theorem publishedEps : PublishedEps := by
-  intro node p e coins appendCoins notBeforeNs events pub prof hδ hs h
-  obtain ⟨params, g, coins', appendCoins', notBeforeNs', events', rs, s, sm, hs', -, -, -, rfl⟩ :=
-    acceptIsVerified p node.reg e pub prof h
-  rw [hs] at hs'
-  simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
-  obtain ⟨rfl, rfl, -⟩ := hs'
+  intro p reg e pub prof h
+  obtain ⟨params, g, coins, appendCoins, notBeforeNs, events, rs, s, sm, hs, -, -, -, rfl⟩ :=
+    acceptIsVerified p reg e pub prof h
+  refine ⟨params, g, coins, appendCoins, notBeforeNs, events, hs, ?_⟩
   simp only [RemoteAudit.Protocol.certify]
   split
   · right
+    intro node hp hg hδ
+    subst hp hg
     dsimp only
     have hd : RemoteAudit.Protocol.openingsCoins node.params node.groupsPerCoin = node.draws := rfl
     rw [ratio_val (eps_nonneg _ _), Finset.sum_const, Finset.card_univ, Fintype.card_fin, smul_eq_mul, hδ]

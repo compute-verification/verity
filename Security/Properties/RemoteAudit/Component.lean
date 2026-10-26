@@ -56,24 +56,25 @@ def AcceptIsVerified : Prop :=
         .ok (rs, s) ∧
       s.outcome = some "accepted" ∧ s.summary = some sm ∧ pub = (RemoteAudit.Protocol.certify params g sm).1
 
-/-- **The component publishes the error `LineHeldAtComponent` proves.** Whenever the component's check accepts
-parameters `p`, the node's registration and a log `e` that decode to the node's session parameters and windows a draw
-(`RemoteAudit.Protocol.sessionOf`), at a node whose δ is the component's `RemoteAudit.Protocol.DELTA`: either the
-public outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or the published `eps`
-is `δ + Σ_c s/2^64` over the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s, `LineHeldAtComponent`'s bound
-less the sketch's δs and the binding term. It is a constant of the session's parameters, not of the draws the session
-made. -/
+/-- **The component publishes the error `LineHeldAtComponent` proves.** Whenever `RemoteAudit.Protocol.check` accepts
+parameters `p`, a registration `reg` and a log `e` with public outputs `pub`: `p` and `e` decode to a session
+(`sessionOf`: its parameters, its windows a draw g, coins, append coins, clock floor and events), and either the public
+outputs certify nothing (`eps` and `q_bytes` 0, the pooled bound refusing the windows), or at every node of those
+parameters and g whose δ is the component's `RemoteAudit.Protocol.DELTA` the published `eps` is `δ + Σ_c s/2^64` over
+the node's `⌈W/g⌉` draws (`Node.draws`) at its `samples` s: `LineHeldAtComponent`'s bound less the sketch's δs and the
+binding term. It is a constant of the session's parameters, not of the draws the session made. -/
 def PublishedEps : Prop :=
-  ∀ (node : Node) (p : RemoteAudit.Protocol.Params) (e : RemoteAudit.Protocol.Evidence)
-    (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ) (events : Array RemoteAudit.Session.Event)
+  ∀ (p : RemoteAudit.Protocol.Params) (reg : RemoteAudit.Registration) (e : RemoteAudit.Protocol.Evidence)
     (pub : RemoteAudit.Protocol.Public) (prof : Lean.Json),
-    (node.delta : ℚ) = RemoteAudit.Protocol.DELTA →
-    RemoteAudit.Protocol.sessionOf p e =
-      .ok (node.params, node.groupsPerCoin, coins, appendCoins, notBeforeNs, events) →
-    RemoteAudit.Protocol.check p node.reg e = .accept pub prof →
-    (pub.eps = ⟨0, 1⟩ ∧ pub.qBytes = 0) ∨
-      (pub.eps.num : ℚ) / pub.eps.den =
-        (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64
+    RemoteAudit.Protocol.check p reg e = .accept pub prof →
+    ∃ (params : RemoteAudit.Session.Params) (g : ℕ) (coins appendCoins : Array ByteArray) (notBeforeNs : ℕ)
+      (events : Array RemoteAudit.Session.Event),
+      RemoteAudit.Protocol.sessionOf p e = .ok (params, g, coins, appendCoins, notBeforeNs, events) ∧
+      ((pub.eps = ⟨0, 1⟩ ∧ pub.qBytes = 0) ∨
+        ∀ node : Node, node.params = params → node.groupsPerCoin = g →
+          (node.delta : ℚ) = RemoteAudit.Protocol.DELTA →
+          (pub.eps.num : ℚ) / pub.eps.den =
+            (node.delta : ℚ) + ((∑ _c : Fin node.draws, node.params.samples : ℕ) : ℚ) / 2 ^ 64)
 
 /-- **The component accepts bytes that play the record on the node.** The parameters `a` (canonical JSON), the
 commitment `b` and the evidence `e` decode under the component's decoders, its check accepts them
