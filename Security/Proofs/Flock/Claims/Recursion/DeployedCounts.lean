@@ -363,7 +363,7 @@ theorem budget_regs_ok {n : RecVStar.Inner} {own : Array Registered.Port}
     refine ⟨by omega, fun reg hreg => ?_⟩
     obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hreg)
     have hj' := FlockSoundness.Discharge.ZkExec.array_forM_ok h j hj
-    dsimp only at hj'
+    try dsimp only at hj'
     split at hj'
     · first | cases hj' | simp [throw, throwThe, MonadExceptOf.throw] at hj'
     · omega
@@ -377,7 +377,7 @@ theorem budget_table_ok {n : RecVStar.Inner} {sts : Array Stmt} (h : RecBudget.t
   intro st hst
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 (Array.mem_toList_iff.1 hst)
   have hj' := FlockSoundness.Discharge.ZkExec.array_forM_ok h j hj
-  dsimp only at hj'
+  try dsimp only at hj'
   split at hj'
   · first | cases hj' | simp [throw, throwThe, MonadExceptOf.throw] at hj'
   · omega
