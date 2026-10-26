@@ -133,14 +133,14 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
 service's verdict accepts only periods whose rounds' checks pass** on the registered instances `reg`, but with
 probability `κ_S` over the oracle and the verifier's coins, for every prover: the rounds' checks run inside C-Flock's
 zero-knowledge proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each round's
-commitment (`trusted-nebius-host`). The verdict reads the transcript and the devices' readings, never the prover's
+commitment (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code (RT-LEAN-2 L29). It assumes nothing of the prover's algorithms. -/
 def ServiceSound (G : Accel) (P : RoundProto) (k : ℕ) (reg : Fin k → P.Inst) {Obs : Type}
     (verdict : Verdict P k Obs) (dev : Readings G P k Obs) (κS : ℝ) : Prop :=
   ∀ A : Prover G P k, prob (fun ox : P.Orc × (Fin k → P.Draw × P.Chk) =>
     A.Passes verdict dev ox.1 ox.2 ∧ ¬ A.Accepted reg ox.1 ox.2) ≤ κS
 
-/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-nebius-host`). **An accepted
+/-- `pouw-dither-import` (proposed; class L, the network certifier's count on `trusted-host`). **An accepted
 period exchanged at most `K` bits**: the network certifier sits on the period's devices' links, on a machine the
 prover doesn't control, and signs the bits that cross them in either direction (its readings `dev`); the period's
 verdict reads its signed count and refuses a period past `K`. The certifier's own coin stream isn't counted
@@ -149,7 +149,7 @@ def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (v
     (dev : Readings G P k Obs) (K : ℝ) : Prop :=
   ∀ (A : Prover G P k) (o : P.Orc) (x : Fin k → P.Draw × P.Chk), A.Passes verdict dev o x → A.ext o x ≤ K
 
-/-- `pouw-own-dither` (proposed; the challenger on `trusted-nebius-host`, RT-POOL RP2(c), RP25, CMP-152). **Each
+/-- `pouw-own-dither` (proposed; the challenger on `trusted-host`, RT-POOL RP2(c), RP25, CMP-152). **Each
 replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,
 drawn fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
 carries the uniform measure on `Ω` to the uniform measure on `Fin N → Fin k → Draw × Chk`). With each replica's own
@@ -168,12 +168,12 @@ def OwnDither (P : RoundProto) (k N : ℕ) {Ω : Type} [Fintype Ω] (coin : Ω �
     Prop :=
   ∀ f : (Fin N → Fin k → P.Draw × P.Chk) → ℝ, avg (fun ω => f (coin ω)) = avg f
 
-/-- `pouw-coins-confidential` (proposed; the network certifiers on `trusted-nebius-host`, RT-POOL RP4, CMP-152). **A
+/-- `pouw-coins-confidential` (proposed; the network certifiers on `trusted-host`, RT-POOL RP4, CMP-152). **A
 replica's coins reach no machine outside it before it has them**: a sampling block's dither and check coin are
 readable only inside its replica's certifier boundary until its root. For the MVP it holds by one device (Daniel's
 RP4 ruling, 26 Oct): the device that runs a server's network certifier also produces that server's live coins, so the
 challenger issues them inside the boundary the certifier counts, and trust in that device and its host provider is
-`trusted-nebius-host`.
+`trusted-host`.
 
 So the strategy a fleet runs on replica `u` (its prover `A u ω` at the challenger's randomness `ω`) may read every
 other replica's coins, past and future (a coalition at its worst), but none of its own: those reach `u` only through
