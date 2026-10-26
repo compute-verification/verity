@@ -70,13 +70,13 @@ def pinCnt (c : Circuit) (i j : ℕ) : ℕ :=
 theorem dCnt_pin (c : Circuit) (pin i j : ℕ) :
     dCnt ((HmRow.delta c pin).1 ++ (outPairs c).toArray ++ (pinList c).toArray) i j =
       dCnt ((HmRow.delta c pin).1 ++ (outPairs c).toArray) i j + pinCnt c i j := by
-  rw [dCnt_append, dCnt_toArray, pinList_eq, count_pinPairs]
+  rw [dCnt_append, pinList_eq, dCnt_toArray (List.flatMap _ _), count_pinPairs]
   rfl
 
 theorem dCnt_pinB (c : Circuit) (pin i j : ℕ) :
     dCnt ((HmRow.delta c pin).2 ++ (outPairs c).toArray ++ (pinList c).toArray) i j =
       dCnt ((HmRow.delta c pin).2 ++ (outPairs c).toArray) i j + pinCnt c i j := by
-  rw [dCnt_append, dCnt_toArray, pinList_eq, count_pinPairs]
+  rw [dCnt_append, pinList_eq, dCnt_toArray (List.flatMap _ _), count_pinPairs]
   rfl
 
 /-- **`A₀` of an accepted statement is `unpin`'s and the pinned copies**. -/
@@ -116,15 +116,20 @@ theorem pinRows_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     Pinned.PinRows (stmtOf st hwf regs) (stmtOf (unpin st) (unpin_wf hwf) regs).A₀
       (stmtOf (unpin st) (unpin_wf hwf) regs).B₀ zero (fun r => ((pinnedCols st.c).count r.val : ZMod 2)) := by
   intro r j
-  have hc : ∀ j : Fin (2 ^ st.c.kLog), (pinCnt st.c r.val j.val : ZMod 2) =
+  have h1 : (if j.val = r.val then 1 else 0 : ℕ) = if j = r then 1 else 0 := by
+    by_cases h : j = r
+    · rw [if_pos h, if_pos (congrArg Fin.val h)]
+    · rw [if_neg h, if_neg (fun e => h (Fin.ext e))]
+  have h2 : (if j.val = Hm.zeroCol st.c then 1 else 0 : ℕ) = if j = zero then 1 else 0 := by
+    by_cases h : j = zero
+    · rw [if_pos h, if_pos (by rw [← hzero]; exact congrArg Fin.val h)]
+    · rw [if_neg h, if_neg (fun e => h (Fin.ext (e.trans hzero.symm)))]
+  have hc : (pinCnt st.c r.val j.val : ZMod 2) =
       ((pinnedCols st.c).count r.val : ZMod 2) * ((if j = r then 1 else 0) + (if j = zero then 1 else 0)) := by
-    intro j
     unfold pinCnt
-    rw [← hzero]
-    simp only [Fin.val_inj]
-    push_cast
-    try rfl
-  exact ⟨(matA_unpin hda r.val j.val).trans (by rw [hc]; rfl), (matB_unpin hdb r.val j.val).trans (by rw [hc]; rfl)⟩
+    rw [h1, h2, Nat.cast_mul, Nat.cast_add, Nat.cast_ite, Nat.cast_ite, Nat.cast_one, Nat.cast_zero]
+  exact ⟨(matA_unpin hda r.val j.val).trans (congrArg (matA (unpin st) r.val j.val + ·) hc),
+    (matB_unpin hdb r.val j.val).trans (congrArg (matB (unpin st) r.val j.val + ·) hc)⟩
 
 /-- **A witness of an accepted statement satisfies `unpin`'s, and carries 0 on its pinned bits**: where its forced-zero
 row `zero` carries 0 and, at each pinned bit (odd in `pinnedCols`), `unpin`'s `B` evaluates to 1. -/
@@ -132,11 +137,11 @@ theorem sat_unpin {st : Stmt} (hda : st.da = (HmOut.delta st.c st.pin).1)
     (hdb : st.db = (HmOut.delta st.c st.pin).2) (hwf : StmtWF st)
     {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} {zero : Fin (2 ^ st.c.kLog)}
     (hzero : zero.val = Hm.zeroCol st.c) {z : Model.Witness st.m} (hz : (stmtOf st hwf regs).Satisfies z)
-    (hz0 : ∀ o r, ((pinnedCols st.c).count r.val : ZMod 2) = 1 → (stmtOf st hwf regs).block z o zero = 0)
-    (hone : ∀ o r, ((pinnedCols st.c).count r.val : ZMod 2) = 1 →
+    (hz0 : ∀ o (r : Fin (2 ^ (stmtOf st hwf regs).kLog)), ((pinnedCols st.c).count r.val : ZMod 2) = 1 → (stmtOf st hwf regs).block z o zero = 0)
+    (hone : ∀ o (r : Fin (2 ^ (stmtOf st hwf regs).kLog)), ((pinnedCols st.c).count r.val : ZMod 2) = 1 →
       (stmtOf (unpin st) (unpin_wf hwf) regs).B₀.mulVec ((stmtOf st hwf regs).block z o) r = 1) :
     (stmtOf (unpin st) (unpin_wf hwf) regs).Satisfies z ∧
-      ∀ o r, ((pinnedCols st.c).count r.val : ZMod 2) = 1 → (stmtOf st hwf regs).block z o r = 0 :=
+      ∀ o (r : Fin (2 ^ (stmtOf st hwf regs).kLog)), ((pinnedCols st.c).count r.val : ZMod 2) = 1 → (stmtOf st hwf regs).block z o r = 0 :=
   Pinned.sat_unpin (pinRows_unpin hda hdb hwf regs zero hzero) hz hz0 hone
 
 /-- **`unpin` of an untyped statement `Stmt.setupHidden` accepts has the layout the placement reads**, pinned outputs
