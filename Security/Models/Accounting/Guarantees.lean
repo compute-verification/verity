@@ -20,6 +20,7 @@ import Models.Accounting.Guarantees.FpG1
 import Models.Accounting.Guarantees.HMu
 import Models.Accounting.Guarantees.DeclaredCircuit
 import Models.Accounting.Guarantees.Gates
+import Models.Accounting.Guarantees.GatesBitwise
 import Models.Accounting.Guarantees.Headline
 import Models.Accounting.Guarantees.HeadlineDc
 import Models.Accounting.Guarantees.Joint
