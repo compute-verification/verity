@@ -34,6 +34,7 @@ namespace {
 template <int V, int ROLL>
 struct Sx {
   static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sx::compress<V, ROLL>(st, w); }
+  static __host__ __device__ __forceinline__ void kw(u64* st, const u64* kw) { sx::compress_kw<V, ROLL>(st, kw); }
 };
 struct Pouw {
   static __host__ __device__ __forceinline__ void run(u64* st, u64* w) { sha::compress(st, w); }
@@ -111,17 +112,39 @@ __global__ void __launch_bounds__(SXR_THREADS) k_frame_leaves(const u64* dids, u
   frame_leaf<D>(dids + 8 * (D_ == 1 ? 0 : tree), rank0 + j, schema, schema_len, values + 8 * t, out + 8 * t);
 }
 
+__global__ void __launch_bounds__(SXR_THREADS) k_frame_setup(LeafRow* rows, u32 n, u64 rank0, const u64* did,
+                                                              const uint8_t* schema, u32 schema_len) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t < n) frame_setup<D>(rows[t], rank0 + t, did, schema, schema_len);
+}
+
+// out[s][units[i]] = the slot-tree leaf of values[i][s] under frames[units[i]], for n units and S slots
+__global__ void __launch_bounds__(SXR_THREADS) k_frame_units(const LeafRow* frames, const u64* units, const u64* values, u32 n,
+                                                              u32 S, u32 U, u64* out) {
+  const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
+  if (t >= (u64)n * S) return;
+  const u64 d = units[t / S], s = t % S;
+  u64 v[8];
+  for (int i = 0; i < 8; ++i) v[i] = values[8 * t + i];
+  frame_tail<D>(frames[d], v, v);
+  for (int i = 0; i < 8; ++i) out[8 * (s * U + d) + i] = v[i];
+}
+
 __global__ void __launch_bounds__(SXR_THREADS) k_node_mids(const u64* dids, u32 D_, u32 level, u64* mids) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t < D_) node_mid<D>(dids + 8 * t, level, mids + 8 * t);
 }
 
-__global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, const u64* in, u32 T, u32 w, u64* out) {
+// tree t's children are pre[t] (if pre) and then in[t][0 ..], its trees in_stride words apart
+__global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, const u64* pre, u64 pre_stride, const u64* in,
+                                                        u64 in_stride, u32 T, u32 w, u64 first, u64* out) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (u64)T * w) return;
-  const u64 tree = t / w, i = t % w;
-  const u64* l = in + 8 * (2 * tree * w + 2 * i);
-  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), i, l, l + 8, out + 8 * t);
+  const u64 tree = t / w, i = t % w, j = 2 * i;
+  const u64* kids = in + tree * in_stride;
+  const u64* l = !pre ? kids + 8 * j : j ? kids + 8 * (j - 1) : pre + tree * pre_stride;
+  const u64* r = kids + 8 * (pre ? j : j + 1);
+  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, r, out + 8 * t);
 }
 
 __global__ void __launch_bounds__(SXR_THREADS) k_pads(const u64* dids, u32 D_, u32 T, u64 first, u32 n, u64* out) {
@@ -214,14 +237,28 @@ int sxr_frame_leaves(void* stream, const uint64_t* dids, uint32_t D_, const uint
   return launched();
 }
 
+int sxr_frame_setup(void* stream, LeafRow* rows, uint32_t n, uint64_t rank0, const uint64_t* did, const uint8_t* schema,
+                    uint32_t schema_len) {
+  if (n) k_frame_setup<<<blocks(n), SXR_THREADS, 0, (cudaStream_t)stream>>>(rows, n, rank0, did, schema, schema_len);
+  return launched();
+}
+
+int sxr_frame_units(void* stream, const LeafRow* frames, const uint64_t* units, const uint64_t* values, uint32_t n, uint32_t S,
+                    uint32_t U, uint64_t* out) {
+  const u64 m = (u64)n * S;
+  if (m) k_frame_units<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(frames, units, values, n, S, U, out);
+  return launched();
+}
+
 int sxr_node_mids(void* stream, const uint64_t* dids, uint32_t D_, uint32_t level, uint64_t* mids) {
   if (D_) k_node_mids<<<blocks(D_), SXR_THREADS, 0, (cudaStream_t)stream>>>(dids, D_, level, mids);
   return launched();
 }
 
-int sxr_level(void* stream, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t* out) {
+int sxr_level(void* stream, const uint64_t* mids, uint32_t D_, const uint64_t* pre, uint64_t pre_stride, const uint64_t* in,
+              uint64_t in_stride, uint32_t T, uint32_t w, uint64_t first, uint64_t* out) {
   const u64 m = (u64)T * w;
-  if (m) k_level<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(mids, D_, in, T, w, out);
+  if (m) k_level<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(mids, D_, pre, pre_stride, in, in_stride, T, w, first, out);
   return launched();
 }
 

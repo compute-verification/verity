@@ -26,6 +26,7 @@ from that slot's rows alone (a replay of its request), and :func:`verify_unit` c
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from collections.abc import Iterable, Mapping, Sequence
@@ -37,16 +38,16 @@ from typing import Any
 import numpy as np
 
 from verity.ml.commitments import hm96
-from verity.ml.commitments.identity import identity_digest_sha512
+from verity.ml.commitments.identity import identity_digest_sha512, tagged_sha512, tagged_sha512_prefix
 from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree
+from verity.ml.commitments.merkle import CommitmentDomain, MerkleTree, domain_message
 from verity.ml.commitments.row_table import ROOTS_SCHEMA, RootOpening, RootTree, verify_roots
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.ml.crypto.chacha20 import keystream
 
 __all__ = ["Group", "Layout", "Part", "Row", "StepCommit", "UnitOpening", "commit", "commit_slot", "edge_layout", "fixture",
            "fresh_salt_key", "h200_layout", "layout_digest", "open_unit", "random_outputs", "row_salts", "slot_domain",
-           "slot_rows", "step_domain", "step_tree", "unit_domain", "verify_unit"]
+           "slot_rows", "step_domain", "step_tree", "unit_domain", "unit_domain_ids", "verify_unit"]
 
 LAYOUT_TAG = "verity/commit-slots/layout/v1"
 UNIT_TAG = "verity/commit-slots/unit/v1"
@@ -133,21 +134,32 @@ class Layout:
         return tuple(out)
 
     @cached_property
+    def group_rows(self) -> tuple[int, ...]:
+        """Group i's rows."""
+        rows: dict[int, int] = {}
+        for g in self.groups:
+            if id(g) not in rows:
+                rows[id(g)] = sum(len(u) for u in g.units)
+        return tuple(rows[id(g)] for g in self.groups)
+
+    @cached_property
+    def group_row_base(self) -> tuple[int, ...]:
+        """Group i's first row g in its slot."""
+        return tuple(int(n) for n in np.cumsum((0, *self.group_rows[:-1]), dtype=np.int64)) if self.groups else ()
+
+    @cached_property
     def row_base(self) -> tuple[int, ...]:
         """Unit u's first row g in its slot."""
-        out, n = [], 0
-        for u in self.units:
-            out.append(n)
-            n += len(u)
-        return tuple(out)
+        n = np.fromiter((len(u) for u in self.units), dtype=np.int64, count=len(self.units))
+        return tuple(np.concatenate(([0], np.cumsum(n)[:-1])).tolist()) if len(n) else ()
 
     @property
     def unit_count(self) -> int:
-        return len(self.units)
+        return sum(len(g.units) for g in self.groups)
 
     @property
     def row_count(self) -> int:
-        return sum(len(u) for u in self.units)
+        return sum(self.group_rows)
 
     @property
     def slot_bytes(self) -> int:
@@ -159,9 +171,21 @@ class Layout:
         prover's plumbing, not the commitment's)."""
         return {"name": self.name, "units": [[r.bits for r in u] for u in self.units]}
 
+    @cached_property
+    def digest(self) -> bytes:
+        """``identity_digest_sha512(LAYOUT_TAG, manifest())``, computed once: the manifest's canonical JSON written a group at
+        a time, a group the layout repeats (its layers) written once."""
+        text: dict[int, str] = {}
+        for g in self.groups:
+            if id(g) not in text:
+                text[id(g)] = ",".join("[" + ",".join(str(r.bits) for r in u) + "]" for u in g.units)
+        units = ",".join(t for t in (text[id(g)] for g in self.groups) if t)
+        return tagged_sha512(LAYOUT_TAG, ('{"name":' + json.dumps(self.name, ensure_ascii=False) + ',"units":[' + units + "]}")
+                             .encode("utf-8"))
+
 
 def layout_digest(layout: Layout) -> bytes:
-    return identity_digest_sha512(LAYOUT_TAG, layout.manifest())
+    return layout.digest
 
 
 # --- domains and salts -------------------------------------------------------------------------------------------------
@@ -181,6 +205,41 @@ def unit_domain(context: bytes, layout: Layout, unit: int) -> CommitmentDomain:
     rows = len(layout.units[unit])
     return _domain(UNIT_TAG, {"context": _context(context), "layout": layout_digest(layout).hex(), "unit": unit, "rows": rows,
                               "schema": ROW_SCHEMA}, rows)
+
+
+def unit_domain_ids(context: bytes, layout: Layout) -> bytes:
+    """Every unit's ``unit_domain(context, layout, u).domain_id``, 64 bytes each in unit order, in one pass: the same bytes
+    hashed, with each unit's manifest written straight into its canonical JSON and the domain message framed around its
+    binding once per row count."""
+    head = ('{"context":' + json.dumps(_context(context)) + ',"layout":' + json.dumps(layout_digest(layout).hex())
+            + ',"rows":').encode()
+    mid = (',"schema":' + json.dumps(ROW_SCHEMA, ensure_ascii=False) + ',"unit":').encode()
+    tag = tagged_sha512_prefix(UNIT_TAG, 0)[:-8]
+    frames: dict[int, tuple[bytes, bytes]] = {}
+    out = bytearray(DIGEST_BYTES * layout.unit_count)
+    sha512 = hashlib.sha512
+    u = 0
+    for g in layout.groups:
+        for unit in g.units:
+            n = len(unit)
+            if n not in frames:
+                frames[n] = _domain_frame(n)
+            pre, post = frames[n]
+            payload = b"%b%d%b%d}" % (head, n, mid, u)
+            binding = sha512(tag + len(payload).to_bytes(8, "big") + payload).digest()
+            out[DIGEST_BYTES * u:DIGEST_BYTES * (u + 1)] = sha512(pre + binding + post).digest()
+            u += 1
+    return bytes(out)
+
+
+def _domain_frame(rows: int) -> tuple[bytes, bytes]:
+    """A unit domain of ``rows`` rows: its domain message's bytes before and after its 64-byte binding."""
+    positions = RangeIndexedDomain(0, rows).identity_sha512()
+    lo, hi = (domain_message(bytes([b]) * DIGEST_BYTES, -1, positions, rows, "sha512") for b in (0, 255))
+    k = next(i for i, (a, b) in enumerate(zip(lo, hi, strict=True)) if a != b)
+    if lo[:k] != hi[:k] or lo[k + DIGEST_BYTES:] != hi[k + DIGEST_BYTES:]:
+        raise AssertionError("a domain message holds its binding in one place")
+    return lo[:k], lo[k + DIGEST_BYTES:]
 
 
 def slot_domain(context: bytes, layout: Layout) -> CommitmentDomain:
