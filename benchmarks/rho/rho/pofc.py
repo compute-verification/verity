@@ -368,7 +368,8 @@ class Pofc:
 
     def partition(self, ctx: Context) -> Partition:
         inner = self.regime.partition(ctx)
-        rate = ctx.location.phi * ctx.fleet.mfu_train
+        # the blocks a link cuts carry peak compute (the physical block is Φ Δτ), so their time is compute over Φ
+        rate = ctx.location.phi
         regions = tuple(
             replace(r, cuts=r.cuts + tuple(self._under(c, f"{c.name}+pofc", rate, self.link)
                                            for c in r.cuts if self._touches(c)),
