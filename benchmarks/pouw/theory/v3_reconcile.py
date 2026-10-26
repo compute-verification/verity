@@ -35,7 +35,9 @@ against BET-ALGO-LAB's own hull, and D5 v2's check:
   share of best.c (RT-PROTO-2's unit), with 07:04Z's rule under its two readings (machine time; the honest program
   at the same prices) at a tensor-only price;
 - `pvtable`: PV per n, v3's pick against L′ = n/32;
-- `issue`: whether the hull's lower issue load is a route or degeneracy: each menu's least issue at makespan best.c.
+- `issue`: whether the hull's lower issue load is a route or degeneracy: each menu's least issue at makespan best.c;
+- `served`: the served-period column as a makespan: one shape's period with X plain s8 MACs beside each credited MAC,
+  1 − (every route) / (honest menu), per X.
 
     python3 benchmarks/pouw/theory/v3_reconcile.py --v3 DIR --a25 DIR [--d5 DIR] [--part reconcile,...] [--json OUT]
 
@@ -450,8 +452,48 @@ def issue(co: Codes, out: dict) -> None:
               f"{res['best']:.4f}, hull {res['route']:.4f} of capacity (saving {1 - res['route'] / res['best']:+.2%})")
 
 
+BESIDE = (0.0, 0.08, 0.25, 0.5, 1.0, 2.0, 4.0)
+
+
+def served(co: Codes, out: dict) -> None:
+    """The served-period column as a period of one shape with X plain s8 MACs beside each credited MAC (tensor and
+    its MMA's smem, rf and issue, no choice of route: `price_methods`' extra_fixed): 1 − the period's makespan with
+    every route over the honest menu's, at each X, and MAC-weighted per model. Picks: v3's rule under pub (on the
+    H200 v3's own picks; on the RTX PRO 6000 A27b's, within its 1% tolerance) and, on the H200, A27a's."""
+    nf, d5_ = co.nf["v3"], co.d5
+    picks = {"v3 rule, pub": None, "A27a": {(65536, 16384): 448, (1536, 65536): 384}}
+    for name in V3_CARDS:
+        c = d5_.SM120 if name == "RTX PRO 6000" else d5_.H200
+        mma = dict(smem=1 / c.honest_tile[0] + 1 / c.honest_tile[1], rf=c.mma_rf, issue=c.mma_issue)
+        for tag, rule in picks.items():
+            if name == "RTX PRO 6000" and rule is not None:
+                continue
+            print(f"\n== {name}, {tag} picks: served-period leak with X plain MACs beside a credited MAC, X = "
+                  + ", ".join(f"{x:g}" for x in BESIDE))
+            for model, shapes in nf.SHAPES.items():
+                W, acc = 0.0, [0.0] * len(BESIDE)
+                for K, N, reps in shapes:
+                    p = co.cap(name, K, N, "pub")
+                    Lp = p["Lp"] if rule is None else rule.get((K, N), 512)
+                    j = co.d5_job(name, K, N, p["t"], Lp)
+                    leaks = []
+                    for x in BESIDE:
+                        f = {r: x * v for r, v in mma.items()}
+                        f["tensor"] = x / c.s8
+                        kw = dict(beside=True, items=(j["sha"],), extra_fixed=f)
+                        b = d5_.price_methods(c, j["methods"][:1], j["L"], N, d5_.TOKENS, **kw)
+                        h = d5_.price_methods(c, j["methods"], j["L"], N, d5_.TOKENS, **kw)
+                        leaks.append(1 - h.c / b.c)
+                    w = K * N * reps
+                    W, acc = W + w, [a + w * lk for a, lk in zip(acc, leaks)]
+                    out["served"].append(dict(card=name, picks=tag, model=model, K=K, N=N, t=p["t"], Lp=Lp,
+                                              beside=BESIDE, leak=leaks))
+                    print(f"  {model:16} {K:5}x{N:<6} L′ {Lp:4}: " + " ".join(f"{lk:6.2%}" for lk in leaks))
+                print(f"  {model:16} MAC-weighted:        " + " ".join(f"{a / W:6.2%}" for a in acc))
+
+
 PARTS = dict(reconcile=reconcile, caps=caps, picks=picks, pv=pv, d5=d5, u13=u13, perlp=perlp, pvtable=pvtable,
-             issue=issue)
+             issue=issue, served=served)
 
 
 def main(argv=None) -> None:
