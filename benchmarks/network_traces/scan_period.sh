@@ -3,8 +3,8 @@
 # rehearsals at the test class's schedule (scan_zk.sh's SC_REHEARSE), honest and void (the fake answering past the
 # warden's delay, SC_LATE_MS: every connection fails late), each proved as one group of SC_GROUP link-windows, every
 # unit drawn; then scan_period.py's cases (honest, late, and the honest run's tampered round) through the period's
-# mirror and network-period, both from SC_PERIOD_REF (the rows form's branch) in a worktree. From a clone, in a slot
-# of network-accounting's pool:
+# mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (the rows form's branch) in a
+# worktree. From a clone, in a slot of network-accounting's pool:
 #   research run --on MACHINE --source . --project verity --as LANE --cwd clone --timeout 180m --env SC_MEM_GB=64 -- \
 #     env CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py --by LANE -- \
 #     bash benchmarks/network_traces/scan_period.sh
@@ -24,10 +24,15 @@ export FLOCK_PROVE=$BIN FLOCK_SELFTEST=$SBIN FLOCK_VERIFY=$LEAN HZ_PYTHON=$PY
 export SC_CLASS=test SC_GROUP=${SC_GROUP:-2} SC_REHEARSE=1 SC_REQUESTS=${SC_REQUESTS:-4} SC_RATE=${SC_RATE:-1} \
   SC_TAIL=${SC_TAIL:-3} SC_PROMPT_MAX=${SC_PROMPT_MAX:-40} SC_MAX_TOKENS=${SC_MAX_TOKENS:-8}
 REF=${SC_PERIOD_REF:-cursor/allp-cert-warden-form-061a}
-log "period: network-period and the mirror from $REF"
-{ git fetch -q origin "$REF" && git worktree add -q --detach "$W/period" FETCH_HEAD \
-  && (cd "$W/period/verity/core/protocols/network/lean" && lake build network-period); } > "$OUT/build-period.log" 2>&1 &
-built=$!
+if [ -f verity/core/protocols/network/tests/period_case.py ]; then
+  P=$SRC; log "period: network-period and the mirror from the tree"
+else   # a machine's clone has only the shipped commits, so a run there ships a commit with the period in it
+  P=$W/period; log "period: network-period and the mirror from $REF"
+fi
+# before the scans, not beside them: scan_zk.sh's sampled-proofs build writes the same path dependencies' .lake
+{ { [ "$P" = "$SRC" ] || { git fetch -q origin "$REF" && git worktree add -q --detach "$P" FETCH_HEAD; }; } \
+  && (cd "$P/verity/core/protocols/network/lean" && lake build network-period); } > "$OUT/build-period.log" 2>&1 \
+  || { tail -30 "$OUT/build-period.log"; log "period: no network-period"; exit 7; }
 declare -A rc
 for run in honest late; do
   mkdir -p "$W/$run"
@@ -38,10 +43,9 @@ for run in honest late; do
   cp -r "$W/$run/out" "$OUT/$run"
   log "period: the $run run, scan_zk.sh rc ${rc[$run]}: $(grep -h '^SCZK .*answers:' "$OUT/$run/sczk.log" | cut -c1-600)"
 done
-wait "$built" || { tail -30 "$OUT/build-period.log"; log "period: no network-period"; exit 7; }
-NP=$W/period/verity/core/protocols/network/lean/.lake/build/bin/network-period
+NP=$P/verity/core/protocols/network/lean/.lake/build/bin/network-period
 PYTHONPATH=$PYTHONPATH:$SRC/verity/core/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
-  --mirror "$W/period/verity/core/protocols/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
+  --mirror "$P/verity/core/protocols/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
   "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
   "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" 2>&1 | tee -a "$OUT/period.log"
 p=${PIPESTATUS[0]}
