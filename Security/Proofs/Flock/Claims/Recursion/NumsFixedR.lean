@@ -47,6 +47,9 @@ theorem rawIns_pf {w : FlockDeploy.Raw} {pf : ByteArray} {b b' : FlockDeploy.Ins
     repeat' split at h'
     all_goals first | (cases h'; done) | skip
   all_goals (cases h; cases h'; simp_all)
+  all_goals first
+    | exact ‹∀ (k : ℕ) (t : Array (String × ℕ × ℕ)), _ = k → ¬_ = some t› _ _ rfl (‹some _ = _› : some _ = _).symm
+    | (subst_vars; simp_all)
 
 /-! ## `Stmt.setupTables` at one table, with the verifier's own public input words -/
 
@@ -269,8 +272,8 @@ theorem staged_same {st : Stage} {x : Msg} {ms ms' : List (Msg × Out)} {s : ℕ
   obtain ⟨hsz2, -⟩ := staged_one hins2 hset2
   obtain ⟨r, p, hr, hp, hb1⟩ := staged_base hins1
   obtain ⟨r', p', hr', hp', hb2⟩ := staged_base hins2
-  obtain rfl : r' = r := Option.some.inj (hr'.symm.trans hr)
-  obtain rfl : p' = p := Option.some.inj (hp'.symm.trans hp)
+  obtain rfl : r = r' := Option.some.inj (hr.symm.trans hr')
+  obtain rfl : p = p' := Option.some.inj (hp.symm.trans hp')
   have hb2' : ({ ({ p.base with publicFile := st.pub x ms s } : FlockDeploy.Raw) with
       publicFile := st.pub x ms' s } : FlockDeploy.Raw).ins = .ok i'.base := hb2
   have e := rawIns_pf hb1 hb2'

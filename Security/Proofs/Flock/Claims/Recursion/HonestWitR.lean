@@ -28,7 +28,7 @@ theorem stagedSetsUp_run (H : Msg → Msg) (IV : Claims.Verifier Coin) (st : Sta
     (ω : Ω) (r : Fin ((V IV st).k x) → Coin) (hacc : (run H P (V IV st) x ω r).out = .acc) :
     ∀ s < nS x, (setupO (staged st x ((run H P (V IV st) x ω r).msgs.take (IV.k (xIOf x) + kS x)) s)).isSome := by
   intro s hs
-  obtain ⟨-, -, -, -, -, hsu, -⟩ := stagedPart_run H IV st x P ω r hacc hs
+  obtain ⟨_, _, _, _, -, hsu, -⟩ := stagedPart_run H IV st x P ω r hacc hs
   simp [hsu]
 
 /-- **The honest witness satisfies each part's tables on the honest run** (V\*'s gate-level completeness at the run;
