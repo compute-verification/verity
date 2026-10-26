@@ -6,6 +6,7 @@ import Proofs.Flock.Claims.Sampling.Count
 import Proofs.Flock.Claims.Sampling.Deployed
 import Proofs.Flock.Claims.Sampling.DeployedSha512
 import Proofs.Flock.Claims.Sampling.Draws
+import Proofs.Flock.Claims.Sampling.EndToEndDraw
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
 import Proofs.Flock.Claims.Sampling.HorizonPr
