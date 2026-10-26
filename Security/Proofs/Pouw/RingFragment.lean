@@ -171,6 +171,7 @@ variable {Vl Vr R : Type} [Fintype Vl] [Fintype Vr] [DecidableEq Vl] [DecidableE
 /-- **Degree 2**: every product multiplies two bit-affine operands (`AffProd`, mixed included). -/
 def AffOps (P : SlpG (Vl ⊕ Vr) R N) : Prop := ∀ j, P.isProd j = true → AffProd (P.prod j)
 
+omit [DecidableEq Vl] [DecidableEq Vr] in
 /-- **An accumulator's product reads in `theoremK`'s form**: with degree-2 products, what linear slot `j` reads from
 products is a combination of products of bit-affine operands. -/
 theorem prodPart_eq (P : SlpG (Vl ⊕ Vr) R N) (hP : AffOps P) (j : Fin N) :
