@@ -22,8 +22,7 @@ record and the coin server's transcript). `RecDeploy.V` is that as one `Claims.V
   the public file's header's, `innerOk`, and there is
   one part per V*
   statement of the verifier's inner shape, `RecVStar.statements`, each part's circuit V*'s statement's of its index,
-  `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`, every part with the same `--rec-rows`,
-  `rowsShared`), as the verifier's inner
+  `partsVStar`, as each part's session holds it, `RecVStar.checkCircuit`), as the verifier's inner
   shape and the inner statement's files with no records (`readOf`), where the setup's checks accept that shape
   (`RecScope.accepts`). The V* records are run messages, so the statement carries no draws, and `scopeCheck` reads
   only the inner scope check: the compiled verifier refuses the draw and shape conditions at each session's decision
@@ -225,18 +224,11 @@ def partsVStar (shape : RecVStar.Inner) (b : ByteArray) (parts : List PartX) (vs
     | some f, some p, some sv => partVStar shape f sv p
     | _, _, _ => false
 
-/-- **The parts hold one `--rec-rows`**: every part's rows are the first part's. The verifier's record of V*'s shared
-rows is one file for every session of the family (`RecVStar.checkShared`, `RecVStar.checkAcc`), which each part's
-rec-acc ports must be, so two parts' sessions open one rec-acc tree; the honest stager writes the same file for every
-part (`85-rec-reprice.sh`'s `rows-<part>.json`, all V*'s shared rows with `acc0` among them). -/
-def rowsShared (parts : List PartX) : Bool :=
-  parts.all fun p => decide (p.rows = parts.head?.bind (·.rows))
-
 /-- The compiled statement's reading before the parts' circuits are held to V\*'s: its bytes decode, the inner
 statement's decode and set up (`RecVStar.innerOf`) and pass Flock's own setup and statement check with a draw
 (`innerOk`), the verifier's own inner shape reads (`RecVStar.Inner.ofJson`), and there is one part per V* statement of
 that shape, whose circuit names the statement's message-round ports (`portsNamed`), the last part's RecCap's port
-`top` (`capPorted`), every part holding the same rows (`rowsShared`). -/
+`top` (`capPorted`). -/
 def readXPre (x : Claims.Msg) : Option XR := do
   let w ← decodeX x
   let ri ← FlockDeploy.decode w.inner
@@ -247,8 +239,7 @@ def readXPre (x : Claims.Msg) : Option XR := do
     innerOk w.inner
     pure dims).toOption
   let vs ← (RecVStar.statements shape).toOption
-  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false ∨
-      rowsShared w.parts = false then none
+  if w.parts.length ≠ vs.size ∨ portsNamed w.parts vs = false ∨ capPorted w.parts = false then none
   pure ⟨w, ri, partition, shape, dims⟩
 
 /-- **The compiled statement's reader**: `readXPre`, where each part's circuit is V\*'s statement's of its index
