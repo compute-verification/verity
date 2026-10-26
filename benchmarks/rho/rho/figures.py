@@ -4,7 +4,7 @@ Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an
 (`tests/test_repository.py` forbids tracked renders):
 
 * `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the declared block's
-  compute and at a server window's, and where each becomes vacuous.
+  compute and at the physical block's (a location between two wipes), and where each becomes vacuous.
 * `brackets`: ρ's bracket per scenario and family: the lower end from the bounds at each status, the upper from the
   attacks.
 * `dark`: ρ against the dark share, per scenario.
@@ -122,8 +122,8 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
     """Each class's per-block slowdown `κC / (2 a(C, k))` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
-    declared block's compute `Γ` and (for a regime with a physical window) at a server window's compute, with the
-    declared policy's `k` and the window's input `K` marked. Below 1 a class is vacuous: it lets the block run
+    declared block's compute `Γ` and (for a regime with a physical block) at the physical block's compute, with the
+    declared policy's `k` and the physical block's input `K` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
     points = 6 * grid + 1
     plt = _plt()
@@ -138,7 +138,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
     panels = [("the declared block's compute Γ", gamma)]
     if win is not None:
-        panels.append(("a server window's compute Φ·Δτ·MFU", win.compute))
+        panels.append(("the physical block's compute Φ·Δτ·MFU", win.compute))
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
@@ -209,7 +209,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                                          label=f"declared policy k = {k_policy:.2g} bits")
         if win is not None:
             lines["window K"] = ax.axvline(win.inputs, c="#d7191c", lw=1, ls="-.",
-                                           label=f"server window K = {win.inputs:.2g} bits")
+                                           label=f"physical block K = {win.inputs:.2g} bits")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(ks[0], ks[-1])
