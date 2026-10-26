@@ -1,7 +1,7 @@
 """Each class's count against the Kimi K2 numbers its Lean docstring (or E1's draft) states, and the class layer's rules:
 counted sets, premise shares, `Outside`, monotonicity in `k`, and every cited premise listed in `data/premises.toml`.
 
-Lean's slowdowns are in its cover model's units, `α₀ s / a` with `s = 4.52·10¹⁶` gates and `α₀` forward products per
+Lean's overheads are in its cover model's units, `α₀ s / a` with `s = 4.52·10¹⁶` gates and `α₀` forward products per
 gate (0.147, or 0.301 with Dgrad); E1's are `c / (κ a)` at matched compute `c = φ k` with `κ = 6` FLOPs per product.
 """
 

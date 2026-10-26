@@ -3,11 +3,11 @@
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
 
-* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the inference block's
+* `class-vs-k`: each class's per-block overhead against the block's novel input budget `k`, at the inference block's
   gates and at the serving block's (one server between two wipes), and where each becomes vacuous.
-* `brackets`: ρ's bracket per scenario and family: the lower end from the bounds at each status, the upper from the
-  attacks.
-* `dark`: ρ against the dark share, per scenario.
+* `overheads`: the overhead per scenario and family: its lower bound from the bounds at each status, each bound alone,
+  and each attack beside it.
+* `dark`: ρ's lower bound, and the best known attack's, against the dark share, per scenario.
 * `phase`: ρ over pairs of parameters (`PHASES`), with its contours and frontier at each target.
 * `tornado`: each scenario's tornado.
 * `vulnerability`: each parameter's plausible range against ρ across a window around it, and where ρ crosses each target.
@@ -121,7 +121,7 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
-    """Each class's per-block slowdown `w c / q_T(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
+    """Each class's per-block overhead `w c / q_T(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
     inference block's gates `c` and (for a regime with serving blocks) at the serving block's `c_S`, with the declared
     policy's `k` and the serving block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
@@ -143,7 +143,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
-                  "slowdown": "w c / q_T(c, k); 0 where the statement's premise fails (no cap), ∞ where q_T = 0",
+                  "overhead": "w c / q_T(c, k); 0 where the statement's premise fails (no cap), ∞ where q_T = 0",
                   "panels": []}
     fig, axes = plt.subplots(1, len(panels), figsize=(6.4 * len(panels), 5.2), sharey=True, squeeze=False)
     lines: dict[str, Any] = {}
@@ -158,36 +158,36 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                 panel["outside"][arg.name] = str(e)
                 continue
 
-            def slowdown(k: float, cap: Any = cap, gates: float = gates, full: float = full) -> float:
+            def overhead(k: float, cap: Any = cap, gates: float = gates, full: float = full) -> float:
                 n = cap(Budget(gates, k))
                 return full / n if n > 0 else math.inf
 
-            ys = [slowdown(k) for k in ks]
+            ys = [overhead(k) for k in ks]
             status = lean.weakest(arg.cites)
             if arg.side == "attack":
                 j = next((j for j, y in enumerate(ys) if math.isfinite(y)), None)
                 first = None
                 if j is not None:
                     first = ks[0] if j == 0 else analysis.crossing(
-                        lambda k, f=slowdown: float(math.isfinite(f(k))), 0.5, ks[j - 1], ks[j])
-                panel["attacks"][arg.name] = {"status": status, "first_finite_k": first, "slowdown": ys}
+                        lambda k, f=overhead: float(math.isfinite(f(k))), 0.5, ks[j - 1], ks[j])
+                panel["attacks"][arg.name] = {"status": status, "first_finite_k": first, "overhead": ys}
                 if first is not None:
                     lines[f"attack {arg.name}"] = ax.axvline(
                         first, c="k", ls=(0, (1, 2)), lw=1.2,
-                        label=f"attack {arg.name} ({status}): ρ_block = {slowdown(first * 1.0001):.3g} from k = "
+                        label=f"attack {arg.name} ({status}): ρ_block = {overhead(first * 1.0001):.3g} from k = "
                               f"{first:.2g}")
                 continue
             vacuous = next((j for j, y in enumerate(ys) if y <= 1), None)
             k_vac = None
             if vacuous is not None:
-                k_vac = ks[0] if vacuous == 0 else analysis.crossing(slowdown, 1.0, ks[vacuous - 1], ks[vacuous])
+                k_vac = ks[0] if vacuous == 0 else analysis.crossing(overhead, 1.0, ks[vacuous - 1], ks[vacuous])
             j = next((j for j, y in enumerate(ys) if y == 0), None)
             fails = None if j is None else ks[0] if j == 0 else analysis.crossing(
-                lambda k, f=slowdown: float(f(k) == 0), 0.5, ks[j - 1], ks[j])
-            panel["classes"][arg.name] = {"status": status, "slowdown": ys, "vacuous_from_k": k_vac,
+                lambda k, f=overhead: float(f(k) == 0), 0.5, ks[j - 1], ks[j])
+            panel["classes"][arg.name] = {"status": status, "overhead": ys, "vacuous_from_k": k_vac,
                                           "premise_fails_from_k": fails,
-                                          "at_declared_k": slowdown(k_policy),
-                                          "at_window_k": slowdown(win.inputs) if win else None}
+                                          "at_declared_k": overhead(k_policy),
+                                          "at_window_k": overhead(win.inputs) if win else None}
             color = f"C{i % 10}"
             line, = ax.plot(ks, [y if y > 0 else math.nan for y in ys], c=color, lw=1.8,
                             ls="--" if status == "draft" else "-", label=f"{arg.name} ({status})")
@@ -197,9 +197,9 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
             if fails is not None:
                 last = max((k for k, y in zip(ks, ys, strict=True) if k < fails), default=None)
                 if last is not None:
-                    ax.plot([last], [slowdown(last)], "x", c=color, ms=8, mew=2)
-            if win is not None and gates == win.gates and slowdown(win.inputs) > 1:
-                ax.annotate(f"{arg.name}: {slowdown(win.inputs):.3g} at K", (win.inputs, slowdown(win.inputs)),
+                    ax.plot([last], [overhead(last)], "x", c=color, ms=8, mew=2)
+            if win is not None and gates == win.gates and overhead(win.inputs) > 1:
+                ax.annotate(f"{arg.name}: {overhead(win.inputs):.3g} at K", (win.inputs, overhead(win.inputs)),
                             xytext=(-8, 0), textcoords="offset points", ha="right", va="center", fontsize=8,
                             color=color, weight="bold", bbox={"fc": "white", "alpha": 0.85, "lw": 0, "pad": 1})
             top = max([top, *(y for y in ys if math.isfinite(y))])
@@ -219,7 +219,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
         ax.grid(True, which="major", alpha=0.3)
         data["panels"].append(panel)
     axes[0][0].set_ylim(1e-2, top * 3)
-    axes[0][0].set_ylabel("per-block slowdown w c / q_T(c, k)")
+    axes[0][0].set_ylabel("per-block overhead w c / q_T(c, k)")
     fig.legend(lines.values(), [h.get_label() for h in lines.values()], loc="lower center",
                ncol=min(4, len(lines)), fontsize=8, bbox_to_anchor=(0.5, -0.02 - 0.035 * math.ceil(len(lines) / 4)))
     fig.suptitle(f"Training classes per block: {s.model.name}, family {fam.name} (× = premise fails, ○ = vacuous)",
@@ -227,11 +227,11 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     return _save(fig, out, "class-vs-k", data)
 
 
-def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
-             targets: Sequence[float] = (10.0, 100.0), grid: int = 30) -> list[Path]:
-    """ρ's bracket for each scenario and family: each bound and attack alone (colored by status), the lower end from
-    the bounds and cuts at each status or stronger, and the bar from `lo` (every bound at once) to `hi` (the best
-    attack)."""
+def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
+              targets: Sequence[float] = (10.0, 100.0), grid: int = 30) -> list[Path]:
+    """The overhead for each scenario and family: its lower bound (every bound at once, the claim), the lower bound from
+    the bounds and cuts at each status or stronger, each bound alone (colored by status, refuted ones hollow), and each
+    attack below them, a construction beside the bound rather than an end of it."""
     plt = _plt()
     names = list(names or registry.names("scenario"))
     rows: list[dict] = []
@@ -239,12 +239,16 @@ def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
         r = analysis.result(registry, name)
         by_status = {st: evaluate(analysis.restrict(r.scenario, st)) for st in STATUSES[:3]}
         for i, f in enumerate(r.families):
-            rows.append({"scenario": name, "family": f.family, "lo": f.lo, "hi": f.hi,
+            best = f.best_attack
+            rows.append({"scenario": name, "family": f.family, "lo": f.lo, "unmonitored": r.unmonitored,
+                         "attack": {"argument": best.argument, "rho": best.rho} if best else None,
                          "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
-                         "bounds": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.bounds],
+                         "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "rho": e.rho}
+                                    for e in f.bounds],
+                         "excluded": list(f.combined.excluded),
                          "attacks": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.attacks],
                          "contradictions": list(f.contradictions)})
-    finite = [v for row in rows for v in (row["lo"], row["hi"], *row["lo_by_status"].values(),
+    finite = [v for row in rows for v in (row["lo"], *row["lo_by_status"].values(),
                                           *(e["rho"] for e in row["bounds"] + row["attacks"]))
               if v and math.isfinite(v) and v > 0]
     xmax = max(finite + list(targets)) * 3
@@ -264,38 +268,43 @@ def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
         return f"{v:.3g}" if math.isfinite(v) else ("∞" if v > 0 else "—")
 
     for y, row in enumerate(reversed(rows)):
-        ax.plot([edge(row["lo"]), edge(row["hi"])], [y, y], c="#bbbbbb", lw=10, solid_capstyle="butt", zorder=1,
-                label=label("bracket [lo, hi]"))
+        ax.plot(edge(row["lo"]), y, "|", ms=22, mew=3, c="k", zorder=5, label=label("the lower bound (every bound)"))
+        ax.plot(edge(row["unmonitored"]), y, "|", ms=14, mew=1.5, c="#888888", zorder=2,
+                label=label("no protocol, μ / MFU (below it: vacuous)"))
         for e in row["bounds"]:
             if not math.isnan(e["rho"]):
+                refuted = e["premise"] == "refuted"
+                hollow = {"mfc": "none"} if refuted else {}
                 ax.plot(edge(e["rho"]), y + 0.25, "o", ms=5, c=STATUS_COLORS[e["status"]], alpha=0.8, zorder=3,
-                        label=label(f"a bound alone ({e['status']})"))
+                        label=label("a bound alone, premises refuted" if refuted else f"a bound alone ({e['status']})"),
+                        **hollow)
         for st, v in row["lo_by_status"].items():
             ax.plot(edge(v), y, "D", ms=9, c=STATUS_COLORS[st], mec="k", zorder=4,
-                    label=label(f"lo from {', '.join(STATUSES[:STATUSES.index(st) + 1])} bounds and cuts"))
+                    label=label(f"the lower bound from {', '.join(STATUSES[:STATUSES.index(st) + 1])} bounds and "
+                                "cuts"))
         for e in row["attacks"]:
             if not math.isnan(e["rho"]):
                 ax.plot(edge(e["rho"]), y - 0.25, "v", ms=8, c=STATUS_COLORS[e["status"]], mec="k", zorder=3,
                         label=label(f"an attack ({e['status']})"))
         by = ", ".join(f"{st} {num(v)}" for st, v in row["lo_by_status"].items())
-        ax.text(xmax * 1.05, y, f"ρ ∈ [{num(row['lo'])}, {num(row['hi'])}]\nlo by status: {by}", va="center",
-                fontsize=8)
+        attack = f"attack {row['attack']['argument']} {num(row['attack']['rho'])}" if row["attack"] else "no attack"
+        ax.text(xmax * 1.05, y, f"ρ ≥ {num(row['lo'])}; {attack}\nby status: {by}", va="center", fontsize=8)
     _targets(ax, targets, "x")
     ax.set_yticks(range(len(rows)), [f"{r['scenario']}\n{r['family']}" for r in reversed(rows)], fontsize=9)
     ax.set_xscale("log")
-    ax.set_xlim(0.8, xmax)
+    ax.set_xlim(min([0.8, *finite]) / 2, xmax)
     ax.set_ylim(-0.7, len(rows) - 0.3)
-    ax.set_xlabel("ρ (slowdown to the target run; ∞ drawn at the right edge)")
-    ax.set_title("ρ's bracket: lower end from bounds by status, upper end from attacks", fontsize=11)
+    ax.set_xlabel("ρ, the overhead on the target run (∞ drawn at the right edge)")
+    ax.set_title("The overhead: its lower bound by status, each bound alone, and the attacks beside it", fontsize=11)
     ax.grid(True, axis="x", which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper center", bbox_to_anchor=(0.5, -0.12 - 0.25 / len(rows)), ncol=3)
-    return _save(fig, out, "brackets", {"rows": rows, "targets": list(targets)})
+    return _save(fig, out, "overheads", {"rows": rows, "targets": list(targets)})
 
 
 def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """ρ (lower end solid, upper dashed) against the dark share `ε_dark` (`grid + 11` points), per scenario, with
-    `μ/ε_dark`, the most the dark pool alone allows."""
+    """ρ's lower bound (solid) and the best known attack's ρ (dashed) against the dark share `ε_dark` (`grid + 11`
+    points), per scenario, with `μ/ε_dark`, the most the dark pool alone allows."""
     points = grid + 11
     plt = _plt()
     names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]
@@ -309,15 +318,15 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
     for i, name in enumerate(names):
         key = _key(registry, name, ("fleet", "eps_dark"))
         lo = analysis.sweep(registry, name, key, ds, LO)
-        hi = analysis.sweep(registry, name, key, ds, analysis.HI)
+        attack = analysis.sweep(registry, name, key, ds, analysis.ATTACK)
         base = analysis.result(registry, name)
         m = min(f.profile.efficiency for f in base.families)
         ms.add(m)
-        data["scenarios"][name] = {"key": key, "lo": [v for _, v in lo], "hi": [v for _, v in hi], "m": m,
-                                   "base_d": registry[key], "base_lo": base.lo, "base_hi": base.hi}
+        data["scenarios"][name] = {"key": key, "lo": [v for _, v in lo], "attack": [v for _, v in attack], "m": m,
+                                   "base_d": registry[key], "base_lo": base.lo, "base_attack": base.attack}
         c = f"C{i % 10}"
-        ax.plot(ds, [_finite(v) for _, v in lo], c=c, lw=2, label=f"{name}: lo")
-        ax.plot(ds, [_finite(v) for _, v in hi], c=c, lw=1.2, ls="--", label=f"{name}: hi")
+        ax.plot(ds, [_finite(v) for _, v in lo], c=c, lw=2, label=f"{name}: lower bound")
+        ax.plot(ds, [_finite(v) for _, v in attack], c=c, lw=1.2, ls="--", label=f"{name}: best known attack")
         ax.plot([registry[key]], [base.lo], "o", c=c, mec="k")
     for m in sorted(ms):
         ax.plot(ds, [m / d for d in ds], c="k", lw=0.8, ls=(0, (1, 1)), label=f"m/d (dark pool alone, m = {m:g})")
@@ -392,7 +401,7 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
         ax.set_xlabel(_short(p["x"]) + _unit(registry, p["x"]))
         ax.set_ylabel(_short(p["y"]) + _unit(registry, p["y"]))
         ax.set_title(p["scenario"], fontsize=10)
-    fig.colorbar(mesh, ax=axes[0].tolist(), label="ρ (lower end)" if metric is LO else "ρ", shrink=0.9)
+    fig.colorbar(mesh, ax=axes[0].tolist(), label="ρ (lower bound)" if metric is LO else "ρ", shrink=0.9)
     fig.suptitle("ρ over pairs of parameters: contours from the grid and frontier dots by bisection at the targets, "
                  "★ today's values, dashed box the plausible ranges", fontsize=10)
     return _save(fig, out, "phase", {"metric": getattr(metric, "__name__", str(metric)), "targets": list(targets),
@@ -425,7 +434,7 @@ def tornado(registry: Registry, out: Path, names: Sequence[str] | None = None, t
         ax.set_yticks(range(len(ss)), [f"{_short(s.key)}  [{s.low:.3g}, {s.high:.3g}]{_unit(registry, s.key)}"
                                        for s in reversed(ss)], fontsize=8)
         ax.set_xscale("log")
-        ax.set_xlabel("ρ (lower end)" if metric is LO else "ρ")
+        ax.set_xlabel("ρ (lower bound)" if metric is LO else "ρ")
         ax.set_title(f"{name}: ρ = {base:.3g} at today's values", fontsize=10)
         ax.grid(True, axis="x", which="major", alpha=0.3)
         ax.legend(fontsize=8, loc="lower right")
@@ -493,7 +502,7 @@ def vulnerability(registry: Registry, out: Path, names: Sequence[str] | None = N
     handles += [Line2D([], [], c="k", lw=1.2, label="plausible range"), Line2D([], [], c="k", lw=2.2, ls="",
                                                                                marker="|", ms=12, label="today")]
     axes[0][0].legend(handles=handles, fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
-    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="ρ (lower end)" if metric is LO else "ρ",
+    fig.colorbar(mesh, ax=axes[:, 0].tolist(), label="ρ (lower bound)" if metric is LO else "ρ",
                  location="bottom", shrink=0.5)
     fig.suptitle("How far each parameter is from where ρ crosses a target: ρ along a window around its plausible range",
                  fontsize=11)
@@ -525,7 +534,7 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
                       rotation=60, ha="right", fontsize=7.5)
         _targets(ax, targets)
         ax.set_yscale("log")
-        ax.set_ylabel("ρ (lower end)" if metric is LO else "ρ")
+        ax.set_ylabel("ρ (lower bound)" if metric is LO else "ρ")
         note = "" if c.joint == c.rho else f" (all at once: {c.joint:.3g})"
         ax.set_title(f"{name}: {c.base:.3g} today → {c.rho:.3g} at the corner{note}", fontsize=10)
         ax.grid(True, which="major", alpha=0.3)
@@ -537,7 +546,7 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
         for n, c in found.items()}})
 
 
-FIGURES = {"class-vs-k": class_vs_k, "brackets": brackets, "dark": dark, "phase": phase, "tornado": tornado,
+FIGURES = {"class-vs-k": class_vs_k, "overheads": overheads, "dark": dark, "phase": phase, "tornado": tornado,
            "vulnerability": vulnerability, "corner": corner}
 
 

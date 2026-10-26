@@ -21,15 +21,16 @@ the horizon with only the inference cut. An attack is a construction, so it is e
 (what a protocol-abiding strategy gets), at the share `mfu` of the gates a construction uses, and the dark leaves at
 theirs.
 
-ρ is the circuit-size slowdown, `|A| / T_0` for the actual circuit `A` that reaches the target: the bound's weight per
-gate of the inventory, against the reference's `w` per gate (its counted weight over its gates, `κ / 2G`), gives
+ρ is the overhead, `|A| / T_0` for the actual circuit `A` that reaches the target (a factor; the slowdown is time,
+below): the bound's weight per gate of the inventory, against the reference's `w` per gate (its counted weight over its
+gates, `κ / 2G`), gives
 
     ρ ≥ μ / ((u/w) ε_dark + (1 − ε_dark) g),   g = Σ_S n_S · share_S / Σ_S n_S
 
 with `share_S` each serving block's local minimum over the reference's weight in it, `w c_S` (so at most `u/w`), and
 `μ` the gates the algorithm needs in multiples of the reference's. `u = w` is `s_×` at the reference's gates per
 counted product; a construction runs the reference's operations, so an attack is at `w` throughout. The time to the
-target is then `T ≥ ρ T_0 / Φ_total`, the idealized normalization (the reference at full capacity;
+target, the slowdown, is then `T ≥ ρ T_0 / Φ_total`, the idealized normalization (the reference at full capacity;
 `scenario.Scenario.seconds`).
 
 This module knows no GPU, protocol or training class: `envelopes` builds the serving blocks from the prior,
@@ -166,7 +167,7 @@ def aggregate(partition: Partition, cap: Cap, w: float, u: float | None = None) 
 
 
 @dataclass(frozen=True)
-class Slowdown:
+class Overhead:
     """ρ for one algorithm under one cap: `rho = efficiency / (dark + (1 − ε_dark) g)`, with each serving block's
     share and `g`'s terms summed over serving blocks (each a share of the reference's weight in the monitored fleet at
     capacity). `dark` is the dark leaves' weight over the reference's in the whole inventory: `(u/w) ε_dark` under a
@@ -188,8 +189,8 @@ class Slowdown:
         return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
 
 
-def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
-             aggregate_only: bool = False, u: float | None = None) -> Slowdown:
+def overhead(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, side: Side = "bound",
+             aggregate_only: bool = False, u: float | None = None) -> Overhead:
     """ρ from the serving-block bound: each serving block's local minimum (or, with `aggregate_only`, the minimum of
     the global sums), and the dark leaves. `w` is the reference's weight per gate, `u` the most a gate holds under a
     bound (`q_U`'s, default `w`)."""
@@ -206,12 +207,12 @@ def slowdown(partition: Partition, cap: Cap, w: float, efficiency: float = 1.0, 
             out[term] = out.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
     dark = partition.eps_dark * (u / w if side == "bound" else partition.dark_mfu)
-    return Slowdown(rho(dark, g, efficiency, partition.eps_dark), g, partition.eps_dark, dark, efficiency, shares,
+    return Overhead(rho(dark, g, efficiency, partition.eps_dark), g, partition.eps_dark, dark, efficiency, shares,
                     out)
 
 
 def rho(dark: float, g: float, efficiency: float = 1.0, eps_dark: float | None = None) -> float:
-    """The size slowdown when the dark leaves hold `dark` of the inventory's weight at capacity and the monitored
+    """The overhead when the dark leaves hold `dark` of the inventory's weight at capacity and the monitored
     `1 − ε_dark` hold `g` of theirs (`eps_dark` defaults to `dark`)."""
     rate = dark + (1 - (dark if eps_dark is None else eps_dark)) * g
     return efficiency / rate if rate > 0 else math.inf

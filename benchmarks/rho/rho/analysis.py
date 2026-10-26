@@ -2,9 +2,9 @@
 
 Every function takes a registry and a scenario name and varies registry keys, so any parameter of any layer (a GPU's
 FLOP/s, a wipe's `k_wipe`, a premise's bits, a family's efficiency, a choice of regime) is swept the same way. The
-metric is a function of a `Result`: by default ρ's lower end `LO` (the least lower bound over the adversary's
-families); `HI` is the best attack's, and `upto(status)` is `LO` from only the bounds and cuts at least as strong as
-`status`. Results are cached per registry and override, so the functions below share their evaluations.
+metric is a function of a `Result`: by default the overhead's lower bound `LO` (the least over the adversary's
+families); `ATTACK` is the best known attack's ρ, and `upto(status)` is `LO` from only the bounds and cuts at least as
+strong as `status`. Results are cached per registry and override, so the functions below share their evaluations.
 
 * `sweep`: ρ along one key.
 * `tornado`: ρ at each ranged parameter's `low` and `high` (the registry's plausible range), the rest held, sorted by
@@ -44,8 +44,8 @@ def LO(r: Result) -> float:
     return r.lo
 
 
-def HI(r: Result) -> float:
-    return r.hi
+def ATTACK(r: Result) -> float:
+    return r.attack
 
 
 def _rank(cites: Iterable[str]) -> int:
@@ -347,7 +347,7 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 
 @dataclass(frozen=True)
 class Term:
-    #: `dark` (the dark leaves), or one of g's terms: a block kind or an uncertified route (`Slowdown.terms`)
+    #: `dark` (the dark leaves), or one of g's terms: a block kind or an uncertified route (`Overhead.terms`)
     name: str
     #: its part of the weight per gate `dark + (1 − ε_dark) g`, in multiples of the reference's, and its share of it
     part: float
@@ -358,14 +358,14 @@ class Term:
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
     """What sets ρ, largest first: the weight per gate `dark + (1 − ε_dark) g` split into the dark leaves and g's terms,
-    for the family the adversary picks (the least `lo`; with `side="attack"`, the least `hi` under its best attack)."""
+    for the family the adversary picks (the least `lo`; with `side="attack"`, its best known attack's)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: f.lo, default=None)
-        s = fam.combined.slowdown if fam else None
+        s = fam.combined.overhead if fam else None
     else:
-        fam = min(r.families, key=lambda f: f.hi, default=None)
-        best = min((a for a in fam.attacks if a.slowdown), key=lambda a: a.rho, default=None) if fam else None
-        s = best.slowdown if best else None
+        fam = min(r.families, key=lambda f: f.attack, default=None)
+        best = fam.best_attack if fam else None
+        s = best.overhead if best else None
     if s is None:
         return []
     parts = {"dark": s.dark} | {t: (1 - s.eps_dark) * v for t, v in s.terms.items()}

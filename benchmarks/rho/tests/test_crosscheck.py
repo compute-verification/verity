@@ -2,7 +2,7 @@
 
 That model (`benchmarks/nci/reference_dc.py` on `cursor/nci-dc-model-4207`, which does not land; its rendered output
 is art:dee8d74e220884143c40b6d7d28acdf13c358f1de84c5f0df2ea7bf525bf4e83) gives D, the fleet's compute over the training
-it can do on monitored compute, so D = 1/g (`Slowdown.g`: monitored training as a share of its unencumbered rate). Its
+it can do on monitored compute, so D = 1/g (`Overhead.g`: monitored training as a share of its unencumbered rate). Its
 numbers are the constants in `MINE`, run at rho's model facts (aOut = 65,536, layer 0's inputs cheap); rho's are
 computed. What is matched, and what each side does differently:
 
@@ -100,7 +100,7 @@ def matched(fleet: str, onsite: bool = False, **family: float) -> Registry:
 def inverse_g(r: Result, argument: str) -> float:
     (f,) = r.families
     (e,) = [e for e in f.bounds if e.argument == argument]
-    return 1 / e.slowdown.g
+    return 1 / e.overhead.g
 
 
 def cheap(k: float, layer_bits: float, layers: int) -> float:

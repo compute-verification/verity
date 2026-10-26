@@ -7,7 +7,7 @@ from rho import envelopes, hardware, lean
 from rho.envelopes import Context, Detection, Onsite, Remote
 from rho.params import Param, Registry
 from rho.scenario import build, evaluate_named
-from rho.theorem import Budget, slowdown
+from rho.theorem import Budget, overhead
 
 ROOT = Path(__file__).resolve().parents[3]
 REG = Registry.load()
@@ -84,8 +84,8 @@ def test_with_nothing_else_bounding_rho_is_lean_remote_dampener_at_full_capacity
     remote = envelopes.regime(reg, "remote")
     part = remote.partition(ctx)
     s, u = part.eps_dark, remote.uncertified(ctx)
-    assert slowdown(part, lambda b: 0.0, 0.6).rho == pytest.approx(max(1.0, 1 / (s + (1 - s) * u)), rel=1e-12)
-    assert slowdown(part, lambda b: 0.0, 0.6).rho > 10
+    assert overhead(part, lambda b: 0.0, 0.6).rho == pytest.approx(max(1.0, 1 / (s + (1 - s) * u)), rel=1e-12)
+    assert overhead(part, lambda b: 0.0, 0.6).rho > 10
     ctx = tiers_context()
     today = envelopes.regime(REG, "remote")
     assert all(T.evaluate(tiers_params(ctx), m)["dampener"] == 1.0 for m in T.TIERS.values())
@@ -204,7 +204,14 @@ def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_devi
                                                         inputs(per_device, "onsite-h200-kimi"))
     state = rack.families[0].profile.state_bits
     assert rack_pd_in > state > rack_in > server_pd_in > server_in
-    assert rack_pd.hi < server_pd.hi
+    assert rack_pd.attack < server_pd.attack
+
+
+@pytest.mark.parametrize("name", REG.names("policy"))
+def test_every_policy_states_its_inference_overhead_or_that_it_is_not_modeled(name):
+    v = envelopes.policy(REG, name).inference_overhead
+    p = REG.param(f"policy.{name}.inference_overhead")
+    assert (math.isnan(v) and p.source.startswith("not modeled")) or (v >= 1 and p.status)
 
 
 @pytest.mark.parametrize("name", REG.names("regime"))

@@ -20,9 +20,9 @@ def test_the_reference_numbers_match_the_spec_arithmetic():
     work = operating.work(r, REG["work.v4-pretrain.flops"])
     assert 30 < work["unencumbered"] < 40
     assert math.isclose(work["dark pool"], work["unencumbered"] / 0.01)
-    assert math.isclose(work["lower end"], r.scenario.seconds(r.lo))
-    assert math.isclose(work["best attack"], r.scenario.seconds(r.hi))
-    assert work["unencumbered"] <= work["lower end"] <= work["best attack"] * (1 + 1e-9) <= work["dark pool"] * 1.001
+    assert math.isclose(work["lower bound"], r.scenario.seconds(r.lo))
+    assert math.isclose(work["best attack"], r.scenario.seconds(r.attack))
+    assert work["unencumbered"] <= work["lower bound"] <= work["best attack"] * (1 + 1e-9) <= work["dark pool"] * 1.001
 
 
 def test_remote_exfiltration_is_unbounded():

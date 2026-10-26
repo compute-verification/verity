@@ -1,13 +1,14 @@
-# ρ: how much the regime slows training
+# ρ: the regime's overhead on training
 
-One number: **ρ**, the size of the actual circuit that reaches a training target over the reference's, `|A| / T_0`, on
-the datacenter the adversary actually runs (not only on the declared circuit NCI's verifier sees), and beside it the
-**time to the target** that size takes on the inventory. Everything here is a way of bounding ρ from below (a bound: a
-theorem or a draft statement, under premises) or from above (an attack: a construction, analytic or measured), at some
-choice of every parameter, and of seeing how it moves.
+One number: **ρ**, the **overhead**, the size of the actual circuit that reaches a training target over the
+reference's, `|A| / T_0` (a factor), on the datacenter the adversary actually runs (not only on the declared circuit
+NCI's verifier sees), and beside it the **time to the target** that size takes on the inventory, `T ≥ ρ T_0 / Φ_total`.
+"Slowdown" here means only that time. Everything here is a way of bounding ρ from below (a bound: a theorem or a draft
+statement, under premises), at some choice of every parameter, and of seeing how it moves; the attacks (constructions,
+analytic or measured) are reported beside the bound, not as an end of it.
 
 ~~~sh
-uv run python benchmarks/rho/run.py                                  # every scenario: ρ's bracket, its time, δ, terms, tornado, dangers
+uv run python benchmarks/rho/run.py                                  # every scenario: the overhead's lower bound, its time, δ, terms, tornado, dangers; the attacks
 uv run python benchmarks/rho/run.py --scenario reference-onsite-h200 --set regime.onsite.k_wipe=2e10
 uv run python benchmarks/rho/run.py --figures /tmp/rho-figs             # and the figures (matplotlib)
 verity bench rho                                                      # the same, as a runner (with $OUT: rho.md, rho.json, figures/)
@@ -23,7 +24,8 @@ it; each module's docstring says what it implements.
 - **Prior** (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its capacity `Φ_X` in gates per
   second and its servers' memory `M_s`, the dark leaves `ε_dark`, the horizon. `Units` is the one place a FLOP-model
   input (a datasheet's FLOP/s, the policy's `Γ`, the run's target, a class's or an attack's statement) becomes gates,
-  through `units.gates_per_flop`; ρ and the time to the target don't depend on its value.
+  through `units.gates_per_flop` (its source is `units.basis`); under `structure.reference`, whose `s_×` (`2G / κ`)
+  scales with it, ρ and the time to the target don't depend on its value.
 - **Envelopes** (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and sampled proofs, the wipe,
   the certifier) is one envelope with its parameters, its slack (the uncertified gates, keyed by route) and its `δ`,
   split into `δ_coin` and `δ_crypto` and summed over subprotocols and serving blocks (`Regime.delta`). The NCI check is
@@ -42,32 +44,49 @@ it; each module's docstring says what it implements.
 | `ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`, Lean's `χ` | uncertified routes `undecl.*`, `gap.*`, `skip.*`, `break.*`, `exfil.faulty` (`Cut.uncertified`) |
 | `E_i`, `δ_i(S)`, `δ_coin`, `δ_crypto`, `Pr[Break]` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.delta → Delta` (`coin`, `crypto`, `by`); `Pr[Break]` named, not bounded |
 | `k_wipe`, `r_in`, `r_side` | `Wipe.k_wipe` per server (`per = "server"`; per device: `residual_bits`, `host_residual_bits`), `Certifier.rate_in` (`intake` or `ingress`, `timing`, `side`) |
-| the local minimum `min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)}` | `theorem.local`; the minimum of global bounds `theorem.aggregate` (`slowdown(..., aggregate_only=True)`) |
-| `\|C_{0,m}(G)\|/T_0`, `ρ`, `T ≥ ρ T_0 / Φ_total` | `Profile.efficiency` (`μ`), `Slowdown.rho`, `Scenario.seconds` |
+| the local minimum `min{q_T(c_S, k_S), n_S q_T(c, k) + q_U(S)}` | `theorem.local`; the minimum of global bounds `theorem.aggregate` (`overhead(..., aggregate_only=True)`) |
+| `\|C_{0,m}(G)\|/T_0`, `ρ`, `T ≥ ρ T_0 / Φ_total` | `Profile.efficiency` (`μ`), `Overhead.rho`, `Scenario.seconds` |
 
-Read a result as `ρ ∈ [lo, hi]`, with the time to the target at each end, `δ_coin + δ_crypto` (plus `Pr[Break]`) that the
-envelopes fail, and the **monitored share** (`Slowdown.monitored`: the part of the adversary's counted weight on
-monitored gates; the protocols do their job for an algorithm when it is small). Bounds count every gate at capacity, so
-the time at `lo` is the idealized normalization (the reference at the inventory's full capacity); an attack is a
-construction on a serving block's *layout* (what a protocol-abiding strategy gets) at the fleet's MFU, padded to
-capacity, so its ρ carries its idle share and its time is exact. A bound above an attack is a **contradiction**: a
-premise is false for that algorithm at that budget. `analysis.upto(status)` gives `lo` from only the bounds and cuts at
-least as strong as a status, and the **operating points** (`operating.py`) turn ρ into time at an optimizer step or a
-pretraining run, and exfiltrating a reference through side channels.
+Read a result as one number per scenario, **the overhead's lower bound** (`Result.lo`: every bound met at once, at the
+family the adversary picks), with its status, where its premises stand, whether it is vacuous (below), the time to the
+target it implies, `δ_coin + δ_crypto` (plus `Pr[Break]`) that the envelopes fail, and the **monitored share**
+(`Overhead.monitored`: the part of the adversary's counted weight on monitored gates; the protocols do their job for an
+algorithm when it is small). Bounds count every gate at capacity, so the time at the lower bound is the idealized
+normalization (the reference at the inventory's full capacity). Every bound at once gives each block the least of the
+caps whose premises aren't refuted at that block's bits (`data/premises.toml`): a bound refuted there doesn't bound it,
+is still reported alone, tagged refuted, and is named in `Estimate.excluded` where it is refuted at a block that binds.
+Beside the lower bound is the **inference overhead** (`policy.<name>.inference_overhead`), the honest inference
+workload's circuit under the partition over its unpartitioned size; ρ models no honest inference circuit to partition
+yet, so it is a placeholder sourced "not modeled".
+
+**The attacks** are a table of their own: the best known attack on each scenario (`Result.attack`,
+`FamilyResult.best_attack`), a construction on a serving block's *layout* (what a protocol-abiding strategy gets) at the
+fleet's MFU, padded to capacity, so its ρ carries its idle share and its time is exact. It is not an end of an interval
+around ρ. A bound above it is a **contradiction**: a premise is false for that algorithm at that budget, and the
+contradiction is reported. `analysis.upto(status)` gives the lower bound from only the bounds and cuts at least as strong
+as a status, and the **operating points** (`operating.py`) turn ρ into time at an optimizer step or a pretraining run,
+and exfiltrating a reference through side channels.
 
 **The comparator.** ρ is normalized as the working draft's §8 normalizes it: `T ≥ ρ T_0 / Φ_total`, against the
 reference at the inventory's full capacity, not at its MFU. An adversary that no protocol encumbers trains at its MFU on
 a circuit padded to capacity, so it already sits at `ρ = μ / MFU`, about 2.5 at the reference fleets' 0.4
-(`Result.unmonitored`). A lower end below that is **vacuous**, because it doesn't exclude even that adversary. `run.py`
-prints the comparator beside every ρ and marks such a lower end "(vacuous)". The protocols show a slowdown only where
-`lo` is above it, and only by `lo / (μ / MFU)`.
+(`Result.unmonitored`). A lower bound below that is **vacuous**, because it doesn't exclude even that adversary. `run.py`
+prints the comparator beside every ρ and marks such a lower bound "(vacuous)". The protocols impose an overhead only
+where the lower bound is above it, and only by `lower bound / (μ / MFU)`.
 
 **The uncertified cap.** The bound counts an uncertified or a dark gate at `ω_max / s_×`, with `s_×` the fewest gates
 in any counted operation's subcircuit. Until it is measured, `structure.reference` takes it at the reference's gates per
 counted product, `2G / κ` (831 gates for the full family). That is the reference's average where the bound needs the
 structural minimum. It is valid only if no counted operation straddles certified and uncertified gates, the named
-assumption `draft:no-straddle`, which every bound counting such gates cites (so those bounds are `draft`). The
-elementary cap, `structure.elementary` (one counted operation a gate, at most), needs no such premise. It is the
+assumption `draft:no-straddle`, which every bound counting such gates cites (so those bounds are `draft`). With
+`s_× = 2G / κ` the reference's weight per gate is `κ / 2G` too, so `G` cancels: **the onsite lower bound rests on the
+dark hardware's datasheet product rate** (the dark leaves, `ε_dark` of `Φ_total`, count at `κ / 2` products a datasheet
+FLOP, Layer 1), not on a Boolean structural minimum, **and on `draft:no-straddle`**. `run.py` says so wherever the dark
+leaves are the bound's largest term. A measured `s_×` (#4826 counts 681 gates in one product subcircuit,
+`AmpereBF16TcDot16_v3`) beside the FLOP model's `G` = 250 would move reference-onsite-h200's lower bound by about 18%,
+so a structure states its `basis` and `Structure.check` refuses one whose `s_×` and `units.gates_per_flop` come from
+different sources: both the FLOP model's (`basis = "flop-model"`), or both one Boolean design's (`"boolean:<design>"`).
+The elementary cap, `structure.elementary` (one counted operation a gate, at most), needs no such premise. It is the
 `*-elementary` scenarios, and what `analysis.upto` falls back to for any status stronger than `draft`.
 
 ## The modules
@@ -77,7 +96,7 @@ Each module is one interface with interchangeable implementations. A different a
 
 | layer | module | interface | implementations (today) | an assumption here is |
 |---|---|---|---|---|
-| exclusion | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap = Budget → weight`; `local`, `aggregate`, `slowdown` | — | (none: the shape) |
+| exclusion | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServingBlock`, `Partition`; `Cap = Budget → weight`; `local`, `aggregate`, `overhead` | — | (none: the shape) |
 | exclusion | `classes.py` | `Argument.allowance(Profile) → Allowance` on a `FlopBudget`, raising `Outside`; `per_block`, `weight_per_gate`; `counts` and `share` name the counted set; `premise_status(cites, k)` from `data/premises.toml`; `Structure` (`s_×`, `ω_max`: what a bound holds an uncertified gate at) from `data/exclusion.toml` | Lean (proved under named premises): cover, cover-aligned, cover-chained, covering, covering-two-costs, covering-additive, covering-priced, fanout, fanout-read, partial-sum, partial-sum-keyed, threaded; drafts (E1): fanout-priced, fanout-split, accumulator, output-premise | a premise set and its count |
 | exclusion | `attacks.py` | the same `Argument`, side `attack`, on the serving block's layout | comply, state-fits (N1), shard (`benchmarks/nci`'s search), tile, measured executions | a construction |
 | | `profile.py` | `Profile`: κ, state bits, `μ` (`efficiency`), and every field a class reads, named as in Lean | — | (the interface between the two) |
@@ -88,7 +107,7 @@ Each module is one interface with interchangeable implementations. A different a
 | | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` | — | every number, with `low`/`high`, `source`, `status` |
 | | `scenario.py` | `build`, `evaluate → Result` (per family: each bound, all bounds at once, each attack, each with its status and premise standing), `seconds`, `reads` | `data/scenarios*.toml`, `data/reference.toml` | a choice per layer |
 | | `analysis.py` | over any keys: `sweep`, `tornado`, `threshold`, `dangers` and `rescues`, `corner` (every range at its worse end), `margins`, `phase` and `frontier`, `attribution` (what sets ρ), `upto(status)` | — | — |
-| | `figures.py` | `render`: each class's per-block ρ against k, brackets by status, ρ against ε_dark, phase maps, tornado, vulnerability, corner (PNG plus the JSON plotted) | — | — |
+| | `figures.py` | `render`: each class's per-block ρ against k, the overheads (the lower bound by status, each bound alone, the attacks beside it), ρ against ε_dark, phase maps, tornado, vulnerability, corner (PNG plus the JSON plotted) | — | — |
 | | `lean.py` | `status(name)`, `weakest(cites)` from the locks | — | — |
 | | `operating.py` | `work`, `exfil`, `points`: ρ as time at the registry's `work.*` and `exfil.*` references | — | a reference |
 | | `pofc.py`, `data/pofc.toml` | `apply(Scenario, Rules)`: declared work as `n_max`-token episodes whose operators form a one-way chain (`Budget.cut`), with the class `pofc-backprop` (the weight toll, in bits, draft) and the page's attacks, open only where their update reaches the next episode (`Rules.persist`: `outputs`, through `Y`, since registration happens once; `recommit`); `toll`, `versus` (ρ against `n_max`); a scenario opts in with `pofc = "<rules>"` | rules `reference`; the page's Llama-405B and Kimi K3 toll tables | a declared-circuit policy beside NCI's |
@@ -115,5 +134,6 @@ holds uncertified or dark gates at a structure whose `s_×` is above 1. Every nu
 - **A scenario**: a table in `data/scenarios.toml` (Daniel's reference datacenter is `data/reference.toml`).
 - **A work or exfiltration reference**: a `work.<name>.flops` or `exfil.<name>.bits` table.
 - **A sensitivity**: give the parameter `low` and `high`; `tornado` and `dangers` pick it up.
-- **A structure** (a measured `s_×`): a `structure.<name>` table in `data/exclusion.toml`, which a scenario names with
-  `structure = "<name>"`.
+- **A structure** (a measured `s_×`): a `structure.<name>` table in `data/exclusion.toml` with its `basis`
+  (`"boolean:<design>"`), which a scenario names with `structure = "<name>"`, beside `units.gates_per_flop` and
+  `units.basis` from the same design (`Structure.check`).

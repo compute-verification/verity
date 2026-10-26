@@ -171,11 +171,13 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     assert (tmp_path / "rho.md").read_text() == text
     record = json.loads((tmp_path / "rho.json").read_text(), parse_constant=lambda c: pytest.fail(f"JSON has {c}"))
     assert set(record["scenarios"]) == {NAMES[0]}
-    assert {"corner", "lo_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
+    assert {"corner", "overhead_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
     assert drawn == [(tmp_path / "figures", [10.0])]
 
 
-def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_path, monkeypatch, capsys):
+def test_run_prints_one_overhead_with_its_comparator_and_the_attack_in_a_table_of_its_own(tmp_path, monkeypatch, capsys):
+    """One number a scenario, the lower bound, flagged vacuous against `μ / MFU`, with the inference overhead beside
+    it (not modeled); the best known attack only in the attacks table, never as an interval's end."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import run
 
@@ -184,7 +186,14 @@ def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_
     monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
     run.main()
     text = capsys.readouterr().out
-    assert "| reference-remote-h200 | [2.35 (vacuous), 5.87] | 2.5 |" in text
+    summary, rest = text.split("## Attacks", 1)
+    assert "| reference-remote-h200 | **2.35 (vacuous)** | draft, contested | partial-sum | 2.5 | not modeled |" in summary
+    assert "5.87" not in summary and "[2.35" not in text
+    assert "| reference-remote-h200 | measured-full | full | draft | 5.87 |" in rest.split("\n## ", 1)[0]
     assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
     record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
     assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)
+    assert record["overhead"] == pytest.approx(2.35, rel=5e-3) and record["attack"]["rho"] == pytest.approx(5.87, rel=5e-3)
+    assert record["inference_overhead"]["value"] is None and record["inference_overhead"]["source"].startswith(
+        "not modeled")
+    assert "hi" not in record and "lo" not in record

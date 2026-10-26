@@ -190,18 +190,18 @@ def test_an_update_leaves_an_episode_only_through_its_outputs():
         replace(RULES, persist="sometimes")
 
 
-def test_in_episode_training_no_longer_sets_the_upper_end_where_its_update_cant_leave():
+def test_in_episode_training_is_no_longer_the_best_attack_where_its_update_cant_leave():
     """At `n_max = 1e8` training the top layer inside an episode reached the unencumbered `ρ = 1/MFU₀` (the construction
     at the training MFU, padded to capacity) when its update persisted for free; under `outputs` its 2e11-bit state
-    can't leave through `Y`, so the upper end is the scenario's own attacks'."""
+    can't leave through `Y`, so the best attack is the scenario's own attacks'."""
     s = build(REG, "reference-onsite-h200")
     f = s.context.fleet
     unencumbered = 1 / (f.eps_dark * f.dark_mfu + (1 - f.eps_dark) * f.mfu_train)
     (top1,) = (q for q in pofc.versus(REG, n_maxes=(1e8,), depths=(1,)))
-    assert top1.hi > 1.5 * unencumbered
+    assert top1.attack > 1.5 * unencumbered
     (free,) = (q for q in pofc.versus(REG.override({"pofc.rules.reference.persist": "recommit"}), n_maxes=(1e8,),
                                          depths=(1,)))
-    assert free.hi == pytest.approx(unencumbered)
+    assert free.attack == pytest.approx(unencumbered)
 
 
 def test_every_pofc_number_says_where_it_comes_from_and_how_sure_it_is():
@@ -235,13 +235,13 @@ def test_pofc_never_lowers_the_guarantee_and_its_class_caps_nothing_at_a_toll_of
     assert [p.toll for p in full] == sorted((p.toll for p in full), reverse=True) and min(p.toll for p in full) > 1
 
 
-def test_a_scenario_under_pofc_evaluates_and_its_bracket_is_ordered_unless_a_premise_is_named_false():
+def test_a_scenario_under_pofc_evaluates_below_its_best_attack_unless_a_premise_is_named_false():
     s, _ = reference()
     for n in N_MAX:
         w = pofc.apply(s, replace(RULES, n_max=n))
         assert w.regime.name == f"{s.regime.name}+pofc" and len(w.bounds) == len(s.bounds) + 2
         for f in evaluate(w).families:
-            assert f.lo <= f.hi * (1 + 1e-9) or f.contradictions
+            assert f.lo <= f.attack * (1 + 1e-9) or f.contradictions
 
 
 def test_a_stack_builds_from_its_table_and_a_model_reads_as_one():

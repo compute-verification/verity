@@ -490,9 +490,10 @@ class Top:
 
 @dataclass(frozen=True)
 class Point:
-    """ρ for one family at one `n_max` on the scenario under PoFC: every bound at once (`lo`), `pofc-backprop` alone
-    and with its signal premise, the best attack (`hi`), and `lo` without PoFC (`unwrapped`); `toll` is one episode's,
-    at the depth the gradient reaches (`depth`, the whole model for full training)."""
+    """ρ for one family at one `n_max` on the scenario under PoFC: every bound at once (`lo`, the lower bound),
+    `pofc-backprop` alone and with its signal premise, the best known attack's (`attack`), and `lo` without PoFC
+    (`unwrapped`); `toll` is one episode's, at the depth the gradient reaches (`depth`, the whole model for full
+    training)."""
 
     family: str
     depth: int
@@ -501,7 +502,7 @@ class Point:
     lo: float
     pofc: float
     signal: float
-    hi: float
+    attack: float
     unwrapped: float
 
     def json(self) -> dict[str, Any]:
@@ -533,5 +534,5 @@ def versus(registry: Registry, scenario: str = "reference-onsite-h200", n_maxes:
                 rho = {e.argument: e.rho for e in f.bounds}
                 t = trained(f.profile, base.model, r, depth)
                 out.append(Point(f.family, t.depth, n, t.toll(episode(r, base.model)), f.lo, rho["pofc-backprop"],
-                                 rho["pofc-backprop-signal"], f.hi, f0.lo))
+                                 rho["pofc-backprop-signal"], f.attack, f0.lo))
     return out
