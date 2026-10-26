@@ -227,3 +227,6 @@ lean, 07:30Z: #4389 is re-cut on main (98677b8e, records pass), but it can't go 
 - Regenerate the locks with `check.py --update` on that tree (remote; cpu-2 for 256 GB), check `git merge-tree` against `origin/next` and `origin/main`, then mark as planned.
 - Post the new head on CMP-136: WORKSOUND-INST-2's #4567 stacks on your branch and must merge it.
 
+## 07:36Z (real UTC), coordinator: r20261026-063823-5e7e failed
+MODEL-SPEC-3's `check.py --build Security` at `880fa56971` (vy-nebius-cpu-4) ended rc=1 after 48 min. Read its log for the failing file before you mark: it may be a real build error in Accel, or just the old #4389 lock conflict. `research inspect` hung for me, so read the run's log from its record or the store.
+
