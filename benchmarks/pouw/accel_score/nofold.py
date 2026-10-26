@@ -199,6 +199,95 @@ def v2_scan(budget: float = 0.004) -> None:
                   + "; ".join(cells))
 
 
+V2_CARDS = {
+    # name: (INT8 dense MAC/s, SHA-512 compressions/s at the public best, tensor MACs per ALU op, s_b)
+    # H200: RT-UNITS U1's IMAD-balanced rate argued on paper (1.43 × 4.79 G/s), RT-MODEL M2's 59.2, M13's s_b 8.
+    # RTX PRO 6000: the README measured the IMAD move slower, so 7.13 G/s stands until CALIB; s_b 2 (0/1 NVFP4).
+    "H200": (MAC_RATE, 1.43 * 4.79e9, 59.2, 8),
+    "RTX PRO 6000": (1.0e15 / 2, 7.13e9, 8, 2),
+}
+U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
+P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
+RHO_V2 = 6                     # Y_X Uᵀ, V Y_Wᵀ, (VΠ)Uᵀ with Π = Σ_s π_sᵀ: two base-128 digits each
+M_PREFILL = 8192               # tokens a prefill call
+EPS_ALG_V2 = 0.005             # budget on the deployed kernel's gap at A = B = 0, per credited shape
+SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATTN's served static shapes
+    "frozen": [(16384, 16512, 1), (16384, 16384, 1), (16384, 65536, 1), (65536, 16384, 1)],
+    "Llama-3.1-8B": [(4096, 6144, 32), (4096, 4096, 32), (4096, 28672, 32), (14336, 4096, 32), (4096, 128256, 1)],
+    "Llama-3.1-70B": [(8192, 10240, 80), (8192, 8192, 80), (8192, 57344, 80), (28672, 8192, 80), (8192, 128256, 1)],
+    "DeepSeek-V4-Pro": [(7168, 7 * 6144, 61), (3072, 7 * 7168, 61), (7168, 1536, 61), (1536, 65536, 61),
+                        (7168, 576, 61), (4096, 16 * 1024, 61), (16384, 7168, 61), (7168, 129280, 1)],
+}
+
+
+def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False) -> dict:
+    """One prefill call of protocol v2, per MAC in plain INT8 tensor time at η.
+
+    Tensor: the product (1) and the six peels. ALU: hashing (S segment words of `word_bits` and O at 32 bits a cell,
+    NF3's leaf and tree), coin expansion (SHA-512 counter mode, 512 bits a compression: the dither (m+N)K bits, the
+    noise 8 bits a value of V and U, the S permutations), and the wraps. A is the previous call's committed output under
+    a public elementwise map plus committed per-row scalars, so it adds no leaves (`commit_a` prices committing it
+    anyway). ε_alg is the larger of the two routes PD2-1 found at A = B = 0.
+    """
+    mac, sha, c_op, s_b = V2_CARDS[card]
+    per_comp = ETA * mac / sha
+    per_bit = LEAF_BLOCKS * TREE / LEAF_DATA_BITS
+    S = math.ceil(K / L)
+    g_hash = per_comp * per_bit * (S * word_bits + 32) / K
+    g_a = per_comp * per_bit * 8 / N if commit_a else 0.0
+    coin_bits = (m + N) * K + 8 * (m + N) * L + S * L * math.log2(L)
+    g_coin = per_comp * coin_bits / (512 * m * N * K)
+    g_rm = RHO_V2 * L / K
+    g_wrap = c_op * (P_W + P_X) / 2
+    tensor, alu = 1 + g_rm, g_hash + g_a + g_coin + g_wrap
+    g = tensor + alu
+    saved = max(2 * L, g_rm * K - K / s_b)          # at A = B = 0 nothing wraps (|b + V| ≤ 97), so wraps cost 0 there
+    return {"L": L, "S": S, "gamma": g, "gamma_max": max(tensor, alu), "hash": g_hash, "A": g_a, "coin": g_coin,
+            "rm": g_rm, "wrap": g_wrap, "h": (g_hash + g_a + g_coin) / g, "eps_alg": saved / (g * K)}
+
+
+def v2_pick(card: str, K: int, N: int, word_bits: int, budget: float = EPS_ALG_V2, **kw) -> dict:
+    """The L (a multiple of 64, at most K) of least γ with ε_alg within budget; else the L of least ε_alg."""
+    rounds = [v2_round(card, K, N, L, word_bits, **kw) for L in range(64, K + 1, 64)]
+    ok = [r for r in rounds if r["eps_alg"] <= budget]
+    return min(ok, key=lambda r: r["gamma"]) if ok else min(rounds, key=lambda r: r["eps_alg"])
+
+
+def v2_static(card: str, model: str, word_bits: int, budget: float = EPS_ALG_V2) -> dict:
+    """MAC-weighted γ (additive and overlapped), h; ε_alg weighted by honest cost; the worst shape's γ."""
+    macs = cost = cost_max = hashed = saved = 0.0
+    worst = (0.0, None)
+    for K, N, reps in SHAPES[model]:
+        r = v2_pick(card, K, N, word_bits, budget)
+        w = K * N * reps
+        macs += w
+        cost += w * r["gamma"]
+        cost_max += w * r["gamma_max"]
+        hashed += w * r["gamma"] * r["h"]
+        saved += w * r["gamma"] * r["eps_alg"]
+        if r["gamma"] > worst[0]:
+            worst = (r["gamma"], (K, N, r["L"]))
+    return {"gamma": cost / macs, "gamma_max": cost_max / macs, "h": hashed / cost, "eps_alg": saved / cost,
+            "worst": worst}
+
+
+def v2() -> None:
+    k6 = math.ceil(LN["1e-6"] / (EPS_S_V1 * (1 - 2 ** -16)))
+    print(f"\nprotocol v2 (static shapes, prefill m {M_PREFILL}): HYB U ±{U_W} permuted per segment, V ±{U_X}, period L, "
+          f"O bound to the words, NF3 leaf/tree, honest SHA-512 at the public best; eps_alg budget {EPS_ALG_V2:.1%} "
+          f"a shape; k = {k6} draws (eps_S {EPS_S_V1:.1%} at 1e-6, {LN['1%'] / k6:.3%} at 1%)")
+    print(f"  {'card':13} {'model':16} {'words':>5} {'budget':>6} {'gamma':>6} {'g_max':>6} {'h':>5} {'eps_alg':>7}"
+          f"  worst shape")
+    for card in V2_CARDS:
+        for model in SHAPES:
+            for wb in (32, 16, 8):
+                for budget in (0.005, 0.01, 0.02):
+                    s = v2_static(card, model, wb, budget)
+                    g, (K, N, L) = s["worst"]
+                    print(f"  {card:13} {model:16} {wb:5} {budget:6.1%} {s['gamma']:6.2f} {s['gamma_max']:6.2f} "
+                          f"{s['h']:5.2f} {s['eps_alg']:7.2%}  K {K} N {N} L {L}: {g:.2f}")
+
+
 def main() -> None:
     print(f"C = {C:.0f} (leaves only, data sheet: {C_LEAF:.0f}); words 4 B, tree x2, plain at eta {ETA}")
     print("\ncoordinator's points (unchecked peel), gamma = 1 + A + C/L + L/K:")
@@ -262,3 +351,4 @@ if __name__ == "__main__":
     v1()
     v1_leaks()
     v2_scan()
+    v2()
