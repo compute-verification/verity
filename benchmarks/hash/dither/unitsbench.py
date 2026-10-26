@@ -103,6 +103,8 @@ class Lib:
             if self.jw_bytes is not None:
                 self.jw_bytes.restype = ctypes.c_ulonglong
                 self.jw_bytes.argtypes = [u32, u32, u32]
+            # H1U_JW: the column pass alone reads seed_c (the call's, at its first position), and no unit reads its own
+            self.jw = self.jw_bytes is not None and self.jw_bytes(32, 32, 512) != h.kh_j10r_rows_bytes(32, 512)
             if hasattr(h, "kh_j10r_row_fault_word"):
                 h.kh_j10r_row_fault_word.restype = ctypes.c_ulonglong
                 h.kh_j10r_row_fault_word.argtypes = [u32, u32, u32, ctypes.c_int]
@@ -239,7 +241,9 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
     0's units of row block 0; one bit of unit 0's seed_c, flipped after the rows, moving unit 0 alone.  sm:
     the receipts, seeds and control under kh_units_multi_j10r_sm (MultiJ10R's sm), the faults under its modes 1 and 2.
     rc (kh_units_multi_j10rc): its units read no seed_c, so the seed fault flips unit 0's sigma_R instead, and one bit of
-    call 0's first column block (column 0's, after the rows) moves exactly call 0's live units of column block 0."""
+    call 0's first column block (column 0's, after the rows) moves exactly call 0's live units of column block 0.  An
+    H1U_JW build's units read no seed_c either (its column pass, in the units' launch, reads the call's): the seed fault
+    flips unit 0's sigma_R, and one bit of call 0's seed_c moves every live unit of call 0."""
     for c in cs:
         c.j10r_seed()
     outs = [torch.empty_like(c.out) for c in cs]
@@ -282,24 +286,33 @@ def j10r_gate(lib: Lib, cs: list, refs: list, sm: bool = False, rc: bool = False
     torch.cuda.synchronize()
     row_moved = moved()
     row_want = [(0, u) for u in range(cs[0].b.shape[0] // 32)]
-    poison()
-    mu.run(mode=1)
-    s = cs[0].jseeds.view(torch.int32)
-    sw = 16 if rc else 0
-    s[0, sw] ^= 1
-    mu.run(mode=2)
-    torch.cuda.synchronize()
-    s[0, sw] ^= 1
-    seed_moved = moved()
+    def seed_fault(sw: int) -> list:
+        poison()
+        mu.run(mode=1)
+        s = cs[0].jseeds.view(torch.int32)
+        s[0, sw] ^= 1
+        mu.run(mode=2)
+        torch.cuda.synchronize()
+        s[0, sw] ^= 1
+        return moved()
+
+    jw = lib.jw and not rc
+    seed_moved = seed_fault(16 if rc or jw else 0)
     r = {"calls": len(cs), "units": mu.units, "sm": sm, **({"smq": "/".join(map(str, smq))} if sm else {}),
          "bad_words": bad, "dead_bad_words": dead, "poison_left": left, "seed_bad": seed_bad, "control_bad_words": k_bad,
          "control_refused": k_bad > 0,
          "fault_rows_moved": len(row_moved), "fault_rows_want": len(row_want), "fault_rows_conforming": row_moved == row_want,
-         "fault_seed": "sigma_R" if rc else "seed_c", "fault_seed_moved": seed_moved[:8],
+         "fault_seed": "sigma_R" if rc or jw else "seed_c", "fault_seed_moved": seed_moved[:8],
          "fault_seed_conforming": seed_moved == [(0, 0)]}
     r["ok"] = (sum(bad) == 0 and dead == 0 and left == 0 and seed_bad == 0 and k_bad > 0 and r["fault_rows_conforming"]
                and r["fault_seed_conforming"])
     r["fault_rows_word"] = rw
+    if jw:
+        call_moved = seed_fault(0)
+        call_want = [(0, u) for u in range(cs[0].live_units)]
+        r.update({"fault_call_seed_moved": len(call_moved), "fault_call_seed_want": len(call_want),
+                  "fault_call_seed_conforming": call_moved == call_want})
+        r["ok"] = r["ok"] and r["fault_call_seed_conforming"]
     if rc:
         poison()
         mu.run(mode=1)

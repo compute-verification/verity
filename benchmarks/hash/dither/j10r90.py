@@ -17,7 +17,9 @@ the units write as 0xA5A5A5A5, up to 8) equal to j10r_units.call_receipts' and t
 receipt_seed; the same call
 by kh_units_multi_j10r_sm on every SM equal on every word; the no-write control (zero units) refused; one bit of the row
 workspace moving exactly row block 0's units, and one bit of unit 0's seed_c moving unit 0 alone (unitsbench.j10r_gate's
-faults, through the rows and units launches alone). The sampled units' receipts (every build) and z tiles go to
+faults, through the rows and units launches alone; under H1U_JW, whose column pass alone reads the call's seed_c, one
+bit of unit 0's sigma_R moving unit 0 alone and one bit of the call's seed_c moving every unit). The sampled units'
+receipts (every build) and z tiles go to
 j10r90-check.npz, the rest to j10r90-check.json. Exit 4 if any gate fails.
 
 verify (a CPU node, check's out/ as DIR): every sampled unit's receipt and z against `h1tile.j10r_reference` itself, from
@@ -258,21 +260,30 @@ def gate(lib, jc: JCall, out: torch.Tensor, first: torch.Tensor | None, picks: l
     rm = moved()
     r["fault_rows_moved"], r["fault_rows_want"] = int(rm.numel()), ncb
     r["fault_rows_conforming"] = bool(rm.numel() == ncb and (rm == torch.arange(ncb, device="cuda")).all())
-    poison(out, mu)
-    mu.run(mode=1)
-    s = jc.jseeds.view(torch.int32)
-    s[0, 0] ^= 1
-    mu.run(mode=2)
-    torch.cuda.synchronize()
-    s[0, 0] ^= 1
-    sm_ = moved().tolist()
+    def seed_fault(sw: int) -> torch.Tensor:
+        poison(out, mu)
+        mu.run(mode=1)
+        s = jc.jseeds.view(torch.int32)
+        s[0, sw] ^= 1
+        mu.run(mode=2)
+        torch.cuda.synchronize()
+        s[0, sw] ^= 1
+        return moved()
+
+    sm_ = seed_fault(16 if lib.jw else 0).tolist()
+    r["fault_seed"] = "sigma_R" if lib.jw else "seed_c"
     r["fault_seed_moved"] = sm_[:8]
     r["fault_seed_conforming"] = sm_ == [0]
+    if lib.jw:
+        cm = seed_fault(0)
+        r["fault_call_seed_moved"], r["fault_call_seed_want"] = int(cm.numel()), jc.units
+        r["fault_call_seed_conforming"] = cm.numel() == jc.units
     out.copy_(keep)
     del keep
     r["ok"] = (r["poison_left"] == 0 and r["bad_words"] == 0 and r["vs_base_bad_words"] in (None, 0)
                and r["seed_bad"] == 0 and r["sm_poison_left"] == 0 and r["sm_vs_units_bad_words"] == 0
-               and r["control_refused"] and r["fault_rows_conforming"] and r["fault_seed_conforming"])
+               and r["control_refused"] and r["fault_rows_conforming"] and r["fault_seed_conforming"]
+               and r.get("fault_call_seed_conforming", True))
     return r, got
 
 
