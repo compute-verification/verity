@@ -7,19 +7,21 @@ algorithm's; a kind it can't reach is `inf`, which the family table leaves out.
 
 The kinds:
 
-* `full`: every weight trained (pretraining, full fine-tuning, full-weight RL); the state is the whole model, at the
-  rate of a scratch-trained model or of a delta from the registered base.
+* `full`: every weight trained (pretraining, full fine-tuning, full-weight RL); the state is the whole model, and a
+  weight costs a block the rate of a scratch-trained model or of a delta from the registered base.
 * `adapter`: LoRA and kin beside frozen, registered weights (LoRA, LoRA-XS, TinyLoRA); state and counted products from
   the model's matrices.
 * `seed`: evolution strategies and zeroth-order methods whose update is seeds and scalars.
-* `low-comm`: `full` with an outer sync every `H` steps of compressed pseudo-gradients (DiLoCo, SparseLoCo, DeMo).
+* `low-comm`: `full` with an outer sync every `sync_every` steps of compressed pseudo-gradients (DiLoCo, SparseLoCo,
+  DeMo).
 * `partial`: a subset trained (a frozen prefix, a share of the experts), the rest registered.
 * `distill`: `full` on a teacher's outputs, the teacher's forward registered work.
 * `nci`: any algorithm of the NCI library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
   table.
 
 A family may name a **precision** (`precision.<name>`, FP8 or NVFP4): the format sets `β_x`, caps every per-activation
-bit count at its width, and multiplies the compute a target needs.
+bit count at its width, and multiplies the compute a target needs. A family's `premises = "<family>"` takes the premise
+numbers it doesn't give from that family (`family`).
 
 Adding a family kind is one dataclass with `profile` and an entry in `KINDS`; adding a family of an existing kind is a
 table.
@@ -120,11 +122,12 @@ def _cap(x: float | None, cap: float) -> float | None:
 
 @dataclass(frozen=True, kw_only=True)
 class Full(Premises):
-    """Every weight trained: pretraining, full fine-tuning, full-weight RL. The state is the whole model, at the rate of a
-    scratch-trained model (pretraining) or of its delta from the registered base (fine-tuning, RL)."""
+    """Every weight trained: pretraining, full fine-tuning, full-weight RL. The state is the whole model at
+    `state_bits_per_param`; what a block pays per weight (`b`, `b_w`) is the rate of a scratch-trained model
+    (pretraining) or of its delta from the registered base (fine-tuning, RL), which the family's table gives."""
 
     kappa: float
-    #: bits per parameter of the trained state a block must hold to train unthrottled
+    #: bits per parameter of the trained state a block must hold to train unthrottled (what an exact run carries)
     state_bits_per_param: float
 
     def profile(self, model: Model, run: Run) -> Profile:
@@ -143,7 +146,8 @@ class LowComm(Full):
     sync_bits: float
 
     def exchange_bits(self, model: Model) -> float:
-        """Bits each worker receives per inner step: the whole model's pseudo-gradient, compressed, every `H` steps."""
+        """Bits each worker receives per inner step: the whole model's pseudo-gradient, compressed, every `sync_every`
+        steps."""
         return model.n_total * self.sync_bits / self.sync_every
 
 
@@ -285,7 +289,8 @@ class Nci(Premises):
       (`fanout_override`) and `b_a` (`boundary_bits`) are its traits; `b = b_w` is its state rate, unknown when the
       state doesn't split; a trait `theorem_applies = false` leaves threads' `d` unknown;
     * `efficiency.pretrain` is `1 / multiplier` (the library's multiplier is compute-equivalent against dense AdamW
-      pretraining), and the family's table may add or override any kind.
+      pretraining, so one that changes the architecture, such as fine-grained MoE's 20, prices a target loss and not a
+      given model's), and the family's table may add or override any kind.
 
     The premises the traits don't give come from the family's table, or `family.full`'s for `nci:<id>`."""
 
