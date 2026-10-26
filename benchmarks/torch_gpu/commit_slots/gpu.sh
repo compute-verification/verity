@@ -6,7 +6,7 @@
 #
 #   research run --on vy-dc-h200 --project verity --campaign e2e-demo --cwd source --env GPU_LEASE_WHO=kernels-kcommit \
 #     -- bash benchmarks/torch_gpu/commit_slots/gpu.sh
-# STEPS (default "tests check bench"), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25), PY.
+# STEPS (default "tests check bench"; a failing tests step ends the lease), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25), PY.
 set -uo pipefail
 O=${OUT:?}
 ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
@@ -33,7 +33,9 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
       check) $PY "$D/check.py" --out "$O" ${CHECK_ARGS:-} > "$O/check.jsonl" 2> "$O/check.err" ;;
       bench) $PY "$D/bench.py" --out "$O" ${BENCH_ARGS:-} > "$O/bench.jsonl" 2> "$O/bench.err" ;;
     esac
-    echo "$s rc $?" >> "$O/rc.txt"
+    rc=$?
+    echo "$s rc $rc" >> "$O/rc.txt"
+    [ "$s" = tests ] && [ "$rc" != 0 ] && { echo "the tests failed: nothing after them runs" >> "$O/rc.txt"; break; }
   done'
 echo "lease rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"
