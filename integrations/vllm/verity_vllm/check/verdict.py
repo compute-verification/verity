@@ -7,7 +7,7 @@ it established and what it found -- ONE document (`<row>/verdict.json`) beside t
 WHY.  The v1 Commit records its decision three times over: `commit/verdict.json` (`commit_pass`, one `first_fail_reason` string: the FIRST
 rule that failed, the others silent), `commit/runs.jsonl` (per instrumented run, every rule's own block under `commit.*`, the check
 names being the field names they grew under -- `weights_pin`, `linkage`, `coverage`, `identity_check`) and `commit_summary.json`, whose
-`pass` degenerated to `rc == 0 and tokens_equal` once `openings` / `coverage` stopped being carried on runs.jsonl (F-r19-int-21).  The
+`pass` degenerated to `rc == 0 and tokens_equal` once `openings` / `coverage` stopped being carried on runs.jsonl.  The
 verdict of record was `commit/verdict.json` + `commit/sampled_replay_p*.json`, read together by whoever knew to.
 
 WHAT.  A `Verdict` = the seven named checks (groups) and the R*/X* rules under them, each a `CheckResult`:
@@ -270,7 +270,7 @@ def execution_of_record(row_dir: str | os.PathLike) -> dict:
     runs' own collector record (runs.jsonl commit.binding.collector: variant, retention, window_mb, window_slots, arena_mb, layout, gpu_tree),
     `collector_variant` / `retention` ('windowed' iff window_mb > 0 else 'whole-block'; retention from the record, else --retain in cmd),
     `engine_settings` = --engine-arg k=v pairs + --max-num-seqs / --openings / --pairs / --open-after-release / --required-manifest /
-    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (F-r19-int-21: that file is no longer
+    --expect-root from the command line (open_after_release also when a run records its openings_after_release: the Commit's default).  [P5] this is what `commit_summary.json` used to carry (that file is no longer
     written; the harness keeps a reader for old records); verdict.json `execution` is the record."""
     d = Path(row_dir)
     out: dict = {}

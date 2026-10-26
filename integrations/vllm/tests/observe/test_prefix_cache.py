@@ -1,6 +1,7 @@
 """prefix_cache: the warm/cold workload pair and the linkage record on synthetic StepStart logs (torch-free)."""
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -35,6 +36,32 @@ def test_generated_pair_is_the_declared_experiment():
     assert cold["feature"]["expect"]["num_computed_at_first_step"][b["request_id"]] == 0
     assert warm["expected_engine_steps"] == PC.WARM_ARRIVE_STEP + PC.MAX_TOKENS
     assert warm["serving_profile"] == PC.PROFILE_LABEL and warm["context_class"] == "C256"
+
+
+class _ByteTok:
+    """`coverage_workloads.Tok`'s interface over UTF-8 bytes, standing in for the served model's tokenizer."""
+
+    path = Path("bytes.json")
+    sha256 = "0" * 64
+
+    def __init__(self, path: str) -> None:
+        pass
+
+    def encode(self, text: str) -> list[int]:
+        return list(text.encode())
+
+    def decode(self, ids: list[int]) -> str:
+        return bytes(ids).decode("utf-8", "replace")
+
+
+def test_gen_with_its_defaults_writes_the_pinned_pair(tmp_path: Path, monkeypatch):
+    from verity_vllm.pipeline import coverage_workloads as gw
+
+    monkeypatch.setattr(gw, "Tok", _ByteTok)
+    assert PC.main(PC.GenOptions(tokenizer="unused", out_dir=str(tmp_path))) == 0
+    got = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(tmp_path.glob("workload_*.json"))}
+    assert got == {"workload_cov_b0_prefix_c256.json": "aa3bc587588897f046959836d19abb5f3d1701b980e08ba941bdee0a45401b59",
+                   "workload_cov_b0_prefix_c256_cold.json": "95cf0f3c99dd50cd9af7616974cf05fd5ca1abd4c541d0b304311bb76fc77cee"}
 
 
 # ------------------------------------------------------------------------------------------------------------ synthetic logs
@@ -247,6 +274,14 @@ def test_evidence_compares_warm_and_cold_run_dirs(tmp_path: Path):
     assert (warm / "prefix_evidence.json").exists() and (warm / "capture" / "prefix_linkage.json").exists()
     txt = PC.evidence_text(doc)
     assert "reuse_observed=True" in txt and "served identity" in txt
+
+
+def test_census_witness_sorts_row_count_and_gemm_kernels():
+    names = ["void vllm::rotary_embedding_kernel<...>", "sm90_tile_kernel", "sm80_tile_kernel", "ampere_tile_kernel",
+             "cublasLt_splitKreduce", "xmma_tile", "Kernel2_gemm", "void at::vectorized_elementwise_kernel<...>"]
+    census = {"steps": [{"step": 0, "kernels": {n: {"count": 1, "grid": [1, 1, 1], "block": [32, 1, 1]} for n in names}}]}
+    w = PC.census_row_witness(census, 0)
+    assert list(w["row_kernels"]) == names[:1] and list(w["gemm_kernels"]) == names[1:7]
 
 
 # ----------------------------------------------------------------------------------------------------- obligations (patterns_prefix)
