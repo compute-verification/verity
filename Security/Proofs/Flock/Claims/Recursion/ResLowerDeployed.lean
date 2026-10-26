@@ -600,11 +600,55 @@ theorem check5_bytes {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   rw [hsl]
   simp [Array.getD_eq_getD_getElem?, hn]
 
+/-- **An algebra part's `v` slot commits**: `v` is an input of the part's unit (`innerSub`'s outputs are `out` alone), so
+its row lies in the table's leaves (`in_block`), and `slotCommits_table` gives its commit string, as
+`hmSlotsCommit_of_full` does for the held rows. -/
+theorem slotV_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)
+    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true) {r : XR} (hr : readX x = some r)
+    {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss) {j : ℕ} {nm' : String} {pt : VStar.Part}
+    (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit} (hpc : r.w.parts[s]?.bind partCircuit = some c)
+    {qv n : ℕ} (hqv : c.ports.findIdx? (·.name == "v") = some qv) (hn2 : n < 2) :
+    SlotCommits c "v" qv n w := by
+  obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, h0, htab⟩ := stagedTables hS
+  rw [hr] at hr'
+  cases hr'
+  rw [hss] at hss'
+  cases hss'
+  rw [hsv] at hsv'
+  cases hsv'
+  have hS' := hS
+  obtain ⟨-, i, spec, sts, -, hsu, -⟩ := hS'
+  have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+  have hsz : p.sts.size = 1 := by rw [hp]; exact (oneFull_staged hS hsu).1
+  have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
+  obtain ⟨L, regs, hz⟩ := Flock.Readable.layout_of_check hck hx ht hpi h0
+  have hz1 : (L.model regs).Satisfies (Flock.Readable.zOf 1 w 0 p.sts[0].m) := by
+    have e := congrArg (fun J => Flock.Readable.zOf J w 0 p.sts[0].m) hsz
+    rw [← e]
+    exact hz
+  obtain ⟨-, hts⟩ := tablesOf_of_parse hx
+  obtain ⟨spec0, hset⟩ := Flock.Readable.setup_of_tablesOf hts
+  unfold Flock.Readable.Read.setup at hset
+  rw [hpi] at hset
+  obtain ⟨-, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset
+  obtain ⟨d, hd, -⟩ := hall 0 h0
+  have ht' : (FlockSoundness.Discharge.Exec.tagsAt p.tags p.I.count 0).typed = false :=
+    (FlockSoundness.Discharge.Exec.tagsAt_typed _ _ _).trans ht
+  obtain ⟨hscope, -⟩ := staged_scope hS hx h0
+  have hv1 := FlockSoundness.Discharge.Layout.scopeOk_ports
+    ((FlockSoundness.Discharge.FailClosed.scopeOk_eq _).symm.trans hscope)
+  obtain ⟨u, -, hupv, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨-, -, hnbl, -⟩ := table_rows ht' hd (by omega) hv1 L regs hz1
+  subst hc0
+  have hout : "v" ∉ (VStar.Stmt.inner j nm' pt).sub.outputs := by show "v" ∉ ["out"]; decide
+  exact slotCommits_table ht' hd (by omega) hv1 hl L regs hz1 hqv (in_block hrows hout hqv)
+    (div_lt_blocks_two hn2 hnbl)
+
 /-- **Check 5's tie at one instance of a staged `rec-residuals` part**: `resTie_layVR` with check 5's public rows from
 the statement's setup. The setup ran `RecCoins.check` at the part's table, so `checkResiduals` at its inner session
 (`residualsCheck_of_check`, `residualsBoth_of_check`), whose `v` and `out` rows the slots read (`check5_bytes`), and
 the deployed `Brings.setup` lists their evaluations (`hset`). What is left are facts of the code: the table's labels
-(`hidx`), the unit's name being no other V\* unit's, the slots, the ports' word counts and where the copy's columns
+(`hidx`), the unit's name being no other V\* unit's, the `out` slot (`v`'s is `slotV_staged`), the ports' word counts and where the copy's columns
 sit. -/
 theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
@@ -627,7 +671,6 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
     {qv qo n : ℕ} (hn2 : n < 2) (hnp : n < sts[0].pub.n)
     (hqv : c.ports.findIdx? (·.name == "v") = some qv) (hqo : c.ports.findIdx? (·.name == "out") = some qo)
     (hvin : qv < HmOut.nIn c) (hoout : ¬ qo < HmOut.nIn c)
-    (hslv : SlotCommits c "v" qv n w)
     (hslo : readForms w (hmCommit c qo n) = FlockSoundness.Binding.commitString
       (rowPfx c qo ++ readForms w (outForms c qo n)) (readForms w (hmSalt c qo n))) :
     ∃ (inn : RecCoins.Inner) (rows : Array (Array ℕ)), f.load sts[0].c.unit.name = .ok inn ∧
@@ -653,7 +696,6 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   have hzn : n < (RecCoins.zeroRows 2 RecCoins.OUT_WORDS).size := by simpa [RecCoins.zeroRows] using hn2
   obtain ⟨prog, hprog, hpv⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcv hqv hn2 hnr hnp
   obtain ⟨-, -, hpo⟩ := check5_bytes hS hck hr hpc hsu h0 hidx hown hcz hqo hn2 hzn hnp
-  beta_reduce at hpv hpo
   have hst : resSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) sts[0] =
       commitIns rows (RecCoins.verifierSalt prog RecCoins.V_VALUE) ++
         commitIns (RecCoins.zeroRows 2 RecCoins.OUT_WORDS) (RecCoins.zeroSalt RecCoins.ZERO_VALUE) := by
@@ -676,7 +718,8 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
       rwa [getElem!_pos ((RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!) i hi] at hz0
     · rw [Array.getElem?_eq_none (Nat.le_of_not_lt hi)]
       rfl
-  exact resTie_layVR hT hnc hr hss hsv hpc hn2 hqv hqo hvin hoout hslv hslo hptv hpto hwv hwo hzr hpv.symm hpo.symm
+  exact resTie_layVR hT hnc hr hss hsv hpc hn2 hqv hqo hvin hoout
+    (slotV_staged hS hck hr hss hsv hpc hqv hn2) hslo hptv hpto hwv hwo hzr hpv.symm hpo.symm
     (hmemS _ (List.mem_append_left _ (hci hnr).1)) (hmemS _ (List.mem_append_left _ (hci hnr).2))
     (hmemS _ (List.mem_append_right _ (hci hzn).1)) (hmemS _ (List.mem_append_right _ (hci hzn).2))
     hsz hVc hOc
