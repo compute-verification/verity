@@ -1,30 +1,19 @@
 """`verity.ml.circuits.ops.rows` and `ops.boolean.rows`: the row units. The residual add is `Bf16AddF2fp_v1` per element on
 every edge word; the argmax is the scan's first maximum (0 for a NaN logits[0], else the least index of the greatest non-NaN
-logit, +0 equal to -0); each Boolean form agrees with its word Definition (`word_of`) and its reference; and the embedding at a
-public position is its token's registered row plus the position's row with ok = 1, the fill with ok = 1 outside the
-vocabulary, and ok = 0 for every wrong read."""
+logit, +0 equal to -0); and each Boolean form agrees with its word Definition (`word_of`) and its reference."""
 from __future__ import annotations
-
-import random
 
 import numpy as np
 import pytest
 
-from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
-from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.ops import fp32 as F
 from verity.ml.circuits.ops import rows as W
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.ops.boolean import rows as R
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.gates import embedding as ER
-from verity.ml.commitments.indexed import RangeIndexedDomain
-from verity.ml.commitments.merkle import CommitmentDomain, merkle_depth
-from verity.ml.commitments.rowleaf import bit_row
 
 #: +-0, the least and greatest subnormals, the least normal, 1, the next word, 2, the greatest finite, +-inf, the F2FP and
 #: torch NaNs, a signalling NaN and a negative NaN
@@ -139,116 +128,3 @@ def test_malformed_bindings_are_refused() -> None:
         for N in (0, -1, "2"):
             with pytest.raises(ValueError, match="positive int of elements"):
                 bind(D, N=N)
-    for V in (1, (1 << 16) + 1, "5"):
-        with pytest.raises(ValueError, match="V in 2 ... 2\\^16"):
-            R.position(V, 2)
-    with pytest.raises(ValueError, match="H is a positive int"):
-        R.position(5, 0)
-
-
-# ---- the embedding at a public position ----------------------------------------------------------------------------------
-
-def _table(rng: random.Random, V: int, H: int):
-    """A table of V random rows of H bf16 words, one token a row, under a registered value's dense domain (owner -2)."""
-    dom = CommitmentDomain(rng.randbytes(64), -2, RangeIndexedDomain(0, V), hash="sha512")
-    rows = [[rng.randrange(1 << 16) for _ in range(H)] for _ in range(V)]
-    salts = [rng.randbytes(ER.SALT_BYTES) for _ in range(V)]
-    return dom, rows, salts, RT.commit(dom, [bit_row((r, 16)) for r in rows], salts)
-
-
-def _path(table: RT.RowTable, rank: int) -> list[bytes]:
-    p = table.path(rank)
-    return [p[k:k + 64] for k in range(0, len(p), 64)]
-
-
-def _cases(rng: random.Random, V: int, H: int) -> list[tuple]:
-    """Every token read honestly, then each read with one thing wrong (another in-range token, a row bit, the salt, the root,
-    the domain id, a sibling), and tokens outside [0, V): V, V + 1 and the largest u16."""
-    dom, rows, salts, table = _table(rng, V, H)
-    D = merkle_depth(V)
-    out = []
-    for t in range(V):
-        pos = [rng.choice(EDGES) if rng.random() < 0.3 else rng.randrange(1 << 16) for _ in range(H)]
-        args = (t, table.root, dom.domain_id, rows[t], salts[t], _path(table, t), pos)
-        bad_row = list(rows[t])
-        bad_row[rng.randrange(H)] ^= 1 << rng.randrange(16)
-        bad_path = list(args[5])
-        bad_path[rng.randrange(D)] = rng.randbytes(64)
-        out += [args, ((t + 1) % V, *args[1:]), (*args[:3], bad_row, *args[4:]),
-                (*args[:4], rng.randbytes(ER.SALT_BYTES), *args[5:]), (t, rng.randbytes(64), *args[2:]),
-                (t, args[1], rng.randbytes(64), *args[3:]), (*args[:5], bad_path, pos)]
-    for tok in (V, V + 1, (1 << 16) - 1):
-        out.append((tok, table.root, dom.domain_id, rows[0], salts[0], _path(table, 0), [0x3F80] * H))
-    return out
-
-
-def _columns(rows) -> list[np.ndarray]:
-    return [np.array([r[k] for r in rows], dtype=np.uint8) for k in range(len(rows[0]))]
-
-
-def _words_ok(got: np.ndarray, H: int) -> list[tuple[list[int], int]]:
-    return [([int(sum(int(b) << j for j, b in enumerate(g[16 * w:16 * w + 16]))) for w in range(H)], int(g[16 * H]))
-            for g in got]
-
-
-def test_the_embedding_is_typed_by_its_shape() -> None:
-    for (V, H), D in (((2, 1), 1), ((5, 2), 3), ((256, 128), 8), ((256, 8192), 8), ((1 << 16, 4), 16)):
-        target = R.position(V, H)
-        assert target is R.position(V, H) and merkle_depth(V) == D
-        assert [t.leaves for _, t in target.signature()[0]] == [16, 512, 512, 16 * H, 1536, 512 * D, 16 * H]
-        assert target.signature()[1].leaves == 16 * H + 1
-        assert BL.elements(target.signature()[1]) == [16] * H + [1]
-    assert R.position(256, 128).signature()[1].leaves == 2_049
-    assert R.position(256, 8192).signature()[1].leaves == 131_073
-
-
-def test_the_reference_is_the_registered_row_plus_the_position_and_refuses_every_wrong_read() -> None:
-    """The reference on a 300-row table (D = 9): each honest read is its row plus the position row with ok = 1, each wrong one
-    ok = 0, and a token outside [0, V) the fill plus the position (0x7FFF in every word) with ok = 1."""
-    rng = random.Random("embedding-position-reference")
-    V, H = 300, 3
-    cases = _cases(rng, V, H)
-    got = [R.reference(V, *c) for c in cases]
-    for t in range(V):
-        honest, *wrong = got[7 * t:7 * t + 7]
-        assert honest == (W.add_row(cases[7 * t][3], cases[7 * t][6]), 1)
-        assert [ok for _, ok in wrong] == [0] * 6
-    assert got[7 * V:] == [([0x7FFF] * H, 1)] * 3
-
-
-def test_the_selection_takes_the_row_inside_the_vocabulary_and_the_fill_outside_it() -> None:
-    """The selection alone: the row at 0 and V - 1, the fill at V and past it up to the largest u16; ok is opens inside the
-    vocabulary and 1 outside it; at V = 2^16 every token is inside."""
-    rng = random.Random("embedding-position-select")
-    H = 3
-    for V in (256, 300, 1 << 16):
-        toks = sorted({0, 1, V - 1, V, V + 1, 511, 512, (1 << 16) - 1} & set(range(1 << 16)))
-        rows, want = [], []
-        for t in toks:
-            for opened in (0, 1):
-                row = [rng.randrange(1 << 16) for _ in range(H)]
-                rows.append(([(t >> j) & 1 for j in range(16)], [opened], [(w >> j) & 1 for w in row for j in range(16)]))
-                inside = t < V
-                want.append(([w if inside else R.FILL for w in row], opened if inside else 1))
-        got = evaluate_bits(bind(R.EmbeddingPositionSelect, V=V, H=H), *_columns(rows)).reshape(len(rows), -1)
-        assert _words_ok(got, H) == want, V
-
-
-def test_the_selection_costs_an_and_a_row_bit_ok_and_the_token_comparison() -> None:
-    """16 H + 1 ANDs, and 7 for tok < 256: its bits 8 to 15 clear, the lowest of them a NOT."""
-    for H in (3, 128):
-        assert BS.compile(bind(R.EmbeddingPositionSelect, V=256, H=H)).counts["and"] == 16 * H + 1 + 7
-
-
-@pytest.mark.slow
-def test_the_embedding_opens_a_registered_table_adds_the_position_and_refuses_every_wrong_read() -> None:
-    """A few minutes, most of it tracing the hm96 leaf and the read's parts: the only evaluation of the wiring (the row's bits
-    into its digest, the digest and salt into the hm96 leaf, its leaf and the token's low D bits into the read, the read's bit
-    into the selection, the selected row and the position row into the add), at D = 3 over two-word rows."""
-    rng = random.Random("embedding-position-gates")
-    V, H = 5, 2
-    cases = _cases(rng, V, H)
-    want = [R.reference(V, *c) for c in cases]
-    assert [ok for _, ok in want].count(1) == V + 3
-    got = evaluate_bits(R.position(V, H), *_columns([R.arguments(V, *c) for c in cases])).reshape(len(cases), -1)
-    assert _words_ok(got, H) == want

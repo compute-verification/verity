@@ -1,8 +1,7 @@
 """The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
-    catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the catalog's
-    row reads on ml.commitments;
+    catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
@@ -47,9 +46,7 @@ ALLOWED = {
     # the catalog and the kernels, distributions of their own before the platform layout
     "ml.circuits.silicon": {"ml.circuits"},
     "ml.circuits.targets": {"ml.circuits", "ml.circuits.silicon"},
-    # 2026-10-25 (CIR-104): the embedding at a public position (`ops.boolean.rows`) reads its token's row of a registered
-    # table with the commitments' in-circuit read (`gates.embedding`, `gates.frame_v3`, `gates.hm96`, `gates.rowleaf`).
-    "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.commitments", "ml.kernels"},
+    "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
     # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it

@@ -16,9 +16,7 @@
   (and `TokenSelect_v4`'s, its V-chunked form, in `verity_vllm`'s registry) with the index in 16 bits; ``torch.argmax``
   differs from it on a NaN (it returns the first NaN's index).
 
-The embedding of a token at a public position, the third row unit, reads a registered table at a hidden token, so it is a
-Boolean Definition only, over `verity.ml.commitments`' row read (`ops.boolean.rows.EmbeddingPosition_v1`). `ops.boolean.rows`
-has these two on bits.
+`ops.boolean.rows` has both on bits.
 """
 from __future__ import annotations
 
