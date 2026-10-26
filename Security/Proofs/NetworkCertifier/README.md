@@ -117,7 +117,8 @@ Horizon.lean    the wrong units over a horizon: a uniform draw misses `f` units 
                                          independent coins (pr_adaptive_le), and with each window's soundness error
                                          added, the horizon's bound (horizonWrongUnits)
 HorizonLeak.lean  the leak through the network certifier over a monitoring period: the escapes multiply with
-                                         each window's error added (pr_adaptive_add_le), the families of faulty sets
+                                         each window's error added (pr_adaptive_add_le, the monitoring-period step
+                                         Periods.prCoin_forall_prod_le at bounds capped at 1), the families of faulty sets
                                          under `Fmax` units (exists_famOf_eq), and the secrets the client's cells
                                          decode to at each draw, read back from the certifier's record
                                          (encard_horizonGood_le, horizonLeak)
@@ -320,7 +321,8 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
 - **The leak through the network certifier over a monitoring period** (`HorizonLeak.lean`): `HorizonLeakAccepted` is
   the count `K_horizon`, conditional on two per-window inputs taken as plain hypotheses, at the faulty set `W_i` of the
   witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape
-  `hesc`, `Pr[acc_i | earlier coins] ≤ C(n_i − |W_i|, kd_i)/C(n_i, kd_i) + e_i`, and the leak relation at that set
+  `hesc`, `Pr[acc_i | earlier coins] ≤ (1 − q)^|W_i| + e_i` with `q` the design's per-window detection probability
+  (no draw's form: a uniform `kd_i`-of-`n_i` draw meets it at `q = kd_i/n_i`), and the leak relation at that set
   `hleak`, `Pr[acc_i ∧ ¬LeakAt W_i] ≤ e'_i`, read on the network certifier's record. From them every window accepts
   outside the monitoring period's good event (`HorizonGood`: the faulty sets hold under `Fmax ≥ ln(1/δ)/q` units and
   every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
