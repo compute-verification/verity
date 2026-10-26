@@ -382,7 +382,7 @@ run = ["systemd:vy-oom-order.timer"]
 owner = "infra"
 
 # The Lean check cache's caps (#3033): lean_audit.py --prune hourly as research, so a node's records trees stay at the 3 last
-# used (cpu-2's / filled with them, INF-151). lean_audit.py loads common.py by its repository path, so both keep that layout.
+# used, or one per `build` Lean slot where lean-slots has more (cpu-2's / filled with them, INF-151). lean_audit.py loads common.py by its repository path, so both keep that layout.
 # After installing, `sudo systemctl enable --now vy-lean-prune.timer`.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/lean-audit/tools/verity/lean/lean_audit.py"
