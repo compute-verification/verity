@@ -1720,6 +1720,14 @@ carrying its template, any other's `parse`'s. -/
 def parseCommit (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
   if tags.isTmpl then parseTmpl tags bytes tables else parse tags bytes tables
 
+/-- `parseCommit` through `parseFast` (`parseCommit_eq_fast`). -/
+def parseCommitFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
+  if tags.isTmpl then parseTmpl tags bytes tables else parseFast tags bytes tables
+
+theorem parseCommit_eq_fast : @parseCommit = @parseCommitFast := by
+  funext tags bytes tables
+  simp only [parseCommit, parseCommitFast, parse_eq_fast]
+
 /-- **The statement circuit of a hidden-output file**: a templated statement's (`Tags.isTmpl`) is the flat circuit its
 template unrolls to (`unrolled`), any other's `parse`'s. -/
 def parseStmt (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit :=
@@ -2156,11 +2164,12 @@ def check (c : Circuit) (pop : Public) (program : ByteArray) : V Nat := do
 end HmLinks
 
 /-- `Stmt.setupH` for a statement with hidden outputs (`Tags.hiddenOutputs`): every check `setupH` makes, on `HmOut`'s rows,
-public file, Δ and regions, and on its public input ports (`HmIn`) against the verifier's own `publicInputs`. -/
+public file, Δ and regions, and on its public input ports (`HmIn`) against the verifier's own `publicInputs`. Its circuit is
+the one the session commits (`HmOut.parseCommit`): a templated statement's carries its template. -/
 def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (tables : List (String × ByteArray) := [])
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
     (publicInputs : Option ByteArray := none) : V Stmt := do
-  let c ← HmOut.parse tags circuitFile tables
+  let c ← HmOut.parseCommit tags circuitFile tables
   let pi ← HmIn.parse c
   let finding0 ← if tags.bindings then (some <$> HmRow.checkPartition c partition)
     else if partition.isSome then throw s!"{tags.name}: the statement binds no partition" else pure none
@@ -2305,7 +2314,7 @@ def Stmt.setupTables (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
   return ({ tables := names, domain := tags.tableDomain count, sigma, hello, mPts, retainRounds := tags.retainRounds,
             unitDraw := draw, instances := units.size, sha512Digests := tags.hm96Rows, coinTree := CoinTree.ofHello hello }, sts)
 
-/-- `Stmt.setupHidden` on its circuit as `HmOut.parse` returns it (`parsed`), which the caller parses once
+/-- `Stmt.setupHidden` on its circuit as `HmOut.parseCommit` returns it (`parsed`), which the caller parses once
 (`Stmt.setupHidden_eq`). -/
 def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (coins : Coins)
     (draw : Option Json := none) (partition : Option Json := none) (program : Option ByteArray := none)
@@ -2369,7 +2378,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
   return { tags, leaf := default, c, pub, n, blocksReal, nbl, m, mPts := PT_LOCAL + nbl, pin, regions, da, db, digest, sigma,
            hello, merkle, partition := (finding.map (·.toJson)).getD Json.null }
 
-/-- `Stmt.setupTables` on its circuit as `HmOut.parse` returns it under `tags` (`parsed`), which the caller parses once: a
+/-- `Stmt.setupTables` on its circuit as `HmOut.parseCommit` returns it under `tags` (`parsed`), which the caller parses once: a
 one-table session sets up on it, several tables each parse their own (`Stmt.setupTables_eq`). -/
 def Stmt.setupTablesOf (parsed : V Circuit) (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins) (count : Nat)
     (tables : List (String × ByteArray) := []) (draw : Option Json := none) (partition : Option Json := none)
@@ -2460,7 +2469,8 @@ set_option maxRecDepth 20000 in
 theorem Stmt.setupHidden_eq (tags : Tags) (circuitFile publicFile : ByteArray) (coins : Coins)
     (tables : List (String × ByteArray)) (draw partition : Option Json) (program publicInputs : Option ByteArray) :
     Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs
-      = Stmt.setupHiddenOf (HmOut.parse tags circuitFile tables) tags publicFile coins draw partition program publicInputs :=
+      = Stmt.setupHiddenOf (HmOut.parseCommit tags circuitFile tables) tags publicFile coins draw partition program
+          publicInputs :=
   rfl
 
 set_option maxRecDepth 20000 in
@@ -2469,8 +2479,8 @@ theorem Stmt.setupTables_eq (tags : Tags) (circuitFile publicFile : ByteArray) (
     (work : Option (Nat × Array (String × Nat × Nat))) (stratified : Option Nat)
     (closure : Option (Std.HashMap Nat (Array Nat))) (publicInputs : Option ByteArray) :
     Stmt.setupTables tags circuitFile publicFile coins count tables draw partition program work stratified closure publicInputs
-      = Stmt.setupTablesOf (HmOut.parse tags circuitFile tables) tags circuitFile publicFile coins count tables draw partition
-          program work stratified closure publicInputs :=
+      = Stmt.setupTablesOf (HmOut.parseCommit tags circuitFile tables) tags circuitFile publicFile coins count tables draw
+          partition program work stratified closure publicInputs :=
   rfl
 
 end Flock

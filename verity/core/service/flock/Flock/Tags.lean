@@ -431,8 +431,9 @@ def circuitTmpl : Tags :=
     sigmaTag := "verity/flock-circuit/tmpl/sigma", domainPrefix := "flock-circuit-tmpl/fast100x2/rep",
     identity := identityHidden false "verity/flock-circuit/tmpl" (leafScheme := leafSchemeHm96Os) }
 
-/-- The templated statements, which no soundness theorem covers yet: `verify` runs every check of a session and then
-refuses it, so they are outside `all` and `find?`, which the proofs read. -/
+/-- The templated statements: a circuit file whose unit `HmOut.parseTmpl` reads from its template. `verify` reads them by
+name (`isTmpl`), beside `all` and `find?`; its statement check passes them only in the form `ProvedScope.scopeOkT`
+covers. -/
 def templated : List Tags := [circuitTmpl]
 
 /-- A templated statement's tags (`templated`, by name, as `verify` reads them). -/
