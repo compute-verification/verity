@@ -44,7 +44,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
 
-from . import audit, codec, pooled, receipts
+from . import audit, codec, pooled
+from . import receipts as _receipts
 
 TIME_HELD, LINK_CHARGED = "time-held", "link-charged"
 FORMS = (TIME_HELD, LINK_CHARGED)
@@ -572,18 +573,18 @@ def registration_of(j: object) -> audit.Registration:
         if field not in codec.FIELDS:
             raise ValueError(f"a codec's field is one of {sorted(codec.FIELDS)}")
         cd = codec.Codec(codec.FIELDS[field], rounds, masked)
-        receipts.receipt_kind(kind)
-        if receipts.store_blocks(blocks) > cd.max_blocks:
+        _receipts.receipt_kind(kind)
+        if _receipts.store_blocks(blocks) > cd.max_blocks:
             raise ValueError(f"a store under {cd.name} is at most {cd.max_blocks} blocks")
-        if len(root) != receipts.DIGEST_BYTES:
-            raise ValueError(f"the payload root is {receipts.DIGEST_BYTES} bytes")
+        if len(root) != _receipts.DIGEST_BYTES:
+            raise ValueError(f"the payload root is {_receipts.DIGEST_BYTES} bytes")
         if len(seed) != codec.SEED_BYTES:
             raise ValueError(f"a codec seed is {codec.SEED_BYTES} bytes")
         if bind:
             raise ValueError("a registration that binds PoUW's tile outputs is not covered")
-        if layout != receipts.LAYOUT:
-            raise ValueError(f"the block layout is {receipts.LAYOUT}")
-        receipts.sketch_rows(kind, rows)
+        if layout != _receipts.LAYOUT:
+            raise ValueError(f"the block layout is {_receipts.LAYOUT}")
+        _receipts.sketch_rows(kind, rows)
         return audit.Registration(audit._node(node), blocks, root, seed, cd, kind, False, layout, rows)
     except ValueError as e:
         raise Malformed(f"registration: {e}") from None
