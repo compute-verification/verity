@@ -451,7 +451,7 @@ theorem run_depR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Pro
   stepWith_dep sha512 P (VR rd) x ω _ (answersCoin_VR rd sha512 x) _ [] [] _ rfl rfl rfl
 
 theorem mapM_getElem? {α β : Type} {f : α → Option β} : ∀ {l : List α} {r : List β}, l.mapM f = some r →
-    ∀ t, r[t]? = l[t]?.bind f
+    ∀ t : ℕ, r[t]? = l[t]?.bind f
   | [], r, h, t => by
     rw [List.mapM_nil] at h
     cases h
@@ -471,9 +471,9 @@ theorem cutLens_two {α : Type} (n : ℕ) (ns : List ℕ) (l : List α) {r j : �
     ((cutLens (n :: n :: ns) l).getD r [])[j]? = l[r * n + j]? := by
   obtain rfl | rfl : r = 0 ∨ r = 1 := by omega
   · show ((l.take n))[j]? = l[0 * n + j]?
-    rw [List.getElem?_take, if_pos hj, Nat.zero_mul, Nat.zero_add]
+    rw [List.getElem?_take, ite_eq_left hj, Nat.zero_mul, Nat.zero_add]
   · show ((l.drop n).take n)[j]? = l[1 * n + j]?
-    rw [List.getElem?_take, if_pos hj, List.getElem?_drop, Nat.one_mul]
+    rw [List.getElem?_take, ite_eq_left hj, List.getElem?_drop, Nat.one_mul]
 
 theorem eq_cons_cons {α : Type} {l : List α} {a b : α} (h0 : l[0]? = some a) (h1 : l[1]? = some b) :
     l = a :: b :: l.drop 2 := by
@@ -595,7 +595,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have hJS : preLig spec st + capRound sch.k0 (ℓ + 1) < (RecDeploy.repSchedAt spec st).length := by
     rw [hRS]; exact hJR
   have hone' : ((RecDeploy.repSchedAt spec st)[preLig spec st + capRound sch.k0 (ℓ + 1)]'hJS).2.1.size = 1 := by
-    rw [← hone, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hJS, Option.getD_some]
+    rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hJS, Option.getD_some] at hone
+    exact hone
   have hsumJ : (((RecDeploy.repSchedAt spec st).take (preLig spec st + capRound sch.k0 (ℓ + 1) + 1)).map
       (·.2.1.size)).sum = ℓ + 1 := by
     rw [List.take_succ, List.map_append, List.sum_append_nat, hsum, List.getElem?_eq_getElem hJS]
@@ -603,8 +604,9 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have htops : (q₁.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? =
       (q₂.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? := by
     rw [hfit₁.tops, hfit₂.tops, hsched₁, hsched₂]
-    exact flatMap_zip_congr (fun s rs => cutLens s.2.1.toList rs) (fun s => s.2.1.size)
-      (fun s b => by simp [cutLens_length]) _ _ _ (preLig spec st + capRound sch.k0 (ℓ + 1) + 1)
+    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) => cutLens u.2.1.toList rs)
+      (fun u : Flock.RecVStar.SchedRound => u.2.1.size)
+      (fun u b => by simp [cutLens_length]) _ _ _ (preLig spec st + capRound sch.k0 (ℓ + 1) + 1)
       (fun j hj => hrow j (by omega)) (by omega) ℓ (by rw [hsumJ]; omega)
   have hcap : q₁.ligerito.recursiveCaps[ℓ]! = q₂.ligerito.recursiveCaps[ℓ]! := caps_getElem!_eq htops
   have hfc : ∀ (cx : RepCtx) (q : Proof) (T : F128), cx.st = Setup.ofCircuit st → cx.sch = sch →
@@ -630,13 +632,16 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   rw [hsched₂, hfc cx₂ q₂ T₂' hst₂ hsch₂ hdom₂ hn₂, vals_capChunk] at hel₂
   have hrJ : ((cutLens (repLens spec sts) rss₁).getD r []).getD (preLig spec st + capRound sch.k0 (ℓ + 1)) [] =
       ((cutLens (repLens spec sts) rss₂).getD r []).getD (preLig spec st + capRound sch.k0 (ℓ + 1)) [] := by
-    rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, hrow _ le_rfl]
+    have hh := hrow _ le_rfl
+    generalize (cutLens (repLens spec sts) rss₁).getD r [] = A at hh ⊢
+    generalize (cutLens (repLens spec sts) rss₂).getD r [] = B at hh ⊢
+    rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, hh]
   unfold RowsAt at hel₁ hel₂
   rw [hrJ] at hel₁
   have hd := hel₁.2.1.symm.trans hel₂.2.1
   simp only [habs, ↓reduceIte, List.cons.injEq, and_true] at hd
   have hcb := congrArg (fun b : ByteArray => b.data.toList) hd
-  simp only [List.toList_toArray] at hcb
+  simp only at hcb
   have hvv := colBytes_inj hcb
   have hkf : kFr q₁.ligerito.messages[capMsg sch.k0 ℓ]! = kFr q₂.ligerito.messages[capMsg sch.k0 ℓ]! := by
     simp only [List.cons.injEq, and_true] at hvv
