@@ -79,7 +79,7 @@ def spec_key(spec: str) -> tuple[str, tuple]:
     """(family, sorted (static, value)) of a bound Definition id such as ``AllReduceMultimem_v1{WORLD=8,SIZE=..,TREES=((..),..),FTZ=False}``:
     the statics split at top-level commas, each value the descriptor's JSON (``EPS={"f64":"0x1.4f8b588e368f1p-17"}``, ``FMA=true``,
     as a Program's rows spell it) or else a Python literal (``bind(..).id``'s ``EPS=1e-05``, nested tuples), so both spell one key."""
-    from verity_vllm.query.program_view import _static_value
+    from verity_vllm.query.call_scope import static_value
 
     fam, _, rest = str(spec).partition("{")
     body = rest[:-1] if rest.endswith("}") else rest
@@ -97,7 +97,7 @@ def spec_key(spec: str) -> tuple[str, tuple]:
     for it in items:
         k, _, v = it.partition("=")
         try:
-            val = _static_value(json.loads(v.strip()))
+            val = static_value(json.loads(v.strip()))
         except ValueError:
             try:
                 val = ast.literal_eval(v.strip())

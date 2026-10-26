@@ -1,7 +1,8 @@
 """`verity-vllm serve-openai`: an OpenAI-compatible HTTP server whose engine is the in-process committing vLLM engine.
 
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
-        [--protocol vllm|plain] [--no-commit] [--no-gpu-tree] [--window-steps 64] [--force-include-usage | --no-force-include-usage]
+        [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--no-gpu-tree] [--window-steps 64]
+        [--force-include-usage | --no-force-include-usage]
         [--scheme vllm-v1|rows-sha512 --required-manifest ROW/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300] [--copy-records-to $OUT]
         [--admit arrival|release-order [--admit-hold-ms 5000]] [--switch-interval-ms 0.1]
@@ -13,7 +14,10 @@ is the reference: under ``--protocol vllm`` (the default) a request is parsed by
 validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamResponse``, serialized the way its
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
-each other and the server records the result at start.
+each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a warden's
+id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the scan's id
+form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings (network-accounting, 24 Oct 07:33Z): the server applies vLLM's neutral
 defaults, never the model's ``generation_config``, and records each request's ingress (the sampling fields it sent, the
@@ -54,16 +58,19 @@ whose rows and salts go to ``served_rows/w<k>.json``), ``requests.jsonl``
 the runner's ids, the prompt ids, the streamed ids, its ingress, its finish, its committed rows and seeds, and its check)
 and `serve_commit.advice_trace`'s file. ``--scheme rows-sha512`` commits as the bench row's declared Commit does, with its
 committer parts built from the row's ``--required-manifest`` and taps (the acquisition plan under ``acquisition/``), and
-``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. The
-seals run on a thread of their own (`serve_seal.Sealer`) while the engine serves the next window; a close waits only while
-the windows awaiting their seal hold ``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
+``--seal`` seals each closed window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. Each
+window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
+order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
+committer (`NativeHostCommitter.detach`), and it waits only while the windows awaiting their finalize and seal hold
+``--seal-hold-gb`` of committed values, in the committer's pinned pool, which
 ``--seal-warm-gb`` grows before serving rather than on the engine loop. A window closes once its steps have committed
 ``--window-gb``, which bounds each bundle on disk; under ``--seal`` the server refuses to start unless ``--out``'s filesystem
 has ``--disk-floor-gb`` free beyond one such window, and once a window's seal would take it under that floor, the window is
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
 run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
 the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
-finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`).
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
+it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -73,6 +80,7 @@ the seal's thread runs Python, each take waits out the interpreter's switch inte
 from __future__ import annotations
 
 import asyncio
+import collections
 import json
 import queue
 import shutil
@@ -91,8 +99,8 @@ from verity_vllm.pipeline import serve_seal as SS
 from verity_vllm.pipeline.serve_admit import ADMIT, Admission, Delta, ReleaseOrder, engine_id_of, keep_scheduler_rows, new_http_id
 from verity_vllm.pipeline.serve_commit import (SERVED_CLASS, CommitWindows, Mirror, advice_trace, ingress_of, param_of,
                                                served_statics, user_of)
-from verity_vllm.pipeline.serve_protocol import (PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError, VllmProtocol,
-                                                 error_body, framing_agrees, http_chunk, sse, usage_of)
+from verity_vllm.pipeline.serve_protocol import (ID_PAYLOAD, PROTOCOLS, SSE_DONE, Completion, PlainProtocol, RequestError,
+                                                 VllmProtocol, error_body, framing_agrees, http_chunk, sse, usage_of)
 
 PRECISIONS = ("verity_int8", "int8_exact", "pin")
 #: precision -> (the int8 parts it registers, the int8 scope its layers must then run; None: not checked). Every precision
@@ -113,8 +121,13 @@ class Options:
     served_model_name: str | None = option("--served-model-name", default=None, help="the name /v1/models lists (default --model)")
     hf_home: str | None = option("--hf-home", env="HF_HOME", default=None, help="the checkpoint store (default $HF_HOME)")
     run_id: str = option("--run-id", env="RESEARCH_RUN_ID", default="local", help="the Commit's run id (default $RESEARCH_RUN_ID)")
-    protocol: str = option("--protocol", choices=("vllm", "plain"), default="vllm",
-                           help="vllm: vLLM's own request and response classes; plain: the same framing without them")
+    protocol: str = option("--protocol", choices=tuple(PROTOCOLS), default="vllm",
+                           help="vllm: vLLM's own request and response classes; plain: the same framing without them; ids: a "
+                                "warden's id requests streamed in the scan's id form, raw, and every other request as vllm "
+                                "(serve_protocol.IdsProtocol)")
+    id_payload: int = option("--id-payload", type=int, default=ID_PAYLOAD,
+                             help="--protocol ids: each id event's bytes, the warden's cell payload B − 9 (default 503: the scan's "
+                                  "B = 512)")
     precision: str = option("--precision", choices=PRECISIONS, default="verity_int8",
                             help="verity_int8 (default): int8 linears only, as vLLM's own server serves the int8 pin, the one that fits "
                                  "the certifier's plan; int8_exact: int8 linears and attention (quantization verity_int8, attention "
@@ -129,6 +142,10 @@ class Options:
     window_steps: int = option("--window-steps", type=int, default=64, help="engine steps a Commit window holds at most")
     idle_close_steps: int = option("--idle-close-steps", type=int, default=1,
                                    help="close a Commit window when the engine idles once it holds this many steps (default 1: at every idle)")
+    window_requests: int = option("--window-requests", type=int, default=0,
+                                  help="at most this many distinct requests in a Commit window, the class's slots (0: no bound): the "
+                                       "engine holds at most this many unfinished requests, the rest wait in admission order, and a "
+                                       "window closes before a step that would bring in one more (the running ones carry on)")
     chunk: int = option("--chunk", type=int, default=65536, help="the committer's leaf, in bytes of the packed step stream (as `commit`'s)")
     hash_threads: int = option("--hash-threads", type=int, default=2, help="the committer's hashlib threads")
     gpu_tree: bool = option("--gpu-tree", action="boolean_optional", default=True,
@@ -140,8 +157,9 @@ class Options:
     seal: bool = option("--seal", action="boolean_optional", default=False,
                         help="seal each closed window as a deferred Commit's row dir, OUT/windows/w<k>/ (serve_seal.seal_window)")
     seal_off_loop: bool = option("--seal-off-loop", action="boolean_optional", default=True,
-                                 help="seal on a thread of its own while the engine serves the next window (serve_seal.Sealer; default "
-                                      "on); --no-seal-off-loop seals on the engine loop, which stops serving for the seal")
+                                 help="finalize and seal each window on a thread of its own while the engine serves the next one "
+                                      "(serve_seal.Sealer; default on); --no-seal-off-loop does both on the engine loop, which "
+                                      "stops serving for them")
     seal_hold_gb: float = option("--seal-hold-gb", type=float, default=64.0,
                                  help="the committed GB the windows awaiting their seal may hold (pinned host memory) before a "
                                       "close waits for room")
@@ -191,19 +209,23 @@ class Options:
 class EngineLoop:
     """The one thread that steps the engine: admissions come through `submit`, outputs go back through each admission's
     ``deliver``. ``engine`` is vLLM's ``LLMEngine`` (``add_request``, ``abort_request``, ``step``,
-    ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None."""
+    ``has_unfinished_requests``); ``commit`` a `CommitWindows` or None. With ``cap`` (``--window-requests``), at most ``cap``
+    requests are in the engine at once: later ones wait in ``held``, in admission order, and go in as running ones finish."""
 
     _STOP = object()
 
-    def __init__(self, engine: Any, commit: CommitWindows | None = None) -> None:
-        self.engine, self.commit = engine, commit
+    def __init__(self, engine: Any, commit: CommitWindows | None = None, cap: int = 0,
+                 clock: Callable[[], float] = time.time) -> None:
+        self.engine, self.commit, self.cap, self.clock = engine, commit, int(cap), clock
         self.q: queue.Queue = queue.Queue()
         self.live: dict[str, Admission] = {}
+        self.held: collections.deque[Admission] = collections.deque()
         self.error: str | None = None
         self.draining: str | None = None
         self.steps = 0
 
     def submit(self, adm: Admission) -> None:
+        adm.times.setdefault("submitted", self.clock())
         self.q.put(adm)
 
     def abort(self, engine_id: str) -> None:
@@ -229,19 +251,35 @@ class EngineLoop:
                 self.engine.abort_request([eid])
                 if self.commit is not None:
                     self.commit.aborted(eid, "client")
+                self._release()
+            else:
+                self.held = collections.deque(a for a in self.held if a.engine_id != eid)
             return True
         if self.draining is not None:
             item.deliver(Delta([], "", error=f"the endpoint is stopping: {self.draining}"))
             return True
+        if self.cap and (self.held or len(self.live) >= self.cap):
+            self.held.append(item)
+        else:
+            self._add(item)
+        return True
+
+    def _add(self, item: Admission) -> None:
         try:
             self.engine.add_request(request_id=item.engine_id, prompt={"prompt_token_ids": list(item.prompt_ids)}, params=item.params)
         except Exception as e:  # noqa: BLE001  (the engine's refusal of one request goes back to it)
             item.deliver(Delta([], "", error=f"{type(e).__name__}: {e}"))
-            return True
+            return
+        item.times["admitted"] = self.clock()
         self.live[item.engine_id] = item
         if self.commit is not None:
             self.commit.admitted(item)
-        return True
+
+    def _release(self) -> None:
+        """Held requests into the engine, in admission order, while it has room under ``cap``; those held before a drain
+        are still served."""
+        while self.held and len(self.live) < self.cap:
+            self._add(self.held.popleft())
 
     def _deliver(self, out: Any) -> None:
         adm = self.live.get(out.request_id)
@@ -274,12 +312,13 @@ class EngineLoop:
                 if not running or not self.engine.has_unfinished_requests():
                     continue
                 if self.commit is not None:
-                    self.commit.before_step()
+                    self.commit.before_step(self.live)
                 for out in self.engine.step():
                     self._deliver(out)
                 if self.commit is not None:
                     self.commit.stepped()
                 self.steps += 1
+                self._release()
         except BaseException as e:
             self.error = f"{type(e).__name__}: {e}"
             raise
@@ -289,6 +328,9 @@ class EngineLoop:
                 if self.commit is not None:
                     self.commit.aborted(adm.engine_id, "server")
             self.live.clear()
+            for adm in self.held:
+                adm.deliver(Delta([], "", error=self.error or "the server stopped"))
+            self.held.clear()
             if self.commit is not None and self.commit.is_open:
                 self.commit.close()
 
@@ -318,11 +360,13 @@ class Server:
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             head = await reader.readuntil(b"\r\n\r\n")
+            t_head = self.clock()
             lines = head.decode("latin-1").split("\r\n")
             method, path, _ = lines[0].split(" ", 2)
             headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines[1:] if ln)}
             body = await reader.readexactly(int(headers.get("content-length") or 0))
-            await self.route(method, path.split("?", 1)[0], body, writer, headers)
+            await self.route(method, path.split("?", 1)[0], body, writer, headers, head + body,
+                             {"head": t_head, "received": self.clock()})
         except (asyncio.IncompleteReadError, ConnectionError, ValueError):
             pass
         finally:
@@ -343,7 +387,7 @@ class Server:
         await writer.drain()
 
     async def route(self, method: str, path: str, body: bytes, writer: asyncio.StreamWriter,
-                    headers: Mapping[str, str] | None = None) -> None:
+                    headers: Mapping[str, str] | None = None, request: bytes = b"", times: Mapping[str, float] | None = None) -> None:
         release = None
         try:
             if path == "/health":
@@ -356,7 +400,7 @@ class Server:
                 return await self._json(writer, 200, json.dumps(self.tokenize(self._body(body))).encode())
             if path == "/v1/completions":
                 release = self._release(headers)
-                return await self.completions(self._body(body), writer, release)
+                return await self.completions(self._body(body), writer, release, self.proto.of(request), times)
             raise RequestError(f"no route {method} {path}", 404, "NotFoundError")
         except RequestError as e:
             await self._json(writer, e.status, error_body(str(e), e.status, e.kind, e.param))
@@ -402,30 +446,35 @@ class Server:
         strs = self.tokenizer.convert_ids_to_tokens(ids) if b.get("return_token_strs") else None
         return {"count": len(ids), "max_model_len": self.max_model_len, "tokens": ids, "token_strs": strs}
 
-    def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None) -> tuple[Completion, Admission]:
-        """Parse a completion request into the engine's admission (ids, sampling parameters)."""
-        req = self.proto.parse(b)
+    def admit(self, b: Any, deliver: Callable[[Delta], None], release: tuple[str, int] | None = None,
+              proto: Any = None, times: Mapping[str, float] | None = None) -> tuple[Completion, Admission]:
+        """Parse a completion request into the engine's admission (ids, sampling parameters), under ``proto`` (by default
+        the server's)."""
+        proto = proto or self.proto
+        req = proto.parse(b)
         self._check_model(req.model)
         prompt_ids = self.encode(req.prompt, req.add_special_tokens) if isinstance(req.prompt, str) else [int(t) for t in req.prompt]
         try:
-            max_tokens = self.proto.max_tokens(req, self.max_model_len, len(prompt_ids), self.defaults)
+            max_tokens = proto.max_tokens(req, self.max_model_len, len(prompt_ids), self.defaults)
         except ValueError as e:
             raise RequestError(str(e)) from e
         try:
-            params = self.proto.seeded(self.proto.sampling_params(req, max_tokens, self.defaults))
+            params = proto.seeded(proto.sampling_params(req, max_tokens, self.defaults))
         except ValueError as e:                              # SamplingParams' own validation
             raise RequestError(str(e)) from e
         top_p = param_of(params, "top_p")
         if top_p is not None and float(top_p) < 1:
             raise RequestError(TOP_P_REFUSAL.format(top_p=top_p), param="top_p")
         http_id = new_http_id()
-        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(self.proto.brought(req), params),
-                              user_of(req.raw), release)
+        return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
+                              user_of(req.raw), release, dict(times or {}))
 
-    async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None) -> None:
+    async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
+                          proto: Any = None, times: Mapping[str, float] | None = None) -> None:
+        proto = proto or self.proto
         loop = asyncio.get_running_loop()
         deltas: asyncio.Queue = asyncio.Queue()
-        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release)
+        req, adm = self.admit(b, lambda d: loop.call_soon_threadsafe(deltas.put_nowait, d), release, proto, times)
         created, model = int(self.clock()), self.served_name
         self.submit(adm)
         self.served += 1
@@ -440,34 +489,37 @@ class Server:
                 finished = True
                 if last.error:
                     raise RequestError(last.error, 500, "InternalServerError")
-                payload = self.proto.response(request_id=adm.http_id, created=created, model=model, text="".join(text),
-                                              finish_reason=last.finish_reason, stop_reason=last.stop_reason,
-                                              prompt_token_ids=adm.prompt_ids if req.return_token_ids else None,
-                                              token_ids=ids if req.return_token_ids else None, usage=usage_of(n_prompt, len(ids)))
+                payload = proto.response(request_id=adm.http_id, created=created, model=model, text="".join(text),
+                                         finish_reason=last.finish_reason, stop_reason=last.stop_reason,
+                                         prompt_token_ids=adm.prompt_ids if req.return_token_ids else None,
+                                         token_ids=ids if req.return_token_ids else None, usage=usage_of(n_prompt, len(ids)))
                 return await self._json(writer, 200, payload.encode())
-            writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
+            http = proto.http
+            frame = http_chunk if http else bytes
+            if http:
+                writer.write(self._head(200, "text/event-stream; charset=utf-8", None))
             self.streaming.add(writer)
             first = True
             while not finished:
                 d = await deltas.get()
                 finished = d.finished
                 if d.error:
-                    writer.write(http_chunk(sse(error_body(d.error, 500, "InternalServerError").decode())))
+                    writer.write(frame(sse(error_body(d.error, 500, "InternalServerError").decode())))
                     break
                 if not d.text and not d.token_ids and not n_out:
                     continue                                     # vLLM: no empty chunk before the first token
                 n_out += len(d.token_ids)
                 usage = usage_of(n_prompt, n_out) if req.continuous_usage else None
-                data = self.proto.chunk(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
-                                        stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
-                                        token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
+                data = proto.events(request_id=adm.http_id, created=created, model=model, text=d.text, finish_reason=d.finish_reason,
+                                    stop_reason=d.stop_reason, prompt_token_ids=adm.prompt_ids if (first and req.return_token_ids) else None,
+                                    token_ids=d.token_ids if req.return_token_ids else None, usage=usage)
                 first = False
-                writer.write(http_chunk(sse(data)))
+                writer.write(frame(data))
                 await writer.drain()
             if req.include_usage and n_out:
-                writer.write(http_chunk(sse(self.proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
-                                                                   usage=usage_of(n_prompt, n_out)))))
-            writer.write(http_chunk(SSE_DONE) + b"0\r\n\r\n")
+                writer.write(frame(sse(proto.usage_chunk(request_id=adm.http_id, created=created, model=model,
+                                                         usage=usage_of(n_prompt, n_out)))))
+            writer.write(frame(SSE_DONE) + (b"0\r\n\r\n" if http else b""))
             await writer.drain()
         finally:
             if not finished:
@@ -557,6 +609,8 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
     """What would fail after the model has loaded, refused before it."""
     if opts.window_steps < 1 or opts.admit_hold_ms < 1:
         raise UsageError("--window-steps and --admit-hold-ms are at least 1")
+    if opts.window_requests < 0:
+        raise UsageError("--window-requests is at least 0 (0: no bound)")
     if (c := served_class(opts))["R"] < opts.max_num_seqs:
         raise UsageError(f"--served-rows-class R {c['R']} is under --max-num-seqs {opts.max_num_seqs}: a full step's rows wouldn't fit")
     if min(opts.window_gb, opts.seal_hold_gb, opts.seal_warm_gb, opts.disk_floor_gb, opts.switch_interval_ms) < 0:
@@ -586,7 +640,7 @@ def build(opts: Options) -> tuple[Any, Any]:
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host"})
     scope = register_int8(opts.precision)
-    from verity_vllm.pipeline.llm import LLM
+    from verity_vllm.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
     if scope is not None:
@@ -604,8 +658,9 @@ def main(opts: Options) -> int:
     out.mkdir(parents=True, exist_ok=True)
     llm, com = build(opts)
     engine = llm.vllm.llm_engine
-    proto = PROTOCOLS[opts.protocol](opts.force_include_usage)
-    framing = framing_agrees(proto) if isinstance(proto, VllmProtocol) else None
+    proto = PROTOCOLS[opts.protocol](opts.force_include_usage, **({"payload": opts.id_payload} if opts.protocol == "ids" else {}))
+    reference = getattr(proto, "base", proto)
+    framing = framing_agrees(reference) if isinstance(reference, VllmProtocol) else None
     defaults: dict[str, Any] = {}                            # vLLM's neutral defaults: the request brings its sampling
     tok = llm.get_tokenizer()
     trace = advice_trace(out, llm)
@@ -621,8 +676,9 @@ def main(opts: Options) -> int:
                                 decode=lambda ids: tok.decode(list(ids), skip_special_tokens=True), marks=trace.window,
                                 seal=SS.seal_of(opts) if opts.seal else None,
                                 served=served_statics(scheduler_config(trace.sched), served_class(opts)), sealer=sealer,
-                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror)
-    loop = EngineLoop(engine, windows)
+                                window_bytes=int(opts.window_gb * SS.GB) or None, disk=disk_floor_of(opts), mirror=mirror,
+                                request_cap=opts.window_requests)
+    loop = EngineLoop(engine, windows, cap=opts.window_requests)
     if windows is not None:
         windows.on_floor = loop.drain
     served = opts.served_model_name or opts.model
@@ -648,7 +704,8 @@ def main(opts: Options) -> int:
     watchdog = SS.Watchdog(out / "pauses.jsonl")
     watchdog.thread.start()
     record = {"address": list(bound[0]), "served_model_name": served, "model": opts.model, "revision": opts.revision,
-              "precision": opts.precision, "protocol": proto.name, "framing": framing, "defaults": dict(defaults),
+              "precision": opts.precision, "protocol": proto.name, "id_payload": getattr(proto, "payload", None),
+              "framing": framing, "defaults": dict(defaults),
               "generation_config_not_applied": engine.vllm_config.model_config.get_diff_sampling_param(),
               "default_seed": DEFAULT_SEED, "top_p": "refused below 1 (CIR-87)", "committer": getattr(com, "name", None),
               "admit": opts.admit, "admit_hold_ms": opts.admit_hold_ms if order is not None else None,
@@ -657,8 +714,11 @@ def main(opts: Options) -> int:
               "sealed": "windows/w<k>/" if windows is not None and windows.seal is not None else None,
               "served_rows_statics": windows.served if windows is not None else None,
               "seal_off_loop": sealer is not None, "seal_hold_gb": opts.seal_hold_gb if sealer is not None else None, "pool_warmed": warmed,
+              "finalize_off_loop": sealer is not None and windows.finalize_on_loop is None,
+              "finalize_on_loop": windows.finalize_on_loop if windows is not None else None,
               "window_gb": opts.window_gb or None, "disk_floor": disk_record(windows), "copy_records_to": opts.copy_records_to,
               "weights": getattr(com, "weights", None), "window_steps": opts.window_steps, "idle_close_steps": opts.idle_close_steps,
+              "window_requests": opts.window_requests or None,
               "committer_options": {k: getattr(opts, k) for k in ("chunk", "hash_threads", "gpu_tree", "cudart_copy", "required_manifest",
                                                                   "hidden_so", "hidden_ns", "tap_cap_mb", "norm_tap_so")},
               "required_manifest_path": getattr(com, "required_manifest_path", None),
@@ -675,8 +735,8 @@ def main(opts: Options) -> int:
         http.shutdown()
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
-        def stopped() -> dict[str, Any]:
-            got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+        def stopped(final: bool) -> dict[str, Any]:
+            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "mirror_errors": mirror.errors[:10] if mirror else None}
@@ -686,11 +746,11 @@ def main(opts: Options) -> int:
             return got
 
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
-            stopped()
+            stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
         watchdog.stop()
-        summary = stopped()
+        summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
         if rows is not None:

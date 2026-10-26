@@ -122,7 +122,7 @@ def _instrument(run, PPD) -> None:
 def run_mode(a) -> int:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(SHAPES)
     schedule = (a.schedule or ["serial"])[0]
@@ -333,7 +333,7 @@ def grouped_mode(a) -> int:
     import glm53_timing as T
     import grouped_check as GC
     import torch
-    from verity_vllm.protocol_options import pouw_pearl_c_grouped as PG
+    from verity_vllm.protocols.pouw.pearl_c import grouped as PG
 
     shapes = [tuple(map(int, s.split(":"))) for s in a.shapes] if a.shapes else list(GC.SHAPES)
     schedules = a.schedule or list(GC.SCHEDULES)

@@ -1,6 +1,6 @@
-import Models.Pouw.Assumptions.PearlC.DeviceChainCap
-import Models.Pouw.Assumptions.PearlC.TTOutChainOnly
-import Models.Pouw.Assumptions.PearlC.TTOutUOnly
+import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 import Proofs.Pouw.PearlC.TTOutW1
 

@@ -1,8 +1,9 @@
 """What an integration hands Verity (`verity.ml.windows.interface`), against the interface alone: a circuit takes only
 Verity's Definitions, a unit's rows are its Definition's bit rows as C-Flock stages them, a window tiles the partition and
 commits under the window-domain rule, an integration's outputs are checked against the Definitions before it commits, a
-wire pattern wires whole members unit by unit under its writers' salts, and the verifier's window is rebuilt from the
-circuit record alone, its members stated by cap and wires. A window written under core's registration, and
+wire pattern wires whole members unit by unit under its writers' salts, a registered read's ports are tables of the
+registered rows under the value's salts, and the verifier's window (and its registered reads) is rebuilt from the circuit
+record alone, its members stated by cap, wires and reads. A window written under core's registration, and
 `of_records` against it, are the records audit's tests (`benchmarks/prove_path/tests/test_records_audit.py`), since these
 may not import core."""
 from __future__ import annotations
@@ -115,6 +116,18 @@ def test_close_commits_every_unit_under_the_window_domain_rule():
     changed, _, _ = window()
     changed._recorded[TID][1].words[0][0, 0] ^= 1
     assert changed.close(salt_key=bytes(32)).roots[win.window.members[1].port("x")] != c.roots[m1.port("x")]
+
+
+def test_close_concatenates_each_templates_words_once(monkeypatch):
+    """Every member's rows are views of one array per port, not each a copy of its whole template's words: close's memory
+    was members × units (249 GB at the decoder's 353,092 units)."""
+    seen = []
+    monkeypatch.setattr(CS, "commit", lambda window, data, **kw: seen.extend(data))
+    win, *_ = window(10, 2)
+    win.close()
+    for p in ("x", "o0"):
+        group = "outs" if p == "o0" else "rows"
+        assert len({id(d[group][p].base) for d in seen}) == 1
 
 
 def test_a_window_closes_over_every_unit():
@@ -274,6 +287,103 @@ def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once
         I.Circuit("twice", ((GEMM, 8),), wires=(I.Wire(**w), I.Wire(**{**w, "at": 5, "radix": (1, 2)})))
     fan = I.Wire(GID, "x", GID, "o0", at=4, radix=(2, 2), base=1, step=(0, 2))
     assert fan.writers(4, 4).tolist() == [1, 3, 1, 3] and fan.span() == (1, 3)
+
+
+class Held:
+    """A registered value as the committer reads core's ``one_stage.registered.Registered``: its rows of ``words`` u16 words,
+    one salt a row, and a statement's table of the rows at some positions (the paths are core's; none here)."""
+
+    def __init__(self, name: str, rows: np.ndarray) -> None:
+        self.name, self.rows, self.words, self.leaves = name, rows, rows.shape[1], len(rows)
+        self.salts = [hashlib.shake_256(b"salt %d" % i).digest(CS.SALT_BYTES) for i in range(len(rows))]
+
+    def statement(self, positions):
+        return ([self.rows[p] for p in positions], [self.salts[p] for p in positions],
+                {"value": self.name, "positions": list(positions), "paths": []})
+
+
+#: core's ``one_stage.registered`` names `interface.registered_reads` reads, as the caller passes the module
+REG = type("REG", (), {"WORD_BITS": 16, "SCHEMA_KEY": "row_schema", "READS_FROM": "reads_from",
+                       "READS_V1": "verity/registered-reads/v1"})
+#: 12 units, unit u reading row u // 2 of six weight rows
+READ = I.Read(TID, "wrow", "w", 0, (6, 2), 0, (K // 2, 0))
+
+
+def registered(n: int = 12, cap: int = 4) -> tuple[I.Window, Held]:
+    w = Held("w", np.random.default_rng(1).integers(0, 1 << 16, (6, K // 2), dtype=np.uint16))
+    circuit = I.Circuit("reads", ((COORD, n),), registered=I.Registered({"w": 6 * K // 2}, reads=(READ,)))
+    win = I.Window(circuit, RUN, LAW, cap, registered={"w": w})
+    ins, _ = values(n)
+    ins[2] = w.rows[np.arange(n) // 2].view(np.uint8)
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    return win, w
+
+
+def test_a_circuit_declares_its_registered_reads_and_the_record_counts_its_free_inputs():
+    """#4317's record format: the reads in the record's ``registered``, its other fields only when declared, and the free
+    input bits counted from the description alone."""
+    win, _ = registered()
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    assert I.Registered.of(doc["registered"]) == win.circuit.registered and "ingress" not in doc
+    assert doc["registered"]["reads"] == [{"reader": TID, "port": "wrow", "param": "w", "at": 0, "radix": [6, 2], "base": 0,
+                                           "step": [K // 2, 0]}]
+    bits = 16 * sum(w for _, w in I.layout(COORD).rows) * 12
+    assert I.input_count(doc, BY_ID.__getitem__) == {"units": 12, "inputs": bits, "wired": 0, "registered": 12 * 8 * K,
+                                                     "ingress": 0, "free": bits - 12 * 8 * K}
+    assert "registered" not in json.loads(I.circuit_bytes(window()[0].circuit_record()))
+    for bad, why in [({**doc["registered"], "params": {"w": 5 * K // 2}}, "leaves"),
+                     ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "port": "o0"}]}, "names no parameter"),
+                     ({**doc["registered"], "reads": doc["registered"]["reads"] * 2}, "both fill rows"),
+                     ({**doc["registered"], "reads": [{**doc["registered"]["reads"][0], "x": 0}]}, "a read's record")]:
+        with pytest.raises(ValueError, match=why):
+            I.input_count({**doc, "registered": bad}, BY_ID.__getitem__)
+
+
+def test_a_read_covers_whole_members_and_reads_whole_rows():
+    reg = lambda r: I.Registered({"w": 6 * K // 2}, reads=(r,))  # noqa: E731
+    with pytest.raises(ValueError, match="covers part of"):
+        I.Window(I.Circuit("part", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 2, (5, 2), 0, (K // 2, 0)))),
+                 RUN, LAW, 4)
+    with pytest.raises(ValueError, match="whole registered rows"):
+        I.Window(I.Circuit("half", ((COORD, 12),), registered=reg(I.Read(TID, "wrow", "w", 0, (12,), 0, (K // 8,)))),
+                 RUN, LAW, 4)
+    with pytest.raises(ValueError, match="uncut registered reads"):
+        I.Window(I.Circuit("ingress", ((COORD, 12),), ingress=(I.Ingress(TID, "x", 0, 12, 0),)), RUN, LAW, 4)
+
+
+def test_the_window_commits_each_read_port_as_a_table_of_the_registered_rows_under_their_salts():
+    """A member a read covers is a shared-row member: its read port's table the distinct rows its units read, under the
+    registered value's salts, each unit's ref its row; its other ports its units' own rows. The header names the rows'
+    positions (`write`), the verifier derives the same members from the record, and its ``--registered`` file names each
+    unit's row from the record and the pin alone."""
+    win, w = registered()
+    c = win.close(salt_key=bytes(32))
+    m1 = win.window.members[1]
+    assert m1.tables == (("x", 4), ("sx", 4), ("wrow", 2), ("sw", 4))
+    assert np.array_equal(c.rows[m1.port("wrow")], w.rows[[2, 3]]) and c.salts[m1.port("wrow")] == w.salts[2] + w.salts[3]
+    assert c.refs[1][:, 2].tolist() == [0, 0, 1, 1] and c.refs[1][:, 0].tolist() == [0, 1, 2, 3]
+    assert win._entries[m1.key] == {"wrow": {"value": "w", "positions": [2, 3], "paths": []}}
+    doc = json.loads(I.circuit_bytes(win.circuit_record()))
+    mine = I.window_of_record(doc, LAW, BY_ID.__getitem__)
+    assert mine.members == win.window.members
+    pin = {"w": {"value": "w", "root": "cd" * 64, "leaves": 6, "words": K // 2, "domain": "ef" * 64}}
+    files = I.registered_reads(doc, mine, pin, registered=REG)
+    assert sorted(files) == [m.key for m in mine.members]
+    assert files[m1.key] == {"format": REG.READS_V1, "ports": {"wrow": {
+        "value": "w", "root": "cd" * 64, "leaves": 6, "words": K // 2, "word_bits": 16, "domain": "ef" * 64,
+        "row_schema": V2, "reads": [2, 2, 3, 3], "reads_from": 4}}}
+    with pytest.raises(ValueError, match="didn't pin"):
+        I.registered_reads(doc, mine, {}, registered=REG)
+    with pytest.raises(ValueError, match="not the port's"):
+        I.registered_reads(doc, mine, {"w": {**pin["w"], "words": 2}}, registered=REG)
+    unread = I.Window(win.circuit, RUN, LAW, 4)
+    unread._recorded = win._recorded
+    with pytest.raises(ValueError, match="give its committed value"):
+        unread.close()
+    twice, _ = registered()
+    twice._recorded[TID][0].words[2][1, 0] ^= 1
+    with pytest.raises(ValueError, match="two rows for one row"):
+        twice.close()
 
 
 def test_the_boundary_is_carried_as_given():

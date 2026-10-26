@@ -9,7 +9,7 @@ The rate audit's game (`RateAudit.lean`) with the tag the deployed operating poi
 reveals fresh signs `σ`, each `n`-byte tile `t` of the store gets the exact integer sketch `S·e_t` (`k_s` words, INT8 on
 the tensor cores), and the prover commits to the tag `H(R, t, dig_σ(e_t))`, a random oracle over the certified stream
 `R`, the tile's index and its sketch words; the verifier checks `s` tiles drawn uniformly. The guarantee
-(`Models/Accounting/Guarantees/RateAuditSketch.lean`) bounds the probability that a device is accepted while the device
+(`Definitions/Accounting/Guarantees/RateAuditSketch.lean`) bounds the probability that a device is accepted while the device
 memory its window read falls short of the store by more than what it held on chip, took in over the link's free
 capacity, or rebuilt with the compute it had.
 

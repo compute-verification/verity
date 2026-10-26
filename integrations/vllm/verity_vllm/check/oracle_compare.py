@@ -66,20 +66,20 @@ def _contiguous(shape, strides) -> bool:
 
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
-    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest)."""
+    RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
+    and a log that is there but can't be read is None with `run_header_unreadable` saying why."""
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
         out[key] = hashlib.sha256(open(pth, "rb").read()).hexdigest() if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
-    hdr = None
+    out["run_header_sha256"] = None
     if os.path.exists(lg):
         try:
             with gzip.open(lg, "rb") as f:
-                hdr = hashlib.sha256(f.readline()).hexdigest()
-        except OSError:
-            hdr = None
-    out["run_header_sha256"] = hdr
+                out["run_header_sha256"] = hashlib.sha256(f.readline()).hexdigest()
+        except (OSError, EOFError) as e:
+            out["run_header_unreadable"] = f"unreadable: capture/log.jsonl.gz ({type(e).__name__}: {e})"[:240]
     return out
 
 
@@ -557,6 +557,12 @@ def query_families_of(manifest: dict[str, Any] | None) -> dict[str, int] | None:
     return dict(Counter(str(r.get("family")) for r in manifest["identities"]))
 
 
+def runtime_rows_of(manifest: dict[str, Any] | None) -> dict[tuple, tuple[int, int]]:
+    """(step, request, op_path, member, invocation) -> (r0, rows) of each identity whose Values are the runtime's rows r0.. (`runtime_rows`)."""
+    return {(int(r["step"]), str(r["request_id"]), str(r["op_path"]), str(r.get("output_member", "out")), int(r.get("invocation", 0))):
+            (int(r["runtime_rows"][0]), int(r["runtime_rows"][1]) - int(r["runtime_rows"][0])) for r in (manifest or {}).get("identities") or () if r.get("runtime_rows")}
+
+
 def producers_of(manifest: dict[str, Any] | None) -> dict[tuple[str, str], dict[str, Any]]:
     """(op_path, output_member) -> {"spec": producer family base, "ordinal": producer_ordinal | None, "operand": producer_operand | None}
     from the required manifest's rows (`spec` is the Program op family that produces the member; `producer_ordinal` the optional index
@@ -751,11 +757,13 @@ def _ambiguous_steps(pairs_seen: set[tuple[int, str]], attrib: dict[tuple[int, s
 def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callable[[int, str, int, int], bytes | None], *,
                    max_report: int = 12, producers: dict[tuple[str, str], dict[str, Any]] | None = None,
                    workload: dict[str, Any] | None = None, aliases: dict[str, Any] | None = None,
-                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset()) -> dict[str, Any]:
+                   query_families: dict[str, int] | None = None, own: frozenset[str] = frozenset(),
+                   runtime_rows: dict[tuple, tuple[int, int]] | None = None) -> dict[str, Any]:
     """Compare every binding-map entry's committed bytes with the Match oracle.  `committed(step, name, byte_lo, byte_hi)` returns the
     bytes of member `name` at `step` in [byte_lo, byte_hi) (None if not retained) -- in the Commit an `OpenedReader`, whose
     `OpeningNotVerified` makes the entry a mismatch.  `own` names what the run's sources committed that no module produced (their
-    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `producers` (producers_of(manifest))
+    `own_names`: the KV slots of commit --memory-map), so no Match value: not compared, counted as hidden_stream.  `runtime_rows`
+    (`runtime_rows_of(manifest)`): an identity that is the runtime's rows r0.. is compared with the fold's rows from r0.  `producers` (producers_of(manifest))
     names each member's producing Program op so exploded-module folds are read at the producer's instances.  `workload` (the run's declared
     requests) is checked against the oracle's request table BY NAME first: a foreign Match record is result False 'foreign oracle' with
     nothing compared.
@@ -878,6 +886,8 @@ def oracle_compare(oracle: MatchOracle, bmap: dict[str, Any], committed: Callabl
             not_cmp[why] += 1
             not_cmp_fam[fam] += 1
             continue
+        r0, n = (runtime_rows or {}).get((step, rid, str(ident.get("op_path")), str(ident.get("output_member")), inv_k), (0, 0))
+        ob = ob[r0 * (len(got) // n):(r0 + n) * (len(got) // n)] if n and len(got) % n == 0 and len(ob) >= (r0 + n) * (len(got) // n) else ob
         compared += 1
         by_fam_cmp[fam] += 1
         steps_cmp.add(step)

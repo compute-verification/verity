@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 from verity.ml.circuits.codec import canonical_json, descriptor_size
 from verity.ml.circuits.defs import REGISTRY
+from verity_vllm import settings
 from verity_vllm.config import RowEngine, done_source_refusal, option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
@@ -117,20 +118,6 @@ def compilation_facts(block: dict | None) -> dict:
 # vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
 # TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable (M-0261)
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
-
-
-def eos_lag_rows_declared(engine: dict | None) -> int | None:
-    """The post-EOS rows a DECLARED engine block computes: async_scheduling True -> 1, False -> 0, undeclared /
-    non-boolean -> None.  GP-01 always declares it (`workload_lag`), so None here means a Program built before it did: GM-01 G6 then FAILS
-    by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop `lag.exercised false`."""
-    if not isinstance(engine, dict):
-        return None
-    v = engine.get("async_scheduling")
-    if isinstance(v, bool):
-        return 1 if v else 0
-    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return 1 if v.strip().lower() == "true" else 0
-    return None
 
 
 def workload_target(target: dict | None):
@@ -640,7 +627,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     # never composes into a canonical workload Program: refused unless this compose is itself marked experimental by the same variable
     exp = {PP.shape_key(s): (component_sampling(shapes[s]).get("geometry") or {}).get("experimental") for s in need}
     exp = {k: v for k, v in exp.items() if v}
-    if exp and os.environ.get("STOCH_DECLARED_CHRONOLOGY_S") != "1":
+    if exp and not settings.STOCH_DECLARED_CHRONOLOGY_S:
         sched["refusal"] = (f"components {sorted(exp)} were derived under the EXPERIMENTAL per-event split schedule "
                             f"(STOCH_DECLARED_CHRONOLOGY_S=1; ruling M-0571 (3): S is a workload-level derived value, not built yet): "
                             f"not composable into a canonical workload Program -- set the same variable to compose mechanism evidence")
@@ -726,7 +713,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["stop_rule"]["eos_lag_rows"] = art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
                                           "applicability.engine.async_scheduling carries the resolved value the record must attest (G1/G6)")
-    assert eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
+    assert W.eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
     # a stochastic row declares its top-p split geometry: the registered split count of the declared num_SMs, which GM-01 holds every
     # launch to. Greedy rows carry no declaration (None -> omitted).
     sgeo = sampler_geometry(app, reqs)

@@ -6,7 +6,8 @@ agent acts unless the automation refuses).  A loop runs it every few minutes.  H
    a merge commit onto `main` naming its PRs, with a `Checked:` trailer for the run.  On a `main` that moved outside the queue,
    the commit still lands when the commits `main` gained share no file with it (`Skipped-check:` names them) and change
    no check tooling (`CHECK_TOOLING`), which would have checked it differently.  Then
-   `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the landing post) and the sweep.
+   `merge.caught_up` (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and
+   the sweep.
 2. Sync `next` (`Queue.sync`): admit and drop PRs, rebuild on a moved `main`; but while a check of `next` runs and `main` moved
    by files its train doesn't change (and no check tooling), `next` stays on its base so the check isn't wasted (`held`, the
    rule `queue.hold` keeps for every sync: `eject`'s and a hand one read drive's launches from the state file).
@@ -56,14 +57,21 @@ Review landing (`land = "review"`; Daniel, 24 Oct 06:05Z: PRs land on an eyeball
 A tick syncs `next` as above, then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` through the same landing steps.  Two gates cut the
-prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source of a package that
-has one: `queue.lean_change`) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
+prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source outside `Security/`
+of a package that has one, Lean that runs as code: `queue.lean_change`; Lean proofs alone land on the verdict, checked after
+landing, Daniel 25 Oct 11:19 PM PDT) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
 (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it as for a train's
 check), or any recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
-the locks on top.  A failed Lean check is run again on the Lean change's own commit, and only a failure there is told to its
-owner; nothing at or above a failed commit lands until it leaves `next`.  And every .py file the landing leaves must compile
-(`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  Each landing awaits the
-after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
+the locks on top.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what
+came this tick (`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a
+whole check of its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
+change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
+holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
+`nonlean_first`, `queue.Queue._nonlean_order`: what a sync merges anyway, never a member it keeps), so a member that changes
+no Lean seldom waits above a Lean change for its check.  A failed Lean check is run again on the Lean change's own commit, and only a
+failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`.  And every .py file the
+landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  No train is checked.  Each
+landing awaits the after-landing run, the post-landing run above with every ci.toml job (`AFTER_LANDING`), `--no-cache` while
 `after_landing_no_cache`, and `--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `main`
 itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
 by hand).  A failure reverts what it implicates only when each failed step passed on the last verified `main` under the same
@@ -77,6 +85,7 @@ import concurrent.futures
 import contextlib
 import functools
 import json
+import math
 import os
 import re
 import shutil
@@ -157,8 +166,6 @@ AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
 #: of a prefix capped below recent churn isn't taken off `next` by the next re-mark (24 Oct: three checks lost to it in 3 h;
 #: three ticks capped a check below one new head for an hour)
 LEAN_SETTLE_TICKS = 1
-#: the review landing's Lean checks that may run at once: a lower one and one stacked at the reviewed top (`Driver._lean_check`)
-LEAN_RUNNING_MAX = 2
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
 #: the step a Lean change's Lean check before a review landing runs (`train.sh TOP MACHINES --deferred lean-audit`)
@@ -661,6 +668,33 @@ def undeferred(doc: dict, defer: frozenset[str]) -> dict:
     return {**doc, "parts": out}
 
 
+def lean_cut(chain: list[Member], lo: int, top: int, is_lean: Callable[[Member], bool], slots: int) -> int:
+    """The index in ``chain`` to check the Lean changes (``is_lean``) of ``chain[lo:top + 1]`` up to, when ``slots`` Lean checks
+    may share them: just below the Lean change after the first ceil(n / ``slots``) of its n, or ``top``.  Spaced cut points
+    each hold only what's above them when one fails, and the lower ones land without waiting for the rest."""
+    at = [j for j in range(lo, top + 1) if is_lean(chain[j])]
+    per = math.ceil(len(at) / max(slots, 1)) if at else 0
+    return at[per] - 1 if 0 < per < len(at) else top
+
+
+def lean_stack(chain: list[Member], lean: dict, is_lean: Callable[[Member], bool], churned: Callable[[Member], bool],
+               most: int) -> int | None:
+    """The index in ``chain`` (`next`'s members) of the commit to stack a review-landing Lean check on, or None: `next`'s top,
+    capped below the lowest member above the checks of ``lean`` (`drive["lean"]`) that came onto `next` just now
+    (``churned``), and cut to share the Lean changes up to it with the checks still free (`lean_cut`), when a Lean change
+    (``is_lean``) at or below it is above every check of `next` that runs or passed, one runs (only lower ones, then), none
+    failed, and fewer than ``most`` run.  25 Oct: members that came above a running check's commit waited for it to pass, then
+    for a whole check of their own."""
+    pos = {m.commit: i for i, m in enumerate(chain)}
+    on = {pos[c]: rec.get("state") for c, rec in lean.items() if c in pos}
+    running = sum(rec.get("state") is None for rec in lean.values())
+    if None not in on.values() or "failed" in on.values() or running >= most:
+        return None
+    hi = max(on)
+    top = next((j for j in range(hi + 1, len(chain)) if churned(chain[j])), len(chain)) - 1
+    return lean_cut(chain, hi + 1, top, is_lean, most - running) if any(is_lean(m) for m in chain[hi + 1:top + 1]) else None
+
+
 class Driver:
     def __init__(self, q: Queue, *, on: str, max_running: int = 2, train_size: int = 4,
                  launch: Callable[[Path, str, str, bool], tuple[list[str], str]] = train_launch,
@@ -670,8 +704,10 @@ class Driver:
                  regenerate_locks: bool = False, per_pr_shadow: int = 0,
                  slots: Callable[[Path, str], dict[str, int]] = free_slots, land: str = "check",
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
-                 ready_by: Callable[[int, str], str | None] | None = None):
+                 ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2):
         self.q, self.on, self.max_running, self.train_size = q, on, max_running, train_size
+        #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
+        self.max_lean_checks = max_lean_checks
         #: `land = "review"` (Daniel, 24 Oct 06:05Z): each member lands on a reviewer's verdict, a Lean change once a Lean check
         #: passed, and the full check runs after landing (`_review`), reusing no pass with ``after_landing_no_cache``
         self.review, self.after_landing_no_cache = land == "review", after_landing_no_cache
@@ -2374,8 +2410,8 @@ class Driver:
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
         """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, as a train's check
-        holds it), land its reviewed prefix (`land_reviewed`) once `main` has a baseline (`_unbaselined`), and launch the
-        after-landing run, or the next run of a bisection (`_bisect_step`)."""
+        holds it), land its reviewed prefix (`land_reviewed`) once `main` has a baseline (`_unbaselined`), stacking a Lean check
+        above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a bisection (`_bisect_step`)."""
         q = self.q
         what: list[str] = []
         self._regen: dict[str, bool | None] = {}
@@ -2386,8 +2422,10 @@ class Driver:
         self._bisect_step(drive)
         running = {c for c, rec in drive["lean"].items() if rec.get("state") is None}
         # an ejection from a Lean check's prefix (`queue.lean_running`) rebuilds `next` only the tick after that check ends, so
-        # the landing uses the check before the rebuild takes its commit off `next`
-        waits = next((c for c, rec in drive["lean"].items() if c in running or rec.get("ended") == drive["tick"]
+        # the landing uses the check before the rebuild takes its commit off `next`; a stacked one (`_stack_lean`) reaches up
+        # to `next`'s top, so one ejection anywhere on `next` would hold every sync for its whole run
+        waits = next((c for c, rec in drive["lean"].items()
+                      if not rec.get("stacked") and (c in running or rec.get("ended") == drive["tick"])
                       if any(not q.ready(n, h) for n, h in rec.get("members") or ())), None)
         if why := hold(self.repo, q.branch, lambda c, base: c in running):
             what.append(why)
@@ -2405,6 +2443,7 @@ class Driver:
         landed, why = None, self._unbaselined(drive)
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
+            self._stack_lean(drive, dry_run)
         what.insert(0, f"landed #{landed.pr}" if landed else why)
         self._sweep(drive, dry_run)
         self.start_postland(drive)
@@ -2664,19 +2703,13 @@ class Driver:
         above it; after a failed one of its own commit, tell `CI` and the owner, and wait for that commit to leave `next` (a new
         head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
         check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
-        that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`.  One
-        running below stays, and while it runs one is stacked at that top when a machine has a free Lean check slot (`_spare`),
-        at most `LEAN_RUNNING_MAX` running.  The launch is saved at once, so a tick that fails after it doesn't launch it again."""
+        that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`, and cut
+        to share the Lean changes up to it with the Lean checks still free (`lean_cut`), lowest first.  One running below
+        stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
         q, m, lean = self.q, chain[i], drive["lean"]
         pos = {x.commit: j for j, x in enumerate(chain)}
         mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i}
-        cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
-        running = [c for c, rec in mine.items() if rec.get("state") is None]
-        if running and (any(rec.get("state") == "failed" for rec in mine.values()) or chain[cap - 1].commit in lean
-                        or max(pos[c] for c in running) >= cap - 1
-                        or sum(rec.get("state") is None for rec in lean.values()) >= LEAN_RUNNING_MAX
-                        or not any(n > 0 for n in self._spare().values())):
-            c = running[0]
+        if c := next((c for c, rec in mine.items() if rec.get("state") is None), None):
             q.log(f"research queue drive: #{m.pr}'s Lean change waits for the Lean check {' '.join(lean[c]['ids'])} of {c[:12]}")
             return
         if (rec := lean.get(m.commit)) and rec.get("state") == "failed":
@@ -2685,9 +2718,31 @@ class Driver:
                         f"Push a fix (a new head checks again), or hold it (`research queue review {m.pr} --hold REASON`)",
                         self._owner(m))
             return
-        top = m if any(rec.get("state") == "failed" for rec in mine.values()) else chain[cap - 1]
+        cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
+        free = self.max_lean_checks - sum(rec.get("state") is None for rec in lean.values())
+        t = i if any(rec.get("state") == "failed" for rec in mine.values()) else lean_cut(chain, i, cap - 1, self._lean_change, free)
+        self._launch_lean(drive, chain, t, f"#{m.pr}'s Lean change", dry_run)
+
+    def _stack_lean(self, drive: dict, dry_run: bool) -> None:
+        """While a Lean check runs, stack one above it on `next`, reviewed or not, for the Lean changes it doesn't hold
+        (`lean_stack`, at most `max_lean_checks` running), so they don't wait for it to pass and then for a check of their own.
+        The lower one runs on.  An ejection from a stacked check's prefix rebuilds `next` at once (`_review`), cancelling it."""
+        base, chain = self._chain()
+        if not chain or base != _out(self.repo, "rev-parse", "origin/main"):
+            return
+        self._rekey_lean(drive, chain)
+        self._note_marks(drive, chain)
+        t = lean_stack(chain, drive["lean"], self._lean_change, lambda m: self._churned(drive, m), self.max_lean_checks)
+        if t is not None:
+            self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
+                              stacked=True)
+
+    def _launch_lean(self, drive: dict, chain: list[Member], t: int, what: str, dry_run: bool, stacked: bool = False) -> None:
+        """Launch the Lean check of ``chain[t]``, for ``what``, and save it at once, so a tick that fails after it doesn't launch
+        it again."""
+        q, top = self.q, chain[t]
         if dry_run or q.shadow:
-            q.log(f"research queue drive: would launch train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} for #{m.pr}'s Lean change")
+            q.log(f"research queue drive: would launch train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} for {what}")
             return
         with slot_rank(None):                  # a running check below stays: its prefix is on `next`, and it may land it
             ids, tail = self.launch_lean(self.repo, top.commit, self.on)
@@ -2695,9 +2750,9 @@ class Driver:
             self.refuse(drive, f"launch:lean:{top.commit}", f"train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} registered "
                                                             f"no run: {tail}")
             return
-        lean[top.commit] = {"ids": ids, "at": self.now(), "members": [[x.pr, x.head] for x in chain[: pos[top.commit] + 1]],
-                            "tree": self._tree(top.commit), "state": None}
-        q.log(f"research queue drive: the Lean check of {top.commit[:12]} for #{m.pr}'s Lean change: {' '.join(ids)}")
+        drive["lean"][top.commit] = {"ids": ids, "at": self.now(), "members": [[x.pr, x.head] for x in chain[: t + 1]],
+                                     "tree": self._tree(top.commit), "state": None, **({"stacked": True} if stacked else {})}
+        q.log(f"research queue drive: the Lean check of {top.commit[:12]} for {what}: {' '.join(ids)}")
         q.save_state({**q.load_state(), "drive": drive})
 
     def _tree(self, commit: str) -> str | None:

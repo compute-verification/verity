@@ -29,6 +29,7 @@ verity_vllm/
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
   collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
   config.py target_family.py             run-definition locations; the target-family preflight
+  settings.py                            every environment variable, declared once (role, type, doc); the run's record of them
   pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
   ops/                pod operations     pod_bootstrap.sh pod_gate.sh pod_*_tap.sh canary.sh *_negatives.sh known_roots.json
 tests/<subpackage>/   mirrors the package; tests/regression = the R19 reference harness (opt in with VERITY_REGRESSION=1)
@@ -104,7 +105,7 @@ range bits per token, from the fused embedding's ids, no kernel change).  `ops/p
 Never: decide what is required; never a model-name list.
 
 **`commit/`** implements *commitment*: `merkle.py` (trees over canonical ids, `path_shape` / `fold_path`, openings), `hashing.py`
-(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), `padding_steps.py`, `hidden_stream.py`, `step_rows.py` (the commitment scheme `rows-sha512`, the Commit's default), `scheme.py` (`vllm-v1`, by name: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the host committer every collector extends;
+(`H(tag, *parts)`), `identity.py`, `binding.py` (binding map + coverage), execution extent (`executed_prefix.py`: the rule and the not-executed classification; its link to the Match account is `check/executed_prefix.py`), `padding_steps.py`, `hidden_stream.py`, `step_rows.py` (the commitment scheme `rows-sha512`, the Commit's default), `scheme.py` (`vllm-v1`, by name: every leaf and root rule, over `verity.ml.commitments.vllm_v1`), and `committer/`, the GPU committer (`native_host.py`, the host committer every collector extends;
 `native_collect.py`, the collector of record (`native_collect_v2b`, the windowed worker), + `native_*.cu` / `.cpp`, `native_jit.py`, `leafhash.py`, `flush_points.py`, `hidden_gpu_src/`).  Never:
 runtime metadata in the identity tuple.
 
@@ -127,8 +128,14 @@ and the embedding shard layout (`embedding_shard.py`).
 refuses a missing required field by file and field name (`fields.py`): `required_manifest.py` (the required-value manifest, as the
 replay's coverage reads it), `query_checks.py` (the sampled replay's reconciliation against Q(P), as the C2 rules read it),
 `served_tokens.py` (the driver's served tokens, `capture/tokens.json`, as GM-01's chronology check and the padded conversion,
-`commit/padding_steps.py`, read them) and `declared_stop.py` (the workload Program's declared stop rule and LAG, as the same two read
-them).
+`commit/padding_steps.py`, read them), `declared_stop.py` (the workload Program's declared stop rule and LAG, as the same two read
+them), `workload.py` (the workload, `workloads/<row>.json` and a run's copy of it, v2 and the older v1, as the stochastic replay
+and GM-01's declared side, `check/match/declaration.py`, read it), `global_match.py` (GM-01's Match result, `global_match.json`, as the executed prefix's link to the Match account reads
+it), `build_summary.py` (the Build's `build_summary.json` in its TP1, TP and R19 TP2 layouts, as the verdict reads the Build's
+correspondence digest from it) and `commit_run.py` (the Commit record, a line of `commit/runs.jsonl`, as the verdict reads it).  The
+newer records (`workload.py`, `global_match.py`, `build_summary.py`, `commit_run.py`) also refuse a field no writer writes
+(`fields.UnknownField`) and `dump` the JSON their writers write; `tests/lint/test_typed_records.py` ratchets the untyped reads they
+replace.
 Never: an import of anything else in `verity_vllm`.
 
 **`ops/`** is pod operations: `pod_bootstrap.sh` (which also installs the `verity-vllm` launcher), `pod_fa2_tap.sh` / `pod_fa3_tap.sh` / `pod_norm_tap.sh` / `pod_router_tap.sh` / `pod_hidden_gpu.sh`, `canary.sh`, `compiled_commit.sh`, the
@@ -336,7 +343,14 @@ bit-identical decode; an executor whose scheme has a circuit in its protocol pac
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
 `verity.core.protocols.pouw.coins.Challenger`, held in the auditor's process: install opens its salt coin
 after the weights' root and refuses without one; a pipeline that is its run's own auditor supplies one,
-`pouw.challenged`), `retain_steps` and `transcript_dir`. Its weight operands are formed per forward from the weight each call is handed, so
+`pouw.challenged`), `retain_steps` and `transcript_dir`. Under `ncp-v2` and Pearl-C, `challenger` (the auditor host's,
+`HOST:PORT`) and `session` replace `coins`: ncp-v2's session is the gate's open answer, and Pearl-C's the gate's reserve
+answer for a session of its salt coin alone (`window.SALT_FAMILIES`), which install opens through `gate` on its salt
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k) before its salt coin opens after
+that root (`pouw_h1_window.salt_session`), so the session ends complete. Each install is an epoch, committing its weights
+under a fresh hm96 key; a reinstall over a weights' root this process already had an epoch over takes the next k. The
+retained manifest names k (`pass_index`) and that session (`session`: its id, ledger seq, root and commitment, never the hello's secret),
+and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root from the weights' root and k. Its weight operands are formed per forward from the weight each call is handed, so
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
@@ -358,7 +372,9 @@ uv run pytest tests/program verity_vllm        # the CPU oracle; tests that need
 ~~~
 
 Tests and tools read fixtures relative to this directory: run them from here.  The repository's merge gate (`check`) runs them as
-the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  Every tool is a `verity-vllm` command
+the suite `verity-vllm` (`tools/verity/check/suites.py --list`).  The suite is about 12000 CPU-s, 50 min in one 4-CPU job;
+`python3 tools/suite_parts.py launch` runs it as 8 `research run --on auto` jobs at once, each a suites.py run of one part's test
+modules, and prints their run ids (`tools/suite_parts.py --help`).  Every tool is a `verity-vllm` command
 (`verity-vllm --help`); a sweep row runs with `verity-vllm row run <row-id> <ROLE> <hf-repo> <revision>`.
 
 A row's one config is its file `workloads/<row-id>.json`, schema `verity-vllm/workload/v2`, read as `config.RowConfig`: the
@@ -408,11 +424,11 @@ sends it (`research run --send FILE`, which lands it in `$RESEARCH_RUN_DIR/input
 (`records.programs(row, ..., bundle=PATH)`, or `records programs ROW --bundle PATH`), each digest checked against the record.
 
 A TP row's Build is the trace unless the row is switched.  `verity-vllm predict compare ROW_DIR` predicts every Program of a traced
-Build from the row's declared inputs (`verity_vllm/predict/`) and compares digests rank by rank; `records switch ROW --comparison
+Build from the row's declared inputs (`verity_vllm/program/predict/`) and compares digests rank by rank; `records switch ROW --comparison
 comparison.json --run RUN --trace art:…` records, where every one is equal, the comparison run and that traced Build as the row's
 `aot` in `manifests/records.json`, and pins the predicted Programs (a row whose file is not done only at its public cap is
 refused).  A switched row's Build (`--build-construction record`, the
-default) derives each Program with `predict emit` (`verity_vllm/predict/aot.py`): the predicted Program, under the trace's annotations (the
+default) derives each Program with `predict emit` (`verity_vllm/program/predict/aot.py`): the predicted Program, under the trace's annotations (the
 runtime correspondence: per Call, the fx occurrence, module, views and slots, which only the trace yields) and with its other
 files, refused unless the predicted Program and descriptor are the trace's, byte for byte.  `records publish` refuses a switched
 row's Build that traced any Program.  Neutrality's rebuild traces every row (`--build-construction trace`), so it checks a switched
@@ -426,7 +442,8 @@ GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `
 hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.
 
 A module that exists for particular models says so with a module-level `__models__ = ("<HF repo id>", ...)`, after its docstring
-(P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
+(P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  A Definition that belongs in Verity, whose vocabulary
+has no models, carries no marker; its row in `manifests/definitions.json` ties it instead.  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
 per model the code those markers tie to it (files and lines by area, the rules they define, the lint allowlist entries on them, the
 profile patterns they supply, or why the profile refuses the `config.json` the Build reads), its family facts and capture maps, and
 the hours from its checkpoint's staging event to its first PASS record.  The step that stages a checkpoint's weights

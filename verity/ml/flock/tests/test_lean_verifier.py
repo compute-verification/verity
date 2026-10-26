@@ -52,15 +52,15 @@ def test_no_escape_hatches():
 
 
 AUDIT = PROOFS / "Flock" / "Soundness" / "Audit"
-AUDIT_STATEMENTS = PROOFS.parent / "Models" / "Flock" / "Guarantees" / "Audit.lean"
+AUDIT_STATEMENTS = PROOFS.parent / "Definitions" / "Flock" / "Guarantees" / "Audit.lean"
 AUDIT_IMPORTS = re.compile(r"import (Mathlib\.|Definitions\.Flock\.|Proofs\.Flock\.Soundness\.Game\.|"
-                           r"Proofs\.Flock\.Soundness\.Audit\.|Models\.Flock\.Guarantees\.Audit$)")
+                           r"Proofs\.Flock\.Soundness\.Audit\.|Definitions\.Flock\.Guarantees\.Audit$)")
 
 
 def test_audit_layer_is_abstract():
     """The audit theorems import only the interaction model, Mathlib, each other, Flock's spec (`Definitions.Flock.*`, which
     the lock's layers hold to itself and Mathlib) and their lifted statements
-    (`Models.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
+    (`Definitions.Flock.Guarantees.Audit`, which imports only Mathlib), so any backend can instantiate them
     (`Security/Proofs/Flock/Soundness/DESIGN.md` §12). The Flock instantiations are the only files that import Flock's theorems:
     `Flock.lean` (oracle layer), `FlockCompiled.lean` (one table), `FlockBatched.lean` (several tables),
     `FlockBatchedAcc.lean` (the expected-time extractor), `FlockLink.lean` (the link theorem), `FlockLinked.lean` (the
@@ -219,6 +219,43 @@ def test_unit_draw_check(tmp_path):
     assert len(got) == len(cases)
     for (case, want), g in zip(cases, got):
         assert g["ok"] == (want == "") and g["why"].startswith(want), (case, g)
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_draw_is_held_to_its_registered_law(tmp_path):
+    """`draw --registration F` and `draw-test --registration F`: the law is the one the window registered before any coin,
+    so a draw at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
+    subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
+    regs = {}
+    for k in (2, 8):
+        regs[k] = tmp_path / f"reg-{k}.json"
+        regs[k].write_text(json.dumps({"law": {"law": "subset", "k": k}, "population": 512, "program": "x"}))
+
+    def draw(k, reg, population=512):
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
+                            "--registration", str(reg)], capture_output=True, text=True)
+        return p.returncode, p.stdout, p.stderr
+
+    for k, other in ((2, 8), (8, 2)):
+        rc, out, _ = draw(k, regs[k])
+        assert rc == 0 and len(json.loads(out[5:])["units"]) == k
+        rc, out, err = draw(other, regs[k])
+        assert rc == 2 and not out and f"is not the registered law {{\"k\":{k},\"law\":\"subset\"}}" in err
+    rc, out, err = draw(2, regs[2], population=511)
+    assert rc == 2 and not out and "the population 511 is not the registered 512" in err
+
+    def subset(k, n=512):
+        return {"law": "subset", "population": n, "k": k, "units": list(range(k))}
+
+    cases = [(2, subset(2), ""), (2, subset(8), "U2: the law"), (8, subset(8), ""), (8, subset(2), "U2: the law"),
+             (2, subset(2, 511), "U2: the population")]
+    for k, d, want in cases:
+        f = tmp_path / "cases.json"
+        f.write_text(json.dumps([{"record": d, "statement": d, "instances": len(d["units"])}]))
+        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(f), "--registration", str(regs[k])],
+                           capture_output=True, text=True, check=True)
+        g = json.loads(p.stdout.splitlines()[-1][10:])
+        assert g["ok"] == (want == "") and g["why"].startswith(want), (k, d, g)
 
 
 def _ir_tests() -> Path:

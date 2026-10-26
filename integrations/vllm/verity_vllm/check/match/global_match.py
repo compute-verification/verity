@@ -84,6 +84,7 @@ import sys
 import time
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.config import UsageError, option
 from verity_vllm.check.match import global_match_fast as GMF  # [R17 mprof] MATCH_IMPL=fast: compute-once memo of the pure per-request work; inert without the flag
@@ -96,6 +97,7 @@ from verity_vllm.check.match.engine_steps import vu_population, within_step_orde
 from verity_vllm.check.match.match_run import MatchRun
 from verity_vllm.check.match.per_request import check_requests
 from verity_vllm.check.match.record import canonicalize_record, read_record, request_aliases
+from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
 COMPARATOR = "cb_a.global_match/v1"
 RULES_VERSION = "r14-v1"
@@ -173,7 +175,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     tokens = json.load(open(tokens_path)) if os.path.exists(tokens_path) else None
     rec = read_record(log_path)
     mark("read_record")
-    res = {"schema": "cb-a/global-match/v1", "comparator": COMPARATOR, "rules_version": RULES_VERSION,
+    res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
            "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir, "log": log_path,
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
                               "workload_digest": gp.get("workload_digest"), "n_requests": len(gp.get("requests") or []),
@@ -289,7 +291,7 @@ def impl_module(name: str | None = None):
     [lane/vllm-v2-gm-scale] The default moved from `record` to `fast`: a `global_match.py` invoked outside `row_pod.sh` (a by-hand rerun,
     another launcher) used to get the audit checker silently -- on the B64 llama32-1b row that is 8+ h single-core at 40-50 GB against
     ~4 min on 8 cores at 13.5 GB for the same verdict.  `MATCH_IMPL=record` still selects the audit checker explicitly."""
-    name = (name if name is not None else os.environ.get(IMPL_ENV, IMPL_DEFAULT)).strip().lower() or IMPL_DEFAULT
+    name = (name if name is not None else settings.get(IMPL_ENV) or IMPL_DEFAULT).strip().lower() or IMPL_DEFAULT
     if name == "record":
         import sys
         return sys.modules[__name__]
@@ -304,11 +306,11 @@ def impl_banner(mod, gp: dict | None = None) -> str:
     component dirs were relocated -- the two facts whose absence cost the v2 acquisition lane an 8 h run (record checker by default,
     a Build's dangling component paths noticed only at load)."""
     name = getattr(mod, "IMPL_NAME", "record")
-    env = os.environ.get(IMPL_ENV)
+    env = settings.raw(IMPL_ENV)
     parts = [f"# global_match impl={name}", f"({IMPL_ENV}={env!r})" if env is not None else f"({IMPL_ENV} unset -> default {IMPL_DEFAULT})"]
     if name == "fast":
-        parts.append(f"workers={GMF.workers(1 << 30)} ({GMF.WORKERS_ENV}={os.environ.get(GMF.WORKERS_ENV) or 'default'})")
-        parts.append(f"compact_args={os.environ.get(GMF.COMPACT_ENV, '1').strip() != '0'}")
+        parts.append(f"workers={GMF.workers(1 << 30)} ({GMF.WORKERS_ENV}={settings.raw(GMF.WORKERS_ENV) or 'default'})")
+        parts.append(f"compact_args={settings.get(GMF.COMPACT_ENV)}")
     else:
         parts.append("single process, no memo (the audit checker; hours and tens of GB on a batched row -- MATCH_IMPL=fast is the Match of record)")
     reloc = ((gp or {}).get("gprog_artifact") or {}).get("relocated_components") or {}

@@ -20,8 +20,12 @@
 #     gpu-lease 1 --wait --mem-gb 256 -- bash benchmarks/one_stage/llama1b_serve_seal.sh
 # Windows are sealed off the engine loop and close at WINDOW_GB committed; the server itself also refuses to start, and later
 # stops taking requests, below DISK_FLOOR_GB free on the serve dir's filesystem, and copies its records into $OUT after each
-# window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8) and MAX_NUM_BATCHED_TOKENS (2048) are
-# serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs and --max-num-batched-tokens.
+# window and at any stop. SEAL_HOLD_GB (64), SEAL_WARM_GB (0), MAX_NUM_SEQS (8), MAX_NUM_BATCHED_TOKENS (2048) and
+# WINDOW_REQUESTS (unset: no bound) are serve-openai's --seal-hold-gb, --seal-warm-gb, --max-num-seqs,
+# --max-num-batched-tokens and --window-requests (a window's class slots, e.g. 4 for V3b's class of record).
+# PROTOCOL (unset: vllm) is its --protocol: ids streams the scan's id form raw to a warden's id requests, for a warden in
+# front of the endpoint, and answers every other request (the smokes, the bursts, VARIED's load, the network certifier's
+# shim and probes) as vllm does.
 # READVICE=DIR (WINDOW=K, default 5) serves nothing: DIR's advice again under that registered compiler, and window K's
 # request Programs and manifest.json.
 # Needs on the node: vLLM's venv (/workspace/jobs/venv312), the checkpoint in /workspace/hf and CUDA (the collector's JIT build).
@@ -85,6 +89,7 @@ under_floor && { df -h "$ROOT"; echo "DISK FLOOR: under $DISK_FLOOR_GB GB free o
   --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 --admit "$ADMIT" --max-model-len "$MAX_MODEL_LEN" \
   --window-gb "${WINDOW_GB:-32}" --disk-floor-gb "$DISK_FLOOR_GB" \
   --seal-hold-gb "${SEAL_HOLD_GB:-64}" --seal-warm-gb "${SEAL_WARM_GB:-0}" ${MAX_NUM_SEQS:+--max-num-seqs "$MAX_NUM_SEQS"} \
+  ${WINDOW_REQUESTS:+--window-requests "$WINDOW_REQUESTS"} ${PROTOCOL:+--protocol "$PROTOCOL"} \
   ${MAX_NUM_BATCHED_TOKENS:+--max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS"} \
   --copy-records-to "$OUT" > "$OUT/serve.log" 2>&1 &
 SRV=$!
@@ -113,7 +118,7 @@ advice_pass() {
     [ -f "$D/advice/.w$k/windows.json" ] && continue
     # shellcheck disable=SC2086
     vv advice "$D" --window "$k" --cap "$CAP" $CA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
-    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace: next pass
+    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace, or pending (rc 3) on a record: next pass
     [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
     "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
 import json, sys, time
@@ -174,13 +179,14 @@ if [ "$ADMIT" = release-order ] && "$PY" -c "import pytest" 2>/dev/null; then   
 fi
 
 if [ "$MAX_MODEL_LEN" -gt 512 ]; then  # one request filling the context: MAX_MODEL_LEN - 64 prompt ids, then all 64 new ones, its window sealed
+  # (ignore_eos at max_tokens, not min_tokens: that masks the EOS logit, which the Program's sampling doesn't model, so compile_steps refuses it)
   "$PY" - "$PORT" "$REPO" "$D" "$MAX_MODEL_LEN" <<'EOF2' 2>&1 | tee "$OUT/long_smoke.txt"
 import json, sys, time, urllib.request
 from pathlib import Path
 port, model, d, L = sys.argv[1], sys.argv[2], Path(sys.argv[3]), int(sys.argv[4])
 P = L - 64
 body = {"model": model, "user": "long-smoke", "prompt": [128000] + [1000 + (7 * i) % 100000 for i in range(P - 1)],
-        "max_tokens": 64, "min_tokens": 64, "temperature": 0, "top_p": 1.0, "return_token_ids": True, "ignore_eos": True}
+        "max_tokens": 64, "temperature": 0, "top_p": 1.0, "return_token_ids": True, "ignore_eos": True}
 rq = urllib.request.Request(f"http://127.0.0.1:{port}/v1/completions", json.dumps(body).encode(), {"content-type": "application/json"})
 with urllib.request.urlopen(rq, timeout=300) as r:
     resp = json.loads(r.read())

@@ -10,7 +10,7 @@
   With ``--build-relabel on`` one template rank's request derives write the other ranks' (`pipeline.tp.relabel_build`); with
   ``--build-programs-only 1`` the Build ends at GP-01, with no manifest and no call-boundary check (`pipeline.neutrality`'s heavy tier).
   A switched row (its `aot` in ``manifests/records.json``, `config_record.aot_of`) has the AOT Build: each derive is
-  ``predict emit`` (`verity_vllm.predict.aot`), the predicted Program with the data its ``aot.trace`` Build holds about it
+  ``predict emit`` (`verity_vllm.program.predict.aot`), the predicted Program with the data its ``aot.trace`` Build holds about it
   (``--aot-trace``, else fetched from the store), and refuses where they differ; ``--build-construction trace`` traces it.
 * **Match**: the capture under the observer and collective recorder, the ``--no-observer`` control, the collective-level
   check (``tp-match --arm check``); a request that stopped before its cap gets its served-shape Program derived per rank

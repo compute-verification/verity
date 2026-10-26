@@ -136,8 +136,8 @@ ROUTER_VPT_BY_E: dict[int, int] = {64: 8, 128: 8}
 
 def _root_name(ctx, view, fallback: str) -> str:
     """The expert stack's weight ROOT name (the parameter fqn, `model.layers.<k>.mlp.experts.routed_experts.w13_weight`), the hint tail
-    every other pattern uses (`hint_of(node, roots[0].name)`): `cb_a.compare` reads the record's weight field names from it.  [R13 MOE-01:
-    the literal `w13`/`w2` tails made every expert-GEMM weight operand differ from the derived Program's by NAME only.]"""
+    every other pattern uses (`hint_of(node, roots[0].name)`): `cb_a.compare` reads the record's weight field names from it (the
+    literal `w13`/`w2` tails made every expert-GEMM weight operand differ from the derived Program's by NAME only)."""
     roots = ctx.roots_of(view)
     return roots[0].name if roots else fallback
 
@@ -440,7 +440,7 @@ class MoEFusedExperts:
 
 @dataclass
 class MoEFusedExpertsPadded(MoEFusedExperts):
-    """[R17-42 route A (4), `moe_construction = padded`] The SAME six kernels, the SAME pins and shape checks as `MoEFusedExperts` --
+    """[`moe_construction = padded`] The SAME six kernels, the SAME pins and shape checks as `MoEFusedExperts` --
     folded to ONE `Compute(MoeFfnFixedL_v1{E,TOPK,VPT,H,I}, rows=M)` per token: `(PerRow(hidden), PerRow(logits), Shared(w13), Shared(w2))
     -> PerRow(out)`.  This is the fold-side twin of the frontend's `PaddedMoeSumRule` (verity_vllm/program/frontend/rules/vllm_moe.py), so GM-01
     sees the record and the Build in the same vocabulary; which twin folds is the workload's DECLARED construction
@@ -715,7 +715,7 @@ def ov_moe_patterns(config: dict[str, Any], *, gemm_constexprs: dict[str, Any] |
                     moe_construction: str | None = None) -> list:
     """The MoE architecture's patterns, placed BEFORE the base list (the tuned-GEMM specialization must see `o_proj` first; the MoE
     scope pattern matches the custom op no base pattern knows).  `moe_construction` (None = `TargetProfile.DEFAULT_MOE_CONSTRUCTION`)
-    selects the scope pattern: the workload's DECLARED construction, never inferred (R17-42 route A (4)).  [P6] the tuned GEMM is the
+    selects the scope pattern: the workload's DECLARED construction, never inferred.  The tuned GEMM is the
     target-agnostic `gen_llama_patterns.GemmLaunchTuned` (the record target's table; `gemm_constexprs` is accepted and unused: the
     delegate `GemmLaunch` pins the target's tiling)."""
     key = moe_construction or TargetProfile.DEFAULT_MOE_CONSTRUCTION

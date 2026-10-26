@@ -63,6 +63,7 @@ import numpy as np
 
 from verity.ml.randomness import Key
 
+from verity_vllm import settings
 from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import fork as FK
 from verity_vllm.check.replay import replay_codes as RC
@@ -177,7 +178,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     if "rms" in need:
         try:
             from verity_vllm.program.kernels import prims_twins
-            rm, _t = prims_twins._rms()
+            rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
         except Exception as e:  # noqa: BLE001
@@ -185,7 +186,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     if "fa2" in need:
         try:
             from verity_vllm.program.kernels import prims_twins
-            _fa2_model, _tables = prims_twins._fa2()
+            _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
             out["fa2_mufu_tables"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"
@@ -196,7 +197,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
 #: objects moved to the permanent generation (never traversed by a collection in the children), `gc_collected` = what the pre-fork
 #: collection freed, `gc_freeze` = the policy (env VERITY_REPLAY_FORK_GC_FREEZE=0 opts out for a measurement, never for a record).
 _FORK_STATS: dict[str, Any] = {}
-FORK_GC_FREEZE = os.environ.get("VERITY_REPLAY_FORK_GC_FREEZE", "1").strip() not in ("0", "false", "no")
+FORK_GC_FREEZE = settings.VERITY_REPLAY_FORK_GC_FREEZE
 CGROUP_MEMORY = ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory.current")
 
 
@@ -389,7 +390,7 @@ def _cublas_facts(env: dict[str, Any]) -> dict[str, Any]:
 def engine_facts_of_record() -> dict[str, Any]:
     """The batch-invariant configuration beside the evaluator strings: what the replay's pins were conditioned on;
     `cublas`, what the route pin's routes were conditioned on (`_cublas_facts`)."""
-    facts: dict[str, Any] = {k: os.environ.get(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
+    facts: dict[str, Any] = {k: settings.raw(k) for k in ("VLLM_BATCH_INVARIANT", *CUBLAS_ENV)}
     try:
         from vllm.model_executor.determinism import batch_invariant as bi          # type: ignore
         facts["vllm_batch_invariant_mode"] = bool(bi.vllm_is_batch_invariant()) if hasattr(bi, "vllm_is_batch_invariant") else "unavailable: no vllm_is_batch_invariant()"

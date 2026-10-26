@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""R13 lane hopper: build the FA3 (hopper/) forward of the pinned vllm-flash-attn (506341a1) as a standalone torch extension --
+"""Build the FA3 (hopper/) forward of the pinned vllm-flash-attn (506341a1) as a standalone torch extension --
 the M1 hidden-value tap `verity_fa3_matReq.so` (VERITY_TAP=3, VERITY_MAT_SRC=59) or an untapped control (VERITY_TAP=0).
 
 Mirrors the flags of the pinned CMake build of `_vllm_fa3_C` (CMakeLists.txt: -O3 --use_fast_math --expt-relaxed-constexpr
@@ -18,6 +18,7 @@ Writes <build-dir>/build_info.json and <build-dir>/resource_usage.txt.
 import glob, hashlib, json, os, subprocess, time
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.config import option
 
 
@@ -43,9 +44,9 @@ class Options:
 
 
 def main(args: Options):
-    os.environ.setdefault('CUDA_HOME', '/usr/local/cuda')
-    os.environ['TORCH_CUDA_ARCH_LIST'] = args.arch
-    os.environ.setdefault('MAX_JOBS', '32')
+    settings.setdefault('CUDA_HOME', '/usr/local/cuda')
+    settings.put('TORCH_CUDA_ARCH_LIST', args.arch)
+    settings.setdefault('MAX_JOBS', '32')
     import torch
     from torch.utils.cpp_extension import load
 
@@ -79,7 +80,7 @@ def main(args: Options):
     include_dirs = [hop, os.path.join(tree, 'csrc', 'common'), os.path.join(tree, 'csrc', 'cutlass', 'include')]
 
     os.makedirs(args.build_dir, exist_ok=True)
-    nvcc = os.path.join(os.environ['CUDA_HOME'], 'bin', 'nvcc')
+    nvcc = os.path.join(settings.raw('CUDA_HOME'), 'bin', 'nvcc')
     nvcc_ver = subprocess.run([nvcc, '--version'], capture_output=True, text=True).stdout.strip().splitlines()[-2:]
     info = {
         'name': args.name, 'tree': tree, 'tree_commit': args.tree_commit,
@@ -87,12 +88,12 @@ def main(args: Options):
         'header_sha256': {p: sha256(p) for p in sorted(glob.glob(os.path.join(hop, '*.h')) + glob.glob(os.path.join(hop, '*.hpp')))},
         'defines': defines, 'cxx_flags': cxx_flags, 'nvcc_flags': nvcc_flags, 'arch': args.arch, 'hdims': hdims,
         'nvcc_version': nvcc_ver, 'torch': torch.__version__, 'torch_cuda': torch.version.cuda,
-        'cuda_home': os.environ['CUDA_HOME'], 'max_jobs': os.environ['MAX_JOBS'],
+        'cuda_home': settings.raw('CUDA_HOME'), 'max_jobs': settings.raw('MAX_JOBS'),
     }
     t0 = time.time()
     # CUTLASS_ENABLE_DIRECT_CUDA_DRIVER_CALL (as the pinned build): the TMA descriptor encode is a direct driver call -> link libcuda
     # (the toolkit's stub at link time; the driver's libcuda.so.1 at load time, as _vllm_fa3_C).
-    ldflags = [f"-L{os.path.join(os.environ['CUDA_HOME'], 'lib64', 'stubs')}", "-lcuda"]
+    ldflags = [f"-L{os.path.join(settings.raw('CUDA_HOME'), 'lib64', 'stubs')}", "-lcuda"]
     info['ldflags'] = ldflags
     load(name=args.name, sources=sources, extra_cflags=cxx_flags, extra_cuda_cflags=nvcc_flags, extra_ldflags=ldflags,
          extra_include_paths=include_dirs, build_directory=args.build_dir, verbose=True,
@@ -102,7 +103,7 @@ def main(args: Options):
     info['so'] = so
     info['so_sha256'] = sha256(so) if os.path.exists(so) else None
     info['so_bytes'] = os.path.getsize(so) if os.path.exists(so) else None
-    cuobjdump = os.path.join(os.environ['CUDA_HOME'], 'bin', 'cuobjdump')
+    cuobjdump = os.path.join(settings.raw('CUDA_HOME'), 'bin', 'cuobjdump')
     ru = subprocess.run([cuobjdump, '--dump-resource-usage', so], capture_output=True, text=True)
     with open(os.path.join(args.build_dir, 'resource_usage.txt'), 'w') as f:
         f.write(ru.stdout + ru.stderr)

@@ -528,8 +528,9 @@ def prune(pkg: Path) -> int:
 
 
 #: the kept builds a node holds before its least recently used go: every tree whose manifest or lakefile differs adds one
-#: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk)
-BUILDS_KEPT = 24
+#: (infra, 12 Oct: 71 of them, 19 GB, on a 200 GB disk). Each package's newest stays past it (`WarmBuilds.evict`): at 24, fewer
+#: than the ~30 packages, every check evicted some and rebuilt them cold (r20261026-040757-de32: Flock's build alone 1,094 s)
+BUILDS_KEPT = 48
 #: the kept dependency trees (one per manifest and toolchain, `deps_key`) a node holds before its least recently used go:
 #: Security/Proofs' is about 35k files, and vy-nebius-2 held 24 (806k inodes) on 18 Oct (infra, LEAN-29)
 DEPS_KEPT = 8
@@ -574,23 +575,39 @@ class WarmBuilds:
             src = pkg / ".lake" / "build"
             if not src.is_dir():
                 continue
-            home = self.store / build_key(os.path.relpath(pkg, work), work)
+            rel = os.path.relpath(pkg, work)
+            home = self.store / build_key(rel, work)
             with self._lock(home.name):
                 if home.exists():
                     shutil.rmtree(home, ignore_errors=True)
                 _move(src, home)
                 os.utime(home)
+                (self.store / f"{home.name}.pkg").write_text(rel)
         self.evict()
 
+    def newest_per_package(self) -> set[str]:
+        """The newest kept build of each package a `NAME.pkg` beside it names."""
+        newest: dict[str, tuple[float, str]] = {}
+        for tag in self.store.glob("*.pkg") if self.store.is_dir() else ():
+            home = self.store / tag.stem
+            try:
+                pkg, t = tag.read_text().strip(), home.stat().st_mtime
+            except OSError:                            # taken while listed, or its build is gone
+                continue
+            if pkg not in newest or t > newest[pkg][0]:
+                newest[pkg] = (t, home.name)
+        return {name for _, name in newest.values()}
+
     def evict(self) -> int:
-        """Remove all but the `kept` builds last given back or copied from (`evict_lru`); the number removed."""
-        return evict_lru(self.store, self.kept)
+        """Remove all but the `kept` builds last given back or copied from, never a package's newest (`evict_lru`); the number
+        removed."""
+        return evict_lru(self.store, self.kept, keep=self.newest_per_package())
 
 
-def evict_lru(store: Path, kept: int) -> int:
+def evict_lru(store: Path, kept: int, keep: set[str] = frozenset()) -> int:
     """Remove all but the ``kept`` directories of ``store`` last used (a rename keeps a directory's mtime, so each use sets
-    it), each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking it or giving it back. The number
-    removed."""
+    it), and never one named in ``keep``, each only when its lock (`NAME.lock` beside it) is free: a run holding it is taking
+    it or giving it back. The number removed."""
     held = []
     for home in store.iterdir() if store.is_dir() else ():
         try:
@@ -600,6 +617,8 @@ def evict_lru(store: Path, kept: int) -> int:
             pass
     n = 0
     for _, home in sorted(held, reverse=True)[kept:]:
+        if home.name in keep:
+            continue
         with open(store / f"{home.name}.lock", "w") as f:
             try:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -607,6 +626,7 @@ def evict_lru(store: Path, kept: int) -> int:
                 continue
             if home.is_dir():
                 shutil.rmtree(home, ignore_errors=True)
+                (store / f"{home.name}.pkg").unlink(missing_ok=True)
                 n += 1
     return n
 

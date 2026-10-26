@@ -2,7 +2,7 @@
 
     python benchmarks/pouw/vllm_bench.py --model /path/to/qwen2.5-3b-instruct --out RESULT.json [--modes bf16,fp8,w7a7,ncp,pearl]
 
-This is the harness's stand-in for the vLLM adapter (``integrations/vllm/verity_vllm/protocol_options/pouw.py``, which
+This is the harness's stand-in for the vLLM adapter (``integrations/vllm/verity_vllm/protocols/pouw/__init__.py``, which
 waits for the vLLM coordinator's OK): it wraps every ``LinearBase`` layer's ``quant_method.apply``, found by type, on stock
 vLLM, and restores nothing because each mode runs in a fresh engine.  Modes:
 
@@ -69,7 +69,7 @@ LOWBYTE_STATUS = "gamma unproved: not a result"
 
 
 def ncp2_committer(mode: str):
-    from verity_vllm.protocol_options import pouw_device as PD
+    from verity_vllm.protocols.pouw import device as PD
     PD.configure(build_dir=os.environ.get("VERITY_POUW_CUDA_BUILD"), arch=os.environ.get("VERITY_POUW_CUDA_ARCH"))
     flags = {"ncp2": PD.HASH | PD.CACHE_Y, "ncp2-nohash": 0, "ncp2-lowbyte": PD.HASH | PD.CACHE_Y | PD.LOWBYTE}[mode]
     return PD.FusedCommitter("ncp-v2", bytes(range(32)), flags | PD.TIME_TILES)
@@ -80,8 +80,8 @@ def ncp2_self_check(committer) -> dict:
     the word leaves. Refuses to go on otherwise."""
     import numpy as np
     import torch
-    from verity_vllm.protocol_options import pouw_device as PD
-    from verity_vllm.protocol_options import pouw_native as PN
+    from verity_vllm.protocols.pouw import device as PD
+    from verity_vllm.protocols.pouw import native as PN
 
     call = PD.gate_call("vllm self-check", 16, 896, 1152)
     ref = PN.commit_call(0, "ncp-v2", call)
@@ -118,7 +118,7 @@ def ncp_y(Wq, pi, gen):
 
 
 class ModeExecutor:
-    """One bench mode's GEMM at every linear site (`verity_vllm.linear.api.LinearExecutor`), over the operands `install`
+    """One bench mode's GEMM at every linear site (`verity_vllm.protocols.linear.api.LinearExecutor`), over the operands `install`
     prepared per weight: weight state kept across calls, no controls, serial only.  Its pass is itself, one for the engine's
     life (`run_mode`)."""
 
@@ -128,7 +128,7 @@ class ModeExecutor:
     schedules = frozenset({"serial"})
 
     def __init__(self, mode: str, states: dict, compute, stats: dict) -> None:
-        from verity_vllm.linear.api import PassSpec
+        from verity_vllm.protocols.linear.api import PassSpec
         self.name, self.states, self.compute, self.stats, self.spec = f"bench:{mode}", states, compute, stats, PassSpec()
 
     def refusals(self, sites) -> list[str]:
@@ -148,13 +148,13 @@ class ModeExecutor:
 
 
 def install(model, mode: str, committer=None):
-    """Every LinearBase layer (found by type, `verity_vllm.linear.vllm_site`) computed for `mode` by one `ModeExecutor` on a
+    """Every LinearBase layer (found by type, `verity_vllm.protocols.linear.vllm_site`) computed for `mode` by one `ModeExecutor` on a
     `Stack` attached through `engine.hooks`; returns the shared stats, the stack (its arm active) and the hooks, which the
     caller uninstalls so the patches don't keep the engine alive."""
     import torch
     from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.linear import vllm_site
-    from verity_vllm.linear.api import Arm, Stack
+    from verity_vllm.protocols.linear import vllm_site
+    from verity_vllm.protocols.linear.api import Arm, Stack
 
     stats = {"calls": 0, "macs": 0, "transcript_bytes": 0, "layers": 0, "y_formed_bytes": 0}
     count = {"forward": 0, "rows": 0}

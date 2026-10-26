@@ -1,4 +1,4 @@
-import Models.Pouw.Guarantees.Deadline
+import Definitions.Pouw.Guarantees.Deadline
 import Proofs.Pouw.Game
 import Proofs.Pouw.Prob
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma

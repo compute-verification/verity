@@ -169,7 +169,7 @@ def adapter_revision(args: Options) -> str:
 def capture_protocols(wl: dict, args: Options, model: object) -> tuple[object | None, list[str]]:
     """The target's executors (PoUW) and their entries. Installed after the warm-up as in the Commit, they serve both arms, so the
     observed run executes what the Commit serves and records each executed call as its executor's own op (`protocol_options.at_capture`)."""
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
 
     target = va.target_of_workload(wl, args.target)
     protocols = PO.at_capture(target, model, PO.own_auditor(wl.get("protocols_config"), target))
@@ -230,7 +230,7 @@ def main(args: Options) -> None:
 
     tw = None
     if not args.no_warmup:
-        warm = va.throwaway_requests(eng, wl["requests"])
+        warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
         with tl.span("prep.warmup_control"):
             _, tw = va.run_requests(eng, warm, wl["sampling"])
         print(f"[m1] warm-up (uninstrumented, {len(warm)} throwaway requests): {tw['wall_s']:.2f}s, {tw['engine_steps']} steps", flush=True)

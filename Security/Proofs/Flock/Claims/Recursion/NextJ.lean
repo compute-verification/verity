@@ -40,11 +40,11 @@ structure FinalJ where
   j : Json
   proofs : Array ByteArray
 
-/-- The record's draw at its parsed value (`recordDraw` after the parse). -/
+/-- The record's draw at its parsed value, rebuilt (`recordDraw` after the parse). -/
 def drawOfJ (j : Json) : Option Json :=
   match j.getObjVal? "unit_draw" with
   | .ok Json.null => none
-  | .ok d => some d
+  | .ok d => some (Flock.norm d)
   | .error _ => none
 
 theorem recordDraw_of_parse {record : String} {j : Json} (h : Json.parse record = .ok j) :

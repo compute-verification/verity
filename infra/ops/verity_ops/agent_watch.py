@@ -107,7 +107,8 @@ read over one ssh (`RUNS_READER`, host, port, user and runs root from the node's
 records each once as **run_ended** for whoever sent it (the request's `submitted_by`, else the command's `--by`, else the job's
 lane): a coordinator's own handle, or a former one's (`lineage`), a worker's launcher's (its coordinator resumes it with Task:
 Cursor refuses a run on a worker), or its parent's when the watch learned it from a Task call, else the lane's (`--by`, the
-job's lane, or a handle `submitted_by` names) when that is a handle. The runs of one read whose sender no handle owns are one
+job's lane, or a handle `submitted_by` names) when that is a handle, else the handle of the branch whose head the run's tree was
+(`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). The runs of one read whose sender no handle owns are one
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring @infra once; a run whose handle
 `quiet_handles` lists (ci: drive reads its own train checks' ends) is skipped. `run_ends.json` keeps each node's last read and the runs
 seen (`RUN_ENDS_KEEP_S`); runs that ended before the first read are never rung. `agent_watch.py runs` prints what it would read.
@@ -179,6 +180,7 @@ UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
+AGENTS_PAGE = 50            # GET /v1/agents page size: 100 took ~13 s and 503'd (upstream_error) every sweep for 30 min, 26 Oct
 RESUME_S = 10 * 60          # idle this long after a research run it must act on ended, with nothing run since: resumed
 WORKER_RELAUNCH_S = 20 * 60 # a worker still idle this long after its coordinator was rung for it: relaunched fresh
 RELAUNCH_EVERY_S = 6 * 3600 # an agent is relaunched at most once in this long
@@ -558,9 +560,27 @@ for n in names:
                 "ended": tr[-1].get("t_utc"), "mtime": mtime, "submitted_by": req.get("submitted_by") or "",
                 "by": cmd[cmd.index("--by") + 1] if "--by" in cmd[:-1] else "", "lane": own.get("lane") or "",
                 "job": own.get("job") or "", "stage": comp.get("stage") or "", "command": " ".join(cmd)[:200],
-                "cancelled_by": by, "cancel_reason": why})
+                "cancelled_by": by, "cancel_reason": why, "tree": comp.get("tree_sha") or ""})
 print(json.dumps(out))
 '''
+
+
+#: how long `read_heads` remembers which branch a pushed sha was the head of (`Watch.branch_of`)
+HEADS_SHA_KEEP_S = 2 * 86400
+
+
+def branch_handle(branch: str, registry: Path | None, handles: set[str]) -> str | None:
+    """The handle a branch belongs to, for a run whose sender no route knows (TOP-90 row 21, 25 Oct: seven workers traced by
+    hand from tree to branch to lane): the registry's `branch_suffixes` of a handle naming the branch's last `-` part, else a
+    handle the branch's name starts with after `cursor/` (`cursor/kernels-kp2s8-8c40`), the longest such."""
+    if not branch:
+        return None
+    suffix = branch.rsplit("-", 1)[-1]
+    for h in read_json(registry).get("handles") or [] if registry else []:
+        if suffix in (h.get("branch_suffixes") or []) and str(h.get("handle")) in handles:
+            return str(h["handle"])
+    name = branch.split("/", 1)[-1]
+    return max((x for x in handles if name.startswith(x + "-")), key=len, default=None)
 
 
 def machine(machines_d: Path, name: str) -> dict | None:
@@ -663,7 +683,7 @@ class Api:
     def agents(self) -> Iterator[dict]:
         cursor = None
         while True:
-            page = self.get("/v1/agents", limit=100, cursor=cursor, includeArchived="false")
+            page = self.get("/v1/agents", limit=AGENTS_PAGE, cursor=cursor, includeArchived="false")
             yield from page.get("items") or []
             cursor = page.get("nextCursor")
             if not cursor:
@@ -1302,12 +1322,14 @@ class Watch:
                               "while the heads are stale", t)
             return
         old, new = self.heads.get("heads") or {}, {}
+        shas = {k: v for k, v in (self.heads.get("shas") or {}).items() if isinstance(v, list) and v[1] >= t - HEADS_SHA_KEEP_S}
         for line in out.splitlines():
             sha, _, ref = line.strip().partition("\t")
             if ref.startswith("refs/heads/") and sha:
                 b = ref[len("refs/heads/"):]
                 new[b] = old[b] if isinstance(old.get(b), list) and old[b][0] == sha else [sha, t]
-        self.heads = {"t0": self.heads.get("t0", t), "t": t, "heads": new}
+                shas.setdefault(sha, [b, t])
+        self.heads = {"t0": self.heads.get("t0", t), "t": t, "heads": new, "shas": shas}
         write_atomic(self.heads_path, (json.dumps(self.heads, sort_keys=True) + "\n").encode())
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
@@ -1439,6 +1461,15 @@ class Watch:
         self.ends = st
         write_atomic(self.ends_path, (json.dumps(st, sort_keys=True) + "\n").encode())
 
+    def branch_of(self, sha: str) -> str:
+        """The branch whose head was ``sha`` when `read_heads` saw it (kept `HEADS_SHA_KEEP_S`), or ""."""
+        if not sha:
+            return ""
+        got = (self.heads.get("shas") or {}).get(sha)
+        if isinstance(got, list) and got:
+            return str(got[0])
+        return next((b for b, v in (self.heads.get("heads") or {}).items() if isinstance(v, list) and v[0] == sha), "")
+
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
                  quiet: set[str] = frozenset()) -> dict | None:
         """Record `row`'s end for its sender's handle; a run whose sender no handle owns is returned instead, for `run_ends` to
@@ -1469,6 +1500,8 @@ class Watch:
             handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or self.names.get(agent, ""))
         elif lane:
             handle, role, name = lane, "lane", ""
+        elif h := branch_handle(self.branch_of(str(row.get("tree") or "")), self.registry, handles):
+            handle, role, name = h, "lane", ""
         else:
             handle, role, name = "", "unknown", ""
         if handle in quiet:

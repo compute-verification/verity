@@ -686,6 +686,28 @@ def test_kept_builds_past_the_cap_go_least_recently_used_first_and_a_held_one_st
     assert builds.evict() == 1 and "k0" not in {p.name for p in store.iterdir()}
 
 
+def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
+    """At 24 kept builds, fewer than the ~30 packages, every Lean check evicted some packages' only build and rebuilt them cold
+    (26 Oct: r20261026-040757-de32 built Flock cold for 1,094 s)."""
+    store = tmp_path / "lean-builds"
+    works = []
+    for i, pkg in enumerate(["pkg/a", "pkg/b", "pkg/c"]):
+        work = tmp_path / f"work{i}"
+        (work / pkg / ".lake" / "build").mkdir(parents=True)
+        (work / pkg / "lakefile.toml").write_text(f'name = "{i}"\n')
+        works.append((work, pkg))
+    builds = LA.WarmBuilds(store, kept=1)
+    for work, pkg in works:
+        builds.give_back(work, {work / pkg})
+    left = {p.name for p in store.iterdir() if p.is_dir()}
+    assert left == {LA.build_key(pkg, work) for work, pkg in works}
+    old = store / "stale"
+    old.mkdir()
+    (store / "stale.pkg").write_text("pkg/a")
+    os.utime(old, (1, 1))
+    assert builds.evict() == 1 and not old.exists() and not (store / "stale.pkg").exists()
+
+
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     files = LA.COMMON.tracked_files()
