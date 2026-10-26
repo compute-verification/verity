@@ -617,7 +617,7 @@ noncomputable def mhX (A : Prover tw twRound 2) (w : Fin 2) : TAlg (Unit × (twA
 theorem twExtract : ExtractAdv tw twRound 2 twReg twQ twBadv twξ (fun _ => 0) := by
   intro _ _ _ _ _ A
   refine ⟨twAdv, past, mwX A, mhX A, adv_inj, fun o x x' w hx => ?_, fun o x w => rootOf_past A o x w,
-    fun o x r => ?_, fun o x w => ?_, ?_⟩
+    fun o x _ r => ?_, fun o x w => ?_, ?_⟩
   · funext v
     simp only [past]
     split_ifs with h

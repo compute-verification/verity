@@ -168,7 +168,7 @@ theorem honest_realization (Q : ℝ) :
     fun _ => (fun p => (toyNF D).merkle p.1 p.2.2, 1), ⟨fun _ => 0, fun _ _ _ => rfl⟩, fun _ _ _ _ _ => rfl,
     fun _ _ _ => rfl, ?_, ?_, fun _ _ _ _ hu _ => (hu 0).symm,
     fun _ _ _ _ _ _ _ _ _ hy => ⟨0, (List.mem_singleton.mp hy).symm⟩, ?_⟩
-  · intro _ _ _
+  · intro _ _ _ _
     show ∑ _ : Fin k, (((1 : ℕ) : ℝ) + ((1 : ℕ) : ℝ)) ≤
       ∑ _ : Fin k, (((2 : ℕ) : ℝ) + ((0 : ℕ) : ℝ)) + ((k : ℝ) * 0 + ((1 : ℕ) : ℝ) * 0)
     norm_num
