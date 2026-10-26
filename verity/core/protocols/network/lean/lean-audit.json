@@ -3,7 +3,7 @@
  "exempt": {
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
-  "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
+  "NetworkCheck.PeriodMain": "the network-period executable's entry point: Core.BlobProtocol.main of NetworkCheck.Period.protocol, or each link-window's opening alone for the tests (opening, NetworkCheck.Period.openings), audited under NetworkCheck",
   "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) and of N2's link-window verdict of record (link-window, NetworkCheck.LinkWindow.linkWindowFn), audited under NetworkCheck"
  },
  "runs": {
@@ -30,9 +30,9 @@
    "why": "the check is code: the record's encodings, the certifier program's Program grid and Σ_sync, the LMS verifier and the core protocol interface, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Period": {
-   "imports": ["NetworkCheck.Check", "CoreProtocol.Profile", "Flock.Public"],
+   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "CoreProtocol.Blobs", "CoreProtocol.Profile", "SampledProofs.OneStageZk", "SampledProofs.Partition", "Flock.Public"],
    "except": [],
-   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, the core interface with its integrity profile (to read one-stage's answers) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
+   "why": "the period's check is code: v4's certificate and sync decoders, the LMS verifier, N2's link-window public row and opening, the core interface with its blobs and integrity profile (to read one-stage's answers), one-stage v2 (to run it on each link-window's proof) and C-Flock's frame-v3 hash (the rows' domain), no Mathlib and nothing of Security"
   },
   "NetworkCheck.Records": {
    "imports": ["NetworkCheck.Check", "Difftest"],
