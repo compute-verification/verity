@@ -103,12 +103,118 @@ theorem partOpensB_layR {Col T : Type} {H : Msg → Msg} {D : Claims.Recursion.D
   · exact Or.inr (Claims.Recursion.findColl_isSome_of_sub H hT
       (fun e he => DeployedR.layoutBTops_sub_layR elem _ x s w e he) h)
 
+theorem readsRows_layR : (DeployedR.layR elem).ReadsRows FlockDeploy.sha512 :=
+  Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl
+
+/-- **`HeldB` at `layR`, at the dense form and the deployed inner verifier.** -/
+theorem heldB_dense_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (bR : Brings) (wE : Msg → ℝ)
+    (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) :
+    Claims.Recursion.VStarB.HeldB
+      (recBound _root_.Flock.Readable.relation bR (DeployedR.layR elem)
+        (bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w).IVStar)
+      (Claims.Recursion.Inner.ofFlock
+        (bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w).deploy decI)
+      (DeployedR.layR elem) Claims.Recursion.Form.Dense :=
+  heldB_layR elem (heldB_layoutBTops _ _ _ _ (fun _ => rfl) (finOpen (DeployedR.restR elem)) _ schedMatches_dense
+    (capPorts _) (rowsCover _) (finPieces_finOpen (DeployedR.restR elem) _))
+
+/-- **`PartOpensB` at `layR`, at the dense form and the coin server's reader.** -/
+theorem partOpensB_dense_layR (bR : Brings) (IV : Claims.Verifier Coin) (s : ℕ) :
+    Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512
+      (recBound _root_.Flock.Readable.relation bR (DeployedR.layR elem) IV)
+      (deployZkRec _root_.Flock.Readable.relation) (DeployedR.layR elem) Claims.Recursion.Form.Dense
+      (showsPart recRead bR) (cmtTr recRead) s :=
+  partOpensB_layR elem (partOpensB_recRead (finOpen (DeployedR.restR elem)) bR (fun _ _ h => h) schedMatches_dense)
+
 end Transfer
+
+/-! ## `KSLin2` at any layout meeting the route's layout premises -/
+
+/-- **`KSLin2` at the deployment's dense statements, the coin server's record and any steps and columns meeting
+`StepsBaseC`, at any layout `L` whose rows, holdings, part openings and readers meet the route's premises, from
+`DecompB` at `PartAccepts`**: `ksLin2_route_staged`, with `StagedB` from `stagedB_deployRec_part` at `recRead`
+(`readsBack_recTr`) and the inner check from `exists_chk_iff`. The layout stays a variable here, so no step unfolds
+it. -/
+theorem ksLin2_stepsC_at (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
+    (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
+    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole)
+    (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hB : StepsBaseC nextE colsE wE join final w) :
+    let bR : Brings := { b with tr := recTr aux nOf hd recRest }
+    let Bd := bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
+    ReadersTrue FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (deployZkRec _root_.Flock.Readable.relation) →
+    (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L
+      Claims.Recursion.Form.Dense) →
+    (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
+      Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s) →
+    (∀ shape ∈ [Claims.Recursion.Form.Dense],
+      Claims.Recursion.VStarB.DecompB FlockDeploy.sha512 D Bd.IVStar L shape
+        (Claims.Recursion.VStarB.PartAccepts FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
+          shape (showsPart recRead bR) (cmtTr recRead))) →
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro bR Bd D hRT hHe hPO hD
+  obtain ⟨hKS, hEC, hCF⟩ := hB
+  have hrb : ReadsBackB FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (fun _ => True) recRead :=
+    readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl
+  refine ksLin2_route_staged _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L hRows hHW
+    FlockDeploy.KS.CpDep nextE colsE wE join rowInDeployed final w hKS (binds_deployed _ _ _ wE join final w) hEC hCF
+    FlockDeploy.KS.zk_KS_outer ?_ hRT
+  intro shape hsh
+  obtain rfl := List.mem_singleton.1 hsh
+  obtain ⟨chk, hPC, hDc⟩ := (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD _ hsh)
+  exact ⟨chk, showsPart recRead bR, cmtTr recRead, hHe,
+    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
+      (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } recRead L _
+      (fun x st hst _ => hrb x st hst trivial) (hHe decI),
+    hPC, hPO, hDc⟩
+
+/-- **`ksLin2_stepsC_at` from `DecompBP` at `PartAcceptsP`**, through `ksLin2_route_stagedP`. -/
+theorem ksLin2_stepsC_atP (nextE : Msg → List Msg → List Coin → Claims.OC Out)
+    (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
+    (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
+    (L : Claims.Recursion.VStarB.LayoutB) (hRows : L.ReadsRows FlockDeploy.sha512) (hHW : L.HeldWhole)
+    (wE : Msg → ℝ) (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
+    (hB : StepsBaseC nextE colsE wE join final w) :
+    let bR : Brings := { b with tr := recTr aux nOf hd recRest }
+    let Bd := bdDeployed _root_.Flock.Readable.relation nextE colsE wE join rowInDeployed final w
+    let D := recBound _root_.Flock.Readable.relation bR L Bd.IVStar
+    ReadersTrue FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (deployZkRec _root_.Flock.Readable.relation) →
+    (∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L
+      Claims.Recursion.Form.Dense) →
+    (∀ s, Claims.Recursion.VStarB.PartOpensB FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
+      Claims.Recursion.Form.Dense (showsPart recRead bR) (cmtTr recRead) s) →
+    (∀ shape ∈ [Claims.Recursion.Form.Dense],
+      Claims.Recursion.VStarB.DecompBP FlockDeploy.sha512 D Bd.IVStar L shape
+        (Claims.Recursion.VStarB.PartAcceptsP FlockDeploy.sha512 D (deployZkRec _root_.Flock.Readable.relation) L
+          shape (showsPart recRead bR) (cmtTr recRead))) →
+    Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
+      (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
+  intro bR Bd D hRT hHe hPO hD
+  obtain ⟨hKS, hEC, hCF⟩ := hB
+  have hrb : ReadsBackB FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (fun _ => True) recRead :=
+    readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl
+  refine ksLin2_route_stagedP _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L hRows hHW
+    FlockDeploy.KS.CpDep nextE colsE wE join rowInDeployed final w hKS (binds_deployed _ _ _ wE join final w) hEC hCF
+    FlockDeploy.KS.zk_KS_outer ?_ hRT
+  intro shape hsh
+  obtain rfl := List.mem_singleton.1 hsh
+  exact ⟨showsPart recRead bR, cmtTr recRead, hHe,
+    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
+      (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } recRead L _
+      (fun x st hst _ => hrb x st hst trivial) (hHe decI),
+    hPO, hD _ hsh⟩
 
 /-! ## `KSLin2` and `BitsLin2` at `layR` -/
 
 /-- **`KSLin2` at the deployment's dense statements, at the layout of record `DeployedR.layR elem`, the coin server's
-record (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_stepsC_partAccepts` at
+record (`recTr`), and any steps and columns meeting `StepsBaseC`, from `DecompB`**: `ksLin2_stepsC_at` at
 `layR`, with `ReadersTrue` from `readersTrue_layR` (`HmSlotsCommit` and `MoreSlotsTrue`) and `PartOpensB` from
 `partOpensB_layR`. -/
 theorem ksLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -130,26 +236,9 @@ theorem ksLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D hD
-  obtain ⟨hKS, hEC, hCF⟩ := hB
-  have hrb : ReadsBackB FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (fun _ => True) recRead :=
-    readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl
-  refine ksLin2_route_staged _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L
-    (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl) (heldWhole_layR elem)
-    FlockDeploy.KS.CpDep nextE colsE wE join rowInDeployed final w hKS (binds_deployed _ _ _ wE join final w) hEC hCF
-    FlockDeploy.KS.zk_KS_outer ?_ (readersTrue_layR elem Bd.IVStar bR _ hmSlotsCommit_of_full hM)
-  intro shape hsh
-  obtain rfl := List.mem_singleton.1 hsh
-  obtain ⟨chk, hPC, hDc⟩ := (Claims.Recursion.VStarB.exists_chk_iff _ _ _ _ _ _ _ _).2 (hD _ hsh)
-  have hHe : ∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L
-      Claims.Recursion.Form.Dense := fun _ =>
-    heldB_layR elem (heldB_layoutBTops _ _ _ _ (fun _ => rfl) (finOpen (DeployedR.restR elem)) _ schedMatches_dense
-      (capPorts _) (rowsCover _) (finPieces_finOpen (DeployedR.restR elem) _))
-  exact ⟨chk, showsPart recRead bR, cmtTr recRead, hHe,
-    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
-      (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } recRead L _
-      (fun x st hst _ => hrb x st hst trivial) (hHe decI),
-    hPC, fun _ => partOpensB_layR elem
-      (partOpensB_recRead (finOpen (DeployedR.restR elem)) bR (fun _ _ h => h) schedMatches_dense), hDc⟩
+  exact ksLin2_stepsC_at nextE colsE b aux nOf hd recRest L (readsRows_layR elem) (heldWhole_layR elem) wE join final w
+    hB (readersTrue_layR elem Bd.IVStar bR _ hmSlotsCommit_of_full hM)
+    (heldB_dense_layR elem nextE colsE bR wE join final w) (partOpensB_dense_layR elem bR Bd.IVStar) hD
 
 /-- **`BitsLin2` at the same choice**: `ksLin2_stepsC_layR` through `bitsLin2On_of_ksLin2On` (`sessionAccepts`). -/
 theorem bitsLin2_stepsC_layR (nextE : Msg → List Msg → List Coin → Claims.OC Out)
@@ -224,7 +313,7 @@ theorem bitsLin2_deployedR_layR (rd : Msg → Option FinalP) (b : Brings)
 
 /-! ## The pinned form: each part's check at its own witness -/
 
-/-- **`ksLin2_stepsC_layR` from `DecompBP` at `PartAcceptsP`**, through `ksLin2_route_stagedP`. -/
+/-- **`ksLin2_stepsC_layR` from `DecompBP` at `PartAcceptsP`**: `ksLin2_stepsC_atP` at `layR`. -/
 theorem ksLin2_stepsC_layRP (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (b : Brings)
     (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
@@ -244,25 +333,9 @@ theorem ksLin2_stepsC_layRP (nextE : Msg → List Msg → List Coin → Claims.O
     Claims.Recursion.KSLin2On FlockDeploy.sha512 (recBoundAt _root_.Flock.Readable.relation bR L) Bd
       (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt := by
   intro bR L Bd D hD
-  obtain ⟨hKS, hEC, hCF⟩ := hB
-  have hrb : ReadsBackB FlockDeploy.sha512 Bd.IVStar { bR with rd := L.readers } (fun _ => True) recRead :=
-    readsBack_recTr _ _ { bR with rd := L.readers } _ aux nOf hd recRest rfl
-  refine ksLin2_route_stagedP _root_.Flock.Readable.relation _root_.Flock.Readable.relation bR L
-    (Claims.Recursion.VStarB.LayoutB.readsRows_of_rowIn fun _ _ => rfl) (heldWhole_layR elem)
-    FlockDeploy.KS.CpDep nextE colsE wE join rowInDeployed final w hKS (binds_deployed _ _ _ wE join final w) hEC hCF
-    FlockDeploy.KS.zk_KS_outer ?_ (readersTrue_layR elem Bd.IVStar bR _ hmSlotsCommit_of_full hM)
-  intro shape hsh
-  obtain rfl := List.mem_singleton.1 hsh
-  have hHe : ∀ decI, Claims.Recursion.VStarB.HeldB D (Claims.Recursion.Inner.ofFlock Bd.deploy decI) L
-      Claims.Recursion.Form.Dense := fun _ =>
-    heldB_layR elem (heldB_layoutBTops _ _ _ _ (fun _ => rfl) (finOpen (DeployedR.restR elem)) _ schedMatches_dense
-      (capPorts _) (rowsCover _) (finPieces_finOpen (DeployedR.restR elem) _))
-  exact ⟨showsPart recRead bR, cmtTr recRead, hHe,
-    fun decI => stagedB_deployRec_part FlockDeploy.sha512 (Claims.Recursion.Inner.ofFlock Bd.deploy decI)
-      (FlockDeploy.deployPlain _root_.Flock.Readable.relation).scopeCheck { bR with rd := L.readers } recRead L _
-      (fun x st hst _ => hrb x st hst trivial) (hHe decI),
-    fun _ => partOpensB_layR elem
-      (partOpensB_recRead (finOpen (DeployedR.restR elem)) bR (fun _ _ h => h) schedMatches_dense), hD _ hsh⟩
+  exact ksLin2_stepsC_atP nextE colsE b aux nOf hd recRest L (readsRows_layR elem) (heldWhole_layR elem) wE join final
+    w hB (readersTrue_layR elem Bd.IVStar bR _ hmSlotsCommit_of_full hM)
+    (heldB_dense_layR elem nextE colsE bR wE join final w) (partOpensB_dense_layR elem bR Bd.IVStar) hD
 
 /-- **`KSLin2` at the deployed reader's steps, at the layout of record, from the pinned form**:
 `ksLin2_stepsC_layRP` at `stepsBase_R`. What stays open: `DecompBP` at `PartAcceptsP`, `PlainRdInR` and
