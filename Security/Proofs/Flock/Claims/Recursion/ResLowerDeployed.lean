@@ -1,6 +1,8 @@
 import Proofs.Flock.Claims.Recursion.DeployedR
 import Proofs.Flock.Claims.Recursion.VerdictPieces
 import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Soundness.ExecRows
 
 /-!
 # The `rec-residuals` pieces' lowering at the deployed run (U12)
@@ -470,6 +472,62 @@ theorem resTie_layVR {b : Brings} {IV : Claims.Verifier Coin}
     (portCalls_sub_layVR elem hr hss hsv hc (by simp [resPorts]) hqv hn)
     (portCalls_sub_layVR elem hr hss hsv hc (by simp [resPorts]) hqo hn)
     (by rw [hfv]; exact hslv) (by rw [hfo]; exact hslo) hptv hpto hwv hwo hzr hpv hpo hvv hsv' hvo hso hsz hVc hOc
+
+/-! ## Check 5's public rows -/
+
+theorem bytes_eq_of_not_bne {a b : ByteArray} (h : ¬ (a != b) = true) : a = b := by
+  have hb : (a == b) = true := by simpa [bne] using h
+  exact ByteArray.ext (beq_iff_eq.1 (hb : (a.data == b.data) = true))
+
+/-- **What `checkRows` checked of the statement's rows**: the reads file's entry `reg` of the port, unit `i` reading
+row `i`, and each of the port's table rows `r` (at the entry's positions) the commit string of the verifier's row at
+its position, under `salt` of META's `program_sha512`. -/
+theorem checkRows_tableRows {salt : String → ℕ → ByteArray} {c : Circuit} {pub : Public}
+    {own : Array Registered.Port} {port value : String} {rows : Array (Array ℕ)} {what : ℕ → String}
+    (h : RecCoins.checkRows salt c pub own port value rows what = .ok ()) :
+    ∃ (reg : Registered.Port) (prog : String) (t : Tables) (p : ℕ) (positions : Array ℕ) (paths : Array ByteArray),
+      own.find? (·.name == port) = some reg ∧ reg.reads = (Array.range rows.size).map some ∧
+      c.metaJ.getObjValAs? String "program_sha512" = .ok prog ∧ pub.tables = some t ∧
+      (List.range c.ports.size).find? (fun p => c.ports[p]!.name == port) = some p ∧
+      Registered.entry pub reg = .ok (positions, paths) ∧
+      ∀ r < positions.size, Registered.tableRow pub t p r =
+        ((Array.range rows.size).map fun i => RecCoins.commitRow rows[i]! (salt prog i)).getD positions[r]!
+          ByteArray.empty := by
+  unfold RecCoins.checkRows at h
+  dsimp only at h
+  split at h
+  · rename_i reg hf
+    split at h
+    · cases h
+    split at h
+    · cases h
+    split at h
+    · cases h
+    rename_i hr
+    split at h
+    · rename_i prog hprog
+      split at h
+      · rename_i t ht
+        split at h
+        · rename_i p hp
+          obtain ⟨⟨positions, paths⟩, hent, h⟩ := FlockSoundness.except_bind_ok h
+          obtain ⟨u, hloop, -⟩ := FlockSoundness.except_bind_ok h
+          cases u
+          simp only [bne_iff_ne, ne_eq, not_not] at hr
+          have hout := FlockSoundness.forIn_range_yield_ok (fun a s hs => by
+            split at hs
+            · cases hs
+            · cases hs; rfl) hloop
+          refine ⟨reg, prog, t, p, positions, paths, hf, hr, hprog, ht, hp, hent, fun r hr' => ?_⟩
+          have hb := hout r (Nat.zero_le _) hr'
+          split at hb
+          · cases hb
+          · rename_i hne
+            exact bytes_eq_of_not_bne hne
+        · cases h
+      · cases h
+    · cases h
+  · cases h
 
 /-! ## The share at the pieces' copies -/
 
