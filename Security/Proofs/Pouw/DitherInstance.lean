@@ -5,18 +5,21 @@ import Proofs.Pouw.Dither
 /-!
 # The headline on the cards from the headline on the model
 
-* `workSoundAt_of_workSound`: `WorkSound` gives `WorkSoundAt c pb` on every card table: an instance of its quantifiers
-  at the counted and timed verdict, which accepts no more than the service's verdict, with the import bound from the
-  certifier's counts. The rounds' work fits the period from the deadline: the certifier's clock bounds each round's
-  work to `Δ` of wall time, G2 bounds its use by `ρ_r Δ`, and `k Δ ≤ T`.
-* `workSoundH200_of_workSound`, `workSoundSm120_of_workSound`: the two instances, and `WorkSoundH200`,
-  `WorkSoundSm120` from `Proofs.Pouw.Dither.WorkSound`.
+* `workSoundAtX_of_workSound`: `WorkSound` gives `WorkSoundAtX c pb hr x` on every card table at every open
+  parameter: an instance of its quantifiers at the counted and timed verdict, which accepts no more than the service's
+  verdict, with the exchange bound from the certifier's counts and `pub_mm`, `pub_sha` the card's public bests at `μ`.
+  The rounds' work fits the period from the deadline: the certifier's clock bounds each round's work to `Δ` of wall
+  time, G2 bounds its use by `ρ_r Δ`, and `k Δ ≤ T`.
+* `workSoundAt_of_workSound`, `workSoundOnCard_of_workSound`: at every `x` meeting the floors, and at the `x`
+  `CardWithinAccel` gives; `WorkSoundH200`, `WorkSoundSm120`, `WorkSoundOnCardH200` and `WorkSoundOnCardSm120` from
+  `Proofs.Pouw.Dither.WorkSound`.
 * `h200_floors`, `sm120_floors`: θ's floors with the product form are met by some open parameter on each card, so
   `WorkSoundAt`'s hypotheses on `x` are not empty.
 * `h200_onCard`, `sm120_onCard` (rule I): at those parameters, on any period's devices, `cardAccel` (programs as runs
-  within the devices' rates) is the devices under the identity match (`OnCard`) and meets (G1) and (G2), so the
-  hypotheses on `G` are not empty either. `cardAccel` is a witness, not the canonical card accelerator RT-LEAN L31
-  asks for: its programs are any runs within the rates, so `SAKMatmul` is false at it.
+  within the devices' rates, no oracle calls, its call step at a public compression) is the devices under the identity
+  match (`OnCard`), meets (G1), (G2) and (G3), and `CallsAtPub`, so the hypotheses on `G` are not empty either.
+  `cardAccel` is a witness, not the canonical card accelerator RT-LEAN L31 asks for: its programs are any runs within
+  the rates, so `SAKMatmul` is false at it.
 -/
 
 namespace Pouw.SecurityProofs.DitherInstance
@@ -25,19 +28,24 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Pouw.Guarantees.DitherIn
 
 open scoped NNRat
 
-/-- `WorkSound` gives the headline on every card table. -/
-theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
-    (pb : PubBest c) (hr : HostRow) : WorkSoundAt c pb hr := by
-  intro x _ _ D P L G e _ _ k verdict Pd μ Hmm Hsha Ho η δ nmax macs comps Ein Eout κS Δ ξ κx t cin cout arrive
-    hdual hmm hsha ho hH hpm hps hη hδ hδ1 hn hm hEi hEo hkΔ hξ g1 g2 p1 p2 sak sha svc sees clock ext
-  have hβ : 0 ≤ nmax * (Hmm + Hsha + Ho) / macs := div_nonneg (mul_nonneg hn (add_nonneg (add_nonneg hmm.le hsha.le) ho)) hm.le
-  have hK : 0 ≤ Ein + Eout := add_nonneg hEi hEo
-  have svc' : ServiceSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) κS := fun A =>
+/-- `WorkSound` gives the headline on every card table at every open parameter. -/
+theorem workSoundAtX_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
+    (pb : PubBest c) (hr : HostRow) (x : Verity.Accel.Open) : WorkSoundAtX c pb hr x := by
+  intro D P L G e _ _ _ k Reg reg Obs verdict dev Pd μ Hmm Hsha Ho macs comps η δ nmax Hmac Ein Eout κS Δ Q κdmm κdsha
+    Badv ξ κx κsha t cin cout arrive hreg hdual hinst hH hη hδ hδ1 hn hHmac hEi hEo hkΔ hξ hκd hsp hcap g1 g2 g3 p1 p2
+    sak sha out svc sees clock ext
+  have hinst' : ∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubCost e μ pb.mm (macs a) ≤ Hmm a ∧
+      pubCost e μ pb.sha (comps a) ≤ Hsha a := fun a ha =>
+    ⟨(hinst a ha).1, (hinst a ha).2.1, (hinst a ha).2.2.1, (hinst a ha).2.2.2.1, (hinst a ha).2.2.2.2.1⟩
+  have svc' : ServiceSound G P k reg (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) dev κS := fun A =>
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
-  have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) (Ein + Eout) :=
-    fun A o x hv => (sees A o x).trans (hv.1.2.1.trans (le_add_of_nonneg_right hEo))
-  refine ⟨h G P k _ Pd μ (pubCost e μ pb.mm macs) (pubCost e μ pb.sha comps) Hmm Hsha Ho η δ (nmax * (Hmm + Hsha + Ho) / macs)
-    (Ein + Eout) κS ξ κx hdual hmm hsha ho hH hpm hps hη hδ hδ1 hβ hK hξ g1 g2 p1 p2 sak sha svc' imp ext, ?_⟩
+  have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) dev
+      (Ein + Eout) :=
+    fun A o x hv => (sees A o x).trans (add_le_add hv.1.2.1 hv.1.2.2)
+  refine ⟨h G P k Reg reg Obs _ dev Pd μ Hmm Hsha Ho (fun a => pubCost e μ pb.mm (macs a))
+    (fun a => pubCost e μ pb.sha (comps a)) η δ (nmax * Hmac) (Ein + Eout) κS Q κdmm κdsha Badv ξ κx κsha hreg hdual
+    hinst' hH hη hδ hδ1 (mul_nonneg hn hHmac) (add_nonneg hEi hEo) hξ hκd hsp hcap g1 g2 g3 p1 p2 sak sha out svc' imp
+    ext, ?_⟩
   intro A o x hv r
   have hrate : 0 ≤ G.rate r := (g2.1 r).le
   have hw : ∀ w, G.use (A.work w) (A.workIn o x w) r ≤ G.rate r * Δ := fun w => by
@@ -54,6 +62,19 @@ theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Ver
         rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]; ring
     _ ≤ G.rate r * Pd.T := mul_le_mul_of_nonneg_left hkΔ hrate
 
+/-- `WorkSound` gives the headline on every card table at θ's floors. -/
+theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
+    (pb : PubBest c) (hr : HostRow) : WorkSoundAt c pb hr :=
+  fun x _ _ => workSoundAtX_of_workSound h c pb hr x
+
+/-- `WorkSound` gives the headline on the card itself: `CardWithinAccel` gives the open parameters, with the card's
+runs as its model's there, and the headline holds at them. -/
+theorem workSoundOnCard_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
+    (pb : PubBest c) (hr : HostRow) : WorkSoundOnCard c pb hr := by
+  intro ι cap oracle can hcw
+  obtain ⟨x, hf, hp, hrun⟩ := hcw
+  exact ⟨x, hf, hp, hrun, workSoundAtX_of_workSound h c pb hr x⟩
+
 theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundH200 :=
   workSoundAt_of_workSound h _ _ _
 
@@ -67,6 +88,15 @@ theorem WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200 :=
 /-- **The headline on the RTX PRO 6000 at θ**, from `WorkSound`'s proof. -/
 theorem WorkSoundSm120 : Pouw.Guarantees.DitherInstance.WorkSoundSm120 :=
   workSoundSm120_of_workSound Pouw.SecurityProofs.Dither.WorkSound
+
+/-- **The headline on the H200 itself**, from `WorkSound`'s proof, under `card-within-accel(H200)`. -/
+theorem WorkSoundOnCardH200 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardH200 :=
+  workSoundOnCard_of_workSound Pouw.SecurityProofs.Dither.WorkSound _ _ _
+
+/-- **The headline on the RTX PRO 6000 itself**, from `WorkSound`'s proof, under
+`card-within-accel(RTX PRO 6000)`. -/
+theorem WorkSoundOnCardSm120 : Pouw.Guarantees.DitherInstance.WorkSoundOnCardSm120 :=
+  workSoundOnCard_of_workSound Pouw.SecurityProofs.Dither.WorkSound _ _ _
 
 /-- An open parameter at θ's floors: every dot, dense and sparse, the constant zero (in product form), `sync = 1`,
 `b1 = 1/8`, `madHi = 2`, a backlog of one tick. -/
@@ -107,7 +137,7 @@ theorem cardUnits_le {ι : Type} {m : Verity.Accel.Machine ι} (Prg : m.Prog ℕ
   have hr := h.2.1 ⟨0, sched.length⟩ r
   unfold cardUnits
   rw [run_length, Finset.range_eq_Ico]
-  simpa [Verity.Window.ticks] using hr
+  simpa [Accounting.Window.ticks] using hr
 
 /-- Programs as runs with a use and a wall time, each resource used at most at its rate over the run's wall time;
 composing runs adds their uses and wall times. -/
@@ -146,8 +176,10 @@ noncomputable def devRate {c : Verity.Accel.Card} (D : Devices c) : Verity.Accel
   | .inr h => D.oth.rate h
 
 /-- An accelerator on the period's devices at `x`: `boundedMc` at the devices' rates, the pooled cards' memory and the
-other devices', nothing imported, and MODEL-SPEC's (P1) and (P2). -/
-noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) : Accel where
+other devices', nothing exchanged, no oracle calls, a call step at the card units `u`, and MODEL-SPEC's (P1) and
+(P2). -/
+noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits) :
+    Accel where
   Mc := boundedMc (devRate D)
   Res := Verity.Accel.Res ⊕ D.oth.Res
   rate := devRate D
@@ -156,29 +188,33 @@ noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D :
   held _ _ := 0
   wall f i := f.1.2.2 i
   ext _ _ := 0
+  calls _ _ := 0
+  callUse := Sum.elim (fun r => (u r : ℝ)) fun _ => 0
   P1 := Verity.Accel.P1Int ∧ Verity.Accel.CapturedProductForm c
   P2 := Verity.Accel.P2Local ∧ Verity.Accel.P2Distinct ∧ Verity.Accel.P2Frame ∧ Verity.Accel.P2Priced
 
 open Classical in
-/-- **`OnCard` is met, with G1 and G2** (rule I): at positive card rates and clock, positive other rates and their
-memory, `cardAccel` is the period's devices at `x` under the identity match, meeting (G1) and (G2). -/
-theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
-    (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r) (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h)
-    (hmem : 0 ≤ D.oth.mem) :
-    OnCard (cardAccel c x D) c x D P L (Equiv.refl _) ∧ (cardAccel c x D).G1 ∧ (cardAccel c x D).G2 := by
+/-- **`OnCard` is met, with G1, G2 and G3** (rule I): at positive card rates and clock, positive other rates and their
+memory, `cardAccel` is the period's devices at `x` under the identity match, meeting (G1), (G2) and (G3). -/
+theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (u : ResUnits)
+    (P : RoundProto) (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r) (hf : 0 < D.f)
+    (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    OnCard (cardAccel c x D u) c x D P L (Equiv.refl _) ∧ (cardAccel c x D u).G1 ∧ (cardAccel c x D u).G2 ∧
+      (cardAccel c x D u).G3 := by
   have hrate : ∀ r, 0 < devRate D r := by
     rintro (r | h)
     · exact mul_pos (NNRat.cast_pos.mpr (mul_pos (Nat.cast_pos.mpr D.n_pos) (hρ r))) hf
     · exact hoth h
-  refine ⟨⟨fun _ => rfl, fun _ => rfl, rfl, Iff.rfl, Iff.rfl, ?_⟩, ?_, ⟨hrate, fun f i => ⟨le_rfl, f.2 i⟩⟩⟩
+  refine ⟨⟨fun _ => rfl, fun _ => rfl, rfl, Iff.rfl, Iff.rfl, ?_⟩, ?_, ⟨hrate, fun f i => ⟨le_rfl, f.2 i⟩⟩,
+    fun f i => ⟨le_rfl, fun r => ?_⟩⟩
   · intro M₀ Prg sched hfits
     let m := D.machine x
     let wl : m.Mem × P.Draw → ℝ := fun p => (((sched p.2).length + x.slack : ℕ) : ℝ) / D.f
-    let u : m.Mem × P.Draw → Verity.Accel.Res ⊕ D.oth.Res → ℝ := fun p q =>
+    let uw : m.Mem × P.Draw → Verity.Accel.Res ⊕ D.oth.Res → ℝ := fun p q =>
       match q with
       | .inl r => if p.1 = M₀ then (cardUnits m (cardRun m Prg (L.putDraw p.2 p.1) (sched p.2)).2 r : ℝ) else 0
       | .inr _ => 0
-    have hu : ∀ p q, 0 ≤ u p q ∧ u p q ≤ devRate D q * wl p := by
+    have hu : ∀ p q, 0 ≤ uw p q ∧ uw p q ≤ devRate D q * wl p := by
       have hwl : ∀ p, 0 ≤ wl p := fun p => div_nonneg (Nat.cast_nonneg _) hf.le
       rintro ⟨M, d⟩ (r | h)
       · by_cases hM : M = M₀
@@ -188,22 +224,25 @@ theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : De
               ((poolCard c D.n D.n_pos).ρ r : ℝ) * (((sched d).length + x.slack : ℕ) : ℝ) := by
             simp only [devRate, wl]
             field_simp
-          simp only [u, ite_true]
+          simp only [uw, ite_true]
           refine ⟨NNRat.cast_nonneg _, ?_⟩
           rw [hR]
           exact_mod_cast hle
-        · simp only [u, hM, ite_false]
+        · simp only [uw, hM, ite_false]
           exact ⟨le_rfl, mul_nonneg (hrate _).le (hwl _)⟩
       · exact ⟨le_rfl, mul_nonneg (hrate _).le (hwl _)⟩
-    refine ⟨⟨(fun p => L.getTr (cardRun m Prg (L.putDraw p.2 p.1) (sched p.2)).1.mem, u, wl), hu⟩, fun d =>
-      ⟨rfl, fun r => ?_, fun _ => rfl, rfl, rfl⟩⟩
-    show u (M₀, d) (.inl r) = _
-    simp only [u, ite_true]
+    refine ⟨⟨(fun p => L.getTr (cardRun m Prg (L.putDraw p.2 p.1) (sched p.2)).1.mem, uw, wl), hu⟩, fun d =>
+      ⟨rfl, fun r => ?_, fun _ => rfl, rfl, rfl, rfl⟩⟩
+    show uw (M₀, d) (.inl r) = _
+    simp only [uw, ite_true]
     rfl
   · intro I O f i
     show (0 : ℝ) + 0 ≤ _
     rw [add_zero]
     exact add_nonneg (Nat.cast_nonneg _) hmem
+  · show (0 : ℝ) * _ ≤ f.1.2.1 i r
+    rw [zero_mul]
+    exact (f.2 i r).1
 
 theorem h200_rates_pos : ∀ r, 0 < Verity.Accel.H200.card.ρ r := by
   intro r; cases r <;> norm_num [Verity.Accel.H200.card, Verity.Accel.H200.ρ]
@@ -211,21 +250,33 @@ theorem h200_rates_pos : ∀ r, 0 < Verity.Accel.H200.card.ρ r := by
 theorem sm120_rates_pos : ∀ r, 0 < Verity.Accel.Sm120.card.ρ r := by
   intro r; cases r <;> norm_num [Verity.Accel.Sm120.card, Verity.Accel.Sm120.ρ]
 
+/-- **An oracle call at a public compression** (rule I): with its call step at the units of one of `pb`'s SHA-512
+schedules, `cardAccel` meets `CallsAtPub` under the identity match. -/
+theorem cardAccel_callsAtPub {c : Verity.Accel.Card} (x : Verity.Accel.Open) (D : Devices c) (pb : PubBest c)
+    {u : ResUnits} (hu : u ∈ pb.sha) : CallsAtPub (cardAccel c x D u) (Equiv.refl _) pb :=
+  ⟨u, hu, fun _ => rfl, fun _ => rfl⟩
+
 /-- **`WorkSoundH200`'s hypotheses on the card are met** (rule I): at θ's floors with the product form, on any
-period's devices with a positive clock and positive other rates, some accelerator is the devices under some match and
-meets (G1) and (G2). -/
+period's devices with a positive clock and positive other rates, some accelerator is the devices under some match,
+meets (G1), (G2) and (G3), and has its oracle calls at a public compression. -/
 theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto) (L : Layout (D.machine floorOpen) P)
     (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
-      OnCard G Verity.Accel.H200.card floorOpen D P L e ∧ G.G1 ∧ G.G2 :=
-  ⟨_, _, cardAccel_onCard _ _ D P L h200_rates_pos hf hoth hmem⟩
+      OnCard G Verity.Accel.H200.card floorOpen D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ CallsAtPub G e pubBestH200 :=
+by
+  obtain ⟨h1, h2, h3, h4⟩ :=
+    cardAccel_onCard _ _ D (shaUnits 3400 152 (3608 / 32)) P L h200_rates_pos hf hoth hmem
+  exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub floorOpen D pubBestH200 (List.Mem.head _)⟩
 
 /-- **`WorkSoundSm120`'s hypotheses on the card are met** (rule I), as on the H200. -/
 theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto) (L : Layout (D.machine floorOpen) P)
     (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
     ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
-      OnCard G Verity.Accel.Sm120.card floorOpen D P L e ∧ G.G1 ∧ G.G2 :=
-  ⟨_, _, cardAccel_onCard _ _ D P L sm120_rates_pos hf hoth hmem⟩
+      OnCard G Verity.Accel.Sm120.card floorOpen D P L e ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ CallsAtPub G e pubBestSm120 :=
+by
+  obtain ⟨h1, h2, h3, h4⟩ :=
+    cardAccel_onCard _ _ D (shaUnits 3415 0 (3415 / 32)) P L sm120_rates_pos hf hoth hmem
+  exact ⟨_, _, h1, h2, h3, h4, cardAccel_callsAtPub floorOpen D pubBestSm120 (List.Mem.head _)⟩
 
 /-- **The hosts are counted at devices whose other devices are the row's hosts** (rule I): with `h200_onCard` and
 `sm120_onCard` at such devices, `OnCard` and `HostsCounted` hold together. -/
