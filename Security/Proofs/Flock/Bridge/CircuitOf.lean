@@ -24,6 +24,11 @@ population `n` (the public file's `pub.n`) give the key program `keyProg D.unrol
   is correct on its openings (`correct_of_progCorrect`). So `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` leaves fewer than
   `K₀` wrong units (`card_wrong_lt_of_relS`), at every circuit and every witness, with no side condition, and at the
   parsed file's circuit (`card_wrong_partsOf_lt`).
+* `circuitOfFile tags cf tables pf`, `unitsOfFile` and `partsOfFile`: the same at the committed files themselves, the
+  circuit file `cf` and the public file `pf` the prover sends before any coin, read as the verifier reads them
+  (`parsedOf`), and the empty circuit when they don't read. `parsedOf_eq` and `parse_of_parsedOf` relate `parsedOf` to
+  the verifier's parse, and `ofFile_iff` restates any statement about the committed files' circuit and units as one
+  about `circuitOf` and `partsOf` at the parse.
 -/
 
 namespace Flock.Bridge
@@ -374,5 +379,131 @@ theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) (
   exact card_wrong_lt_of_relS _ κ kd K₀ desc q roots H Cm w h
 
 end Parsed
+
+end Flock.Bridge
+
+namespace Verity
+
+/-- The circuit with no gates: what a file that doesn't parse registers. -/
+def Circuit.empty : Circuit where
+  N := 0
+  w := Fin.elim0
+  isInput := Fin.elim0
+  reads := Fin.elim0
+  reads_lt g := g.elim0
+  input_reads g := g.elim0
+  op g := g.elim0
+  op_congr g := g.elim0
+  outputs := ∅
+
+/-- The empty circuit's partition into no units. -/
+def Partition.empty : Partition Circuit.empty 0 where
+  unit := Fin.elim0
+  input_iff g := g.elim0
+
+end Verity
+
+namespace Flock.Bridge
+
+/-! ## The committed files' circuit -/
+
+/-- **A registered circuit file, parsed**: the descriptor the verifier reads from it, its unit's rows built, and the
+population its public file states. -/
+structure Parsed where
+  D : Flock.Desc
+  hU : FlockSoundness.Built D.unroll.unit
+  n : ℕ
+
+open Classical in
+/-- **What the committed files parse to**: the circuit file `cf` (with the lookup tables `tables`) as the verifier reads
+it (`Flock.Desc.parse tags`), and the public file `pf` against its circuit (`HmOut.loadPublic`), when both read and the
+unit's rows are built; else `none`. -/
+noncomputable def parsedOf (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray) :
+    Option Parsed :=
+  match Flock.Desc.parse tags cf tables with
+  | .error _ => none
+  | .ok D =>
+    match HmOut.loadPublic tags D.unroll pf with
+    | .error _ => none
+    | .ok pub => if hU : FlockSoundness.Built D.unroll.unit then some ⟨D, hU, pub.n⟩ else none
+
+namespace Parsed
+
+/-- A parse's circuit: `circuitOf` at it, the empty circuit at none. -/
+noncomputable def circuit : Option Parsed → Verity.Circuit
+  | some r => circuitOf r.D r.hU r.n
+  | none => .empty
+
+/-- A parse's number of units. -/
+def units : Option Parsed → ℕ
+  | some r => r.n
+  | none => 0
+
+/-- A parse's units, as core's partition of its circuit. -/
+noncomputable def parts : (o : Option Parsed) → Verity.Partition (circuit o) (units o)
+  | some r => partsOf r.D r.hU r.n
+  | none => .empty
+
+end Parsed
+
+variable (tags : Flock.Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (pf : ByteArray)
+
+/-- **The committed circuit file as core's circuit**: `circuitOf` at what the circuit file `cf` and the public file
+`pf` parse to, the empty circuit when they don't. -/
+noncomputable def circuitOfFile : Verity.Circuit := Parsed.circuit (parsedOf tags cf tables pf)
+
+/-- **The committed files' number of units**: the public file's population. -/
+noncomputable def unitsOfFile : ℕ := Parsed.units (parsedOf tags cf tables pf)
+
+/-- **The committed files' units**, as core's partition of `circuitOfFile`. -/
+noncomputable def partsOfFile : Verity.Partition (circuitOfFile tags cf tables pf) (unitsOfFile tags cf tables pf) :=
+  Parsed.parts (parsedOf tags cf tables pf)
+
+variable {tags cf tables pf}
+
+/-- Files the verifier reads parse to their descriptor, its built unit and the public file's population. -/
+theorem parsedOf_eq {D : Flock.Desc} {pub : Flock.Public} (hD : Flock.Desc.parse tags cf tables = .ok D)
+    (hpub : HmOut.loadPublic tags D.unroll pf = .ok pub) (hU : FlockSoundness.Built D.unroll.unit) :
+    parsedOf tags cf tables pf = some ⟨D, hU, pub.n⟩ := by
+  simp only [parsedOf, hD, hpub, dif_pos hU]
+
+/-- Files that parse are files the verifier reads: the circuit file to the parse's descriptor, and the public file
+to its population. -/
+theorem parse_of_parsedOf {r : Parsed} (h : parsedOf tags cf tables pf = some r) :
+    Flock.Desc.parse tags cf tables = .ok r.D ∧
+      ∃ pub : Flock.Public, HmOut.loadPublic tags r.D.unroll pf = .ok pub ∧ pub.n = r.n := by
+  unfold parsedOf at h
+  split at h
+  · cases h
+  · next D hD =>
+    split at h
+    · cases h
+    · next pub hpub =>
+      split at h
+      · cases h
+        exact ⟨hD, pub, hpub, rfl⟩
+      · cases h
+
+/-- **The committed files' circuit is the parse's**: any statement about `circuitOfFile`, its units and its partition
+is the same statement about `circuitOf`, `n` and `partsOf` at the parse. -/
+theorem ofFile_iff {r : Parsed} (hr : parsedOf tags cf tables pf = some r)
+    (Q : (C : Verity.Circuit) → (n : ℕ) → Verity.Partition C n → Prop) :
+    Q (circuitOfFile tags cf tables pf) (unitsOfFile tags cf tables pf) (partsOfFile tags cf tables pf) ↔
+      Q (circuitOf r.D r.hU r.n) r.n (partsOf r.D r.hU r.n) := by
+  unfold circuitOfFile unitsOfFile partsOfFile
+  rw [hr]
+  exact Iff.rfl
+
+theorem circuitOfFile_eq {r : Parsed} (hr : parsedOf tags cf tables pf = some r) :
+    circuitOfFile tags cf tables pf = circuitOf r.D r.hU r.n := by
+  unfold circuitOfFile
+  rw [hr]
+  rfl
+
+theorem unitsOfFile_eq {r : Parsed} (hr : parsedOf tags cf tables pf = some r) :
+    unitsOfFile tags cf tables pf = r.n := by
+  unfold unitsOfFile
+  rw [hr]
+  rfl
 
 end Flock.Bridge
