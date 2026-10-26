@@ -1,7 +1,7 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
 are CMP-95 interface 1's (its fixture's TINY manifest, tensor digests and entries, and at H200 its stream's length, head
 and every tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts, for its
-reader named by digest, whose domains are the verifier's (``tok`` row-seg rows, a scale 32-bit leaves), over one process
+reader named by digest, whose domains are the verifier's (``tok`` (H, V) in row/v2, a scale 32-bit leaves), over one process
 and several, whatever the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness it
 writes) and the verifier's domain, pads, many chunks a value and both widths and row formats included; a P2 link
 (interface 2's layout over a
@@ -71,7 +71,7 @@ def test_the_manifest_and_generator_are_interface_1s():
         {t["name"]: t["sha256"] for t in ref["tensors"]}
     assert [(v.name, v.leaves, v.reg_words, v.word_bits, interface_1_domain(v).domain_id.hex()) for v in TINY] == \
         [(e["value"], e["leaves"], e["words"], e.get("word_bits", 16), e["domain"]) for e in FIXTURE["tiny"]["values"]]
-    assert (TINY[0].name, TINY[0].schema, TINY[0].rows, TINY[0].words) == ("tok", G.SCHEMA_SEG, 256, 32)
+    assert (TINY[0].name, TINY[0].schema, TINY[0].rows, TINY[0].words) == ("tok", G.SCHEMA_V2, 32, 256)
     h200, want = LR.manifest(LR.H200), FIXTURE["h200"]
     assert len(h200) == 733 and h200[-1].offset + h200[-1].nbytes == want["stream_bytes"] == 139_736_443_904
     assert (LR.generate(SEED, h200[0], 0, 1)[:64]).hex() == want["stream_head"]

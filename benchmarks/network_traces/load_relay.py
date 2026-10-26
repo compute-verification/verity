@@ -2,8 +2,9 @@
 form the units read it. The certifier reads the load from a source (a file, a pipe, another host's stream), writes every
 byte on to the sink (the H200's) as it reads it, and commits every tensor of CMP-95 interface 1's manifest as a
 registered value, as the reading program's units read it (interface 1's registration for a program named by its
-digest): an f32 scale one 32-bit leaf a row, every other tensor 16-bit leaves, a linear's row ``row_codes`` codes, in
-``hm96-sha512/row/v2`` rows but ``tok``'s, one token's embedding a ``hm96-sha512/row-seg/v1`` row (`EmbeddingRead_v1`'s);
+digest): an f32 scale one 32-bit leaf a row, every other tensor 16-bit leaves, a linear's row ``row_codes`` codes,
+``tok`` (H, V) one coordinate over the tokens a row (proofs' pick, CMP-95 option (a)), in ``hm96-sha512/row/v2`` rows
+(a value of ``hm96-sha512/row-seg/v1`` rows, as interface 1's ``tok_rows="token"`` registers ``tok``, commits too);
 each row under its own salt, in a frame-v3-sha512 tree under the value's domain, the root `Registered.commit`'s
 (`transfer_rows.Transfer`). It then signs
 each value's head (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0, the server session's) and writes the
@@ -146,8 +147,8 @@ class Value:
 
 
 def manifest(shape: Shape) -> tuple[Value, ...]:
-    """Interface 1's tensors in stream order, each a value: ``tok`` (a token's embedding, H words, a row-seg row),
-    ``pos`` (1 word), then per layer ``attn_norm``, ``wq``, ``wk``, ``wv``, ``wo``, ``mlp_norm``, ``wup``, ``wdown``,
+    """Interface 1's tensors in stream order, each a value: ``tok`` (H, V), a coordinate over the tokens a row of V
+    words, ``pos`` (1 word), then per layer ``attn_norm``, ``wq``, ``wk``, ``wv``, ``wo``, ``mlp_norm``, ``wup``, ``wdown``,
     each linear its s8 rows of ``row_codes`` codes then its f32 ``.scale`` (one 32-bit leaf a row), a gain 1 word a
     row; then ``final_norm``, ``head`` and ``head.scale``."""
     s, out, off = shape, [], 0
@@ -164,7 +165,7 @@ def manifest(shape: Shape) -> tuple[Value, ...]:
         add(name, n * k, s.row_codes // 2, "s8", n)
         add(name + ".scale", 4 * n, 2, "scale", 1, -(7 + _log2(k) // 2) + shift)
 
-    add("tok", 2 * s.width * s.vocab, s.width, "embed", s.vocab, schema=G.SCHEMA_SEG)
+    add("tok", 2 * s.width * s.vocab, s.vocab, "embed", s.width)
     add("pos", 2 * s.width * s.context, 1, "embed", s.width)
     q, kv = s.heads * s.head_dim, s.kv_heads * s.head_dim
     for i in range(s.layers):
