@@ -40,10 +40,12 @@ theorem framesRead_fits {x : Msg} {v : FlockDeploy.Ins × SessionSpec × Array S
         (rounds (Rows.shapeNoCoin v.2.1 v.2.2)).flatten.toList.map (keyVal pT'.1 pT'.2) := by
   have hex : ∃ pT : Flock.Proof × F128, FitsRep (repCtx v.2.1 v.2.2 default (nodesR o₀) [] k)
       ((cutLens (repLens v.2.1 v.2.2) (ot.map rowsR)).getD k []) pT.1 pT.2 :=
-    ⟨pT, Rows.fitsRep_of (c := repCtx v.2.1 v.2.2 c₁ (nodesR o₀) cs k) rfl rfl rfl
+    ⟨pT, Rows.fitsRep_of (c := repCtx v.2.1 v.2.2 c₁ (nodesR o₀) cs k)
+      (c' := repCtx v.2.1 v.2.2 default (nodesR o₀) [] k) rfl rfl rfl
       (Rows.repCtx_n hk c₁ default _ _ cs []) rfl rfl hfit⟩
   refine ⟨Classical.choose hex,
-    Rows.fitsRep_of (c := repCtx v.2.1 v.2.2 default (nodesR o₀) [] k) rfl rfl rfl
+    Rows.fitsRep_of (c := repCtx v.2.1 v.2.2 default (nodesR o₀) [] k)
+      (c' := repCtx v.2.1 v.2.2 c₁ (nodesR o₀) cs k) rfl rfl rfl
       (Rows.repCtx_n hk default c₁ _ _ [] cs) rfl rfl (Classical.choose_spec hex), ?_⟩
   have h0 : (rowsOf ((((o₀ :: ot).map fun o => joinR (o.map Prod.fst)) ++ [last]).headD [])).map
       (List.map nodeOf) = some (nodesR o₀) := by
