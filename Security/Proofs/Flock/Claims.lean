@@ -251,6 +251,7 @@ import Proofs.Flock.Claims.Recursion.VStarTraceAt
 import Proofs.Flock.Claims.Recursion.HpEarlyStaged
 import Proofs.Flock.Claims.Recursion.VStarAccept
 import Proofs.Flock.Claims.Recursion.VStarDense
+import Proofs.Flock.Claims.Recursion.VStarTopsOk
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.RowDLevels
