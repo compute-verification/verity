@@ -1,13 +1,13 @@
 """The Commit's coins from the auditor host's challenger (`verity_vllm.pipeline.commit_coins`, VLLM-17 under CIR-72): one
 session a Commit, reserved through infra's gate before any root, opened on its first run's root of record, and each
 run's coins opened after that run's root; the verifier holds them to the one session the auditor's signed ledger opened
-for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a tree the host's pins log
-records as main's, ended closed, and to the roots the challenger's signed release log shows it received.
+for the Commit's root (`challenger.ledger_head`, `challenger.pinned_session`), run from a commit the host's pins log
+records on the verifier's first-parent history of main, ended closed, and to the roots the challenger's signed release log shows it received.
 
 A Commit whose openings come from the session opened on its own root passes. Refused: openings drawn before their run's
 root, a session opened on another Commit's root, a second session for the Commit's root, coins held in the Commit's
 process, a ledger cut before the session's end, and a session read with no pins log or one that doesn't record its
-tree."""
+tree, or with no first-parent history of main or one without its pin."""
 from __future__ import annotations
 
 import hashlib
@@ -26,7 +26,7 @@ from verity.ml.crypto import lms
 from verity_vllm.commit.challenge import challenge_positions
 from verity_vllm.pipeline import commit_coins as CC
 
-from tests.protocol_options import challenger_host as CH
+from tests.protocols import challenger_host as CH
 
 PRIVATE, KEY = CH.challenger_key(3, H=5)
 GATE = "ssh -i KEY -o IdentitiesOnly=yes research@auditor"
@@ -132,9 +132,10 @@ def _commit(auditor: _Auditor, names: list[str]) -> tuple[list[dict], list[bytes
     return records, roots, sid
 
 
-def _reason(auditor, records, roots, sid, heads=None, pins=CH.PINS):
+def _reason(auditor, records, roots, sid, heads=None, pins=CH.PINS, main=CH.MAIN):
     published = None if pins is None else [CH.write_pins(auditor.tmp / "pins.jsonl", pins)]
-    return CC.reason(records, roots, heads or auditor.heads(), auditor.sessions[sid]["directory"], KEY, pins=published)
+    return CC.reason(records, roots, heads or auditor.heads(), auditor.sessions[sid]["directory"], KEY, pins=published,
+                     main=main)
 
 
 def test_a_commit_whose_openings_come_from_a_session_opened_on_its_own_root_passes(tmp_path, monkeypatch):
@@ -149,6 +150,10 @@ def test_a_commit_whose_openings_come_from_a_session_opened_on_its_own_root_pass
     assert _reason(auditor, records, roots, sid, pins=[other]).startswith(
         "the Commit's challenger session is not trusted: the host's pins log is not the one the open of session "
         f"{sid} sealed")
+    assert _reason(auditor, records, roots, sid, main=None) == (
+        f"the Commit's challenger session is not trusted: {LC.NO_MAIN}")
+    assert _reason(auditor, records, roots, sid, main=CH.MAIN[:1]) == (
+        f"the Commit's challenger session is not trusted: {LC.first_parent_reason(sid, CH.PINNED, list(CH.MAIN[:1]))}")
     verbs = [shlex.split(a[-1])[0] for a in auditor.argv]
     assert verbs == ["reserve", "open", "status"] and all(a[:-1] == shlex.split(GATE) for a in auditor.argv)
     assert json.loads(shlex.split(auditor.argv[0][-1])[6]) == CC.families(2)
@@ -236,7 +241,8 @@ def test_a_ledger_cut_before_the_sessions_end_is_refused(tmp_path, monkeypatch):
 def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
     """The gate and the peer go together, the gate is one source of the C2 replay's challenge, a Commit with no
     instrumented run reserves nothing, a vllm-v1 root draws no coins, the session draws one coin of each family a run
-    and no more, a run's draws read only coins drawn after its own root, and a gate refusal names itself."""
+    and no more, a run's draws read only coins drawn after its own root, and a gate refusal names itself. The gate's
+    ``ledger`` reads as its lines."""
     for kw, match in (({"challenger_peer": None}, "go together"), ({"challenger_gate": None}, "go together"),
                       ({"replay_challenge": "ab"}, "two sources")):
         with pytest.raises(SystemExit, match=match):
@@ -247,6 +253,11 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
         CC.of_options(_options(), 1, gate_run=lambda argv: (3, json.dumps({"refused": "busy"})))
     with pytest.raises(CoinError, match="refused status \\(exit 255\\): ssh: connect"):
         CC.Gate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
+    lines, asked = ['{"kind":"period-open"}', '{"kind":"reserve"}'], []
+    assert CC.Gate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
+    assert asked[0][-1] == "ledger"
+    with pytest.raises(CoinError, match="refused ledger \\(exit 3\\)"):
+        CC.Gate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()
     auditor = _Auditor(tmp_path, monkeypatch)
     coins = CC.of_options(_options(), 1, gate_run=auditor.run)
     with pytest.raises(CoinError, match="not this run's 32-byte root \\(vllm-v1\\)"):

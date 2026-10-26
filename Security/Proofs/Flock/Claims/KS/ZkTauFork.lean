@@ -162,7 +162,6 @@ def ZkTauAlignQ {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse true Readab
         (zkSim_root P x spec sts ω _ (zk_mPts_le hs hin hset) u) (finJ (zkTabs h0 L hz hk hlay) hj)
         (tabsJ_get _ _ _))
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -223,7 +222,6 @@ def ZkTauAlign (x : Claims.Msg) : Prop :=
     ZkTauAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r
       (zkRd hset h0 L hz hk hlay j (.inl (.inr (.inr r)))).val u
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -275,7 +273,6 @@ def ZkTauClash (x : Claims.Msg) : Prop :=
       Claims.TiedColl sha512 ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r₁))).vLog ++
         (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r₂))).vLog)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -309,76 +306,6 @@ def ZkTauClash (x : Claims.Msg) : Prop :=
       Claims.TiedColl sha512 ((Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r₁))).vLog ++
         (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r₂))).vLog)
 
-end Gen
-
-open Classical in
-/-- **The fork advantage at rep `r`'s `τ` from the alignment and the clash**: `zkAdvSim` at `τ` is at most the
-simulated fork at round `t`, where at each tape the fork at the `τ` node is at most the fork after `t` coins of
-`TauForkEvZ`: that fork is at most the live fork of the decoded event (`forkC_simAtJZ_le_out`, the dead branches
-opening no `τ`, `not_opensTauZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event gives two
-accepting runs (`zkSimAbortAt`) that collide by `ZkTauClash`. -/
-theorem zkAdvTau_le_of {x : Claims.Msg} (hc : ZkTauClash x) {s : Claims.Flock.Stmt}
-    (hs : parse true Readable.relation x = some s)
-    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
-    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
-    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
-    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
-    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
-    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
-    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (hC : ∀ p, wideJ true x j (C p))
-    (r : Fin 2) (t : Fin ((V true).k x))
-    (halign : ∀ u, ZkTauAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r t.val u) :
-    zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C (.inl (.inr (.inr r))) ≤
-      Claims.Flock.simForkPr sha512 (V true) P x (zkΦ x spec sts) (fun t => Claims.Flock.FnFork.forkN t) ω t.val := by
-  have hk' := zkN_add hset
-  have hj' : j < (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length := (finJ _ hj).isLt
-  have hN : 2 ≤ ((tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).get ⟨j, hj'⟩).N := by
-    rw [tabsJ_get]
-    exact two_le_zkTabsN h0 L hz hk hlay j
-  have hq : 0 < ((tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).get ⟨j, hj'⟩).q := by
-    rw [tabsJ_get]
-    show 0 < (zkTabs h0 L hz hk hlay j).q
-    rw [zkTabs_q]
-    decide
-  unfold Claims.Flock.simForkPr
-  rw [Claims.Bridge.Pr_eq_Ex, Claims.Bridge.Ex_prod]
-  refine div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ => ?_) (Nat.cast_nonneg _)
-  refine ((halign u).trans (forkC_simAtJZ_le_out execArith ZkExec.hs512 _
-    (OkOffWJ (tabsJ _ (zkTabs h0 L hz hk hlay)) j (zkRoot P x ω) C) (AccTxJ ins.read.I d j (zkRoot P x ω) C)
-    (opnD sts _) spec.dg (decD _) (fun _ _ => true) (fun _ _ _ => []) (fun rs j => Exec.capOfRoot rs[j.val]!) (zkN x)
-    (decodesTableW_deploy hs hin hset h0 L hz hk hlay hd j (zkRoot P x ω) C) (zkRoot P x ω) _
-    (zkSim_root P x spec sts ω _ (zk_mPts_le hs hin hset) u) (finJ (zkTabs h0 L hz hk hlay) hj)
-    (tabsJ_get _ _ _)
-    (Ev := fun p => TauForkEvZ ZkExec.hs512 j r.val p.1 p.2)
-    (Q := OpensTauZ ZkExec.hs512 j r.val)
-    (fun _ h => tauForkEvZ_opens h)
-    (fun caps pts outs h => not_opensTauZ_nul execArith ZkExec.hs512 _ hj' hN hq r.val caps pts outs h) _)).trans ?_
-  refine le_trans (le_of_eq (forkC_liveStratZ zkN spec.dg
-    (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset)) sha512
-    (zkSim P x spec sts) x (ω, u) _ ⟨t.val, by have := t.isLt; omega⟩)) ?_
-  refine Claims.Ex_mono fun rr => ind_le_indZ fun h => ?_
-  obtain ⟨a, a', ha, ha', -⟩ := id h
-  have hacc : ∀ (r' : Fin (zkN x + 2) → LCoin 65536) a,
-      Claims.Bridge.RetOK (outJ ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-        (AccTxJ ins.read.I d j (zkRoot P x ω) C) (opnD sts _) (decD _) (fun _ _ => true) (fun _ _ _ => [])
-        (fun rs j => Exec.capOfRoot rs[j.val]!)
-        (repJ execArith ZkExec.hs512 (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)))
-        (liveOut (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) (fun _ => spec.mPts) zkN
-          spec.dg (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
-          sha512 (zkSim P x spec sts) x (ω, u) r') a →
-        (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc := fun r' _ ha => by
-    by_contra hn
-    exact zkSimAbortAt x s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r' hn ha.1
-  have h₁ := hacc _ _ ha
-  have h₂ := hacc _ _ ha'
-  exact ⟨h₁, h₂, hc s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u _ _ r h h₁ h₂⟩
-
-
-namespace Gen
-
-variable [S : ZkSetup]
-
 open Classical in
 /-- **The fork advantage at rep `r`'s `τ` from the alignment and the clash**: `zkAdvSim` at `τ` is at most the
 simulated fork at round `t`, where at each tape the fork at the `τ` node is at most the fork after `t` coins of
@@ -443,6 +370,30 @@ theorem zkAdvTau_le_of {x : Claims.Msg} (hc : ZkTauClash x) {s : Claims.Flock.St
   exact ⟨h₁, h₂, hc s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u _ _ r h h₁ h₂⟩
 
 end Gen
+
+open Classical in
+/-- **The fork advantage at rep `r`'s `τ` from the alignment and the clash**: `zkAdvSim` at `τ` is at most the
+simulated fork at round `t`, where at each tape the fork at the `τ` node is at most the fork after `t` coins of
+`TauForkEvZ`: that fork is at most the live fork of the decoded event (`forkC_simAtJZ_le_out`, the dead branches
+opening no `τ`, `not_opensTauZ_nul`), the deployed runs' fork at round `t` (`forkC_liveStratZ`), whose event gives two
+accepting runs (`zkSimAbortAt`) that collide by `ZkTauClash`. -/
+theorem zkAdvTau_le_of {x : Claims.Msg} (hc : ZkTauClash x) {s : Claims.Flock.Stmt}
+    (hs : parse true Readable.relation x = some s)
+    (hin : Claims.Flock.InScope true s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
+    (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
+    (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
+    {d : Lean.Json} (hd : ins.read.draw = some d) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (j : ℕ)
+    (hj : j < (tables true x).length) (C : Fin (wordLenJ true x j) → List 𝔽) (hC : ∀ p, wideJ true x j (C p))
+    (r : Fin 2) (t : Fin ((V true).k x))
+    (halign : ∀ u, ZkTauAlignQ hs hin hset h0 L hz hk hlay hd P ω j hj C r t.val u) :
+    zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C (.inl (.inr (.inr r))) ≤
+      Claims.Flock.simForkPr sha512 (V true) P x (zkΦ x spec sts) (fun t => Claims.Flock.FnFork.forkN t) ω t.val :=
+  Gen.zkAdvTau_le_of (S := S₀) (x := x) (hc := hc) (s := s) (hs := hs) (hin := hin) (ins := ins) (spec := spec)
+    (sts := sts) (hset := hset) (h0 := h0) (L := L) (hz := hz) (hk := hk) (hlay := hlay) (d := d) (hd := hd) (Ω := Ω)
+    (P := P) (ω := ω) (j := j) (hj := hj) (C := C) (hC := hC) (r := r) (t := t) (halign := halign)
 
 namespace Gen
 

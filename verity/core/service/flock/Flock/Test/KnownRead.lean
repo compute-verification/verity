@@ -6,7 +6,8 @@ port the file does not name is not checked. A known name no port has, or a circu
 the file names known content, and not checked where it names none. A bit read only at a copy past `upv`, or only
 through another copy's leaf, is not read. A known output row passes where some copy returns each of its bits at a
 computed column, and is refused at the first bit none does. A known port that is no `sha512/row/v2` row, or whose
-known rows are not its words, is refused.
+known rows are not its words, is refused. A port marked `read_in_full` is checked as one row of its registered row's
+words (`fullRows`): refused at another width, or at a bit no computed row reads.
 -/
 import Flock.KnownRead
 
@@ -45,6 +46,11 @@ def known (names : List String) : Array (String × Array (Array Nat × ByteArray
 
 def why (c : Circuit) (names : List String) : String :=
   match KnownRead.check c (known names) with
+  | .error e => e
+  | .ok () => ""
+
+def why' (c : Circuit) (known : Array (String × Array (Array Nat × ByteArray))) : String :=
+  match KnownRead.check c known with
   | .error e => e
   | .ok () => ""
 
@@ -103,5 +109,31 @@ def why (c : Circuit) (names : List String) : String :=
 #guard (KnownRead.check (circ [List.range 48]) #[("k1", #[(#[7], ByteArray.empty)])]).toBool
 #guard !(KnownRead.check (circ [List.range 48]) #[("k1", #[(#[7, 8], ByteArray.empty)])]).toBool
 #guard !(KnownRead.check (circ [List.range 48]) #[("k0", #[(#[7, 8], ByteArray.empty), (#[7], ByteArray.empty)])]).toBool
+
+/-- A registered port `name` of `words` leaves of `bits` bits. -/
+def reg (name : String) (words : Option Nat) (bits : Nat := 16) : Registered.Port :=
+  { name, value := "v", root := ByteArray.empty, leaves := 1, words, wordBits := bits, domain := ByteArray.empty,
+    readsRel := #[some 0] }
+
+/-- The ports a file's JSON marks read in full, or its refusal. -/
+def marked (t : String) : String :=
+  match Lean.Json.parse t >>= Flock.KnownRead.readOf with
+  | .ok ns => toString ns
+  | .error e => e
+
+-- the ports marked read in full, by name; false or absent is not, and a value other than true or false is refused
+#guard marked "{\"ports\": {\"k0\": {\"read_in_full\": true}, \"k1\": {}, \"x\": {\"read_in_full\": false}}}" ==
+  "#[k0]"
+#guard marked "{\"ports\": {\"k0\": {\"read_in_full\": 1}}}" ==
+  "registered reads: port k0: read_in_full is true or false"
+-- a port read in full is one row of its registered row's u16 words, 32-bit leaves two each
+#guard KnownRead.fullRows #[reg "k0" (some 2)] #["k0"] == #[("k0", #[(#[0, 0], ByteArray.empty)])]
+#guard KnownRead.fullRows #[reg "k0" (some 1) 32] #["k0"] == #[("k0", #[(#[0, 0], ByteArray.empty)])]
+-- read in every bit at its registered width: passes; at another width, or with a bit unread, refused
+#guard (KnownRead.check (circ [List.range 48]) (KnownRead.fullRows #[reg "k0" (some 2), reg "k1" (some 1)] #["k0", "k1"])).toBool
+#guard why' (circ [List.range 48]) (KnownRead.fullRows #[reg "k1" (some 2)] #["k1"]) ==
+  "registered reads: known port k1: the circuit's row is not a hm96-sha512/row/v2 row without segments of its known rows' 1 words"
+#guard why' (circ [List.range 47]) (KnownRead.fullRows #[reg "k1" (some 1)] #["k1"]) ==
+  "registered reads: known port k1: no computed row of the circuit reads bit 15 of its row, so its known content binds nothing there"
 
 end Flock.Test.KnownRead

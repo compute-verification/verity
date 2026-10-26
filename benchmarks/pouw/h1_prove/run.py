@@ -317,7 +317,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
         raise SystemExit(f"call {call}'s registered file: {why}")
     for u in units:
         want = {p: (v, i) for p, (v, i) in U.unit_reads(win.program, win.tp, u).items() if p in reg}
-        got = {p: (e["value"], e["reads"][u]) for p, e in doc["ports"].items()}
+        got = {p: (e["value"], CC.port_reads(e)[u]) for p, e in doc["ports"].items()}
         if got != want:
             raise SystemExit(f"unit {u}: the registered reads {got} are not the window's {want}")
     path.write_text(json.dumps(doc))
@@ -374,7 +374,8 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
     drawn unit (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
     (`credit._registration`): the window's registered ``entries`` (the commitment's and the verifier's ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
-    the open root ``window_root``. Each proof's ``program`` is the descriptor's SHA-512, the Program Lean was given. The
+    the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
+    descriptor's SHA-512, the Program Lean was given. The
     steps before them (the challenger's log, the credit bits, the round roots) need a served window's ledger, which this
     harness has none of."""
     layout, why = CR.layout_of(descriptor)
@@ -384,7 +385,7 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
         program = hashlib.sha512(descriptor).hexdigest()
         proofs = [{"program": program, "registered": f, "unit": int(u), "verdict": "accept"} for u, f in sorted(findings.items())]
         why = CR._proved(sorted(drawn), proofs) or CR._registration(
-            window_root, program, CR._prefix(descriptor), entries, ss, layout, proofs)
+            window_root, program, CR._prefix(descriptor), entries, ss, layout, len(layout["calls"]), proofs)
     return None if why is None else list(why)
 
 

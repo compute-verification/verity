@@ -5,6 +5,6 @@
  "infra": 900,
  "memory-accounting": 1200,
  "proofs": 1800,
- "top": 900,
+ "top": 3600,
  "vllm": 3600
 }

@@ -12,9 +12,9 @@ from typing import Any
 
 
 class Type:
-    # Memos of structural facts (`leaves`, `field_starts`, `width_set`), filled on first use. They are slots of this base, not
-    # dataclass fields, so equality, hashing, repr, replace and pickling see only the type's own fields.
-    __slots__ = ("_leaves", "_starts", "_widths")
+    # Memos of structural facts (`leaves`, `field_starts`, `width_set`, `field_types`), filled on first use. They are slots of
+    # this base, not dataclass fields, so equality, hashing, repr, replace and pickling see only the type's own fields.
+    __slots__ = ("_leaves", "_starts", "_widths", "_types")
 
     @property
     def leaves(self) -> int:
@@ -189,8 +189,15 @@ def leaves_of(t: Type) -> int:
 
 
 def field_types(t: Tuple | Record) -> tuple[Type, ...]:
-    """The field types of a tuple or a record, in order."""
-    return tuple(ft for _, ft in t.fields) if isinstance(t, Record) else t.fields
+    """The field types of a tuple or a record, in order: a record's computed once a type."""
+    if not isinstance(t, Record):
+        return t.fields
+    try:
+        return t._types
+    except AttributeError:
+        types = tuple(ft for _, ft in t.fields)
+        object.__setattr__(t, "_types", types)
+        return types
 
 
 def field_starts(t: Tuple | Record) -> tuple[int, ...]:

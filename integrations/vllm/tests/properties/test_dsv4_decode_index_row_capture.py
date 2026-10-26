@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 from tests.properties import dsv4_decode_index_row_capture_gpu as X
-from verity_vllm.program.kernels import dsv4_decode_indices_twin as T
+from verity.ml.definitions.numerics import dsv4_decode_indices_twin as T
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 
@@ -186,6 +186,7 @@ def _stand_in_cache_utils(monkeypatch, calls: list) -> None:
     monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
 
 
+@pytest.mark.slow
 def test_launch_hands_the_kernel_the_decodes_operands(tmp_path, monkeypatch) -> None:
     """`launch` on CPU tensors with the kernel the twin: the wrapper gets the [:tokens] top-k slice of a TOPK-wide buffer, the
     whole `token_to_req_indices` buffer, the [:requests] table of stride NB, block size 64 and a bool valid of the tokens' bytes
@@ -249,6 +250,7 @@ def test_the_jobs_take_every_word_and_find_a_flipped_one(observed, case: str, tm
     assert r["mismatch"] == 1 and r["first_mismatch"]["word"] == st["TOPK"] and r["first_mismatch"]["token"] == lo + 2
 
 
+@pytest.mark.slow
 def test_the_references_agree_with_the_twin(observed) -> None:
     """The reference `Dsv4GlobalTopk_v1` on every edge token of the small row and on the served step's first, last and padding
     tokens at both statics agrees with the twin on every word."""

@@ -5,7 +5,8 @@ with the boundary siblings of its tree (`open_range`) and verified against the r
 bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.  `open_levels` is one leaf's path from level
 tensors; `level_sizes` is the number of nodes on each level.
 
-The step trees are ``commit_scheme``'s: vllm-v1 (the default), or rows-sha512 (`step_rows`, ``rows``), whose leaves are hiding leaves
+The step trees are ``commit_scheme``'s: vllm-v1 (unset on `NativeHostCommitter`; an old record's), or rows-sha512 (`step_rows`,
+``rows``; unset on `NativeCollectCommitter`, the Commit's collector), whose leaves are hiding leaves
 salted from each step's 64-byte key (``row_keys``), whose trees are complete frame-v3-sha512 trees and whose roots are 64 bytes; a
 range opening under it carries its leaves' salts.
 """

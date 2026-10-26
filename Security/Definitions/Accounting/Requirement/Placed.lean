@@ -24,7 +24,7 @@ gate (`Wiring.Topological`).
 
 The three are reducible, so that the run's gates are `Fin n` to the elaborator as they are to the kernel. This is the
 run of a node that runs `W` as placed, leaf, ticks and values as given, its operations constants, with no outputs and no
-coins among its gates: `Models/Accounting/Guarantees/RequirementPouw.lean` states what such a node is credited and
+coins among its gates: `Definitions/Accounting/Guarantees/RequirementPouw.lean` states what such a node is credited and
 helped, which is completeness, not what a node that passes PoUW ran.
 -/
 

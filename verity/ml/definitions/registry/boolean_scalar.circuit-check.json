@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "DivFullScaleA_v4": {
+   "and": 597,
+   "type": "8b653603453a07db823c367945fac31d0b7cc1370722c58e46512357e5f41ddf0feaa1959275de95a7fe111597212f6381f29e1d9b0f92273309422afc55de15"
+  },
+  "F32FmaRm_v3": {
+   "and": 4518,
+   "type": "176792b6cd2a2268a8f96d84141fa6bb309762d1d9b4757e1a408a828b0a93658685a301cbb3a87d62abb27ecbb43178c6653cc8a9382307148f40e540cd76c9"
+  },
+  "F32FmaRm_v4": {
+   "and": 4518,
+   "type": "b28208ba8ba5d629ed7a1ceac3f177f13b1a83b3af9f2153a4d36f3fe6f7a065a274cf0b96b6e228cd472b2a77c3097b061d74306fac7d313969c4b62564bfb9"
+  },
+  "F32GtStrict_v2": {
+   "and": 153,
+   "type": "ed5cdd99218846ebffc879dcb81f8258e4fda5d3cb9a8e6dcabac8374c6752e059bbb0a37385dd521b43fec8ebd0f94088cea47de049c2cec5ea3d802c807cd8"
+  },
+  "F32Sub_v3": {
+   "and": 781,
+   "type": "c568ce3d2ab577fb3597669b8a1f937156dcd4bad7642ba5467a7bde527fe55107fcea66e51e3d0dedd6a7215a225cdb0c039c74a4694fd7c3e5a9c9c183e09d"
+  },
+  "F32Sub_v4": {
+   "and": 781,
+   "type": "3482cd389f7ee4d64a519b798c69df72e79ff17010eab642841b56c32016a57ace99d380770a968bdb4f15ae585192ed93692afb80d683fe476ba66ac3fc4a4c"
+  }
+ }
+}

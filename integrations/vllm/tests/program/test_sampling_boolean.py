@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.sampling_boolean`: the Boolean greedy path agrees with its word Definitions (`trace.word_of`):
+"""`verity.ml.definitions.registry.sampling_boolean`: the Boolean greedy path agrees with its word Definitions (`trace.word_of`):
 `ArgmaxStep_v2` with `ArgmaxStep_v1` on special and random carries, `TokenSelect_v2{V}` with `TokenSelect_v1{V}` on over 90,000
 logit rows (ties, signed zeros, infinities, NaNs, a NaN first logit) and at the served vocabularies (SmolLM2's 49,152,
 Llama-3.2's 128,256, Gemma-2's 256,000), the maximum at the first and the last index included; its stages chained as root Calls give the same token, each stage is separable and partitions under `Q_word_v1` with
@@ -22,11 +22,11 @@ from verity.ml.circuits.cut import separable
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity_vllm.program.kernels import rows
-from verity_vllm.program.registry import b1
-from verity_vllm.program.registry import sampling as SM
-from verity_vllm.program.registry import sampling_boolean as SB
-from verity_vllm.query import word as W
+from verity.ml.definitions.numerics import rows
+from verity.ml.definitions.registry import b1
+from verity.ml.definitions.registry import sampling as SM
+from verity.ml.definitions.registry import sampling_boolean as SB
+from verity.ml.definitions import word as W
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -220,8 +220,6 @@ def test_word_view_at_one_logit() -> None:
     assert not E.evaluate_batch(bind(b1.TokenSelect, V=1), x).any()
 
 
-@pytest.mark.xfail(strict=True, reason="rows.token_select_first_max maps NaN to -inf before argmax, so with a NaN first logit "
-                   "it returns the first maximum of the rest, where TokenSelect_v1 (a scan whose best stays the NaN) returns 0")
 def test_rows_oracle_with_a_nan_first_logit() -> None:
     x = np.array([[0x7FC0, 0x3F80, 0x4000]], np.uint16)
     assert rows.token_select_first_max(x[0]) == int(first_max(x)[0]) == 0
@@ -255,7 +253,7 @@ def f32_argmax(V: int, y: np.ndarray) -> np.ndarray:
     return (bits.astype(np.int64) << np.arange(32)).sum(axis=1)
 
 
-@pytest.mark.parametrize("V", [2, 5, 65])
+@pytest.mark.parametrize("V", [2, 5, pytest.param(65, marks=pytest.mark.slow)])
 def test_f32_first_max_is_the_word_definition(V) -> None:
     """The f32 restatement against `GumbelSelectF32_v1{V}` at temp 0 (+0 and -0), where it is the first maximum of the logits."""
     y = f32_rows(V, 1024, _rng("f32-oracle", V))
@@ -295,8 +293,7 @@ def test_stages_partition(V, stage) -> None:
     _partitions(V, stage)
 
 
-@pytest.mark.slow
-@pytest.mark.parametrize("V", sorted(SERVED))
+@pytest.mark.parametrize("V", [pytest.param(V, marks=pytest.mark.slow) if V == 256000 else V for V in sorted(SERVED)])
 def test_served_vocabulary(V) -> None:
     """The served sizes (V = 256,000: about 25 s): the gate count and levels, each stage's partition, and 64 rows against
     `first_max`, which `test_first_max_is_the_word_definition` ties to the word Definition (its scan takes minutes on these

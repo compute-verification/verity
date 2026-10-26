@@ -1,6 +1,6 @@
 """`requirement`: a toy decoder's live and read bits per step, held to `boundary.py`'s exact in(S) and out(S), and the link
 to the audit's store and plans (`StoreMatches`, `PlanMatches`) with the transfer bounds of
-`Security/Models/Accounting/Guarantees/Requirement.lean` checked on every held set."""
+`Security/Definitions/Accounting/Guarantees/Requirement.lean` checked on every held set."""
 
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def test_the_honest_store_matches_and_the_transfer_bounds_hold(run, B):
 
 def test_the_honest_store_at_64_bit_blocks(run):
     """Five registered blocks; k_0 and tok_1 share step 0's append, k_1 and tok_2 step 1's; every block is freed at step 2,
-    its values' last read. At step 2 step 0's append holds 32 live bits of 64 (tok_1 is dead): the store's density
+    its values' last structural reader. At step 2 step 0's append holds 32 live bits of 64 (tok_1 is dead): the store's density
     there is 1/2, so RequirementDense's D is 32."""
     _, _, _, req = run
     layout, store = R.pack(req, 64)
@@ -216,13 +216,13 @@ def _starts(program: Program, ends: list[int]) -> list[int]:
 
 
 def _span(req: R.Requirement, v: int) -> tuple:
-    """A value's birth and its last read after it (a read in its own step, such as a scan's carry, keeps nothing live)."""
+    """A value's birth and its last structural reader after it (a read in its own step, such as a scan's carry, keeps nothing live)."""
     b, last = req.born.get(v), req.last.get(v)
     return b, last if last is not None and b is not None and last > b else None
 
 
 def _census_path(program: Program, ends: list[int]) -> R.Requirement:
-    """`from_census` is `upper_bound` at the census's grain: each census value's gates have its birth and last read, and
+    """`from_census` is `upper_bound` at the census's grain: each census value's gates have its birth and last structural reader, and
     every step's live gates and bounded reads are its values'."""
     c = census(program, ends)
     schedule = R.Schedule.by_calls(program, _starts(program, ends))

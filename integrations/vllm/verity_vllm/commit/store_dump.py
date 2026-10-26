@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.commit import hiding, scheme, step_rows
+from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 
@@ -376,7 +376,7 @@ class DumpedRun:
     steps: list[DumpedStep]
 
 
-class DumpedStore(NativeRangeOpenings, hiding.LeafSchemeRule):
+class DumpedStore(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     """The committer's openings over a dumped store (`load`)."""
 
     name = "dumped-store"

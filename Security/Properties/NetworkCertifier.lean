@@ -4,13 +4,13 @@ import Properties.Identity
 /-!
 # The network certificate check: what its Lean code (`NetworkCheck.Check`) does
 
-The properties of `NetworkCheck.protocol` (`verity/network-certificate/v3`, the port of `audit.py`'s `Audit`), stated
+The properties of `NetworkCheck.protocol` (`verity/network-certificate/v4`, the port of `audit.py`'s `Audit`), stated
 against its functions as they run, each in one shape: for every input, if the function accepts (or, for a refusal,
 doesn't reject; for the undecided outcome, is undecided), its named conclusion holds. They say what `answer` and the
 check refuse, what an acceptance establishes about each link-window and what an undecided outcome means.
-`Properties.Proofs.NetworkCertifier` proves them; the converses (that the check accepts, or is undecided on, what
+`Proofs.Properties.NetworkCertifier` proves them; the converses (that the check accepts, or is undecided on, what
 these conclusions describe) and the honest transcript's acceptance are completeness, at the end of
-`Properties.Proofs.NetworkCertifier.Outcomes`, each with one instance in `Properties.Proofs.NetworkCertifier.Instance`. What an accepted run of the certifier device is, is
+`Proofs.Properties.NetworkCertifier.Outcomes`, each with one instance in `Proofs.Properties.NetworkCertifier.Instance`. What an accepted run of the certifier device is, is
 `Properties.CertifierNetwork.Runs`.
 
 The predicates below say what a link-window's records, certificate and digests are, in the check's own terms; none
@@ -39,14 +39,15 @@ def LmsVerifies (p : Params) (m sig : ByteArray) : Prop :=
   ∃ s, Lms.Signature.decode p.lms sig = .ok s ∧ Lms.verify p.lms p.key m s = .ok true
 
 /-- Link-window `(d, l, w)` has exactly one record `r`, and its certificate is the key's (the key's identifier `I`),
-names `(d, l, w)`, signs the head's digest `dg`, and verifies under the key over `certificateMessage` of them in the
-parameters' certifier session. -/
+names `(d, l, w)`, signs the head's digest `dg` under the record's salt (`certificateDigest`), and verifies under the
+key over `certificateMessage` of them in the parameters' certifier session. -/
 def Signs (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) :
     Prop :=
-  recordsOf c d l w = [r] ∧ r.head.digest = .ok dg ∧ r.certificate.digest = dg ∧
+  recordsOf c d l w = [r] ∧ r.head.digest = .ok dg ∧ r.certificate.digest = certificateDigest r.salt dg ∧
     r.certificate.keyId = p.key.extract 0 16 ∧ r.certificate.link = l ∧ r.certificate.direction = d ∧
     r.certificate.window = w ∧
-    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w dg = .ok m ∧ LmsVerifies p m r.certificate.signature
+    ∃ m, certificateMessage (p.key.extract 0 16) p.session l d w (certificateDigest r.salt dg) = .ok m ∧
+      LmsVerifies p m r.certificate.signature
 
 /-- `Signs`, and the signed head is complete and settled by the deadline. -/
 def Settled (p : Params) (c : Commitment) (d : Direction) (l : String) (w : Nat) (r : Certified) (dg : ByteArray) :
@@ -192,6 +193,10 @@ def certMessage (session : ByteArray) (r : Certified) : Option ByteArray :=
 def headStrings (h : RecordHead) : List ByteArray :=
   (h.encode.toOption.bind fun enc => (Properties.Identity.taggedInput recordTag enc).toOption).toList
 
+/-- What SHA-512 hashes for the digest a certificate signs over head `h` under `salt`: `certificate_digest`'s input. -/
+def saltedStrings (salt : ByteArray) (h : RecordHead) : List ByteArray :=
+  (h.digest.toOption.map (certificateInput salt)).toList
+
 /-- The node inputs `pairs lv` hashes on one level. -/
 def pairInputs (lv : Nat) : List ByteArray → List ByteArray
   | a :: b :: rest => nodeInput a b :: pairInputs lv rest
@@ -221,10 +226,10 @@ def treeStrings (g : Grid) (grid : Array (Array (Option ByteArray))) : List Byte
 /-- The syncs `link` declares, one per window, as the check reads them. -/
 def declared (W : Nat) (link : Link) : Fin W → ClockSync := fun v => link.syncs.getD v.1 noSync
 
-/-- The strings the check hashes under egress parameters digest `eg`: each record's head and certificate message, and
-the frame tree and head it recomputes of each egress link-window. -/
+/-- The strings the check hashes under egress parameters digest `eg`: each record's head, its digest under the record's
+salt and its certificate message, and the frame tree and head it recomputes of each egress link-window. -/
 def checkStrings (p : Params) (c : Commitment) (e : Evidence) (eg : ByteArray) : List ByteArray :=
-  c.records.toList.flatMap (fun r => headStrings r.head ++
+  c.records.toList.flatMap (fun r => headStrings r.head ++ saltedStrings r.salt r.head ++
     (messageInput r.certificate.keyId p.session r.certificate.link r.certificate.direction r.certificate.window
       r.certificate.digest).toOption.toList) ++
   (p.egress.toList.zip e.links.toList).flatMap fun q => (List.range p.windows).flatMap fun w =>

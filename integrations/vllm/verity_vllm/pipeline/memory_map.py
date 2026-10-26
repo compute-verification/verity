@@ -1,11 +1,13 @@
 """The Commit's memory map (opt-in, ``commit --memory-map REQUEST_JSON``): memory-map/v1 of the run's KV, written in the
-in-process C2 replay once the vllm-v1 roots are final.  Its blocks, their steps and store indices come from each request's
+in-process C2 replay once the Commit's roots are final.  Its blocks, their steps and store indices come from each request's
 Program of record (`commit.memory_map.rows`: the KV rows the Build wrote beside its ``descriptor.json.gz``, over the census it
 wrote there, `cache`; a Build without them has them computed once and cached, `of_build`) at the pages the engine wrote: each
 request's slots as the Commit committed them (`<layer>/slot_mapping`, `acquire.sources.kv_slots_source`, which the flag
 attaches), in the page layout of the engine's cache tensors.  Each d_j is from the committed K and V words of the block's rows,
 read as the serving rows read a Program's slices (`serving_rows._operand`: the ProgramIndex's members, the binding map's
-committed words).  A request whose slots weren't committed is refused by name: no page is assumed.  A Commit whose run a remote
+committed words).  A warm request (a prefix-cache hit) commits slots from its cached prefix on: its Program's first C rows are
+cached positions (the Build's ``prefix_cache.json``), whose pages are the ones its producers (the replay's ``cached_prefixes``)
+wrote.  A request whose slots weren't committed is refused by name: no page is assumed.  A Commit whose run a remote
 session audited (``--remote-verifier``) has written the session's record, ``remote_session.json``, by then, and the map
 follows its deferred residency (`commit.memory_map.Deferral`, `deferral`): each block written where its append's encode landed.
 A TP Commit (``tp-commit --memory-map``) writes one map a rank, in the rank's replay (`pipeline.tp.rank_replay.memory_map`),
@@ -40,6 +42,7 @@ import numpy as np
 from verity.core.protocols.remote_bandwidth import codec
 from verity.core.protocols.remote_bandwidth.memory_map import dumps
 from verity_vllm.acquire.sources.kv_slots_source import MEMBER
+from verity_vllm.check.replay.cached_prefix import layout_of
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import memory_map as MM
@@ -50,12 +53,14 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
                  manifest: Any, arrivals: Mapping[str, int], caches: Mapping[str, Any] | None,
                  session: str | Path | None = None, tp: Mapping[str, int] | None = None,
                  attention_paths: Sequence[str] = (), indices: dict | None = None,
-                 index_kw: Mapping[str, Any] | None = None) -> dict[str, Any] | None:
+                 index_kw: Mapping[str, Any] | None = None,
+                 cached_prefixes: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any] | None:
     """Write the run's memory map as ``request`` asks, from the requests' loaded Programs of record (`c2_replay.programs_of_record`)
     at their engine arrival steps and the KV-slots source's `caches`, under the deferral of the remote session whose record is at
     ``session`` if there is one; on TP rank ``tp`` (``{"rank", "world"}``) its rank's map (`at_rank`), the rank Programs read
     with the implementation paths the Build observed (``attention_paths``), their indices built under ``index_kw`` and shared with
-    the replay's ``indices`` (`write`).  None without a request.  A failure is written beside the map and returned, never raised."""
+    the replay's ``indices`` (`write`); each warm request's cached pages its producers' (``cached_prefixes``,
+    `c2_replay.cached_prefixes`).  None without a request.  A failure is written beside the map and returned, never raised."""
     if not request:
         return None
     req = json.loads(Path(request).read_text())
@@ -66,7 +71,7 @@ def after_commit(request: str | None, *, loaded: Mapping[str, Mapping[str, Any]]
     try:
         return write(out, req, loaded=loaded, store=CommittedStore.of_record(bmap, committed, manifest if isinstance(manifest, dict) else None),
                      arrivals=arrivals, caches=caches, deferral=deferral(session) if session is not None else None, tp=tp,
-                     attention_paths=attention_paths, indices=indices, index_kw=index_kw)
+                     attention_paths=attention_paths, indices=indices, index_kw=index_kw, cached_prefixes=cached_prefixes)
     except Exception as e:  # noqa: BLE001
         out.with_name(out.name + ".error.txt").write_text(traceback.format_exc())
         print(f"[memory-map] FAILED (no verdict changes): {e!r}"[:400], flush=True)
@@ -101,9 +106,9 @@ def deferral(path: str | Path) -> MM.Deferral | None:
 
 
 #: beside a request Build's ``descriptor.json.gz``: its Program's census (`MM.census_of`) and KV rows (`MM.rows_doc`), each naming
-#: the Program by digest; KV rows of another schema are recomputed (v1 refused MLA's latent rows)
+#: the Program by digest; KV rows of another schema are recomputed (v1 refused MLA's latent rows, v2 a warm Program's cached prefix)
 CENSUS, KV_ROWS = "census.json.gz", "kv_rows.json.gz"
-KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v2"
+KV_ROWS_SCHEMA = "verity-vllm/kv-rows/v3"
 
 
 def _read(path: Path, digest: str, schema: str | None = None) -> dict[str, Any] | None:
@@ -121,9 +126,10 @@ def _put(path: Path, doc: Mapping[str, Any]) -> None:
     tmp.replace(path)
 
 
-def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
+def cache(d: str | Path, program: Any, digest: str, build: str | Path | None = None) -> dict[str, Any]:
     """Write Build dir ``d``'s `CENSUS` and `KV_ROWS` for its request Program ``program`` (``digest``), the census read back when
-    one beside it already names the Program; a Program with no KV a memory map lays out gets the reason in place of its rows."""
+    one beside it already names the Program, a warm Program's cached prefix as the Build (``build``, else ``d``) laid it out
+    (``prefix_cache.json``); a Program with no KV a memory map lays out gets the reason in place of its rows."""
     d = Path(d)
     c = _read(d / CENSUS, digest)
     if c is None:
@@ -131,7 +137,7 @@ def cache(d: str | Path, program: Any, digest: str) -> dict[str, Any]:
         _put(d / CENSUS, c)
     doc: dict[str, Any] = {"schema": KV_ROWS_SCHEMA, "program": digest, "census": c["digest"]}
     try:
-        doc.update(MM.rows_doc(MM.rows(program, c)))
+        doc.update(MM.rows_doc(MM.rows(program, c, layout_of(str(d if build is None else build)))))
     except ValueError as e:
         doc["refused"] = str(e)
     _put(d / KV_ROWS, doc)
@@ -151,7 +157,7 @@ def of_build(d: str | Path, digest: str, at: str | Path | None = None) -> MM.Row
     """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
     descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest; read and
     cached at ``at`` in place of ``d`` when given, ``d`` only read."""
-    from verity_vllm.program.boolean import load_program
+    from verity.ml.definitions.boolean import load_program
 
     d = Path(d)
     at = d if at is None else Path(at)
@@ -161,7 +167,7 @@ def of_build(d: str | Path, digest: str, at: str | Path | None = None) -> MM.Row
         if got != digest:
             raise ValueError(f"{d}: descriptor.json.gz is Program {got[:16]}, its instance rows {str(digest)[:16]}")
         at.mkdir(parents=True, exist_ok=True)
-        cache(at, program, digest)
+        cache(at, program, digest, d)
         doc = _read(at / KV_ROWS, digest, KV_ROWS_SCHEMA)
     if "refused" in doc:
         raise ValueError(f"{d}: {doc['refused']}")
@@ -177,9 +183,11 @@ def _layer(name: str) -> int:
 
 def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str, Any]], store: Any, arrivals: Mapping[str, int],
           caches: Mapping[str, Any] | None, deferral: MM.Deferral | None = None, tp: Mapping[str, int] | None = None,
-          attention_paths: Sequence[str] = (), indices: dict | None = None, index_kw: Mapping[str, Any] | None = None) -> dict[str, Any]:
+          attention_paths: Sequence[str] = (), indices: dict | None = None, index_kw: Mapping[str, Any] | None = None,
+          cached_prefixes: Mapping[str, Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """The map of ``req`` into ``out`` and its layout beside it: each request's slots and KV words read from ``store`` (a
-    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, its writes
+    `CommittedStore`), its pages laid out as ``caches`` (KV layer name -> the engine's cache tensor) lay them out, a warm
+    request's cached pages the ones its producers (``cached_prefixes[request]["producers"]``) wrote, its writes
     where ``deferral`` has their encodes land; the Programs a TP rank's (``tp``) when given, their members spelt as the
     ProgramIndex spells them with ``attention_paths`` and ``index_kw`` (the manifest's query and norm-scale policy,
     `rank_replay.index_query`).  ``indices`` is the replay's memo (`driver.sampled_replay`'s, keyed ``("index", id(instances))``):
@@ -228,7 +236,8 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
             raise ValueError(f"request {rid}'s KV layers wrote step {step}'s rows to different slots: memory-map/v1 lays out one table a request")
         return got[0]
 
-    tables = MM.tables(rows, arrivals, slots, page.block_size)
+    producers = {r: [str(q) for q in pc["producers"]] for r, pc in (cached_prefixes or {}).items() if r in rows}
+    tables = MM.tables(rows, arrivals, slots, page.block_size, producers)
     kv = {r: MM.packed(rs) for r, rs in rows.items()} if page.form == "packed" else rows
 
     def payload(rid: str, row: MM.Row) -> bytes:
@@ -237,14 +246,16 @@ def write(out: Path, req: Mapping[str, Any], *, loaded: Mapping[str, Mapping[str
 
     layout = MM.Layout(page.block_size, page.pages, tuple(req["firsts"]) if req.get("firsts") is not None else None,
                        int(req["blocks"]) if req.get("blocks") is not None else None)
-    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables, deferral)
+    head, steps = MM.record(kv, {r: int(arrivals[r]) for r in rows}, payload, bytes.fromhex(req["registration"]), layout, tables, deferral,
+                            producers)
     out.write_text(dumps(head, steps))
     t_d = time.perf_counter()
     engine = MM.engine_agrees(kv, layout, tables, steps, _engine_blocks([caches[n] for n in layers], tables))
     doc = {"schema": "verity-vllm/memory-map-layout/v1", "map": out.name, "tp": dict(tp) if tp else None, "blocks": head.blocks,
            "page": {"form": page.form, "pages": page.pages, "block_size": page.block_size, "head_words": page.head_words},
            "requests": {r: {"arrive": int(arrivals[r]), "steps": rs.steps, "positions": rs.positions, "layers": len(rs.layers),
-                            "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2]}
+                            "row_bytes": rs.row_bytes, "pages": tables[r], "program_digest": by_dir[str(loaded[r]["dir"])][2],
+                            **({"cached": rs.cached, "producers": producers[r]} if rs.cached else {})}
                         for r, rs in rows.items()},
            "deferral": None if deferral is None else {"first_step": deferral.first_step, "appends": len(deferral.encodes),
                                                       "lifetime": deferral.lifetime},

@@ -8,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.config import TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, row_target, row_world
+from verity_vllm.config import TARGETS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, RowConfig, RowEngine, RowId, done_source, row_target, row_world
+from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
 from verity_vllm.pipeline import workload as W
 
@@ -42,6 +43,16 @@ def test_every_workload_file_is_a_row_config_that_round_trips(p):
     assert cfg.engine.vllm == VLLM
     if is_row_id(p.stem):
         assert RowConfig.load(p.stem) == cfg and row_world(cfg.row) == row_world(p.stem)
+
+
+@pytest.mark.parametrize("p", [p for p in TP_ROWS if done_source(json.loads(p.read_text())) == "public-cap"], ids=lambda p: p.stem)
+def test_every_tp_row_done_at_its_caps_declares_the_arrivals_it_is_served_at(p):
+    """The TP Commit places the Build's manifest at the declared arrive_steps, and the serving loop admits a request early when the
+    engine would idle; GLM-5.3 B8 stochastic's gapped declaration left 52,005 identities unbound (Commit r20261021-181707-464b)."""
+    reqs = json.loads(p.read_text())["requests"]
+    declared = [int(r.get("arrive_step") or 0) for r in reqs]
+    assert declared == realized_arrive_steps(reqs), (f"declare arrive_steps {realized_arrive_steps(reqs)}, where the serving loop admits "
+                                                     f"them (pipeline/workload.py ARRIVE_STEP_RULE)")
 
 
 @pytest.mark.parametrize("p", [p for p in FILES if is_row_id(p.stem)], ids=lambda p: p.stem)

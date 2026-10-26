@@ -95,17 +95,28 @@ static uint8_t pd_e4m3(float f) {   // __nv_cvt_float_to_fp8(f, __NV_SATFINITE, 
 }
 
 #include "hash_decode.cuh"
+// pd_commit_t's Z form, which pearl_c_sm90.cu's pd_commit_g takes: pd_commit_zero_V
+#define PD_ZERO_INSTANCE(V) static void pd_commit_zero_##V(const Args a) { pd_commit_t<V, true>(a, blockIdx.x); }
+PD_VARIANT_LIST(PD_ZERO_INSTANCE)
+// another file's kernels beside these (pearl_c_sm90/hash_prefill_host.cpp): PD_HOST_EXTRA the file, PD_HOST_EXTRA_INSTANCES
+// their definitions, PD_HOST_EXTRA_KERNELS their KERNELS entries
+#ifdef PD_HOST_EXTRA
+#include PD_HOST_EXTRA
+PD_HOST_EXTRA_INSTANCES
+#else
+#define PD_HOST_EXTRA_KERNELS
+#endif
 
 namespace {
 struct Kernel { const char* name; void (*fn)(const Args); };
 #define PD_KERNELS(V) {"pd_commit_" #V, pd_commit_##V}, {"pd_tree_" #V, pd_tree_##V}, {"pd_tiles_" #V, pd_tiles_##V}, \
-                      {"pd_probe_" #V, pd_probe_##V},
+                      {"pd_probe_" #V, pd_probe_##V}, {"pd_commit_zero_" #V, pd_commit_zero_##V},
 const Kernel KERNELS[] = {
     {"s512_heads", s512_heads},   {"pd_heads", pd_heads},     {"s512_row_segs", s512_row_segs},
     {"s512_folds", s512_folds},   {"hm_leaves", hm_leaves},   {"s512_frame_leaves", s512_frame_leaves},
     {"s512_pads", s512_pads},     {"s512_nodes", s512_nodes}, {"s512_tree_small", s512_tree_small},
     {"s512_seeds", s512_seeds},   {"s512_tile_segs", s512_tile_segs}, {"s512_tile_leaves", s512_tile_leaves},
-    {"s512_rows", s512_rows},     PD_VARIANT_LIST(PD_KERNELS)};
+    {"s512_rows", s512_rows},     PD_VARIANT_LIST(PD_KERNELS) PD_HOST_EXTRA_KERNELS};
 }  // namespace
 
 extern "C" int pd_run(const char* name, int grid, int block, const Args* a) {

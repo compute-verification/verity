@@ -68,7 +68,7 @@ theorem checkPort_ok {c : Circuit} {pub : Public} {t : Tables} {indices : Array 
               simp only [Bool.not_eq_true', Bool.and_eq_false_iff, decide_eq_false_iff_not, not_or, Classical.not_not] at hi'
               obtain ⟨hr, hreads⟩ := hi'
               have ho := List.find?_eq_none.mp hrow _ (List.mem_range.mpr hr)
-              exact ⟨hr, _, _, hreads, by simpa using ho⟩
+              exact ⟨hr, _, _, (reg.readAt_eq _).symm.trans hreads, by simpa using ho⟩
             · split at h
               · exact absurd (except_bind_ok h) fun ⟨_, h1, _⟩ => throw_ne_ok _ _ h1
               · split at h <;> exact absurd h (throw_ne_ok _ _)

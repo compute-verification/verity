@@ -721,13 +721,15 @@ def KSLin2On [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bou
       κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
         Real.sqrt (γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x * PrB H (D.record Bd.IVStar).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x) + 1) *
-          PrBinner H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+          PrBinner H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI (D.record Bd.IVStar) x) *
-          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
-        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
+          (PrFCI H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M +
+            1 / ((M : ℝ) + 1)) +
+        4 * (PrF0I H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (PrFdev H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))
+          (PrFdev H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M +
+            1 / ((M : ℝ) + 1))
 
 end Scoped
 

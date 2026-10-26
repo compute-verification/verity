@@ -1,4 +1,4 @@
-"""`verity_vllm.program.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
+"""`verity.ml.definitions.registry.boolean_moe`: the Boolean versions of `registry.moe`'s element-wise Definitions agree with their word
 Definitions (`trace.word_of`): the routed sum's coordinate on every word at one slot, on every pair of special words, every word
 against 8 specials and random pairs at two, and at OLMoE's eight slots on random rows, rows of special words, rows that cancel to a
 few ulps and rows that overflow; the sum in 64-column chunks (`MoeSum_v3`, the lift's version) on random and special rows; the router's exponential on special words, random words and words across its range, its
@@ -29,11 +29,11 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import ZERO
 from verity.ml.circuits.cut import separable
-from verity_vllm.program import boolean as SW
-from verity_vllm.program.registry import boolean_moe as BM
-from verity_vllm.program.registry import moe as M
-from verity_vllm.program.kernels import moe_twins
-from verity_vllm.program.registry.prims import F32, I32
+from verity.ml.definitions import boolean as SW
+from verity.ml.definitions.registry import boolean_moe as BM
+from verity.ml.definitions.registry import moe as M
+from verity.ml.definitions.numerics import moe_twins
+from verity.ml.definitions.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -51,7 +51,7 @@ PINS = {
                                                                     "27ac80523ef558eb7d6bb3d98e86fcdf0345e959eca86586de7a3dc7fd478b57bb9fef175ad1b826c88e125c587efb27e62e3c971cd997b20ba6f9fe8b436750"),
 }
 TARGETS = [bind(BM.MoeSumCoordinate, TOPK=8), bind(BM.MoeSum, TOPK=8, H=8), bind(BM.MoeSumV3, TOPK=8, H=136), bind(BM.NvExpf),
-           bind(BM.MoeRouterSigmoidScore),
+           pytest.param(bind(BM.MoeRouterSigmoidScore), marks=pytest.mark.slow),
            pytest.param(bind(BM.MoeRouterTopKOrdered, E=8, TOPK=2, VPT=4), marks=pytest.mark.slow),
            *[pytest.param(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=k), marks=pytest.mark.slow)
              for k in ("block", "warp")]]
@@ -123,7 +123,8 @@ AGAINST = np.array([0x0000, 0x8000, 0x3F80, 0xBF80, 0x0001, 0x7F7F, 0xFF80, 0x7F
 
 @pytest.mark.slow
 def test_two_slots_on_special_pairs_every_word_and_random_pairs() -> None:
-    """Every pair of special words, every word against 8 special words in either slot, and 100,000 random pairs (about 30 s)."""
+    """Every pair of special words, every word against 8 special words in either slot, and 100,000 random pairs (about 60 s): the
+    only exhaustive check of the two-slot sum's rounding, which the random and special rows at eight slots sample."""
     rng = np.random.default_rng(0x5E2)
     grid = np.array(list(itertools.product(SPECIALS, repeat=2)), np.uint16)
     every = np.stack([np.repeat(EVERY, len(AGAINST)), np.tile(AGAINST, len(EVERY))], axis=1)
@@ -159,6 +160,7 @@ def test_the_routed_sum_passes_the_word_querys_cut_check() -> None:
     assert PO.verify(PO.build(prog, PO.query(16, 32)), prog).ok
 
 
+@pytest.mark.slow
 def test_the_chunked_routed_sum_rows() -> None:
     """`MoeSum_v3` at two full chunks and a remainder of 8 columns, over 150 random tokens and 100 of special words: the word
     `MoeSum_v1`."""
@@ -212,6 +214,7 @@ def test_the_exponential_on_special_random_and_in_range_words() -> None:
     _agree(bind(BM.NvExpf), _expf_words(np.random.default_rng(0xE1), 3000))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_the_exponential_on_many_words() -> None:
     """100,000 random words and 100,000 across expf's range (about 30 s)."""
@@ -231,6 +234,7 @@ def test_the_router_probabilities() -> None:
     _agree(bind(BM.MoeRouterProbs, E=8, VPT=4), _logits(np.random.default_rng(0xB1), 100, 8))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("E_, VPT", [(8, 4), (16, 2), (8, 1)])
 def test_the_router_probabilities_on_many_rows(E_, VPT) -> None:
@@ -270,6 +274,7 @@ def test_the_selection_rounds() -> None:
            bind(SELECT_ROUNDS, E=6, TOPK=3))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("E_, TOPK", [(8, 4), (6, 3), (5, 5)])
 def test_the_selection_rounds_on_many_rows(E_, TOPK) -> None:
@@ -325,10 +330,12 @@ def _agree2(target, args, word=None) -> None:
     assert not bad.size, f"{target.id}: {bad.size} of {n} rows differ from {word.id}, first {bad[:5]}"
 
 
+@pytest.mark.slow
 def test_the_sigmoid_score_on_special_random_and_in_range_words() -> None:
     _agree2(bind(BM.MoeRouterSigmoidScore), _score_words(np.random.default_rng(0x51), 2000))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_the_sigmoid_score_on_many_words() -> None:
     """100,000 words of each kind (about 60 s)."""
@@ -365,12 +372,14 @@ def _selection_scores(rng, n: int, E_: int) -> tuple[np.ndarray, np.ndarray]:
     return s, rng.integers(0, 1 << 32, s.shape, dtype=np.uint64).astype(np.uint32)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 def test_the_bias_slots(kernel) -> None:
     st = {"E": 6, "TOPK": 3, "SCALE": 2.5, "KERNEL": kernel}
     _agree2(bind(BM.MoeRouterBiasTopK, **st), _selection_scores(np.random.default_rng(0x5B1), 200, 6), bind(BIAS_SLOTS, **st))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 @pytest.mark.parametrize("E_, TOPK", [(16, 8), (5, 5), (8, 1)])
@@ -388,6 +397,7 @@ def _router_rows(E_: int, n: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
     return np.array([x for x, _ in r], np.uint32), np.array([b for _, b in r], np.uint32)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 def test_the_sigmoid_router(kernel) -> None:
     """`MoeRouterSigmoidBias_v2` at 8 experts and 2 slots on the kernel tests' rows (ties, a deciding bias, the sigmoid's ranges,
@@ -395,6 +405,7 @@ def test_the_sigmoid_router(kernel) -> None:
     _agree2(bind(BM.MoeRouterSigmoidBias, E=8, TOPK=2, SCALE=2.5, KERNEL=kernel), _router_rows(8, 300, 0x5C))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 @pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
 def test_the_sigmoid_router_at_eight_slots(kernel) -> None:

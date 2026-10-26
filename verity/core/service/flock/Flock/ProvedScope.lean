@@ -216,10 +216,13 @@ def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
   | some m => .error (refusal s!"m = {m}, below {mMin zk}{if zk then " under --zk" else " without --zk"}")
   | none => .ok ()
 
-/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a `--zk` session of a statement
-with hidden outputs whose verifier holds its own registered reads (`--registered F`), the setting of
-`EndToEndRegistered` (an untyped statement, which `statementRules` requires of every form). -/
-def sharedRowsOk (tags : Tags) (zk registered : Bool) : Bool := zk && tags.hiddenOutputs && registered
+/-- Where a shared-row public file (header `shared_rows`) is a form the proof covers: a statement with hidden outputs and
+`hm96-sha512/v1` leaves whose verifier holds its own registered reads (`--registered F`), with or without `--zk`: under
+`--zk` the setting of `EndToEndRegistered` (`FailClosed.SoundZHJR`), without it `FailClosed.SoundExecHR`. A statement with
+plain SHA-512 leaves (a recursive session's inner statement, whose registered reads `Registered.checkDescription` reads)
+keeps its own rows. `zk` is unread: `--zk` needs `hm96-sha512/v1` leaves (`leafOk`), so the rule is the same in both. -/
+def sharedRowsOk (tags : Tags) (_zk registered : Bool) : Bool :=
+  tags.hiddenOutputs && registered && tags.merkleLeaf == "hm96-sha512/v1"
 
 /-- **`verify`'s statement is one the soundness proof covers**: every rule of `statementRules`, and on the circuit and public
 file as the proof reads them, a shared-row public file only where `sharedRowsOk`, wherever the wires feed the unit or the
@@ -272,25 +275,163 @@ theorem check_eq (tags : Tags) (zk : Bool) (circuitFile publicFile : ByteArray) 
       = checkOf (circuitOf tags circuitFile tables) tags zk publicFile count publicInputs registered :=
   rfl
 
-/-- What a draw's law is, when no soundness claim draws by it: the claims draw by the stratified law (with or without
-`--zk`) and, under `--zk`, by the subset law, so a bernoulli draw, a work draw (with or without a closure) and a subset
-draw without `--zk` are outside them. -/
-def lawWhy (zk : Bool) (d : Draw.UnitDraw) : Option String :=
+/-- What `--plain-tables` refuses of a statement: hidden outputs with leaves other than `hm96-sha512/v1` (the plain proof
+at several tables reads hm96 leaves; `check` at one table also passes plain SHA-512 leaves at hidden outputs) and more
+than `Tags.MAX_TABLES` tables, what `Stmt.setupTables` sets up. -/
+def plainTablesWhy (tags : Tags) (count : Nat) : Option String :=
+  if tags.hiddenOutputs && tags.merkleLeaf != "hm96-sha512/v1" then
+    some s!"{tags.name}, a statement with hidden outputs and {tags.merkleLeaf} leaves under --plain-tables"
+  else if count ≤ Tags.MAX_TABLES then none
+  else some s!"{count} tables in a session under --plain-tables, more than {Tags.MAX_TABLES}"
+
+/-- The refusal of a session verified without the verifier's own program (`--program`), which `verify` reaches only when
+every check has passed. -/
+def NO_PROGRAM : String :=
+  "refused: a session without the verifier's program (--program): a verifier that cannot read the Program cannot know what the statement computes, nor which of its values are registered"
+
+/-- `program_sha512` of the verifier's own `--program` bytes: SHA-512 of the canonical descriptor without `annotations`
+(`TemplateQuery.Desc`'s, the digest a partition object and META name); none for bytes that are not a JSON descriptor. -/
+def programDigest (b : ByteArray) : Option String := do
+  let j ← (Lean.Json.parse (← String.fromUTF8? b)).toOption
+  let bare := match j with
+    | .obj kvs => Lean.Json.mkObj (kvs.toArray.filter (·.1 != "annotations")).toList
+    | x => x
+  return hexOf (Sha512.hash (← (canon bare).toOption).toUTF8)
+
+/-- META's `program_sha512`, the Program the circuit binds; none when META names none. -/
+def metaProgram (c : Circuit) : Option String := (c.metaJ.getObjValAs? String "program_sha512").toOption
+
+/-- What `--plain-tables` refuses of the verifier's own program against the circuit: a session without it
+(`NO_PROGRAM`), bytes that are not a JSON descriptor, a circuit whose META binds no program, and a program whose digest
+is not META's `program_sha512`. -/
+def programWhyP (c : Circuit) : Option ByteArray → Option String
+  | none => some NO_PROGRAM
+  | some b => match programDigest b, metaProgram c with
+    | none, _ => some "refused: the verifier's program (--program) is not a JSON descriptor"
+    | some _, none => some "refused: a circuit whose META binds no program_sha512 under --plain-tables: the verifier cannot hold its program to the circuit"
+    | some h, some m => if h = m then none
+      else some s!"refused: the verifier's program (--program, program_sha512 {h}) is not the circuit's (META program_sha512 {m})"
+
+/-- **The verifier's own program is the circuit's** (`--plain-tables`): `programWhyP` on the circuit `verify` parsed. -/
+def programP (parsed : V Circuit) (program : Option ByteArray) : Except String Unit :=
+  match parsed with
+  | .error e => .error (refusal s!"a circuit that does not parse ({e})")
+  | .ok c => match programWhyP c program with
+    | some why => .error why
+    | none => .ok ()
+
+/-- **`verify --plain-tables`'s statement is one the soundness proof covers** (PROTOCOL.md §16.15): a plain (no `--zk`)
+session of public or hidden outputs at any number of tables up to `Tags.MAX_TABLES`, at hidden outputs with
+`hm96-sha512/v1` leaves, every condition `check` puts on a one-table plain session, and the verifier's own program is
+the one META binds (`programP`). The one-table plain form keeps `check` without the flag. -/
+def checkP (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray)) (count : Nat)
+    (program : Option ByteArray) (publicInputs registered : Bool) : Except String Unit :=
+  match plainTablesWhy tags count with
+  | some why => .error (refusal why)
+  | none => match check tags false circuitFile publicFile tables 1 publicInputs registered with
+    | .error e => .error e
+    | .ok () => programP (circuitOf tags circuitFile tables) program
+
+/-- `checkP` on its circuit as `circuitOf` returns it (`checkP_eq`). -/
+def checkPOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) (program : Option ByteArray)
+    (publicInputs registered : Bool) : Except String Unit :=
+  match plainTablesWhy tags count with
+  | some why => .error (refusal why)
+  | none => match checkOf parsed tags false publicFile 1 publicInputs registered with
+    | .error e => .error e
+    | .ok () => programP parsed program
+
+theorem checkP_eq (tags : Tags) (circuitFile publicFile : ByteArray) (tables : List (String × ByteArray))
+    (count : Nat) (program : Option ByteArray) (publicInputs registered : Bool) :
+    checkP tags circuitFile publicFile tables count program publicInputs registered
+      = checkPOf (circuitOf tags circuitFile tables) tags publicFile count program publicInputs registered :=
+  rfl
+
+/-- **What an accepted `checkP` establishes**: the form (at most `Tags.MAX_TABLES` tables, hm96 leaves at hidden outputs),
+`check` at one table, and the verifier's own program held to the circuit's. -/
+theorem checkP_ok {tags : Tags} {circuitFile publicFile : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
+    {program : Option ByteArray} {publicInputs registered : Bool}
+    (h : checkP tags circuitFile publicFile tables count program publicInputs registered = .ok ()) :
+    plainTablesWhy tags count = none ∧ check tags false circuitFile publicFile tables 1 publicInputs registered = .ok () ∧
+      programP (circuitOf tags circuitFile tables) program = .ok () := by
+  unfold checkP at h
+  cases hw : plainTablesWhy tags count with
+  | some w => simp [hw] at h
+  | none =>
+    simp only [hw] at h
+    cases hc : check tags false circuitFile publicFile tables 1 publicInputs registered with
+    | error e => simp [hc] at h
+    | ok u =>
+      cases u
+      simp only [hc] at h
+      exact ⟨rfl, rfl, h⟩
+
+/-- **`programWhyP` passes only the circuit's program**: the verifier holds bytes `b`, META binds a program, and `b`'s
+digest is META's `program_sha512`. -/
+theorem programWhyP_none {c : Circuit} {program : Option ByteArray} (h : programWhyP c program = none) :
+    ∃ b, program = some b ∧ (metaProgram c).isSome = true ∧ programDigest b = metaProgram c := by
+  cases program with
+  | none => simp [programWhyP] at h
+  | some b =>
+    refine ⟨b, rfl, ?_⟩
+    simp only [programWhyP] at h
+    cases hd : programDigest b with
+    | none => simp [hd] at h
+    | some d =>
+      cases hm : metaProgram c with
+      | none => simp [hd, hm] at h
+      | some m =>
+        simp only [hd, hm] at h
+        by_cases he : d = m
+        · subst he; exact ⟨rfl, rfl⟩
+        · simp [he] at h
+
+/-- **An accepted `programP` holds the verifier's program to META's**: the circuit parsed, and `programWhyP` passes. -/
+theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : programP parsed program = .ok ()) :
+    ∃ c, parsed = .ok c ∧ programWhyP c program = none := by
+  cases parsed with
+  | error e => simp [programP] at h
+  | ok c =>
+    refine ⟨c, rfl, ?_⟩
+    simp only [programP] at h
+    cases hw : programWhyP c program with
+    | none => rfl
+    | some w => simp [hw] at h
+
+/-- What a draw's law is, when no soundness claim draws by it at the session's form (PROTOCOL.md §16.15): the one rule
+for which law each form draws by. Without `--plain-tables`: the stratified law at every form `check` passes, each claim at
+one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
+and, without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
+(`SoundExecH` at its subset draw design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset law alone. So a
+bernoulli draw, a work draw (with or without a closure), a subset draw without `--zk` or `--plain-tables` at public outputs,
+and a stratified draw under `--plain-tables` are outside them. -/
+def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
   match d.law with
-  | .stratified .. => none
-  | .subset _ => if zk then none else some "a subset draw without --zk"
+  | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
+  | .subset _ => if zk || tags.hiddenOutputs || plainTables then none else some "a subset draw without --zk"
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by** (PROTOCOL.md §16.15): `draw` is the record's
-(`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without a draw is
-refused (D12); so is a draw that does not parse. -/
-def drawLaw (zk : Bool) : Option Lean.Json → Except String Unit
+/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`, PROTOCOL.md §16.15): `draw` is
+the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
+a draw is refused (D12); so is a draw that does not parse. -/
+def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
   | some j => match Draw.UnitDraw.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
-    | .ok d => match lawWhy zk d with
+    | .ok d => match lawWhy zk tags plainTables d with
       | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
+
+/-- **The verifier holds its own program**: a session verified without it (`--program`) is refused (`NO_PROGRAM`),
+whatever else it passes. -/
+def programHeld (program : Option ByteArray) : Except String Unit :=
+  if program.isSome then .ok () else .error NO_PROGRAM
+
+theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .ok ()) : program.isSome = true := by
+  unfold programHeld at h
+  split at h
+  · assumption
+  · cases h
 
 end Flock.ProvedScope

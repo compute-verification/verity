@@ -49,13 +49,15 @@ import Proofs.Pous.Chain.PubFamily
 import Proofs.Pous.Chain.PubRounds
 import Proofs.Pous.Rebuild.Exclusion
 import Proofs.Pous.EndToEnd
+import Proofs.Pous.Period
+import Proofs.Pous.Pooled
 
 /-!
 # The proved guarantees
 
-`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Models/Pous/Guarantees.lean`,
-`Security/Models/Pous/Guarantees/P2.lean`, `Security/Models/Pous/Guarantees/SecureErasure.lean`,
-`Security/Models/Pous/Guarantees/StreamedWipe.lean` (the frozen statements)
+`Pous.SecurityProofs.X : Pous.Guarantees.X` for every statement of `Security/Definitions/Pous/Guarantees.lean`,
+`Security/Definitions/Pous/Guarantees/P2.lean`, `Security/Definitions/Pous/Guarantees/SecureErasure.lean`,
+`Security/Definitions/Pous/Guarantees/StreamedWipe.lean` (the frozen statements)
 and `Security/Proofs/Pous/Statements.lean` (the lemmas) that has a proof. `lean-audit.json` pins these theorems, so a
 change to a guarantee, or to a definition it reads, changes their records. The open statements (`A2LemmaAM1`,
 `A5RabinGcd`, `A7Params`, `M1Meets`) have no entry here.
@@ -223,7 +225,7 @@ theorem P2RingAuditSecureOfRoundSecure : Pous.Guarantees.P2RingAuditSecureOfRoun
   PousP2Rounds.auditSecure_of_roundSecure
 theorem P2RingGradedOfRoundSecure : Pous.Guarantees.P2RingGradedOfRoundSecure := PousP2Rounds.graded
 
-/-! ## Proved results cited outside the package (`Security/Models/Pous/Guarantees.lean`, `Statements.lean`) -/
+/-! ## Proved results cited outside the package (`Security/Definitions/Pous/Guarantees.lean`, `Statements.lean`) -/
 
 theorem B5Stacked : Pous.Guarantees.B5Stacked := @PousBridge.b5_stacked
 theorem DenseMeets64 : Pous.Guarantees.DenseMeets64 := PousDenseReCert.dense_meets_64

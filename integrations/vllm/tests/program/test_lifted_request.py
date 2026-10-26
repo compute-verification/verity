@@ -29,9 +29,9 @@ from verity.ml.circuits import Program, bind
 from verity.ml.circuits.codec import _spec_id, encode_program, program_digest
 from verity.ml.circuits.defs import REGISTRY
 from verity_vllm.program import workload as W
-from verity_vllm.program.registry import b1, lifted as L
-from verity_vllm.program.kernels import serve3_reference as ref
-from verity_vllm.program.registry.b1 import weights_type
+from verity.ml.definitions.registry import b1, lifted as L
+from verity.ml.definitions.numerics import serve3_reference as ref
+from verity.ml.definitions.registry.b1 import weights_type
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs
 from verity.ml.circuits.types import Array, Value
 
@@ -152,6 +152,7 @@ def test_component_is_the_flat_program_and_the_lift_has_exactly_the_guard_nodes_
     assert L._reads(body_l.ret) == set(lifted.output_nodes) and lifted.continuation == "continuation-v1"
 
 
+@pytest.mark.slow
 def test_active_prefix_is_bit_exact_at_every_mapped_gate_and_the_rest_is_bot(component, lifted):
     pu, tu, out_u = _run(component.fn, _inputs_per_param(component.fn.body.params, False))
     pl, tl, out_l = _run(lifted, _inputs_per_param(component.fn.body.params, True))
@@ -307,6 +308,7 @@ def test_lag1_candidate_the_placeholder_step_is_active_on_the_eos_and_bit_exact_
         L.lift_request_component(component.fn, (17,), max_tokens=CAP, boundary_prefix=BOUNDARY)  # type: ignore[call-arg]
 
 
+@pytest.mark.slow
 def test_continuation_v1_words_of_the_lifted_program_equal_the_rules_recurrence_under_both_profiles(component):
     """coord R17-39 (e) 'add the lifted-Program tests' / revb S-r17b-20: the controller words the LIFTED PROGRAM computes on the fixture's own
     transcript -- `slot=t/emit`, `slot=t/is_eos`, `slot=t/out` and `r_t` (= 1 at the unguarded slots, else `s=t-1/live`) -- EQUAL

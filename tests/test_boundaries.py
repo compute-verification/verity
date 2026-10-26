@@ -1,7 +1,8 @@
-"""The dependency rules (DESIGN.md "Development") as import-boundary checks over ``verity/``, and the one over ``infra/``.
+"""The dependency rules (AGENTS.md "Map and commands") as import-boundary checks over ``verity/``, and the one over ``infra/``.
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
-    catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits;
+    catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
+    workloads' Definitions (ml.definitions) on the catalog and the kernels;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
@@ -49,20 +50,26 @@ ALLOWED = {
     "ml.circuits.ops": {"ml.circuits", "ml.circuits.silicon", "ml.kernels"},
     "ml.kernels": {"ml.circuits", "ml.circuits.silicon"},
     "ml.private_circuits": {"ml.circuits"},
+    # the served workloads' kernel Definitions and their Boolean versions, replay and the proof-unit cut, which no verifier reads
+    "ml.definitions": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.kernels"},
+    # 2026-10-24 (Daniel): integrations are frontends. An integration hands Verity a window: its circuit, the values it
+    # commits in a `verity.ml.commitments` scheme and registers before any coin, and the drawn units' openings; core's
+    # records come from the caller. Its catalog of templates is Verity's Definitions (`ml.circuits.ops`).
+    "ml.windows": {"ml.circuits", "ml.circuits.ops", "ml.commitments"},
     "core.claims": set(),
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof service's challenger
-    # draws with them (`service.Stream.select`).
-    "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness", "core.protocols.profile"},
+    # draws with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
+    "core.protocols.sampled_proofs": {"core.claims", "ml.circuits", "ml.commitments", "ml.randomness",
+                                      "core.protocols.profile"},
     "core.protocols.pous": {"core.claims", "ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     # 2026-10-11 (Daniel, decision 7 of the resource-accounting agenda): the bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
     # 2026-10-12 (memory accounting's remote bandwidth program): the remote audit commits receipts in frame-v3-sha512
-    # trees, draws from the verifier's secret, and records its openings as an integrity profile.  A KV pass's plan of
-    # 10^5 runs is checked and encoded in numpy (`ml.kernels.plans`), which a protocol can't import itself.  Its coins
-    # are the proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness", "core.protocols.profile",
+    # trees, draws from the verifier's secret, and records its openings as an integrity profile.  Its coins are the
+    # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs"},
     # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
     # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
@@ -77,7 +84,8 @@ ALLOWED = {
 #: repository's own directories.
 FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_flock", "verity_torch", "verity_cli", "verity_difftest",
                       "circuit_check", "research", "cluster", "sp1", "vllm", "torch", "jax", "onnx", "archive", "backends",
-                      "benchmarks", "frontends", "infra", "integrations", "tools", "veritor")
+                      "benchmarks", "examples", "frontends", "infra", "integrations", "tools", "veritor",
+                      "verity_torch_loop")
 #: ``verity``'s third-party dependencies (the root's ``pyproject.toml``); anything else it imports is the stdlib or
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
@@ -120,7 +128,7 @@ CORE_ML_EDGES = {
     "core.protocols.sampled_proofs": {"ml.circuits", "ml.commitments", "ml.randomness"},
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
-    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.kernels", "ml.randomness"},
+    "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
     "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
                             "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
@@ -157,10 +165,11 @@ def _separate(rel: Path) -> bool:
 
 def _sources(root: Path = SRC) -> list[Path]:
     """``verity``'s own Python files: every ``.py`` under ``root`` outside a ``tests/`` or ``lean/`` directory, a Lake build
-    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree."""
+    directory (core's Lean builds in ``verity/core/service/flock/.lake``) or a ``SEPARATE`` tree, and no circuit-check
+    sidecar (``<module>.circuit-check.py``: circuit-check's bindings, which it loads by path and no module imports)."""
     return sorted(p for p in root.rglob("*.py")
                   if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts)
-                  and not _separate(p.relative_to(SRC)))
+                  and not _separate(p.relative_to(SRC)) and not p.name.endswith(".circuit-check.py"))
 
 
 def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",)) -> list[tuple[str, int, bool]]:
@@ -327,9 +336,11 @@ def test_core_ml_edges_shrink_with_allowed() -> None:
 
 
 def _infra_packages() -> set[str]:
-    """The import packages of ``infra/``'s distributions, from each one's wheel configuration."""
+    """The import packages of ``infra/``'s distributions, from each one's wheel configuration.  A project with no wheel (the
+    Slack events service's suite, whose code Vercel deploys) has no package to import."""
     return {Path(p).name for pyproject in sorted((ROOT / "infra").glob("*/pyproject.toml"))
-            for p in tomllib.loads(pyproject.read_text())["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"]}
+            for p in tomllib.loads(pyproject.read_text()).get("tool", {}).get("hatch", {}).get("build", {})
+            .get("targets", {}).get("wheel", {}).get("packages", [])}
 
 
 def test_nothing_outside_infra_imports_it() -> None:

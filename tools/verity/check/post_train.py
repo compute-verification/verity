@@ -45,9 +45,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
-MACHINE = "vy-nebius-1"
-#: node 1's guest cores; its check slots hold 8-95 and 128-159, and 160-191 is proofs' (infra, 4 Oct: 96-127 at nice 19)
-CORES = "96-127"
+#: node 2: its two 560 GB check slots hold all 120 of its cores, so the rebuilds run unpinned at nice 19 beside them, in the
+#: ~480 GB of its 1600 GB slice the slots leave (node 1, their machine since 3 Oct on cores 96-127, drains 23 Oct 13:00Z; CI-152)
+MACHINE = "vy-nebius-2"
+CORES = ""
 BY = "regression"
 PREFIX = "regression "
 PASS = f"{PREFIX}pass"
@@ -57,8 +58,8 @@ INCONCLUSIVE = f"{PREFIX}inconclusive:"
 MARKS = "regression and rebuild"
 SUITE = "verity-vllm"
 LOCK = Path(tempfile.gettempdir()) / "verity-post-train.lock"
-#: the run's bound on the machine: the rebuilds took 89 and 104 min on cores 96-127 beside other lanes' jobs (3 Oct; #39's is the
-#: longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
+#: the run's bound on the machine: the rebuilds took 89 and 104 min on node 1's cores 96-127 beside other lanes' jobs (3 Oct;
+#: #39's is the longest); a run that outlives it is cut off before its junit, and is inconclusive, not a failure
 TIMEOUT_S = 4 * 3600
 #: the run's memory, reserved on the machine (`research run --mem-gb`, waiting up to MEM_WAIT_S for it), and its xdist workers
 #: capped at MEM_GB // WORKER_GB: 19 Oct, r20261019-043523-415a ran about 20 workers at ~28 GB each with nothing reserved, 570 GB,
@@ -278,7 +279,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="post_train.py", description=__doc__.split("\n\n")[1])
     ap.add_argument("commit", nargs="?", default="origin/main", help="a landing of main (default origin/main)")
     ap.add_argument("--on", default=MACHINE, metavar="MACHINE", help=f"where the rebuilds run (default {MACHINE})")
-    ap.add_argument("--cores", default=CORES, metavar="LIST", help=f"`taskset -c LIST` for them (default {CORES}; '' for none)")
+    ap.add_argument("--cores", default=CORES, metavar="LIST",
+                    help=f"`taskset -c LIST` for them (default {CORES or 'none'}; '' for none)")
     ap.add_argument("--workers", type=int, default=12, help="pytest-xdist workers: a row's rebuild each (default 12; at most --mem-gb "
                                                                 f"// {WORKER_GB})")
     ap.add_argument("--mem-gb", type=int, default=MEM_GB, help=f"the memory the run reserves on the machine (default {MEM_GB})")

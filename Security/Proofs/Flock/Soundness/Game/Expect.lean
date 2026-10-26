@@ -1,3 +1,4 @@
+import Definitions.Flock.Game.Expect
 import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Rewinding
 
@@ -24,16 +25,6 @@ open scoped ENNReal
 namespace Game
 
 variable {α : Type}
-
-/-- The expectation of `f` over the verifier's uniform coins, against the strategy `s`. -/
-noncomputable def expect (f : α → ℝ) : (g : Game α) → Strategy g → ℝ
-  | .ret a, _ => f a
-  | .send _ k, s => expect f (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => (∑ c : C, expect f (k c) (s c)) / (@Fintype.card C iF)
-
-/-- The expectation over two independent runs of the same strategy. -/
-noncomputable def expect₂ (F : α → α → ℝ) (g : Game α) (s : Strategy g) : ℝ :=
-  expect (fun a => expect (F a) g s) g s
 
 theorem expect_add (f f' : α → ℝ) : ∀ (g : Game α) (s : Strategy g),
     expect (fun a => f a + f' a) g s = expect f g s + expect f' g s
@@ -88,10 +79,6 @@ theorem expect_nonneg {f : α → ℝ} (h : ∀ a, 0 ≤ f a) (g : Game α) (s :
   have := expect_mono h g s
   rwa [expect_const] at this
 
-open Classical in
-/-- The indicator of an event, as a real function. -/
-noncomputable def ind (p : α → Prop) (a : α) : ℝ := if p a then 1 else 0
-
 theorem ind_nonneg (p : α → Prop) (a : α) : 0 ≤ ind p a := by
   unfold ind; split_ifs <;> norm_num
 
@@ -132,15 +119,8 @@ end Game
 namespace Rewinding
 
 open Game Finset
-
 variable {α : Type} {P V : Type} [Fintype P] [Fintype V] [DecidableEq V]
-
 variable (op : α → P → Option V)
-
-/-- `vstar` is a plurality table for the strategy's run distribution: at each position no value is
-opened with larger probability. -/
-def IsPluralityE (g : Game α) (s : Strategy g) (vstar : P → V) : Prop :=
-  ∀ p v, expect (ind fun a => op a p = some v) g s ≤ expect (ind fun a => op a p = some (vstar p)) g s
 
 /-- Every run distribution has a plurality table. -/
 theorem exists_pluralityE [Nonempty V] (g : Game α) (s : Strategy g) :

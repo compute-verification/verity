@@ -56,6 +56,7 @@ from typing import Any
 from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 PARTIALS = "partials"
 A, B, ADMIT, ZY, RECEIPT = "a", "b", "admit", "zy", "receipt"
@@ -68,6 +69,10 @@ PUB, OK = "pub", "o0"
 OK_ROW = (1,)
 #: the ``--registered`` file's key that its ports are every port of the statement (Flock's `Registered.COMPLETE_KEY`)
 COMPLETE = "complete"
+#: a ``--registered`` port's key that the statement reads its row in full (Flock's `KnownRead.READ_KEY`)
+READ_IN_FULL = "read_in_full"
+#: the values a statement reads in full (`READ_IN_FULL`): each is read by several statements at one row
+FULL = (A, B, PARTIALS)
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, COMBINE = "lane", "combine"
 
@@ -194,19 +199,51 @@ def known_rows(r: int, c: int, kind: str, ln: int | None = None, *, admit: Seque
     return out
 
 
+def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any], lanes_: int,
+                     words_: int) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
+    """The verifier's entries and roots of a drawn leaf's values, from the accepted registration record and the accepted
+    produced record alone (Lean's `PouwWindow.Lanes.roots?`): each registered value's entry in the registration's
+    ``registered`` (the first of its value) and that entry's root, and ``partials``' own entry (`produced.entry`:
+    ``lanes_`` rows of ``words_`` u16 words under the registration's digest) at the produced record's root of
+    ``partials``. `registered_file` reads them; `pouw-leaf-own` holds a statement's file to them."""
+    ent: dict[str, Mapping[str, Any]] = {}
+    roots: dict[str, str] = {}
+    for e in registration.get("registered") or ():
+        if e["value"] not in ent:
+            ent[e["value"]], roots[e["value"]] = e, e["root"]
+    got = [e for e in produced["produced"] if e.get("value") == PARTIALS]
+    if not got:
+        raise ValueError(f"the produced record has no {PARTIALS}")
+    ent[PARTIALS] = PR.entry(registration["program"], PARTIALS, lanes_, words_, R.digest(registration))
+    roots[PARTIALS] = got[0]["root"]
+    return ent, roots
+
+
 def registered_file(ports: Mapping[str, tuple[str, int]], entries: Mapping[str, Mapping[str, Any]],
                     roots: Mapping[str, str], schemas: Mapping[str, str] | None = None,
-                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True) -> dict[str, Any]:
+                    known_ports: Mapping[str, Mapping[str, Any]] | None = None, complete: bool = True,
+                    place: Mapping[str, tuple[str, int]] | None = None) -> dict[str, Any]:
     """The Lean verifier's ``--registered`` file of one statement (one unit) from its `reads`: each port's value's entry
     (a registered value's from the accepted registration, or ``partials``' from `produced.entry`) and root (the accepted
-    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``complete``:
+    registration's, or the accepted produced record's), and its `known` ports' (`produced.known_port`'s). ``place``: the
+    unit's placement, ``{value: (table, base)}``: port ``(value, row)`` reads row ``base + row`` of ``table``, whose
+    entry, root and schema it takes (Lean's `PouwWindow.Lanes.ownOf`); a value it doesn't name is its own table from row 0
+    (`selfPlace`), every value so where it is None. ``complete``:
     the ports are every port of the statement (`own`), which the verifier then holds the circuit to
-    (`Registered.checkComplete`)."""
+    (`Registered.checkComplete`). A port of an A row, a B row or a partials row (`FULL`: lane l's ``a<s>``, ``b<t>``
+    and ``partials``, the combine's ``p<x>``, by the value it reads, whatever table that is placed in) is marked
+    ``read_in_full`` (`READ_IN_FULL`): the verifier holds it to one row of the registered row's words, every bit of
+    which the statement reads (Flock's `KnownRead.fullRows`), so the statements that read one row (four lanes an A row,
+    four a B row, lane l and the combine a partials row) read its same bits (proofs' `PouwWindow.Lanes.readFull`, which
+    `LeafLanesSound` takes)."""
     out = {}
     for port, (value, row) in ports.items():
-        if value not in entries or value not in roots:
-            raise ValueError(f"port {port!r} reads {value!r}, whose entry and root the verifier does not hold")
-        out[port] = PR.port(value, entries[value], roots[value], [row], (schemas or {}).get(value, G.SCHEMA))
+        table, base = (place or {}).get(value, (value, 0))
+        if table not in entries or table not in roots:
+            raise ValueError(f"port {port} reads {table}, whose entry and root the verifier does not hold")
+        out[port] = PR.port(table, entries[table], roots[table], [base + row], (schemas or {}).get(table, G.SCHEMA))
+        if value in FULL:
+            out[port][READ_IN_FULL] = True
     if set(out) & set(known_ports or {}):
         raise ValueError(f"ports {sorted(set(out) & set(known_ports or {}))} are both reads and known")
     return {"format": G.READS, "ports": {**out, **(known_ports or {})}, **({COMPLETE: True} if complete else {})}
@@ -216,6 +253,7 @@ __all__ = [
     "ADMIT",
     "COMBINE",
     "COMPLETE",
+    "FULL",
     "LANE",
     "LANE_COLS",
     "LANE_ROWS",
@@ -225,6 +263,7 @@ __all__ = [
     "PUB",
     "PUBLIC",
     "PUBLIC_BITS",
+    "READ_IN_FULL",
     "RECEIPT",
     "ZY",
     "A",
@@ -242,6 +281,7 @@ __all__ = [
     "reads",
     "registered_file",
     "statements",
+    "verifier_entries",
     "word_order",
     "words",
 ]

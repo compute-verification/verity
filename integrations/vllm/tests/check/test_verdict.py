@@ -21,13 +21,14 @@ import pytest
 
 from verity_vllm.check.codes import VerificationCode as VC
 
-from verity_vllm.check.verdict import commit_verdict
+from verity_vllm.check.commit_pass import commit_verdict
+from verity_vllm.check.verdict_names import OLD_TO_NEW, mapping_markdown
 from verity_vllm.check import verdict as V
 from verity_vllm.pipeline import cli
 from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
-from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -38,11 +39,18 @@ CLASSES = {"input_token_ids": {"how": "bound-as-leaf", "tensors": 4}, "instance_
            "fa2_hidden_m1_stream": {"how": "bound-as-leaf", "tensors": 64}}
 
 
+def _checks(faults: list | None = None, **kw) -> dict:
+    """`population.query_checks` as the replay's coverage writes it over a reconciled Q(P), with `kw` over it."""
+    rule = {"applied": True, "faults": faults or [], **{k: {"n": 0, "first": []} for k in ("evaluated_past_stop", "manifest_cut_before_classification")}}
+    return {"ok": True, **{k: {"n": 0, "first": []} for k in ("vus_outside_query", "identities_without_rows", "rows_disagree")},
+            "ranks": {"replay": [0], "manifest": [0], "equal": True}, "accounted": True, "unstated_families": [], "executed_prefix_rule": rule} | kw
+
+
 def _sr(**kw) -> dict:
     return {"result": True, "grade": "complete", "why": None, "strata_unevaluated": [],
             "sample": {"per_stratum": 2, "seed": SEED_ROOT, "seed_source": ROOT_FORM, "picked": 407, "evaluated": 407, "equal": 407, "mismatch_n": 0, "not_evaluated_n": 0},
             "population": {"vus": 57678, "not_evaluable": {}, "not_evaluable_by_family": {},
-                           "query_total": {"identities": 57678}, "query_checks": {"ok": True, "executed_prefix_rule": {"applied": True, "faults": []}}}, **kw}
+                           "query_total": {"identities": 57678}, "query_checks": _checks()}, **kw}
 
 
 def _epr(ok: bool = True) -> dict:
@@ -157,7 +165,7 @@ def test_the_code_is_the_outcome():
 def test_mapping_old_to_new_is_complete_with_no_loss():
     _, _, checks = _both(_base())
     names = {c.name for c in checks}
-    documented_old = {tok.strip() for m in V.OLD_TO_NEW for tok in m["old"].split(" / ")}
+    documented_old = {tok.strip() for m in OLD_TO_NEW for tok in m["old"].split(" / ")}
     emitted_compat = {f for c in checks for f in c.compat}
 
     def documented(f: str) -> bool:
@@ -168,7 +176,7 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     missing_doc = sorted(f for f in emitted_compat if not documented(f))
     assert not missing_doc, f"compat fields not in OLD_TO_NEW: {missing_doc}"
     # ... and every documented old fact lands on a check / group / Verdict field that exists
-    targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in V.OLD_TO_NEW}
+    targets = {m["new"].split(" ")[0].strip("`").rstrip(";,") for m in OLD_TO_NEW}
     unknown = []
     for t in targets:
         if "/" in t:
@@ -188,11 +196,11 @@ def test_mapping_old_to_new_is_complete_with_no_loss():
     # each old check name of the prompt has its new name
     for old, new in (("linkage", "boundary_linkage"), ("weights_pin", "checkpoint_binding"), ("executed_prefix", "execution_extent"),
                      ("coverage", "required_value_coverage"), ("identity", "program_source_identity")):
-        assert any(old in m["old"] and new in m["new"] for m in V.OLD_TO_NEW), (old, new)
+        assert any(old in m["old"] and new in m["new"] for m in OLD_TO_NEW), (old, new)
     # every group has at least one rule check and a one-sentence claim
     for g, spec in V.GROUPS.items():
         assert spec["claim"].endswith(".") and any(c.name.startswith(g + "/") for c in checks), g
-    assert "| `commit_pass` |" in V.mapping_markdown()
+    assert "| `commit_pass` |" in mapping_markdown()
 
 
 # ---------------------------------------------------------------------------------------------------------------- (3) equivalence
@@ -218,7 +226,7 @@ def _mutations():
     c = b(); c["boundary_linkage"] = {"result": False, "why": "1 unlinked", "unlinked_n": 1}; yield "boundary linkage", c, True
     c = b(); c["sampled_replay"]["result"] = False; c["sampled_replay"]["why"] = "a VU differs"; yield "replay mismatch", c, True
     c = b(); c["sampled_replay"]["sample"]["seed"] = 12345; c["oracle_compare"] = {"result": True, "complete": False}; yield "prover-chosen seed, no form (B)", c, True
-    c = b(); c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "vus_outside_query": {"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]}}
+    c = b(); c["sampled_replay"]["population"]["query_checks"] = _checks(ok=False, vus_outside_query={"n": 1, "first": [{"request_id": "r0", "step": 1, "op_path": "x", "member": "y"}]})
     yield "population scope", c, True
     c = b(); del c["weights_pin"]; yield "weights unpinned", c, True
     c = b(); c["classes"] = {k: v for k, v in CLASSES.items() if k != "weights"}; yield "required class undeclared", c, True
@@ -308,7 +316,7 @@ def test_account_missing_is_insufficient_evidence_not_fail():
              "and re-run the Commit; not a verdict on the Program)")
     c["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=True, problems=["tokens.json: not beside the Commit"])
     c["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 6, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
-    c["sampled_replay"]["population"]["query_checks"] = {"ok": False, "executed_prefix_rule": {"applied": True, "faults": [{"request_id": "r0", "faults": [fault]}]}}
+    c["sampled_replay"]["population"]["query_checks"] = _checks([{"request_id": "r0", "faults": [fault]}], ok=False)
     (ok, why), out, checks = _both(c)
     assert ok is False and "executed-prefix rule faults" in why            # v1: a named FAIL through the replay's population scope
     by = {c_.name: c_ for c_ in checks}
@@ -520,7 +528,13 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"request": req, "step": step}
     assert V.correspondence_of_build(None) == (None, "absent", {})
-    assert V.correspondence_of_build({"request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+    assert V.correspondence_of_build({"step": {"ok": True}, "request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+    # a summary its record refuses: a note, and the wrappers' own result.json
+    (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": "zz" * 32, "digest": "x"},
+                                                      "request": {"ok": True}}))
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step"
+    assert any("build_summary.json not read" in n and "'step.digest'" in n for n in v.notes)
 
 
 # ---------------------------------------------------------------------------------------------------------------- (9) property citations

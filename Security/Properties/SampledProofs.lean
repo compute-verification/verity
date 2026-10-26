@@ -159,11 +159,27 @@ def OutputPortIs (log : Array Json) (leaves : Nat) (record port : String) : Prop
   ∃ r, Registration.outputPort log record port = some r ∧ int? (getD r "leaves") = some (leaves : Int) ∧
     (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
 
+/-- An output value's earlier registered value: the log's record with digest `record` has a `registered` entry for
+`value` (`Registration.outputValue`) with `leaves` leaves, `words` words and `bits` word bits (`Registration.widthOf`:
+16 when it leaves them out), and a string domain and root. -/
+def OutputValueIs (log : Array Json) (leaves words bits : Nat) (record value : String) : Prop :=
+  ∃ r, Registration.outputValue log record value = some r ∧
+    (int? (getD r "leaves") = some (leaves : Int) ∧ int? (getD r "words") = some (words : Int) ∧
+      Registration.widthOf r = some (bits : Int)) ∧
+    (∃ dom, getD r "domain" = .str dom) ∧ ∃ root, getD r "root" = .str root
+
+/-- What an output value takes from its earlier record, for a value of `leaves` leaves, `words` words and `bits` word
+bits: its port (`OutputPortIs`) or its registered value (`OutputValueIs`). -/
+def EarlierIs (log : Array Json) (leaves words bits : Nat) (record : String) : Registration.Earlier → Prop
+  | .port p => OutputPortIs log leaves record p
+  | .value u => OutputValueIs log leaves words bits record u
+
 /-- R7, for a v2 record (`Registration.checkOutputs`): the verifier derives its own entries for the values it expects
 registered (`Registration.ownEntries`: `Registered.entries`, counting each value's rows in the row format it holds for
 it, `v.schemas`, with each value's domain under its window's open root but the values it holds across windows); each
-output value it has an entry for has its earlier port, with the value's leaf count (`OutputPortIs`), and takes that
-port's domain and root (`Registration.applyOutputs`: `mine'` and `held'`); the
+output value it has an entry for has its earlier port, with the value's leaf count, or its earlier registered value,
+with the value's leaves, words and word bits (`EarlierIs`), and takes that port's or entry's domain and root
+(`Registration.applyOutputs`: `mine'` and `held'`); the
 record's `registered` is a list of entries, each exactly `{value, root, leaves, words, domain}` with `word_bits` beside
 them or not; its values are exactly the verifier's (`ValuesAre`); each of the verifier's values has its entry (the last
 naming it, as Python's dict reads it) as derived and held (`EntryIs`), a value it doesn't fill held to its output's root,
@@ -173,7 +189,8 @@ recomputes from the record, the log and its binding (`SuppliedIs`, `Supplied.roo
 def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
   ∃ mine es mine' held', Registration.ownEntries v = .ok mine ∧
     getD rec "registered" = .arr es ∧
-    (∀ o ∈ v.outputs, ∀ want, mine.find? (·.value == o.1) = some want → OutputPortIs v.log want.leaves o.2.1 o.2.2) ∧
+    (∀ o ∈ v.outputs, ∀ want, mine.find? (·.value == o.1) = some want →
+      EarlierIs v.log want.leaves want.words want.wordBits o.2.1 o.2.2) ∧
     (Registration.applyOutputs #[] mine (v.pinned ++ Registration.heldRoots v.log (Registration.ownEntries v))
       v.outputs v.log).2 = (mine', held') ∧
     (∀ e ∈ es, keys? e = some Registered.ENTRY_KEYS ∨

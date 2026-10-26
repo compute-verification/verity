@@ -71,6 +71,185 @@ structure Commit where
 /-- `Σ_{i < n} f(i)`. -/
 def sumF (n : Nat) (f : Nat → F128) : F128 := (List.range n).foldl (fun acc i => acc + f i) 0
 
+/-! ### What compiled code runs (`@[csimp]`: proofs see the definitions above and in `Finish`) -/
+
+namespace Fast
+
+/-- `f` folded from `acc` over `i, i + 1, …, i + k − 1`, with no list. -/
+@[specialize] def foldRange {α : Type} (f : α → Nat → α) : Nat → Nat → α → α
+  | _, 0, acc => acc
+  | i, k + 1, acc => foldRange f (i + 1) k (f acc i)
+
+theorem foldRange_eq {α : Type} (f : α → Nat → α) :
+    ∀ (i k : Nat) (acc : α), foldRange f i k acc = (List.range' i k).foldl f acc
+  | _, 0, _ => rfl
+  | i, k + 1, acc => by rw [foldRange, foldRange_eq f (i + 1) k, List.range'_succ, List.foldl_cons]
+
+theorem foldRange_succ {α : Type} (f : α → Nat → α) (n : Nat) (acc : α) :
+    foldRange f 0 (n + 1) acc = f (foldRange f 0 n acc) n := by
+  rw [foldRange_eq, foldRange_eq, ← List.range_eq_range', ← List.range_eq_range', List.range_succ, List.foldl_append]
+  rfl
+
+/-- `sumF` as compiled code computes it: the same additions in the same order, with no list. Each term comes first
+(`F128.add_comm`) so that the sum reuses the accumulator's cell: with the term second, compiled code takes a table entry
+`f i = t[i]!` as its own and counts a reference on it, which parallel tasks reading one table contend on. -/
+@[inline] def sumFFast (n : Nat) (f : Nat → F128) : F128 := foldRange (fun acc i => f i + acc) 0 n 0
+
+end Fast
+
+open Fast in
+@[csimp] theorem sumF_eq_sumFFast : @sumF = @sumFFast :=
+  funext fun n => funext fun f => by
+    rw [sumF, sumFFast, show (fun acc i => f i + acc) = fun acc i => acc + f i from
+      funext fun _ => funext fun _ => F128.add_comm _ _, foldRange_eq, List.range_eq_range']
+
+namespace Fast
+
+theorem sumF_zero (f : Nat → F128) : sumF 0 f = 0 := rfl
+
+theorem sumF_succ (n : Nat) (f : Nat → F128) : sumF (n + 1) f = sumF n f + f n := by
+  rw [sumF, sumF, List.range_succ, List.foldl_append]
+  rfl
+
+theorem sumF_congr {n : Nat} {f f' : Nat → F128} (h : ∀ i, i < n → f i = f' i) : sumF n f = sumF n f' := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [sumF_succ, sumF_succ, ih fun i hi => h i (by omega), h n (by omega)]
+
+theorem sumF_eq_zero {n : Nat} {f : Nat → F128} (h : ∀ i, i < n → f i = 0) : sumF n f = 0 := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [sumF_succ, ih fun i hi => h i (by omega), h n (by omega), F128.add_zero]
+
+/-- `Σ_{i < m + n} f(i) = Σ_{i < m} f(i) + Σ_{i < n} f(m + i)`. -/
+theorem sumF_add (m n : Nat) (f : Nat → F128) : sumF (m + n) f = sumF m f + sumF n fun i => f (m + i) := by
+  induction n with
+  | zero => rw [Nat.add_zero, sumF_zero, F128.add_zero]
+  | succ n ih => rw [← Nat.add_assoc, sumF_succ, sumF_succ, ih, F128.add_assoc]
+
+/-- `Σ_{i < b·a} f(i) = Σ_{j < a} Σ_{i < b} f(b·j + i)`. -/
+theorem sumF_blocks (a b : Nat) (f : Nat → F128) :
+    sumF (b * a) f = sumF a fun j => sumF b fun i => f (b * j + i) := by
+  induction a with
+  | zero => rfl
+  | succ a ih => rw [Nat.mul_succ, sumF_add, ih, sumF_succ]
+
+/-- Changing one term `f(k)`, `k < n`, by `d` changes the sum by `d` (`F128.add_comm`: the term's place doesn't matter). -/
+theorem sumF_update {n k : Nat} {f f' : Nat → F128} (d : F128) (hk : k < n) (hd : f' k = f k + d)
+    (h : ∀ i, i ≠ k → f' i = f i) : sumF n f' = sumF n f + d := by
+  induction n with
+  | zero => omega
+  | succ n ih =>
+    rw [sumF_succ, sumF_succ]
+    by_cases hkn : k = n
+    · subst hkn
+      rw [sumF_congr fun i hi => h i (by omega), hd, F128.add_assoc]
+    · rw [ih (by omega), h n (Ne.symm hkn), F128.add_assoc, F128.add_comm d, ← F128.add_assoc]
+
+theorem getElem!_eq {α : Type} [Inhabited α] (xs : Array α) {i : Nat} (h : i < xs.size) : xs[i]! = xs[i] := by
+  simp [h]
+
+theorem getElem!_range_map {α : Type} [Inhabited α] (f : Nat → α) {n i : Nat} (h : i < n) :
+    ((Array.range n).map f)[i]! = f i := by
+  rw [getElem!_eq _ (by simpa using h)]
+  simp
+
+theorem mul_sumF (g : F128) (n : Nat) (f : Nat → F128) : g * sumF n f = sumF n fun i => g * f i := by
+  induction n with
+  | zero => exact F128.mul_zero g
+  | succ n ih => rw [sumF_succ, sumF_succ, F128.mul_add, ih]
+
+theorem getElem!_map_mul (g : F128) (xs : Array F128) (i : Nat) : (xs.map (g * ·))[i]! = g * xs[i]! := by
+  by_cases h : i < xs.size
+  · rw [getElem!_eq _ (by simpa using h), getElem!_eq xs h, Array.getElem_map]
+  · rw [getElem!_neg _ i (by simpa using h), getElem!_neg xs i h]
+    exact (F128.mul_zero g).symm
+
+/-- `sumF` in tasks of `b` terms, their sums added in order (`sumF_blocks`). -/
+@[specialize] def sumFPar (b n : Nat) (f : Nat → F128) : F128 :=
+  let a := n / b
+  ((Array.range a).map fun i => Task.spawn fun _ => sumF b fun j => f (b * i + j)).foldl (fun acc t => t.get + acc) 0 +
+    sumF (n - b * a) fun j => f (b * a + j)
+
+theorem sumFPar_eq (b n : Nat) (f : Nat → F128) : sumFPar b n f = sumF n f := by
+  have hp : ∀ a : Nat, ((Array.range a).map fun i => Task.spawn fun _ => sumF b fun j => f (b * i + j)).foldl
+      (fun acc t => t.get + acc) 0 = sumF a fun i => sumF b fun j => f (b * i + j) := by
+    intro a
+    rw [Array.foldl_map, ← Array.foldl_toList, Array.toList_range, sumF]
+    refine congrArg (fun g => List.foldl g (0 : F128) (List.range a)) (funext fun acc => funext fun i => ?_)
+    exact F128.add_comm _ _
+  unfold sumFPar
+  dsimp only
+  rw [hp, ← sumF_blocks, ← sumF_add, Nat.add_sub_cancel' (Nat.mul_div_le n b)]
+
+theorem foldRange_succ_at {α : Type} (f : α → Nat → α) (lo n : Nat) (acc : α) :
+    foldRange f lo (n + 1) acc = f (foldRange f lo n acc) (lo + n) := by
+  rw [foldRange_eq, foldRange_eq, List.range'_1_concat, List.foldl_append]
+  rfl
+
+/-- `e + a`, kept out of line: `B.modify k (addTo e)` then hands it the entry with no other reference, so the sum
+reuses the entry's cell; inlined, the entry is still in `B` when the sum is built, and every update allocates. -/
+@[noinline] def addTo (e a : F128) : F128 := e + a
+
+/-- **Byte `j`'s buckets** of the words `lo, …, lo + n − 1`: entry `b < 256` is
+`Σ_{y, byte_j(g[lo + y]) = b} e[lo + y]` (`byteBuckets_go`). -/
+def byteBuckets (g e : Array F128) (j lo n : Nat) : Array F128 :=
+  foldRange (fun B y => B.modify ((g[y]!).byte j) (addTo e[y]!)) lo n (Array.replicate 256 0)
+
+/-- After `n` words from `lo`, the buckets' sum over the bytes with bit `i` set is
+`Σ_{y < n} bit_{8j+i}(g[lo + y])·e[lo + y]`. -/
+theorem byteBuckets_go (g e : Array F128) (j lo : Nat) {i : Nat} (hj : j < 16) (hi : i < 8) : ∀ n : Nat,
+    (byteBuckets g e j lo n).size = 256 ∧
+    (sumF 256 fun b => if b.testBit i then (byteBuckets g e j lo n)[b]! else 0) =
+      sumF n fun y => if (g[lo + y]!).bit (8 * j + i) then e[lo + y]! else 0
+  | 0 => by
+    refine ⟨by simp [byteBuckets, foldRange], ?_⟩
+    rw [sumF_zero]
+    apply sumF_eq_zero
+    intro b hb
+    simp only [byteBuckets, foldRange]
+    split
+    · rw [getElem!_eq _ (by simpa using hb)]; simp
+    · rfl
+  | n + 1 => by
+    obtain ⟨hs, ih⟩ := byteBuckets_go g e j lo hj hi n
+    unfold byteBuckets at hs ih ⊢
+    rw [foldRange_succ_at]
+    generalize foldRange (fun B y => B.modify ((g[y]!).byte j) (addTo e[y]!)) lo n (Array.replicate 256 0) = B
+      at hs ih ⊢
+    refine ⟨by rw [Array.size_modify, hs], ?_⟩
+    have hk := (g[lo + n]!).byte_lt j
+    rw [sumF_succ n, ← ih, ← F128.testBit_byte _ hj hi]
+    apply sumF_update _ hk
+    · rw [getElem!_eq (B.modify _ _) (by rw [Array.size_modify, hs]; exact hk), getElem!_eq B (by rw [hs]; exact hk),
+        Array.getElem_modify_self]
+      split
+      · exact F128.add_comm _ _
+      · rw [F128.add_zero]
+    · intro b hb
+      by_cases hb256 : b < 256
+      · rw [getElem!_eq (B.modify _ _) (by rw [Array.size_modify, hs]; exact hb256),
+          getElem!_eq B (by rw [hs]; exact hb256), Array.getElem_modify_of_ne (Ne.symm hb)]
+      · simp [hs, hb256]
+
+/-- **A claim's byte tables** of `er`: entry `256·j + b` (`j < 16`, `b < 256`) is `Σ_{i < 8, bit_i(b)} er[8j + i]`. -/
+def byteTable (er : Array F128) : Array F128 :=
+  Array.ofFn (n := 4096) fun k => sumF 8 fun i => if (k.val % 256).testBit i then er[8 * (k.val / 256) + i]! else 0
+
+theorem byteTable_sum (er : Array F128) (v : F128) :
+    (sumF 128 fun u => if v.bit u then er[u]! else 0) = sumF 16 fun j => (byteTable er)[256 * j + v.byte j]! := by
+  rw [show 128 = 8 * 16 from rfl, sumF_blocks]
+  apply sumF_congr
+  intro j hj
+  have hb := v.byte_lt j
+  rw [byteTable, getElem!_eq _ (by rw [Array.size_ofFn]; omega), Array.getElem_ofFn]
+  simp only [show (256 * j + v.byte j) % 256 = v.byte j by omega, show (256 * j + v.byte j) / 256 = j by omega]
+  apply sumF_congr
+  intro i hi
+  rw [F128.testBit_byte v hj hi]
+
+end Fast
+
 /-- `X̂_c(ω_q)` for `c < 2^cols`: the products of `Ŵ_i(ω_q)` over the bits of `c`. -/
 def xhats (sv : Array F128) (q cols : Nat) : Array F128 :=
   let wh := whats sv q cols
@@ -141,6 +320,157 @@ def consW (cols : Nat) (pos : Array Nat) (alpha : Array F128) : Array F128 :=
   let xs := pos.map fun p => xhats sv p cols
   (Array.range (2 ^ cols)).map fun c => sumF pos.size fun j => ea[j]! * (xs[j]!)[c]!
 
+/-! ### The Ligerito rounds in tasks (`@[csimp]`: proofs see the definitions above) -/
+
+namespace Fast
+
+/-- `(Array.range n).map f` in tasks of `b` entries (`parTab_eq`), for any entry type; `b = 1` is a task to an entry. -/
+@[specialize] def parTab {α : Type} (b : Nat) (f : Nat → α) (n : Nat) : Array α :=
+  ((Array.range (n / b)).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+    (fun acc t => acc ++ t.get) #[] ++ (Array.range (n - n / b * b)).map fun j => f (n / b * b + j)
+
+theorem parTab_eq {α : Type} (b : Nat) (f : Nat → α) (n : Nat) : parTab b f n = (Array.range n).map f := by
+  have hp : ∀ a, ((Array.range a).map fun i => Task.spawn fun _ => (Array.range b).map fun j => f (i * b + j)).foldl
+      (fun acc t => acc ++ t.get) #[] = (Array.range (a * b)).map f := by
+    intro a
+    induction a with
+    | zero => simp only [Nat.zero_mul, Array.range_eq_empty_iff.mpr rfl, Array.map_empty, Array.foldl_empty]
+    | succ a ih =>
+      rw [Array.range_succ, Array.map_append, Array.foldl_append, ih, Nat.succ_mul, Array.range_add]
+      simp only [Task.spawn, List.map_toArray, List.map_cons, List.map_nil, List.size_toArray, List.length_cons,
+        List.length_nil, Nat.zero_add, List.foldl_toArray', List.foldl_cons, List.foldl_nil, Array.map_append,
+        Array.map_map, Function.comp_def]
+  conv => rhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n b)]
+  rw [Array.range_add, Array.map_append, Array.map_map, parTab, hp]
+  rfl
+
+theorem range_map_get! {α β : Type} [Inhabited α] (f : α → β) (t : Array α) :
+    (Array.range t.size).map (fun i => f t[i]!) = t.map f := by
+  apply Array.ext
+  · simp
+  · intro i h1 _
+    simp only [Array.getElem_map, Array.getElem_range]
+    rw [getElem!_eq t (by simpa using h1)]
+
+/-- `Σ_{k < n} f(k)` in K, added as `roundPoly` adds. -/
+def sumK (n : Nat) (f : Nat → F256) : F256 := (List.range n).foldl (fun acc k => acc + f k) 0
+
+/-- `sumK` as compiled code computes it: the same additions in the same order, with no list. -/
+@[inline] def sumKFast (n : Nat) (f : Nat → F256) : F256 := foldRange (fun acc k => acc + f k) 0 n 0
+
+@[csimp] theorem sumK_eq_sumKFast : @sumK = @sumKFast :=
+  funext fun n => funext fun f => by rw [sumK, sumKFast, foldRange_eq, List.range_eq_range']
+
+theorem addK_assoc (a b c : F256) : a + b + c = a + (b + c) := by
+  show F256.add (F256.add a b) c = F256.add a (F256.add b c)
+  simp only [F256.add, F128.add_assoc]
+
+theorem addK_zero (a : F256) : a + 0 = a := by
+  cases a
+  show F256.add _ F256.zero = _
+  simp only [F256.add, F256.zero, F128.add_zero]
+
+theorem addK_congr {a a' : F256} (b : F256) (h : a = a') : a + b = a' + b := h ▸ rfl
+
+theorem sumK_zero (f : Nat → F256) : sumK 0 f = 0 := rfl
+
+theorem sumK_succ (n : Nat) (f : Nat → F256) : sumK (n + 1) f = sumK n f + f n := by
+  rw [sumK, sumK, List.range_succ, List.foldl_append]
+  rfl
+
+theorem sumK_congr {n : Nat} {f f' : Nat → F256} (h : ∀ i, i < n → f i = f' i) : sumK n f = sumK n f' := by
+  induction n with
+  | zero => rfl
+  | succ n ih => rw [sumK_succ, sumK_succ, ih fun i hi => h i (by omega), h n (by omega)]
+
+theorem sumK_add (m n : Nat) (f : Nat → F256) : sumK (m + n) f = sumK m f + sumK n fun i => f (m + i) := by
+  induction n with
+  | zero => rw [Nat.add_zero, sumK_zero, addK_zero]
+  | succ n ih => rw [← Nat.add_assoc, sumK_succ, sumK_succ, ih, addK_assoc]
+
+theorem sumK_blocks (a b : Nat) (f : Nat → F256) :
+    sumK (a * b) f = sumK a fun j => sumK b fun i => f (j * b + i) := by
+  induction a with
+  | zero => rw [Nat.zero_mul]; rfl
+  | succ a ih => rw [Nat.succ_mul, sumK_add, ih, sumK_succ]
+
+/-- `Σ_{k < n}` as `2^12`-term blocks and the rest. -/
+theorem sumK_split (n : Nat) (f : Nat → F256) : sumK n f =
+    sumK (n / 4096) (fun i => sumK 4096 fun j => f (i * 4096 + j)) +
+      sumK (n - n / 4096 * 4096) fun j => f (n / 4096 * 4096 + j) := by
+  conv => lhs; rw [← Nat.add_sub_cancel' (Nat.div_mul_le_self n 4096)]
+  rw [sumK_add, sumK_blocks]
+
+/-- `roundPoly`'s terms. -/
+@[inline] def rpA (t w : Array F256) (k : Nat) : F256 := t[2 * k]! * w[2 * k]!
+@[inline] def rpB (t w : Array F256) (k : Nat) : F256 := (t[2 * k]! + t[2 * k + 1]!) * (w[2 * k]! + w[2 * k + 1]!)
+
+/-- `roundPoly` with its sums in `2^12`-term blocks, a task to a block (`roundPoly_eq_fast`). -/
+def roundPolyFast (t w : Array F256) : F256 × F256 :=
+  let h := t.size / 2
+  let ps := parTab 1 (fun i => (sumK 4096 fun j => rpA t w (i * 4096 + j), sumK 4096 fun j => rpB t w (i * 4096 + j)))
+    (h / 4096)
+  (sumK (h / 4096) (fun i => (ps[i]!).1) + sumK (h - h / 4096 * 4096) (fun j => rpA t w (h / 4096 * 4096 + j)),
+   sumK (h / 4096) (fun i => (ps[i]!).2) + sumK (h - h / 4096 * 4096) (fun j => rpB t w (h / 4096 * 4096 + j)))
+
+theorem roundPoly_eq_fast (t w : Array F256) : roundPoly t w = roundPolyFast t w := by
+  show (sumK (t.size / 2) (rpA t w), sumK (t.size / 2) (rpB t w)) = _
+  simp only [roundPolyFast, parTab_eq]
+  rw [sumK_split (t.size / 2) (rpA t w), sumK_split (t.size / 2) (rpB t w)]
+  refine Prod.ext (addK_congr _ (sumK_congr fun i hi => ?_)) (addK_congr _ (sumK_congr fun i hi => ?_)) <;>
+    simp only [getElem!_range_map _ hi]
+
+/-- `foldK` in tasks of `2^12` entries. -/
+def foldKFast (r : F256) (a : Array F256) : Array F256 :=
+  parTab 4096 (fun k => a[2 * k]! + r * (a[2 * k + 1]! + a[2 * k]!)) (a.size / 2)
+
+/-- `addScaled` in tasks of `2^12` entries. -/
+def addScaledFast (w v : Array F256) (b : F128) : Array F256 :=
+  parTab 4096 (fun i => w[i]! + (v[i]!).smul b) w.size
+
+/-- `embedF` in tasks of `2^12` entries. -/
+def embedFFast (g : Array F128) : Array F256 := parTab 4096 (fun i => F256.ofF g[i]!) g.size
+
+/-- `consW` with a task to each query's `X̂` and its entries in tasks of `2^8`. -/
+def consWFast (cols : Nat) (pos : Array Nat) (alpha : Array F128) : Array F128 :=
+  let ea := eqTable alpha
+  let sv := svTable (cols + 1)
+  let xs := parTab 1 (fun j => xhats sv pos[j]! cols) pos.size
+  parTab 256 (fun c => sumF pos.size fun j => ea[j]! * (xs[j]!)[c]!) (2 ^ cols)
+
+end Fast
+
+open Fast in
+@[csimp] theorem roundPoly_eq_roundPolyFast : @roundPoly = @roundPolyFast :=
+  funext fun t => funext fun w => roundPoly_eq_fast t w
+
+open Fast in
+@[csimp] theorem foldK_eq_foldKFast : @foldK = @foldKFast :=
+  funext fun r => funext fun a => by rw [foldK, foldKFast, parTab_eq]
+
+open Fast in
+@[csimp] theorem addScaled_eq_addScaledFast : @addScaled = @addScaledFast :=
+  funext fun w => funext fun v => funext fun b => by rw [addScaled, addScaledFast, parTab_eq]
+
+open Fast in
+@[csimp] theorem embedF_eq_embedFFast : @embedF = @embedFFast :=
+  funext fun g => by rw [embedF, embedFFast, parTab_eq, range_map_get!]
+
+open Fast in
+@[csimp] theorem consW_eq_consWFast : @consW = @consWFast :=
+  funext fun cols => funext fun pos => funext fun alpha => by
+    simp only [consW, consWFast, parTab_eq]
+    rw [range_map_get! (fun p => xhats (svTable (cols + 1)) p cols) pos]
+
+/-- `mleF` with its sum in tasks of `2^12` terms. -/
+def Fast.mleFFast (g : Array F128) (z : Array F128) : F128 :=
+  let e := eqTable z
+  Fast.sumFPar 4096 g.size fun x => g[x]! * e[x]!
+
+open Fast in
+@[csimp] theorem mleF_eq_mleFFast : @mleF = @mleFFast :=
+  funext fun g => funext fun z => by rw [mleF, mleFFast, sumFPar_eq]
+
 /-- What the prover keeps through the opening: the K-table being folded, the weight, and the proof's lists so far. -/
 structure LigState where
   tab : Array F256
@@ -163,19 +493,15 @@ def sendMsg (m : F256 × F256) : LP M Unit := do
   liftT (liftTM (absorbK m.1))
   liftT (liftTM (absorbK m.2))
 
-/-- A grinding nonce from the tape onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message. -/
-def powP (nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
+/-- A grinding nonce onto list `kind` (`0` query, `1` consistency, `2` claim), absorbed as a message: `0`, the only one the
+verifier accepts (R4), so the tape's nonces are unread. -/
+def powP (_nonce : Nat → Nat → UInt64) (kind : Nat) : LP M Unit := do
   let st ← get
-  let i := match kind with
-    | 0 => st.qn.size
-    | 1 => st.cn.size
-    | _ => st.cbn.size
-  let v := nonce kind i
   set (match kind with
-    | 0 => { st with qn := st.qn.push v }
-    | 1 => { st with cn := st.cn.push v }
-    | _ => { st with cbn := st.cbn.push v })
-  liftT (liftTM (pow v))
+    | 0 => { st with qn := st.qn.push 0 }
+    | 1 => { st with cn := st.cn.push 0 }
+    | _ => { st with cbn := st.cbn.push 0 })
+  liftT (liftTM (pow 0))
 
 /-- A challenge: fold the table and the weight at it; then the next message, after splitting when `split`. -/
 def challengeP (io : Asks M) (split : Bool) : LP M F256 := do
@@ -235,6 +561,26 @@ def ringSwitchP (io : Asks M) (sv : Nat → Array F128) (claims : Array Claim) :
   let sws := (Array.range n).map fun k => { gamma := gamma[k]!, rpp := (perClaim[k]!).1, z := (perClaim[k]!).2 : Switched }
   return (ss, T, sws)
 
+/-- `ringSwitchP` with every claim's switched vector computed first, a task to a claim (`ringSwitchP_eq_fast`). -/
+def ringSwitchPFast (io : Asks M) (sv : Nat → Array F128) (claims : Array Claim) :
+    TMW M (Array (Array F128) × F128 × Array Switched) :=
+  let pre := Fast.parTab 1 sv claims.size
+  ringSwitchP io (fun k => if k < claims.size then pre[k]! else sv k) claims
+
+omit [MonadExceptOf String M] in
+theorem ringSwitchP_eq_fast (io : Asks M) (sv : Nat → Array F128) (claims : Array Claim) :
+    ringSwitchP io sv claims = ringSwitchPFast io sv claims := by
+  have h : (fun k => if k < claims.size then (Fast.parTab 1 sv claims.size)[k]! else sv k) = sv := by
+    funext k
+    split
+    · rw [Fast.parTab_eq, Fast.getElem!_range_map _ ‹_›]
+    · rfl
+  exact congrArg (fun s => ringSwitchP io s claims) h.symm
+
+@[csimp] theorem ringSwitchP_eq_ringSwitchPFast : @ringSwitchP = @ringSwitchPFast := by
+  funext M _ _ io sv claims
+  exact ringSwitchP_eq_fast (M := M) io sv claims
+
 /-- **The batched basis on the Boolean cube** (§12.4): `b(y) = Σ_k γ_k·Φ_k(eq(z_k, y))` for `y < 2^ℓ`, with
 `Φ_k(x^u) = eq(r''_k, u)`. -/
 def basisVals (sws : Array Switched) (l : Nat) : Array F128 :=
@@ -248,6 +594,21 @@ def basisVals (sws : Array Switched) (l : Nat) : Array F128 :=
 
 /-- The sum `Σ_c a[c]·b[c]` of two K-tables. -/
 def dotK (a b : Array F256) : F256 := (List.range a.size).foldl (fun acc c => acc + a[c]! * b[c]!) 0
+
+/-- `dotK` with its sum in `2^12`-term blocks, a task to a block (`dotK_eq_dotKFast`). -/
+def Fast.dotKFast (a b : Array F256) : F256 :=
+  let n := a.size
+  let ps := Fast.parTab 1 (fun i => Fast.sumK 4096 fun j => a[i * 4096 + j]! * b[i * 4096 + j]!) (n / 4096)
+  Fast.sumK (n / 4096) (fun i => ps[i]!) +
+    Fast.sumK (n - n / 4096 * 4096) fun j => a[n / 4096 * 4096 + j]! * b[n / 4096 * 4096 + j]!
+
+open Fast in
+@[csimp] theorem dotK_eq_dotKFast : @dotK = @dotKFast :=
+  funext fun a => funext fun b => by
+    show sumK a.size (fun c => a[c]! * b[c]!) = _
+    simp only [dotKFast, parTab_eq]
+    rw [sumK_split a.size (fun c => a[c]! * b[c]!)]
+    exact addK_congr _ (sumK_congr fun i hi => by simp only [getElem!_range_map _ hi])
 
 /-- A sumcheck message masked by the lane round `j`'s pads (`lgMsg j 0` to `lgMsg j 3`, coordinate by coordinate). -/
 def maskMsg (lay : Zk.PadLayout) (h : Array F128) (j : Nat) (m : F256 × F256) : F256 × F256 :=

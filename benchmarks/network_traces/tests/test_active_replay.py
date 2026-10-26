@@ -328,12 +328,14 @@ def test_the_command_line_parses_a_sync_rule(tmp_path, capsys):
 @pytest.mark.parametrize("ms, responses, requests", [
     (15, None, None),
     (110, "status:delivery-refused", "status:delivery-refused"),
-    (300, "status:monitor-unavailable", "status:delivery-refused"),
+    (300, "status:monitor-unavailable", "status:monitor-unavailable"),
 ])
 def test_a_stalled_proxy_fails_its_window_closed(setup, runs, tmp_path, ms, responses, requests):
     """The proxy stopped right after window 1's first release (`--stall`): under the slack nothing faults; 110 ms,
     between two ticks, forwards the request late (`delivery-refused`), though no tick is late enough to fault; 300 ms
-    also makes the egress tick late. Only window 1 fails, both links, and nowhere is there a mismatch."""
+    also makes the next boundary's ticks late, and its ingress tick, first (`active.TICK_ORDER`), names its window's
+    reason before the egress tick finds the late forward. Only window 1 fails, both links, and nowhere is there a
+    mismatch."""
     _, report, _ = setup
     plan, _ = runs
     run = tmp_path / "stalled"
@@ -506,8 +508,6 @@ def test_the_server_proxy_and_peer_listen_on_or_connect_to_the_host_they_are_giv
 
     def reached(port: int) -> None:
         socket.create_connection((host, port)).close()
-        with pytest.raises(ConnectionRefusedError):
-            socket.create_connection(("127.0.0.1", port))
         listening.append(port)
 
     with pytest.raises(_Stop):

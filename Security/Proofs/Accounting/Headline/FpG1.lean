@@ -1,6 +1,6 @@
 import Proofs.Accounting.Headline.Sm120
 import Proofs.Pouw.FpG1.H1
-import Models.Accounting.Guarantees.FpG1
+import Definitions.Accounting.Guarantees.FpG1
 
 /-!
 # FP8-g1's and W4A8-g1's headlines on sm_120, and an honest g1 window that meets every premise

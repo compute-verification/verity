@@ -4,7 +4,7 @@
 #   research run --on vy-nebius-2 --project verity --campaign hash-loop --source <tree> --cwd source \
 #     --env GPU_LEASE_WHO=<id> -- bash benchmarks/pouw/served_h1/serve.sh
 # Coins off the node: a gated window's session (POUW_CHALLENGER_GATE) is refused, exit 13, since the gated served window
-# of record is vllm's H1 path, integrations/vllm/verity_vllm/protocol_options/pouw_h1.py (#3053), not this one.
+# of record is vllm's H1 path, integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), not this one.
 # For development and timing, a session opened before the run: POUW_CHALLENGER=
 # 127.0.0.1:PORT and POUW_CHALLENGER_SESSION=ID (with POUW_CHALLENGER_SECRET_FILE for a session with a secret), its layout
 # the window's (S = --steps, default --max-tokens + 2; EPOCH = serve.py's --epoch, default 1), waited for with `ss -ltn`
@@ -12,9 +12,10 @@
 # the registration root, which a gate session's challenger refuses (it opens the salt only after the session's root).
 # Without one the coins are in-process; with one of the pair alone it exits 13.  The verifier's check reads the session as
 # the gate publishes it (`ssh GATE fetch SESSION`), every head of the auditor's ledger it holds (`ssh GATE ledger`, one
-# --ledger each) and the challenger's key record:
-#   python3 benchmarks/pouw/served_h1/coins.py check --challenger-out SESSION_DIR --ledger LEDGER \
-#     --manifest THIS_RUN/out/manifest.json --key-record KEY_RECORD --period P --root R
+# --ledger each), the host's pins log infra published, its own first-parent history of main and the challenger's key
+# record:
+#   python3 benchmarks/pouw/served_h1/coins.py check --challenger-out SESSION_DIR --ledger LEDGER --pins PINS \
+#     --main MAIN --manifest THIS_RUN/out/manifest.json --key-record KEY_RECORD --period P --root R
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?}; OUT=$D/out; mkdir -p "$OUT"
 mkdir -p /workspace/pouw
@@ -41,7 +42,7 @@ if [ -n "${POUW_CHALLENGER:-}" ]; then
   ss -Hltn "sport = :$port" | grep -q . || { echo "served-h1: NO_CHALLENGER: nothing listens on $POUW_CHALLENGER"; exit 13; }
   echo "served-h1: coins from challenger session $POUW_CHALLENGER_SESSION at $POUW_CHALLENGER (development: its root isn't this window's)"
 elif [ -n "${POUW_CHALLENGER_GATE:-}" ]; then
-  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is integrations/vllm/verity_vllm/protocol_options/pouw_h1.py (#3053)"; exit 13
+  echo "served-h1: NO_CHALLENGER: POUW_CHALLENGER_GATE is refused; the gated served window of record is integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)"; exit 13
 else
   echo "served-h1: coins=in-process (not certified)"
 fi

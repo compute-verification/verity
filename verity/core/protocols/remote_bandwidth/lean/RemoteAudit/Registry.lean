@@ -1,5 +1,5 @@
 import Flock.Canon
-import RemoteAudit.Session
+import RemoteAudit.Flight
 
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
@@ -26,13 +26,14 @@ open Flock
 def Registry.SCHEMA : String := "verity/remote-bandwidth/registry/v0"
 def Registry.UNENDED : String := "unended"
 
-/-- A live registration's session: one this registry started, as it stands, or the outcome it was read back with. -/
+/-- A live registration's session: one this registry started, as it stands, with its windows in flight (`Flight`)
+and the windows a draw's openings coin covers (`Shared`), or the outcome it was read back with. -/
 inductive Registry.Run
-  | running (s : Session.State)
+  | running (s : Session.State) (inFlight perCoin : Nat)
   | read (outcome : String)
 
 def Registry.Run.outcome : Registry.Run → String
-  | .running s => s.outcome.getD Registry.UNENDED
+  | .running s _ _ => s.outcome.getD Registry.UNENDED
   | .read o => o
 
 /-- A node's live registration: its digest, the registration if this registry drew it (`none` read back), and its
@@ -88,36 +89,37 @@ def register (r : Registry) (source node : ByteArray) (blocks : Nat) (payloadRoo
   pure (some reg, { r with live := r.live.push { node, digest := reg.digest, drawn := some reg } })
 
 /-- The next session over the node's live registration, `Session.State.init` on its parameters and coins, as its k-th
-(`index`, if given, must be k); refused for a registration that isn't its node's live one, drawn here. -/
+(`index`, if given, must be k), at `inFlight` windows in flight (`Flight`) and `perCoin` windows a draw's openings coin
+(`Shared`); refused for a registration that isn't its node's live one, drawn here. -/
 def session (r : Registry) (reg : Registration) (params : Session.Params) (coins appendCoins : Array ByteArray)
-    (notBeforeNs : Nat) (index : Option Int) : Option (Nat × Registry) := do
+    (notBeforeNs : Nat) (index : Option Int) (inFlight : Nat := 2) (perCoin : Nat := 1) : Option (Nat × Registry) := do
   let x ← r.live.find? (·.node == reg.node)
   let drawn ← x.drawn
   guard (drawn.digest == reg.digest)
   let k := x.sessions.size
   if let some i := index then guard (i = k)
   let s := Session.State.init params reg coins appendCoins notBeforeNs
-  pure (k, r.withLive reg.node ({ · with sessions := x.sessions.push (.running s) }))
+  pure (k, r.withLive reg.node ({ · with sessions := x.sessions.push (.running s inFlight perCoin) }))
 
-/-- One event through session `k` of the node's live registration (`Session.step`); refused for a session this
-registry isn't running. -/
+/-- One event through session `k` of the node's live registration (`Flight.step` at its windows in flight and its
+windows a coin, which is `Session.step` at two and one); refused for a session this registry isn't running. -/
 def step (r : Registry) (node : ByteArray) (k : Nat) (e : Session.Event) :
     Except String (Option Session.Result × Registry) := do
   let node ← node? node
   let some x := r.live.find? (·.node == node) | return (none, r)
-  let some (.running s) := x.sessions[k]? | return (none, r)
-  let (out, s) ← Session.step s e
-  pure (some out, r.withLive node ({ · with sessions := x.sessions.set! k (.running s) }))
+  let some (.running s f g) := x.sessions[k]? | return (none, r)
+  let (out, s) ← Flight.step f g s e
+  pure (some out, r.withLive node ({ · with sessions := x.sessions.set! k (.running s f g) }))
 
 /-- Session `k` of the node's live registration, if this registry runs it. -/
 def running (r : Registry) (node : ByteArray) (k : Nat) : Option Session.State :=
   match (r.live.find? (·.node == node)).bind (·.sessions[k]?) with
-  | some (.running s) => some s
+  | some (.running s _ _) => some s
   | _ => none
 
 /-- Session `k` of the node's live registration set to `s`, if this registry runs it. -/
 def update (r : Registry) (node : ByteArray) (k : Nat) (s : Session.State) : Registry :=
-  r.withLive node fun x => { x with sessions := x.sessions.modify k fun | .running _ => .running s | o => o }
+  r.withLive node fun x => { x with sessions := x.sessions.modify k fun | .running _ f g => .running s f g | o => o }
 
 /-- Session `k` of the node's live registration ended with `outcome` where `Session` gives it none: the driver's
 (a message it can't read, `malformed`, or the verifiers' `disagreement`). It counts so at the close. -/

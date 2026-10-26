@@ -1,7 +1,7 @@
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Proofs.Flock.Soundness.Game.Expect
 import Randomness
-import Proofs.Flock.Soundness.Model.Basic
+import Definitions.Flock.Arith
 import Definitions.Claims.Hm96
 
 /-!

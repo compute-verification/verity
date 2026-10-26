@@ -18,9 +18,15 @@ spec = importlib.util.spec_from_file_location("repo_check_placement", ROOT / "to
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 NOW = datetime(2026, 10, 3, 17, 50, tzinfo=timezone.utc)
-N1, N2 = CHECK.AUTO
+#: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
+N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
           "tree": "/workspace/research/src/" + "6b3d704c8" * 4 + "abcd", "by": "https://cursor.com/agents/bc-1"}
+
+
+@pytest.fixture(autouse=True)
+def _placed(tmp_path, monkeypatch):
+    monkeypatch.setattr(CHECK, "PLACED", tmp_path / "placed.json")
 
 
 def slot(name: str, holder: dict | None = None, blocked: str | None = None, upcoming: list | None = None) -> dict:
@@ -91,6 +97,20 @@ def test_otherwise_the_fewest_waiters_ahead_and_with_priority_only_the_priority_
         CHECK.placement(machine([{**slot("d"), "trains": True}]))
 
 
+def test_spare_counts_the_checks_a_machine_could_start_now_which_drive_moves_waiting_trains_onto():
+    """24 Oct 05:28Z: two new empty nodes stood idle while trains waited 1-4 h in other machines' lines; drive reads how many
+    train checks each machine could start now and moves that many waiting trains there."""
+    two = machine([{**slot("a"), "trains": True}, {**slot("b"), "trains": True}, slot("c", HOLDER)])
+    assert CHECK.spare(two, priority=True) == 2 and CHECK.spare(two) == 0            # only=trains slots: a lane check gets none
+    assert CHECK.spare(machine([slot("a"), slot("b")], [waiter(priority=True)]), priority=True) == 1   # one is spoken for
+    assert CHECK.spare(machine([slot("a"), slot("b", blocked="12 GB of memory free, under the 560 GB")]), True) == 1
+    assert CHECK.spare(machine([slot("a"), slot("b")], pools=lean(free=1)), True) == 1                 # one Lean check slot free
+    assert CHECK.spare(machine([slot("a", HOLDER)]), True) == 0
+    assert CHECK.spare(machine(None), True) == 1                                     # no slots file: a check runs at once
+    assert CHECK.spare({**machine([slot("a")]), "deadline_in_s": 60}, True) == 0
+    assert CHECK.spare({"check": {"error": "x"}, "lean": {"pools": None}}, True) == 0
+
+
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
     free = machine([slot("d")])
     docs = {N1: "exit 255: ssh: connect to host 81.85.2.165 port 22: Connection timed out", N2: free}
@@ -122,7 +142,7 @@ def test_with_no_machine_readable_auto_refuses_and_launches_nothing(monkeypatch,
     calls = []
     monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, **kw: calls.append(cmd) or subprocess.CompletedProcess(cmd, 0, "", ""))
     assert CHECK.choose([N1, N2], {N1: "x", N2: "y"})[0] is None
-    assert CHECK.record(["--on", "auto"]) == 2 and calls == []
+    assert CHECK.record(["--on", "auto"]) == 2 and [c for c in calls if c[:2] != ["git", "rev-parse"]] == []
     out = capsys.readouterr()
     assert f"check: --on auto: skipping {N1}: exit 255: no route to host" in out.out
     assert f"check: --on auto refused: no machine's slots could be read ({N1}, {N2}); nothing launched" in out.err
@@ -197,7 +217,7 @@ def test_a_quick_tier_on_auto_goes_where_a_check_slot_is_free_whatever_its_lean_
     assert CHECK.choose([N1, N2], {N1: n1, N2: n2})[1].startswith("the fewest waiting ahead")       # a check's pick: no room on n2
     n2_lean_unread = n2 | {"lean": {"error": "PermissionError: /workspace/research/locks/lean-slots"}}
     assert Q.place(f"{N1},{N2}", ROOT, read=lambda names: {N1: n1, N2: n2_lean_unread})[0] == N2
-    got, why = Q.place("auto", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
+    got, why = Q.place(f"{N1},{N2}", ROOT, read=lambda names: {n: "exit 255: no route to host" for n in names})
     assert got is None and why == f"no machine's slots could be read; skipped {N1}: exit 255: no route to host; skipped {N2}: exit 255: no route to host"
 
 
@@ -270,6 +290,7 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     env = {"PATH": os.environ["PATH"], "CHECK_SLOTS": str(locks / "slots"), "LEAN_SLOTS": str(locks / "lean-slots")}
     r = subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
+    doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set
     assert [(s["name"], s["holder"]["pid"] if s["holder"] else None, s["blocked"]) for s in doc["check"]["slots"]] == [
         ("c", os.getpid(), None), ("a", None, None)]
     pools = doc["lean"]["pools"]
@@ -308,3 +329,21 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
     assert CHECK.slots_view(["m"], read=lambda names: {"m": "exit 255: ssh"}) == 1
     assert capsys.readouterr().out.splitlines() == ["m: can't be read: exit 255: ssh", "--on m would refuse: no machine's slots could be read"]
     assert CHECK.slots_view(["--bogus"]) == 2
+
+
+def test_checks_placed_at_once_go_to_different_machines_until_each_shows_in_its_line(tmp_path):
+    """23 Oct 13:04Z: drive's four parallel launches all read cpu-1's one free slot as theirs, and three queued there for an hour
+    while cpu-4's stood free."""
+    docs = {N1: machine([slot("a")]), N2: machine([slot("b")])}
+    read = lambda names: json.loads(json.dumps({n: docs[n] for n in names}))
+    path, t = tmp_path / "placed.json", [1000.0]
+    first = CHECK.place([N1, N2], "a" * 40, True, read=read, path=path, now=lambda: t[0])[1]
+    second = CHECK.place([N1, N2], "b" * 40, True, read=read, path=path, now=lambda: t[0])[1]
+    assert (first, second) == (N1, N2)
+    assert CHECK.place([N1, N2], "a" * 40, True, read=read, path=path, now=lambda: t[0])[1] == N1     # a relaunch: its own claim
+    docs[N1] = machine([slot("a", HOLDER | {"tree": "/workspace/research/src/" + "a" * 40})])
+    docs[N2] = machine([slot("b")])
+    got = CHECK.place([N1, N2], "c" * 40, True, read=read, path=path, now=lambda: t[0])  # a runs; b's claim holds N2:
+    assert got[1] == N1 and CHECK.twins([N1, N2], got[0], N1, True) == [N1, N2]                       # no room, so twins
+    t[0] += CHECK.PLACED_S                                                                              # until b's claim expires
+    assert CHECK.place([N1, N2], "d" * 40, True, read=read, path=path, now=lambda: t[0])[1] == N2

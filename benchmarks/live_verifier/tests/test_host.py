@@ -2,9 +2,10 @@
 `verifier.json` with a dummy challenger ssh: a run is held to the whitelist, written as its request and started as its
 one unit, and its command line is one verifier.py's own parser reads as the request; the gate refuses any other verb,
 any other form of its forced command, a parameter the whitelist doesn't hold, and a read-only key's run; a run is
-stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved doesn't
-run. The slow test runs a run through the stub verifier (`stub_verifier.py`, a real paced session): its out/ is
-verifier.py's, which `auditor_line.py` reads, `fetch` ships it and `replay` replays it through both verifiers."""
+stopped only by its lane or vy-admin, a replay or a close waits for no unit to run, and a run whose pin moved, or on a
+host with no first-parent list of main, doesn't run. The slow test runs a run through the stub verifier
+(`stub_verifier.py`, a real paced session): its out/ is verifier.py's, which `auditor_line.py` reads, `fetch` ships it
+and `replay` replays it through both verifiers."""
 from __future__ import annotations
 
 import argparse
@@ -17,6 +18,7 @@ import shlex
 import subprocess
 import sys
 import tarfile
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -31,6 +33,7 @@ sys.path.insert(0, str(RS))
 
 import challengers  # noqa: E402
 import host as H  # noqa: E402
+import store_layout as SL  # noqa: E402
 import verifier as V  # noqa: E402
 
 T0 = datetime(2026, 10, 21, 13, 0, 0, tzinfo=timezone.utc)
@@ -45,6 +48,8 @@ PACED = [*BASE, "--paced", "2:8000:40:2", "4:16000:40:2"]
 SESSIONS = ["run", "--peer", "vy-nebius-2", "--port", "7958", "--period", "memory-line-1", "--pin", KEY,
             "--sessions", "3", "--windows", "7", "--window-ms", "1000", "--samples", "2773", "--minutes", "30",
             "--jitter-ms", "2.5", "--quantile", "p99", "--lifetime", "4", "--verdict", "both"]
+ROLE = "SYNTHETIC_BF16"
+BOUND = [*PACED, "--model", ROLE, "--engines", "2", "--arena-blocks", "7"]
 
 
 @pytest.fixture
@@ -53,8 +58,10 @@ def svc(tmp_path) -> H.Host:
     settings["challenger"]["ssh"] = SSH
     (tmp_path / "verifier.json").write_text(json.dumps(settings))
     (tmp_path / "var" / "runs").mkdir(parents=True)
-    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl")
+    host = H.Host(root=tmp_path / "var", config=tmp_path / "verifier.json", pins=tmp_path / "pins.jsonl",
+                  main=tmp_path / "main-first-parent.txt")
     H.record_pin(host.pins, PIN, T0, seal=lambda p: None)
+    host.main.write_text(f"{PIN}\n{'e' * 40}\n")
     return host
 
 
@@ -122,22 +129,28 @@ def test_a_run_is_held_to_the_whitelist_written_as_its_request_and_started_as_it
         "--host": "127.0.0.1", "--port": "7951", "--out": str(svc.runs / RUN / "out"), "--registry": str(svc.registry),
         "--transcript": str(svc.scratch / RUN / "transcripts"), "--verdict": "lean", "--challenger": "gate",
         "--challenger-ssh": SSH, "--challenger-peer": "vy-auditor-1", "--challenger-pin": KEY,
-        "--challenger-period": "memory-line-1", "--host-bytes": "1843153879040", "--ingress-bytes-per-s": "4400000000.0"}
+        "--challenger-period": "memory-line-1", "--challenger-main": str(svc.main), "--host-bytes": "1843153879040",
+        "--ingress-bytes-per-s": "4400000000.0"}
     assert argv[i:] == ["--paced", "2:8000:40:2", "4:16000:40:2"]
     assert "run" in refused(call(svc, PACED, units, token="cd34")) and units.started == [f"vy-verifier@{RUN}.service"]
     assert [p.name for p in svc.runs.iterdir()] == [RUN]
 
 
-@pytest.mark.parametrize("words, want", [
-    (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean", "port": 7951, "challenger_minutes": 120}),
-    (SESSIONS, {"paced": None, "verdict": "both", "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
-                "samples": 2773, "challenger_minutes": 30, "jitter_ms": 2.5, "quantile": "p99", "lifetime": 4}),
-])
-def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_hosts_paths_and_capacities(
-        svc, monkeypatch, words, want):
-    rc, out = call(svc, words)
-    assert rc == 0, out
-    argv = json.loads(out)["argv"]
+def test_a_run_is_refused_before_anything_starts_while_the_host_has_no_first_parent_list_of_main(svc):
+    """The verifier refuses every gate session whose challenger pin isn't on main's first-parent line, read from the
+    list infra writes at `Host.main`; without that list no run starts, so none ends with every session refused."""
+    units = Units()
+    svc.main.unlink()
+    assert refused(call(svc, PACED, units)) == (
+        f"this host has no {svc.main}, main's first-parent history (infra writes `git rev-list --first-parent "
+        "origin/main` there, root's, 0644): the verifier refuses every gate session whose challenger pin it can't find "
+        "on it, so no run starts without it")
+    assert units.started == [] and list(svc.runs.iterdir()) == []
+
+
+def parsed(monkeypatch, argv: list[str]) -> tuple[argparse.Namespace, tuple]:
+    """verifier.py's arguments as its own parser reads the gate's command line, and where it then listens: its main up
+    to the listen, which nothing reaches."""
     got = {}
     parse = argparse.ArgumentParser.parse_args
 
@@ -158,16 +171,99 @@ def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_ho
     monkeypatch.setattr(sys, "argv", argv[2:])
     with pytest.raises(Listened) as e:
         V.main()
-    assert e.value.args == ("127.0.0.1", want["port"])
-    a = got["a"]
+    return got["a"], e.value.args
+
+
+@pytest.mark.parametrize("words, want", [
+    (PACED, {"paced": ["2:8000:40:2", "4:16000:40:2"], "verdict": "lean", "port": 7951, "challenger_minutes": 120}),
+    (SESSIONS, {"paced": None, "verdict": "both", "port": 7958, "sessions": 3, "windows": 7, "window_ms": 1000.0,
+                "samples": 2773, "challenger_minutes": 30, "jitter_ms": 2.5, "quantile": "p99", "lifetime": 4}),
+])
+def test_a_runs_command_line_is_one_verifier_py_reads_as_its_request_with_the_hosts_paths_and_capacities(
+        svc, monkeypatch, words, want):
+    rc, out = call(svc, words)
+    assert rc == 0, out
+    a, listened = parsed(monkeypatch, json.loads(out)["argv"])
+    assert listened == ("127.0.0.1", want["port"])
     assert {k: getattr(a, k) for k in want} == want
+    assert (a.model, a.checkpoint, a.pin, a.arena_blocks) == (None, None, None, None)
     assert (a.out, a.registry, a.transcript) == (svc.runs / RUN / "out", svc.registry, svc.scratch / RUN / "transcripts")
-    assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period) == (
-        "gate", SSH, "vy-auditor-1", KEY, "memory-line-1")
+    assert (a.challenger, a.challenger_ssh, a.challenger_peer, a.challenger_pin, a.challenger_period,
+            a.challenger_main) == ("gate", SSH, "vy-auditor-1", KEY, "memory-line-1", svc.main)
     assert (a.host_bytes, a.ingress_bytes_per_s, a.hbm_bytes, a.lean_exe, a.host) == (
         1843153879040, 4.4e9, V.HBM_BYTES, None, "127.0.0.1")
     for spec in a.paced or []:
         V.pace_of(spec, 17.0)
+
+
+@pytest.fixture
+def tree(svc, tmp_path) -> Path:
+    """A pinned tree whose core pin (`models.json`'s shape) pins ROLE as the checkpoint infra provisioned in the host's
+    models dir: a small synthetic BF16 one (`store_layout.synthetic`, an arena of 6 weights blocks)."""
+    ckpt = svc.root / "models" / ROLE
+    pin = SL.synthetic(ckpt, name=ROLE, layers=1, hidden=16, heads=2, kv_heads=1, intermediate=32, vocab=64)
+    (ckpt / "pin.json").unlink()
+    t = tmp_path / "tree"
+    (t / H.MODEL_PINS).parent.mkdir(parents=True)
+    (t / H.MODEL_PINS).write_text(json.dumps({ROLE: {
+        "checkpoint_sha512": pin["checkpoint_sha512"], "files": pin["checkpoint"], "recipe": "bf16/v1",
+        "repo": "example/synthetic-bf16", "revision": "0" * 40}}, indent=1, sort_keys=True) + "\n")
+    return t
+
+
+def test_a_bound_runs_command_line_names_its_roles_checkpoint_and_cores_pin_which_verifier_py_binds_to(
+        svc, tree, monkeypatch, capsys, tmp_path):
+    """`--model ROLE` names no path: the gate adds the role's directory in the host's models dir as `--checkpoint` and
+    the pinned tree's `models.json` as verifier.py's `--pin`, apart from the gate's own `--pin` (the challenger's key,
+    `--challenger-pin`); the rest is the unbound run's command line, and verifier.py binds the store to that pin before
+    it listens."""
+    rc, out = call(svc, BOUND, tree=tree)
+    doc = json.loads(out)
+    assert rc == 0, doc
+    req = json.loads((svc.runs / RUN / "request.json").read_text())
+    assert (req["model"], req["engines"], req["arena-blocks"], req["pin"]) == (ROLE, 2, 7, KEY)
+    argv = req["argv"]
+    assert argv == doc["argv"]
+    i = argv.index("--model")
+    assert argv[i:] == ["--model", ROLE, "--checkpoint", str(svc.root / "models" / ROLE), "--pin",
+                        str(tree / H.MODEL_PINS), "--engines", "2", "--arena-blocks", "7",
+                        "--paced", "2:8000:40:2", "4:16000:40:2"]
+    assert argv.count("--pin") == 1 and argv[argv.index("--challenger-pin") + 1] == KEY
+    unbound = {k: v for k, v in req.items() if k not in ("model", "engines", "arena-blocks", "argv")}
+    assert argv[:i] + argv[i + 10:] == H.verifier_argv(svc, RUN, unbound, svc.settings(), tree=tree)
+
+    monkeypatch.setattr(V.os, "sched_getaffinity", lambda pid: {0})
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    a, listened = parsed(monkeypatch, argv)
+    assert listened == ("127.0.0.1", 7951)
+    assert (a.model, a.checkpoint, a.pin, a.engines, a.arena_blocks, a.challenger_pin, a.layout_workers) == (
+        ROLE, svc.root / "models" / ROLE, tree / H.MODEL_PINS, 2, 7, KEY, 1)
+    pinned = json.loads((tree / H.MODEL_PINS).read_text())[ROLE]["checkpoint_sha512"]
+    assert f"store: {ROLE} pinned ({pinned[:16]}...), " in capsys.readouterr().out
+
+
+def test_a_bound_run_is_refused_before_anything_starts_without_its_roles_checkpoint_or_cores_pin(svc, tree, tmp_path):
+    """The role's directory must be on the host, in the models dir `verifier.json` names (`models`, else
+    /var/lib/vy-verifier/models), and the pinned tree must carry core's pin; else nothing is written or started."""
+    units = Units()
+    lacking = [*PACED, "--model", "QWEN25_32B_BF16", "--arena-blocks", "7"]
+    assert refused(call(svc, lacking, units, tree=tree)) == (
+        f"--model QWEN25_32B_BF16: this host has no {svc.root / 'models' / 'QWEN25_32B_BF16'}, the role's checkpoint "
+        "(infra provisions it, root-held regular files)")
+    pins = (tree / H.MODEL_PINS).read_text()
+    (tree / H.MODEL_PINS).unlink()
+    assert refused(call(svc, BOUND, units, tree=tree)) == (
+        f"--model {ROLE}: the pinned tree has no {H.MODEL_PINS}, core's pin of each role, which the verifier binds the "
+        "store to")
+    (tree / H.MODEL_PINS).write_text(pins)
+    settings = json.loads(svc.config.read_text())
+    svc.config.write_text(json.dumps({**settings, "models": str(tmp_path / "models")}))
+    assert f"this host has no {tmp_path / 'models' / ROLE}," in refused(call(svc, BOUND, units, tree=tree))
+    assert units.started == [] and list(svc.runs.iterdir()) == []
+    (svc.root / "models").rename(tmp_path / "models")
+    rc, out = call(svc, BOUND, units, tree=tree)
+    argv = json.loads(out)["argv"]
+    assert rc == 0 and argv[argv.index("--checkpoint") + 1] == str(tmp_path / "models" / ROLE)
 
 
 def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
@@ -190,9 +286,11 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
         ("--host-bytes", "1"), ("--ingress-bytes-per-s", "1"), ("--hbm-bytes", "1"), ("--disk-bytes-per-s", "1"),
         ("--link-bytes-per-s", "1"), ("--challenger", "serve"), ("--challenger-ssh", "research@198.51.100.1"),
         ("--challenger-peer", "vy-nebius-2"), ("--challenger-key", "/tmp/k"), ("--challenger-params", "4,4"),
+        ("--challenger-main", "/tmp/main"),
         ("--out", "/tmp/out"), ("--registry", "/tmp/r.json"), ("--transcript", "/tmp/t"), ("--lean-exe", "/bin/sh"),
         ("--host", "0.0.0.0"), ("--check-workers", "1"), ("--delta-log2", "-1"), ("--pings", "1"),
-        ("--appends", "9"), ("--memory-of", "/tmp/v.json"), ("--close", "ab"), ("--disk-burst-bytes", "1")]],
+        ("--appends", "9"), ("--memory-of", "/tmp/v.json"), ("--close", "ab"), ("--disk-burst-bytes", "1"),
+        ("--checkpoint", "/tmp/m"), ("--layout-workers", "1")]],
     ([*PACED, "-h"], "unrecognized arguments: -h"),
     ([*PACED, "--help"], "unrecognized arguments: --help"),
     ([*BASE, "--sessions", "1", "extra"], "unrecognized arguments: extra"),
@@ -229,6 +327,18 @@ def test_the_runs_ports_are_the_tunnels_and_not_the_challenger_gates():
     ([*PACED, "--pace-pass-ms", "1e1"], "--pace-pass-ms '1e1'"),
     ([*PACED, "--verdict", "python"], "--verdict 'python'"),
     ([*PACED, "--quantile", "p90"], "--quantile 'p90'"),
+    # a bound run's role and its store's shape; its checkpoint and pin are the host's
+    *[([*PACED, "--model", role, "--arena-blocks", "7"], f"--model {role!r}: a role of core's pin")
+      for role in ("qwen25_32b", "A/B", "..", "", "A" * 65, "A-B", "A B", "QWEN.BF16")],
+    ([*PACED, "--model", ROLE], "--model needs --arena-blocks A"),
+    ([*PACED, "--model", ROLE, "--engines", "8"], "--model needs --arena-blocks A"),
+    *[([*PACED, flag, "7"], f"{flag} shapes a bound run's store: it comes with --model ROLE")
+      for flag in ("--engines", "--arena-blocks")],
+    *[([*PACED, "--model", ROLE, "--engines", n, "--arena-blocks", "7"], f"--engines '{n}': an integer, 1 to 8")
+      for n in ("0", "9", "01", "1.0", "+1", "-1", "0x2")],
+    *[([*PACED, "--model", ROLE, "--arena-blocks", n], f"--arena-blocks '{n}': an integer, 1 to 33554432")
+      for n in ("0", "33554433", "999999999", "1e3", "07", "-1", "7.0")],
+    ([*PACED, "--model", ROLE, "--arena-blocks", "7", "--pin", "/tmp/models.json"], "--pin"),
 ])
 def test_a_run_is_refused_unless_every_parameter_is_one_the_whitelist_holds(svc, words, why):
     units = Units()

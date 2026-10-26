@@ -32,6 +32,9 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
+#: the netlist's rows per joined piece, and the characters a digest encodes at a time
+NETLIST_ROWS = 1 << 16
+HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
 
@@ -51,7 +54,7 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity_vllm.program.registry import prims as P
+    from verity.ml.definitions.registry import prims as P
 
     return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
@@ -247,7 +250,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
-    `verity_vllm.program.registry.sampling_boolean.traced_family` traces it)."""
+    `verity.ml.definitions.registry.sampling_boolean.traced_family` traces it)."""
     s = getattr(g, "scope", None)
     while s is not None:
         d = getattr(s.spec, "defn", s.spec)
@@ -490,6 +493,21 @@ def units(target, cut: Callable | None = None, group: int = 1) -> Units:
     return Units(target, in_widths, [width[g] for g in ret_gates], ins, outs, sigs[0], first, arg_gates, ret_gates, K, tail)
 
 
+def whole(target) -> Units:
+    """``target``'s one-call Program as ONE unit: its live gates, every input leaf a port and every output leaf a return, for a
+    template whose gate graph is not identical components (a parse whose fields read different bytes of one body)."""
+    _prog, call = standalone(target)
+    args, rets = list(call.args), list(call.returns)
+    gates = live_gates(call)
+    local = {g.index: k for k, g in enumerate(gates)}
+    port = {a: j for j, a in enumerate(args)}
+    sig = tuple((g.prim.id, tuple(("g", local[o]) if o in local else ("in", port[o]) for o in g.operands)) for g in gates)
+    in_widths = [_leaf_width(target, p) for p in range(len(args))]
+    width = {**dict(zip(args, in_widths)), **{g.index: g.prim.ret.w for g in gates}}
+    return Units(target, in_widths, [width[r] for r in rets], [[("leaf", p) for p in range(len(args))]],
+                 [[("ret", p) for p in range(len(rets))]], sig, gates, args, rets)
+
+
 #: tensor-core k-step primitive -> fp.tc_dot16's (groups, W, F): verity.ml.circuits.silicon.models AMPERE_BF16_M16N8K16 / HOPPER_BF16_WGMMA_K16.
 #: The Ampere step has two ids, the vLLM registry's _v1 and core's _v2 (verity.ml.circuits.ops.prims): one measured total function.
 TC_STEPS = {"AmpereBF16TcDot16_v1": ((8, 8), 25, -132), "AmpereBF16TcDot16_v2": ((8, 8), 25, -132), "HopperBF16WgmmaDot16_v1": ((16,), 26, -133)}
@@ -710,9 +728,6 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
             s.append("C")
         return s
 
-    for v in ands:
-        a, b = C.data[v]
-        rows_a[col[v]], rows_b[col[v]] = form(a), form(b)
     for r in reads.values():
         r.fill(rows_a, rows_b, form)
     for _, Lf in C.asserts:
@@ -734,7 +749,7 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     rows_b.append([const])
 
     def fix(r):
-        if isinstance(r, np.ndarray):
+        if r is None or isinstance(r, np.ndarray):
             return r
         par: dict[int, int] = {}
         for c in r:
@@ -745,6 +760,20 @@ def layout(C: Circuit, in_names: Sequence[str], out_names: Sequence[str], in_spl
     for rows in (rows_a, rows_b):
         for i, r in enumerate(rows):
             rows[i] = fix(r)
+    at, wired = col.__getitem__, frozenset(const_bit)
+
+    def and_row(Lf: L) -> list:
+        # fix(form(Lf)): over no constant-wired value bit, the form's columns are distinct (col is one-to-one) and below const
+        if wired and not wired.isdisjoint(Lf.s):
+            return fix(form(Lf))
+        s = sorted(map(at, Lf.s))
+        if Lf.c & 1:
+            s.append(const)
+        return s
+
+    for v in ands:
+        a, b = C.data[v]
+        rows_a[col[v]], rows_b[col[v]] = and_row(a), and_row(b)
     lay = Layout(rows_a, rows_b, const, in_groups, out_groups, {})
     read_rows = sum(r.rows for r in reads.values())
     lay.counts = {"ands": len(ands) + read_rows, "asserts": len(C.asserts), "rows": len(rows_a), "in_words": lay.in_words, "out_words": lay.out_words,
@@ -862,10 +891,13 @@ def netlist(lay: Layout, name: str, cut: dict | None = None, leaves: dict | None
         head.append(len(groups))
         for c, words, bits in groups:
             head += [c, words, len(bits), *bits]
-    lines = [" ".join(map(str, head))]
-    for a, b in zip(lay.rows_a, lay.rows_b):
-        lines.append(" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)])))
-    return "\n".join(lines) + "\n" + netlist_pins(cut, leaves)
+    # rows go in pieces of NETLIST_ROWS lines, and the text is joined once: a GLM-5.3 norm unit's is 8.6 GB
+    out = [" ".join(map(str, head)) + "\n"]
+    for k in range(0, lay.useful, NETLIST_ROWS):
+        out.append("\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
+                              for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n")
+    out.append(netlist_pins(cut, leaves))
+    return "".join(out)
 
 
 def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
@@ -879,8 +911,16 @@ def _cols_of(r) -> list:
     return r.tolist() if isinstance(r, np.ndarray) else r
 
 
+def _sha256(text: str) -> hashlib._Hash:
+    """SHA-256 of ``text``'s UTF-8, encoded :data:`HASH_CHUNK` characters at a time."""
+    h = hashlib.sha256()
+    for k in range(0, len(text), HASH_CHUNK):
+        h.update(text[k:k + HASH_CHUNK].encode())
+    return h
+
+
 def digest(text: str) -> str:
-    return hashlib.sha256(text.encode()).hexdigest()
+    return _sha256(text).hexdigest()
 
 
 def _flat_ports(t) -> list[list[int]]:
@@ -950,9 +990,9 @@ def evaluate_layout(lay: Layout, ports: Sequence[Sequence[int]], T: int, flip: t
 
 @dataclass
 class Lowering:
-    """A template instance lowered to identical units: the IR Definition, its :class:`Units`, the unit circuit and its
-    ``flock-ir-unit/v2`` layout. ``evaluate`` runs the laid-out unit rows (what Flock proves) over every unit of every
-    instance and assembles the instances' outputs and cut words."""
+    """A template instance lowered to identical units: the IR Definition, its :class:`Units`, the unit circuit (None once laid
+    out, as `class_statement.unit_lowering` drops it) and its ``flock-ir-unit/v2`` layout. ``evaluate`` runs the laid-out unit
+    rows (what Flock proves) over every unit of every instance and assembles the instances' outputs and cut words."""
 
     name: str
     definition: object
@@ -964,7 +1004,8 @@ class Lowering:
     def domain(self) -> str:
         """The operand domain the statement covers (vocab ``domain``): ``total`` when the unit asserts nothing, so every input
         encoding is proven to give the IR's own output, else ``finite-only``."""
-        return "finite-only" if self.circuit.asserts else "total"
+        asserts = self.layout.counts["asserts"] if self.circuit is None else len(self.circuit.asserts)
+        return "finite-only" if asserts else "total"
 
     @property
     def cut(self) -> dict | None:
@@ -1008,7 +1049,7 @@ class Lowering:
     def sha256_of(self, expanded: str) -> str:
         """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
         lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
-        h = hashlib.sha256(expanded.encode())
+        h = _sha256(expanded)
         h.update(netlist_pins(self.cut, self.leaves).encode())
         return h.hexdigest()
 
@@ -1122,7 +1163,7 @@ def write_tables(out_dir) -> dict:
     :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity_vllm.program.kernels import fa2_relation, rms_relation
+    from verity.ml.definitions.numerics import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)

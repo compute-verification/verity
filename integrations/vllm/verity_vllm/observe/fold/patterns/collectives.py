@@ -1,4 +1,4 @@
-"""[R17 D90, COORD R17-4] The fold-side rule for a tensor-parallel rank's collectives: `vllm.all_reduce.default` / `vllm.all_gather.default`
+"""The fold-side rule for a tensor-parallel rank's collectives: `vllm.all_reduce.default` / `vllm.all_gather.default`
 (pynccl behind vLLM's custom op) resolve to ONE `AllReduce2_v1{N}` / `AllGather2_v1{N}` instance per row whose single `parts` operand is a
 `resolver.Collective` -- this rank's own partial (a memory read of the collective INPUT storage, produced in this rank's log) and the PEER
 rank's partial (the fold's `peers_<request>` root parameter, root class `collective_received`) in RANK order -- and whose output is the
@@ -9,14 +9,14 @@ module hint is REFUSED, fail closed: the cross-rank leg locates the peer by (ste
 the received geometry ([M, N] for all_reduce; [M, world*N] for all_gather along the trailing axis), world size 2 and, for all_gather, `dim`
 = -1 / last.  What it does NOT decide: the step/k numbering (the fold's, `fold._collective_prepare`), the rows' requests (the fold's
 attribution), the peer's value (a declared input; its linkage to the other rank's committed partial is the cross-rank leg's and root
-policy's, never the fold's assumption).  The Definitions are the registered TP2 composites (`verity_vllm.program.registry.b1_tp2`): the same ones the
+policy's, never the fold's assumption).  The Definitions are the registered TP2 composites (`verity.ml.definitions.registry.b1_tp2`): the same ones the
 rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so the two sides compare instance by instance.
 """
 
 from __future__ import annotations
 
-from verity_vllm.program.registry import b1_tp2
-from verity_vllm.program.registry import tp_allreduce as T
+from verity.ml.definitions.registry import b1_tp2
+from verity.ml.definitions.registry import tp_allreduce as T
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_row_major
@@ -33,7 +33,7 @@ KINDS = {ALL_REDUCE_OP: "all_reduce", ALL_GATHER_OP: "all_gather"}
 class TpCollective:
     """`vllm.all_reduce(tensor [M,N] bf16, group) -> [M,N]`   -> `Compute(AllReduce2_v1{N}, rows=M, (Collective(own=tensor, "all_reduce", site),), (PerRow(out),))`
     `vllm.all_gather(tensor [M,N] bf16, dim, world, group) -> [M, world*N]` -> `Compute(AllGather2_v1{N}, rows=M, (Collective(own, "all_gather", site),), (PerRow(out),))`.
-    [lane vllm-tp-n] `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
+    `world` is the profile's communicator size: 2 binds the `*2` identities above, > 2 binds `AllReduce_v2{WORLD,N}` /
     `AllGather_v1{WORLD,N}` (`b1_tp2.all_reduce` / `all_gather`); the `parts` operand is `Array<world, Array<N, bf16>>` in rank order and
     the fold fills every peer rank's row from the request's `peers` root (one field per (collective, peer rank)).  An all-reduce on a
     route `tp_allreduce.CAPTURED` covers at the capture's settings, world, GPU and transport (`covered_route`) binds the Build's routed

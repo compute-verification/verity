@@ -166,7 +166,7 @@ def test_a_refused_session_reaches_nothing_of_the_auditor(exe, tmp_path):
 
 
 def test_a_stop_at_finish_holds_the_proofs_and_cuts_the_auditor(exe, tmp_path):
-    """Admitted, its `Register` is relayed, but its proof is held (answered `Ok` by the loop) and its `Finish`, which the
+    """Admitted, its `Register` leaves, but its proof is dropped (answered `Ok` by the loop) and its `Finish`, which the
     loop's own check refuses (before the step-0 coin commitment), is the session's stop: neither reaches the auditor, the
     prover is told in a verdict that does not accept, and the record is Python's for open, finish, slot, admit, stop."""
     fw = FW.Firewall(tmp_path / "lean")

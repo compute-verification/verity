@@ -98,9 +98,10 @@ def staged(tmp_path_factory):
                            bound=["--partition", str(d / "partition.json"), "--program", str(d / "program.json")])
 
 
-def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None) -> Path:
+def _stage(s, name: str, registered=True, salts=None, entry=None, extra=None, outs=None, out_salts=None, cs=None) -> Path:
     positions, refs = G.table(POSITIONS)
     rows, reg_salts, e = s.reg.statement(positions)
+    rows = rows if cs is None else cs
     sub = json.loads(s.text.split("\n", 2)[1][5:]).get("subcircuit", "rope-head/d64/neox-bf16")
     inputs = SimpleNamespace(name="rope-registered", subcircuit=SimpleNamespace(id=sub))
     reg = {"cs": entry or e, **(extra or {})} if registered else extra
@@ -179,6 +180,24 @@ def test_each_table_row_opens_the_registered_root_at_its_position(staged):
         assert code == 1 and want in out, (name, out)
 
 
+def test_a_table_of_two_registrations_rows_opens_no_one_root(staged):
+    """A table whose rows are two registrations' of the value (two row tables of a window, each row under its own salt with
+    a true path to its own root) is refused whichever one root the verifier holds: a port is read against one registered
+    root, so a prover that builds a chunk over two row tables can't have it verified (`tables.registered_reads`)."""
+    positions, _ = G.table(POSITIONS)
+    other = G.Registered.commit(P.program_digest(staged.program), VALUE,
+                                np.random.default_rng(20261024).integers(0, 1 << 16, (TABLE_ROWS, 64)).tolist())
+    (rows_a, salts_a, e_a), (rows_b, salts_b, e_b) = staged.reg.statement(positions), other.statement(positions)
+    half = len(positions) // 2
+    mix = lambda a, b: list(a[:half]) + list(b[half:])  # noqa: E731
+    public = _stage(staged, "two-tables", cs=mix(rows_a, rows_b), salts=mix(salts_a, salts_b),
+                    entry={**e_a, "paths": mix(e_a["paths"], e_b["paths"])})
+    code, out = _statement(staged, public, staged.dir / "own.json")
+    assert code == 1 and f"table row {half} does not open {VALUE}'s registered root at position {positions[half]}" in out, out
+    code, out = _statement(staged, public, _own(staged, "own-other-root", lambda ps: ps["cs"].__setitem__("root", other.root.hex())))
+    assert code == 1 and f"table row 0 does not open {VALUE}'s registered root at position {positions[0]}" in out, out
+
+
 def test_each_instance_reads_the_position_its_unit_reads_in_the_verifiers_program(staged):
     """A table row that opens the registered root is still refused when an instance reads it in place of the row its unit
     reads in the verifier's program."""
@@ -187,6 +206,24 @@ def test_each_instance_reads_the_position_its_unit_reads_in_the_verifiers_progra
     assert code == 1 and f"unit 3 reads position {POSITIONS[3]}, and the verifier's program reads 10" in out
     code, out = _statement(staged, public, _own(staged, "own-none", lambda ps: ps["cs"]["reads"].__setitem__(4, None)))
     assert code == 1 and f"reads no row of {VALUE} in unit 4" in out
+
+
+def test_a_unit_past_a_ports_reads_reads_none(staged):
+    """A unit past a port's ``reads`` reads none, as a null there does (`badInstance`'s ``reads[u]?``), so a reads file
+    trimmed of its trailing nulls (`h1window.table_reads_file`'s) verifies as the untrimmed one: the honest statement is
+    accepted alike under reads padded with nulls past the population, and a statement whose last unit's read is null or
+    absent is refused alike."""
+    public = _stage(staged, "honest-trim")
+
+    def verdict(name, edit):
+        code, out = _statement(staged, public, _own(staged, name, edit))
+        return code, [line for line in out.splitlines() if " ms" not in line]
+
+    trimmed = verdict("own-trimmed", lambda ps: None)
+    assert trimmed[0] == 0 and verdict("own-padded", lambda ps: ps["cs"]["reads"].extend([None] * 5)) == trimmed
+    null = verdict("own-last-null", lambda ps: ps["cs"]["reads"].__setitem__(7, None))
+    assert null[0] == 1 and any(f"reads no row of {VALUE} in unit 7" in line for line in null[1]), null
+    assert verdict("own-last-absent", lambda ps: ps["cs"]["reads"].pop()) == null
 
 
 def test_the_ports_are_exactly_the_verifiers(staged):
@@ -202,7 +239,10 @@ def test_the_ports_are_exactly_the_verifiers(staged):
     assert code == 1 and "names port x registered, and the verifier's registered reads do not" in out
     bad = staged.dir / "bad.json"
     cs = {k: v for k, v in staged.own["ports"]["cs"].items() if k not in ("words", "word_bits")}
-    for doc, want in (({"format": "verity/registered-reads/v1", "ports": {}}, "not a verity/registered-reads/v0 file"),
+    for doc, want in (({"format": "verity/registered-reads/v2", "ports": {}}, "not a verity/registered-reads/v1 file"),
+                      ({**staged.own, "ports": {"cs": {**cs, "reads_from": 0}}}, "reads_from is a verity/registered-reads/v1 key"),
+                      ({**staged.own, "format": G.READS_V1, "ports": {"cs": {**cs, "reads_at": 0}}}, "and no other"),
+                      ({**staged.own, "format": G.READS_V1, "window": 0}, "and no other"),
                       ({**staged.own, "ports": {}}, "no port"),
                       ({**staged.own, "ports": {"cs": {**cs, "words": 64, "word_bits": 8}}}, "leaves of 16 or 32 bits"),
                       ({**staged.own, "ports": {"cs": {**cs, "word_bits": 32}}}, "a row's words when they are 32"),
@@ -210,6 +250,22 @@ def test_the_ports_are_exactly_the_verifiers(staged):
         bad.write_text(json.dumps(doc))
         code, out = _statement(staged, public, bad)
         assert code == 2 and want in out, out
+
+
+def test_a_v1_files_reads_start_at_its_first_unit(staged):
+    """A `verity/registered-reads/v1` port's `reads` start at unit `reads_from`: from unit 0 they are v0's, and from unit 1
+    unit 0 reads nothing, so its instance is refused."""
+    public = _stage(staged, "honest-v1")
+    v1 = staged.dir / "own-v1.json"
+    v1.write_text(json.dumps({**staged.own, "format": G.READS_V1}))
+    code, out = _statement(staged, public, v1)
+    assert code == 0, out
+    cs = staged.own["ports"]["cs"]
+    later = staged.dir / "own-v1-later.json"
+    later.write_text(json.dumps({**staged.own, "format": G.READS_V1,
+                                 "ports": {"cs": {**cs, G.READS_FROM: 1, "reads": cs["reads"][1:]}}}))
+    code, out = _statement(staged, public, later)
+    assert code == 1 and f"reads no row of {VALUE} in unit 0" in out, out
 
 
 def test_the_ports_rows_are_the_registered_rows(staged):
@@ -392,7 +448,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     `out`) has each table row, at the registered position `x` it opens, the `b ‖ c` the coin server recorded there: at level
     0 node `x` of the table's `root_B`, above it rep 0's level-`l` top and then rep 1's (`rec_outer.TopValue`). Here the
     registered rows are the session's level-`l` tops: its `root_B`, or rep 0's top of six nodes and rep 1's of four. With
-    the inner transcript recording them the full draw passes setup (to the subset law's refusal without `--zk`); a
+    the inner transcript recording them the full draw passes setup (to the session's proof files, which it has none of); a
     transcript whose `root_B`, rep 0's top or rep 1's top differs at one node a row reads is refused at that row, and an
     inner session record whose link points are not the transcript's is refused before setup (`RecVStar.innerLink`). This
     is the one test of `root_B` on a statement: V*'s level 0 at the rec-coins fixture is 436 openings of 64 lanes, about
@@ -430,7 +486,7 @@ def test_a_rounds_tops_are_the_coin_servers(staged, tmp_path, level):
     def off(xs: list[bytes], i: int) -> list[bytes]:
         return [bytes([b[0] ^ 1]) + b[1:] if j == i else b for j, b in enumerate(xs)]
 
-    assert why(root, tops) == "refused: a subset draw without --zk: no soundness claim draws by this law"
+    assert why(root, tops).startswith("session files: "), why(root, tops)
     # row r of the table reads position OUT_POSITIONS[r]: 2, 7, 0, 9, 4, 4, 1, 6
     if level == 0:
         assert why(off(root, 9), tops) == (f"setup: rec-tops: {unit}: port out's table row 3 is not node 9 of circuit's root_B, "
@@ -452,7 +508,7 @@ def rope(tmp_path_factory):
     import ci
 
     try:
-        root = ci.fetch(FIXTURE, tmp_path_factory.mktemp("store"))
+        root = ci.fetch_sessions(FIXTURE, tmp_path_factory.mktemp("store"))
     except (subprocess.CalledProcessError, OSError) as e:
         pytest.skip(f"the evidence store is not reachable: {e}")
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)

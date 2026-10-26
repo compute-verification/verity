@@ -1,0 +1,16 @@
+{
+ "definitions": {
+  "CompileSlice_v2{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=0,EW=0,Q=3,D=5,P=5,K=3,CN=5,CTW=4,CU=4,G=1,CD=2,SW=6}": {
+   "and": 83092,
+   "type": "75b06dc2dbc3311ea163bc1feb299d2d6a6ff5135e76edbf6814d74be1dda67e15e9335270e1c9867c92f933f4d24159d3ef74cd45b8774603c5c025f0880c80"
+  },
+  "CompileSlice_v2{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=0,EW=0,Q=3,D=5,P=5,K=3,CN=5,CTW=4,CU=4,G=5,CD=2,SW=6}": {
+   "and": 83092,
+   "type": "8adc2317aac63e6f21d2bec65afc194a9af206f10c7486160fe0509c93470c32495f98eef7a1c352c3200077f0c6a720bedfd53a6d7c74bfefbe390292e9a26f"
+  },
+  "CompileSlice_v2{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=1,EW=0,Q=3,D=5,P=5,K=3,CN=5,CTW=4,CU=4,G=5,CD=2,SW=6}": {
+   "and": 91785,
+   "type": "abcb12941e33413633266a4b933f383ece5a6aa6a5949e74906fa425b076179e7dcac75f9bd02f6171d31eb8bb6b0db185d9def7ed78c2a3ce110aa3ac22c9df"
+  }
+ }
+}

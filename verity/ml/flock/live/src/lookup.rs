@@ -177,7 +177,7 @@ impl LookupNet {
             in_groups: vec![Group { col: 0, words: 1, bits: vec![n] }],
             out_groups: vec![Group { col: out0 / 128, words: 1, bits: vec![bits] }],
             in_words: 1, out_cols: vec![out0 / 128], a: bd.a, b: bd.b, unit_log, sha256: h.finalize().into(), leaves: None, cut: None,
-            flat: Default::default(),
+            order: None, flat: Default::default(),
         };
         (net, LookupNet { n, unit_log, const_pos: konst, lo, bits, k, table, lo_rows, hi_rows, prod0, out0 })
     }

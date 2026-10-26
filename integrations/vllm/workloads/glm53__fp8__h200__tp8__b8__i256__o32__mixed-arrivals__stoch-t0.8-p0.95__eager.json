@@ -370,7 +370,7 @@
    "index": 1,
    "prompt_len": 25,
    "max_tokens": 7,
-   "arrive_step": 9,
+   "arrive_step": 2,
    "arrival_offset_s": 0.088,
    "prompt_token_ids": [
     10163,
@@ -413,7 +413,7 @@
    "index": 2,
    "prompt_len": 245,
    "max_tokens": 23,
-   "arrive_step": 13,
+   "arrive_step": 9,
    "arrival_offset_s": 0.127,
    "prompt_token_ids": [
     1655,
@@ -1211,8 +1211,8 @@
   ],
   "arrive_steps": [
    0,
+   2,
    9,
-   13,
    13,
    15,
    16,
@@ -1221,7 +1221,7 @@
   ],
   "arrival_rule": {
    "nominal_step_s": 0.01,
-   "arrive_step": "round(offset_s / nominal_step_s)",
+   "arrive_step": "realized_arrive_steps of round(offset_s / nominal_step_s): an arrival after every earlier request has finished is declared at the forward after the last of them, where the serving loop admits it",
    "schedule": "0 | sorted U[0.05, 0.6*O*nominal_step_s] s (staggered); all 0 (none)"
   },
   "length_rule": {
@@ -1234,5 +1234,5 @@
   "tp": 8,
   "execution": "eager"
  },
- "note": "R12 sweep glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager: B=8 I<=256 O<=32 stoch-t0.8-p0.95 arrivals=staggered; prompt lens [256, 25, 245, 91, 175, 8, 13, 103], caps [2, 7, 23, 3, 11, 29, 32, 13], arrive steps [0, 9, 13, 13, 15, 16, 18, 18]; every request to max_tokens => 50 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  A row of record: sampling.ignore_eos, every request done only at its public cap."
+ "note": "R12 sweep glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__stoch-t0.8-p0.95__eager: B=8 I<=256 O<=32 stoch-t0.8-p0.95 arrivals=staggered; prompt lens [256, 25, 245, 91, 175, 8, 13, 103], caps [2, 7, 23, 3, 11, 29, 32, 13], arrive steps [0, 2, 9, 13, 15, 16, 18, 18]; every request to max_tokens => 50 engine steps; max_num_batched_tokens keeps the whole admitted prefill in one step; max_model_len = I + O.  A row of record: sampling.ignore_eos, every request done only at its public cap."
 }

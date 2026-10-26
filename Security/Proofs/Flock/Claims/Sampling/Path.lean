@@ -1,6 +1,6 @@
 import Proofs.Flock.Claims.Sampling.Binding
 import Proofs.Flock.Verifier.Registered
-import Properties.Proofs.NetworkCertifier.Bytes
+import Proofs.Properties.NetworkCertifier.Bytes
 
 /-!
 # The registered path check binds (frame-v3-sha512)

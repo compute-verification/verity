@@ -9,8 +9,9 @@ held_s is the KV the step's requests hold (memory-map/v1's plan: only held block
 a policy credits (`lifetimes.policy`: rekey, held, expire), both from `analyze.py` at stocks on a grid of the pool,
 interpolated here. Everything is one engine's: R_cap and R_in a node's over its engines, the pool the engine's.
 
-R_cap is a step model's units (a JSON of `token`, `sample`, attention `coefficients` and `calls` by class, as
-`--models` gives them under `--model-name` and `--lever`) over the run's own steps: the largest over 1 s windows
+R_cap is a step model's nonlinear units (a JSON of `token`, `sample`, attention `coefficients` and `calls` by class, as
+`--models` gives them under `--model-name` and `--lever`, the attention's data products among them as class ``products``:
+E_WORD is in nonlinear units, so a step model without them is refused) over the run's own steps: the largest over 1 s windows
 (`--r-cap peak`), or the most over a sliding window of each row's T, over T (`window`, the property's per-window
 budget, which the honest node keeps to by admission control; `window-run` over every phase of the run). Or it is a
 node peak given outright (`--r-cap-node`). A row of L < 2 is marked refused: a session that defers a block's
@@ -35,7 +36,9 @@ from pathlib import Path
 
 import numpy as np
 
-E_WORD = {"conjectured": 364_497.0, "best found": 490_080.0}
+# E a word in nonlinear units (#4622's gate model, note:20261026T0110Z-report-s5-lowerbounds), at p1024, k = 3: conjectured,
+# SquaringFloor and ChainSum at 2^-40; best found, the seam square's 16,544 nonlinear units a squaring times 3 x 1,021
+E_WORD = {"conjectured": 1_145_562.0, "best found": 16_544.0 * 3 * 1021}
 COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start")
 GRID = ((60.0, (1, 2, 5, 10, 60)), (20.0, (1, 2, 3)))
 DEFERRED_MIN_L = 2
@@ -165,6 +168,10 @@ def main() -> int:
     ph = an["phases"][a.phase]
     pool = an["serve"]["pool_bytes"]
     models = json.loads(a.models.read_text())["models"][a.model_name]
+    if not a.r_cap_node and "products" not in models[a.lever]["coefficients"]:
+        raise SystemExit(f"{a.models}: step model {a.model_name} {a.lever!r} has no data products (class `products`), and "
+                         "E_WORD is in nonlinear units (#4622): give its attention coefficients the row's data products (2 D a "
+                         "head-key, b_q), or a node peak in nonlinear units (--r-cap-node)")
     rc = r_cap(models[a.lever], ph)
     rc["window_run"] = {T: max(r_cap(models[a.lever], p)["window"][T] for p in an["phases"]) for T in rc["window"]}
     r_engine = {T: a.r_cap_node / a.engines if a.r_cap_node else

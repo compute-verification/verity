@@ -91,7 +91,7 @@ def onePort (bc : ByteArray) : Flock.Registered.Port where
   words := none
   wordBits := 0
   domain := ByteArray.empty
-  reads := #[]
+  readsRel := #[]
 
 theorem climb_one (dom leaf path : ByteArray) (i : ℕ) :
     Flock.Registered.climb dom leaf i (Flock.log2ceil 1) path = leaf := by

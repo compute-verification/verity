@@ -1,8 +1,36 @@
 diff --git a/crates/flock-core/src/lincheck.rs b/crates/flock-core/src/lincheck.rs
-index 0030fd7..82ef254 100644
+index 0030fd7..bb86644 100644
 --- a/crates/flock-core/src/lincheck.rs
 +++ b/crates/flock-core/src/lincheck.rs
-@@ -567,6 +567,10 @@ pub struct LincheckProof {
+@@ -376,20 +376,22 @@ impl<'a> LincheckCircuit for SparseMatrixCircuit<'a> {
+ #[derive(Clone)]
+ pub struct CscCircuit {
+     n_cols: usize,
+-    a_col_ptr: Vec<u32>,
++    a_col_ptr: Vec<u64>,
+     a_rows: Vec<u32>,
+-    b_col_ptr: Vec<u32>,
++    b_col_ptr: Vec<u64>,
+     b_rows: Vec<u32>,
+     /// Constant-wire pin column (see [`LincheckCircuit::const_pin_col`]).
+     const_pin: Option<usize>,
+ }
+ 
+ /// Flatten one sparse matrix into CSC arrays: rows with a 1 in column `c` are
+-/// `rows_flat[col_ptr[c] as usize .. col_ptr[c+1] as usize]`.
+-fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
++/// `rows_flat[col_ptr[c] as usize .. col_ptr[c+1] as usize]`. Row indices fit
++/// 32 bits; the offsets are 64-bit, since one matrix can hold more than 2^32
++/// nonzeros.
++fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u64>, Vec<u32>) {
+     assert!(m.num_rows <= u32::MAX as usize);
+     assert!(m.num_cols <= u32::MAX as usize);
+-    let mut col_ptr = vec![0u32; m.num_cols + 1];
++    let mut col_ptr = vec![0u64; m.num_cols + 1];
+     for row in m.rows.iter() {
+         for &c in row {
+             col_ptr[c + 1] += 1;
+@@ -567,6 +569,10 @@ pub struct LincheckProof {
      /// [`LincheckGrinding::disabled`].
      #[serde(default)]
      pub grinding_nonces: Vec<u64>,
@@ -13,7 +41,7 @@ index 0030fd7..82ef254 100644
  }
  
  /// Fiat--Shamir grinding policy for the Boolean lincheck.
-@@ -1974,6 +1978,7 @@ fn column_sumcheck_prove<Ch: Challenger>(
+@@ -1974,6 +1980,7 @@ fn column_sumcheck_prove<Ch: Challenger>(
          z_partial,
          matrix_evals: Vec::new(),
          grinding_nonces: take(grinding_nonces),
@@ -21,6 +49,30 @@ index 0030fd7..82ef254 100644
      };
      let claim = LincheckClaim {
          r_inner_skip,
+@@ -3016,4 +3023,23 @@ mod tests {
+             Err(LincheckError::KSkipExceedsKLog { .. })
+         ));
+     }
++
++    /// One matrix past 2^32 nonzeros: its CSC offsets past `u32::MAX`, and the
++    /// fold over them. About 52 GB, so ignored; run on a node with
++    /// `cargo test --release -p flock-core -- --ignored --test-threads 1 past_u32`.
++    #[test]
++    #[ignore]
++    fn csc_nnz_past_u32() {
++        use crate::lincheck::{CscCircuit, LincheckCircuit};
++        let (n0, n1) = ((1usize << 31) + 1, (1usize << 31) + 2);
++        let a = SparseBinaryMatrix::new(2, 2, vec![vec![0; n0], vec![0; n1]]);
++        let b = SparseBinaryMatrix::new(2, 2, vec![Vec::new(), vec![1]]);
++        let c = CscCircuit::from_matrices(&a, &b);
++        let nnz = (n0 + n1) as u64;
++        assert!(nnz > u32::MAX as u64);
++        assert_eq!((c.a_col_ptr.as_slice(), c.a_rows.len()), ([0, nnz, nnz].as_slice(), nnz as usize));
++        let (alpha, e) = (F128::new(3, 5), [F128::new(7, 11), F128::new(13, 17)]);
++        // characteristic 2: column 0 adds e[0] n0 (odd) times and e[1] n1 (even) times
++        assert_eq!(c.fold_alpha_batched(alpha, &e), vec![alpha * e[0], e[1]]);
++    }
+ }
 diff --git a/crates/flock-core/src/pcs.rs b/crates/flock-core/src/pcs.rs
 index c36ce18..5281a68 100644
 --- a/crates/flock-core/src/pcs.rs
@@ -682,6 +734,85 @@ index 195c44a..b90ae6a 100644
          let Some(&nonce) = proof
              .consistency_batch_grinding_nonces
              .get(consistency_nonce)
+diff --git a/crates/flock-core/src/r1cs.rs b/crates/flock-core/src/r1cs.rs
+index 6bfe14b..e6e1cd6 100644
+--- a/crates/flock-core/src/r1cs.rs
++++ b/crates/flock-core/src/r1cs.rs
+@@ -568,17 +568,18 @@ const APPLY_STRIP: usize = 8;
+ /// Flatten `m.rows` (Vec<Vec<usize>>) into CSR arrays: row `r`'s column
+ /// indices are `cols[row_ptr[r] as usize .. row_ptr[r+1] as usize]`. One
+ /// sequential pass; removes the per-row Vec indirection from the hot loops.
+-fn flatten_csr(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
++/// The offsets are 64-bit: one matrix can hold more than 2^32 nonzeros.
++fn flatten_csr(m: &SparseBinaryMatrix) -> (Vec<u64>, Vec<u32>) {
+     assert!(m.num_cols <= u32::MAX as usize);
+     let nnz: usize = m.rows.iter().map(|r| r.len()).sum();
+     let mut row_ptr = Vec::with_capacity(m.num_rows + 1);
+     let mut cols = Vec::with_capacity(nnz);
+-    row_ptr.push(0u32);
++    row_ptr.push(0u64);
+     for row in m.rows.iter() {
+         for &c in row {
+             cols.push(c as u32);
+         }
+-        row_ptr.push(cols.len() as u32);
++        row_ptr.push(cols.len() as u64);
+     }
+     (row_ptr, cols)
+ }
+@@ -605,7 +606,7 @@ fn as_u128s(block: &[F128]) -> &[u128] {
+ /// Working set: colbits = k bytes (32 KB at k = 2^15) + the strip's z/out —
+ /// L1-resident on Apple P-cores (128 KB L1d).
+ fn apply_strip_csr(
+-    row_ptr: &[u32],
++    row_ptr: &[u64],
+     cols: &[u32],
+     z_strip: &[F128],
+     out_strip: &mut [F128],
+@@ -683,7 +684,7 @@ fn transpose_64x64(a: &mut [u64; 64]) {
+ /// ~5x the 8-wide kernel on the sha2 matrices (more single-threaded, where
+ /// it is purely compute-bound).
+ fn apply_strip64_csr(
+-    row_ptr: &[u32],
++    row_ptr: &[u64],
+     cols: &[u32],
+     z_strip: &[F128],
+     out_strip: &mut [F128],
+@@ -734,7 +735,7 @@ fn apply_strip64_csr(
+ }
+ 
+ /// Single-block CSR kernel (tail strips whose block count < APPLY_STRIP).
+-fn apply_one_block_csr(row_ptr: &[u32], cols: &[u32], z_block: &[F128], out_block: &mut [F128]) {
++fn apply_one_block_csr(row_ptr: &[u64], cols: &[u32], z_block: &[F128], out_block: &mut [F128]) {
+     let z = as_u128s(z_block);
+     let f128_per_block = z_block.len();
+     for out_idx in 0..f128_per_block {
+@@ -952,4 +953,25 @@ mod tests {
+             "const_pin value"
+         );
+     }
++
++    /// One matrix past 2^32 nonzeros through the packed apply: row 1's columns
++    /// sit past `u32::MAX` in the flat CSR, where a wrapped offset would read
++    /// row 0's. About 52 GB, so ignored; run on a node with
++    /// `cargo test --release -p flock-core -- --ignored --test-threads 1 past_u32`.
++    #[test]
++    #[ignore]
++    fn csr_nnz_past_u32() {
++        use super::{F128, flatten_csr};
++        let n0 = (1usize << 32) + 2;
++        let mut rows = vec![Vec::new(); 128];
++        rows[0] = vec![0; n0];
++        rows[1] = vec![1];
++        let m_0 = SparseBinaryMatrix::new(128, 128, rows);
++        let (row_ptr, cols) = flatten_csr(&m_0);
++        assert_eq!((row_ptr[1], row_ptr[2], cols.len()), (n0 as u64, n0 as u64 + 1, n0 + 1));
++        drop((row_ptr, cols));
++        // z = bit 1 only: row 0 (column 0, an even count) gives 0, row 1 gives z[1]
++        let out = apply_block_diag_packed(&m_0, &[F128::new(0b10, 0)], 7, 7);
++        assert_eq!(out, vec![F128::new(0b10, 0)]);
++    }
+ }
 diff --git a/crates/flock-core/src/verifier.rs b/crates/flock-core/src/verifier.rs
 index c1c6d04..7f3c0d6 100644
 --- a/crates/flock-core/src/verifier.rs

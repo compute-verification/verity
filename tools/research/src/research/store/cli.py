@@ -554,7 +554,10 @@ def cmd_label(argv: list[str]) -> int:
     value = json.loads(ns.value) if ns.value_json else ns.value
     key = vocab.canonical_key(ns.key)                      # hygiene (§8.1): the canonical key and spelling go in the file, the form the vocabulary
     value = vocab.coerce(key, vocab.canonical_value(key, value))   # declares (a real bool for zk / model_agrees, an int for B), never the word
+    st = LocalStore(ns.store)
     why = vocab.check(key, value) or vocab.check_ref(key, ns.ref)
+    if not why and key == vocab.MEMORY_LINE_OF_RECORD:
+        why = vocab.check_line_of_record(value, _run_file(st, ns.ref, vocab.MEMORY_LINE_FILE))
     if why and not ns.off_vocab:
         print(f"research data label: refused: {why}.  Nothing written (--off-vocab writes it anyway)", file=sys.stderr)
         return 2
@@ -564,11 +567,19 @@ def cmd_label(argv: list[str]) -> int:
             print(f"research data label: {note}", file=sys.stderr)
     if why:
         print(f"research data label: warning: {why}; stored anyway (--off-vocab)", file=sys.stderr)
-    st = LocalStore(ns.store)
     print(st.add_label(ns.target, key, value, ns.by, ref=ns.ref))
     said, lost = _label_write_through(st, ns.target)
     print(f"research data label: {said}", file=sys.stderr)
     return 1 if lost else 0
+
+
+def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
+    """The JSON file `rel` of run `run_id`'s run record (its Attempt's `outputs.run_record`), or None where the store has none."""
+    try:
+        art = ((st.get_attempt(run_id) or {}).get("outputs") or {}).get("run_record")
+        return json.loads((st.fetch(art, paths=[rel]) / rel).read_text()) if art else None
+    except (StoreError, OSError, ValueError):
+        return None
 
 
 def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:

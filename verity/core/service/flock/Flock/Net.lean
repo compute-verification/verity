@@ -245,6 +245,117 @@ def parse (lines : Array String) : V Net := do
   if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
   ofRows name useful constPos inGroups outGroups ra rb
 
+/-- Row `i` of a `NET` block (line `1 + i`) as numbers, as `parse` reads it. -/
+def rowNums (lines : Array String) (i : Nat) : V (Array Nat) :=
+  (tokens (lines.getD (1 + i) "")).mapM fun t => match t.toNat? with
+    | some n => pure n
+    | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
+
+/-- A line's numbers as `parse` reads a row's, `none` when a token isn't one. -/
+def lineNums (s : String) : Option (Array Nat) := (tokens s).mapM String.toNat?
+
+/-- A line and, when read, its numbers (`some (lineNums s)`): read where the file's lines were split
+(`SplitNL.splitTasks`). -/
+structure Row where
+  s : String
+  v : Option (Option (Array Nat))
+  ok : ∀ w, v = some w → w = lineNums s
+
+/-- `s` with its numbers read when it starts with a digit, as a row does. -/
+def Row.of (s : String) : Row :=
+  if (String.Pos.Raw.get s 0).isDigit then ⟨s, some (lineNums s), fun _ h => (Option.some.inj h).symm⟩
+  else ⟨s, none, fun _ h => nomatch h⟩
+
+/-- `lineNums s`, from `t[k]` when it is a row of the line `s` (one pointer comparison when it is the same string). -/
+@[inline] def look (t : Array Row) (k : Nat) (s : String) : Option (Array Nat) :=
+  match t[k]? with
+  | some r => if r.s == s then (match r.v with | some w => w | none => lineNums s) else lineNums s
+  | none => lineNums s
+
+theorem look_eq (t : Array Row) (k : Nat) (s : String) : look t k s = lineNums s := by
+  unfold look
+  split
+  · next r _ =>
+    split
+    · next h =>
+      obtain ⟨rs, rv, rok⟩ := r
+      cases rv with
+      | none => rfl
+      | some w => exact (rok w rfl).trans (congrArg lineNums (eq_of_beq h))
+    · rfl
+  · rfl
+
+theorem mapM_toNat (xs : List String) (m : String) :
+    xs.mapM (fun t => match t.toNat? with | some n => (pure n : V Nat) | none => throw m) =
+      match xs.mapM String.toNat? with | some v => pure v | none => throw m := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.mapM_cons]
+    cases x.toNat? with
+    | none => rfl
+    | some n =>
+      rw [ih]
+      cases xs.mapM String.toNat? <;> rfl
+
+theorem mapM_toNat_arr (xs : Array String) (m : String) :
+    xs.mapM (fun t => match t.toNat? with | some n => (pure n : V Nat) | none => throw m) =
+      match xs.mapM String.toNat? with | some v => pure v | none => throw m := by
+  rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList, mapM_toNat]
+  cases xs.toList.mapM String.toNat? <;> rfl
+
+/-- Row `i` of a `NET` block as numbers, from `t[k]` (`look`). -/
+def rowAt (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) : V (Array Nat) :=
+  match look t k (lines.getD (1 + i) "") with
+  | some v => pure v
+  | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
+
+theorem rowAt_eq (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) :
+    rowAt t k lines i = rowNums lines i := by
+  unfold rowAt rowNums
+  rw [look_eq, lineNums, mapM_toNat_arr]
+
+/-- `parse` with each row's numbers from `t` (`look`): the rows read where the file's lines were split
+(`HmRow.parseFastFrom`), line `base + j` of the file being line `j` of `lines`. `parseWith_eq` holds for any `t`. -/
+def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
+  let h := tokens (lines.getD 0 "")
+  if h[0]? != some "flock-ir-unit/v2" then throw "not a flock-ir-unit/v2 circuit"
+  let name := h.getD 1 ""
+  let useful ← num h 2
+  let constPos ← num h 3
+  let (inGroups, at1) ← groups h 4
+  let (outGroups, at2) ← groups h at1
+  if at2 != h.size then throw "flock-ir-unit/v2: trailing header fields"
+  if outGroups.isEmpty then throw "flock-ir-unit/v2: no output group"
+  if constPos + 1 != useful then throw "flock-ir-unit/v2: the constant is not the last useful column"
+  let inWords := (inGroups.back?.map fun g => g.col + g.words).getD 0
+  if inGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD || g.col + g.words > inWords)
+      || outGroups.any (fun g => g.bits.foldl (· + ·) 0 > g.words * WORD) then
+    throw "flock-ir-unit/v2: a port group's ports overrun its words, or an input group the input rows"
+  if inWords * WORD > constPos then throw "flock-ir-unit/v2: the input rows reach the constant"
+  let mut ra := #[]
+  let mut rb := #[]
+  for i in [0:useful] do
+    let v ← rowAt t (base + 1 + i) lines i
+    let na := v.getD 0 0
+    let nb := v.getD (1 + na) 0
+    if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {i} is malformed"
+    ra := ra.push (v.extract 1 (1 + na))
+    rb := rb.push (v.extract (2 + na) (2 + na + nb))
+  let mut at_ := 1 + useful
+  if (lines.getD at_ "").startsWith "LEAVES " then
+    match Json.parse ((lines.getD at_ "").drop 7).toString with
+    | .ok _ => at_ := at_ + 1
+    | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
+  if (lines.getD at_ "").startsWith "CUT " then
+    throw s!"{name}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation"
+  if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
+  ofRows name useful constPos inGroups outGroups ra rb
+
+theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines := by
+  unfold parseWith parse
+  simp only [rowAt_eq, rowNums]
+
 end Net
 
 end Flock

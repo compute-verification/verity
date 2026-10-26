@@ -59,8 +59,8 @@ WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
 SORTED = {"assumptions", "guarantees", "reads", "dependencies", "compile_time"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
-#: `frozen` and `conjectures`)
-NESTED = {"upstream", "shape", "claims"}
+#: `frozen` and `conjectures`, `trees`' `except`)
+NESTED = {"upstream", "shape", "claims", "trees"}
 MISSING = object()
 
 

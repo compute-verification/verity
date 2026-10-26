@@ -22,9 +22,9 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation import evaluate
-from verity_vllm.program.kernels import mhc_twin as W
-from verity_vllm.program.registry import boolean_mhc as BM
-from verity_vllm.program.registry import mhc as M
+from verity.ml.definitions.numerics import mhc_twin as W
+from verity.ml.definitions.registry import boolean_mhc as BM
+from verity.ml.definitions.registry import mhc as M
 
 EPS = 1e-6
 F32_SPECIALS = np.array([0, 0x80000000, 1, 0x80000001, 0x00800000, 0x3F800000, 0xBF800000, 0x3F800001, 0x7F7FFFFF, 0xFF7FFFFF,
@@ -327,6 +327,8 @@ def test_boolean_tf32_prenorm_split() -> None:
     _agree(bind(BM.MhcPrenormTf32SplitV2, K=64, OUT=1), a, b)
 
 
+@pytest.mark.slow
+@pytest.mark.boolean_sweep
 def test_boolean_post_and_sinkhorn() -> None:
     rng = np.random.default_rng(12)
     x, residual, post, comb = _post_operands(rng, 16, 2, 2)
@@ -339,6 +341,7 @@ def test_boolean_residual_broadcast() -> None:
     _agree(bind(BM.MhcResidualBroadcastV2, HC=4, H=8), bf16(rng, (16, 8)))
 
 
+@pytest.mark.boolean_sweep
 @pytest.mark.slow
 def test_boolean_tf32_compositions() -> None:
     """The multi-launch TF32 Definitions are Calls of their Boolean pieces and have the `_v1` word views."""

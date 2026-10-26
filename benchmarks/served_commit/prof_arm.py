@@ -68,10 +68,15 @@ class ProfArm(ServedCommitArm):
 
 
 class RootsArm(ProfArm):
-    """Each finished run's root, bounded-staging record and per-step (plan key, predicted length, bytes) appended to
+    """Each finished run's root, bounded-staging record, per-step (plan key, predicted length, bytes) and per-thread CPU appended to
     $RESEARCH_RUN_DIR/out/roots.jsonl, and each distinct run layout (every step's (name, dtype, shape, bytes), once per process) to
     out/layouts.jsonl. Every RootsArm commits under one run id, so their roots compare across arms. ``retain_levels`` None is the
-    committer's default (no levels under retain=none)."""
+    committer's default (no levels under retain=none).
+
+    The records are written after the run's timed window, where `ServedCommitArm` checks a run (the next ``begin_run``, before its
+    clock, or the harness reading ``extras`` or ``gate``): building and hashing a run's layout costs tens of milliseconds at 26k
+    tensors (and its garbage collections), which a run's time must not hold. A run's thread CPU runs from its ``begin_run`` to its
+    record, so it includes the finalize."""
 
     retain_levels: bool | None = None
     dumped: ClassVar[set[str]] = set()
@@ -94,18 +99,22 @@ class RootsArm(ProfArm):
         com._begin_step = begin_step
 
     def begin_run(self, target: Any) -> None:
+        self._check()
         self.plan_log = []
         super().begin_run(target)
         self.cpu0 = _thread_cpu()
 
-    def end_run(self, target: Any) -> None:
-        cpu = _cpu_delta(self.cpu0, _thread_cpu())
-        super().end_run(target)
+    def _check(self) -> None:
+        if self.pending is not None:
+            self._record(self.pending)
+        super()._check()
+
+    def _record(self, rc: Any) -> None:
         import hashlib
         import json
         import os
 
-        rc = self.pending
+        cpu = _cpu_delta(self.cpu0, _thread_cpu())
         bs = dict((rc.extra or {}).get("bounded_staging") or {})
         w = dict((rc.extra or {}).get("windows") or {})
         st = dict(self.committer._nc.stats()) if hasattr(self.committer._nc, "stats") else {}
@@ -136,7 +145,8 @@ class RootsArm(ProfArm):
 
 
 class StockProfArm:
-    """The stock engine with ProfArm's exec/sample and run ranges and nothing else: the control's own per-step times."""
+    """The stock engine with ProfArm's exec/sample and run ranges and nothing else: the control's own per-step times. Its
+    per-thread CPU line in out/roots.jsonl is written after the run's timed window, as `RootsArm`'s records are."""
 
     protocols: tuple[str, ...] = ()
     precision = "bfloat16"
@@ -145,6 +155,7 @@ class StockProfArm:
 
     def __init__(self, id: str) -> None:
         self.id = id
+        self.cpu0: dict[str, float] | None = None
 
     def install(self, target: Any) -> StockProfArm:
         return self
@@ -159,17 +170,27 @@ class StockProfArm:
             _ranged(runner, "sample", "sample")
 
     def begin_run(self, target: Any) -> None:
+        self._record()
         self.cpu0 = _thread_cpu()
         torch.cuda.nvtx.range_push(f"run:{self.id}")
 
     def end_run(self, target: Any) -> None:
+        torch.cuda.nvtx.range_pop()
+
+    def extras(self, target: Any) -> dict[str, Any]:
+        self._record()
+        return {}
+
+    def _record(self) -> None:
         import json
         import os
 
-        torch.cuda.nvtx.range_pop()
+        if self.cpu0 is None:
+            return
+        cpu, self.cpu0 = _cpu_delta(self.cpu0, _thread_cpu()), None
         out = os.path.join(os.environ.get("RESEARCH_RUN_DIR", "."), "out", "roots.jsonl")
         with open(out, "a") as f:
-            f.write(json.dumps({"arm": self.id, "thread_cpu_s": _cpu_delta(self.cpu0, _thread_cpu())}) + "\n")
+            f.write(json.dumps({"arm": self.id, "thread_cpu_s": cpu}) + "\n")
 
 
 class SwitchArm(RootsArm):

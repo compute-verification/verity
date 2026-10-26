@@ -8,7 +8,7 @@ import Proofs.Pouw.SteinerRigidity
 Neekon Vafa's definition (`note:20261015T1810Z-draft-relative-security-def`) as RS-DEF froze it
 (`note:20261015T1815Z-draft-rs-definition-frozen`, v1), in an abstract machine model, so that the construction and
 proof workers' results land here as theorems or as named hypotheses. The definitions the guarantees
-(`Models.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
+(`Definitions.Pouw.Guarantees.RelativeSecurity`) read are in `Definitions.Pouw.RelativeSecurity`, under the same names.
 
 * The machine model (`Machine`, `MatMachine`): algorithms from inputs to outputs, their semantics with the coins as
   part of the input, a per-run `cost` and its worst case `time`, with axioms: nonnegativity, monotonicity (running `f`
@@ -260,6 +260,13 @@ theorem prob_le_of_slices {α β : Type*} [Fintype α] [Fintype β] (E : α × �
   classical
   rw [prob_eq_expect, expect_prod_swap]
   exact expect_le_of_le hκ fun b => by rw [← prob_eq_expect (fun a => E (a, b))]; exact h b
+
+/-- A probability over a product is the mean of its slices at the second coordinate. -/
+theorem prob_prod_eq_sum {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) :
+    prob E = ∑ b, (Fintype.card β : ℝ)⁻¹ * prob (fun a => E (a, b)) := by
+  classical
+  rw [prob_eq_expect, expect_prod_swap, expect, div_eq_inv_mul, Finset.mul_sum]
+  exact Finset.sum_congr rfl fun b _ => by rw [prob_eq_expect (fun a => E (a, b))]
 
 /-- Probabilities are invariant under a relabelling of the sample space. -/
 theorem prob_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (p : α → Prop) :
@@ -2405,6 +2412,103 @@ theorem serviceFloor_of_rounds {Mc : Machine} {S : Service} {Ω : Type} [Fintype
   refine (prob_mono fun x hx => ⟨hx.1, hx.2.trans_le ?_⟩).trans
     (G.window_le_exp hp hG _ Bind ZK hB hZ hacc (fun x => Mc.charge M (e.symm x, r)) V hF₀ hcost D)
   linarith [hV x]
+
+/-- **One slice of the window's rounds**: `RoundsHyp`'s conclusion at one adversary and one value of its coins, with
+the acceptance `acc`, the charge `cost` and the binding and zero-knowledge breaks named rather than bounded, so that
+a bound per prover can read the breaks of each slice. -/
+def RoundsSlice {Ω : Type} [Fintype Ω] {R : ℕ} (p F₀ sl Vmax : ℝ) (acc : Paths Ω R → Prop) (cost : Paths Ω R → ℝ)
+    (Bind ZK : Fin R → Paths Ω R → Prop) : Prop :=
+  ∃ (G : RoundGame Ω R) (V : Paths Ω R → ℝ), G.ExpBound (1 - p) ∧
+    (∀ x, acc x → G.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) ∧ (∀ x, V x ≤ Vmax) ∧
+    ∀ x, (R - G.deficiency x) * F₀ - V x - R * sl ≤ cost x
+
+/-- **Theorem S on one slice**: its accepted runs charged below `(R − D) F₀ − Vmax − R sl` have probability at most
+`e^{−(1−p) D}` plus the slice's breaks, summed over the rounds. -/
+theorem RoundsSlice.prob_le {Ω : Type} [Fintype Ω] {R : ℕ} {p F₀ sl Vmax : ℝ} {acc : Paths Ω R → Prop}
+    {cost : Paths Ω R → ℝ} {Bind ZK : Fin R → Paths Ω R → Prop} (h : RoundsSlice p F₀ sl Vmax acc cost Bind ZK)
+    (hp : p ≤ 1) (hF₀ : 0 < F₀) (D : ℝ) :
+    prob (fun x => acc x ∧ cost x < (R - D) * F₀ - Vmax - R * sl) ≤
+      Real.exp (-((1 - p) * D)) + ∑ w, (prob (Bind w) + prob (ZK w)) := by
+  obtain ⟨G, V, hG, hacc, hV, hcost⟩ := h
+  have hbad : prob (fun x => ∃ w ∈ (univ : Finset (Fin R)), Bind w x ∨ ZK w x) ≤
+      ∑ w, (prob (Bind w) + prob (ZK w)) :=
+    (prob_exists_le _ _).trans (Finset.sum_le_sum fun w _ => prob_or_le _ _)
+  refine (prob_mono fun x hx => ?_).trans
+    ((prob_or_le _ _).trans (add_le_add (G.prob_accepts_le (by linarith) hG D) hbad))
+  have h1 := (hcost x).trans_lt hx.2
+  have h2 : (R - G.deficiency x) * F₀ < (R - D) * F₀ := by linarith [hV x]
+  have hD := (mul_lt_mul_iff_of_pos_right hF₀).mp h2
+  rcases hacc x hx.1 with h | ⟨w, hw⟩
+  · exact Or.inl ⟨h, by linarith⟩
+  · exact Or.inr ⟨w, mem_univ _, hw⟩
+
+/-- A finder's collision probability is at most its `ecr/sha-512` bound at any budget: the bound is `⊤` unless the
+finder meets the assumption within the budget. -/
+theorem ofReal_finderPr_le_ecrBound (H : Claims.Msg → Claims.Msg) (F : Claims.Finder) (q : ℝ) :
+    ENNReal.ofReal (F.Pr H) ≤ Claims.ecrBound H F q := by
+  unfold Claims.ecrBound
+  split_ifs with h
+  · have h1 : F.Pr H ≤ Claims.Ex (fun s => (F.cost s : ℝ)) / 2 ^ (256 : ℝ) := h.1
+    exact ENNReal.ofReal_le_ofReal (h1.trans (div_le_div_of_nonneg_right h.2 (by positivity)))
+  · exact le_top
+
+/-- **The service floor per prover from the window's slices**: if every adversary that commits first has, at each
+value `r` of its coins, a slice of the window's rounds whose round-`w` breaks are at most `δb + βb · Pr[fb … w]` and
+`δz + βz · Pr[fz … w]`, then its accepted runs charged below `(R − D) F₀ − Vmax − R sl` have probability at most its
+`breakBound` at `ε ≥ e^{−(1−p) D}`, at any budget constants: each slice's bound is at most 1 and at most
+`ε + R (δb + δz)` plus its finder terms (`Claims.ecrBound` bounds each finder at every budget), and the slices
+average. -/
+theorem serviceFloorPerProver_of_slices {Mc : Machine} {S : Service} {Ω : Type} [Fintype Ω] {R : ℕ}
+    {p F₀ sl Vmax δb βb δz βz : ℝ} (e : S.Seed ≃ Paths Ω R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders Mc S R)
+    (h : ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+      (∀ σ σ' r, (Mc.eval M (σ, r)).1 = (Mc.eval M (σ', r)).1) → ∀ r : Ω',
+      ∃ Bind ZK : Fin R → Paths Ω R → Prop,
+        (∀ w, prob (Bind w) ≤ δb + βb * (fb Ω' M r w).Pr sha) ∧ (∀ w, prob (ZK w) ≤ δz + βz * (fz Ω' M r w).Pr sha) ∧
+        RoundsSlice p F₀ sl Vmax
+          (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+          (fun x => Mc.charge M (e.symm x, r)) Bind ZK)
+    (hp : p ≤ 1) (hF₀ : 0 < F₀) (hβb : 0 ≤ βb) (hβz : 0 ≤ βz) (cb db cz dz : ℝ) {ε : ℝ} (D : ℝ)
+    (hε : Real.exp (-((1 - p) * D)) ≤ ε) :
+    ServiceFloorPerProver Mc S ((R - D) * F₀ - Vmax - R * sl) (breakBound sha fb fz cb db cz dz ε δb βb δz βz) := by
+  intro Ω' _ M hc
+  have hc0 : (0 : ℝ) ≤ (Fintype.card Ω' : ℝ)⁻¹ := inv_nonneg.mpr (Nat.cast_nonneg _)
+  have hinv : ENNReal.ofReal (Fintype.card Ω' : ℝ)⁻¹ ≤ (Fintype.card Ω' : ENNReal)⁻¹ := by
+    rcases Nat.eq_zero_or_pos (Fintype.card Ω') with h0 | h0
+    · simp [h0]
+    · have hpos : (0 : ℝ) < Fintype.card Ω' := by exact_mod_cast h0
+      rw [ENNReal.ofReal_inv_of_pos hpos, ENNReal.ofReal_natCast]
+  have hfd : ∀ (fd : Finders Mc S R) (q β : ℝ) (r : Ω'), 0 ≤ β →
+      ENNReal.ofReal (β * ∑ w, (fd Ω' M r w).Pr sha) ≤ ENNReal.ofReal β * finderTerm sha fd q Ω' M r := by
+    intro fd q β r hβ
+    rw [ENNReal.ofReal_mul hβ, ENNReal.ofReal_sum_of_nonneg fun w _ => ?_]
+    · unfold finderTerm
+      exact mul_le_mul' le_rfl (Finset.sum_le_sum fun w _ => ofReal_finderPr_le_ecrBound _ _ _)
+    · unfold Claims.Finder.Pr Claims.Pr
+      positivity
+  rw [prob_prod_eq_sum, ENNReal.ofReal_sum_of_nonneg fun r _ => ?_]
+  swap
+  · exact mul_nonneg hc0 (prob_nonneg _)
+  unfold breakBound
+  refine Finset.sum_le_sum fun r _ => ?_
+  rw [ENNReal.ofReal_mul hc0]
+  refine mul_le_mul' hinv (le_min (ENNReal.ofReal_le_one.mpr (prob_le_one _)) ?_)
+  obtain ⟨Bind, ZK, hB, hZ, hsl⟩ := h Ω' M hc r
+  have hs1 : ∑ w : Fin R, (prob (Bind w) + prob (ZK w)) ≤
+      ∑ w : Fin R, ((δb + δz) + (βb * (fb Ω' M r w).Pr sha + βz * (fz Ω' M r w).Pr sha)) :=
+    Finset.sum_le_sum fun w _ => by linarith [hB w, hZ w]
+  have hs2 : ∑ w : Fin R, ((δb + δz) + (βb * (fb Ω' M r w).Pr sha + βz * (fz Ω' M r w).Pr sha)) =
+      R * (δb + δz) + ((βb * ∑ w, (fb Ω' M r w).Pr sha) + βz * ∑ w, (fz Ω' M r w).Pr sha) := by
+    rw [Finset.sum_add_distrib, Finset.sum_const, Finset.sum_add_distrib, Finset.card_univ, Fintype.card_fin,
+      nsmul_eq_mul, ← Finset.mul_sum, ← Finset.mul_sum]
+  have hreal : prob (fun σ : S.Seed => S.verify (Mc.eval M (σ, r)).1 σ (Mc.eval M (σ, r)).2 = true ∧
+      Mc.charge M (σ, r) < (R - D) * F₀ - Vmax - R * sl) ≤
+      ε + R * (δb + δz) + (βb * ∑ w, (fb Ω' M r w).Pr sha) + βz * ∑ w, (fz Ω' M r w).Pr sha := by
+    rw [prob_equiv e]
+    refine (hsl.prob_le hp hF₀ D).trans ?_
+    linarith [hs1, hs2, hε]
+  refine (ENNReal.ofReal_le_ofReal hreal).trans ?_
+  refine (ENNReal.ofReal_add_le.trans (add_le_add ENNReal.ofReal_add_le le_rfl)).trans ?_
+  exact add_le_add (add_le_add le_rfl (hfd fb _ βb r hβb)) (hfd fz _ βz r hβz)
 
 /-- Both operands lie in `G_use = [−g, g]` (RS-DEF v2 §1.10). -/
 def InGrid {n : ℕ} (g : ℤ) (x : Mat ℤ n n × Mat ℤ n n) : Prop := ∀ i j, |x.1 i j| ≤ g ∧ |x.2 i j| ≤ g
@@ -5301,22 +5405,30 @@ def RoundsHypKSt (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
           c.1 ≠ c'.1 → ∀ k, (prog w s).coef (word w s c) k ≠ 0 → (prog w s).coef (word w s c') k = 0) ∧
         κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **Staged rounds give the window's cost line with stage-wise floors summed**: under `RoundsHypKSt` with products
-of affine operands and chain factor 1, `RoundsHyp` holds at `p = ¾` with `F₀ = St κ L n n' B`, the round's `St`
-stage floors summed, and no slack. The round's deficiency is the mean of its stages' (`StagedPlay.dAt_game`), its
-exponential bound comes from the stages' supermartingale (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`),
-and each stage's certified count from its own errors. -/
-theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
-    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
-    (h : RoundsHypKSt Mc S R St Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
-    (hOk : ∀ π, Ok π → AffProd π) (hSt : 0 < St) (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S (DStage St n L np B n') R (3 / 4) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+/-- `roundsHyp_of_staged` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
+`acc`, charge `cost` and breaks named, and `RoundsHypKSt`'s cost line at that slice. -/
+theorem roundsSlice_of_staged {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
+    {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
+    (P : StagedPlay (DCells n n' B) (DBits n L np B n') Ar St R) (acc : Paths (DStage St n L np B n') R → Prop)
+    (cost : Paths (DStage St n L np B n') R → ℝ) (Bind ZK : Fin R → Paths (DStage St n L np B n') R → Prop)
+    (V : Paths (DStage St n L np B n') R → ℝ) (hacc : ∀ x, acc x → P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x)
+    (hV : ∀ x, V x ≤ Vmax)
+    (hK : ∀ x, ∃ (N : Fin R → Fin St → ℕ) (prog : ∀ w s, SlpG (DBits n L np B n') Ar (N w s))
+        (pc : Fin R → Fin St → Fin n → Fin B → Fin L → Ar)
+        (vq : Fin R → Fin St → Fin B → Fin L → Fin n' → Ar)
+        (word : ∀ w s, DCells n n' B → Fin (N w s)),
+        (∀ w s j, (prog w s).isProd j = true → Ok ((prog w s).prod j)) ∧
+        (∀ w s c, P.errAt x w s c =
+          fun z => (prog w s).val z (word w s c) - dPrefix (pc w s) (vq w s) wt c.1 c.2.1 c.2.2.val z) ∧
+        (∀ w s c c', (∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w s c (bitInd U) = 0) →
+          (∀ U : Finset (DBits n L np B n'), U.card ≤ 2 → P.errAt x w s c' (bitInd U) = 0) →
+          c.1 ≠ c'.1 → ∀ k, (prog w s).coef (word w s c) k ≠ 0 → (prog w s).coef (word w s c') k = 0) ∧
+        κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ cost x)
+    (hc : ChainBound Ar n L np B n' wt Ok 1) (hOk : ∀ π, Ok π → AffProd π) (hSt : 0 < St) (hκ : 0 ≤ κ) :
+    RoundsSlice (3 / 4) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax acc cost Bind ZK := by
   classical
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
-  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
-  refine ⟨P.game, Bind, ZK, V, P.game.expBound_of_staged (by norm_num) (P.game_staged fun x w s c => ?_), hB, hZ,
-    hacc, hV, fun x => ?_⟩
+  refine ⟨P.game, V, P.game.expBound_of_staged (by norm_num) (P.game_staged fun x w s c => ?_), hacc, hV,
+    fun x => ?_⟩
   · obtain ⟨N, prog, pc, vq, word, hOk', hE, -, -⟩ := hK x
     rw [hE w s c]
     exact (prog w s).cubeQuad_err (fun j hj => hOk _ (hOk' w s j hj)) (word w s c) (pc w s) (vq w s) wt c.1 c.2.1
@@ -5360,7 +5472,25 @@ theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb 
       _ ≤ κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x := by
         gcongr with w _ s
         exact (mul_le_mul_of_nonneg_left (hcor w s) (Nat.cast_nonneg L)).trans (hprod w s)
-      _ ≤ Mc.charge M (e.symm x, r) := hcharge
+      _ ≤ cost x := hcharge
+
+/-- **Staged rounds give the window's cost line with stage-wise floors summed**: under `RoundsHypKSt` with products
+of affine operands and chain factor 1, `RoundsHyp` holds at `p = ¾` with `F₀ = St κ L n n' B`, the round's `St`
+stage floors summed, and no slack. The round's deficiency is the mean of its stages' (`StagedPlay.dAt_game`), its
+exponential bound comes from the stages' supermartingale (`RoundGame.expBound_of_staged`, `StagedPlay.game_staged`),
+and each stage's certified count from its own errors (`roundsSlice_of_staged`, slice by slice). -/
+theorem roundsHyp_of_staged {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {Ok : ((DBits n L np B n' → Ar) → Ar) → Prop}
+    (h : RoundsHypKSt Mc S R St Vmax δb δz κ n L np B n' wt Ok) (hc : ChainBound Ar n L np B n' wt Ok 1)
+    (hOk : ∀ π, Ok π → AffProd π) (hSt : 0 < St) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (DStage St n L np B n') R (3 / 4) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  obtain ⟨G, V', hG, hacc', hV', hcost⟩ := roundsSlice_of_staged P
+    (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+    (fun x => Mc.charge M (e.symm x, r)) Bind ZK V hacc hV hK hc hOk hSt hκ
+  exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 section Overlap
 
@@ -6575,20 +6705,34 @@ theorem card_oCells (St : ℕ) (n n' B : Fin St → ℕ) :
     Fintype.card (OCells St n n' B) = ∑ t, n t * n' t * B t := by
   simp [OCells, Fintype.card_sigma, Fintype.card_prod, mul_assoc]
 
-/-- **Overlapping stages give the window's cost line** (Theorem K∥): under `RoundsHypKOv` with chain factor 1 on
-every stage's shape, `RoundsHyp` holds at `p = ¾` with `F₀ = κ L C`, `C` the round's cell-blocks over all its
-stages, and no slack. The luck is per draw, with the other draws' bits given (`OvPlay.passBound_game`), and the
-certified count is `SlpG.cells_card_le_ov`'s at every bit point of the draws, so at least its mean. -/
-theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
-    {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} (h : RoundsHypKOv Mc S R St Vmax δb δz κ n L np B n' wt)
+/-- `roundsHyp_of_overlap` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
+`acc`, charge `cost` and breaks named, and `RoundsHypKOv`'s cost line at that slice. -/
+theorem roundsSlice_of_overlap {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St → ℕ} {L np : ℕ} {Ar : Type} [CommRing Ar]
+    {wt : Fin np → Ar}
+    (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R)
+    (acc : Paths (OSpot St n L np B n') R → Prop) (cost : Paths (OSpot St n L np B n') R → ℝ)
+    (Bind ZK : Fin R → Paths (OSpot St n L np B n') R → Prop) (V : Paths (OSpot St n L np B n') R → ℝ)
+    (hacc : ∀ x, acc x → P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (hV : ∀ x, V x ≤ Vmax)
+    (hK : ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (OBits St n L np B n') Ar (N w))
+        (pc : Fin R → ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+        (vq : Fin R → ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar)
+        (word : ∀ w, OCells St n n' B → Fin (N w)),
+        (∀ w j, (prog w).isProd j = true → AffMulAt ((prog w).prod j)) ∧
+        (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
+          dPrefix (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
+        (∀ w (W : ODraws St n L np B n') c c',
+          (∀ U : Finset (DBits (n c.1) L np (B c.1) (n' c.1)), U.card ≤ 2 →
+            P.errAt x w c (mergeAt W c.1 (bitInd U)) = 0) →
+          (∀ U : Finset (DBits (n c'.1) L np (B c'.1) (n' c'.1)), U.card ≤ 2 →
+            P.errAt x w c' (mergeAt W c'.1 (bitInd U)) = 0) →
+          (⟨c.1, c.2.1⟩ : Σ t, Fin (n t)) ≠ ⟨c'.1, c'.2.1⟩ → ∀ k,
+          (prog w).coef (word w c) k ≠ 0 → (prog w).coef (word w c') k = 0) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ cost x)
     (hc : ∀ t, ChainBound Ar (n t) L np (B t) (n' t) wt (fun π => AffProd π) 1) (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S (OSpot St n L np B n') R (3 / 4) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb δz := by
+    RoundsSlice (3 / 4) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax acc cost Bind ZK := by
   classical
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
-  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
-  refine ⟨P.game, Bind, ZK, V, RoundGame.expBound_of_pathBound _
-    (P.game.pathBound_of_passBound (P.passBound_game fun x w c U => ?_)), hB, hZ, hacc, hV, fun x => ?_⟩
+  refine ⟨P.game, V, RoundGame.expBound_of_pathBound _
+    (P.game.pathBound_of_passBound (P.passBound_game fun x w c U => ?_)), hacc, hV, fun x => ?_⟩
   · obtain ⟨N, prog, pc, vq, word, hOk, hE, -, -⟩ := hK x
     rw [hE w c]
     refine ((prog w).cubeQuad_val_mergeAt (hOk w) U c.1 (word w c)).sub
@@ -6661,7 +6805,24 @@ theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb
         gcongr with w
         rw [hcor w, ← expect_mul_left]
         exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
-      _ ≤ Mc.charge M (e.symm x, r) := hcharge
+      _ ≤ cost x := hcharge
+
+/-- **Overlapping stages give the window's cost line** (Theorem K∥): under `RoundsHypKOv` with chain factor 1 on
+every stage's shape, `RoundsHyp` holds at `p = ¾` with `F₀ = κ L C`, `C` the round's cell-blocks over all its
+stages, and no slack. The luck is per draw, with the other draws' bits given (`OvPlay.passBound_game`), and the
+certified count is `SlpG.cells_card_le_ov`'s at every bit point of the draws, so at least its mean
+(`roundsSlice_of_overlap`, slice by slice). -/
+theorem roundsHyp_of_overlap {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+    {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} (h : RoundsHypKOv Mc S R St Vmax δb δz κ n L np B n' wt)
+    (hc : ∀ t, ChainBound Ar (n t) L np (B t) (n' t) wt (fun π => AffProd π) 1) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (OSpot St n L np B n') R (3 / 4) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  obtain ⟨G, V', hG, hacc', hV', hcost⟩ := roundsSlice_of_overlap P
+    (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+    (fun x => Mc.charge M (e.symm x, r)) Bind ZK V hacc hV hK hc hκ
+  exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 section ParityOverlapRound
 
@@ -6746,22 +6907,28 @@ def RoundsHypKStP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w s, (prog w s).ChargePure φ p₀ (word w s)) ∧
         κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **Staged rounds of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
-`RoundsHypKStP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = St κ L n n' B` and no slack. The
-game is the product-deficit game (`StagedPlay.gameP`, accepting as `game` does), whose rounds are staged at `0.854`
-whatever the errors (`StagedPlay.game_stagedP`); each stage's cell-blocks not short of products are counted by
-`SlpG.card_full_le`. -/
-theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
-    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
-    (h : RoundsHypKStP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hSt : 0 < St)
-    (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S (DStage St n L np B n') R (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+/-- `roundsHyp_of_stagedP` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
+`acc`, charge `cost` and breaks named, and `RoundsHypKStP`'s cost line at that slice. -/
+theorem roundsSlice_of_stagedP {R St : ℕ} {Vmax κ : ℝ} {n L np B n' : ℕ} {Ar : Type} [CommRing Ar]
+    {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
+    (P : StagedPlay (DCells n n' B) (DBits n L np B n') Ar St R) (acc : Paths (DStage St n L np B n') R → Prop)
+    (cost : Paths (DStage St n L np B n') R → ℝ) (Bind ZK : Fin R → Paths (DStage St n L np B n') R → Prop)
+    (V : Paths (DStage St n L np B n') R → ℝ) (hacc : ∀ x, acc x → P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x)
+    (hV : ∀ x, V x ≤ Vmax)
+    (hK : ∀ x, ∃ (N : Fin R → Fin St → ℕ) (prog : ∀ w s, SlpG (DBits n L np B n') Ar (N w s))
+        (pc : Fin R → Fin St → Fin n → Fin B → Fin L → Ar)
+        (vq : Fin R → Fin St → Fin B → Fin L → Fin n' → Ar)
+        (word : ∀ w s, DCells n n' B → Fin (N w s)),
+        (∀ w s j, (prog w s).isProd j = true → OneSided ((prog w s).prod j)) ∧
+        (∀ w s c, P.errAt x w s c =
+          fun z => (prog w s).val z (word w s c) - dPrefix (pc w s) (vq w s) wt c.1 c.2.1 c.2.2.val z) ∧
+        (∀ w s, (prog w s).ChargePure φ p₀ (word w s)) ∧
+        κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x ≤ cost x)
+    (hw : φ (wt p₀) = 1) (hSt : 0 < St) (hκ : 0 ≤ κ) :
+    RoundsSlice (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax acc cost Bind ZK := by
   classical
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
-  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
-  refine ⟨P.gameP (dFrame p₀) φ, Bind, ZK, V, (P.gameP (dFrame p₀) φ).expBound_of_staged (by norm_num)
-    (P.game_stagedP (fun c => dFrame_injective p₀ c) φ), hB, hZ,
+  refine ⟨P.gameP (dFrame p₀) φ, V, (P.gameP (dFrame p₀) φ).expBound_of_staged (by norm_num)
+    (P.game_stagedP (fun c => dFrame_injective p₀ c) φ),
     fun x hx => (hacc x hx).imp_left (P.accepts_gameP (dFrame p₀) φ x).mpr, hV, fun x => ?_⟩
   obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
   set C : ℝ := ((n * n' * B : ℕ) : ℝ)
@@ -6795,7 +6962,25 @@ theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb
     _ ≤ κ * ∑ w, ∑ s, ((univ.filter fun j => (prog w s).isProd j = true).card : ℝ) - V x := by
       gcongr with w _ s
       exact hprod w s
-    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+    _ ≤ cost x := hcharge
+
+/-- **Staged rounds of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
+`RoundsHypKStP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = St κ L n n' B` and no slack. The
+game is the product-deficit game (`StagedPlay.gameP`, accepting as `game` does), whose rounds are staged at `0.854`
+whatever the errors (`StagedPlay.game_stagedP`); each stage's cell-blocks not short of products are counted by
+`SlpG.card_full_le` (`roundsSlice_of_stagedP`, slice by slice). -/
+theorem roundsHyp_of_stagedP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n L np B n' : ℕ}
+    {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
+    (h : RoundsHypKStP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hSt : 0 < St)
+    (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (DStage St n L np B n') R (427 / 500) (St * (κ * L * ((n * n' * B : ℕ) : ℝ))) 0 Vmax δb δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  obtain ⟨G, V', hG, hacc', hV', hcost⟩ := roundsSlice_of_stagedP P
+    (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+    (fun x => Mc.charge M (e.symm x, r)) Bind ZK V hacc hV hK hw hSt hκ
+  exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 /-- **The window's rounds with overlapping stages, one-sided operands of any form** (RS-E-REF r6 VI.2), a named
 hypothesis: `RoundsHypKOv` with its products one-sided per draw at every bit point of the other draws (`OneSidedAt`)
@@ -6820,23 +7005,29 @@ def RoundsHypKOvP (Mc : Machine) (S : Service) (R St : ℕ) (Vmax δb δz κ : �
         (∀ w, (prog w).ChargePureAt φ p₀ (word w)) ∧
         κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ Mc.charge M (e.symm x, r)
 
-/-- **Overlapping stages of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
-`RoundsHypKOvP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = κ L C`, `C` the round's
-cell-blocks over all its stages, and no slack. The game is the product-deficit game (`OvPlay.gameP`), whose rounds
-pass at most `1 − 0.146 d` whatever the errors (`OvPlay.passBound_gameP`); the count is `SlpG.card_full_le_ov`'s at
-every bit point of the draws, so at least its mean. -/
-theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
-    {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
-    (h : RoundsHypKOvP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
-    RoundsHyp Mc S (OSpot St n L np B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
-      δz := by
+/-- `roundsHyp_of_overlapP` on one slice (`RoundsSlice`): one adversary at one value of its coins, its acceptance
+`acc`, charge `cost` and breaks named, and `RoundsHypKOvP`'s cost line at that slice. -/
+theorem roundsSlice_of_overlapP {R St : ℕ} {Vmax κ : ℝ} {n B n' : Fin St → ℕ} {L np : ℕ} {Ar : Type}
+    [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
+    (P : OvPlay (fun t => DCells (n t) (n' t) (B t)) (fun t => DBits (n t) L np (B t) (n' t)) Ar R)
+    (acc : Paths (OSpot St n L np B n') R → Prop) (cost : Paths (OSpot St n L np B n') R → ℝ)
+    (Bind ZK : Fin R → Paths (OSpot St n L np B n') R → Prop) (V : Paths (OSpot St n L np B n') R → ℝ)
+    (hacc : ∀ x, acc x → P.game.accepts x ∨ ∃ w, Bind w x ∨ ZK w x) (hV : ∀ x, V x ≤ Vmax)
+    (hK : ∀ x, ∃ (N : Fin R → ℕ) (prog : ∀ w, SlpG (OBits St n L np B n') Ar (N w))
+        (pc : Fin R → ∀ t, Fin (n t) → Fin (B t) → Fin L → Ar)
+        (vq : Fin R → ∀ t, Fin (B t) → Fin L → Fin (n' t) → Ar)
+        (word : ∀ w, OCells St n n' B → Fin (N w)),
+        (∀ w j, (prog w).isProd j = true → OneSidedAt ((prog w).prod j)) ∧
+        (∀ w c, P.errAt x w c = fun z => (prog w).val z (word w c) -
+          dPrefix (pc w c.1) (vq w c.1) wt c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) ∧
+        (∀ w, (prog w).ChargePureAt φ p₀ (word w)) ∧
+        κ * ∑ w, ((univ.filter fun j => (prog w).isProd j = true).card : ℝ) - V x ≤ cost x)
+    (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
+    RoundsSlice (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax acc cost Bind ZK := by
   classical
-  obtain ⟨e, h⟩ := h
-  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
-  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
   let fr : (c : OCells St n n' B) → Fin L ⊕ Fin L → DBits (n c.1) L np (B c.1) (n' c.1) := fun c => dFrame p₀ c.2
-  refine ⟨P.gameP fr φ, Bind, ZK, V, RoundGame.expBound_of_pathBound _
-    ((P.gameP fr φ).pathBound_of_passBound (P.passBound_gameP (fun c => dFrame_injective p₀ c.2) φ)), hB, hZ,
+  refine ⟨P.gameP fr φ, V, RoundGame.expBound_of_pathBound _
+    ((P.gameP fr φ).pathBound_of_passBound (P.passBound_gameP (fun c => dFrame_injective p₀ c.2) φ)),
     fun x hx => (hacc x hx).imp_left (P.accepts_gameP fr φ x).mpr, hV, fun x => ?_⟩
   obtain ⟨N, prog, pc, vq, word, hOk, hE, hpure, hcharge⟩ := hK x
   set C : ℝ := (Fintype.card (OCells St n n' B) : ℝ)
@@ -6878,7 +7069,25 @@ theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δ
       refine (mul_le_mul_of_nonneg_left (hcor w) (Nat.cast_nonneg L)).trans ?_
       rw [← expect_mul_left]
       exact expect_le_of_le (Nat.cast_nonneg _) fun W => hprod w W
-    _ ≤ Mc.charge M (e.symm x, r) := hcharge
+    _ ≤ cost x := hcharge
+
+/-- **Overlapping stages of one-sided operands of any form give the window's cost line** (RS-E-REF r6 VI.2): under
+`RoundsHypKOvP` with `φ (wt p₀) = 1`, `RoundsHyp` holds at `p = 0.854` with `F₀ = κ L C`, `C` the round's
+cell-blocks over all its stages, and no slack. The game is the product-deficit game (`OvPlay.gameP`), whose rounds
+pass at most `1 − 0.146 d` whatever the errors (`OvPlay.passBound_gameP`); the count is `SlpG.card_full_le_ov`'s at
+every bit point of the draws, so at least its mean (`roundsSlice_of_overlapP`, slice by slice). -/
+theorem roundsHyp_of_overlapP {Mc : Machine} {S : Service} {R St : ℕ} {Vmax δb δz κ : ℝ} {n B n' : Fin St → ℕ}
+    {L np : ℕ} {Ar : Type} [CommRing Ar] {wt : Fin np → Ar} {φ : Ar →+* ZMod 2} {p₀ : Fin np}
+    (h : RoundsHypKOvP Mc S R St Vmax δb δz κ n L np B n' wt φ p₀) (hw : φ (wt p₀) = 1) (hκ : 0 ≤ κ) :
+    RoundsHyp Mc S (OSpot St n L np B n') R (427 / 500) (κ * L * (Fintype.card (OCells St n n' B) : ℝ)) 0 Vmax δb
+      δz := by
+  obtain ⟨e, h⟩ := h
+  refine ⟨e, fun Ω' _ M hcom r => ?_⟩
+  obtain ⟨P, Bind, ZK, V, hB, hZ, hacc, hV, hK⟩ := h Ω' M hcom r
+  obtain ⟨G, V', hG, hacc', hV', hcost⟩ := roundsSlice_of_overlapP P
+    (fun x => S.verify (Mc.eval M (e.symm x, r)).1 (e.symm x) (Mc.eval M (e.symm x, r)).2 = true)
+    (fun x => Mc.charge M (e.symm x, r)) Bind ZK V hacc hV hK hw hκ
+  exact ⟨G, Bind, ZK, V', hG, hB, hZ, hacc', hV', hcost⟩
 
 /-- **The window's rounds with Theorem H's cost line** (the re-encoded design in exact arithmetic over a field `F`:
 FP8 operands or scaled reads, with exact sums), a named hypothesis. It is `RoundsHyp` with the cost line derived
@@ -7629,8 +7838,8 @@ theorem relativelySecure_edited120θ_of_floor (kd : K120 → Kind) (G : MatGates
 /-- **Route (c) on sm_120 in B_θ, on the int8 grid, from any B floor per adversary** (proposed, a claim change; CMP-33;
 `relativelySecure_edited120θ_of_floor` adversary by adversary, which it supersedes): B's service floor per adversary
 `F_B ≤ n³` u, at each adversary's own `κf` (a named hypothesis, `ServiceFloorPerProver`; the floors per prover of
-`Models.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`,
-stated and not yet proved, `relativelySecurePerProver_edited120θ_at_breakBound`), carries to `0.8 F_B` u in B_θ
+`Definitions.Pouw.Guarantees.RelativeSecurity` give it at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`,
+`relativelySecurePerProver_edited120θ_at_breakBound`), carries to `0.8 F_B` u in B_θ
 (`serviceFloorPerProver_θ`), and the edited protocol is relatively secure per adversary with
 `relativelySecure_edited120θ_of_floor`'s `ε`, `γ` and `N`, at each B_θ adversary's threshold `κf(M.projθ) + δ'`: its B
 shadow's bound, read through the shadow's collision finders, plus one `δ' > 0`. -/
@@ -7673,7 +7882,7 @@ theorem relativelySecurePerProver_edited120θ_of_floor (kd : K120 → Kind) (G :
 
 /-- **Route (c) on sm_120 in B_θ at the floors' error per prover** (proposed, a claim change; CMP-33):
 `relativelySecurePerProver_edited120θ_of_floor` at `κf = breakBound sha fb fz cb db cz dz 2^{−40} δb βb δz βz`, the
-error the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` conclude (stated, not yet proved). Each B_θ
+error the floors per prover of `Definitions.Pouw.Guarantees.RelativeSecurity` conclude. Each B_θ
 adversary's threshold is its B shadow's error plus `δ'`: the shadow's finders read through `ecr/sha-512` at budgets of
 `cb · time + db` and `cz · time + dz` SHA-512 calls, `time` the shadow's B time, which the adversary's gates fix and no
 choice of finder lowers. -/
@@ -7811,9 +8020,10 @@ theorem relativelySecure_edited120θ_half (kd : K120 → Kind) (G : MatGates kd 
 Superseded per adversary (CMP-33). Every theorem of the `certifiedFraction120θ` family reads one `κf`, or one `δb` and
 `δz` for every adversary through its `RoundsHyp*`, so over SHA-512 commitments it holds only at a bound about 1: an
 adversary that hard-codes a collision breaks binding in every round. Its form per adversary is
-`serviceFloorPerProver_θ` at the floors per prover of `Models.Pouw.Guarantees.RelativeSecurity` (the same floor, each
+`serviceFloorPerProver_θ` at the floors per prover of `Definitions.Pouw.Guarantees.RelativeSecurity` (the same floor, each
 adversary's error its `breakBound`, read at its B shadow, its finders at budgets computed from the shadow's B time),
-which are stated and not yet proved; their reader is `relativelySecurePerProver_edited120θ_at_breakBound`.
+proved in `Proofs.Pouw.RelativeSecurityGuarantees` and `Proofs.Pouw.RelativeSecurityJ10R`; their reader is
+`relativelySecurePerProver_edited120θ_at_breakBound`.
 -/
 
 /-- **The certified fraction** (the headline): from B's floor of Theorem E's form, every adversary in B_θ that commits

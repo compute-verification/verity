@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Complete.Json.Live
 import Proofs.Flock.Claims.Complete.Json.Stmt
 import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+import Proofs.Flock.Claims.Complete.Json.Text
 
 /-!
 # B's record checks at the honest run
@@ -178,6 +179,23 @@ theorem liveReads_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Ou
     Run.json S h64 hP o
   exact hlv
 
+/-- **The record is in its canonical text** (S0): the goal `RecordCanonical`, the printed honest record
+(`check_printJ`). -/
+theorem canonical_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.Out64 H) (hP : ProverOk H rel) :
+    RecordCanonical H rel := by
+  intro o
+  obtain ⟨st, rb, streams, hst, ht, htabs, hss, hpf, hex, hlink, -, hrec, hdec, hsess, hlv, hlive⟩ :=
+    Run.json S h64 hP o
+  obtain ⟨-, -, hdraw, -⟩ := stmtOk S o.toCase
+  have hd : Good (o.spec.unitDraw.getD Json.null) := by
+    unfold DrawOk at hdraw
+    revert hdraw
+    cases o.spec.unitDraw with
+    | none => exact fun _ => .null
+    | some d => exact fun hd => hd.2.1
+  rw [hrec]
+  exact check_printJ S (good_recordObj ht _ rb _ streams o.proofs hd)
+
 /-- **Alike values are equivalent** (`JsonEquiv`, what `drawEq` decides). -/
 theorem Same.jsonEquiv {a b : Json} (h : Same a b) : JsonEquiv a b := by
   induction h with
@@ -204,7 +222,7 @@ theorem drawMatches_goal (S : Claims.JsonSpec printJ Flock.canon) (h64 : Claims.
   | some d =>
     rintro ⟨d', hd', hs⟩
     rw [hd']
-    exact (drawEq_iff _ _).2 (.some hs.symm.jsonEquiv)
+    exact (drawEq_iff _ _).2 (.some hs)
 
 theorem list_bytes_beq_self (l : List ByteArray) : (l == l) = true := by
   induction l with

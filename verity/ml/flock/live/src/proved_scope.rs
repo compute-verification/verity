@@ -8,7 +8,7 @@
 //! check's rules on those hold of every statement it sets up, as do its parse and its public file's load. Its statements
 //! all have hidden outputs, so the circuit's check is `scopeOkI` once the wires passed: the general instance form.
 
-use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT};
+use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT, TMPL_STATEMENT};
 use crate::ir_block::IrUnitNet;
 
 const WORD: usize = 128;
@@ -241,26 +241,35 @@ pub fn statement_why(name: &str, typed: bool, zk: bool, tables: usize, public_in
 
 /// The statement's id as the Lean verifier names it: a selftest build's (`seed-injection`) is `+seed-injection`'s.
 pub fn lean_name(c: &Composite) -> String {
-    let base = if c.statement() == crate::typed::STATEMENT { crate::typed::STATEMENT } else { STATEMENT };
+    let base = match c.statement() {
+        crate::typed::STATEMENT => crate::typed::STATEMENT,
+        TMPL_STATEMENT => TMPL_STATEMENT,
+        _ => STATEMENT,
+    };
     format!("{base}{}", if cfg!(feature = "seed-injection") { "+seed-injection" } else { "" })
 }
 
-/// The shared-row rule of `ProvedScope.check` (`sharedRowsOk`): a shared-row public file (`shared`) is a covered form only in
-/// a `--zk` session whose verifier holds its own registered reads (`registered`, `--registered F`). Every statement the
+/// The shared-row rule of `ProvedScope.check` (`sharedRowsOk`): a shared-row public file (`shared`) is a covered form, with
+/// or without `--zk`, only where the verifier holds its own registered reads (`registered`, `--registered F`) and the
+/// statement's leaves are `hm96-sha512/v1` (not `plain_leaves`, a recursive session's inner statement). Every statement the
 /// live build sets up has hidden outputs.
-pub fn shared_rows_why(shared: bool, zk: bool, registered: bool) -> Option<&'static str> {
-    (shared && !(zk && registered)).then_some("a shared-row public file (header shared_rows)")
+pub fn shared_rows_why(shared: bool, registered: bool, plain_leaves: bool) -> Option<&'static str> {
+    (shared && !(registered && !plain_leaves)).then_some("a shared-row public file (header shared_rows)")
 }
 
 /// **`ProvedScope.check`** on a statement the live build set up: its circuit, its public file (`inst`), `--zk` and its tables.
 /// The Lean verifier holds its own `--registered F` exactly when the public header names registered reads: without it such
 /// a header is refused at setup, and with it a header naming none is (`Registered.check`).
 pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
+    // the Lean verifier's verdict on a templated statement (`Tags.templated`), in place of every rule below
+    if c.statement() == TMPL_STATEMENT {
+        return Err(refusal(&format!("{}, a templated statement", lean_name(c))));
+    }
     let typed = c.statement() == crate::typed::STATEMENT;
     if let Some(why) = statement_why(&lean_name(c), typed, zk, tables, !c.public_inputs.is_empty()) {
         return Err(refusal(&why));
     }
-    if let Some(why) = shared_rows_why(inst.tables.is_some(), zk, inst.header.get("registered").is_some()) {
+    if let Some(why) = shared_rows_why(inst.tables.is_some(), inst.header.get("registered").is_some(), c.plain_leaves()) {
         return Err(refusal(why));
     }
     if wires_feed(c) && !wires_acyclic(c) {
@@ -286,7 +295,7 @@ mod tests {
         a.push(vec![const_pos]);
         b.push(vec![const_pos]);
         IrUnitNet { name: "unit".into(), useful: const_pos + 1, const_pos, in_groups: groups, out_groups: vec![], in_words, out_cols: vec![],
-                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, flat: FlatCache::default() }
+                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None, flat: FlatCache::default() }
     }
 
     #[test]
@@ -405,13 +414,14 @@ mod tests {
     }
 
     #[test]
-    fn a_shared_row_file_needs_zk_and_registered_reads() {
+    fn a_shared_row_file_needs_registered_reads_and_hm96_leaves() {
         let refused = Some("a shared-row public file (header shared_rows)");
-        assert_eq!(shared_rows_why(true, true, true), None);
-        assert_eq!(shared_rows_why(true, true, false), refused);
-        assert_eq!(shared_rows_why(true, false, true), refused);
+        assert_eq!(shared_rows_why(true, true, false), None);
         assert_eq!(shared_rows_why(true, false, false), refused);
+        assert_eq!(shared_rows_why(true, true, true), refused);
+        assert_eq!(shared_rows_why(true, false, true), refused);
         assert_eq!(shared_rows_why(false, false, false), None);
+        assert_eq!(shared_rows_why(false, false, true), None);
         assert_eq!(refusal(refused.unwrap()),
                    "refused: a shared-row public file (header shared_rows): a statement form the soundness proof does not cover");
     }

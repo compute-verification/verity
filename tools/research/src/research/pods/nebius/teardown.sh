@@ -26,7 +26,7 @@ nebius_auth
 resolve_project
 VM_ID=$(vm_id)
 BOOT_ID=$(disk_id "$VM_NAME-boot")
-DATA_ID=$(disk_id "$VM_NAME-data")
+DATA_ID=$(disk_id "$DATA_NAME")
 
 case $cmd in
   status)

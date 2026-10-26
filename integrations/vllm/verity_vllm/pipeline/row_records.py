@@ -27,6 +27,15 @@ def load_json(path: str) -> Any:
         return None
 
 
+def tail(path: str, n: int = 300) -> str:
+    """The last line of the log at ``path``, at most ``n`` characters ("" when it is absent or empty)."""
+    try:
+        lines = open(path, errors="replace").read().splitlines()
+    except OSError:
+        return ""
+    return (lines[-1] if lines else "")[:n]
+
+
 def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     """The row's batch and envelope, the request wrapper's default shape (LP, T), the Match snapshot steps and the pinned
     checkpoint dir, from the workload manifest.
@@ -116,6 +125,18 @@ COMPOSE_PEAK_RATIO = 1.5
 #: GLM-5.3 TP8 (78 layers), I256 mixed arrivals: B32 composed at 128.8 GiB a rank against 207.6 GiB summed (0.62x, r20261018-005907-aca0),
 #: B8 past 32.2 GiB against 62.7 GiB (0.51x, OOM-killed at its scope's cap, r20261018-074029-94eb)
 COMPOSE_SUM_RATIO = 0.7
+#: a TP row's required-value manifest (`manifest build-global`): the word check, then one component per rank x declared request.
+#: GLM-5.3 TP8 B8 I256 at 2 processes (r20261020-084508-06dd): the word check 4,738 s, each of the 64 components 356-409 s.  The
+#: limit gives the word check 3x and each component 1,200 s as if one process built them all
+MANIFEST_BASE_S = 4 * 3600
+MANIFEST_COMPONENT_S = 1200
+#: a TP rank's fold Match legs (`tp-fold-match`) as multiples of its request Programs' summed `derive_bytes`: GLM-5.3 TP8 B8 I256
+#: (62.4 GiB summed) ran GM-01 with the shared X-09 at 339 GiB and the fold near 40 GB (r20261019-162751-9b01), each leg in at most
+#: about 2 h; a leg's limit is 350 s a GiB (3x that), at least 7200 s
+FOLD_GM_SUM_RATIO = 5.5
+FOLD_SUM_RATIO = 0.6
+FOLD_LEG_S_PER_GIB = 350
+FOLD_LEG_MIN_S = 7200
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -129,6 +150,30 @@ def compose_bytes(shapes: list[tuple[int, ...]], layers: int) -> int:
     """The planned peak host memory of a TP rank's GP-01 compose over the request Programs of `shapes`."""
     each = [derive_bytes(s[0], s[1], layers) for s in shapes]
     return int(max(COMPOSE_PEAK_RATIO * max(each), COMPOSE_SUM_RATIO * sum(each)))
+
+
+def manifest_timeout(components: int) -> int:
+    """The TP manifest's limit in seconds over `components` component builds (ranks x declared requests), whatever one derive's is."""
+    return MANIFEST_BASE_S + MANIFEST_COMPONENT_S * max(1, int(components))
+
+
+def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes: int | None = None, folds: int = 0) -> dict[str, Any]:
+    """The fold Match's sizing for ranks of request `shapes` in `mem_bytes` (default the headroom): a GM-01 leg's and a fold's planned
+    peak, as many ranks' compare and GM-01 legs at once as hold beside `folds` folds (at least one), then as many folds as the rest
+    holds unless `folds` is given (each 1..`world`), whether one of each fits at all, and one leg's limit in seconds."""
+    mem = _memory_headroom() if mem_bytes is None else mem_bytes
+    s = sum(derive_bytes(sh[0], sh[1], layers) for sh in shapes)
+    gm, fold = int(FOLD_GM_SUM_RATIO * s), int(FOLD_SUM_RATIO * s)
+    rw = max(1, min(world, (mem - max(1, folds) * fold) // gm))
+    return {"gm_bytes": gm, "fold_bytes": fold, "mem_bytes": mem, "rank_workers": rw,
+            "fold_workers": folds or max(1, min(world, (mem - rw * gm) // fold)), "fits": mem >= gm + fold,
+            "leg_s": max(FOLD_LEG_MIN_S, int(FOLD_LEG_S_PER_GIB * s / 2**30))}
+
+
+def fold_phase_s(leg_s: int, world: int, rank_workers: int, fold_workers: int) -> int:
+    """`tp-fold-match`'s limit: every rank's fold in rounds of `fold_workers`, then its compare and GM-01 legs in rounds of
+    `rank_workers`, then the cross-rank leg (four legs when every rank runs at once)."""
+    return leg_s * (-(-world // fold_workers) + 2 * -(-world // rank_workers) + 1)
 
 
 def model_layers(ck: str) -> int | None:
@@ -624,7 +669,7 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     req = cfg.engine.args
     mml = req.get("max_model_len") or int(s["max_input"]) + int(s["max_output"])
     batch = int(s["batch"])
-    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]),
+    return {"B": batch, "I": int(s["max_input"]), "O": int(s["max_output"]), "requests": len(w.get("requests") or s["input_lengths"]),
             "shapes": sorted({(int(a), int(b) - 1) for a, b in zip(s["input_lengths"], s["output_caps"])}),
             "MML": mml, "MNBT": min(int(req.get("max_num_batched_tokens") or mml), batch * int(mml)),
             "ck": checkpoint_dir(cfg.model, cfg.engine.revision, hf_home, checkpoints) or ""}

@@ -36,7 +36,9 @@
 //
 // The builder (WMsg) writes `merkle._message`'s bytes as big-endian words, the data's 64-byte parts left zero and filled
 // later (wm_put64, at any byte offset).  hash_decode_host.cpp builds this file for the host tests.  pearl_c_sm120.cu
-// builds the served variants (its PD_VARIANT_LIST); run.py's Pipeline launches them at decode (`PD_SERVED`).
+// builds the served variants (its PD_VARIANT_LIST); run.py's Pipeline launches them at decode (`PD_SERVED`).  A build that
+// defines PD_PDL (pearl_c_sm90.cu) has pd_commit let a programmatic next launch on its stream start at once, which waits at
+// its entry for pd_commit to complete.
 #pragma once
 #include "../pearl_c/hash_h3.cuh"
 #include "hash_fast.cuh"
@@ -409,12 +411,9 @@ template <int V> DEV void pd_fold(const uint64_t* qst, const uint64_t* dig, int 
 }
 // the hm96 salt pieces of leaf i (hm_leaves' work before x), by one whole warp: lanes 0-2 the three ChaCha20 blocks of y
 // (into shared ys), each lane 6 of the mask's 192 byte-table rows (4 q + r for y[q]'s byte r, an L2 or DRAM load each: one
-// lane alone waits on 192 of them in turn), XORed across the warp, then lane 0 c's state.  Out on lane 0: the mask M·y (8
-// little-endian limbs) and c's state
-template <int V>
-DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
-                    uint64_t* c) {
-  const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
+// lane alone waits on 192 of them in turn), XORed across the warp (`pd_hm_mask`), then lane 0 c's state.  Out on lane 0:
+// the mask M·y (8 little-endian limbs) and c's state
+DEV void pd_hm_mask(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk) {
   const uint64_t* tables = reinterpret_cast<const uint64_t*>(hm + 128);
   if (lane < 3) {
     uint32_t key[8];
@@ -443,6 +442,13 @@ DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, 
   if (lane) return;
 #pragma unroll
   for (int k = 0; k < 8; k++) mk[k] = m[k];
+}
+template <int V>
+DEV void pd_hm_salt(uint64_t salt_key, uint64_t nonce, uint64_t i, uint64_t hm, uint32_t* ys, int lane, uint64_t* mk,
+                    uint64_t* c) {
+  const uint64_t* mid = reinterpret_cast<const uint64_t*>(hm);
+  pd_hm_mask(salt_key, nonce, i, hm, ys, lane, mk);
+  if (lane) return;
   uint64_t st[8], w[16];
 #pragma unroll
   for (int j = 0; j < 8; j++) st[j] = mid[j];
@@ -835,8 +841,9 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
   }
 }
 
-// pd_commit_V: a CTA a row r < i0, 32 (cw + 2) threads, cw = ceil(s / 32) (s = k / 256), or with PD_PAIR 32 (2 cw + 2) and
-// PD_PAIR_SMEM bytes of dynamic shared memory (s <= 64).  The segments' warps (cw, or with PD_PAIR cw consumers then cw
+// pd_commit_V: a CTA a row r < i0 (its blockIdx.x, or pearl_c_sm90.cu's pd_commit_gm's from its map), 32 (cw + 2) threads,
+// cw = ceil(s / 32) (s = k / 256), or with PD_PAIR 32 (2 cw + 2) and PD_PAIR_SMEM bytes of dynamic shared memory (s <= 64).
+// The segments' warps (cw, or with PD_PAIR cw consumers then cw
 // producers), the salt's, then the templates', frame leaf's and pads'.  With PD_PAIR the row's leaf chain is pair 0's (warps
 // 0 and cw) and its seed chain pair 1's (warps 1 and cw + 1, or at cw = 1 warps 2 and 3); with PD_LATE the salt, the
 // templates and the frame leaf run while warp 0 folds, on warps 1, 2 and 3.  p0 A's rows (FP32, k words each), p1 row
@@ -845,8 +852,10 @@ extern "C" __global__ void __launch_bounds__(32) pd_heads(const Args) {
 // p9 scratch (a u32 counter, zero before the first launch and left zero), p10 seed_A out, p11 line_a out, p12 E_A's codes
 // out (32 B a line: row r's line under its own line key, then the filler lines under line_a) or 0; i0 rows (at most
 // PD_MAX_ROWS), i1 k, i2 mode (0: the tree, seed_A and the filler lines too, 1: level 0 and the rows' lines only), i3 E_A's
-// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0
-template <int V> DEV void pd_commit_t(const Args a) {
+// lines (rows and filler rows); PD_STAMP: p13 the stamps or 0.  Z (pearl_c_sm90.cu's pd_commit_g and pd_commit_gm): p14 the
+// digest state of a row of k zero words or 0, and rows r >= i4 zero, whose CTAs take that state for their row digest rather
+// than hash the row
+template <int V, bool Z = false> DEV void pd_commit_t(const Args a, const int r) {
   __shared__ uint64_t dig[RS_MAX_SEGS * 8], xr[8], mk[8], cc[8], ftm[8], ftw[32], hbuf[48], root[8];
   __shared__ uint64_t tm[PD_MAX_LEVELS * PD_TM];
   __shared__ uint64_t kw[PD_KW_BLOCKS * 80];   // the fold's schedules; before it the templates' builders, after it the levels
@@ -856,10 +865,14 @@ template <int V> DEV void pd_commit_t(const Args a) {
   constexpr bool PAIR = (V & PD_PAIR) != 0, LATE = (V & PD_LATE) != 0;
   static_assert(!LATE || PAIR, "PD_LATE's helpers are warps 1-3, which PD_PAIR's 2 cw + 2 warps always have");
   static_assert(!LATE || PD_PAIR_WORDS >= 96 * PD_MAX_LEVELS, "PD_LATE's builders fit in pair 0's buffer");
+#ifdef PD_PDL
+  asm volatile("griddepcontrol.launch_dependents;" ::: "memory");   // a programmatic next launch waits for this one at its entry
+#endif
   const int count = a.i[0], k = a.i[1], s = k / 256, cw = (s + 31) / 32, sw = PAIR ? 2 * cw : cw;
   const int c1 = cw >= 2 ? 1 : 2, p1 = cw >= 2 ? cw + 1 : 3;
-  const int r = blockIdx.x, tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
+  const int tid = threadIdx.x, warp = tid / 32, lane = tid % 32;
   const int width = count <= 1 ? 1 : 1 << (32 - __clz(count - 1)), levels = 31 - __clz(width);
+  const bool zero = Z && a.p[14] != 0 && r >= a.i[4];
   if (count > PD_MAX_ROWS || ((V & PD_ROUNDS) && s / 2 + 1 > PD_KW_BLOCKS)) __trap();
   if (PAIR && (cw > 2 || pd_dyn_bytes() < (uint32_t)PD_PAIR_SMEM)) __trap();
   const uint64_t dom = a.p[6], scratch = a.p[9], tree = a.p[2], sb = a.p[13];
@@ -895,34 +908,36 @@ template <int V> DEV void pd_commit_t(const Args a) {
   if (tid == 0) pd_stamp<V>(sb, r, PS_START);
   if (PAIR && warp < sw) {                          // the row's segments, paired: lane tid's segment (a stand-in past s)
     if (warp < cw) {
-      const bool on = tid < s;
-      const int j = on ? tid : 0;
-      uint64_t st[8], w[16];
-      rs_seg_head(st, j, s);
-      const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j);
-      uint4 nb[8];
+      if (!zero) {
+        const bool on = tid < s;
+        const int j = on ? tid : 0;
+        uint64_t st[8], w[16];
+        rs_seg_head(st, j, s);
+        const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * j);
+        uint4 nb[8];
 #pragma unroll
-      for (int q = 0; q < 8; q++) nb[q] = seg[q];
+        for (int q = 0; q < 8; q++) nb[q] = seg[q];
 #pragma unroll 1
-      for (int c = 0; c <= RS_SEG / 128; c++) {
-        if (c < RS_SEG / 128) {
+        for (int c = 0; c <= RS_SEG / 128; c++) {
+          if (c < RS_SEG / 128) {
 #pragma unroll
-          for (int q = 0; q < 8; q++) {
-            w[2 * q] = rs_be64(nb[q].x, nb[q].y);
-            w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
-          }
-          if (c + 1 < RS_SEG / 128) {
+            for (int q = 0; q < 8; q++) {
+              w[2 * q] = rs_be64(nb[q].x, nb[q].y);
+              w[2 * q + 1] = rs_be64(nb[q].z, nb[q].w);
+            }
+            if (c + 1 < RS_SEG / 128) {
 #pragma unroll
-            for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
+              for (int q = 0; q < 8; q++) nb[q] = seg[8 * (c + 1) + q];
+            }
+          } else {
+            pd_padw(w, 128 + RS_SEG);
           }
-        } else {
-          pd_padw(w, 128 + RS_SEG);
+          pd_cmp<V, 1>(st, w);
         }
-        pd_cmp<V, 1>(st, w);
-      }
-      if (on) {
+        if (on) {
 #pragma unroll
-        for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
+          for (int q = 0; q < 8; q++) dig[8 * tid + q] = st[q];
+        }
       }
       if (tid == 0) pd_stamp<V>(sb, r, PS_SEGS);
       pd_pstop();
@@ -931,7 +946,7 @@ template <int V> DEV void pd_commit_t(const Args a) {
     }
   } else if (LATE) {
   } else if (warp < sw) {                           // the row's segments
-    if (tid < s) {
+    if (tid < s && !zero) {
       uint64_t st[8], w[16];
       rs_seg_head(st, tid, s);
       const uint4* seg = reinterpret_cast<const uint4*>(a.p[0] + 4ull * k * r + (uint64_t)RS_SEG * tid);
@@ -960,7 +975,13 @@ template <int V> DEV void pd_commit_t(const Args a) {
   if (tid == 0) pd_stamp<V>(sb, r, PS_SYNC1);
   if (warp == 0) {                                  // the row digest (kw its schedules)
     uint64_t st[8];
-    pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    if (zero) {
+      const uint64_t* z = reinterpret_cast<const uint64_t*>(a.p[14]);
+#pragma unroll
+      for (int q = 0; q < 8; q++) st[q] = z[q];
+    } else {
+      pd_fold<V>(RS_Q_HEADS + 8 * s, dig, s, st, lane, kw);
+    }
     if (lane == 0) {
       s512_store(a.p[1] + 64ull * r, st, 8);
 #pragma unroll
@@ -1076,19 +1097,21 @@ template <int V> DEV void pd_tile_seg(const Args& a, int cols, int ti, int tj, i
 }
 // pd_tiles_V: the tile leaves (s512_tile_leaves' bytes), a CTA of 32 threads a tile (row-major; a last row block of R = 16,
 // 32 or 48 rows partial), lane j < s = R / 2 its segment j from the header table, then pd_fold.  With PD_GROUP (and
-// PD_PAIR) a CTA of 32 PD_G threads takes PD_G tiles of a row block (cdiv(cols / 64, PD_G) CTAs a row block, the last
-// partial), tile g's segment j on thread g s + j, and the tiles' folds run together on warp 0, lane g tile g's, paired with
-// warp 1 (8 PD_PAIR_WORDS bytes of dynamic shared memory): a fold's lone lane no longer holds a warp's issue to itself.
+// PD_PAIR) a CTA of 32 G threads takes G tiles of a row block (G = PD_G but where an instance says; cdiv(cols / 64, G)
+// CTAs a row block, the last partial), tile g's segment j on thread g s + j, and the tiles' folds run together on warp 0,
+// lane g tile g's, paired with warp 1 (8 PD_PAIR_WORDS bytes of dynamic shared memory): a fold's lone lane no longer holds
+// a warp's issue to itself.
 // p0 C~ (rows x cols), p1 U, p2 out (64 B a tile); i0 rows (a multiple of 16), i1 cols (a multiple of 64)
 constexpr int PD_G = 4, PD_GDIG = 32 * 8 + 1;   // a tile's digests, a word apart so the folds' lanes miss each other's banks
-template <int V> DEV void pd_tiles_t(const Args a) {
+template <int V, int G = PD_G> DEV void pd_tiles_t(const Args a) {
   const int cols = a.i[1], tn = cols / 64;
   if constexpr ((V & PD_GROUP) != 0) {
     static_assert((V & PD_PAIR) != 0, "PD_GROUP's folds are paired");
-    __shared__ uint64_t dig[PD_G * PD_GDIG];
-    if (blockDim.x != 32 * PD_G || pd_dyn_bytes() < 8u * PD_PAIR_WORDS) __trap();
-    const int gn = (tn + PD_G - 1) / PD_G, ti = blockIdx.x / gn, tj0 = PD_G * (blockIdx.x % gn);
-    const int R = min(64, a.i[0] - 64 * ti), s = R / 2, gs = min(PD_G, tn - tj0), tid = threadIdx.x, lane = tid % 32;
+    static_assert(G <= 32, "a tile's fold a lane of warp 0");
+    __shared__ uint64_t dig[G * PD_GDIG];
+    if (blockDim.x != 32 * G || pd_dyn_bytes() < 8u * PD_PAIR_WORDS) __trap();
+    const int gn = (tn + G - 1) / G, ti = blockIdx.x / gn, tj0 = G * (blockIdx.x % gn);
+    const int R = min(64, a.i[0] - 64 * ti), s = R / 2, gs = min(G, tn - tj0), tid = threadIdx.x, lane = tid % 32;
     if (tid < gs * s) pd_tile_seg<V>(a, cols, ti, tj0 + tid / s, tid % s, s, dig + PD_GDIG * (tid / s));
     __syncthreads();
     if (tid / 32 == 1) {
@@ -1168,7 +1191,7 @@ template <int V> DEV void pd_probe_t(const Args a) {
 }
 
 #define PD_INSTANCE(V)                                                                                                    \
-  extern "C" __global__ void __launch_bounds__(192) pd_commit_##V(const Args a) { pd_commit_t<V>(a); }                  \
+  extern "C" __global__ void __launch_bounds__(192) pd_commit_##V(const Args a) { pd_commit_t<V>(a, blockIdx.x); }      \
   extern "C" __global__ void __launch_bounds__(128) pd_tree_##V(const Args a) { pd_tree_t<V>(a); }                      \
   extern "C" __global__ void __launch_bounds__((V & PD_GROUP) ? 32 * PD_G : 32) pd_tiles_##V(const Args a) {            \
     pd_tiles_t<V>(a);                                                                                                     \

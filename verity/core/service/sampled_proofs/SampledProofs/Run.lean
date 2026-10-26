@@ -9,7 +9,12 @@ check the stream ran on it, in the stream's order.
   (`Select.Rule.lawOver`, whatever law the copies carry), a law whose drawn count varies (`countVaries`: `shapes`), and
   the receipt (`registration.receipt`);
 * `select`: the draw of record on the bytes of the challenger's coins (`Select.select`, under the rule over the program's
-  population, `Select.resolve`), held to the registration and the expanded law (`Draw.checkDraw`);
+  population, `Select.resolve`); the coins are what the run's source says (`coinsHold`, code `coins`): from the
+  verifier's own coins, no evidence; from the auditor's challenger, evidence (`coins`) that the bytes it read are
+  exactly the coins the session the ledger opens for the registration's window (the verifier's `windowRoot`) released
+  after the registration's digest, every one read and each opening checked against the challenger's commitment
+  (`Challenger.coinsReason`), missing evidence or no window refused; then the draw is held to the registration and the
+  expanded law (`Draw.checkDraw`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier of record, and the
   audit record (`Record.record`) over the draw's proved units; the symbol accepts when the audit record does.
@@ -22,6 +27,7 @@ the clock's (`late`).
 import SampledProofs.OneStage
 import SampledProofs.Select
 import SampledProofs.Service
+import SampledProofs.ChallengerCoins
 
 namespace SampledProofs.Run
 
@@ -50,6 +56,9 @@ structure Input where
   instances : Option Int
   served : Json
   sessionRoots : Json
+  /-- the draw's coins are the auditor's challenger's (`coin_source` `challenger`), not the verifier's own -/
+  fromChallenger : Bool
+  coins : Json := Json.null
 
 private def refused (step : String) (codes : Array String) : Json :=
   Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]
@@ -76,6 +85,16 @@ def countVaries (law : Json) : Bool :=
     | none => false
   | _, _ => false
 
+/-- The draw's coins are what its source says: a draw from the verifier's own coins carries no evidence (`null`), and
+one from the auditor's challenger carries evidence that holds of the bytes it read (`Challenger.coinsReason`, after the
+registration's digest, for the window whose open root `window` the verifier holds), so missing evidence, or a verifier
+that holds no window, is a refusal and never a skip. -/
+def coinsHold (fromChallenger : Bool) (coins record : Json) (window : Option String) (read : ByteArray) : Bool :=
+  if !fromChallenger then coins == Json.null else
+  match window, Registration.digest record with
+  | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
+  | _, _ => false
+
 /-- The run, step by step; an error where the Python raises. -/
 def run (i : Input) : V Json := do
   let v := i.params.verifier
@@ -94,6 +113,8 @@ def run (i : Input) : V Json := do
   let derived ← Draw.derive v.program v.query law v.workTable
   let (draw, _, read) ← Select.select (← Select.resolve i.rule v.program v.query) v.program v.query v.workTable
     i.closure i.source
+  if !coinsHold i.fromChallenger i.coins i.record v.windowRoot (i.source.extract 0 read) then
+    return refused "select" #["coins"]
   let codes := Draw.checkDraw draw (getD i.record "population") derived
   if !codes.isEmpty then return refused "select" codes
   let drawn := Draw.proved draw

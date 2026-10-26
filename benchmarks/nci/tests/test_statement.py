@@ -22,9 +22,11 @@ STREAMED = {"pous_rounds": 74000.0, "pous_floor": 0.0}
 RUNGS = {
     "Today": {"residual": 1.0},
     "PoUW's floor credit": {},
-    "Floor credit, attested clock and EPYC hosts": {"residual": 0.217, "clock_share": 0, "host_share": 0.0021},
-    "Best plausible PoUW design": {"residual": 0.01, "host_share": 0.0021, "clock_share": 0},
+    "Floor credit, attested clock and EPYC hosts": {"residual": 0.213, "clock_share": 0, "host_share": 0.0021},
+    "Best plausible PoUW design": {"residual": 0.01, "host_share": 0.0021, "clock_share": 0, "eps_w": 0.0025},
 }
+#: PoUW's deficit at the floor, the best design's: at r̂ = 0 all of C is certified, so the deficit is ε_W C
+EPS_W = RUNGS["Best plausible PoUW design"]["eps_w"]
 WIPES = {13.0: "Streamed-label wipes, 13 GB", 6.0: "Streamed-label wipes, 6 GB",
          3.05: "Streamed-label wipes, 3.05 GB (no power removal)", 1.0: "Power removal, 1 GB"}
 
@@ -52,15 +54,16 @@ def test_d_is_the_hardware_multiple_of_the_binding_terms():
     rows = {r["rung"]: r for r in S.ladder()}
     best = T.residual_share(P | RUNGS["Best plausible PoUW design"])
     assert rows["Best plausible PoUW design"]["D"]["T1"] == pytest.approx(P["mfu"] / (best + X.nu(P) + LAG), rel=1e-4)
-    assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(P["mfu"] / (X.nu(P) + LAG + EPS), rel=1e-4)
-    assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(P["mfu"] / (X.nu(P) + 60 / H + EPS), rel=1e-4)
+    floor = X.nu(P) + EPS_W + EPS
+    assert rows["Floor (r̂ = 0, 4 GB)"]["D"]["T1"] == pytest.approx(P["mfu"] / (floor + LAG), rel=1e-4)
+    assert rows["Floor, one-minute verdict lag"]["D"]["T3"] == pytest.approx(P["mfu"] / (floor + 60 / H), rel=1e-4)
     one = P | S.streamed(1.0)
     assert rows["Power removal, 1 GB"]["D"]["T3"] == pytest.approx(max(1.0, P["mfu"] / min(X.mu(one), 1.0)), rel=0.01)
     fl = quantities(S.floor())
-    assert fl["MFU_0 / (ν + ε′), the floor's limit as the verdict lag goes to 0"] == P["mfu"] / (X.nu(P) + EPS)
-    assert fl["MFU_0 / ν, the same as ε′ goes to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)
-    assert fl["D at zero lag and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are falsified)"] > (
-        P["mfu"] / X.nu(P))
+    assert fl["MFU_0 / (ν + ε_W + ε′), the floor's limit as the verdict lag goes to 0"] == P["mfu"] / floor
+    assert fl["MFU_0 / ν, the same as ε_W and ε′ go to 0 too (δ_win / ε′ then needs δ_win → 0)"] == P["mfu"] / X.nu(P)
+    assert fl["D at zero lag, ε_W and ε′, r̂ = 0, T3, if the partial-sum law held (its support premises are "
+              "falsified)"] > P["mfu"] / X.nu(P)
 
 
 def test_fleet_wide_forgiveness_is_j_identities_of_verdict_lag():
@@ -156,11 +159,11 @@ def test_the_symbols_closed_forms_are_what_evaluate_uses():
 
 
 def test_the_thresholds_are_on_d_not_on_one_over_eta():
-    """At T1 with host CPUs and the clock at 0, D < X once r > MFU_0 / X - nu - Delta/H - eps'; on 1/eta the edge would
-    be at 1/X, 2.5 times higher."""
+    """At T1 with host CPUs and the clock at 0, D < X once r̂ > (MFU_0 / X - nu - Delta/H - eps_W - eps') / (1 - eps_W);
+    on 1/eta the edge would be at 1/X, 2.5 times higher."""
     found = S.search(("defaults", "T1", 0))
     for level in S.LEVELS:
-        edge = P["mfu"] / level - X.nu(P) - LAG - EPS
+        edge = (P["mfu"] / level - X.nu(P) - LAG - P["eps_w"] - EPS) / (1 - P["eps_w"])
         if edge > 0:
             (a, _), = found[level]
             assert a == pytest.approx(edge, rel=1e-3), level

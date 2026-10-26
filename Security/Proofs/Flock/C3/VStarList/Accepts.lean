@@ -23,9 +23,11 @@ covers check (`RecVStar.checkCovers`). So:
 * Every candidate-3 session either setup accepts is one these read: the verifier holds the inner files
   (`files_of_checkInner`), the inner transcript (`commits_of_checks`) and R's registration, both JSON
   (`held_of_commits`).
+* At the verifier's inner shape `commits` reads the coin server's record in its own format (`reads_of_commits`), and
+  what it reads there is what the JSON readers read (`checkReads_ok`).
 * `sparse_of_acceptsC3`: `AcceptsC3` names a RecSparse shape (`checkInnerStmt`), so `hcoins_of_acceptsC3`: at an
   accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
-  against, never `--rec-inner-coins`'s record, which `checkAtC3` refuses there.
+  against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
 -/
 
 namespace FlockC3.VStarList
@@ -90,7 +92,7 @@ theorem sparse_of_acceptsC3 (h : AcceptsC3 ish st tr record reg) : ish.sparse.is
 
 /-- **Check 5's source at an accepted candidate-3 session is the files of its record**, `_hcoins`'s form at the record
 `r`: `AcceptsC3` at `r` names a RecSparse shape (`sparse_of_acceptsC3`), where `checkInner` refuses every source but
-the inner statement's files (`files_of_checkInner`: `--rec-inner-coins` is refused there), and the verifier holds the
+the inner statement's files (`files_of_checkInner`: a `Source.coins` is refused there), and the verifier holds the
 inner transcript against its source's record (`hrec`: `verify` reads it as `recCoins.map (·.record)`), so the files'
 record is `r`. -/
 theorem hcoins_of_acceptsC3 {coins : String → Option RecCoins.Source} {r : String}
@@ -154,9 +156,84 @@ theorem commits_ok (htr : Json.parse tt = .ok tr) (hreg : Json.parse rt = .ok re
       cases hs : RecVStar.checkSchedule ish tr with
       | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
       | ok u =>
-        simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs] at h
-        subst h
-        exact ⟨rfl, rfl⟩
+        cases hr : RecSetup.checkReads ish tt tr record cs' with
+        | error e => simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs, hr] at h
+        | ok u' =>
+          simp [hb, bind, Except.bind, pure, Except.pure, hreg, htr, hi, hs, hr] at h
+          subst h
+          exact ⟨rfl, rfl⟩
+
+/-- **`commits` at the verifier's inner shape reads the record in its own format** (`RecSetup.checkReads`). -/
+theorem reads_of_commits {r : Except String (Option String)} (htr : Json.parse tt = .ok tr)
+    (h : RecSetup.commits (some ish) (.ok tt) r bound record = .ok cs) :
+    RecSetup.checkReads ish tt tr record cs = .ok () := by
+  unfold RecSetup.commits at h
+  simp only [bind, Except.bind, pure, Except.pure, htr] at h
+  repeat' split at h
+  all_goals first | (cases h; done) | (cases h; assumption)
+
+/-- What `checkReads` holds of rep `x`'s salted tops and `c_k`: the record's, read in its own format, are the JSON's. -/
+def RepAgrees (r : RecRecord.Record) (lk : RecVStar.InnerLink) (cs : RecVStar.InnerCommits) (x : ℕ) : Prop :=
+  RecSetup.repTops r s!"{lk.table}/rep{x}".toUTF8.toList =
+      (lk.tops.getD x #[]).toList.map (fun (k, top) => (k, top.toList.map (·.toList))) ∧
+    RecSetup.repCommits r s!"{lk.table}/rep{x}".toUTF8.toList =
+      (cs.reps.getD x #[]).toList.map fun (k, c) => (k, [c.toList])
+
+/-- **What `checkReads` holds**: the coin server's record reads in its own format (`RecRecord.readFull`), and what it
+reads there is what the JSON readers read: Hello's tables are the circuit table alone, `link.roots` that table's
+`root_B` alone, the link points the JSON's, the rounds the schedule's, and each rep's salted tops and `c_k` the
+JSON's. -/
+theorem checkReads_ok (h : RecSetup.checkReads ish tt tr record cs = .ok ()) :
+    ∃ lk r want, RecVStar.innerLink tr record = .ok lk ∧ RecRecord.readFull tt.toUTF8.toList = some r ∧
+      r.hello.tables = [lk.table.toUTF8.toList] ∧
+      r.roots = [(lk.table.toUTF8.toList, lk.root.toList.map (·.toList))] ∧
+      r.points = (lk.points.toList.map (·.toList)).flatten ∧
+      RecVStar.scheduleOf ish lk.table = some want ∧
+      r.rounds.map (fun x => (x.stream, x.k, x.n, RecSetup.schedOfRound x)) =
+        want.toList.flatMap (fun (s, _, _, rs) => rs.toList.mapIdx fun k w => (s.toUTF8.toList, k, w.1, w)) ∧
+      RepAgrees r lk cs 0 ∧ RepAgrees r lk cs 1 := by
+  unfold RecSetup.checkReads at h
+  obtain ⟨lk, hlk, h⟩ := ebind_ok h
+  have hb : ∀ {α : Type} [BEq α] [LawfulBEq α] {a b : α}, ¬(a != b) = true → a = b := by
+    intro α _ _ a b h; simpa using h
+  split at h
+  · rename_i r hr
+    simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+    split at h
+    · cases h
+    rename_i h1
+    split at h
+    · cases h
+    rename_i h2
+    split at h
+    · cases h
+    rename_i h3
+    split at h
+    · rename_i want hw
+      split at h
+      · cases h
+      rename_i h4
+      simp only [List.forIn_cons, List.forIn_nil, bind, Except.bind] at h
+      have hT : ∀ x : ℕ, ¬(RecSetup.repTops r (toString lk.table ++ toString "/rep" ++ toString x).toUTF8.toList !=
+          List.map (fun x => (x.fst, List.map (fun x => x.toList) x.snd.toList)) (lk.tops.getD x #[]).toList) = true →
+          ¬(RecSetup.repCommits r (toString lk.table ++ toString "/rep" ++ toString x).toUTF8.toList !=
+            List.map (fun x => (x.fst, [x.snd.toList])) (cs.reps.getD x #[]).toList) = true → RepAgrees r lk cs x :=
+        fun x a b => ⟨hb a, hb b⟩
+      by_cases a0 : (RecSetup.repTops r (toString lk.table ++ toString "/rep" ++ toString 0).toUTF8.toList !=
+          List.map (fun x => (x.fst, List.map (fun x => x.toList) x.snd.toList)) (lk.tops.getD 0 #[]).toList) = true
+      · simp only [a0, ↓reduceIte] at h; simp at h
+      by_cases b0 : (RecSetup.repCommits r (toString lk.table ++ toString "/rep" ++ toString 0).toUTF8.toList !=
+          List.map (fun x => (x.fst, [x.snd.toList])) (cs.reps.getD 0 #[]).toList) = true
+      · simp only [a0, b0, ↓reduceIte] at h; simp at h
+      by_cases a1 : (RecSetup.repTops r (toString lk.table ++ toString "/rep" ++ toString 1).toUTF8.toList !=
+          List.map (fun x => (x.fst, List.map (fun x => x.toList) x.snd.toList)) (lk.tops.getD 1 #[]).toList) = true
+      · simp only [a0, b0, a1, ↓reduceIte] at h; simp at h
+      by_cases b1 : (RecSetup.repCommits r (toString lk.table ++ toString "/rep" ++ toString 1).toUTF8.toList !=
+          List.map (fun x => (x.fst, [x.snd.toList])) (cs.reps.getD 1 #[]).toList) = true
+      · simp only [a0, b0, a1, b1, ↓reduceIte] at h; simp at h
+      exact ⟨lk, r, want, hlk, hr, hb h1, hb h2, hb h3, hw, hb h4, hT 0 a0 b0, hT 1 a1 b1⟩
+    · cases h
+  · cases h
 
 /-- **A candidate-3 session holds R's registration**, and both files are JSON: `commits` refuses one without it. -/
 theorem held_of_commits {t : Except String String} {r : Except String (Option String)}

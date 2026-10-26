@@ -66,6 +66,7 @@ def _rows(rep) -> dict:
                      for k, n in enumerate(rep.program.fn.body.nodes)]}
 
 
+@pytest.mark.slow
 def test_unset_and_once_derive_the_same_program_and_per_forward_adds_per_forward():
     _m, unset = _derived(None)
     _m, once = _derived("once")
@@ -91,6 +92,7 @@ def _bf16(words: list[int]) -> torch.Tensor:
     return torch.tensor(np.array(words, dtype=np.uint16).view(np.int16)).view(torch.bfloat16)
 
 
+@pytest.mark.slow
 def test_once_is_bit_equal_on_edge_words():
     rng = np.random.default_rng(57)
     for k in range(4):
@@ -106,7 +108,7 @@ def test_once_is_bit_equal_on_edge_words():
 
 
 def test_cross_call_finds_the_repeated_adds_only_per_forward():
-    X = pytest.importorskip("verity_vllm.query.cross_call")
+    X = pytest.importorskip("verity.ml.definitions.cross_call")
     _m, per = _derived("per-forward")
     _m, once = _derived("once")
     r = X.check_program(_rows(per), strict=False)

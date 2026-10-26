@@ -1,7 +1,8 @@
 {
  "definitions": {
   "Const32[0x00000001]_v2": {
-   "and": 0
+   "and": 0,
+   "type": "f4553e8c42bf9c0bdd917091a768fd6777e4aebaaafc66e385bc4b27abc92149615b2c435e7e85da60b00660a2448b8617dad64ecc53f2cd9bf8738aeb815929"
   }
  }
 }

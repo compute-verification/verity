@@ -12,8 +12,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
 from verity_vllm.engine import static_schedule
 from verity_vllm.config import RowEngine
 from verity_vllm.program import prefix_plan as PP
@@ -120,7 +118,7 @@ ACCEPTED_TOKENS: dict[str, list[int]] = {
 
 
 def execution_of_workload(workload: dict | None) -> str | None:
-    """[R15 EXEC-02] The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
+    """The execution label a workload manifest declares: an explicit top-level `execution` (or `sweep.execution`) when the
     schema carries one, else the last `__` token of `sweep.row_id` (`…__greedy__bi-eager` -> 'bi-eager'); None for a workload that is not
     a sweep row (no row id: the caller's default applies and the header records `declared_execution: null`)."""
     if not isinstance(workload, dict):
@@ -155,8 +153,8 @@ def fresh_prefix_cache(engine: Engine) -> None:
 
 
 def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[dict[str, list[int]], dict]:
-    """Add every request with *our* request ids and step the engine until all finish (driver.run_requests; with declared
-    `arrive_step`s, `run_requests_arrivals`).  `timing["requests"]` carries the realized per-request steps (D87)."""
+    """Add every request with *our* request ids and step the engine until all finish (`arrivals.run_requests_arrivals`, at
+    each request's declared `arrive_step`).  `timing["requests"]` carries the realized per-request steps (D87)."""
     fresh_prefix_cache(engine)
     class _R:
         def __init__(self, d: dict, order: int) -> None:
@@ -202,9 +200,9 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
         chunks.on_step(outs)
     rs = [_R(r, i) for i, r in enumerate(requests)]
     params_for = lambda r: sampling_params({"max_tokens": r.max_tokens, "seed": r.seed, "n": r.n, **r.params}, sampling)  # noqa: E731
-    # [D87] one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` is the driver's loop, and its `engine_steps`
-    # counts forwards (the observer's / gates' unit) rather than step() iterations (vLLM V1 returns the previous forward's sample, so
-    # iterations = forwards + 1); verity_vllm.engine.engine_driver.run_requests stays available for callers that want the raw iteration count
+    # [D87] one loop for every profile: with all arrive_steps 0 `run_requests_arrivals` adds every request before the first step, and
+    # its `engine_steps` counts forwards (the observer's / gates' unit) rather than step() iterations (vLLM V1 returns the previous
+    # forward's sample, so iterations = forwards + 1); the raw iteration count is its `step_iterations`
     outs, timing = run_requests_arrivals(engine.llm, rs, params_for, on_step=_collect)
     timing["arrivals"] = any(r.arrive_step > 0 for r in rs)
     try:
@@ -232,13 +230,17 @@ def run_requests(engine: Engine, requests: list[dict], sampling: dict) -> tuple[
 #: tensors only under some of them (`runner.sampler/seed` only for an explicitly seeded batch), so a bounded warm-up that dropped them
 #: learned plans every seeded record step overran (SmolLM2-135M Gumbel sm_120: +8 B past a chunk boundary = +256 B, failed closed).
 THROWAWAY_SAMPLING_FIELDS = ("seed", "n", "variant", "temperature", "top_p", "top_k")
+#: The warm-up prompts' token seed for a single warm-up pass.
+WARMUP_SEED = 0x5EED_7A9B
 
 
-def throwaway_requests(engine: Engine, like: list[dict], seed: int = 0x5EED_7A9B) -> list[dict]:
+def throwaway_requests(engine: Engine, like: list[dict], seed: int) -> list[dict]:
     """Warm-up prompts of the same lengths, random tokens (prefix caching is off; they share no block anyway), with the same per-request
     sampling fields (`THROWAWAY_SAMPLING_FIELDS`): the warm-up stages the same layout as the run it stands in for."""
+    from verity_vllm.commit import challenge
+
     vocab = int(getattr(engine.llm.llm_engine.vllm_config.model_config.hf_config, "vocab_size", 32000))
-    rng = np.random.default_rng(seed)
+    rng = challenge.generator(seed)
     out = []
     for i, r in enumerate(like):
         w = {"request_id": f"warmup-{i}", "prompt_token_ids": rng.integers(3, vocab - 1, size=len(r["prompt_token_ids"])).tolist(),

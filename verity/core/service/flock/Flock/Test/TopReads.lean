@@ -12,7 +12,7 @@ open Flock Flock.RecCoins
 
 def port (name value : String) (reads : List Nat) : Registered.Port :=
   { name, value, root := .empty, leaves := 4, words := some 8, wordBits := 16, domain := .empty,
-    reads := (reads.map some).toArray }
+    readsRel := (reads.map some).toArray }
 
 def pos : Array Nat := #[5, 13, 6]
 

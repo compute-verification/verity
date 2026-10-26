@@ -2,7 +2,7 @@ import Mathlib
 import Proofs.Accounting.Bandwidth.Ticked
 import Proofs.Accounting.Actual.Transducer
 import Definitions.Accounting.Actual.Source
-import Models.Accounting.Guarantees.Bandwidth.Causal
+import Definitions.Accounting.Guarantees.Bandwidth.Causal
 
 /-!
 # B3 on a strategy causal from every tick: the chip as a `Ticked.Chip`
@@ -39,7 +39,7 @@ and the other two from the chip's ports' constraints (`Security/Definitions/Acco
 with only `HearsChip` (HBM's ports deliver a function of the store and of what the chip did) in place of
 `PassiveMemory`: with HBM's links alphabets it gives passive memory at `βm` bits a tick (`passiveMemory_of_hearsChip`),
 and the bound holds at `βm T` in place of `∑ wd`. The four are the guarantees `Bandwidth.Guarantees.B3`, `B3RO`,
-`B3Capacity` and `B3CapacityRO` (`Security/Models/Accounting/Guarantees/Bandwidth/Causal.lean`).
+`B3Capacity` and `B3CapacityRO` (`Security/Definitions/Accounting/Guarantees/Bandwidth/Causal.lean`).
 -/
 
 namespace Bandwidth

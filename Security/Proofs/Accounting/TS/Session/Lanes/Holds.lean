@@ -8,14 +8,11 @@ field's bits hold the encoding of the leaf's word there, and the words are in ra
 (`Lanes.Range`):
 
 * `LeafInRange`: the committed leaf's codes are s8, its scales' and y's encodings u32 and u16, its z s32;
-* `LaneHolds`: lane `l`'s ports' rows hold its A rows (`laneA`) and B rows (`laneB`), the leaf's record, its partials
-  row, the public inputs' admit bits, salt, position and roots and its index `l`, each field at its place, and `ok = 1`;
-  `CombHolds`: the combine's hold the 32 partials rows, the receipt and `ok = 1`;
-* `LaneDataHolds`, `CombDataHolds`: `LaneHolds`' and `CombHolds`' fields at the registered data ports (the A and B
-  rows, the record and the partials row; the partials rows and the receipt), the part
-  `Accounting.Assumptions.TS.LeafReads` asks of the opened rows; the known fields are flock-verify's known-read check's
-  (`Lanes.KnownRead`, `LaneKnownHolds.laneHolds`);
-* `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view.
+* `LaneHolds`: lane `l`'s ports' rows hold its A rows (`laneA`) and B rows (`laneB`), the leaf's record, the public
+  inputs' admit bits, salt, position and roots and its index `l`, each field at its place, and `ok = 1`; `CombHolds`:
+  the combine's hold the receipt and `ok = 1`;
+* `decLane_eq`, `decComb_eq`: then the decodes are `laneView` and the combine's view, at the partials rows they read
+  (lane `l`'s and the combine's `p<l>` are one row, `Lanes.Partials`).
 -/
 
 namespace Accounting.TS.Lanes
@@ -35,10 +32,10 @@ structure LeafInRange {K : ℕ} (L : Leaf K) : Prop where
   y : ∀ i j, 0 ≤ L.y i j ∧ L.y i j < 2 ^ 16
 
 /-- **Lane `l`'s ports' rows hold its words**, each field's bits at its place in the layout (`decLane`'s): its A rows'
-and B rows' codes (two's complement) and scales, the leaf's z (two's complement) and y cell by cell, its partials
-row's words, the admit bits, the salt, position and roots, the index `l`, and `ok = 1`. -/
-structure LaneHolds (K nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (L : Leaf K) (P : LanePub)
-    (p : Fin nw → BitVec 32) (l : Fin 32) : Prop where
+and B rows' codes (two's complement) and scales, the leaf's z (two's complement) and y cell by cell, the admit bits, the
+salt, position and roots, the index `l`, and `ok = 1`. -/
+structure LaneHolds (K : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (L : Leaf K) (P : LanePub) (l : Fin 32) :
+    Prop where
   a : ∀ (s : Fin 4) (k : Fin K), Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].codes" + 8 * k.val) 8
     (encS 8 ((laneA L l s).codes k))
   aS : ∀ s : Fin 4, Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].scale") 32 (laneA L l s).scale.toNat
@@ -47,7 +44,6 @@ structure LaneHolds (K nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool
   bS : ∀ t : Fin 8, Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].scale") 32 (laneB L l t).scale.toNat
   z : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.z" + 32 * (i.val * T.c + j.val)) 32 (encS 32 (L.z i j))
   y : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat
-  part : ∀ w : Fin nw, Holds (rd "partials") (fieldBit (lanePorts T 0) "partials" + 32 * w.val) 32 (p w).toNat
   admit : ∀ i : Fin 32, rd "admit" (fieldBit (lanePorts T 0) "admit" + i.val) = some (P.admit i)
   salt : Holds (rd "pub") (fieldBit (lanePorts T 0) "salt") digestBits P.salt
   position : Holds (rd "pub") (fieldBit (lanePorts T 0) "position") positionBits P.position
@@ -55,34 +51,10 @@ structure LaneHolds (K nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool
   lane : Holds (rd "pub") (fieldBit (lanePorts T 0) "lane") laneBits l.val
   ok : rd "o0" 0 = some true
 
-/-- **The combine's ports' rows hold its words**: row `x` of the partials at `p<x>`, the receipt, and `ok = 1`. -/
-structure CombHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (parts : Fin 32 → Fin nw → BitVec 32)
-    (receipt : Fin nw → BitVec 32) : Prop where
-  p : ∀ (x : Fin 32) (w : Fin nw),
-    Holds (rd s!"p{x.val}") (fieldBit (combinePorts T) s!"partials[{x.val}]" + 32 * w.val) 32 (parts x w).toNat
+/-- **The combine's ports' rows hold its words**: the receipt, and `ok = 1`. -/
+structure CombHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (receipt : Fin nw → BitVec 32) : Prop where
   receipt : ∀ w : Fin nw, Holds (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32 (receipt w).toNat
   ok : rd "o0" 0 = some true
-
-/-- **Lane `l`'s data ports' rows hold its words**: `LaneHolds`' fields at its registered ports, its A rows' and B
-rows' codes and scales, the leaf's z and y cell by cell and its partials row's words. -/
-structure LaneDataHolds (K nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (L : Leaf K) (p : Fin nw → BitVec 32)
-    (l : Fin 32) : Prop where
-  a : ∀ (s : Fin 4) (k : Fin K), Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].codes" + 8 * k.val) 8
-    (encS 8 ((laneA L l s).codes k))
-  aS : ∀ s : Fin 4, Holds (rd s!"a{s.val}") (fieldBit (lanePorts T 0) s!"a[{s.val}].scale") 32 (laneA L l s).scale.toNat
-  b : ∀ (t : Fin 8) (k : Fin K), Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].codes" + 8 * k.val) 8
-    (encS 8 ((laneB L l t).codes k))
-  bS : ∀ t : Fin 8, Holds (rd s!"b{t.val}") (fieldBit (lanePorts T 0) s!"b[{t.val}].scale") 32 (laneB L l t).scale.toNat
-  z : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.z" + 32 * (i.val * T.c + j.val)) 32 (encS 32 (L.z i j))
-  y : ∀ i j : Fin 32, Holds (rd "zy") (fieldBit (lanePorts T 0) "zy.y" + 16 * (i.val * T.c + j.val)) 16 (L.y i j).toNat
-  part : ∀ w : Fin nw, Holds (rd "partials") (fieldBit (lanePorts T 0) "partials" + 32 * w.val) 32 (p w).toNat
-
-/-- **The combine's data ports' rows hold its words**: row `x` of the partials at `p<x>`, and the receipt. -/
-structure CombDataHolds (nw : ℕ) (T : Tile) (rd : String → ℕ → Option Bool) (parts : Fin 32 → Fin nw → BitVec 32)
-    (receipt : Fin nw → BitVec 32) : Prop where
-  p : ∀ (x : Fin 32) (w : Fin nw),
-    Holds (rd s!"p{x.val}") (fieldBit (combinePorts T) s!"partials[{x.val}]" + 32 * w.val) 32 (parts x w).toNat
-  receipt : ∀ w : Fin nw, Holds (rd "receipt") (fieldBit (combinePorts T) "receipt" + 32 * w.val) 32 (receipt w).toNat
 
 /-- An in-range row read at its fields decodes to itself. -/
 theorem row_eq {K : ℕ} {r : Row K} (hr : RowInRange r) {rd : ℕ → Option Bool} {lc ls : ℕ}
@@ -97,10 +69,10 @@ theorem row_eq {K : ℕ} {r : Row K} (hr : RowInRange r) {rd : ℕ → Option Bo
   · exact bitsN_cast hr.scale.1 hr.scale.2 hs
 
 /-- **Lane `l`'s rows decode to its view**: where its ports' rows hold its words (`LaneHolds`) of an in-range leaf,
-`decLane` is `laneView` of the leaf, the public inputs, its partials row and `l`. -/
+`decLane` is `laneView` of the leaf, the public inputs, the partials row it reads and `l`. -/
 theorem decLane_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {L : Leaf K} {P : LanePub}
-    {p : Fin nw → BitVec 32} {l : Fin 32} (hR : LeafInRange L) (h : LaneHolds K nw T rd L P p l) :
-    decLane K nw T rd = laneView L P p l := by
+    {l : Fin 32} (hR : LeafInRange L) (h : LaneHolds K T rd L P l) :
+    decLane K nw T rd = laneView L P (decLane K nw T rd).part l := by
   unfold decLane laneView
   rw [LaneView.mk.injEq]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
@@ -113,8 +85,7 @@ theorem decLane_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool}
     exact sgnBits_bitsN (by norm_num) (by norm_num at hz ⊢; exact hz.1) (by norm_num at hz ⊢; exact hz.2) (h.z i j)
   · funext i j
     exact bitsN_cast (hR.y i j).1 (hR.y i j).2 (h.y i j)
-  · funext w
-    exact ofNat_bitsN (h.part w)
+  · rfl
   · obtain ⟨admit, salt, position, roots, hs, hp, hr⟩ := P
     rw [LanePub.mk.injEq]
     refine ⟨?_, ?_, ?_, ?_⟩
@@ -134,16 +105,14 @@ theorem decLane_eq {K nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool}
     exact Nat.mod_eq_of_lt l.isLt
   · simp [h.ok]
 
-/-- **The combine's rows decode to its view**: where its ports' rows hold the partials rows, the receipt and `ok = 1`
-(`CombHolds`), `decComb` is that view. -/
-theorem decComb_eq {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {parts : Fin 32 → Fin nw → BitVec 32}
-    {receipt : Fin nw → BitVec 32} (h : CombHolds nw T rd parts receipt) :
-    decComb nw T rd = ⟨parts, receipt, true⟩ := by
+/-- **The combine's rows decode to its view**: where its ports' rows hold the receipt and `ok = 1` (`CombHolds`),
+`decComb` is the partials rows it reads, the receipt and `ok = 1`. -/
+theorem decComb_eq {nw : ℕ} {T : Tile} {rd : String → ℕ → Option Bool} {receipt : Fin nw → BitVec 32}
+    (h : CombHolds nw T rd receipt) : decComb nw T rd = ⟨(decComb nw T rd).parts, receipt, true⟩ := by
   unfold decComb
   rw [CombineView.mk.injEq]
   refine ⟨?_, ?_, ?_⟩
-  · funext x w
-    exact ofNat_bitsN (h.p x w)
+  · rfl
   · funext w
     exact ofNat_bitsN (h.receipt w)
   · simp [h.ok]

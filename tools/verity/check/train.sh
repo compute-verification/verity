@@ -22,7 +22,10 @@
 #
 # `--deferred STEP,...`: the post-landing run (`research queue drive --defer`) in place of the check: only those ci.toml jobs
 # and what they need (`check.py --record --deferred`), in a priority slot as a check runs, recorded without `--tool check`, so
-# no gate reads it; drive reads its steps and suites. It takes neither --agreement nor --against.
+# no gate reads it; drive reads its steps and suites. It takes no --against. With it alone, `--agreement` sends the upstream
+# build (a run of `main` has no change to send it for), `--no-cache` reuses no pass, and `--no-regenerate` fails lean-audit on a
+# lock record difference rather than passing it on a regenerated record: drive's after-landing run of a review landing (`land =
+# "review"`, `after_landing_no_cache`), where nothing commits regenerated records.
 #
 # `TRAIN_ORDINARY=1` runs the check as an ordinary job, without `--priority` (behind every priority check and in turn with lane
 # checks), and `TRAIN_QUIET=1` posts nothing when a launch registers no run: drive's per-PR shadow sets both, so it never takes
@@ -33,12 +36,14 @@
 # empty (its tree is its base's: BASE, or else where it leaves origin/main, or its parent for a commit on main) or that origin
 # doesn't hold, and a BASE that isn't an ancestor of COMMIT.
 set -euo pipefail
-[ $# -ge 2 ] || { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
+[ $# -ge 2 ] || { sed -n '2,37p' "$0" | sed 's/^# \{0,1\}//'; exit 2; }
 commit=$1 machine=$2; shift 2
-pass=() against= deferred=
+pass=() against= deferred= nocache= noregen=
 while [ $# -gt 0 ]; do
   case $1 in
     --agreement) pass+=(--agreement) ;;
+    --no-cache) nocache=1 ;;
+    --no-regenerate) noregen=1 ;;
     --against) [ $# -ge 2 ] || { echo "train: --against needs BASE" >&2; exit 2; }; against=$2; shift ;;
     --deferred) [[ $# -ge 2 && $2 =~ ^[a-z0-9-]+(,[a-z0-9-]+)*$ ]] || { echo "train: --deferred needs STEP,..." >&2; exit 2; }
       deferred=$2; shift ;;
@@ -47,9 +52,15 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ -z "$against" ] || [ ${#pass[@]} -eq 0 ] || { echo "train: --agreement refused with --against: a touched-suites run sends no build" >&2; exit 2; }
-[ -z "$deferred" ] || { [ -z "$against" ] && [ ${#pass[@]} -eq 0 ]; } \
-  || { echo "train: --deferred takes neither --agreement nor --against: a post-landing run is its steps alone" >&2; exit 2; }
+[ -z "$nocache" ] || [ -n "$deferred" ] \
+  || { echo "train: --no-cache refused without --deferred: a train's check reuses the passes its inputs earned" >&2; exit 2; }
+[ -z "$noregen" ] || [ -n "$deferred" ] \
+  || { echo "train: --no-regenerate refused without --deferred: a train's check regenerates the locks drive commits" >&2; exit 2; }
+[ -z "$deferred" ] || [ -z "$against" ] \
+  || { echo "train: --deferred takes no --against: a post-landing run is its steps alone" >&2; exit 2; }
 [ -z "$deferred" ] || pass+=(--deferred "$deferred")
+[ -z "$nocache" ] || pass+=(--no-cache)
+[ -z "$noregen" ] || pass+=(--no-regenerate)
 [ -z "${VERITY_SKIP_STORE:-}" ] || { echo "train: VERITY_SKIP_STORE is set; a recorded train runs the store-backed tests" >&2; exit 1; }
 [ -z "${AWS_SESSION_TOKEN:-}" ] || { echo "train: AWS_SESSION_TOKEN is set; a temporary credential cannot mint the custody key" >&2; exit 1; }
 [ -n "${AWS_ACCESS_KEY_ID:-}" ] && [ -n "${R2_ENDPOINT:-}" ] || { echo "train: no parent store key (AWS_ACCESS_KEY_ID, R2_ENDPOINT)" >&2; exit 1; }
@@ -74,7 +85,12 @@ sha=$(git -C "$root" rev-parse --verify "$commit^{commit}" 2>>"$why") || die "$c
 # one fetch and worktree at a time per checkout: two launches racing on the fetch both failed (22:51Z, 9 Oct)
 exec 9> "$(git -C "$root" rev-parse --path-format=absolute --git-common-dir)/train.lock"
 flock 9
-git -C "$root" fetch -q origin 2>>"$why" || die "git fetch origin failed"
+# a fetch of drive's tick in the same clone can hold a ref's lock (`cannot lock ref`): two more tries
+for backoff in 5 15 ''; do
+  git -C "$root" fetch -q origin 2>>"$why" && break
+  [ -n "$backoff" ] || die "git fetch origin failed"
+  sleep "$backoff"
+done
 [ -n "$(git -C "$root" for-each-ref --contains "$sha" refs/remotes/origin)" ] \
   || die "${sha:0:12} is on no branch of origin: push it first, the run ships what origin holds"
 if [ -n "$against" ]; then

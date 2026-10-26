@@ -2,6 +2,7 @@ import Proofs.Flock.Claims.KS.PlainWire
 import Proofs.Flock.Claims.KS.PlainDraw
 import Proofs.Flock.Claims.KS.ForkCoupling
 import Proofs.Flock.Claims.KS.RoundsN
+import Proofs.Flock.Claims.Recursion.PlainK
 
 /-!
 # The plain simulator
@@ -237,10 +238,28 @@ noncomputable def plainMsg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (
     depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) hl.length
   else []
 
+/-- **The simulator's message at the live history `hl`**: `P`'s at the coins `simCoins` it rebuilds, its first as
+it is, each round's as `plainRound` at the round's rep and count, its last only where `VK keep` accepts `P` at those
+coins, else nothing. -/
+noncomputable def plainMsgK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (u : plainTape x) (hl : List (Claims.Msg × Claims.Msg)) : Claims.Msg :=
+  if hl.length = 0 then depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) 0
+  else if hl.length ≤ plainN x then
+    plainRound (plainRep spec st hl.length) (plainCnt x spec st hl.length)
+      (depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) hl.length)
+  else if (Claims.run sha512 P (VK keep) x ω (simCoins x spec st u hl)).out = .acc then
+    depMsg sha512 P x ω (Claims.coinSeq (simCoins x spec st u hl)) hl.length
+  else []
+
 /-- **The plain simulator** of `P` at `x`, at the tape `(ω, u)`. -/
 noncomputable def plainSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) :
     Claims.Prover (Ω × plainTape x) :=
   ⟨fun _ hl p => .ret (plainMsg P x spec st p.1 p.2 hl)⟩
+
+/-- **The plain simulator** of `P` at `x`, at the tape `(ω, u)`. -/
+noncomputable def plainSimK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) :
+    Claims.Prover (Ω × plainTape x) :=
+  ⟨fun _ hl p => .ret (plainMsgK keep P x spec st p.1 p.2 hl)⟩
 
 /-- The simulator's round digest: the session's. -/
 def plainDg (spec : SessionSpec) : ByteArray → ByteArray := spec.dg
@@ -250,17 +269,30 @@ noncomputable def plainW (spec : SessionSpec) (h : 2 * spec.mPts ≤ 65536) : Cl
   fun _ => plainWire spec.mPts h
 
 /-- **The simulator's first message is `P`'s.** -/
-theorem plainSim_first {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+theorem plainSim_firstK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (u : plainTape x) :
-    (((plainSim P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 := by
-  simp only [plainSim, Claims.OC.eval, plainMsg]
+    (((plainSimK keep P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 := by
+  simp only [plainSimK, Claims.OC.eval, plainMsgK]
   rfl
 
+/-- `plainSim_firstK` at the deployed plain verifier (`keep := id`). -/
+theorem plainSim_first {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (u : plainTape x) :
+    (((plainSim P x spec st).next x [] (ω, u)).eval sha512).1 = ((P.next x [] ω).eval sha512).1 :=
+  plainSim_firstK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (u := u)
+
 /-- **The simulator sends `P`'s roots** (`plainRoot_of_first`). -/
+theorem plainSim_rootK (keep : Bool → Bool) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
+    (h : 2 * spec.mPts ≤ 65536) (u : plainTape x) :
+    (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec h) sha512 (plainSimK keep P x spec st) x
+      (ω, u)).1 = plainRoot P x ω :=
+  plainRoot_of_first plainN (plainDg spec) (fun _ => rfl) (plainSim_firstK keep P x spec st ω) u
+
+/-- `plainSim_rootK` at the deployed plain verifier (`keep := id`). -/
 theorem plainSim_root {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (st : Stmt) (ω : Ω)
     (h : 2 * spec.mPts ≤ 65536) (u : plainTape x) :
     (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec h) sha512 (plainSim P x spec st) x
       (ω, u)).1 = plainRoot P x ω :=
-  plainRoot_of_first plainN (plainDg spec) (fun _ => rfl) (plainSim_first P x spec st ω) u
+  plainSim_rootK id (Ω := Ω) (P := P) (x := x) (spec := spec) (st := st) (ω := ω) (h := h) (u := u)
 
 end FlockDeploy.KS

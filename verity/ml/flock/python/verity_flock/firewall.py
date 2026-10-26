@@ -21,8 +21,10 @@ appended under ``record.lock``, and ``slot.lock``, the outer slot. Four rules ho
   again) is a stop at that next statement, never opened, so a statement the worker skips ends the recursive session where
   it stands. After a stop, and after the last statement's release, a relay refuses each outer session of it before
   anything reaches the challenger (``refused``, not a failure: the challenger sees nothing of it).
-* **Outer proofs go one at a time.** The firewall has one slot, across streams and protocols. An outer session takes it at
-  its first request and holds it until the session is released (the challenger's verdict accepts it) or fails. A second
+* **This relay takes outer proofs one at a time**, stricter than AGENTS.md's independent sessions (each statement fixed
+  first, one session each with its own live coins, every verdict counted). It has one slot, across streams and protocols.
+  An outer session takes it at its first request and holds it until the session is released (the challenger's verdict
+  accepts it) or fails. A second
   session that asks meanwhile waits (``wait``) and takes the slot after (``slot``), so each ``slot`` event is followed by its
   session's outcome before the next one. A holder that ended before its outcome (killed, say) is recorded as its session's
   stop by the next session to take the slot.

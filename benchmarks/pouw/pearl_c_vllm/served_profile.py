@@ -146,7 +146,10 @@ def _range_passes(stack) -> None:
 CATEGORIES = (
     ("pearlc:gemm", r"^gemm_pearlc|^gemm_ct"),
     ("pearlc:lines_a", r"^lines$"),
-    ("pearlc:forming", r"^(stats_s5|form_s5|eprime|words|words_u|gemm_words|pa|pb)$|^(stats_s5|form_s5|gemm_words)"),
+    ("pearlc:a_commit", r"^pd_commit_|^pd_tree_|^pd_heads$|^pl_(leaves|levels|seed_a|seeds)_"),
+    ("pearlc:tile_hash", r"^pd_tiles_"),
+    ("pearlc:forming", r"^(stats_s5|stats_r|form_s5|eprime|words|words_u|words_k|gemm_words|pa|pb|quant_s5|plainq|diff_words|gen_f32)$"
+                       r"|^(stats_s5|form_s5|gemm_words)"),
     ("pearlc:row_digests", r"^s512_rows$|^s512_row_segs$"),
     ("pearlc:seeds", r"^s512_seeds$"),
     ("pearlc:a_tree", r"^s512_pads$|^hm_leaves$|^s512_frame_leaves$|^s512_nodes$|^s512_tree_small$"),
@@ -170,7 +173,7 @@ FOLDS = {"s512_row_segs": "pearlc:row_digests", "s512_tile_segs": "pearlc:tile_h
 PASS_END = {"pearlc:a_tree": "pearlc:transcript_tree"}
 #: `hash_split_ms`'s groups of Pearl-C categories
 HASH_GROUPS = {"tile_leaves": ("pearlc:tile_hash",),
-               "a_rows": ("pearlc:row_digests", "pearlc:a_tree", "pearlc:seeds", "pearlc:lines_a"),
+               "a_rows": ("pearlc:row_digests", "pearlc:a_tree", "pearlc:seeds", "pearlc:lines_a", "pearlc:a_commit"),
                "transcript_tree": ("pearlc:transcript_tree",),
                "screen": ("pearlc:screen",),
                "forming_gemm": ("pearlc:forming", "pearlc:gemm")}
@@ -353,7 +356,7 @@ def main() -> None:
     e2e.main()
 
 
-if "--analyze" not in sys.argv:
+if __name__ in ("__main__", "__mp_main__") and "--analyze" not in sys.argv:
     here = os.environ.get("SERVED_TREE", os.getcwd())
     sys.path[:0] = [str(Path(here) / "benchmarks/pouw/pearl_c_vllm"), str(Path(here) / "benchmarks/pouw")]
     _instrument()

@@ -132,7 +132,7 @@ theorem dgWith_std (spec : SessionSpec) (b : ByteArray) : spec.dgWith std b = pu
   split <;> rfl
 
 theorem decodeWith_std (spec : SessionSpec) (text : String) : Record.decodeWith std spec text = Record.decode spec text := by
-  unfold Record.decodeWith Record.decode
+  unfold Record.decodeWith Record.decodeJWith Record.decode
   simp only [monadLift_self, dgWith_std, pure_bind]
   rfl
 

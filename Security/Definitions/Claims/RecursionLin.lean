@@ -204,7 +204,10 @@ reader, and its loop reads only what a run shows: whether it accepts, and its co
 `√(γ_BI·Pr[B_I])` becomes `(4k_I + 1)·Pr[B_I]`, and the inner Flock's caps and level 0 are the composite's finders over
 `E_O`'s draws at `IVStar` (`FCI`, `F0I`), whose loops read whether a draw's inner view accepts and the draw's inner
 coins. A draw where the inner view departs from the prover's plurality is `Fdev`'s, at `FCI`'s two and `F0I`'s `k + 1`
-draws as well as the inner `E^rep`'s `N_I` (`βdev2`). `BitsLin2` is its bits.
+draws as well as the inner `E^rep`'s `N_I` (`βdev2`). An accepted inner run's calls are the outer witnesses' recorded
+ones and its setup's at the inner statement, which no witness need record, so `B_I`, `FCI`, `F0I` and `Fdev` search
+both (`Deploy.withSetup`), each charged the setup's `|S(x_I)|` calls once (`Finder.charge`, `setupLen`).
+`BitsLin2` is its bits.
 -/
 
 section FlockLin
@@ -430,24 +433,40 @@ weight `4`) make, with `W_I` the inner caps' positions and `k_I` the inner `E^re
 noncomputable def βdev2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) : ℝ :=
   (NI D I x + 8 * Cp.width (xI D x) + 4 * ((I.k (xI D x) : ℝ) + 1)) * I.V.k (xI D x)
 
+/-- **The record with the inner verifier's own calls among the recorded ones**: at each statement, after the outer
+witnesses' calls, the inner verifier's setup's at the inner statement (`Deploy.innerSetup`) and its calls on the inner
+messages the witnesses give (`Deploy.innerCalls`), each with `H`'s answer. -/
+def Deploy.withSetup (H : Msg → Msg) (D : Deploy Coin) : Deploy Coin :=
+  { D with calls := fun x ws => D.calls x ws ++ (D.innerSetup (xI D x) ++ D.innerCalls H x ws).map fun u => (u, H u) }
+
+/-- **`F` charged `n` more SHA-512 calls** on every coin: a finder that also evaluates `n` fixed inputs. -/
+def _root_.Claims.Finder.charge (F : Finder) (n : ℕ) : Finder := { F with cost := fun s => F.cost s + n }
+
+/-- **The inner setup's calls at `x`**: `|S(x_I)|`, what a finder searching them evaluates once. -/
+def setupLen (D : Deploy Coin) (x : Msg) : ℕ := (D.innerSetup (xI D x)).length
+
 /-- **The recursion's bits with the inner Flock's roots linear**: `λ₂ = min(log₂(1/κ), 255.5 − ½ log₂ γ,
-256 − log₂((4k_I + 1)·c_Be), 255 − log₂(4·W_I·c_Be), 256 − log₂(4·(k_I + 1)·c_Be), 255 − log₂(β₂·c_Be)) − log₂ 6`,
-with `k_I` the inner verifier's rounds in the third term and the inner `E^rep`'s accepted reruns per wait in the fifth.
-`B_I` costs at most `c_Be` per call of the prover's run, `FCI` and `Fdev` two draws', `c_Be` too, and `F0I` `k_I + 1`
-draws', `(k_I + 1)·c_Be/2`; the tails `4·W_I/(M+1)`, `β₂/(M+1)` and `4·(k_I + 1)/(R+1)` are below their collision
-terms at `M + 1 ≥ 2^256/(c_Be·t)` and `R + 1 ≥ 2^257/(c_Be·t)`. -/
-noncomputable def lamLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) : ℝ :=
+256 − log₂((4k_I + 1)·c_S), 255 − log₂(4·W_I·c_S), 256 − log₂(4·(k_I + 1)·c_S), 255 − log₂(β₂·c_S)) − log₂ 6`
+at `c_S = c_Be + |S(x_I)| + 2n`, with `k_I` the inner verifier's rounds in the third term and the inner `E^rep`'s
+accepted reruns per wait in the fifth, and `n` a bound on the inner verifier's calls on one draw's inner messages
+(`Deploy.innerCalls`). `B_I` costs at most `c_Be` per call of the prover's run, `FCI` and `Fdev` two draws', `c_Be` too,
+and `F0I` `k_I + 1` draws', `(k_I + 1)·c_Be/2`, each with the inner setup's `|S(x_I)|` calls once (`setupLen`) and `n`
+calls per draw it reads; the tails `4·W_I/(M+1)`, `β₂/(M+1)` and `4·(k_I + 1)/(R+1)` are below their collision terms at
+`M + 1 ≥ 2^256/(c_Be·t)` and `R + 1 ≥ 2^257/(c_Be·t)`. -/
+noncomputable def lamLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) (x : Msg) (n : ℕ) : ℝ :=
   min (min (min (min (min (Real.logb 2 (1 / κ D I x)) (255.5 - Real.logb 2 (γ D I x) / 2))
-    (256 - Real.logb 2 ((4 * I.V.k (xI D x) + 1) * cBe D x)))
-    (255 - Real.logb 2 (4 * Cp.width (xI D x) * cBe D x)))
-    (256 - Real.logb 2 (4 * ((I.k (xI D x) : ℝ) + 1) * cBe D x)))
-    (255 - Real.logb 2 (βdev2 D I Cp x * cBe D x)) - Real.logb 2 6
+    (256 - Real.logb 2 ((4 * I.V.k (xI D x) + 1) * (cBe D x + setupLen D x + 2 * n))))
+    (255 - Real.logb 2 (4 * Cp.width (xI D x) * (cBe D x + setupLen D x + 2 * n))))
+    (256 - Real.logb 2 (4 * ((I.k (xI D x) : ℝ) + 1) * (cBe D x + setupLen D x + 2 * n))))
+    (255 - Real.logb 2 (βdev2 D I Cp x * (cBe D x + setupLen D x + 2 * n))) - Real.logb 2 6
 
 /-- **The recursion: KS at the representation V\* binds, with the inner Flock's roots linear**: at the compiled record
 whose inner view runs `IVStar` (`D.record Bd.IVStar`), over the bound record, at every inner and outer decoder that meets
 the spec, on every prover and at every `M`, `R`: `Pr[run = acc ∧ ¬R(x, E*(x))] ≤ κ(x) + √(γ(x)·Pr[B]) +
 (4k_I + 1)·Pr[B_I] + 4·W_I·(Pr[FCI] + 1/(M+1)) + 4·(Pr[F0I] + (k_I + 1)/(R+1)) + β₂·(Pr[Fdev] + 1/(M+1))`, the inner
-caps read by `Cp` at the inner statement. It is `KSBoundLin` with `KSFlockLin`'s terms in place of `√(γ_BI·Pr[B_I])`. -/
+caps read by `Cp` at the inner statement, and `B_I`, `FCI`, `F0I` and `Fdev` searching the inner verifier's own calls,
+its setup's and those on each draw's inner messages, with the recorded ones (`Deploy.withSetup`). It is `KSBoundLin`
+with `KSFlockLin`'s terms in place of `√(γ_BI·Pr[B_I])`. -/
 def KSLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
@@ -457,35 +476,46 @@ def KSLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound
       κ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x +
         Real.sqrt (γ (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) x * PrB H (D.record Bd.IVStar).V P x) +
         (4 * (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x) + 1) *
-          PrBinner H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x +
+          PrBinner H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x +
         4 * Cp.width (xI (D.record Bd.IVStar) x) *
-          (PrFCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M + 1 / ((M : ℝ) + 1)) +
-        4 * (PrF0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
+          (PrFCI H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M +
+            1 / ((M : ℝ) + 1)) +
+        4 * (PrF0I H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x R +
           (((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) : ℝ) + 1) / ((R : ℝ) + 1)) +
         βdev2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x *
-          (PrFdev H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M + 1 / ((M : ℝ) + 1))
+          (PrFdev H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M +
+            1 / ((M : ℝ) + 1))
 
 /-- **The recursion: bits at the representation V\* binds, with the inner Flock's roots linear**, at every inner and
 outer decoder that meets the spec: every prover making at most `t ≥ 1` SHA-512 calls per run (both parties') has
-`Pr[acc ∧ ¬R] ≤ t · 2^{−λ₂(x)}`, where `B` obeys the strict birthday bound and `B_I`, `Fdev` and `FCI` at every `M`
-and `F0I` at every `R` the linear expected-time bound. -/
+`Pr[acc ∧ ¬R] ≤ t · 2^{−λ₂(x)}`, at every `n` bounding the inner verifier's calls on any outer witnesses' inner messages
+(`Deploy.innerCalls`), where `B` obeys the strict birthday bound and `B_I`, `Fdev` and `FCI` at every `M` and `F0I` at
+every `R` the linear expected-time bound, each searching the inner verifier's own calls with the recorded ones and
+charged their evaluations (`Finder.charge`): the setup's `|S(x_I)|` once (`setupLen`) and `n` per draw it reads, `2n`
+for `B_I`, `Fdev` and `FCI` and `(k_I + 1)·n` for `F0I`. -/
 def BitsLin2 [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin) (Bd : Bound Coin Col T)
     (DO : Flock.Deploy Coin Col' T') (Cp : Caps Coin) : Prop :=
   ∀ decI, decOK Bd.deploy decI → ∀ decO, decOK DO decO → ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (t : ℕ), 1 ≤ t →
     (∀ ω r, (run H P (D.record Bd.IVStar).V x ω r).pLog.length +
       (run H P (D.record Bd.IVStar).V x ω r).vLog.length ≤ t) →
+    ∀ n : ℕ, (∀ ws, ((D.record Bd.IVStar).innerCalls H x ws).length ≤ n) →
     (∀ hk : 0 < (D.record Bd.IVStar).V.k x, StrictBirthday H (B H (D.record Bd.IVStar).V P x hk)) →
     (∀ hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x),
-      ExpectedCR H (Binner H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x hk)) →
+      ExpectedCR H ((Binner H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x
+        hk).charge (setupLen (D.record Bd.IVStar) x + 2 * n))) →
     (∀ (M : ℕ) (hk : 0 < (Inner.ofFlock Bd.deploy decI).V.k (xI (D.record Bd.IVStar) x)),
-      ExpectedCR H (Fdev H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x M hk)) →
+      ExpectedCR H ((Fdev H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x M
+        hk).charge (setupLen (D.record Bd.IVStar) x + 2 * n))) →
     (∀ (M : ℕ) (hW : 0 < Cp.width (xI (D.record Bd.IVStar) x)),
-      ExpectedCR H (FCI H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M hW)) →
-    (∀ R : ℕ, ExpectedCR H (F0I H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO P x R)) →
+      ExpectedCR H ((FCI H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO Cp P x M
+        hW).charge (setupLen (D.record Bd.IVStar) x + 2 * n))) →
+    (∀ R : ℕ, ExpectedCR H ((F0I H ((D.record Bd.IVStar).withSetup H) (Inner.ofFlock Bd.deploy decI) DO decO P x
+      R).charge (setupLen (D.record Bd.IVStar) x +
+        ((Inner.ofFlock Bd.deploy decI).k (xI (D.record Bd.IVStar) x) + 1) * n))) →
     PrBad H (D.record Bd.IVStar).V (Recursion.R (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI))
         (E H (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) DO decO) x P ≤
-      t * (2 : ℝ) ^ (-lamLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x)
+      t * (2 : ℝ) ^ (-lamLin2 (D.record Bd.IVStar) (Inner.ofFlock Bd.deploy decI) Cp x n)
 
 end Composite
 

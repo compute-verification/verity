@@ -120,6 +120,25 @@ def test_a_tree_that_is_not_the_committed_root_opens_nothing_of_record(world):
     assert wc["equal"] is False and "does not fold to its root" in wc["why"]
 
 
+def test_on_read_opens_a_tensor_on_its_first_read_as_open_weights_does_and_refuses_one_by_name(world):
+    words, _wc = _open(world)
+    shard = world["ck"] / "model.safetensors"
+    b = bytearray(shard.read_bytes())
+    b[-(PARTS["model.norm.weight"].nbytes + 3)] ^= 1       # inside v_proj, a part of qkv_proj
+    shard.write_bytes(bytes(b))
+    lazy = CPU.OnRead(world["bundle"], world["tree"], world["root"], WR.CheckpointIndex(str(world["ck"]), verify_shards=False))
+    assert set(lazy) == {n for n, *_ in world["tree"]["names"] if n != "model.half.weight"} and not lazy.words
+    rd = CPU.provider(lazy, "model.", set())
+    assert np.array_equal(rd("model.norm.weight", 0, 8), words["model.norm.weight"]) and set(lazy.words) == {"model.norm.weight"}
+    with pytest.raises(LookupError, match=f"{QKV} \\(checkpoint\\) does not open .*tensor root != the committed tensor root"):
+        rd("model." + QKV, 0, 1)
+    with pytest.raises(ValueError, match="is not the committed weights root"):
+        CPU.OnRead(world["bundle"], world["tree"], "00" * 32, None)
+    world["tree"]["tensor_roots"][1] = "11" * 32
+    with pytest.raises(ValueError, match="does not fold to its root"):
+        CPU.OnRead(world["bundle"], world["tree"], world["root"], None)
+
+
 def test_an_int32_table_opens_as_the_checkpoints_i64_words_in_range(tmp_path):
     """DeepSeek-V4's hash-routed layers register `ffn.gate.tid2eid` as int32 [V, 6], stored I64 in the checkpoint: it opens as the
     checkpoint's values in i32 words (the replay's `GatherI32x{V}` rows read it), and a value outside int32 leaves it unopened."""

@@ -95,7 +95,7 @@ def innerR : RecVStar.Inner := { inner with stacked := some { m := 22, claims :=
 
 def accPort (name : String) (reads : Array (Option Nat)) : Registered.Port :=
   { name, value := "rec-acc", root := ByteArray.empty, leaves := 897, words := some 64, wordBits := 16,
-    domain := ByteArray.empty, reads }
+    domain := ByteArray.empty, readsRel := reads }
 
 def level3 : VStar.Stmt := .recOpen 3 16 4 106
 

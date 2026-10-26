@@ -216,3 +216,39 @@ def test_a_statements_registered_file_reads_each_value_at_its_row_under_its_root
     assert f["ports"]["receipt"]["root"] == "ff" * 64
     with pytest.raises(ValueError, match="does not hold"):
         LL.registered_file(LL.reads(8, 16, "lane", 0), entries, roots)
+
+
+def test_a_statements_row_ports_and_only_those_are_read_in_full():
+    """Lane l's ``a<s>``, ``b<t>`` and ``partials`` and the combine's ``p<x>`` are marked ``read_in_full``, which
+    flock-verify holds to one row of the registered row's words (`KnownRead.fullRows`, proofs'
+    `PouwWindow.Lanes.readFull`); ``zy``, which each lane reads only at its own cells, and ``receipt`` are not."""
+    reg, pd = "ab" * 64, "12" * 64
+    vals = [LL.PARTIALS, LL.RECEIPT, LL.A, LL.B, LL.ZY]
+    entries = {v: PR.entry(pd, v, 32, 2, reg) for v in vals}
+    roots = {v: f"{i:02x}" * 64 for i, v in enumerate(vals)}
+    for kind, ln in LL.statements(32, 32):
+        ports = LL.reads(32, 32, kind, ln)
+        f = LL.registered_file(ports, entries, roots)
+        full = sorted(p for p, e in f["ports"].items() if e.get(LL.READ_IN_FULL) is True)
+        assert full == sorted(p for p, (v, _) in ports.items() if v in LL.FULL), (kind, ln)
+        assert full == (sorted([*(f"a{s}" for s in range(4)), *(f"b{t}" for t in range(8)), "partials"])
+                        if kind == LL.LANE else sorted(f"p{x}" for x in range(32)))
+        assert all(LL.READ_IN_FULL not in e for p, e in f["ports"].items() if p not in full)
+
+
+def test_the_verifiers_entries_are_the_registrations_and_the_produced_records():
+    """Each registered value's entry and root are the registration's first of its value; the partials' are the
+    verifier's own entry under the registration's digest at the produced record's root, over any registered entry of
+    that name (Lean's `PouwWindow.Lanes.roots?`)."""
+    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+
+    e = {v: {"value": v, "root": f"{i:02x}" * 64, "leaves": 4, "words": 2, "domain": f"{i + 8:02x}" * 64}
+         for i, v in enumerate((LL.A, LL.B, LL.PARTIALS))}
+    rec = {"format": "verity/registration/v2", "program": "12" * 64,
+           "registered": [e[LL.A], e[LL.B], {**e[LL.A], "root": "ee" * 64}, e[LL.PARTIALS]]}
+    produced = {"produced": [{"value": "x", "root": "aa" * 64}, {"value": LL.PARTIALS, "root": "bb" * 64}]}
+    ent, roots = LL.verifier_entries(rec, produced, 32, 6)
+    assert roots == {LL.A: e[LL.A]["root"], LL.B: e[LL.B]["root"], LL.PARTIALS: "bb" * 64}
+    assert ent[LL.A] is rec["registered"][0] and ent[LL.PARTIALS] == PR.entry("12" * 64, LL.PARTIALS, 32, 6, R.digest(rec))
+    with pytest.raises(ValueError, match="no partials"):
+        LL.verifier_entries(rec, {"produced": [produced["produced"][0]]}, 32, 6)

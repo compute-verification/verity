@@ -3,7 +3,7 @@ int8-exact row, one process on one GPU, in the static form (Daniel, 20:52Z): the
 fixed function of public parameters alone.
 
 The receipts bind extra work beside cuBLASLt's served y, not the served kernel's.  vllm's PoUW option
-(``pouw:eps1-sm120-h1fx1``, `verity_vllm.protocol_options.pouw_h1`) hands over each int8-exact linear call's s8 rows and scales
+(``pouw:eps1-sm120-h1fx1``, `verity_vllm.protocols.pouw.h1`) hands over each int8-exact linear call's s8 rows and scales
 and its layer, and holds its own stand-in root(B) per layer (`pouw_h1.weight_root`), their weights' root and the epoch's
 64-byte salt from the challenger's salt coin (`pouw_h1.program_salt`).  Its own per-call positions, padding and stand-in
 roots follow the step's real rows, so this window doesn't use them (the seeded mode keeps the option's salt).  Instead:
@@ -44,7 +44,7 @@ roots follow the step's real rows, so this window doesn't use them (the seeded m
   `window.round_key(...).stream(0, 64)`), so every candidate and every selection a round's noise reads is committed before
   that noise's coin.  The gate's units come from the draw coin, opened after the window's receipts root (`receipts_root`).
   This window has no gated session of its own (compute accounting, 21 Oct): the gated served window of record is vllm's
-  H1 path, `integrations/vllm/verity_vllm/protocol_options/pouw_h1.py` (#3053), which holds the salt, round-0 request
+  H1 path, `integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py` (#3053), which holds the salt, round-0 request
   table, open root R, session S and requests_root rules (#2950, PRF-132), so ``--gate USER@HOST`` (or
   ``$POUW_CHALLENGER_GATE``) is refused.  ``--challenger HOST:PORT`` and ``--session ID`` (or ``$POUW_CHALLENGER`` and
   ``$POUW_CHALLENGER_SESSION``, with ``$POUW_CHALLENGER_SECRET_FILE`` for a session that has a secret) take a session
@@ -409,7 +409,7 @@ def run(a: argparse.Namespace) -> dict:
     rec = Record(out)
     if a.gate:
         raise ValueError(f"--gate {a.gate}: served_h1's own gated window is superseded; the gated served window of "
-                         "record is vllm's H1 path, integrations/vllm/verity_vllm/protocol_options/pouw_h1.py (#3053), "
+                         "record is vllm's H1 path, integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053), "
                          "which holds the salt, round-0 request table, R, S and requests_root rules (#2950, PRF-132); "
                          "here a window's coins are in-process, or a development session's (--challenger, --session)")
     at = CO.session(a.challenger, a.session)
@@ -438,13 +438,13 @@ def run(a: argparse.Namespace) -> dict:
     from tests.engine import int8_exact_gpu as G
     from verity.core.protocols.pouw import verifier
     from verity.core.protocols.pouw.coins import Challenger
-    from verity_vllm import protocol_options as PO
+    from verity_vllm import protocols as PO
     from verity_vllm.engine import int8_exact as E
     from verity_vllm.engine import int8_ops
     from verity_vllm.engine.build import build_engine, target_mismatches
     from verity_vllm.program.frontend.target_profile import TargetProfile
-    from verity_vllm.protocol_options import pouw
-    from verity_vllm.protocol_options import pouw_h1 as PH
+    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw import h1 as PH
 
     t_max, s_max = a.rows, a.steps or a.max_tokens + 2
     target = TargetProfile.from_device().with_overrides(int8_exact=a.int8_exact)
@@ -753,7 +753,9 @@ def run(a: argparse.Namespace) -> dict:
         coins["ok"] = bool(coins["rounds_reason"] is None and coins["draw_reason"] is None and coins["rounds_cover_steps"]
                            and all(recomputed))
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
-                           "--ledger <each head of the auditor's ledger infra published> --manifest manifest.json "
+                           "--ledger <each head of the auditor's ledger infra published> --pins <the host's pins log "
+                           "infra published> --main <the verifier's git rev-list --first-parent origin/main> "
+                           "--manifest manifest.json "
                            "--key-record <the challenger's "
                            "challenger-key/v1 record> --period <the window's period> --root <the window's root>, from the "
                            "challenger's own record, never this one" if cs.source == "off-node"
@@ -1074,7 +1076,7 @@ def main(argv: list[str] | None = None) -> int:
                          "development only, since its salt coin opens after the registration root, not a window's root")
     ap.add_argument("--gate", default=os.environ.get(CO.GATE_ENV), metavar="USER@HOST",
                     help=f"refused (default ${CO.GATE_ENV}): the gated served window of record is vllm's H1 path, "
-                         "integrations/vllm/verity_vllm/protocol_options/pouw_h1.py (#3053)")
+                         "integrations/vllm/verity_vllm/protocols/pouw/h1/__init__.py (#3053)")
     return 0 if run(ap.parse_args(argv))["ok"] else 1
 
 

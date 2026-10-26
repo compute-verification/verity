@@ -82,7 +82,13 @@ noncomputable def Finder.ev {γ : Type} (Fd : Finder γ) (f : γ → ℝ) : ℝ 
 /-- **`SHA512CRStrict` for one finder**, at the budget `q` on every outcome: `q` bounds the SHA-512 evaluations of the
 prover's runs the finder plays and of its verifications. The cost is `q` itself (`fun _ => q`), so Lean doesn't check
 that the finder stays within it: a budget below the finder's real count makes this a claim about SHA-512 that
-`cr/sha-512` doesn't make. Whoever instantiates it states an honest `q` (`ASSUMPTIONS.md`). -/
+`cr/sha-512` doesn't make. Whoever instantiates it states an honest `q` (`ASSUMPTIONS.md`).
+
+Assumption record. Claim: `cr/sha-512` (`Claims.StrictBirthday`). It assumes that this one finder, which plays the
+prover's runs and outputs what they open two ways, finds a SHA-512 collision with probability at most `q²/2^513`. That
+is the generic birthday bound for 512-bit outputs at `q` evaluations, and no SHA-512 collision is known. A hash premise:
+it is `Assumptions.SHA512CRStrict` at the constant cost `q`, so it reduces to `StrictBirthday` and asks nothing of the
+verifier. The one condition Lean doesn't check is the budget: `q` must bound the finder's real evaluations. -/
 def Finder.CR (Fd : Finder Pair) (q : ℝ) : Prop :=
   Assumptions.SHA512CRStrict H Fd.g Fd.s id (fun _ => q) q
 

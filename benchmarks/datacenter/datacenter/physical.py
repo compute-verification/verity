@@ -122,13 +122,17 @@ class Block:
 @dataclass
 class Datacenter:
     """Blocks, the fabric devices between them (switches, certifiers, the challenger, the outside world), the links,
-    and the certifiers' cadence."""
+    the certifiers' cadence, and whether they seal their pair links."""
 
     name: str
     blocks: list[Block]
     fabric: list[Device] = field(default_factory=list)
     links: list[Link] = field(default_factory=list)
     cadence: Cadence = field(default_factory=Cadence)
+    #: every link between two blocks' certifiers is a sealed pair link (the certifier's `Proxy(pair=…)`, PROTOCOL.md
+    #: "Sealed pair links"), so what crosses from one block to another is ciphertext off the two certifiers, and the
+    #: export is charged at the facility boundary only (`Placement._exported`). Off by default.
+    sealed: bool = False
 
     @property
     def devices(self) -> dict[str, Device]:
@@ -221,7 +225,7 @@ class Datacenter:
         r = lambda s: s if s in keep else f"{prefix}.{s}"  # noqa: E731
         return Datacenter(prefix, [Block(r(b.name), [replace(d, name=r(d.name)) for d in b.devices]) for b in self.blocks],
                           [replace(d, name=r(d.name)) for d in self.fabric],
-                          [replace(l, a=r(l.a), b=r(l.b)) for l in self.links], self.cadence)
+                          [replace(l, a=r(l.a), b=r(l.b)) for l in self.links], self.cadence, self.sealed)
 
 
 @dataclass
@@ -236,7 +240,7 @@ class Fleet:
 
     def merged(self) -> Datacenter:
         """The fleet as one datacenter, so a circuit can be placed across sites with the same `place`. Devices shared by
-        name (the outside world) appear once."""
+        name (the outside world) appear once. Its pair links are sealed when every site's are."""
         seen, fabric = set(), []
         for dc in self.datacenters:
             for d in dc.fabric:
@@ -245,7 +249,7 @@ class Fleet:
                     fabric.append(d)
         return Datacenter("+".join(dc.name for dc in self.datacenters), [b for dc in self.datacenters for b in dc.blocks],
                           fabric, [l for dc in self.datacenters for l in dc.links] + list(self.links),
-                          self.datacenters[0].cadence)
+                          self.datacenters[0].cadence, all(dc.sealed for dc in self.datacenters))
 
     def validate(self) -> list[str]:
         """Each datacenter's own problems, a device name in two of them (but the outside world's), and a link between

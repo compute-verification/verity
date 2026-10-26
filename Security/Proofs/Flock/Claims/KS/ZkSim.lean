@@ -356,7 +356,6 @@ noncomputable def zkRd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : 
     (j : ℕ) (i : Claims.Flock.IZW (zkTabs h0 L hz hk hlay j).sch.levels.length) : Fin ((V true).k x) :=
   ⟨zkRdAt spec sts j i, by have := zkRdAt_le h0 L hz hk hlay j i; rw [zkK hset]; omega⟩
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -370,12 +369,6 @@ noncomputable def zkRd {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : 
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (j : ℕ) (i : Claims.Flock.IZW (zkTabs h0 L hz hk hlay j).sch.levels.length) : Fin ((V true).k x) :=
   ⟨zkRdAt spec sts j i, by have := zkRdAt_le h0 L hz hk hlay j i; rw [zkK hset]; omega⟩
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 theorem zkRd_succ_lt {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -460,19 +453,12 @@ theorem zkRd_zero {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array
 /-- **The live session's rounds at `x`**: the deployed verifier's, between the link message and the last. -/
 def zkN (x : Claims.Msg) : ℕ := (V true).k x - 2
 
-
 namespace Gen
 
 variable [S : ZkSetup]
 
 /-- **The live session's rounds at `x`**: the deployed verifier's, between the link message and the last. -/
 def zkN (x : Claims.Msg) : ℕ := (V true).k x - 2
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 theorem zkN_add {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf true x = some (ins, spec, sts)) : zkN x + 2 = (V true).k x := by
@@ -492,7 +478,6 @@ reads. -/
 def zkCnt (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (i : ℕ) : ℕ :=
   max 1 (if i = 0 then 2 * spec.mPts else if i ≤ zkN x then min ((zkNs spec sts).getD (i - 1) 0) 65536 else 0)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -509,7 +494,6 @@ end Gen
 def zkNOf (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (i : Fin ((V true).k x)) : ℕ :=
   zkCnt x spec sts i.val
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -517,12 +501,6 @@ variable [S : ZkSetup]
 /-- `zkCnt` at the deployed rounds. -/
 def zkNOf (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (i : Fin ((V true).k x)) : ℕ :=
   zkCnt x spec sts i.val
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 theorem zkNOf_pos (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (i : Fin ((V true).k x)) :
     1 ≤ zkNOf x spec sts i :=
@@ -537,7 +515,6 @@ theorem zkNOf_pos (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (i : 
 /-- The revealed history a deployed round's tape entry is read at (`FnFork.histKey`). -/
 abbrev zkD (x : Claims.Msg) : Type := Fin ((V true).k x) → Fin 65536 → Option 𝔽
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -550,7 +527,6 @@ end Gen
 /-- **The simulator's tape**: per deployed round, a coin at each revealed history. -/
 abbrev zkTape (x : Claims.Msg) : Type := Fin ((V true).k x) → zkD x → LCoin 65536
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -565,7 +541,6 @@ def zkKey (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) :
     Fin ((V true).k x) → (Fin ((V true).k x) → LCoin 65536) → zkD x :=
   Claims.Flock.FnFork.histKey (zkNOf x spec sts)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -584,7 +559,6 @@ noncomputable def zkΦ (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) 
   if hL : zkN x + 2 = (V true).k x then fun q => fnAt hL (zkNOf x spec sts) (zkKey x spec sts) q.1 q.2
   else fun _ => default
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -595,12 +569,6 @@ noncomputable def zkΦ (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) 
     zkTape x × (Fin (zkN x + 2) → LCoin 65536) → Fin ((V true).k x) → Coin :=
   if hL : zkN x + 2 = (V true).k x then fun q => fnAt hL (zkNOf x spec sts) (zkKey x spec sts) q.1 q.2
   else fun _ => default
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 theorem zkΦ_eq {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : zkN x + 2 = (V true).k x) :
     zkΦ x spec sts = fun q => fnAt hL (zkNOf x spec sts) (zkKey x spec sts) q.1 q.2 :=
@@ -631,20 +599,6 @@ theorem Pr_zkΦ {x : Claims.Msg} {spec : SessionSpec} {sts : Array Stmt} (hL : z
     Claims.Pr (fun p => E (zkΦ x spec sts p)) = Claims.Pr E :=
   Gen.Pr_zkΦ (S := S₀) (x := x) (spec := spec) (sts := sts) (hL := hL) (E := E)
 
-/-- **The coupling at the deployed masked verifier**: at `V true`, with a tape of uniform functions of the live coins
-`LCoin 65536` read through a prefix key (`Claims.Bridge.Live.fnAt`), `ForkCoinCoupling` holds at the chances
-`FnFork.δN GF128 65536 n` (`forkCoinCoupling_fnAt`). -/
-theorem forkCoinCoupling_zk {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω)
-    (x : Claims.Msg) (ω : Ω) {L : ℕ} (h : L = (V true).k x) (n : Fin ((V true).k x) → ℕ)
-    {key : Fin ((V true).k x) → (Fin ((V true).k x) → LCoin 65536) → D}
-    (hk : Claims.Flock.FnFork.PrefixKey n key) :
-    Claims.Flock.ForkCoinCoupling sha512 (V true) P x (Claims.Flock.FnFork.δN 𝔽 65536 n)
-      (Claims.Flock.simForkPr sha512 (V true) P x
-        (fun q : (Fin ((V true).k x) → D → LCoin 65536) × (Fin L → LCoin 65536) => fnAt h n key q.1 q.2)
-        (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
-  Claims.Flock.forkCoinCoupling_fnAt (A := 𝔽) (M := 65536) (hI := instInhabitedCoin) sha512 (V true) P x ω h n hk
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -663,6 +617,20 @@ theorem forkCoinCoupling_zk {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (
   Claims.Flock.forkCoinCoupling_fnAt (A := 𝔽) (M := 65536) (hI := instInhabitedCoin) sha512 (V true) P x ω h n hk
 
 end Gen
+
+/-- **The coupling at the deployed masked verifier**: at `V true`, with a tape of uniform functions of the live coins
+`LCoin 65536` read through a prefix key (`Claims.Bridge.Live.fnAt`), `ForkCoinCoupling` holds at the chances
+`FnFork.δN GF128 65536 n` (`forkCoinCoupling_fnAt`). -/
+theorem forkCoinCoupling_zk {D : Type} [Fintype D] [DecidableEq D] {Ω : Type} (P : Claims.Prover Ω)
+    (x : Claims.Msg) (ω : Ω) {L : ℕ} (h : L = (V true).k x) (n : Fin ((V true).k x) → ℕ)
+    {key : Fin ((V true).k x) → (Fin ((V true).k x) → LCoin 65536) → D}
+    (hk : Claims.Flock.FnFork.PrefixKey n key) :
+    Claims.Flock.ForkCoinCoupling sha512 (V true) P x (Claims.Flock.FnFork.δN 𝔽 65536 n)
+      (Claims.Flock.simForkPr sha512 (V true) P x
+        (fun q : (Fin ((V true).k x) → D → LCoin 65536) × (Fin L → LCoin 65536) => fnAt h n key q.1 q.2)
+        (fun t => Claims.Flock.FnFork.forkN t) ω) ω :=
+  Gen.forkCoinCoupling_zk (S := S₀) (D := D) (Ω := Ω) (P := P) (x := x) (ω := ω) (L := L) (h := h) (n := n) (key := key)
+    (hk := hk)
 
 namespace Gen
 
@@ -704,7 +672,6 @@ noncomputable def zkReveal (x : Claims.Msg) (spec : SessionSpec) (sts : Array St
   if i = 0 then zkPadE (2 * spec.mPts) ((ptsE spec.mPts).symm (finDecode m))
   else zkPadE (zkCnt x spec sts i) (finDecode m)
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -723,7 +690,6 @@ noncomputable def zkRecon (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stm
     (hl : List (Claims.Msg × Claims.Msg)) : Fin ((V true).k x) → LCoin 65536 :=
   fun i => if i.val < hl.length then zkReveal x spec sts i.val (hl.getD i.val default).2 else fun _ => 0
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -740,7 +706,6 @@ entries. -/
 noncomputable def zkSimCoins (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (u : zkTape x)
     (hl : List (Claims.Msg × Claims.Msg)) : Fin ((V true).k x) → Coin :=
   fnC (zkNOf x spec sts) (zkKey x spec sts) u (zkRecon x spec sts hl)
-
 
 namespace Gen
 
@@ -847,7 +812,6 @@ noncomputable def zkMsg {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spe
     zkDepMsg sha512 P x ω (Claims.coinSeq (zkSimCoins x spec sts u hl)) hl.length
   else []
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -872,7 +836,6 @@ noncomputable def zkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spe
     Claims.Prover (Ω × zkTape x) :=
   ⟨fun _ hl p => .ret (zkMsg P x spec sts p.1 p.2 hl)⟩
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -881,12 +844,6 @@ variable [S : ZkSetup]
 noncomputable def zkSim {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) :
     Claims.Prover (Ω × zkTape x) :=
   ⟨fun _ hl p => .ret (zkMsg P x spec sts p.1 p.2 hl)⟩
-
-end Gen
-
-namespace Gen
-
-variable [S : ZkSetup]
 
 /-- **The simulator's first message is `P`'s.** -/
 theorem zkSim_first {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (spec : SessionSpec) (sts : Array Stmt)
@@ -934,7 +891,6 @@ def ZkSimAbort {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (mP
   ∀ u r', (Claims.run sha512 P (V true) x ω (Φ (u, r'))).out ≠ .acc →
     ¬ pL (liveOut J (fun _ => mPts) N dg w sha512 P' x (ω, u) r')
 
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -964,7 +920,6 @@ def ZkSimRunAt (x : Claims.Msg) : Prop :=
     ZkSimRun P x ω (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) spec.mPts zkN spec.dg
       (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
       (zkSim P x spec sts) (zkΦ x spec sts)
-
 
 namespace Gen
 
@@ -1002,7 +957,6 @@ def ZkSimAbortAt (x : Claims.Msg) : Prop :=
     ZkSimAbort P x ω spec.mPts (fun _ => (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length) zkN spec.dg
       (zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset))
       (zkSim P x spec sts) (zkΦ x spec sts) (AccTxJ ins.read.I d j (zkRoot P x ω) C)
-
 
 namespace Gen
 
@@ -1089,7 +1043,6 @@ noncomputable def zkAdvSim {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
           (zkSim P x spec sts) x (ω, u))
         (zkSim_root P x spec sts ω _ (zk_mPts_le hs hin hset) u) (finJ (zkTabs h0 L hz hk hlay) hj)
         (tabsJ_get _ _ _))) / Fintype.card (zkTape x)
-
 
 namespace Gen
 
@@ -1179,7 +1132,6 @@ def ZkSimForkLe (x : Claims.Msg) : Prop :=
       zkAdvSim hs hin hset h0 L hz hk hlay hd P ω j hj C i ≤
         Claims.Flock.simForkPr sha512 (V true) P x (zkΦ x spec sts) (fun t => Claims.Flock.FnFork.forkN t) ω
           (zkRd hset h0 L hz hk hlay j i).val
-
 
 namespace Gen
 
@@ -1235,7 +1187,6 @@ def ZkViewClash (x : Claims.Msg) : Prop :=
         (∃ (j' q : ℕ) (a b : List 𝔽), (q, a) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j' ∧
           (q, b) ∈ zkRawColsJ (Claims.run sha512 P (V true) x ω r).seen j' ∧ a ≠ b) ∨
           Claims.TiedColl sha512 (Claims.run sha512 P (V true) x ω r).vLog
-
 
 namespace Gen
 
@@ -1326,46 +1277,6 @@ theorem zk_sch_m1 {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array
   Gen.zk_sch_m1 (S := S₀) (x := x) (ins := ins) (spec := spec) (sts := sts) (hset := hset) (h0 := h0) (L := L)
     (hz := hz) (hk := hk) (hlay := hlay) (j := j) (hj := hj)
 
-open Classical in
-/-- **The masked simulator meets `ZkSimWJ`** wherever the four hold: the fork rounds `zkRd`, the chances
-`δN GF128 65536 (zkNOf …)` and their fit (`zk_slackFitW_δN`), and at each tape the masked simulator at `zkΦ`'s uniform
-coins sending `P`'s roots; the simulation is `ZkSimRunAt`, the self-clash from the abort, the lockstep and the view's
-clash (`zkClashRun_of_raw`), and each fork clause `ZkSimForkLe` then the slack (`zk_simFork_le`). -/
-theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimAbortAt x) (hfork : ZkSimForkLe x)
-    (hclash : ZkViewClash x) : ZkSimWJ x := by
-  intro s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω _ _ P
-  refine ⟨zkRd hset h0 L hz hk hlay, zkRd_inj hset h0 L hz hk hlay, zkRd_zero hset h0 L hz hk hlay,
-    Claims.Flock.FnFork.δN 𝔽 65536 (zkNOf x spec sts),
-    fun t => Claims.Flock.FnFork.δN_nonneg («X» := 𝔽) (M := 65536) (zkNOf x spec sts) t,
-    zk_slackFitW_δN (n := (tables true x).length) (stJ h0) (zk_m_range hs hin hset h0)
-      (fun j => (zkTabs h0 L hz hk hlay j).sch) (zk_sch_m1 hset h0 L hz hk hlay) (fun j => (zkTabs h0 L hz hk hlay j).N)
-      (zkRd hset h0 L hz hk hlay) (fun j _ i => zkRd_succ_lt hset h0 L hz hk hlay j i) (zkNOf x spec sts)
-      (fun t _ => zkNOf_pos x spec sts t),
-    fun ω => ⟨zkN, spec.dg,
-      zkW (tabsJ (tables true x).length (zkTabs h0 L hz hk hlay)).length spec (zk_mPts_le hs hin hset), zkTape x,
-      inferInstance, inferInstance, zkSim P x spec sts, zkΦ x spec sts, Pr_zkΦ (zkN_add hset),
-      fun u => zkSim_root P x spec sts ω _ (zk_mPts_le hs hin hset) u,
-      hrun s hs hin ins spec sts hset h0 L hz hk hlay Ω P ω, fun j hj C hC => ⟨?_,
-      fun r ℓ => (hfork s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC
-        (.inl (.inl (r, ℓ)))).trans (zk_simFork_le P ω hset _),
-      fun r => (hfork s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC
-        (.inl (.inr (.inl r)))).trans (zk_simFork_le P ω hset _),
-      fun r => (hfork s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC
-        (.inl (.inr (.inr r)))).trans (zk_simFork_le P ω hset _),
-      (hfork s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC (.inr ())).trans
-        (zk_simFork_le P ω hset _)⟩⟩⟩
-  refine zkClashRun_of_raw fun u r' hp => ?_
-  obtain ⟨a, ⟨hpL, -⟩, -⟩ := id hp
-  have hacc : (Claims.run sha512 P (V true) x ω (zkΦ x spec sts (u, r'))).out = .acc := by
-    by_contra hn
-    exact habort s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC u r' hn hpL
-  obtain ⟨s', spec', sts', link, c₁, mids, f, hact, -⟩ := acc_decide hacc
-  have hv := hrun s hs hin ins spec sts hset h0 L hz hk hlay Ω P ω u r' hacc s' spec' sts' link c₁ mids f hact
-  rw [hv] at hp
-  exact ⟨hacc, hclash s hs hin ins spec sts hset h0 L hz hk hlay d hd Ω P ω j hj C hC _ hacc s' spec' sts' link c₁
-    mids f hact hp⟩
-
-
 namespace Gen
 
 variable [S : ZkSetup]
@@ -1411,6 +1322,15 @@ theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimA
 
 end Gen
 
+open Classical in
+/-- **The masked simulator meets `ZkSimWJ`** wherever the four hold: the fork rounds `zkRd`, the chances
+`δN GF128 65536 (zkNOf …)` and their fit (`zk_slackFitW_δN`), and at each tape the masked simulator at `zkΦ`'s uniform
+coins sending `P`'s roots; the simulation is `ZkSimRunAt`, the self-clash from the abort, the lockstep and the view's
+clash (`zkClashRun_of_raw`), and each fork clause `ZkSimForkLe` then the slack (`zk_simFork_le`). -/
+theorem zkSimWJ_of_parts {x : Claims.Msg} (hrun : ZkSimRunAt x) (habort : ZkSimAbortAt x) (hfork : ZkSimForkLe x)
+    (hclash : ZkViewClash x) : ZkSimWJ x :=
+  Gen.zkSimWJ_of_parts (S := S₀) (x := x) (hrun := hrun) (habort := habort) (hfork := hfork) (hclash := hclash)
+
 /-- **The masked record the claims read: KS**, at SHA-512 at the deployed relation, at every number of tables, from
 the masked simulator's lockstep, abort, fork bounds and view clashes at the statements some run accepts
 (`zk_KS_trim_of_simWJ`). -/
@@ -1420,7 +1340,6 @@ theorem zk_KS_of_parts (hrun : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x �
     (hclash : ∀ x, ¬ Claims.Flock.NoAcc sha512 (V true) x → ZkViewClash x) :
     Claims.Flock.KS sha512 (deployZkTrim Readable.relation) :=
   zk_KS_trim_of_simWJ fun x hno => zkSimWJ_of_parts (hrun x hno) (habort x hno) (hfork x hno) (hclash x hno)
-
 
 namespace Gen
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 
 from verity_vllm.check.match import batch_decomp as BD
-from verity_vllm.check.match import program_compare as C
+from verity_vllm.check.match import instance_sequence as SEQ
 
 
 class NamedCheck:
@@ -39,7 +39,7 @@ class MatchRun:
     tokens_optional: bool
     rec: dict
     res: dict
-    fold: C.Prog
+    fold: SEQ.Prog
     declared: dict[str, dict]
 
     @property
