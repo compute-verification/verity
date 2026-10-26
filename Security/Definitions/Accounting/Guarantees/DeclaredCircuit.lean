@@ -44,10 +44,13 @@ check (#3828) at a cap fixed before the coins. `SteeredLayout` fixes one `a` at 
 `Properties.RemoteAudit.steered_of_checked` gives it at `a = a₀ + 1` when, at every prefix and every append coin, the
 check accepts a schedule of at most `a₀` bits holding the plan the pass sent, under the named gap
 `Properties.RemoteAudit.ScheduleLayoutGap` (the model's layout of a pass is the verifier's positions of the session's
-appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin, over which
-the check refuses a schedule (memory-accounting's steer-cap, in progress), not the bits of the one schedule a session
-published: a prover whose schedule is 200 bits on most coins and 300 where it steers meets `SteeredLayout` only at 301
-(RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, open until the cap lands). A layout that follows a
+appends and the plan the pass sent). So `a₀` is the steering cap the prover commits before the first coin
+(`audit.Params.schedule_cap`, credited as `audit.Ledger.steering`, #4021), over which the check refuses a schedule, not
+the bits of the one schedule a session published: a prover whose schedule is 200 bits on most coins and 300 where it
+steers would meet `SteeredLayout` only at 301 (RD-18, note:memory-accounting/20261024T2155Z-report-redteam-5, which the
+committed cap fixes). `Properties.DeclaredCircuit.ScheduledRequirement` is `G` with `SteeredLayout` so discharged, on
+the sessions the check accepts at every pass, with `2^(a + (cap + 1))` in the query term
+(`Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement`). A layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`), so
 `a` does not collapse to `|Y|`. Each append has its own coin, uniform and independent of the others', so a re-key,
 which appends a block again, draws a fresh one. Each append's blocks are read within `L` windows of the window

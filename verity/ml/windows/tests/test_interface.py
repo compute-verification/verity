@@ -229,8 +229,8 @@ def chain_values(seed: int = 0) -> tuple[list[np.ndarray], list[np.ndarray]]:
 
 def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_salts():
     """Each member's wired port reads, unit by unit, the writer the pattern gives it; the committed rows' public strings are
-    the writers' (a5's wiring check), a wire moved to other writers is refused there, and a reader row that isn't its
-    writer's output doesn't commit."""
+    the writers' (a5's wiring check), a wire moved to other writers is refused there (on the drawn units alone, the units
+    it draws), and a reader row that isn't its writer's output doesn't commit."""
     win = I.Window(chain(), RUN, LAW, 2)
     assert [(m.base, m.n, m.wired) for m in win.window.members] == [
         (0, 2, ()), (2, 2, (("x", "o0", (4, 5)),)), (4, 2, (("x", "o0", (0, 1)),)), (6, 2, (("x", "o0", (2, 3)),))]
@@ -242,6 +242,11 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
     assert WI.check(win.window.members, publics) == {}
     moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in win.window.members]
     assert set(WI.check(moved, publics)) == {m.key for m in moved if m.wired}
+    everyone = range(sum(m.n for m in win.window.members))
+    assert WI.check_drawn(win.window.members, publics, everyone) == {}
+    assert set(WI.check_drawn(moved, publics, everyone)) == set(WI.check(moved, publics))
+    assert WI.check_drawn(moved, publics, []) == {}
+    assert list(WI.check_drawn(moved, publics, [3])) == [moved[1].key]
     bad = I.Window(chain(), RUN, LAW, 2)
     x = ins[0].copy()
     x[2, 0] ^= 1
