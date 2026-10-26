@@ -49,10 +49,10 @@ UNITS = {
     "verity/ml/circuits/tests/test_population_ports.py::Unit": "the population tests' stand-in unit, a position beside its sink",
 }
 KEY_COUNTS = {
-    "benchmarks/e2e_h200/e2e_h200/program.py::program":
-        "the toy's served step: its key count n and position p, run inputs with no coin",
     "verity/ml/circuits/ops/boolean/softmax_row.py::QkSoftmaxRowPad":
         "QkSoftmaxRowPad's key count n: attention padded to T = 32",
+    "benchmarks/e2e_h200/e2e_h200/program.py::program":
+        "the toy's served step: its key count n and position p, run inputs with no coin",
 }
 TESTS = {
     "verity/ml/circuits/tests/test_ports.py::SEED": "the port rules' seed vectors (E_COIN_REUSE, E_PORT_KIND, batched seeds)",
