@@ -30,6 +30,20 @@ theorem map_ok {ε α β : Type} {x : Except ε α} {f : α → β} {b : β} (h 
   | error => cases h
   | ok a => exact ⟨a, rfl, Except.ok.inj h⟩
 
+/-! `Except`'s evaluation, for `simp only` on a step whose every discriminant is fixed. -/
+
+theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.ok a >>= f) = f a := rfl
+theorem error_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (Except.error e >>= f) = Except.error e := rfl
+theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) : (throw e >>= f : Except ε β) = throw e := rfl
+theorem pure_bind' {ε α β : Type} (a : α) (f : α → Except ε β) : (pure a >>= f : Except ε β) = f a := rfl
+theorem map_ok' {ε α β : Type} (a : α) (f : α → β) : (f <$> (Except.ok a : Except ε α)) = Except.ok (f a) := rfl
+theorem throw_eq_ok {ε α : Type} (e : ε) (a : α) : ((throw e : Except ε α) = Except.ok a) ↔ False :=
+  ⟨fun h => nomatch h, False.elim⟩
+theorem error_eq_ok {ε α : Type} (e : ε) (a : α) : ((Except.error e : Except ε α) = Except.ok a) ↔ False :=
+  ⟨fun h => nomatch h, False.elim⟩
+theorem pure_eq_ok {ε α : Type} (a b : α) : ((pure a : Except ε α) = Except.ok b) ↔ a = b :=
+  ⟨fun h => Except.ok.inj h, fun h => h ▸ rfl⟩
+
 theorem beq_bytes {a b : ByteArray} (h : (a == b) = true) : a = b := by
   have h' : (a.data == b.data) = true := h
   exact ByteArray.ext (beq_iff_eq.mp h')
@@ -110,6 +124,120 @@ theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Reads} {draw : Option Json} 
     exact ⟨sts', buildSessionOf_ok hr, hshape, rfl⟩
   · cases h
 
+/-! ## One step, its pieces named
+
+`step'` is `step` with the session's setup, rep files, coin-tree key and verdict as functions of their own, so a proof
+cases on the verdict as one term; `step_eq` is `rfl`. -/
+
+/-- The session's setup at its record's own draw. -/
+def stOf (I : Flock.Witness.Inputs) (rd : Reads) (record : String) :
+    Flock.V (Flock.SessionSpec × Array Flock.Setup × Json × Json) :=
+  setupAt I rd (Flock.Witness.recordDraw record)
+
+/-- The session's rep files, the blobs its `reps` name. -/
+def filesOf (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (s : Session) (record : String) :
+    Flock.V (Array ByteArray) := do
+  let (spec, _, _) ← stOf I rd record
+  spec.repStreams.mapM fun (_, _, w) => do
+    let n := s!"{w.replace "/" "."}.bin"
+    let some (_, d) := s.reps.find? (·.1 == n) | throw s!"session files: the session names no rep file {n}"
+    (bs.get d s!"session files: {n}")
+
+/-- The session's coin-tree key. -/
+def coinKeyOf (I : Flock.Witness.Inputs) (rd : Reads) (record : String) : Option String :=
+  match stOf I rd record with
+  | .ok (spec, _, _) =>
+    if spec.coinTree.isNone then none
+    else (Json.parse record).toOption.bind fun j =>
+      (j.getObjVal? "coin_tree").toOption.bind fun ct => (ct.getObjValAs? String "key").toOption
+  | .error _ => none
+
+/-- The session's verdict. -/
+def verdictOf (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope : Flock.V Unit) (r : Run) (s : Session)
+    (record : String) : Flock.V Unit := do
+  let proofs ← filesOf I rd bs s record
+  if let some k := coinKeyOf I rd record then Flock.CoinTree.checkFresh r.coinKeys k
+  let (spec, tabs, _) ← stOf I rd record
+  Flock.Zk.verify spec tabs record proofs
+  scope
+  Flock.ProvedScope.sizesOk true (tabs.map (·.m))
+  if (Flock.Witness.recordDraw record).isNone then
+    Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false (Flock.Witness.recordDraw record)
+  Flock.RecSetup.fullDraw none false (Flock.Witness.recordDraw record) record
+  Flock.RecSetup.innerDrawn none
+  Flock.ProvedScope.programHeld I.program
+  Flock.RecordText.check record
+
+def step' (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope : Flock.V Unit) (programSha : Option String)
+    (want : Json) (r : Run) (s : Session) : Flock.V Run := do
+  let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
+    | throw s!"session {s.name}'s record is not UTF-8"
+  let coinKeys := match coinKeyOf I rd record with | some k => r.coinKeys.push k | none => r.coinKeys
+  let (ok, why) := match verdictOf I rd bs scope r s record with | .ok () => (true, "") | .error e => (false, e)
+  if ok && (programSha.map Json.str) != some want then
+    throw s!"session {s.name}'s verdict names program {programSha.getD "none"}, not the partition object's {want.compress}"
+  let units ← if ok then provedUnits I.publicFile record else pure #[]
+  let (part, opened) := match stOf I rd record with | .ok (_, _, p, o) => (p, o) | .error _ => (Json.null, Json.null)
+  pure { coinKeys, all := r.all && ok, proved := r.proved ++ units,
+         out := r.out.push (s!"flock-verify/{s.name}", Json.mkObj ([("accepted", Json.bool ok),
+           ("of_record", Json.bool true), ("session", Json.str s.name), ("why", Json.str why), ("units", natsJson units)] ++
+           (if part.isNull then [] else [("partition", part)]) ++
+           (match programSha with | some h => [("program_sha512", Json.str h)] | none => []) ++
+           (match rd.registered with | some r => [("registered", Flock.Registered.finding r)] | none => []) ++
+           (if opened.isNull then [] else [("openings", opened)]))) }
+
+theorem step_eq (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope : Flock.V Unit)
+    (programSha : Option String) (want : Json) (r : Run) (s : Session) :
+    step I rd bs scope programSha want r s = step' I rd bs scope programSha want r s := rfl
+
+/-- An accepted verdict is flock-verify `--zk`'s acceptance of the record and the rep files at the record's own draw. -/
+theorem verdictOf_ok {I : Flock.Witness.Inputs} {rd : Reads} {bs : Core.Blobs} {scope : Flock.V Unit} {r : Run}
+    {s : Session} {record : String} (h : verdictOf I rd bs scope r s record = .ok ()) :
+    ∃ proofs, AcceptsZK I record proofs := by
+  unfold verdictOf at h
+  obtain ⟨proofs, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨⟨spec, tabs, rest⟩, hst, h⟩ := bind_ok h
+  obtain ⟨_, hv, -⟩ := bind_ok h
+  obtain ⟨sts, hset, hshape, rfl⟩ := setupAt_ok hst
+  exact ⟨proofs, spec, sts, hset, hshape, hv⟩
+
+/-- A step that leaves every session accepted, on an accepted verdict: it pushes one verdict and adds the units the
+session proved, and the program is the partition object's. -/
+theorem step'_ok {I : Flock.Witness.Inputs} {rd : Reads} {bs : Core.Blobs} {scope : Flock.V Unit}
+    {programSha : Option String} {want : Json} {r r' : Run} {s : Session}
+    (h : step' I rd bs scope programSha want r s = .ok r') (hall : r'.all = true) :
+    r.all = true ∧ (∃ h, programSha = some h ∧ (Json.str h == want) = true) ∧ r'.out.size = r.out.size + 1 ∧
+      ∃ b record units, bs.get s.record s!"session {s.name}'s record" = .ok b ∧ String.fromUTF8? b = some record ∧
+        verdictOf I rd bs scope r s record = .ok () ∧ provedUnits I.publicFile record = .ok units ∧
+        r'.proved = r.proved ++ units := by
+  unfold step' at h
+  obtain ⟨b, hb, h⟩ := bind_ok h
+  rcases hrec : String.fromUTF8? b with _ | record
+  · simp only [hrec, throw_eq_ok] at h
+  rcases hv : verdictOf I rd bs scope r s record with e | ⟨⟨⟩⟩
+  · rcases hst : stOf I rd record with e' | ⟨spec, tabs, part, opened⟩ <;>
+    (simp only [hrec, hv, hst, ok_bind, error_bind, throw_bind, pure_bind', map_ok', throw_eq_ok, error_eq_ok,
+        pure_eq_ok, Bool.false_and, Bool.false_eq_true, ↓reduceIte] at h
+     subst h
+     simp at hall)
+  rcases programSha with _ | ph
+  · simp only [hrec, hv, ok_bind, error_bind, throw_bind, pure_bind', throw_eq_ok, error_eq_ok, pure_eq_ok,
+      Option.map_none, bne, Option.none_beq_some, Bool.not_false, Bool.true_and, eq_self_iff_true, ↓reduceIte] at h
+  rcases hj : (Json.str ph == want) with _ | _
+  · simp only [hrec, hv, hj, ok_bind, error_bind, throw_bind, pure_bind', throw_eq_ok, error_eq_ok, pure_eq_ok,
+      Option.map_some, bne, Option.some_beq_some, Bool.not_false, Bool.true_and, eq_self_iff_true, ↓reduceIte] at h
+  rcases hu : provedUnits I.publicFile record with eu | units
+  · simp only [hrec, hv, hj, hu, ok_bind, error_bind, throw_bind, pure_bind', throw_eq_ok, error_eq_ok, pure_eq_ok,
+      Option.map_some, bne, Option.some_beq_some, Bool.not_true, Bool.true_and, Bool.false_eq_true, eq_self_iff_true,
+      ↓reduceIte] at h
+  rcases hst : stOf I rd record with e' | ⟨spec, tabs, part, opened⟩ <;>
+  (simp only [hrec, hv, hj, hu, hst, ok_bind, error_bind, throw_bind, pure_bind', map_ok', throw_eq_ok, error_eq_ok,
+      pure_eq_ok, Option.map_some, bne, Option.some_beq_some, Bool.not_true, Bool.true_and, Bool.false_eq_true,
+      eq_self_iff_true, ↓reduceIte] at h
+   subst h
+   exact ⟨by simpa using hall, ⟨ph, rfl, hj⟩, by simp, b, record, units, hb, hrec, hv, hu, rfl⟩)
+
 /-- One session's step, when the run it starts goes on to accept every session: the run so far accepted every one,
 this session's record and proof files are accepted by flock-verify `--zk` at its record's own draw, its program is the
 partition object's, it pushes one verdict, and it adds the units it proved. -/
@@ -119,13 +247,10 @@ theorem step_ok {I : Flock.Witness.Inputs} {rd : Reads} {bs : Core.Blobs} {scope
     (h : step I rd bs scope programSha want r s = .ok r') (hall : r'.all = true) :
     r.all = true ∧ (∃ h, programSha = some h ∧ (Json.str h == want) = true) ∧ r'.out.size = r.out.size + 1 ∧
       ∃ record proofs units, SessionAccepted I s record proofs units ∧ r'.proved = r.proved ++ units := by
-  unfold step at h
-  obtain ⟨b, hb, h⟩ := bind_ok h
-  split at h
-  · next record hrec =>
-    trace_state
-    sorry
-  · cases h
+  rw [step_eq] at h
+  obtain ⟨hall0, hprog, hsize, b, record, units, hb, hrec, hv, hunits, hproved⟩ := step'_ok h hall
+  obtain ⟨proofs, hacc⟩ := verdictOf_ok hv
+  exact ⟨hall0, hprog, hsize, record, proofs, units, ⟨⟨b, hbs _ _ _ hb, hrec⟩, hacc, hunits⟩, hproved⟩
 
 /-- The fold of `step` over the sessions `l`, when it ends in a run that accepted every session. -/
 theorem fold_ok {I : Flock.Witness.Inputs} {rd : Reads} {bs : Core.Blobs} {scope : Flock.V Unit}
@@ -167,11 +292,31 @@ theorem run_ok {p : Own} {pub : String} {sessions : Array Session} {want : Array
           SessionAccepted (inputsOf tags p circuitB pubB (Core.Blobs.ofArray blobs)) x.1 x.2.1 x.2.2.1 x.2.2.2) ∧
         (ss.foldl (fun acc x => acc ++ x.2.2) #[]).qsort (· < ·) = want := by
   unfold run at h
-  split at h
-  · next tags0 htags =>
-    trace_state
-    sorry
-  · cases h
+  rcases htags : Flock.Tags.find? STATEMENT with _ | tags
+  · simp only [htags, throw_eq_ok] at h
+  rcases hpl : tags.plainLeaves with _ | _ <;>
+  rcases hreg : (p.registered.isNone && readsRegistered p.programJ) with _ | _ <;>
+  rcases hc : (Core.Blobs.ofArray blobs).get p.circuit "circuit" with _ | circuitB <;>
+  rcases hp : (Core.Blobs.ofArray blobs).get pub "public file" with _ | pubB <;>
+  rcases hrd : readsOf p.registered with _ | rd <;>
+  simp only [htags, hpl, hreg, hc, hp, hrd, ok_bind, error_bind, throw_bind, pure_bind', throw_eq_ok, error_eq_ok,
+    Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at h
+  obtain ⟨r1, hf, h⟩ := bind_ok h
+  rw [← Array.foldlM_toList] at hf
+  rcases ha1 : r1.all with _ | _ <;>
+  rcases hq : (r1.proved.qsort (· < ·) != want) with _ | _ <;>
+  simp only [ha1, hq, ok_bind, error_bind, throw_bind, pure_bind', throw_eq_ok, error_eq_ok, pure_eq_ok,
+    Bool.true_and, Bool.false_and, Bool.false_eq_true, eq_self_iff_true, ↓reduceIte] at h <;>
+  subst h <;>
+  simp only [ha1, Bool.false_eq_true] at hall
+  obtain ⟨-, hprog, hsize, ss, hlen, hss, hproved⟩ :=
+    fold_ok (bs := Core.Blobs.ofArray blobs) (fun _ _ _ hb => get_ofArray hb) sessions.toList _ _ hf ha1
+  have hunits := bne_eq_false_iff_eq.mp hq
+  rw [hproved] at hunits
+  refine ⟨tags, circuitB, pubB, by first | exact htags | rfl, get_ofArray hc, get_ofArray hp, by rw [hsize]; simp,
+    fun hpos => ?_,
+    ss, by simpa using hlen, hss, hunits⟩
+  exact hprog (List.ne_nil_of_length_pos (by simpa using hpos))
 
 theorem acceptMeans : AcceptMeans := by
   intro p c e blobs pub prof h
