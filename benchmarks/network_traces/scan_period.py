@@ -1,21 +1,23 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's group and the scan's answers
-for it (`scan_zk.py prove`'s ``answers.json``), checked by the period's Python mirror and its Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's link-window and the scan's
+answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
-        NAME=WARDEN_RUN,SCAN_OUT[,tampered] ...
+        NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of a group's link-windows W: the parameters the warden run's ``deployment.json`` (its key,
-  session and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, and
-  the scan's layout terms its free inputs over a link-window's buckets (`scan_free`); the commitment the scan's
-  registration for each W; the evidence, for each W, the scan's answer, the certificates of W's three records
+* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
+  and one schedule), the link `warden_serve.LINK`, the Program the scan's registration's, no compute audit, and the
+  scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
+  commitment the scan's registration; the evidence the scan's answer, the certificates of W's three records
   (``certified.jsonl``: requests, responses, fails) and W's two row registrations (``cells.jsonl``, as ``answers.json``
-  carries them).
-* **tampered**: the same warden run's rows and certificates with the scan's tampered round's registration
-  (``tampered/registration.json``, an egress-only Program) and its refusal as each W's answer: a prover's answer for
-  another statement than the link's Program.
+  carries them). The rows form reads a registration of one link-window's 2T units, so a group of more is refused.
+* **tampered** and **chain**: the same rows and certificates with that round's registration
+  (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
+  for another statement than the link's Program; chain's the link's Program's, refused.
+* **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
+  certifier didn't sign.
 * **The check**: each case through the mirror (``--mirror``, `period_case.py` loaded by path: `reference`) and
-  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's (`EXPECT`): accept where the
-  scan's answers accept, else reject. ``DIR`` gets each case's files and ``period.json``, each case's answers.
+  ``network-period check`` (``--lean``), whose verdicts must agree and be the case's: accept where the scan's answer
+  accepts, else reject. ``DIR`` gets each case's files and ``period.json``, each case's answers.
 """
 from __future__ import annotations
 
@@ -37,12 +39,6 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 
 
-def scan_free(summary: dict) -> int:
-    """The scan's free inputs a link-window, an overcount: each of its T buckets' units' rows (``summary.json``'s
-    ``bits``) but the warden's own cells (``row``), which its row registrations bind."""
-    return summary["T"] * sum(b for k, b in summary["bits"].items() if k.rsplit("/", 1)[-1] != "row")
-
-
 def certificates(run: Path, w: int) -> list[dict]:
     """Link-window w's three records' certificates in ``certified.jsonl``, in the rows form's order (requests,
     responses, fails: `warden_serve.CERTIFIED`), each the certificate's own fields."""
@@ -59,27 +55,33 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 
 def rows_case(run: Path, scan: Path, round_: str = "honest") -> dict:
-    """The rows form's case (module docstring) of the warden run ``run``'s group, as scan_zk.py proved it into
-    ``scan``: honest, ``answers.json``'s; ``tampered``, the tampered round's registration and its refusal."""
+    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
+    (tampered, chain), that round's registration and its refusal."""
     dep = json.loads(SZ._found(run, "deployment.json").read_text())
     doc = json.loads((scan / "answers.json").read_text())
-    summary = json.loads((scan / "summary.json").read_text())
-    windows = doc["windows"]
-    if round_ == "honest":
-        reg, answers = doc["registration"], [x["answer"] for x in windows]
+    if len(doc["windows"]) != 1:
+        raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
+                         "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
+    (x,) = doc["windows"]
+    if round_ in ("honest", "forged"):
+        reg, answer = doc["registration"], x["answer"]
     else:
         reg = json.loads((scan / round_ / "registration.json").read_text())
-        why = summary["rounds"][round_]["audit"]["why"]
-        answers = [SZ.window_answer(reg, None, None, f"the scan's {round_} round refused: {why}")] * len(windows)
+        why = json.loads((scan / "summary.json").read_text())["rounds"][round_]["audit"]["why"]
+        answer = SZ.window_answer(reg, None, None, f"the scan's {round_} round refused: {why}")
+    certs = certificates(run, x["window"])
+    if round_ == "forged":
+        sig = certs[1]["signature"]
+        certs[1]["signature"] = sig[:-1] + ("1" if sig[-1] == "0" else "0")
     N, W, H = dep["key"]["params"]
-    params = {"audits": [], "cells": [], "first": windows[0]["window"], "jitter": 1, "key": dep["key"]["public"],
+    params = {"audits": [], "cells": [], "first": x["window"], "jitter": 1, "key": dep["key"]["public"],
               "link": WS.LINK, "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
-              "scan": {"free": scan_free(summary), "steps": summary["T"]}, "schedule": dict(dep["params"]),
-              "session": dep["session"], "windows": len(windows)}
-    commitment = canonical_json({"audits": [], "windows": [reg] * len(windows)})
+              "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": dict(dep["params"]),
+              "session": dep["session"], "windows": 1}
+    commitment = canonical_json({"audits": [], "windows": [reg]})
     evidence = canonical_json({"audits": [], "windows": [
-        {"answer": a, "certificates": certificates(run, x["window"]), "registrations": x["registrations"]}
-        for x, a in zip(windows, answers)]})
+        {"answer": answer, "certificates": certs, "registrations": x["registrations"]}]})
     return {"commitment": commitment.hex(), "evidence": evidence.hex(), "params": params}
 
 
@@ -108,7 +110,7 @@ def main(argv=None) -> int:
     ap.add_argument("--mirror", type=Path, required=True, help="the period's mirror (period_case.py, its tests')")
     ap.add_argument("--lean", required=True, help="network-period, built")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered]")
+    ap.add_argument("cases", nargs="+", help="NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged]")
     a = ap.parse_args(argv)
     m = mirror(a.mirror)
     a.out.mkdir(parents=True, exist_ok=True)

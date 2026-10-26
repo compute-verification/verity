@@ -25,11 +25,13 @@ from types import SimpleNamespace
 
 import pytest
 
+from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
+PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
 
 
 def _load():
@@ -322,56 +324,73 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert sz.wired(h.rounds["honest"]) == []
 
 
-def test_the_rows_forms_case_is_each_link_windows_rows_certificates_and_the_scans_answer(tmp_path):
-    """`scan_period.rows_case` of a G = 2 group in the rows form's formats (`NetworkCheck.Period`, whose mirror and
-    Lean, on the rows form's branch, check it on a node: scan_period.sh): the deployment's key, session and schedule,
-    the scan's Program and layout terms, the group's registration for each link-window, and each one's answer, its
-    three records' certificates (requests, responses, fails: its own) and its two row registrations, each named by the
-    registration's roots; the tampered case the tampered round's registration with its refusal as each answer."""
+@pytest.mark.slow
+def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path):
+    """`scan_period.rows_case` of one link-window in the rows form's formats (`NetworkCheck.Period`; its Lean checks the
+    case on a node: scan_period.sh): the deployment's key, session and schedule, the registered Program and its
+    descriptor (``joint/program.json``) as the scan, the registration, and its answer, three records' certificates
+    (requests, responses, fails: its own) and two row registrations, each named by the registration's roots. The
+    period's mirror accepts the honest case, its scan's terms read off the test class's own templates, and refuses the
+    forged case (a certificate's signature changed) at the certificates, the tampered case (another Program's
+    registration) at the registration and the chain case (the round's registration of the Program) at its refusal; a
+    group of two link-windows is refused by name. Slow (the test class's Program, about 15 s): the period check reads
+    the scan's templates' signatures, which no stand-in can stand for."""
     import scan_period as SP
 
-    G = 2
-    run = published(tmp_path / "run", sz.TEST, windows=G)
-    h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
+    PC = SP.mirror(PERIOD_CASE)
+    run = published(tmp_path / "run", sz.TEST, windows=1)
+    h = sz.host(tmp_path / "host", run, setup=sz.TEST)
     T, scan = h.at.T, tmp_path / "scan"
-    (scan / "tampered").mkdir(parents=True)
-    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
-    defs = {"first": FIRST, "ingress": ING, "egress": EG}
+    defs = sz._defs(sz.TEST.cls)
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, 1, T))
     program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES])
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
+    (scan / "joint").mkdir(parents=True)
+    (scan / "joint" / "program.json").write_bytes(canonical_json(encode_program(program)))
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]])
-    reg = R.record(program, query, sz.DR.parse_law(f"stratified:{2 * G * T}"), sz.S.SCHEME, roots,
-                   {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    law = sz.DR.parse_law(f"stratified:{2 * T}")
+    reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
+                  for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
-    (scan / "tampered" / "registration.json").write_text(json.dumps(other))
-    answer = sz.window_answer(reg, None, None, "the scan refused")
+    for name, r in (("tampered", other), ("chain", chain)):
+        (scan / name).mkdir()
+        (scan / name / "registration.json").write_text(json.dumps(r))
+    draw = {**sz.DR.derive(program, query, law), "population": 2 * T, "units": list(range(2 * T))}
+    record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(2 * T))}
+    answer = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
+    registrations = [h.at.sides[s][0].registration for s in ("ingress", "egress")]
     (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [
-        {"window": w, "answer": answer, "registrations": [h.at.sides[s][w].registration for s in ("ingress", "egress")]}
-        for w in range(G)]}))
-    bits = {f"{tp}/{r}": b for tp, (ins, outs) in sz.ports_of(sz.TEST.cls).items() for r, b in ins + outs}
-    (scan / "summary.json").write_text(json.dumps({"T": T, "bits": bits,
-                                                   "rounds": {"tampered": {"audit": {"why": {"x": "y"}}}}}))
+        {"window": 0, "answer": answer, "registrations": registrations}]}))
+    (scan / "summary.json").write_text(json.dumps({"rounds": {r: {"audit": {"why": {"x": "y"}}}
+                                                              for r in ("tampered", "chain")}}))
     dep, regs = json.loads((run / "deployment.json").read_text()), _cells(run)
     case = SP.rows_case(run, scan)
     p = case["params"]
-    assert sorted(p) == ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
-                         "session", "windows"]
+    assert sorted(p) == PC.ROWS_PARAMS_KEYS
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
                                                                   WS.LINK)
-    assert (p["program"], p["windows"], p["first"], p["audits"]) == (reg["program"], G, 0, [])
-    assert p["scan"] == {"free": T * sum(b for k, b in bits.items() if not k.endswith("/row")), "steps": T}
-    assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [], "windows": [reg] * G}
-    ev = json.loads(bytes.fromhex(case["evidence"]))
-    for w, x in enumerate(ev["windows"]):
-        assert x["answer"] == answer and x["registrations"] == [regs["ingress", w], regs["egress", w]]
-        assert [(c["link"], c["direction"], c["window"]) for c in x["certificates"]] == [
-            ("warden", "ingress", w), ("warden", "egress", w), ("warden-fails", "egress", w)]
-        assert all({"root": d["root"], "domain": d["domain"]} in [{"root": r["root"], "domain": r["domain"]}
-                                                                   for r in reg["roots"]] for d in x["registrations"])
-    t = SP.rows_case(run, scan, "tampered")
-    assert json.loads(bytes.fromhex(t["commitment"]))["windows"] == [other] * G and t["params"] == p
-    assert {(x["answer"]["verdict"], x["answer"]["commitment"]) for x in json.loads(bytes.fromhex(t["evidence"]))[
-        "windows"]} == {("reject", R.digest(other))}
+    assert (p["program"], p["windows"], p["first"], p["audits"]) == (reg["program"], 1, 0, [])
+    assert p["scan"] == json.loads((scan / "joint" / "program.json").read_text())
+    assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [], "windows": [reg]}
+    (x,) = json.loads(bytes.fromhex(case["evidence"]))["windows"]
+    assert x["answer"] == answer and x["registrations"] == [regs["ingress", 0], regs["egress", 0]]
+    assert [(c["link"], c["direction"], c["window"]) for c in x["certificates"]] == [
+        ("warden", "ingress", 0), ("warden", "egress", 0), ("warden-fails", "egress", 0)]
+    assert all({"root": d["root"], "domain": d["domain"]} in [{"root": r["root"], "domain": r["domain"]}
+                                                               for r in reg["roots"]] for d in x["registrations"])
+    ports = sz.ports_of(sz.TEST.cls)
+    bits = {tp: dict(ins + outs) for tp, (ins, outs) in ports.items()}
+    assert PC.params(p).scan == PC.Scan(T, T * bits["first"]["prog"], 16 + bits["first"]["o1"] + bits["first"]["o2"],
+                                        16 + bits["egress"]["o1"])
+    out = PC.reference(case)
+    assert (out["verdict"], out["public"]["windows"], out["public"]["scans"][0]["units"]) == ("accept", 1, 2 * T), out
+    refused = {r: PC.reference(SP.rows_case(run, scan, r)) for r in ("forged", "tampered", "chain")}
+    assert {r: (a["verdict"], a["reason"]) for r, a in refused.items()} == {
+        "forged": ("reject", "window 0: certificates"), "tampered": ("reject", "window 0: registration"),
+        "chain": ("reject", "window 0: service: the scan's chain round refused: {'x': 'y'}")}
+    (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [{"window": w} for w in (0, 1)]}))
+    with pytest.raises(SystemExit, match="a group of 2 link-windows .* scan_zk.py --group 1"):
+        SP.rows_case(run, scan)
 
 
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys):
