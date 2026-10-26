@@ -27,6 +27,20 @@ premise. The lower bound has to be a **theorem inside the model**. The only trus
 **The intermediate result he named:** "some GPU model under which we can prove that the naive tiled matrix
 multiplication algorithm is faster than Strassen."
 
+**Rulings, 25 Oct 5:59 PM PDT (Daniel):**
+
+- **R-ACCEL-1, freed compute.** \((1-\varepsilon)\)-work-soundness with parallel resources means this: no prover strategy
+  gets more credited work plus other work out of the period's devices than an honest prover could on the same devices,
+  plus \(\varepsilon C\). Its dual is a price vector. Daniel: "sounds good but may need to revisit over time". Build on
+  it, and keep the definition in one place so a later revision is one edit.
+- **R-ACCEL-2, the protocol may change.** "Yes may change Dither for sure." Then: "we really need to choose some version
+  of dither or maybe even something else such that we get provable security under our accelerator model." So the
+  deliverable is a *co-designed* triple of model, protocol and proof. Every workstream that hits an obstacle proposes the
+  smallest protocol change that removes it, with its honest overhead (γ) and its effect on usefulness (perplexity),
+  rather than stopping. PROTO-DESIGN collects these proposals and ranks them.
+- **Daniel also asked** whether Pearl-C gets provable security under the model. Today it doesn't: its γ rests on the
+  named conjecture TT_OUT(ρ) over W1 programs, an algorithmic assumption. PEARLC-MODEL owns the question.
+
 **Wording:**
 
 - Don't use "completeness" for a model property; the word is overloaded.
@@ -354,6 +368,65 @@ Survey what bears on P1, P2 and Theorem O, saying what each result implies for u
   proving.
 
 A note with citations, plus a one-page "what this means for the model". By **Mon 10:00Z**.
+
+### PROTO-DESIGN (added 26 Oct 01:10Z, after R-ACCEL-2)
+
+Choose the protocol so that the lower bound is provable in the model: a Dither variant, or something else.
+
+**The tension to resolve.** The noise has to be removable cheaply, which forces structure on it: Dither's rank-\(L\)
+\(S = \Pi U^\top\) and its 1-bit \(R\), or Pearl-C's low-rank \(N = EF^\top\). Structured, narrow noise is exactly what
+fast algorithms exploit (4b: \(A = B = 0\) leaves narrow operands, and one INT8 Strassen level fits). Pearl-C escapes by
+putting the noise *inside* the FP8 quantization, \(\tilde X = \mathrm{fp8}(\alpha X + \beta N)\). Its operands are then
+full-width at any \(A\), and bit-exact float rounding defeats every algebraic shortcut. But it also defeats Theorem K's
+rank counting.
+
+**Levers:**
+
+- \(L\);
+- \(U\)'s range, and where the noise sits;
+- the fold: its per-word nonlinearity, and its minimal ALU cost \(r_{\min}\), which by 4f may set \(\varepsilon\);
+- bits committed per MAC, which strengthens 4g's general bound;
+- integer exactness against bit-exact float;
+- hybrids, e.g. integer exactness with full-width operands at every \(A, B\) plus a nonlinear per-word fold. If that's
+  achievable at low γ, only O-BITS's non-ring instructions remain.
+
+**Deliverable:** a ranked table of candidate protocols. For each candidate:
+
+- the honest overhead γ, from data-sheet rates plus measured where it exists;
+- its usefulness cost, as perplexity or output error;
+- which threats of 4b–4g it removes;
+- which proof route it enables, and what's still unproved;
+- the smallest change from Dither or Pearl-C.
+
+Work from the other workstreams' obstacles as they report; I relay them. Paper by **Mon 12:00Z**, updated as reports land.
+
+### PEARLC-MODEL (added 26 Oct 01:10Z, Daniel's question)
+
+Does Pearl-C get provable security under the model?
+
+**Read first:**
+
+- `verity/core/protocols/pouw/schemes/pearl_c.py`'s docstring: the forming, the HOPPER_E4M3_K32 chains, the peel, the
+  leaves and the tickets;
+- `Security/Models/Pouw/Assumptions/PearlC/` (TTOut) and `Security/Definitions/Pouw/Assumptions/PearlC/TTOutW1.lean`,
+  where γ rests on TT_OUT(ρ) and "nothing here is proved by counting";
+- W1 (`Security/Definitions/Pouw/PearlC/W1.lean`: the whole sm_120 instruction machine with prices; moves are free,
+  against P2);
+- the Pearl paper and its own security claim.
+
+**Questions to answer:**
+
+1. Which part of TT_OUT the model (G1, G2, P1, P2 at θ) discharges, and which part is still a statement about all
+   programs.
+2. P1 for FP8 atoms. Is the FP8 tensor core the only unit with Hopper's and sm_120's exact E4M3 atom semantics
+   (per-product alignment truncation, FP32 promotion)? What does emulating it cost on every other exact path?
+3. A proof route that needs no rank argument: data flow, or the dependency of each atom on its own products' truncated
+   values.
+4. Which threats of 4b–4g vanish for Pearl-C (narrow noise, Strassen), which survive (bitwise glue, concurrency, cheaper
+   tickets or leaves), and which are new (FP exactness windows, the peel).
+5. A recommendation, Dither against Pearl-C against a hybrid, for "provable under the model".
+
+Paper by **Mon 12:00Z**.
 
 ## 6. Coordination
 
