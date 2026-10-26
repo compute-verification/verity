@@ -97,7 +97,9 @@ challenger fills every memory tier of one server with labels it derives itself (
 and the wipe), then reveals `k` indices drawn on live coins once the fill is complete and checks each answer against its
 own label, under a deadline per batch. `Pous.SecurityProofs.StreamedWipe` bounds what an accepted wipe leaves of the
 prior content, with no named assumption, for the sequential reveal, the only one the verdict accepts (batch size 1); at
-2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`). `PROTOCOL.md` ("The
+2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`); at `k = 2152`, for every
+fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` (`StreamedWipeMeetsFamily`, with
+`StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`). `PROTOCOL.md` ("The
 streamed-label wipe") has the messages, the bound, the measured fill and round trips, and the holes. The verdict is decided by its Lean port, `MemoryChallenger.StreamedWipe`
 (`streamed-wipe-verdict` in `verity/core/devices/memory_challenger/lean/`), through `wipe_verdict.judge` there;
 `streamed_wipe.verdict` is the reference it is difftested against, and runs beside it under `both`.
