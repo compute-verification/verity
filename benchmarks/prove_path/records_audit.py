@@ -32,7 +32,8 @@ pinned before the run (``--registered FILE``: ``{"program", "values": {param: en
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
 (a5's ``registered``, with its negatives: no registered reads, another root, every unit reading another row). The reads
-leave the free inputs: `declared_count` counts them registered.
+of a pinned parameter leave the free inputs: `declared_count` counts them registered, the ``--registered`` file's
+parameters its pins.
 
 A registration whose window commits per-window values (``activations``: ``{program, values: {value: entry}}``, the torch
 loop's activation rows, `TorchLoop.commit_activations`) has them fixed before the draw with the rest of the registration;
@@ -47,10 +48,14 @@ too, but the prover chose its rows: its reads count free, and the count names it
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE]
-    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...]
+    records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME ...]
 
-``count``: a stated record that declares its inputs (registered reads, ingress: `interface.Circuit.declared`) counted from
-its description alone (`declared_count`).
+``count``: a stated record that declares its inputs (cuts, registered reads, ingress: `interface.Circuit.declared`) counted
+from its description alone (`declared_count`), before the committer writes its members' rows. A registered read counts as
+registered only at a parameter ``--pin`` names, one whose root the verifier fixed before the run; any other is free. For
+vLLM's window circuit that is ``weights``, the served model's weights record, whose root of record the checkpoint's pinned
+shards fix before the run (`verity_vllm.check.weights_of_record`); the records don't carry the window's registered roots
+yet, so holding its ``weights`` root to that one is the registration's check, not this count's.
 
 ``--compilers FILE``: ``{name: {"digest": hex, "argv": [...], "code": [path, ...], "pythonpath": [path, ...]}}``, the
 registered compilers the verifier holds, each by the name and digest a registration names it under. A registration names
@@ -269,19 +274,17 @@ def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> di
 
 
 def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], Any] = IF.resolve,
-                   untied: Iterable[str] = ()) -> dict[str, Any]:
+                   pins: Iterable[str] = (), untied: Iterable[str] = ()) -> dict[str, Any]:
     """The leak bound's count of a stated record that declares its inputs (`interface.input_count`, from its description
-    alone): its input rows less those its wires, registered reads and ingress fill leave ``free``, and ``other_inputs`` is
-    those plus the advice's ``bits``, the compile unit's one input, a statement of its own. So ``other_inputs`` equals the
-    charge exactly when the circuit leaves no input free. The input rows read from an ``untied`` value (`window_pins`: a
-    per-window value no output port of the circuit writes, whose rows the prover chose) are free, not registered."""
-    n = IF.input_count(doc, resolve)
+    alone): its input rows less those its wires, registered reads of the verifier's ``pins`` and ingress fill leave
+    ``free``, and ``other_inputs`` is those plus the advice's ``bits``, the compile unit's one input, a statement of its own.
+    So ``other_inputs`` equals the charge exactly when the circuit leaves no input free. An ``untied`` value (`window_pins`:
+    a per-window value no output port of the circuit writes, whose rows the prover chose) is no pin here, though the audit
+    opens its reads against its committed root: its input rows are free, and the count names it."""
     untied = set(untied)
+    n = IF.input_count(doc, resolve, () if isinstance(pins, str) else set(pins) - untied)
     if untied:
-        reg = IF.declarations(doc)[2]
-        lays = {t: dict(IF.layout(resolve(t)).rows) for t, _ in doc["templates"]}
-        moved = sum(r.units * 16 * lays[r.reader][r.port] for r in reg.reads if r.param in untied and r.port in lays[r.reader])
-        n = {**n, "registered": n["registered"] - moved, "free": n["free"] + moved, "untied": sorted(untied)}
+        n = {**n, "untied": sorted(untied)}
     other = n["free"] + bits
     return {**n, "other_inputs": other, "advice_bits": bits, "bound": "vacuous" if other > bits else "within the charge"}
 
@@ -607,7 +610,7 @@ def audit(a: argparse.Namespace) -> int:
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "coins", "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
-    row["leak"] = (declared_count(doc, bits, resolve, untied)
+    row["leak"] = (declared_count(doc, bits, resolve, pins, untied)
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
         row["registered"] = {"pins": {v: e["root"] for v, e in pins.items()}, "members": len(reads)}
@@ -707,12 +710,14 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", required=True, help="the circuit record (circuit.json), or its description")
     p.add_argument("--bits", type=int, required=True, help="the advice's registered length in bits, the charge")
     p.add_argument("--catalog", action="append", default=[], help="a module whose Definitions the record's templates name, "
-                   "imported before they resolve (repeatable)")
+                   "imported before they resolve (repeatable; `interface.resolve` loads the ops and the embedding read)")
+    p.add_argument("--pin", action="append", default=[], help="a registered parameter, by the record's name for it, whose root "
+                   "the verifier fixed before the run (repeatable; none: every registered read is free)")
     a = ap.parse_args(argv)
     if a.cmd == "count":
         for m in a.catalog:
             importlib.import_module(m)
-        print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits), sort_keys=True))
+        print(json.dumps(declared_count(json.loads(Path(a.circuit).read_text()), a.bits, pins=a.pin), sort_keys=True))
         return 0
     if bool(a.opening) == bool(a.circuit) or bool(a.opening) != bool(a.compilers):
         ap.error("a compiled circuit: --opening FILE --compilers FILE; a circuit with no compiler: --circuit SHA512")
