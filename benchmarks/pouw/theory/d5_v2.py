@@ -332,12 +332,13 @@ def pv_lengths(nf, quick: bool) -> dict:
 
 
 def world_x(nf) -> dict:
-    """A world model's uncredited tensor work a credited MAC (static and PV): QK^T, and V4's indexer, in MACs (at the
-    s8 rate if run in FP8; BF16 takes twice)."""
+    """A world model's uncredited tensor work a credited MAC (static and PV): QK^T in both softmax passes (1 +
+    SOFTMAX_PASS, as nofold's `v2_world` and D6's period count it), and V4's indexer, in MACs (at the s8 rate if run in
+    FP8; BF16 takes twice)."""
     out = {}
     for m in nf.WORLD:
         _, static, qk, pv, ix = nf.world_macs(m)
-        out[m["name"]] = dict(qk=qk / (static + pv), indexer=ix / (static + pv))
+        out[m["name"]] = dict(qk=qk * (1 + nf.SOFTMAX_PASS) / (static + pv), indexer=ix / (static + pv))
     return out
 
 
