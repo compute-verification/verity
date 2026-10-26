@@ -38,6 +38,7 @@ from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
+from verity_vllm import settings
 
 
 def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
@@ -83,7 +84,7 @@ def _engine_main(args) -> None:
     topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout) if instrumented else None
     (out / "topology.json").write_text(json.dumps({"arm": args.arm, "tp": args.tp, "build_s": round(build_s, 1),
                                                     "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
-                                                    "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))},
+                                                    "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)

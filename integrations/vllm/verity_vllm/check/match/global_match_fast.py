@@ -374,7 +374,7 @@ class _MemoProjection(_CanonMemo, PJ.Projection):
     decoded fold + components) and GM-01's G3 build one each per request; `projection()` below hands G3 the X-09 one (relabelled) instead
     of rebuilding + recanonicalising it."""
 
-    def __init__(self, oracle, label, inst_idx, tok_node, weights_node, seed_node=None, peer_node=None):  # noqa: D107
+    def __init__(self, oracle, label, inst_idx, tok_node, weights_node, seed_node=None, peer_node=None):
         super().__init__(oracle, label, inst_idx, tok_node, weights_node, seed_node, peer_node)
         key = _proj_key(oracle, inst_idx, tok_node, weights_node, seed_node, peer_node)
         _proj_registry[key] = (oracle, self)
