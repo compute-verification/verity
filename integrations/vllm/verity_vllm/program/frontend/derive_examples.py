@@ -251,9 +251,9 @@ class GreedyServe(nn.Module):
 
 
 class StochasticServe(nn.Module):
-    """[R15 stoch] `GreedyServe` with the seeded temperature + top-p select of vLLM's sampler as the stand-in op
+    """`GreedyServe` with the seeded temperature + top-p select of vLLM's sampler as the stand-in op
     `vllm_iface.gumbel_topp_token_select(logits, seed, temperature, top_p, pos, splits)` — the shape of `cb_a.vllm_meta.StochasticRequest`
-    over the example CausalLM.  `seed` (int64 [1]) and [R16 stoch, coord M-0169] `splits` (int32 [steps+1]: the derived split count
+    over the example CausalLM.  `seed` (int64 [1]) and `splits` (int32 [steps+1]: the derived split count
     per sampling event, S_t = SplitsFor_v1(|live(t)|, num_SMs)) are forward INPUTS; temperature / top_p are constructor constants;
     `pos` is the logits row's position (LP-1+k for the k-th sample).  `literal_seed` (negative): the seed created inside forward —
     hidden state, refused.  `literal_splits` (negative): S as a tensor literal / a Python int inside forward — refused likewise (S is
