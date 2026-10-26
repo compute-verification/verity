@@ -545,7 +545,7 @@ end FlockDeploy.KS
 
 namespace RecDeploy
 
-open Flock FlockDeploy FlockDeploy.KS
+open Flock FlockComplete FlockDeploy FlockDeploy.KS
 
 /-- **Recursion completeness's inner premise at `bdR (nextR rd)`** (`InnerAccepts`, which `vstar_complete` takes): at a
 compiled statement whose inner rounds of `v` are the honest prover's (`honestAsR`) for the inner statement, the honest
@@ -560,7 +560,7 @@ theorem innerAccepts_honest (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     (hx : setupOf false (xIOf xC) = some (s, spec, sts))
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) (hc1 : cs.head? = some c₁)
-    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (V false).k (xIOf xC))
+    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (FlockDeploy.V false).k (xIOf xC))
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
     (hfin : final lastO = some (salted ys (honestRounds (fileCaps spec sts c₁ pfs)
@@ -585,7 +585,7 @@ end RecDeploy
 
 namespace RecDeploy.DeployedR
 
-open Flock FlockDeploy FlockDeploy.KS
+open Flock FlockComplete FlockDeploy FlockDeploy.KS
 open Claims (Msg)
 
 /-- **One round's openings as the honest prover lays them in V\*'s last message**: each row, then its salt. -/
@@ -663,7 +663,7 @@ theorem ivstar_honest_filesR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     (hc1 : cs.head? = some c₁) (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes)
-    (hk : cs.length = (V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
+    (hk : cs.length = (FlockDeploy.V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
     (hl : (lensOf (filesOs spec sts c₁ pfs cs Ts ys)).length < 2 ^ 64)
     (hl' : ∀ l ∈ lensOf (filesOs spec sts c₁ pfs cs Ts ys), l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
@@ -685,7 +685,7 @@ theorem innerAccepts_honestR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (hx : setupOf false (xIOf xC) = some (s, spec, sts))
     (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
       ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) (hc1 : cs.head? = some c₁)
-    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (V false).k (xIOf xC))
+    (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (FlockDeploy.V false).k (xIOf xC))
     {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
     (hl : (lensOf (filesOs spec sts c₁ pfs cs Ts ys)).length < 2 ^ 64)
