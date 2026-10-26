@@ -181,11 +181,18 @@ burst windows a close took 0.4–1.9 s, longer under seal load; the seal queue's
 r20261026-021253-83ee runs `finalize` off the loop: a close of 0.012 s at p90. On its successor bbee, 89bf's request,
 the same seeded schedule, is accepted (6cd9: 100 of 100 requests ended).
 
-**K per monitoring period** (`chain_record.py leak`). These are d951's files with its scan, every unit drawn and
-accepted. K uses:
+vllm's reading of bbee's records over 6cd9 (r20261026-040530-d82e and r20261026-040621-b1e4):
+- The part of a window close still on the engine loop: 0.025 s at p50, 0.05 s at p90 and 0.076 s at most, over the
+  90 closes made while seals ran. On 9995, under the void runs, it was 0.49 s at p90 and 1.95 s at most.
+- Received to submitted: 0.001 s at p90, over 135 requests.
+- Submitted to admitted: 0.018 s at p90. The three gaps over 0.1 s, at most 0.43 s, are `--window-requests 8`'s cap.
+- Admitted to first token: 0.056 s at p50 and 0.53 s at p90.
+
+**K per monitoring period** (`chain_record.py leak`). These are 6cd9's files at full traffic with its scan
+(r20261026-035637-a739), every unit drawn and accepted. K uses:
 - the run's parameters (`deployment.json`), the same on every active-warden run: B = 512, lanes = 4, r = 4, D = 21,
   T = 32 buckets of 100 ms, and egress_cells = 65;
-- its traffic: 40 requests over 43 link-windows, 0.93 a link-window;
+- its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
 - every unit drawn.
 
@@ -215,12 +222,12 @@ The scale:
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,366 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,366 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,366 |
-| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,366 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,366 |
-| year | 1,000 | 1.41·10^15 (71,454×) | 1.41·10^15 (71,454×) | 1.41·10^15 (71,454×) | 143,366 |
+| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
+| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
+| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
+| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
+| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
+| year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
 
 As registered today, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
 monitoring period.
@@ -230,12 +237,12 @@ the weights:
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 1.99·10^8 (1.01%) | 2·10^8 (1.01%) | 1.98·10^8 (1%) | 1,047 |
-| week | 1,000 | 1.98·10^11 (10×) | 1.98·10^11 (10×) | 1.98·10^11 (10×) | 1,047 |
-| month | 1 | 8.49·10^8 (4.29%) | 8.51·10^8 (4.3%) | 8.48·10^8 (4.29%) | 1,047 |
-| month | 1,000 | 8.48·10^11 (42.9×) | 8.48·10^11 (42.9×) | 8.48·10^11 (42.9×) | 1,047 |
-| year | 1 | 1.03·10^10 (52.2%) | 1.03·10^10 (52.2%) | 1.03·10^10 (52.2%) | 1,047 |
-| year | 1,000 | 1.03·10^13 (522×) | 1.03·10^13 (522×) | 1.03·10^13 (522×) | 1,047 |
+| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
+| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
+| month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
+| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
+| year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
+| year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
 
 This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors
 (ONE-TAP is on it). It is not the record's number.
@@ -246,19 +253,23 @@ K also rests on these conditions:
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
 - The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
-- At full traffic (6cd9, accepted: 100 requests over 75 link-windows, 1.33 a link-window, every unit drawn) the
-  anchored table's machine-week is 1.44% of the weights and its machine-year 74.8%; as registered today it is 1.37×
+- At d951's light traffic (40 requests over 43 link-windows, 0.93 a link-window, its scan's every unit drawn) the
+  anchored table's machine-week is 1.01% of the weights and its machine-year 52.2%; as registered today it is 1.37×
   a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriod's sum.
 
 **`stubbed`.**
 - NET-71: the units read the records through a stand-in until the rows form (#4452) and the generator-form lowering
-  land. N2 and the I/O tie are proved on 2982's records, not on an active-warden run's.
-- StandInTie: `IoTieRequest` doesn't read 2982's link format, so the endpoint step's tie runs in the clear on
+  land. N2 is proved on 2982's records, not on an active-warden run's.
+- StandInTie, on 2982: `IoTieRequest` doesn't read 2982's link format, so the endpoint step's tie runs in the clear on
   network-e2e's stand-ins.
   - r20261025-233707-ed7a (#4458) proved the tie at the served class on the active-warden link format: honest tied,
     forged refused, C-Flock `--zk` and Lean.
-  - The tie on the record's own active-warden leg is in progress (PROVE-PATH).
+  - On d951 the tie is proved on the run's own ingress, which replaces the stand-in there: r20261026-013852-ecb2,
+    art:046767802b0b4304494bab829d106543743a1fb006869fda367614aff91691a5. It ran `IoTieRequest_v1{B=512,L=4,R=4}`
+    over all 43 link-windows and 40 of 40 connections, with C-Flock `--zk` on one GPU and Lean. Honest tied in 43 of
+    43; a forged prompt digit was refused at link-window 0, at the registered read. 1,556,020 proof bytes a
+    link-window. Its verifier still reads the tie's advice (prompt and output lengths, release) in the clear (NET-68).
 - The clock certificate's opening is checked on the host: the certificates step's host audit opens the salted syncs in
   the clear (#4365's named gap).
 
@@ -282,7 +293,8 @@ with a = log2 #S_s + Σ_c log2(cap_c + 1), charged once a period, b_w window w's
 
 What it doesn't cover:
 
-- The I/O tie. IoTieRequest is checked in the clear tonight, outside the proofs.
+- The I/O tie. On 2982 IoTieRequest is checked in the clear, outside the proofs. On d951 it is proved (ecb2), but
+  its verifier reads the tie's advice in the clear.
 - `Claims.Sampling.KS` is a hypothesis until proofs' bridge restates it on `Flock.Guarantees.SampledKSLive`, which makes
   the error δ + ksAvgStrictZ + linkBoundZC.
 - `hdata` (the active warden's arrivals are the framed egress of the network certifier's observations) and `Carries` are run conditions
