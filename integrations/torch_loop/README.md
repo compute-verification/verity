@@ -23,7 +23,8 @@ committed row longer than one SHA-512 block.
   vLLM.
 - `verity_torch_loop/transformer.py`: the demo's standard workload (CMP-92), a 2-layer decoder-only transformer (width 128,
   2 heads of 64, MLP 512, byte vocabulary, context 32, greedy). Its static matmuls are `ScaledMmS8Coordinate_v1{K=128|512}`
-  units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64, DOT=AmpereBF16TcDot16_v2}` units over the KV cache (PV's 32
+  units. Attention's QKᵀ and PV are `GemmCoordinate_v2{K=64, DOT=HopperBF16WgmmaDot16_v1}` units (`--bf16-dot ampere`:
+  `AmpereBF16TcDot16_v2`) over the KV cache (PV's 32
   positions padded with +0 to 64, since C-Flock pins a unit through a row of more than one SHA-512 block), computed through
   the Definition's kernel. RMSNorm, softmax, ReLU, the quantizer, the adds and argmax run in torch, and
   are not units until their Definitions land (CIR-100). `serve_transformer.py` writes its window as `serve.py` writes the

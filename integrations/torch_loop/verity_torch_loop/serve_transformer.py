@@ -1,7 +1,7 @@
 """The decoder's window (`transformer.DecoderLoop`), written for the audit from its records alone, as `serve` writes the MLP's.
 
     python -m verity_torch_loop.serve_transformer --out DIR [--law L] [--prompt BYTES ...] [--generate G] [--seed S] \\
-        [--cap 16] [--workers N] [--run-id ID] [--tamper]
+        [--cap 16] [--workers N] [--run-id ID] [--bf16-dot hopper|ampere] [--tamper]
     python -m verity_torch_loop.serve_transformer --circuit-only [the same shape and --run-id]
 
 The first serves the prompts, commits every unit and writes the window (``circuit.json``, the registration under core's
@@ -36,11 +36,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--cap", type=int, default=16)
     ap.add_argument("--workers", type=int, default=1, help="processes committing the rows (`Window.close`)")
     ap.add_argument("--run-id", default="", help="the run's name, which its root binds (`DecoderLoop`)")
+    ap.add_argument("--bf16-dot", choices=sorted(T.BF16_DOTS), default=T.BF16_DOT, help="the BF16 GEMMs' step")
     ap.add_argument("--tamper", action="store_true")
     a = ap.parse_args(argv)
     if bool(a.out) == a.circuit_only:
         ap.error("--out DIR, or --circuit-only")
-    loop = T.DecoderLoop(T.Model(a.seed), [p.encode() for p in (a.prompt or PROMPTS)], a.generate, a.tamper, a.run_id)
+    loop = T.DecoderLoop(T.Model(a.seed), [p.encode() for p in (a.prompt or PROMPTS)], a.generate, a.tamper, a.run_id,
+                         a.bf16_dot)
     law = D.parse_law(a.law)
     if a.circuit_only:
         empty = IF.Window(loop.circuit(), loop.run_root, law, a.cap)

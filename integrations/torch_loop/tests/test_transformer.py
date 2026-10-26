@@ -108,10 +108,22 @@ def test_core_accepts_its_written_window_and_the_circuit_it_registers_first_is_t
 def test_every_template_has_a_row_c_flock_pins_it_by():
     """C-Flock stages a unit only if one of its rows takes a SHA-512 compression before its last block (`circuit.compose`):
     the audit of r20261025-225017-fa7f refused every member while PV's K was 32."""
-    for fn in T.TEMPLATES:
+    for fn in {t for dot in T.BF16_DOTS for t in T.templates(dot)}:
         ins, _ = IF.unit_rows(fn)
         assert any(FC.Port(name, -(-n // 16), n).comps for name, _, n, _ in ins), descriptor_id(fn)
     assert FC.Port("p", 32, 512).comps == 0
+
+
+def test_its_bf16_gemms_bind_hopper_unless_ampere_is_chosen():
+    """Circuits' ruling: the BF16 GEMMs bind `GEMM_HOPPER` (the H200 target). `GEMM_AMPERE` stays selectable, and a decoder
+    under it records its own template's function."""
+    assert "HopperBF16WgmmaDot16" in BF and T.DecoderLoop(T.Model(), [b"A"], 1).circuit().ids == [SH, SF, BF]
+    loop = T.DecoderLoop(T.Model(), [b"A"], 1, dot="ampere")
+    amp = descriptor_id(T.dynamic(T.D, "ampere"))
+    assert "AmpereBF16TcDot16" in amp and loop.circuit().ids == [SH, SF, amp]
+    assert loop.window(LAW).mismatches() == {}
+    with pytest.raises(ValueError, match="BF16 step"):
+        T.DecoderLoop(T.Model(), [b"A"], 1, dot="sm120")
 
 
 def test_it_loads_no_vllm():

@@ -36,7 +36,8 @@
 #   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer
 #     transformer, its four templates' units), honest and tampered, against the circuit registered before it ran, in members
 #     of PP_TORCH_LOOP_CAP units (default 16), committed by PP_TORCH_DECODER_WORKERS processes (default 8);
-#     PP_TORCH_LOOP_SHAPE: more serve_transformer.py flags (--prompt, --generate). The public member files aren't kept.
+#     PP_TORCH_LOOP_SHAPE: more serve_transformer.py flags (--prompt, --generate, --bf16-dot). The public member files
+#     aren't kept. PP_LAW=stratified:3 draws a member of every template.
 #   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
 #     honest subset:4, forged subset:8 (every unit drawn); with PP_PLAIN=1, stratified:4 and stratified:8.
 #   PP_PLAIN=1: plain C-Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
