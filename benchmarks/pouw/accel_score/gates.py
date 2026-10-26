@@ -383,10 +383,16 @@ def instructions(card: str) -> list[dict]:
     return out
 
 
+def _stand_in(name: str) -> bool:
+    """An instruction whose gates are a stand-in for 𝓜's `Open.dot` (a sparse form, or a format without a pinned dot)."""
+    return name.startswith("mma.sp") or name.split()[-1] in OPEN_DOT
+
+
 @functools.cache
-def phi(card: str) -> dict:
-    """Φ: max Σ x_i gates_i a SM-clock over 𝓜's units (one LP), then gates a second at 𝓜's tick, with the mix."""
-    a, ins = ACCEL[card], instructions(card)
+def phi(card: str, pinned: bool = False) -> dict:
+    """Φ: max Σ x_i gates_i a SM-clock over 𝓜's units (one LP), then gates a second at 𝓜's tick, with the mix.
+    pinned: the stand-in dots left out (`_stand_in`), a sensitivity on what they add."""
+    a, ins = ACCEL[card], [i for i in instructions(card) if not (pinned and _stand_in(i["name"]))]
     res = list(a["rho"])
     A = np.array([[i["use"].get(r, 0.0) for i in ins] for r in res])
     sol = linprog(-np.array([i["gates"] for i in ins], dtype=float), A_ub=A, b_ub=[a["rho"][r] for r in res],
@@ -439,7 +445,7 @@ def bit_size(card: str) -> float:
     s8 = dot_gates(card, "s8")["per_mac"]
     if card == "H200":
         return dot_gates(card, "b1")["per_mac"] / s8
-    return (7 / 8) ** 2 * dot_gates(card, "nvf4")["per_mac"] / s8
+    return (7 / 8) ** 2 * min(dot_gates(card, f)["per_mac"] for f in ("nvf4", "mxf4")) / s8
 
 
 def tensor_checks(card: str, pb_card) -> dict:
@@ -451,6 +457,31 @@ def tensor_checks(card: str, pb_card) -> dict:
     if getattr(pb_card, "f4", 0.0):
         out["FP4"] = (s8 * pb_card.s8 / pb_card.f4) / dot_gates(card, "nvf4")["per_mac"]
     return out
+
+
+@functools.cache
+def elementwise_gates() -> dict:
+    """Gates of the serving circuit's elementwise steps, each the repository's Boolean form of its function: dq, an
+    INT32 accumulator to F32 at a scale (`fp.s32_to_f32`, `fp.f32_mul`); q, an F32 to INT8 at a scale (`f32_mul`,
+    `int8.f32_to_s8_rzi`); add, mul; ex2 and rcp (`mufu`'s MUFU.EX2 and MUFU.RCP)."""
+    from verity.ml.circuits.ops.boolean import int8, mufu
+    one = {"add": (lambda C, a, b: fp.f32_add(C, a, b), 2, 32), "mul": (lambda C, a, b: fp.f32_mul(C, a, b), 2, 32),
+           "cvt": (lambda C, a: fp.s32_to_f32(C, a), 1, 32), "f2s8": (lambda C, a: int8.f32_to_s8_rzi(C, a), 1, 8),
+           "ex2": (lambda C, a: mufu.mufu_ex2(C, a), 1, 32), "rcp": (lambda C, a: mufu.mufu_rcp(C, a), 1, 32)}
+    out = {k: size(f, [32] * n, w)["total"] for k, (f, n, w) in one.items()}
+    out["dq"], out["q"] = out["cvt"] + out["mul"], out["mul"] + out["f2s8"]
+    return out
+
+
+@functools.cache
+def sha512_gates() -> dict:
+    """One SHA-512 compression with its feed-forward (`verity.ml.commitments.gates.sha512.compress_gadget`), traced."""
+    from verity.ml.commitments.gates.sha512 import compress_gadget
+
+    def f(C, cv, msg):
+        cut = lambda b, n: [list(b)[64 * i:64 * i + 64] for i in range(n)]  # noqa: E731
+        return [b for w in compress_gadget(C, cut(cv, 8), cut(msg, 16)) for b in w]
+    return size(f, [512, 1024], 512)
 
 
 def lookup_gates(table_entries: int, width: int, macs: float) -> float:
