@@ -166,13 +166,14 @@ theorem acc_of_accepts (wE w : Msg → ℝ) (b : Brings) (aux : Msg → ℕ → 
 
 /-! ## The target -/
 
-/-- **A strategy at the recursive component, causal in its rounds.** The parameters and the commitment are sent before
-any coin, so both are constants of the play. Then the challenger device draws `ξ`. At `ξ` the prover opens the
+/-- **A strategy at the recursive component, causal in its rounds.** The parameters, the commitment and the registered
+inner circuit file (ruling R6) are sent before any coin, so all three are constants of the play. Then the challenger device draws `ξ`. At `ξ` the prover opens the
 recursive session at the statement `stmt ξ` and runs `P ξ` against the session's live coins. The evidence and blobs it
 sends are `send ξ` of that run. -/
 structure Play (Ξ Ω : Type) where
   params : ByteArray
   commitment : ByteArray
+  circuitFile : ByteArray
   stmt : Ξ → Msg
   P : Ξ → Claims.Prover Ω
   send : Ξ → Claims.Trace → ByteArray × Array ByteArray
@@ -253,15 +254,17 @@ def ShowsSent (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) (θ : ByteArray
     VStar.Recursive.Integrity.evidenceOf sent.1 = .ok (.inr e) →
     Names p e (Core.Blobs.ofArray sent.2) x ∧ Shows IV st x e.proofs (Core.Blobs.ofArray sent.2) v
 
-/-- **The parameters name the inner circuit `D`**: they decode to the recursive form, and the inner circuit file they
-pin by SHA-512 reads as `D`. -/
-def NamesInner (θ : ByteArray) (D : Flock.Desc) : Prop :=
-  ∃ (j : Lean.Json) (p : VStar.Recursive.Params) (bytes : ByteArray) (tags : Flock.Tags),
+/-- **The committed circuit file is the inner circuit `D`** (ruling R6): the parameters decode to the recursive form,
+the committed file `file` has the SHA-512 they pin, and it reads as `D`. `circuitOf` reads this file, never some file
+with the parameters' digest. A different file under that digest is a SHA-512 collision, which is `Break` once the
+target is restated against `Game`'s commit phase. -/
+def NamesInner (θ file : ByteArray) (D : Flock.Desc) : Prop :=
+  ∃ (j : Lean.Json) (p : VStar.Recursive.Params) (tags : Flock.Tags),
     Core.canonicalJson θ = .ok j ∧ VStar.Recursive.Integrity.paramsOfJson j = .ok (.inr p) ∧
-    Flock.hexOf (Flock.Sha512.hash bytes) = p.own.circuit ∧ Flock.Desc.parse tags bytes = .ok D
+    Flock.hexOf (Flock.Sha512.hash file) = p.own.circuit ∧ Flock.Desc.parse tags file = .ok D
 
 /-- **ONE-9p's target: sampled proofs at the recursive configuration.** Take a play whose parameters name the inner
-circuit `D` with `n` units. Suppose:
+circuit `D` with `n` units through its committed circuit file (`NamesInner`, R6). Suppose:
 * the device's draw misses any `K₀` units with probability at most `δs` (`hDraw`);
 * every play's prover meets the named SHA-512 premises at `t` calls and level `λ` (`hCR`);
 * what it sends names its statement and shows its run (`hShow`), and the records hold the run's live coins (`hLive`).
@@ -286,7 +289,7 @@ theorem sampledProofsRecursive (wE w : Msg → ℝ) (b : Brings) (aux : Msg → 
     (drawOf : Ξ → Finset (Fin n))
     (hK₀ : ∀ m : ℕ, ε * n < m → K₀ ≤ m)
     (hDraw : ∀ S : Finset (Fin n), K₀ ≤ S.card → Claims.Pr (fun ξ : Ξ => Disjoint (drawOf ξ) S) ≤ δs)
-    (τ : Play Ξ Ω) (hθ : NamesInner τ.params D)
+    (τ : Play Ξ Ω) (hθ : NamesInner τ.params τ.circuitFile D)
     (hCR : ∀ ξ, CRAt wE w b aux nOf hd recRest t lam (τ.stmt ξ) Ω (τ.P ξ))
     (hShow : ∀ ξ ω r, ShowsSent (boundAt wE w).IVStar (stageAt aux nOf hd recRest) (τ.stmt ξ) τ.params
       (τ.sent ξ (Claims.run FlockDeploy.sha512 (τ.P ξ) (recordAt wE w b aux nOf hd recRest).V (τ.stmt ξ) ω r))
