@@ -423,8 +423,15 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
+def other_subset(drawn: dict) -> list[int]:
+    """A K-subset of the period's windows that isn't the draw's: the first K the draw didn't hold, then drawn ones
+    from the start where it left fewer than K (none other at K = n)."""
+    held = set(drawn["units"])
+    return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
+
+
 def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
-           coins=None) -> dict:
+           coins=None, forge=None) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
     firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
@@ -433,9 +440,12 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
     With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
     advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
     decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
-    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`). Coins with a ``drawn``
-    (the challenger's, `a5_coins.RankCoins`) end their turn on the session once the draw has read them, and the
-    result's ``segment`` is what they released."""
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the draw of
+    record: the Lean verifier of record's (``--lean``) draw on the coins the period draw read (`service.lean_draw`),
+    which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
+    on the session once the draw has read them, and the result's ``segment`` is what they released. ``forge``, a
+    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a draw object
+    listing them (`other_subset`), which is what ``period.json`` then holds."""
     lw = rd.lw
     k = getattr(a, "draw", 0) or None
     stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
@@ -451,10 +461,13 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
         finally:
             if callable(getattr(coins, "drawn", None)):
                 segment = coins.drawn()
+        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
+            f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        if forge is not None:
+            drawn = {**drawn, "units": forge(drawn)}
+            log(f"{name}: the prover proves windows {drawn['units']} instead")
         (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
         windows = [rd.windows[u] for u in drawn["units"]]
-        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) after the period's "
-            f"commitment {drawn['commitment'][:16]}")
     previous, rows = None, []
     for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
@@ -519,6 +532,11 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
     network = lw.network_verdict(stream, rd.plan["windows"], drawn)
+    if drawn is not None:
+        sel = network["selection"]
+        log(f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+            f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
+                                                   "the windows proved are the draw of record's"))
     return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
             **({} if segment is None else {"segment": segment})}
 

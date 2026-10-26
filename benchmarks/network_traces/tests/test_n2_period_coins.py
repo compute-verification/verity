@@ -56,19 +56,22 @@ def _session(tmp_path: Path, monkeypatch, names: list[str]):
 def _draw(ch, name: str, rounds) -> dict:
     roots = [x.root.hex() for x in rounds[name].windows]
     commitment = hashlib.sha512(("period/" + name).encode()).hexdigest()
-    coins = ch.ranks[name]
+    coins, read = ch.ranks[name], bytearray()
     coins.commit(bytes.fromhex(commitment))
     rule = S.Law(f"subset:{K}")
-    draw = S.select_draw(rule, S.selection_law(rule, N), N, coins)
-    return {"period": {"roots": roots, "advice": None, "k": K, "commitment": commitment, "units": list(draw["units"])},
+    draw = S.select_draw(rule, S.selection_law(rule, N), N, lambda m: read.extend(b := coins(m)) or b)
+    return {"period": {"roots": roots, "advice": None, "k": K, "commitment": commitment, "units": list(draw["units"]),
+                       "read": read.hex()},
             "segment": coins.drawn()}
 
 
 def test_every_members_draw_holds_on_the_one_session_and_a_draw_after_another_commitment_does_not(tmp_path, monkeypatch):
     """Both members plan before the session opens (26 windows, `subset:8`), each reads its coins in its own turn after its
     period's commitment, and each draw holds against the session's evidence (`coins.coins_reason`) on the root the
-    verifier recomputes from what it received, every `a5_coins.negatives` refused. The same coins held to another
-    commitment, or to a root over a period whose roots changed, are refused."""
+    verifier recomputes from what it received, every `a5_coins.negatives` refused, and the coins the period records it
+    read (``read``, which the network verdict's Lean draws on) are the ones the session released. The same coins held to
+    another commitment, or to a root over a period whose roots changed, and a period recording other coins than those
+    released, are refused."""
     names = ["honest", "tampered_all"]
     ch, rounds = _session(tmp_path, monkeypatch, names)
     try:
@@ -82,9 +85,16 @@ def test_every_members_draw_holds_on_the_one_session_and_a_draw_after_another_co
     assert ch.published.get("error") is None, ch.published.get("error")
     for n in names:
         assert got[n]["ok"] and got[n]["root_ok"] and got[n]["coins_reason"] is None, got[n]
+        assert got[n]["read_is_released"] and got[n]["read_bytes"] == len(done[n]["period"]["read"]) // 2 > 0
         assert got[n]["negatives_refused"] and all(got[n]["negatives_refused"].values()), got[n]["negatives_refused"]
         assert len(done[n]["period"]["units"]) == K and (tmp_path / "out" / n / "verifier" / "coins.json").exists()
     assert ch.published["plan"]["needs"] == {"0": n2.coin_need(K, N, 64), "1": n2.coin_need(K, N, 64)}
+
+    read = done["honest"]["period"]["read"]
+    flipped = {**done, "honest": {**done["honest"], "period": {**done["honest"]["period"],
+                                                               "read": f"{int(read[:2], 16) ^ 1:02x}" + read[2:]}}}
+    refused = ch.check(flipped, tmp_path / "out")["honest"]
+    assert not refused["ok"] and not refused["read_is_released"], refused
 
     other = {**done, "honest": {**done["honest"], "period": {**done["honest"]["period"], "commitment": "ee" * 64}}}
     refused = ch.check(other, tmp_path / "out")["honest"]
@@ -104,7 +114,7 @@ def test_a_draw_that_never_ran_leaves_its_member_refused_and_the_session_closed(
     finally:
         ch.close()
     roots = [x.root.hex() for x in rounds["tampered_all"].windows]
-    done["tampered_all"] = {"period": {"roots": roots, "advice": None, "k": K, "commitment": "aa" * 64}}
+    done["tampered_all"] = {"period": {"roots": roots, "advice": None, "k": K, "commitment": "aa" * 64, "read": ""}}
     for n in names:
         (tmp_path / "out" / n / "verifier").mkdir(parents=True)
     got = ch.check(done, tmp_path / "out")

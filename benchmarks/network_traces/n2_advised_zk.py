@@ -46,18 +46,24 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   window's salted root and the advice's digest, the challenger then draws K of the windows on its coins
   (`LinkWindows.period_draw`), and only the drawn windows are registered, proved and decided; the network verdict is
   the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows of the period's, ε = bound / n, at the
-  stream's δ, ``--delta``). The coins are the verifier's own by default; ``--challenger local|gate:USER@HOST`` takes
-  the auditor's challenger's instead (`Challenger`: one session, as `records_audit` takes it, whose evidence each
-  member's draw is held to, `coins.coins_reason`). The summary's ``draw`` and ``sampled`` report them, ``sampled`` per
-  member in scan_zk's shape: ``draw`` {law, coins, units, of}, ``audit`` {accepted, wrong_units} and ``charge``
-  {delta, wrong_units, epsilon}, None unless accepted.
+  stream's δ, ``--delta``). Its draw of record is the Lean verifier of record's (``--lean``'s ``draw --population n
+  --k K --stream-file``, `service.lean_draw`) on the coins the period draw read, and it accepts only when the windows
+  proved are that draw's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
+  ``--challenger local|gate:USER@HOST`` takes the auditor's challenger's instead (`Challenger`: one session, as
+  `records_audit` takes it, whose evidence the coins each member's Lean drew on are held to, `coins.coins_reason`). The
+  summary's ``draw`` and ``sampled`` report them, ``sampled`` per member in scan_zk's shape: ``draw`` {law, coins,
+  units, of, by}, ``audit`` {accepted, wrong_units} and ``charge`` {delta, wrong_units, epsilon}, None unless
+  accepted.
 * **Members.** One stream each, over the link's windows (``--members``: some of them): ``honest``, the session's
   advice and records; ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); ``short``, one
   request's output length one short (`advised_traffic.with_output_len`); on the simulated link ``extra``, one frame
   more handed to the egress certifier in its first busy bucket, the egress records certified anew; and on the served
   link ``tampered``, window 0's egress head with one count more and its certificate unchanged (`n2_zk.one_count`),
   since the run's certifier key isn't the driver's, and ``tampered_all``, that change in every window
-  (`every_count`), which a sampled period refuses whatever it draws. The advice is public and the heads are witness: moved and short
+  (`every_count`), which a sampled period refuses whatever it draws; with ``--draw K`` (K < n), ``other_subset``, the
+  honest records with the prover proving another K-subset of the windows than the draw's (`n2_zk.other_subset`) under
+  a draw object listing them, every window accepted, which the network verdict refuses by name since the Lean's draw
+  on the period's coins isn't those windows. The advice is public and the heads are witness: moved and short
   change the view the verifier computes, extra and tampered the egress heads the prover commits. Each advice negative
   and extra is the first of its kind that `advised.view` takes in every window, so the unit takes every window's
   instance, and that the advised counts refuse in some window: the proof's verdict bit refuses it, with both head
@@ -127,6 +133,8 @@ SHAPE = AT.Shape(T, WINDOWS, GridParams(T, AT.R, 1), GridParams(T, 4, 1),
                  tuple(range(T - 8, T + 8)) + tuple(range(3 * T - 8, 3 * T + 8)))
 MEMBERS = ("honest", "moved", "short", "extra")
 E2E_MEMBERS = ("honest", "moved", "short", "tampered", "tampered_all")
+#: the sampled period's negative: the prover proves another K-subset than the draw of record's
+OTHER = "other_subset"
 #: IoTieRequest's one pinned size class (B, T, R, OWN): the only one whose ingress tie can be proved
 TIE_PINNED = (512, 4, 2, 1)
 
@@ -474,10 +482,10 @@ def failed(x) -> list[str]:
 
 
 def expected(name: str, fails: list[list[str]]) -> bool:
-    """Whether each window's failed parts are the member's: none when honest; tampered, window 0's egress head its
-    signed digest (and the advised counts, which read the count it changed) and no other window; else the advised
-    counts alone, in at least one window."""
-    if name == "honest":
+    """Whether each window's failed parts are the member's: none when honest or other_subset; tampered, window 0's
+    egress head its signed digest (and the advised counts, which read the count it changed) and no other window; else
+    the advised counts alone, in at least one window."""
+    if name in ("honest", OTHER):
         return not any(fails)
     if name == "tampered":
         return "egress/signed" in fails[0] and set(fails[0]) <= {"egress/signed", "advised"} and not any(fails[1:])
@@ -560,7 +568,8 @@ class Challenger:
 
     def check(self, done: dict, out: Path) -> dict:
         """Each member's draw held to the session's evidence: the root the verifier recomputes from every member's
-        ``period.json`` (`coins_root`), the coins its draw read released after its period's commitment in that one
+        ``period.json`` (`coins_root`), the coins its draw read (``period.json``'s ``read``, which the network verdict's
+        Lean drew on, and which must be what its rank released) released after its period's commitment in that one
         session (`coins.coins_reason`), and each of `a5_coins.negatives` refused. Writes each member's evidence beside
         what its verifier received (``coins.json``)."""
         published = self.close()
@@ -568,7 +577,8 @@ class Challenger:
                           next(iter(done.values()))["period"]["k"])
         out_ = {}
         for name, res in done.items():
-            segment, read = res.get("segment"), bytes(self.ranks[name].read)
+            segment, read = res.get("segment"), bytes.fromhex(res["period"]["read"])
+            same = read == bytes(self.ranks[name].read)
             ev = None if segment is None else self.AC.evidence(published, segment)
             after = bytes.fromhex(res["period"]["commitment"])
 
@@ -580,8 +590,9 @@ class Challenger:
             (out / name / "verifier" / "coins.json").write_text(json.dumps(ev, sort_keys=True))
             out_[name] = {"source": f"challenger:{self.source}", "root": root, "root_ok": root == self.root,
                           "session": published.get("trusted"), "plan": published.get("plan"), "coins_reason": why,
-                          "read_bytes": len(read), "negatives_refused": negatives,
-                          "ok": root == self.root and why is None and bool(negatives) and all(negatives.values())}
+                          "read_bytes": len(read), "read_is_released": same, "negatives_refused": negatives,
+                          "ok": root == self.root and why is None and same and bool(negatives)
+                          and all(negatives.values())}
         return out_
 
 
@@ -617,6 +628,14 @@ def prove(a) -> int:
     wanted = a.members.split(",") if a.members else E2E_MEMBERS
     sim = e2e(Path(a.e2e), a.windows, a.clock_stand_in, a.advice_from_io, wanted) if a.e2e else simulated(a.seed)
     lw = sim.lw
+    if a.draw and a.draw < sim.windows:
+        link, pairs, _ = sim.members["honest"]
+        sim.members[OTHER] = (link, pairs, {"draw": "the prover proves another K-subset of the windows than the "
+                                                    "draw of record's (n2_zk.other_subset), under a draw object "
+                                                    "listing them"})
+    elif a.members and OTHER in a.members.split(","):
+        raise SystemExit(f"{OTHER} proves another K-subset of a sampled period: it needs --draw K, K < "
+                         f"{sim.windows}")
     chosen = a.members.split(",") if a.members else list(sim.members)
     if not set(chosen) <= set(sim.members):
         raise SystemExit(f"--members {a.members}: the link's members are {list(sim.members)}")
@@ -673,7 +692,7 @@ def prove(a) -> int:
     def go(k: int, name: str) -> tuple[str, dict]:
         rd = rounds[name]
         res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0,
-                       coins=coins(a, challenger, name))
+                       coins=coins(a, challenger, name), forge=Z.other_subset if name == OTHER else None)
         (out / name / "verifier" / "advice.json").write_text(json.dumps(
             {"advice": ADV.to_json(rd.advice.advice), "received": list(rd.advice.received),
              "digest": AD.digest(rd.advice)}, sort_keys=True))
@@ -697,8 +716,10 @@ def prove(a) -> int:
         net = res["network"]
         held = checked.get(name, {"ok": True})
         accepted = net["accepted"] and held["ok"]
+        named = set(net.get("why") or ())
         good = (all(r["as_expected"] for r in res["windows"]) and accepted == (name == "honest") and held["ok"]
                 and (net["accepted"] is False or net["advice"] == AD.digest(rounds[name].advice))
+                and named == ({SVC.PERIOD_DRAWN} if name == OTHER else set())
                 and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
         summary["members"][name].update(res, ok=good, **({"coins": held} if name in checked else {}))
@@ -707,14 +728,17 @@ def prove(a) -> int:
             summary.setdefault("sampled", {})[name] = {
                 "accepted": accepted,
                 "draw": {"law": f"subset:{sel['k']}", "coins": summary["draw"]["coins"]["source"], "units": sel["units"],
-                         "of": sel["population"], "commitment": sel["commitment"]},
+                         "of": sel["population"], "commitment": sel["commitment"], "by": sel["by"],
+                         "coin_bytes": len(res["period"]["read"]) // 2},
+                "proved": [r["window"] for r in res["windows"]], "why": net["why"],
                 "audit": {"accepted": accepted, "wrong_units": wu},
                 "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if accepted else None,
                 **({"coins": held} if name in checked else {})}
         log(f"member {name}: network {'accept' if net['accepted'] else 'refuse'} (refused windows {net['refused']}"
-            + (f"; drew {net['selection']['units']}, {net['selection']['k']} of {net['selection']['population']}: at "
-               f"most {net['wrong_units']['bound']} wrong, epsilon {net['wrong_units']['epsilon']:.4f} at delta "
-               f"{net['wrong_units']['delta']:.3g}" if "wrong_units" in net else "")
+            + (f"; the draw of record ({net['selection']['by']}) {net['selection']['units']}, {net['selection']['k']} "
+               f"of {net['selection']['population']}: at most {net['wrong_units']['bound']} wrong, epsilon "
+               f"{net['wrong_units']['epsilon']:.4f} at delta {net['wrong_units']['delta']:.3g}"
+               + (f"; refused by name {sorted(net['why'])}" if net["why"] else "") if "wrong_units" in net else "")
             + (f"; challenger's coins {'hold' if held['ok'] else 'REFUSED: ' + str(held['coins_reason'])}, "
                f"{sum(held['negatives_refused'].values())}/{len(held['negatives_refused'])} coin negatives refused"
                if name in checked else "")
