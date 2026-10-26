@@ -368,7 +368,7 @@ class Pofc:
 
     def partition(self, ctx: Context) -> Partition:
         inner = self.regime.partition(ctx)
-        # the blocks a link cuts carry peak compute (the server-time block is Φ Δτ), so their time is compute over Φ
+        # the blocks a link cuts carry peak compute (the serving block is Φ Δτ), so their time is compute over Φ
         rate = ctx.location.phi
         regions = tuple(
             replace(r, cuts=r.cuts + tuple(self._under(c, f"{c.name}+pofc", rate, self.link)
