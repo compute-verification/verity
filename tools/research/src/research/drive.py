@@ -59,9 +59,11 @@ A tick syncs `next` as above, then lands its longest prefix whose every member h
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `main` through the same landing steps.  Two gates cut the
 prefix first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, or a Lean source of a package that
 has one: `queue.lean_change`) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean check
-(`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it as for a train's
-check), or any recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit,
-the locks on top.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what
+(`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top), or any recorded run of the store whose lean-audit passed
+there; one that regenerated locks lands exactly at its commit, the locks on top.  While any Lean check of a commit of `next`
+runs, drive's or one in its run registry it didn't launch (a hand `train.sh COMMIT MACHINES --deferred lean-audit` on the
+control pod), `next` stays on its base for it as for a train's check, and the members up to it keep their place (`--first`
+goes above them).  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what
 came this tick (`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a
 whole check of its own; the lower one runs on.  A failed Lean check is run again on the Lean change's own commit, and only a
 failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`.  And every .py file the
@@ -336,6 +338,37 @@ def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
             return ("unknown", None, None, None)
 
     return dict(zip(ids, _each(one, ids)))
+
+
+#: how far back `lean_runs` reads drive's run registry: a Lean check waits in a slot line and runs well inside it
+LEAN_RUN_WINDOW_S = 12 * 3600
+RUN_ID_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
+
+
+def lean_runs(commits: set[str], since: float, root: Path | None = None) -> dict[str, list[str]]:
+    """{commit: [run id, ...]} of the runs of this machine's run registry launched since ``since`` that check one of ``commits``
+    with lean-audit among their steps (`check.py` with lean-audit in its `--deferred`, or a whole check), and that haven't ended
+    by their local records: a hand `train.sh COMMIT MACHINES --deferred lean-audit` on the control pod registers here as drive's
+    own launches do (26 Oct: ci's two at 7d11a5e2 and 2823fe1e).  The store has no such run before it ends (its README, §10).
+    Reads one listing and the records of the runs it names since ``since``."""
+    from . import runs as R
+
+    root = R.runs_root(root)
+    cut = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(since))
+    out: dict[str, list[str]] = {}
+    for d in sorted(root.iterdir()) if root.is_dir() else ():
+        if not RUN_ID_RE.match(d.name) or d.name < cut:
+            continue
+        rec = R._read(d / "remote.json") or {}
+        job = R._read(d / "job.json") or {}
+        cmd = [str(x) for x in rec.get("command") or (job.get("execution") or {}).get("command") or ()]
+        commit = rec.get("source_sha") or (job.get("computation") or {}).get("tree_sha")
+        if commit not in commits or not any(x.endswith("check/check.py") for x in cmd) or "--shard" in cmd:
+            continue
+        steps = cmd[cmd.index("--deferred") + 1].split(",") if "--deferred" in cmd[:-1] else [LEAN_STEP]
+        if LEAN_STEP in steps and R.summarize(d)["state"] in R.ACTIVE:
+            out.setdefault(commit, []).append(d.name)
+    return out
 
 
 #: how many runs drive reads at once: each `research status` is an ssh round trip to the run's node (20 Oct: the control pod's
@@ -724,6 +757,8 @@ class Driver:
         self.launch_lean: Callable[[Path, str, str], tuple[list[str], str]] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
+        #: the running Lean checks of drive's run registry, its own and hand ones (`lean_runs`), which hold `next` as its own do
+        self.lean_runs: Callable[[set[str], float], dict[str, list[str]]] = lean_runs
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         #: with pytest deferred, the suites a train's change reaches run before it lands (CI-57: #2271 and #2382 each reverted
@@ -2393,8 +2428,8 @@ class Driver:
     #    and "bisect" (a failed after-landing run's implicated landings, being bisected: `_bisect_step`)
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
-        """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, as a train's check
-        holds it), land its reviewed prefix (`land_reviewed`) once `main` has a baseline (`_unbaselined`), stacking a Lean check
+        """One tick of the review landing: sync `next` (held on its base while a Lean check of it runs, drive's or a hand one:
+        `_running_lean`, as a train's check holds it), land its reviewed prefix (`land_reviewed`) once `main` has a baseline (`_unbaselined`), stacking a Lean check
         above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a bisection (`_bisect_step`)."""
         q = self.q
         what: list[str] = []
@@ -2404,7 +2439,7 @@ class Driver:
         self._stop_trains(drive)
         self._follow_lean(drive)
         self._bisect_step(drive)
-        running = {c for c, rec in drive["lean"].items() if rec.get("state") is None}
+        running = self._running_lean(drive)
         # an ejection from a Lean check's prefix (`queue.lean_running`) rebuilds `next` only the tick after that check ends, so
         # the landing uses the check before the rebuild takes its commit off `next`; a stacked one (`_stack_lean`) reaches up
         # to `next`'s top, so one ejection anywhere on `next` would hold every sync for its whole run
@@ -2436,6 +2471,27 @@ class Driver:
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
+
+    def _running_lean(self, drive: dict) -> set[str]:
+        """The commits of `next` a Lean check runs at, which the sync keeps in place with the members below them (`queue.hold`,
+        `frozen`; `--first` goes above them): drive's own (`drive["lean"]`), and any other run of its run registry whose steps
+        include lean-audit (`lean_runs`: a hand `train.sh COMMIT MACHINES --deferred lean-audit`) while `research status` reads
+        it live (26 Oct 07:16Z: a `--first` rebuild of `next` threw away ci's two hand checks).  A registry that can't be read
+        adds none."""
+        running = {c for c, rec in drive["lean"].items() if rec.get("state") is None}
+        mine = {r for rec in drive["lean"].values() for r in rec.get("ids") or ()}
+        try:
+            found = self.lean_runs({m.commit for m in self._chain()[1]} - running, self.now() - LEAN_RUN_WINDOW_S)
+        except Exception as e:  # noqa: BLE001  (holds nothing: drive's own Lean checks still hold `next`)
+            self.q.log(f"research queue drive: the run registry's Lean checks can't be read ({type(e).__name__}: {e}); taken as none")
+            return running
+        held = {c: live for c, ids in found.items()
+                if (live := [r for r, (st, *_) in self._states([r for r in ids if r not in mine]).items()
+                             if st in ACTIVE and st != "unknown"])}
+        if held:
+            self.q.log("research queue drive: Lean checks drive didn't launch hold `next` up to them: "
+                       + ", ".join(f"{c[:12]} ({' '.join(ids)})" for c, ids in held.items()))
+        return running | set(held)
 
     def _baselined(self, pl: dict) -> bool:
         """Whether `verified` ran the after-landing run as the review landing runs it, under `after_landing_no_cache`

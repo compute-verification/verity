@@ -4,6 +4,7 @@ a Lean change only once a Lean check passed, and launches no train check; the af
 reverts what it implicates once `main` passed that step before, bisecting when several PRs are implicated."""
 from __future__ import annotations
 
+import calendar
 import json
 
 import pytest
@@ -38,6 +39,8 @@ class Review(Harness):
         self.d.ready_by = lambda pr, head: next((lab.by for lab in sorted(world.store.labels(label_target(pr, head), key=vocab.READY),
                                                                           key=lambda lab: lab.ts, reverse=True)), None)
         self.d.launch_postland = self.launch_post
+        self.hand: dict[str, list[str]] = {}                    # Lean checks of drive's run registry it didn't launch, by commit
+        self.d.lean_runs = lambda commits, since: {c: ids for c, ids in self.hand.items() if c in commits}
         if baseline:
             assert Q.baseline(self.q, _git(world.origin, "rev-parse", "main"), "ci") == 0
 
@@ -716,6 +719,68 @@ def test_a_lean_check_above_the_landing_top_covers_it_only_with_no_lean_change_b
     h.run_state[h.lean_ids()[1]] = ("done", 0, None)
     h.evidence = [_steps_run(world.tmp, h.lean_ids()[1], {LEAN_STEP: "passed"})]
     assert h.tick().startswith("landed #1") and _main(world) == one
+
+
+def test_a_hand_lean_check_holds_the_members_up_to_its_commit_until_it_ends(world, monkeypatch):
+    """26 Oct 07:16Z: a `--first` rebuild of `next` came before ci's two hand Lean checks (`train.sh COMMIT MACHINES --deferred
+    lean-audit`, at 7d11a5e2 and 2823fe1e) landed anything, and threw both away: drive held `next` only under its own."""
+    h = Review(world, monkeypatch)
+    for n, f in ((1, "a.txt"), (2, "b.txt"), (3, "c.txt"), (4, "d.txt")):
+        world.gh.put(n, world.change({f: f"{n}\n"}))
+    assert not h.tick().startswith("landed")
+    one, two = (m.commit for m in h.q.chain()[:2])
+    h.hand[two] = ["r20261026-063429-f8e3"]
+    h.run_state["r20261026-063429-f8e3"] = ("running", None, None)
+    h.q.first = (4,)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [1, 2, 4, 3], world.logs        # `--first` goes above the running check
+    assert [m.commit for m in h.q.chain()[:2]] == [one, two] and h.launched == []
+    assert any("didn't launch hold `next` up to them: " + two[:12] in s for s in world.logs), world.logs
+    h.run_state["r20261026-063429-f8e3"] = ("done", 0, None)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [4, 1, 2, 3], world.logs
+
+
+def test_lean_runs_reads_the_registry_s_live_lean_checks_of_the_commits_asked_and_a_registry_that_cant_be_read_holds_none(
+        world, monkeypatch, tmp_path):
+    from research.drive import lean_runs
+
+    check = ["python3", "tools/verity/check/slot.py", "--priority", "--", "uv", "run", "python", "tools/verity/check/check.py",
+             "--keep-going"]
+
+    def run(rid: str, commit: str, extra: list[str], state: str | None = "running") -> None:
+        d = tmp_path / rid
+        d.mkdir()
+        (d / "remote.json").write_text(json.dumps({"run_id": rid, "phase": "launched", "command": check + extra,
+                                                   "source_sha": commit, "remote_run_dir": f"/r/{rid}"}))
+        if state:
+            (d / "status.json").write_text(json.dumps({"state": state}))
+
+    run("r20261026-063429-f8e3", "c1", ["--deferred", "lean-audit"])
+    run("r20261026-063430-8e1b", "c1", ["--deferred", "pytest,lean-audit"], state=None)     # launched, no records yet
+    run("r20261026-063554-88c4", "c2", ["--deferred", "lean-audit"], state="cancelled")
+    run("r20261026-063555-a3e0", "c2", [])                                               # a whole check runs lean-audit
+    run("r20261026-063556-0001", "c2", ["--deferred", "pytest"])
+    run("r20261026-063557-0002", "c3", ["--deferred", "lean-audit"])                     # not a commit asked of
+    run("r20261025-063557-0003", "c1", ["--deferred", "lean-audit"])                     # before the window
+    (tmp_path / "src").mkdir()
+    since = calendar.timegm((2026, 10, 26, 0, 0, 0))
+    assert lean_runs({"c1", "c2"}, since, tmp_path) == {"c1": ["r20261026-063429-f8e3", "r20261026-063430-8e1b"],
+                                                        "c2": ["r20261026-063555-a3e0"]}
+
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"a.txt": "1\n"}))
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    assert not h.tick().startswith("landed")
+
+    def unreadable(commits, since):
+        raise OSError("runs root gone")
+
+    h.d.lean_runs = unreadable
+    h.q.first = (2,)
+    h.tick()
+    assert [m.pr for m in h.q.chain()] == [2, 1]
+    assert sum("run registry's Lean checks can't be read (OSError: runs root gone)" in s for s in world.logs) == 1, world.logs
 
 
 def test_a_landing_that_does_not_compile_lands_what_is_below_the_pr_that_broke_it(world, monkeypatch):
