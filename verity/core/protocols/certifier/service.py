@@ -175,6 +175,22 @@ When the in-the-clear check's audit is the Lean check's (`lean_audit.Audit`), `a
 reference: a link-window where the two differ rejects, and the verdict says `"by": "lean"` and carries the reference's
 accept bit (`reference`), never a violation's kind.
 
+**The verdict of record is the Lean's** on plain and served links: `NetworkCheck.LinkWindow.verdict`
+(`verity/core/protocols/network/lean`, `network-records verdicts`' ``link-window``, `lean_verdict`), switched by the one
+line `OF_RECORD` under the 8 Oct ruling. `verify` runs it and this module's `python_verdict` on every proof, records
+whose verdict it is (`by`) and the other's accept bit (`reference`), and rejects a link-window where they differ or the
+Lean refuses the case. The gap list, what `python_verdict` reads that the Lean takes as an input rather than checks:
+- an advised link's window view (`advised.view`, under the tie source's IoTieRequest verdict and the clock source's
+  syncs), which is why an advised link's verdict of record stays this module's;
+- what both take from the proof service and the lowering: the findings of the verifier's own run of C-Flock's Lean
+  verifier (`proofs.verify`), the delivered sessions' SHA-512s, the registration and the draw, and the registered
+  Program's and partition's digests and the gate ids (`P.partition`, `head_check.gate`), which the Lean holds the
+  findings and pins to but doesn't derive.
+The Lean reads an `LmsKey` only, and refuses (so `verify` rejects) any other key. `tie_service.IngressTie.verify`, the
+ingress tie's verifier, is not ported and stays Python. Every recorded proving run of N2 replays through both to the
+verdict it recorded (`benchmarks/network_traces/n2_lean_replay.py`), and the properties of the Lean's verdict are
+`Security/Properties/NetworkCertifier/LinkWindow.lean`.
+
 What that establishes, and what it doesn't: the outcome is accept exactly when the Lean verifier accepts a proof of the
 registered unit whose public row is the verifier's own and whose output word is 0b11, the certificates verify and the
 sync is declared; the outcome record binds the registered root, the draw and the delivered sessions. The verifier of
