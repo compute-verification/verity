@@ -247,7 +247,7 @@ theorem colsHold_outRow {p : Flock.Readable.Parsed} (h1 : p.sts.size = 1) (h0 : 
         (HmOut.outCol c (n % c.g) (64 * jo + t / 16) + t % 16)) := fun t ht => by
     rw [hlen] at ht
     simp only [accOutForms, List.getElem_map, List.getElem_range, Nat.add_sub_cancel_left, hgrp]
-    rw [if_pos (show t / 16 < 64 by omega)]
+    simp only [show t / 16 < 64 by omega, ↓reduceIte]
   have hcol : ∀ k < 128, HmOut.outCol c (n % c.g) k = c.unitRange.slot (n % c.g * c.upv) + (B + 16 * k) := by
     intro k hk
     have h := outCol_unit P ho (n % c.g) (j := k) (by rw [hlo, Array.size_range]; exact hk)
