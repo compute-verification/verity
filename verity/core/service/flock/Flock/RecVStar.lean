@@ -1103,7 +1103,8 @@ drawn), its tops' node counts and copies of level 0's top (`schedOf`), and a `c_
 message (one: `innerCommits`, which runs first). `rec_live.Proxy` holds a session to the same schedule round by round,
 and it runs on the prover's side: a session that bypasses it reaches the coin server with any rounds, and its record
 still ends `finish`. This holds that record to the schedule here, by counts alone, one comparison a round of the
-schedule. -/
+schedule. It reads the schedule right only at `k_log ≥ 6`: below it `SchedRound`'s absorb flag can't tell z_partial's
+round from a 2-element one, and `statements`, which every V* session's setup runs, refuses such a shape. -/
 def checkSchedule (i : Inner) (tr : Json) : V Unit := do
   let at_ := "the coin server's record is off the schedule of the verifier's inner shape " ++
     s!"(m {i.m}, k_log {i.kLog}, claims {i.claims})"
