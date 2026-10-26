@@ -45,6 +45,7 @@ public row then holds its call u0 and its ``blocks`` too (`h1window.call_blocks`
 from __future__ import annotations
 
 import ctypes as C
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -57,6 +58,10 @@ HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 import receipts as RC  # noqa: E402
+
+_ws_spec = importlib.util.spec_from_file_location("dither_j10r_ws", HERE.parents[1] / "hash" / "dither" / "j10r_ws.py")
+WS = importlib.util.module_from_spec(_ws_spec)
+_ws_spec.loader.exec_module(WS)
 
 from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import credit as CR  # noqa: E402
@@ -118,8 +123,9 @@ def _stream(t: torch.Tensor) -> int:
 #: unit's index in the launch and n_digits(K / 32)
 UCALL = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"),
                   ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"), ("md", "<u4")])
-#: h1u.cu's `UCallR`, `kh_units_multi_j10r`'s record of one call: `UCALL`'s with its row workspace ``rws`` (the call's row
-#: blocks of its stream, `kh_j10r_rows_bytes(M, K)` bytes)
+#: h1u.cu's `UCallR`, `kh_units_multi_j10r`'s record of one call: `UCALL`'s with its workspace ``rws`` (the call's row
+#: blocks of its stream, and an H1U_JW build's column blocks and W' after them: `j10r_ws.workspace_bytes(M, N, K)`
+#: bytes, the build's own size)
 UCALLR = np.dtype([("A", "<u8"), ("B", "<u8"), ("seeds", "<u8"), ("out", "<u8"), ("rws", "<u8"),
                    ("N", "<u4"), ("K", "<u4"), ("u0", "<u4"), ("md", "<u4")])
 
@@ -150,10 +156,10 @@ class Units:
             h.kh_units_multi_j10r.argtypes = [vp, u32, u32, u32, vp, C.c_int, vp]
             h.kh_units_multi_j10r.restype = C.c_int
             h.kh_ucallr_bytes.argtypes, h.kh_ucallr_bytes.restype = [], u32
-            h.kh_j10r_rows_bytes.argtypes, h.kh_j10r_rows_bytes.restype = [u32, u32], C.c_ulonglong
             if h.kh_ucallr_bytes() != UCALLR.itemsize:
                 raise ValueError(f"h1u.cu's UCallR is {h.kh_ucallr_bytes()} bytes, not the {UCALLR.itemsize} `UCALLR` "
                                  "lays out")
+            WS.flags(h)
         self.h = h
 
     def words(self, k: int) -> int:
@@ -191,7 +197,8 @@ class Units:
         in one launch (`kh_units_multi`) -> their receipts (sum of units, kh_words(K)) int32, call i's from the sum of the
         units before it, each word for word its `receipts`. ``live`` as `receipts`', every call's. ``j10r``: J10-R's units
         (`kh_units_multi_j10r`, each call's seeds `seeds`' with its ``call``), each call's row blocks hashed once into a
-        workspace of its own."""
+        workspace of its own, of the build's size for its N (`j10r_ws.workspace_bytes`: an H1U_JW build's column blocks
+        and W' too); `j10r_ws.WorkspaceError` where the build and that size disagree."""
         if not calls:
             raise ValueError("kh_units_multi: no calls")
         if j10r:
@@ -222,10 +229,10 @@ class Units:
         for i in range(len(calls)):
             rec[i]["out"] = out[int(rec[i]["u0"])].data_ptr() if n_of[i] else out.data_ptr()
         if j10r:
-            per = int(self.h.kh_j10r_rows_bytes(m, k))
-            rws = torch.empty(len(calls) * per, dtype=torch.uint8, device=dev)
+            per = [WS.workspace_bytes(self.h, m, int(rec[i]["N"]), k) for i in range(len(calls))]
+            rws = torch.empty(sum(per), dtype=torch.uint8, device=dev)
             for i in range(len(calls)):
-                rec[i]["rws"] = rws.data_ptr() + i * per
+                rec[i]["rws"] = rws.data_ptr() + sum(per[:i])
         table = torch.from_numpy(rec.view(np.uint8)).pin_memory().to(dev, non_blocking=True)
         lv = None if live is None else live.data_ptr()
         if j10r:
