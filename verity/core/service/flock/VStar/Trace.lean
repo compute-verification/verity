@@ -70,33 +70,54 @@ def putWords (w : Array Bool) (col : Nat) (ws : Array UInt64) : Array Bool :=
 def putBytes (w : Array Bool) (col : Nat) (b : ByteArray) : Array Bool :=
   (List.range (8 * b.size)).foldl (fun acc t => acc.set! (col + t) ((b.get! (t / 8)).toNat.testBit (t % 8))) w
 
+/-- Instance `i`'s port-`p` row's message after its prefix (its bytes, zeros past the row, then SHA-512's padding) and its
+chain: the chaining value before each compression, from the prefix's midstate, then after the last. -/
+def chain (c : Circuit) (pin : In.PartIn) (p i : Nat) : ByteArray × Array (Array UInt64) :=
+  let port := c.ports.getD p default
+  let row := (portIn c pin p i).1
+  let msg := row.extract 0 port.bytes ++ zeros (port.bytes - row.size) ++ HmRow.tailOf port
+  (msg, (List.range port.chunks).foldl (fun cvs k => cvs.push (Sha512.compress cvs.back! msg (128 * k)))
+    #[HmRow.midstateOf port])
+
+/-- Message block `k` of a row's message as SHA-512's sixteen big-endian words. -/
+def blockWords (msg : ByteArray) (k : Nat) : Array UInt64 := HmRow.wordsBE (msg.extract (128 * k) (128 * k + 128)) 16
+
+/-- `sha512x3` slot `s` of a VU (its rows' chains `ch`, by port): each compression `(p, k)` placed there (`rowSlots`), its
+chaining value at the `cv` input of its sub-slot and its block at the `msg` input, ports and compressions in order. -/
+def shaSlot (c : Circuit) (ch : Array (ByteArray × Array (Array UInt64))) (s : Nat) : Array Bool :=
+  let sha := (c.nets.getD c.shaNet default).2
+  let sin := portCols sha.inGroups
+  let where_ := (HmRow.rowSlots c.ports).2
+  (List.range c.ports.size).foldl (fun w p =>
+    let (msg, cvs) := ch.getD p default
+    (List.range (c.ports.getD p default).chunks).foldl (fun w k =>
+      let (slot, sub) := (where_.getD p #[]).getD k (0, 0)
+      if slot == s then
+        putWords (putWords w (sin.getD (2 * sub) default).1 (cvs.getD k #[])) (sin.getD (2 * sub + 1) default).1
+          (blockWords msg k)
+      else w) w)
+    (Array.replicate (sha.inWords * WORD) false)
+
+/-- Port `p`'s `hm96` slot of a VU (its rows' chains `ch`; the instance `i`): the chain's last value at `cv`, the message's
+last block at `pad`, the row's salt at `y`; zero past the ports. -/
+def hmSlot (c : Circuit) (pin : In.PartIn) (ch : Array (ByteArray × Array (Array UInt64))) (i p : Nat) : Array Bool :=
+  let hm := (c.nets.getD c.hmNet default).2
+  let hin := portCols hm.inGroups
+  let w0 := Array.replicate (hm.inWords * WORD) false
+  if p < c.ports.size then
+    let (msg, cvs) := ch.getD p default
+    putBytes (putWords (putWords w0 (hin.getD 0 default).1 (cvs.getD (c.ports.getD p default).chunks #[]))
+      (hin.getD 1 default).1 (blockWords msg (c.ports.getD p default).chunks)) (hin.getD 2 default).1 (portIn c pin p i).2
+  else w0
+
 /-- Block `b`'s row slots' inputs (`Stmt::row_inputs`): its `c.g · nSha` `sha512x3` slots, then its `c.g · perVu[hm]` `hm96`
 slots, each VU's in order. -/
-def rowIns (c : Circuit) (pin : In.PartIn) (b : Nat) : Array (Array Bool) × Array (Array Bool) := Id.run do
-  let sha := (c.nets.getD c.shaNet default).2
-  let hm := (c.nets.getD c.hmNet default).2
-  let sin := portCols sha.inGroups
-  let hin := portCols hm.inGroups
-  let (nSha, where_) := HmRow.rowSlots c.ports
+def rowIns (c : Circuit) (pin : In.PartIn) (b : Nat) : Array (Array Bool) × Array (Array Bool) :=
+  let nSha := (HmRow.rowSlots c.ports).1
   let perHm := c.perVu.getD c.hmNet 0
-  let mut si := Array.replicate (c.g * nSha) (Array.replicate (sha.inWords * WORD) false)
-  let mut hi := Array.replicate (c.g * perHm) (Array.replicate (hm.inWords * WORD) false)
-  for g in [0:c.g] do
-    for p in [0:c.ports.size] do
-      let port := c.ports.getD p default
-      let (row, salt) := portIn c pin p (b * c.g + g)
-      let msg := row.extract 0 port.bytes ++ zeros (port.bytes - row.size) ++ HmRow.tailOf port
-      let mut cv := HmRow.midstateOf port
-      for k in [0:port.chunks] do
-        let (slot, sub) := (where_.getD p #[]).getD k (0, 0)
-        let blk := HmRow.wordsBE (msg.extract (128 * k) (128 * k + 128)) 16
-        si := si.modify (g * nSha + slot) fun w =>
-          putWords (putWords w (sin.getD (2 * sub) default).1 cv) (sin.getD (2 * sub + 1) default).1 blk
-        cv := Sha512.compress cv msg (128 * k)
-      let pad := HmRow.wordsBE (msg.extract (128 * port.chunks) msg.size) 16
-      hi := hi.modify (g * perHm + p) fun w =>
-        putBytes (putWords (putWords w (hin.getD 0 default).1 cv) (hin.getD 1 default).1 pad) (hin.getD 2 default).1 salt
-  return (si, hi)
+  let chs := (Array.range c.g).map fun g => (Array.range c.ports.size).map fun p => chain c pin p (b * c.g + g)
+  ((Array.range (c.g * nSha)).map fun x => shaSlot c (chs.getD (x / nSha) #[]) (x % nSha),
+   (Array.range (c.g * perHm)).map fun x => hmSlot c pin (chs.getD (x / perHm) #[]) (b * c.g + x / perHm) (x % perHm))
 
 /-- A u16 ORed in at column `col` (`w |= v << col % 128` on the column's 64-bit half: a bit past the half is dropped). -/
 def orU16 (w : Array Bool) (col v : Nat) : Array Bool :=
@@ -126,18 +147,14 @@ def unitIns (c : Circuit) (pin : In.PartIn) (b k : Nat) : Array Bool :=
 
 /-- A slot's values from its inputs (`IrUnitNet::eval64`): each input row (a self row) its input bit, the constant 1, every
 computed row `(A z)(B z)` in order; `2^unitLog` bits, zero past the useful rows. -/
-def evalNet (net : Net) (ins : Array Bool) : Array Bool := Id.run do
+def evalNet (net : Net) (ins : Array Bool) : Array Bool :=
   let first := net.inWords * WORD
-  let mut z := Array.replicate (2 ^ net.unitLog) false
-  for i in [0:first] do
-    if (net.a.row i).size == 1 then z := z.set! i (ins.getD i false)
-  z := z.set! net.constPos true
-  for i in [first:net.useful] do
-    if i != net.constPos then
-      let x := (net.a.row i).foldl (fun s k => s ^^ z.getD k false) false
-      let y := (net.b.row i).foldl (fun s k => s ^^ z.getD k false) false
-      z := z.set! i (x && y)
-  return z
+  let z0 := (Array.range (2 ^ net.unitLog)).map fun i =>
+    if i == net.constPos then true else i < first && (net.a.row i).size == 1 && ins.getD i false
+  (List.range' first (net.useful - first)).foldl (fun z i =>
+    if i == net.constPos then z
+    else z.set! i ((net.a.row i).foldl (fun s k => s ^^ z.getD k false) false &&
+      (net.b.row i).foldl (fun s k => s ^^ z.getD k false) false)) z0
 
 /-- The blocks' count's log, `max 3 (log2ceil blocks_real)` (`Stmt::new`). -/
 def nbl (c : Circuit) (pin : In.PartIn) : Nat := max 3 (log2ceil (max ((count pin + c.g - 1) / c.g) 1))
