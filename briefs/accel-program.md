@@ -111,6 +111,8 @@ multiplication algorithm is faster than Strassen."
 
 - **R-ACCEL-5, proving cost is not a constraint.** "don't worry about proving, I know for a fact that won't be the actual constraint in deployment." Never trade coverage, ε or γ for proving cost. γ is the honest serving overhead.
 
+**OPEN DECISION, asked of Daniel at 26 Oct 03:00Z (the barrier).** ABSORB-THM's Theorem B: over an instruction set containing LOP3, a proved "work ≥ c·n³" for the transcript is an explicit superlinear circuit lower bound, beyond known techniques. The options are (A) a narrow named computational assumption, cryptanalyzed like SHA-512's; (B) SHA-512 per word as a random oracle (γ ≈ 134–223); (C) credit only the provable floor (c ≈ 1/3 on the H200); (D) keep searching. The coordinator recommends (A) with (C) beside it. Until Daniel answers, every result is stated as its unconditional part plus the weakest assumption it needs.
+
 **Wording:**
 
 - Don't use "completeness" for a model property; the word is overloaded.

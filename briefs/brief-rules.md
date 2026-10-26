@@ -61,3 +61,4 @@ L. (Daniel, 25 Oct 12:11 PM PDT; AGENTS.md via #4330; top 19:19Z) Results are pe
 
 M. (Daniel, 25 Oct 12:20 PM PDT; #4330; top 19:23Z) The device is the "network certifier". Never call it a warden, a tap, the auditor's tap or a warden/certifier, in messages, PRs, reports or notes. The one exception is the literature phrase "it functions as an active warden".
 N. (Daniel via memory-accounting, 26 Oct 01:50Z: "what is a leg? it's polluting everything") Never write "leg" for a protocol's part of the demo or of a joint guarantee. Say "protocol", or the protocol's own name: sampled proofs, PoUW, PoUS, the bandwidth audit, the wipe, network accounting. Not "phase" either; the demo plan uses that for its stages.
+O. (O-BITS, 26 Oct 02:50Z) The Linear connection posts every comment as "Daniel Reuter". Start each Linear comment with `[<lane or WORKER NAME>]` so nobody reads it as Daniel's words.
