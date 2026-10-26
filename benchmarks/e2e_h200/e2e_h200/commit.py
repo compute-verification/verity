@@ -34,6 +34,9 @@ from .shape import Shape
 
 COMMIT_SLOTS = Path(__file__).resolve().parents[2] / "torch_gpu" / "commit_slots"
 BACKENDS = ("slots", "reference", "host", "device")
+#: groups the forward may run ahead of the side stream's row reads: an added group's tables stay allocated until the side
+#: stream has read them, so without a bound a commit slower than the forward holds the whole step's values
+LAG = 2
 
 
 def tables(shape: Shape) -> list[list[Table]]:
@@ -172,6 +175,8 @@ class Roots:
     root: bytes
     tables: tuple[tuple[str, bytes], ...] = ()
     slot_roots: tuple[bytes, ...] = ()
+    #: the side stream's time from group 0's tables being written to the step root (CUDA slots only)
+    seconds: float | None = None
 
 
 class Committer:
@@ -210,7 +215,9 @@ class Committer:
         if not self.streams:
             return
         st.salt_key = salt_key or (self.salt(st.step) if self.salt else self.S.fresh_salt_key())
-        st.pending = self.G.StepCommitter(self.plan, st.step, st.batch, st.salt_key)
+        self._marks: list[tuple[str, Any]] | None = None if self.plan.host else []
+        self._start, self._read = None, []
+        st.pending = self.G.StepCommitter(self.plan, st.step, st.batch, st.salt_key, marks=self._marks)
         st.pending.salts = self.E.SaltKey(st.salt_key, nonce0)
 
     def group(self, st: StepTables, i: int) -> None:
@@ -222,13 +229,23 @@ class Committer:
             tensors += [codes, word] if t.quant else [codes]
         if self.plan.host:
             tensors = [x if isinstance(x, np.ndarray) else x.contiguous().numpy() for x in tensors]
-        st.pending.add(tensors)
+        elif i == 0:
+            self.plan.stream.wait_stream(torch.cuda.current_stream(self.plan.device))
+            self._start = torch.cuda.Event(enable_timing=True)
+            self._start.record(self.plan.stream)
+        done = st.pending.add(tensors)
+        if done is not None:
+            self._read.append(done)
+            if len(self._read) > LAG:
+                torch.cuda.current_stream(self.plan.device).wait_event(self._read.pop(0))
 
     def finish(self, st: StepTables) -> Roots:
         if self.streams:
             res = st.pending.finish().result()
             st.pending = None
-            return Roots(res.root, (), res.slot_roots)
+            sec = self._start.elapsed_time(self._marks[-1][1]) / 1000 if self._marks and self._start else None
+            self._read = []
+            return Roots(res.root, (), res.slot_roots, sec)
         return self.commit(st)
 
     def commit(self, st: StepTables) -> Roots:
