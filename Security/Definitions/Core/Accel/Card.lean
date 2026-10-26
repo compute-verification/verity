@@ -96,8 +96,8 @@ structure Open where
   /-- on a card whose data-sheet tensor rate is another instruction's (the H200's is `wgmma`'s), the factor by which
   an `mma.sync` MAC uses more tensor units than that instruction's; unmeasured until CALIB measures it -/
   sync : ℚ≥0
-  /-- the `imad` lanes an `IMAD.HI` uses. The data sheets charge a plain `IMAD`'s one (DS-90, DS-120); the H200's timed
-  duo runs its `IMAD.HI` mix 21% slower than that (BET-ALGO-LAB), so it is a parameter until CALIB measures it -/
+  /-- the `imad` lanes an `IMAD.HI` uses. The Programming Guide gives `IMAD.HI` 32 lanes a SM-clock against `IMAD`'s 64
+  (§6.4.1 Table 7), so 2, θ's floor on both cards; CALIB measured 30.6 lanes on the H200 (r20261017-095350-02ff) -/
   madHi : ℚ≥0
   /-- the dot of every format pair and `k` that no capture pins, by formats, saturation and `k` -/
   dot : Fmt → Fmt → Bool → ℕ → Dot
