@@ -71,7 +71,20 @@ and its key record is art:d12f85becc, main's `CHALLENGER_KEY_PIN`.
 
 The window is one request for one decode step. That is N = 256 units: two linears of 128 output coordinates each. The
 256 units form one member, so one C-Flock session (J = 1 table, hidden outputs) is the whole audit, and it draws 64 of
-the 256 units. Each arm is a run of its own, with its own root and its own gate session:
+the 256 units (q = 1/4).
+
+**Over a monitoring period.** Serve windows like this one through any monitoring period, a week, a month or a year,
+each window on its own live coins. If every window is accepted, the wrong units over the whole period total at most 18
+at δ = 1%, and at most 55 at δ = 10⁻⁶. The bound adds Σ (ε_ks + δ_link) over the period's windows to δ.
+- The theorem is `Flock.Guarantees.IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`): the total
+  stays below ln(1/δ)/q.
+- The total is the same for a week, a month and a year, whatever the number of windows. Only the ε_ks + δ_link sum grows
+  with the number of windows, and no number for it is computed here.
+- As a share of compute, the total is divided by all the units of the period's compute over a datacenter. The
+  datacenter's size and the window rate are parameters (`benchmarks/census`). This demo checks one machine, and its one
+  window is 256 units.
+
+The per-window figures follow. Each arm is a run of its own, with its own root and its own gate session:
 
 | arm | session | verdict |
 |---|---|---|
@@ -81,8 +94,9 @@ the 256 units. Each arm is a run of its own, with its own root and its own gate 
 | compiled, tampered | s20261025T173628Z-7c0e | refused, as tampered; 25/25 negatives refused |
 
 The tampered windows flip bit 0 of every output. The firewall's refusal of each tampered arm reads "FIREWALL-REFUSED:
-circuit: the constraints lincheck final fail on a rep's pads". The integrity profile's bound for each accepted arm: an
-accepted transcript has at most 2 wrong units of 256, except with probability δ = 0.5. r20261025-170501-8a09 ran the
+circuit: the constraints lincheck final fail on a rep's pads". Per window, beside the period's total, the integrity
+profile's bound for each accepted arm: an accepted transcript has at most 2 wrong units of 256, except with probability
+δ = 0.5. r20261025-170501-8a09 ran the
 same four arms at subset:2, and they behaved the same way, but its bound is only 74 of 256.
 
 The theorem is `Flock.Guarantees.EndToEndHidden` (`Security/Proofs/Flock/EndToEndHidden/Statement.lean`, proved as
