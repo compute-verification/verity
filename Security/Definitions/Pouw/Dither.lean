@@ -321,9 +321,9 @@ def answerIn (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (b : Fin k) : P.Orc × 
 /-- Round `w`'s commitment. -/
 def root (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Root := (G.Mc.eval (A.work w) (A.workIn o x w)).2
 
-/-- Round `w`'s answer. -/
-def ans (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (w : Fin k) : P.Ans :=
-  (G.Mc.eval (A.answer w) (A.answerIn o x w)).2
+/-- Sampling block `b`'s answer. -/
+def ans (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (b : Fin k) : P.Ans :=
+  G.Mc.eval (A.answer b) (A.answerIn o x b)
 
 /-- **The transcript**: every round's commitment and answer, what the prover sends. -/
 def transcript (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : Fin k → P.Root × P.Ans :=
