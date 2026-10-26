@@ -194,14 +194,6 @@
   "Properties.Pouw.Period.StagedPins": {
    "owner": "@compute-accounting",
    "digest": "601dbebed64f324a3b89f8bfdf394b8eb47cd98003101825382a4c94c1da7dc1"
-  },
-  "Properties.RemoteAudit.Line.Registered": {
-   "owner": "@memory-accounting",
-   "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
-  },
-  "Properties.RemoteAudit.ScheduleLayoutGap": {
-   "owner": "@memory-accounting",
-   "digest": "7a9fc4b287459b57492b22f04af9961b0fea507e9e20f7d07ece852e1050d80b"
   }
  },
  "meaning": [
@@ -460,9 +452,9 @@
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
-   "imports": ["Definitions.Accounting", "RemoteAudit"],
+   "imports": ["Definitions.Accounting", "RemoteAudit", "Properties.RemoteAudit"],
    "except": [],
-   "why": "the schedule check (`RemoteAudit.Schedule`) is stated against the code, and the gap it leaves against the layout vocabulary it feeds (`Definitions.Accounting.Schedule`), never a proof"
+   "why": "the schedule check (`RemoteAudit.Schedule`) and the verifier's layout (`sessionLayout`, where `checkOpening` checks each block under `Properties.RemoteAudit.receipterOf`) are stated against the code and the layout vocabulary they feed (`Definitions.Accounting.Schedule`), never a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -477,7 +469,7 @@
   "Properties.Accounting.DeclaredCircuit": {
    "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
    "except": [],
-   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+   "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and the verifier's layout (`Properties.RemoteAudit.Schedule`), never a proof"
   }
  },
  "reads_exempt": {
@@ -1929,6 +1921,18 @@
    "assumptions": [],
    "type_hash": "9208ff59300d11ed98f57101b871efd1e060561660733e3b6083c1dab8da6a9e"
   },
+  "Properties.RemoteAudit.planBlocks": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.codeLayoutTiles": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.opensAtPosition": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Line.lineRegistered": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.steered_of_checked": {
    "owner": "@memory-accounting",
    "signature": [
@@ -2159,8 +2163,7 @@
   "premises": [
    "Definitions.NetworkCertifier.Premises",
    "Definitions.Accounting.Assumptions",
-   "Properties.RemoteAudit.Line.Premises",
-   "Properties.RemoteAudit.Schedule"
+   "Properties.RemoteAudit.Line.Premises"
   ],
   "statements": ["Properties"],
   "properties": {
@@ -3162,6 +3165,30 @@
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
+   "Properties.RemoteAudit.planBlocks": {
+    "conjuncts": [
+     {
+      "function": "RemoteAudit.Plan.make?",
+      "outcome": "accept"
+     },
+     {
+      "function": "RemoteAudit.Plan.whole",
+      "outcome": "none"
+     }
+    ]
+   },
+   "Properties.RemoteAudit.codeLayoutTiles": {
+    "function": "RemoteAudit.Plan.make?",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.opensAtPosition": {
+    "function": "RemoteAudit.checkOpening",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Line.lineRegistered": {
+    "function": "RemoteAudit.Line.lineOfRegistered",
+    "outcome": "accept"
+   },
    "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
     "function": "RemoteAudit.Shared.run",
     "outcome": "accept"
@@ -3233,7 +3260,7 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) for a period realizing H1's checked credit (RealizesWorkOfH1CheckedCreditPeriod), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's one added gap is RealizesWorkOfH1CheckedCreditPeriod.work_of_fixed (RT4-LOGIC-6): the words fixed right are within the compute account's work at p.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check."
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) at the verifier's layout (Properties.RemoteAudit.sessionLayout) with SteeredLayout replaced by, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
