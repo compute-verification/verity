@@ -59,7 +59,7 @@ theorem tableAt {r : Read} {sts : Array Stmt} (hs : r.tablesOf = some sts) (ht :
   · rw [hh] at hd
     simp only [↓reduceIte] at hd
     have hp := (Hidden.setupHidden_spec' hd).parse
-    rw [parseH_tagsAt ht] at hp
+    rw [parseCommit_tagsAt ht] at hp
     refine ⟨?_, Hidden.hidden_layout' ht' hd, Hidden.setupHidden_wf hd⟩
     simp only [ProvedScope.circuitOf, hh, ↓reduceIte, hp]
 

@@ -30,7 +30,7 @@ variable {S : Finset (Fin n)} (x : TableH I mPts S)
 
 include hc in
 /-- A drawn table's statement is on the session's one circuit. -/
-theorem c_eq : x.st.c = c := Except.ok.inj ((setupHidden_parseC x.h).symm.trans hc)
+theorem c_eq : x.st.c = c := setupHidden_c_of_parse hc x.h
 
 /-- **A drawn table's acceptance**: its `Stmt.setupHidden` run, with the layout `Hidden.hidden_layout` gives and its
 unit slots' rows its flat twin's (`unitRowsFlat`); the table's statement is the layout's block R1CS at the table's
@@ -46,11 +46,12 @@ noncomputable def acc : AcceptedH x.T.S where
   program := I.program
   st := x.st
   ht := ht
+  hi := HmOut.parse_isTmpl hc
   h := x.h
   L := Hidden.hidden_layout ht x.h
   hR := unitRowsFlat ht x.h (by rw [x.c_eq hc]; exact hv1.1)
   regs := x.regs
-  hT := (Integrate.model_eq (parse_facts (parse_untyped ht (setupHidden_parseC x.h)).1) _
+  hT := (Integrate.model_eq (parse_facts (parse_untyped ht (setupHidden_parseC (HmOut.parse_isTmpl hc) x.h)).1).netWidths _
     (Hidden.setupHidden_spec x.h).leaf x.hwf x.regs).trans x.hT.symm
 
 end TableH

@@ -1,3 +1,4 @@
+import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Layout
 import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
 import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
@@ -45,6 +46,35 @@ theorem parseCommit_untyped (ht : tags.typed = false) (h : HmOut.parseCommit tag
   · rw [parseCommit_tmpl hi] at h
     obtain ⟨tu, c₀, hp, hc, -, rfl⟩ := TmplValue.parseTmpl_cases h
     exact ⟨_, c₀, hp, (parse_factsPre_nets hp).1, hc, rfl, .inr ⟨tu, rfl, rfl, rfl⟩⟩
+
+/-- **A committed untyped circuit passed `HmRow.check`.** -/
+theorem parseCommit_check (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
+    ∃ ls, HmRow.check c tags ls = .ok () := by
+  obtain ⟨pre, c₀, -, P, -, he, -⟩ := parseCommit_untyped ht h
+  obtain ⟨ls, hl⟩ := P.check
+  exact ⟨ls, by rw [he]; exact hl⟩
+
+/-- `parseCommit_check`'s `CheckFacts`. -/
+theorem parseCommit_checkFacts (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
+    CheckFacts c := by
+  obtain ⟨pre, c₀, -, P, -, he, -⟩ := parseCommit_untyped ht h
+  obtain ⟨ls, hl⟩ := parseCommit_check ht h
+  have hty : c.typed = none := by rw [he]; exact P.typed
+  exact check_facts (tags := tags) (ls := ls) hty hl
+
+/-- **A committed untyped circuit's nets are as the placement reads them** (`Integrate.NetWidths`): `HmRow.parse`'s for a
+flat file, the template's committed net then the file's for a templated one (`parseTmpl_net_width`). -/
+theorem parseCommit_netWidths (ht : tags.typed = false) (h : HmOut.parseCommit tags cf tables = .ok c) :
+    Integrate.NetWidths c := by
+  cases hi : tags.isTmpl
+  · rw [parseCommit_flat hi] at h
+    exact (parse_facts (parse_untyped ht h).1).netWidths
+  · rw [parseCommit_tmpl hi] at h
+    refine ⟨fun hn => ?_, ?_⟩
+    · obtain ⟨h1, h2, h3, -⟩ := parseTmpl_net_width h hn
+      exact ⟨h1, h2, h3⟩
+    · obtain ⟨tu, c₀, hp, -, -, rfl⟩ := TmplValue.parseTmpl_cases h
+      exact (parse_factsPre_nets hp).1.kinds
 
 /-- A committed circuit has the tags' leaf scheme. -/
 theorem parseCommit_leafScheme (h : HmOut.parseCommit tags cf tables = .ok c) : c.leafScheme = tags.merkleLeaf := by
@@ -205,5 +235,113 @@ theorem setupHidden_plain (hl : tags.merkleLeaf = "flock-leaf/sha512-unsalted")
 theorem setupHidden_wf (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     StmtWF st ∧ RegionsWF st :=
   specC_wf (setupHidden_specC h)
+
+/-! ## The flat twin -/
+
+/-- **What the copy positions read, of a templated circuit** whose Δ is `HmRow.delta`'s: the unit is the template's
+committed net, first and named `unit`, whose rows end at its useful rows, the constant's the last (`tmpl_net_rows`). -/
+theorem unitFacts_tmpl (hT : HmOut.parseTmpl tags cf tables = .ok st.c) (hda : st.da = (HmRow.delta st.c st.pin).1) :
+    Aliased.UnitFacts tags st := by
+  obtain ⟨tu, c₀, hp, -, -, he⟩ := TmplValue.parseTmpl_cases hT
+  obtain ⟨P, -, -, hsn, hhn⟩ := parse_factsPre_nets hp
+  obtain ⟨hu0, h0, hun⟩ := unit_of_parsePre hp
+  obtain ⟨ls, hcheck⟩ := P.check
+  have hty : st.c.typed = none := by rw [he]; exact P.typed
+  have C : CheckFacts st.c := check_facts (tags := tags) (ls := ls) hty (by rw [he]; exact hcheck)
+  have htu : st.c.tmpl = some tu := by rw [he]
+  have hu : st.c.unit = tu.net := by rw [he]; exact hun
+  have hname : (c₀.nets.getD c₀.unitNet default).1 = "unit" := by rw [hu0, h0]
+  have R := tmpl_net_rows tu
+  refine ⟨(by rw [unitPre_tmpl htu, he]; exact P.toU.retmpl (some tu)), parseTmpl_nets_ok hT,
+    fun i hi => (parseTmpl_net_width hT hi).2.2.2, C, (by rw [hda]; exact delta_flat st.c st.pin hty),
+    fun e => ?_, fun e => ?_, (by rw [hu]; exact R.1.le), (by rw [hu]; exact R.2.1.le), (by rw [hu]; exact R.2.2)⟩
+  · have e' : c₀.unitNet = c₀.shaNet := by rw [he] at e; exact e
+    rw [← e', hname] at hsn
+    exact absurd hsn (by unfold HmRow.SHA_NET; decide)
+  · have e' : c₀.unitNet = c₀.hmNet := by rw [he] at e; exact e
+    rw [← e', hname] at hhn
+    exact absurd hhn (by unfold HmRow.HM_NET; decide)
+
+/-- **The flat twin of an untyped session on the committed circuit has the layout the placement reads**: `layout_of`'s
+for a flat file, `layout_of_tmpl`'s for a templated one. -/
+theorem flat_layoutC (ht : tags.typed = false) (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) :
+    Layout (flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    exact layout_of (st := flatTwin st) (parse_facts (parse_untyped ht hP).1) s.pin rfl rfl s.m s.kLog
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    exact layout_of_tmpl (st := flatTwin st) hT s.pin rfl rfl s.m s.kLog
+
+/-- **The flat twin's unit facts**, of an untyped session on the committed circuit (`unitFacts_of_parse`,
+`unitFacts_tmpl`). -/
+theorem flat_unitFactsC (ht : tags.typed = false)
+    (s : SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st) : Aliased.UnitFacts tags (flatTwin st) := by
+  cases hi : tags.isTmpl
+  · have hP := s.parse
+    rw [parseCommit_flat hi] at hP
+    exact unitFacts_of_parse (st := flatTwin st) (parse_untyped ht hP).1 rfl
+  · have hT := s.parse
+    rw [parseCommit_tmpl hi] at hT
+    exact unitFacts_tmpl (st := flatTwin st) hT rfl
+
+/-! ## A session from either setup -/
+
+/-- **A committed circuit**: `HmOut.parse`'s (a flat file, or a flat session at any tags) or `HmOut.parseTmpl`'s. -/
+def Committed (tags : Tags) (cf : ByteArray) (tables : List (String × ByteArray)) (c : Circuit) : Prop :=
+  HmOut.parse tags cf tables = .ok c ∨ HmOut.parseTmpl tags cf tables = .ok c
+
+theorem committed_of_commit (h : HmOut.parseCommit tags cf tables = .ok c) : Committed tags cf tables c := by
+  cases hi : tags.isTmpl
+  · rw [parseCommit_flat hi] at h
+    exact .inl h
+  · rw [parseCommit_tmpl hi] at h
+    exact .inr h
+
+/-- **What a hidden-output session accepted, on its committed circuit**: `SpecOf` at `HmOut.parseCommit`
+(`setupHidden_specC`, `setupHiddenOf_specC`), or at `HmOut.parse` (`Stmt.setupHidden`, at any tags). -/
+def SpecC (tags : Tags) (cf pf : ByteArray) (coins : Coins) (tables : List (String × ByteArray)) (draw : Option Json)
+    (st : Stmt) : Prop :=
+  SpecOf (HmOut.parseCommit tags cf tables) tags pf coins draw st ∨
+    SpecOf (HmOut.parse tags cf tables) tags pf coins draw st
+
+/-- `Stmt.setupHidden`'s accept is a `SpecC`. -/
+theorem setupHidden_specCC (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
+    SpecC tags cf pf coins tables draw st :=
+  .inl (setupHidden_specOf h)
+
+/-- `SpecOf` at the committed circuit itself. -/
+theorem SpecC.self (s : SpecC tags cf pf coins tables draw st) : SpecOf (.ok st.c) tags pf coins draw st :=
+  Or.elim s (fun s => { s with parse := rfl }) (fun s => { s with parse := rfl })
+
+theorem SpecC.committed (s : SpecC tags cf pf coins tables draw st) : Committed tags cf tables st.c :=
+  Or.elim s (fun s => committed_of_commit s.parse) (fun s => .inl s.parse)
+
+/-- **The flat twin's layout**, of an untyped session from either setup. -/
+theorem SpecC.flatLayout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) :
+    Layout (flatTwin st) := by
+  have s0 := s.self
+  rcases s.committed with hP | hT
+  · exact layout_of (st := flatTwin st) (parse_facts (parse_untyped ht hP).1) s0.pin rfl rfl s0.m s0.kLog
+  · exact layout_of_tmpl (st := flatTwin st) hT s0.pin rfl rfl s0.m s0.kLog
+
+/-- **The flat twin's unit facts**, of an untyped session from either setup. -/
+theorem SpecC.unitFacts (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) :
+    Aliased.UnitFacts tags (flatTwin st) := by
+  rcases s.committed with hP | hT
+  · exact unitFacts_of_parse (st := flatTwin st) (parse_untyped ht hP).1 rfl
+  · exact unitFacts_tmpl (st := flatTwin st) hT rfl
+
+/-- **The statement circuit's unit is the committed circuit's logical net**, with no template, at the committed
+circuit's units per VU. -/
+theorem Committed.unrolled_unit (hty : tags.typed = false) (h : Committed tags cf tables c) :
+    (HmOut.unrolled c).unit = lunit c ∧ (HmOut.unrolled c).tmpl = none ∧ (HmOut.unrolled c).upv = c.upv := by
+  rcases h with h | h
+  · have hf := parse_tmpl_none hty h
+    rw [unrolled_flat hf, lunit_flat hf]
+    exact ⟨rfl, hf, rfl⟩
+  · obtain ⟨-, -, -, -, -, -, -, -, he⟩ := unrolled_of_parseTmpl h
+    exact ⟨FlockSoundness.unrolled_unit h, unrolled_tmpl h, by rw [he]⟩
 
 end FlockSoundness.Discharge.Hidden

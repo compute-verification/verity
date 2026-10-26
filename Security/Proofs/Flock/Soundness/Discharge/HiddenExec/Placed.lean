@@ -27,7 +27,7 @@ open FlockSoundness.Discharge.Zero (ZeroIn)
 
 /-! ## An accepted hidden-output statement -/
 
-/-- **An accepted untyped hidden-output statement whose block R1CS is `T`**: `Stmt.setupHidden` accepted the circuit
+/-- **An accepted untyped hidden-output statement on flat tags whose block R1CS is `T`**: `Stmt.setupHidden` accepted the circuit
 file `cf`, public file `pf`, coins, tables, draw, partition object and program, returning `st`; `L` is a layout of `st`,
 whose unit slots' rows are its flat twin's (`hR`), and `T` is `L.model` at regions `regs`. -/
 structure AcceptedH (T : Model.Statement) where
@@ -41,6 +41,7 @@ structure AcceptedH (T : Model.Statement) where
   program : Option ByteArray
   st : Stmt
   ht : tags.typed = false
+  hi : tags.isTmpl = false
   h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st
   L : Layout st
   hR : UnitRowsFlat st
@@ -78,7 +79,7 @@ theorem placement {g : ℕ} (hg : g < a.st.c.g) : Placement T a.rows (a.col hg) 
 
 /-- An accepted statement's circuit is the one its circuit file parses to (`parse_untyped`). -/
 theorem c_eq {c : Flock.Circuit} (hp : HmRow.parse a.tags a.cf a.tables = .ok c) : a.st.c = c := by
-  have := (Hidden.parse_untyped a.ht (Hidden.setupHidden_spec' a.h).parse).1
+  have := (Hidden.parse_untyped a.ht ((Hidden.setupHidden_spec' a.h).parseF a.hi)).1
   rw [hp] at this
   exact (Except.ok.inj this).symm
 

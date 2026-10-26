@@ -43,7 +43,7 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
   have hh' : (zkTags I).hiddenOutputs = true := (zkTags_hiddenOutputs I).trans hh
   rw [setupOne_hidden hh'] at hst
   have ht' : (zkTags I).typed = false := (zkTags_typed I).trans ht
-  have hcst : st.c = c := Except.ok.inj ((setupHidden_parseC hst).symm.trans hc)
+  have hcst : st.c = c := setupHidden_c_of_parse hc hst
   refine ⟨st, hst, hshape, fun regs => ⟨_, ⟨zkTags I, I.circuitFile, I.publicFile, zkCoins I, I.tables,
     recordDraw t.record, I.partition, I.program, st, ht', hst, Hidden.hidden_layout ht' hst,
     unitRowsFlat ht' hst (by rw [hcst]; exact hv1.1), regs, rfl⟩, rfl, HEq.rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩⟩

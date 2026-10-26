@@ -502,9 +502,7 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
     g < 2 ^ st.c.g.log2 := by
   unfold HiddenExec.setupOne at h
   split at h
-  · have P := FlockSoundness.parse_facts (HiddenExec.parse_untyped ht (HiddenExec.setupHidden_parseC h)).1
-    obtain ⟨ls, hls⟩ := P.check
-    exact Layout.vu_lt_pow2_of (FlockSoundness.check_facts P.typed hls) hg
+  · exact Layout.vu_lt_pow2_of (Hidden.parseCommit_checkFacts ht (Hidden.setupHidden_parseCommit h)) hg
   · exact Layout.vu_lt_pow2_of (Aliased.setupH_unitFacts ht h).check hg
 
 open FlockSoundness.Refine in

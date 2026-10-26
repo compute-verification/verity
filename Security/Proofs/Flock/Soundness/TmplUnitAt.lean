@@ -39,6 +39,16 @@ theorem built_tmpl {c : Circuit} {tu : TmplUnit} (ht : c.tmpl = some tu) : Built
   rw [lunit_tmpl ht hu]
   exact TmplValue.unroll_built hu
 
+/-- **A templated unit net's rows are its useful rows**, which end at its constant: `Net.ofRowsAt` places one row at
+each position up to the committed constant. -/
+theorem tmpl_net_rows (tu : TmplUnit) :
+    tu.net.a.rows = tu.net.useful ∧ tu.net.b.rows = tu.net.useful ∧ tu.net.useful = tu.net.constPos + 1 := by
+  obtain ⟨_, _, -, -, hat, -⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
+  obtain ⟨_, -, hu, hcp, -, ha, hb, -, -, -, -, -, hp, -, -⟩ := Net.ofRowsAt_ok hat
+  have hi := (Net.posOk_parts hp).2.1
+  rw [ofRows_rows ha, ofRows_rows hb, Net.placed_size, Net.placed_size, hi, hu, hcp]
+  exact ⟨rfl, rfl, rfl⟩
+
 /-- **A templated unit is its logical net placed at `upos`**: `posMap` keeps the input rows, puts every other column
 between them and the constant, the constant at the committed constant, and committed row `posMap[x]` is logical row `x`
 read through `posMap`. -/

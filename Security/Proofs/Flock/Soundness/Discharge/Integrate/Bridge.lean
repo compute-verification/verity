@@ -147,6 +147,20 @@ theorem net_width {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} 
     exact ⟨ofRows_width ha, ofRows_width hb, fun lk h => by rw [hlk] at h; cases h⟩
   · exact build_width hb
 
+/-- **What the placement reads of a circuit's nets**: each net `2^unitLog` wide on both sides, a lookup slot's table
+reading at most 32 output bits (`net_width`), and each net range's net among the circuit's. -/
+structure NetWidths (c : Circuit) : Prop where
+  width : ∀ {n : ℕ}, n < c.nets.size →
+    (c.nets.getD n default).2.a.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
+      (c.nets.getD n default).2.b.width = 2 ^ (c.nets.getD n default).2.unitLog ∧
+      ∀ lk, (c.nets.getD n default).2.lookup = some lk → lk.bits ≤ 32
+  kinds : ∀ r ∈ c.ranges.toList, ∀ i, r.kind = .net i → i < c.nets.size
+
+/-- A circuit `HmRow.parse` accepted has `NetWidths`. -/
+theorem _root_.FlockSoundness.ParseFacts.netWidths {tags : Tags} {c : Circuit} (P : ParseFacts tags c) :
+    NetWidths c :=
+  ⟨net_width P, P.kinds⟩
+
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH`'s leaf is the default one**: an hm96 row statement has no compression leaf. -/
 theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
@@ -165,14 +179,14 @@ theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : 
 
 section Model
 
-variable {st : Stmt} {tags : Tags} (P : ParseFacts tags st.c) (L : Layout st) (hleaf : st.leaf = default)
+variable {st : Stmt} (P : NetWidths st.c) (L : Layout st) (hleaf : st.leaf = default)
 include P L hleaf
 
 theorem slotA_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : ℕ} (hc : c < 2 ^ rg.slotLog) :
     slotEntryA st rg.kind i c = (slotA st rg.kind i c : ZMod 2) := by
   cases hk : rg.kind with
   | net n =>
-      have hw := net_width P (P.kinds rg hrg n hk)
+      have hw := P.width (P.kinds rg hrg n hk)
       rw [L.slotLog rg hrg n hk] at hc
       exact sparse_eq _ _ _ (Or.inl (by rw [hw.1]; exact hc))
   | mask =>
@@ -187,7 +201,7 @@ theorem slotB_eq {rg : Range} (hrg : rg ∈ st.c.ranges.toList) (i : ℕ) {c : �
     slotEntryB st rg.kind i c = (slotB st rg.kind i c : ZMod 2) := by
   cases hk : rg.kind with
   | net n =>
-      have hw := net_width P (P.kinds rg hrg n hk)
+      have hw := P.width (P.kinds rg hrg n hk)
       rw [L.slotLog rg hrg n hk] at hc
       show sparseEntry _ i c + lookupEntry _ i c = ((spCnt _ i c + lkSide _ _ i c : ℕ) : ZMod 2)
       rw [Nat.cast_add, sparse_eq _ _ _ (Or.inl (by rw [hw.2.1]; exact hc))]
@@ -244,7 +258,7 @@ theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) (hwf : StmtWF st)
     (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     (setupH_layout ht h).model regs = stmtOf st hwf regs :=
-  model_eq (parse_facts (setupH_spec ht h).1) (setupH_layout ht h) (setupH_leaf h) hwf regs
+  model_eq (parse_facts (setupH_spec ht h).1).netWidths (setupH_layout ht h) (setupH_leaf h) hwf regs
 
 /-- **A drawn table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
 theorem table_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) {S : Finset (Fin n)} {d : Lean.Json}

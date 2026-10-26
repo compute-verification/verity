@@ -45,9 +45,7 @@ theorem setupHidden_mPts_of_proved {c : Circuit} {d : Json} {N₀ : ℕ} (hc : H
     (hD : ∀ D, Draw.UnitDraw.ofJson d = .ok D → D.proved.size = N₀)
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) : st.mPts = mPtsOf c.g N₀ := by
   obtain ⟨ud, hud, hm⟩ := setupHidden_mPts_drawn h
-  have e := setupHidden_parseC h
-  rw [hc] at e
-  rw [hm, ← Except.ok.inj e, hD ud hud]
+  rw [hm, setupHidden_c_of_parse hc h, hD ud hud]
 
 /-- `setupHidden_mPts_of_proved` at the session's own `g`. -/
 theorem setupHidden_mPts_of_provedG {g : ℕ} {d : Json} {N₀ : ℕ} (hg : st.c.g = g)
@@ -101,7 +99,7 @@ theorem drawOkZKH_of_exec (I : Inputs) {c : Flock.Circuit}
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.stratified Kd (Array.ofFn St)) pop) (ω : Ω) :
     DrawOkZKH I dj (mPtsOf c.g (∑ s, ks s))
       ((Audit.Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) :=
-  drawOkZKH_of_execG I (fun h => congrArg Flock.Circuit.g (Except.ok.inj ((setupHidden_parseC h).symm.trans hc))) σs ks hks
+  drawOkZKH_of_execG I (fun h => congrArg Flock.Circuit.g (setupHidden_c_of_parse hc h)) σs ks hks
     St hS Kd pop Lb src dj hdj ω
 
 /-- `drawOkZKH_of_exec` at the statement circuit (`HmOut.parseStmt`, a templated file's template unrolled), on untyped

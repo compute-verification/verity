@@ -41,10 +41,10 @@ variable (a : AcceptedH T)
 
 /-- An accepted statement's circuit file parses (`HmRow.parse`) to its circuit (`parse_untyped`). -/
 theorem parse : HmRow.parse a.tags a.cf a.tables = .ok a.st.c :=
-  (Hidden.parse_untyped a.ht (Hidden.setupHidden_spec' a.h).parse).1
+  (Hidden.parse_untyped a.ht ((Hidden.setupHidden_spec' a.h).parseF a.hi)).1
 
 theorem checkRows : HmOut.checkRows a.st.c = .ok () :=
-  (Hidden.parse_untyped a.ht (Hidden.setupHidden_spec' a.h).parse).2
+  (Hidden.parse_untyped a.ht ((Hidden.setupHidden_spec' a.h).parseF a.hi)).2
 
 theorem rowRanges : RowRanges a.st.c :=
   RowRanges.ofL (st := Hidden.flatTwin a.st) a.flatLayout a.unitFacts.parse a.unitFacts.check
@@ -176,11 +176,11 @@ theorem out_copyH (a : AcceptedH T) (ho : a.st.c.outNet = a.st.c.unitNet)
     T.block z o (a.col hg x) =
       z (siteAddrH a o (Typed.msgCol a.st.c g (HmOut.nIn a.st.c + jo) ((16 * k + t) / 8) ((16 * k + t) % 8))) := by
   have hcol := col_val_compH a hg x hu' h1 h2 hx
-  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', h, L, hR, regs, hT⟩ := a
+  obtain ⟨tags, cf, pf, coins, tables, draw, partition, program, st, ht', hi', h, L, hR, regs, hT⟩ := a
   subst hT
   dsimp only at ho hrf hg x hu' hj h1 h2 hx hjo hk hw hcol ⊢
   have s := Hidden.setupHidden_spec' h
-  obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' s.parse
+  obtain ⟨hpa, hcr⟩ := Hidden.parse_untyped ht' (s.parseF hi')
   have P := parse_facts hpa
   rw [upos_flat P.tmpl] at hcol
   obtain ⟨ls, hls⟩ := P.check

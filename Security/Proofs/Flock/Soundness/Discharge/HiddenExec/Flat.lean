@@ -1,3 +1,4 @@
+import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
@@ -48,17 +49,16 @@ theorem checkRows_le {c : Circuit} (h : HmOut.checkRows c = .ok ()) : c.outRowPo
 variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
   {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
 
-/-- **The flat twin of an untyped hidden statement has the layout the placement reads** (`layout_of`). -/
+/-- **The flat twin of an untyped hidden statement has the layout the placement reads** (`Hidden.flat_layoutC`). -/
 theorem flat_layout (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) : Layout (Hidden.flatTwin st) :=
-  have s := Hidden.setupHidden_spec' h
-  layout_of (st := Hidden.flatTwin st) (parse_facts (Hidden.parse_untyped ht s.parse).1) s.pin rfl rfl s.m s.kLog
+  Hidden.flat_layoutC ht (Hidden.setupHidden_specC h)
 
-/-- **The flat twin's unit facts** (`Hidden.unitFacts_of_parse`). -/
+/-- **The flat twin's unit facts** (`Hidden.flat_unitFactsC`). -/
 theorem flat_unitFacts (ht : tags.typed = false)
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
     Aliased.UnitFacts tags (Hidden.flatTwin st) :=
-  Hidden.unitFacts_of_parse (st := Hidden.flatTwin st) (Hidden.parse_untyped ht (Hidden.setupHidden_spec' h).parse).1 rfl
+  Hidden.flat_unitFactsC ht (Hidden.setupHidden_specC h)
 
 /-! ## Δ's output pairs are at the rows' `sha512x3` slots -/
 
