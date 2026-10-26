@@ -109,7 +109,9 @@ makes at most `Q` calls, so its commitment path's distinct queries, with the ver
 prover can't buy a larger `q` by padding. With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every
 prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
-`κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`. -/
+`κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`.
+The log's term `μ · q ξl / C` is about `(μ · ξl / shaPub_μ) (μ · cap / C)`: one bound for every prover is small only
+where a log entry's upkeep is small next to a call; `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
     (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
