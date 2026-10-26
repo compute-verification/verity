@@ -54,15 +54,14 @@ def main():
     P = pickle.load(open(sys.argv[2], "rb"))
     b.static, b.pv = P["v3.1"]
     object.__setattr__(card, "facets", tuple((a * card.s8 / 4096, v) for _, a, v in facets))
-    out = {"facets": [list(f) for f in facets], "vector": current,
-           "menu": b.run(("RTX PRO 6000",), f"{current} facets, menu")}
+    Path(sys.argv[3] + ".facets.json").write_text(json.dumps({"vector": current, "facets": facets}, indent=1))
+    out = {"menu": b.run(("RTX PRO 6000",), f"{current} facets, menu")}
     b.pb.tile_methods = b.patched
     cap0 = b.pb.cap
     b.pb.RES = b.pb.RES + ("xu",)
     b.pb.cap = lambda c: {**cap0(c), "xu": b.XU_LANES if c.family == "sm_120" else math.inf}
     out["census routes"] = b.run(("RTX PRO 6000",), f"{current} facets, + b1 census")
-    json.dump({lab: ({" | ".join(map(str, k)): v for k, v in r.items()} if isinstance(r, dict) else r)
-               for lab, r in out.items()}, open(sys.argv[3] + ".json", "w"), indent=1, default=str)
+    b.dump(out, sys.argv[3])
 
 
 if __name__ == "__main__":

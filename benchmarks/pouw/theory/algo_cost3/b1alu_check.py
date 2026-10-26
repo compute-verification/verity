@@ -51,7 +51,7 @@ COSTS = tuple(float(x) for x in _opt("--cost", "0.77").split(","))
 PIPES = tuple(_opt("--pipes", "alu,fma").split(","))
 CENSUS = "--census" in sys.argv
 A7_ALU = COSTS[0]
-XS = (0.0, 0.25, 1.0)
+XS = d6.BESIDE
 MODELS = ("Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro")
 _orig = pb.tile_methods
 
@@ -133,6 +133,15 @@ def run(cards, label):
     return res
 
 
+def dump(out, prefix):
+    """PREFIX.json holds every label's rows; PREFIX.LABEL.json each label's alone, keyed "card | model | x" as d6.py's
+    --census reads them."""
+    flat = {lab: {" | ".join(map(str, k)): v for k, v in r.items()} for lab, r in out.items()}
+    Path(prefix + ".json").write_text(json.dumps(flat, indent=1, default=str))
+    for lab, r in flat.items():
+        Path(f"{prefix}.{lab.replace(' ', '_')}.json").write_text(json.dumps(r, indent=1, default=str))
+
+
 if __name__ == "__main__":
     P = pickle.load(open(sys.argv[2], "rb"))
     static, pv = P["v3.1"]
@@ -146,5 +155,4 @@ if __name__ == "__main__":
         out[label] = run(("RTX PRO 6000",), f"+ {label}")
     for A7_ALU in () if CENSUS else COSTS:
         out[f"b1 {A7_ALU} on {'+'.join(PIPES)}"] = run(("RTX PRO 6000",), f"+ b1 {A7_ALU} {'+'.join(PIPES)}")
-    json.dump({lab: {" | ".join(map(str, k)): v for k, v in r.items()} for lab, r in out.items()},
-              open(sys.argv[3] + ".json", "w"), indent=1, default=str)
+    dump(out, sys.argv[3])
