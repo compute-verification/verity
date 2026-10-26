@@ -142,11 +142,14 @@ def test_sessions_reach_a_listening_verifier_which_records_their_answers(tmp_pat
 
 
 def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(tmp_path) -> None:
-    """The auditor gate's party shape (`--party CMD`): CMD's stdout says the port and then the verifier's record of the
-    answer, which the verdict line holds to the session's."""
+    """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
+    site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
+    directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
+    to the session's, and which the device's answers.jsonl keeps."""
     reg = B.toy(tmp_path / "toy")
-    party = (f"{sys.executable} -m verity.core.protocols.remote_bandwidth.p2_party "
-             f"--registration {tmp_path / 'toy' / 'registration.json'} --listen 127.0.0.1:0")
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
+             f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
+             f"--registration {tmp_path / 'toy' / 'registration.json'}")
     base = ["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
             "--node", reg.node.decode(), "--party", party, "--party-host", "127.0.0.1", "--device", "cpu",
             "--ref-decode", "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001",
@@ -156,6 +159,8 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         doc = json.loads((tmp_path / name / "session.json").read_text())
         assert doc["verifier_record"] == doc["answer"] and doc["answer"]["verdict"] == expect
         assert "verifier_record_agrees=True" in doc["verdict_line"]
+    kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
+    assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
     record = {"verdict": "accept"}
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
 

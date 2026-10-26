@@ -20,10 +20,11 @@ record of PoUS's setup, `registration_json`), never the prover's word for it, an
   8,224 bytes each, over the session's span.
 
 `python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT
-[--sessions N]) [--answer FILE]` is the verifier's side (`main`), each session with fresh coins. Listening, it prints
-`{"listening": port}` and then each session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts
-over ssh (`benchmarks/live_verifier/host.py`'s party verbs). `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s
-`hold`, `run` and `open` until the answer, which it returns.
+[--sessions N]) [--answer FILE | --device DIR]` is the verifier's side (`main`), each session with fresh coins.
+Listening, it prints `{"listening": port}` and then each session's `{"answer"}` on stdout, the shape of a party the
+auditor's gate starts over ssh with its `--device` directory (`benchmarks/live_verifier/host.py`'s party verbs).
+`prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s `hold`, `run` and `open` until
+the answer, which it returns.
 
 No Lean replays a P2 session yet (`RemoteAudit.P2` checks one opening); the verdict here is the Python session's.
 """
@@ -273,10 +274,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     where.add_argument("--stdio", action="store_true", help="the channel is this process's stdin and stdout")
     where.add_argument("--listen", help="HOST:PORT to accept provers on (port 0: any, printed as {\"listening\"})")
     ap.add_argument("--sessions", type=int, default=1, help="with --listen: the sessions to serve, one after another")
-    ap.add_argument("--answer", type=Path, help="a file each session's answer is appended to, a JSON line each: the "
-                                                "verifier's own record of them")
+    record = ap.add_mutually_exclusive_group()
+    record.add_argument("--answer", type=Path, help="a file each session's answer is appended to, a JSON line each: "
+                                                    "the verifier's own record of them")
+    record.add_argument("--device", type=Path, help="the party's directory, as the auditor's gate gives it: --answer "
+                                                    "is its answers.jsonl")
     a = ap.parse_args(argv)
     reg = registration_of(json.loads(a.registration.read_text()))
+    if a.device is not None:
+        a.device.mkdir(parents=True, exist_ok=True)
+        a.answer = a.device / "answers.jsonl"
 
     def log(m: str) -> None:
         print(f"p2_party {time.strftime('%H:%M:%SZ', time.gmtime())}: {m}", file=sys.stderr, flush=True)
