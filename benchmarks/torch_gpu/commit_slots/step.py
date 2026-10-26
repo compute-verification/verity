@@ -14,7 +14,8 @@ of ``--slots`` slots on the plan's side stream (``slots_gpu.StepCommitter``):
 
 - one step with each phase marked (the row digests, the leaves, the multi-row units, the fold, the slot trees, the step
   tree), with each phase's compressions counted from the layout as the engine hashes them, and its G compressions/s;
-- ``--reps`` unmarked steps at each ``--temps`` pass size, with the peak memory;
+- ``--reps`` unmarked steps at each ``--temps`` pass size and ``--leaf-minb`` leaf kernel (the first of each is the marked
+  step's and the profile's), with the peak memory and how long the host took to enqueue the step;
 - the leaf kernel alone over the widest group's first pass, at 1 and 2 blocks an SM;
 - one step under torch's profiler: each kernel's launches and time, and the side stream's time with no kernel running;
 - ``--samples`` random slots plus the first and the last, rebuilt by the CPU reference (``slots.commit_slot``) and checked
@@ -175,7 +176,7 @@ def run(a: argparse.Namespace) -> int:
 
     m0 = torch.cuda.memory_allocated()
     t = time.perf_counter()
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, temp_bytes=a.temps[0], leaf_minb=a.leaf_minb[0])
     torch.cuda.synchronize()
     distinct = {id(g): g for g in layout.groups}
     gen = torch.Generator(device="cuda")
@@ -206,7 +207,7 @@ def run(a: argparse.Namespace) -> int:
         end.record(plan.stream)
         res = pend.result()
         end.synchronize()
-        return res, {"temp_bytes": plan.temp_bytes, "gpu_s": round(start.elapsed_time(end) / 1e3, 4),
+        return res, {"temp_bytes": plan.temp_bytes, "leaf_minb": plan.leaf_minb, "gpu_s": round(start.elapsed_time(end) / 1e3, 4),
                      "wall_s": round(time.perf_counter() - t0, 4), "enqueue_s": round(enq, 4),
                      "peak_gib": gib(torch.cuda.max_memory_allocated() - base),
                      "peak_total_gib": gib(torch.cuda.max_memory_allocated()),
@@ -258,14 +259,15 @@ def run(a: argparse.Namespace) -> int:
 
     doc["steps"] = []
     for temp in a.temps:
-        plan.temp_bytes = temp
-        rs = [step()[1] for _ in range(a.reps)]
-        best = min(rs, key=lambda r: r["gpu_s"])
-        doc["steps"].append({"temp_bytes": temp, "passes_a_group": sorted({-(-slots // plan.per_pass(grp.shape, slots))
-                                                                          for grp in plan.groups}),
-                             "gpu_s": [r["gpu_s"] for r in rs], "best": best})
-        save("steps")
-    plan.temp_bytes = G.TEMP_BYTES
+        for minb in a.leaf_minb:
+            plan.temp_bytes, plan.leaf_minb = temp, minb
+            rs = [step()[1] for _ in range(a.reps)]
+            best = min(rs, key=lambda r: r["gpu_s"])
+            doc["steps"].append({"temp_bytes": temp, "leaf_minb": minb,
+                                 "passes_a_group": sorted({-(-slots // plan.per_pass(grp.shape, slots)) for grp in plan.groups}),
+                                 "gpu_s": [r["gpu_s"] for r in rs], "best": best})
+            save("steps")
+    plan.temp_bytes, plan.leaf_minb = a.temps[0], a.leaf_minb[0]
 
     try:
         from torch.profiler import ProfilerActivity, profile
@@ -279,8 +281,10 @@ def run(a: argparse.Namespace) -> int:
                 kernels.append({"kernel": e.key[:120], "launches": e.count, "s": round(us / 1e6, 4)})
         kernels.sort(key=lambda k: -k["s"])
         busy = sum(k["s"] for k in kernels)
-        doc["profile"] = {"gpu_s": r["gpu_s"], "kernels_s": round(busy, 4), "idle_s": round(r["gpu_s"] - busy, 4),
-                          "launches": sum(k["launches"] for k in kernels), "kernels": kernels[:25]}
+        doc["profile"] = {"gpu_s": r["gpu_s"], "enqueue_s": r["enqueue_s"], "kernels_s": round(busy, 4),
+                          "idle_s": round(r["gpu_s"] - busy, 4), "launches": sum(k["launches"] for k in kernels),
+                          "pageable_uploads": sum(k["launches"] for k in kernels if "Pageable -> Device" in k["kernel"]),
+                          "kernels": kernels[:25]}
     except Exception as e:   # a profiler the node lacks costs only this part
         doc["profile"] = {"error": repr(e)}
     save("profile")
@@ -314,6 +318,8 @@ def main(argv: list[str] | None = None) -> int:
     tm.add_argument("--slots", type=int, default=4096)
     tm.add_argument("--reps", type=int, default=3)
     tm.add_argument("--temps", type=int, nargs="+", default=[1 << 30, 4 << 30], help="pass sizes (Plan.temp_bytes)")
+    tm.add_argument("--leaf-minb", type=int, nargs="+", choices=(0, 1, 2), default=[0],
+                    help="the leaf kernel's blocks an SM (Plan.leaf_minb; 0, the build's default)")
     tm.add_argument("--samples", type=int, default=4, help="random slots the reference rebuilds, beside the first and last")
     a = ap.parse_args(argv)
     return export(a) if a.cmd == "export" else run(a)
