@@ -41,8 +41,6 @@ Registered functions (`_v1`):
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from types import SimpleNamespace
 
 from verity.ml.circuits.codec import register_lazy_family

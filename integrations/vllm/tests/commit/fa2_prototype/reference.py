@@ -47,7 +47,7 @@ def f32_bit(x: np.floating | float) -> int:
 
 
 def scale_log2(D: int) -> np.float32:
-    """FA2 `set_params_fprop`: `float(softmax_scale) * M_LOG2E` in double, narrowed to fp32 (`b1._scale_log2_bits`)."""
+    """FA2 `set_params_fprop`: `float(softmax_scale) * M_LOG2E` in double, narrowed to fp32 (`b1.scale_log2_bits`)."""
     s = float(np.float32(D ** -0.5))
     return np.float32(s * M_LOG2E)
 

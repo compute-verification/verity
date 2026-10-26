@@ -48,8 +48,6 @@ live thread stays in its chain.  `DsaRMSNorm_v1{N, EPS}` computes `TritonBlockRM
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3",)
-
 import numpy as np
 
 from verity.ml.circuits.defs import composite

@@ -436,7 +436,8 @@ GLM-5.3's 8 ranks (about 50 minutes on a 256-CPU pod; its Build ends at GP-01, `
 hours).  `--update` re-pins a row from its rebuild and keeps its record, which the same PR re-publishes.
 
 A module that exists for particular models says so with a module-level `__models__ = ("<HF repo id>", ...)`, after its docstring
-(P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
+(P8 and the by-name lint skip it; its circuit-check sidecar goes with it).  A Definition that belongs in Verity, whose vocabulary
+has no models, carries no marker; its row in `manifests/definitions.json` ties it instead.  `verity-vllm glue [REPO ...] [--json]` (`glue.py`) reports
 per model the code those markers tie to it (files and lines by area, the rules they define, the lint allowlist entries on them, the
 profile patterns they supply, or why the profile refuses the `config.json` the Build reads), its family facts and capture maps, and
 the hours from its checkpoint's staging event to its first PASS record.  The step that stages a checkpoint's weights
