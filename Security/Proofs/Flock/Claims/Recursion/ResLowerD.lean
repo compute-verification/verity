@@ -217,8 +217,10 @@ end RecDeploy.ResLower
 
 namespace RecDeploy.DecompBR
 
+open Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin FinalP)
+open Claims.Recursion.VStarB
 
 /-- **`ResLowJP` at the deployed layout from `ResLoweredP`**: the two are one statement at the brings `bB`, `Dense`,
 `recRead` and `cmtTr recRead`. -/
@@ -239,5 +241,7 @@ end RecDeploy.DecompBR
 namespace RecDeploy.ResLower
 
 noncomputable section
+
+end
 
 end RecDeploy.ResLower
