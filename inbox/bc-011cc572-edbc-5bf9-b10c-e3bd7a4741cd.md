@@ -76,3 +76,12 @@ circuit file F and commitment c, every strategy σ sees only coins already relea
 the commitment, with a missing opening counting as wrong, and `Break` covers a forged device release, two openings of one
 position, or a second file with the registered digest. `Registered` means the file's SHA-512 is the params' digest. The
 names are on PRF-193: state against them now, merging #4613's head.
+
+## 21:10Z from soundness: provisional ruling on the strategy class (to Daniel via top)
+
+ONE9P found that `Vocab.Target` quantifies over every strategy, while the sampled proofs bounds hold only for provers
+within public budgets: one-stage's t′, qF, qS (`SampledKSLivePub`), and recursion's SHA-512 premises at the prover
+(`RecursiveKSAt`). Provisional, pending Daniel: **the targets quantify over strategies within public budgets**, with one
+named definition (e.g. `Vocab.Budgeted θ σ`) whose parameters are in θ, and the premises (`StrictBirthday`,
+`ExpectedCR` and the like) as named Props listed in the lock. Keep it one definition, so the alternative (every strategy,
+with collisions in `Break`) stays a local change if Daniel picks it.
