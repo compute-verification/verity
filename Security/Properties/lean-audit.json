@@ -489,13 +489,14 @@
    "imports": [
     "CoreOnsite",
     "Properties.Composition",
+    "Properties.Flock.Circuit.CircuitOf",
     "Definitions.Accounting.JointPeriod",
     "Definitions.Core.Game",
     "Definitions.Hash.RowLeaf",
     "Flock.Hash"
    ],
    "except": [],
-   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof"
+   "why": "soundness at the verifier of record is stated over onsite's compiled code and its SHA-512, the composition's properties, the committed files as the verifier reads them (Flock.Bridge.circuitOfFile), the period model's vocabulary, the shared game and the row-leaf opening it reads the commitment through, never over a proof"
   },
   "Properties.Pouw.Period": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions", "PouwCheck"],
@@ -2241,6 +2242,9 @@
    "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
+  },
+  "Properties.Composition.bindCollision": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -3329,6 +3333,14 @@
    "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
     "function": "NciCheck.Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.Composition.acceptRegistration": {
+    "function": "Core.Composition.checkRegistered",
+    "outcome": "accept"
+   },
+   "Properties.Composition.bindCollision": {
+    "function": "Core.Composition.bind",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -3344,7 +3356,7 @@
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes the setup check's open AcceptsDecodes and PublishesRoot, CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at onsite's compiled verifier in the causal game (rulings R4, R5, R6: Verity.Vocab.game, params, the registered circuit file and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.Soundness): its event's acceptance is Core.Onsite.protocol.answer's, sampled proofs' claim is read off the commitment (Verity.Vocab.CommitHolds over Hash.RowLeaf.accepts under the compiled SHA-512), the claims read the committed file, whose digest the commit phase checks against the params' (Verity.Vocab.Registered, conjoined in the event until onsite's sampled component is v2, ONE-3b), and the break is a forged release, two openings of one position or a second file with the registered digest (Verity.Vocab.Break), but it takes each subprotocol's target in that game (Verity.Vocab.SampledProofsSound, PouwSound, PousSound, BandwidthAuditSound, NetworkCertifierSound; no premise module's) as a hypothesis until each is proved (ONE-8, ONE-10, ONE-11, ONE-12, ONE-16 of note:proofs/20261026T0332Z-report-onethm), and Vocab's fields are given until ONE-4, ONE-7 and ONE-19 define them",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at onsite's compiled verifier in the causal game (rulings R4', R5, R6 and Daniel's one adversary form, 26 Oct: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.Soundness): its event's acceptance is Core.Onsite.protocol.answer's (NCI's registration check, then the composition: Verity.RegistrationAccepts, from Properties.Composition.AcceptRegistration), sampled proofs' claim is read off the fixed extractor's transcript (Verity.Vocab.extract; unbound over Hash.RowLeaf.accepts under the compiled SHA-512, a registered constant opening to its constant), the claims read the committed files as the verifier reads them (Flock.Bridge.circuitOfFile at v2's reading, Verity.Vocab.read), whose digest the commit phase checks against the params' (Verity.Vocab.Registered, conjoined in the event until onsite's sampled component is v2, ONE-3b), PoUW's claim counts gates (Verity.Vocab.computed), and the event has no break: for every strategy, each subprotocol's error is its delta plus its collision term at its fixed finder's probability of a SHA-512 collision (Verity.Vocab.error, Verity.Finder.collides); but it takes each subprotocol's target in that game (Verity.Vocab.SampledProofsSound, PouwSound, PousSound, BandwidthAuditSound, NetworkCertifierSound; no premise module's) as a hypothesis until each is proved (ONE-8, ONE-10, ONE-11, ONE-12, ONE-16 of note:proofs/20261026T0332Z-report-onethm), and Vocab's fields are given until ONE-3b, ONE-4, ONE-7, ONE-8 and ONE-19 define them. Its checks are Verity.soundness_of_subprotocols_honest and Verity.soundness_of_subprotocols_nontrivial",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkPeriod's claims; RegisteredBeforeDraw, DrawIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
