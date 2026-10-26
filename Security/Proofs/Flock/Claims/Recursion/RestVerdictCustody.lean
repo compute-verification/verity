@@ -36,7 +36,7 @@ theorem fld_ok {j : Json} {k : String} {v : Json} (h : j.getObjVal? k = .ok v) :
 theorem array_mapM_ok_ex {α β : Type} (f : α → Flock.V β) (a : Array α) (P : ℕ → β → Prop)
     (h : ∀ (i : ℕ) (hi : i < a.size), ∃ y, f a[i] = .ok y ∧ P i y) :
     ∃ ys : Array β, a.mapM f = .ok ys ∧ ys.size = a.size ∧
-      ∀ (i : ℕ) (hi : i < a.size) (h' : i < ys.size), P i ys[i] := by
+      ∀ (i : ℕ) (_ : i < a.size) (h' : i < ys.size), P i ys[i] := by
   choose g hg using h
   refine ⟨Array.ofFn fun i : Fin a.size => g i.1 i.2, ?_, by simp, fun i hi h' => ?_⟩
   · exact array_mapM_ok_of f a _ (by simp) fun i h₁ h₂ => by simpa using (hg i h₁).1
@@ -53,8 +53,8 @@ theorem flatMap_congr_idx {α β γ : Type} {f : α → List γ} {g : β → Lis
     simp only [List.getElem_cons_zero] at h0
     simp only [List.flatMap_cons, h0]
     congr 1
-    exact flatMap_congr_idx A B (by simpa using hl) fun i h₁ h₂ => by
-      simpa using h (i + 1) (by simpa using h₁) (by simpa using h₂)
+    exact flatMap_congr_idx A B (by simpa using hl) fun i h₁ h₂ =>
+      h (i + 1) (by simpa using h₁) (by simpa using h₂)
 
 theorem getElem_of_map_eq {α β : Type} {f : α → β} {L : List α} {M : List β} (h : L.map f = M) (t : ℕ)
     (h₁ : t < L.length) (h₂ : t < M.length) : f L[t] = M[t] := by
@@ -175,7 +175,8 @@ theorem str_rootB {rootB : Array ByteArray} (htn : spec.tables.toList.Nodup) (hr
 theorem isNull_empty (t : String) : Record.isNull (Json.mkObj []) t = true := by
   have hn := FlockComplete.JsonRT.get?_mkObj_none (l := []) (k := t) rfl
   unfold Record.isNull
-  simp only [Json.mkObj, Json.getObjVal?, hn] <;> rfl
+  simp only [Json.mkObj, Json.getObjVal?, hn]
+  rfl
 
 theorem arr_erase :
     Record.arr (eraseCoins (shaSubJ spec ds (recordObj spec hh rootB pts S files))) "streams" =
@@ -198,11 +199,13 @@ theorem streamObj_name (q : (ℕ × ℕ × String) × Array Round) :
     (streamObj spec hh rootB q).getObjValAs? String "stream" = .ok q.1.2.2 := by
   have e : (streamObj spec hh rootB q).getObjVal? "stream" = .ok (Json.str q.1.2.2) :=
     getObjVal?_mkObj (streamList_distinct ..) (by simp [streamList])
-  simp only [Json.getObjValAs?, Json.getObjValD, e] <;> rfl
+  simp only [Json.getObjValAs?, Json.getObjValD, e]
+  rfl
 
 theorem nameOf_streamObj (q : (ℕ × ℕ × String) × Array Round) :
     nameOf (streamObj spec hh rootB q) = q.1.2.2 := by
-  simp only [nameOf, streamObj_name] <;> rfl
+  simp only [nameOf, streamObj_name]
+  rfl
 
 theorem nameOf_mapStream (g : String → ℕ → Json → Json) (s : Json) : nameOf (mapStream g s) = nameOf s := by
   simp only [nameOf, mapStream, getObjValAs_mapKey_ne _ _ (by decide : ("stream" : String) ≠ "rounds")]
@@ -234,7 +237,7 @@ theorem find_streamObj (hS : S.size = spec.repStreams.size) (hnd : (spec.repStre
     intro k hk
     simp [Array.getElem_zip]
   rw [Array.find?_eq_some_iff_getElem]
-  refine ⟨by rw [streamObj_name]; simp, i, by simp [hS, hi], hz i hi, fun k hk => ?_⟩
+  refine ⟨by rw [streamObj_name]; simp [Except.toOption], i, by simp [hS, hi], hz i hi, fun k hk => ?_⟩
   have hk' : k < spec.repStreams.size := by omega
   rw [hz k hk', streamObj_name]
   have hne : spec.repStreams[k].2.2 ≠ spec.repStreams[i].2.2 := by
@@ -243,7 +246,7 @@ theorem find_streamObj (hS : S.size = spec.repStreams.size) (hnd : (spec.repStre
         (spec.repStreams.toList.map (·.2.2))[i]'(by simpa using hi) := by simpa using e
     have := (List.Nodup.getElem_inj_iff hnd).1 e'
     omega
-  simpa using hne
+  simpa [Except.toOption] using hne
 
 /-- **A round with its coins erased and then set reads them**, with its count and message. -/
 theorem roundJ_sub (k : ℕ) (r : Round) (v : Array F128) :
@@ -304,7 +307,7 @@ theorem streamOffset_rec (hS : S.size = spec.repStreams.size) (hnd : (spec.repSt
   unfold streamOffset
   have hnames : spec.repStreams[i].2.2 = (spec.repStreams.toList.map (·.2.2))[i]'(by simpa using hi) := by simp
   rw [hnames, takeWhile_ne_nodup _ hnd i (by simpa using hi), List.map_take]
-  congr 1
+  congr 2
   apply List.ext_getElem (by simp [hS])
   intro i' h₁ h₂
   simp only [List.getElem_map, Array.getElem_toList]
@@ -348,7 +351,7 @@ theorem liveOfJ_rec (g : String → ℕ → Json → Json) (htn : spec.tables.to
         refine ⟨rd, ?_, fun _ => h2⟩
         simp only [Array.getElem_mapIdx, Array.getElem_map, Array.getElem_range, getElem!_pos (S[i]) k hk']
         exact h1)
-    refine ⟨rs, ?_, by simpa using hsz, fun k hk h' => hP k (by simpa using hk) hk⟩
+    refine ⟨rs, ?_, by simpa using hsz, fun k hk h' => hP k (by simpa using hk) h' hk⟩
     unfold streamJ
     rw [find_mapStream, find_mapStream, find_streamObj spec hh rootB S hS hnd i hi]
     dsimp only [Option.map]
@@ -513,7 +516,7 @@ theorem custody_decR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : 
           (recStreams spec sts pf.2 cs.tail.dropLast) (filesAt (tabsOf sts) (pointsOf spec c₁) pf.1))))
         spec.repStreams[i].2.2 + k]? = some q := ⟨_, List.getElem?_eq_getElem hlt⟩
     obtain ⟨m, c⟩ := q
-    beta_reduce
+    dsimp only
     rw [hq]
     exact ⟨_, roundJ_sub spec _ k _ _, rfl⟩
   obtain ⟨lv, hlv, hrB, hpubs, hbytes⟩ := key
