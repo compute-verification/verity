@@ -435,6 +435,81 @@ theorem dirsTie_staged {b : Brings} {IV : Claims.Verifier Coin}
   rw [hcol, ← bitL_readForms hl, hrb, wordBytes, bitL_wordBytes _ h hb16, List.getD_eq_getElem?_getD,
     Array.getElem?_toList, ← Array.getD_eq_getD_getElem?, getD_padTo, hdr, getD_of_lt hj]
 
+/-! ## `CopyDirsTieR` at `layVR` -/
+
+/-- Piece `q`'s instance of its level's table: rep `r`'s opening `j` is `r · q + j` (`copyAtR`). -/
+def instR (xI : Msg) (q : OpenPiece) : ℕ := q.rep * OpenLower.qAt xI q.level + q.query
+
+/-- The deployed record over `layVR elem`. -/
+abbrev DR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (IV : Claims.Verifier Coin) : Claims.Recursion.Deploy Coin :=
+  recBound _root_.Flock.Readable.relation b (layVR elem) IV
+
+/-- **What `dirsTie_staged` takes beyond `StagedAt`**, at each piece a level part owns, at its instance `instR`: the
+part's circuit, with `dirs` among its inputs; the staged setup's registered rows (`hidx`, `hown`) and check 5's source
+(`hf`), its unit no other recursive unit (`hso`, `hop`, `hsp`), the setup listing `openSetupSt` (`hset`); the
+instance among the statement's, the public rows' and check 5's `dirs` rows; and `posAt` the position check 5 registers
+there (`openPos`, the coin tie). -/
+def DirsSideR (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
+    (IV : Claims.Verifier Coin) (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg)
+    (Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace)
+    (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ) : Prop :=
+  OpenLower.AtPieces FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) pieces
+    fun x cs _ LANES HH s xO _ _ _ q =>
+    ∃ (cc : Circuit) (i0 : RecIns) (spec : SessionSpec) (sts : Array Stmt) (own : Array Registered.Port)
+      (f : RecCoins.Source),
+      (readX x).bind (fun r => r.w.parts[s]?.bind partCircuit) = some cc ∧ 4 < HmOut.nIn cc ∧
+      setupO xO = some (i0, spec, sts) ∧ i0.base.registered = some own ∧
+      RecCoins.Source.atC3 i0.src i0.inner i0.commits = some f ∧ (∀ u ∈ resSetup xO, u ∈ b.setup xO) ∧
+      Registered.unitIndices sts[0]!.pub = .ok (Array.range sts[0]!.pub.n) ∧
+      RecCoins.stackedParams sts[0]!.c.unit.name = none ∧ RecOpening.params sts[0]!.c.unit.name = none ∧
+      RecSparse.params sts[0]!.c.unit.name = none ∧
+      (∀ (r : XR) (ss : Array VStar.Stmt) (lv n : ℕ), readX x = some r → RecVStar.statements r.shape = .ok ss →
+        ss[s]? = some (.recOpen lv LANES HH n) → instR (Claims.Recursion.xI (DR b elem IV) x) q < n) ∧
+      instR (Claims.Recursion.xI (DR b elem IV) x) q < sts[0]!.pub.n ∧
+      ∀ (inn : RecCoins.Inner) (cr dr : Array (Array ℕ)), f.load sts[0]!.c.unit.name = .ok inn →
+        FlockSoundness.Discharge.Recursion.openRows inn LANES HH = some (cr, dr) →
+        instR (Claims.Recursion.xI (DR b elem IV) x) q < dr.size ∧
+        posAt (Claims.Recursion.xI (DR b elem IV) x)
+            ((List.range (Bd.DE.V.k (Claims.Recursion.xI (DR b elem IV) x))).map cs) q =
+          openPos inn LANES HH (instR (Claims.Recursion.xI (DR b elem IV) x) q)
+
+/-- **`CopyDirsTieR` at the deployed layout `layVR`**, from `DirsSideR`: `dirsTie_staged` at each piece's instance
+`instR`, whose block and VU are `copyAtR`'s (`partCircuit_staged`: the part's circuit is the staged table's). -/
+theorem copyDirsTieR_layVR {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
+    {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
+    {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
+    (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
+    (hside : DirsSideR b elem IV shape untr cmt Bd pieces posAt) :
+    OpenLower.CopyDirsTieR FlockDeploy.sha512 (DR b elem IV) shape untr b cmt (layVR elem) Bd pieces posAt := by
+  intro x st hx hf cs ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  obtain ⟨cc, i0, spec, sts, own, f, hpc, hdin, hsu, hown, hf', hset, hidx, hso, hop, hsp, hin, hnp, hrows⟩ :=
+    hside x st hx hf cs ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
+  rw [hr] at hpc
+  change r.w.parts[s]?.bind partCircuit = some cc at hpc
+  obtain ⟨hxp, -, -, -, hT, hnc, -, hck, hS⟩ := hst
+  have hp : p = { i0.base.read with sts } := Option.some.inj (hxp.symm.trans (parse_of_setupO hsu))
+  have h0 : 0 < sts.size := by subst hp; exact ht
+  have e0 : sts[0]! = sts[0] := getElem!_pos sts 0 h0
+  rw [e0] at hidx hso hop hsp hnp hrows
+  obtain ⟨p', -, -, hx', htyp, hpi, -, -, h0p, -⟩ := stagedTables hS
+  rw [hxp] at hx'
+  cases hx'
+  have hcc := partCircuit_staged hS hxp htyp hpi hr hpc h0p
+  obtain ⟨inn, cr, dr, hinn, hor, htie⟩ := dirsTie_staged hT hnc hS hck hr hss hsv hpc hxp ht hsu h0 hidx hown
+    hso hop hsp hf' hset hdin (hin r ss lv n hr hss hsv) hnp
+  obtain ⟨hdr, hpos⟩ := hrows inn cr dr hinn hor
+  show OpenLower.DirsTie (OpenLower.copyR (Claims.Recursion.xI (DR b elem IV) x) w p ht q) LANES HH
+    (posAt (Claims.Recursion.xI (DR b elem IV) x)
+      ((List.range (Bd.DE.V.k (Claims.Recursion.xI (DR b elem IV) x))).map cs) q)
+  rw [hpos]
+  have hcp : OpenLower.copyR (Claims.Recursion.xI (DR b elem IV) x) w p ht q =
+      Flock.Readable.copyOf p 0 ht w (instR (Claims.Recursion.xI (DR b elem IV) x) q / cc.g)
+        (instR (Claims.Recursion.xI (DR b elem IV) x) q % cc.g) 0 := by
+    simp only [OpenLower.copyR, OpenLower.copyAtR, instR, getElem!_pos p.sts 0 ht, hcc]
+  rw [hcp]
+  exact htie hdr
+
 end
 
 end RecDeploy.OpenDirs
