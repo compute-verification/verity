@@ -3,12 +3,14 @@ the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is
 difftested in `verity/core/devices/memory_challenger/lean/tests/test_wipe_protocol.py`): an honest segment certified at
 ⌈M/19⌉ + E, its bound vacuous when the egress is uncounted, a prover keeping more than f·M of foreign content and a late
 read rejected, a session the prover left undecided. The leg runs whole against a challenger side on a host of its own
-(`wipe_side.py`), and the bound's numeric step holds at the reads it is stated for."""
+(`wipe_side.py`), its record naming what the bound doesn't cover (the links leaving the node, the undeclared tiers, an
+uncounted egress) and the session's window, and the bound's numeric step holds at the reads it is stated for."""
 
 from __future__ import annotations
 
 import json
 import math
+import os
 import socket
 import sys
 import threading
@@ -148,17 +150,27 @@ def test_the_party_follows_period_json(tmp_path) -> None:
         WP.placement("n0", "a", simulated=True)
 
 
-def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
-    """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
-    (`wipe_side.py`), its case and record written, the premise recorded as held. No network certifier counted the
-    egress, so its bound is vacuous."""
+CONTROL = {"name": "control", "to": "outside", "via": "eth0 10.0.0.13: ssh"}
+
+
+def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
     period = tmp_path / "periods" / "p0"
     period.mkdir(parents=True)
-    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor"}))
+    (period / "period.json").write_text(json.dumps({"challenger_host": "auditor", "wipe": wipe}))
     device = tmp_path / "device"
     device.mkdir()
     side = WP.Party("auditor", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
     monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    return period
+
+
+def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
+    """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
+    (`wipe_side.py`), its case and record written, the premise recorded as held. No network certifier counted the
+    egress, so its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
+    the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
+    carries the session's window on the challenger's clock."""
+    period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
     out = tmp_path / "out"
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
@@ -169,7 +181,61 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     record = json.loads((out / "wipe.json").read_text())
     assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
-    assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "memory_bits": M, "segments": W.SEGMENTS, "tier": W.TIER}
+    assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "links": [CONTROL], "memory_bits": M,
+                                         "segments": W.SEGMENTS, "tier": W.TIER}
+    control, challenger = record["placement"]["links"]
+    assert control == WP.link("control", "n0", "outside", CONTROL["via"])
+    assert challenger["name"] == "challenger" and challenger["ends"] == ["n0", "auditor"]
+    assert challenger["via"] == f"{record['report']['connection']['local']} to {record['report']['connection']['peer']}"
+    assert challenger["via"].startswith("127.0.0.1:") and challenger["counted_by"] is None
+    assert answer["profile"]["placement"] == record["placement"]
+    dram = [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "host-dram"]
+    assert len(dram) == 1 and dram[0]["what"] == "the host's DRAM outside the fill" and dram[0]["bytes"] > 0
+    window = {"t0": "2026-10-27T08:00:00.123456Z", "t1": "2026-10-27T08:03:03.000001Z"}
+    assert {k: record["report"]["window"][k] for k in window} == window
+    assert record["window"]["challenger"] == record["report"]["window"] and set(record["window"]["prover"]) == {
+        "clock", "t0", "t1"}
+    gaps = record["uncertified"]
+    assert not any(g.startswith("key custody") for g in gaps) and gaps[0].startswith("egress: signed UNCOUNTED")
+    assert any(g.startswith("tier host-dram: the host's DRAM outside the fill (") for g in gaps)
+    assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
+    s = W.summary(record)
+    assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps
+
+
+def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, monkeypatch) -> None:
+    period = _side(tmp_path, monkeypatch, {"egress_bits": 0})
+    with pytest.raises(ValueError, match="reaches only a challenger on this node"):
+        W.leg(period, "n0", tmp_path / "out")
+
+
+def test_what_the_bound_does_not_cover() -> None:
+    """The memory outside the declared tier, a placement off its own host, and a counted link left out."""
+    gpu = W.undeclared("gpu-hbm", 100, {"tier": "gpu-hbm", "total_bytes": 1000, "device": "NVIDIA H200"})
+    assert gpu[0] == {"tier": "gpu-hbm", "bytes": 900, "what": "NVIDIA H200's memory outside the fill"}
+    assert gpu[1]["tier"] == "host-dram" and gpu[1]["what"] == "the host's DRAM"
+    host = W.undeclared("host-dram", 100)
+    assert host[0]["tier"] == "host-dram" and host[0]["bytes"] == gpu[1]["bytes"] - 100
+    counted = WP.link("relay", "n0", "outside", "eth1", mbps=10_000, counted_by="network certifier (NET-78)")
+    where = WP.placement("n0", "n0", simulated=True, links=[counted, WP.link("control", "n0", "outside", "eth0")],
+                         undeclared=gpu[:1])
+    gaps = W.uncertified(where, None)
+    assert gaps[0] == f"key custody: {where[WP.PREMISE]}" and len(gaps) == 3
+    assert gaps[1] == ("tier gpu-hbm: NVIDIA H200's memory outside the fill (900 bytes) is undeclared: the fill doesn't "
+                       "cover it and M doesn't count it")
+    assert gaps[2] == ("link control: n0 to outside (eth0) is counted by no network certifier, so what leaves on it is "
+                       "outside E")
+    assert WP.utc(1_793_088_000_123_456_789) == "2026-10-27T08:00:00.123456Z"
+
+
+def test_the_disks_are_the_block_device_filesystems_once(tmp_path) -> None:
+    st = os.statvfs(tmp_path)
+    mounts = tmp_path / "mounts"
+    mounts.write_text("\n".join([f"/dev/x {tmp_path} ext4 rw 0 0", f"/dev/y {tmp_path} ext4 rw 0 0",
+                                 f"/dev/loop3 {tmp_path} squashfs ro 0 0", f"tmpfs {tmp_path} tmpfs rw 0 0",
+                                 "/dev/z /nonexistent/wipe-period ext4 rw 0 0"]) + "\n")
+    assert W.disks(mounts) == st.f_blocks * st.f_frsize
+    assert W.disks(tmp_path / "missing") == 0
 
 
 def test_the_config_and_the_device_fit() -> None:
@@ -182,6 +248,10 @@ def test_the_config_and_the_device_fit() -> None:
                 {"egress_bits": -1}, {"egress_bits": "0"}):
         with pytest.raises(ValueError, match="foreign_bytes is a byte count"):
             W.config({"wipe": bad})
+    assert W.config({"wipe": {"links": [CONTROL | {"mbps": 1000, "counted_by": None}]}})["links"][0]["mbps"] == 1000
+    for bad in ({"name": "x", "to": "y"}, CONTROL | {"ends": ["a", "b"]}, CONTROL | {"mbps": "1"}, "control"):
+        with pytest.raises(ValueError, match="wipe.links: each is"):
+            W.config({"wipe": {"links": [bad]}})
     p = W.params_for()
     assert W.foreign_labels("fM", p) == W.SEGMENT_LABELS // 19 + 1
     assert W.foreign_labels(100, p) == 2 and W.foreign_labels(0, p) == 0 and W.foreign_labels(1 << 40, p) == p.labels

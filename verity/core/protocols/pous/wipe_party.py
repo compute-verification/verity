@@ -9,7 +9,9 @@ session, after its last batch or a late or wrong one. The challenger draws the l
 id in its own session log, and signs under its own key with the egress its host was given (`--egress-bits`, the network
 certifier's count over the session; `UNCOUNTED`, which bounds nothing, when it has none): never a count the prover
 sends. A prover that leaves before the session ends leaves it unsigned. The side reports `{"commitment", "ended",
-"host", "public_key", "reads", "signed"}`, `signed` null when unsigned.
+"host", "public_key", "reads", "signed", "window"}`, `signed` null when unsigned, and `window` the session's `t0` (the
+prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
+interval a network certifier counts the session's egress over.
 
 `python -m verity.core.protocols.pous.wipe_party --device DIR [--listen HOST:PORT] [--egress-bits N] [--streamer
 build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"k", "labels", "limit_ns", "node",
@@ -17,7 +19,7 @@ build|PATH [--threads T]]` is the challenger's side (`main`): it reads the reque
 With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `session(party, request, prover)` is
 the leg's side: it starts the challenger's side with `party.command`, connects to `party.address` (by default the port
-it printed, on this machine) and answers from `prover` (`answer`).
+it printed, on this machine), answers from `prover` (`answer`) and adds the connection's two addresses as it saw them.
 """
 
 from __future__ import annotations
@@ -121,10 +123,21 @@ def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int
     return n
 
 
-def report(c: sw.Challenger, public_key: bytes) -> dict[str, Any]:
-    return {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
-            "public_key": public_key.hex(), "reads": len(c.batches),
-            "signed": None if c.signed is None else c.signed.to_json()}
+def utc(unix_ns: int) -> str:
+    """A real-time clock reading as ISO 8601 UTC, to the microsecond."""
+    s, ns = divmod(unix_ns, 10 ** 9)
+    return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(s)) + f".{ns // 1000:06d}Z"
+
+
+def report(c: sw.Challenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
+    """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock."""
+    out = {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
+           "public_key": public_key.hex(), "reads": len(c.batches),
+           "signed": None if c.signed is None else c.signed.to_json()}
+    if window is not None:
+        out["window"] = {"t0": utc(window[0]), "t1": utc(window[1]), "t0_unix_ns": window[0], "t1_unix_ns": window[1],
+                         "clock": f"{out['host']}'s real-time clock"}
+    return out
 
 
 def commitment_of(j: Mapping[str, Any]) -> sw.WipeCommitment:
@@ -173,12 +186,23 @@ class Party:
         return cls(host, tuple(entry["command"]), (h, int(p)))
 
 
+def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
+         counted_by: str | None = None) -> dict[str, Any]:
+    """A link leaving the prover's node, as `Accounting.Placed.Links` declares one: its `ends` (the node, and `to` past
+    its boundary), what carries it (`via`), its capacity in Mb/s when known, and the network certifier that counts what
+    leaves on it (`counted_by`), `None` when none does, so its egress is outside the session's count."""
+    return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
+
+
 def placement(node: str, host: str, *, verifier: str | None = None, store: Mapping[str, Any] | None = None,
-              simulated: bool = False) -> dict[str, Any]:
+              simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
+              undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-nebius-host`'s premise holds: that the memory challenger ran on a
     machine the prover doesn't control, which is never the prover's node. `kind` names the placement: `own-host`,
     `simulated` (the challenger a process of its own on the prover's node, standing in for its own host, the premise
-    assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says."""
+    assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
+    `links` are the links leaving the prover's node (`link`), and `undeclared` the memory the node has outside the fill's
+    declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
     held = host != node
     if simulated and held:
         raise ValueError(f"a simulated placement runs the memory challenger on the prover's node {node}, not on {host}")
@@ -187,7 +211,8 @@ def placement(node: str, host: str, *, verifier: str | None = None, store: Mappi
            PREMISE: {"own-host": f"holds: the memory challenger ran on {host}, not the prover's {node}",
                      "simulated": f"simulated: the memory challenger ran as a process of its own on the prover's node "
                                   f"{node}, its key in its own scratch, standing in for a host the prover doesn't control",
-                     "prover-node": f"unmet: the memory challenger ran on the prover's node {node}"}[kind]}
+                     "prover-node": f"unmet: the memory challenger ran on the prover's node {node}"}[kind],
+           "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
     return out if store is None else out | {"prover_store": dict(store)}
 
 
@@ -201,7 +226,8 @@ def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
 def session(party: Party, request: Mapping[str, Any], prover: sw.Prover, *,
             stop_after: int | None = None) -> dict[str, Any]:
     """One wipe with the challenger's side `party` starts: `request` sent, the fill kept and each batch answered by
-    `prover`, the side's report back, with `answered`, the batches the prover answered."""
+    `prover`, the side's report back, with `answered`, the batches the prover answered, and `connection`, the
+    socket's `local` and `peer` addresses (`HOST:PORT`) on the prover's side."""
     p = subprocess.Popen(list(party.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     try:
         p.stdin.write(json.dumps(dict(request), sort_keys=True) + "\n")
@@ -212,6 +238,7 @@ def session(party: Party, request: Mapping[str, Any], prover: sw.Prover, *,
         port = json.loads(line)["listening"]
         with socket.create_connection(party.address or ("127.0.0.1", port)) as s:
             s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            connection = {k: "%s:%d" % a[:2] for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
             with s.makefile("rwb") as f:
                 answered = answer(f, prover, stop_after)
         out = json.loads(p.stdout.readline())
@@ -219,7 +246,7 @@ def session(party: Party, request: Mapping[str, Any], prover: sw.Prover, *,
         rc = p.wait()
     if rc != 0:
         raise RuntimeError(f"the challenger's side on {party.host} exited {rc}")
-    return out | {"answered": answered}
+    return out | {"answered": answered, "connection": connection}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -248,6 +275,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     with socket.create_server((host, int(port))) as srv:
         print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
         conn, _ = srv.accept()
+        t0 = time.time_ns()
         with conn:
             conn.setblocking(True)
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
@@ -258,12 +286,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             with conn.makefile("rwb") as f:
                 c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=a.egress_bits,
                           fill=None if streamer is None else native)
-    print(json.dumps(report(c, signer.public_key) | extra, sort_keys=True), flush=True)
+            t1 = time.time_ns()
+    print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
     return 0
 
 
-__all__ = ["CHUNK", "PREMISE", "UNCOUNTED", "Party", "answer", "commitment_of", "main", "params_of", "placement", "report",
-           "request_of", "serve", "session", "signed_of"]
+__all__ = ["CHUNK", "PREMISE", "UNCOUNTED", "Party", "answer", "commitment_of", "link", "main", "params_of", "placement",
+           "report", "request_of", "serve", "session", "signed_of", "utc"]
 
 if __name__ == "__main__":
     sys.exit(main())

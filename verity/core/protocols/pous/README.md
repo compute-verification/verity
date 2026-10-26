@@ -126,7 +126,11 @@ before the fill, with host memory as its CPU stand-in) and has the challenger st
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
 past `f·M`, which must reject), and its `placement` `simulated` names a challenger on the prover's node the stand-in for
-one on its own host.
+one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
+no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
+the node's memory outside the declared tier (`undeclared_tiers`: the device's outside the fill, the host's DRAM, its
+disks) and an egress signed `UNCOUNTED`. It also carries the session's window, `t0` (the prover connected) and `t1` (the
+session signed) on the challenger's clock, which a network certifier counts the egress over.
 
 Tests: `uv run pytest verity/core/protocols/pous` (about 8 s). P3's 64 KB-label segment vector runs with `VERITY_POUS_SLOW=1`.
 Regenerate the vectors with `python verity/core/protocols/pous/tests/pous_vectors.py`, and the Lean vectors with
