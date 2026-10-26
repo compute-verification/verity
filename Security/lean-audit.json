@@ -2784,6 +2784,15 @@
    "assumptions": [],
    "type_hash": "21c560aa53d87b8de413f4642976ab01db69dcac363f25a19d88b4b732d30987"
   },
+  "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": {
+   "owner": "@lean",
+   "signature": [
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :",
+    "  Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod"
+   ],
+   "assumptions": [],
+   "type_hash": "8c3dda6ff4ca31c818104a37896b5af0666c53ff846e2ccaf90aa792e29a6820"
+  },
   "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod": {
    "owner": "@lean",
    "signature": [
@@ -11686,7 +11695,8 @@
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close)."
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
+   "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -12233,6 +12243,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Bandwidth.SecurityProofs.AuditInteractive",
     "Bandwidth.SecurityProofs.AuditInteractiveRO",
     "Bandwidth.SecurityProofs.AuditJoint",
@@ -12321,7 +12332,11 @@
     "Accounting.BandwidthCoins": "c3bb41c05837c55489d3f73243f4280cbdb8336332389cf2c224c1e49c149b17",
     "Accounting.RealizesBandwidth": "77354a4cb9b40ce1fbb04b20b43f916dc96c419d4cc94233aa8adefcfafe9c89"
    },
-   "guarantees": ["Accounting.SecurityProofs.BandwidthOfAudit", "Accounting.SecurityProofs.BandwidthOfAuditPerRun"]
+   "guarantees": [
+    "Accounting.SecurityProofs.BandwidthOfAudit",
+    "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"
+   ]
   },
   "Definitions.Accounting.BoundReceipt": {
    "digest": "53ed45e11502dd358ad97759eaa6c04a2cb7c1faca874618a8597f6dc4d70c27",
@@ -12831,6 +12846,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
@@ -13663,6 +13679,13 @@
     "Accounting.Guarantees.JointHorizonBlocksAbstract": "144ba7e5493fa277ccd9ef43927deca71dd15c0683b5b6094d1f253c59e56eea"
    },
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocksAbstract"]
+  },
+  "Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod": {
+   "digest": "92bbb6a198220d610653da2cc982f5ce463b117d9823a5548efd4fd04aaf38ff",
+   "definitions": {
+    "Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod": "2e2b525eded3e46566b8b1b26ee5a168da7e81167dc6cd285dcab61e0cf32914"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
   },
   "Definitions.Accounting.Guarantees.JointPeriod": {
    "digest": "0b040bf0543c502206f56df368155b42518932ba96b305671c00e355eee93d49",
@@ -14592,6 +14615,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
@@ -14639,6 +14663,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.JointHorizonBlocks"]
   },
+  "Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod": {
+   "digest": "14292553c86b96d68d79da7719972e449bf4300354039c2c2af7f3d9eac2f93c",
+   "definitions": {
+    "Accounting.RealizesBandwidthOfAuditPerRunPeriod": "791ddd03a495c1a38f95db79fd73bc9fc518abee0e5320ceff094ed79a3a0629"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod"]
+  },
   "Definitions.Accounting.JointPeriod": {
    "digest": "1bd7aa7b193bcd9a8591295185d5bfac76487671f52e32c46d11e0c8f0a011f5",
    "definitions": {
@@ -14676,6 +14707,7 @@
     "Accounting.instFintypeAudit": "dc9e117e0e88e8b554ce66dc5272159cd8ee10f8ae1184a3bfe1034a0b87a87d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
@@ -17543,6 +17575,7 @@
     "Accounting.SecurityProofs.B2P2Ring",
     "Accounting.SecurityProofs.B4",
     "Accounting.SecurityProofs.B4Covered",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.Composition",
     "Accounting.SecurityProofs.Fit",
@@ -17904,6 +17937,7 @@
     "Accounting.SecurityProofs.Actual.Runtime",
     "Accounting.SecurityProofs.Actual.Windows",
     "Accounting.SecurityProofs.Actual.WindowsAt",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.JointHorizon",
     "Accounting.SecurityProofs.JointHorizonBlocks",
@@ -22021,6 +22055,7 @@
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.BoundReceiptLink",
     "Accounting.SecurityProofs.BoundReceiptLinkInteractive",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.CarrierBits",
     "Accounting.SecurityProofs.Colocation",
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
@@ -23560,6 +23595,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.BandwidthOfAudit",
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
+    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod",
     "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityPeriod",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
