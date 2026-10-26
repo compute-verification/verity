@@ -243,3 +243,14 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     k = d1["K"][f"{2.0 ** -20:.3g}"]
     assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
     assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
+
+
+def test_a_structured_find_in_what_the_verifier_received_is_listed_and_a_leaked_one_fails():
+    window = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
+    found = {"verifier_found": ["head egress 0 @160"], "structured": {"head egress 0 @160": "across"}}
+    member = {"windows": [window], "network": {"accepted": True}}
+    assert cr.unexpected("honest", member | {"received": found | {"leaked": []}}) == []
+    assert cr.unexpected("honest", member | {"received": found | {"leaked": ["head egress 0 @160"]}}) == [
+        "a witness piece in what the verifier received"]
+    assert cr.unexpected("honest", member | {"received": {"verifier_found": ["x"]}}) == [
+        "a witness piece in what the verifier received"]

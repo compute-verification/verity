@@ -264,13 +264,15 @@ def escaped(name: str, m: dict, s: dict) -> dict | None:
 
 def unexpected(name: str, m: dict, escape: dict | None = None) -> list[str]:
     """What keeps an N2 driver's member from its ``ok``: the conditions `n2_zk` and `n2_advised_zk` hold it to, but
-    a negative's acceptance when it escaped the draw (`escaped`)."""
+    a negative's acceptance when it escaped the draw (`escaped`). A witness piece counts when the scan reads it
+    ``leaked`` (`leak_scan.classify`); a ``structured`` find is listed, not counted, as the drivers decide."""
     wins, net, rec = m.get("windows") or [], m.get("network") or {}, m.get("received") or {}
     return ([f"windows {[w.get('window') for w in wins if not w.get('as_expected')]} not as expected"]
             * any(not w.get("as_expected") for w in wins)
             + [f"network {'accepted' if net.get('accepted') else 'refused'}"]
             * (net.get("accepted") != (name == "honest") and escape is None)
-            + ["a witness piece in what the verifier received"] * bool(rec.get("leaked") or rec.get("verifier_found"))
+            + ["a witness piece in what the verifier received"] * bool(rec.get("leaked") if "leaked" in rec
+                                                                        else rec.get("verifier_found"))
             + [f"the control (the prover's own {(rec.get('control') or {}).get('file')}) holds "
                f"{(rec.get('control') or {}).get('blobs_found')} of {(rec.get('control') or {}).get('of')} pieces, "
                "so the scan isn't shown to find a leak"] * ((rec.get("control") or {}).get("holds_all") is False))
