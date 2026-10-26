@@ -222,7 +222,8 @@ theorem recKSDecompL_of_leavesJ
     RecKSDecompL rd b aux nOf hd rest wE final w L := by
   have h : Top.Targets rd (rowsD resP key) (holdsD rd key elemAt vvAt side posAt) (Top.accRC rd key) :=
     Top.targets_of_open rd _ _ _ hRdep hDm
-      (Top.targetE_accRC rd key _ (rowEHolds_PD rd resP key elemAt vvAt side posAt))
+      (Top.targetE_accRC rd key (fun P' ch h => Top.targetE_rowD rd P' ch key h) _
+        (rowEHolds_PD rd resP key elemAt vvAt side posAt))
       (DecodeAt.decode_at S rd _)
   have hP : ∀ x, (recL rd b aux nOf hd rest wE final w L).parse x = parse x := fun _ => rfl
   have hS : ∀ f, Claims.Recursion.Form.Dense f → Claims.Recursion.Form.Dense f := fun _ h => h
