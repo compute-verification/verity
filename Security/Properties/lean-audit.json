@@ -2007,9 +2007,9 @@
    "assumptions": [],
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162"
   },
-  "Verity.soundness_of_legs": {
+  "Verity.soundness_of_subprotocols": {
    "owner": "@proofs",
-   "signature": ["Verity.soundness_of_legs : Verity.Soundness"],
+   "signature": ["Verity.soundness_of_subprotocols : Verity.Soundness"],
    "assumptions": [],
    "type_hash": "a00afad94fb0ef9fcf724c1a0b9e476656902a48e953c90754ad6a5648a3e911"
   }
@@ -3072,7 +3072,7 @@
    "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes the setup check's open AcceptsDecodes and PublishesRoot, CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
-   "Verity.soundness_of_legs": "frozen (premise): JointHorizon at onsite's compiled verifier: its event's acceptance is Core.Onsite.protocol.answer's and each audit's verdict is its compiled component's (Verity.compiled), but it takes each audit's per-period guarantee at its compiled component (Accounting.PeriodRun.Sound, no premise module's) as a hypothesis until the legs are proved (ONE-8 and ONE-18 of note:proofs/20261026T0332Z-report-onethm), and the run's partition, network claim and coin coordinates are still fields of the run (ONE-7, ONE-12, ONE-4)"
+   "Verity.soundness_of_subprotocols": "frozen (premise): JointPeriod at onsite's compiled verifier in the commit-then-coin game (Verity.Vocab.Soundness): its event's acceptance is Core.Onsite.protocol.answer's outside the LMS break, and each subprotocol's verdict is its compiled component's on the device's logged coins (Verity.Vocab.run), but it takes each subprotocol's per-period guarantee at that run (Verity.Vocab.SampledProofsSound, PouwSound, PousSound, BandwidthAuditSound, NetworkCertifierSound; no premise module's) as a hypothesis until each is proved (ONE-8, ONE-10, ONE-11, ONE-12, ONE-16 of note:proofs/20261026T0332Z-report-onethm), and Vocab's fields are given until ONE-4, ONE-7 and ONE-19 define them"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -3633,7 +3633,7 @@
     "_private.CoreComposition.Product.0.Core.Composition.keysOf._sparseCasesOn_1": "8c7327936ba35502233279cb8c67a11eec17be1a4589db306ed6e85b626187d6",
     "_private.CoreComposition.Product.0.Core.Composition.reasons": "f19dd4d38993b4aec3bfb2e367bea0f8433abfc65851e0abbb8d3828495332ad"
    },
-   "guarantees": ["Properties.Composition.acceptMeans", "Verity.soundness_of_legs"]
+   "guarantees": ["Properties.Composition.acceptMeans", "Verity.soundness_of_subprotocols"]
   },
   "CoreOnsite": {
    "digest": "c3f67e937c209e0a8b0efbab3b34b066b2e1ab13cd82c1354230e1fb7188c0a7",
@@ -3641,7 +3641,7 @@
     "Core.Onsite.components": "5e3287bd79949c584a1b8731a656311dd84c64628b2e13e0e0a3ca24c8e74c28",
     "Core.Onsite.protocol": "f8f6f2c06e3b3324404115ac8351e15f73ba5ab7cb8c34f10c636b672e07cb17"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "CoreProtocol.Profile": {
    "digest": "5984142843feabc0265c0dbc835f42d089c7efe9b318f6e435b25c8acec39e2d",
@@ -3711,7 +3711,7 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "CoreProtocol.Protocol": {
@@ -3796,7 +3796,7 @@
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "CoreProtocol.Ratio": {
@@ -3829,7 +3829,7 @@
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Definitions.Accounting.Actual.WipeDraw": {
@@ -3932,7 +3932,7 @@
     "Properties.Requirement.held",
     "Properties.Requirement.read",
     "Properties.Requirement.stepRegion",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Definitions.Accounting.Joint": {
@@ -3953,7 +3953,7 @@
    "guarantees": [
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Definitions.Accounting.JointPeriod": {
@@ -3992,7 +3992,7 @@
     "Accounting.instDecidableEqAudit": "551d5bbb9d5a40c37cbcc687b93b265d4cb0120365b1f1fc79580bc9478d7e60",
     "Accounting.instFintypeAudit": "dc9e117e0e88e8b554ce66dc5272159cd8ee10f8ae1184a3bfe1034a0b87a87d"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "Definitions.Accounting.PerRun": {
    "digest": "b1c6c044380a189c68a4c095f815da1bb330274907bfcf0979276ad15954c950",
@@ -4253,7 +4253,7 @@
     "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots",
     "NciCheck.Properties.SecurityProofs.ThrottlesSlots",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Definitions.Core.Declaration": {
@@ -4379,7 +4379,7 @@
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.Reports",
     "NciCheck.Properties.SecurityProofs.Witnesses",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Definitions.Core.Prims": {
@@ -4944,7 +4944,7 @@
     "Pous.Period.SecurityProofs.periodHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeld",
     "Properties.RemoteAudit.Line.SecurityProofs.lineHeldIdentity",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Definitions.Pouw.RelativeSecurity": {
@@ -5358,7 +5358,7 @@
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
     "Properties.SampledProofs.noAcceptAfterHalt",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Canon": {
@@ -5425,7 +5425,7 @@
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Draw": {
@@ -5491,7 +5491,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Extract": {
@@ -5517,7 +5517,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Firewall": {
@@ -5528,7 +5528,7 @@
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Hash": {
@@ -5639,7 +5639,7 @@
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Hm96": {
@@ -5721,7 +5721,7 @@
     "Properties.RemoteAudit.releasedStayOut",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.HmRow": {
@@ -5760,7 +5760,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Keccak": {
@@ -5777,7 +5777,7 @@
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Net": {
@@ -5791,7 +5791,7 @@
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Partition": {
@@ -5810,7 +5810,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Program": {
@@ -6021,7 +6021,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Public": {
@@ -6048,7 +6048,7 @@
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Qcall": {
@@ -6109,7 +6109,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Qword": {
@@ -6134,7 +6134,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Registered": {
@@ -6150,7 +6150,7 @@
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.Steps": {
@@ -6176,7 +6176,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Flock.TemplateQuery": {
@@ -6223,7 +6223,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Identity.Sha512": {
@@ -6267,7 +6267,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.frameSizes",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Identity.Tagged": {
@@ -6305,7 +6305,7 @@
     "Properties.Pouw.Commit.drawCoinAccepts",
     "Properties.Pouw.Commit.epochSaltAccepts",
     "Properties.Pouw.Commit.frameSizes",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Lms.Sign": {
@@ -6395,7 +6395,7 @@
     "Properties.NetworkRecords.noGridMeans",
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "MemoryChallenger.FrameV3": {
@@ -6431,7 +6431,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "MemoryChallenger.Judge": {
@@ -6475,7 +6475,7 @@
    "guarantees": [
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "MemoryChallenger.Records": {
@@ -6558,7 +6558,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "MemoryChallenger.SignedMessage": {
@@ -6576,7 +6576,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "MemoryChallenger.Verdict": {
@@ -6611,7 +6611,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "NciCheck.Baseline": {
@@ -6973,7 +6973,7 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "NetworkCheck.Certificate": {
@@ -7075,7 +7075,7 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "NetworkCheck.Check": {
@@ -7176,7 +7176,7 @@
     "Properties.NetworkRecords.answerAcceptMeans",
     "Properties.NetworkRecords.noGridAcceptsMore",
     "Properties.NetworkRecords.noGridMeans",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "NetworkCheck.Period": {
@@ -7278,7 +7278,7 @@
     "_private.NetworkCheck.Period.0.NetworkCheck.Period.keysOf": "bedcd61816d7fe8a1685b659a3cb8c6d503104b32b102bece9c06421f50614fc",
     "_private.NetworkCheck.Period.0.NetworkCheck.Period.keysOf._sparseCasesOn_1": "065ae26563018312c1872bc0c9d25e56c60eb915f1b44cd5997925f95e24b2c9"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "NetworkCheck.Records": {
    "digest": "6860ab656070e758e8d3a9ead218cd46b82fd42b8d6bb0a6b8a18ae4103e76de",
@@ -7403,7 +7403,7 @@
     "PousCheck.Certificate.profileJson": "dc1c033fa1bc4d0379df74bb170b762b0a857c3c42713a6a7470f87ef332b1ed",
     "PousCheck.Certificate.strs": "11800377a10bc5580521885b71fed1cbcf948c01ddc69a1d364543341fb6bdbe"
    },
-   "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts", "Verity.soundness_of_legs"]
+   "guarantees": ["PousCheck.Properties.SecurityProofs.timedAuditAccepts", "Verity.soundness_of_subprotocols"]
   },
   "PousCheck.Challenge": {
    "digest": "c85d778a47d9c1fb2d13846432c2991e5f97d3a5aa557155e4d8aafe87cbbb6e",
@@ -7463,7 +7463,7 @@
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PousCheck.P2": {
@@ -7507,7 +7507,7 @@
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "PousCheck.Properties.SecurityProofs.deployed",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PousCheck.Params": {
@@ -7593,7 +7593,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PousCheck.RunProtocol": {
@@ -7631,7 +7631,7 @@
     "_private.PousCheck.RunProtocol.0.PousCheck.RunProtocol.hexJ": "ff8a918744c89cd27a6ea08a7a873b568ef72b41efc360c28b1539581c7671c9",
     "_private.PousCheck.RunProtocol.0.PousCheck.RunProtocol.natJ": "5dfabf7ec43a535e341beaced010298d5a02bb8b6ef82bf83d93c07a0a445ba1"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "PousCheck.Setup": {
    "digest": "369d32cb35688d77475a78abff9fdf2451e64821e4db2faf61748d95cefaba4b",
@@ -7684,7 +7684,7 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PousCheck.TimedAudit": {
@@ -7753,7 +7753,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Credit": {
@@ -7889,7 +7889,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Json": {
@@ -7916,7 +7916,7 @@
     "Properties.Pouw.Credit.SecurityProofs.establishedSound",
     "Properties.Pouw.Credit.SecurityProofs.workDrawMisses",
     "Properties.Pouw.Strata.strataTile",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Pass": {
@@ -7995,7 +7995,7 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCheck.Tile": {
@@ -8018,7 +8018,7 @@
     "Properties.Pouw.Check.digestIsOneStage's",
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwCommit.Coins": {
@@ -8219,7 +8219,7 @@
     "Properties.Pouw.Window.kPrimeLeast",
     "Properties.Pouw.Window.kPrimeRefuses",
     "Properties.Pouw.Window.kPrimeServed",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Grid": {
@@ -8284,7 +8284,7 @@
     "Properties.Pouw.Window.pointEnumerates",
     "Properties.Pouw.Window.pointRefuses",
     "Properties.Pouw.Window.workAtRefuses",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Json": {
@@ -8314,7 +8314,7 @@
     "Properties.Pouw.LiveSalt.acceptMeans",
     "Properties.Pouw.LiveSalt.oneRoot",
     "Properties.Pouw.Strata.strataTile",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Length": {
@@ -8343,7 +8343,7 @@
     "Properties.Pouw.Check.neverNull",
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "PouwWindow.Public": {
@@ -8368,7 +8368,7 @@
     "Properties.Pouw.Check.publishesPublic",
     "Properties.Pouw.Check.undecidedOnlyFromService",
     "Properties.Pouw.Window.publicItems_eq",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "Properties.Accounting.Requirement": {
@@ -8546,7 +8546,7 @@
     "Properties.Composition.digests": "3f6c516221163d568ddc3ec0ad2128b6f40f10c8023f86cdbd9bc67367e89f38",
     "Properties.Composition.triples": "c13bf0420c351aa780cb5d3b9df5299a788f116b55f766540d9366b2993990d6"
    },
-   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts", "Verity.soundness_of_legs"]
+   "guarantees": ["Properties.Composition.acceptMeans", "Properties.Composition.answerAccepts", "Verity.soundness_of_subprotocols"]
   },
   "Properties.Evaluate": {
    "digest": "cd5c4e08ef821abd0b2f6be9c8d87edbb721cbc76cde9c021adc8949e7a7e177",
@@ -9617,7 +9617,7 @@
     "Verity.compiled": "ed0b7a968c3ecb94e90012439e9a9b8a117897b159560085c1172006f94a29b5",
     "Verity.component": "49a980b5bf830b5a5caeb4afbcde25bcce960798d1c1e8627f5a23c849fd043e"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "RemoteAudit.Basic": {
    "digest": "1abd58bcd7a8edab8f5f024aca09ead7e3d0025dede12f1e7831de62a850f782",
@@ -9674,7 +9674,7 @@
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Codec": {
@@ -9748,7 +9748,7 @@
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Difftest": {
@@ -9772,7 +9772,7 @@
     "_private.RemoteAudit.Difftest.0.RemoteAudit.Difftest.positive": "ab78f3c3ac4d4e58812d58e59a3baba57b5a6abe0f578dfd8995b10061d27e52",
     "_private.RemoteAudit.Difftest.0.RemoteAudit.Difftest.runsOf": "ba86ff3d37c7d9f117b0a1665f45bcf26049d3749557da0b11b1f2ae39666a39"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "RemoteAudit.Flight": {
    "digest": "0160a318e882bbe19512b29e46dfb02fa4a4968029fab1a164f0440018dbca5b",
@@ -9784,7 +9784,7 @@
     "RemoteAudit.Flight.step": "87356f3680242c4c3253c8e00c811f47d3b8aa35df1b9dcfaac58492a895382a",
     "RemoteAudit.Flight.step._sparseCasesOn_1": "d683ef459a69656e31ffc489d40e3cc272eb4dc9fa400f7cd7a48fc9bb68cfa4"
    },
-   "guarantees": ["Properties.RemoteAudit.liveIsRun", "Verity.soundness_of_legs"]
+   "guarantees": ["Properties.RemoteAudit.liveIsRun", "Verity.soundness_of_subprotocols"]
   },
   "RemoteAudit.Line": {
    "digest": "a922a376856353e99393efb6f2576bf2b570940107337621f486d19c396bfd99",
@@ -9852,7 +9852,7 @@
     "Properties.RemoteAudit.Line.lineChecked",
     "Properties.RemoteAudit.Line.stretchBound",
     "Properties.RemoteAudit.lineCoversSession",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Plan": {
@@ -9903,7 +9903,7 @@
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Pooled": {
@@ -9935,7 +9935,7 @@
     "Properties.RemoteAudit.lineCoversSession",
     "Properties.RemoteAudit.pooledCovers",
     "Properties.RemoteAudit.pooledCoversSession",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Protocol": {
@@ -9968,7 +9968,7 @@
     "_private.RemoteAudit.Protocol.0.RemoteAudit.Protocol.keys._sparseCasesOn_1": "4a31dea515fc88beb052abce00dc23e6f2e2b85e606dded25cbcc667eff9ffb3",
     "_private.RemoteAudit.Protocol.0.RemoteAudit.Protocol.natJ": "ded0ae769f279eec96a4886e7e53d4e17b5f0db223eae702b3c1bc15774da7cf"
    },
-   "guarantees": ["Verity.soundness_of_legs"]
+   "guarantees": ["Verity.soundness_of_subprotocols"]
   },
   "RemoteAudit.Receipts": {
    "digest": "a8eac003b744e47151af64db092362f750e38639c505338a597adcc0e03ffbb6",
@@ -10036,7 +10036,7 @@
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Schedule": {
@@ -10199,7 +10199,7 @@
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Shared": {
@@ -10217,7 +10217,7 @@
     "Properties.RemoteAudit.Shared.recordKeptAfterDraw",
     "Properties.RemoteAudit.Shared.sessionDrawsRecords",
     "Properties.RemoteAudit.liveIsRun",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Verifier": {
@@ -10354,7 +10354,7 @@
     "Properties.RemoteAudit.receiptsBelowLimit",
     "Properties.RemoteAudit.recordKeptAfterDraw",
     "Properties.RemoteAudit.releasedStayOut",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "RemoteAudit.Wire": {
@@ -10371,7 +10371,7 @@
     "RemoteAudit.Wire.decodeOpenings._sparseCasesOn_3": "cf94d3000bc69ce0f7f96f1f2485648f0ea0b17d0d2c553dbbe328e5d4f9d284",
     "RemoteAudit.Wire.openingsOf": "11050f1eddeef11a78bc9ae1ea2d502e65e8103adbfb2a95ee1f1cf106ec5b6b"
    },
-   "guarantees": ["Properties.RemoteAudit.liveIsRun", "Verity.soundness_of_legs"]
+   "guarantees": ["Properties.RemoteAudit.liveIsRun", "Verity.soundness_of_subprotocols"]
   },
   "SampledProofs.Bound": {
    "digest": "23ae437f7f883dcf409e9a6ad03dc10cfc00cf974f4a5de70ac7607e33a42161",
@@ -10392,7 +10392,7 @@
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Challenger": {
@@ -10652,7 +10652,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Fleet": {
@@ -10723,7 +10723,7 @@
     "Properties.SampledProofs.haltEndsOpen",
     "Properties.SampledProofs.haltIsFinal",
     "Properties.SampledProofs.noAcceptAfterHalt",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.OneStage": {
@@ -10774,7 +10774,7 @@
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Partition": {
@@ -10808,7 +10808,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Program": {
@@ -10825,7 +10825,7 @@
     "Properties.SampledProofs.SecurityProofs.drawMisses",
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.PyJson": {
@@ -10878,7 +10878,7 @@
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Registered": {
@@ -10922,7 +10922,7 @@
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Registration": {
@@ -10999,7 +10999,7 @@
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
     "Properties.SampledProofs.digestIsRecord's",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   },
   "SampledProofs.Run": {
@@ -11181,7 +11181,7 @@
    "guarantees": [
     "Properties.SampledProofs.acceptMeans",
     "Properties.SampledProofs.bernoulliBounds",
-    "Verity.soundness_of_legs"
+    "Verity.soundness_of_subprotocols"
    ]
   }
  },
