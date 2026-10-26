@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VerdictTargetL
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 
 /-!
@@ -10,9 +11,9 @@ import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 * `targetR_of`: `TargetR` from `TargetRDep`, each rep's coin rounds at the shape's sizes (`hsz`), its four
   accumulators (`hacc`), and the `rec-residuals` pieces with their cover and ties (`hcoverR`, `hE`, `hvv`): S and its
   groups are `DecAt.structure_ok`, `hw` is `DecAt.hw_of_acc` and `hparts` is `DecAt.partsZero_of_pieces`.
-* `targetD_of`: `TargetD` from `TargetDDep`, the `rec-open` pieces' sides and positions (`hside`, `hpos`) and the
-  passing level checks (`hlev`), with `TargetRDep`'s `hsz` for the verifier rows' run (`DecAt.rowsRun_of`):
-  `DecAt.rowD_target`.
+* `targetD_of`: `TargetD` from `TargetDDep`, the passing level checks (`hlev`), with the pieces' sides and positions
+  at the decision (`DecAt.hside`, `DecAt.hpos`) and `TargetRDep`'s `hsz` for the verifier rows' run
+  (`DecAt.rowsRun_of`): `DecAt.rowD_target`.
 
 `Top.targetL` (`VerdictTargetL`) gives `TargetL` from the coin tie `TargetZ`.
 -/
@@ -64,20 +65,12 @@ def TargetRDep : Prop :=
               (D.rep cls (acc x ms cs) i r).extras (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
             ∀ p (hp : p < gs.size) k (hk : k < gs[p].2.2.size), vvAt x cs (keyAt r p) k = el v gs[p].2.2[k]
 
-/-- **Row D's target at the deployed reader**: the `rec-open` pieces' sides (`hside`) and positions (`hpos`) at some
-key, and every verifier rows' run's level checks passing (`hlev`). -/
+/-- **Row D's target at the deployed reader**: some key for the `rec-open` pieces, and every verifier rows' run's
+level checks passing (`hlev`). The pieces' sides and positions are the decision's (`Rows.sideAt`, `Rows.posAt`). -/
 def TargetDDep : Prop :=
   ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
     i < D.sts.size →
-      ∃ (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (sideAt : Msg → List Msg → OpenPiece → OpenSide)
-        (posAt : Msg → List Coin → OpenPiece → ℕ),
-        (∀ r : Fin 2, ∀ q ∈ Rows.DecAt.rowDPiecesAt key i x, q.table = i → q.rep = r.val →
-          sideAt x ms q = D.side cls i r) ∧
-        (∀ r : Fin 2, ∀ v info kappa,
-          verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds (D.rep cls (acc x ms cs) i r).extras
-            (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
-          ∀ q ∈ Rows.DecAt.rowDPiecesAt key i x, q.table = i → q.rep = r.val →
-            posAt x cs q = (info.lg.conss[q.level]!).pos[q.query]!) ∧
+      ∃ _key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ,
         ∀ r : Fin 2, ∀ v info kappa,
           verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds (D.rep cls (acc x ms cs) i r).extras
             (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
@@ -112,9 +105,11 @@ theorem targetD_of (hR : TargetRDep rd P acc) (h : TargetDDep rd P acc) : Target
     omega
   obtain ⟨hsz, -⟩ := hR x ms cs hA D cls i hi
   obtain ⟨S, gs, hS, -⟩ := D.structure_ok cls hst hf hx hi D.points_eq
-  obtain ⟨key, sideAt, posAt, hside, hpos, hlev⟩ := h x ms cs hA D cls i hi
-  exact D.rowD_target cls (acc x ms cs) key hi sideAt posAt hside hpos (D.rowsRun_of cls (acc x ms cs) hti hS hsz)
-    hlev
+  obtain ⟨key, hlev⟩ := h x ms cs hA D cls i hi
+  exact D.rowD_target cls (acc x ms cs) key hi (Rows.sideAt rd) Rows.posAt
+    (D.hside cls i hi (Rows.DecAt.rowDPiecesAt key i x))
+    (D.hpos cls (acc x ms cs) i hst hf hx hi hti (Rows.DecAt.rowDPiecesAt key i x))
+    (D.rowsRun_of cls (acc x ms cs) hti hS hsz) hlev
 
 end Top
 
