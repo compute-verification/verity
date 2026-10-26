@@ -46,13 +46,24 @@ def LayoutB.HeldWhole (L : LayoutB) : Prop :=
 theorem LayoutB.WholeBeforeLast.heldWhole {L : LayoutB} (h : L.WholeBeforeLast) : L.HeldWhole :=
   fun x _ i hi _ => h x i hi
 
-/-- The bytes round `i`'s pieces span. -/
-def LayoutB.piecesLen (L : LayoutB) (x : Msg) (i : ℕ) : ℕ := ((L.pieceAt x i).map fun p => pieceLen p.2).sum
-
 /-- **The readers' message at a round, given the run's**: the statement's where it fixes the round; where the round is
 assembled from pieces, the run's first bytes the pieces span; else the run's. -/
 def LayoutB.pick (L : LayoutB) (x : Msg) (i : ℕ) (m : Msg) : Msg :=
   (L.fixedAt x i).getD (if (L.pieceAt x i).isEmpty then m else m.take (L.piecesLen x i))
+
+/-- `CmtAgrees` where the readers' message at each round it asks about is `pick` of the commit string. -/
+theorem LayoutB.cmtAgrees_of_pick {L : LayoutB} {cmt : Msg → ℕ → Msg → Msg} {x xO : Msg} {ms : List Msg}
+    (h : ∀ i, i + 1 < L.rounds x → L.fixedAt x i = none → ms.getD i [] = L.pick x i (cmt x i xO)) :
+    L.CmtAgrees cmt x xO ms := by
+  intro i hi hf
+  rw [h i hi hf]
+  unfold LayoutB.pick
+  rw [hf, Option.getD_none]
+  refine ⟨fun hp => by simp [hp], ?_⟩
+  by_cases hp : L.pieceAt x i = []
+  · simp [hp]
+  · have hne : (L.pieceAt x i).isEmpty = false := by simpa using hp
+    simp only [hne, Bool.false_eq_true, ↓reduceIte, List.take_take, Nat.min_self]
 
 theorem flatMap_take_of_slices {α β : Type} (len : α → ℕ) (g : α → List β) (M : List β) :
     ∀ (l : List α) (o : ℕ), (∀ a ∈ l, (g a).length = len a) →
@@ -284,10 +295,8 @@ theorem vstarAccepts_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recur
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 hfx hpe
-      rw [hrd i (by omega)]
-      simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none, hpe, List.isEmpty_nil, ↓reduceIte]
-      exact (hshs.2 i hi1).symm
+    · refine Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_pick fun i hi1 _ => ?_
+      rw [hrd i (by omega), hshs.2 i hi1]
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd
@@ -380,10 +389,8 @@ theorem vstarAcceptsV_boundW {W Col T : Type} (H : Msg → Msg) (I : Claims.Recu
       rw [Claims.Recursion.VStarB.LayoutB.msgs_getD L x ws hi,
         Claims.Recursion.VStarB.LayoutB.msg_of_pieces hfx hne]
       exact Claims.Recursion.VStarB.LayoutB.assembled_piece hsw hl hp
-    · intro i hi1 hfx hpe
-      rw [hrd i (by omega)]
-      simp only [Claims.Recursion.VStarB.LayoutB.pick, hfx, Option.getD_none, hpe, List.isEmpty_nil, ↓reduceIte]
-      exact (hshs.2 i hi1).symm
+    · refine Claims.Recursion.VStarB.LayoutB.cmtAgrees_of_pick fun i hi1 _ => ?_
+      rw [hrd i (by omega), hshs.2 i hi1]
     · exact hRows x ws htrue s ws[s] (List.getElem?_eq_getElem hsw)
   rcases hDec x st hst hf (Claims.coinSeq r) ws ho.1 htrue hchk with hd | hd
   · exact Or.inl hd
