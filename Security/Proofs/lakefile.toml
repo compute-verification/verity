@@ -34,7 +34,7 @@ path = "../../verity/core/primitives/randomness"
 name = "core_vstar"
 path = "../../verity/core/service/vstar"
 
-# The recursive integrity component (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
+# Sampled proofs' recursive configuration (`VStar.Recursive`), whose acceptance `Proofs.Properties.Verity.Recursive` relates to
 # `RecursiveKSAt`'s event
 [[require]]
 name = "core_vstar_recursive"
