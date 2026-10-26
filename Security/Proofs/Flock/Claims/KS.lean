@@ -78,6 +78,7 @@ import Proofs.Flock.Claims.KS.PlainLeafDecK
 import Proofs.Flock.Claims.KS.PlainClashLaterK
 import Proofs.Flock.Claims.KS.PlainClash0K
 import Proofs.Flock.Claims.KS.PlainLeafClashK
+import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainSlackFit
 import Proofs.Flock.Claims.KS.PlainSim
 import Proofs.Flock.Claims.KS.PlainLock
