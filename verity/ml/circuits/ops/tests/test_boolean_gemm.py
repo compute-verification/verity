@@ -41,6 +41,7 @@ S8 = [bind(BG.BlackwellS8ImmaDot32), bind(BG.S32ToF32Rn), bind(BG.GemmAccumulato
 PADS = [bind(BG.GemmCoordinatePad, T=1, K=32, **BG.GEMM_HOPPER), bind(BG.GemmCoordinatePad, T=17, K=32, **BG.GEMM_HOPPER)]
 ROWS = bind(BG.ScaledMmS8CoordinateRows, K=64, R=2, **BG.GEMM_SM90_S8)
 PVROWS = [bind(BG.PvRow, T=T, K=32, D=64, **BG.GEMM_HOPPER) for T in (1, 8, 32)]
+PVROWPAD = bind(BG.PvRowPad, T=32, K=32, D=64, **BG.GEMM_HOPPER)
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -76,7 +77,7 @@ PINS = {
     PVROWS[2].id: (1011840, 1932544, 98368, "52c7bce9fe1c63421d9a49037aa7585fb5e4a2c5fe93e1744ebdcfb28250da30ce33367174aa2489d4a4a660213c9466185d2a32d5c1998302a6f8aba3f3b55a"),
 }
 TARGETS = [bind(BG.F2fpBf16), *STEPS, AMPERE_K64, HOPPER_K64, *DOTS, *GEMMS, *FP8_STEPS, *FP8_COORDS, bind(BG.BlackwellE5m2QmmaDot32),
-           *(t for t, _ in FP4), *S8, *PADS, ROWS, *PVROWS]
+           *(t for t, _ in FP4), *S8, *PADS, ROWS, *PVROWS, PVROWPAD]
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=[t.id for t in TARGETS])
@@ -94,6 +95,7 @@ def test_pinned_counts_and_digests(target) -> None:
 #: each Boolean GEMM composite, its step width k and the rest of a binding
 FAMILIES = [(BG.DotBf16, 16, BG.GEMM_AMPERE), (BG.GemmCoordinate, 16, BG.GEMM_HOPPER), (BG.Gemm, 16, {"N": 3, **BG.GEMM_AMPERE}),
             (BG.GemmCoordinatePad, 16, {"T": 1, **BG.GEMM_HOPPER}), (BG.PvRow, 16, {"T": 1, "D": 2, **BG.GEMM_HOPPER}),
+            (BG.PvRowPad, 16, {"T": 1, "D": 2, **BG.GEMM_HOPPER}),
             (BG.GemmCoordinateE4m3, 32, BG.GEMM_HOPPER_E4M3_MMAV2), (BG.GemmCoordinateNvf4, 64, BG.GEMM_SM120_NVF4),
             (BG.GemmCoordinateMxf4, 64, BG.GEMM_SM120_MXF4), (BG.GemmAccumulatorS8, 32, BG.GEMM_SM120_S8),
             (BG.ScaledMmS8Coordinate, 32, BG.GEMM_SM120_S8), (BG.ScaledMmS8CoordinateRows, 32, {"R": 1, **BG.GEMM_SM90_S8})]
@@ -295,6 +297,27 @@ def test_the_pv_row_agrees_with_its_word_definition_and_is_the_padded_coordinate
         pad = bind(BG.GemmCoordinatePad, T=T, K=32, **BG.GEMM_HOPPER)
         cols = np.stack([BS.evaluate_words(pad, p, np.ascontiguousarray(v[:, :, d])).reshape(n) for d in range(D)], axis=1)
         assert np.array_equal(BS.evaluate_words(target, p, *vs).reshape(n, D), cols)
+
+
+def test_the_padded_pv_row_agrees_with_its_word_definition_at_every_key_count() -> None:
+    """`PvRowPad_v2{T=32, K=32, D=64}` agrees with `PvRowPad_v1` on 300 heads whose key counts n run over 0..33 and a few
+    u16 words past them (0x7FFF, 0x8000, 0x8020 and 0xFFFF among them), with inf p words and inf and NaN V words past n; at
+    n in {1, 2, 5, 17, 31, 32} its words are `PvRow_v2{T=n}`'s on the first n keys."""
+    params, _ = E.batch.signature_of(TR.word_of(bind(BG.GemmCoordinate, K=32, **BG.GEMM_HOPPER)))
+    heads, D, T = 300, 64, 32
+    xs, ws = K.sample_tc(np.random.default_rng(28), heads * D, params)
+    p, v = xs[:heads].copy(), ws.reshape(heads, D, 32).transpose(0, 2, 1).copy()
+    counts = np.concatenate([np.arange(heads - 6) % (T + 2), [T + 1, 1 << 8, 0x7FFF, 0x8000, 0xFFFF, 0x8020]]).astype(np.uint16)
+    past = np.arange(T)[None, :] >= counts[:, None]
+    p[past & (np.arange(T) % 3 == 0)] = 0x7F80
+    v[past, 0], v[past, 1] = 0x7F80, 0x7FC0
+    vs = [np.ascontiguousarray(v[:, t]) for t in range(T)]
+    _agree(PVROWPAD, [p, *vs, counts])
+    got = BS.evaluate_words(PVROWPAD, p, *vs, counts).reshape(heads, D)
+    for n in (1, 2, 5, 17, 31, 32):
+        at = np.flatnonzero(counts == n)
+        row = bind(BG.PvRow, T=n, K=32, D=64, **BG.GEMM_HOPPER)
+        assert np.array_equal(got[at], BS.evaluate_words(row, p[at, :n], *(x[at] for x in vs[:n])).reshape(len(at), D)), n
 
 
 def test_the_scaled_s8_matmul_agrees_with_scaled_mm_s8_v1() -> None:
