@@ -24,6 +24,9 @@ failure message carries its fix.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
  counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name.
+- **Recorded outcomes** (`test_silent_excepts.py`, allowlist `allowlists/silent_excepts.json`): in `verity_vllm/check/` and
+ `verity_vllm/commit/`, a caught exception is raised or recorded (an `error` result, a reason, an `unreadable: …` entry in
+ the record), never dropped with `pass`, `continue` or a default.
 - **By-name rules** (`tests/test_no_by_name_rules.py`, allowlist `tests/by_name_allowlist.json`): no verification
  answer comes from a model name, a module path or a family string.
 - **Ruff** (`test_ruff.py`, allowlist `allowlists/ruff.json`): `ruff check` under `integrations/vllm/ruff.toml`, which

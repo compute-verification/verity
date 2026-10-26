@@ -1520,17 +1520,18 @@ def test_a_push_to_an_agents_branch_is_activity(tmp_path):
         sweep(start)
     w.sweep = working
     w.sweep(lambda r: None)
-    sweeps(w, clock, 60)
+    sweeps(w, clock, 50)
     sh.heads[f"cursor/by-suffix-{CO[-4:]}"] = "4" * 40
-    sweeps(w, clock, 60)
+    sweeps(w, clock, 50)
     sh.heads["cursor/api-named"] = "5" * 40
-    sweeps(w, clock, 60)
+    sweeps(w, clock, 50)
     sh.heads["cursor/not-veritys"] = "6" * 40
     assert silent(tmp_path) == []
-    sweeps(w, clock, 90)
+    sweeps(w, clock, 60)
     (rec,) = silent(tmp_path)
-    assert (rec["agent"], rec["handle"], rec["run"], rec["minutes"], rec["since"]) == (
-        CO, "circuits", "run-r", 90, W.iso(T0 + 125 * 60)), "its last push was seen at the heads read after it"
+    assert (rec["agent"], rec["handle"], rec["run"], rec["minutes"], rec["since"], rec["owner"]) == (
+        CO, "circuits", "run-r", 60, W.iso(T0 + 105 * 60), "top"), \
+        "its last push was seen at the heads read after it; a coordinator is silent after an hour, and @top is rung"
     assert rec["branches"] == ["cursor/api-named", f"cursor/by-suffix-{CO[-4:]}"]
     assert status(tmp_path)[CO]["watch_state"] == "silent"
 
@@ -1552,10 +1553,10 @@ def test_stale_heads_or_no_notes_judge_nobody_and_an_agent_that_goes_idle_ends_i
     sweeps(w, clock, 5)
     assert w.silent == {} and w.active == {}
     agents[0]["status"], runs["run-r"]["status"] = "ACTIVE", "RUNNING"
-    sweeps(w, clock, 85)
+    sweeps(w, clock, 55)
     assert len(silent(tmp_path)) == 1, "a new ACTIVE spell counts from its start, the sweep that saw it ACTIVE again"
     sweeps(w, clock, 10)
-    assert [r["since"] for r in silent(tmp_path)][1:] == [W.iso(clock.t - W.SILENT_S)]
+    assert [r["since"] for r in silent(tmp_path)][1:] == [W.iso(clock.t - W.COORD_SILENT_S)]
     (tmp_path / "no-notes").mkdir()
     api2, clock2, w2 = coordinators(tmp_path / "no-notes", agents, runs, git_remote=REMOTE, sh=FakeSh())
     sweeps(w2, clock2, 200)
@@ -1573,7 +1574,7 @@ def test_a_restarted_watch_keeps_the_spells_rings(tmp_path):
     assert len(silent(tmp_path)) == 1
     again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
                     notes=tmp_path / "notes", git_remote=REMOTE, sh=sh)
-    sweeps(again, clock, 85)
+    sweeps(again, clock, 25)
     assert len(silent(tmp_path)) == 1, "neither the ring nor the spell's start is forgotten"
     sweeps(again, clock, 5)
     assert [r["window"] for r in silent(tmp_path)] == [1, 2]

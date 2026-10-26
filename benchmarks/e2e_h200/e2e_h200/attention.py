@@ -16,7 +16,8 @@ one IEEE round to nearest.
 on CUDA through kernels' `attn_ref` (#4466: QK^T and PV, each word ``GemmCoordinate_v2{K, GEMM_HOPPER}``, PV's K the keys
 padded to a multiple of 16, which equals the K = 32 padding: both pad with +0 codes) and `softmax_t` (SoftmaxRow_v1 in
 torch integer and f32 ops); elsewhere through the numpy kernels above, one call per distinct length. Scores and
-probabilities come out (B, H, C), zero past each slot's length.
+probabilities come out (B, H, C), zero past each slot's length. The step commits a head's probabilities, padded with +0 to 32
+keys, as one ``QkSoftmaxRowPad_v1{T=32, D}`` unit and its PV row as one ``PvRow_v1{T=32}`` (`plan`): the same words.
 """
 from __future__ import annotations
 

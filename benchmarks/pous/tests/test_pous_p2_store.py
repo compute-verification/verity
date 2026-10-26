@@ -116,6 +116,36 @@ def test_toy_refusals():
     assert S.refusal(STORE, C_STAR, other, 0) == 2
 
 
+def _toy_read():
+    toy = S.toy_tensors(STORE)
+    return toy, lambda lo, hi: S.w_range(STORE, lambda name, a, b: toy[name][a:b], lo, hi)
+
+
+def test_w_range_is_the_toy_w():
+    """Any byte range of W from the tensors alone: each at its block, zero between and to the last segment's end."""
+    toy, read = _toy_read()
+    p, (qkv, o) = STORE.params, STORE.tensors[:2]
+    assert hashlib.sha512(read(0, p.w_bytes)).hexdigest() == TOY["w_sha512"]
+    for lo, hi in [(0, 1), (qkv.size - 3, o.offset + 5), (p.segment_bytes - 7, p.segment_bytes + 9),
+                   (STORE.tensors[-1].offset + 1, p.w_bytes), (p.w_bytes - 1, p.w_bytes), (5, 5)]:
+        assert read(lo, hi) == W[lo:hi], (lo, hi)
+    with pytest.raises(ValueError):
+        read(0, p.w_bytes + 1)
+
+
+def test_commit_is_deterministic():
+    """`commit_w` is toy.json's commitment at one and at three workers, and refuses a tensor whose SHA-256 differs."""
+    toy, read = _toy_read()
+    pieces = [(t.name, t.offset, t.size, hashlib.sha256(toy[t.name]).hexdigest()) for t in STORE.tensors]
+    assert S.commit_w(STORE, read, 1, pieces).hex() == TOY["commitment"] == S.commit_w(STORE, read, 3, pieces).hex()
+    bad = list(pieces)
+    bad[3] = bad[3][:3] + (hashlib.sha256(b"").hexdigest(),)
+    with pytest.raises(ValueError, match=r"\['model\.layers\.0\.mlp\.down_proj\.weight'\]"):
+        S.commit_w(STORE, read, 3, bad)
+    with pytest.raises(ValueError, match="holds 9 of the 10"):
+        S.commit_w(STORE, read, 1, pieces + [("past", STORE.params.w_bytes, 1, "")])
+
+
 def test_spot_vectors():
     """Blocks at the real store's indices (segments up to 1,037, v up to 65,535): keys, then decode."""
     real = S.build(S.MQA16K).params
