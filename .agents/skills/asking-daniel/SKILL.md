@@ -23,7 +23,7 @@ Only keys and claims need him (8 Oct, narrowed 13 Oct): access and keys, and wha
 spend included, is its owner's call, and his standing rulings stand until he reverses them. Check the recorded rulings first
 (`AGENTS.md`, the skills, "Standing rulings" in `.agents/skills/friction/SKILL.md`): if one covers the case, follow it.
 
-Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't money, keys or access
+Until he says otherwise (19 Oct, 2:59 PM PDT: "provisionally accept all of them"), an ask that isn't keys or access
 goes on its page already decided: Status *Decided by lane*, Choose set to your pick, and Decision "Provisionally accepted
 (Daniel, 19 Oct 21:59Z standing rule): <option>. Re-check: <why it holds>". Resolve its card with that option and
 `--provisional` (implied by a `--note` starting "Provisionally accepted"), so the card says your lane decided, not Daniel, and act
