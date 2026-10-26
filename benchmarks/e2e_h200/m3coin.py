@@ -4,6 +4,10 @@ opened after that root; the drawn units are a `subset:K` of the registered popul
 
     python benchmarks/e2e_h200/m3coin.py --registration REG.json --gate-key KEY --gate research@HOST --peer NAME --out DIR
 
+``REG.json`` is m3reg's record, or a step registration (`replay_bundle.STEP_FORMAT`, M3 proper), whose digest is
+`replay_bundle.step_digest`'s; for one, ``receipt.json`` (the step's receipt, as `prove_bundle.py --step` reads it) is written
+before the session is reserved and ``draw.json`` (``{law, k, population, units}``, sorted) after the coin.
+
 * The gate's ledger signs the session's `open` entry, which binds the registration's digest as the window root, before
   `serve.py` releases any coin; the client records that same digest as the coin's `after`.
 * `units = derive(coin, DOMAIN, {"registration": digest}).subset(k, population, "m3")` (`verity.ml.randomness`): the
@@ -28,8 +32,10 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import remote
 from verity.ml import randomness as R
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path[:0] = [str(Path(__file__).resolve().parent), str(Path(__file__).resolve().parents[1] / "e2e_demo")]
 import m3reg as REG  # noqa: E402
+from verity.core.protocols.sampled_proofs.one_stage import registration as OR  # noqa: E402
+from verity_e2e_demo import replay_bundle as RB  # noqa: E402
 
 SCHEME = "verity/e2e-h200-m3/coins/v1"
 LABEL = "m3-draw"
@@ -59,10 +65,16 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     reg = json.loads(Path(a.registration).read_text())
-    digest = reg["digest"]
-    if REG.digest(REG.FORMAT, reg["record"]) != digest:
-        raise SystemExit("the registration's digest is not its record's")
-    law, population = reg["record"]["law"], int(reg["record"]["population"])
+    step = reg.get("format") == RB.STEP_FORMAT
+    if step:
+        if set(reg) - {RB.STEPS_KEY} != RB.STEP_KEYS or reg["population"] != reg["slots"] * reg["units_per_slot"]:
+            raise SystemExit(f"not a {RB.STEP_FORMAT} with exactly {sorted(RB.STEP_KEYS)} and optionally {RB.STEPS_KEY}")
+        digest, law, population = RB.step_digest(reg), reg["law"], int(reg["population"])
+    else:
+        digest = reg["digest"]
+        if REG.digest(REG.FORMAT, reg["record"]) != digest:
+            raise SystemExit("the registration's digest is not its record's")
+        law, population = reg["record"]["law"], int(reg["record"]["population"])
     if law != {"law": "subset", "k": law.get("k")} or not isinstance(law["k"], int):
         raise SystemExit(f"the registered law is {law}, not subset:K")
     ssh = ["-i", a.gate_key, "-o", "StrictHostKeyChecking=accept-new", a.gate]
@@ -79,6 +91,10 @@ def main(argv: list[str] | None = None) -> int:
             raise Ch.CoinError(f"the gate answered {words[0]} with exit {rc}: {got.decode(errors='replace').strip()}")
         return got
 
+    if step:
+        receipt = {**OR.receipt(reg, f"vy-challenger-1's gate ({a.gate}), session root the step registration's digest"),
+                   "registration": digest}
+        (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True) + "\n")
     pins = [x for x in ask(["pins"]).decode().split("\n") if x]
     pin = json.loads(pins[-1]).get("commit") if pins else None
     doc["host_pin"] = pin
@@ -134,6 +150,9 @@ def main(argv: list[str] | None = None) -> int:
     units = draw(opening.coin, digest, law["k"], population)
     write(commitment=commitment, opening=opening.to_json(), units=units,
           derivation=f"verity.ml.randomness.derive(coin, {DOMAIN!r}, {{'registration': digest}}).subset({law['k']}, {population}, 'm3')")
+    if step:
+        (out / "draw.json").write_text(json.dumps({"law": "subset", "k": law["k"], "population": population,
+                                                    "units": sorted(units)}, sort_keys=True) + "\n")
     print("DRAW " + json.dumps({"units": units}), flush=True)
     sid = r["session"]
     end = None
