@@ -21601,6 +21601,19 @@
     "Pous.SecurityProofs.StreamedWipeMeetsFamily"
    ]
   },
+  "Definitions.Pous.Guarantees.StreamedWipeFamily": {
+   "digest": "79bb928a4f65347dcff796f9092b4e582881d0d656b0cdf0fa559ee23d117e5a",
+   "definitions": {
+    "Pous.Guarantees.StreamedWipeMeets141GB": "c719407a3c4404da87e21dabbe812e2da713b8649792d179e5b6c26eeab47719",
+    "Pous.Guarantees.StreamedWipeMeets96GiB": "00694a90938395dd8b99ecfd0995a7ab9ad07e56bfc8a49d22f530418f32005d",
+    "Pous.Guarantees.StreamedWipeMeetsFamily": "3bc7f2fc49dd3c6d47f43fcaedeee627155cb4ef0d0a04701d14e943688d1eef"
+   },
+   "guarantees": [
+    "Pous.SecurityProofs.StreamedWipeMeets141GB",
+    "Pous.SecurityProofs.StreamedWipeMeets96GiB",
+    "Pous.SecurityProofs.StreamedWipeMeetsFamily"
+   ]
+  },
   "Definitions.Pous.Model.Audit": {
    "digest": "ae9ed577afee6873bd59d0b44e3a7daa4019bdf0958b65f2ec852459c09a026e",
    "definitions": {

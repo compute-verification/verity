@@ -428,9 +428,8 @@ auditor's own PRF outputs, so a label the server didn't keep is a label it can't
 prior content through the wipe had no room for the labels. The reference is `streamed_wipe.py`, its tests
 `tests/test_pous_streamed_wipe.py`, its verdict's Lean port `MemoryChallenger.StreamedWipe`
 (`verity/core/devices/memory_challenger/lean/`), its timing `benchmarks/pous/streamed_wipe/`, and its guarantees
-`Pous.Guarantees.StreamedWipe`, `StreamedWipeMeets2600GB`, and `StreamedWipeMeetsFamily` with its instances
-`StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB` (`Security/Definitions/Pous/Guarantees/StreamedWipe.lean`, the game
-in `Security/Definitions/Pous/Model/StreamedWipe.lean`), all proved (`Security/Proofs/Pous/StreamedWipe/`), where
+`Pous.Guarantees.StreamedWipe` and `StreamedWipeMeets2600GB` (`Security/Definitions/Pous/Guarantees/StreamedWipe.lean`, the
+game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
 `PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
 
 **Labels and coins.** The memory challenger, the auditor's device on a machine the prover doesn't control, derives every
@@ -514,10 +513,12 @@ At the deployed fill, `N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half
   count `C(N, r) ≤ N^r ≤ 2^(36·r)` spends the difference: `k · (D/N) = 28.434 > 41 · ln 2` for sampling, and
   `17 + 548 · (D − 1) + 41 = 8,554,279,510` bits for compression, each `2^-41`.
 
-At `k = 2152` reads and `δ = 2^-128`, the figure `verity/wipe/v0` publishes, `StreamedWipeMeetsFamily` proves
-`⌈M/19⌉ + E` bits for every fill of `N ≥ 2^19` labels (one 32 MiB segment or more, no upper limit) at
-`g = N − ⌈N/24⌉`: `2152/24 > 129 · ln 2` for sampling, and with the count `C(N, r) ≤ 2^N` the compression term needs
-`q ≥ E + 512 · (⌈N/24⌉ − 1) + N + 141`, below `⌈M/19⌉ + E` since `512/24 + 1 < 512/19` bits a label, each `2^-129`.
+At `k = 2152` reads and `δ = 2^-128`, the figure `verity/wipe/v0` publishes, `StreamedWipeMeetsFamily`
+(`Security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean`, with its instances `StreamedWipeMeets96GiB` and
+`StreamedWipeMeets141GB`, proved in `Security/Proofs/Pous/StreamedWipe/Family.lean`) proves `⌈M/19⌉ + E` bits for every
+fill of `N ≥ 2^19` labels (one 32 MiB segment or more, no upper limit) at `g = N − ⌈N/24⌉`: `2152/24 > 129 · ln 2` for
+sampling, and with the count `C(N, r) ≤ 2^N` the compression term needs `q ≥ E + 512 · (⌈N/24⌉ − 1) + N + 141`, below
+`⌈M/19⌉ + E` since `512/24 + 1 < 512/19` bits a label, each `2^-129`.
 `(18/19)^2152 ≈ 2^-167.9`, but sampling can't take all of `f = 1/19`: the missing labels' bits and the count come out of
 the same `M/19`. At `k = 2152` this split reaches about `f = 1/23`, and `f = 1/19` from about `k = 1,765`.
 
