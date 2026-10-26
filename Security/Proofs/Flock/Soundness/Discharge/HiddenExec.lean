@@ -10,6 +10,7 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Sites
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
+import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteHP
 import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Inst
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
@@ -40,6 +41,8 @@ Since #757 main's prover writes the hidden-output statement (`verity/flock-circu
 * `PlacedP`: `Placed` at public inputs: `AcceptedHP`, `SitesHP` and `ProgPlaces` for `Placed.keyProgP`.
 * `Ret`, `SiteH`: where the circuit computes each output word (the unit copy and port `HmOut.outCol` reads), and the
   site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
+* `SiteHP`: `SiteH` at public inputs, through the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`): copies
+  off a public leaf, returned outputs and the rows' `b ‖ c`.
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
   string, a unit's computed committed gates bits of its output rows.
 * `Inst`: the same at `instProg`'s places (`instLayoutH`, `instRowsH`, `instRowsH_computes`), from `InstKeysRow`.
