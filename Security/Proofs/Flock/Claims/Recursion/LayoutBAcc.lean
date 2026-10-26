@@ -292,7 +292,7 @@ theorem msg_last {x : Msg} {ws : List Claims.Flock.Wit}
 
 /-- **Slot `σ`'s owner's value**, where the owner is part `o` with circuit `c` and first holding `h`: what `o`'s witness
 reads at `accSegs c h`, empty where `o` has no witness. -/
-theorem row_layoutBAcc {x : Msg} {ws : List Claims.Flock.Wit} {r : XR} (hr : readX x = some r) {σ o : ℕ}
+theorem row_layoutBAcc {x : Msg} {r : XR} (hr : readX x = some r) {σ o : ℕ}
     {c : Circuit} {h : String × ℕ} (hcan : accCanon r σ.unpair.1 = some (o, c, h)) :
     (layoutBAcc rest).rowOwner x σ = some o ∧
       ∀ w, (layoutBAcc rest).rowHeld x o w σ = some (readSegs w (accSegs c h)) := by
@@ -334,7 +334,7 @@ theorem rowsLaid_layoutBAcc : (layoutBAcc rest).RowsLaid := by
     rw [h0.2] at hkl
     simp at hkl
   have hk' : k < (B.map fun e => e.2).length := by simpa using hkl
-  rw [msg_last rest hfx hpos hne, hfin, List.flatMap_append, flatMap_split_at _ _ hk', ← List.append_assoc]
+  rw [msg_last rest hfx hpos hne, hfin, List.flatMap_append, flatMap_split_at (B.map fun e => e.2) (pieceRead ws) hk', ← List.append_assoc]
   have hlen : ((finOpen rest x).flatMap (pieceRead ws) ++ ((B.map fun e => e.2).take k).flatMap (pieceRead ws)).length =
       ((finOpen rest x).map fun q => pieceLen q.2).sum + ((B.take k).map fun e => pieceLen e.2.2).sum := by
     rw [List.length_append, flatMap_pieceRead_length, flatMap_pieceRead_length, ← List.map_take, List.map_map]
@@ -416,8 +416,10 @@ theorem accIn_isSome {x : Msg} {r : XR} (hr : readX x = some r) {σ : ℕ}
     (hfx : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none) (hpos : 0 < layoutOf.rounds x)
     (hp : σ.unpair.1 ≤ chainTop r) (hc : (accCanon r σ.unpair.1).isSome) : (accIn rest x σ).isSome := by
   obtain ⟨k, hk⟩ := Option.isSome_iff_exists.1 (accBlock_findIdx hp hc)
+  have hc' : (layoutBTops (finAcc rest)).fixedAt x (layoutOf.rounds x - 1) = none ∧ 0 < layoutOf.rounds x :=
+    ⟨hfx, hpos⟩
   unfold accIn accOff
-  rw [if_pos ⟨hfx, hpos⟩, hr, Option.bind_some, hk]
+  rw [if_pos hc', hr, Option.bind_some, hk]
   rfl
 
 /-- **`chainAt` reads row `p`'s owner's value**: at the readers' messages, where slot `Nat.pair p 0` is placed and its
@@ -429,7 +431,7 @@ theorem chainAt_held {x : Msg} {ws : List Claims.Flock.Wit} {p i off o : ℕ} {w
   have hlaid := rowsLaid_layoutBAcc rest x ws (Nat.pair p 0) i off hin
   rw [LayoutB.row_of_owner ho hw hv] at hlaid
   have e := fun k => elemsOf_drop_of_take (pre := [])
-    (l := (((layoutBAcc rest).msgs x ws).getD i []).drop off) (B := v) (by simpa using hlaid) (n := 2)
+    (l := (((layoutBAcc rest).msgs x ws).getD i []).drop off) (B := v) (by rw [List.nil_append]; exact hlaid) (n := 2)
     (by omega) k
   simp only [List.length_nil, List.drop_zero] at e
   simp only [chainAt, hin, e]
