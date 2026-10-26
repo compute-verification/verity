@@ -36,7 +36,9 @@
 #   PP_TORCH_FROZEN=1: the torch loop's decode step at the frozen H200 shape (verity_torch_loop.serve_frozen: width 16,384, MQA,
 #     MLP 65,536, every matmul coordinate a unit), one window per template, each audited from its records alone against the
 #     circuit registered before it ran, under PP_LAW (default subset:64, per window) in members of PP_TORCH_LOOP_CAP units
-#     (default 16384), committed by PP_TORCH_FROZEN_WORKERS processes (default 16); then the tampered step (every output's
+#     (default 16384; PP_TORCH_FROZEN_CAPS a tag's own, default "s8-mlp=512": a member's drawn units are one --zk session,
+#     about 110 GB per 2^30 drawn bits, and a down projection's unit is 2^27), committed by PP_TORCH_FROZEN_WORKERS
+#     processes (default 16); then the tampered step (every output's
 #     bit 0 flipped), whose drawn units Lean must refuse, on PP_TORCH_FROZEN_TAMPERED tags (default all; "none" skips it);
 #     W per block and pooled (frozen_w) into $O/w.json. PP_ONLY=honest|forged runs one arm. PP_TORCH_LOOP_SHAPE: more
 #     serve_frozen.py flags (--layers, --position, --tags, --keep).
@@ -272,6 +274,7 @@ elif [ -n "${PP_TORCH_LOOP:-}" ]; then
 elif [ -n "${PP_TORCH_FROZEN:-}" ]; then
   TLAW=${PP_LAW:-subset:64} TCAP=${PP_TORCH_LOOP_CAP:-16384}
   TF="$PY -m verity_torch_loop.serve_frozen --law $TLAW --cap $TCAP ${PP_TORCH_LOOP_SHAPE:-}"
+  for c in ${PP_TORCH_FROZEN_CAPS-s8-mlp=512}; do TF="$TF --cap-of $c"; done
   export PYTHONPATH=$REPO/integrations/torch_loop
   frozen() {  # NAME [--tamper [--tags T,...]]: the step's windows, each audited from its records alone against the circuit
               # registered before it ran; the arm is a run (and its windows roots) of its own

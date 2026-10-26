@@ -15,7 +15,7 @@ from verity.core.protocols.sampled_proofs.one_stage import draw as D, registrati
 from verity.ml.windows import interface as IF, rows as CS
 from verity_torch_loop import frozen as F, frozen_w as FW, loop as L, serve_frozen as S
 
-SHAPE = ["--small", "--law", "subset:4", "--cap", "64", "--position", "3"]
+SHAPE = ["--small", "--law", "subset:4", "--cap", "64", "--cap-of", "s8-mlp=16", "--position", "3"]
 
 
 def test_the_steps_units_are_its_templates_and_a_tampering_steps_are_not():
@@ -50,6 +50,7 @@ def test_the_circuits_it_registers_before_running_are_the_ones_it_writes_and_cor
         v = R.check(rec, mine.program, mine.query, mine.law, CS.SCHEME, CS.expected_ports(mine), leaf_layer=layer)
         assert v.ok, v.to_json()
         assert rec["window"]["run"] == w["run"] and mine.population == w["population"]
+        assert w["members"] == len(mine.members) == -(-w["population"] // (16 if tag == "s8-mlp" else 64))
 
 
 def test_the_f64_linear_is_the_loops_at_the_extremes():

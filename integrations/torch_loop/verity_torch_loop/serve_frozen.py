@@ -1,8 +1,8 @@
 """The frozen H200 shape's decode step (`frozen.FrozenStep`), one window per template, written for the audit from its records
 alone, as `serve` writes the MLP's.
 
-    python -m verity_torch_loop.serve_frozen --out DIR [--law L] [--cap N] [--layers 1] [--position 7] [--prompt TEXT] \\
-        [--tags s8-width,s8-mlp,bf16-dot] [--keep N] [--seed S] [--workers N] [--run-id ID] [--tamper] [--small]
+    python -m verity_torch_loop.serve_frozen --out DIR [--law L] [--cap N] [--cap-of TAG=N ...] [--layers 1] [--position 7] \\
+        [--prompt TEXT] [--tags s8-width,s8-mlp,bf16-dot] [--keep N] [--seed S] [--workers N] [--run-id ID] [--tamper] [--small]
     python -m verity_torch_loop.serve_frozen --circuit-only [the same shape and --run-id]
 
 The first runs the step, commits every unit and writes each template's window (``circuit.json``, the registration under core's
@@ -32,7 +32,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out")
     ap.add_argument("--circuit-only", action="store_true")
     ap.add_argument("--law", default="subset:64")
-    ap.add_argument("--cap", type=int, default=16384)
+    ap.add_argument("--cap", type=int, default=16384, help="units a member at most")
+    ap.add_argument("--cap-of", action="append", default=[], metavar="TAG=N",
+                    help="a tag's own cap: a member's drawn units are one --zk session, whose memory grows with them")
     ap.add_argument("--layers", type=int, default=1)
     ap.add_argument("--position", type=int, default=len(PROMPT) - 1)
     ap.add_argument("--prompt", default=PROMPT)
@@ -47,16 +49,17 @@ def main(argv: list[str] | None = None) -> int:
     if bool(a.out) == a.circuit_only:
         ap.error("--out DIR, or --circuit-only")
     shape, law, tags = SMALL if a.small else F.FROZEN, D.parse_law(a.law), tuple(a.tags.split(","))
+    caps = {tag: int(n) for tag, n in (c.split("=", 1) for c in a.cap_of)}
     seconds, t = {}, time.perf_counter()
     model = F.Model(shape, a.layers, a.seed) if not a.circuit_only else None
     step = F.FrozenStep(model or _Shapeless(shape, a.layers, a.seed), a.prompt.encode(), a.position, tags, a.tamper, a.keep,
                         a.run_id)
     if a.circuit_only:
-        print(json.dumps({tag: hashlib.sha512(IF.circuit_bytes(IF.Window(step.circuit(tag), step.run_root(tag), law, a.cap)
+        print(json.dumps({tag: hashlib.sha512(IF.circuit_bytes(IF.Window(step.circuit(tag), step.run_root(tag), law, caps.get(tag, a.cap))
                                                                 .circuit_record())).hexdigest() for tag in tags}))
         return 0
     seconds["weights"], t = time.perf_counter() - t, time.perf_counter()
-    wins = step.windows(law, a.cap)
+    wins = step.windows(law, a.cap, caps)
     seconds["serve"] = time.perf_counter() - t
     out = {"generated": bytes(step.generated).hex(), "checked": step.checked, "mismatched": step.mismatched, "windows": {}}
     for tag, win in wins.items():

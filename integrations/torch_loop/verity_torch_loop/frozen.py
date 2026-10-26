@@ -218,9 +218,10 @@ class FrozenStep:
     def circuit(self, tag: str) -> IF.Circuit:
         return IF.Circuit(f"{NAME}/{tag}", ((self.templates[tag], self.units[tag]),))
 
-    def windows(self, law: dict, cap: int) -> dict[str, IF.Window]:
-        """Every window under ``law`` in members of at most ``cap`` units, every unit recorded."""
-        self._windows = {tag: IF.Window(self.circuit(tag), self.run_root(tag), law, cap) for tag in self.tags}
+    def windows(self, law: dict, cap: int, caps: dict[str, int] | None = None) -> dict[str, IF.Window]:
+        """Every window under ``law`` in members of at most ``cap`` units (``caps``: a tag's own), every unit recorded."""
+        self._windows = {tag: IF.Window(self.circuit(tag), self.run_root(tag), law, (caps or {}).get(tag, cap))
+                         for tag in self.tags}
         self.run()
         return self._windows
 
