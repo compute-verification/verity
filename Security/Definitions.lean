@@ -1,4 +1,5 @@
 import Definitions.Core
+import Definitions.Core.Blocks
 import Definitions.Nci
 import Definitions.Nci.Support
 import Definitions.Nci.Reads
