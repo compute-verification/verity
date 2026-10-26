@@ -37,9 +37,14 @@ def cfOf (w : Array (Array F128)) : ℕ → ℕ → F128 := fun j t => (w[j]!).g
 
 theorem range_cfOf {w : Array (Array F128)} {j q : ℕ} (h : (w[j]!).size = q) :
     (Array.range q).map (cfOf w j) = w[j]! := by
-  refine Array.ext (by simp [h]) fun t h1 h2 => ?_
-  simp only [Array.getElem_map, Array.getElem_range, cfOf]
-  rw [Array.getD, dif_pos h2]
+  apply Array.ext
+  · simp [h]
+  · intro t h1 h2
+    first
+      | (simp [cfOf, Array.getD_eq_getD_getElem?, h2]; done)
+      | (simp [cfOf, Array.getD, h2]; done)
+      | (simp only [Array.getElem_map, Array.getElem_range, cfOf]
+         rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem h2, Option.getD_some])
 
 theorem range_map_cons {α : Type} (f : ℕ → α) {n : ℕ} (hn : 0 < n) :
     (List.range n).map f = f 0 :: (List.range' 1 (n - 1)).map f := by
@@ -87,7 +92,7 @@ theorem levelsLoop_pos {sch : Flock.Schedule} {k₀ : ℕ}
       obtain ⟨e₂, -, -, hc₂, -⟩ := Flock.RecAlgebra.oodIntro_conv (p := default) (by omega) h₂
       obtain ⟨e₃, -, -, hc₃, -⟩ := Flock.RecAlgebra.oodIntro_conv (p := default) (by omega) h₃
       obtain ⟨e₄, hz, -, -, mm, -, -, -, -, hc₄, -⟩ := Flock.RecAlgebra.vqueryFold (hq (i + 1) (by omega)) h₄
-      obtain ⟨ih, ihs⟩ := levelsLoop_pos hq fuel (i + 1) _ _ _ st₄ k₄ out st' k' (by omega) (by omega) h
+      obtain ⟨ih, ihs⟩ := levelsLoop_pos (k₀ := k₀) hq fuel (i + 1) _ _ _ st₄ k₄ out st' k' (by omega) (by omega) h
       have hr : k₃ = k₀ + qOff sch (i + 1) := by
         unfold qOff
         rw [if_pos hi']
@@ -135,6 +140,7 @@ theorem ligeritoRun_pos {sch : Flock.Schedule} {st₀ : LSt F128} {k₀ k' : ℕ
   obtain ⟨hn7, h2, hl0, hc0, hl4, hcols, hext⟩ := hdim
   have hq : ∀ i ≤ sch.levels.size - 1, (sch.levels.getD i default).q ≠ 0 :=
     fun i hi => (hlv i (by omega)).q_ne_zero
+  have hc01 := hcols 0 (by omega)
   rw [StateT.run] at hrun
   unfold Flock.RecAlgebra.ligeritoRun at hrun
   obtain ⟨-, h⟩ := Flock.RecAlgebra.vcoinVec_bind (by omega) hrun
@@ -177,7 +183,7 @@ end Pos
 
 /-- `ligerito` returns the contexts of its `ligeritoRun`, run from a state with none. -/
 theorem ligerito_run_conss {sch : Flock.Schedule} {M : Messages F128} {tIn : F128} {sws : Array Switched}
-    {k k' : ℕ} {src : Coins} {r : Array F128 × Flock.RecAlgebra.LgPts}
+    {k k' : ℕ} {src : Flock.RecAlgebra.Coins} {r : Array F128 × Flock.RecAlgebra.LgPts}
     (h : Flock.RecAlgebra.ligerito sch M tIn sws k src = .ok (r, k')) :
     ∃ (st₀ : LSt F128) (out : Array F256 × Array (Array F256) × ℕ) (st : LSt F128) (k₁ : ℕ), st₀.conss = #[] ∧
       (Flock.RecAlgebra.ligeritoRun sch M).run st₀ k src = .ok ((out, st), k₁) ∧ r.2.conss = st.conss := by
