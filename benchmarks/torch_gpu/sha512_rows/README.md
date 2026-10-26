@@ -27,8 +27,13 @@ E.pads(dids, trees, first, n); E.root(leaves, dids)        # pads; each tree's r
 ```
 
 `tensors` are (slots, …) with contiguous slot rows; a thread hashes one (row, slot), and a warp's 32 threads are one row in
-consecutive slots, so they run the same length. `SaltKey` draws row r's salt in slot s as ChaCha20 blocks 3r … 3r + 2 under
-the key with nonce `nonce0 + s` (C-Flock's `hm96_salt`, commit_slots' `row_salts`). Calls run on the current torch stream.
+consecutive slots, so they run the same length. The row kernel starts the rows with the most compressions first
+(`RowTable.order`), so its last wave is short rows; the digests stay in table order. A table can span several layers'
+tensors, which at 4,096 slots fills the GPU better than one layer a call (25 rows × 4,096 slots is 1.5 waves on an H200).
+`SaltKey` draws row r's salt in slot s as ChaCha20 blocks 3r … 3r + 2 under the key with nonce `nonce0 + s` (C-Flock's
+`hm96_salt`, commit_slots' `row_salts`). hm96's mask M·y reads the key's 64 KB Hankel table (`hankel_table`: bytes
+[p, p + 64) of T_v are `byte_tables(key)[p][v]`) from shared memory, commit_gpu's `hm96_mask`. The leaf kernel comes at 1 or
+2 blocks an SM (`leaves(..., minb=)`). Calls run on the current torch stream.
 
 ## Compression variants
 
