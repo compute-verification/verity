@@ -9,8 +9,9 @@ of the types its decoders produce. It takes no premise.
 
 `AcceptMeans`: what v2 accepts on `blobs` has
 
-* **the files the parameters and the evidence commit**: a circuit file whose SHA-512 is the auditor's committed digest
-  (`proofs.circuit`), and a public file whose SHA-512 is the evidence's `proofs.public` (`Names`);
+* **the files the parameters and the evidence commit**: a circuit file, one of the caller's blobs, whose SHA-512 is the
+  auditor's committed digest (`proofs.circuit`: the registration check, R6), and a public file, one of the blobs, whose
+  SHA-512 is the evidence's `proofs.public` (`Blob`);
 * **every session verified by flock-verify `--zk`**: at least one session, and for each of the evidence's sessions, in
   order, its record (the blob its `record` names, as UTF-8 text) and proof files on which flock-verify `--zk` accepts
   (`AcceptsZK`) on the inputs `verify --zk` reads (`inputsOf`: the statement `verity/flock-circuit`, those two files, one
@@ -48,6 +49,9 @@ def AcceptsZK (I : Flock.Witness.Inputs) (record : String) (proofs : Array ByteA
 /-- The digest `d` names the bytes `b`: `d` is the lowercase hex of `b`'s SHA-512. -/
 def Names (d : String) (b : ByteArray) : Prop := Flock.hexOf (Flock.Sha512.hash b) = d
 
+/-- The bytes `b` are one of the caller's `blobs`, and the digest `d` names them. -/
+def Blob (blobs : Array ByteArray) (d : String) (b : ByteArray) : Prop := b ∈ blobs ∧ Names d b
+
 /-- One session as v2 verified it on `I`: its record is the bytes its `record` digest names, as the UTF-8 text `record`;
 flock-verify `--zk` accepts it with the proof files `proofs`; and it proved the units `units`. -/
 def SessionAccepted (I : Flock.Witness.Inputs) (s : Session) (record : String) (proofs : Array ByteArray)
@@ -64,7 +68,7 @@ def Accepted (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Arra
     (prof : Core.Integrity) : Prop :=
   ∃ (tags : Flock.Tags) (circuitB pubB : ByteArray) (ss : List (String × Array ByteArray × Array Nat))
     (vs : Array (String × Json)),
-    Flock.Tags.find? STATEMENT = some tags ∧ Names p.own.circuit circuitB ∧ Names e.pub pubB ∧
+    Flock.Tags.find? STATEMENT = some tags ∧ Blob blobs p.own.circuit circuitB ∧ Blob blobs e.pub pubB ∧
     0 < e.sessions.size ∧ ss.length = e.sessions.size ∧
     (∀ x ∈ e.sessions.toList.zip ss,
       SessionAccepted (inputsOf tags p.own circuitB pubB (Core.Blobs.ofArray blobs)) x.1 x.2.1 x.2.2.1 x.2.2.2) ∧

@@ -73,6 +73,10 @@ path = "../../verity/core/protocols/composition"
 name = "core_onsite"
 path = "../../verity/core/protocols/onsite"
 
+[[require]]
+name = "core_remote"
+path = "../../verity/core/protocols/remote"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
@@ -88,4 +92,4 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.Composition",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
-  "Properties.SampledProofs.OneStageZk", "Properties.Onsite"]
+  "Properties.SampledProofs.OneStageZk", "Properties.Composed", "Properties.Onsite", "Properties.Remote"]
