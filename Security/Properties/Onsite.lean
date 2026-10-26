@@ -2,12 +2,12 @@ import CoreOnsite
 import Properties.SampledProofs.OneStageZk
 
 /-!
-# Onsite Verity's integrity component: what onsite's acceptance says of the proofs
+# Onsite Verity's sampled proofs subprotocol: what onsite's acceptance says of the proofs
 
 The property of `Core.Onsite.protocol.answer` on the caller's blobs, the whole of what onsite's caller runs, stated
 against it as it runs. It takes no premise.
 
-`IntegrityAccepts`: when onsite accepts, its parameters and evidence decode to the components' (`decodeParams`,
+`SampledProofsAccepts`: when onsite accepts, its parameters and evidence decode to the components' (`decodeParams`,
 `decodeEvidence`), one of whose cases is one-stage v2's (`verity/sampled-proofs/one-stage/v2`), under the parameters
 onsite names for it; v2's decoders read that case, and what they decode to is `Accepted` on the same blobs: every
 session flock-verify `--zk` accepts (`AcceptsZK`) on the circuit and public files the parameters and the evidence commit.
@@ -24,7 +24,7 @@ namespace Properties.Onsite
 
 /-- **Onsite's accept gives v2's**: onsite accepts only parameters and evidence naming a case of one-stage v2, under
 the parameters onsite names for it, that v2 decodes to what it accepts on the caller's blobs (`Accepted`). -/
-def IntegrityAccepts : Prop :=
+def SampledProofsAccepts : Prop :=
   ∀ (a b e : ByteArray) (blobs : Array ByteArray),
     (Core.Onsite.protocol.answer a b e blobs).verdict = .accept →
       ∃ (ps : List Named) (ev : List Case) (n : Named) (x : Case),

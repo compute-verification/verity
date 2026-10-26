@@ -2,7 +2,7 @@ import Properties.Onsite
 import Proofs.Properties.Composition
 import Proofs.Properties.SampledProofs.OneStageZk
 
-/-! # Proof of onsite's integrity property (`Properties.Onsite`)
+/-! # Proof of onsite's sampled proofs property (`Properties.Onsite`)
 
 Onsite on the caller's blobs is `product` of its components on them (`productB_on`), so `Properties.Composition`'s
 `answerAccepts` and `acceptMeans` reduce its acceptance to each component's own, one-stage v2's among them, which
@@ -33,7 +33,7 @@ theorem v2_mem : SampledProofs.OneStageZk.protocol ∈ Core.Onsite.components :=
   unfold Core.Onsite.components
   repeat (first | exact List.Mem.head _ | apply List.Mem.tail)
 
-theorem integrityAccepts : IntegrityAccepts := by
+theorem sampledProofsAccepts : SampledProofsAccepts := by
   intro a b e blobs h
   let bs := Core.Blobs.ofArray blobs
   let cs := Core.Onsite.components.map (·.onBlobs bs)
@@ -44,7 +44,8 @@ theorem integrityAccepts : IntegrityAccepts := by
   have hv2 : SampledProofs.OneStageZk.protocol.onBlobs bs ∈ cs := List.mem_map_of_mem v2_mem
   rw [← hfst, List.mem_map] at hv2
   obtain ⟨x, hx, hx1⟩ := hv2
-  have hids := zip_ids (·.id) (·.id) (·.id) cs ps ev hpid heid x hx
+  have hids := zip_ids (fun P : Protocol => P.id) (fun n : Named => n.id) (fun x : Case => x.id) cs ps ev hpid heid
+    x hx
   have hd := hdec x hx
   rw [hx1] at hd
   obtain ⟨p, c', e', hp', hc', he', pub', prof', hchk⟩ := hd

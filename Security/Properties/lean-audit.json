@@ -781,7 +781,7 @@
    "assumptions": [],
    "type_hash": "9ef48444197e3ddf011a98db92e86110363c2cf80dde2491249648d8fe97dbc2"
   },
-  "Properties.Onsite.integrityAccepts": {
+  "Properties.Onsite.sampledProofsAccepts": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.OneStageZk.acceptMeans": {
@@ -3258,7 +3258,7 @@
     "function": "Core.Protocol.answer",
     "outcome": "accept"
    },
-   "Properties.Onsite.integrityAccepts": {
+   "Properties.Onsite.sampledProofsAccepts": {
     "function": "Core.BlobProtocol.answer",
     "outcome": "accept"
    },

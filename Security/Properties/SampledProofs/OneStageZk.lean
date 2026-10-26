@@ -3,7 +3,7 @@ import SampledProofs.OneStageZk
 /-!
 # Sampled proofs' one-stage audit on the proofs (`verity/sampled-proofs/one-stage/v2`): what its Lean verdict means
 
-The property of `SampledProofs.OneStageZk.checkBlobs`, the check onsite's and remote's integrity component runs on the
+The property of `SampledProofs.OneStageZk.checkBlobs`, the check onsite's and remote's sampled proofs subprotocol runs on the
 caller's blobs (`Core.BlobProtocol.on`, so on `Core.Blobs.ofArray blobs`), stated against it as it runs, for every input
 of the types its decoders produce. It takes no premise.
 
