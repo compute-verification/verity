@@ -1,7 +1,7 @@
 """The audit of the loop's PoUW window (`pouw`) and PoUW's answer on it.
 
     python -m verity_torch_loop.pouw_audit --window DIR --circuit SHA512 --run HEX --m0-pythonpath PATH --bin flock-circuit \\
-        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN]
+        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN] [--scratch DIR]
 
 The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
@@ -22,12 +22,18 @@ given ``--pouw-check``, Lean's) decides the window at the verifier's parameters 
 published run as the context; the requests' max_tokens as registered), written to ``--out``'s
 ``pouw.json``: verdict, reason, W (the credited MACs), ε, δ, K′. ``--forged``: the window holds tampered tiles, and the
 audit passes when Lean refused them.
+
+The audit's proving tree (each member's circuit, the sessions' archives, the prover's files) is written in a temporary
+directory under ``--scratch`` (default the system's), removed when the audit ends; ``--out``'s ``audit/`` gets its records
+(`keep`), from which the answer is made.
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -130,6 +136,19 @@ def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction) -> dict[str
             "verdict": "accept"}
 
 
+def keep(src: Path, dst: Path) -> None:
+    """The audit's records from ``src`` into ``dst``, as `benchmarks/prove_path/run.sh`'s ``keep``: never a member's
+    circuit (its SHA-512 is in the records), a session's archive, an instance file, a private file or the prover's copy of
+    a member's files."""
+    for f in sorted(src.rglob("*")):
+        rel = f.relative_to(src)
+        if not f.is_file() or {"archive", "prover"} & set(rel.parts[:-1]) or f.name == "circuit.txt" \
+                or f.name.endswith("-private.bin") or f.name.startswith("inst-") or re.match(r"m[0-9]+-inst-", f.name):
+            continue
+        (dst / rel).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(f, dst / rel)
+
+
 def lean_line(exe: str, params: Any, commitment: bytes, evidence: bytes) -> str:
     """`pouw-check check PARAMS COMMITMENT EVIDENCE`'s outcome line."""
     with tempfile.TemporaryDirectory() as d:
@@ -169,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--delta-audit", default="0.5", help="the one-stage audit's own δ (records_audit's --delta)")
     ap.add_argument("--forged", action="store_true")
     ap.add_argument("--pouw-check", help="a built Lean pouw-check, which must agree with core_check")
+    ap.add_argument("--scratch", help="where the audit's proving tree goes, removed after (default the system's temporary "
+                    "directory)")
     a = ap.parse_args(argv)
     wdir, out = Path(a.window), Path(a.out)
     rec, prov = _provenance(wdir)
@@ -177,10 +198,15 @@ def main(argv: list[str] | None = None) -> int:
     RA.verifier_window = verifier_window
     FI.flock_input_files = flock_input_files
     RA.source = lambda w, held: source(w, {**held, **held_prov})
-    rc = RA.main(["audit", "--window", str(wdir), "--law", f"{law['law']}:{law['k']}", "--circuit", a.circuit,
-                  "--run", a.run, "--m0-pythonpath", a.m0_pythonpath, "--bin", a.bin, "--lean", a.lean,
-                  "--firewall", a.firewall, "--out", str(out / "audit"), "--delta", a.delta_audit,
-                  *(["--forged"] if a.forged else [])])
+    (out / "audit").mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="pouw-audit-", dir=a.scratch, ignore_cleanup_errors=True) as work:
+        try:
+            rc = RA.main(["audit", "--window", str(wdir), "--law", f"{law['law']}:{law['k']}", "--circuit", a.circuit,
+                          "--run", a.run, "--m0-pythonpath", a.m0_pythonpath, "--bin", a.bin, "--lean", a.lean,
+                          "--firewall", a.firewall, "--out", work, "--delta", a.delta_audit,
+                          *(["--forged"] if a.forged else [])])
+        finally:
+            keep(Path(work), out / "audit")
     items = rec["window"]["public"]
     params = {"check": PW.check_item(), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
               "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": items["length"]["max_tokens"], "stop": Wd.STOP_FIXED},
