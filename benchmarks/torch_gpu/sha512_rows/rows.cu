@@ -70,20 +70,23 @@ __global__ void __launch_bounds__(SXR_THREADS) k_leaf_setup(LeafRow* rows, u32 G
   if (t < G) leaf_setup<D>(rows[t], dids, schema, schema_len);
 }
 
-// T in shared memory (a block's 64 KB, loaded once), the leaves grid-stride over resident blocks; MINB blocks an SM caps
-// the registers (1: as many as it wants, 2: 128)
+// T in shared memory (a block's 64 KB, loaded once), then each thread's salt words (48 KB a block; word w of thread j at
+// w SXR_THREADS + j, so a warp's loads of a word are in 32 banks); the leaves grid-stride over resident blocks; MINB blocks
+// an SM caps the registers (1: as many as it wants, 2: 128)
 template <int MINB>
 __global__ void __launch_bounds__(SXR_THREADS, MINB) k_leaves(const __grid_constant__ LeafArgs a) {
   extern __shared__ uint4 smem[];
   const uint4* Tg = reinterpret_cast<const uint4*>(a.T);
-  for (int i = threadIdx.x; i < T_BYTES / 16; i += blockDim.x) smem[(i >> 4) * (TSTRIDE / 16) + (i & 15)] = __ldg(Tg + i);
+  for (int i = threadIdx.x; i < T_BYTES / 16; i += blockDim.x) smem[i] = __ldg(Tg + i);
   __syncthreads();
   const uint8_t* T = reinterpret_cast<const uint8_t*>(smem);
+  u32* y = reinterpret_cast<u32*>(smem + T_BYTES / 16) + threadIdx.x;
   const u64 n = (u64)a.G * a.S, step = (u64)gridDim.x * blockDim.x;
 #pragma unroll 1
-  for (u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x; t < n; t += step) leaf<D>(a, T, TSTRIDE, (u32)(t / a.S), (u32)(t % a.S));
+  for (u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x; t < n; t += step)
+    leaf<D>(a, T, y, SXR_THREADS, threadIdx.x & 7, (u32)(t / a.S), (u32)(t % a.S));
 }
-constexpr int LEAF_SMEM = 256 * TSTRIDE;
+constexpr int LEAF_SMEM = T_BYTES + 4 * SALT_U32 * SXR_THREADS;
 
 template <int MINB>
 int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
@@ -94,6 +97,8 @@ int launch_leaves(cudaStream_t stream, const LeafArgs& a, u64 n) {
   if (!resident[dev]) {
     int sms = 0, per_sm = 0;
     if ((rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributeMaxDynamicSharedMemorySize, LEAF_SMEM)) ||
+        (rc = cudaFuncSetAttribute(k_leaves<MINB>, cudaFuncAttributePreferredSharedMemoryCarveout,
+                                   cudaSharedmemCarveoutMaxShared)) ||
         (rc = cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev)) ||
         (rc = cudaOccupancyMaxActiveBlocksPerMultiprocessor(&per_sm, k_leaves<MINB>, SXR_THREADS, LEAF_SMEM)))
       return rc;
