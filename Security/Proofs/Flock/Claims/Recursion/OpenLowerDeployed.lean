@@ -489,8 +489,10 @@ def SideSchR (pieces : Msg → List OpenPiece) : Prop :=
       (side (Claims.Recursion.xI D x) ms' q).sch = schAt (Claims.Recursion.xI D x) q.table
 
 theorem sideSchR_sideAtR (rd : Msg → Option FinalP) (pieces : Msg → List OpenPiece) :
-    SideSchR H D shape untr b cmt L Bd (sideAtR rd) pieces :=
-  by intros; rfl
+    SideSchR H D shape untr b cmt L Bd (sideAtR rd) pieces := by
+  unfold SideSchR AtPieces AtOpened
+  intros
+  rfl
 
 /-- **`OpenTieR` is its two halves.** -/
 theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
