@@ -10,7 +10,8 @@ makes one from finite inputs), except that `argmax` and `quantize` take a NaN in
                eps)))), out_j = bf16(RN(w_j * bf16(RN(x_j * rs))))
     quantize   RowAbsMax_v1{N, RELU} over parts and QuantChunkS8_v1{N, RELU}: amax = max |x| (after x < 0 -> +0 under
                RELU), scale = RN(amax / 127) (1 when amax is not > 0), codes = clamp(rne(RN(x / scale)), -128, 127), a NaN 0
-    s8_linear  ScaledMmS8CoordinateRows_v1{K, R, GEMM_SM90_S8}: the exact s32 sum, then bf16(RN(RN(f32(acc) * sx) * sw))
+    s8_linear  ScaledMmS8CoordinateRows_v1{K, R, GEMM_SM90_S8}: the exact s32 sum (`s32_mm`), then
+               bf16(RN(RN(f32(acc) * sx) * sw)) (`scale`)
     add        Bf16AddRow_v2{N}: bf16(RN(a + b))
     embed      EmbeddingCoordinate_v1{V}: bf16(RN(tok[:, token] + pos[:, t]))
     argmax     Argmax_v2{V}: TokenSelect, the first index of the greatest logit, a NaN never taken
@@ -153,9 +154,13 @@ def s32_mm(xq: torch.Tensor, wq: torch.Tensor) -> torch.Tensor:
     return out
 
 
+def scale(acc: torch.Tensor, sx: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
+    """The linear's epilogue on its s32 sums: bf16(RN(RN(f32(acc) * sx) * sw))."""
+    return bf16((acc.to(torch.float32) * sx[:, None]) * sw[None, :])
+
+
 def s8_linear(q: Quant, wq: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
-    acc = s32_mm(q.codes, wq)
-    return bf16((acc.to(torch.float32) * q.scale[:, None]) * sw[None, :])
+    return scale(s32_mm(q.codes, wq), q.scale, sw)
 
 
 def argmax(logits: torch.Tensor) -> torch.Tensor:

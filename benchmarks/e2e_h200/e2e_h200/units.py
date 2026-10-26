@@ -184,7 +184,8 @@ def _pv(t: int) -> RP.Template:
 class Subcircuit(Protocol):
     """A subcircuit of the step's integrity registration besides the model's units: ``serve`` runs after each served step
     (with the driver's resident weights, ``driver.params``), ``families`` gives its units at a step for the draw, and
-    ``manifest`` what the registration records of it."""
+    ``manifest`` what the registration records of it. Optionally ``call(driver, st, op, lo, codes, w, acc)``, which the driver
+    calls on each served linear call: rows ``lo ..`` of linear ``op``'s A codes, its weight and its s32 sums."""
     name: str
 
     def serve(self, driver: Any, result: Any) -> None: ...

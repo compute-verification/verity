@@ -126,13 +126,15 @@ class Driver:
         """``batch``: the KV pool's slots. ``tamper``: a table whose committed bytes have bit 0 flipped at every step (a loop
         whose committed outputs are not its model's), which replay or opening must find. ``micro_batch``: the rows a
         layer's ops run on at once (all by default). ``attention``: `attention.Attention`'s kind (by default its pick).
-        ``subcircuits``: `units.Subcircuit`s, each served after every step."""
+        ``subcircuits``: `units.Subcircuit`s, each served after every step, and one with a ``call`` method also called on
+        every served linear call (`_linear`)."""
         self.shape, self.batch, self.committer, self.tamper = check(shape), batch, committer, tamper
         self.device, self.clock, self.keep = torch.device(device), clock, keep
         self.params = store if isinstance(store, Params) else Params(shape, store, device, resident, clock)
         self.store = self.params.store
         self.mb = micro_batch or batch
         self.subcircuits = list(subcircuits)
+        self.calls = [s for s in self.subcircuits if hasattr(s, "call")]
         self.attn = A.Attention(self.device, attention)
         self.groups = tables(shape)
         self.forms = forms(shape)
@@ -173,6 +175,14 @@ class Driver:
         self.committer.group(st, group)
         if not self.keep and self.committer.streams:
             st.drop(ops)
+
+    def _linear(self, st: StepTables, op: str, lo: int, q: O.Quant, w: torch.Tensor) -> torch.Tensor:
+        """Linear ``op``'s served call on rows ``lo ..`` of the step: its s32 sums, each subcircuit's ``call`` on them (a PoUW
+        unit's z is this accumulator), then the epilogue."""
+        acc = O.s32_mm(q.codes, w)
+        for sub in self.calls:
+            sub.call(self, st, op, lo, q.codes, w, acc)
+        return O.scale(acc, q.scale, self.params.sw[op])
 
     @staticmethod
     def _bf(t: tuple[torch.Tensor, torch.Tensor]) -> torch.Tensor:
@@ -240,10 +250,10 @@ class Driver:
                 xs = x[lo:hi]
                 h = self._norm(T, "attn", p + "attn_norm", lo, hi, xs)
                 q = self._quantize(T, "attn", lo, hi, h)
-                qv = O.s8_linear(q, w["wq"], self.params.sw[p + "wq"])
+                qv = self._linear(st, p + "wq", lo, q, w["wq"])
                 self._bf(T["wq"])[lo:hi] = qv
-                kk = O.s8_linear(q, w["wk"], self.params.sw[p + "wk"])
-                vv = O.s8_linear(q, w["wv"], self.params.sw[p + "wv"])
+                kk = self._linear(st, p + "wk", lo, q, w["wk"])
+                vv = self._linear(st, p + "wv", lo, q, w["wv"])
                 self._bf(T["wk"])[lo:hi], self._bf(T["wv"])[lo:hi] = kk, vv
                 s_c, p_c = sl[lo:hi], pos[lo:hi]
                 if kv is None:
@@ -264,17 +274,17 @@ class Driver:
                 att = att.reshape(m, sh.width)
                 self._bf(T["pv"])[lo:hi] = att
                 q = self._quantize(T, "o", lo, hi, att)
-                o = O.s8_linear(q, w["wo"], self.params.sw[p + "wo"])
+                o = self._linear(st, p + "wo", lo, q, w["wo"])
                 self._bf(T["wo"])[lo:hi] = o
                 xs = O.add(xs, o)
                 self._bf(T["attn_residual"])[lo:hi] = xs
                 h = self._norm(T, "mlp", p + "mlp_norm", lo, hi, xs)
                 q = self._quantize(T, "up", lo, hi, h)
-                u = O.s8_linear(q, w["wup"], self.params.sw[p + "wup"])
+                u = self._linear(st, p + "wup", lo, q, w["wup"])
                 self._bf(T["wup"])[lo:hi] = u
                 q = self._quantize(T, "down", lo, hi, u, relu=True)
                 del u
-                dn = O.s8_linear(q, w["wdown"], self.params.sw[p + "wdown"])
+                dn = self._linear(st, p + "wdown", lo, q, w["wdown"])
                 self._bf(T["wdown"])[lo:hi] = dn
                 xs = O.add(xs, dn)
                 self._bf(T["mlp_residual"])[lo:hi] = xs
@@ -290,7 +300,7 @@ class Driver:
         for lo, hi in ch:
             h = self._norm(T, "final", "final_norm", lo, hi, x[lo:hi])
             q = self._quantize(T, "head", lo, hi, h)
-            logits = O.s8_linear(q, head, self.params.sw["head"])
+            logits = self._linear(st, "head", lo, q, head)
             self._bf(T["head"])[lo:hi] = logits
             nxt[lo:hi] = O.argmax(logits)
         T["argmax"][0].view(torch.int16)[:, 0] = nxt.to(torch.int16)
