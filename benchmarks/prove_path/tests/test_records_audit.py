@@ -8,7 +8,10 @@
   circuit is another or that writes none, and a length other than the registered one or none;
 * a compiler registered under a commit runs from a checkout of that commit, not the auditing tree's, and a commit whose code
   doesn't hash to the registered digest is refused;
-* the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it;
+* the leak bound's count is the circuit's unwired input bits, reported beside the advice's charge and vacuous past it, and
+  a record that declares registered reads counts them registered (`declared_count`);
+* a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
+  (`pinned`), and refused before any draw without them;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
@@ -29,7 +32,7 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
@@ -245,6 +248,63 @@ def test_the_leak_count_is_the_circuits_unwired_input_bits_and_vacuous_past_the_
     assert got["other_inputs"] == got["inputs"] - 4 * x and got["external"] == 5 * x
 
 
+def _registered(d: Path, n: int = 8, cap: int = 4) -> SimpleNamespace:
+    """A window of ``n`` coordinates each reading its ``wrow`` from a registered value of 4 rows (unit u row u % 4), committed
+    by core's registered rows, and the verifier's pin of it."""
+    rng = np.random.default_rng(1)
+    rows = rng.integers(0, 1 << 16, (4, K // 2), dtype=np.uint16)
+    value = REG.Registered.commit("test/model", "w", rows.tolist(), schema=REG.SCHEMA_V2)
+    read = IF.Read(TID, "wrow", "w", 0, (n // 4, 4), 0, (0, K // 2))
+    win = IF.Window(IF.Circuit("test", ((COORD, n),), registered=IF.Registered({"w": 4 * K // 2}, reads=(read,))), RUN,
+                    D.parse_law(LAW), cap, registered={"w": value})
+    x = rng.integers(-128, 128, (n, K)).astype(np.int8)
+    sx, sw = ((np.abs(rng.standard_normal(n)) / 127).astype(np.float32) for _ in range(2))
+    ins = [x.view(np.uint8), sx.view(np.uint32), rows[np.arange(n) % 4].view(np.uint8), sw.view(np.uint32)]
+    win.record(COORD, ins, [np.asarray(evaluate_batch(COORD, *ins, kernel="reference"), dtype=np.uint16)])
+    win.write(win.close(), d, {"label": "test"}, registrar=R)
+    return SimpleNamespace(dir=d, value=value, pin={"program": "test/model", "values": {"w": value.entry()}})
+
+
+def test_registered_reads_are_audited_against_the_pinned_entries_and_leave_the_free_inputs(tmp_path, capsys):
+    got = _registered(tmp_path / "w")
+    mine, doc, _sets = RA.verifier_window(got.dir, D.parse_law(LAW), None)
+    pins = RA.pinned(got.pin)
+    files = IF.registered_reads(doc, mine, pins, registered=REG)
+    assert [f["ports"]["wrow"]["reads"] for f in files.values()] == [[0, 1, 2, 3], [0, 1, 2, 3]]
+    assert all(f["ports"]["wrow"]["root"] == got.value.root.hex() for f in files.values())
+    per_unit = sum(16 * w for _p, w in IF.layout(COORD).rows)
+    count = RA.declared_count(doc, 0)
+    assert (count["inputs"], count["registered"], count["free"]) == (8 * per_unit, 8 * 8 * K, 8 * per_unit - 8 * 8 * K)
+    assert count["other_inputs"] == count["free"] and count["bound"] == "vacuous"
+    with pytest.raises(ValueError, match="another value or domain"):
+        RA.pinned({**got.pin, "program": "test/other"})
+    with pytest.raises(ValueError, match="a pin is"):
+        RA.pinned({"values": {}})
+    base = ["audit", "--window", str(got.dir), "--law", LAW, "--circuit", "00" * 64, "--run", RUN, "--m0-pythonpath", ".",
+            "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(tmp_path / "o")]
+    assert RA.main(base) == 1
+    assert "didn't pin" in json.loads((tmp_path / "o" / "summary.json").read_text())["refused"]["records"]
+    (tmp_path / "circuit.json").write_bytes((got.dir / "circuit.json").read_bytes())
+    assert RA.main(["count", "--circuit", str(tmp_path / "circuit.json"), "--bits", "0"]) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["free"] == count["free"]
+
+
+def test_a_windows_committed_activations_are_held_to_domains_binding_its_run():
+    rows = [[1, 2], [3, 4]]
+    mine = {v: REG.Registered.commit("test/model", v, rows, schema=REG.SCHEMA_V2, window=RUN).entry() for v in ("x", "sx")}
+    w = {"run": RUN, "activations": {"program": "test/model", "values": mine}}
+    got = RA.committed_activations(w)
+    assert got["ok"] and got["detail"]["values"]["x"] == {"root": mine["x"]["root"], "leaves": 2, "words": 2}
+    assert RA.committed_activations({"run": RUN}) is None
+    elsewhere = REG.Registered.commit("test/model", "x", rows, schema=REG.SCHEMA_V2, window="cd" * 64).entry()
+    for bad, code in (({**w, "run": "cd" * 64}, "domains"), ({**w, "activations": {**w["activations"], "program": "other"}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {**mine, "x": elsewhere}}}, "domains"),
+                      ({**w, "activations": {"program": "test/model", "values": {}}}, "activations"),
+                      ({**w, "activations": {"program": "test/model"}}, "activations")):
+        v = RA.committed_activations(bad)
+        assert not v["ok"] and code in v["codes"], (bad, v)
+
+
 def test_a_window_with_row_tables_is_refused_until_its_records_carry_their_segment_roots(written, monkeypatch):
     mine, doc = IF.of_records(written.dir, D.parse_law(LAW), IF.resolve)
     assert not mine.row_tables
@@ -317,7 +377,7 @@ import json, sys
 from pathlib import Path
 sys.path.insert(0, {str(HERE.parent)!r})
 import records_audit as RA
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R
 import a5 as A5
 d, t = Path({str(written.dir)!r}), Path({str(tmp_path)!r})
 mine, doc, sets = RA.verifier_window(d, D.parse_law({LAW!r}), None)
