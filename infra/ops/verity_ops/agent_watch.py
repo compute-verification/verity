@@ -90,7 +90,8 @@ says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages,
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
 
-An agent that works but says nothing is **silent**: a coordinator or a worker ACTIVE for `SILENT_S` (90 min) with no note of
+An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator for
+`COORD_SILENT_S` (60 min, its record's `owner` top, whom the relay rings), with no note of
 its (a note whose `origin:` names it, new or changed by its mtime) and no push to its branches. Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
 head ending in its id's last four characters (a coordinator's `cursor/...-1037`); pushes are read every `HEADS_EVERY_S` with
@@ -270,6 +271,7 @@ WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-lo
 WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
+COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to @top (TOP-90 row 37: memory-accounting hung 01:47-04:39Z)
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
 HEADS_EVERY_S = 5 * 60          # the branch heads (`git ls-remote --heads`) are read this often
 HEADS_STALE_S = 3 * HEADS_EVERY_S   # heads older than this tell no push apart from none: nobody is judged silent
@@ -1335,14 +1337,15 @@ class Watch:
                 self.silent.pop(agent)
                 s, changed = None, True
             n = s["rings"] if s else 0
-            if n >= SILENT_RINGS or t - last < SILENT_S * (n + 1):
+            coord = agent in self.coords
+            if n >= SILENT_RINGS or t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
             self.silent[agent] = {"from": last, "rings": n + 1}
             changed = True
             self.record("silent", Run(agent, k["run"], k["name"]), since=iso(last), minutes=int((t - last) // 60),
                         active_minutes=int((t - k["since"]) // 60), window=n + 1, lane=k["lane"],
                         branches=sorted(b for b in mine if b in heads) or sorted(mine),
-                        **({"handle": k["handle"]} if k["handle"] else {}))
+                        **({"handle": k["handle"]} if k["handle"] else {}), **({"owner": "top"} if coord else {}))
         if changed:
             self.save()
 
