@@ -52,7 +52,7 @@ mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MF
 # Onsite at Daniel's operating point: a wipe every 24 h; residual 10 GB per device today, 5 GB his target.
 [regime.reference-onsite-h200]
 kind = "onsite"
-residual = { value = 0.505, low = 0.01, high = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS: residual 0.323 + host_share 0.118 + clock_share 0.064", status = "measured" }
+residual = { value = 0.505, low = 0.01, high = 1.0, source = "benchmarks/nci/tiers.py audited_residual: the GPUs' uncredited share at the floor credit 0.323 + host CPUs 0.118 + clock 0.064; low: best plausible design; high: nothing credited today", status = "measured" }
 eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
 eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
 identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
@@ -65,7 +65,7 @@ side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e7, source = "ruling: D
 
 [regime.reference-onsite-nvl72]
 kind = "onsite"
-residual = { value = 0.505, low = 0.01, high = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS: residual 0.323 + host_share 0.118 + clock_share 0.064", status = "measured" }
+residual = { value = 0.505, low = 0.01, high = 1.0, source = "benchmarks/nci/tiers.py audited_residual: the GPUs' uncredited share at the floor credit 0.323 + host CPUs 0.118 + clock 0.064; low: best plausible design; high: nothing credited today", status = "measured" }
 eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
 eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
 identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
@@ -78,7 +78,7 @@ side = { value = 1e3, unit = "bit/s", low = 1e2, high = 1e7, source = "ruling: D
 
 [regime.reference-remote]
 kind = "remote"
-residual = { value = 0.505, low = 0.01, high = 0.6, source = "benchmarks/nci/tiers.py DEFAULTS: residual 0.323 + host_share 0.118 + clock_share 0.064", status = "measured" }
+residual = { value = 0.505, low = 0.01, high = 1.0, source = "benchmarks/nci/tiers.py audited_residual: the GPUs' uncredited share at the floor credit 0.323 + host CPUs 0.118 + clock 0.064; low: best plausible design; high: nothing credited today", status = "measured" }
 eps_w = { value = 0.00744, low = 0.001, high = 0.03, source = "benchmarks/nci/tiers.py DEFAULTS eps_w", status = "derived" }
 eps_agg = { value = 1e-4, low = 0, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg", status = "derived" }
 identities = { value = 1, unit = "identity", source = "benchmarks/nci/tiers.py DEFAULTS", status = "assumed" }
