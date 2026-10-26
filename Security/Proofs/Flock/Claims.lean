@@ -176,7 +176,6 @@ import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowL
 import Proofs.Flock.Claims.Recursion.RoundCounts
 import Proofs.Flock.Claims.Recursion.VerdictTargetL
-import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.Recursion.NonVacuousRows
 import Proofs.Flock.Claims.Recursion.VerdictLoop
 import Proofs.Flock.Claims.KS.PlainR
@@ -184,8 +183,6 @@ import Proofs.Flock.Claims.Recursion.LastBindsR
 import Proofs.Flock.Claims.Recursion.KSLin2R
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.LastFilesR
-import Proofs.Flock.Claims.Recursion.LastCallsR
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.CapPieces
 import Proofs.Flock.Claims.Recursion.RestVerdictDraw
