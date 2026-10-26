@@ -366,7 +366,7 @@ theorem four_lt_nIn {c : Circuit} {L H : ℕ} (hr : RecOpen.rowsOk c L H = true)
   have hno : ∀ j < 5, (#["row", "aux", "acc", "coef", "dirs"] : Array String)[j]! ≠ "out" := by
     intro j hj
     interval_cases j <;> decide
-  obtain ⟨-, hnk, -⟩ := FlockC3.RegLevels.rowsOk_get hr hk5
+  obtain ⟨hk', hnk, -⟩ := FlockC3.RegLevels.rowsOk_get hr hk5
   exact hno k hk5 ((hnm k hk5).symm.trans (hnk.symm.trans h0.1))
 
 theorem algebra_ok {inn : RecCoins.Inner} {sh : Shape} {extras : Array Claim}
