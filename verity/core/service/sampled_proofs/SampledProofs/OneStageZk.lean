@@ -238,7 +238,7 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
         r.2.forM (Flock.RecVStar.checkTopRows · registered none)
         r.2.forM (Flock.RecCoins.checkLink · registered (Flock.RecCoins.Source.atC3 none none none) none)
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
         (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
           Flock.registeredOpenings sts registered)
     | .error e => Except.error s!"setup: {e}"
@@ -279,7 +279,7 @@ def verdicts (p : Own) (pub : String) (sessions : Array Session) (provedUnits? :
       Flock.Zk.verify spec tabs record proofs
       scope
       Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-      if draw.isNone then Flock.ProvedScope.drawLaw true tags draw
+      if draw.isNone then Flock.ProvedScope.drawLaw true tags false draw
       Flock.RecSetup.fullDraw none false draw record
       Flock.RecSetup.innerDrawn none
       Flock.ProvedScope.programHeld program
