@@ -1426,6 +1426,14 @@
    "owner": "@compute-accounting",
    "digest": "e1e59f7569d7baa02fa14dca3be9f25d1ee520b7975c05df13083b151eb78739"
   },
+  "Pouw.Assumptions.AnswerAfterCoin": {
+   "owner": "@compute-research",
+   "digest": "89342078975f690562e712e8ec371d4c153295df552320e84044025b6e175b84"
+  },
+  "Pouw.Assumptions.CertifierSeesImports": {
+   "owner": "@compute-research",
+   "digest": "966a0d751ac558f6a4796279d246e233492835d7e2f6ae06f17d654ff3d79f4e"
+  },
   "Pouw.Assumptions.ChargeVF3j16": {
    "owner": "@compute-accounting",
    "digest": "90821a828650e17affb44beb232f6a4b984e257937ba9cf3a5c72b67f99a083a"
@@ -1442,9 +1450,17 @@
    "owner": "@compute-accounting",
    "digest": "65708df74b82c06f6910adb4a1827feb648f0985642dcaa800dbab6b103b83b4"
   },
+  "Pouw.Assumptions.ExtractAdv": {
+   "owner": "@compute-research",
+   "digest": "75e54a669afded1a21308d964342b4ed414db391f318119780bfdddb46b1d7bf"
+  },
   "Pouw.Assumptions.HonestClock": {
    "owner": "@compute-accounting",
    "digest": "b834a5b2456ac78c2c5b98a872a1ee0d833cfb9b8f26a63e562596e7ff5bbd1a"
+  },
+  "Pouw.Assumptions.ImportWithinCertifier": {
+   "owner": "@compute-research",
+   "digest": "da3d3b0e08858ad33f905c8e639f5f63d576cccc0197c9ae5dac826a40b6084d"
   },
   "Pouw.Assumptions.KScopeAffine": {
    "owner": "@compute-accounting",
@@ -1469,6 +1485,22 @@
   "Pouw.Assumptions.KScopeOverlapOneSidedJ10R": {
    "owner": "@compute-accounting",
    "digest": "a65c12c575aa911fb0a9e4c6ecaa41448dbb400843f7936024ed8d7eccec92ac"
+  },
+  "Pouw.Assumptions.OutsourceWithinEgress": {
+   "owner": "@compute-research",
+   "digest": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8"
+  },
+  "Pouw.Assumptions.RootAfterCoin": {
+   "owner": "@compute-research",
+   "digest": "630f9c0ce441ae71a3e01cb27ea3dcc3f7d1219d43589b54ec209349e50025dd"
+  },
+  "Pouw.Assumptions.SAKMatmul": {
+   "owner": "@compute-research",
+   "digest": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919"
+  },
+  "Pouw.Assumptions.ServiceSound": {
+   "owner": "@compute-research",
+   "digest": "ad7aa962f2d81c72c56e9a919f0f84a08e2183e328b115ed7192fc51fd7ab19f"
   },
   "Pouw.Assumptions.ServiceSoundOverlap": {
    "owner": "@compute-accounting",
@@ -1501,6 +1533,14 @@
   "Pouw.Assumptions.ServiceSoundStagedPerProver": {
    "owner": "@compute-accounting",
    "digest": "4c3fe8a649c99598cd3ecbc2003205b301be1b01b090eac60f65acd46a29066b"
+  },
+  "Pouw.Assumptions.ShaRealize": {
+   "owner": "@compute-research",
+   "digest": "c0a7b2a0583613cdc66de3bb9c2fb24feb188ebf99fbd7668f87ceb42985e6ad"
+  },
+  "Pouw.Assumptions.ShaSpeed": {
+   "owner": "@compute-research",
+   "digest": "a7aaf286384107345096ab0159333defd5d18be6702c647d43c33036731f1ccf"
   },
   "Pouw.Assumptions.TT": {
    "owner": "@compute-accounting",
@@ -1538,6 +1578,46 @@
    "owner": "@compute-accounting",
    "digest": "933eb6b182a96758dd6a00b6a416628b77478886d52063e30857f9084fd7eaff"
   },
+  "Pouw.Dither.Accel.G1": {
+   "owner": "@compute-research",
+   "digest": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963"
+  },
+  "Pouw.Dither.Accel.G2": {
+   "owner": "@compute-research",
+   "digest": "c43225c9fe927e1f79ee53ee85e6d18ac1f76bd4d82d340944c8f94e2e633269"
+  },
+  "Pouw.Dither.Accel.G3": {
+   "owner": "@compute-research",
+   "digest": "737f8763e4a5b32d479cb493af1282d33017f403b5a4a9850296bb544520b74e"
+  },
+  "Pouw.Dither.Accel.OracleCalls": {
+   "owner": "@compute-research",
+   "digest": "e949ee029843f8f5bc79bfda13d760ac651fd046dd707daab5a2088010d9c450"
+  },
+  "Pouw.Dither.CallsAtPub": {
+   "owner": "@compute-research",
+   "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201"
+  },
+  "Pouw.Dither.FreedSound": {
+   "owner": "@compute-research",
+   "digest": "d651f64f2dd7178c2c19065387a5d8e53b3dffadda6f93a99e55a3a3d0112613"
+  },
+  "Pouw.Dither.HostsCounted": {
+   "owner": "@compute-research",
+   "digest": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e"
+  },
+  "Pouw.Dither.OnCard": {
+   "owner": "@compute-research",
+   "digest": "9f520551ee51f2313541fceff52c740196cf6a224c5180de819844f7007c873e"
+  },
+  "Pouw.Dither.Period.DualOpt": {
+   "owner": "@compute-research",
+   "digest": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d"
+  },
+  "Pouw.Dither.Period.Fits": {
+   "owner": "@compute-research",
+   "digest": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6"
+  },
   "Pouw.Eps1.ClassP": {
    "owner": "@compute-accounting",
    "digest": "a701827ced69a6601de286c0a09f129a13cb0c797905954636c3ae3ad8bb16d2"
@@ -1573,6 +1653,10 @@
   "Pouw.InInt7": {
    "owner": "@compute-accounting",
    "digest": "d7dc4723b128157ac4a867bc38bdcbb69e10521d919e03fa35f9469d6f7b4248"
+  },
+  "Pouw.MerkleExtract.Opens": {
+   "owner": "@compute-research",
+   "digest": "1bea356c7db58b6e5a6d9ad25b7b4b8c044625b62eca1f06e8c4b9b2b8652289"
   },
   "Pouw.NCP.Assumptions.TTNCP": {
    "owner": "@compute-accounting",
@@ -1801,6 +1885,14 @@
    "owner": "@proofs",
    "digest": "2e9228b3a4629702b902a2f18b295af7675ae8c2269eb61a4afd2e591bb697ac"
   },
+  "Verity.Assumptions.AccelProductForm": {
+   "owner": "@compute-research",
+   "digest": "6aa7f763ea990aeefc8be23df437ad5dea689c0222934400fbe7d06a5ef848e1"
+  },
+  "Verity.Assumptions.CardWithinAccel": {
+   "owner": "@compute-research",
+   "digest": "9970d9795fc5080b384ca0a894a62c36113f13acf26cfa0dafbdd94f9ca82be9"
+  },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
    "digest": "02e4cb87864bcee487dafdb2047e70b7e521b0c0e9d0d8cb824ff3854abe00e1"
@@ -1856,98 +1948,6 @@
   "Verity.TC.Relation.packHolds": {
    "owner": "@proofs",
    "digest": "ba87ddd4f64a0fe79b117e6376e5b113805dbe47547cd9ba45537cdafbfdc22e"
-  },
-  "Pouw.Assumptions.AnswerAfterCoin": {
-   "owner": "@compute-research",
-   "digest": "89342078975f690562e712e8ec371d4c153295df552320e84044025b6e175b84"
-  },
-  "Pouw.Assumptions.CertifierSeesImports": {
-   "owner": "@compute-research",
-   "digest": "966a0d751ac558f6a4796279d246e233492835d7e2f6ae06f17d654ff3d79f4e"
-  },
-  "Pouw.Assumptions.ExtractAdv": {
-   "owner": "@compute-research",
-   "digest": "75e54a669afded1a21308d964342b4ed414db391f318119780bfdddb46b1d7bf"
-  },
-  "Pouw.Assumptions.ImportWithinCertifier": {
-   "owner": "@compute-research",
-   "digest": "da3d3b0e08858ad33f905c8e639f5f63d576cccc0197c9ae5dac826a40b6084d"
-  },
-  "Pouw.Assumptions.OutsourceWithinEgress": {
-   "owner": "@compute-research",
-   "digest": "b56a56840f42a8ccfc2418f4a8b4169d2e1025ce9933babced5498b9fff7fbc8"
-  },
-  "Pouw.Assumptions.RootAfterCoin": {
-   "owner": "@compute-research",
-   "digest": "630f9c0ce441ae71a3e01cb27ea3dcc3f7d1219d43589b54ec209349e50025dd"
-  },
-  "Pouw.Assumptions.SAKMatmul": {
-   "owner": "@compute-research",
-   "digest": "aca93284b4344597af71ea0c3d855de46f764cce17a7649612e8145c68315919"
-  },
-  "Pouw.Assumptions.ServiceSound": {
-   "owner": "@compute-research",
-   "digest": "ad7aa962f2d81c72c56e9a919f0f84a08e2183e328b115ed7192fc51fd7ab19f"
-  },
-  "Pouw.Assumptions.ShaRealize": {
-   "owner": "@compute-research",
-   "digest": "c0a7b2a0583613cdc66de3bb9c2fb24feb188ebf99fbd7668f87ceb42985e6ad"
-  },
-  "Pouw.Assumptions.ShaSpeed": {
-   "owner": "@compute-research",
-   "digest": "a7aaf286384107345096ab0159333defd5d18be6702c647d43c33036731f1ccf"
-  },
-  "Pouw.Dither.Accel.G1": {
-   "owner": "@compute-research",
-   "digest": "4653da5027854c6fcc140db720f6a2dedbae2c9b3ec44e4c96c63aafd4278963"
-  },
-  "Pouw.Dither.Accel.G2": {
-   "owner": "@compute-research",
-   "digest": "c43225c9fe927e1f79ee53ee85e6d18ac1f76bd4d82d340944c8f94e2e633269"
-  },
-  "Pouw.Dither.Accel.G3": {
-   "owner": "@compute-research",
-   "digest": "737f8763e4a5b32d479cb493af1282d33017f403b5a4a9850296bb544520b74e"
-  },
-  "Pouw.Dither.Accel.OracleCalls": {
-   "owner": "@compute-research",
-   "digest": "e949ee029843f8f5bc79bfda13d760ac651fd046dd707daab5a2088010d9c450"
-  },
-  "Pouw.Dither.CallsAtPub": {
-   "owner": "@compute-research",
-   "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201"
-  },
-  "Pouw.Dither.FreedSound": {
-   "owner": "@compute-research",
-   "digest": "d651f64f2dd7178c2c19065387a5d8e53b3dffadda6f93a99e55a3a3d0112613"
-  },
-  "Pouw.Dither.HostsCounted": {
-   "owner": "@compute-research",
-   "digest": "2e9647f866c68156bca4a51cafe3d1f65e86170e9569d9e33310a990c8dd1d1e"
-  },
-  "Pouw.Dither.OnCard": {
-   "owner": "@compute-research",
-   "digest": "9f520551ee51f2313541fceff52c740196cf6a224c5180de819844f7007c873e"
-  },
-  "Pouw.Dither.Period.DualOpt": {
-   "owner": "@compute-research",
-   "digest": "de2cfdb23fc458876516bcb4d65a44dcd271dacfca87cc2b335f82c4d1ab181d"
-  },
-  "Pouw.Dither.Period.Fits": {
-   "owner": "@compute-research",
-   "digest": "9409d527a674bf2bfd45e109f28e6de008c5e986e2b64178aade79fa7ea769b6"
-  },
-  "Pouw.MerkleExtract.Opens": {
-   "owner": "@compute-research",
-   "digest": "1bea356c7db58b6e5a6d9ad25b7b4b8c044625b62eca1f06e8c4b9b2b8652289"
-  },
-  "Verity.Assumptions.AccelProductForm": {
-   "owner": "@compute-research",
-   "digest": "6aa7f763ea990aeefc8be23df437ad5dea689c0222934400fbe7d06a5ef848e1"
-  },
-  "Verity.Assumptions.CardWithinAccel": {
-   "owner": "@compute-research",
-   "digest": "9970d9795fc5080b384ca0a894a62c36113f13acf26cfa0dafbdd94f9ca82be9"
   }
  },
  "meaning": [
