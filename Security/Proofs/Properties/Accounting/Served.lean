@@ -17,7 +17,7 @@ A receipt and a check word are in the second case: a computed value (`Tie.comput
 (`Tie.receipt`, `Tie.checked`), and only gates of its own unit read it (`Tie.readers`; each reader is a gate,
 `reads_lt`).
 `TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
-`SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
+`SeededScheduleNotLive`: `SeededSchedule` puts a read run input at the draw, `LayerCommitted` at its first reader's
 round, which `Wf` puts below it (an input has no second case). `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
 `epochScope` each window's of an `EpochTie`. `spentIn_split` is what a window timed from its own start after the salt's
 release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
@@ -275,8 +275,8 @@ theorem llama31Rounds : Llama31Rounds := by
   cases F <;> first | exact (hF rfl).elim | decide +kernel
 
 theorem seededScheduleNotLive : SeededScheduleNotLive := by
-  intro ι Cd Np Kd p query l hl hU hWf ⟨ℓ, j, hb, hj, hR⟩ hLC
-  obtain ⟨_, _, _, hd, _, _⟩ := hU l hl
+  intro ι Cd hS hWf ⟨ℓ, j, hb, hj, hR⟩ hLC
+  obtain ⟨hd, _⟩ := hS
   obtain ⟨hW1, hW2, _⟩ := hWf
   have hlt : ℓ < Cd.dag.length := by
     by_contra hge

@@ -5,11 +5,11 @@ import SampledProofs.Draw
 /-!
 # The served window's units and draw are the service's, per call (`SampledProofs.Slots.layout`, `Draw.drawUnits`)
 
-The served replacement of `Properties.Compose.UnitsOfLayout` for a window of per-call Programs
-(`Accounting.Served.Layout`, `Accounting.Served.Tie`). `UnitsOfLayout` reads one Program's partition and puts every
-value the prover writes at the draw (its commit-coin conjunct, PoUW's seeded salt-and-draw schedule), so it can't sit
-beside `LayerCommitted` on a circuit with a run input any gate reads (`SeededScheduleNotLive`): the live statements need
-the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of it here, per call:
+The served form of `Properties.Compose.UnitsOfLayout` for a window of per-call Programs
+(`Accounting.Served.Layout`, `Accounting.Served.Tie`). `UnitsOfLayout` reads one Program's partition. PoUW's seeded
+salt-and-draw schedule (`Properties.Compose.SeededSchedule`) puts every value the prover writes at the draw, so it can't
+sit beside `LayerCommitted` on a circuit with a run input any gate reads (`SeededScheduleNotLive`): the live statements
+need the served schedule, which `Tie.commit` and `Tie.receipt` state. What `UnitsOfLayout` says, per call:
 
 * **units** (`CallUnits`): call site `c` is a run of linear `linearOf c`'s Program (`VllmInt8LinearH1{K, N, M = T}`,
   #2615, in the form's variant: with each unit's `z` words for `zTree`, its `y` words and the `dequant(z) = y` check
@@ -75,15 +75,13 @@ def DrawMissesSubset : Prop :=
           ∀ u ∈ U, u ∉ r.1) ≤
       prob (fun β : Equiv.Perm (Fin N) => ∀ t ∈ Pouw.Window.subsetDraw K β, t.val ∉ U)
 
-/-- **`UnitsOfLayout`'s seeded schedule and `LayerCommitted` exclude each other** on a well-formed declared circuit with
-a run input that some gate reads: `UnitsOfLayout` commits the run input at the draw, and `LayerCommitted` needs it by
-its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the live
-statements can't take `UnitsOfLayout` as written. -/
+/-- **The seeded schedule and `LayerCommitted` exclude each other** on a well-formed declared circuit with a run input
+that some gate reads: `Properties.Compose.SeededSchedule` commits the run input at the draw, and `LayerCommitted` needs
+it by its first reader's round, which is a round of the window. So no circuit with an activation meets both, and the
+live statements can't take the seeded schedule. -/
 def SeededScheduleNotLive : Prop :=
-  ∀ (ι : Type) (Cd : Declared ι) (Np Kd : ℕ) (p : SampledProofs.Program) (query : Json)
-    (l : SampledProofs.Slots.Layout),
-    SampledProofs.Slots.layout p query = .ok l → Properties.Compose.UnitsOfLayout Cd Np Kd p query → Cd.Wf →
-      (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
+  ∀ (ι : Type) (Cd : Declared ι), Properties.Compose.SeededSchedule Cd → Cd.Wf →
+    (∃ ℓ j, Cd.binding ℓ = some .run ∧ j < Cd.dag.length ∧ Cd.Reads j ℓ) → ¬ LayerCommitted Cd
 
 /-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
 units are the per-call Programs' (`ServedUnits`), and the verifier's draw over its population misses as a uniform
