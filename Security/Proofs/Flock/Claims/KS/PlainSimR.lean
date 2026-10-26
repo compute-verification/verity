@@ -51,6 +51,9 @@ theorem range_map_ends2 {α : Type} (f : ℕ → α) (n : ℕ) :
 /-- A message's rows, none where it carries none. -/
 def rowsD (m : Claims.Msg) : List ByteArray := (rowsOf m).getD []
 
+/-- A message's rows' nodes (`nodeOf`): round 0's link, as `decR` reads it. -/
+def rowsN (m : Claims.Msg) : List ByteArray := (rowsD m).map nodeOf
+
 /-- The rounds before deployed round `i`'s rep: `|plainRepNs|` on rep 1. -/
 def plainROff (spec : SessionSpec) (st : Stmt) (i : ℕ) : ℕ := plainRep spec st i * (plainRepNs spec st).length
 
@@ -63,7 +66,7 @@ def plainPreR (spec : SessionSpec) (st : Stmt) (dm : ℕ → Claims.Msg) (i : �
 
 /-- Deployed round `i`'s rep context at the link coin `c₁` and round 0's rows. -/
 def plainCtx (spec : SessionSpec) (st : Stmt) (c₁ : Coin) (dm : ℕ → Claims.Msg) (i : ℕ) : RepCtx :=
-  repCtx spec #[st] c₁ (rowsD (dm 0)) [] (plainRep spec st i)
+  repCtx spec #[st] c₁ (rowsN (dm 0)) [] (plainRep spec st i)
 
 open Classical in
 /-- **Deployed round `i`'s frame**: the round's chunk of a fit of its rep consistent with the rows through round `i`,
@@ -117,9 +120,9 @@ theorem plainFrameR_at {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ 
     {rss : List (List ByteArray)} {L q j m : ℕ} {p : Flock.Proof} {T : F128}
     (hn₀ : (plainRepNs spec st).length = L) (hlen : rss.length = L + L)
     (hrows : ∀ i (hi : i < rss.length), rss[i] = rowsD (dm (i + 1))) (hq : q < 2) (hj : j < L)
-    (hm : m = q * L + j + 1) (hsc : SchedOf (repCtx spec #[st] c₁ (rowsD (dm 0)) [] q))
-    (hfit : FitsRep (repCtx spec #[st] c₁ (rowsD (dm 0)) [] q) ((rss.drop (q * L)).take L) p T) :
-    plainFrameR spec st c₁ dm m = encs ((chunksOf (repCtx spec #[st] c₁ (rowsD (dm 0)) [] q) p T).getD j []) := by
+    (hm : m = q * L + j + 1) (hsc : SchedOf (repCtx spec #[st] c₁ (rowsN (dm 0)) [] q))
+    (hfit : FitsRep (repCtx spec #[st] c₁ (rowsN (dm 0)) [] q) ((rss.drop (q * L)).take L) p T) :
+    plainFrameR spec st c₁ dm m = encs ((chunksOf (repCtx spec #[st] c₁ (rowsN (dm 0)) [] q) p T).getD j []) := by
   subst hm
   have hqL : q * L + L ≤ L + L := by interval_cases q <;> omega
   have hrep : plainRep spec st (q * L + j + 1) = q := by
@@ -202,33 +205,33 @@ is deployed round `k + 1`'s `plainFrameR`, wherever both reps are set up. -/
 theorem pf_frames {spec : SessionSpec} {st : Stmt} {c₁ : Coin} {dm : ℕ → Claims.Msg} {rss : List (List ByteArray)}
     {cs : List Coin} {L : ℕ} {p₀ p₁ : Flock.Proof} {T₀ T₁ : F128} {fr : List Claims.Msg}
     (hlen : rss.length = L + L) (hrows : ∀ i (hi : i < rss.length), rss[i] = rowsD (dm (i + 1)))
-    (hsc : ∀ q < 2, SchedOf (repCtx spec #[st] c₁ (rowsD (dm 0)) [] q))
-    (hf₀ : FitsRep (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) ((rss.drop (0 * L)).take L) p₀ T₀)
-    (hf₁ : FitsRep (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 1) ((rss.drop (1 * L)).take L) p₁ T₁)
-    (hfr : fr = framesOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) p₀ T₀ ++
-      framesOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 1) p₁ T₁) :
+    (hsc : ∀ q < 2, SchedOf (repCtx spec #[st] c₁ (rowsN (dm 0)) [] q))
+    (hf₀ : FitsRep (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) ((rss.drop (0 * L)).take L) p₀ T₀)
+    (hf₁ : FitsRep (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 1) ((rss.drop (1 * L)).take L) p₁ T₁)
+    (hfr : fr = framesOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) p₀ T₀ ++
+      framesOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 1) p₁ T₁) :
     fr.length = L + L ∧ ((plainRepNs spec st).length = L → ∀ k < L + L,
       fr[k]? = some (plainFrameR spec st c₁ dm (k + 1))) := by
-  have hch₀ : (chunksOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) p₀ T₀).length = L := by
+  have hch₀ : (chunksOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) p₀ T₀).length = L := by
     rw [hf₀.rounds, List.length_take, List.length_drop]
     omega
-  have hch₁ : (chunksOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 1) p₁ T₁).length = L := by
+  have hch₁ : (chunksOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 1) p₁ T₁).length = L := by
     rw [hf₁.rounds, List.length_take, List.length_drop]
     omega
-  have hfr₀ : (framesOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) p₀ T₀).length = L := by
+  have hfr₀ : (framesOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) p₀ T₀).length = L := by
     rw [framesOf, List.length_map, hch₀]
-  have hfr₁ : (framesOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 1) p₁ T₁).length = L := by
+  have hfr₁ : (framesOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 1) p₁ T₁).length = L := by
     rw [framesOf, List.length_map, hch₁]
   subst hfr
   refine ⟨by rw [List.length_append, hfr₀, hfr₁], fun hn₀ k hk => ?_⟩
   by_cases hkL : k < L
-  · have h1 : k < (framesOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) p₀ T₀).length := by rw [hfr₀]; exact hkL
-    have h2 : k < (chunksOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) p₀ T₀).length := by rw [hch₀]; exact hkL
+  · have h1 : k < (framesOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) p₀ T₀).length := by rw [hfr₀]; exact hkL
+    have h2 : k < (chunksOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) p₀ T₀).length := by rw [hch₀]; exact hkL
     rw [List.getElem?_append_left h1, framesOf_getElem? h2]
     exact congrArg some (plainFrameR_at (q := 0) (j := k) (m := k + 1) hn₀ hlen hrows (by omega) hkL (by omega)
       (hsc 0 (by omega)) (fitsRep_cs hf₀)).symm
-  · have h1 : (framesOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 0) p₀ T₀).length ≤ k := by rw [hfr₀]; omega
-    have h2 : k - L < (chunksOf (repCtx spec #[st] c₁ (rowsD (dm 0)) cs 1) p₁ T₁).length := by rw [hch₁]; omega
+  · have h1 : (framesOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 0) p₀ T₀).length ≤ k := by rw [hfr₀]; omega
+    have h2 : k - L < (chunksOf (repCtx spec #[st] c₁ (rowsN (dm 0)) cs 1) p₁ T₁).length := by rw [hch₁]; omega
     rw [List.getElem?_append_right h1, hfr₀, framesOf_getElem? h2]
     exact congrArg some (plainFrameR_at (q := 1) (j := k - L) (m := k + 1) hn₀ hlen hrows (by omega) (by omega)
       (by omega) (hsc 1 (by omega)) (fitsRep_cs hf₁)).symm
@@ -562,8 +565,10 @@ theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims
   subst link'
   subst c₁'
   subst c₁
-  have hr0 : rowsOf (plainDm P x spec st ω u r' 0) = some r₀ := hr₀
-  have hr₀' : rowsD (plainDm P x spec st ω u r' 0) = r₀ := by simp only [rowsD, hr0, Option.getD_some]
+  obtain ⟨r₀', hr0, hr₀e⟩ := Option.map_eq_some_iff.1 hr₀
+  have hr0' : rowsOf (plainDm P x spec st ω u r' 0) = some r₀' := hr0
+  have hr₀' : rowsN (plainDm P x spec st ω u r' 0) = r₀ := by
+    simp only [rowsN, rowsD, hr0', Option.getD_some, hr₀e]
   subst r₀
   obtain ⟨hrssL, hget⟩ := mapM_some_get hrss
   have hN : rss.length = plainN x := by simpa using hrssL
@@ -574,7 +579,7 @@ theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims
   obtain ⟨L, hLdef⟩ : ∃ L, (RecDeploy.repSchedAt spec st).length = L := ⟨_, rfl⟩
   obtain ⟨hlen, p₀, T₀, p₁, T₁, hf₀, hf₁, hpf2⟩ := readPs_one hLdef hpf
   have hsc : ∀ q < 2, SchedOf (repCtx spec #[st] (Claims.coinSeq (plainΦ x spec st (u, r')) 0)
-      (rowsD (plainDm P x spec st ω u r' 0)) [] q) :=
+      (rowsN (plainDm P x spec st ω u r' 0)) [] q) :=
     fun q hq => schedOf_repCtx_of_checksAtJ id With.std hv hc _ [] (by simpa using hq)
   obtain ⟨hpflen, hframe⟩ := pf_frames (dm := plainDm P x spec st ω u r') hlen hrows hsc hf₀ hf₁ hpf2
   obtain ⟨-, lv, hlv, hcu⟩ := checksAtJ_ok hc
@@ -604,10 +609,14 @@ theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims
   have hlenN : plainN x = (plainRepNs spec st).length + (plainRepNs spec st).length := by omega
   rw [plainSimR_liveOut rd P x spec st ω hw hm1 u r' hL]
   refine liveOutJ_ext' ?_ ?_ ?_ ?_
-  · show (((setupOf false x).bind fun v => (rowsOf ((P.next x [] ω).eval sha512).1).bind (linkR v.2.2)).getD
+  · show (((setupOf false x).bind fun v =>
+        ((rowsOf ((P.next x [] ω).eval sha512).1).map (List.map nodeOf)).bind (linkR v.2.2)).getD
         default).1.toArray = link.1.toArray
-    have hr1 : rowsOf ((P.next x [] ω).eval sha512).1 = some (rowsD (plainDm P x spec st ω u r' 0)) := hr0
-    have hlk' : linkR #[st] (rowsD (plainDm P x spec st ω u r' 0)) = some link := hlk
+    have hr1 : (rowsOf ((P.next x [] ω).eval sha512).1).map (List.map nodeOf) =
+        some (rowsN (plainDm P x spec st ω u r' 0)) := by
+      show (rowsOf (plainDm P x spec st ω u r' 0)).map (List.map nodeOf) = _
+      simp only [rowsN, rowsD, hr0', Option.map_some, Option.getD_some]
+    have hlk' : linkR #[st] (rowsN (plainDm P x spec st ω u r' 0)) = some link := hlk
     first
       | (simp only [hset, Option.some_bind, hr1, hlk', Option.getD_some]; done)
       | simp [hset, hr1, hlk']

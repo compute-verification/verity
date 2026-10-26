@@ -286,7 +286,7 @@ theorem topGroups_length : ∀ (s : List RecVStar.SchedRound) (r : List (List By
   | _ :: _, [], h => by simp at h
   | a :: s, b :: r, h => by
     have ih := topGroups_length s r (by simp at h; omega)
-    simp only [topGroups, List.zip_cons_cons, List.flatMap_cons, List.length_append] at ih ⊢
+    simp only [topGroups, List.zip_cons_cons, List.flatMap_cons, List.length_append, List.length_map] at ih ⊢
     rw [ih, cutLens_length]
     simp [topsN, flagTop]
 
@@ -410,7 +410,7 @@ theorem fit_chunk {c : RepCtx} (hsc : SchedOf c) {rows rows' : List (List ByteAr
     rw [hA]
     have h2 := h'.elems j hj'
     rw [← hrow] at h2
-    exact (h.elems j hj).vals_eq h2
+    exact (h.elems j hj).vals_eq h2 (by rw [← hA, ← vals_length_skel, hsk', vals_length_skel])
   rw [← hA]
   exact eq_of_skel_vals hsk' hv
 
