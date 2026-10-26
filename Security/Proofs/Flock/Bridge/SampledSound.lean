@@ -1,19 +1,25 @@
 import Proofs.Flock.Bridge.Public
-import Proofs.Properties.Verity.SampledProofs
+import Proofs.Flock.Bridge.CircuitOf
 
 /-!
-# Sampled proofs' session as C-Flock's live audit
+# Sampled proofs' soundness at C-Flock's live audit, prover by prover
 
-`SampledSession.KS` at the session C-Flock runs, from `SampledKSLivePub`:
+Sampled proofs' claim reads the transcript of one fixed extractor, the one `SampledKSLivePub` is stated with
+(`XplurZC`, through `witDep`): at most an `ε` share of the circuit's units are wrong in it (R4′). Its bound holds at
+every prover `τ` with no hypothesis on `τ`: `ecr/sha-512` and cr/sha-512 are asked only of the finders C-Flock builds
+from `τ`, and where they fail the bound is `⊤`, as C-Flock's link bound reads its collision premise (`linkBoundZC`).
 
 * `Flock.Guarantees.LiveAt n D hU kd K₀ desc`: `SampledKSLivePub`'s setting at one session (the inputs flock-verify
   reads, the registration, the draw's setup, the verifier's bytes and A3, the analysis' `k`, `R_w`, `M`, `ρ`, `t'` and
   the budgets), at the parsed circuit file `D` with `n` units, the draw size `kd`, `K₀` and the descriptor `desc`;
-  `LiveAt.CR`, at a strategy, the two collision-resistance premises `SampledKSLivePub` reads at it; `LiveAt.ks`, its
-  conclusion at that strategy.
-* `Verity.SampledSession.ofLive`: the session whose circuit, units and constants at each file are the key program's at
-  its parse, and whose game, acceptance, witness and error at each `θ` and `c` are `LiveAt`'s;
-  `SampledSession.ks_ofLive`: its `KS`, where the premises hold at every strategy.
+  `LiveAt.CR τ`, the two collision-resistance premises `SampledKSLivePub` reads at the finders built from `τ`;
+  `LiveAt.ks`, its conclusion where they hold.
+* `LiveAt.wrongE q τ`: the units wrong in the extractor's transcript at `τ`; `LiveAt.Holds q ε τ`, the claim;
+  `LiveAt.bound τ`, `deltaPub` where `CR τ` holds and `⊤` elsewhere.
+* `LiveAt.sound`: at every `τ`, `Pr[flock-verify accepts ∧ ¬ Holds] ≤ bound τ`, where `K₀ − 1 ≤ ε n`.
+* `LiveAt.sound_honest`: `K₀ = ⌊ε n⌋ + 1` meets that hypothesis. `LiveAt.sound_nontrivial`: an accept-everything
+  verifier breaks the bound at a prover whose extracted transcript fails the claim, where the finders meet the premises
+  and `deltaPub < 1`.
 -/
 
 namespace Flock.Guarantees
@@ -146,90 +152,57 @@ theorem ks (q : Claims.Sampling.Query) (τ : Strategy A.G) (hCR : A.CR τ) :
     desc A.qr A.hpop kd A.hkd A.hdiv A.dj A.S₀ A.d₀ A.y₀ A.wr A.dg A.N A.Ω A.Lb A.src A.hA3 A.hTags A.hCust A.k A.Rw A.M
     A.hk A.hRw A.hM A.ρ A.hρ A.hρk A.t' A.ht' K₀ A.hK₀ τ A.qF A.qS q hCR.1 hCR.2
 
+open Classical in
+/-- **The units the fixed extractor's transcript has wrong** at `τ`: the wire values the witness `witDep` builds from
+`XplurZC`'s values opens (`openedOf`), read against the key program's partition. -/
+noncomputable def wrongE (q : Claims.Sampling.Query) (τ : Strategy A.G) : Finset (Fin n) :=
+  A.P.wrong (Bridge.openedOf (Cc (hU := hU) (n := n)) (κ (hU := hU) (n := n))
+    ((Bridge.witDep (Cc (hU := hU) (n := n)) A.Cd Claims.Sampling.sha512Msg A.roots (A.Xr τ)).val
+      Claims.Sampling.sha512Msg A.Cd (Bridge.stmtOf A.P (κ (hU := hU) (n := n)) kd desc q A.roots)))
+
+/-- **Sampled proofs' claim at `τ`** (R4′): at most an `ε` share of the `n` units are wrong in the extractor's
+transcript. -/
+def Holds (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) : Prop :=
+  ((A.wrongE q τ).card : ℝ) ≤ ε * n
+
+/-- **The bound at `τ`**: `deltaPub` where the finders built from `τ` meet the collision-resistance premises, `⊤`
+elsewhere. -/
+noncomputable def bound (τ : Strategy A.G) : ℝ≥0∞ :=
+  if A.CR τ then ENNReal.ofReal (Bridge.deltaPub n kd K₀ A.k A.qF A.qS A.t' A.M A.Rw (Bridge.ioSum A.P) A.ρ) else ⊤
+
+/-- **Sampled proofs' soundness at the live audit, prover by prover**: at every prover `τ`, flock-verify accepts while
+the extractor's transcript has more than an `ε` share of the units wrong with probability at most `bound τ`, where
+`K₀ − 1 ≤ ε n`. -/
+theorem sound (q : Claims.Sampling.Query) (ε : ℝ) (hε : (K₀ : ℝ) - 1 ≤ ε * n) (τ : Strategy A.G) :
+    prob (fun o => LiveAcceptsZK A.I o ∧ ¬ A.Holds q ε τ) A.G τ ≤ A.bound τ := by
+  unfold bound
+  split_ifs with hCR
+  · refine (prob_mono (fun o ho => ⟨ho.1, fun hR => ho.2 ?_⟩) _ _).trans (A.ks q τ hCR)
+    have hlt := Bridge.card_wrong_lt_of_relS A.P (κ (hU := hU) (n := n)) kd K₀ desc q A.roots
+      Claims.Sampling.sha512Msg A.Cd _ hR
+    have hlt' : (A.wrongE q τ).card < K₀ := hlt
+    have h1 : ((A.wrongE q τ).card : ℝ) + 1 ≤ K₀ := by exact_mod_cast hlt'
+    show ((A.wrongE q τ).card : ℝ) ≤ ε * n
+    linarith
+  · exact le_top
+
+/-- **`sound`'s hypothesis holds at the deployed choice** `K₀ = ⌊ε n⌋ + 1`. -/
+theorem sound_honest (ε : ℝ) (hεn : 0 ≤ ε * n) : (((⌊ε * n⌋₊ + 1 : ℕ) : ℝ)) - 1 ≤ ε * n := by
+  push_cast
+  linarith [Nat.floor_le hεn]
+
+/-- **`sound` is not trivial**: for a verifier that accepts everything, its bound fails at a prover whose extracted
+transcript fails the claim, where the finders built from it meet the premises and `deltaPub < 1`. -/
+theorem sound_nontrivial (q : Claims.Sampling.Query) (ε : ℝ) (τ : Strategy A.G) (hCR : A.CR τ)
+    (hbad : ¬ A.Holds q ε τ)
+    (h1 : Bridge.deltaPub n kd K₀ A.k A.qF A.qS A.t' A.M A.Rw (Bridge.ioSum A.P) A.ρ < 1) :
+    ¬ prob (fun _ => True ∧ ¬ A.Holds q ε τ) A.G τ ≤ A.bound τ := by
+  intro h
+  have h2 := (prob_true A.G τ).symm.le.trans
+    ((prob_mono (p := fun _ => True) (q := fun _ => True ∧ ¬ A.Holds q ε τ) (fun _ _ => ⟨trivial, hbad⟩) A.G τ).trans h)
+  rw [bound, if_pos hCR] at h2
+  exact not_le.2 (ENNReal.ofReal_lt_one.2 h1) h2
+
 end LiveAt
 
 end Flock.Guarantees
-
-namespace Verity.SampledSession
-
-open Flock.Guarantees
-
-/-- **Sampled proofs' session as C-Flock's live audit**: at each file `F`, the key program of its parse `D F` (its unit
-built, `hU F`) with `n F` units, its partition and constants; at each `θ` and `c`, the live audit `A θ c` at the
-registered file's parse, its acceptance (flock-verify's), the witness extracted at each strategy, and the error
-`deltaPub`. -/
-noncomputable def ofLive (file : ByteArray → ByteArray) (D : ByteArray → Flock.Desc)
-    (hU : ∀ F, FlockSoundness.Built (D F).unroll.unit) (n : ByteArray → ℕ) (kd K₀ : ByteArray → ℕ)
-    (desc : ByteArray → Claims.Msg) (q : ByteArray → Claims.Sampling.Query)
-    (A : ∀ θ c : ByteArray, LiveAt (n (file θ)) (D (file θ)) (hU (file θ)) (kd θ) (K₀ θ) (desc θ)) :
-    SampledSession where
-  file := file
-  C F := Flock.Bridge.keyCircuit (D F) (hU F) (n F)
-  n := n
-  P F := Flock.Bridge.keyPartition (D F) (hU F) (n F)
-  κ F := fun g => Flock.Bridge.constsOf (D F).unroll (hU F) (n F) g
-  kd := kd
-  K₀ := K₀
-  desc := desc
-  q := q
-  roots θ c := (A θ c).roots
-  H := Claims.Sampling.sha512Msg
-  Cm θ c := (A θ c).Cd
-  Out θ c := (A θ c).Reg × Finset (Fin (n (file θ))) × FlockSoundness.Discharge.Exec.Transcript
-  G θ c := (A θ c).G
-  Acc θ c := FlockSoundness.Discharge.ZkExec.LiveAcceptsZK (A θ c).I
-  wit θ c τ _ := Flock.Bridge.witDep (LiveAt.Cc (hU := hU (file θ)) (n := n (file θ))) (A θ c).Cd Claims.Sampling.sha512Msg (A θ c).roots ((A θ c).Xr τ)
-  δ θ c := Flock.Bridge.deltaPub (n (file θ)) (kd θ) (K₀ θ) (A θ c).k (A θ c).qF (A θ c).qS (A θ c).t' (A θ c).M
-    (A θ c).Rw (Flock.Bridge.ioSum (A θ c).P) (A θ c).ρ
-
-/-- **C-Flock's guarantee on the live session**: where the collision-resistance premises hold at every strategy of
-every session, `ofLive`'s `KS` holds (`SampledKSLivePub`). -/
-theorem ks_ofLive (file : ByteArray → ByteArray) (D : ByteArray → Flock.Desc)
-    (hU : ∀ F, FlockSoundness.Built (D F).unroll.unit) (n : ByteArray → ℕ) (kd K₀ : ByteArray → ℕ)
-    (desc : ByteArray → Claims.Msg) (q : ByteArray → Claims.Sampling.Query)
-    (A : ∀ θ c : ByteArray, LiveAt (n (file θ)) (D (file θ)) (hU (file θ)) (kd θ) (K₀ θ) (desc θ))
-    (hCR : ∀ θ c τ, (A θ c).CR τ) : (ofLive file D hU n kd K₀ desc q A).KS :=
-  fun θ c τ => (A θ c).ks (q θ) τ (hCR θ c τ)
-
-end Verity.SampledSession
-
-namespace Verity.Vocab
-
-open Accounting Flock.Guarantees Flock.Bridge
-open scoped ENNReal
-
-variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
-
-/-- **Sampled proofs' target from C-Flock's live audit**: `sampledProofsSound` at `ofLive`'s session, with `KS`
-discharged by `SampledKSLivePub` (`ks_ofLive`): where the collision-resistance premises hold at every strategy and
-`deltaPub` is at most the published error. -/
-theorem sampledProofsSound_ofLive (file : ByteArray → ByteArray) (D : ByteArray → Flock.Desc)
-    (hU : ∀ F, FlockSoundness.Built (D F).unroll.unit) (n : ByteArray → ℕ) (kd K₀ : ByteArray → ℕ)
-    (desc : ByteArray → Claims.Msg) (q : ByteArray → Claims.Sampling.Query)
-    (A : ∀ θ c : ByteArray, LiveAt (n (file θ)) (D (file θ)) (hU (file θ)) (kd θ) (K₀ θ) (desc θ))
-    (place : (θ F c : ByteArray) → Fin (keyCircuit (D F) (hU F) (n F)).N → Option Place)
-    (programDigest : ByteArray → Option Hash.Digest) (rounds : ByteArray → List ℕ)
-    (coinsRead : Audit → Sent → List Release)
-    (world : (θ F c : ByteArray) → Game.Strategy (play (rounds θ) θ F c) → Outcome → Accounting.World d α)
-    (certOf : ByteArray → Accounting.Certificates) (priceOf : ByteArray → Accounting.Price)
-    (delta : ByteArray → Audit → ℝ≥0∞)
-    (hreg : ∀ θ h, programDigest θ = some h → sha512 (file θ).data.toList = h)
-    (hOpens : ∀ (θ c : ByteArray) (g : Fin (keyCircuit (D (file θ)) (hU (file θ)) (n (file θ))).N) (v : BitVec 1),
-      ((SampledSession.ofLive file D hU n kd K₀ desc q A).vocab place programDigest rounds coinsRead world certOf
-          priceOf delta).Opens θ (file θ) c g v ↔
-        OpensAt (keyCircuit (D (file θ)) (hU (file θ)) (n (file θ)))
-          (fun g => constsOf (D (file θ)).unroll (hU (file θ)) (n (file θ)) g) Claims.Sampling.sha512Msg
-          (A θ c).Cd (A θ c).roots g (v.getLsbD 0))
-    (hCouple : (SampledSession.ofLive file D hU n kd K₀ desc q A).Couples
-      ((SampledSession.ofLive file D hU n kd K₀ desc q A).vocab place programDigest rounds coinsRead world certOf
-        priceOf delta))
-    (hCR : ∀ θ c τ, (A θ c).CR τ)
-    (hε : ∀ θ, (K₀ θ : ℝ) - 1 ≤ (certOf θ).ε * n (file θ))
-    (hδ : ∀ θ c, ENNReal.ofReal (deltaPub (n (file θ)) (kd θ) (K₀ θ) (A θ c).k (A θ c).qF (A θ c).qS (A θ c).t'
-      (A θ c).M (A θ c).Rw (ioSum (A θ c).P) (A θ c).ρ) ≤ delta θ .sampled) :
-    ((SampledSession.ofLive file D hU n kd K₀ desc q A).vocab place programDigest rounds coinsRead world certOf
-      priceOf delta).SampledProofsSound :=
-  sampledProofsSound _ place programDigest rounds coinsRead world certOf priceOf delta hreg hOpens hCouple
-    (SampledSession.ks_ofLive file D hU n kd K₀ desc q A hCR) hε hδ
-
-end Verity.Vocab
