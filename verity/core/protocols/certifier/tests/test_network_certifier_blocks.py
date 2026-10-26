@@ -1,9 +1,10 @@
-"""The blocks check (`blocks`) on a TINY class circuit, from the window interface's records: S = 2 slots of NP = 15 prompt
-bytes and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit j·O + k reads slot j's request row (its ``a``, the circuit's
-external input), the loaded weights' row k (``b``) and the loaded bias (``acc``); `F32ToBf16Rn_v2`'s unit u is wired to
-its output, and its ``o0`` is response row u (the circuit's external output). The network certifier on the server's
-uplink commits and signs the load, the request and the response (`transfer_rows`), and the verifier's pins come from
-its certificates alone (`blocks.pins`): with them the circuit's free inputs are 0."""
+"""The blocks check (`blocks`) on a TINY class circuit, from the window interface's records: S = 2 slots, each a request
+row of NP + 1 = 16 words, and O = 2 output steps. `AmpereBF16TcDot16_v3`'s unit j·O + k reads slot j's request row (its
+``a``, the circuit's external input), the loaded weights' row k (``b``) and the loaded bias (``acc``); `F32ToBf16Rn_v2`'s
+unit u is wired to its output, and its ``o0`` is response row u (the circuit's external output). The network certifier on
+the server's uplink commits and signs the load, the request and the response (`transfer_rows`), and the verifier's pins
+come from its certificates alone (`blocks.pins`): with them the circuit's free inputs are 0. The demo's own request and
+response rows (`transfer_rows.request_rows`, `response_rows`) bind at the frozen shape on stand-in units (`demo`)."""
 
 from __future__ import annotations
 
@@ -80,8 +81,8 @@ def values(seed: int = 7) -> dict[str, list[list[int]]]:
     """Each transfer's rows as the certifier saw them cross."""
     rng = random.Random(seed)
     word = lambda n, w: [[rng.randrange(1 << 16) for _ in range(w)] for _ in range(n)]  # noqa: E731
-    return {"w": word(O, 16), "bias": word(1, 2), "request": TR.request_rows([b"hello", b"tiny"], S, NP),
-            "response": TR.response_rows([b"ok", b"!"], S, O), "h_out": word(S * O, 2), "h": word(S * O, 2)}
+    return {"w": word(O, 16), "bias": word(1, 2), "request": word(S, NP + 1), "response": word(S * O, 1),
+            "h_out": word(S * O, 2), "h": word(S * O, 2)}
 
 
 def public(seed: bytes) -> LmsKey:
@@ -121,6 +122,26 @@ def tiny():
     return c, record(c), layouts(c)
 
 
+def test_a_load_of_32_bit_leaves_is_pinned_at_the_verifiers_width_alone(tiny, tmp_path):
+    """The loaded bias, the dot's f32 ``acc`` (2 u16 words a row), registered as a program reading it at 32 bits does,
+    one 32-bit leaf a row: pinned when the verifier's ``formats`` name that width, refused at the default 16, and a
+    format for no transfer, or a width that doesn't cut a transfer's rows, refused."""
+    c, doc, lays = tiny
+    certs, b = Certifiers(tmp_path), blocks()
+    regs = [r for r in certs.register(doc, b) if r["value"] != "bias"]
+    wide = TR.Transfer.commit(UPLINK, Direction.INGRESS, 0, "load", doc["program"], "bias",
+                              [[lo | hi << 16] for lo, hi in values()["bias"]], word_bits=32)
+    regs.append(TR.registration(wide.head, certs.issuers[UPLINK].sign(UPLINK, Direction.INGRESS, 0, wide.head.digest())))
+    pins = BK.pins(doc, b, lays, regs, certs.keys(), {"bias": (32, TR.SCHEMA)})
+    assert pins["bias"] == wide.root.hex() and IF.input_count(doc, pins=pins)["free"] == 0
+    with pytest.raises(ValueError, match="transfer 'bias' .*registration's words is 1, and the verifier's 2"):
+        BK.pins(doc, b, lays, regs, certs.keys())
+    with pytest.raises(ValueError, match=r"formats of \['x'\], which no transfer names"):
+        BK.pins(doc, b, lays, regs, certs.keys(), {"x": (32, TR.SCHEMA)})
+    with pytest.raises(ValueError, match="transfer 'response' .*rows of 1 u16 words are no whole number of 32-bit leaves"):
+        BK.pins(doc, b, lays, regs, certs.keys(), {"bias": (32, TR.SCHEMA), "response": (32, TR.SCHEMA)})
+
+
 def test_free_is_zero_only_with_certified_pins(tiny, tmp_path):
     c, doc, lays = tiny
     certs = Certifiers(tmp_path)
@@ -135,6 +156,53 @@ def test_free_is_zero_only_with_certified_pins(tiny, tmp_path):
     checked = BK.check(doc, b, lays)
     assert [(t.value, t.words, t.rows) for t in checked.transfers] == [("w", 16, O), ("bias", 2, 1), ("request", NP + 1, S),
                                                                         ("response", 1, S * O)]
+
+
+ADD, R = "I32Add_v2", 2
+
+
+def demo() -> tuple[IF.Circuit, dict]:
+    """The demo's per-request rows at the frozen shape (P = 8 prompt bytes, G = 24 generated) for R = 2 slots, on a
+    stand-in for the units that read and write them, which aren't on main (the embedding's token read, CIR-104's
+    ``EmbeddingPosition_v1``, and CIR-100's argmax): `I32Add_v2`'s unit r·G + g reads request row r·P + g mod P as its
+    ``a`` (2 words, the token key) and the loaded ``k`` as its ``b``, and its i32 ``o0`` is response row r·G + g, at
+    step g + 1 of the server-time window."""
+    P, G = TR.PROMPT, TR.GENERATED
+    reads = (IF.Read(ADD, "a", "request", 0, (R, G // P, P), 0, (2 * P, 0, 2)), IF.Read(ADD, "b", "k", 0, (R * G,), 0, (0,)))
+    c = IF.Circuit("demo-class", ((IF.resolve(ADD), R * G),), external=(f"{ADD}/a", f"{ADD}/o0"),
+                   registered=IF.Registered({"request": 2 * R * P, "k": 2}, reads=reads))
+    b = {"format": BK.FORMAT, "server": [{"name": "s0", "uplink": UPLINK, "units": "all"}],
+         "server_time": {"window": WINDOW, "steps": G + 1},
+         "transfers": [{"server": "s0", "dir": "in", "kind": "load", "value": "k", "window": 0, "t": None},
+                       {"server": "s0", "dir": "in", "kind": "request", "value": "request", "window": WINDOW,
+                        "t": {"base": 0, "radix": [R * P], "step": [0]}},
+                       {"server": "s0", "dir": "out", "kind": "response", "value": "response", "window": WINDOW,
+                        "t": {"base": 1, "radix": [R, G], "step": [0, 1]}, "leaves": 2 * R * G,
+                        "writes": [{"writer": ADD, "out": "o0", "at": 0, "radix": [R * G], "base": 0, "step": [2]}]}]}
+    return c, b
+
+
+def test_the_demos_request_and_response_rows_bind_at_the_frozen_shape(tmp_path):
+    c, b = demo()
+    doc, lays = record(c), layouts(c)
+    req = [bytes(range(i, i + TR.PROMPT)) for i in (0, 100)]
+    data = {"k": [[0, 0]], "request": TR.request_rows(req, R),
+            "response": TR.response_rows([bytes(range(TR.GENERATED)), b"\xfe" * TR.GENERATED], R)}
+    checked = BK.check(doc, b, lays)
+    assert [(t.value, t.words, t.rows) for t in checked.transfers] == [
+        ("k", 2, 1), ("request", 2, R * TR.PROMPT), ("response", 2, R * TR.GENERATED)]
+    certs = Certifiers(tmp_path)
+    regs = certs.register(doc, b, data)
+    pins = BK.pins(doc, b, lays, regs, certs.keys())
+    assert sorted(pins) == ["k", "request"] and IF.input_count(doc, pins=pins)["free"] == 0
+    assert IF.input_count(doc, pins={"k"})["free"] == 16 * 2 * R * TR.GENERATED
+    heads = BK.certified(doc, b, lays, regs, certs.keys())
+    assert (heads["request"].rows, heads["response"].rows, heads["response"].words) == (16, 48, 2)
+    short = edit(b, ("transfers", 2, "leaves"), 2 * R * (TR.GENERATED - 1))
+    with pytest.raises(ValueError, match="isn't whole rows of 2 words among the value's 92 leaves"):
+        BK.check(doc, short, lays)
+    with pytest.raises(ValueError, match="'response'.*registration's rows is 46, and the verifier's 48"):
+        BK.pins(doc, b, lays, certs.register(doc, b, data | {"response": data["response"][:-2]}), certs.keys())
 
 
 def test_two_servers_pin_each_transfer_from_its_own_uplinks_certifier(tmp_path):
