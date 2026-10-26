@@ -256,11 +256,12 @@ theorem innerSetup_same {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScop
     rw [z8] at hpa
     simp only [Except.toOption, Option.some.injEq] at hpa
     rw [hpa, hp]
-  have hdraw : s.read.draw = some d := by
-    have hz9 := z9
+  have hdraw : s.read.draw = some (Flock.norm d) := by
+    obtain ⟨dr, hz9, he⟩ := z9
     rw [hb] at hz9
     simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hz9
-    exact hz9.symm
+    rw [he, ← hz9]
+    rfl
   have hsetup := FlockDeploy.Ins.setup_read hsu
   unfold Readable.Read.setup at hsetup
   rw [z2, z3, z4, z5, z7, hs3, hdraw, hpart, hpi] at hsetup

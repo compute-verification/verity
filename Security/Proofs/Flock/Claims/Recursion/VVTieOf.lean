@@ -22,8 +22,9 @@ agree:
   those of `V ++ comb` at `vs`;
 * copy `(o, g)` of instance `o · c.g + g < 2` with `g < c.g` is instance `o + g` (`inst_eq_add`).
 
-`holoOf` reads META's `holo`, which check 5's statement pins by its bytes (`checkFile`) and no lemma parses yet, so
-plainness is the hypothesis `hplain`, as in `VBridge.Family`.
+`holoOf` reads META's `holo`, which `RecVStar.checkCircuit` pins to V*'s file's (`checkHolo`): `false` at every
+statement over the dense form's plain inner shape (`staged_plain`, by `checkCircuit_plain`). `vvTie_dense` is
+`vvTie_of` with `hplain` so discharged.
 -/
 
 namespace RecDeploy.ResLower
@@ -77,7 +78,7 @@ theorem residualRows_some {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extr
       | ok rows' =>
         rw [hr] at h
         cases h
-        exact ⟨gs, R, P, vs, rfl, rfl, rfl⟩
+        exact ⟨gs, R, P, vs, rfl, hj, hr⟩
 
 /-- **The part's `v` elements are its group's**: `part`'s `nv` is the number of group `j`'s `V` elements. -/
 theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
@@ -95,9 +96,9 @@ theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.Gf
   · obtain ⟨gs', hgs', hp⟩ := FlockVBridge.PartS.bind_ok hp
     rw [hg] at hgs'
     cases hgs'
-    dsimp only at hp
+    try dsimp only at hp
     rw [hj] at hp
-    dsimp only at hp
+    try dsimp only at hp
     obtain ⟨S2, -, hp⟩ := FlockVBridge.PartS.bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     exact hp.2.2.symm
@@ -111,7 +112,7 @@ theorem comb_of_row {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : A
       let comb ← if vs.any (· ≥ base.size) then inn.comb r rep else pure RecCoins.ZERO_COMB
       let full := base ++ comb
       pure (RecCoins.padTo (RecCoins.words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size)) :
-        V (Array ℕ)) = .ok row)
+        _root_.Flock.V (Array ℕ)) = .ok row)
     {rep : RecCoins.Rep} (hrep : inn.rep sh extras r = .ok rep) (ha : vs.any (· ≥ rep.v.size - 64) = true) :
     ∃ cb, inn.comb r rep = .ok cb := by
   obtain ⟨rep', hrep', h⟩ := FlockVBridge.PartS.bind_ok h
@@ -198,7 +199,7 @@ theorem getD_nat (a : Array ℕ) (i : ℕ) : a.getD i 0 = a[i]! := by
   rw [Array.getElem!_eq_getD]
   rfl
 
-theorem append_cancel_right' {V V' Z : Array _root_.Flock.F128} (h : V ++ Z = V' ++ Z) : V = V' := by
+theorem append_cancel_right' {a a' z : Array _root_.Flock.F128} (h : a ++ z = a' ++ z) : a = a' := by
   have e := congrArg Array.toList h
   simp only [Array.toList_append] at e
   exact Array.toList_inj.1 (List.append_cancel_right e)
@@ -331,5 +332,31 @@ theorem vvTie_of {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ �
       FlockVBridge.Decode.sub_lt _ _ e he, hvOf combR]
     all_goals rfl
   · rw [if_neg he, resVOf_none (hVall combR) hS0 hg0 hj (Nat.le_of_not_lt he)]
+
+/-- **A dense statement's staged tables are plain**: each passed `checkCircuit` at the reader's inner shape
+(`checks_stmt`, `checkStmt_circuit`), whose holo flag a dense form leaves off, so its META says no `holo`
+(`checkCircuit_plain`). -/
+theorem staged_plain {untr : TrReader} {b : Brings} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+    (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) {xO : Msg}
+    (hsh : showsPart untr b s x xO c) {i : RecIns} {spec : SessionSpec} {sts : Array Stmt}
+    (hsu : setupO xO = some (i, spec, sts)) (t : ℕ) (ht : t < sts.size) :
+    RecResiduals.holoOf sts[t].c = .ok false := by
+  obtain ⟨ms, -, -, -, rfl, -, -⟩ := hsh.2
+  obtain ⟨hins, hset⟩ := setupO_some hsu
+  obtain ⟨r, hr, hinner, -⟩ := insO_staged hins
+  have hC := RecIns.setup_checks hset
+  rw [hinner, insO_staged_part hins] at hC
+  obtain ⟨_, _, _, -, -, hc⟩ := checkStmt_circuit (checks_stmt hC t ht)
+  obtain ⟨r', hr', -, rfl⟩ := parse_read hst
+  rw [hr] at hr'
+  cases hr'
+  exact FlockSoundness.Discharge.Recursion.checkCircuit_plain hc hd.1
+
+/-- **`VVTie` at RECR's verifier values, from the verifier's checks**: `vvTie_of`, its plain tables by
+`staged_plain`. -/
+theorem vvTie_dense {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : ℕ → Coin} {st0 : Claims.Recursion.Stmt}
+    (hst : parse x = some st0) (hd : Claims.Recursion.Form.Dense st0.form) (hB : RestRead.kI x ≤ Bk (xIOf x)) :
+    VVTie recRead b Rows.resVRead Bk s x c :=
+  vvTie_of hst hd hB fun _ hsh _ _ _ hsu t ht _ => staged_plain hst hd hsh hsu t ht
 
 end RecDeploy.ResLower
