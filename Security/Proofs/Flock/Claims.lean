@@ -227,6 +227,15 @@ import Proofs.Flock.Claims.Recursion.VStarBuild
 import Proofs.Flock.Claims.Recursion.VStarTrace
 import Proofs.Flock.Claims.Recursion.HpLast
 import Proofs.Flock.Claims.Recursion.VStarDeployed
+import Proofs.Flock.Claims.Recursion.VStarFit
+import Proofs.Flock.Claims.Recursion.VStarHh
+import Proofs.Flock.Claims.Recursion.VStarPorts
+import Proofs.Flock.Claims.Recursion.VStarPin
+import Proofs.Flock.Claims.Recursion.VStarHonest
+import Proofs.Flock.Claims.Recursion.VStarCap0
+import Proofs.Flock.Claims.Recursion.VStarPortsM
+import Proofs.Flock.Claims.Recursion.VStarFitHeld
+import Proofs.Flock.Claims.Recursion.VStarFinal
 import Proofs.Flock.Claims.Recursion.HpEarly
 import Proofs.Flock.Claims.Recursion.SlotsOk
 import Proofs.Flock.Claims.Recursion.HpEarlyTrace
