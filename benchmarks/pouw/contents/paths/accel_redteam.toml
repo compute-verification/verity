@@ -1,0 +1,4 @@
+order = 367
+path = "`theory/accel_redteam.py`"
+runs_on = "CPU"
+what = "ACCEL O-REDTEAM's exact checks of attacks on Dither at A = B = 0 under the draft accelerator model: the b1 AND.POPC bit-plane route, FFMA integer adds through denormal bit patterns and their sign wall, one Strassen level a segment with per-product prefix accumulators, accumulator biases, and IMAD.WIDE packing; each priced per word against honest LI on the H200's data-sheet rates (note:compute-research/20261026T0124Z-draft-accel-o-redteam)"
