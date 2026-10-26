@@ -40,8 +40,10 @@ def _check(args: list[str]) -> int:
 
 def _bench(args: list[str]) -> int:
     names = sorted(p.name for p in (ROOT / "benchmarks").iterdir() if p.is_dir() and not p.name.startswith((".", "_")))
+    if args:
+        args = [args[0].replace("-", "_"), *args[1:]]
     if not args or args[0] not in names:
-        raise SystemExit("verity bench NAME [ARGS]: NAME is one of " + ", ".join(names))
+        raise SystemExit("verity bench NAME [ARGS] (a - in NAME is a _): NAME is one of " + ", ".join(names))
     d = ROOT / "benchmarks" / args[0]
     for runner, argv in (("run.py", [sys.executable]), ("run.sh", ["bash"])):
         if (d / runner).exists():

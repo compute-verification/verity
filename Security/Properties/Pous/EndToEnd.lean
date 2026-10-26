@@ -36,7 +36,7 @@ separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-nebius-host`
+   host never restores an earlier copy: `trusted-host`
    (pending network-accounting's widening, Daniel decision 2)) and the coins drawn online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
@@ -56,7 +56,7 @@ it hands the server the session commitment, and `P2RingAuditSecure`, the conject
 Two gaps stood between these statements and the deployed verifier:
 
 * **G-1**: the check's half is fixed in code; one session per id is the memory challenger's `SessionLog` under its host
-  presumption, which `trusted-nebius-host` covers as network-accounting widens it
+  presumption, which `trusted-host` covers as network-accounting widens it
   (pending network-accounting's widening, Daniel decision 2). The check's half: a session's `binding` is required and is
   the setup's root (`Run.check` refuses any other), so a session names the setup it audits, and its id is the one the
   auditor designated for the audit (`Run.check` refuses any other); `RunCheckAccepts` states it. The memory challenger
@@ -314,7 +314,7 @@ It speaks of the deployed system only through the four claims of this module's h
 `pous-ring-speed` (the hardware's `D`, `Q` and `L` within `Δ + RTT`, by measurement), `pous-ring-instantiation` (P2 with
 `φ = id`, SHA-512-CTR keys and its public root is no easier than `p2ring` with uniform `ω`) and `prf/sha-512` (the
 derived streams are as good as uniform bytes). G-1: the check's half is fixed in code; one session per id is the memory
-challenger's `SessionLog` under its host presumption, which `trusted-nebius-host` covers as network-accounting widens it
+challenger's `SessionLog` under its host presumption, which `trusted-host` covers as network-accounting widens it
 (pending network-accounting's widening, Daniel decision 2). G-2 (the composed check) is fixed in code. What the deployed
 verifier's acceptance gives is `RunCheckAccepts` (this module's header). -/
 def EndToEndRing : Prop :=

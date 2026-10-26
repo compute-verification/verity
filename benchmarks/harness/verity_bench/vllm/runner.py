@@ -686,7 +686,7 @@ def _pearl_c_run(llm: Any) -> Any | None:
     a pass each time the model runner's ``execute_model`` returns (`pouw.install`), so the harness only reads the passes
     (`_pass_totals`) and gates the run (`_pearl_c_gate`)."""
 
-    from verity_vllm.protocol_options import pouw_pearl_c_device as PPD
+    from verity_vllm.protocols.pouw import pearl_c as PPD
 
     option = llm.protocols.get("pouw") if llm.protocols is not None else None
     run = getattr(getattr(option, "end_pass", None), "__self__", None)
@@ -703,12 +703,20 @@ def _pass_totals(run: Any) -> dict[str, int]:
 def _pearl_c_gate(run: Any) -> dict[str, Any]:
     """The experimental arm's own gate, `e2e.gate`'s call check, on the protocol arm's installed run: at every distinct
     (n, k), served y against x·Wᵀ within `bench_arm.ERR`, the commitment twice, and the ``hash_leaf``-omitted negative
-    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control."""
+    control. Pearl-C's y carries the epoch's live salt, so no stock arm is its token control. Its ``coins`` are the
+    installed run's: a live session's (``challenger``, its salt epoch ``pass_index`` and the root its salt coin follows,
+    `salt.epoch_open_root` of the weights' root and that epoch) when the option took its salt from one, else
+    ``in-process``."""
 
     from benchmarks.pouw.pearl_c_vllm.bench_arm import PearlCArm
+    from verity.core.protocols.pouw.salt import epoch_open_root
 
     check = PearlCArm()
     check.run, check.schedule = run, run.schedule.name
+    c = run.commits
+    check.coins = ({"source": c["coin_source"], "session": c.get("session"), "pass_index": c["pass_index"],
+                    "salt_after": epoch_open_root(bytes.fromhex(c["weights_root"]), c["pass_index"]).hex()}
+                   if c.get("coin_source", "in-process") != "in-process" else {"source": "in-process"})
     check.weights = {w: x.tensor for w, x in run.weights.items()}
     got = check.gate(None)
     # The check begins and ends its own passes; the next forward's calls need an open pass, as the adapter's hook leaves
@@ -825,7 +833,7 @@ class _VllmEngine:
         import vllm
 
         from verity_vllm.engine.hooks import Hooks, live
-        from verity_vllm.pipeline.llm import LLM
+        from verity_vllm.llm import LLM
 
         self.arm, self.obj, self.installed, self.pearl_c, self.h1 = arm, plugin(arm), None, None, None
         self.target = Target(arm, None, None, Hooks(tag=f"bench:{arm.id}"))
@@ -939,7 +947,7 @@ class _VllmEngine:
 
         if self.h1 is None:
             return self._serve(point, phase)
-        from verity_vllm.protocol_options import pouw
+        from verity_vllm.protocols import pouw
 
         start = time.perf_counter()
         self.llm.reinstall(h1_config(self.h1["config"], window_steps(point, self.h1["rows"])))

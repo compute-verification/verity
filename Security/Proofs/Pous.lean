@@ -49,6 +49,8 @@ import Proofs.Pous.Chain.PubFamily
 import Proofs.Pous.Chain.PubRounds
 import Proofs.Pous.Rebuild.Exclusion
 import Proofs.Pous.EndToEnd
+import Proofs.Pous.Period
+import Proofs.Pous.Pooled
 import Proofs.Pous.EndToEndAt
 
 /-!

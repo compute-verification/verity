@@ -631,7 +631,7 @@ def build(opts: Options) -> tuple[Any, Any]:
     if opts.commit:
         engine_env.apply_target({"VERITY_RETAIN": "host"})
     scope = register_int8(opts.precision)
-    from verity_vllm.pipeline.llm import LLM
+    from verity_vllm.llm import LLM
 
     llm = LLM(opts.model, revision=opts.revision, **engine_options(opts))
     if scope is not None:
