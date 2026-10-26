@@ -85,6 +85,7 @@ every machine of a census deployment, the pooled total first and the per-window 
   the firewall overlaps: the next window's loop serves while a window is audited.
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
   aren't its model's. `--registered` has the loop read its weights as registered values, committed once a run.
+  `--wired` serves the loop's wired circuit (`serve --wired`).
   `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
   `verity_torch_loop.pouw_audit` before the legs.
   `--tie` ties the outputs to the certified ones (`verity_all_protocols/tie.py`) under a work law (default `work:64`, any
@@ -115,6 +116,7 @@ research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-
 
 - `--tie`, network-accounting's output tie;
 - `--pouw h1`, whose work leg refuses a window without PoUW's window;
+- `--registered`, so the weights are counted registered, not free;
 - `--law work:64`, the work law the tie needs;
 - `--jobs 1 --session-jobs 1`, so one firewalled session runs at a time.
 
@@ -122,7 +124,19 @@ Under `--tie-tamper` it also sets `CERTIFIER_TAMPER=byte`.
 
 `run.sh` checks the command before it builds anything (`runner --check`, whose output is `$OUT/mode-check.json`). It
 refuses a command that contradicts the mode, with the reason: another `--law`, `--jobs` or `--session-jobs` other than 1,
-or another `CERTIFIER_TAMPER`.
+another `CERTIFIER_TAMPER`, or `--wired`.
 
 Window 0 is tied to a relay with one egress byte changed, so it must reject, and window 1 is honest, so it must accept.
 Any other command is a development run: its `mode.json` says `"of_record": false`.
+
+The run of record is unwired: the output tie reads the per-coordinate circuit's output units, so `--tie` and `--wired`
+are refused together. Its mode names the gap (`gap`), and the wiring is cited from its companion run (wired,
+registered, no tie), a development run:
+
+~~~sh
+research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
+  bash benchmarks/all_protocols/run.sh --registered --wired --pouw h1 --law work:14 --jobs 1 --session-jobs 1 \
+  --windows 2 --tamper 0
+~~~
+
+The wired output tie needs `out` committed at h words a row (`certifier_serve --out-words`), after S1.
