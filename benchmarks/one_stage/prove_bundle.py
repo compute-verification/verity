@@ -143,7 +143,8 @@ def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: 
                    "why": ((record or {}).get("verdict") or {}).get("why")},
             "lean": {x: lean.get(x) for x in ("accepted", "why", "verify_s", "partition", "digest")},
             "served_draw": served.get("units"), "proved": a0.proved_units(mm["header"], live or {}),
-            "prover": {"accepted": (live or {}).get("accepted"), "why": (live or {}).get("why")},
+            "prover": {"accepted": (live or {}).get("accepted"), "why": (live or {}).get("why"),
+                       "stopped": (live or {}).get("prover_stopped")},
             "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "dense_m", "units",
                                                         "proof_bytes")},
             "roots": (live or {}).get("roots") == mm["header"]["frame_v3"]["roots"],
@@ -227,11 +228,13 @@ def main(argv=None) -> int:
         for arm, fw in (("firewalled", True), ("unfirewalled", False)):
             s = session(a, mm, bm["draw"], out / "tampered" / f"session-{arm}", firewall=fw, forged=True)
             # behind the firewall no proof may leave the prover; without it Lean's own verdict must refuse the proof
-            refused = ("FIREWALL" in str(s["prover"]["why"]) and s["lean"]["accepted"] is not True) if fw else a0.lean_refused(s["lean"])
+            refused = (str(s["prover"]["stopped"]).startswith("FIREWALL-REFUSED") and s["lean"]["accepted"] is not True
+                       and s["m0"]["accepted"] is not True) if fw else a0.lean_refused(s["lean"])
             negatives[f"tampered/{arm}"] = {"refused": refused, "lean": s["lean"], "m0": s["m0"], "prover": s["prover"],
                                             "checks_before_draw": mm["checks"]}
             print(f"PROVEBUNDLE tampered {arm}: refused {negatives[f'tampered/{arm}']['refused']} (prover "
-                  f"{str(s['prover']['why'])[:200]!r}; Lean {s['lean']['why']!r})", flush=True)
+                  f"{str(s['prover']['stopped'] or s['prover']['why'])[:200]!r}; Lean {str(s['lean']['why'])[:200]!r})",
+                  flush=True)
     summary["negatives"] = negatives
     ok = bool(rows) and all(r["accepted"] for r in rows.values()) and bool(negatives) and all(v["refused"] for v in negatives.values())
     summary["ok"] = ok
