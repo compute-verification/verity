@@ -1,10 +1,10 @@
 """verity_vllm.program.predict.window_circuit (V3b at ASK-122's fixed slots): a served window is its class's one Circuit of the
 catalog's units, a class Program a slot whatever the traffic, every input row wired from its writer's row, a registered read
 of the weights or a slot's ingress row, and nothing free. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5
-positions a Program), at a grain small enough to slice TINY's GEMMs and cut its ports; the class's circuit is the same for
-windows that differ in everything, their request count included. At the class of record's slots (8, 4 at each of buckets 0
-and 16) with TINY's caps, a 3-request and an 8-request window are one circuit; the class of record itself is past `KEYS` until
-v19 binds, so it is held only to taking both windows to the one class circuit.
+positions a Program), at a grain small enough to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks
+included, is the same for windows that differ in everything, their request count included. At the class of record's slots
+(8, 4 at each of buckets 0 and 16) with TINY's caps, a 3-request and an 8-request window are one circuit; the class of record
+itself is past `KEYS` until v19 binds, so it is held only to taking both windows to the one class circuit.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import hashlib
 import json
 from collections import Counter
 
+import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
 from verity_vllm.program.predict import window_circuit as WC
@@ -52,6 +53,13 @@ def _bytes(circuit) -> bytes:
     return IF.circuit_bytes(circuit.description())
 
 
+def _blocks(circuit) -> bytes:
+    """The circuit's blocks as its record carries them, less the proof block's partition digest: that is its population
+    program's, which its templates fix (`Circuit.blocks_record`, pinned in the windows suite), and building it here would
+    run the embedding's population program."""
+    return IF.circuit_bytes(circuit.blocks.doc(sum(circuit.units.values()), ""))
+
+
 @pytest.fixture(scope="module")
 def window():
     """The window's Circuit and its templates' ids by label."""
@@ -69,24 +77,26 @@ def _source(circuit, tid: str, port: str, unit: int, row: int = 0) -> tuple[str,
 def test_windows_of_a_class_are_one_circuit_whatever_their_request_count(window):
     """The privacy property (ASK-122: only the slot count is public): WINDOW and OTHER differ in their requests' arrival
     steps, prompt lengths (4 and 3 against 3 and 2) and output lengths, and a window of one request in its request count too,
-    and their circuits' descriptions (units, wires, cuts, registered reads, ingress), templates and external ports are byte
-    for byte the class's circuit."""
+    and their circuits' descriptions (units, wires, cuts, registered reads, ingress), blocks, templates and external ports are
+    byte for byte the class's circuit: the blocks' slots are the class's 2 whatever the window's requests."""
     circuit, _ = window
     cls = class_circuit(S._registered(), CLASS, None, GRAIN)
     for other in (_circuit(OTHER), _circuit(ONE), cls):
-        assert _bytes(other) == _bytes(circuit)
+        assert _bytes(other) == _bytes(circuit) and _blocks(other) == _blocks(circuit)
         assert (other.ids, other.external) == (circuit.ids, circuit.external)
+        assert (other.blocks.slots, other.blocks.steps) == (2, 5)
 
 
 def test_a_3_request_and_an_8_request_window_at_the_class_of_records_slots_are_one_circuit():
     """At the class of record's slots, 4 a boundary at buckets 0 and 16 (TINY's caps: the class of record's own Program is
     past `KEYS`), a window of three requests (two anchored at bucket 0, one at 16) and one of eight (four at each) emit the
-    same circuit, the same descriptor digest (SHA-512 of its description's bytes): eight class Programs, each slot's ingress
-    row the system's ingress at its anchor."""
+    same circuit, the same descriptor digest (SHA-512 of its description's bytes) and the same blocks: eight class Programs,
+    each slot's ingress row the system's ingress at its anchor."""
     eight = _circuit(EIGHT, cls=SLOTS, placed=[(0, 1)] * 4 + [(16, 17)] * 4)
     three = _circuit(THREE, cls=SLOTS, placed=[(0, 1), (16, 18), (16, 31)])
     assert hashlib.sha512(_bytes(three)).hexdigest() == hashlib.sha512(_bytes(eight)).hexdigest()
-    assert (three.ids, three.external) == (eight.ids, eight.external)
+    assert (three.ids, three.external, _blocks(three)) == (eight.ids, eight.external, _blocks(eight))
+    assert (eight.blocks.slots, eight.blocks.steps) == (8, 5)
     n = {_label(fn): k for fn, k in eight.templates}
     assert (n[ROW], n[FIRST], n[MASK], n[EMB]) == (8, 8, 8 * SLOTS.positions, 8 * SLOTS.positions)
     row = IF.descriptor_id(next(fn for fn, _ in eight.templates if _label(fn) == ROW))
@@ -112,12 +122,13 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
     """Each allocation's slots sit side by side in its template, so every slot's copy of a wire or read pattern is one: the
-    class of record's slots at 2 and at 8 Programs have the same 155 wires, 63 weight reads, root reads and openings, the 8
-    Programs 4 times the units and one ingress pattern a boundary."""
+    class of record's slots at 2 and at 8 Programs have the same 155 wires, 63 weight reads, root reads, openings and 78
+    inference entries, the 8 Programs 4 times the units and one ingress pattern a boundary."""
     reg = S._registered()
     two, eight = class_circuit(reg, SLOTS, 2, GRAIN), class_circuit(reg, SLOTS, None, GRAIN)
-    shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings)) for c in (two, eight)]
-    assert shape == [(155, 63, 2, 1)] * 2 and two.ids == eight.ids
+    shape = [(len(c.wires), len(c.registered.reads), len(c.registered.roots), len(c.registered.openings),
+              len(c.blocks.inference)) for c in (two, eight)]
+    assert shape == [(155, 63, 2, 1, 78)] * 2 and two.ids == eight.ids
     assert sum(n for _, n in eight.templates) == 4 * sum(n for _, n in two.templates) == 9816
     assert [(g.at, g.units, g.step) for g in two.ingress] == [(0, 2, 0)]
     assert [(g.at, g.units, g.step) for g in eight.ingress] == [(0, 4, 0), (4, 4, 16)]
@@ -225,6 +236,64 @@ def test_a_head_attends_over_every_key_position_through_one_gather(window):
     other = _source(circuit, att, "k", 4)
     assert other == (gather5, 1, "o0") and _source(circuit, att, "q", 4) == (rope, 100, "o0")
     assert [_source(circuit, gather5, "parts", 1, r) for r in range(5)] == [(rope, 24 * p + 10, "o0") for p in range(5)]
+
+
+def _labels(circuit) -> dict[str, np.ndarray]:
+    """Each template's units' (slot, step), by descriptor id: its inference entries expanded, an entry's digits in mixed radix
+    with the first the slowest."""
+    out = {tid: np.full((n, 2), -1, dtype=np.int64) for tid, n in circuit.units.items()}
+    for e in circuit.blocks.inference:
+        i, lab = np.arange(e.units, dtype=np.int64), np.zeros((e.units, 2), dtype=np.int64)
+        lab[:, 1] = e.step
+        for r, a in zip(reversed(e.radix), reversed(e.axes)):
+            if a != "-":
+                lab[:, int(a == "step")] += i % r
+            i //= r
+        out[e.template][e.at:e.at + e.units] = lab
+    return out
+
+
+def test_the_blocks_put_each_unit_at_its_slot_and_its_positions_step(window):
+    """The inference block (`interface.Blocks`): the class's 2 slots are its slots and its 5 positions its steps, each
+    allocation's units an entry of its slots' runs side by side, like entries merged. Position p's embedding, select and mask
+    are step p, its feed (p = 1..3) step p, a slot's ingress row step 0, a head over T keys step T - 1 (its digits layer,
+    slot, head; its key and value gathers' each gather of the step, then the slot), and the entries tile every template.
+    Every wire's writer is of its reader's slot at its step or before: a slot reads only its own units, a position only its
+    own and earlier positions'."""
+    circuit, ids = window
+    label = {tid: name for name, tid in ids.items()}
+    assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 78)
+    by: dict[str, list] = {}
+    for e in circuit.blocks.inference:
+        by.setdefault(label[e.template], []).append((e.at, e.radix, e.axes, e.step))
+    assert set(by) == set(ids)
+    assert by[EMB] == by[COMBINE] == by[MASK] == [(0, (5, 2), ("step", "slot"), 0)]
+    assert (by[FIRST], by[ROW], by[FEED]) == ([(0, (2,), ("slot",), 0)], [(0, (2,), ("slot",), 0)],
+                                              [(0, (3, 2), ("step", "slot"), 1)])
+    att = "AttentionHead_v18{{T={},D=16,BN=128,MASKED_FROM=0}}"
+    assert by[att.format(5)] == [(0, (2, 2, 4), ("-", "slot", "-"), 4)]
+    assert by["AllGather_v1{WORLD=5,N=16}"] == [(0, (8, 2), ("-", "slot"), 4)]
+    assert [{s for *_, s in by[att.format(t)]} for t in range(1, 6)] == [{t} for t in range(5)]
+    assert by["RoPEHead_v1{D=16}"][:2] == [(0, (2, 4), ("slot", "-"), 0), (8, (2, 2), ("slot", "-"), 0)]
+    labels = _labels(circuit)
+    assert all((lab >= 0).all() for lab in labels.values())
+    for w in circuit.wires:
+        i = np.arange(w.units, dtype=np.int64)
+        reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
+        assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+
+
+def test_inference_entries_are_the_slots_runs_side_by_side():
+    """`_inference` takes a template's runs in unit order (a slot's are allocated before the next slot's, each allocation's
+    slots side by side), merges its units of one (slot, step) into runs, takes each ``slots`` runs (slots 0, 1, ... of one
+    length at one step) as an entry, and merges like entries that follow on at one step under a ``-`` digit, then at
+    consecutive steps under a ``step`` digit; units that aren't such runs are refused by name."""
+    assert WC._inference({"t": [(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]}, 2) == [
+        IF.InferenceEntry("t", 0, (2, 2, 2), ("step", "slot", "-"), 0)]
+    for spans in ([(0, 1, 0, 3), (1, 1, 1, 3), (2, 1, 0, 3), (3, 1, 1, 3)], [(0, 1, 0, 3), (2, 1, 0, 3), (1, 1, 1, 3), (3, 1, 1, 3)]):
+        assert WC._inference({"t": spans}, 2) == [IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
+    with pytest.raises(Unexpressible, match=r"t: units from 0 are not 2 slots' runs of one length at one step"):
+        WC._inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
 
 
 def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window):
