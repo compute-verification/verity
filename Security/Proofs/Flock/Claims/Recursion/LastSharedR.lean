@@ -33,8 +33,8 @@ theorem readPs_last {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ 
   unfold readPs at h h'
   by_cases hc : fl.ps.size = 2 * sts.size ∧ (repLens spec sts).sum = rss.length
   · by_cases hc' : fl'.ps.size = 2 * sts.size ∧ (repLens spec sts).sum = rss.length
-    · rw [ite_cond_eq_true _ _ (eq_true hc)] at h
-      rw [ite_cond_eq_true _ _ (eq_true hc')] at h'
+    · rw [ite_eq_left_of_eq_true _ _ (eq_true hc)] at h
+      rw [ite_eq_left_of_eq_true _ _ (eq_true hc')] at h'
       obtain ⟨rs, hrs, rfl⟩ := Option.map_eq_some_iff.1 h
       obtain ⟨rs', hrs', rfl⟩ := Option.map_eq_some_iff.1 h'
       obtain ⟨hlen, hget⟩ := mapM_some_get hrs
@@ -52,9 +52,9 @@ theorem readPs_last {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {r₀ 
       rw [show rs[i] = (rs[i].1, rs[i].2) from rfl] at hr
       rw [show rs'[i] = (rs'[i].1, rs'[i].2) from rfl] at hr'
       exact (readRep_last hr hr').2
-    · rw [ite_cond_eq_false _ _ (eq_false hc')] at h'
+    · rw [ite_eq_right_of_eq_false _ _ (eq_false hc')] at h'
       cases h'
-  · rw [ite_cond_eq_false _ _ (eq_false hc)] at h
+  · rw [ite_eq_right_of_eq_false _ _ (eq_false hc)] at h
     cases h
 
 /-- **Two decisions of `nextR` on the same rounds and coins, differing only in the last message, share the setup, the
