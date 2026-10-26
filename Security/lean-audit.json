@@ -17604,6 +17604,14 @@
     "Verity.SecurityProofs.SoundMono"
    ]
   },
+  "Definitions.Core.Guarantees.NaiveStrassen": {
+   "digest": "0f2986f521d2f0ef964691ab822e09c526f44c454c4216fe1ae5ce6a8e7e302a",
+   "definitions": {
+    "Verity.Guarantees.NaiveBeatsStrassenServed": "2bdd40bb2cd8a841c349071fc071ca32d82a8fdf98629f6e2c56693deb4e8226",
+    "Verity.Guarantees.NaiveBeatsStrassenServedSize": "4805bae99988d38bdb49800e1e5b401acb29311b40556fd336b7bde0d69d1679"
+   },
+   "guarantees": ["Verity.SecurityProofs.NaiveBeatsStrassenServed", "Verity.SecurityProofs.NaiveBeatsStrassenServedSize"]
+  },
   "Definitions.Core.Guarantees.PrivatePartition": {
    "digest": "338c36fe6dcf5a21be7bf3cc6af6b5118090c13871f3e320e121872843bff65d",
    "definitions": {
@@ -35183,14 +35191,6 @@
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_custody_nonvacuous",
     "FlockSoundness.Discharge.ZkReg.zk_session_soundHJR_nonvacuous"
    ]
-  },
-  "Definitions.Core.Guarantees.NaiveStrassen": {
-   "digest": "0f2986f521d2f0ef964691ab822e09c526f44c454c4216fe1ae5ce6a8e7e302a",
-   "definitions": {
-    "Verity.Guarantees.NaiveBeatsStrassenServed": "2bdd40bb2cd8a841c349071fc071ca32d82a8fdf98629f6e2c56693deb4e8226",
-    "Verity.Guarantees.NaiveBeatsStrassenServedSize": "4805bae99988d38bdb49800e1e5b401acb29311b40556fd336b7bde0d69d1679"
-   },
-   "guarantees": ["Verity.SecurityProofs.NaiveBeatsStrassenServed", "Verity.SecurityProofs.NaiveBeatsStrassenServedSize"]
   },
   "PouwWindow.FullDraw": {
    "digest": "75a5b393e7f1bdbdca00dc52f222392f97a496d9db4e0f453e48468dbe3bfef1",
