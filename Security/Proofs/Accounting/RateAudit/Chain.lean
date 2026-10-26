@@ -288,9 +288,18 @@ namespace LiveChain
 
 variable {P κ S L q : ℕ}
 
+/-- The one root of no bits. -/
+def noRoot : Bits 0 := fun i => i.elim0
+
 /-- A pass's game coins as a pass's coins over roots of no bits: the oracle family at its one root. -/
-def toPass : Coins N b h ρ s ≃ PassCoins N b h ρ 0 s :=
-  (Equiv.refl _).prodCongr ((Equiv.funUnique (Bits 0) (Oracle N b h ρ)).symm.prodCongr (Equiv.refl _))
+def toPass : Coins N b h ρ s ≃ PassCoins N b h ρ 0 s where
+  toFun x := (x.1, fun _ => x.2.1, x.2.2)
+  invFun y := (y.1, y.2.1 noRoot, y.2.2)
+  left_inv _ := rfl
+  right_inv := fun ⟨u, f, v⟩ => by
+    refine Prod.ext rfl (Prod.ext ?_ rfl)
+    funext r
+    exact congrArg f (funext fun i => i.elim0)
 
 /-- The window's live coins as the game's coins over roots of no bits, and the live coins themselves. -/
 def split : Store N b × (Fin P → LiveCoins N b h ρ κ s) ≃
@@ -304,7 +313,7 @@ def split : Store N b × (Fin P → LiveCoins N b h ρ κ s) ≃
 the earlier passes' live coins from `c`. -/
 def toGrind (A : LiveChain P N b h ρ κ S L q s) (c : Fin P → Bits κ) : GrindChain P N b h ρ S L q 0 s 1 where
   device j η _ := A.device j (fun i => (c i.1, toPass.symm (η i)))
-  cand _ _ _ _ := default
+  cand _ _ _ _ := noRoot
   pick _ _ _ _ := 0
 
 /-- A window with live pass coins is unpaid with at most the bound its grinding chain at `G = 1` has at every value
