@@ -21,6 +21,10 @@ union bound, at `ln(G/δ)` a replica.
   guess their own as the sum of the others' each pass with probability 1/2 at every value of the others', the form
   `SAKMatmul` gives, yet all pass together with probability 1/2, and two of them have a product averaging 2. The
   pointwise premise refuses them (`parity_pointwise`).
+* **Pooling replicas by convexity** (`prob_convex_pool`, RT-POOL's RP1): without a new premise, each replica's own
+  moment (`WorkSound`'s, average at most 1 under `SAKMatmul`) bounds the fleet's total shortfall at `ln(1/δ)` rather
+  than `ln(G/δ)`: the weights `1/η` put the total's exponential below the replicas' mixture, which needs no
+  independence between them. The bound is on the total; its rate is a replica's, not the fleet's.
 -/
 
 namespace Pouw.SecurityProofs.Pool
@@ -430,5 +434,42 @@ theorem pool_luck (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (Reg : Set P
   calc _ ≤ prob (fun z => Real.exp t ≤ ∏ i, Y i z) := prob_mono hsub
     _ ≤ Real.exp (-t) + prob (fun z => ∃ i, Deg i z) := hmain
     _ ≤ Real.exp (-t) + m * κdeg B := add_le_add le_rfl hdeg
+
+/-! ## Pooling replicas by convexity -/
+
+/-- **Pooling replicas by convexity**: if replica `u`'s shortfall `D u`, scaled by its rate `η u`, has its exponential
+below a nonnegative `M u` of average at most 1 wherever `A` holds, the replicas' total shortfall exceeds
+`t · ∑ u, 1 / η u` on `A` with probability at most `e^{-t}`. The replicas' moments need no independence: the weights
+`(1 / η u) / ∑ v, 1 / η v` put the total's exponential below their mixture of the `M u` (Jensen), whose average is at
+most 1. -/
+theorem prob_convex_pool {Ω ι : Type*} [Fintype Ω] [Fintype ι] [Nonempty ι] (M D : ι → Ω → ℝ) (η : ι → ℝ)
+    (hη : ∀ u, 0 < η u) (hM0 : ∀ u ω, 0 ≤ M u ω) (hM : ∀ u, expect (M u) ≤ 1) (A : Ω → Prop)
+    (hZ : ∀ u ω, A ω → Real.exp (η u * D u ω) ≤ M u ω) (t : ℝ) :
+    prob (fun ω => A ω ∧ t * ∑ u, 1 / η u ≤ ∑ u, D u ω) ≤ Real.exp (-t) := by
+  set S := ∑ u, 1 / η u with hS
+  have hSpos : 0 < S := Finset.sum_pos (fun u _ => one_div_pos.mpr (hη u)) Finset.univ_nonempty
+  set w : ι → ℝ := fun u => 1 / η u / S with hw
+  have hw0 : ∀ u ∈ (univ : Finset ι), 0 ≤ w u := fun u _ => div_nonneg (one_div_pos.mpr (hη u)).le hSpos.le
+  have hw1 : ∑ u, w u = 1 := by rw [hw, ← Finset.sum_div, div_self hSpos.ne']
+  refine prob_le_of_expect_le_one (f := fun ω => ∑ u, w u * M u ω)
+    (fun ω => Finset.sum_nonneg fun u hu => mul_nonneg (hw0 u hu) (hM0 u ω)) ?_ t ?_
+  · rw [Pouw.RelativeSecurity.expect_sum]
+    calc ∑ u, Pouw.RelativeSecurity.expect (fun ω => w u * M u ω)
+          = ∑ u, w u * Pouw.RelativeSecurity.expect (M u) := by
+          simp only [Pouw.RelativeSecurity.expect_mul_left]
+      _ ≤ ∑ u, w u * 1 := Finset.sum_le_sum fun u hu => mul_le_mul_of_nonneg_left (hM u) (hw0 u hu)
+      _ = 1 := by simp only [mul_one, hw1]
+  · rintro ω ⟨hA, ht⟩
+    have hmix : ∑ u, w u • (η u * D u ω) = (∑ u, D u ω) / S := by
+      rw [Finset.sum_div]
+      refine Finset.sum_congr rfl fun u _ => ?_
+      rw [hw, smul_eq_mul]
+      field_simp [(hη u).ne']
+    have htS : t ≤ (∑ u, D u ω) / S := by rw [le_div_iff₀ hSpos]; linarith
+    calc Real.exp t ≤ Real.exp (∑ u, w u • (η u * D u ω)) := Real.exp_le_exp.mpr (hmix ▸ htS)
+      _ ≤ ∑ u, w u • Real.exp (η u * D u ω) :=
+          convexOn_exp.map_sum_le hw0 hw1 fun _ _ => Set.mem_univ _
+      _ ≤ ∑ u, w u * M u ω := Finset.sum_le_sum fun u hu => by
+          rw [smul_eq_mul]; exact mul_le_mul_of_nonneg_left (hZ u ω hA) (hw0 u hu)
 
 end Pouw.SecurityProofs.Pool
