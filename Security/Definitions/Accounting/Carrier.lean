@@ -140,8 +140,8 @@ def encoded (E : SketchStore N m) : Provenance N m α → ℕ
   | input _ f k => (k (f E)).encoded E
   | encode t x _ f k => (k (f fun u => E (t, u))).encoded E + x
 
-/-- The budgeted gates the encodes cost at store `E`, at `cost x` per `encode` step of `x` bits. The circuit's other
-budgeted gates only add to its count, so a budget on its budgeted gates bounds this. -/
+/-- The capped units the encodes cost at store `E`, at `cost x` per `encode` step of `x` bits. The circuit's other
+gates only add to its count, so a budget on its capped units bounds this. -/
 def gates (cost : ℕ → ℕ∞) (E : SketchStore N m) : Provenance N m α → ℕ∞
   | done _ => 0
   | input _ f k => (k (f E)).gates cost E
