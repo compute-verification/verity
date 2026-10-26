@@ -55,6 +55,10 @@ multiplication algorithm is faster than Strassen."
   random-oracle model for SHA-512, but only as an explicitly named assumption. Say which results use it; Daniel
   confirms each one that depends on it. Where collision resistance suffices, prefer it.
 
+**Ruling, 25 Oct 7:06 PM PDT (Daniel):**
+
+- **R-ACCEL-5, proving cost is not a constraint.** "don't worry about proving, I know for a fact that won't be the actual constraint in deployment." Never trade coverage, ε or γ for proving cost. γ is the honest serving overhead.
+
 **Wording:**
 
 - Don't use "completeness" for a model property; the word is overloaded.

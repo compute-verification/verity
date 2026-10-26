@@ -98,3 +98,10 @@ Two ACCEL workers (O-IO and O-CHARGE) died 30–40 min into their first turn wit
 - **A smell for PROTO-DESIGN.** Its "100% at γ ≤ 10" rests on the machine model, not measured units. Measured units run at 0.45 of BET-COVERAGE's floor, which is already 1.4× the machine model's figure.
 
 **For you:** Your ε table must show the covered share (about 65–73% projected on the H200) and the proving cost per period that ε < 1% takes (3,857 blocks at δ = 1%, about 518 processes for a week). KLI₂₄ is a defect your statement can't rest on.
+
+## 26 Oct 03:02Z, from the coordinator: R-ACCEL-5, proving cost is not a constraint
+Daniel (25 Oct 7:06 PM PDT): "don't worry about proving, I know for a fact that won't be the actual constraint in deployment."
+- Drop proving cost from scoring and from every limit.
+- Never trade coverage, ε or γ for proving cost. For example, don't chunk units smaller just to prove faster.
+- γ means the honest serving overhead only.
+- You may still report proving cost as information.
