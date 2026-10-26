@@ -273,8 +273,8 @@ check must agree; a disagreement means some part reads something it doesn't decl
 reverting anyone's change.
 
 Check time is to come down by a lot, and anyone may do whatever it takes (Daniel, 11 Oct): a change to how `check` runs
-lands without its file owner's review, and the owner is told. infra owns check time as an outcome, and spend past a budget
-line goes to Daniel. Landing is automated, and ci owns that: from a ready mark and a review to `main` moving, no agent acts
+lands without its file owner's review, and the owner is told. infra owns check time as an outcome, and its spend is
+infra's call (13 Oct). Landing is automated, and ci owns that: from a ready mark and a review to `main` moving, no agent acts
 unless the automation refuses, and the lander handles what it refuses.
 
 PRs land through ci's `research queue drive`, with `land = "review"` in `tools/verity/check/drive.toml`:
