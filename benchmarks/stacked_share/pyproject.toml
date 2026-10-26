@@ -7,4 +7,6 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # units.py reads property/v1 and census/v1 (verity.ml.circuits); share.py and frontier.py import nothing of verity
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/kernels/__init__.py",
-          "verity/ml/kernels/tc.py"]
+          "verity/ml/kernels/tc.py",
+          # beta.py reads the Program as units.py does, and its data products by the pass beside property/v1's
+          "benchmarks/property_redteam/products_pass.py"]

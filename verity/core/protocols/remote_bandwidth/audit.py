@@ -108,7 +108,7 @@ from verity.ml.randomness import derive, frame
 from . import codec, coins, receipts
 from . import pooled as _pooled
 from . import schedule as _schedule
-from .codec import BLOCK_BYTES, SEED_BYTES, Codec
+from .codec import BLOCK_BYTES, P2_LAYOUT, SEED_BYTES, Codec, P2Codec
 from .receipts import DIGEST_BYTES, LIMITS, SALT_BYTES, Plan
 
 PROTOCOL_ID = "verity/remote-bandwidth/v0"
@@ -258,11 +258,14 @@ class Params:
                              "re-key falls at age L − 1, which at L = 1 is before it may be resident")
         if not 0 < self.delta < 1:
             raise ValueError("0 < delta < 1")
-        if type(self.codec) is not Codec:
-            raise ValueError("a session's codec is a Codec")
+        if type(self.codec) not in (Codec, P2Codec):
+            raise ValueError("a session's codec is a Codec, or a P2 store's P2Codec")
         receipts.receipt_kind(self.receipt)
         _bind(self.bind)
-        receipts.block_layout(self.layout)
+        if type(self.codec) is Codec:
+            receipts.block_layout(self.layout)
+        elif self.layout != P2_LAYOUT or self.bind or self.receipt != receipts.SKETCH_SHA512:
+            raise ValueError(f"a P2 store's session reads {P2_LAYOUT} units under sketch-sha512, of the block alone")
         receipts.sketch_rows(self.receipt, self.rows)
         if type(self.groups_per_coin) is not int or self.groups_per_coin < 1:
             raise ValueError("groups_per_coin is a positive integer")
@@ -869,10 +872,17 @@ class Session:
     `Record.end_ns` over the same store, less the trusted round-trip floor if there is one, or the clock at
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
-    the session's: they take indices from N up, and a later session over the store starts again from N."""
+    the session's: they take indices from N up, and a later session over the store starts again from N.  A session
+    over PoUS's P2 store is `p2.Session`, whose blocks are units of `block_bytes` (`codecs`, the codec it takes)."""
+
+    codecs: tuple[type, ...] = (Codec,)
+    block_bytes: int = BLOCK_BYTES
 
     def __init__(self, params: Params, registration: Registration, tiles: Tiles | None, coins_: coins.Coins, *,
                  not_before_ns: int, clock: Callable[[], int] = time.monotonic_ns) -> None:
+        if type(params.codec) not in self.codecs:
+            raise ValueError(f"a {type(self).__name__} is over a store under {[c.__name__ for c in self.codecs]}, not "
+                             f"{type(params.codec).__name__}: a P2 store's session is p2.Session")
         if (registration.blocks != params.blocks or registration.codec != params.codec
                 or registration.receipt != params.receipt or registration.bind != params.bind
                 or registration.layout != params.layout
@@ -1320,7 +1330,7 @@ class Session:
             profile = window_profile(lengths, len(w.draws), self.params.delta)
             out.append(WindowRecord(t, lengths, w.released_ns, self.deadline(t), w.opened_ns, profile, tuple(w.post),
                                     tuple(w.steps), tuple(w.heads), tuple(w.stale), tuple(w.arrived)))
-        return Record(self.registration.digest, self.commitment.root, self.params.blocks, BLOCK_BYTES, tuple(out),
+        return Record(self.registration.digest, self.commitment.root, self.params.blocks, self.block_bytes, tuple(out),
                       self.registration.receipt, self.registration.bind, self.registration.codec,
                       self.registration.layout, self.registration.rows, self.extent - self.params.blocks, self.released,
                       self.params.lifetime, self._head, self.params.pace, self.params.groups_per_coin,
@@ -1724,7 +1734,8 @@ class Rebuild:
 
     def __post_init__(self) -> None:
         if type(self.codec) is not Codec:
-            raise ValueError("a rebuild model is of a Codec")
+            raise ValueError("a rebuild model is of a Codec: μ_rebuild over a P2 store waits on the squaring ceiling at "
+                             "P2's encode (SquaringCeilingP2, drafted, not stated)")
         if type(self.squarings_per_s) not in (int, float) or not 0 <= self.squarings_per_s < math.inf:
             raise ValueError("a squaring ceiling is a finite nonnegative rate")
 

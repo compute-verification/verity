@@ -1,5 +1,6 @@
 """The agent watch (INF-69) frees a held run: RUNNING, its last event a finished tool call, then nothing but heartbeats for
 15 minutes. It cancels the run, starts a 'continue' run on the agent, and records it; it never cancels a long tool call."""
+import io
 import json
 import re
 import uuid
@@ -348,6 +349,49 @@ def test_the_stream_parses_server_sent_events_until_done(monkeypatch):
     assert events[1][1] == {"callId": "c1", "name": "Shell", "status": "completed"}
     assert seen[0].full_url.endswith("/v1/agents/bc-a/runs/run-1/stream")
     assert seen[0].get_header("Authorization").startswith("Basic ")
+
+
+def test_a_sweeps_reads_stop_at_its_budget_and_its_actions_still_go(monkeypatch):
+    """26 Oct: with the API answering near its 60 s timeout, one sweep's serial reads took 24 min and the cloud watch alerted.
+    A read past `reads_until` raises TimeoutError without asking, one before it waits at most what is left; a POST always goes."""
+    class Resp:
+        def __enter__(self):
+            return io.BytesIO(b"{}")
+
+        def __exit__(self, *a):
+            return False
+
+    asked = []
+    monkeypatch.setattr(W.urllib.request, "urlopen", lambda req, timeout=None: asked.append((req.get_method(), timeout)) or Resp())
+    clock = Clock(100.0)
+    api = W.Api("k", clock=clock)
+    api.get("/v1/agents")
+    api.reads_until = 130.0
+    api.get("/v1/agents")
+    clock.t = 130.0
+    with pytest.raises(TimeoutError):
+        api.get("/v1/agents")
+    api.post("/v1/agents/bc-a/runs/run-1/cancel")
+    assert asked == [("GET", 60), ("GET", 30.0), ("POST", 60)]
+
+
+def test_a_run_read_that_times_out_skips_its_agent_and_the_sweep_goes_on(tmp_path):
+    """An IDLE agent's run read (`Watch.read`) caught only HTTP errors, so a timeout there, or a spent read budget, failed the
+    whole sweep and left status.json stale."""
+    class SlowApi(FakeApi):
+        def get(self, path, **params):
+            if path.endswith("/runs/run-i"):
+                raise TimeoutError("The read operation timed out")
+            return super().get(path, **params)
+
+    clock = Clock()
+    api = SlowApi([{"id": "bc-i", "status": "IDLE", "latestRunId": "run-i", "updatedAt": W.iso(clock.t)},
+                   {"id": "bc-a", "status": "ACTIVE", "latestRunId": "run-1"}], {"run-1": {"status": "RUNNING"}})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.sweep(started.append)
+    assert [r.run for r in started] == ["run-1"]
+    assert status(tmp_path)["bc-a"]["watch_state"] == "followed"
+    assert records(tmp_path) == [], "a timeout is not an unreadable run"
 
 
 def test_a_tool_calls_interaction_update_twin_doesnt_hide_a_held_run(tmp_path):
@@ -1502,6 +1546,23 @@ def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_unt
     assert len(silent(tmp_path)) == 2, "a new note is activity"
     sweeps(w, clock, 5)
     assert [r["window"] for r in silent(tmp_path)] == [1, 2, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
+
+
+def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
+    """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 359)
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
+    sweeps(w, clock, 1)
+    sweeps(w, clock, 600)
+    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
+    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner")} for r in got] == [
+        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top"}]
 
 
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):

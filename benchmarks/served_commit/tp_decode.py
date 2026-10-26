@@ -1,7 +1,7 @@
 """Commit under a TP engine in eager mode (GLM-5.3 TP8): plain served vLLM (`stock`) against one Commit arm in the same engine,
 run by run interleaved, batch by batch (B1, B8, B32: a Commit run follows the plans only of the committed run before it,
 `native_plans.h`, so each batch's warm-up learns them right before its pairs), each rank's committer made as `tp-commit` makes it
-(`engine.rank_worker.tp2_commit_make`, the native collector on windowed staging) and its root read as the rank's: no root
+(`pipeline.tp.rank_worker.tp2_commit_make`, the native collector on windowed staging) and its root read as the rank's: no root
 combination, openings or verdict. Measurement only.
 
     bash benchmarks/served_commit/tp_decode.sh      (ARM, RETAIN, BATCHES, PAIRS; its header has the rest)
@@ -248,7 +248,7 @@ def main() -> None:
     from verity_vllm import protocols as PO
     from verity_vllm.engine import served as SV
     from verity_vllm.engine import vllm_adapter as va
-    from verity_vllm.engine.rank_worker import EXTENSION
+    from verity_vllm.pipeline.tp.rank_worker import EXTENSION
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.pipeline.tp import phases as PH
     from verity_vllm.pipeline.tp import target as TT
