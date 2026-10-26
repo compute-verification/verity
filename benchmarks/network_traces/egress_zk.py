@@ -26,7 +26,8 @@ by the Lean verifier's registered reads (`flock-verify verify --zk --registered`
 * **What the verifier receives** is scanned for every 16-byte piece of every unit's state and row and every salt but
   ``o0``'s (`a8.received`), less the pieces public anyway: the staged circuit, zero bytes, and the pad and `END`
   cells of the window's ordinals (a piece of them is a small integer among zeros). The prover's instance file, which
-  holds them all but a row's zero-padded last piece (`packed`), is the control.
+  holds them all, is the control; it lays the ``state`` table's 204-byte rows back to back, each followed by the next
+  rather than by zeros, so a state's zero-padded last chunk isn't held there (`leak_scan.public_pieces`' ``fields``).
 """
 from __future__ import annotations
 
@@ -311,14 +312,6 @@ def blobs_of(m: dict) -> tuple[dict[str, bytes], set[str]]:
     return blobs, set(blobs)
 
 
-def packed(blobs: dict[str, bytes], size: int) -> set[str]:
-    """The pieces the control isn't to hold: each row's last chunk zero-padded where its length isn't a multiple of
-    `size` (`leak_scan.cut`), the proof's packing of the row's last element. The instance file lays a table's rows back
-    to back (a 204-byte ``state`` row is followed by the next one, not by zeros), and the scan's overlapping last piece
-    covers those bytes there."""
-    return {f"{k} @{len(b) - len(b) % size}" for k, b in blobs.items() if len(b) % size}
-
-
 def known(sg: SimpleNamespace, at: SimpleNamespace) -> bytes:
     """What the scan leaves out (the module docstring's): the circuit, zeros, and the window's pads and ENDs."""
     B = PARAMS.cell_bytes
@@ -385,9 +378,7 @@ def prove(a) -> int:
     ok = True
     for j, (name, m) in enumerate(staged.items()):
         res = audit_member(M, av, sg, m, at, out / name, a.port + j)
-        whole, owned = blobs_of(m)
-        blobs, held, public = WZ.public_pieces(M.a8, whole, owned, known(sg, at))
-        held -= packed(whole, M.a8.PIECE)
+        blobs, held, public = WZ.public_pieces(M.a8, *blobs_of(m), known(sg, at), fields=True)
         res["received"] = {**M.a8.received(out / name / "verifier", m["dir"] / f"inst-{m['n']}.bin", blobs, held),
                            "public_pieces": public}
         good = expected(name, res) and not res["received"]["verifier_found"] and res["received"]["control"]["holds_all"]
