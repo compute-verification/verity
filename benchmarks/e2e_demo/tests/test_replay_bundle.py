@@ -1,5 +1,6 @@
 """The drawn-unit replay bundle: the checked-in fixture checks clean and fits its schema, each kind of tampering is refused by
-name, and a fresh bundle from the torch loop's window agrees with the fixture and refuses a tampered loop's outputs."""
+name, the vendored commit call reproduces kernels' fixture, and a fresh bundle from the torch loop's window agrees with the
+fixture and refuses a tampered loop's outputs."""
 from __future__ import annotations
 
 import copy
@@ -10,16 +11,23 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-from verity_e2e_demo import replay_bundle as B
+from verity_e2e_demo import commit_slots as S, replay_bundle as B
 
 HERE = Path(__file__).parent
 FIXTURE = HERE / "fixtures" / "drawn-unit-bundle.json"
-SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v1.schema.json"
+SLOTS_FIXTURE = HERE / "fixtures" / "commit-slots-v1.json"
+SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
+PATHS = "its paths do not reach its unit, slot and step roots"
 
 
 @pytest.fixture(scope="module")
 def bundle() -> tuple[dict, bytes]:
     return B.read(FIXTURE)
+
+
+@pytest.fixture(scope="module")
+def validator() -> jsonschema.Draft202012Validator:
+    return jsonschema.Draft202012Validator(json.loads(SCHEMA.read_text()))
 
 
 def _repay(doc: dict, payload: bytes) -> dict:
@@ -32,16 +40,34 @@ def _row(doc: dict, unit: int, port: str) -> dict:
     return next(r for u in doc["units"] if u["unit"] == unit for r in u["rows"] if r["port"] == port)
 
 
-def test_fixture_checks_clean_and_fits_its_schema(bundle) -> None:
+def test_the_vendored_commit_call_is_kernels_fixture() -> None:
+    assert S.fixture() == json.loads(SLOTS_FIXTURE.read_text())
+
+
+def test_fixture_checks_clean_and_fits_its_schema(bundle, validator) -> None:
     doc, payload = bundle
-    jsonschema.Draft202012Validator(json.loads(SCHEMA.read_text())).validate(doc)
+    validator.validate(doc)
     assert B.check(doc, payload) == {}
+    assert doc["target"] == {"binding": "GEMM_SM120_S8", "card": "sm_120", "dot": "BlackwellS8ImmaDot32_v1"}
+    assert doc["commitment"]["reference"] == B.REFERENCE
     assert [u["unit"] for u in doc["units"]] == list(B.FIXTURE_DRAW)
     assert {(u["coords"]["slot"], u["coords"]["layer"]) for u in doc["units"]} == {(0, 0), (0, 1), (1, 0), (1, 1)}
     for u in doc["units"]:
         kinds = {r["port"]: ("registered" if r["registered"] else "slot") for r in u["rows"]}
         assert kinds == {"x": "slot", "sx": "slot", "wrow": "registered", "sw": "registered", "o0": "slot"}
     assert all(B.replay(u, payload) for u in doc["units"])
+
+
+def test_inputs_open_at_their_producer_and_outputs_at_their_own_unit(bundle) -> None:
+    doc, _ = bundle
+    for u in doc["units"]:
+        c, base = u["coords"], u["coords"]["layer"] * 129
+        rows = {r["port"]: r["slot"] for r in u["rows"]}
+        producer = {"block": c["block"], "step": c["step"], "slot": c["slot"], "layer": c["layer"],
+                    "op": f"{c['op']}.input_quant", "unit": base}
+        assert [(rows[p]["unit"], rows[p]["rank"], rows[p]["producer"]) for p in ("x", "sx")] == [(base, 0, producer),
+                                                                                                (base, 1, producer)]
+        assert (rows["o0"]["unit"], rows["o0"]["rank"], rows["o0"]["producer"]) == (base + 1 + c["unit"], 0, None)
 
 
 def test_a_flipped_payload_byte_is_refused(bundle) -> None:
@@ -55,16 +81,39 @@ def test_a_flipped_payload_byte_is_refused(bundle) -> None:
 def test_a_wrong_window_path_is_refused(bundle) -> None:
     doc, payload = bundle
     doc = copy.deepcopy(doc)
-    r = _row(doc, 300, "x")
-    r["window"]["path"][0] = "00" * 64
+    _row(doc, 300, "x")["window"]["path"][0] = "00" * 64
     assert B.check(doc, payload) == {"unit:300/x": "its window path does not reach its port's registered root"}
 
 
-def test_a_wrong_slot_path_is_refused(bundle) -> None:
+@pytest.mark.parametrize("edit", [
+    lambda s: s["path"].append("00" * 64),
+    lambda s: s["slot_path"]["proof"].__setitem__(0, "00" * 64),
+    lambda s: s["step_path"]["proof"].__setitem__(0, "00" * 64),
+    lambda s: s["step_path"]["roots"].__setitem__(0, "00" * 64),
+], ids=["unit-path", "slot-path", "step-path", "slot-root"])
+def test_a_wrong_step_commitment_path_is_refused(bundle, edit) -> None:
     doc, payload = bundle
     doc = copy.deepcopy(doc)
-    _row(doc, 200, "sx")["slot"]["step_path"].append("00" * 64)
-    assert B.check(doc, payload) == {"unit:200/sx": "its slot path does not reach its slot, step and block roots"}
+    edit(_row(doc, 200, "sx")["slot"])
+    assert B.check(doc, payload) == {"unit:200/sx": PATHS}
+
+
+def test_an_opening_in_another_slot_is_refused(bundle) -> None:
+    doc, payload = bundle
+    doc = copy.deepcopy(doc)
+    _row(doc, 5, "o0")["slot"]["slot"] = 1
+    assert B.check(doc, payload) == {"unit:5/o0": "it opens outside its unit's slot and step"}
+
+
+def test_a_producer_not_where_the_input_opens_is_refused(bundle) -> None:
+    doc, payload = bundle
+    doc = copy.deepcopy(doc)
+    _row(doc, 5, "x")["slot"]["producer"]["unit"] = 1
+    _row(doc, 5, "sx")["slot"]["producer"] = None
+    _row(doc, 200, "o0")["slot"]["producer"] = dict(_row(doc, 200, "x")["slot"]["producer"])
+    assert B.check(doc, payload) == {"unit:5/x": "its producer's coordinates are not where it opens",
+                                     "unit:5/sx": "an output opens in its own unit, an input names its producer",
+                                     "unit:200/o0": "an output opens in its own unit, an input names its producer"}
 
 
 def test_a_swapped_registered_row_is_refused(bundle) -> None:
@@ -74,11 +123,52 @@ def test_a_swapped_registered_row_is_refused(bundle) -> None:
     assert B.check(doc, payload) == {"unit:5/wrow": "its registered path does not reach the value's root"}
 
 
-def test_a_forged_slot_domain_is_refused(bundle) -> None:
+def test_a_forged_layout_digest_or_block_is_refused(bundle) -> None:
+    doc, payload = bundle
+    forged = copy.deepcopy(doc)
+    forged["commitment"]["layout_digest"] = "00" * 64
+    assert B.check(forged, payload) == {"commitment": "its layout digest is not its layout's"}
+    forged = copy.deepcopy(doc)
+    forged["commitment"]["blocks"][0]["steps"][0]["root"] = "00" * 64
+    bad = B.check(forged, payload)
+    assert bad["block:0"] == "its root is not the block tree's over its steps' roots"
+    assert {k for k, v in bad.items() if v == PATHS} == {f"unit:{u}/{p}" for u in B.FIXTURE_DRAW for p in ("x", "sx", "o0")}
+
+
+def test_another_context_is_refused(bundle) -> None:
     doc, payload = bundle
     doc = copy.deepcopy(doc)
-    doc["slot_trees"]["blocks"][0]["steps"][0]["slots"][0]["leaves"] += 1
-    assert "slot:0/0/0" in B.check(doc, payload)
+    doc["commitment"]["context"] = "11" * 64
+    bad = B.check(doc, payload)
+    assert bad["block:0"] and bad["step:0/0"] == "its domain is not the commit call's"
+    assert {k for k, v in bad.items() if v == PATHS} == {f"unit:{u}/{p}" for u in B.FIXTURE_DRAW for p in ("x", "sx", "o0")}
+
+
+def test_a_live_draw_carries_its_receipt(bundle, validator) -> None:
+    doc, payload = bundle
+    live = copy.deepcopy(doc)
+    live["draw"]["source"] = "live"
+    assert B.check(live, payload) == {"draw": "a live draw carries the challenger's live-coin receipt, and a draw is live or fixture"}
+    assert not validator.is_valid(live)
+    live["draw"]["receipt"] = {"challenger": "test", "coins": "00" * 64}
+    assert B.check(live, payload) == {} and validator.is_valid(live)
+
+
+@pytest.mark.parametrize("binding", ["GEMM_SM90_S8", "GEMM_HOPPER", "GEMM_SM80"])
+def test_the_target_is_its_binding_as_circuits_resolves_it(bundle, binding) -> None:
+    doc, payload = bundle
+    doc = copy.deepcopy(doc)
+    doc["target"]["binding"] = binding
+    assert "target" in B.check(doc, payload)
+
+
+def test_a_target_whose_dot_the_templates_do_not_bind_is_refused(bundle) -> None:
+    doc, payload = bundle
+    doc = copy.deepcopy(doc)
+    doc["target"] = B.target("GEMM_HOPPER")
+    assert doc["target"]["dot"] == "HopperBF16WgmmaDot16_v1"
+    assert B.check(doc, payload) == {f"unit:{u}": "its template binds another dot than the target's HopperBF16WgmmaDot16_v1"
+                                     for u in B.FIXTURE_DRAW}
 
 
 def test_a_tampered_output_is_refused_by_replay(bundle) -> None:
@@ -92,25 +182,44 @@ def test_a_tampered_output_is_refused_by_replay(bundle) -> None:
 
 
 @pytest.fixture(scope="module")
-def fresh(tmp_path_factory) -> tuple[Path, dict]:
+def fresh(tmp_path_factory) -> tuple[Path, dict, B.Commitment]:
     d = tmp_path_factory.mktemp("window")
-    _, weights = B.torch_loop_window(d)
-    return d, weights
+    _, weights, com = B.torch_loop_window(d)
+    return d, weights, com
+
+
+def _build(fresh, drawn, binding: str = "GEMM_SM120_S8", **kw) -> tuple[dict, bytes]:
+    d, weights, com = fresh
+    return B.build(d, drawn, commitment=com, locate=B.torch_loop_locate(128), binding=binding, reads=B.torch_loop_reads,
+                   weights=kw.pop("weights", weights), **kw)
 
 
 def test_a_fresh_bundle_is_the_fixture(fresh) -> None:
-    d, weights = fresh
-    doc, payload = B.build(d, B.FIXTURE_DRAW, reads=B.torch_loop_reads, weights=weights,
-                           draw={"source": "fixture", "law": {"law": "subset", "k": len(B.FIXTURE_DRAW)}})
-    assert B.check(doc, payload, registration=json.loads((d / "registration.json").read_text())) == {}
+    doc, payload = _build(fresh, B.FIXTURE_DRAW, draw={"source": "fixture", "law": {"law": "subset", "k": len(B.FIXTURE_DRAW)}})
+    assert B.check(doc, payload, registration=json.loads((fresh[0] / "registration.json").read_text())) == {}
     want, want_payload = B.read(FIXTURE)
     assert payload == want_payload and json.loads(json.dumps(doc)) == want
 
 
+def test_the_build_names_the_card_binding(fresh) -> None:
+    """The H200's INT8 binding resolves to the s8 dot the templates bind; its BF16 binding does not, and is refused."""
+    doc, payload = _build(fresh, [5], binding="GEMM_SM90_S8")
+    assert doc["target"] == {"binding": "GEMM_SM90_S8", "card": "sm_90", "dot": "BlackwellS8ImmaDot32_v1"}
+    assert B.check(doc, payload) == {}
+    with pytest.raises(ValueError, match="binds BlackwellS8ImmaDot32_v1, not GEMM_HOPPER's HopperBF16WgmmaDot16_v1"):
+        _build(fresh, [5], binding="GEMM_HOPPER")
+
+
+def test_a_live_draw_without_its_receipt_is_not_built(fresh) -> None:
+    with pytest.raises(ValueError, match="live-coin receipt"):
+        _build(fresh, [5], draw={"source": "live"})
+    doc, _ = _build(fresh, [5], draw={"source": "live", "receipt": {"challenger": "test"}})
+    assert doc["draw"]["receipt"] == {"challenger": "test"}
+
+
 def test_another_registration_is_refused(fresh, bundle) -> None:
-    d, _ = fresh
     doc, payload = bundle
-    reg = json.loads((d / "registration.json").read_text())
+    reg = json.loads((fresh[0] / "registration.json").read_text())
     for r in reg["roots"]:
         r["root"] = "00" * 64
     bad = B.check(doc, payload, registration=reg)
@@ -118,15 +227,22 @@ def test_another_registration_is_refused(fresh, bundle) -> None:
 
 
 def test_weights_under_other_salts_are_refused(fresh) -> None:
-    d, _ = fresh
     from verity_torch_loop import loop as L
     other = B.torch_loop_weights(L.Model(), hashlib.sha256(b"another test key").digest(), "torch-loop/mlp-w8a8-h128/seed0")
     with pytest.raises(ValueError, match="committed under its own salt"):
-        B.build(d, [5], reads=B.torch_loop_reads, weights=other)
+        _build(fresh, [5], weights=other)
+
+
+def test_rows_under_other_step_salts_are_refused(fresh) -> None:
+    d, weights, com = fresh
+    other = B.Commitment(com.context, com.layout, com.slots,
+                         {k: B.StepRecord(hashlib.sha256(b"another step key").digest(), r.rows) for k, r in com.steps.items()})
+    with pytest.raises(ValueError, match="not the step commitment's row"):
+        _build((d, weights, other), [5])
 
 
 def test_a_tampered_loop_fails_replay(tmp_path) -> None:
-    _, weights = B.torch_loop_window(tmp_path, tamper=True)
-    doc, payload = B.build(tmp_path, [5, 300], reads=B.torch_loop_reads, weights=weights)
+    _, weights, com = B.torch_loop_window(tmp_path, tamper=True)
+    doc, payload = _build((tmp_path, weights, com), [5, 300])
     assert B.check(doc, payload) == {u: "its committed outputs are not its Definition's on its committed inputs"
                                      for u in ("unit:5", "unit:300")}
