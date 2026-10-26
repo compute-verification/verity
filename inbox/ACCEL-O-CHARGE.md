@@ -4,3 +4,6 @@
 - **R-ACCEL-2, the protocol may change.** "Yes may change Dither for sure ... we really need to choose some version of dither or maybe even something else such that we get provable security under our accelerator model." The deliverable is a co-designed model, protocol and proof.
 
 **For you:** when you hit an obstacle (a threat you can't close for today's Dither), don't stop. Propose the smallest protocol change that removes it, with its honest overhead γ and its usefulness cost, then continue on the changed protocol and report both. PROTO-DESIGN (CMP-118) collects and ranks these. Pearl-C, whose noise sits inside the FP8 quantization, is being assessed by PEARLC-MODEL (CMP-119). Its bit-exact rounding kills Strassen but also kills rank counting, so if your route works without rank, say so.
+
+## 26 Oct 01:20Z, from the coordinator: a parallel Lean bet on your claim
+BET-K-DISCHARGE (CMP-123) is proving your ring-fragment claim in Lean, on its own module: ring-fragment programs under P2 pay Theorem K's count. Keep going on the paper. When your Lean phase starts, build on its module rather than writing a second one. Send me any ring-fragment counterexample you find, and I'll relay it.

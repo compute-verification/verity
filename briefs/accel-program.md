@@ -428,6 +428,58 @@ Does Pearl-C get provable security under the model?
 
 Paper by **Mon 12:00Z**.
 
+### Parallel bets (Daniel, 26 Oct 01:05Z: "Let's take a bunch of parallel bets and see what pays off.")
+
+Each bet is one worker that pursues one concrete protocol-and-proof path end to end. Every bet has a hypothesis, a **kill
+criterion** (what would show it can't work, so we learn fast) and a deliverable due **Mon 26 Oct 12:00Z**. PROTO-DESIGN
+scores the bets against each other. A bet that's killed reports why: that is a result too.
+
+- **BET-HYBRID** (CMP-120).
+  - *Hypothesis:* an integer protocol exists with three properties. (i) Every tensor-core operand is full-width at every
+    admissible \(A, B\), so a Strassen-level combination overflows int8 with high probability. (ii) The noise is
+    removable for at most about \(0.1\,n^3\) extra MACs. (iii) Each word's cross term is still a rank-\(L\) mod-2 form in
+    fresh coins, so Theorem K and P2 charging apply.
+  - *Directions to start from:* per-segment fresh noise, mod-\(2^8\) wraparound noise, structured noise on both sides,
+    and splitting an operand.
+  - *Kill:* a proof that (i), (ii) and (iii) are incompatible.
+  - *Deliverable:* a spec, the paper argument, a CPU reference (python prover and verifier), γ, and a usefulness plan.
+- **BET-PEARL-I8** (CMP-121).
+  - *Hypothesis:* put Pearl-C's noise inside an **INT8** quantization, \(\tilde X = q_8(\alpha X + \beta N)\) with
+    \(N = EF^\top\) low-rank, keep exact s32 accumulation, and add a pinned integer peel. The operands are then
+    full-width at any \(A\), arithmetic stays exact, and no float accumulation subtleties arise. The lower bound reduces
+    to exact segment sums of a product of two pseudorandom full-width int8 matrices. NAIVE-STRASSEN's bound holds there in
+    the average case, so the gap left is only the non-ring instructions.
+  - *Kill:* the integer peel can't be exact and cheap, or the model allows a cheaper exact algorithm on pseudorandom
+    full-width int8.
+  - *Deliverable:* a spec, a CPU reference, γ, and a perplexity plan.
+- **BET-BANDWIDTH** (CMP-122).
+  - *Hypothesis:* a protocol whose honest run is both tensor-core-bound and register-write-bound, because it commits more
+    bits per MAC (smaller \(L\), or more words). Then 4g's fully general output-bandwidth bound plus the tensor-core rate
+    give \(c \approx 1\) under R-ACCEL-1's LP, with no rank argument.
+  - *Kill:* it needs \(\gamma > 10\), or the LP shows tensor-core savings still pay.
+  - *Deliverable:* the paper, plus numbers at H200 rates.
+- **BET-K-DISCHARGE** (CMP-123).
+  - *Lean first.* On MODEL-SPEC's definitions, or a local stand-in, prove that every program in the ring fragment of the
+    ISA pays at least Theorem K's count, reusing `theoremK`. The ring fragment is MMA by format, IMAD and IADD3 as ring
+    operations, and moves priced by P2. That discharges `KScopeOneSided` and `ChargeVF3j16` for ring-fragment programs.
+  - This is O-CHARGE's claim pursued in Lean, in parallel. It owns its own module.
+  - *Kill:* a ring-fragment program that's cheaper. That would be a counterexample for O-CHARGE too.
+  - *Deliverable:* the Lean statement, then a stop for the red team.
+- **BET-COVERAGE** (CMP-124).
+  - *Hypothesis:* a tile and commitment design credits at least half of the frozen shape's served INT8 MACs on the H200 at
+    \(\gamma \le 10\), within C-Flock's limits. The candidates are receipts folded per word with SHA-512 only per
+    receipt, large-K tiles, and per-call noise (J10-R's `PouwH1Tile_v5/v6`).
+  - *Context:* today's H1 tile, at 17 compressions per 2,048 MACs, credits 0.075–0.15% (CMP-107).
+  - *Kill:* a hashing floor per credited MAC that exceeds the budget for every design within C-Flock's limits.
+  - *Deliverable:* a table, plus a recommendation.
+- **BET-ATTACK-LAB** (CMP-125).
+  - *Empirical.* Implement the top attacks on Dither in exact CPU emulation, with instruction counts by model class: depth-1
+    Strassen on narrow noise with sparse correction, IMAD packing, bit-sliced arithmetic, Four Russians, and cheaper
+    receipts. Implement the honest kernel the same way. Compute each attack's priced cost from its counted instructions
+    times data-sheet rates.
+  - Prepare GPU versions to run on an H200 after M3 (Mon 23:00Z), with the coordinator's OK.
+  - *Deliverable:* the code, the counted costs, and \(\varepsilon_{\text{attack}}\) per attack.
+
 ## 6. Coordination
 
 - **Red team:** I red-team every statement before its proof (rule 6). Report to me in your final message, and I relay
