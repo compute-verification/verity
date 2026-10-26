@@ -728,7 +728,12 @@ cannot know what it verifies), then a record not in its canonical text (`RecordT
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
 different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
-is accepted under `--zk` and changes nothing), all after every
+is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
+tags, files and a draw outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
+without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
+reading several input groups or a tail stage returning the outputs is; a shared-row public file, with or without
+`--registered F`; at more than one table a draw that does not parse or a subset draw whose `k` the tables don't divide;
+`Flock.Guarantees.SampledKSLiveV4` is over that acceptance), all after every
 check has passed (so the reason is the refusal only when nothing else
 fails; the form's first). Exit 0 iff every
 session is accepted. `--zk`: the sessions are `flock-circuit --zk`'s (`Flock.Zk`), on the keyed coin tree;
@@ -923,7 +928,7 @@ def verifyCmd (args : List String) : IO UInt32 := do
       ProvedScope.programHeld program
       RecordText.check record
       ksFiles
-      if zk then KsScope.checkOf ksParsed tags pubB count draw
+      if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
     if let some k := coinKey then coinKeys := coinKeys.push k
     let (ok, why) := match verdict with | .ok () => (true, "") | .error e => (false, e)
     all := all && ok

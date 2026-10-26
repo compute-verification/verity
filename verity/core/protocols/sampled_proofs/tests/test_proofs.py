@@ -5,8 +5,9 @@ verifier's own program, partition and `--registered` file are the fixture's `sta
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
-verdict comes from core's own verifier run: the honest session is accepted with its program, registered finding and units
-read off that run, a circuit file other than the committed one is refused before the verifier runs, tampered proof bytes
+verdict comes from core's own verifier run: the honest session passes every check with its program and registered
+finding read off that run, and is refused for its shared-row public file alone, which `verify --zk` refuses until a proof
+covers it (`Flock.KsScope`, `SampledKSLiveV4`), so it proves no unit; a circuit file other than the committed one is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
 names them or not.
@@ -39,6 +40,9 @@ CS_ROOT = ("2deda0ffb88e7c0e56693ec7e41b16c21bca80726956209c5c56505c922b5ac1"
            "a176ca20f9238c9298ef77b0678e94681352a92ec2f95059a9f92e6a56054001")
 #: the instances the session's own draw drew, which are the units, the public file's indices being 0..31
 DRAWN = (1, 2, 3, 6, 8, 10, 11, 13, 16, 17, 21, 22, 24, 26, 28, 30)
+#: `verify --zk`'s last refusal, of a shared-row public file (`KsScope.TABLES_WHY`)
+TABLES = ("refused: a shared-row public file (header shared_rows) under --zk: a statement form the soundness proof does "
+          "not cover")
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -95,15 +99,19 @@ def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-
 
 @lean
 @pytest.mark.slow
-def test_the_honest_session_is_accepted_by_cores_own_verifier_run(fx):
+def test_the_honest_session_passes_every_check_of_cores_own_verifier_run_but_its_shared_rows(fx):
+    """The honest session's draw is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
+    the registered root; the verifier refuses it for its shared-row public file alone, so it proves no unit."""
     got, why = _verify(fx, fx / "session")
     assert why is None, why
     (f,) = got
     partition = json.loads((fx / "stage" / "partition.json").read_text())
-    assert f.accepted is True and f.why == "", f
+    assert (f.accepted, f.why) == (False, TABLES), f
     assert f.program == partition["program"]
     assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
-    assert f.units == DRAWN
+    assert f.units == ()
+    draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
+    assert tuple(draw["units"]) == DRAWN, draw
 
 
 def _unnamed(fx: Path) -> str:
