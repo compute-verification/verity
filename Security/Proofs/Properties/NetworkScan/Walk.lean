@@ -111,7 +111,7 @@ theorem step_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     (hf : ((P.defs[P.root]!).body.nodes[k]!).form ≠ .scan) (B : ℕ) (s : Scope × Ref) (x)
     (hs : Resolve.Inv P B s) (hb : Below A s.1) (h : resolveStep P s = .ok x) :
     (∀ a, x = .inl a → s.1.off ≤ a) ∧ (∀ s', x = .inr s' → Below A s'.1 ∨
-      (s'.1 = P.rootScope ∧ ∃ i t, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧
+      (s'.1 = P.rootScope ∧ ∃ i t : ℕ, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧
         s'.2 = (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get t)) := by
   obtain ⟨sc, ⟨p, i, j⟩⟩ := s
   obtain ⟨hg, hr, -, -⟩ := hs
@@ -209,7 +209,7 @@ theorem run_below {A : Scope} {k m : ℕ} (hA : A = P.child P.rootScope k m)
     ∀ (n : ℕ) (s : Scope × Ref) (a : ℕ), Resolve.Inv P (A.off + (P.defs[A.d]!).gates) s → Below A s.1 →
       Flock.Steps.run "scope resolution" (resolveStep P) n s = .ok a →
       (A.off ≤ a ∧ a < A.off + (P.defs[A.d]!).gates) ∨
-        ∃ i t, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧ ∃ n' ≤ n,
+        ∃ i t : ℕ, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧ ∃ n' ≤ n,
           Flock.Steps.run "scope resolution" (resolveStep P) n'
             (P.rootScope, (((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get t) = .ok a
   | 0, _, _, _, _, h => by simp [Flock.Steps.run, throw, throwThe, MonadExceptOf.throw] at h

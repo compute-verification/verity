@@ -38,7 +38,7 @@ def MemberReads : Prop :=
         ∀ a ∈ ops,
           ((P.child P.rootScope k m).off ≤ a ∧
             a < (P.child P.rootScope k m).off + (P.defs[((P.defs[P.root]!).body.nodes[k]!).fn]!).gates) ∨
-          ∃ i t, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧
+          ∃ i t : Nat, t < ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.count) ∧
             Flock.Program.resolve P P.rootScope ((((P.defs[P.root]!).body.nodes[k]!).args[i]!).seq.get t) = .ok a
 
 /-- **The scan is causal** (`NetTiming.Layout.Fits`'s part (3)). If `scanOf` accepts the scan `j`, its canonical text
