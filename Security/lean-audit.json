@@ -33462,12 +33462,14 @@
    ]
   },
   "Flock.Record": {
-   "digest": "697ae51ec236fcac0660648d58f086c1c39e2a404c7b943fde2e6d3f35e06bc5",
+   "digest": "79cd6d01f252e02c4efd4441e5bd838f98fd950259bde56c685ee4a3bbc41f5f",
    "definitions": {
     "Flock.Record.arr": "9df0e1daf24196fc6e670a3a7f3d4f0a3c82c61e8eee4d5bf3a08271c3106721",
     "Flock.Record.check": "bba52587ec1aba9b29fabcd7a69510dd279175672cb253a09dec230cb8ef566f",
-    "Flock.Record.decode": "262806cc44027839d1ee362b9743c0863b3ba662a781b7d550dd9b090d8593f1",
+    "Flock.Record.decode": "0f5b68fc64305dc55b9fc8a357cc5ef27bd91af93e2099c465ae9d391da4409e",
     "Flock.Record.decode._sparseCasesOn_1": "db3cf4d64ba54afdc52ff5c3157a190182857d75dd3aca61716adafe72922ed9",
+    "Flock.Record.decode._sparseCasesOn_6": "c1fefee5f817482e502558025bad2b876bd01fe4e4fb692e079408b156fa84ab",
+    "Flock.Record.decode._sparseCasesOn_7": "15a3f277f500464acdd31375a6610e09a4ed0ee88f025e02d9f1cba941c803a5",
     "Flock.Record.f128s": "04e28d3233afdc499f00fd193535bd0587ef0f280717aabf3c02e27e7dd45515",
     "Flock.Record.fld": "217db7f71969f89fe63a196c3d79470e4fa8a9ead499212240ac6d00b588f88d",
     "Flock.Record.isNull": "3194e4cc0fa1b2bcd866c572048dd869c632e141ec45c009ee26716ffbc2c367",
