@@ -6976,10 +6976,11 @@
     "      (∀ (own : Array Flock.Registered.Port) (t : FlockSoundness.Discharge.Exec.Transcript),",
     "        FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR zk I own t →",
     "          Or (Eq I.tags.hiddenOutputs Bool.true) (FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts zk I t))",
-    "      (FlockSoundness.Discharge.FailClosed.SoundExecJ I))"
+    "      (if hh : Eq I.tags.hiddenOutputs Bool.true then FlockSoundness.Discharge.FailClosed.SoundExecHJ I hh",
+    "      else FlockSoundness.Discharge.FailClosed.SoundExecJ I ⋯))"
    ],
    "assumptions": [],
-   "type_hash": "1d75a921e41b7b41d9c3d00afc7c507a637bae7cd795b20d40e40b11c02814a4"
+   "type_hash": "c27a68a3a851b0ae4402c1038e1d5d1807ee82389c65c7e29096d4aa647af7b5"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": {
    "owner": "@proofs",
@@ -32237,7 +32238,7 @@
    ]
   },
   "Flock.ProvedScope": {
-   "digest": "e17871ef222175ed80157ce994b3d9855ed09038b3eef60c14b2225fca6fa94d",
+   "digest": "547ca9ef8c9522785a3d255bd6ebda5759e955aaad63a3effaef06aee733efb1",
    "definitions": {
     "Flock.ProvedScope.NO_PROGRAM": "c1e8296485c16b9065ec7619c59042d2c85b28a452c8a0fc69bb424a18799cd8",
     "Flock.ProvedScope.bitRows": "d74e0d1cd6dda8ca99a69595e7e2c1c076d95dbafbd867f2238ae2c3b9e6b92c",
@@ -32251,7 +32252,7 @@
     "Flock.ProvedScope.leafOk": "ea451e4d24f59860510fe86cbf4c64817c58f0c34e2ffc91406602d90e0df98c",
     "Flock.ProvedScope.metaProgram": "72c68f2d9672db2822e71f17a3c20be4a7a994e1c1f99290c7f14471d7120db3",
     "Flock.ProvedScope.outReads": "f5b8fd482b2d8d287cfd34ae370e42f8a9e4b4135da0b76fe67c499b9db03a5b",
-    "Flock.ProvedScope.plainTablesWhy": "f90f97b3984b1e061b6b22a156494cfe232a458da127d26fecd8a194bcfb6d44",
+    "Flock.ProvedScope.plainTablesWhy": "3d3442795cc62c683c13d1126acf59c10f35668b7d957febf99fe333edce8ebf",
     "Flock.ProvedScope.portBits": "585baabbbd824e4325f37df6e5e83ddf55708ce02e603de7b541bb45922686ff",
     "Flock.ProvedScope.portMask": "23714665ca3e9816a87625c4e344cde88005a983ea0fdf701132d4a6650c1ca5",
     "Flock.ProvedScope.portReadsB": "c68fe911ec7b47605079bc5e6aaec87d0953330395799dc50815c1ff29ac00e7",
@@ -39897,18 +39898,21 @@
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
-   "digest": "c42decbb44e442d36e2d48cd890126af53542d24acdaa26ee1dff62ee8330ce3",
+   "digest": "6db3e1dfc29476cd9d2d8480714da6a9821882427ff4d8c2b3d055c2ccf4227c",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts": "ea5c4b6ca5cb51a75d8a57cd78a7f966035c1f7a2d7386f108d2540319c2cd29",
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
     "FlockSoundness.Discharge.FailClosed.SoundExec": "8d885934c7822bcf7ac82bfaf261dfef46a50685aaa49b7bcecc32670f13a9d3",
     "FlockSoundness.Discharge.FailClosed.SoundExecH": "bb58949b45fcb9282890d5d6b978250880995fe41821517a8205c3691095a7e5",
     "FlockSoundness.Discharge.FailClosed.SoundExecHG": "5513d999a516abcdc1966f0d40042920a239993fd62ae271b78e47668ed5065d",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHJ": "de277006b8f647c763727a1a6034e4fe955709d75575c139433e37374d9228ac",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHJG": "960ba9fb24f40e8064ab68a368bc74fab90055aff72f3059db4f07540b85515a",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHJU": "efc5be2c93b4ec5ebfefe3ac182c7df92e3567b26c9d9061c94af83bae7393e6",
     "FlockSoundness.Discharge.FailClosed.SoundExecHR": "6ab3d8dae0c314ed5c1fb9fda99506648d7437dce61ec5b7b58850fb88832e79",
     "FlockSoundness.Discharge.FailClosed.SoundExecHRG": "7656ac5a00c5a565242a80f388a6ae8ab0a4ae37d106f54322ef70e964c43b7c",
     "FlockSoundness.Discharge.FailClosed.SoundExecHRU": "3643d930b75bada0c207119381e86ab17198fdef03ce29dfcce602f57014d1e3",
     "FlockSoundness.Discharge.FailClosed.SoundExecHU": "6fbe3772615088e357f4845bc6d3257b3731912f45ab653c127e8648f98980ed",
-    "FlockSoundness.Discharge.FailClosed.SoundExecJ": "ded5e66ad45478781ca06927a0a2cfc3042b791ccbc01e2d8bcf52855f77d5c2",
+    "FlockSoundness.Discharge.FailClosed.SoundExecJ": "28b0af65e85ecdcc9047add0637342e10c3de388cd1892e5f700c85491ea0fd5",
     "FlockSoundness.Discharge.FailClosed.SoundZ": "23e5ce96a293593257030c9b54df7fcf6900b44d21853ed14d731b80dfef7e17",
     "FlockSoundness.Discharge.FailClosed.SoundZH": "ce8a783761d1547fe7c0ed6052a572143ea42cbfe4ea2053c87a039be6cef8ca",
     "FlockSoundness.Discharge.FailClosed.SoundZHG": "8836f7c643a4548dfff3cb1bdcd9432a966ffcd5354321ec1316e5bc47560c86",
@@ -41617,6 +41621,30 @@
     "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205",
     "FlockVBridge.keyProg_parse"
    ]
+  },
+  "Proofs.Flock.Soundness.Discharge.PlainHJ.Bind": {
+   "digest": "ca6a97b3c8b52c67619d6231e73dd8d85b817c674a371e7b0265672efdd9fe66",
+   "definitions": {
+    "FlockSoundness.Discharge.PlainHJ.layPHJ": "999c17c8f0e38bad4f1ac6b82bde351c8ab005f2827458fcef147ad28139f760",
+    "FlockSoundness.Discharge.PlainHJ.layPHJI": "d6519337fa63cef1f4ad5449c327a418d79166a1be158bd4ef4602d93001e95b",
+    "FlockSoundness.Discharge.PlainHJ.ppPHJ": "3adaacdd7dcfdc25fc61cdec0b80ad57d584d9a3fbd231f6b7677ea25e16757e",
+    "FlockSoundness.Discharge.PlainHJ.ppPHJI": "cb3966a8beefb967d0f99149a40be6f1c159f20fbfb6b33d882c1b5963a38d37",
+    "FlockSoundness.Discharge.PlainHJ.rsPHJ": "5fcb0788458f2dfafe083cdf761148fe223db82ef38d41ec5666748cb1b257b5",
+    "FlockSoundness.Discharge.PlainHJ.rsPHJI": "a65b5eddc62f35026699abd62472653a9da6bdcc686153813f7bf7135df7ab7d",
+    "FlockSoundness.Discharge.PlainHJ.sitesPHJI": "be39cd1c712ca083625597f4f402d5d1a715bea3240e86a946181a22602c2355"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+  },
+  "Proofs.Flock.Soundness.Discharge.PlainHJ.Defs": {
+   "digest": "89c21cc4333a3d6920dae3b4f31b93edf75a6e2567b2f35d193a6bf045615771",
+   "definitions": {
+    "FlockSoundness.Discharge.PlainHJ.DrawOkPHJ": "9fd719efc97c24115c29e23a5bf7aa6239eaf033662a6aa337249c15c784f69e",
+    "FlockSoundness.Discharge.PlainHJ.opnPHJ": "d7298198c91f60603ce23c52cd6ed6467bf8008f80570169602764be0b6932fb",
+    "FlockSoundness.Discharge.PlainHJ.planPHJ": "42d59449d3eb93445d4d65c7f0f70d59d21884a4049ed2409888670505dd7be4",
+    "FlockSoundness.Discharge.PlainHJ.tabPHJ": "3cff3c405e26b78012929bc6d0dfbc8a3a1f7ca274fe7e59dc04d5489aada845",
+    "FlockSoundness.Discharge.PlainHJ.tablePHJ": "84da63c95f44cebe7b3d820849960c383193893aca2d3bdb331eeb52d99a14b5"
+   },
+   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
   },
   "Proofs.Flock.Soundness.Discharge.PlainJ.Defs": {
    "digest": "987fcb2ce0c866b40eb6fb5f36a745ece083eac1bd5eb5ac5399f79ac4f08e90",
