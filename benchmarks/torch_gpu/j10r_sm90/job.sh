@@ -15,7 +15,8 @@
 #     --env GPU_LEASE_WHO=kernels-kp2dec --send CPU_RUN/out/fixtures/expected.npz --send .../fixtures.json \
 #     --send CPU_RUN/out/lib/sm_90a/j10r_ref.so [--send .../h1u_kr.so ...] -- bash benchmarks/torch_gpu/j10r_sm90/job.sh gpu
 # Env: NVCC (default CUDA 13.0's), STEPS (gpu's, default "check bench"), CHECK_ARGS, BENCH_ARGS, LEASE_MIN (default 25),
-# PY (default /workspace/cp/venv312's python), JOBS.
+# PY (default /workspace/cp/venv312's or /workspace/jobs/venv312's python, else torch and numpy from PyPI in a uv venv
+# in the scratch directory), JOBS.
 set -uo pipefail
 WHAT=${1:?usage: job.sh build|cpu|gpu}
 D=benchmarks/torch_gpu/j10r_sm90
@@ -46,13 +47,19 @@ case $WHAT in
     ls -l "$OUT/fixtures"
     exit $rc ;;
   gpu)
-    PY=${PY:-/workspace/cp/venv312/bin/python}
     LIBS=${LIBS:-${RESEARCH_RUN_DIR:-.}/inputs}
+    S=$(mktemp -d /tmp/j10r-sm90.XXXXXX); trap 'rm -rf "$S"' EXIT
+    : > "$OUT/rc.txt"
+    PY=${PY:-}
+    for v in /workspace/cp/venv312 /workspace/jobs/venv312; do [ -z "$PY" ] && [ -x "$v/bin/python" ] && PY=$v/bin/python; done
+    if [ -z "$PY" ]; then
+      uv venv -q -p 3.12 "$S/venv" && uv pip install -q -p "$S/venv" torch numpy > "$OUT/venv.out" 2>&1
+      echo "venv rc $?" >> "$OUT/rc.txt"
+      PY=$S/venv/bin/python
+    fi
     export PYTHONPATH=$ROOT:$ROOT/$D PYTHONDONTWRITEBYTECODE=1
     { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
       nvidia-smi --query-gpu=index,name,compute_cap,driver_version --format=csv; ls -l "$LIBS"; } > "$OUT/env.txt" 2>&1
-    S=$(mktemp -d /tmp/j10r-sm90.XXXXXX); trap 'rm -rf "$S"' EXIT
-    : > "$OUT/rc.txt"
     FIX=$LIBS
     if [ ! -f "$FIX/expected.npz" ]; then
       FIX=$OUT/fixtures
