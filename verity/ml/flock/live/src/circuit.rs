@@ -170,6 +170,11 @@ pub const ROW_SEG_BITS: usize = 8192;
 pub const OUT_ROWS_SEG_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row-seg/v1 row of their words, hashed in the circuit; the public file has no output word";
 /// the same with a run committed as a `hm96-sha512/row/v2` row, the Lean verifier's `Tags.outRowsV2Identity`
 pub const OUT_ROWS_V2_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row, or each run of output ports in META out_row_ports one hm96-sha512/row/v2 or hm96-sha512/row-seg/v1 row of their words (its row_schemas entry), hashed in the circuit; the public file has no output word";
+/// a statement's `outputs` identity with pinned outputs (META `pinned_outputs`), the Lean verifier's `Tags.pinnedIdentity`
+pub const PINNED_IDENTITY: &str = "hidden: each output port an hm96-sha512/row/v2 row (each run of output ports in META out_row_ports one bit row of their words), hashed in the circuit, but the last output ports, META pinned_outputs, which have no row: each of their bits a copy of a forced-zero row; the public file has no output word";
+/// what `Composite::parse` refuses of META `pinned_outputs`, word for word the Lean verifier's (`HmRow.pinnedOf`)
+pub const PINNED_LINEAR: &str = "META: a pinned output's bit is not a linear row (its B the constant alone), which its Δ copy of the forced-zero row pins to zero";
+pub const PINNED_REFUSED: &str = "META: pinned_outputs is not the last output ports' names, each once, at least one, of an untyped statement of bit rows (row_schemas) whose padding instance's pinned outputs are zero";
 /// what `Composite::check` refuses of the output rows, word for word the Lean verifier's (`HmOut.checkRows`)
 pub const OUT_ROWS_REFUSED: &str = "the rows are not the input rows, then one output row per output port (its name, its words zero-padded to whole SHA-512 blocks, all their bits) or per run of output ports (META out_row_ports), a bit row of exactly their words (sha512/row/v2 or sha512/row-seg/v1) named after the first, each name once";
 const ROLE_X: u8 = 1;
@@ -425,8 +430,11 @@ pub struct Composite {
     pub n_in: usize,
     /// each output port's words
     pub out_words: Vec<usize>,
-    /// each output row's output ports, a run in port order (META `out_row_ports`; absent: one each)
+    /// each output row's output ports, a run in port order (META `out_row_ports`; absent: one each), covering every output
+    /// port but the pinned ones
     pub out_row_ports: Vec<usize>,
+    /// the pinned output ports (META `pinned_outputs`), the last ones: no row, each bit Δ's copy of a forced-zero row
+    pub pinned: usize,
     pub g: usize,
     pub k_log: usize,
     pub upv: usize,
@@ -916,10 +924,27 @@ impl Composite {
             .map(|d| hexb(d.as_str().unwrap_or("")).and_then(|b| b.try_into().map_err(|_| "b || c length".to_string()))).collect::<Result<Vec<[u8; BC_BYTES]>, String>>()?;
         let dummy_outputs = meta["dummy"]["outputs"].as_array().ok_or("META: dummy outputs")?.iter().map(|x| x.as_u64().unwrap_or(u64::MAX) as u16).collect();
         let out_words: Vec<usize> = meta["out_ports"].as_array().ok_or("META: out_ports")?.iter().map(|p| p[1].as_u64().unwrap_or(0) as usize).collect();
+        let pinned = match meta.get("pinned_outputs") {
+            None => 0,
+            Some(v) => {
+                let out_names: Vec<&str> = meta["out_ports"].as_array().map(|a| a.iter().map(|p| p[0].as_str().unwrap_or("")).collect()).unwrap_or_default();
+                let names: Option<Vec<&str>> = v.as_array().and_then(|a| a.iter().map(Value::as_str).collect());
+                let k = names.as_ref().map_or(0, Vec::len);
+                let zero = |o: usize| meta["dummy"]["outputs"].get(o).and_then(Value::as_u64) == Some(0);
+                let w0: usize = out_words[..out_words.len().saturating_sub(k)].iter().sum();
+                if k == 0 || k > out_names.len() || names.as_deref() != Some(&out_names[out_names.len() - k..]) || !v2 || typed || tmpl
+                    || !(w0..out_words.iter().sum()).all(zero)
+                {
+                    return Err(PINNED_REFUSED.into());
+                }
+                k
+            }
+        };
+        let rowed = out_words.len() - pinned;
         let out_row_ports: Vec<usize> = match meta.get("out_row_ports") {
-            None => vec![1; out_words.len()],
-            Some(v) => v.as_array().and_then(|a| a.iter().map(|x| x.as_u64().filter(|&k| k >= 1 && k <= out_words.len() as u64).map(|k| k as usize)).collect())
-                .filter(|r: &Vec<usize>| r.iter().sum::<usize>() == out_words.len())
+            None => vec![1; rowed],
+            Some(v) => v.as_array().and_then(|a| a.iter().map(|x| x.as_u64().filter(|&k| k >= 1 && k <= rowed as u64).map(|k| k as usize)).collect())
+                .filter(|r: &Vec<usize>| r.iter().sum::<usize>() == rowed)
                 .ok_or("META: out_row_ports is not each output row's run of output ports, in order, covering every output port once")?,
         };
         let net_of = |nm: &str| nets.iter().position(|n| n.0 == nm).ok_or(format!("META: unknown circuit {nm}"));
@@ -964,7 +989,7 @@ impl Composite {
         let c = Composite {
             name, sha512, class_sha512, k_log: us(&meta, "k_log")?, leaf_scheme: meta["leaf_scheme"].clone(), meta, nets, ranges, ports, n_in,
             leaf_cuts_of: { let mut v = vec![Vec::new(); upv]; for &(u, j, l) in &leaf_cuts { if u < upv { v[u].push((j, l)); } } v },
-            out_words, out_row_ports, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, out_slotted, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
+            out_words, out_row_ports, pinned, g, upv, unit_net, leaves_in, leaves_out, public_inputs, leaves_public, rows, sha_net, hm_net, out_net, out_ports, out_slotted, leaf_cuts, dummy_bc, dummy_outputs, per_vu, wires,
             lookups: lookups_fast.into_iter().collect(), typed: None,
         };
         let typed = instance.map(|inst| {
@@ -1116,6 +1141,14 @@ impl Composite {
         }
         if seen_out.iter().any(|x| !x) {
             return Err("an output leaf no unit returns".into());
+        }
+        // Δ copies the forced-zero row onto each pinned bit's A and B rows: only under B the constant alone does that force
+        // the bit and its gate's value to zero (elsewhere it would only force A·z · B·z to zero, or free the bit)
+        for (n, r) in self.pinned_rows() {
+            let net = &self.nets[n].1;
+            if (0..16).any(|t| r.checked_add(t).and_then(|i| net.b.get(i)).map(Vec::as_slice) != Some(&[net.const_pos][..])) {
+                return Err(PINNED_LINEAR.into());
+            }
         }
         if unit.useful >= 1 << unit.unit_log {
             return Err("the unit fills its slot: no forced-zero row for a zero leaf".into());
@@ -1397,6 +1430,20 @@ impl Composite {
         }
     }
 
+    /// The pinned output words' first rows in the circuit that computes them, `(net, row)` per word (16 bits from it): what
+    /// [`Self::out_col`] places in a slot, for an untyped statement.
+    pub fn pinned_rows(&self) -> Vec<(usize, usize)> {
+        let w0: usize = self.out_words[..self.out_words.len() - self.pinned].iter().sum();
+        let unit_cols = port_cols(self.unit().out_groups.get(..1).unwrap_or(&[]));
+        let tail_cols = port_cols(&self.nets[self.out_net].1.out_groups);
+        (w0..self.out_words.iter().sum()).map(|o| if self.out_net != self.unit_net {
+            (self.out_net, self.out_ports.get(o).and_then(|&(_, p)| tail_cols.get(p)).map_or(usize::MAX, |x| x.0))
+        } else {
+            let q = self.leaves_out.iter().find_map(|l| l.iter().position(|&x| x == o));
+            (self.unit_net, q.and_then(|q| unit_cols.get(q)).map_or(usize::MAX, |x| x.0))
+        }).collect()
+    }
+
     /// `(g, p, byte, t)`: bit `t` of row byte `byte` of VU `g`'s port `p` as a column, a message bit of its compression (the
     /// block's bytes big-endian per word): a `sha512x3` slot's message, or for the last block the hm96 slot's `pad`.
     pub fn msg_col(&self) -> impl Fn(usize, usize, usize, usize) -> usize + '_ {
@@ -1598,6 +1645,15 @@ pub fn delta(c: &Composite, pin: usize) -> (Vec<(u32, u32)>, Vec<(u32, u32)>) {
                     let src = if k < w { out_col(g, at + k) + t } else { zero };
                     both(&mut da, &mut db, msg_col(g, c.n_in + j, 2 * k + t / 8, t % 8), src);
                 }
+            }
+        }
+    }
+    // each pinned output's bits, per VU: copies of the forced-zero row (its gate's B the constant alone, so its value is 0)
+    let w0: usize = c.out_words[..c.out_words.len() - c.pinned].iter().sum();
+    for g in 0..c.g {
+        for o in w0..c.out_words.iter().sum() {
+            for t in 0..16 {
+                both(&mut da, &mut db, out_col(g, o) + t, zero);
             }
         }
     }
@@ -3737,6 +3793,75 @@ mod tests {
         lines[1] = format!("META {}", serde_json::to_string(&m).unwrap());
         let err = Composite::parse(&lines.join("\n"), None).err().unwrap_or_default();
         assert!(err.contains("vus_per_block is not a power of two"), "{err}");
+    }
+
+    /// A writer with no output row (CMP-149's form B): one 1024-bit `sha512/row/v2` input row `x`, read as one 16-bit leaf,
+    /// and one pinned output word `d = x XOR (x rotated by one)`, each bit a linear row (B the constant alone).
+    fn pinned_statement(edit: &dyn Fn(&mut Value)) -> String {
+        let x = Port { name: "x".into(), words: 64, comps: 1, bits: 1024, v2: true, segs: None };
+        let rc = row_consts(&x);
+        let name = |n: usize| ["unit", SHA_NET, HM_NET][n];
+        let wires: Vec<Value> = row_wires(std::slice::from_ref(&x), 1, 2).iter()
+            .map(|w| json!([name(w.dst.0), w.dst.1, w.dst.2, name(w.src.0), w.src.1, w.src.2])).collect();
+        let zeros = "0".repeat(128);
+        let mut meta = json!({"format": FORMAT, "statement": STATEMENT, "program_sha512": zeros,
+            "partition": {"rule": PARTITION_V1, "digest": zeros}, "scheme": SCHEME, "row_schemas": [[ROW_SCHEMA_V2, 1024]],
+            "ports": [["x", 64, 1]], "input_ports": 1,
+            "rows": [{"prefix": crate::hex(&rc.prefix), "midstate": rc.midstate.iter().map(|w| format!("{w:016x}")).collect::<Vec<_>>(),
+                      "pad": crate::hex(&rc.tail)}],
+            "row_key_sha512": crate::hex(&Sha512::digest(hm96_sha512_default_key())), "vus_per_block": 2, "k_log": 17,
+            "units_per_vu": 1, "leaves_in": [[0]], "leaves_out": [[0]], "wires": wires,
+            "ranges": [{"type": "unit", "net": SHA_NET, "slot_log": 14, "pos0": 0, "count": 2, "packed": true},
+                       {"type": "unit", "net": HM_NET, "slot_log": 13, "pos0": 4, "count": 2},
+                       {"type": "unit", "net": "unit", "slot_log": 9, "pos0": 128, "count": 2},
+                       {"type": "mask", "net": "mask", "slot_log": 10, "pos0": 66, "count": 1}],
+            "per_vu": {SHA_NET: 1, HM_NET: 1},
+            "dummy": {"bc": [crate::hex(&[0u8; BC_BYTES])], "outputs": [0]}, "out_ports": [["d", 1]], "pinned_outputs": ["d"],
+            "leaf_scheme": leaf_scheme()});
+        edit(&mut meta);
+        let n = 2 * WORD + 1;
+        let rows: String = (0..n).map(|i| match i {
+            0..16 => format!("1 {i} 1 {i}\n"),
+            128..144 => { let (a, b) = (i - 128, (i - 127) % 16); format!("2 {} {} 1 {}\n", a.min(b), a.max(b), n - 1) }
+            _ if i == n - 1 => format!("1 {i} 1 {i}\n"),
+            _ => "0 0\n".into(),
+        }).collect();
+        let unit = format!("CIRCUIT unit {}\nflock-ir-unit/v2 unit {n} {} 1 0 1 1 16 1 1 1 1 16\n{rows}", n + 1, n - 1);
+        format!("{FORMAT} t\nMETA {}\n{unit}{}{}", serde_json::to_string(&meta).unwrap(),
+                section(SHA_NET, &[512, 1024, 512, 1024, 512, 1024], 64, &[512, 512, 512], 16),
+                section(HM_NET, &[512, 1024, 8 * SALT_BYTES], 32, &[8 * BC_BYTES], 8))
+    }
+
+    /// A pinned output (META `pinned_outputs`) has no row, and Δ ends, per VU, with each of its bits a copy of the unit range's
+    /// forced-zero row; the live server refuses the form until a soundness theorem covers it. META naming anything but the
+    /// last output ports, of a statement of bit rows whose padding instance's pinned outputs are zero, is refused, and so is
+    /// a pinned bit whose row is not linear.
+    #[test]
+    fn pinned_outputs_are_copies_of_the_forced_zero_row() {
+        let c = Composite::parse(&pinned_statement(&|_| {}), None).unwrap_or_else(|e| panic!("{e}"));
+        assert_eq!((c.pinned, c.out_row_ports.len(), c.ports.len()), (1, 0, 1));
+        let (da, db) = delta(&c, pin_of(&c));
+        let zero = (c.unit_range().slot(0) + c.unit().useful) as u32;
+        let want: Vec<(u32, u32)> = (0..c.g).flat_map(|g| (0..16).flat_map(move |t| {
+            let i = (c.out_col()(g, 0) + t) as u32;
+            [(i, i), (i, zero)]
+        })).collect();
+        assert_eq!((&da[da.len() - want.len()..], &db[db.len() - want.len()..]), (&want[..], &want[..]));
+        assert_eq!(crate::proved_scope::circuit_why(&c, true).as_deref(), Some(crate::proved_scope::PINNED_WHY));
+        let refused: [(&str, &dyn Fn(&mut Value)); 5] = [
+            ("not an output port", &|m| m["pinned_outputs"] = json!(["e"])),
+            ("none", &|m| m["pinned_outputs"] = json!([])),
+            ("named twice", &|m| m["pinned_outputs"] = json!(["d", "d"])),
+            ("a nonzero padding output", &|m| m["dummy"]["outputs"] = json!([1])),
+            ("not a list of names", &|m| m["pinned_outputs"] = json!("d")),
+        ];
+        for (case, edit) in refused {
+            let err = Composite::parse(&pinned_statement(edit), None).err().unwrap_or_default();
+            assert!(err.contains(PINNED_REFUSED), "{case}: {err}");
+        }
+        let text = pinned_statement(&|_| {}).replace("2 0 1 1 256\n", "2 0 1 0\n");
+        let err = Composite::parse(&text, None).err().unwrap_or_default();
+        assert!(err.contains(PINNED_LINEAR), "{err}");
     }
 
     #[test]
