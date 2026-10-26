@@ -123,4 +123,10 @@ theorem neverUndecided : NeverUndecided := by
   unfold Period.check at h
   split at h <;> cases h
 
+theorem refuses : Refuses := by
+  refine ⟨{ key := .null, main := .null, name := "" }, { ledger := .null, bytes := .empty },
+    { pins := .null, windows := .null }, fun pc prof h => ?_⟩
+  obtain ⟨_, _, ws, hws, _⟩ := acceptMeans _ _ _ _ _ h
+  simp [windowsOf] at hws
+
 end Properties.Pouw.PeriodCheck

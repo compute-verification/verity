@@ -1624,6 +1624,9 @@
   "Properties.Pouw.PeriodCheck.periodCreditMeans": {
    "owner": "@compute-accounting"
   },
+  "Properties.Pouw.PeriodCheck.refuses": {
+   "owner": "@compute-accounting"
+  },
   "Properties.Pouw.Strata.strataTile": {
    "owner": "@compute-accounting",
    "signature": ["Properties.Pouw.Strata.strataTile : Properties.Pouw.Strata.StrataTile"],
@@ -2792,6 +2795,10 @@
    "Properties.Pouw.PeriodCheck.periodCreditMeans": {
     "function": "PouwCheck.Credit.periodCredit",
     "outcome": "accept"
+   },
+   "Properties.Pouw.PeriodCheck.refuses": {
+    "function": "PouwCheck.Period.protocol.check",
+    "outcome": "none"
    },
    "Properties.Pouw.Window.bucket8192": {
     "function": "PouwWindow.bucket",

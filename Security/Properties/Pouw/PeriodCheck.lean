@@ -14,6 +14,7 @@ The properties of onsite's work component, `PouwCheck.Period.protocol` (`verity/
   the close's order. A refused window refuses the period: there's no partial credit.
 * `AcceptMeans`: the same of the check's accept, with its profile the period's name and its number of windows.
 * `NeverUndecided`: the check accepts or rejects.
+* `Refuses`: the check doesn't accept everything, so `AcceptMeans` says something of it.
 
 These give the period guarantees' premise that every window of the period is accepted, at `Credit.window`'s verdict
 (`Credit.window` is `windowLayout`'s first component): `Properties.Pouw.PeriodJ10R`'s `WindowAccepts` at each window,
@@ -73,5 +74,11 @@ def AcceptMeans : Prop :=
 def NeverUndecided : Prop :=
   ∀ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence) (r : String),
     Period.protocol.check p c e ≠ .undecided r
+
+/-- **The period check refuses something** (`AcceptMeans`'s nontrivial lemma): a check that accepted every period would
+falsify `AcceptMeans`, here at evidence whose windows aren't a list. -/
+def Refuses : Prop :=
+  ∃ (p : Period.Params) (c : Period.Commitment) (e : Period.Evidence),
+    ∀ pc prof, Period.protocol.check p c e ≠ .accept pc prof
 
 end Properties.Pouw.PeriodCheck
