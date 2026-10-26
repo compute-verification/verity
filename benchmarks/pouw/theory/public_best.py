@@ -655,7 +655,7 @@ def price(card: Card, leaves: list, L: int, n: int, m: int, g: tuple = NAIVE, be
     if facets:
         for a, b in card.facets:
             A_ub.append([-4.0] + [a * cols[j][ix["tensor"]] + b * cols[j][ix[other]] / 32 for j in range(nv)])
-            b_ub.append(-(b * fixed.get(other, 0.0) / 32))
+            b_ub.append(-(a * fixed.get("tensor", 0.0) + b * fixed.get(other, 0.0) / 32))
     A_eq = [[0.0] + [row.get(nm, 0.0) for nm in names] for row, _ in eqs]
     b_eq = [rhs for _, rhs in eqs]
     res = linprog([1.0] + [0.0] * nv, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq, bounds=[(0, None)] * (nv + 1),
@@ -1190,46 +1190,122 @@ def lane_report(menu: dict, scales=(0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0)) -
 # products a segment (ALGO-COST A12, PROTO-DESIGN-2's "new route"): T_s = b c^T + V (sum_tau c_tau)^T + Z U^T, with
 # Z = sum_tau (b + V)_tau pi_tau^-1, the last two of inner L'.
 
-V2_V, V2_U = 96, 80
+V2_V, V2_U = 80, 80                 # v2 as frozen (PROTO-DESIGN-3, nofold.py 541efba7a3): ±80 on both cards
+V2_V_MARGIN = 96                    # the RTX PRO 6000's stated margin
+V2_T = {"sm_90": 2, "sm_120": 4}    # v2 as frozen: tiles a segment per card
 V2_PEEL_DIGITS = 4                  # Z_X U^T and V Y_W^T, two base-128 digits each, inner L' once a call
-BIT_COST = {"sm_90": (("b1 wgmma, θ 32764.6 b1 MACs a SM-clock", 4095.6 / 32764.6),),
-            "sm_120": (("FP4 Strassen depth 2 (ALGO-COST A7, exact)", 0.383),
-                       ("A7 with b1 emulated on the ALU beside it", 0.26))}
+# b c^T's cost in tensor time a naive MAC, and the Strassen depth it runs at (its output assembly then costs lanes);
+# depth None: part of it runs on lanes the price leaves out, so it enters only the standalone table.
+BIT_COST = {"sm_90": (("b1 wgmma, θ 32764.6 b1 MACs a SM-clock", 4095.6 / 32764.6, 0),),
+            "sm_120": (("FP4 Strassen depth 2 (ALGO-COST A7, exact)", 0.383, 2),
+                       ("A7 with b1 emulated on the ALU beside it", 0.26, None))}
 
 
-def tile_route(card: Card, t: int, Lp: int, K: int, n: int, bit: float, **kw) -> dict:
+def _tile_operands(t: int, v: int):
+    zero = data_pmf("zero")
+    eX, eW = entry_pmf(zero, v), entry_pmf(zero, V2_U)
+    return eX, eW, Leaf(1.0, _stats("A", eX, (1,) * t), _stats("B", eW, (1,)), 1)
+
+
+def route_peels(Lp: int, K: int) -> float:
+    """The tile route's own peels, int8 products of inner L' a naive MAC. Its Z U^T summed over a call's segments is
+    the peel Z_X U^T; V Y_W^T is its V (sum c)^T summed plus Z_V U^T = (Z - Z_b) U^T, which needs one call-level
+    product Z_b U^T, Z_b the call's permuted bits summed (entries 0..K/L', base-128 digits)."""
+    return math.ceil(math.log2(K / Lp + 1) / 7) * Lp / K
+
+
+def tile_route(card: Card, t: int, Lp: int, K: int, n: int, bit: float, v: int = V2_V, **kw) -> dict:
     """The tile route at A = B = 0 against the honest kernel, both standalone at θ, a naive MAC: honest 1 (plus its peels,
     V2_PEEL_DIGITS products of inner L' a call); the route b c^T at `bit` over the whole segment, V (sum c)^T one int8
-    product of inner L', and Z U^T priced by `price` (Z a t-term form of b + V entries, its excess on any route)."""
-    zero = data_pmf("zero")
-    eX, eW = entry_pmf(zero, V2_V), entry_pmf(zero, V2_U)
+    product of inner L', Z U^T priced by `price` (Z a t-term form of b + V entries, its excess on any route) and
+    `route_peels`."""
+    _, _, zleaf = _tile_operands(t, v)
     honest = 1 + V2_PEEL_DIGITS * Lp / K
-    z = price(card, [Leaf(1.0, _stats("A", eX, (1,) * t), _stats("B", eW, (1,)), 1)], Lp, n, TOKENS, **kw)
+    z = price(card, [zleaf], Lp, n, TOKENS, **kw)
     vc = 1.0
-    route = bit + (vc + z.c) / t
+    route = bit + (vc + z.c) / t + route_peels(Lp, K)
     return dict(honest=honest, z=z.c, z_routes=z.routes, route=route, c=route / honest)
+
+
+def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int, v: int = V2_V,
+             hash_scale: float = 1.0) -> dict:
+    """The tile route inside the job, θ's max with facets, a naive MAC of a segment of L = t L'. Honest: the dense
+    product of X = b + V and W' = c + U pi (both within int8 at A = B = 0, so no wraps), v2's peels and every word's
+    SHA-512 leaf at the best schedule. Route: the same words and hashing; b c^T (`bit` of tensor time, its MMAs' lane
+    loads in proportion, and at Strassen `depth` its output assembly and one conversion a word on the ALU) and
+    V (sum c)^T as fixed loads; Z U^T a leaf of weight 1/t priced on any route beside the hash; `route_peels`."""
+    eX, eW, zleaf = _tile_operands(t, v)
+    L = t * Lp
+    hs = sha_menu(card)
+    items = job_items(card, L, K, False, False, hs, hash_scale)
+    peels = ("peels", V2_PEEL_DIGITS * Lp / K, items[1][2])
+    honest = price(card, leaves_of(None, 0, eX, eW), L, n, TOKENS, beside=False, items=(peels, items[2]))
+    mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
+    fixed = {r: x * (bit + 1 / t) for r, x in mma.items()}
+    fixed["tensor"] = (bit + 1 / t) / card.s8
+    if depth:
+        ops = (assembly(STRASSEN, depth) + 1) / L
+        for r, x in (("alu", ops), ("issue", ops), ("rf", 3 * ops), ("vec", ops)):
+            fixed[r] = fixed.get(r, 0.0) + x
+    own = ("peels", route_peels(Lp, K), items[1][2])
+    route = price(card, [replace(zleaf, weight=1 / t)], L, n, TOKENS, beside=True, items=(own, items[2]),
+                  extra_fixed=fixed)
+    return dict(lane=lane_load(honest), honest=honest, route=route, c=route.c / honest.c)
 
 
 def tile_report(Lps=(256, 512, 1024), ts=(2, 3, 4, 5, 6)) -> dict:
     out = {}
-    print(f"\n== v2's noise tiles at A = B = 0 (V ±{V2_V}, U ±{V2_U}, U permuted every tile): the tile route b c^T + "
-          f"V(Σc)^T + Z U^T over the honest t products (plus {V2_PEEL_DIGITS} peel digits of inner L' a call), a naive "
-          "MAC; each cell c (Z U^T's own price); the route wins from the first t with c < 1")
-    for card in (H200, H200_M1, SM120):
-        vs = [("", dict(beside=True))] + ([("reads free", dict(beside=True, wgmma_smem=False))]
-                                          if card.family == "sm_90" else [])
-        for bname, bit in BIT_COST[card.family]:
-            for vname, kw in vs:
-                for K, n in ((16384, 16512), (65536, 4096)):
-                    for Lp in Lps:
-                        cells, wins = [], None
-                        for t in ts:
-                            r = tile_route(card, t, Lp, K, n, bit, **kw)
-                            out[card.name, bname, vname, K, Lp, t] = r
-                            cells.append(f"t {t}: {r['c']:.3f} ({r['z']:.3f})")
-                            wins = wins or (t if r["c"] < 1 else None)
-                        print(f"  {card.name:12} {vname:10} b c^T by {bname[:20]:20} K {K:5} L' {Lp:4} | wins from t "
-                              f"{wins} | " + "; ".join(cells))
+    print(f"\n== v2's noise tiles at A = B = 0 (U ±{V2_U}, U permuted every tile): the tile route b c^T + V(Σc)^T + "
+          f"Z U^T over the honest t products (plus {V2_PEEL_DIGITS} peel digits of inner L' a call), standalone, a "
+          "naive MAC; each cell c (Z U^T's own price); the route wins from the first t with c < 1")
+    for v in (V2_V, V2_V_MARGIN):
+        for card in (H200, H200_M1, SM120):
+            vs = [("", dict(beside=True))] + ([("reads free", dict(beside=True, wgmma_smem=False))]
+                                              if card.family == "sm_90" else [])
+            for bname, bit, _ in BIT_COST[card.family]:
+                for vname, kw in vs:
+                    for K, n in ((16384, 16512), (65536, 4096)):
+                        for Lp in Lps:
+                            cells, wins = [], None
+                            for t in ts:
+                                r = tile_route(card, t, Lp, K, n, bit, v, **kw)
+                                out[v, card.name, bname, vname, K, Lp, t] = r
+                                cells.append(f"t {t}: {r['c']:.3f} ({r['z']:.3f})")
+                                wins = wins or (t if r["c"] < 1 else None)
+                            print(f"  V ±{v} {card.name:12} {vname:10} b c^T by {bname[:20]:20} K {K:5} L' {Lp:4} | "
+                                  f"wins from t {wins} | " + "; ".join(cells))
+    return out
+
+
+V2_LP = {"sm_90": (512, 1792), "sm_120": (256,)}    # L' = L / t at v2's segment lengths (L up to 3584 and 1024)
+
+
+def tile_lane_report(shown=(0.0, 0.25, 0.5, 1.0, 2.0, 4.0), grid_=tuple(i / 16 for i in range(65))) -> dict:
+    """The tile route inside the job against the honest kernel's lane load, at v2's frozen t per card (and t - 1,
+    t + 1) and v2's L': the job's hashing scaled by s sets the lane load, as in `lane_report`. On a grid of s, the
+    highest lane load at which the route still wins (c < 1), and its least c."""
+    out = {}
+    print("\n== v2's tile route inside the job (θ's max with facets) against the honest kernel's lane load, hashing "
+          "scaled by s (1: v1's words, 4 bytes a word, two compressions a 32 words); cells: lane load, c; then the "
+          "highest lane load where the route wins on s in [0, 4] and its least c")
+    for v in (V2_V, V2_V_MARGIN):
+        for card in (H200, H200_M1, SM120):
+            t0 = V2_T[card.family]
+            for bname, bit, depth in BIT_COST[card.family]:
+                if depth is None:
+                    continue
+                for t in sorted({max(2, t0 - 1), t0, t0 + 1}):
+                    for K, n in ((16384, 16512), (65536, 4096)):
+                        for Lp in V2_LP[card.family]:
+                            rs = {s: tile_job(card, t, Lp, K, n, bit, depth, v, s) for s in sorted({*grid_, *shown})}
+                            wins = [r for r in rs.values() if r["c"] < 1 - 1e-9]
+                            top = max((r["lane"] for r in wins), default=None)
+                            low = min(r["c"] for r in rs.values())
+                            out[v, card.name, bname, t, K, Lp] = dict(cells=rs, wins_to_lane=top, least_c=low)
+                            cells = "; ".join(f"s {s:g}: {rs[s]['lane']:.2f} {rs[s]['c']:.3f}" for s in shown)
+                            verdict = f"wins up to lane {top:.2f}, least c {low:.3f}" if top else "never wins"
+                            print(f"  V ±{v} {card.name:12} {bname[:20]:20} t {t} K {K:5} L' {Lp:4} | {cells} | "
+                                  f"{verdict}")
     return out
 
 
@@ -1258,6 +1334,7 @@ def main() -> None:
         return
     if args.tiles:
         tile_report()
+        tile_lane_report()
         return
     print("catalogue: " + ", ".join(f"{k} rank {len(v[0])}, {len(v)} orientations" for k, v in cat.items())
           + "; not integral (left out): " + ", ".join(n for n in CATALOGUE if n not in cat))
@@ -1279,6 +1356,7 @@ def main() -> None:
     sweep_report(menu)
     lane_report(menu)
     tile_report()
+    tile_lane_report()
 
 
 if __name__ == "__main__":

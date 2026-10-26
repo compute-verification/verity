@@ -75,6 +75,22 @@ def test_v2_tile_route_holds_at_two_tiles_and_breaks_four_on_sm120():
     assert PB.tile_route(PB.SM120, 4, 512, 16384, 16512, 0.383, beside=True)["c"] < 0.9
 
 
+def test_fixed_tensor_load_counts_in_the_joint_facets():
+    _, bit, depth = PB.BIT_COST["sm_90"][0]
+    p = PB.tile_job(PB.H200, 2, 1024, 16384, 16512, bit, depth, 80, 0.3)["route"]
+    assert max(p.loads.values()) <= p.c * (1 + 1e-6)
+
+
+def test_v2_tile_route_in_the_job_needs_lane_load_at_four_tiles_on_sm120():
+    _, bit, depth = PB.BIT_COST["sm_120"][0]
+    lo = PB.tile_job(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 0.25)
+    hi = PB.tile_job(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 0.5)
+    three = PB.tile_job(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 0.25)
+    assert lo["lane"] < 1 and lo["c"] < 0.95
+    assert hi["lane"] > 1.4 and hi["c"] > 1
+    assert three["lane"] > 1 and three["c"] > 1.05
+
+
 def test_sha_schedules_match_rt_units():
     t0, r0 = PB.sha_clocks(PB.H200, "default build")
     t1, _ = PB.sha_clocks(PB.H200, "A-wide + R-hi")
