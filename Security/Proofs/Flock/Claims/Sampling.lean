@@ -8,6 +8,8 @@ import Proofs.Flock.Claims.Sampling.DeployedSha512
 import Proofs.Flock.Claims.Sampling.Draws
 import Proofs.Flock.Claims.Sampling.Escape
 import Proofs.Flock.Claims.Sampling.ExecBernoulli
+import Proofs.Flock.Claims.Sampling.HorizonPr
+import Proofs.Flock.Claims.Sampling.InputSlot
 import Proofs.Flock.Claims.Sampling.KS
 import Proofs.Flock.Claims.Sampling.Leaf
 import Proofs.Flock.Claims.Sampling.Live
@@ -25,7 +27,7 @@ import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.Claims.Sampling.ZK
 
 /-! The sampling compiler's lemmas: each registered draw law's miss bound in `Claims.Pr` (`Sampling.Draws`), the
-executable Bernoulli draw's bound (`Sampling.ExecBernoulli`) and every law's live draw's (`Sampling.Live`); each
+executable Bernoulli draw's bound (`Sampling.ExecBernoulli`), the audit layer's horizon escape (`Sampling.HorizonPr`) and every law's live draw's (`Sampling.Live`); each
 design's acceptance probability as its model draw's miss probability, the nested escape and the classes' product
 (`Sampling.Escape`), and the deployed count bound at the claims' designs (`Sampling.Count`); the extractor's rerun
 programs (`Sampling.Extract`, `Sampling.Cost`), its rerun and own-call bounds (`Sampling.Runs`) and its expected reruns

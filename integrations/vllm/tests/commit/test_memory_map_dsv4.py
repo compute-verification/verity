@@ -15,7 +15,7 @@ from verity_vllm.commit import memory_map as MM
 
 @pytest.mark.xfail(strict=True, raises=ValueError,
                    reason="MEM-48: memory-map/v1 lays out none of DeepSeek-V4's caches, and no DeepSeek-V4 Program takes a cached prefix")
-def test_a_warm_deepseek_v4_requests_compressed_caches_are_its_producers(flashmla_small):  # noqa: F811
+def test_a_warm_deepseek_v4_requests_compressed_caches_are_its_producers(flashmla_small):
     rng = np.random.default_rng(4)
     model = V4._SparseAttn(rng, 4, 28, (30, 1, 1))
     rep = V4._derive_mhc(model, tuple(map(V4._tensor, V4._sparse_inputs(rng, model))))

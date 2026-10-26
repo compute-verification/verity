@@ -164,7 +164,7 @@ def _bias_shape(shp: tuple[int, ...] | None) -> int | None:
 
 
 class BroadcastBiasAddRule(OpRule):
-    """[R13 X-04] `aten.add.Tensor(x[.., N], b[N])` — a rank-1 bias broadcast over the trailing axis of a bf16 value collection — ->
+    """[X-04] `aten.add.Tensor(x[.., N], b[N])` — a rank-1 bias broadcast over the trailing axis of a bf16 value collection — ->
     the registered `BiasAdd_v1{N}` (`bias_add` kind: one f32 add + RNE per element, `P.Bf16Add`) per row of `x`.
 
     This is the general operation, not a layer recogniser: it is what vLLM's batch-invariant linear emits after the persistent

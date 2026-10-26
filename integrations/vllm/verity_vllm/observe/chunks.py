@@ -1,5 +1,5 @@
 """verity_vllm/observe/chunks.py — which engine steps were a request's prefill chunks, and which step produced each served token.
-Torch-free (coverage campaign, chunked-prefill column, window 2026-09-17).
+Torch-free.
 
 vLLM V1 prefills a prompt in chunks when `max_num_batched_tokens` is smaller than the prompt: each chunk is one engine step (a
 forward pass with partial-prefill attention), the engine samples a token at every chunk and DISCARDS the samples of the chunks
@@ -164,7 +164,7 @@ _CHILD_RE = re.compile(r"^(\d+)_(.+)$")
 def attribute(timing: dict, collector: Collector, prompt_len: dict[str, int], *, resolved_lag: int | None = None) -> dict:
     """Add the chunk keys to `timing["requests"][rid]` (in place, additive) and return `timing["chunk_attribution"]`.
 
-    [rev F-r17-16 / R17-1] `resolved_lag` = the engine's RESOLVED async_scheduling as LAG (1 / 0; None = unattested), the record's lag of
+    `resolved_lag` = the engine's RESOLVED async_scheduling as LAG (1 / 0; None = unattested), the record's lag of
     record (tokens.json `lag.value`).  The scheduler-state inference below derives a lag from schedule deltas (finish iteration - last
     advancing iteration); under async_scheduling=False the finishing request is freed inside step() BEFORE the post-step snapshot, so its
     last forward is invisible, last_adv one early, and the derived lag reads 1 for a true 0 -- the first sync record (exec r17_2216) had
