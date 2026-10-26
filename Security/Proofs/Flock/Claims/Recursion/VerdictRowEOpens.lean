@@ -37,8 +37,8 @@ theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart 
   obtain rfl : sv = .recOpen l LANES HH m := Option.some.inj (hsv'.symm.trans hsv)
   obtain ⟨-, hset⟩ := setupO_some hsu
   have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
-  have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   have h0 : 0 < sts.size := by subst hp; exact h0p
+  have e0 : p.sts[0] = sts[0] := by subst hp; rfl
   obtain ⟨_, P⟩ := Flock.Readable.parseFacts_of_parse hx ht hpi h0p
   have hpar := FlockVBridge.params_of_check P.recNet ((htab 0 h0p).1.trans (FlockVBridge.name_recOpen l LANES HH m))
   rw [e0] at hpar
