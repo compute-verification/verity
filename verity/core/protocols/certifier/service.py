@@ -165,14 +165,14 @@ are one advice's. The in-the-clear check runs `advised_check` too.
 **A warden link** (`LinkWindows(warden=WardenProfile(…))`) is the active warden's (`warden.Warden`) own two records
 of each link-window: its responses on egress and its requests on ingress, on its one grid, certified under its
 schedule's parameters digest (`warden.WardenParams.digest`, which its deployment publishes) rather than a certifier's
-(`certificate.parameters_digest`). The warden is the auditor's device, and its code puts every bucket's cells, r a live
-connection with padding (`warden.audit` reads them in the clear, the scan's units in zero knowledge), so its counts are
-its schedule's: no occupancy profile holds them, the period's schedule terms charge them (log2 #S_s and
-Σ_c log2(cap_c + 1)), and the warden runs no shaper clock, so a window declares no sync and the charge is 0. Its unit is
-the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its end's head to the warden's grid
-and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The in-the-clear check is the
-opening's root and the head checks: the records' cells are the scan's, and the certifier's host audit doesn't read a
-warden's records.
+(`certificate.parameters_digest`). The warden is the auditor's device, and its code puts every bucket's cells, r for
+each live connection and the rest padding (`warden.audit` reads them in the clear, the scan's units in zero
+knowledge), so its counts are its schedule's: no occupancy profile holds them, the period's schedule terms charge them
+(log2 #S_s and Σ_c log2(cap_c + 1)), and the warden runs no shaper clock, so a window declares no sync and the
+charge is 0. Its unit is the plain one, `NetworkLinkWindow` v5{EGRESS, INGRESS}, each head check holding its end's
+head to the warden's grid and digest and to the warden's signed digest. Its public items are `PUBLIC_WARDEN`. The
+in-the-clear check is the opening's root and the head checks: the records' cells are the scan's, and the certifier's
+host audit doesn't read a warden's records.
 
 A link whose egress end has no occupancy profile and is neither served, advised nor a warden's has no verdict
 (`ValueError`, failing closed): nothing would hold its egress timing.
@@ -432,8 +432,8 @@ PUBLIC_ADVISED = tuple(p for p in PUBLIC_SERVED if p.item not in ("served", "syn
 #: a warden link's: no occupancy profile and no sync, the warden's schedule instead, which puts its counts
 PUBLIC_WARDEN = tuple(p for p in PUBLIC if p.item not in ("charge", "occupancy")) + (
     S.Public("warden", "structure", "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads "
-             "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r a "
-             "live connection), so its counts are the schedule's, which the period's schedule terms charge"),
+             "bind) and the link's windows, fixed before the run: the device's code puts every bucket's cells (r for "
+             "each live connection), so its counts are the schedule's, which the period's schedule terms charge"),
 )
 #: an advised link's: and the advice its window read (`advised.digest`), which the verifier reports beside the unit's
 #: two output bits
