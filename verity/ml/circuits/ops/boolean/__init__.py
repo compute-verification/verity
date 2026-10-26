@@ -8,6 +8,8 @@
     elementwise  element-wise FP32, BF16 and I32 arithmetic as Boolean Definitions
     cast         the bf16 <-> f32 casts as Boolean Definitions
     s8           the exact s8 matmul family on bits: the u8 x s8 step, S8Dot_v2, S8Matmul_v2, LimbSplit_v2 and its four limb steps
+    s8split      a W8A8 coordinate split along K so that each Definition outputs at most 16 bits: the 16-bit halves of a
+                 chunk's s32 accumulator and of an s32 sum, and the epilogue on G s32 parts
     int8         the exact-int8 profile's f32 / f64 steps (rint, the s8 casts, the exact and RN64 products, the u32 cast, the LUT
                  index) as circuits over `forms`, for `verity_vllm.program.registry.boolean_int8`'s Definitions
     moe          a padded static MoE layer's pair GEMMs on bits: MoeSelectBf16x{E}_v2 (the multiplexer tree over the expert id's
