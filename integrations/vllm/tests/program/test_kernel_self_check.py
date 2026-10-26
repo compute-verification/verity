@@ -3,15 +3,23 @@ kernels (`rows`) and the twins — against the reference by core `verity.ml.circ
 check specialisations: no mismatch, and not every instance declined."""
 from __future__ import annotations
 
+import importlib
+import pkgutil
+
 import numpy as np
 import pytest
 
 from verity.ml.circuits.evaluation import kernels, self_check
 from verity_vllm.commit import challenge as CH
+from verity.ml.definitions import registry
 from verity.ml.definitions.numerics import kernel_registry as KR
 from verity.ml.definitions.numerics import rows, twins
 
 N = 6
+# a registry module registers its composites' twins as it loads, and the pairs are read at collection: unless this file
+# imports them all, which twins it checks depends on the modules collected before it
+for _m in pkgutil.iter_modules(registry.__path__):
+    importlib.import_module(f"{registry.__name__}.{_m.name}")
 PAIRS = [(r.key, r.kernel) for r in KR.registered()]
 
 

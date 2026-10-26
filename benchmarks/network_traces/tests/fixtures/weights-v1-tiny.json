@@ -1,5 +1,5 @@
 {
- "source": "CMP-95 interface 1's fixture, integrations/torch_loop/tests/fixtures/weights-v1.json on cursor/allp-iface-1de3 (#4445) at e85213348d: its seed, dummy salt key and test reader's digest, TINY's manifest, entries and registration digest for that reader, and H200's stream length, first 64 bytes and every tensor's first and last rows' digest",
+ "source": "CMP-95 interface 1's fixture, integrations/torch_loop/tests/fixtures/weights-v1.json on cursor/allp-iface-1de3 (#4445) at 6ec00cc41c: its seed, dummy salt key and test reader's digest, TINY's manifest, entries and registration digest for that reader, and H200's stream length, first 64 bytes and every tensor's first and last rows' digest",
  "seed": "7665726974792f7365656465642d776569676874732f746573742d73656564",
  "salt_key": "949128c0518b7da645ef2b24ade03b84336ca041519d6861ec27801ced54d91d",
  "program": "b3a4990704e0dfab79e1325b90b252589edbdd8635c313691e89759cebd24f0359f94102e18b4029b391970410a4d69e322024100a5b52e82fe511525cda6dd8",
@@ -17,7 +17,8 @@
     "mlp": 64,
     "name": "tiny-h32-l1",
     "row_codes": 16,
-    "tok_schema": "hm96-sha512/row-seg/v1",
+    "tok_rows": "coordinate",
+    "tok_schema": "hm96-sha512/row/v2",
     "vocab": 256,
     "width": 32
    },
@@ -26,17 +27,17 @@
     {
      "dtype": "bf16",
      "kind": "embed",
-     "leaves": 256,
+     "leaves": 32,
      "name": "tok",
      "nbytes": 16384,
      "offset": 0,
-     "schema": "hm96-sha512/row-seg/v1",
-     "sha256": "52bb295256d1e49bdd66900d0a9b5fdc818719e802a14d784b7adac903509a13",
+     "schema": "hm96-sha512/row/v2",
+     "sha256": "6237b245de2b68da1fa061324230b74fa345c8f4e0c79659dd86862a5dc0f577",
      "shape": [
-      256,
-      32
+      32,
+      256
      ],
-     "words": 32
+     "words": 256
     },
     {
      "dtype": "bf16",
@@ -307,14 +308,14 @@
     }
    ]
   },
-  "registration": "5bf8e38982c92486d417915f65ddbd6cd5d30888c84c26ec194ecf43b6760c0e1657bbe068797d4373f9479e83eecbd2e7e3130b090c421c644d751c3b02653c",
+  "registration": "82e303f099d1d6ca161e1ce69628f07c1a9f16f0dc525e26f7df537b72546134cc1e42a0c1adbf1a74cdcc091a954e73a64e64575cf61a0709b9b4b5e5407300",
   "values": [
    {
-    "domain": "63387ff7e6ced87435481f55332c3bbd5c9033a32b9c436fd8be26ca548986217f6e65ff0a93877854b57e9ae3e8451a6454d7970d32a51abbbcbbcb309fe3ac",
-    "leaves": 256,
-    "root": "438fa1ada88b22dd4c346399f40958396333b1a1911bcedddcea024b66371097f27065d9820ee229de684fcbc2cb634a47a4d987f8840d98139dcc5c8ffe3998",
+    "domain": "0806640281bfb69375caacd4f1ebab728d632ee97485f8c588d0b6d8b52c0ebc3dcde21ec48955a54e29604ff05ce7d41555b2ad861d7a1041531a1223ce1091",
+    "leaves": 32,
+    "root": "f8c6e956c50246df323624b58932e1afef013315133a329170e18e78094908e365248615f44d565b17a3b00af82cbd9eb7e382f399fb1258de6d2e9d61f7f9ed",
     "value": "tok",
-    "words": 32
+    "words": 256
    },
    {
     "domain": "56e3faed10620a71d9a90d6df9bb36f646fa3bcd7e141c304e7334bcbaf7655d02b3597e31ad67ad214180550c2c8145cffe29ba45dad6c995508ad782e3e9ca",
@@ -455,8 +456,8 @@
   "rows": [
    [
     "tok",
-    "a0795dbed7fccbad45e1928aaa9c07f5d343b018789549a2d8d4d5a1b8697041",
-    "ef60b2d2db563781b4f72311299bae9321d9f7b03c27e3a0b3db5571bd50bf37"
+    "48159b4c2d276396c08a52e12f2a5e3645f9fb5fa13deac80318d3390d21ff0f",
+    "1e8d88c27f9d3fffb800dbf0910a1f11674d17d05827d85e5bec6809487b92d0"
    ],
    [
     "pos",
@@ -549,7 +550,7 @@
     "01f143bf4d837f4eabe4d2cbb65e0d7d027e0bce1d0145f347c5853b91e79b67"
    ]
   ],
-  "rows_sha256": "7901ae38d46bed0453aacef9e81845f11ed8847b2a34d0fe82d6bc6b512cead9",
+  "rows_sha256": "59c6c26f7e2832dffd830cff83027cbff3039e86d82c18359c4eaeed8058e037",
   "stream_bytes": 139736443904,
   "stream_head": "5f3f3cbf733f71bf5abf29bf7b3f77bf083f12bf11bf13bf633f33bf6c3f5fbf3fbf523f2c3f57bf583f33bf5a3f02bf5abf39bf453f313f3bbf48bf393f523f"
  }

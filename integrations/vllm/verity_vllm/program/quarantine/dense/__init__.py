@@ -27,7 +27,7 @@ ATen CUDA kernel here converts f32 -> bf16 with the hardware `cvt.rn.bf16.f32` (
 """
 from __future__ import annotations
 
-from verity_vllm.program.quarantine.dense import (add_scalar_bf16, add_scalar_f32, add_widened_bf16, bf16_div_scalar, bf16_mul_scalar, bf16_mul_scalar_tensor,  # noqa: F401
+from verity_vllm.program.quarantine.dense import (add_scalar_bf16, add_scalar_f32, add_widened_bf16, bf16_div_scalar, bf16_mul_scalar, bf16_mul_scalar_tensor,
                bf16_tanh, gelu_tanh_mul, gelu_tanh_mul_bf16, mean_triton, mul_vec_f32, narrow_f32_bf16, rsqrt_f32,
                scale_row_bf16, scale_row_f32, square_bf16, square_f32, tanh_f32)
 

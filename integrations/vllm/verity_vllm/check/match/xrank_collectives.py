@@ -1,4 +1,4 @@
-"""[R16 tp TP-12, rev F-r16-18] CROSS-RANK REPLAY OF THE COLLECTIVE OUTPUTS from the two ranks' COMMITTED partials.
+"""[TP-12] CROSS-RANK REPLAY OF THE COLLECTIVE OUTPUTS from the two ranks' COMMITTED partials.
 
 What TP adds to a Commit is the all-reduce / all-gather OUTPUT every layer consumes; at TP2 the per-rank sampled replay evaluates the rank
 partial (`Gemm_v1{K/W}` on the shard) but the collective output itself had no registered evaluator (`AllReduce2_v1`, `AllGather2_v1`,
@@ -41,7 +41,7 @@ FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}         
 
 
 def collective_family(kind: str, world: int) -> str:
-    """[lane vllm-tp-n] the received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
+    """The received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
     selector (`b1_tp2.all_reduce` / `all_gather`): `AllReduce2_v1` / `AllGather2_v1` at world 2, `AllReduce_v2` / `AllGather_v1` beyond."""
     from verity.ml.definitions.registry import b1_tp2 as TP2
     sel = {"all_reduce": TP2.all_reduce, "all_gather": TP2.all_gather}.get(kind)
@@ -408,7 +408,7 @@ def fold_pairs(per_pair: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def coverage_of_unreplayable(res: dict[str, Any], dumps_meta: list[dict[str, Any]]) -> dict[str, Any]:
-    """[rev M-0418 hardening] the pass's strata SITES against the sites of the replay-unreplayable collective families named by the ranks'
+    """The pass's strata SITES against the sites of the replay-unreplayable collective families named by the ranks'
     Programs (`unreplayable_sites` from each rank dump: family -> [op_path]).  A family site with no stratum is a NAMED gap (a received
     output committed without a committed partial, a collective kind the partial hook missed): the pass result becomes False by name.
     Field read for the finalizer: coverage_of_unreplayable.complete."""

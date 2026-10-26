@@ -82,8 +82,9 @@ def test_size_prices_the_measured_units_and_refuses_the_unmeasured():
 
 def test_window_circuit_and_class_size_default_to_the_class_of_record():
     """Without ``--class``, ``window-circuit`` and ``class-size`` take the class of record, the certifier run of record's
-    envelope (4 slots, 1,024 prompt ids, 64 outputs); a given class is read as SLOTS,PROMPT,OUTPUTS."""
+    envelope (8 slots, the endpoint's ``--window-requests 8``; 1,024 prompt ids, 64 outputs); a given class is read as
+    SLOTS,PROMPT,OUTPUTS."""
     import prove_path as PP
 
-    assert PP.window_class_of(None) == CLASS_OF_RECORD == WindowClass(4, 1024, 64)
+    assert PP.window_class_of(None) == CLASS_OF_RECORD == WindowClass(8, 1024, 64)
     assert PP.window_class_of("1,2,2") == PROBE

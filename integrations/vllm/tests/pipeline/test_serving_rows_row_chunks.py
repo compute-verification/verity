@@ -10,11 +10,15 @@ from verity_flock.class_statement import UnitStager
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity.ml.definitions.registry import b1 as B1
+from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.definitions.registry import deepgemm as DG
+from verity.ml.definitions.registry import fa2_check_inf as FA2
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
+from verity.ml.circuits.ops import mufu as MU
+from verity.ml.circuits.ops import prims as OP
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 #: one plain row template, and one packed with two return fields (a whole ``PARTS`` part, DeepGEMM's linear's quantisation, here
@@ -109,6 +113,17 @@ def test_a_row_template_the_caps_name_is_chunks_of_the_stager_s_bit_rows_on_its_
         st.reference_check(c["rows"], c["outs"])
     with pytest.raises(AssertionError, match="outputs are not the IR reference's"):
         st.reference_check(got[0][0]["rows"], {**got[0][0]["outs"], "o0": got[0][0]["outs"]["o0"] ^ np.uint16(1)})
+
+
+def test_a_whole_attention_row_reads_its_tables_in_lookup_slots_and_an_rmsnorm_row_inline():
+    """`chunk_rows.reads` of a whole row: lookup slots for Llama-3.2-1B's decode attention row under v5 and v18 (inline, its
+    ``--zk`` prover ran out of memory at 600 GiB; in slots it was proved, `chunk_rows.reads`), inline for the RMSNorm rows,
+    which read the rsq table too and were proved inline at their served shapes."""
+    att = {"T": 1, "NH": 32, "KVH": 8, "D": 64, "BN": 128, "DOT": OP.HopperBF16WgmmaDot16, "INV": MU.Fa2InvSum, "MASKED_FROM": 0}
+    norms = (bind(DF.RMSNormTritonV5, N=2048, EPS=1e-5), bind(B1.RMSNormFusedCuda, N=2048, EPS=1e-5))
+    for fn, want in [(bind(d, **att), "slots") for d in (FA2.AttentionV5, DF.AttentionV18)] + [(fn, "inline") for fn in norms]:
+        tp = SRW.template(descriptor_id(fn))
+        assert (tp.layout, CR.reads(tp)) == ("row", want), tp.id
 
 
 def test_a_scope_of_several_prefixes_takes_the_rows_under_any_of_them(rows):
