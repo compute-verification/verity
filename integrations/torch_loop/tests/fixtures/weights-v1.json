@@ -6,7 +6,7 @@
  "shapes": {
   "cmp92-h200-mqa-w16384-l52": {
    "rows": [
-    ["tok","a0795dbed7fccbad45e1928aaa9c07f5d343b018789549a2d8d4d5a1b8697041","ef60b2d2db563781b4f72311299bae9321d9f7b03c27e3a0b3db5571bd50bf37"],
+    ["tok","48159b4c2d276396c08a52e12f2a5e3645f9fb5fa13deac80318d3390d21ff0f","1e8d88c27f9d3fffb800dbf0910a1f11674d17d05827d85e5bec6809487b92d0"],
     ["pos","7d9f1743b7b058d5f513edba7fca8340412f3d4097709690cadcffa2eaa61b7b","32a7d01a5b6a72e88e0b5d762877ebae32970587e2ac98f4d125bfed4589354e"],
     ["l0.attn_norm","b4bd96be533051cceb883cf5984bc13f1f3db6866a13d901c794c9eb528b12cb","b4bd96be533051cceb883cf5984bc13f1f3db6866a13d901c794c9eb528b12cb"],
     ["l0.wq","9a157a6a401fd2899c46e577d6fb23ffa5b80e371b97470a368cb117df340608","15c5350066d8957f4800ab51f30d29e32314ec086ca95c91b35091e5c1aaa8f5"],
@@ -26,7 +26,7 @@
     ["head","be64ab049130e17ab74fd4f54e6c5d8bc30443dd30d7af481441a41d1b50684e","e196b3e9c956deaff164ebea9e6088dcbe3812b05f15021a6391982f2cb9a5a9"],
     ["head.scale","01f143bf4d837f4eabe4d2cbb65e0d7d027e0bce1d0145f347c5853b91e79b67","01f143bf4d837f4eabe4d2cbb65e0d7d027e0bce1d0145f347c5853b91e79b67"]
    ],
-   "rows_sha256": "7901ae38d46bed0453aacef9e81845f11ed8847b2a34d0fe82d6bc6b512cead9",
+   "rows_sha256": "59c6c26f7e2832dffd830cff83027cbff3039e86d82c18359c4eaeed8058e037",
    "stream_bytes": 139736443904,
    "stream_head": "5f3f3cbf733f71bf5abf29bf7b3f77bf083f12bf11bf13bf633f33bf6c3f5fbf3fbf523f2c3f57bf583f33bf5a3f02bf5abf39bf453f313f3bbf48bf393f523f"
   },
@@ -44,13 +44,14 @@
      "mlp": 512,
      "name": "cmp92-phase1-h128-l2",
      "row_codes": 128,
-     "tok_schema": "hm96-sha512/row-seg/v1",
+     "tok_rows": "coordinate",
+     "tok_schema": "hm96-sha512/row/v2",
      "vocab": 256,
      "width": 128
     },
     "stream_bytes": 511232,
     "tensors": [
-     {"dtype":"bf16","kind":"embed","leaves":256,"name":"tok","nbytes":65536,"offset":0,"schema":"hm96-sha512/row-seg/v1","sha256":"f9473b96ef5a556c85ea098c3418dfb50760bfe0b56f3bb9fd2c0a765a5ab3f3","shape":[256,128],"words":128},
+     {"dtype":"bf16","kind":"embed","leaves":128,"name":"tok","nbytes":65536,"offset":0,"schema":"hm96-sha512/row/v2","sha256":"f31eeec28a60beac856c4524beb3c8539ff9ecadfd29ea023fb670d032198b7f","shape":[128,256],"words":256},
      {"dtype":"bf16","kind":"embed","leaves":4096,"name":"pos","nbytes":8192,"offset":65536,"schema":"hm96-sha512/row/v2","sha256":"ff54bfa857315ff30990f0e80eb84211d7e68264c73fbad34455c638fec5a733","shape":[128,32],"words":1},
      {"dtype":"bf16","kind":"gain","leaves":128,"name":"l0.attn_norm","nbytes":256,"offset":73728,"schema":"hm96-sha512/row/v2","sha256":"cb2a432e5ec9a8a1e0004714a9cb65f06bdb2033ce45750b1187d9bbb93ceab7","shape":[128],"words":1},
      {"dtype":"s8","kind":"s8","leaves":128,"name":"l0.wq","nbytes":16384,"offset":73984,"schema":"hm96-sha512/row/v2","sha256":"cb9d77f784be563a7c03b897189d7fa67f7286ec0a2be1f75ac8cba3f3134820","shape":[128,128],"words":64},
@@ -85,9 +86,9 @@
      {"dtype":"f32","exponent":-10,"kind":"scale","leaves":256,"name":"head.scale","nbytes":1024,"offset":510208,"schema":"hm96-sha512/row/v2","sha256":"63495eed87437a3db78f850eb89698d324824281927f9079724c567b209cb688","shape":[256],"words":2}
     ]
    },
-   "registration": "a55cfb7febc02aae4d472266ba9897d454042093693713bbb3511bd80a8c73e1d95d4b5febf1b59057a8b22e8b79e7870bf15354f5893293157f963d98316ec3",
+   "registration": "c7bbace8726a4bc34a0473f45d3261b3495a17dd07479a2ce6b5410c6dbd8ac8154504ed55898d4162dfd7296b59979a681809d83062f463312f9907120f03c7",
    "values": [
-    {"domain":"46ba53b018cc468e5cd74bd1a4efaebd49b3da584c137e69a7456e1194704405f571c52df81c247e5e130ac16dd27c418ad96b77a60a2ba8a63c7b76fbbc4de8","leaves":256,"root":"f0764b286639f799d8c667375e1c01fe1097f0033680c2f1aa86c811e1fa4a11e725cf80c34fe3a904c19ccd5713985172b25856f5f5312a50043e1b2d208ccb","value":"tok","words":128},
+    {"domain":"f740dba104bfd234b1d18c59354ae4acb438cb5748fae3710d15d52f0cae8ab1ca97c5ff5861c393ce97d38e289101a89ffa71576eba6c9b2249f3ead0ac4639","leaves":128,"root":"89c529dac906615675c618524c27cd039cf00b49974747fd04db683011bd959e015677c74f6a4a9b4f0d00cded5d0ba393adec5d45deae96ce5008d8726f35e0","value":"tok","words":256},
     {"domain":"735776267f358f385070e343cb148888258bc66eea966fa99047882bc132545dd04a4de2afedb4678035b8705f9f429d5aa52b8f352e31feff1b06c5a84ae88f","leaves":4096,"root":"35dc39c127e7d0206cef2b690fbd664255db662d596bdd71113e14e57dbfd1a304c14ab9303581698bf8732f4dc2efc34b73fca16cabeeae7032515429fb094a","value":"pos","words":1},
     {"domain":"b6748973f070a1eb51c6f9574a76b05884f1b9e31cf84070628add32e0b27421b9c4a5be817312b19de98261e67e7808e92d43f2618977e8a281feef0fea7727","leaves":128,"root":"b5ca349933bb2b2a033e7897cd26ddbaa8ed360fde784e379610e340a6d2a041ce4aeb17e7cff090eb3eb98d4f654f6e9649d11bee1df21966640a1cebf107b9","value":"l0.attn_norm","words":1},
     {"domain":"c02dada871506f8ca0f21372872211e0f0dc75243e2cebef2587244b60e9b86d74849bdd41a2c55bbcf63d003fd2879a1ee8d648ad50fdf122957097edd67dd1","leaves":128,"root":"8485a80d5d45286a4c3b3b93ebb61287bf4a8d856d1f12f4d8af46b3437f2dc23199683d868e1f9476b6d6c5b66418a8744856554cc1bb5d96fdb16166b9378e","value":"l0.wq","words":64},
@@ -136,13 +137,14 @@
      "mlp": 64,
      "name": "tiny-h32-l1",
      "row_codes": 16,
-     "tok_schema": "hm96-sha512/row-seg/v1",
+     "tok_rows": "coordinate",
+     "tok_schema": "hm96-sha512/row/v2",
      "vocab": 256,
      "width": 32
     },
     "stream_bytes": 34240,
     "tensors": [
-     {"dtype":"bf16","kind":"embed","leaves":256,"name":"tok","nbytes":16384,"offset":0,"schema":"hm96-sha512/row-seg/v1","sha256":"52bb295256d1e49bdd66900d0a9b5fdc818719e802a14d784b7adac903509a13","shape":[256,32],"words":32},
+     {"dtype":"bf16","kind":"embed","leaves":32,"name":"tok","nbytes":16384,"offset":0,"schema":"hm96-sha512/row/v2","sha256":"6237b245de2b68da1fa061324230b74fa345c8f4e0c79659dd86862a5dc0f577","shape":[32,256],"words":256},
      {"dtype":"bf16","kind":"embed","leaves":256,"name":"pos","nbytes":512,"offset":16384,"schema":"hm96-sha512/row/v2","sha256":"072d5a1c9958582b942d29dae5d940792365808fdcda267ec5ec8c761214f64d","shape":[32,8],"words":1},
      {"dtype":"bf16","kind":"gain","leaves":32,"name":"l0.attn_norm","nbytes":64,"offset":16896,"schema":"hm96-sha512/row/v2","sha256":"f2aa99e77e29f2e4fa54912632fc224ce16f190050fc1cce855fb089c782fe15","shape":[32],"words":1},
      {"dtype":"s8","kind":"s8","leaves":64,"name":"l0.wq","nbytes":1024,"offset":16960,"schema":"hm96-sha512/row/v2","sha256":"d1c0e19d225bb44a5fff8b18d6f7cb49127a3ceba5400011d63d1882c872030e","shape":[32,32],"words":8},
@@ -163,9 +165,9 @@
      {"dtype":"f32","exponent":-9,"kind":"scale","leaves":256,"name":"head.scale","nbytes":1024,"offset":33216,"schema":"hm96-sha512/row/v2","sha256":"894e204b368e7ac93d0dced30fe3814e38f995a7d5bbe312c25904dec41594ee","shape":[256],"words":2}
     ]
    },
-   "registration": "5bf8e38982c92486d417915f65ddbd6cd5d30888c84c26ec194ecf43b6760c0e1657bbe068797d4373f9479e83eecbd2e7e3130b090c421c644d751c3b02653c",
+   "registration": "82e303f099d1d6ca161e1ce69628f07c1a9f16f0dc525e26f7df537b72546134cc1e42a0c1adbf1a74cdcc091a954e73a64e64575cf61a0709b9b4b5e5407300",
    "values": [
-    {"domain":"63387ff7e6ced87435481f55332c3bbd5c9033a32b9c436fd8be26ca548986217f6e65ff0a93877854b57e9ae3e8451a6454d7970d32a51abbbcbbcb309fe3ac","leaves":256,"root":"438fa1ada88b22dd4c346399f40958396333b1a1911bcedddcea024b66371097f27065d9820ee229de684fcbc2cb634a47a4d987f8840d98139dcc5c8ffe3998","value":"tok","words":32},
+    {"domain":"0806640281bfb69375caacd4f1ebab728d632ee97485f8c588d0b6d8b52c0ebc3dcde21ec48955a54e29604ff05ce7d41555b2ad861d7a1041531a1223ce1091","leaves":32,"root":"f8c6e956c50246df323624b58932e1afef013315133a329170e18e78094908e365248615f44d565b17a3b00af82cbd9eb7e382f399fb1258de6d2e9d61f7f9ed","value":"tok","words":256},
     {"domain":"56e3faed10620a71d9a90d6df9bb36f646fa3bcd7e141c304e7334bcbaf7655d02b3597e31ad67ad214180550c2c8145cffe29ba45dad6c995508ad782e3e9ca","leaves":256,"root":"9ea28e8261be4fb6d15b9dde6f00dc3c519384b9753f952baa67cf9cdf498377871387fd8da46ee386f46034a6580b1d0e416c7bc180cba8a3ec6f62c7713803","value":"pos","words":1},
     {"domain":"e4e78a54e5520e9073b9433854458026fb9a53aeac9a8da34946b880298d353ca9ac1a2da42acacb978643201412e3d55984ccf0bbac4109d7614f39b0e17aa4","leaves":32,"root":"e654b2e82f1700fd3c91e051404fc0f1472832f0f93b577267c00e4fd251414792be86f66e199c69d497dd1f601cbb497757ecfaf8259213de98bc1c1fd897f5","value":"l0.attn_norm","words":1},
     {"domain":"53cfe1ab1482f9cdb180578ead4084c3c5c1382af3b0f66eaf4e19f255d3f7c63ef28ee66b53fdb7bd5ee160ce1980c085c5bb118759c1a3feacf0c198c00581","leaves":64,"root":"bbc359a978265bd86cb4d01968f2911b87f762d0cb3f1d41fcad1e9b685c9f2adcf0e923b213f9f710208c4416516e175302c02e874bbf9083fa347ebc640815","value":"l0.wq","words":8},
