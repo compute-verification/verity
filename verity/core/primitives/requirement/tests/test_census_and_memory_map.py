@@ -174,8 +174,8 @@ def _payload(r: str, row) -> bytes:
 
 @pytest.fixture(scope="module")
 def requests() -> dict[str, Program]:
-    from verity_vllm.predict.build import build_program
-    from verity_vllm.predict.phi import Phi
+    from verity_vllm.program.predict.build import build_program
+    from verity_vllm.program.predict.phi import Phi
 
     phi = Phi(model={"repo": "org/m", "revision": "r", "hf_config": WIDE},
               target={"compute_capability": [12, 0], "num_sms": 188}, workload={"requests": []})
@@ -246,8 +246,8 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
     request's census is its Program's at its sampling events unless `censuses` gives one."""
     from verity_vllm.commit import memory_map as MM
-    from verity_vllm.store.interface import PageLayout
-    from verity_vllm.store.registry import _page_blocks
+    from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
+    from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}

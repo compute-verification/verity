@@ -86,7 +86,7 @@ and KV connectors.
    the decisions' by `used`; the certified request records (P, O) are the arrivals, in the warden's release order;
 3. the charge: advice v1's arithmetic code run forward over the same decisions (`arith_encode`), each window's coded
    length at most its declared charge, so no decoder runs in the circuit;
-4. `compile_steps` (`integrations/vllm/verity_vllm/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
+4. `compile_steps` (`integrations/vllm/verity_vllm/program/predict/steps.py`): each row (request, start, n) becomes a `RowRef`
    into its request's Program, the rows being exactly I1 v0's `steps`, which v0 carried in the advice.
 
 **The circuit**, traced whole (`_build`): the running loop over static slots, each slot's n read off the budget the

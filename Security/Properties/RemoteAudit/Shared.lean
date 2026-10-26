@@ -34,7 +34,7 @@ draw `c`'s, `W + c`.
 At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` is the window, and draw `c` is window
 `c` alone (`drawWindows_one`, `drawLengths_one`): `OpeningsUnreadUntilDrawn` and `RecordKeptAfterDraw` give today's,
 `ReleaseOrder 1` and `LiveUnder 1` are today's, and `AcceptDrawsOpenable` on a draw of one window gives today's
-(`Properties.Proofs.RemoteAudit.Shared`'s `*_one`). Today's `DrawIsSubset` is on `draws` alone, which knows no `g`;
+(`Proofs.Properties.RemoteAudit.Shared`'s `*_one`). Today's `DrawIsSubset` is on `draws` alone, which knows no `g`;
 this one states it for `Shared.close`'s draw.
 -/
 

@@ -49,7 +49,7 @@ bundle=...)`), each digest checked against the record as from the store.
     verity-vllm records switch <row> --comparison comparison.json --run R --trace art:… [--tier T]   # the row's Build becomes AOT
 
 A switched row (`switch`: its `aot` in the index, `config_record.aot_of`) has the AOT Build on its record path
-(`verity_vllm.predict.aot`): its pins are the predicted Programs, equal on every rank to the traced Build its comparison checked.
+(`verity_vllm.program.predict.aot`): its pins are the predicted Programs, equal on every rank to the traced Build its comparison checked.
 """
 from __future__ import annotations
 
