@@ -19,8 +19,8 @@
 #      node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and
 #      SC_GATE_KEY, the lane's gate key)
 # Kept in $OUT/sczk: the driver's summary and logs and everything the verifier received; never a prover's file (inst-*)
-# nor a circuit (its pin is kept), nor a session's archive. A rehearsal's public files go in $OUT/warden, its records
-# and salts (the prover's) nowhere.
+# nor a circuit (its pin is kept), nor a session's archive, nor a signer's state (the deployment's or the tamper's). A
+# rehearsal's public files go in $OUT/warden, its records and salts (the prover's) nowhere.
 set -uo pipefail
 export HZ_CONFIGS=sczk HZ_MEM_GB=${SC_MEM_GB:?}
 SC_CACHE=${SC_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -72,6 +72,6 @@ log "sczk: proving${SC_CLASS:+ at $SC_CLASS}${SC_GROUP:+, group $SC_GROUP}${SC_D
 rc=${PIPESTATUS[0]}
 mkdir -p "$OUT/sczk"
 (cd "$W/sczk" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -name 'instances.bin' ! -path '*/archive/*' \
-  ! -name 'signer-state.json' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
+  ! -name '*signer-state.json*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/sczk/")
 log "sczk: done, rc $rc"
 exit "$rc"
