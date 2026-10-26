@@ -86,6 +86,19 @@ def test_two_runs_of_one_shape_are_two_roots_each_registering_its_own_circuit(tm
     assert got["a"]["run"] != got["b"]["run"] and got["a"]["circuit"] != got["b"]["circuit"]
 
 
+def test_under_a_work_law_it_registers_its_work_table_and_its_output_units_are_the_last_linears(tmp_path, capsys):
+    shape = ["--law", "work:4", "--requests", "3,7", "--steps", "2", "--cap", "8"]
+    assert S.main(["--circuit-only", *shape]) == 0
+    before = json.loads(capsys.readouterr().out)
+    assert S.main(["--out", str(tmp_path), *shape]) == 0
+    got = json.loads(capsys.readouterr().out)
+    assert got["circuit"] == before["circuit"]
+    assert json.loads((tmp_path / "circuit.json").read_text())["work_table"] == {descriptor_id(L.template(L.H)): 1}
+    last = sorted(u for m in json.loads((tmp_path / "index.json").read_text())["members"] for lo, hi, lab in m["labels"]
+                  if lab["layer"] == 1 for u in range(lo, hi))
+    assert [u for lo, hi in before["outputs"] for u in range(lo, hi)] == last and len(last) == got["population"] // 2
+
+
 def test_its_compiler_compiles_the_committed_schedule_to_the_circuit_it_registers(tmp_path, capsys):
     shape = ["--law", "subset:2", "--requests", "3", "--steps", "1", "--cap", "32"]
     assert S.main(["--out", str(tmp_path / "w"), "--opening", str(tmp_path / "opening.json"), *shape]) == 0

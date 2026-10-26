@@ -423,3 +423,17 @@ def test_the_served_compilers_command_charges_the_registered_length_and_refuses_
     (tmp_path / "bad.bin").write_bytes(b"\xff" * 7)
     assert PP.main([*base, "--advice", str(tmp_path / "bad.bin")]) == RA.REFUSED
     assert "prove_path.py circuit:" in capsys.readouterr().err
+
+
+def test_the_output_class_is_the_given_ranges_and_every_uncut_registered_read_of_an_output_port():
+    """`output_class`: the verifier's own ranges, with each uncut registered read of an ``o<j>`` port adding its reader's
+    units at the template's base in the population; a read of an input port, or a cut one, adds none."""
+    circuit = {"templates": [["a", 8], ["b", 16]], "registered": {"reads": [
+        {"reader": "b", "port": "o0", "at": 4, "radix": [2, 2], "cut": [0, 1]},
+        {"reader": "a", "port": "o1", "at": 0, "radix": [2]},
+        {"reader": "b", "port": "w", "at": 0, "radix": [16], "cut": [0, 1]},
+        {"reader": "b", "port": "o0", "at": 12, "radix": [4], "cut": [1, 2]}]}}
+    assert RA.output_class(circuit) == [[0, 2], [12, 16]]
+    assert RA.output_class(circuit, [[2, 4], [20, 24]]) == [[0, 4], [12, 16], [20, 24]]
+    assert RA.output_class({"templates": [["a", 8]]}, [[4, 8]]) == [[4, 8]]
+    assert RA.output_class({"templates": [["a", 8]]}) == []

@@ -21,11 +21,13 @@ this circuit from the advice and charges the registered length. A circuit with n
 registered (``--circuit``). Then `a5.audit`: the registration checked by Lean and Python, the draw on live coins read after
 the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, Lean's verdicts and the audit record. Then the
 advice was fixed before the draw (`fixed_before_draw`), and advice re-committed after the coins is refused (`after_draw`).
+Units whose outputs are served out (``--outputs`` and the circuit's registered reads of output ports, `output_class`) are
+proved whole beside the draw, under a work law: every draw's closure (a5's `output_closure`).
 The summary reports the leak bound's count beside the advice's charge, ``vacuous`` while the circuit's other inputs exceed
 it (`leak_count`; a record that declares its inputs, `declared_count`). An integration's labels are never read.
 
 A circuit that reads registered values at public positions (`interface.Read`) is audited against the entries the verifier
-pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}``, each entry core's
+pinned before the run (``--registered FILE``: ``{"program", "values": {param: entry}}`` or a list of them, each entry core's
 ``registered.Registered.entry()``, its domain held to the one its program, value and rows make, `pinned`): each drawn
 member's ``--registered`` file comes from the record and those entries alone (`interface.registered_reads`), and Lean's
 registered reads open every row of its read ports against the pinned root at the row the record reads for its unit
@@ -39,7 +41,7 @@ the window's run root (`committed_activations`), and reports their roots. The ci
 nothing from the free inputs.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
-        [--template-sets DIR] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
+        [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...]
@@ -78,8 +80,10 @@ import contextlib
 import hashlib
 import importlib
 import json
+import math
 import os
 import random
+import re
 import socket
 import subprocess
 import sys
@@ -271,7 +275,17 @@ def declared_count(doc: Mapping[str, Any], bits: int, resolve: Callable[[str], A
 def pinned(doc: Any) -> dict[str, dict[str, Any]]:
     """The registered values' entries the verifier pinned before the run (``--registered``), by parameter, each refused
     (ValueError) unless it names its parameter and its domain is the one core's ``registered.domain`` makes of the pin's
-    program, the value and its rows: a root is pinned under its domain, never the prover's word for one."""
+    program, the value and its rows: a root is pinned under its domain, never the prover's word for one. A list of pins
+    is their values together, each under its own program (the weights under the model's, the output a network certifier
+    relayed under the reading program's), a value pinned once."""
+    if isinstance(doc, list):
+        out: dict[str, dict[str, Any]] = {}
+        for d in doc:
+            got = pinned(d)
+            if twice := sorted(set(got) & set(out)):
+                raise ValueError(f"values {twice} pinned twice")
+            out |= got
+        return out
     try:
         program, values = doc["program"], doc["values"]
         for v, e in values.items():
@@ -279,7 +293,7 @@ def pinned(doc: Any) -> dict[str, dict[str, Any]]:
             if e.get("value") != v or e.get("domain") != want or not isinstance(e.get("root"), str):
                 raise ValueError(f"the pin of {v!r} names another value or domain than {program!r}'s, or no root")
     except (KeyError, TypeError, AttributeError) as e:
-        raise ValueError(f"a pin is {{program, values: {{param: entry}}}}: {type(e).__name__}: {e}") from e
+        raise ValueError(f"a pin is {{program, values: {{param: entry}}}}, or a list of them: {type(e).__name__}: {e}") from e
     return {str(v): dict(e) for v, e in values.items()}
 
 
@@ -403,6 +417,27 @@ def verifier_window(window_dir: Path, law: Mapping[str, Any], template_sets: Pat
     return mine, doc, sets
 
 
+def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()) -> list[list[int]]:
+    """The units the verifier proves whole (a5's output class), as ascending ``[lo, hi)`` ranges: the ``given`` ranges (the
+    verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
+    covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
+    the population's indices from the templates' order)."""
+    base, at = {}, 0
+    for t, n in circuit["templates"]:
+        base[t], at = at, at + n
+    units = {u for lo, hi in given for u in range(lo, hi)}
+    for r in (circuit.get("registered") or {}).get("reads", ()):
+        if re.fullmatch(r"o[0-9]+", r["port"]) and r.get("cut", [0, 1]) == [0, 1]:
+            units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
+    out: list[list[int]] = []
+    for u in sorted(units):
+        if out and out[-1][1] == u:
+            out[-1][1] = u + 1
+        else:
+            out.append([u, u + 1])
+    return out
+
+
 def _code(fn: Any) -> str | None:
     """The module a Definition's code is in: where the summary says each template's Definition came from."""
     d = getattr(fn, "defn", fn)
@@ -446,6 +481,7 @@ def audit(a: argparse.Namespace) -> int:
     a.port = a.port if a.port is not None else free_ports(A5.RANK_PORTS)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else ())
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     if a.challenger:
@@ -502,7 +538,7 @@ def audit(a: argparse.Namespace) -> int:
         row["ok"] = row["ok"] and not row["coins_session"]["error"]
     row["ok"] = row["ok"] and (acts is None or acts["ok"])
     (out / "summary.json").write_text(json.dumps(row, indent=1, sort_keys=True, default=str))
-    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "seconds")}
+    print("RECORDS " + json.dumps({x: row.get(x) for x in ("ok", "circuit", "population", "draw", "draw_counts", "outputs", "seconds")}
                                   | {"compile": (compiled or {}).get("ok"), "fixed_before_draw": (row.get("fixed_before_draw") or {}).get("ok"),
                                      "accepted": (s.get("audit") or {}).get("accepted"),
                                      "negatives_refused": all((row.get("negatives") or {"none": False}).values()),
@@ -528,6 +564,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--circuit", help="instead: the SHA-512 of the circuit record the verifier registered, a circuit with no compiler")
     p.add_argument("--run", required=True, help="the run root the verifier holds the window to, the one the run published")
     p.add_argument("--template-sets", help="the verifier's own input sets, for templates whose units are not bit rows")
+    p.add_argument("--outputs", help="JSON: the verifier's own [lo, hi) ranges of the units whose outputs are served out, proved "
+                   "whole beside the draw (`output_class`; a work law)")
     p.add_argument("--m0-pythonpath", required=True)
     p.add_argument("--bin", required=True)
     p.add_argument("--lean", required=True)
