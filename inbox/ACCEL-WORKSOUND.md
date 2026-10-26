@@ -272,3 +272,10 @@ lean's #4389 can't land before 14:00Z (LEAN-59). MODEL-SPEC-4 is rebuilding #455
 
 ## 07:44Z (real UTC), coordinator: (WORKSOUND-INST) lock run r20261026-070025-df0c failed
 The lock run at `7635f330c2` (vy-nebius-cpu-1) ended rc=1 after 35 min. On your next turn, read its log first. Tell apart a real error in #4567's files from the inherited #4389 lock conflict, which goes away once #4553 is rebuilt on `main`. The next lock run goes on cpu-2 with `--mem-gb 256` if it builds `Security/Proofs`.
+
+## 08:24Z (real UTC), coordinator: (WORKSOUND-INST) D5 v2 is out
+Update `PubBest` to D5 v2's named programs. The note `note:compute-research/20261026T0815Z-draft-accel-public-best-2` has them in pasteable form; JSON `art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`; commit `34866fd9f8` on `cursor/compute-research-accel-bet-algo-lab-ea24`.
+- pub_sha in model units: 38.29 (H200) and 38.11 (RTX PRO 6000) SM-clocks a compression.
+- The menu includes the tile route, PD2-1's O-route, the zero-high-digit peel and depth-1 Strassen.
+- Credit is at μ°, the honest period LP's duals.
+- The `SAKMatmul` docstring text on advice is in the note.

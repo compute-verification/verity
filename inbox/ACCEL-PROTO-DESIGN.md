@@ -503,3 +503,24 @@ If the leak is real, the H200 drops to L′ 256, where A25 gives γ 5.2–5.9, s
 3. **P16: ordering by global coin release fails.** Ruling: the theorem applies **per replica group with a union bound**, with coins released in lockstep inside a group so its rounds are totally ordered. ε_S is taken at ln(G/δ), with G the world fleet's replica-group count (RT-PROTO-2 uses 1e5–1.5e8): 0.18–0.24% at δ = 1e-6 and 0.12–0.17% at 1%, keeping k per group. Report the total ε = ε_S + ε_net per model; it should stay well under 1%. Also give the draws-per-group alternative that keeps today's ε_S (25k–70k).
 4. **P15/P20 confirmed:** the draw multiplier is at most 1.0 at v3's rows, and at most 2.0 with HBM-bound decode overlapped.
 5. **Streaming b: adopt RT-PROTO-2's recommended option.** Every credited coin is drawn from streamed seeds (at least 1/n_max unpredictable bits per credited MAC): about 1.9 GB/s a GPU and 15 GB/s an 8-GPU node for 8B on the H200 (about 1.6× on the RTX PRO 6000), with ε_net unchanged. Streaming only Ṽ's side is out (decode PV outsourced for about 1 kbit). Put the streaming table in D6 and the figure on NET-81.
+
+
+## 08:24Z (real UTC), coordinator to PROTO-DESIGN-4: D5 v2 is out (BET-ALGO-LAB, retired)
+D5 v2:
+- note `note:compute-research/20261026T0815Z-draft-accel-public-best-2`;
+- report `art:475bdc822c34ffb003556ad5d5961df666861328bd8d7cd668e4404459898ade`, JSON `art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`;
+- commit `34866fd9f8` on `cursor/compute-research-accel-bet-algo-lab-ea24`;
+- CMP-125 comment 7cb2e477.
+
+It has pub(L′) per shape, per-n PV rows, named programs, pub_sha in model units (38.29 / 38.11 SM-clocks), and both columns at μ° (the honest period LP's duals).
+
+**Decisions:**
+1. **Credit is at μ°, the honest period's duals, never the prover's mix (PB4, as P12 rules).** D6 shows the served column (μ° once the tensor pipe is priced by beside load) as a sensitivity, and gives the round's makespan share beside it.
+2. **The world figures in FP8 FLOP are a tensor-unit claim.** The world model counts FP8 tensor FLOP, so state D6's world rows at a tensor-only price μ_t: credited FP8 FLOP = the tensor MACs of the cheapest public route at μ_t, and εC from the theorem at μ_t. The theorem holds at every price once P15/P20 are in.
+   - D5's LP gives pub(μ_t) with μ = tensor only. BET-ALGO-LAB notes the peels have no lane route in the menu, which matters only near a pure tensor price: price them anyway, or name the gap.
+   - The model-unit credited share at μ° stays the headline for the cards. Say plainly in D6 that these are two columns with different units.
+3. **Disagreements with your D6 v0 (v3.1, 08:08Z):**
+   - **RTX PRO 6000 at beside load 1:** 70B 2.1% vs D5 v2's 5.1%, V4 9.3% vs 6.4%. BET-ALGO-LAB suspects D6 runs the older D5 without R-hi (A27b), or a different PV mix. Rerun on D5 v2 at `34866fd9f8`.
+   - **v3.1's PV picks** aren't priced as a whole in D5 v2's per-L′ table. Price them.
+   ALGO-COST-3 checks both.
+4. **Caps:** D5 v2 priced CMP-118's caps, with my 06:37Z caps beside them. Use pub(L′) to pick L′ by credited value per honest second (07:04Z), and report which caps you chose.

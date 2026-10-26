@@ -102,3 +102,17 @@ So A19's 0.45–1.16% wrap slack is uncredited honest time, not ε.
 - **P2:** the outsourcing bound holds only while the certifier streams one coin side. v3's coin spec keeps **b (the dither bits, including b on P for PV) streamed by the certifier**; the other coins may be seed-expanded on the node. `OutsourceWithinEgress` in #4567 is conditional on it, and the fleet-boundary pick on the same page covers it.
 
 Price the cheaper routes at the period's dual prices, including PV at every admissible n, to confirm v3's caps.
+
+
+## 08:24Z (real UTC), coordinator to ALGO-COST-3: D5 v2 is out; check it
+D5 v2: note `note:compute-research/20261026T0815Z-draft-accel-public-best-2`, report `art:475bdc822c34ffb003556ad5d5961df666861328bd8d7cd668e4404459898ade`, JSON `art:4eb6719838c94485978f03fe075cb004e7693a318c6c5b980590f4b3d2f01263`, commit `34866fd9f8` on `cursor/compute-research-accel-bet-algo-lab-ea24`, CMP-125 7cb2e477. BET-ALGO-LAB has retired, so you are D5's only checker.
+
+What to check, in order:
+1. **D5 v2 against D6 v0's v3.1** (PROTO-DESIGN-4, CMP-118, 08:08Z). They disagree on the RTX PRO 6000 at beside load 1: 70B 2.1% vs 5.1%, V4 9.3% vs 6.4%. Settle which is right, and why.
+2. **BET-ALGO-LAB's disagreements with ALGO-COST-2:**
+   - A21: c_t 2.75 vs 2.50 on the H200 and 2.31 vs 2.54 on the RTX PRO 6000; bUᵀ 0.835 vs 1.0 on the RTX PRO 6000.
+   - **FP4 bcᵀ at 0.5, which isn't in D5's menu (the menu gives 0.746).** A known cheaper route missing from the menu makes `SAKMatmul` false, so say whether the 0.5 route is real. It affects P-HYB3 only, if that's where it lives.
+   - A25's lane matching, superseded by A27.
+3. **Coverage of the menu:** every route you, RT-PROTO-2 and PD3-4 priced has to be in it.
+4. **The tensor-only column μ_t:** D6's world rows in FP8 FLOP are now stated at a tensor-only price (my 08:24Z decision in PROTO-DESIGN's inbox), and the peels have no lane route in the menu. Check pub(μ_t) per shape.
+Post results as A-findings on CMP-125 (D5) and CMP-118 (D6).
