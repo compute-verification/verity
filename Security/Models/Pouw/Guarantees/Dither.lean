@@ -8,9 +8,10 @@ The ACCEL program's final guarantee (CMP-116, DITHER-THM), on the accelerator mo
 the freed-compute bound it gives (R-ACCEL-1).
 
 * `DitherWorkSound`: under the device premises (G1, G2, P1, P2), Theorem O's statement in the model at the constant
-  `c`, the proof service's soundness per prover (`ServiceSoundDither`: C-Flock sound and zero knowledge, SHA-512 only
-  through each adversary's finders, live coins from the auditor's challenger) and the network certifier's import count
-  (`ImportWithinCertifier`), a monitoring period of `k` rounds is `(1 − ε)`-work-sound at every price vector, with
+  `c` and ABSORB's (two theorems to be proved in the model, never assumptions), the proof service's soundness per
+  prover (`ServiceSoundDither`: C-Flock sound and zero knowledge, SHA-512 only through each adversary's finders, live
+  coins from the auditor's challenger) and the network certifier's import count (`ImportWithinCertifier`), a monitoring
+  period of `k` rounds is `(1 − ε)`-work-sound at every price vector, with
   `ε = (1 − c) + D/k + β K/(k H)`: model slack, sampling luck, network import. The floor holds on the rounds the
   adversary's run is credited for (`RoundsFloor`) and so on its whole run (`WorkSound`). Each adversary's error is its
   own (`breakBound` at the luck `e^{−η D}`).
@@ -20,7 +21,8 @@ the freed-compute bound it gives (R-ACCEL-1).
 **What it replaces.** The floors of record (`StagedFloorKOneSided` and its siblings) rest on Theorem K's scope
 (`KScopeOneSided`, `KScopeAffine`: which programs a prover runs) and on `ChargeVF3j16` (what the machine charges a
 product). `DitherWorkSound` takes neither: its premises are the device model, the service and the network certifier,
-and its constant `c` is Theorem O's, a statement about the model that O-CHARGE (CMP-111) and O-BITS (CMP-112) prove.
+its constant `c` is Theorem O's, a statement about the model that O-CHARGE (CMP-111) and O-BITS (CMP-112) prove, and
+what an accepted run's rounds cost beside the run is ABSORB's, a statement about the model that ABSORB-THM proves.
 WORD-WORK's per-word premise (`WordCostsMacs`, CMP-102) is replaced the same way: the credit it multiplies by MACs a
 word is here a priced cost, read off the model. The map from the old floors and from #4363's
 `H1CheckedCreditPeriod` is in the note (note:compute-research/20261026T0130Z-draft-accel-dither-thm).
@@ -34,8 +36,9 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 every round protocol `P` (today's Dither is `ditherRound` at its knobs), every service `S` whose seed is the period's
 `k` rounds of live coins (`e`), every price vector `λ` and every analysis map `run`: if the devices meet (G1), (G2),
 (P1) and (P2), Theorem O holds in the model at `λ` with constant `c`, rate `η` and import weight `β` against the
-honest round's priced cost `H`, the service is sound up to its proof layer per prover, and the network certifier
-counts at most `K` imported bits, then every adversary that commits first has its accepted periods whose rounds are
+honest round's priced cost `H`, ABSORB holds of the cut `run` (an accepted run's rounds are pieces of it), the service
+is sound up to its proof layer per prover, and the network certifier counts at most `K` imported bits, then every
+adversary that commits first has its accepted periods whose rounds are
 priced below `(1 − ε) k H` with probability at most its own `breakBound` at the luck `e^{−η D}` (`RoundsFloor`), and so
 its accepted periods priced below `(1 − ε) k H` as a whole (`WorkSound`), where `ε = (1 − c) + D/k + β K/(k H)`. The
 rounds' floor is the one freed compute reads (`FreedOfFloor`): other work the adversary runs beside its rounds is not
@@ -45,14 +48,14 @@ The three terms: the model's slack `1 − c` (Theorem O's constant; 0 where the 
 the sampling luck `D/k` (at `δ = e^{−η D}`, `D = ln(1/δ)/η`, with `η = 1 − p` at the per-round luck `p`), and the
 network import `β K/(k H)`. `H` is free, so the statement holds at the honest kernel's priced cost of a round, where
 it reads as `(1 − ε)`-work-soundness, and Theorem O at `c` forces `c H` below every always-passing program's cost.
-No premise is about algorithms: Theorem O is a theorem of the model, proved or not, and the device premises are data
-sheets'. -/
+No premise is about algorithms: Theorem O and ABSORB are theorems of the model, proved or not, the device premises are
+data sheets', and the rest are the service's cryptography, the auditor's live coins and the network certifier. -/
 def DitherWorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (S : Service) (k : ℕ) (e : S.Seed ≃ Paths (P.Draw × P.Chk) k)
     (run : PeriodMap G S P k) (p : G.Res → ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders G.Mc S k)
     (c η β H K D δb βb δz βz cb db cz dz : ℝ),
     Simplex p → 0 < H → 0 ≤ η → 0 ≤ β → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    G.G1 → G.G2 → G.P1 → G.P2 → TheoremO G P p c η β H →
+    G.G1 → G.G2 → G.P1 → G.P2 → TheoremO G P p c η β H → Absorb G S P run e →
     ServiceSoundDither G S P run e sha fb fz δb βb δz βz → ImportWithinCertifier G S K →
     let ε := epsDither c D β K H k
     let κ := breakBound sha fb fz cb db cz dz (Real.exp (-(η * D))) δb βb δz βz

@@ -16,8 +16,10 @@ The final guarantee of the ACCEL program (`Models.Pouw.Guarantees.Dither.DitherW
   Dither as one instance (`ditherRound`) whose knobs (`Knobs`: `L`, U's range and placement) are parameters;
 * **Theorem O's slot** (`TheoremO`): a statement about the model alone, to be proved in it (O-CHARGE, CMP-111;
   O-BITS, CMP-112), never an assumption about algorithms;
-* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), its priced floors, on the
-  rounds (`RoundsFloor`) and on the whole run (`WorkFloor`, `WorkSound`), and the error `epsDither`;
+* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), **ABSORB's slot**
+  (`Absorb`: the rounds an accepted run is cut into are pieces of it, a theorem to be proved in the model, ABSORB-THM,
+  never an assumption), its priced floors, on the rounds (`RoundsFloor`) and on the whole run (`WorkFloor`,
+  `WorkSound`), and the error `epsDither`;
 * **freed compute** (`Period`, `Period.FreedWithin`): R-ACCEL-1's definition, kept in this one place.
 -/
 
@@ -166,6 +168,10 @@ noncomputable def roundMoment (G : Accel) (P : RoundProto) (p : G.Res → ℝ) (
 `P`, on every committed instance, has moment at most 1 at price `λ`, constant `c`, rate `η` and import weight `β`:
 `E_σ[1_pass(σ) · e^{η (c − (cost_λ + β · imported)/H)₊}] ≤ 1`.
 
+The program is chosen after the instance, so it may carry as constants anything computed from the instance before the
+round (the undithered product `A B`, say), within (G1)'s memory. That precomputation is not in the round's cost, so
+Theorem O's constant must hold against it: the rounds' floor counts only what the rounds themselves use.
+
 **This is a theorem to be proved in the model, not an assumption.** It is true or false of `G` and `P` alone, with
 nothing about which algorithms anyone runs: O-CHARGE (CMP-111) and O-BITS (CMP-112) prove it, and the constant they
 reach is the guarantee's model slack `1 − c`. Where it holds, `c H` is at most the cost of every program that always
@@ -224,6 +230,27 @@ structure PeriodRun (G : Accel) (P : RoundProto) (R : ℕ) where
 value of its own coins, its run. -/
 abbrev PeriodMap (G : Accel) (S : Service) (P : RoundProto) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → PeriodRun G P R
+
+/-- **ABSORB's slot**: in the accelerator model `G` at its device premises, the analysis `run` cuts every accepted
+period of every adversary that commits first into rounds that are pieces of the adversary's run: on every run the
+verifier accepts, the rounds' uses of each resource sum to at most the run's, and their imported bits to at most the
+run's. The cut is at the commitments, so the rounds are disjoint stretches of the period's devices' time (rounds are
+period-wide epochs: round `w`'s transcript is committed before round `w + 1`'s first coin).
+
+**This is a theorem to be proved in the model, not an assumption** (ABSORB-THM). The theorem is that some analysis
+map meets it beside `Models.Pouw.Assumptions.ServiceSoundDither`: that every accepted run computes the transcripts it
+commits to (through the hash and the fold) within its own resources. It is true or false of `G`, the service and the
+protocol, over every program of `G`, and says nothing of which algorithms a prover runs. It carries the floor's whole
+link to the adversary: without it, an analysis could cut any accepted run into honest rounds, and the floor would read
+nothing of the run. -/
+def Absorb (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
+    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) : Prop :=
+  G.G1 → G.G2 → G.P1 → G.P2 →
+    ∀ (Ω' : Type) [Fintype Ω'] (M : G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
+      (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
+        S.verify (G.Mc.eval M (e.symm x, r)).1 (e.symm x) (G.Mc.eval M (e.symm x, r)).2 = true →
+          (∀ q, (run Ω' M r).play.use x q ≤ G.use M (e.symm x, r) q) ∧
+            (run Ω' M r).play.ext x ≤ G.ext M (e.symm x, r)
 
 /-- **The priced floor, adversary by adversary**: every adversary that commits first has its accepted runs priced
 below `F` at `λ` (its size or its priced cost, whichever is larger) with probability at most `κ Ω M`.

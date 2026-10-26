@@ -6,8 +6,8 @@ import Proofs.Pouw.RelativeSecurity
 
 * `FreedOfFloor`: the guarantee `Models.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
   program.
-* `workFloor_of_roundsFloor`: the rounds' floor gives the whole run's floor under the service's premise that the
-  rounds use no more of any resource than the run, so `DitherWorkSound`'s proof owes only its `RoundsFloor` conjunct.
+* `workFloor_of_roundsFloor`: the rounds' floor gives the whole run's floor under ABSORB (the rounds use no more of any
+  resource than the run), so `DitherWorkSound`'s proof owes only its `RoundsFloor` conjunct.
 * `workFloor_iff_serviceFloorPerProver`: where the machine's cost of a run is its priced cost at `λ`, the priced floor
   `WorkFloor` is the service floor per prover of the floors of record (`ServiceFloorPerProver`), so the conclusions
   of `StagedFloorKOneSidedPerProver` and `DitherWorkSound` are one form.
@@ -61,24 +61,23 @@ theorem workFloor_iff_serviceFloorPerProver (G : Accel) (S : Service) (p : G.Res
   unfold WorkFloor ServiceFloorPerProver Machine.charge
   simp only [hc]
 
-/-- **The rounds' floor gives the whole run's floor**: where the service is sound per prover (so an accepted period's
-rounds use no more of any resource than the adversary's run), every run whose rounds are priced at `F` or more is
-itself priced at `F` or more, at every price vector. -/
+/-- **The rounds' floor gives the whole run's floor**: where ABSORB holds of the cut (an accepted period's rounds use
+no more of any resource than the adversary's run), every run whose rounds are priced at `F` or more is itself priced
+at `F` or more, at every price vector. -/
 theorem workFloor_of_roundsFloor (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
-    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders G.Mc S R)
-    (δb βb δz βz : ℝ) (p : G.Res → ℝ) (F : ℝ)
+    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (p : G.Res → ℝ) (F : ℝ)
     (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal)
-    (hp : Simplex p) (hG2 : G.G2) (hS : ServiceSoundDither G S P run e sha fb fz δb βb δz βz)
+    (hp : Simplex p) (hG1 : G.G1) (hG2 : G.G2) (hP1 : G.P1) (hP2 : G.P2) (hA : Absorb G S P run e)
     (h : RoundsFloor G S P run e p F κ) : WorkFloor G S p F κ := by
   intro Ω _ M hM
   refine le_trans (ENNReal.ofReal_le_ofReal (prob_mono ?_)) (h Ω M hM)
   rintro ⟨σ, r⟩ ⟨hv, hlt⟩
   refine ⟨hv, lt_of_le_of_lt ?_ (lt_of_le_of_lt (le_max_right _ _) hlt)⟩
-  have hx := (hS Ω M hM r).2.2 (e σ) (by rw [Equiv.symm_apply_apply]; exact hv)
+  have hx := hA hG1 hG2 hP1 hP2 Ω M hM r (e σ) (by rw [Equiv.symm_apply_apply]; exact hv)
   rw [Equiv.symm_apply_apply] at hx
   unfold PeriodPlay.priced Accel.priced
   exact Finset.sum_le_sum fun q _ =>
-    mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right (hx.2.1 q) (hG2.1 q).le) (hp.1 q)
+    mul_le_mul_of_nonneg_left (div_le_div_of_nonneg_right (hx.1 q) (hG2.1 q).le) (hp.1 q)
 
 /-! ## The honest witness (rule I) -/
 
@@ -210,16 +209,22 @@ theorem theoremO_flat (H η : ℝ) (hH : 0 < H) : TheoremO (flat H) P1 p1 1 η 0
   split_ifs <;> simp [hs]
 
 /-- **The service is sound in the witness**, at no break and for any finders. -/
-theorem serviceSound_flat (H : ℝ) (hH : 0 ≤ H) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders (flat H).Mc S1 1) :
+theorem serviceSound_flat (H : ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders (flat H).Mc S1 1) :
     ServiceSoundDither (flat H) S1 P1 (run1 H) (Equiv.refl _) sha fb fz 0 0 0 0 := by
   intro Ω' _ M _ r
-  refine ⟨fun w => ?_, fun w => ?_, fun x _ => ⟨Or.inl ⟨rfl, trivial⟩, fun q => ?_, ?_⟩⟩
+  refine ⟨fun w => ?_, fun w => ?_, fun x _ => Or.inl ⟨rfl, trivial⟩⟩
   · show prob (fun _ => False) ≤ 0 + 0 * _
     rw [prob_false]
     simp
   · show prob (fun _ => False) ≤ 0 + 0 * _
     rw [prob_false]
     simp
+
+/-- **ABSORB holds of the witness's cut**: every program is tagged at least one round, so the honest round is a piece
+of it. -/
+theorem absorb_flat (H : ℝ) (hH : 0 ≤ H) : Absorb (flat H) S1 P1 (run1 H) (Equiv.refl _) := by
+  intro _ _ _ _ Ω' _ M _ r x _
+  refine ⟨fun q => ?_, ?_⟩
   · have ht : (1 : ℝ) ≤ (M.1.2 : ℝ) := by exact_mod_cast M.2
     show H * ((1 : ℕ) : ℝ) + 0 ≤ H * (M.1.2 : ℝ)
     simp only [Nat.cast_one, mul_one, add_zero]
@@ -248,6 +253,7 @@ theorem honest_witness (H η : ℝ) (hH : 0 < H) (hη : 0 ≤ η) (sha : Claims.
     (fb fz : Finders (flat H).Mc S1 1) :
     Simplex (G := flat H) p1 ∧ 0 < H ∧ 0 ≤ η ∧ (0 : ℝ) ≤ 0 ∧
       (flat H).G1 ∧ (flat H).G2 ∧ (flat H).P1 ∧ (flat H).P2 ∧ TheoremO (flat H) P1 p1 1 η 0 H ∧
+      Absorb (flat H) S1 P1 (run1 H) (Equiv.refl _) ∧
       ServiceSoundDither (flat H) S1 P1 (run1 H) (Equiv.refl _) sha fb fz 0 0 0 0 ∧
       ImportWithinCertifier (flat H) S1 0 ∧
       (∀ σ σ' r, ((flat H).Mc.eval (honest H) (σ, r)).1 = ((flat H).Mc.eval (honest H) (σ', r)).1) ∧
@@ -255,8 +261,8 @@ theorem honest_witness (H η : ℝ) (hH : 0 < H) (hη : 0 ≤ η) (sha : Claims.
       (∀ x, (run1 H Unit (honest H) ()).play.priced p1 x = (1 : ℕ) * H) ∧
       ∀ ω, (flat H).priced p1 (honest H) ω = (1 : ℕ) * H := by
   refine ⟨simplex_p1 H, hH, hη, le_rfl, g1_flat H, g2_flat H hH.le, trivial, trivial, theoremO_flat H η hH,
-    serviceSound_flat H hH.le sha fb fz, import_flat H, fun _ _ _ => rfl, honest_accepted H, honest_rounds_priced H,
-    fun ω => ?_⟩
+    absorb_flat H hH.le, serviceSound_flat H sha fb fz, import_flat H, fun _ _ _ => rfl, honest_accepted H,
+    honest_rounds_priced H, fun ω => ?_⟩
   rw [priced_flat]
   show H * ((1 : ℕ) : ℝ) = ((1 : ℕ) : ℝ) * H
   ring
