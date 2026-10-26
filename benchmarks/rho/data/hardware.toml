@@ -1,0 +1,23 @@
+# The actual datacenter's hardware: locations, fleets, horizons (rho/hardware.py).
+
+# A location is the largest set of devices joined by links no certifier sees.
+[location.h200-hgx]
+devices = { value = 8, unit = "GPU", source = "NVIDIA HGX H200: 8 GPUs on one NVLink switch domain", status = "datasheet" }
+phi = { value = 1.58312e16, unit = "FLOP/s", low = 7.9156e15, high = 1.58312e16, status = "datasheet", source = "benchmarks/census/hardware.json h100-sxm5-80gb/e4m3: 1978.9e12 dense FP8, x 8 (H200 is H100's compute with more HBM); low: BF16" }
+memory = { value = 9.024e12, unit = "bit", source = "8 x 141 GB HBM3e (NVIDIA H200 datasheet)", status = "datasheet" }
+
+[fleet.reference-h200]
+location = "h200-hgx"
+count = { value = 12500, unit = "location", source = "a 100k-GPU frontier cluster", status = "assumed" }
+dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, d in {0.001, 0.01}", status = "ruled" }
+mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
+mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the declared (served) work's MFU, prefill-heavy", status = "assumed" }
+
+[horizon.week]
+seconds = { value = 604800, unit = "s" }
+
+[horizon.month]
+seconds = { value = 2592000, unit = "s" }
+
+[horizon.year]
+seconds = { value = 31536000, unit = "s" }
