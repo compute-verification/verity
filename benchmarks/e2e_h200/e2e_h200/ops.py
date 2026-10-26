@@ -2,16 +2,17 @@
 unit in circuits' plan (CMP-92, comment af6de1f1 as revised 23:30Z to size classes, sections 1 and 1b): every f32 op one IEEE
 round to nearest (torch's elementwise kernels, no fast math, no FMA across separate ops), division and sqrt correctly
 rounded through f64 (`div_rn`, `sqrt_rn`), every reduction sequential in ascending index from +0 (`seq_sum`, never torch's
-blocked sums: a Triton kernel on CUDA, numpy on the host), every bf16 rounding RNE. NaN words are not modelled: no op here makes one from finite inputs.
+blocked sums: a Triton kernel on CUDA, numpy on the host), every bf16 rounding RNE. NaN words are not modelled (no op here
+makes one from finite inputs), except that `argmax` and `quantize` take a NaN input as their Definitions do.
 
     rmsnorm    RmsNormRow_v1{N, EPS}: s = sum_i RN(x_i^2) from +0, mean = RN(s / N), rs = RN(1 / RN(sqrt(RN(mean + eps)))),
                out_j = bf16(RN(w_j * bf16(RN(x_j * rs))))
     quantize   QuantRowS8_v1{N, RELU}: amax = max |x| (after max(x, 0) under RELU), scale = RN(amax / 127) (1 when amax is 0),
-               codes = clamp(rne(RN(x / scale)), -128, 127)
+               codes = clamp(rne(RN(x / scale)), -128, 127), a NaN 0
     s8_linear  ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}: the exact s32 sum, then bf16(RN(RN(f32(acc) * sx) * sw))
     add        Bf16AddRow_v1{N}: bf16(RN(a + b))
     embed      the embedding row: bf16(RN(tok[:, token] + pos[:, t]))
-    argmax     the argmax row: the first index of the greatest logit
+    argmax     the argmax row: TokenSelect, the first index of the greatest logit, a NaN never taken
 
 The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and a float64 matmul in row chunks on the CPU (exact: integers below 2^53): the stand-in for
 kernels' KP2-S8 GEMM until it is handed over.
@@ -113,7 +114,7 @@ def quantize(x: torch.Tensor, relu: bool = False) -> Quant:
         xf = torch.clamp_min(xf, 0.0)
     amax = xf.abs().amax(-1)
     scale = torch.where(amax > 0, div_rn(amax, torch.full_like(amax, 127.0)), torch.ones_like(amax))
-    codes = torch.round(div_rn(xf, scale[:, None])).clamp(-128, 127).to(torch.int8)
+    codes = torch.nan_to_num(torch.round(div_rn(xf, scale[:, None])), nan=0.0).clamp(-128, 127).to(torch.int8)
     return Quant(codes, scale)
 
 
@@ -142,5 +143,9 @@ def s8_linear(q: Quant, wq: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:
 
 
 def argmax(logits: torch.Tensor) -> torch.Tensor:
-    """The first index of the greatest value of each row, (B,) int64."""
-    return torch.argmax(f32(logits), dim=-1)
+    """`TokenSelect` over each row, (B,) int64: the first index of the greatest value (+0 = -0), a NaN never taken, and 0
+    when the row's first value is NaN or none is above -inf (torch's argmax takes a NaN as the greatest)."""
+    xf = f32(logits)
+    nan = torch.isnan(xf)
+    j = torch.argmax(torch.where(nan, float("-inf"), xf), dim=-1)
+    return torch.where(nan[:, 0], torch.zeros_like(j), j)
