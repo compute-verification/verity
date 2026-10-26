@@ -92,7 +92,7 @@ and incompressible; a method bound by device memory or L2 on compressible data o
 **Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until
 each is added with its rate: 2:4-sparse MMA and its metadata selector, DMMA, `HFMA2` and `f16` accumulators, vector
 atomics and reductions (`red.v4`, `redux.sync`), TMA bulk reductions (`cp.reduce.async.bulk`), NVSwitch `multimem`
-reductions, and the shuffle pipe. The node's host CPUs and its host and peer links are other devices of the period
+reductions. The node's host CPUs and its host and peer links are other devices of the period
 (RT-PROTO P9, RT-UNITS U9), not units of the card. -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
     Prop :=

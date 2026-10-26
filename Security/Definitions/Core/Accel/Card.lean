@@ -10,8 +10,8 @@ capture fixes yet (`Open`). Both instances (`Accel.H200`, `Accel.Sm120`) are tab
   the card.
 * **Resources** (`Res`): the tensor core (one pipe every format shares, a MAC of format `f` using `weight f` units:
   the formats' peaks are one pipe's rate at different widths), the warp schedulers' issue slots, the integer `alu` and
-  `imad` pipes, shared memory's banks, and device memory's bandwidth. The FP32 pipe's rate is the issue rate, so it
-  is not a resource of its own; L2's bandwidth and the register file's ports are in no document, so they are free.
+  `imad` pipes, the shuffle pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's rate is the
+  issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no document, so they are free.
 * **Units** (`use`): an MMA uses `m·n·k·weight` tensor units and an issue slot; a lane function `1/32` of a slot
   (a warp instruction is 32 lanes' functions) and one lane of its pipe; a uniform instruction a whole slot (the
   uniform datapath has its own ALU, but its instruction takes the warp's issue slot); a copy `1/32` of a slot and, per
@@ -50,6 +50,8 @@ inductive Res
   | alu
   /-- the integer multiply-add pipe, in lanes -/
   | imad
+  /-- the shuffle pipe, in lanes (its own pipe beside the `alu`, CALIB: SHFL 32 lanes a SM-clock on both cards) -/
+  | shfl
   /-- shared memory's banks, in words -/
   | smem
   /-- device memory's bandwidth, in words -/
@@ -76,6 +78,7 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
     | .issue, _ => 1 / 32
     | .alu, .alu => 1
     | .imad, .imad => if g matches .madHi _ then hi else 1
+    | .shfl, .shfl => 1
     | _, _ => 0
   | .uni _, r => if r = .issue then 1 else 0
   | .copy s t n, r =>

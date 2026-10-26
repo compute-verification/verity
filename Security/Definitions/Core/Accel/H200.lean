@@ -51,8 +51,8 @@ Every other dot is `Open.dot`. `wgmma` `.s8` at m64n64k32, m64n128k32 and m64n25
 
 **Where the instance is coarser than the card** (each lets a program do more): the pools of `Card`; a `wgmma` charged
 one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `imad` lane (it takes two); FP32 lane
-functions charged an issue slot's share only; the shuffle pipe (32 lanes a clock) omitted, a cross-lane move being a
-register copy here; uniform registers pooled with the register file.
+functions charged an issue slot's share only; uniform registers pooled with the register file. A cross-lane move is
+`SHFL` on the shuffle pipe (32 lanes a SM-clock, its own pipe beside the `alu`) or a register copy on the `alu`.
 
 **Not yet in the instance** (each a gap in faithfulness, not a relaxation): DMMA (`f64` MMA, 128 MACs an SM clock,
 32 units each), 2:4-sparse MMA (`.sp`, the same products at the same rate with a free gather of `A`), `f16`
@@ -77,6 +77,7 @@ def ρ : Res → ℚ≥0
   | .issue => 132 * 4
   | .alu => 132 * 64
   | .imad => 132 * 64
+  | .shfl => 132 * 32
   | .smem => 132 * 32
   | .dram => 20000 / 33
 

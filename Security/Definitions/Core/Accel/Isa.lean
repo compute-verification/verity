@@ -207,7 +207,7 @@ inductive AtomFn
 /-- The CUDA-core pipe a lane function issues to: the integer `alu`, the integer multiplier `imad`, or the FP32 `fma`
 pipe. -/
 inductive Pipe
-  | alu | imad | fma
+  | alu | imad | fma | shfl
   deriving DecidableEq
 
 /-- A lane function: one lane's instruction on 32-bit registers. -/
@@ -252,12 +252,14 @@ inductive Lane
   | fadd
   /-- `FMUL` (`Fp32.f32MulV2`) -/
   | fmul
+  /-- `SHFL`: a cross-lane move, the word `a` (the pooled register file names the source lane's register) -/
+  | shfl
   deriving DecidableEq
 
 namespace Lane
 
 def nIn : Lane → ℕ
-  | .popc | .flo | .brev => 1
+  | .popc | .flo | .brev | .shfl => 1
   | .setp _ | .min _ | .max _ | .lea _ | .fadd | .fmul => 2
   | .madWide => 4
   | _ => 3
@@ -269,6 +271,7 @@ def nOut : Lane → ℕ
 def pipe : Lane → Pipe
   | .mad | .madWide | .madHi _ | .dp4a _ _ => .imad
   | .ffma | .fadd | .fmul => .fma
+  | .shfl => .shfl
   | _ => .alu
 
 /-- Byte `i` of `w`, signed or not. -/
@@ -330,6 +333,7 @@ def eval : Lane → (ℕ → Word) → ℕ → Word
   | .ffma, x, _ => BitVec.ofNat 32 (Fp32.f32FmaV2 (x 0).toNat (x 1).toNat (x 2).toNat)
   | .fadd, x, _ => BitVec.ofNat 32 (Fp32.f32AddV2 (x 0).toNat (x 1).toNat)
   | .fmul, x, _ => BitVec.ofNat 32 (Fp32.f32MulV2 (x 0).toNat (x 1).toNat)
+  | .shfl, x, _ => x 0
 
 end Lane
 

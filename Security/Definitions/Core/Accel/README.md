@@ -65,7 +65,8 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 
 | SASS | Mark | Model, or what is missing |
 |---|---|---|
-| MOV, SHFL | coarse | a register copy (a shuffle is a cross-lane move here). The shuffle pipe's rate is omitted |
+| MOV | coarse | a register copy on the `alu` |
+| SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`, 32 lanes a SM-clock), beside the `alu` |
 | LDG, STG, LDS, STS, LDL, STL, LD, ST | covered | `copy` of at most 4 words, direct or `indirect` (an address register plus an offset) |
 | LDSM, STSM (`ldmatrix`, `stmatrix`) | coarse | 4-word copies. The `.trans` forms move 16-bit halves across lanes, which is missing |
 | MOVM (`movmatrix`) | missing | |
@@ -116,7 +117,7 @@ uncovered variants (`.64`, other atomic operations, `f16` accumulators).
 | UBREV, UFLO, UIADD3, UIMAD, UISETP, ULEA, ULOP, ULOP3, ULOP32I, UMOV, UPOPC, UPRMT, USEL, USHF, USHL, USHR | covered | `Op.uni` (integer, a whole issue slot) |
 | PLOP3, PSETP, P2R, R2P, UP2UR, UPLOP3, UPSETP, UR2UP | covered | predicates are registers: `Lane.lop3`, `setp`, register copies |
 | LDC, ULDC | coarse | a copy from device memory (constant banks) |
-| SHFL | coarse | a register copy (the shuffle pipe omitted) |
+| SHFL | covered | `Lane.shfl` on the shuffle pipe (`Res.shfl`) |
 | FENCE, LDGDEPBAR, SYNCS, CCTL, CCTLL, ERRBAR, MEMBAR, CCTLT, UCGABAR_ARV, UCGABAR_WAIT, USETMAXREG, WARPGROUP, WARPGROUPSET, UBLKPF, UTMACCTL, UTMACMDFLUSH, UTMAPF, ACQBULK, BMOV, BPT, BREAK, BSSY, BSYNC, CGAERRBAR, ENDCOLLECTIVE, EXIT, KILL, NANOSLEEP, PREEXIT, WARPSYNC, YIELD, BAR, DEPBAR, NOP, PMTRIG | coarse | no data effect: the schedule is free, so a program may omit it |
 | UCLEA, UIADD3.64, ULEPC | missing | 64-bit uniform and immediate moves, `UCLEA`, `ULEPC` |
 | FCHK, FMNMX, FSET, FSETP, FSWZADD | missing | FP32 compare, min/max, check, swizzle |
