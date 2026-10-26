@@ -1301,8 +1301,12 @@ def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int
     loads in proportion, and at Strassen `depth` its output assembly and one conversion a word on the ALU) and
     V (sum c)^T as fixed loads; Z U^T a leaf of weight 1/t priced on any route beside the hash; no peels. The
     prover may run the route on some groups of t tiles and the dense product (with its peels) on the rest, so c is
-    the hull of the two over honest (`price_methods`); route_only is the route on every group."""
+    the hull of the two over honest (`price_methods`); route_only is the route on every group. best is the honest
+    words' best program (the dense product with every route beside the tensor pipe, OPT_honest = OPT*): c_opt, the
+    route's leak against it, is the protocol's; eps_alg = 1 - best / honest is the deployed kernel's gap."""
     L, zleaf, sha, peels, dense, honest = _tile_honest(card, t, Lp, K, n, v, hash_scale)
+    dense_m = Method("dense", dense, items=(peels,))
+    best = price_methods(card, [dense_m], L, n, TOKENS, beside=True, items=(sha,))
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
     fixed = {r: x * (bit + 1 / t) for r, x in mma.items()}
     fixed["tensor"] = (bit + 1 / t) / card.s8
@@ -1312,10 +1316,10 @@ def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int
             fixed[r] = fixed.get(r, 0.0) + x
     tiles = Method("tiles", [replace(zleaf, weight=1 / t)], fixed=fixed)
     route = price_methods(card, [tiles], L, n, TOKENS, beside=True, items=(sha,))
-    hull = price_methods(card, [tiles, Method("dense", dense, items=(peels,))], L, n, TOKENS, beside=True,
-                         items=(sha,))
-    return dict(lane=lane_load(honest), alu=_alu_load(honest), honest=honest, route=hull, route_only=route,
-                c=hull.c / honest.c, c_route=route.c / honest.c)
+    hull = price_methods(card, [tiles, dense_m], L, n, TOKENS, beside=True, items=(sha,))
+    return dict(lane=lane_load(honest), alu=_alu_load(honest), honest=honest, best=best, route=hull, route_only=route,
+                c=hull.c / honest.c, c_route=route.c / honest.c, c_opt=min(1.0, hull.c / best.c),
+                eps_alg=1 - best.c / honest.c)
 
 
 def _alu_load(p: Priced) -> float:
@@ -1467,40 +1471,48 @@ def pub_programs(menu: dict | None = None) -> dict:
 
 
 def v2_report(ts: dict | None = None) -> dict:
-    """c_mm of v2 as frozen per static shape: the tile route inside the job at the shape's L' and honest ALU/tensor
-    (V2_PICKS), c = min(1, route / honest); per model the leak sum w h (1 - c) / sum w h, w the shape's MACs and h the
-    honest cost a MAC. ts overrides the card's tile count (the same L')."""
+    """c_mm of v2 as frozen per static shape: the tile route mixed with dense tiles inside the job at the shape's L'
+    and honest ALU/tensor (V2_PICKS), c = c_opt (over the honest words' best program, OPT*); per model the leak
+    sum w h (1 - c) / sum w h, w the shape's MACs and h OPT*'s cost a MAC, and the deployed kernel's gap eps_alg
+    weighted the same way. ts overrides the card's tile count (the same L')."""
     out = {}
-    print("\n== v2 as frozen (V ±80, nofold.v2_pick at 070e970980): the tile route inside the job per static shape at "
-          "its L' and honest ALU/tensor; cells: K x N, L', ALU/T: c; per model the MAC-and-cost-weighted leak")
+    print("\n== v2 as frozen (V ±80, nofold.v2_pick at 070e970980): the tile route mixed with dense tiles inside the "
+          "job per static shape at its L' and honest ALU/tensor, over OPT*; cells: K x N, L', ALU/T: c (eps_alg); per "
+          "model the MAC-and-cost-weighted leak and eps_alg")
     for card in (H200, H200_M1, SM120):
         t = (ts or V2_T)[card.family]
         _, bit, depth = BIT_COST[card.family][0]
         for model in ("frozen", "Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro"):
-            num = den = 0.0
+            num = den = alg = dep = 0.0
             cells = []
             for mdl, K, N, reps, Lp, alu in V2_PICKS[card.family]:
                 if mdl != model:
                     continue
                 r = tile_job_at(card, t, Lp, K, N, bit, depth, V2_V, alu)
-                c = min(1.0, r["c"])
-                w = K * N * reps * r["honest"].c
-                num, den = num + w * (1 - c), den + w
-                out[card.name, t, model, K, N] = dict(Lp=Lp, alu=alu, c=c, c_route=r["c_route"], mix=r["route"].mix)
-                cells.append(f"{K}x{N} {Lp} {alu:.2f}: {c:.3f}" + (
-                    f" (route only {r['c_route']:.3f}; {shares(r['route'])})" if c < 1 - 1e-6 else ""))
+                c = r["c_opt"]
+                w = K * N * reps
+                num, den = num + w * r["best"].c * (1 - c), den + w * r["best"].c
+                alg, dep = alg + w * (r["honest"].c - r["best"].c), dep + w * r["honest"].c
+                out[card.name, t, model, K, N] = dict(Lp=Lp, alu=alu, c=c, c_route=r["c_route"], mix=r["route"].mix,
+                                                      eps_alg=r["eps_alg"])
+                cells.append(f"{K}x{N} {Lp} {alu:.2f}: {c:.3f} ({r['eps_alg']:.1%})" + (
+                    f" [route only {r['c_route']:.3f}; {shares(r['route'])}]" if c < 1 - 1e-6 else ""))
             out[card.name, t, model] = num / den
-            print(f"  {card.name:12} t {t} {model:16} leak {num / den:6.2%} | " + "; ".join(cells))
+            out[card.name, t, model, "eps_alg"] = alg / dep
+            print(f"  {card.name:12} t {t} {model:16} leak {num / den:6.2%} eps_alg {alg / dep:5.2%} | "
+                  + "; ".join(cells))
     return out
 
 
 def tile_lane_report(alus=(0.6, 0.82, 1.0, 1.05, 1.1, 1.5, 2.0)) -> dict:
     """The tile route inside the job against the honest kernel's lane load, at v2's frozen t per card (and t - 1,
     t + 1) and v2's L': the job's hashing scaled so that the honest ALU time over tensor time (nofold's lane load) is
-    each of `alus`; c = min(1, route / honest), since the honest kernel is itself a public program."""
+    each of `alus`; c_opt, the hull of route and dense tiles over the honest words' best program (OPT*), and the
+    deployed kernel's gap eps_alg against that program."""
     out = {}
     print("\n== v2's tile route inside the job (θ's max with facets) at the honest kernel's ALU/tensor (nofold's lane "
-          "load; v2 as frozen: ≥ 1.00, 0.82 if the network certifier expanded the coins); cells: ALU/tensor: c")
+          "load; v2 as frozen: ≥ 1.00, 0.82 if the network certifier expanded the coins); cells: ALU/tensor: c_opt "
+          "(the route mixed with dense tiles over OPT*) / eps_alg (the deployed kernel's gap to OPT*)")
     for v in (V2_V, V2_V_MARGIN):
         for card in (H200, H200_M1, SM120):
             t0 = V2_T[card.family]
@@ -1514,7 +1526,7 @@ def tile_lane_report(alus=(0.6, 0.82, 1.0, 1.05, 1.1, 1.5, 2.0)) -> dict:
                             for a in alus:
                                 r = tile_job_at(card, t, Lp, K, n, bit, depth, v, a)
                                 out[v, card.name, bname, t, K, Lp, a] = r
-                                cells.append(f"{a:.2f}: " + (f"{min(1.0, r['c']):.3f}" if r else "-"))
+                                cells.append(f"{a:.2f}: " + (f"{r['c_opt']:.3f}/{r['eps_alg']:.1%}" if r else "-"))
                             print(f"  V ±{v} {card.name:12} {bname[:20]:20} t {t} K {K:5} L' {Lp:4} | "
                                   + "; ".join(cells))
     return out

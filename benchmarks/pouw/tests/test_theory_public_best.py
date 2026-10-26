@@ -104,8 +104,10 @@ def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_and_mixed_with_dense
     past = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.1)
     three = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 1.0)
     assert four["alu"] == pytest.approx(1.0, abs=1e-3) and four["c"] < four["c_route"] < 0.98
-    assert past["c_route"] >= 1 and past["c"] < 1 and 0 < past["route"].mix["tiles"] < 1
+    assert four["c_opt"] < 0.98
+    assert past["c_route"] >= 1 and past["c_opt"] < 1 and 0 < past["route"].mix["tiles"] < 1
     assert three["c_route"] >= 1 and three["route"].mix.get("tiles", 0.0) < 1e-6
+    assert three["c_opt"] == pytest.approx(1.0) and three["eps_alg"] > 0.005
 
 
 def test_the_hull_of_methods_beats_each_method_where_they_bind_different_resources():
