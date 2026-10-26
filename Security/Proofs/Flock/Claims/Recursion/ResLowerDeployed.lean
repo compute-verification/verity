@@ -1046,7 +1046,8 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     have h2 : FlockSoundness.Discharge.Hidden.outAt st.c (q - HmOut.nIn st.c + 1) ≤
         FlockSoundness.Discharge.Hidden.outAt st.c st.c.outPorts.size := by
       unfold FlockSoundness.Discharge.Hidden.outAt
-      exact words_take_mono (·.2) st.c.outPorts.toList (by omega)
+      exact words_take_mono (·.2) st.c.outPorts.toList (a := q - HmOut.nIn st.c + 1) (b := st.c.outPorts.size)
+        (by omega)
     rw [FlockSoundness.Discharge.HiddenExec.outAt_size] at h2
     rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD'] at h1
     omega

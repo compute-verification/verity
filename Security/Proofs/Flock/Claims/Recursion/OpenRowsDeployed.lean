@@ -171,15 +171,15 @@ theorem encF_toBytes (a : F128) : encF a = a.toBytes.data.toList := by
   apply List.ext_getElem (by simp [encF, encNat, hs])
   intro i h1 h2
   have hi : i < 16 := by simpa [encF, encNat] using h1
-  rw [show a.toBytes.data.toList[i] = a.toBytes.data[i]'(by omega) by simp,
-    ← getElem!_pos a.toBytes.data i (by omega), FlockSoundness.Refine.toBytes_get a i hi]
-  unfold encF
+  have hg := FlockSoundness.Refine.toBytes_get a i hi
+  rw [getElem!_pos a.toBytes.data i (by omega)] at hg
+  rw [Array.getElem_toList, hg]
+  simp only [encF, encNat, List.getElem_append, List.length_map, List.length_range, List.getElem_map,
+    List.getElem_range]
   by_cases h8 : i < 8
-  · rw [List.getElem_append_left (by simp [encNat]; omega)]
-    simp only [encNat, List.getElem_map, List.getElem_range, h8, ↓reduceIte]
+  · simp only [h8, ↓reduceIte, ↓reduceDIte]
     exact byte_eq _ _ h8
-  · rw [List.getElem_append_right (by simp [encNat]; omega)]
-    simp only [encNat, List.getElem_map, List.getElem_range, List.length_map, List.length_range, h8, ↓reduceIte]
+  · simp only [h8, ↓reduceIte, ↓reduceDIte]
     exact byte_eq _ _ (by omega)
 
 theorem rowBytes_encF (row : Array F128) : (MerkleScheme.rowBytes row).data.toList = row.toList.flatMap encF := by
