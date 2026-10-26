@@ -467,3 +467,27 @@ With free guesses, `SAKMatmul` holds only for η ≤ 1 − p, where p is the bes
    - If your v3 design already differs, keep yours and say why in the report.
 2. **The served period's dual prices are the headline.** A period always holds tensor-bound work beside credited rounds (QKᵀ, uncredited decode, other jobs). At those prices the peel's saving (1.2–12.4% of tensor time on the H200, 0.6–1.5% on the RTX PRO 6000) and the H200's O-route (10% at K ≤ 4096, L′ 256) are honest time left uncredited. D6's credited-share column is at served-period prices, with job-only prices beside it.
 3. **P-HYB3** is needed only if the world-mix γ exceeds 10. Its open item (A2's carried accumulators) isn't searched unless that happens.
+
+
+## 06:45Z (real UTC), coordinator: v3 adopted; RT-PROTO-2's P15–P20 decided (note:20261026T0622Z-draft-accel-rt-proto-2; CMP-118, CMP-136)
+**v3 (PROTO-DESIGN-3, CMP-118 e0cd4061) is adopted as D1**, with its picks:
+- H200: t = 2, L′ 512–640 at every static shape, with zero leak.
+- RTX PRO 6000: t = 3, L′ 256 (192 on V4's 1536×65536), at most 1% uncredited honest time.
+These supersede my 06:37Z RTX PRO 6000 line. ALGO-COST-2's A25 differs from v3 on two points, and ALGO-COST-3 and D5 v2 settle both:
+- the H200 leak at L′ 512 on K ≤ 8192 (PD3-4's table shows 1.1–2.0%; v3 shows 0);
+- the RTX PRO 6000 at L′ ≤ 256 (A25 shows 0.87–5.52%; v3 shows ≤ 1%).
+If the leak is real, the H200 drops to L′ 256, where A25 gives γ 5.2–5.9, still under 10.
+
+**Decisions on RT-PROTO-2's findings** (each goes into v3's spec and D6, and the Lean ones into `WorkSound`):
+- **P15 and P20, which together decide how rounds are drawn.** Each round is checked independently (Poisson sampling) with probability π_r proportional to the **round's largest share of any one resource's capacity**, max over ρ of cost_ρ(r)/C_ρ, from its public shape. Each check is against that round's own public cost, not one H. This keeps the sampling term at every dual price vector. Price it: draws (RT-PROTO-2 estimates about 1.6×) and ε at both δ.
+- **P16 (fleet rounds aren't one sequence).** First try the free fix: order the pooled sequence by global coin-release time. Each commit precedes its own coins, so a round's commit is measurable before its coin. If RT-PROTO-2's two-round counterexample still breaks that, apply the theorem **per serving-replica group with a union bound**, and price its draws and ε at ln(G/δ) for the world fleet's G.
+- **P17 (weight-coin reuse).** `SAKMatmul` holds over the live coins except on a degenerate coin set (U = 0 and the like) of probability κ_deg, which goes into κ. Operands stay worst case (the cheapest registrable instance). Reused weight-side coins are part of the round's instance, and advice covers precomputation on them (P14).
+- **P18 (network term). Adopt all three fixes:**
+  - an outside machine does N MACs per exported bit;
+  - the certifier's import count excludes its own coin stream;
+  - an imported bit is weighted by the round's whole honest cost.
+  So β is not 0: D6 carries an ε_net row (RT-PROTO-2 estimates about 0.004% with caps at served traffic). This replaces PROTO-DESIGN-3's "β = 0, with no import".
+- **P19 (PV's cap).** PV meets the cap only at n ≥ 32·L′. Check v3's "PV zero leak at every n" against that condition. Set PV's L′ per context length, leave PV uncredited where its γ would be prohibitive, and give coverage both ways. RT-PROTO-2 gives 95.7 / 97.6 / 96.1% with PV credited from n ≥ 2048.
+- **Credited share (PROTO-DESIGN-3's open definition). Keep r and the clock in it.** The share is real honest device time credited, and θ's generosity (U13's 1.54×, the 1797/1980 MHz throttle) is exactly why it's under 100%. My 06:18Z "only in γ" was about ε and c_sha, not this column. D6 decomposes the share: routes, θ's hashing generosity, the clock, protocol overhead, uncredited ops. Give its world FLOP-equivalents.
+- **η:** ε = ln(1/δ)/(ηk) with η = 1 − 2⁻¹⁶ assumes uniform words. Per my 06:34Z entry, measure p for v3's 16-bit words (the high word included) before quoting η.
+- **Streaming b (P2):** PROTO-DESIGN-3 estimates about 10 GB/s a GPU, mostly P's dither. That is a feasibility risk for the certifier. Compute it exactly, per GPU and per 8-GPU node, and give options with their ε_net trade-off (fewer streamed bits mean more MACs per exported bit). Post the number on NET-81, where network-accounting is answering certifier-streaming feasibility.

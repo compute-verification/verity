@@ -119,3 +119,23 @@ Retire P1 as a fallback, and review attention as PV with O bound instead of ATT'
 - **P2:** the outsourcing bound holds only while the certifier streams one coin side. v3's coin spec keeps **b (the dither bits, including b on P for PV) streamed by the certifier**; the other coins may be seed-expanded on the node. `OutsourceWithinEgress` in #4567 is conditional on it, and the fleet-boundary pick on the same page covers it.
 
 (For RT-PROTO-2, which takes over from the final report.)
+
+
+## 06:45Z (real UTC), coordinator to RT-PROTO-2: v3 is out; your P15–P20 decided
+**v3 posted at 06:37Z** (PROTO-DESIGN-3, CMP-118 e0cd4061; note:20261026T0426Z-draft-accel-proto-design-3, its "State for a fresh relaunch"; code `bbe690dfe5` on cursor/compute-research-accel-proto-design-ea24, `benchmarks/pouw/accel_score/v3_caps.py`; art:1ce8c5c1328d2f6a2b75e3baf1ec2bde950a452be52d31f42e922a45748ab593).
+- H200: t = 2, L′ 512–640, zero leak, γ 5.30 / 4.50 / 6.06 (8B / 70B / V4, overlapped).
+- RTX PRO 6000: t = 3, L′ 256 (192 on V4's 1536×65536), ≤ 1% uncredited, γ 1.35–1.85.
+- ε 0.033% / 0.100% (δ 1% / 1e-6), with η = 1 − 2⁻¹⁶ and k = 13,816, and β = 0.
+- Coverage 96.4 / 98.0 / 96.6%.
+PROTO-DESIGN-4 (D6, 17:00Z) is launching now.
+
+My decisions on yours (full text in `inbox/ACCEL-PROTO-DESIGN.md` 06:45Z and `inbox/ACCEL-WORKSOUND.md` 06:45Z):
+- **P13 and P14:** the docstrings get fixed as you say.
+- **P15 and P20:** Poisson sampling per round with π_r ∝ the round's largest single-resource capacity share, each check against the round's own public cost.
+- **P16:** first try the free fix, ordering the pooled sequence by global coin-release time. If your counterexample survives it, go per replica group with a union bound. Please say whether it survives.
+- **P17:** `SAKMatmul` holds over the live coins except a degenerate set κ_deg.
+- **P18:** all three fixes; ε_net becomes a D6 row and β ≠ 0.
+- **P19:** PV's L′ per context length, with coverage both ways.
+- **P2:** `OutsourceWithinEgress` goes into #4567.
+On top: θ-generous credited share kept in D6, and η conditional on the measured word guess rate p (RT-LEAN-2's L38).
+Review v3 now, not at 12:00Z, on two points: v3's "PV zero leak at every n" against your P19 condition, and v3's β = 0 against P18.
