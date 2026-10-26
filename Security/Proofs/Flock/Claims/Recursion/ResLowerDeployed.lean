@@ -957,7 +957,8 @@ theorem outCol_lt {st : Flock.Stmt} (L : FlockSoundness.Layout st) {tags : Flock
 (`outCol_leaf`), at the unit slot `g · upv`, column `16 k` of the returned-output group. -/
 theorem outCol_range {st : Flock.Stmt} (L : FlockSoundness.Layout st) {tags : Flock.Tags} {ls : Lean.Json}
     (hty : st.c.typed = none) (ho : st.c.outNet = st.c.unitNet) (hls : HmRow.check st.c tags ls = .ok ())
-    (hupv : st.c.upv = 1) {N : ℕ} (hl : st.c.leavesOut.getD 0 #[] = Array.range N) (g : ℕ) {k : ℕ} (hk : k < N) :
+    (hupv : st.c.upv = 1) {N : ℕ} (hl : st.c.leavesOut.getD 0 #[] = Array.range N) {g : ℕ} (hg : g < st.c.g) {k : ℕ}
+    (hk : k < N) :
     HmOut.outCol st.c g k =
       st.c.unitRange.slot (g * st.c.upv) + ((st.c.unit.outGroups.getD 0 default).col * Flock.WORD + 16 * k) := by
   have C := FlockSoundness.check_facts hty hls
@@ -1371,7 +1372,7 @@ theorem oCols_staged {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit} 
   have hb := hlt q (by omega)
   have hq' : ∀ A, A + (FlockVBridge.OfVStar.partBase S ns nv + 16 * (q / 16)) + q % 16 =
       A + (FlockVBridge.OfVStar.partBase S ns nv + q) := fun A => by omega
-  rw [hel, formBit_var, outCol_range L P.typed ho hls hupv hlo _ hq16, hcol, hq',
+  rw [hel, formBit_var, outCol_range L P.typed ho hls hupv hlo (Nat.mod_lt _ (by omega)) hq16, hcol, hq',
     Claims.Recursion.VStar.copyOf_eq (by omega), hdiv, hmod]
   simp [Claims.Recursion.VStar.copyIdx, hsz, hupv]
 
