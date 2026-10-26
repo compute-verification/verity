@@ -30,7 +30,11 @@ class FakeGitHub:
 
     def __call__(self, *args: str) -> str:
         if args[:2] == ("pr", "list"):
-            return json.dumps(self.merged if "merged" in args else list(self.open.values()))
+            assert "merged" not in args, "a listing of merged PRs by number misses those that waited in the queue"
+            return json.dumps(list(self.open.values()))
+        if args[:2] == ("api", "graphql"):
+            assert f"query={M.MERGED_QUERY}" in args and "orderBy: {field: UPDATED_AT, direction: DESC}" in M.MERGED_QUERY
+            return json.dumps(self.merged)
         self.mutations.append(args)
         n = int(args[2])
         if args[:2] == ("pr", "close"):
@@ -770,7 +774,9 @@ def test_the_landings_go_to_the_merge_thread_quietly_and_a_failed_post_leaves_th
 
 def test_the_sweep_deletes_the_head_branch_of_a_pr_github_marked_merged_itself(tmp_path):
     """17 Oct (CI-48): drive lands a PR's commits; GitHub then marks the PR merged, so it was never open for the sweep, and its
-    branch stayed: 2,119 of the repository's 3,543 branches were already on main."""
+    branch stayed: 2,119 of the repository's 3,543 branches were already on main.  The merged PRs are the most recently updated
+    ones (`MERGED_QUERY`; the fake refuses `gh pr list --state merged`): 26 Oct, the newest 200 by number left out 20 PRs that
+    had waited in the queue, and their branches stayed."""
     repo, gh, tips, _merge = _world(tmp_path)
     del gh.open[1], gh.open[2]
     gh.merged = [{"number": 1, "headRefName": "A", "headRefOid": tips["A"]}, {"number": 2, "headRefName": "B", "headRefOid": tips["B"]},
@@ -811,6 +817,9 @@ def test_the_branch_sweep_deletes_what_is_on_main_and_archives_idle_unmerged_wor
     del gh.open[1], gh.open[2]                                            # A and B landed; C, D and E stay open
     for name in ("A", "B"):                                               # landed with the train, and fresh at ``now``
         _git(repo, "push", "-q", "origin", f":refs/heads/{name}")
-    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (1, 1)  # old-landed deleted, old-work archived
+    # old-landed deleted; old-work, the head of a PR drive closed as stale, kept
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append, keep=["old-work"]) == (1, 0)
+    assert "old-work" in _heads(repo)
+    assert M.sweep_branches(repo, now=now, gh=gh, log=[].append) == (0, 1)  # without it, old-work archived
     assert _heads(repo) == {"main", "C", "D", "E", "new-landed", "new-work", "cursor/verity-ci-3d4e"}
     assert "refs/archive/heads/old-work" in _git(repo, "ls-remote", "origin", "refs/archive/*")

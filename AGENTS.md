@@ -283,7 +283,9 @@ PRs land through ci's `research queue drive`, with `land = "review"` in `tools/v
   `research data label pr:N@SHA ready true --by LANE`. A new head needs a new mark. The owner is the lane a `Lane NAME` line
   in the PR's body names, else the Cursor agent id the body carries. Marks written before `marked_after` in
   `tools/verity/check/queue.toml` don't count, and a `hold` label keeps a PR out. `research queue status` says what each PR
-  waits for.
+  waits for. A PR not marked ready at its head and idle 3 days (its head commit, and its ready and review labels there) is
+  stale: drive rings its owner once a day and closes it at 7 days, its branch kept, unless it is held, on `next`, or a draft
+  that says "keep open" (`stale_days`, `stale_close_days` in `tools/verity/check/drive.toml`).
 - Drive stacks admitted PRs on `next`, one merge commit each. Reviewers, agents ci staffs and never the PR's owner, read
   `next` bottom up: `research queue review` lists the members above `main` with no land verdict at their head (number, head,
   owner, files, whether it waits for a Lean check), and `research queue review N --land [--ref NOTE] --by LANE` or

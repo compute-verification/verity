@@ -4,7 +4,9 @@ longest prefix of `next` whose every member has a reviewer's land verdict at its
 eyeball review, and the full check runs after landing); `land` below, and drive's `land = "check"`, take the newest commit on
 `next` that `research merge`'s gate accepts: a passing `check` attempt of that exact commit.
 
-    research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused
+    research queue status [--json]                 each open PR: its place in `next`, what it waits for, or why it was refused;
+                                                   `stale` when it is unmarked at its head and idle drive.toml's `stale_days`
+                                                   (`research.stale`), which drive closes at `stale_close_days`
     research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
     research queue land [--dry-run]                fast-forward `main` to the newest commit on `next` that passed `check`, push it
     research queue eject PR --reason TEXT [--by HANDLE]
@@ -290,6 +292,16 @@ class GitHub:
             return None
         return r.stdout.strip() or None if r.returncode == 0 else None
 
+    def close(self, number: int, comment: str) -> None:
+        """Close PR ``number`` with ``comment`` (drive's stale rule, `research.stale`), as `gh` is authenticated here: drive's App."""
+        try:
+            r = subprocess.run(["gh", "pr", "close", str(number), "--repo", self.repo, "--comment", comment], capture_output=True,
+                               text=True, timeout=GH_TIMEOUT_S)
+        except subprocess.TimeoutExpired:
+            raise QueueError(f"gh pr close {number}: no answer in {GH_TIMEOUT_S} s") from None
+        if r.returncode:
+            raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
+
 
 # ---- rules and labels ---------------------------------------------------------------------------------------------------------------
 
@@ -338,6 +350,10 @@ class DriveFlags:
     #: scripts a PR's head passes to be admitted (`gate_refusal`: the ready mark's preflight, and the sync that merges it onto
     #: `next`), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
+    #: days an open PR unmarked at its head stays idle before it is stale (`research.stale`: `status` says so, drive rings its
+    #: owner once a day), and before drive closes it; 0 is off
+    stale_days: int = 0
+    stale_close_days: int = 0
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml") -> "DriveFlags":
@@ -404,6 +420,13 @@ class DriveFlags:
                 raise bad("landing_gates", "a list of Python scripts by their path from the repository's root, as "
                                            "[\"integrations/x/tools/gate.py\"]")
             got["landing_gates"] = tuple(v)
+        for k in ("stale_days", "stale_close_days"):
+            if k in doc:
+                if type(doc[k]) is not int or doc[k] < 0:
+                    raise bad(k, "a whole number of days, 0 for off")
+                got[k] = doc[k]
+        if got.get("stale_close_days") and not 0 < got.get("stale_days", 0) <= got["stale_close_days"]:
+            raise bad("stale_close_days", "0, or at least stale_days, which must be on: drive closes only a stale PR")
         return cls(**got)
 
     def override(self, a: argparse.Namespace) -> "DriveFlags":
@@ -664,6 +687,7 @@ class Entry:
     after: tuple[int, ...] = ()           # open PRs whose heads its head contains
     position: int | None = None           # 1-based, on `next`
     commit: str | None = None
+    idle_since: float | None = None       # stale (`research.stale`): idle since then
 
 
 def based_on(pr: PR, prs: Iterable[PR]) -> str:
@@ -1117,7 +1141,9 @@ class Queue:
 
     # -- status
 
-    def status(self) -> dict[int, Entry]:
+    def status(self, stale: Callable[[list[PR]], dict[int, float]] | None = None, close_days: int = 0) -> dict[int, Entry]:
+        """Each open PR's entry; with ``stale`` (`research.stale.stale_prs` over the open PRs), each stale one says so, an unmarked
+        PR based on another branch among them, and ``close_days`` (drive's `stale_close_days`) when drive closes it."""
         self._clone()
         state = self.load_state()
         open_prs = self.github.open_prs()
@@ -1125,6 +1151,15 @@ class Queue:
         entries = self.entries(prs, state)
         entries.update(waiting)
         entries.update(self.off_main(open_prs))
+        by_number = {p.number: p for p in open_prs}
+        for n, since in (stale(open_prs) if stale else {}).items():
+            p = by_number[n]
+            e = entries.setdefault(n, Entry(p, state="waiting", why=f"based on {based_on(p, open_prs)}, and not marked ready at "
+                                                                    f"{p.head[:8]}"))
+            e.idle_since = since
+            e.why = (f"stale, idle since {time.strftime('%Y-%m-%d', time.gmtime(since))}"
+                     + (f" (drive closes it {close_days} days idle; push, mark it ready or close it)" if close_days else "")
+                     + f": {e.why}")
         for i, m in enumerate(self.chain(), 1):
             if m.pr in entries and entries[m.pr].pr.head == m.head:
                 entries[m.pr].state, entries[m.pr].position, entries[m.pr].commit = "queued", i, m.commit
@@ -2583,10 +2618,21 @@ def main(argv: list[str]) -> int:
                 q.fetch()
             labels.since = q.rules().marked_after
         if a.command == "status":
-            entries = q.status()
+            from .stale import stale_prs
+
+            q._clone()
+            q.fetch()
+            r = _git(q.workdir, "show", f"refs/remotes/origin/main:{DRIVE_FLAGS}", check=False)
+            got = DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at main") if r.returncode == 0 else DriveFlags()
+            entries = q.status(lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
+                                                     lambda n, h: [lab.ts for lab in labels.reviews(n, h)]),
+                               got.stale_close_days)
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
-                                   "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after)}
+                                   "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),
+                                   "stale": e.idle_since is not None,
+                                   "idle_since": None if e.idle_since is None else
+                                   time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(e.idle_since))}
                                   for e in sorted(entries.values(), key=lambda e: e.pr.number)], indent=1))
             else:
                 print(_render(entries))
@@ -2615,7 +2661,8 @@ def main(argv: list[str]) -> int:
             Driver(q, on=flags.on, max_running=flags.max_running, train_size=flags.train_size, defer=frozenset(flags.defer),
                    regenerate_locks=flags.regenerate_locks, per_pr_shadow=flags.per_pr_shadow, land=flags.land,
                    after_landing_no_cache=flags.after_landing_no_cache, reviews=labels.reviews,
-                   ready_by=labels.ready_by).tick(dry_run=a.dry_run)
+                   ready_by=labels.ready_by, stale_days=flags.stale_days,
+                   stale_close_days=flags.stale_close_days).tick(dry_run=a.dry_run)
             return 0
         if a.command == "report":
             from .mergequeue import Reporter, Statuses

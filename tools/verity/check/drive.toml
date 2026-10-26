@@ -25,3 +25,9 @@ after_landing_no_cache = true
 # the per-PR landing in shadow beside the trains (`research.drive`): at most this many of its checks at once, landing and ejecting
 # nothing; 0 is off (`research queue stats --per-pr` reads what it would land)
 per_pr_shadow = 0
+# days an open PR not marked ready at its head stays idle (its head commit, and its ready, eject and review labels there) before
+# it is stale: `research queue status` says so and drive rings its owner once a day (`research.stale`); 0 is off
+stale_days = 3
+# days idle before drive closes such a PR, with a comment, its branch kept; never one with a hold label, a draft that says
+# "keep open", or one on `next`; 0 is off (TOP-90 row 36)
+stale_close_days = 7
