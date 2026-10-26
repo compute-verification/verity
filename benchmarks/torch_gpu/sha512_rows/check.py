@@ -165,6 +165,9 @@ def check_trees(engine: E.Engine, seed: int = 3) -> dict[str, Any]:
     up = E.digests(engine.level(Dev(engine).put(kids), [big.domain_id], 9))
     kb = E.digests(kids)
     bad["level9-index-to-299"] = sum(up[i] != big.node(9, i, kb[2 * i], kb[2 * i + 1]) for i in range(300))
+    first = (1 << 40) - 7
+    up = E.digests(engine.level(Dev(engine).put(kids), [big.domain_id], 9, first, engine.node_mids([big.domain_id], 9)))
+    bad["level9-index-from-2^40-7"] = sum(up[i] != big.node(9, first + i, kb[2 * i], kb[2 * i + 1]) for i in range(300))
     pads = E.digests(engine.pads([big.domain_id], 1, 65530, 10))
     bad["pads-65530"] = sum(pads[j] != big.pad(65530 + j) for j in range(10))
     return {"mismatches": bad}

@@ -16,7 +16,8 @@ import slots as S, slots_gpu as G
 S.commit(context, layout, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, the same signature with a plan in place of (context, layout)
-plan = G.Plan(context, layout)                     # once a run: domains, pad tails, midstates, hm96's table on the device
+plan = G.Plan(context, layout)                     # once a run: domains, pad tails, midstates, hm96's table on the device;
+                                                   # temp_bytes= bounds a step's temporaries (default 1 GiB)
 G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, streaming as a step's groups (e.g. layers) come out of the forward pass
@@ -36,6 +37,13 @@ plan = G.Plan(context, G.regroup(layout, 4))
   A plan is linear in the layout's units: the layout digest is computed once (`Layout.digest`), every unit's domain id in
   one pass (`S.unit_domain_ids`, two SHA-512s a unit), and a group the layout repeats (its layers) is laid out once, so
   `add` rebinds that group's row table to the step's tensors without a Python step a row.
+  A step's memory is its slots' frontiers and one pass's temporaries. It holds no slot's leaves: a slot's tree is its
+  frontier, one node a level (the left sibling still waiting for its right one), 24 nodes or 1.5 KB a slot at six
+  million units. `add` folds a group's unit leaves into the frontiers a level at a time (the engine's `level` at any
+  first index), and `finish` closes each with pad(units) and the subtrees of pads alone, which the plan hashes once. A
+  group goes through in passes of as many slots as keep its temporaries within `temp_bytes`: about four (rows, slots)
+  digest buffers, so a group of 117,400 rows takes 35 slots a pass at 1 GiB. A pass's salts are its slots' own
+  (nonce `nonce0 + s`), so passes change no root.
 - `step`: the step's index; `slots`: how many sequence slots it has.
 - `salt_key`: 32 bytes, `S.fresh_salt_key()` (the OS generator), fresh each step and the prover's alone, kept with the
   step's record to open from.
@@ -139,5 +147,7 @@ Run `r20261026-014030-c476` (vy-dc-h200, one H200, commit 3934f0782e, `gpu.sh`),
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
-  refusals, the host twin against the reference (regrouped layouts included), and (with a GPU) the device against the
-  host twin.
+  refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
+  matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
+  step's memory (counted: its frontier and one pass), planning at six million units, and (with a GPU) the device
+  against the host twin.

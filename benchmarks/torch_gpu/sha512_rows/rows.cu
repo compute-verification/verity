@@ -116,12 +116,13 @@ __global__ void __launch_bounds__(SXR_THREADS) k_node_mids(const u64* dids, u32 
   if (t < D_) node_mid<D>(dids + 8 * t, level, mids + 8 * t);
 }
 
-__global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, const u64* in, u32 T, u32 w, u64* out) {
+__global__ void __launch_bounds__(SXR_THREADS) k_level(const u64* mids, u32 D_, const u64* in, u32 T, u32 w, u64 first,
+                                                        u64* out) {
   const u64 t = (u64)blockIdx.x * blockDim.x + threadIdx.x;
   if (t >= (u64)T * w) return;
   const u64 tree = t / w, i = t % w;
   const u64* l = in + 8 * (2 * tree * w + 2 * i);
-  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), i, l, l + 8, out + 8 * t);
+  node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, l + 8, out + 8 * t);
 }
 
 __global__ void __launch_bounds__(SXR_THREADS) k_pads(const u64* dids, u32 D_, u32 T, u64 first, u32 n, u64* out) {
@@ -219,9 +220,10 @@ int sxr_node_mids(void* stream, const uint64_t* dids, uint32_t D_, uint32_t leve
   return launched();
 }
 
-int sxr_level(void* stream, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t* out) {
+int sxr_level(void* stream, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t first,
+              uint64_t* out) {
   const u64 m = (u64)T * w;
-  if (m) k_level<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(mids, D_, in, T, w, out);
+  if (m) k_level<<<blocks(m), SXR_THREADS, 0, (cudaStream_t)stream>>>(mids, D_, in, T, w, first, out);
   return launched();
 }
 

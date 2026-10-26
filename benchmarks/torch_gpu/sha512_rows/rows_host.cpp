@@ -62,11 +62,12 @@ int sxr_node_mids(void*, const uint64_t* dids, uint32_t D_, uint32_t level, uint
   return 0;
 }
 
-int sxr_level(void*, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t* out) {
+int sxr_level(void*, const uint64_t* mids, uint32_t D_, const uint64_t* in, uint32_t T, uint32_t w, uint64_t first,
+              uint64_t* out) {
   for (u64 t = 0; t < (u64)T * w; ++t) {
     const u64 tree = t / w, i = t % w;
     const u64* l = in + 8 * (2 * tree * w + 2 * i);
-    node<D>(mids + 8 * (D_ == 1 ? 0 : tree), i, l, l + 8, out + 8 * t);
+    node<D>(mids + 8 * (D_ == 1 ? 0 : tree), first + i, l, l + 8, out + 8 * t);
   }
   return 0;
 }

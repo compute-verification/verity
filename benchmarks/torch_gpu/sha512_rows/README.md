@@ -22,7 +22,7 @@ lt = E.leaf_table(dids, did_of_row, rank, position, salt_row)
 leaves = E.leaves(lt, x, engine.SaltKey(key, nonce0))      # (G, S, 8); or salts=(G, S, 192) uint8 from the caller
 leaves = E.commit_rows(rows, lt, salts)                    # both: rows in, leaf digests out
 E.frame_leaves(values, dids, rank0, schema)                # (T, n, 8): leaf (rank0 + j, rank0 + j, schema, value)
-E.level(children, dids, level)                             # (T, w, 8) nodes over (T, 2w, 8)
+E.level(children, dids, level, first)                      # (T, w, 8) nodes first .. first + w - 1 over (T, 2w, 8)
 E.pads(dids, trees, first, n); E.root(leaves, dids)        # pads; each tree's root (tree_levels' padding)
 ```
 
