@@ -9,12 +9,15 @@ import Proofs.Flock.Bridge.Assembly
 import Proofs.Flock.Bridge.EndToEndHiddenC
 import Proofs.Flock.Bridge.FaultyRightC
 import Proofs.Flock.Bridge.KSLive
+import Proofs.Flock.Bridge.Public
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
 the row/v2 sampled statement at the constants `κ` and `canonAt`, proved (`Flock.Bridge.assemblyTargetC` with every
 target it takes). `Lowers`: the claims program `progOf C κ` lowers every unit of every circuit (`Flock.Bridge.lowers`).
-`FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). -/
+`FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`). `Public`:
+`Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub`, `SampledKSLiveV2` with its error
+`Flock.Bridge.deltaPub`, a function of the public parameters. -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl
