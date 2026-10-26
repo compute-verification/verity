@@ -1436,7 +1436,7 @@ ingress counts and the advice. The advice's length is the leak, charged as `A_c`
 
 This section is that claim's red team, written as its parts are drafted: the advice codec (`advice.py`, with `encode`,
 `decode` and `bits`), N2's advice mode (`advised`), the I/O tie unit (`io_tie`) and the compiler
-(`verity_vllm.predict.compile_steps`). Nothing in it is proved. It gives the argument, every assumption the argument
+(`verity_vllm.program.predict.compile_steps`). Nothing in it is proved. It gives the argument, every assumption the argument
 rests on, what each attack costs under the design as drafted, the adversarial cases each part's tests must carry, and
 what the drafts do with them.
 
