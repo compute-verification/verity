@@ -30,7 +30,7 @@ import wgmma as W  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
-TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192, 16384, 20480)
+TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192, 12288, 16384, 20480)
 WARPS, STAGES = (4, 8), (2, 3, 4, 5)
 GROUPS = (1, 2, 4, 8, 16, 32)
 

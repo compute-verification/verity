@@ -54,8 +54,8 @@ import run as R  # noqa: E402
 from verity_vllm.engine import int8_exact as E  # noqa: E402
 from verity_vllm.engine import int8_fused as X  # noqa: E402
 
-SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192, 16384,
-            20480)
+SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192, 12288,
+            16384, 20480)
 ARMS = ("exact", "exact_triton", "lt", "cutlass", "cutlass_swap")
 PEAKS = {"sm_90": {"measured": 1942.7, "datasheet_1830mhz": 1979.0}, "sm_120": {"measured": 807.5}}
 OUT_BYTES = {"exact": 2, "exact_triton": 2, "lt": 4, "cutlass": 2, "cutlass_swap": 2}
