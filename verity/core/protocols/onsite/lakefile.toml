@@ -30,10 +30,15 @@ path = "../../service/sampled_proofs"
 name = "pouw_check"
 path = "../pouw/lean/check"
 
-# Communication: the network certificate check, with the certifier program it reads the Program's grid from.
+# Communication: the network certificate check, with the certifier program it reads the Program's grid from, and the NCI
+# policy's check of record (`NciCheck.Protocol`).
 [[require]]
 name = "network_check"
 path = "../network/lean"
+
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
 
 [[lean_lib]]
 name = "CoreOnsite"
