@@ -6,10 +6,10 @@
 # flock-circuit, Lean's flock-verify and flock-firewall, the sampled-proofs verifier of record, onsite, PoUS's run and
 # setup checks (pous-run-protocol, pous-setup), the remote bandwidth session's (remote-audit-protocol) and the streamed
 # wipe's (wipe-protocol), in scratch and the clone; the legs find them in period.json's tools. Its arguments go to the
-# runner (--windows N, --start I, --jobs J, --tamper W,..., --pouw h1, --registered, --tie, --tie-tamper W,... with
+# runner (--windows N, --start I, --tamper W,..., --pouw h1, --registered, --tie, --tie-tamper W,... with
 # CERTIFIER_TAMPER=byte); ALLP_FLOCK_WORK=DIR keeps M0's build across runs.
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 64 -- \
-#     bash benchmarks/all_protocols/run.sh --windows 4 --jobs 4 --tamper 3
+#     bash benchmarks/all_protocols/run.sh --windows 4 --tamper 3
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
