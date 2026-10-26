@@ -178,24 +178,33 @@ class Provers:
     def _link(self, idx, blocks: int) -> int:
         return RTT_NS + transfer_ns(blocks, self.bw, indices=len(idx))
 
+    def _timed(self, respond):
+        """`respond` for the session's batches; the warm-up frames before them (all `challenger_party.WARMUP_INDEX`,
+        answers nothing checks) answered from HBM at once and not logged."""
+        def wrapped(idx):
+            if all(i == challenger_party.WARMUP_INDEX for i in idx):
+                return self._read(idx)
+            return respond(idx)
+        return wrapped
+
     def local(self, _blocks):
         def respond(idx):
             t0 = time.perf_counter_ns()
             return self._land(t0, None, 0, self._read(idx))
-        return respond
+        return self._timed(respond)
 
     def honest(self, _blocks):
         def respond(idx):
             t0 = time.perf_counter_ns()
             return self._land(t0, self._link(idx, len(idx)), 0, self._read(idx))
-        return respond
+        return self._timed(respond)
 
     def zeros(self, _blocks):
         def respond(idx):
             t0 = time.perf_counter_ns()
             out = [bytes(self.n) if i in self.dropped else b for i, b in zip(idx, self._read(idx), strict=True)]
             return self._land(t0, self._link(idx, len(idx)), len({i for i in idx if i in self.dropped}), out)
-        return respond
+        return self._timed(respond)
 
     def gpu_recompute(self, _blocks):
         def respond(idx):
@@ -208,7 +217,7 @@ class Provers:
             model = RTT_NS + transfer_ns(0, self.bw, indices=len(idx)) + max(
                 transfer_ns(len(idx), self.bw), computed + transfer_ns(len(missing), self.bw))
             return self._land(t0, model, len(missing), out, {"compute_ns": computed, "recomputed_wrong": wrong})
-        return respond
+        return self._timed(respond)
 
     def floor(self, _blocks):
         def respond(idx):
@@ -217,7 +226,7 @@ class Provers:
             compute = math.ceil(missing / FLOOR_THREADS) * FLOOR_BLOCK_NS
             model = max(self._link(idx, len(idx) - missing), compute)
             return self._land(t0, model, missing, self._read(idx), {"compute_ns": compute})
-        return respond
+        return self._timed(respond)
 
 
 def far(blocks):
