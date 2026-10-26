@@ -31,11 +31,11 @@ open RecDeploy.HpLast
 def rowCommit (rw : _root_.VStar.In.Row) : Msg :=
   FlockSoundness.Binding.commitString (rowMsg rw.words) rw.salt.data.toList
 
-/-- **The trace's hm96 slots commit**: at each port `nm` (index `q`) and instance `n` with a row, the slot's output is
-the commit string of its row and salt off the trace (`SlotCommits`). -/
+/-- **The trace's hm96 slots commit**: at each port `nm` (index `q`) and instance `n` with a row placed at unit input
+columns (`rowHidden`), the slot's output is the commit string of its row and salt off the trace (`SlotCommits`). -/
 def SlotsOk (mask : ℕ → ℕ → Bool) (c : Circuit) (pin : _root_.VStar.In.PartIn) : Prop :=
-  ∀ nm q n rw, c.ports.findIdx? (·.name == nm) = some q → portRow pin nm n = some rw →
-    SlotCommits c nm q n (VStarTrace.A mask c pin)
+  ∀ nm q n rw ps, c.ports.findIdx? (·.name == nm) = some q → portRow pin nm n = some rw →
+    rowHidden c nm n = some ps → SlotCommits c nm q n (VStarTrace.A mask c pin)
 
 /-- **The trace at every part**: at each part with a circuit and port inputs at the history `h`, `TraceOk` and
 `SlotsOk`. -/
@@ -66,7 +66,7 @@ theorem readSegs_commit {mask : ℕ → ℕ → Bool} {c : Circuit} {pin : _root
     (hps : rowHidden c nm n = some ps) :
     readSegs (VStarTrace.A mask c pin) [(([] : Msg), hmCommit c q n)] = rowCommit rw := by
   have hP := VStarTrace.placesR_assign h mask
-  have hc := hS nm q n rw hq hrw
+  have hc := hS nm q n rw ps hq hrw hps
   unfold SlotCommits at hc
   have hr : readForms (VStarTrace.A mask c pin) (ps.map HmNets.Lin.var) =
       Claims.Recursion.VStar.bytesOf (_root_.VStar.In.wordBits rw.words) := by
@@ -179,7 +179,7 @@ theorem hpEarly_run (mask : ℕ → ℕ → Bool) (I : InnerRec) (IV : Claims.Ve
       (witFin (VStarTrace.A mask) I x w ω.1 (((Claims.run FlockDeploy.sha512
         (refP IV (finB b (VStarTrace.A mask) I x) w) (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω
           r).msgs.take (IV.k (xIOf x))).map histOf) s) i →
-      (((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
+      ((((Claims.run FlockDeploy.sha512 (refP IV (finB b (VStarTrace.A mask) I x) w)
         (RecDeploy.V IV (finB b (VStarTrace.A mask) I x).st) x ω r).msgs.map Prod.fst).getD i []).drop o).take
           m.length = m :=
   hpEarly hs hi hfit hT (hmsg_run (VStarTrace.A mask) I IV b w hx hk ω r hi)
