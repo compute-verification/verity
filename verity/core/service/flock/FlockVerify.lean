@@ -100,11 +100,12 @@ def statementInputs (args : List String) : IO (Except String (ByteArray × ByteA
     return .ok (c, pb, cm, tables)
 
 /-- A recursive session's inner statement's registered reads (§16.16, a plain-leaves statement): with the verifier's own
-registered reads, its description read from the developer's registration (`Registered.checkDescription`); without, a
-statement that names registered reads is refused, as `Registered.check` refuses one. -/
+registered reads, a circuit that names each port once (`Registered.namesOnce`) and its description read from the
+developer's registration (`Registered.checkDescription`); without, a statement that names registered reads is refused, as
+`Registered.check` refuses one. -/
 def checkDescription (st : Stmt) (registered : Option (Array Registered.Port)) : V Unit :=
   match registered with
-  | some own => Registered.checkDescription st.c st.pub own
+  | some own => Registered.namesOnce st.c >>= fun _ => Registered.checkDescription st.c st.pub own
   | none => Registered.check st.c st.pub none false
 
 /-- A statement's identifier (§16.10): the public header's `identifier`, a JSON object C-Flock does not read, must be the
@@ -643,12 +644,12 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
   IO.println s!"RECVSTAR {line.compress}"
   return (if res.toBool then 0 else 1)
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null). -/
+/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`norm`). -/
 def recordDraw (record : String) : Option Lean.Json :=
   match Lean.Json.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Lean.Json.null => none
-    | .ok d => some d
+    | .ok d => some (Flock.norm d)
     | .error _ => none
   | .error _ => none
 
