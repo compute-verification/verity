@@ -199,8 +199,8 @@ class HiddenM1Source:
             self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.c.errors.append(f"fa2 tap skipped count: {e!r}"[:200])
         self.ns.verity_set_tap(0, None, None, 0, 0, 0, 0)
         self.active = False
 
@@ -360,8 +360,8 @@ class HiddenM1SourceFA3(HiddenM1Source):
             self._tap = None
         try:
             self.stats["skipped"] = int(self.ns.verity_tap_skipped())
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception as e:  # noqa: BLE001
+            self.c.errors.append(f"fa3 tap skipped count: {e!r}"[:200])
         self.ns.verity_set_tap_off()
         self.active = False
 
