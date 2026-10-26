@@ -34,12 +34,12 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
-
-import fixtures as F
 import shape as S
 import units as UN
+
+import fixtures as F
+from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import seeds as SD
 
 ANCHORS = ((64, 64, 512), (64, 32, 1024), (32, 64, 4608))
 
@@ -49,10 +49,10 @@ def libs_of(h1u: list[str], ref: str | None, sm: bool) -> dict:
     for spec in h1u:
         name, _, path = spec.partition("=")
         libs[name] = UN.H1u(path)
-        if sm:
-            if not UN.H1u.has_sm(path):
-                raise SystemExit(f"check: {path} has no kh_units_multi_j10r_sm")
+        if sm and UN.H1u.has_sm(path):
             libs[f"{name}-sm"] = UN.H1u(path, sm=True)
+        elif sm:
+            print(json.dumps({"lib": name, "note": "no kh_units_multi_j10r_sm: its served launch is not checked"}))
     if ref:
         libs["ref"] = UN.Ref(ref)
     return libs

@@ -14,6 +14,7 @@ import ctypes
 
 import numpy as np
 import torch
+
 from verity.core.protocols.pouw.circuit import seeds as SD
 
 T = 32
