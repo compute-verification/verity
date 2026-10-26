@@ -82,9 +82,10 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                f"{c.policy.name} (Γ = {c.policy.gamma:.3g} FLOP, k = {c.policy.k:.3g} bit), {c.horizon.name}; target "
                f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {when(s, 1.0)} unencumbered).")
     out = [f"## {s.name}", "", setting, "",
-           f"**ρ̄ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target; the lower end holds "
-           f"except with probability δ_coin = {fmt(delta['coin'])} (the coins' draws) plus δ_crypto = "
-           f"{fmt(delta['crypto'])} (binding and knowledge soundness), under the hardware model and the inventory.", "",
+           f"**ρ̄ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target. The declared cut's "
+           f"free terms exceed their stated shares with probability at most δ_coin = {fmt(delta['coin'])} (the coins' "
+           f"draws) plus δ_crypto = {fmt(delta['crypto'])} (binding and knowledge soundness); this covers no other term "
+           f"(onsite, not the wipe's or the certifier's).", "",
            "ρ's lower end from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
            "What sets ρ̄ (each part's share of the adversary's rate `ε_dark + (1 − ε_dark) g`, and the most ρ̄ can be "

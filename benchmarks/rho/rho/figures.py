@@ -3,7 +3,7 @@
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
 
-* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the inference block's
+* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the declared block's
   compute and at the serving block's (a location between two wipes), and where each becomes vacuous.
 * `brackets`: ρ's bracket per scenario and family: the lower end from the bounds at each status, the upper from the
   attacks.
@@ -136,7 +136,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     p = fam.profile(s.model, s.run)
     gamma, k_policy = s.context.policy.gamma, s.context.policy.k
     win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
-    panels = [("the inference block's compute Γ", gamma)]
+    panels = [("the declared block's compute Γ", gamma)]
     if win is not None:
         panels.append(("the serving block's compute Φ·Δτ·MFU", win.compute))
     ks = _logspace(1e4, 1e13, points)
@@ -293,8 +293,8 @@ def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
 
 def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """ρ (lower end solid, upper dashed) against the dark share `ε_dark` (`grid + 11` points), per scenario, with `μ/ε_dark`,
-    the most the dark pool alone allows."""
+    """ρ (lower end solid, upper dashed) against the dark share `ε_dark` (`grid + 11` points), per scenario, with
+    `μ/ε_dark`, the most the dark pool alone allows."""
     points = grid + 11
     plt = _plt()
     names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]

@@ -6,16 +6,16 @@ the declared blocks. A regime says, for one location over one window (a **region
 valid, and cites what makes each valid:
 
 * **declared** (remote and onsite): the remote composition, `Nci.Guarantees.DampenerRemote`, term for term. The
-  certified work `(1 − ε_W) W_cert` runs inference blocks `(Γ, k)`, and every other FLOP of the location's capacity is
-  free at face value, keyed by the route it escapes by (the working draft's §8; `ROUTES`):
+  certified work `(1 − ε_W) W_cert` runs declared blocks `(Γ, k)`, and every other FLOP of the location's capacity is
+  free at face value, keyed by its route (the working draft's §8; `ROUTES`):
   - `undecl`, known compute running no declared work: the host CPUs at peak;
   - `gap`, declared work certified for less than it occupied: PoUW's floor credit (`residual`) and the clock above the
     credited one (together with `undecl`, the audited residual `r̂`);
   - `skip`, credited without running: PoUW's deficit `ε_W W_cert/C` and the certificate slack `ε'`;
   - `break`, declared work that fails a check, run until its identity halts: the verdict lag `JΔ/H` and, with sampled
-    proofs, the escaped faulty blocks `θ`;
-  - `exfil`, the bits the accepted faulty blocks write to their outputs (`k_exfil`), still converted to FLOPs at
-    `chord` products a bit as Lean's cheating share `χ` does. The residual is a share of peak capacity, as Lean counts it
+    proofs, the faulty blocks accepted before detection `θ`;
+  - `exfil`, Lean's cheating share `χ`: the compute that bits injected by accepted faulty blocks buy, at `chord`
+    products a bit. The residual is a share of peak capacity, as Lean counts it
   (`M_r ≤ κ (C − (1 − ε_W) W_cert + …)/2`), so its free FLOPs are `share · Φ Δτ`: `g`'s free share is the Lean
   dampener's `share / MFU₀`. `benchmarks/nci/tiers.py` computes the same terms (`tests/test_regimes.py` holds them to it).
 * **serving** (onsite only): the whole serving block (a location between two wipes) is one block, its budget
@@ -152,9 +152,10 @@ class Remote:
         return min(1.0, self.residual + self.clock_share + self.host * loc.host_ops / loc.phi)
 
     def delta(self) -> dict[str, float]:
-        """The chance the declared cut's escapes exceed their stated shares, split by what fails: `δ_coin` (the work
-        draw's `δ_s / ε'` by Markov, and with sampled proofs the escape bound's `δ`) and `δ_crypto` (`(δ_bind + δ_ks) / ε'`).
-        Onsite, the wipe's and the certifier's own failure probabilities are not modeled here."""
+        """A bound on the chance that the declared cut's free terms exceed their stated shares, split by what it rests
+        on: `δ_coin` (the work draw's `δ_s / ε'` by Markov, and with sampled proofs the escape bound's `δ`) and
+        `δ_crypto` (`(δ_bind + δ_ks) / ε'`). It covers nothing else: onsite, the wipe's and the certifier's failure bounds are not
+        included."""
         coin = self.window_delta_coin / self.eps_agg + (self.p_evade if self.sampled else 0.0)
         return {"coin": coin, "crypto": self.window_delta_crypto / self.eps_agg}
 
@@ -292,8 +293,8 @@ class Onsite(Remote):
 
 KINDS: Mapping[str, type] = {"unmonitored": Unmonitored, "remote": Remote, "onsite": Onsite}
 
-#: the routes by which declared-cut FLOPs escape the inference blocks, the prefix of each free source's key (the
-#: working draft's §8: `ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`, and `k_exfil` counted as FLOPs)
+#: the routes of the declared cut's free FLOPs, the prefix of each free source's key (the working draft's §8:
+#: `ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`, and Lean's `χ` as `exfil`)
 ROUTES = ("undecl", "gap", "skip", "break", "exfil")
 
 

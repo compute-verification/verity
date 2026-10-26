@@ -342,7 +342,8 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 class Term:
     #: `dark` (`ε_dark`), or one of g's terms: a block kind or a free source (`Slowdown.terms`)
     name: str
-    #: its part of the adversary's rate `ε_dark + (1 − ε_dark) g`, in multiples of the unencumbered rate, and its share of the rate
+    #: its part of the adversary's rate `ε_dark + (1 − ε_dark) g`, in multiples of the unencumbered rate, and its share
+    #: of the rate
     part: float
     share: float
     #: `m / part`: ρ can't exceed it while this term remains
@@ -350,8 +351,8 @@ class Term:
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets ρ, largest first: the adversary's rate `ε_dark + (1 − ε_dark) g` split into the dark pool and g's terms, for the
-    family the adversary picks (the least `lo`; with `side="attack"`, the least `hi` under its best attack)."""
+    """What sets ρ, largest first: the adversary's rate `ε_dark + (1 − ε_dark) g` split into the dark pool and g's
+    terms, for the family the adversary picks (the least `lo`; with `side="attack"`, the least `hi` under its best attack)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: f.lo, default=None)
         s = fam.combined.slowdown if fam else None

@@ -84,35 +84,37 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 
 ### Notation
 
-The working draft's §8 ("From the circuit to the datacenter") is the notation, and the code names follow it:
+The names follow the working draft's §8 ("From the circuit to the datacenter"), which defines them and proposes, but
+does not establish, their composition. Renaming changed no accounting: this model's numbers are its earlier accounting
+under these names, not a validation of §8.
 
 | draft | here | meaning |
 |---|---|---|
-| inference block `I`, `(c, k)` | `Blocks("declared")`, `Policy` `(Γ, k)` | an element of the declared partition |
+| declared block `I`, `(c, k)` | `Blocks("declared")`, `Policy` `(Γ, k)` | an element of the declared partition |
 | serving block `S`, `(c_S, k_S)` | the `serving` cut, `Onsite.budget` | one location between two wipes |
-| `ε_dark` | `fleet.<name>.eps_dark`, `Fleet.eps_dark_rate`, `Partition.eps_dark` | compute nobody found |
+| `ε_dark` | `fleet.<name>.eps_dark`, `Fleet.eps_dark_rate`, `Partition.eps_dark` | compute nobody found, a share of the fleet's |
 | `ε_undecl` | free source `undecl.host` | known compute running no declared work |
 | `ε_gap` | `gap.floor` (`residual`), `gap.clock` | declared work certified for less than it occupied |
 | `ε_skip` | `skip.pouw` (`ε_W`), `skip.certs` (`ε'`) | credited without running |
 | `ε_break` | `break.lag` (`JΔ/H`), `break.escape` (`θ`) | fails a check, runs until its identity halts |
-| `k_exfil` of unchecked blocks | `exfil.faulty` (Lean's `χ`), the faulty-outputs row | arbitrary bits written to outputs |
-| `k_wipe`, `k_in`, `k_infil(S)` | `residual_bits` and `host_residual_bits`, certified ingress, `timing` and `side` | what enters a serving block |
-| `δ_coin`, `δ_crypto` | `Regime.delta()`, from `window_delta_coin` and `window_delta_crypto` | the chance a stated escape is exceeded |
-| `μ`, `ρ̄` | `Profile.efficiency`, `Slowdown.rho` | a method's cost relative to the reference; the deployment slowdown |
+| Lean's `χ`; `k_exfil` of unchecked blocks | `exfil.faulty`; the faulty-outputs row | the compute injected bits buy; what they carry out |
+| `k_wipe`, `r_in`, `r_side` | `residual_bits` and `host_residual_bits`, certified ingress, `timing` and `side` | what enters a serving block |
+| `δ_coin`, `δ_crypto` | `Regime.delta()`, from `window_delta_coin` and `window_delta_crypto` | the declared partition's terms only: not the wipe's or the certifier's |
+| `\|C_{0,m}(G)\|/T_0`, `ρ̄` | `Profile.efficiency`, `Slowdown.rho` | a method's cost relative to the reference; the deployment slowdown, a proposed quantity |
 
-Two differences remain, both listed as next steps: `exfil.faulty` still counts `k_exfil` as FLOPs at `chord` products a
-bit, where §8 has it enter the reading blocks' `k_infil`; and shares are of peak capacity (Conventions), where §8
-defines them as shares of the adversary's unencumbered training rate.
+`exfil.faulty` is Lean's `χ`, the compute that injected bits buy, at `chord` products a bit; the faulty-outputs row is
+what they carry out. They answer different questions. Replacing `χ` by per-block allowances needs its own theorem
+(§8), so it stays. Shares are of peak capacity (Conventions).
 
 ### Declared and actual circuits
 
 The NCI verifier of record enforces the policy `(Γ, k)` on the **declared** circuit. The **actual** circuit is what the
 fleet computes, and the regimes map it onto blocks:
 
-- **declared cut** (remote and onsite): the certified share of a region runs inference blocks `(Γ, k)`; every other
-  unit of capacity is free at face value, at peak as Lean counts it, keyed by the route it escapes by: `undecl` (host
+- **declared cut** (remote and onsite): the certified share of a region runs declared blocks `(Γ, k)`; every other
+  unit of capacity is free at face value, at peak as Lean counts it, keyed by its route: `undecl` (host
   CPUs), `gap` (the GPUs' uncredited floor and clock above the credit; with `undecl`, `r̂`), `skip` (PoUW's deficit
-  `ε_W`, the slack `ε'`), `break` (the verdict lag `JΔ/H`, the escape slack `θ`) and `exfil` (Lean's `χ`). It rests on `DampenerRemote`'s premises (PoUW, terminal and sampled detection) and the
+  `ε_W`, the slack `ε'`), `break` (the verdict lag `JΔ/H`, the slack `θ` for faulty blocks accepted before detection) and `exfil` (Lean's `χ`). It rests on `DampenerRemote`'s premises (PoUW, terminal and sampled detection) and the
   verifier's enforcement.
 - **serving cut** (onsite): a serving block, a location between two wipes, is one block, `(Φ Δτ, K)`, by causality on the actual
   circuit's annotation (`width_into_region_le`, `Links`, `Covered`; ASK-141). In its `links` form, what Lean proves
@@ -122,8 +124,8 @@ fleet computes, and the regimes map it onto blocks:
   draft.
 
 A location is the largest set of devices joined by links no certifier sees (an HGX server's NVLink domain, an NVL72
-rack). Remotely nothing bounds what enters a location, so free FLOPs are free; onsite the serving block's input caps
-them too, which is why only `ε_dark` escapes the serving cut.
+rack). Remotely nothing bounds what enters a location, so free FLOPs are free; onsite the serving cut puts all of a
+location's compute in one block, which rests on `WindowsAt` and the cut's other citations.
 
 ### Conventions
 

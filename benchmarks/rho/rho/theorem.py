@@ -16,8 +16,8 @@ region is unconstrained). The dark pool's share `ε_dark` of the adversary's tra
     ρ̄ = μ / (ε_dark + (1 − ε_dark) · g)
 
 where `μ` is the compute the algorithm needs to reach the target, in multiples of the reference algorithm's (the
-working draft's `|C_{0,m}(G)|/T_0`), and the other escapes (`ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`) are the free FLOPs
-inside `g`.
+working draft's `|C_{0,m}(G)|/T_0`), and the other unaccounted compute (`ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`) is
+the free FLOPs inside `g`.
 
 This module knows no GPU, protocol or training class: `regimes` builds the partition from the actual datacenter,
 `classes` and `attacks` give allowances, and `families` the algorithm's profile.
@@ -119,8 +119,8 @@ def share(region: Region, allowance: Allowance, kappa: float, side: Side = "boun
 
 @dataclass(frozen=True)
 class Slowdown:
-    """ρ for one algorithm under one allowance: `rho = efficiency / (ε_dark + (1 − ε_dark) g)`, with each region's share and
-    `g`'s terms summed over regions (each a share of the monitored fleet's unencumbered products)."""
+    """ρ for one algorithm under one allowance: `rho = efficiency / (ε_dark + (1 − ε_dark) g)`, with each region's share
+    and `g`'s terms summed over regions (each a share of the monitored fleet's unencumbered products)."""
 
     rho: float
     g: float
@@ -151,8 +151,8 @@ def slowdown(partition: Partition, allowance: Allowance, kappa: float, efficienc
 
 
 def rho(eps_dark: float, g: float, efficiency: float = 1.0) -> float:
-    """The slowdown when an `ε_dark` share of the training rate runs unencumbered and the rest at `g` of its unencumbered
-    rate."""
+    """The slowdown when an `ε_dark` share of the training rate runs unencumbered and the rest at `g` of its
+    unencumbered rate."""
     rate = eps_dark + (1 - eps_dark) * g
     return efficiency / rate if rate > 0 else math.inf
 

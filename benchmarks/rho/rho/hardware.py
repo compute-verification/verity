@@ -14,8 +14,8 @@ its compute (15 times at today's numbers), so a bound linear in `K` gives it a s
 unthrottled (Kimi K2's 16-bit state fits a rack's day, not a server's).
 
 A **fleet** is the adversary's monitored locations and its dark share `ε_dark` of compute: one connected pool outside
-every monitored region, which runs unencumbered (Daniel, 25 Oct), at its own utilization `mfu_dark`. A **horizon** is the
-monitoring period a result is over.
+every monitored region, which runs unencumbered (Daniel, 25 Oct), at its own utilization `mfu_dark`. A **horizon** is
+the monitoring period a result is over.
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
 rate (no `links`-form physical cut).
