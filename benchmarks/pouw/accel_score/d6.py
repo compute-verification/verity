@@ -592,6 +592,22 @@ def report(D: dict) -> str:
              "at every dual price (P20). "
              "Credit is pub at the period's dual prices: one LP over the period's credited rounds with every public "
              "route (`d5_routes.period`). A route that wins there leaves honest time uncredited and never adds to ε.\n")
+    L.append(f"### The world (rule L2): pooled, every window, both δ, {HEADLINE}, V4 as the world's request (8B, 70B "
+             "below)\n")
+    L.append("ε at P16's 8-GPU groups. C is the world's FP8 FLOP (brief rule L2); the credited share and ε are one "
+             "card's, scaled to the world.\n")
+    L.append("| card, model | window | C (FP8 FLOP) | credited (FLOP-eq.) | εC δ 1% | εC δ 1e-6 | "
+             "honest time uncredited (FLOP-eq.) | QKᵀ + indexer + plain PV, uncredited MACs |")
+    L.append("|---|---|---|---|---|---|---|---|")
+    for card in vc.CARDS:
+        for m in reversed(models):
+            r = rows[HEADLINE, card, "measured", m]
+            for win, F in WORLD_FLOP.items():
+                s = r["share"]["share"]
+                g8 = r["eps"]["groups"][8]["eps"]
+                L.append(f"| {card}, {short[m]} | {win} | {F:.2e} | {s * F:.2e} | {g8[0.01] * F:.1e} | "
+                         f"{g8[1e-6] * F:.1e} | {(1 - s) * F:.1e} | {pct(r['world']['uncredited'], 1)} |")
+    L.append("")
     L.append("### ε (goal ≤ 1% at δ = 1e-6)\n")
     L.append("ε = ε_S + ε_net. P16 (07:04Z): the theorem holds per serving-replica group (coins in lockstep inside a "
              "group), with a union bound over the world fleet's G groups, so ε_S = ln(G/δ)/(ηk) at k = 13,816 a group; "
@@ -736,22 +752,6 @@ def report(D: dict) -> str:
                 cells.append(f"{top} {pct(f[top])}; tensor {pct(f.get('tensor', 0.0))}; issue "
                              f"{pct(f.get('issue', 0.0), 3)}")
             L.append(f"| {design}, {card} | " + " | ".join(cells) + " |")
-    L.append("")
-    L.append("### The world (rule L2): pooled, every window, both δ, V4 as the world's request (8B, 70B below)\n")
-    L.append("ε at P16's 8-GPU groups. C is the world's FP8 FLOP (brief rule L2); the credited share and ε are one "
-             "card's, scaled to the world.\n")
-    L.append("| card, model | window | C (FP8 FLOP) | credited (FLOP-eq.) | εC δ 1% | εC δ 1e-6 | "
-             "honest time uncredited (FLOP-eq.) | QKᵀ + indexer + plain PV, uncredited MACs |")
-    L.append("|---|---|---|---|---|---|---|---|")
-    for card in vc.CARDS:
-        for m in reversed(models):
-            r = rows[HEADLINE, card, "measured", m]
-            for win, F in WORLD_FLOP.items():
-                s = r["share"]["share"]
-                e = r["eps"]
-                g8 = e["groups"][8]["eps"]
-                L.append(f"| {card}, {short[m]} | {win} | {F:.2e} | {s * F:.2e} | {g8[0.01] * F:.1e} | "
-                         f"{g8[1e-6] * F:.1e} | {(1 - s) * F:.1e} | {pct(r['world']['uncredited'], 1)} |")
     L.append("")
     L.append("### P16: per replica group (union bound), G from the world model at the card's FP8 rate (scaled)\n")
     L.append("| card | GPUs a group | G | ε_S δ 1% / 1e-6 at k = 13,816 a group | k a group for ε_S 0.1% at 1e-6 | "
