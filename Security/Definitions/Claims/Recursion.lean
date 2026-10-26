@@ -414,7 +414,8 @@ error and no other; and the inputs of the SHA-512 evaluations the V* setup makes
 statement's bytes), none by default; the inputs of the SHA-512 evaluations the inner verifier's setup makes at an
 inner statement (`innerSetup`, reading no message and no coin: the inner statement's own), none by default; and the
 inputs of the SHA-512 evaluations the inner verifier makes on the inner messages the outer witnesses give, at an oracle
-(`innerCalls`, reading no coin), none by default. -/
+and the run's coins (`innerCalls`, the compiled verifier's coins, whose first are the inner session's), none by
+default. -/
 structure Deploy (Coin : Type) where
   V : Verifier Coin
   parse : Msg → Option Stmt
@@ -437,7 +438,7 @@ structure Deploy (Coin : Type) where
   δc : (Msg → Msg) → Msg → ℝ
   setup : Msg → List Msg := fun _ => []
   innerSetup : Msg → List Msg := fun _ => []
-  innerCalls : (Msg → Msg) → Msg → List Flock.Wit → List Msg := fun _ _ _ => []
+  innerCalls : (Msg → Msg) → Msg → (ℕ → Coin) → List Flock.Wit → List Msg := fun _ _ _ _ => []
 
 instance Deploy.instNonemptyTape {Coin : Type} (D : Deploy Coin) : Nonempty D.Tape := D.tapeNonempty
 
