@@ -2,78 +2,64 @@ import Definitions.Pouw.Dither
 import Definitions.Pouw.Assumptions.Dither
 
 /-!
-# Dither's work-soundness over a monitoring period (trusted)
+# The no-fold Dither protocol's work-soundness over a monitoring period (trusted)
 
-The ACCEL program's final guarantee (CMP-116, DITHER-THM), on the accelerator model of `Definitions.Pouw.Dither`, and
-the freed-compute bound it gives (R-ACCEL-1).
+The ACCEL program's headline (CMP-136, D2), on the accelerator model of `Definitions.Pouw.Dither`.
 
-* `DitherWorkSound`: under the device premises (G1, G2, P1, P2), SAK(matmul) at the constant `c = pub/H` (the one
-  computational premise, R-ACCEL-6: Theorem O's moment bound and the direct-sum cut), the
-  proof service's soundness per prover (`ServiceSoundDither`: C-Flock sound and zero knowledge, SHA-512 only through
-  each adversary's finders, live coins from the auditor's challenger) and the network certifier's import count
-  (`ImportWithinCertifier`), a monitoring period of `k` rounds is `(1 − ε)`-work-sound at every price vector, with
-  `ε = (1 − c) + D/k + β K/(k H)`: model slack, sampling luck, network import. The floor holds on the rounds the
-  adversary's run is credited for (`RoundsFloor`) and so on its whole run (`WorkSound`). Each adversary's error is its
-  own (`breakBound` at the luck `e^{−η D}`).
-* `FreedOfFloor`: the floor at the dual price of the period's linear program bounds freed compute by `ε C`, `C` the
-  period's devices at that price (`Period.FreedWithin`).
-
-**What it replaces.** The floors of record (`StagedFloorKOneSided` and its siblings) rest on Theorem K's scope
-(`KScopeOneSided`, `KScopeAffine`: which programs a prover runs) and on `ChargeVF3j16` (what the machine charges a
-product). `DitherWorkSound` takes neither: its premises are the device model, the service and the network certifier,
-and SAK(matmul), the one computational premise (R-ACCEL-6), whose constant `c = pub/H` reads the public best matmul
-method's cost, which the ring count (`RingKCount`) proves on the tensor cores.
-WORD-WORK's per-word premise (`WordCostsMacs`, CMP-102) is replaced the same way: the credit it multiplies by MACs a
-word is here a priced cost, read off the model. The map from the old floors and from #4363's
-`H1CheckedCreditPeriod` is in the note (note:compute-research/20261026T0130Z-draft-accel-dither-thm).
+* `WorkSound`: under the accelerator model's device premises (G1, G2, P1, P2) and exactly the program's trust base,
+  each a named premise (SAK(matmul), SHA-512's speed, the proof service's soundness, the network certifier's import
+  count, and commit-and-open's extraction), freed compute over a monitoring period of `k` rounds is at most `ε C` except
+  with probability at most each adversary's `breakBound` at `δ`:
+  `Pr[accepted ∧ W_cred + W_other > OPT_honest + ε C] ≤ δ + k (δb + δz) + finder terms`, with
+  `ε = (1 − h)(1 − c_mm) + h (1 − c_sha) + ln(1/δ)/(η k) + β K/(k H)`.
+* `FreedOfFloor`: the rounds' floor at the period's dual price bounds freed compute by `ε C` (weak duality); the step
+  from the floor to `WorkSound`'s conclusion.
 -/
 
 namespace Pouw.Guarantees.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
-/-- **Dither is `(1 − ε)`-work-sound over a monitoring period** (DITHER-THM). In every accelerator model `G` and for
-every round protocol `P` (today's Dither is `ditherRound` at its knobs), every service `S` whose seed is the period's
-`k` rounds of live coins (`e`), every price vector `λ` and every analysis map `run`: if the devices meet (G1), (G2),
-(P1) and (P2), SAK(matmul) holds at `λ` with constant `c`, rate `η` and import weight `β` against the honest round's
-priced cost `H` (Theorem O's moment bound, and the cut `run` is a direct sum: an accepted run's rounds are pieces of
-it), the service
-is sound up to its proof layer per prover, and the network certifier counts at most `K` imported bits, then every
-adversary that commits first has its accepted periods whose rounds are
-priced below `(1 − ε) k H` with probability at most its own `breakBound` at the luck `e^{−η D}` (`RoundsFloor`), and so
-its accepted periods priced below `(1 − ε) k H` as a whole (`WorkSound`), where `ε = (1 − c) + D/k + β K/(k H)`. The
-rounds' floor is the one freed compute reads (`FreedOfFloor`): other work the adversary runs beside its rounds is not
-counted toward it.
+/-- **The no-fold protocol is `(1 − ε)`-work-sound over a monitoring period** (R-ACCEL-1's freed compute; CMP-136).
+In every accelerator model `G` and for every round protocol `P` (the no-fold protocol is `noFoldRound` at its knobs, so
+protocol v1 and v2 are instances), every service `S` whose seed is the period's `k` rounds of live coins (`e`), every
+analysis map `run`, every period `Pd` of the devices with its jobs, and every price `μ` that is the period's dual
+price at `k` credited rounds (`Period.DualOpt`): if the honest round costs `H = H_mm + H_sha` at `μ` (its words and its
+commitment, both positive), the parameters are in range (`c_mm, c_sha ≤ 1`, the honest kernel and hashing being
+public methods; `0 < δ ≤ 1`; `η > 0`; `β, K ≥ 0`), the devices meet (G1), (G2), (P1) and (P2), and
 
-The three terms: the model's slack `1 − c` (SAK(matmul)'s constant; 0 where the honest kernel is the public best),
-the sampling luck `D/k` (at `δ = e^{−η D}`, `D = ln(1/δ)/η`, with `η = 1 − p` at the per-round luck `p`), and the
-network import `β K/(k H)`. `H` is free, so the statement holds at the honest kernel's priced cost of a round, where
-it reads as `(1 − ε)`-work-soundness, and Theorem O at `c` forces `c H` below every always-passing program's cost.
-Beside the data sheets' device premises, the service's cryptography, the auditor's live coins and the network
-certifier, the statement reads one statement over every program of the model, SAK(matmul). Where honest time includes
-SHA-512 hashing at share `h`, `c` is the matmul constant on the rest and `ShaSpeed` the hashing's (the note's
-\(1 - c = (1 - h)(1 - c_{mm}) + h(1 - c_{sha})\)). -/
-def DitherWorkSound : Prop :=
+* SAK(matmul) holds on the words at `μ` with constant `c_mm`, rate `η` and import weight `β` against `H_mm`,
+* SHA-512's speed holds on the commitment likewise with constant `c_sha` against `H_sha`,
+* the service is sound up to its proof layer per prover,
+* the network certifier counts at most `K` imported bits, and
+* the analysis map extracts computing rounds from every accepted commit-and-open run, within it,
+
+then for every adversary that commits first, the probability that its period is accepted and other work `z` fits on
+the period's devices beside its credited rounds with `k + W_other(z) > OPT_honest + ε C` (`C = μ · cap`, the period's
+devices at `μ`) is at most its own `breakBound` at the luck `δ`, where
+`ε = (1 − h)(1 − c_mm) + h (1 − c_sha) + ln(1/δ)/(η k) + β K/(k H)`, `h = H_sha / H`.
+
+The terms: the model's slack on the matmul share and on the hashing share (0 where the honest kernel and the honest
+hashing are the public best), the sampling luck (`η = 1 − p` at the per-round luck `p`), and the network import. -/
+def WorkSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (S : Service) (k : ℕ) (e : S.Seed ≃ Paths (P.Draw × P.Chk) k)
-    (run : PeriodMap G S P k) (p : G.Res → ℝ) (sha : Claims.Msg → Claims.Msg) (fb fz : Finders G.Mc S k)
-    (c η β H K D δb βb δz βz cb db cz dz : ℝ),
-    Simplex p → 0 < H → 0 ≤ η → 0 ≤ β → 0 ≤ δb → 0 ≤ βb → 0 ≤ δz → 0 ≤ βz →
-    G.G1 → G.G2 → G.P1 → G.P2 → SAKMatmul G S P run e p c η β H →
-    ServiceSoundDither G S P run e sha fb fz δb βb δz βz → ImportWithinCertifier G S K →
-    let ε := epsDither c D β K H k
-    let κ := breakBound sha fb fz cb db cz dz (Real.exp (-(η * D))) δb βb δz βz
-    RoundsFloor G S P run e p ((1 - ε) * (k * H)) κ ∧ WorkSound G S p (k * H) ε κ
+    (run : PeriodMap G S P k) (Pd : Period G) (μ : G.Res → ℝ) (sha : Claims.Msg → Claims.Msg)
+    (fb fz : Finders G.Mc S k) (cmm csha η δ β Hmm Hsha K δb βb δz βz cb db cz dz : ℝ),
+    Pd.DualOpt μ k → 0 < Hmm → 0 < Hsha → Hmm + Hsha = ∑ r, μ r * Pd.hon r →
+    cmm ≤ 1 → csha ≤ 1 → 0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K → 0 ≤ βb → 0 ≤ βz →
+    G.G1 → G.G2 → G.P1 → G.P2 →
+    SAKMatmul G P μ cmm η β Hmm → ShaSpeed G P μ csha η β Hsha →
+    ServiceSound G S P run e sha fb fz δb βb δz βz → ImportWithinCertifier G S K → Extract G S P run e →
+    FreedSound G S P run e Pd k (epsWorkSound cmm csha Hmm Hsha η δ β K k) (∑ r, μ r * Pd.cap r)
+      (breakBound sha fb fz cb db cz dz δ δb βb δz βz)
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
 credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
 complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
-fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`, with `X` its rounds'
-use `PeriodPlay.use`: the rounds' floor `RoundsFloor` of `DitherWorkSound` at the price vector `λ_r ∝ μ_r ρ_r`), frees
-at most `ε C` with `C = μ · cap`, the period's devices at the dual price. The floor on the whole run (`WorkSound`) is
-not enough here: it would count the other work `z` toward the credited part's floor. Counting one resource alone
-(tensor-core time) is the floor at one vertex of the simplex, which is the dual price only where that resource binds
-every job. -/
+fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`), frees at most
+`ε C` with `C = μ · cap`, the period's devices at the dual price. The floor on the whole run would not be enough here:
+it would count the other work `z` toward the credited part's floor. -/
 def FreedOfFloor : Prop :=
   ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
     (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →

@@ -1,27 +1,27 @@
 import Definitions.Pouw.RelativeSecurity
 
 /-!
-# Dither's work-soundness: the vocabulary its guarantee reads (trusted)
+# The no-fold Dither protocol's work-soundness: the vocabulary its guarantee reads (trusted)
 
-The final guarantee of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.DitherWorkSound`) is stated over:
+The headline of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated over:
 
-* **the accelerator model** `G = (Σ, M, R, ρ, I, u)` (`Accel`): a machine's programs, the period's devices'
-  resources with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, and the two device
-  premises the model is held to, (G1) capacity (`Accel.G1`) and (G2) rate (`Accel.G2`), beside the two arithmetic
-  premises (P1) exact operand formats and (P2) a product lives in one accumulator (`Accel.P1`, `Accel.P2`), which
-  MODEL-SPEC (CMP-109) defines; until it lands, this structure is the abstraction MODEL-SPEC instantiates;
-* **prices** (`Simplex`, `Accel.priced`): a run's cost at a price vector `λ` on the resources, `Σ_r λ_r u_r / ρ_r`,
-  in device-seconds when `λ` is a probability vector;
-* **a round** of a commit-then-check protocol (`RoundProto`), parametric in the protocol (R-ACCEL-2), with today's
-  Dither as one instance (`ditherRound`) whose knobs (`Knobs`: `L`, U's range and placement) are parameters;
-* **Theorem O's slot** (`TheoremO`): a round program's moment bound, which R-ACCEL-6 splits into SAK(matmul) (the one
-  computational premise, `Definitions.Pouw.Assumptions.SAKMatmul`) and the tensor-core ring count (proved,
-  BET-K-DISCHARGE's `RingKCount`);
-* **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), **the direct-sum cut**
-  (`DirectSum`: the rounds an accepted run is cut into are pieces of it; one half of SAK(matmul), never a premise on
-  its own), its priced floors, on the rounds (`RoundsFloor`) and on the whole run
-  (`WorkFloor`, `WorkSound`), and the error `epsDither`;
-* **freed compute** (`Period`, `Period.FreedWithin`): R-ACCEL-1's definition, kept in this one place.
+* **the accelerator model** `G = (Σ, M, R, ρ, I, u)` (`Accel`): a machine's programs, the period's devices' resources
+  with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, the two device premises (G1)
+  capacity and (G2) rate (`Accel.G1`, `Accel.G2`) and the arithmetic premises (P1) and (P2) (`Accel.P1`, `Accel.P2`),
+  which MODEL-SPEC (CMP-109) instantiates from `Definitions.Core.Accel`;
+* **prices** on the resources (`Accel.cost`): a run's cost `Σ_r μ_r u_r` at a price `μ_r ≥ 0` a unit of resource `r`
+  (at `μ_r = λ_r / ρ_r`, the device-seconds it takes at the price vector `λ`);
+* **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
+  commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol (R-ACCEL-2),
+  with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
+  v2 are instances;
+* **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
+  SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s `SAKMatmul`, `ShaSpeed`);
+* **a monitoring period's play** round by round (`PeriodPlay`: per round a words program and a commitment program),
+  the analysis's map from adversaries to plays (`PeriodMap`, `PeriodRun`), and the rounds' floor (`RoundsFloor`);
+* **freed compute** (`Period`, `Period.FreedWithin`, `Period.DualOpt`, `FreedSound`): R-ACCEL-1's definition, kept in
+  this one place, and its probability form, the headline's conclusion;
+* the error (`epsWorkSound`).
 -/
 
 namespace Pouw.Dither
@@ -31,12 +31,12 @@ open Pouw.RelativeSecurity Finset
 section Model
 
 /-- **The accelerator model** at the granularity this guarantee reads: a machine `Mc` (its programs, what they compute
-and their composition), the period's devices' resources `Res` (tensor cores, ALUs, shared-memory and register ports,
-global memory, links), each at its data-sheet rate `rate` (`ρ`, units a second), their memory `mem` (`M`, bits), and
-per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, and the bits
-it reads from outside the period's devices `ext` (what the network certifier counts). `P1` and `P2` are the arithmetic
-premises, exact operand formats and one accumulator per product, as MODEL-SPEC (CMP-109) defines them. `θ = (M, ρ, u)`
-are the model's parameters; the guarantee's error reads them only through Theorem O's constant. -/
+and their composition), the period's devices' resources `Res` (tensor cores, issue slots, shared-memory and register
+ports, device memory, links), each at its data-sheet rate `rate` (`ρ`, units a second), their memory `mem` (`M`, bits),
+and per run its use of each resource `use` (`u`), the bits it holds at its peak `held`, its wall time `wall`, and the
+bits it reads from outside the period's devices `ext` (what the network certifier counts). `P1` and `P2` are the
+arithmetic premises, exact operand formats and one accumulator per product, as MODEL-SPEC (CMP-109) defines them in
+`Definitions.Core.Accel.Principles`. `θ = (M, ρ, u)` are the model's parameters. -/
 structure Accel where
   /-- The programs, what they compute and how they compose. -/
   Mc : Machine
@@ -75,25 +75,21 @@ def G2 : Prop :=
   (∀ r, 0 < G.rate r) ∧
     ∀ {I O : Type} (f : G.Mc.Alg I O) (x : I) (r : G.Res), 0 ≤ G.use f x r ∧ G.use f x r ≤ G.rate r * G.wall f x
 
-/-- **A run's priced cost** at the price vector `λ`: `Σ_r λ_r u_r / ρ_r`, the device-seconds it takes at `λ`. At a
-point mass on one resource it is that resource's busy time; per-resource counting (tensor-core time alone) is one such
-point, and the guarantee holds at every `λ` at once. -/
-noncomputable def priced (p : G.Res → ℝ) {I O : Type} (f : G.Mc.Alg I O) (x : I) : ℝ :=
-  ∑ r, p r * (G.use f x r / G.rate r)
+/-- **A run's cost at the prices `μ`**: `Σ_r μ_r u_r`, `μ_r` the price of a unit of resource `r`. At `μ_r = λ_r / ρ_r`
+it is the device-seconds the run takes at the price vector `λ`; at a point mass it is one resource's busy time. -/
+noncomputable def cost (μ : G.Res → ℝ) {I O : Type} (f : G.Mc.Alg I O) (x : I) : ℝ := ∑ r, μ r * G.use f x r
 
 end Accel
-
-/-- A price vector is a probability vector on the resources. -/
-def Simplex {G : Accel} (p : G.Res → ℝ) : Prop := (∀ r, 0 ≤ p r) ∧ ∑ r, p r = 1
 
 end Model
 
 section Round
 
 /-- **A round of a commit-then-check protocol**: an instance the prover committed before the round (`Inst`, the
-workload's operands), the round's first live coin `Draw` (σ₁), the transcript the prover commits after it `Tr`, the
-check's live coin `Chk` (σ₂), and whether the check passes on the committed transcript (`ok`). The proof layer (C-Flock's
-proof that the committed transcript passes, the receipt fold) is the service's, not the round's. -/
+workload's operands), the round's first live coin `Draw` (σ₁, the noise), the words the prover computes after it
+`Tr`, their commitment `commit` (in `Root`), the check's live coin `Chk` (σ₂), and whether the check passes on the
+words (`ok`). The prover sends the commitment before σ₂ is drawn and opens the words the check draws; the proof layer
+(C-Flock's proofs of the opened words, the commitment's openings) is the service's, not the round's. -/
 structure RoundProto where
   Inst : Type
   Draw : Type
@@ -101,123 +97,127 @@ structure RoundProto where
   [instDraw : Fintype Draw]
   [instChk : Fintype Chk]
   Tr : Type
+  Root : Type
+  commit : Tr → Root
   ok : Inst → Draw → Chk → Tr → Prop
 
 attribute [instance] RoundProto.instDraw RoundProto.instChk
 
-/-- A word of the transcript: integers mod `2^32`. -/
+/-- A word: integers mod `2^32`. -/
 abbrev Word : Type := ZMod (2 ^ 32)
 
-/-- **Dither's knobs** (R-ACCEL-2): `A` is `n × m`, `B` is `m × n'` with `m = nb · L`, the prefix stride `L` (32
-today), U's range `±1, …, ±u` (64 today) and its placement `place` (`S_tj = U_{j, place t}`; `t mod L` today). -/
-structure Knobs where
+/-- **The no-fold protocol's knobs** (PROTO-DESIGN, R-ACCEL-2): `A` is `n × m`, `B` is `m × n'` with `m = nb · L`,
+`L` the segment length; the noise (`Draw`, and `noise`, the noised operands `(Ã, B̃)` from the committed operands and
+the noise: HYB noise in protocol v1, whatever v2 freezes); `s` words checked a round; and `merkle`, the commitment to
+the words: each word a SHA-512 Merkle leaf (hm96 rows in frame-v3-sha512 trees), no fold. -/
+structure NoFold where
   n : ℕ
   n' : ℕ
   nb : ℕ
   L : ℕ
-  u : ℕ
-  place : Fin (nb * L) → Fin L
+  Draw : Type
+  [instDraw : Fintype Draw]
+  noise : (Fin n → Fin (nb * L) → Word) × (Fin (nb * L) → Fin n' → Word) → Draw →
+    (Fin n → Fin (nb * L) → Word) × (Fin (nb * L) → Fin n' → Word)
+  s : ℕ
+  Root : Type
+  merkle : (Fin n → Fin n' → Fin nb → Word) → Root
 
-/-- U's value from its index: `k < u` is `k + 1`, `k ≥ u` is `−(k − u + 1)`. -/
-def uVal (u : ℕ) (k : Fin (2 * u)) : Word :=
-  if k.val < u then ((k.val + 1 : ℕ) : Word) else -((k.val - u + 1 : ℕ) : Word)
+attribute [instance] NoFold.instDraw
 
-/-- **Dither's prefix word** at cell `(i, j)` and block `b`: `Σ_{t < (b+1)L} Ã_it B̃_tj` mod `2^32`, with
-`Ã = A + R` (`R` a 0/1 matrix) and `B̃ = B + S`, `S_tj = U_{j, place t}`. -/
-def ditherPrefix (k : Knobs) (a : (Fin k.n → Fin (k.nb * k.L) → Word) × (Fin (k.nb * k.L) → Fin k.n' → Word))
-    (d : (Fin k.n → Fin (k.nb * k.L) → Fin 2) × (Fin k.n' → Fin k.L → Fin (2 * k.u)))
+/-- **A no-fold word** at cell `(i, j)` and segment `b`: the noised product's prefix sum at the end of segment `b`,
+`Σ_{t < (b+1) L} Ã_it B̃_tj` mod `2^32`. -/
+def noFoldWord (k : NoFold) (ab : (Fin k.n → Fin (k.nb * k.L) → Word) × (Fin (k.nb * k.L) → Fin k.n' → Word))
     (i : Fin k.n) (j : Fin k.n') (b : Fin k.nb) : Word :=
-  ∑ t : Fin (k.nb * k.L), if t.val < (b.val + 1) * k.L then
-    (a.1 i t + ((d.1 i t).val : Word)) * (a.2 t j + uVal k.u (d.2 j (k.place t))) else 0
+  ∑ t : Fin (k.nb * k.L), if t.val < (b.val + 1) * k.L then ab.1 i t * ab.2 t j else 0
 
-/-- **Today's Dither round, at its knobs**: the instance is the committed operands `(A, B)`, the first coin the dither
-`(R, U)`, the transcript every prefix word (`n n' nb` words, `n³/L` for square operands), the check a cell and block,
-and the check passes where the committed word there is the prefix word. -/
-def ditherRound (k : Knobs) : RoundProto where
+/-- **The no-fold round at its knobs**: the instance is the committed operands `(A, B)`, the first coin the noise, the
+words every segment prefix sum of the noised product (`n n' nb` words), committed by `merkle`, and the check `s` cells
+and segments, passing where every checked word is the noised product's. -/
+def noFoldRound (k : NoFold) : RoundProto where
   Inst := (Fin k.n → Fin (k.nb * k.L) → Word) × (Fin (k.nb * k.L) → Fin k.n' → Word)
-  Draw := (Fin k.n → Fin (k.nb * k.L) → Fin 2) × (Fin k.n' → Fin k.L → Fin (2 * k.u))
-  Chk := Fin k.n × Fin k.n' × Fin k.nb
+  Draw := k.Draw
+  Chk := Fin k.s → Fin k.n × Fin k.n' × Fin k.nb
   Tr := Fin k.n → Fin k.n' → Fin k.nb → Word
-  ok a d c T := T c.1 c.2.1 c.2.2 = ditherPrefix k a d c.1 c.2.1 c.2.2
+  Root := k.Root
+  commit := k.merkle
+  ok a d c T := ∀ q, T (c q).1 (c q).2.1 (c q).2.2 = noFoldWord k (k.noise a d) (c q).1 (c q).2.1 (c q).2.2
 
-/-- **The honest transcript**: every prefix word of the dithered product. -/
-def ditherHonest (k : Knobs) (a : (ditherRound k).Inst) (d : (ditherRound k).Draw) : (ditherRound k).Tr :=
-  fun i j b => ditherPrefix k a d i j b
+/-- **The honest words**: every segment prefix sum of the noised product. -/
+def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
+  fun i j b => noFoldWord k (k.noise a d) i j b
 
 end Round
 
-section TheoremO
+section Moments
 
 /-- The uniform average of `f`. -/
 noncomputable def avg {Ω : Type} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / Fintype.card Ω
 
-/-- **A round's shortfall** at the model constant `c`: `(c − (cost + β · imported)/H)₊`, how far a round's priced
-cost, with each imported bit worth `β`, falls short of `c` honest rounds' `H`. -/
+/-- **A shortfall** at the constant `c` against the honest cost `H`: `(c − (cost + β · imported)/H)₊`, how far a
+program's cost, with each imported bit worth `β`, falls short of `c` times the honest program's `H`. -/
 noncomputable def roundShortfall (c β H cost imp : ℝ) : ℝ := max 0 (c - (cost + β * imp) / H)
 
 open Classical in
-/-- **A round program's moment**: the average over the round's coins of `e^{η · shortfall}` where the check passes,
-`0` where it fails. The program `M` is fixed before the round's coins and computes the transcript from the first coin
-alone, so the transcript is committed before the check is drawn. -/
-noncomputable def roundMoment (G : Accel) (P : RoundProto) (p : G.Res → ℝ) (c η β H : ℝ) (a : P.Inst)
-    (M : G.Mc.Alg P.Draw P.Tr) : ℝ :=
+/-- **A words program's moment** (SAK(matmul)'s): the average over the round's coins of `e^{η · shortfall}` where the
+check passes on the words it computes, `0` where it fails, its cost at the prices `μ` against `c H`. The program is
+fixed before the round's coins and computes the words from the first coin alone. -/
+noncomputable def wordsMoment (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (c η β H : ℝ) (a : P.Inst)
+    (Mw : G.Mc.Alg P.Draw P.Tr) : ℝ :=
   avg fun x : P.Draw × P.Chk =>
-    if P.ok a x.1 x.2 (G.Mc.eval M x.1) then
-      Real.exp (η * roundShortfall c β H (G.priced p M x.1) (G.ext M x.1)) else 0
+    if P.ok a x.1 x.2 (G.Mc.eval Mw x.1) then
+      Real.exp (η * roundShortfall c β H (G.cost μ Mw x.1) (G.ext Mw x.1)) else 0
 
-/-- **Theorem O's slot**: in the accelerator model `G` at its device premises, every round program of the protocol
-`P`, on every committed instance, has moment at most 1 at price `λ`, constant `c`, rate `η` and import weight `β`:
-`E_σ[1_pass(σ) · e^{η (c − (cost_λ + β · imported)/H)₊}] ≤ 1`.
+open Classical in
+/-- **A commitment program's moment** (SHA-512 speed's): for a commitment program `Mh` beside a words program `Mw`, the
+average over the round's coins of `e^{η · shortfall}` of `Mh`'s cost against `c H`, where the check passes on `Mw`'s
+words, `0` where it fails. -/
+noncomputable def commitMoment (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (c η β H : ℝ) (a : P.Inst)
+    (Mw : G.Mc.Alg P.Draw P.Tr) (Mh : G.Mc.Alg P.Draw P.Root) : ℝ :=
+  avg fun x : P.Draw × P.Chk =>
+    if P.ok a x.1 x.2 (G.Mc.eval Mw x.1) then
+      Real.exp (η * roundShortfall c β H (G.cost μ Mh x.1) (G.ext Mh x.1)) else 0
 
-The program is chosen after the instance, so it may carry as constants anything computed from the instance before the
-round (the undithered product `A B`, say), within (G1)'s memory. That precomputation is not in the round's cost, so
-Theorem O's constant must hold against it: the rounds' floor counts only what the rounds themselves use.
-
-**R-ACCEL-6 splits it.** At `c = pub/H`, `pub` the public best matmul method's priced cost of a round, the bound is
-SAK(matmul) at the round: no round program computes the dithered products (or all but a small fraction of their
-words) more cheaply at `λ` than the public best. That half is assumed (`Definitions.Pouw.Assumptions.SAKMatmul`). The other
-half is a theorem: the public best's cost on the tensor cores is the ring count (BET-K-DISCHARGE's `RingKCount`), so
-`pub` is a model quantity. A round program outputs its transcript, so this is a statement about matrix products, not
-about hashing or the proof layer. Where it holds, `c H` is at most the cost of every program that always passes, so
-`c ≤ 1` is the honest kernel's share of the public best. Theorem K's floor of record (`StagedFloorKOneSided`) reaches
-the same period floor on its scope, at the parity luck `η = 0.146` and `c H = St κ L n n' B` (`ChargeVF3j16`'s
-charge). -/
-def TheoremO (G : Accel) (P : RoundProto) (p : G.Res → ℝ) (c η β H : ℝ) : Prop :=
-  G.G1 → G.G2 → G.P1 → G.P2 → ∀ (a : P.Inst) (M : G.Mc.Alg P.Draw P.Tr), roundMoment G P p c η β H a M ≤ 1
-
-end TheoremO
+end Moments
 
 section Period
 
-/-- **A monitoring period's play**, round by round: per round, the instance committed before it, the round program
-(fixed before the round's coins, on the history), then the rest of the play, which may depend on the round's coins. -/
+/-- **A monitoring period's play**, round by round: per round, the instance committed before it, the round's words
+program and commitment program (both fixed before the round's coins, on the history), then the rest of the play,
+which may depend on the round's coins. -/
 inductive PeriodPlay (G : Accel) (P : RoundProto) : ℕ → Type
   | done : PeriodPlay G P 0
-  | round {k : ℕ} (a : P.Inst) (M : G.Mc.Alg P.Draw P.Tr) (next : P.Draw × P.Chk → PeriodPlay G P k) :
-      PeriodPlay G P (k + 1)
+  | round {k : ℕ} (a : P.Inst) (Mw : G.Mc.Alg P.Draw P.Tr) (Mh : G.Mc.Alg P.Draw P.Root)
+      (next : P.Draw × P.Chk → PeriodPlay G P k) : PeriodPlay G P (k + 1)
 
 namespace PeriodPlay
 
 variable {G : Accel} {P : RoundProto}
 
-/-- Every round's check passes. -/
+/-- Every round's check passes on the words its words program computes. -/
 def accepts : {k : ℕ} → PeriodPlay G P k → Paths (P.Draw × P.Chk) k → Prop
   | _, .done, _ => True
-  | _, .round a M next, x => P.ok a x.1.1 x.1.2 (G.Mc.eval M x.1.1) ∧ (next x.1).accepts x.2
+  | _, .round a Mw _ next, x => P.ok a x.1.1 x.1.2 (G.Mc.eval Mw x.1.1) ∧ (next x.1).accepts x.2
 
-/-- The rounds' use of a resource, summed along the realized coins. -/
+/-- Every round's commitment program computes the commitment to its words program's words, on every first coin, at
+every node of the play. -/
+def Computes : {k : ℕ} → PeriodPlay G P k → Prop
+  | _, .done => True
+  | _, .round _ Mw Mh next => (∀ d, G.Mc.eval Mh d = P.commit (G.Mc.eval Mw d)) ∧ ∀ y, (next y).Computes
+
+/-- The rounds' use of a resource (words and commitment programs), summed along the realized coins. -/
 def use : {k : ℕ} → PeriodPlay G P k → Paths (P.Draw × P.Chk) k → G.Res → ℝ
   | _, .done, _, _ => 0
-  | _, .round _ M next, x, r => G.use M x.1.1 r + (next x.1).use x.2 r
+  | _, .round _ Mw Mh next, x, r => G.use Mw x.1.1 r + G.use Mh x.1.1 r + (next x.1).use x.2 r
 
 /-- The rounds' imported bits, summed along the realized coins. -/
 def ext : {k : ℕ} → PeriodPlay G P k → Paths (P.Draw × P.Chk) k → ℝ
   | _, .done, _ => 0
-  | _, .round _ M next, x => G.ext M x.1.1 + (next x.1).ext x.2
+  | _, .round _ Mw Mh next, x => G.ext Mw x.1.1 + G.ext Mh x.1.1 + (next x.1).ext x.2
 
-/-- The rounds' priced cost at `λ` along the realized coins: `Σ_r λ_r (Σ_w u_{w,r}) / ρ_r`. -/
-noncomputable def priced {k : ℕ} (pl : PeriodPlay G P k) (p : G.Res → ℝ) (x : Paths (P.Draw × P.Chk) k) : ℝ :=
-  ∑ r, p r * (pl.use x r / G.rate r)
+/-- The rounds' cost at the prices `μ` along the realized coins. -/
+noncomputable def cost {k : ℕ} (pl : PeriodPlay G P k) (μ : G.Res → ℝ) (x : Paths (P.Draw × P.Chk) k) : ℝ :=
+  ∑ r, μ r * pl.use x r
 
 end PeriodPlay
 
@@ -233,59 +233,24 @@ value of its own coins, its run. -/
 abbrev PeriodMap (G : Accel) (S : Service) (P : RoundProto) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → PeriodRun G P R
 
-/-- **The direct-sum cut** (one conjunct of `Definitions.Pouw.Assumptions.SAKMatmul`): in the accelerator model `G` at its
-device premises, the analysis `run` cuts every accepted period of every adversary that commits first into rounds that
-are pieces of the adversary's run: on every run the verifier accepts, the rounds' uses of each resource sum to at most
-the run's, and their imported bits to at most the run's. The cut is at the commitments, so the rounds are disjoint
-stretches of the period's devices' time (round `w`'s transcript is committed before round `w + 1`'s first coin).
-
-It is the direct-sum form of SAK(matmul) (R-ACCEL-6) in its commit-and-open reading: a program that commits to the
-credited dithered products (by SHA-512 trees, then opens what the check draws) together with other work costs at least
-those products' rounds plus the other work. It is not a premise on its own, and SHA-512's collision resistance gives
-binding only, not that the committed words were computed. Whether Daniel's scoping covers the commit-and-open reading
-is his decision; without it the cut needs SHA-512's speed in composite form or SHA-512 as a random oracle. -/
-def DirectSum (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
-    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) : Prop :=
-  G.G1 → G.G2 → G.P1 → G.P2 →
-    ∀ (Ω' : Type) [Fintype Ω'] (M : G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
-      (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) → ∀ (r : Ω') x,
-        S.verify (G.Mc.eval M (e.symm x, r)).1 (e.symm x) (G.Mc.eval M (e.symm x, r)).2 = true →
-          (∀ q, (run Ω' M r).play.use x q ≤ G.use M (e.symm x, r) q) ∧
-            (run Ω' M r).play.ext x ≤ G.ext M (e.symm x, r)
-
-/-- **The priced floor, adversary by adversary**: every adversary that commits first has its accepted runs priced
-below `F` at `λ` (its size or its priced cost, whichever is larger) with probability at most `κ Ω M`.
-`ServiceFloorPerProver` with the run's cost read at `λ`. -/
-def WorkFloor (G : Accel) (S : Service) (p : G.Res → ℝ) (F : ℝ)
-    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (M : G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
-    (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) →
-    ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (G.Mc.eval M ω).1 ω.1 (G.Mc.eval M ω).2 = true ∧
-      max (G.Mc.size M) (G.priced p M ω) < F) ≤ κ Ω M
-
-/-- **The rounds' priced floor, adversary by adversary**: every adversary that commits first has its accepted periods
-whose rounds (the credited part, as the analysis `run` cuts it out of the adversary's run, along the period's coins
-`e`) are priced below `F` at `λ` with probability at most `κ Ω M`. The rest of the adversary's run is its other work,
-so this is the floor freed compute reads (`Period.FreedWithin`); it implies `WorkFloor` wherever the rounds' use is at
-most the run's. -/
+/-- **The rounds' floor, adversary by adversary**: every adversary that commits first has its accepted periods whose
+rounds (the credited part, as the analysis `run` cuts it out of the adversary's run, along the period's coins `e`)
+cost below `F` at the prices `μ` with probability at most `κ Ω M`. -/
 def RoundsFloor (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
-    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (p : G.Res → ℝ) (F : ℝ)
+    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (μ : G.Res → ℝ) (F : ℝ)
     (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
   ∀ (Ω : Type) [Fintype Ω] (M : G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
     (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) →
     ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (G.Mc.eval M ω).1 ω.1 (G.Mc.eval M ω).2 = true ∧
-      (run Ω M ω.2).play.priced p (e ω.1) < F) ≤ κ Ω M
+      (run Ω M ω.2).play.cost μ (e ω.1) < F) ≤ κ Ω M
 
-/-- **`(1 − ε)`-work-soundness** at `λ` against the honest period's priced cost `Hp`: accepted runs priced below
-`(1 − ε) Hp` have probability at most `κ`. -/
-def WorkSound (G : Accel) (S : Service) (p : G.Res → ℝ) (Hp ε : ℝ)
-    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
-  WorkFloor G S p ((1 - ε) * Hp) κ
-
-/-- **Dither's error over a monitoring period of `k` rounds**: `ε = (1 − c) + D/k + β K/(k H)`, the model slack
-(Theorem O's constant), the sampling luck (`D = ln(1/δ)/η` rounds' worth of shortfall at luck `e^{−η D} = δ`), and the
-network import (`K` bits at most, the network certifier's, each worth `β`). -/
-noncomputable def epsDither (c D β K H : ℝ) (k : ℕ) : ℝ := (1 - c) + D / k + β * K / (k * H)
+/-- **The headline's error over a monitoring period of `k` rounds**:
+`ε = (1 − h)(1 − c_mm) + h (1 − c_sha) + ln(1/δ)/(η k) + β K/(k H)`, with `H = H_mm + H_sha` the honest round's cost
+(its matmul part, the words, and its hashing part, the commitment), `h = H_sha / H` the hashing's share, `c_mm` and
+`c_sha` the two public-best constants (SAK(matmul) and SHA-512's speed), the sampling luck at confidence `δ` and rate
+`η`, and the network import (`K` bits at most, the network certifier's, each worth `β`). -/
+noncomputable def epsWorkSound (cmm csha Hmm Hsha η δ β K : ℝ) (k : ℕ) : ℝ :=
+  (Hmm * (1 - cmm) + Hsha * (1 - csha)) / (Hmm + Hsha) + Real.log (1 / δ) / (η * k) + β * K / (k * (Hmm + Hsha))
 
 end Period
 
@@ -293,7 +258,7 @@ section Freed
 
 /-- **A monitoring period's devices and the other work they could do**, in resource units: the period's length `T`
 (seconds), the other jobs `J`, each with its value `val` per unit and its use `needs` per unit, and the honest use
-`hon` per unit of credited work (the honest kernel's, Dither included). -/
+`hon` of a credited round (the honest words and commitment programs'). -/
 structure Period (G : Accel) where
   T : ℝ
   J : Type
@@ -321,11 +286,32 @@ def value (W : ℝ) (z : Pd.J → ℝ) : ℝ := W + ∑ j, Pd.val j * z j
 /-- **Freed compute is at most `ε C`** (R-ACCEL-1, Daniel 25 Oct): a strategy credited `W` with other work `z` gets
 no more credited work plus other work out of the period's devices than an honest strategy on the same devices, plus
 `ε C`. An honest strategy is credited `W'` at the honest use `W' · hon` and does other work `z'` beside it. Its dual is
-a price vector on the resources (`Definitions.Pouw.Guarantees.Dither.FreedOfFloor`). This is the definition's one place. -/
+a price on the resources (`Definitions.Pouw.Guarantees.Dither.FreedOfFloor`). This is the definition's one place. -/
 def FreedWithin (W : ℝ) (z : Pd.J → ℝ) (ε C : ℝ) : Prop :=
   ∃ (W' : ℝ) (z' : Pd.J → ℝ), 0 ≤ W' ∧ Pd.Fits (fun r => W' * Pd.hon r) z' ∧ Pd.value W z ≤ Pd.value W' z' + ε * C
 
+/-- **`μ` is the period's dual price at credited work `W`**: prices are nonnegative, every job uses nonnegative
+resources and is worth at most its use at `μ` (dual feasibility), and an honest strategy credited `W` does other work
+worth exactly the capacity it leaves at `μ` (complementary slackness: the honest optimum `OPT_honest`). A choice of
+the price, not a premise about the prover: by linear programming duality such a `μ` exists whenever the honest
+strategy credited `W` fits. -/
+def DualOpt (μ : G.Res → ℝ) (W : ℝ) : Prop :=
+  (∀ r, 0 ≤ μ r) ∧ (∀ j r, 0 ≤ Pd.needs j r) ∧ (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) ∧
+    ∃ z' : Pd.J → ℝ, Pd.Fits (fun r => W * Pd.hon r) z' ∧ ∑ j, Pd.val j * z' j = ∑ r, μ r * (Pd.cap r - W * Pd.hon r)
+
 end Period
+
+/-- **Freed compute at most `ε C`, adversary by adversary** (R-ACCEL-1's probability form): for every adversary that
+commits first, the probability that its period is accepted and some other work `z` fits on the period's devices beside
+its credited part (its rounds' use, as the analysis `run` cuts them out of its run) with
+`W + W_other(z) > OPT_honest + ε C` (`¬ Period.FreedWithin`) is at most `κ Ω M`. The credited work is `W`. -/
+def FreedSound (G : Accel) (S : Service) (P : RoundProto) {R : ℕ} (run : PeriodMap G S P R)
+    (e : S.Seed ≃ Paths (P.Draw × P.Chk) R) (Pd : Period G) (W ε C : ℝ)
+    (κ : ∀ (Ω : Type) [Fintype Ω], G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans) → ENNReal) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] (M : G.Mc.Alg (S.Seed × Ω) (S.Com × S.Ans)),
+    (∀ σ σ' r, (G.Mc.eval M (σ, r)).1 = (G.Mc.eval M (σ', r)).1) →
+    ENNReal.ofReal (prob fun ω : S.Seed × Ω => S.verify (G.Mc.eval M ω).1 ω.1 (G.Mc.eval M ω).2 = true ∧
+      ∃ z, Pd.Fits ((run Ω M ω.2).play.use (e ω.1)) z ∧ ¬ Pd.FreedWithin W z ε C) ≤ κ Ω M
 
 end Freed
 
