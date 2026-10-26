@@ -62,8 +62,18 @@ def operating_md(points: list[operating.Point]) -> list[str]:
     return out
 
 
+def faulty_md(reg: Registry, fo: operating.Row) -> list[str]:
+    if math.isinf(fo.capacity):
+        return ["Faulty outputs: no sampled proofs, so nothing detects them.", ""]
+    head = (f"Faulty outputs (steps the sampled proofs let go unchecked, drawn at q = {fmt(reg['faulty.q'])} a step): "
+            f"{fmt(fo.capacity)} bits before the first detection, except with chance δ = {fmt(reg['faulty.delta'])}.")
+    out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]
+    out += [f"| {n} | {fmt(reg[f'exfil.{n}.bits'])} | {fmt(p)} |" for n, p in fo.detect.items()]
+    return out + [""]
+
+
 def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Term],
-                points: list[operating.Point]) -> list[str]:
+                points: list[operating.Point], faulty: list[str]) -> list[str]:
     s = r.scenario
     c = s.context
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (dark share {c.fleet.dark:g}), policy "
@@ -76,7 +86,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
            "What sets ρ (each part's share of the adversary's rate `d + (1 − d) g`, and the most ρ can be while it "
            "remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
            f"The adversary does {monitored(r):.1%} of its training on monitored compute.", ""]
-    out += operating_md(points)
+    out += operating_md(points) + faulty
     for f in r.families:
         out += [f"### {f.family} (m = {fmt(f.profile.efficiency)})", "",
                 "| argument | side | status | premises | ρ | g | ρ in one declared block | binding cut |",
@@ -158,7 +168,8 @@ def main() -> None:
         by_status = {st: analysis.at(reg, name, None, analysis.upto(st)) for st in analysis.STATUSES[:3]}
         terms = analysis.attribution(r)
         points = operating.points(reg, r)
-        md += scenario_md(r, by_status, terms, points)
+        fo = operating.faulty(reg, r.scenario)
+        md += scenario_md(r, by_status, terms, points, faulty_md(reg, fo))
         swings = analysis.tornado(reg, name)
         md += ["Tornado (guaranteed ρ at each parameter's plausible ends):", "",
                "| parameter | low | high | ρ at low | ρ at high | decades |", "|---|---|---|---|---|---|"]
@@ -176,6 +187,7 @@ def main() -> None:
             "lo": r.lo, "hi": r.hi, "years_lo": r.scenario.years(r.lo), "lo_by_status": by_status,
             "attribution": [vars(t) for t in terms], "monitored": monitored(r),
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
+            "faulty_outputs": {"capacity_bits": fo.capacity, "detect": dict(fo.detect)},
             "families": {f.family: {"lo": f.lo, "hi": f.hi, "contradictions": list(f.contradictions),
                                     "estimates": [row(e) for e in f.bounds + (f.combined,) + f.attacks]}
                          for f in r.families},
