@@ -472,7 +472,7 @@ def main(argv=None) -> int:
     c.add_argument("--ops", default=",".join(OPS))
     sw = sub.add_parser("sweep")
     sw.add_argument("--out", required=True)
-    sw.add_argument("--cells", required=True, help="TARGET:K,TARGET:K,...")
+    sw.add_argument("--cells", required=True, help="TARGET:K[:MENU],... with MENU all (default), alu or imad")
     sw.add_argument("--procs", type=int, default=4)
     sw.add_argument("--timeout", type=int, default=3600)
     sw.add_argument("--vectors", type=int, default=4)
@@ -482,13 +482,13 @@ def main(argv=None) -> int:
         r = synth(TARGETS[a.target], a.k, vectors=a.vectors, seed=a.seed, timeout_s=a.timeout, ops=ops)
         print(json.dumps(r, indent=1))
         return 0
-    cells = [(t, int(k)) for t, k in (x.split(":") for x in a.cells.split(","))]
+    cells = [(c.split(":") + ["all"])[:3] for c in a.cells.split(",")]
     from concurrent.futures import ProcessPoolExecutor, as_completed
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     results = []
     with ProcessPoolExecutor(a.procs) as ex:
-        futs = [ex.submit(_cell, t, k, a.vectors, a.timeout) for t, k in cells]
+        futs = [ex.submit(_cell, t, int(k), a.vectors, a.timeout, MENUS[m]) for t, k, m in cells]
         for f in as_completed(futs):
             r = f.result()
             results.append(r)
@@ -497,8 +497,13 @@ def main(argv=None) -> int:
     return 0
 
 
-def _cell(t, k, vectors, timeout):
-    return synth(TARGETS[t], k, vectors=vectors, timeout_s=timeout)
+#: sweep menus: every modelled op, the ALU pipe's alone, the IMAD pipe's alone
+MENUS = {"all": OPS, "alu": tuple(o for o in OPS if PIPE[o] == "alu"),
+         "imad": tuple(o for o in OPS if PIPE[o] == "imad")}
+
+
+def _cell(t, k, vectors, timeout, ops=OPS):
+    return synth(TARGETS[t], k, vectors=vectors, timeout_s=timeout, ops=ops)
 
 
 if __name__ == "__main__":
