@@ -55,22 +55,27 @@ def SessionAccepted (I : Flock.Witness.Inputs) (s : Session) (record : String) (
   (∃ b, Names s.record b ∧ String.fromUTF8? b = some record) ∧ AcceptsZK I record proofs ∧
     provedUnits I.publicFile record = .ok units
 
-/-- What v2 accepts on `blobs`: the committed circuit and public files; for each of the evidence's sessions, in order
-(`ss`, at least one), its record and proof files flock-verify `--zk` accepts on `verify --zk`'s inputs, and the units
-it proved, which together are the evidence's `proved_units`; the descriptor's digest the partition object's program;
-and v1's check accepting the verdicts this run computed, with what it publishes. -/
+/-- What v2 accepted on `blobs`, publishing `pub` and `prof`: the committed circuit and public files; for each of the
+evidence's sessions, in order (`ss`, at least one), its record and proof files flock-verify `--zk` accepts on
+`verify --zk`'s inputs, and the units it proved, which together are the evidence's `proved_units`; the descriptor's
+digest the partition object's program; and v1's check accepting the verdicts this run computed, with what it
+publishes. -/
+def Accepted (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray) (pub : OneStage.Public)
+    (prof : Core.Integrity) : Prop :=
+  ∃ (tags : Flock.Tags) (circuitB pubB : ByteArray) (ss : List (String × Array ByteArray × Array Nat))
+    (vs : Array (String × Json)),
+    Flock.Tags.find? STATEMENT = some tags ∧ Names p.own.circuit circuitB ∧ Names e.pub pubB ∧
+    0 < e.sessions.size ∧ ss.length = e.sessions.size ∧
+    (∀ x ∈ e.sessions.toList.zip ss,
+      SessionAccepted (inputsOf tags p.own circuitB pubB (Core.Blobs.ofArray blobs)) x.1 x.2.1 x.2.2.1 x.2.2.2) ∧
+    (ss.foldl (fun acc x => acc ++ x.2.2) #[]).qsort (· < ·) = e.base.provedUnits ∧
+    (∃ h, programDigest p.own.program = some h ∧ (Json.str h == getD p.own.partition "program") = true) ∧
+    OneStage.check p.base c { e.base with verdicts := vs } = .accept pub prof
+
+/-- **What v2 accepts on `blobs` is `Accepted`.** -/
 def AcceptMeans : Prop :=
   ∀ (p : Params) (c : OneStage.Commitment) (e : Evidence) (blobs : Array ByteArray) (pub : OneStage.Public)
     (prof : Core.Integrity),
-    checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof →
-      ∃ (tags : Flock.Tags) (circuitB pubB : ByteArray) (ss : List (String × Array ByteArray × Array Nat))
-        (vs : Array (String × Json)),
-        Flock.Tags.find? STATEMENT = some tags ∧ Names p.own.circuit circuitB ∧ Names e.pub pubB ∧
-        0 < e.sessions.size ∧ ss.length = e.sessions.size ∧
-        (∀ x ∈ e.sessions.toList.zip ss,
-          SessionAccepted (inputsOf tags p.own circuitB pubB (Core.Blobs.ofArray blobs)) x.1 x.2.1 x.2.2.1 x.2.2.2) ∧
-        (ss.foldl (fun acc x => acc ++ x.2.2) #[]).qsort (· < ·) = e.base.provedUnits ∧
-        (∃ h, programDigest p.own.program = some h ∧ (Json.str h == getD p.own.partition "program") = true) ∧
-        OneStage.check p.base c { e.base with verdicts := vs } = .accept pub prof
+    checkBlobs p c e (Core.Blobs.ofArray blobs) = .accept pub prof → Accepted p c e blobs pub prof
 
 end Properties.SampledProofs.OneStageZk
