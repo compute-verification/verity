@@ -261,7 +261,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
 
     DOT = hopper.HopperBF16WgmmaDot16
     T, D = k.shape
-    scale = b1._scale_log2_bits(D)
+    scale = b1.scale_log2_bits(D)
     nb = -(-T // BN)
     m = 0
     l = [0] * 4

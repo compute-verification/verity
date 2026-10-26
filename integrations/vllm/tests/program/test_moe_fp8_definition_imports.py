@@ -8,13 +8,14 @@ package; `from verity_vllm.program.registry import m` imports the module `m`.
 from __future__ import annotations
 
 import ast
+import importlib.util
 import sys
 from pathlib import Path
 
 import pytest
 
 REGISTRY = "verity_vllm.program.registry"
-DIR = Path(__file__).resolve().parents[2] / "verity_vllm" / "program" / "registry"
+DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", "boolean_fp8", "boolean_fp8_moe", "nvfp4",
           "boolean_gather", "dsv4_moe", "boolean_dsv4_moe")
 #: other families' modules the family's Definitions call: the scalar and bit primitives (`prims`, `ref_prims`, `pad_prims`), the B1
@@ -53,7 +54,8 @@ def _core(name: str) -> bool:
     def under(prefix: str) -> bool:
         return name == prefix or name.startswith(prefix + ".")
     moved_in = ("verity.core", "verity.ml.commitments.multiproof", "verity.ml.private_circuits", "verity.ml.circuits.ops",
-                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock")
+                "verity.ml.circuits.silicon", "verity.ml.circuits.targets", "verity.ml.kernels", "verity.ml.flock",
+                "verity.ml.definitions")
     return under("verity") and (not any(map(under, moved_in))
                                 or any(map(under, ("verity.core.protocols", "verity.core.claims"))))
 
@@ -71,7 +73,7 @@ def test_a_definition_module_imports_only_verity_and_definition_modules(name):
 
 
 def test_the_rule_sees_what_it_forbids(tmp_path, monkeypatch):
-    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from ..kernels import fp8_twins\n"
+    (tmp_path / "x.py").write_text("import numpy as np\n\n\ndef f():\n    from verity_vllm.program.kernels import fp8_twins\n"
                                    "    from . import fp8, targets\n")
     monkeypatch.setattr(sys.modules[__name__], "DIR", tmp_path)
     assert [(m, _allowed(m)) for m, _ in _imports("x")] == [

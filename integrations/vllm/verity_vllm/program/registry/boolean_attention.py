@@ -9,7 +9,7 @@ v9's `INV`: `Fa2InvSum_v2` or `Fa3InvSum_v2`, FA3's, here) and `MufuEx2Ftz_v2`, 
 row of them shares an operand cut at it (`elementwise.shared_operand`), so that the head computes no value twice: each k16 step
 of q.k and of p.v is an `AttnDotStep` whose shared operand (the query's or p's 16 words, a partial step's zero words folded in)
 is decoded once per row by `AttnDotStepA`; o's rescale and the epilogue's `o * inv` are `ScaleRow*`, the scores' `s * scale -
-max_scaled` is `FmaSubRow*`, the lanes' rescale `FmaRow*`. The constant `_scale_log2_bits(D)` is folded into the gates of the
+max_scaled` is `FmaSubRow*`, the lanes' rescale `FmaRow*`. The constant `scale_log2_bits(D)` is folded into the gates of the
 Definitions that read it (`F32MulFtzConst`, `FmaSubRowF32FtzConst*`); the zero padding and zero state are the zero bit. v4 and v5 are
 the FA3 / FA2 per-iteration `Check_inf` chains (`fa3_check_inf`, `fa2_check_inf`); v8 is v5's, whose unguarded blocks
 (`CHECK` false, below `MASKED_FROM`) rescale by the running max as it is; v9 is v4's, whose unguarded blocks read it as it
@@ -35,7 +35,7 @@ from verity.ml.circuits.boolean.forms import const_bits
 from verity.ml.circuits.boolean.trace import definition, word_of
 from verity_vllm.program.registry import hopper
 from verity_vllm.program.registry.b1 import (AttentionHeadV2, AttentionHeadV3, AttentionV2, AttentionV3, AttnBlockV2, AttnBlockV3,
-                                             _lane, _scale_log2_bits)
+                                             _lane, scale_log2_bits)
 from verity_vllm.program.registry.fa2_check_inf import (AttentionHeadV5, AttentionHeadV11, AttentionV5, AttentionV11, AttnBlockV5,
                                                         AttnBlockV11)
 from verity_vllm.program.registry.fa3_check_inf import AttentionHeadV4, AttentionV4, AttnBlockV4
@@ -156,7 +156,7 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
     """One BN-key block of FA2's online softmax for one query row, NVIS visible columns (`AttnBlock_v2` / `_v3`'s body); without
     ``check`` (`AttnBlock_v5`'s unmasked iteration) the rescale reads the running max as it is, not guarded, and without
     ``guard_max`` (`AttnBlock_v4`'s) so does `max * scale`. ``scale_log2`` is the scale word when it is an input (v14 to v17's),
-    else the constant `_scale_log2_bits(D)`."""
+    else the constant `scale_log2_bits(D)`."""
     if BN % 16 or D % 16 or not 1 <= NVIS <= BN:
         raise ValueError(f"{name}: BN={BN} and D={D} must be multiples of 16 and 1 <= NVIS={NVIS} <= BN")
     if FIRST and not check:
@@ -172,7 +172,7 @@ def _block(B, name: str, D: int, NVIS: int, FIRST: bool, BN: int, DOT, q, k, v, 
         bmax = B.call(BA.F32Max, bmax, s[j])
     m_new = bmax if FIRST else B.call(BA.F32Max, m_prev, bmax)
     m_use = B.call(BA.GuardNegInfZero, m_new) if check or guard_max else m_new
-    K = _scale_log2_bits(D) if scale_log2 is None else None
+    K = scale_log2_bits(D) if scale_log2 is None else None
 
     def by_scale(x):
         return B.call(BA.F32MulFtz, x, scale_log2) if K is None else B.call(bind(F32MulFtzConst, K=K), x)

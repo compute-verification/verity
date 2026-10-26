@@ -830,3 +830,26 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
         assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
     finally:
         os.unlink(exp)
+
+
+def test_provenance_names_why_the_code_is_null_or_came_from_the_git_fallback(tmp_path, monkeypatch):
+    """When code_version raises, derived.code_source says so: next to the git HEAD that replaced it, or, when git fails too, as the
+    reason code is null, rather than a null that reads like a tree with neither EXPORT.json nor .git."""
+    import subprocess
+    import types
+    import verity_vllm.pipeline.experiment as EX
+
+    def broken(_root):
+        raise ValueError("EXPORT.json is not JSON")
+    monkeypatch.setattr(EX, "code_version", broken)
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: types.SimpleNamespace(stdout="c" * 40 + "\n"))
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] == "c" * 40 and dv["code_source"] == "git (code_version raised ValueError: EXPORT.json is not JSON)"
+
+    def no_git(*_a, **_k):
+        raise FileNotFoundError("git")
+    monkeypatch.setattr(subprocess, "run", no_git)
+    dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
+    assert dv["code"] is None
+    assert dv["code_source"] == ("unreadable: code_version raised ValueError: EXPORT.json is not JSON; "
+                                 "git rev-parse raised FileNotFoundError: git")
