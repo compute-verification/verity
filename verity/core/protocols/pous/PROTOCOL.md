@@ -892,9 +892,10 @@ Two kinds of statement at P2's deployed point, which nothing joins inside Lean:
   whose leaves have the published root, every one of the device's 105 recorded answers was the challenged block of
   `C*` on time on the device's own clock; or the run holds a SHA-512 collision or an LMS forgery. `RunCheckAccepts` is
   proved (`Pous.EndToEnd.SecurityProofs.runCheckAccepts`). `RunCertifies` adds setup's
-  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It follows from
-  `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot` (`runCertifies_of`), which are open, so it is a
-  statement no guarantee states yet (`unstated`).
+  acceptance (`Accepted`): `C*` decodes to the committed `W` and its root is published. It is proved
+  (`Pous.EndToEnd.SecurityProofs.runCertifies`) from `RunCheckAccepts` and setup's `AcceptsDecodes` and `PublishesRoot`
+  (`PousCheck.Properties.SecurityProofs.acceptsDecodes` and `publishesRoot`, guarantees), and `periodHeld` reads it; no
+  guarantee states it alone (`unstated`).
 - `Pous.EndToEnd.EndToEndRing`, **in the ring model, with ω uniform**: a server holding at most `⌊ρ·|C|⌋` bits
   between setup, the session and its rounds, each answer `(D, Q, L)`-bounded (`Server S D Q L`), shown the session
   commitment the code builds, with the memory challenger's coins drawn online by the code's own sampler and coin tree,

@@ -125,14 +125,6 @@
    "owner": "@memory-accounting",
    "digest": "82d88ab393eef366e20b905918a572a64ce5b80e0de3acbd140171f8f6a5daad"
   },
-  "PousCheck.Properties.AcceptsDecodes": {
-   "owner": "@memory-accounting",
-   "digest": "f868d8718cc355d0ebe11ee22c08fcdabdfb34118763167a0ba646a7345ec31e"
-  },
-  "PousCheck.Properties.PublishesRoot": {
-   "owner": "@memory-accounting",
-   "digest": "680e12cbfc7b08535e30f388ece5bc8eb694ff263ca847a79d27cb403177b59c"
-  },
   "Properties.RemoteAudit.Line.Registered": {
    "owner": "@memory-accounting",
    "digest": "7c773414aca257d4e824b995ad666c83efa6f99c5da980456cf89fd6cdb80f3d"
@@ -557,11 +549,23 @@
    "assumptions": [],
    "type_hash": "490f8e2f6da996708950158f449ec1c4cebced6b38811e0091f1262cc31d7309"
   },
+  "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
+   "owner": "@memory-accounting",
+   "signature": ["PousCheck.Properties.SecurityProofs.acceptsDecodes : PousCheck.Properties.AcceptsDecodes"],
+   "assumptions": [],
+   "type_hash": "147702d45231f61ee43eef6d3a0f8e063948e0d0f874124c5542abf5dfbc8e67"
+  },
   "PousCheck.Properties.SecurityProofs.deployed": {
    "owner": "@memory-accounting",
    "signature": ["PousCheck.Properties.SecurityProofs.deployed : PousCheck.Properties.Deployed"],
    "assumptions": [],
    "type_hash": "f8977ea58504508ed7a1eae3a72cadbc4a36e463c703441b45cddd5d5330cec3"
+  },
+  "PousCheck.Properties.SecurityProofs.publishesRoot": {
+   "owner": "@memory-accounting",
+   "signature": ["PousCheck.Properties.SecurityProofs.publishesRoot : PousCheck.Properties.PublishesRoot"],
+   "assumptions": [],
+   "type_hash": "9e37b17a2c12a29fe835857c63299bb9b88aff6578a04e0d53da2bb680c0ce16"
   },
   "PousCheck.Properties.SecurityProofs.timedAuditAccepts": {
    "owner": "@memory-accounting",
@@ -3027,6 +3031,14 @@
    "Properties.Pouw.LiveSalt.acceptMeans": {
     "function": "PouwCheck.liveSaltCheck",
     "outcome": "accept"
+   },
+   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
+    "function": "PousCheck.SetupProtocol.protocol.check",
+    "outcome": "accept"
+   },
+   "PousCheck.Properties.SecurityProofs.publishesRoot": {
+    "function": "PousCheck.SetupProtocol.protocol.check",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -3035,7 +3047,7 @@
    "Pous.EndToEnd.SecurityProofs.honestPassesRing": "completeness: the honest full-state server passes P2's ring audit with probability 1, so P2RingAuditSecure's and EndToEndRing's events are not vacuous",
    "Pous.EndToEnd.SecurityProofs.honestPassesAccepts": "completeness: the honest full-state server passes EndToEndRing's event with probability 1 (the coin tree is always built and the draw never rejects)",
    "NciCheck.Properties.DescAgrees": "unstated: descAgrees_of_readsExact (Proofs.Properties.Nci.Agrees) proves it from ReadsExact (Proofs.Properties.Nci.Novel: Desc.analyze's reads per root node are the unrolled operands outside it), the one open statement: descAgrees_of_open (Proofs.Properties.Nci.Novel) proves it from OperandsResolve (Proofs.Properties.Nci.Walk), BodiesOk and ReadsExact, bodiesOk (Proofs.Properties.Nci.BodiesOk) proves BodiesOk (Proofs.Properties.Nci.Resolve: every body resolution reaches names parameters and earlier nodes at a leaf, its indices in range), operandsResolve_of (Proofs.Properties.Nci.OperandsResolve) proves OperandsResolve from it, and novelExact_of proves NovelExact from ReadsExact with novelWidthExact (Proofs.Properties.Nci.Width: Desc.novelWidth is the width of the union of the gates it is given)",
-   "Pous.EndToEnd.RunCertifies": "unstated: it joins the composed check's runCheckAccepts, proved, with the setup check's AcceptsDecodes and PublishesRoot, which are open; runCertifies_of proves it from those two",
+   "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.DrawMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.drawMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
@@ -3049,7 +3061,7 @@
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.LiveCoinBinding": "unstated: no guarantee states it yet: its `c = c'` needs `Flock.canon` injective on the live domain's binding (scheme, epoch and layout), which no lemma proves, and the climb from the coin to the root, frame by frame (CMP-81). The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
-   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes the setup check's open AcceptsDecodes and PublishesRoot, CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeld": "frozen (premise): Its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted: SetupProtocol.protocol.check and PousCheck.Run.check), but it is stated over an abstract joint run of the device model (Accounting.Run, whose fits field is no premise module's) and takes CoinCommitHides and Pous.Period.RingDevice (pous-ring-device, pous-ring-instantiation and prf/sha-512 per run), and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function."
   },
   "conjectures": {
@@ -3699,6 +3711,8 @@
     "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -5209,6 +5223,8 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
@@ -5316,6 +5332,8 @@
     "NciCheck.Properties.SecurityProofs.Witnesses",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.NetworkCertifier.acceptedRowsAreProgramRows",
@@ -5487,6 +5505,8 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
@@ -5600,6 +5620,8 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.coinAccepts",
     "Properties.Pouw.Commit.coinBinding",
@@ -5664,6 +5686,8 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts",
     "Properties.Pouw.Commit.leafRefusals",
     "Properties.SampledProofs.SecurityProofs.designWellFormed",
@@ -6141,6 +6165,8 @@
    "guarantees": [
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -6179,6 +6205,8 @@
    "guarantees": [
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
     "Proofs.NetworkCertifier.encardAcceptedObservationsLe",
     "Properties.CertifierDevice.issuerVerifies",
@@ -7288,7 +7316,12 @@
     "PousCheck.Commit.manifest": "7357976ad97043def87d98ca0169c9dd4e9783d99b1a147b8222fe4c50239309",
     "PousCheck.Commit.manifestJson": "09e6a40193c8ebf72415e83a7f610c7fe54fa3b9ad92e9836dd11fd4c2c512df"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
+   ]
   },
   "PousCheck.Keys": {
    "digest": "019e70aa3871b15c8acfd2beddc900e75fbd5cc6471b11af30081c200c71f81c",
@@ -7311,7 +7344,12 @@
     "PousCheck.Keys.packagePrefix": "6e874727f7f6dd9bd5310c06f1ef69a0b9a59b4a684371da2bbad9866462bcc0",
     "PousCheck.Keys.pad128": "b9c5905f71f7ee855b6342015267268bd819febb3b0e2707c70f7a0f2a2f9b3c"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
+   ]
   },
   "PousCheck.Merkle": {
    "digest": "d3c8c82be5fd8dcbe1b1d0b58a16652567730f832780488dcf06006eb3369fd2",
@@ -7329,6 +7367,8 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
@@ -7372,7 +7412,9 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
-    "PousCheck.Properties.SecurityProofs.deployed"
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.deployed",
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
   },
   "PousCheck.Params": {
@@ -7403,7 +7445,12 @@
     "PousCheck.Prim.natOfBERange": "453b049a77a20be8b54f4d2067cfd242b7b38f41d5dfa72e16392cef7b24841e",
     "PousCheck.Prim.zeros": "d69ecaabe57a2ee3bb80328697532a0f36c5a73da5594922ea098ae8eb7d67a2"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
+   ]
   },
   "PousCheck.Randomness": {
    "digest": "c905b3f6142f2b9d069984668f3104ad69e4c2748f6ea8057b34e4a3354e7313",
@@ -7477,7 +7524,12 @@
     "PousCheck.Setup.segmentLeaves": "dab415d76f82e7cd2e29da5f158a219e9a6ae8481fa6cf03ce4060f53b91e918",
     "PousCheck.Setup.verifierKeyFromEncoding": "a151341775d2b482de1c14855ca7009c0b8743a11b2e9c4cecf08e748bfbe254"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
+   ]
   },
   "PousCheck.SetupProtocol": {
    "digest": "46a17ccd9e3f10771339d1f112da3b745391ec8a2915782bfd0d92dbcca04cb8",
@@ -7505,7 +7557,9 @@
    "guarantees": [
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
-    "Pous.Period.SecurityProofs.periodHeld"
+    "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
+    "PousCheck.Properties.SecurityProofs.publishesRoot"
    ]
   },
   "PousCheck.TimedAudit": {
@@ -8732,7 +8786,9 @@
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
+    "PousCheck.Properties.SecurityProofs.acceptsDecodes",
     "PousCheck.Properties.SecurityProofs.deployed",
+    "PousCheck.Properties.SecurityProofs.publishesRoot",
     "PousCheck.Properties.SecurityProofs.timedAuditAccepts"
    ]
   },
