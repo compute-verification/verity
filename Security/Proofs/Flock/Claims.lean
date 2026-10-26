@@ -173,7 +173,9 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowL
+import Proofs.Flock.Claims.Recursion.RoundCounts
 import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.Recursion.NonVacuousRows
 import Proofs.Flock.Claims.Recursion.VerdictPublicsAfter
 import Proofs.Flock.Claims.Recursion.VerdictLoop
