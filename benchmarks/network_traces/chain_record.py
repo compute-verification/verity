@@ -539,8 +539,9 @@ def markdown(r: dict) -> str:
         lines.append(f"- K open: {k['open']}" + (f"; the network's terms {k['network']}" if k.get("network") else ""))
     for delta, h in k.items():
         if isinstance(h, dict) and "K" in h:
-            lines.append(f"- K at δ = {delta}: {h['K']} bits ({h['share']:.3g} of the {h['units']} units' output "
-                         f"bits), Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}; {h['conditional']}")
+            lines.append(f"- K at δ = {delta}: {h['K']} bits, {h['share']:.3g}× the {h['units']} units' "
+                         f"{OUT_BITS * h['units']} output bits; Fmax {h['Fmax']} at q = {h['q']}, terms {h['terms']}; "
+                         f"{h['conditional']}")
     lines += ["- uncovered:"] + [f"  - {u}" for u in d["uncovered"]]
     return "\n".join(lines) + "\n"
 
