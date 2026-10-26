@@ -683,7 +683,8 @@ def coinTreeCmd (path : String) : IO UInt32 := do
 
 /-- `verify --statement ID --circuit F --comp F --public F [--coins seed|os] [--session-tables J] --session DIR...`: `ID`
 names the statement's tags (`verity/flock-circuit` by default, or `verity/flock-netlist/v1`); `--comp` is the row leaf's
-pinned compression circuit; `J` (default 1) is the tables of every session (§16.12). A session with a work draw needs the
+pinned compression circuit; `J` (default 1) is the tables of every session (§16.12), which split one draw of fixed count, a
+subset or a stratified one, into `J` equal parts (`Draw.tablesWhy`). A session with a work draw needs the
 verifier's own `--work K`, `--work-table`, `--program` and `--partition`, one with a stratified draw its own
 `--stratified K`, `--program` and `--partition`, a closure draw its own `--closure F`, a statement that reads registered
 values its own `--registered F` (`Registered.check`; a verifier whose own `--program` has a `RegisteredInput<w>_v1` node
@@ -1257,11 +1258,13 @@ def heldToRegistration (law : Draw.Law) (pop : Nat) : Lean.Json × Nat → Optio
     else none
 
 /-- `draw (--population N (--k K | --p NUM/DEN) | --program P --partition Q (--stratified K | --work K --work-table F))
-[--closure F] [--registration F] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
+[--closure F] [--registration F] [--tables J] [--stream HEX | --stream-file F]`: the unit draw (§7.3), from the operating system's randomness (a stratified or work draw:
 one stream per stratum), or from the given bytes (a test; a stratified or work draw's streams are its consecutive segments).
 The strata are the verifier's own, derived from its program and partition object, and a work law's works and floors are its
 own work table's; with `--closure F`, a work draw is widened by the verifier's closure map. With `--registration F` the
-draw is refused, before any coin is read, unless its law and population are the registration's. Prints `DRAW {…}`, the
+draw is refused, before any coin is read, unless its law and population are the registration's. With `--tables J` it is
+one draw for a session of `J` tables (`verify --session-tables J`), refused before any coin unless they can split it
+(`Draw.tablesWhy`: a subset law, or a stratified one, whose `Σ_s k_s` is a positive multiple of `J`). Prints `DRAW {…}`, the
 object the verifier sends in the clear. -/
 def drawCmd (args : List String) : IO UInt32 := do
   let (law, pop) ← match ← ownLaw args with
@@ -1287,6 +1290,16 @@ def drawCmd (args : List String) : IO UInt32 := do
     | .ok (some r) => match heldToRegistration law pop r with
       | some why => IO.eprintln s!"draw: {why}"; return 2
       | none => pure ()
+  match (argOf args "--tables").map String.toNat? with
+    | none => pure ()
+    | some none => IO.eprintln "draw: --tables J"; return 2
+    | some (some j) =>
+      if j == 0 || j > Tags.MAX_TABLES then
+        IO.eprintln s!"draw: --tables J: 1 ≤ J ≤ {Tags.MAX_TABLES}"
+        return 2
+      if let some why := Draw.tablesWhy law j then
+        IO.eprintln s!"draw: {why}"
+        return 2
   let stream ← match argOf args "--stream", argOf args "--stream-file" with
     | none, none => pure none
     | some hex, none => match unhex hex with | .ok b => pure (some b) | .error e => IO.eprintln s!"draw: {e}"; return 2
