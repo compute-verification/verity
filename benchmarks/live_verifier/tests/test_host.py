@@ -679,7 +679,8 @@ def test_the_wipe_party_and_its_key_import_on_a_python_with_no_site_packages():
 
 
 def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path, monkeypatch):
-    """`exec_party` with a party that never exits (no prover joined): its timer kills it, and the log records why."""
+    """`exec_party` with a party that never exits (no prover joined): its timer kills it and its parent, and the log records
+    why. Killing the parent alone (runuser, 26 Oct on vy-auditor-2) left the party listening and holding the pipe."""
     armed: list[float] = []
 
     class Timer:
@@ -697,6 +698,7 @@ def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path
     monkeypatch.setattr(H.threading, "Timer", Timer)
     monkeypatch.setattr(H, "TREE", tmp_path)
     sink, log = io.BytesIO(), tmp_path / "log.jsonl"
-    rc = H.exec_party([sys.executable, "-c", "import sys; sys.stdin.read()"], sink, log, 2)
+    child = "import subprocess, sys; subprocess.run([sys.executable, '-c', 'import sys; sys.stdin.read()'])"
+    rc = H.exec_party([sys.executable, "-c", child], sink, log, 2)     # a party under a parent, as under runuser
     assert armed == [120] and rc == -9
     assert json.loads(log.read_bytes().splitlines()[-1]) == {"killed": "the session's 2 min ran out"}
