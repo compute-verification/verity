@@ -362,3 +362,19 @@ def test_a_bundle_of_more_than_one_block_is_refused(fresh, step) -> None:
     reg, _, _ = step
     doc, payload = _build(fresh, [5, 6], draw={"source": "fixture", "law": {"law": "subset", "k": 2}})
     assert set(B.check_step(doc, payload, reg, STEP_INDEX)) == {"step:units"}
+
+
+def test_a_step_whose_proof_blocks_are_some_of_its_units(fresh, step) -> None:
+    """With `proof_units` (the coordinate units; each layer's quantizer unit is committed, not proved) the population is
+    the slots' proof blocks only, and index b of a slot names its b-th proof unit."""
+    _, weights, com = fresh
+    (b, s), = com.steps
+    pu = [u for u in range(com.layout.unit_count) if u % 129 != 0]
+    reg = B.step_registration(com, weights, {"law": "subset", "k": 8}, run=B.RUN_ID, program="torch-loop/mlp-w8a8-h128/seed0",
+                              block=b, step=s, proof_units=pu)
+    _, doc, payload = step
+    assert reg["population"] == 2 * 256 and B.block_of(reg, 5) == (0, 6) and B.block_of(reg, 256) == (1, 1)
+    assert B.check_step(doc, payload, reg, 5) == {}
+    assert set(B.check_step(doc, payload, reg, STEP_INDEX)) == {"step:index"}
+    assert set(B.check_step(doc, payload, {**reg, "proof_units": pu[::-1]}, 5)) == {"step"}
+    assert set(B.check_step(doc, payload, {**reg, "population": 2 * 258}, 5)) == {"step"}

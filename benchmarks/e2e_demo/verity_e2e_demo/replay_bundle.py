@@ -609,6 +609,8 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
 STEP_FORMAT = "verity/commit-slots-step-registration/v1"
 STEP_KEYS = {"format", "run", "program", "block", "step", "step_root", "slot_roots", "slots", "layout_digest", "context",
              "units_per_slot", "population", "law", "weights"}
+#: optional: a slot's layout units that are proof blocks, ascending, when not every unit of the layout is one
+STEP_OPTIONAL = {"proof_units"}
 
 
 def step_digest(reg: Mapping[str, Any]) -> str:
@@ -617,20 +619,28 @@ def step_digest(reg: Mapping[str, Any]) -> str:
 
 
 def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
-                      program: str, block: int, step: int) -> dict[str, Any]:
+                      program: str, block: int, step: int, proof_units: Sequence[int] | None = None) -> dict[str, Any]:
     """The registration of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
-    values ``weights`` its blocks read."""
+    values ``weights`` its blocks read; ``proof_units``: a slot's layout units that are proof blocks (default every one)."""
     steps = _Steps(com)
+    per = len(proof_units) if proof_units is not None else com.layout.unit_count
     return {"format": STEP_FORMAT, "run": run, "program": program, "block": block, "step": step,
             "step_root": steps.step(block, step).root.hex(), "slot_roots": [sc.root.hex() for sc in steps.slots(block, step)],
             "slots": com.slots, "layout_digest": S.layout_digest(com.layout).hex(), "context": com.context.hex(),
-            "units_per_slot": com.layout.unit_count, "population": com.slots * com.layout.unit_count, "law": dict(law),
-            "weights": [{"value": v, "root": w.root.hex()} for v, w in sorted(weights.items())]}
+            "units_per_slot": com.layout.unit_count, "population": com.slots * per, "law": dict(law),
+            "weights": [{"value": v, "root": w.root.hex()} for v, w in sorted(weights.items())],
+            **({"proof_units": sorted(int(u) for u in proof_units)} if proof_units is not None else {})}
+
+
+def _blocks_a_slot(reg: Mapping[str, Any]) -> int:
+    return len(reg["proof_units"]) if "proof_units" in reg else int(reg["units_per_slot"])
 
 
 def block_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
-    """A drawn proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
-    return divmod(int(index), int(reg["units_per_slot"]))
+    """A drawn proof block's ``(slot, layout unit)``: index ``slot * B + b`` for the slot's b-th proof block, B a slot's
+    proof blocks; without ``proof_units`` every layout unit is one, so ``slot * units_per_slot + unit``."""
+    slot, b = divmod(int(index), _blocks_a_slot(reg))
+    return slot, (reg["proof_units"][b] if "proof_units" in reg else b)
 
 
 def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
@@ -641,11 +651,15 @@ def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], i
     or a registered value whose root ``reg`` names, and each step row's slot root is the registered one. The paths
     themselves are `check`'s, which runs first, so a row whose paths don't reach the registered step root is refused."""
     bad = check(doc, payload, registration=registration)
-    if set(reg) != STEP_KEYS or reg["format"] != STEP_FORMAT:
-        return {**bad, "step": f"not a {STEP_FORMAT} with exactly {sorted(STEP_KEYS)}"}
-    if (reg["population"] != reg["slots"] * reg["units_per_slot"] or len(reg["slot_roots"]) != reg["slots"]
+    if not STEP_KEYS <= set(reg) <= STEP_KEYS | STEP_OPTIONAL or reg["format"] != STEP_FORMAT:
+        return {**bad, "step": f"not a {STEP_FORMAT} with exactly {sorted(STEP_KEYS)} (and optionally {sorted(STEP_OPTIONAL)})"}
+    pu = reg.get("proof_units")
+    if pu is not None and not (isinstance(pu, list) and pu and all(isinstance(u, int) for u in pu)
+                               and pu == sorted(set(pu)) and 0 <= pu[0] and pu[-1] < reg["units_per_slot"]):
+        return {**bad, "step": "its proof_units are not ascending distinct layout units"}
+    if (reg["population"] != reg["slots"] * _blocks_a_slot(reg) or len(reg["slot_roots"]) != reg["slots"]
             or not 0 <= int(index) < reg["population"]):
-        return {**bad, "step": "its population is not slots x units_per_slot over its slot roots, or the index is outside it"}
+        return {**bad, "step": "its population is not slots x a slot's proof blocks over its slot roots, or the index is outside it"}
     com = doc["commitment"]
     try:
         unit_count = layout_of_json(com["layout"]).unit_count

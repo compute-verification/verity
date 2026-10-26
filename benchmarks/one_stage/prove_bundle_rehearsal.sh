@@ -37,7 +37,7 @@ log "step: make (k $K, live over the step registration)"
 "$PY" benchmarks/one_stage/prove_bundle.py make --step --k "$K" --lean "$B/flock-verify" --scratch "$T/s" --out "$T/step" \
   > "$O/step-make.log" 2>&1 || { tail -20 "$O/step-make.log"; exit 8; }
 grep '^MAKE' "$O/step-make.log" | tee -a "$O/rehearsal.log"
-art=$(research data put --kind m3-rehearsal-fetch-check --file "$T/step/step-registration.json" 2> "$O/fetch-check.log" | tail -1)
+art=$(research data put --kind m3-rehearsal-fetch-check/v1 --file "$T/step/step-registration.json" 2> "$O/fetch-check.log" | tail -1)
 if [ -n "$art" ] && research data fetch "$art" --to "$T/f" >> "$O/fetch-check.log" 2>&1 \
     && cmp -s "$T/step/step-registration.json" "$(find "$T/f" -type f | head -1)"; then
   log "fetch ok: $art (put then fetched in the node's store, the same bytes)"

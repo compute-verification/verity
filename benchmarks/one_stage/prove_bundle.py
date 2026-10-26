@@ -148,7 +148,7 @@ def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
 
 def _read_step(sdir: Path) -> dict:
     reg = json.loads((sdir / "step-registration.json").read_text())
-    if set(reg) != RB.STEP_KEYS or reg.get("format") != RB.STEP_FORMAT:
+    if not RB.STEP_KEYS <= set(reg) <= RB.STEP_KEYS | RB.STEP_OPTIONAL or reg.get("format") != RB.STEP_FORMAT:
         raise SystemExit(f"{sdir}/step-registration.json: not a {RB.STEP_FORMAT} with exactly {sorted(RB.STEP_KEYS)}")
     if reg["law"].get("law") != "subset":
         raise SystemExit(f"the registered law {reg['law']} is not a subset law")
@@ -208,14 +208,16 @@ TIES = {"lean": "each drawn block's one-member window: its C-Flock --zk session 
 
 
 def make_step(s: Path, out: Path, k: int, lean: str) -> int:
-    """The torch loop's step as a step tree (`--step`): its registration from the fixture's commitment, the live draw over
-    it (`step_draw`), and per drawn block whose layout unit is a proof block of the window (a ScaledMm coordinate; the
-    layers' quantizer units are none) a one-unit bundle of the window, registered `subset:1`, with the step's receipt."""
+    """The torch loop's step as a step tree (`--step`): its registration from the fixture's commitment, its proof blocks the
+    ScaledMm coordinate units (`proof_units`; the layers' quantizer units are committed, not proved), the live draw over
+    it (`step_draw`), and per drawn block a one-unit bundle of the window, registered `subset:1`, with the step's receipt."""
     _, weights, com = RB.torch_loop_window(s / "window", law="subset:1")
     RB.torch_loop_window(s / "tampered", tamper=True, law="subset:1")
     (b, st), = com.steps
+    # the proof blocks are the ScaledMm coordinate units; each layer's quantizer unit (its first) is committed, not proved
+    pu = [u for u in range(com.layout.unit_count) if u % 129 != 0]
     reg = RB.step_registration(com, weights, D.parse_law(f"subset:{k}"), run=RB.RUN_ID,
-                               program=next(iter(weights.values())).program, block=b, step=st)
+                               program=next(iter(weights.values())).program, block=b, step=st, proof_units=pu)
     out.mkdir(parents=True, exist_ok=True)
     (out / "step-registration.json").write_text(json.dumps(reg, indent=1, sort_keys=True))
     receipt, draw = step_draw(lean, out)
@@ -223,7 +225,7 @@ def make_step(s: Path, out: Path, k: int, lean: str) -> int:
     at = {}
     for u in range(w.win["population"]):
         c = RB.torch_loop_coords(*w.label(u))
-        at[c["slot"] * com.layout.unit_count + c["layer"] * 129 + 1 + c["unit"]] = u
+        at[c["slot"] * len(pu) + pu.index(c["layer"] * 129 + 1 + c["unit"])] = u
     made = {}
     for g in draw["units"]:
         if g not in at:
