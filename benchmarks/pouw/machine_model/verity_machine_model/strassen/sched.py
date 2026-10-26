@@ -243,7 +243,11 @@ def narrow(name: str, lmax: int, pairs=((2, 128), (2, 129), (128, 255), (256, 25
 
 
 if __name__ == "__main__" and len(sys.argv) > 1 and sys.argv[1] == "narrow":
-    narrow(sys.argv[2], int(sys.argv[3]))
+    if len(sys.argv) > 4:
+        narrow(sys.argv[2], int(sys.argv[3]),
+               tuple(tuple(int(v) for v in p.split(":")) for p in sys.argv[4].split(",")))
+    else:
+        narrow(sys.argv[2], int(sys.argv[3]))
     sys.exit(0)
 
 if __name__ == "__main__":
