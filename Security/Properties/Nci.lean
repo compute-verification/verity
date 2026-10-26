@@ -9,12 +9,12 @@ the verifier's check of a declared division against the NCI policy, `Nci.Complie
 `NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving the fix for some codes).
 θ, the baseline, holds only input gates bound at registration (`IsRegistered`): one bound per run is refused. The difftest holds it to the Python reference on
 random instances; the statements here say what it computes on every instance. Each is a named `Prop`, proved as
-`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Properties.Proofs.Nci`, and a guarantee of this
+`NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of this
 package (`lean-audit.json`).
 
 Each statement has one shape (the lean-proofs skill, "One shape"): for every instance, if the check gives a verdict (or
 doesn't refuse with a code), its named conclusion holds. The converses, that the check refuses exactly the malformed
-and gives a verdict on every well-formed instance, are completeness, in `Properties.Proofs.Nci`, each with an instance.
+and gives a verdict on every well-formed instance, are completeness, in `Proofs.Properties.Nci`, each with an instance.
 
 **Refusals: a malformed instance is refused with its code.**
 

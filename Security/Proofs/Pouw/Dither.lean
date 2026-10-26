@@ -1,10 +1,10 @@
-import Models.Pouw.Guarantees.Dither
+import Definitions.Pouw.Guarantees.Dither
 import Proofs.Pouw.RelativeSecurity
 
 /-!
 # Dither's work-soundness: the freed-compute bound, the map to the floors of record, and the honest witness
 
-* `FreedOfFloor`: the guarantee `Models.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
+* `FreedOfFloor`: the guarantee `Definitions.Pouw.Guarantees.Dither.FreedOfFloor`, weak duality of the period's linear
   program.
 * `workFloor_of_roundsFloor`: the rounds' floor gives the whole run's floor under the direct-sum cut (the rounds use no
   more of any resource than the run), so `DitherWorkSound`'s proof owes only its `RoundsFloor` conjunct.
@@ -24,7 +24,7 @@ open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
 
 /-! ## Freed compute -/
 
-/-- `Models.Pouw.Guarantees.Dither.FreedOfFloor`. -/
+/-- `Definitions.Pouw.Guarantees.Dither.FreedOfFloor`. -/
 theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
   intro G Pd W ε X μ z z' hμ hneeds hval hW hε hfit' hslack hfit hfloor
   refine ⟨W, z', hW, hfit', ?_⟩

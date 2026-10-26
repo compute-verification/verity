@@ -3,7 +3,7 @@ import Definitions.Pouw.RelativeSecurity
 /-!
 # Dither's work-soundness: the vocabulary its guarantee reads (trusted)
 
-The final guarantee of the ACCEL program (`Models.Pouw.Guarantees.Dither.DitherWorkSound`) is stated over:
+The final guarantee of the ACCEL program (`Definitions.Pouw.Guarantees.Dither.DitherWorkSound`) is stated over:
 
 * **the accelerator model** `G = (Σ, M, R, ρ, I, u)` (`Accel`): a machine's programs, the period's devices'
   resources with their data-sheet rates `ρ`, their memory `M`, a run's use of each resource `u`, and the two device
@@ -15,7 +15,7 @@ The final guarantee of the ACCEL program (`Models.Pouw.Guarantees.Dither.DitherW
 * **a round** of a commit-then-check protocol (`RoundProto`), parametric in the protocol (R-ACCEL-2), with today's
   Dither as one instance (`ditherRound`) whose knobs (`Knobs`: `L`, U's range and placement) are parameters;
 * **Theorem O's slot** (`TheoremO`): a round program's moment bound, which R-ACCEL-6 splits into SAK(matmul) (the one
-  computational premise, `Models.Pouw.Assumptions.SAKMatmul`) and the tensor-core ring count (proved,
+  computational premise, `Definitions.Pouw.Assumptions.SAKMatmul`) and the tensor-core ring count (proved,
   BET-K-DISCHARGE's `RingKCount`);
 * **a monitoring period's play** round by round (`PeriodPlay`, `PeriodRun`, `PeriodMap`), **the direct-sum cut**
   (`DirectSum`: the rounds an accepted run is cut into are pieces of it; one half of SAK(matmul), never a premise on
@@ -175,7 +175,7 @@ Theorem O's constant must hold against it: the rounds' floor counts only what th
 
 **R-ACCEL-6 splits it.** At `c = pub/H`, `pub` the public best matmul method's priced cost of a round, the bound is
 SAK(matmul) at the round: no round program computes the dithered products (or all but a small fraction of their
-words) more cheaply at `λ` than the public best. That half is assumed (`Models.Pouw.Assumptions.SAKMatmul`). The other
+words) more cheaply at `λ` than the public best. That half is assumed (`Definitions.Pouw.Assumptions.SAKMatmul`). The other
 half is a theorem: the public best's cost on the tensor cores is the ring count (BET-K-DISCHARGE's `RingKCount`), so
 `pub` is a model quantity. A round program outputs its transcript, so this is a statement about matrix products, not
 about hashing or the proof layer. Where it holds, `c H` is at most the cost of every program that always passes, so
@@ -233,7 +233,7 @@ value of its own coins, its run. -/
 abbrev PeriodMap (G : Accel) (S : Service) (P : RoundProto) (R : ℕ) : Type 1 :=
   ∀ (Ω' : Type) [Fintype Ω'], G.Mc.Alg (S.Seed × Ω') (S.Com × S.Ans) → Ω' → PeriodRun G P R
 
-/-- **The direct-sum cut** (one conjunct of `Models.Pouw.Assumptions.SAKMatmul`): in the accelerator model `G` at its
+/-- **The direct-sum cut** (one conjunct of `Definitions.Pouw.Assumptions.SAKMatmul`): in the accelerator model `G` at its
 device premises, the analysis `run` cuts every accepted period of every adversary that commits first into rounds that
 are pieces of the adversary's run: on every run the verifier accepts, the rounds' uses of each resource sum to at most
 the run's, and their imported bits to at most the run's. The cut is at the commitments, so the rounds are disjoint
@@ -321,7 +321,7 @@ def value (W : ℝ) (z : Pd.J → ℝ) : ℝ := W + ∑ j, Pd.val j * z j
 /-- **Freed compute is at most `ε C`** (R-ACCEL-1, Daniel 25 Oct): a strategy credited `W` with other work `z` gets
 no more credited work plus other work out of the period's devices than an honest strategy on the same devices, plus
 `ε C`. An honest strategy is credited `W'` at the honest use `W' · hon` and does other work `z'` beside it. Its dual is
-a price vector on the resources (`Models.Pouw.Guarantees.Dither.FreedOfFloor`). This is the definition's one place. -/
+a price vector on the resources (`Definitions.Pouw.Guarantees.Dither.FreedOfFloor`). This is the definition's one place. -/
 def FreedWithin (W : ℝ) (z : Pd.J → ℝ) (ε C : ℝ) : Prop :=
   ∃ (W' : ℝ) (z' : Pd.J → ℝ), 0 ≤ W' ∧ Pd.Fits (fun r => W' * Pd.hon r) z' ∧ Pd.value W z ≤ Pd.value W' z' + ε * C
 
