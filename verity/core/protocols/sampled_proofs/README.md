@@ -97,6 +97,14 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
   root's input gates (drawn `all`: the input unit is always checked), each replay unit one proof unit, and the draw's
   checked proof units as `(slot, index)` in class, stratum and replay-unit order.
+- **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
+  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
+  circuit digest and the verifier's registered file, its evidence names the public file and each session's record and
+  rep files by SHA-512 in place of `verdicts`, and the files come in as `Core.Blobs`. The check runs
+  `flock-verify verify --zk`'s one-stage path (the C-Flock library calls `verifyCmd` makes) on those blobs, binds the
+  evidence's `proved_units` to what the accepted sessions proved, and hands the verdicts to v1's `check`.
+  `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
+  to `verify`'s. Onsite, remote and composition still read v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,
