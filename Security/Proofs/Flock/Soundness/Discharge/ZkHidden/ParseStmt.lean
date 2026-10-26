@@ -14,7 +14,8 @@ session it reads of the session's committed circuit (`HmOut.parseCommit`), and t
   templated tags, `HmOut.parse_isTmpl`).
 * `setupHidden_commit`, `stmt_of_setupHidden`, `g_pos_of_setupHidden`: a session `Stmt.setupHidden` accepts commits
   `HmOut.parseCommit`'s circuit, the statement circuit is it unrolled, and its `g` is positive.
-* `drawSetupH_of_setupHiddenU`: `drawSetupH_of_setupHiddenI` from the session alone.
+* `drawSetupH_of_setupHiddenU`, `drawSetupH_of_acceptsU`, `tableAtH_of_acceptsU`: `drawSetupH_of_setupHiddenI`,
+  `drawSetupH_of_accepts` and `tableAtH_of_acceptsI` from the session alone.
 * `parseStmtH_identity`, `parseStmtH_tagsAt`, `zkTags_isTmpl`: an untyped `HmOut.parseStmt` reads no identity, so it
   agrees at every table's tags.
 -/
@@ -54,7 +55,7 @@ end FlockSoundness
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Refine
-open FlockSoundness.Discharge.Exec (Inputs)
+open FlockSoundness.Discharge.Exec (Inputs Accepts recordDraw)
 open FlockSoundness.Discharge.Integrate (model_sched fits_blocks)
 open Lean (Json)
 
@@ -109,6 +110,33 @@ theorem drawSetupH_of_setupHiddenU (ht : I.tags.typed = false) {st : Flock.Stmt}
   obtain ⟨k0, l₀, l₁, rest, ext, hsch⟩ := model_sched hf
   exact ⟨⟨st, h, D, hD, hS, hg, hblk, st.m, k0, l₀, l₁, rest, ext, hsch,
     by have := exec_fast100_ge hf; omega, hmPts, setupHidden_wf h⟩, rfl⟩
+
+/-- `drawSetupH_of_accepts` from the session alone. -/
+theorem drawSetupH_of_acceptsU (ht : I.tags.typed = false) (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
+    {t : Exec.Transcript} (h : Accepts I t) (hd : recordDraw t.record = some d) :
+    ∃ st D, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program =
+        .ok st ∧ Draw.UnitDraw.ofJson d = .ok D ∧
+      ((∀ u ∈ S, u.val ∈ D.proved) → st.mPts = mPts → ∃ x : DrawSetupH I mPts S d, x.st = st) := by
+  obtain ⟨st, hst, hv⟩ := accepts_oneAny hc1 h
+  rw [setupOne_hidden hh, hd] at hst
+  obtain ⟨-, sch, -, -, hf, -, -⟩ := verify_one_ok hv
+  obtain ⟨pop, -, hdr⟩ := setupHidden_drawn hst
+  obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
+  exact ⟨st, D, hst, hD, fun hS hm => drawSetupH_of_setupHiddenU ht hst hf hD hS hm⟩
+
+/-- `tableAtH_of_acceptsI` from the session alone. -/
+theorem tableAtH_of_acceptsU (ht : I.tags.typed = false) (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {t : Exec.Transcript}
+    (h : Accepts I t) (hd : recordDraw t.record = some (dj S))
+    (hS : ∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved)
+    (hmPts : ∀ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition
+      I.program = .ok st → st.mPts = mPts) :
+    ∃ st, Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program =
+        .ok st ∧ ∃ hwf : StmtWF st, (tableAtH dj x₀ S).T.S = stmtOf st hwf (regionsOf st) := by
+  obtain ⟨st, D, hst, hD, hx⟩ := drawSetupH_of_acceptsU (S := S) (mPts := mPts) ht hh hc1 h hd
+  obtain ⟨x, rfl⟩ := hx (hS D hD) (hmPts _ hst)
+  obtain ⟨y, hy, e⟩ := tableAtH_stmt dj x₀ x
+  exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, congrArg (fun T : TableH I mPts S => T.T.S) e⟩⟩
 
 end FlockSoundness.Discharge.HiddenExec
 
