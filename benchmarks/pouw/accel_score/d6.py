@@ -157,8 +157,8 @@ _FREED: dict = {}
 def freed(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True) -> dict:
     key = (card, K, N, t, Lp, weight_coins)
     if key not in _FREED:
-        c, m, _ = job_methods(card, K, N, t, Lp, weight_coins)
-        _FREED[key] = {r: x[0] for r, x in dr.freed(c, m).items()}
+        _, lps = job_lps(card, K, N, t, Lp, weight_coins)
+        _FREED[key] = {r: x[0] for r, x in dr.freed_lp(vc.CARDS[card][0], lps).items()}
     return _FREED[key]
 
 
@@ -227,8 +227,8 @@ def value_test(card: str, model: dict, k: tuple, p: dict, ev: dict) -> float:
     """Credited value per honest second a round class adds over serving it plain, less the period's: CLOCK·η·pub_k
     / (γ_k − 1) − the period's credited share, pub_k at the period's served duals (plain PV costs 1 a MAC)."""
     c = vc.CARDS[card][0]
-    _, m, _ = job_methods(card, k[1], k[2], p["t"], p["Lp"], weight_coins=False)
-    pub = dr.mu_price(c, m, "hull", ev["period"]["dense"]["served_mu"])
+    _, lps = job_lps(card, k[1], k[2], p["t"], p["Lp"], False)
+    pub = dr.mu_price_lp(c, lps["hull"][0], ev["period"]["dense"]["served_mu"])
     return CLOCK[card] * nf.ETA * pub / max(p["gamma"] - 1, 1e-9) - ev["share"]["share"]
 
 
@@ -328,8 +328,11 @@ def job_lps(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool,
     key = (card, K, N, t, Lp, weight_coins, peel_lanes)
     if key not in _JOB:
         c, m, _ = job_methods(card, K, N, t, Lp, weight_coins=weight_coins, peel_lanes=peel_lanes)
-        m["at_tensor"] = {wh: dr.mu_price(c, m, wh, MU_T) for wh in ("dense", "hull")}
-        _JOB[key] = (m, {wh: dr.captured(c, m, wh) for wh in ("dense", "hull")})
+        lps = {wh: dr.captured(c, m, wh) for wh in ("dense", "hull")}
+        for box, _ in lps.values():
+            box.update({k: np.asarray(box[k], dtype=float) for k in ("A_ub", "b_ub", "A_eq", "b_eq")})
+        m["at_tensor"] = {wh: dr.mu_price_lp(c, lps[wh][0], MU_T) for wh in lps}
+        _JOB[key] = (m, lps)
     return _JOB[key]
 
 
@@ -390,7 +393,7 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
     ms, freed_ = [], {}
     for K, N, w, p, wc in items:
         m, lps = job_lps(card, K, N, p["t"], p["Lp"], wc, peel_lanes)
-        ms.append((w / cred, m, wc, N))
+        ms.append((w / cred, m, wc, N, lps))
         for wh in jobs:
             box, pr = lps[wh]
             jobs[wh].append((w / cred, box))
@@ -417,7 +420,7 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
     mu0 = out["dense"]["served_mu"]
     kinds = {"static": True, "pv": False}
     for wh in jobs:
-        each = [(w, wc, dr.mu_price(c, m, wh, mu0), m["at_tensor"][wh], N) for w, m, wc, N in ms]
+        each = [(w, wc, dr.mu_price_lp(c, lps[wh][0], mu0), m["at_tensor"][wh], N) for w, m, wc, N, lps in ms]
         out[wh]["at_served"] = sum(w * a for w, _, a, _, _ in each)
         out[wh]["at_tensor"] = sum(w * b for w, _, _, b, _ in each)
         out[wh]["net_most"] = dict(served=max(N * a for _, _, a, _, N in each),
@@ -427,7 +430,7 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
             out[wh][kind] = dict(w=sum(w for w, _, _ in sel), at_served=sum(w * a for w, a, _ in sel),
                                  at_tensor=sum(w * b for w, _, b in sel))
     assert abs(out["dense"]["at_served"] / out["dense"]["own_dual"] - 1) < 1e-4, (out["dense"], card, model["name"])
-    out["honest_tensor"] = sum(w * m["honest_tensor"] for w, m, _, _ in ms)
+    out["honest_tensor"] = sum(w * m["honest_tensor"] for w, m, _, _, _ in ms)
     if bounded:
         out["hull"]["tensor_bounded"] = {s: dr.period_row_min(c, jobs["hull"], F, "tensor",
                                                               out["dense"]["served"] * (1 + s)) for s in BOUND_SLACK}

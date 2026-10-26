@@ -103,6 +103,27 @@ def freed(card, m, best=None):
     return out
 
 
+def row_min_lp(card, lp, row, c_max):
+    """`row_min` on a job's LP as `captured` returns it, without rebuilding it from the methods."""
+    j = rows(card).index(row)
+    A_ub, b_ub = np.asarray(lp["A_ub"]), np.asarray(lp["b_ub"])
+    kw = {k: v for k, v in lp.items() if k not in ("c", "A_ub", "b_ub", "bounds")}
+    res = pb.linprog(np.r_[0.0, A_ub[j, 1:]], A_ub=A_ub, b_ub=b_ub,
+                     bounds=[(0, c_max / card.s8 * (1 + 1e-9))] + list(lp["bounds"][1:]), **kw)
+    assert res.status == 0, res.message
+    return float((A_ub[j, 1:] @ res.x[1:] - b_ub[j]) / -A_ub[j, 0] * card.s8)
+
+
+def freed_lp(card, lps):
+    """`freed` on a job's two LPs as `captured` returns them ({'dense': (lp, priced), 'hull': (lp, priced)})."""
+    best = lps["dense"][1]
+    out = {}
+    for r in rows(card):
+        h = row_min_lp(card, lps["hull"][0], r, best.c)
+        out[r] = ((row_min_lp(card, lps["dense"][0], r, best.c) - h) / best.c, (best.loads[r] - h) / best.c)
+    return out
+
+
 def mu_price(card, m, which, mu):
     """The job's least cost at fixed dual prices μ over m[which] (no makespan bound): min Σ_r μ_r load_r, with loads in
     time (load / rate) and μ as `period` returns it (Σ μ_r cap_r = 1). In honest-kernel units."""
@@ -119,6 +140,18 @@ def mu_price(card, m, which, mu):
 
     priced(card, m, which, hook)
     return (box["fun"] + box["fixed"]) * card.s8
+
+
+def mu_price_lp(card, lp, mu):
+    """`mu_price` on a job's LP as `captured` returns it, without rebuilding it from the methods."""
+    names = rows(card)
+    A_ub, b_ub = np.asarray(lp["A_ub"]), np.asarray(lp["b_ub"])
+    tc = -A_ub[:, 0]
+    w = np.array([mu.get(r, 0.0) for r in names]) / tc
+    obj = np.r_[0.0, w @ A_ub[:, 1:]]
+    res = pb.linprog(obj, A_ub=A_ub, b_ub=b_ub, **{k: v for k, v in lp.items() if k not in ("c", "A_ub", "b_ub")})
+    assert res.status == 0, res.message
+    return (res.fun - w @ b_ub) * card.s8
 
 
 def captured(card, m, which):
@@ -155,8 +188,8 @@ def _period_lp(card, jobs, fixed):
     """`period`'s LP: (A_ub, b_ub, A_eq, b_eq, the makespan column), the fixed loads moved into b_ub."""
     names = rows(card)
     tcol = np.array([jobs[0][1]["A_ub"][j][0] for j in range(len(names))])
-    ub = [sparse.csr_matrix(np.array(lp["A_ub"])[:, 1:] * w) for w, lp in jobs]
-    b_ub = sum(w * np.array(lp["b_ub"]) for w, lp in jobs)
+    ub = [sparse.csr_matrix(np.asarray(lp["A_ub"])[:, 1:] * w) for w, lp in jobs]
+    b_ub = sum(w * np.asarray(lp["b_ub"]) for w, lp in jobs)
     f = dict(fixed or {})
     for j, r in enumerate(names):
         if r.startswith("joint"):
@@ -165,7 +198,7 @@ def _period_lp(card, jobs, fixed):
         else:
             b_ub[j] -= f.get(r, 0.0)
     A_ub = sparse.hstack([sparse.csr_matrix(tcol[:, None])] + ub).tocsr()
-    eq = sparse.block_diag([sparse.csr_matrix(np.array(lp["A_eq"])[:, 1:]) for _, lp in jobs])
+    eq = sparse.block_diag([sparse.csr_matrix(np.asarray(lp["A_eq"])[:, 1:]) for _, lp in jobs])
     A_eq = sparse.hstack([sparse.csr_matrix((eq.shape[0], 1)), eq]).tocsr()
     return A_ub, b_ub, A_eq, np.concatenate([lp["b_eq"] for _, lp in jobs]), tcol
 
