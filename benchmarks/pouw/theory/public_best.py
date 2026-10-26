@@ -919,6 +919,7 @@ def operand_cases():
         "A=B=0, v1 (V ±64, U ±80)": (entry_pmf(zero, U_X), entry_pmf(zero, U_W), True),
         "A=B=0, ±80 both (v2's likely)": (entry_pmf(zero, 80), entry_pmf(zero, 80), True),
         "A=B=0, no V (U ±80; is V needed?)": (entry_pmf(zero, 0), entry_pmf(zero, 80), True),
+        "A=B=0, v2 draft (V ±96, U ±80)": (entry_pmf(zero, 96), entry_pmf(zero, 80), True),
         "real, v1 (A σ20, B σ30.7)": (entry_pmf(data_pmf("gauss", 20.0), U_X),
                                       entry_pmf(data_pmf("gauss", 30.7), U_W), False),
     }
@@ -1183,6 +1184,55 @@ def lane_report(menu: dict, scales=(0.0, 0.05, 0.1, 0.15, 0.2, 0.3, 0.5, 1.0)) -
     return out
 
 
+# --------------------------------------------------------------------------------------------------------------------
+# v2's noise tiles (PROTO-DESIGN-2, nofold.py eb880f9be8): a segment of L = t L' holds t tiles, V (m x L') repeats every
+# tile and U's columns are permuted afresh in each, X = b + V, W' = c + U pi_tau. At A = B = 0 a prover can skip the t
+# products a segment (ALGO-COST A12, PROTO-DESIGN-2's "new route"): T_s = b c^T + V (sum_tau c_tau)^T + Z U^T, with
+# Z = sum_tau (b + V)_tau pi_tau^-1, the last two of inner L'.
+
+V2_V, V2_U = 96, 80
+V2_PEEL_DIGITS = 4                  # Z_X U^T and V Y_W^T, two base-128 digits each, inner L' once a call
+BIT_COST = {"sm_90": (("b1 wgmma, θ 32764.6 b1 MACs a SM-clock", 4095.6 / 32764.6),),
+            "sm_120": (("FP4 Strassen depth 2 (ALGO-COST A7, exact)", 0.383),
+                       ("A7 with b1 emulated on the ALU beside it", 0.26))}
+
+
+def tile_route(card: Card, t: int, Lp: int, K: int, n: int, bit: float, **kw) -> dict:
+    """The tile route at A = B = 0 against the honest kernel, both standalone at θ, a naive MAC: honest 1 (plus its peels,
+    V2_PEEL_DIGITS products of inner L' a call); the route b c^T at `bit` over the whole segment, V (sum c)^T one int8
+    product of inner L', and Z U^T priced by `price` (Z a t-term form of b + V entries, its excess on any route)."""
+    zero = data_pmf("zero")
+    eX, eW = entry_pmf(zero, V2_V), entry_pmf(zero, V2_U)
+    honest = 1 + V2_PEEL_DIGITS * Lp / K
+    z = price(card, [Leaf(1.0, _stats("A", eX, (1,) * t), _stats("B", eW, (1,)), 1)], Lp, n, TOKENS, **kw)
+    vc = 1.0
+    route = bit + (vc + z.c) / t
+    return dict(honest=honest, z=z.c, z_routes=z.routes, route=route, c=route / honest)
+
+
+def tile_report(Lps=(256, 512, 1024), ts=(2, 3, 4, 5, 6)) -> dict:
+    out = {}
+    print(f"\n== v2's noise tiles at A = B = 0 (V ±{V2_V}, U ±{V2_U}, U permuted every tile): the tile route b c^T + "
+          f"V(Σc)^T + Z U^T over the honest t products (plus {V2_PEEL_DIGITS} peel digits of inner L' a call), a naive "
+          "MAC; each cell c (Z U^T's own price); the route wins from the first t with c < 1")
+    for card in (H200, H200_M1, SM120):
+        vs = [("", dict(beside=True))] + ([("reads free", dict(beside=True, wgmma_smem=False))]
+                                          if card.family == "sm_90" else [])
+        for bname, bit in BIT_COST[card.family]:
+            for vname, kw in vs:
+                for K, n in ((16384, 16512), (65536, 4096)):
+                    for Lp in Lps:
+                        cells, wins = [], None
+                        for t in ts:
+                            r = tile_route(card, t, Lp, K, n, bit, **kw)
+                            out[card.name, bname, vname, K, Lp, t] = r
+                            cells.append(f"t {t}: {r['c']:.3f} ({r['z']:.3f})")
+                            wins = wins or (t if r["c"] < 1 else None)
+                        print(f"  {card.name:12} {vname:10} b c^T by {bname[:20]:20} K {K:5} L' {Lp:4} | wins from t "
+                              f"{wins} | " + "; ".join(cells))
+    return out
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true", help="exact CPU checks of the words at small sizes")
@@ -1190,6 +1240,7 @@ def main() -> None:
     ap.add_argument("--sha-only", action="store_true")
     ap.add_argument("--sweep", action="store_true", help="only the job's c_mm as L grows")
     ap.add_argument("--lanes", action="store_true", help="only the job's c_mm against the honest lane load")
+    ap.add_argument("--tiles", action="store_true", help="only v2's tile route (ALGO-COST A12)")
     args = ap.parse_args()
     cat = catalogue()
     if args.check:
@@ -1204,6 +1255,9 @@ def main() -> None:
                               f"2:4 MACs {cnt.sp}, leftover contributions {cnt.left}")
         print("packing invariance (no permutation, v1's permutation):", check_packing_invariance())
         print("without V (M7's complement split, §I's packed correction):", check_no_v())
+        return
+    if args.tiles:
+        tile_report()
         return
     print("catalogue: " + ", ".join(f"{k} rank {len(v[0])}, {len(v)} orientations" for k, v in cat.items())
           + "; not integral (left out): " + ", ".join(n for n in CATALOGUE if n not in cat))
@@ -1224,6 +1278,7 @@ def main() -> None:
     job_report(menu)
     sweep_report(menu)
     lane_report(menu)
+    tile_report()
 
 
 if __name__ == "__main__":

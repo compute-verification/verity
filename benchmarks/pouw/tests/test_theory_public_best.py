@@ -68,6 +68,13 @@ def test_strassen_depth_one_is_tensor_bound_on_sm120_at_zero_data():
     assert p.c == pytest.approx(7 / 8) and "tensor" in p.binding
 
 
+def test_v2_tile_route_holds_at_two_tiles_and_breaks_four_on_sm120():
+    for card in (PB.H200, PB.SM120):
+        bit = PB.BIT_COST[card.family][0][1]
+        assert PB.tile_route(card, 2, 512, 16384, 16512, bit, beside=True)["c"] > 1
+    assert PB.tile_route(PB.SM120, 4, 512, 16384, 16512, 0.383, beside=True)["c"] < 0.9
+
+
 def test_sha_schedules_match_rt_units():
     t0, r0 = PB.sha_clocks(PB.H200, "default build")
     t1, _ = PB.sha_clocks(PB.H200, "A-wide + R-hi")
