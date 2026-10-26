@@ -530,9 +530,14 @@
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
   },
   "Properties.Accounting.JointBridge": {
-   "imports": ["Definitions.Accounting", "Properties.Pous.Period"],
+   "imports": [
+    "Definitions.Accounting",
+    "Definitions.Accounting.Assumptions",
+    "Properties.Pous.Period",
+    "Properties.Pouw.Period"
+   ],
    "except": [],
-   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`) and the protocol's own period statement (`Properties.Pous.Period`), never a proof"
+   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`), the bridge's named claims (`Definitions.Accounting.Assumptions`) and the protocol's own period statement (`Properties.Pous.Period`, `Properties.Pouw.Period`), never a proof"
   },
   "Properties.Accounting.JointBridge.WorkOfCreditedWords": {
    "imports": ["Definitions.Accounting", "Definitions.Accounting.Assumptions"],
