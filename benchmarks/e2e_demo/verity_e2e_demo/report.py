@@ -80,8 +80,13 @@ WORLD_LABEL = "world-inference-2027"
 STUBS = {
     "pouw-live-salt": "PoUW's salt isn't yet the live coin read in its answer, nor its rows the committed activations "
                       "(#4405, #4426), so the demo's ACCEPT isn't yet \"no stubs\".",
-    "certifier-output-tie": "Network accounting's output tie reads a rehearsal's records under fake salts, not the "
-                            "network certifier's own cells (NET-71), so the demo's ACCEPT isn't yet \"no stubs\".",
+    "certifier-output-tie": "Network accounting's output tie isn't proved yet: the certified egress isn't yet shown "
+                            "equal to #4426's committed output rows inside the period's --zk proof (NET-80), so the "
+                            "demo's ACCEPT isn't yet \"no stubs\".",
+    "torch-loop-wiring": "The torch loop's ReLU and per-row quantize are not proved units: each linear's input is a "
+                         "committed value, not tied to the previous linear's outputs, until CMP-91 wires each linear "
+                         "as one ScaledMmS8_v1{128,128} unit to QuantRowS8_v1 (#4433), directly or through "
+                         "output-port registered reads, so the demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
 PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network accounting", "pous": "PoUS",

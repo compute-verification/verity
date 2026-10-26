@@ -127,11 +127,11 @@ def test_the_world_figure_carries_its_census_label() -> None:
 def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
     rec = _load("block-record-r2-period0")
     out = D.render([rec])
-    assert "(#4405, #4426)" in out and "(NET-71)" in out
+    assert "(#4405, #4426)" in out and "(NET-80)" in out and "ReLU and per-row quantize are not proved units" in out
     assert "This block drew k = 2, not M3's handful of 8 (PRF-171)." in out
     assert "run on the prover's node for the demo" in out
-    fixed = D.render([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1"}})
-    assert "(#4405, #4426)" not in fixed and "(NET-71)" in fixed
+    fixed = D.render([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1", "torch-loop-wiring": "run r2"}})
+    assert "(#4405, #4426)" not in fixed and "(NET-80)" in fixed and "ReLU and per-row" not in fixed
     with pytest.raises(ValueError, match="fixed 'salt'"):
         D.render([rec], {**_m(), "fixed": {"salt": "run r1"}})
 
