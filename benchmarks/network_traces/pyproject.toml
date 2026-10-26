@@ -22,9 +22,15 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # proof format with its verifier's reader. A served run's Commit windows are the vLLM integration's window advice, which
 # window_chain joins for n2_advised_zk. n2_advised_zk's period draws take the challenger's coins through one_stage's
 # a5_coins, whose local session is live_challenger's auditor host and serve.py (under its tests' stub).
-# torch_loop_stub.py serves the torch loop's model.
+# torch_loop_stub.py serves the torch loop's model. demo_stub's endpoint records are read as the warden path's endpoint
+# step reads them: `verity-vllm advice` (with the step trace and the records it imports) and network-e2e's chain.
 inputs = ["integrations/vllm/workloads", "integrations/vllm/verity_vllm/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/window_advice.py",
+          "integrations/vllm/verity_vllm/pipeline/advice.py", "integrations/vllm/verity_vllm/pipeline/advice_windows.py",
+          "integrations/vllm/verity_vllm/config.py", "integrations/vllm/verity_vllm/engine/__init__.py",
+          "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/step_trace.py",
+          "integrations/vllm/verity_vllm/records/__init__.py", "integrations/vllm/verity_vllm/records/fields.py",
+          "integrations/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
           "benchmarks/live_challenger", "benchmarks/one_stage/a5_coins.py", "integrations/torch_loop/verity_torch_loop",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",

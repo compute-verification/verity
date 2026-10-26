@@ -167,7 +167,9 @@ RUN = b"\x5a" * A.RUN_ID_BYTES
 
 def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes], S.Endpoint]:
     """`PLAN`'s class requests, user-j with prompt j and the warden's release N = j, through ``serve --out``'s
-    scheduler and HTTP side, stepped here (`Endpoint.step`) on a clock of one second a reading; each one's answer."""
+    scheduler and HTTP side, stepped here (`Endpoint.step`) on a clock of one second a reading once the connections'
+    handlers have added them (the scheduler's arrivals, which each handler signals on `Endpoint.wake`), in the order
+    their connections opened; each one's answer."""
     import demo_endpoint as DE
     a = argparse.Namespace(out=out, host="127.0.0.1", port=0, vocab=S.VOCAB, window_steps=window_steps, run_id="t")
     ticks = itertools.count()
@@ -183,12 +185,13 @@ def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes]
                 reader.feed_data(with_release(ids_request(user=f"user-{j}", prompt=prompts[j], seed=j), j, RUN))
                 reader.feed_eof()
                 tasks.append(asyncio.create_task(server(reader, writers[j])))
-            await asyncio.sleep(0)
+            while sched.arrivals < len(tasks):
+                await server.wake.wait()
+                server.wake.clear()
             ran = 0
             while sched.busy() and (steps is None or ran < steps):
                 server.step()
                 ran += 1
-                await asyncio.sleep(0)
             if not sched.busy():
                 sched.idle()
         await asyncio.gather(*tasks)
