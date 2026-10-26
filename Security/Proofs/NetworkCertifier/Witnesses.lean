@@ -68,9 +68,10 @@ theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T
     ((D.partition s).map fun P => faultyBits s.prog P (Finset.range P.rus.length)).getD 0
   rw [hP]
   show faultyBits s.prog P F ≤ faultyBits s.prog P (Finset.range P.rus.length)
-  unfold faultySets at hF
+  classical
+  simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
   unfold faultyBits
-  exact Finset.sum_le_sum_of_subset (Finset.mem_powerset.1 (Finset.mem_filter.1 hF).1)
+  exact Finset.sum_le_sum_of_subset hF.1
 
 set_option synthInstance.maxSize 1024 in
 /-- **`SampledAuditAccepted`'s hypothesis at the deployed record**: `KS` (`ks_deployed`). -/
@@ -198,16 +199,18 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 noncomputable def leakD (Coin : Type) : Claims.Sampling.Deploy Coin Unit Unit :=
   { sksD Coin with parse := fun _ => some notStmt, partition := fun _ => some notPart }
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem leakD_scopeAcc (x : Msg) : ScopeAcc (leakD Coin) (fun _ => notLay) (fun _ => 1) x :=
   ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem leakD_κ (x : Msg) : Claims.Sampling.κ (leakD Coin) 0 x < 1 / 3 :=
   sksD_κ (Coin := Coin) x
 
 theorem leakD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
     (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H = 0 := by
   simp only [Bext]
-  rw [dif_pos (show 0 < (leakD Coin).V.k x from Nat.one_pos)]
+  rw [dite_eq_left (show 0 < (leakD Coin).V.k x from Nat.one_pos)]
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
     simp [ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _), findColl])]
@@ -218,9 +221,11 @@ theorem leakD_breg (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit)
       (fun _ => []) Unit silentP x).Pr H = 0 := by
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
-    simp [Breg, regLog, leakD, ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _), findColl])]
+    simp only [Breg, ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _)]
+    simp [regLog, leakD, findColl])]
   exact Pr_false
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **No witness is in `RLeak`** at `leakD`, at one step at `δ = 0`, whatever the inputs `As` admits: the step the
 trace carries has no frame, where the circuit, the negation of the ingress the trace carries, holds one, and the only
 possible faulty set is empty, since the one unit is drawn `all`. -/
@@ -245,10 +250,11 @@ theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.Stmt → (ℕ → 
     rfl
   obtain ⟨-, -, F, hF, a, -, free, hfree, hacc⟩ := h (fun _ _ => [false]) [obs0] hcar hcov rfl (by simp [obs0])
   have hF0 : F = ∅ := by
-    unfold faultySets at hF
-    obtain ⟨hsub, -, hdis⟩ := Finset.mem_filter.1 hF
+    classical
+    simp only [faultySets, Finset.mem_filter, Finset.mem_powerset] at hF
+    obtain ⟨hsub, -, hdis⟩ := hF
     refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
-    have hv1 : v < 1 := Finset.mem_range.1 (Finset.mem_powerset.1 hsub hv)
+    have hv1 : v < 1 := Finset.mem_range.1 (hsub hv)
     obtain rfl : v = 0 := by omega
     exact Finset.disjoint_left.1 hdis hv (by decide)
   subst hF0
@@ -281,7 +287,7 @@ theorem leakD_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → Lis
   have hp : PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP = 1 :=
     prBad_accV H Rx _ x silentP hR
   have hb : PrB H (leakD Coin).V silentP x = 0 := prB_accV H silentP x
-  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext, one_mul] at h
+  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext] at h
   linarith
 
 /-- `SampledLeakRegistered`'s bound fails at `leakD`'s silent prover, at a relation with no witness at `x`, a bound
@@ -366,7 +372,7 @@ theorem HorizonWrongUnitsLe_honest (n k : ℕ) :
 /-- **`HorizonWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
 that unit wrong, `q = F = 1`. -/
 theorem HorizonWrongUnitsLe_nontrivial :
-    ¬ Pr (fun ω : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
+    ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by
   simp [Pr]
