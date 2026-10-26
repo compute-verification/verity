@@ -262,9 +262,8 @@ class Driver:
                     keys = (self.k[layer, lo:hi] if whole else self.k[layer, s_c]).view(torch.bfloat16)
                     vals = (self.v[layer, lo:hi] if whole else self.v[layer, s_c]).view(torch.bfloat16)
                 else:
-                    kv.write(layer, kk, vv, rows=(lo, hi))
-                    ka, va, _ = kv.read(layer)
-                    keys, vals = ka[lo:hi], va[lo:hi]
+                    kv.write(layer, kk, vv, slice(lo, hi))
+                    keys, vals, _ = kv.read(layer, slice(lo, hi))
                 a0 = self._tick(sec, "forward", c0)
                 sc, pr, att = self.attn(qv.view(m, sh.heads, sh.head_dim), keys, vals, p_c + 1)
                 c0 = self._tick(sec, "attention", a0)
