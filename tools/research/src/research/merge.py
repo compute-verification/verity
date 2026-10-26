@@ -534,7 +534,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     records match, read from the store, else from its run dir on its node (``fetch``: `live_records`), hashed here, never
     digests a caller hands in.  Only drive passes it, having read that verdict itself; `gate` and the push guard never do.
     With it, ``ran`` is the commit that check ran on when it isn't the parent (`Driver._carry` rebuilt the parent above a lock
-    commit drive landed): everything above is then taken against ``ran``, so what lands is still the tree it checked with its
+    commit drive landed): ``commit``'s files are then taken against ``ran``, so what lands is still the tree it checked with its
     records, whatever the parent holds."""
     parents = _git(repo, "rev-list", "--parents", "-n", "1", commit).stdout.split()[1:]
     if len(parents) != 1:
