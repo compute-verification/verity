@@ -11,11 +11,12 @@ blocks agree iff (up to a 2^-64 collision) every output word does, and a block t
   2   sqrt        2^32   sqrt.rn.f32(i)                                   rmsnorm
   3   rcp         2^32   div.rn.f32(1, i)                                 rmsnorm's rs, softmax's r
   4   div_n       2^32   div.rn.f32(i, 16384)                             rmsnorm's mean at the frozen width
-  5   quant_div   2^31   div.rn.f32(f32(i & 0xFFFF), scale(i >> 16))      quant's codes, every bf16 word by every amax
+  5   quant_div   2^31   qdiv(i & 0xFFFF, scale(i >> 16)), against         quant's codes, every bf16 word by every amax
+                         div.rn.f32(f32(i & 0xFFFF), scale(i >> 16))     (qdiv: RN(1 / scale) and one FMA correction)
   6   bf16        2^32   cvt.rn.bf16.f32(i)                               rmsnorm, softmax
   7   scale       2^16   quant's scale(i)                                 quant
   8   add         2^32   bf16(add.rn.f32(widen(i >> 16), widen(i)))       add: every pair of bf16 words
-The constants (1, 16384, 127) come in as the kernel's argument, as they do into the units.
+The constants (1, 16384, 127) come in as the kernel's arguments, as they do into the units.
 """
 from __future__ import annotations
 
@@ -87,6 +88,6 @@ def gpu(op: int) -> list[int]:
     import lib as L
     nb = blocks(op)
     out = torch.zeros(nb, dtype=torch.int64, device="cuda")
-    L.lib().launch("units_sweep", nb, 1024, [L.i32(op), L.u64(OPS[op][1]), L.u(OPS[op][2]), L.ptr(out)])
+    L.lib().launch("units_sweep", nb, 1024, [L.i32(op), L.u64(OPS[op][1]), L.u(OPS[op][2]), L.u(W.ONE), L.ptr(out)])
     torch.cuda.synchronize()
     return [int(v) & 0xFFFFFFFFFFFFFFFF for v in out.cpu().tolist()]

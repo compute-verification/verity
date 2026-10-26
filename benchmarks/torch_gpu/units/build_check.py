@@ -20,7 +20,8 @@ import sys
 from collections import Counter
 
 ARCH = "sm_90a"
-KERNELS = ("units_rmsnorm", "units_quant", "units_softmax", "units_argmax", "units_relu", "units_add", "units_sweep")
+KERNELS = ("units_rmsnorm", "units_quant", "units_quant4", "units_softmax", "units_argmax", "units_relu", "units_add",
+           "units_sweep")
 EX2 = ("units_softmax", "units_sweep")
 INTEGER = ("units_argmax", "units_relu")
 MUFU_OK = {"EX2", "RCP", "RSQ"}

@@ -96,6 +96,13 @@ def test_order_nan_and_relu16():
     assert (r[~nan & (vals < 0)] == 0).all() and (r[nan | ~(vals < 0)] == h[nan | ~(vals < 0)]).all()
 
 
+def test_relu16_closed_form_is_relu16():
+    """units.cu's relu16, v - 0x8001 < 0x7F80 (unsigned) ? 0 : v, on every bf16 word."""
+    h = np.arange(1 << 16, dtype=np.uint32)
+    got = np.where(((h - np.uint32(0x8001)) & np.uint32(0xFFFFFFFF)) < 0x7F80, 0, h).astype(np.uint16)
+    assert (got == W.relu16(h.astype(np.uint16))).all()
+
+
 # ---- each twin against a scalar composition of the primitives' evaluators -------------------------------------------------
 
 def add(a, b):
@@ -303,6 +310,7 @@ BODIES = {
     "units_rmsnorm": ["FMUL R1, R2, R2", "FADD R3, R3, R1", "MUFU.RSQ R4, R3", "MUFU.RCP R5, R4", "FFMA R6, R5, R4, R3",
                       "FCHK P0, R1, R2", "F2FP.BF16.F32.PACK_AB R7, RZ, R6"],
     "units_quant": ["MUFU.RCP R5, R4", "FFMA R6, R5, R4, R3", "F2I.S8.NTZ R2, R6"],
+    "units_quant4": ["UCGABAR_ARV", "MUFU.RCP R5, R4", "FFMA R6, R5, R4, R3", "F2I.S8.NTZ R2, R6"],
     "units_softmax": ["FADD R1, R2, -R3", "FMUL R1, R1, 1.4426950216293334961", "MUFU.EX2 R2, R1", "F2FP.BF16.F32.PACK_AB R3, RZ, R2"],
     "units_argmax": ["ISETP.GT.AND P0, PT, R1, R2, PT", "HFMA2.MMA R5, -RZ, RZ, 0, 0", "SEL R3, R1, R2, P0"],
     "units_relu": ["LOP3.LUT R1, R2, 0x7fff, RZ, 0xc0, !PT"],

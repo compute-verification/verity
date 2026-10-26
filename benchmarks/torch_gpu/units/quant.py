@@ -1,5 +1,6 @@
 """The per-row s8 quantizer in CIR-100's form (#4433's ops.quant; the CMP-96 replay's RowAbsMax_v1, QuantS8Scale_v1 and
-QuantS8Pair_v1): units_quant, one block per row, and its twin.
+QuantS8Pair_v1): units_quant (a CTA a row, up to 16384 words) or units_quant4 (a cluster of four CTAs a row, 65536 words),
+and its twin.
 
 OPS, a row x of N bf16 words, RELU on or off (on only for down_quant at the frozen shape):
   v_i     = RELU ? relu16(x_i) : x_i            relu16: +0 where 0 > x_i strictly; -0 and every NaN are themselves
@@ -9,9 +10,12 @@ OPS, a row x of N bf16 words, RELU on or off (on only for down_quant at the froz
   scale   = RN(f32(amax) / 127) if 1 <= f32(amax) <= 0x7F800000 as signed words, else 1.0 (a zero or NaN amax)
                                                                                                   QuantS8Scale_v1
   code_i  = cvt.rni.sat.s8.f32(RN(f32(v_i) / scale))     ties to even, saturated to [-128, 127], NaN 0   QuantS8Pair_v1
-The max is over integers (exact, so the tree's shape changes no word; NaN encodings sit above +inf), the division
-div.rn.f32.  On the GPU thread j of row r's block takes level 1's chunk j, the next levels' threads their chunks, thread 0
-the scale, and every thread writes codes.
+The max is over integers (exact, so neither the tree's shape nor the order inside a node changes a word; NaN encodings sit
+above +inf), the division div.rn.f32's RN(f32(v_i) / scale).  On the GPU a CTA holds 16384 words of the row in registers
+(at 65536, each of the cluster's four CTAs a quarter, level 2's node and its chunk of 128 level-1 words); a half-warp's
+shuffle max makes each level-1 word and one warp the CTA's node; the cluster's four nodes make the root through
+distributed shared memory.  The quotient is RN(1 / scale) once a row and one FMA correction (units.cu's qdiv), with
+div.rn for the words outside its window; the sweep (op 5) holds it to RN(v / scale) on every bf16 word and every amax.
 """
 from __future__ import annotations
 
@@ -56,16 +60,21 @@ def twin(x: np.ndarray, relu: bool) -> dict:
     return {"codes": codes, "scale": s, "tree": np.concatenate(tree, axis=1)}
 
 
+#: the words a CTA holds, and the one width a cluster of four takes
+CTA_WORDS, CLUSTER_WORDS = 16384, 65536
+
+
 def gpu(x, relu: bool, *, codes=None, scale_out=None, tree=None, units: bool = False):
-    """units_quant on x (R, N) bf16 -> (codes (R, N) int8, scale (R,) int32 f32 words); with ``units`` (or ``tree``) also
-    tree (R, T) int16 bf16 words.  ``codes``, ``scale_out`` and ``tree`` take the caller's tensors."""
+    """units_quant (N <= 16384) or units_quant4 (N = 65536) on x (R, N) bf16 -> (codes (R, N) int8, scale (R,) int32 f32
+    words); with ``units`` (or ``tree``) also tree (R, T) int16 bf16 words.  ``codes``, ``scale_out`` and ``tree`` take the
+    caller's tensors."""
     import torch
 
     import lib as L
     R, N = x.shape
     lv = levels(N)
-    if N % 8 or lv[0] > 1024:
-        raise ValueError(f"units_quant takes N a multiple of 8 with at most 1024 level-1 chunks, not N = {N}")
+    if N % 8 or not (N <= CTA_WORDS or N == CLUSTER_WORDS):
+        raise ValueError(f"units_quant takes N a multiple of 8 up to {CTA_WORDS}, or {CLUSTER_WORDS}, not N = {N}")
     x = L.words(x, torch.bfloat16, (R, N), "quant x")
     codes = L.out_or_new(codes, torch.int8, (R, N), x, "quant codes")
     sc = L.out_or_new(scale_out, torch.int32, (R,), x, "quant scale")
@@ -73,7 +82,8 @@ def gpu(x, relu: bool, *, codes=None, scale_out=None, tree=None, units: bool = F
     units = units or tree is not None
     tree = L.out_or_new(tree, torch.int16, (R, sum(lv)), x, "quant tree") if units else None
     if R:
-        L.lib().launch("units_quant", R, L.threads(lv[0]),
+        name, grid = ("units_quant4", 4 * R) if N == CLUSTER_WORDS else ("units_quant", R)
+        L.lib().launch(name, grid, L.ROW_THREADS,
                        [L.ptr(x), L.ptr(codes), L.ptr(sc), L.ptr(tree), L.i32(N), L.i32(sum(lv)), L.i32(int(bool(relu))),
-                        L.u(W.F127)])
+                        L.u(W.F127), L.u(W.ONE)])
     return (codes, sc, tree) if units else (codes, sc)

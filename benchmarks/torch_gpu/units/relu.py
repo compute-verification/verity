@@ -22,7 +22,8 @@ def gpu(x, *, out=None):
     import lib as L
     x = L.words(x, torch.bfloat16, tuple(x.shape), "relu x")
     out = L.out_or_new(out, torch.bfloat16, tuple(x.shape), x, "relu")
+    L.aligned("relu", x, out)
     n = x.numel()
     if n:
-        L.lib().launch("units_relu", min(-(-n // 256), 1 << 16), 256, [L.ptr(x), L.ptr(out), L.u64(n)])
+        L.lib().launch("units_relu", min(-(-n // 2048), 1 << 16), 256, [L.ptr(x), L.ptr(out), L.u64(n)])
     return out

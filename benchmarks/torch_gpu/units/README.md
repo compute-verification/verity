@@ -6,11 +6,11 @@ CMP-96 replay's templates, CIR-100's quantizer, CIR-104's row units). Linear HAS
 
 | unit | GPU (units.cu) | twin and its op sequence | circuits' templates |
 |---|---|---|---|
-| RMSNorm | `units_rmsnorm`, a block a row | `rmsnorm.py` | RmsSumSqPart_v1, F32SumPart_v1, RmsNormRecip_v1, RmsNormOut_v1 |
-| s8 quantizer | `units_quant`, a block a row | `quant.py` | RowAbsMax_v1, QuantS8Scale_v1, QuantS8Pair_v1 |
-| softmax | `units_softmax`, a thread a row | `softmax.py` | SoftmaxMax_v1, SoftmaxRecip_v1, SoftmaxOut_v1 |
+| RMSNorm | `units_rmsnorm`, a CTA of 128 a row, staged in shared memory | `rmsnorm.py` | RmsSumSqPart_v1, F32SumPart_v1, RmsNormRecip_v1, RmsNormOut_v1 |
+| s8 quantizer | `units_quant`, a CTA a row in registers; `units_quant4`, a cluster of four at 65536 | `quant.py` | RowAbsMax_v1, QuantS8Scale_v1, QuantS8Pair_v1 |
+| softmax | `units_softmax`, a thread a row, 128 rows a CTA through shared memory | `softmax.py` | SoftmaxMax_v1, SoftmaxRecip_v1, SoftmaxOut_v1 |
 | argmax | `units_argmax`, a thread a row | `argmax.py` | Argmax_v1; ArgmaxChunkBest_v1, ArgmaxChunkIdx_v1, ArgmaxCombine_v1 |
-| ReLU | `units_relu` | `relu.py` | relu16 (folded into the quantizer at down_quant) |
+| ReLU | `units_relu`, uint4s | `relu.py` | relu16 (folded into the quantizer at down_quant) |
 | residual add | `units_add` | `add.py` | Bf16AddRow_v1 (Bf16AddF2fp_v1 per element) |
 
 Each module's docstring states its OPS: every f32 operation an IEEE round-to-nearest-even instruction with no flush, every
@@ -21,7 +21,13 @@ returns the intermediate unit outputs (chunk sums, rs, the absmax tree, m, r, ch
 
 `sweep.py` runs the kernels' helpers on every operand word (ex2, the s8 conversion, sqrt.rn, 1/b, a/16384, the quantizer's
 division by every scale, the bf16 rounding, the scale, the residual add of every pair of bf16 words) and reduces each
-block of 2^24 to a digest, so the H200's MUFU.EX2 is held to `MufuEx2Ftz` (measured on sm_89) on all 2^32 inputs.
+block of 2^24 to a digest, so the H200's MUFU.EX2 is held to `MufuEx2Ftz` (measured on sm_89) on all 2^32 inputs, and
+the quantizer's quotient (RN(1 / scale) once a row and one FMA correction, div.rn outside its window) to div.rn on every
+bf16 word and every amax.
+
+`bench.py` times each unit on the GPU's ruler (a sleep ahead of the start event, so the host's launch time isn't counted)
+and the host-inclusive one, and a decode step's units both summed and launched as one; `check.py` runs it after the check,
+and `session.sh` also runs it on another ship's modules (`units-old.tar`) in the same lease.
 
 ## Running
 
@@ -29,10 +35,11 @@ block of 2^24 to a digest, so the H200's MUFU.EX2 is held to `MufuEx2Ftz` (measu
 # on a CPU node: the cubin, build_check.py, the harness SASS gate's verdict, and the fixture (pools, words, sweep digests)
 research run --on auto --cwd source --cpus 16 --mem-gb 32 --send replay.py --send rows.py --env PROCS=16 \
   -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && bash benchmarks/torch_gpu/units/build.sh "$OUT/ship"'
-# on the H200: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing at 4096 and 16384
+# on the H200: the sweeps, the check at B = 1, 7, 128, 4096, 16384 and 20480, then timing at 4096 and 16384 (with
+# units-old.tar, an earlier build's ship, timed beside it)
 tar -C BUILD_RUN/out/ship -cf /tmp/units-ship.tar .
 research run --on vy-dc-h200 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
-  --send /tmp/units-ship.tar -- bash benchmarks/torch_gpu/units/session.sh
+  --send /tmp/units-ship.tar [--send /tmp/units-old.tar] -- bash benchmarks/torch_gpu/units/session.sh
 ```
 
 The fixture holds every pool word of the twins to circuits' references and refuses to write on a disagreement:

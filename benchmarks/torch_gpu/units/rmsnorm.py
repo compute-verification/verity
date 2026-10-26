@@ -9,9 +9,10 @@ RN with no flush, every NaN result 0x7FFFFFFF; bf16() is cvt.rn.bf16.f32 (RNE, N
   total   = (((+0 + group_0) + group_1) + ... + group_ng-1)
   rs      = RN(1 / sqrt.rn(RN(RN(total / f32(N)) + eps)))                    eps 0x3727C5AC (1e-5)   RmsNormRecip_v1{N, ng}
   out_i   = bf16(RN(f32(w_i) * f32(bf16(RN(f32(x_i) * rs)))))                                        RmsNormOut_v1
-x^2 is RN(f32(x) * f32(x)) and the division and the square root are div.rn.f32 and sqrt.rn.f32.  On the GPU thread j sums
-chunk j, threads g < ng sum the groups, thread 0 makes total and rs, and every thread writes outputs; nothing is
-reassociated or contracted (-fmad=false).
+x^2 is RN(f32(x) * f32(x)) and the division and the square root are div.rn.f32 and sqrt.rn.f32.  On the GPU a CTA of 128
+threads copies its row (N <= 16384) into shared memory once, coalesced; thread j sums chunk j from there, threads g < ng
+sum the groups, thread 0 makes total and rs, and every thread writes outputs, coalesced; nothing is reassociated or
+contracted (-fmad=false).
 """
 from __future__ import annotations
 
@@ -20,6 +21,8 @@ import numpy as np
 import words as W
 
 CHUNK, GROUP = 128, 64
+#: the words a CTA's shared memory holds (units.cu's RQ uint4s)
+ROW_WORDS = 16384
 
 
 def forms(N: int) -> tuple[int, int, int, int]:
@@ -55,8 +58,9 @@ def gpu(x, w, *, eps: int = W.EPS, out=None, units: bool = False, parts: dict | 
     import lib as L
     R, N = x.shape
     C, nc, G, ng = forms(N)
-    if C % 8 or nc > 1024:
-        raise ValueError(f"units_rmsnorm takes chunks of a multiple of 8 words and at most 1024 of them, not {nc} of {C}")
+    if C % 8 or N > ROW_WORDS:
+        raise ValueError(f"units_rmsnorm takes chunks of a multiple of 8 words and rows of at most {ROW_WORDS}, not {nc} of "
+                         f"{C}")
     x = L.words(x, torch.bfloat16, (R, N), "rmsnorm x")
     w = L.words(w, torch.bfloat16, (N,), "rmsnorm w")
     out = L.out_or_new(out, torch.bfloat16, (R, N), x, "rmsnorm")
@@ -67,7 +71,7 @@ def gpu(x, w, *, eps: int = W.EPS, out=None, units: bool = False, parts: dict | 
                                        "rs": (torch.int32, (R,))}, x, "rmsnorm")
     if R:
         p = parts or {}
-        L.lib().launch("units_rmsnorm", R, L.threads(nc),
+        L.lib().launch("units_rmsnorm", R, L.ROW_THREADS,
                        [L.ptr(x), L.ptr(w), L.ptr(out), L.ptr(p.get("chunks")), L.ptr(p.get("groups")), L.ptr(p.get("rs")),
                         L.i32(N), L.i32(C), L.i32(nc), L.i32(G), L.i32(ng), L.u(W.f32word(N)), L.u(eps), L.u(W.ONE)])
     return (out, parts) if units else out

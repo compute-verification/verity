@@ -11,7 +11,10 @@ import os
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-KERNELS = ("units_rmsnorm", "units_quant", "units_softmax", "units_argmax", "units_relu", "units_add", "units_sweep")
+KERNELS = ("units_rmsnorm", "units_quant", "units_quant4", "units_softmax", "units_argmax", "units_relu", "units_add",
+           "units_sweep")
+#: units.cu's RT and SR: the threads of an RMSNorm, quantizer or softmax CTA
+ROW_THREADS = 128
 
 u, i32, u64, vp, P = C.c_uint, C.c_int, C.c_uint64, C.c_void_p, C.POINTER
 CUDA = {

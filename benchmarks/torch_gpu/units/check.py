@@ -14,21 +14,20 @@
    not enter any word) and at mixed lengths, argmax over 256, ReLU over B rows of every bf16 word, the residual add of 16384;
    then each pool's other widths once.  The add's row also counts where torch's CUDA bf16 add differs from it (information:
    circuits expects none).  Exit 4 if anything fails, before anything is timed.
-3. Diagnostic timing (information only): at each B of TIME_B, each unit and torch's nearest op (not the units' words), the
-   median of REPS after a warm-up, interleaved rep by rep; and a step row, the units' medians summed at a decode step's
-   counts (STEP: per layer 2 RMSNorms, 3 quantizers of 16384, 1 of 65536 with ReLU, 1 softmax at n = 32 and 2 residual adds,
-   then the final RMSNorm, quantizer and argmax), one kernel after another, without the embedding or any matmul.
+3. Diagnostic timing (information only), bench.py's: at each B of TIME_B, each unit and torch's nearest op on the GPU's
+   ruler and the host-inclusive one, and a step row, the units' medians summed at a decode step's counts and that step's
+   launches measured as one (STEP: per layer 2 RMSNorms, 3 quantizers of 16384, 1 of 65536 with ReLU, 1 softmax at n = 32
+   and 2 residual adds, then the final RMSNorm, quantizer and argmax), without the embedding or any matmul.
 
 One JSON object per line on stdout as each part finishes, a summary on stderr.
 
-  python3 check.py CHECK   (env: BATCHES=1,7,128,4096,16384,20480, REPS=20, TIME_B=4096,16384, UNITS_EXPECT, UNITS_ANY_GPU=1
-                            for a dry run on another card, SWEEP=0 to skip the sweeps)
+  python3 check.py CHECK   (env: BATCHES=1,7,128,4096,16384,20480, REPS=20, STEP_REPS=5, TIME_B=4096,16384, UNITS_EXPECT,
+                            UNITS_ANY_GPU=1 for a dry run on another card, SWEEP=0 to skip the sweeps)
 """
 from __future__ import annotations
 
 import json
 import os
-import statistics
 import sys
 
 import numpy as np
@@ -38,6 +37,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import add as AD  # noqa: E402
 import argmax as AM  # noqa: E402
+import bench as BE  # noqa: E402
 import lib as L  # noqa: E402
 import quant as Q  # noqa: E402
 import relu as RL  # noqa: E402
@@ -45,10 +45,7 @@ import rmsnorm as RN  # noqa: E402
 import softmax as SM  # noqa: E402
 import sweep as SW  # noqa: E402
 
-HEADS = 256
-LAYERS = 52
-STEP = {"rmsnorm 16384 (units)": 2 * LAYERS + 1, "quant 16384 (units)": 3 * LAYERS + 1, "quant 65536 relu (units)": LAYERS,
-        "softmax n=32 (units)": LAYERS, "add 16384": 2 * LAYERS, "argmax 256 (units)": 1}
+HEADS = BE.HEADS
 JUNK = (0x7FC0, 0xFFC1, 0x7F80, 0xFF80, 0x7F7F, 0xFF7F)
 POISON = {torch.int8: -0x5B, torch.int16: -0x5A5B, torch.int32: -0x5A5A5A5B}  # 0xA5, 0xA5A5, 0xA5A5A5A5
 
@@ -265,61 +262,6 @@ def sweeps(check: str) -> list[dict]:
     return rows
 
 
-# ---- timing ---------------------------------------------------------------------------------------------------------------
-
-def timing(dev, B: int, reps: int) -> list[dict]:
-    g = torch.Generator(device=dev).manual_seed(7)
-    rnd = lambda *s: torch.randn(*s, generator=g, device=dev).to(torch.bfloat16)  # noqa: E731
-    x16, w16, x64 = rnd(B, 16384), rnd(16384), torch.relu(rnd(B, 65536))
-    s = rnd(B * HEADS, 32)
-    lens32 = torch.full((B,), 32, dtype=torch.int32, device=dev)
-    lmix = torch.randint(1, 33, (B,), generator=g, device=dev, dtype=torch.int32)
-    logits = rnd(B, 256)
-    o16, p = torch.empty_like(x16), torch.empty_like(s)
-    c16, c64 = torch.empty(B, 16384, dtype=torch.int8, device=dev), torch.empty(B, 65536, dtype=torch.int8, device=dev)
-    tok = torch.empty(B, dtype=torch.int16, device=dev)
-    y64 = torch.empty_like(x64)
-    r16 = rnd(B, 16384)
-    arms = {
-        "rmsnorm 16384 (units)": (lambda: RN.gpu(x16, w16, out=o16, units=True), 2 * x16.numel() * 2),
-        "torch rms_norm 16384": (lambda: torch.nn.functional.rms_norm(x16, (16384,), w16, 1e-5), 2 * x16.numel() * 2),
-        "quant 16384 (units)": (lambda: Q.gpu(x16, False, codes=c16, units=True), x16.numel() * 3),
-        "quant 65536 relu (units)": (lambda: Q.gpu(x64, True, codes=c64, units=True), x64.numel() * 3),
-        "add 16384": (lambda: AD.gpu(x16, r16, out=o16), 3 * x16.numel() * 2),
-        "torch add 16384": (lambda: torch.add(x16, r16, out=o16), 3 * x16.numel() * 2),
-        "softmax n=32 (units)": (lambda: SM.gpu(s, lens32, HEADS, out=p, units=True, check_lens=False), 2 * s.numel() * 2),
-        "softmax mixed n (units)": (lambda: SM.gpu(s, lmix, HEADS, out=p, units=True, check_lens=False), 2 * s.numel() * 2),
-        "torch softmax f32 n=32": (lambda: torch.softmax(s.float(), -1).to(torch.bfloat16), 2 * s.numel() * 2),
-        "argmax 256 (units)": (lambda: AM.gpu(logits, out=tok, units=True), logits.numel() * 2),
-        "torch argmax 256": (lambda: torch.argmax(logits, -1), logits.numel() * 2),
-        "relu 65536": (lambda: RL.gpu(x64, out=y64), 2 * x64.numel() * 2),
-        "torch relu 65536": (lambda: torch.relu(x64), 2 * x64.numel() * 2),
-    }
-    if not hasattr(torch.nn.functional, "rms_norm"):
-        del arms["torch rms_norm 16384"]
-    times: dict[str, list[float]] = {k: [] for k in arms}
-    for f, _ in arms.values():
-        f()
-    torch.cuda.synchronize()
-    for _ in range(reps):
-        for name, (f, _) in arms.items():
-            e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
-            e0.record()
-            f()
-            e1.record()
-            e1.synchronize()
-            times[name].append(e0.elapsed_time(e1))
-    rows = []
-    for name, (_, nbytes) in arms.items():
-        med = statistics.median(times[name])
-        rows.append({"part": "timing", "arm": name, "B": B, "reps": reps, "median_ms": med, "min_ms": min(times[name]),
-                     "bytes": nbytes, "GBps_at_median": nbytes / med / 1e6})
-    med = {r["arm"]: r["median_ms"] for r in rows}
-    rows.append({"part": "step", "B": B, "layers": LAYERS, "counts": STEP,
-                 "median_ms": sum(n * med[arm] for arm, n in STEP.items())})
-    return rows
-
-
 def main(argv: list[str]) -> int:
     check = argv[1] if len(argv) > 1 else os.path.join(HERE, "check")
     ident = identity()
@@ -365,14 +307,10 @@ def main(argv: list[str]) -> int:
         return 4
     print(f"check: 0 mismatches at B {batches} (softmax at every length 1..32 and mixed), the pools' other widths, and "
           f"every sweep", file=sys.stderr)
-    for B in [int(b) for b in os.environ.get("TIME_B", "4096,16384").split(",")]:
-        for row in timing(dev, B, int(os.environ.get("REPS", "20"))):
+    for B in BE.runs():
+        for row in BE.timing(dev, B, int(os.environ.get("REPS", "20")), int(os.environ.get("STEP_REPS", "5"))):
             emit(row)
-            if row["part"] == "step":
-                print(f"step B={B}: {row['median_ms']:.2f} ms of units ({LAYERS} layers)", file=sys.stderr)
-            else:
-                print(f"timing B={B} {row['arm']}: {row['median_ms']:.3f} ms ({row['GBps_at_median']:.0f} GB/s)",
-                      file=sys.stderr)
+            print(BE.summary(row), file=sys.stderr)
         torch.cuda.empty_cache()
     return 0
 
