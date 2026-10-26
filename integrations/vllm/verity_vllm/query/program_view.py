@@ -39,8 +39,9 @@ import operator
 from array import array
 from collections.abc import Sequence as _SequenceABC
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Iterator, Sequence
+from typing import Any, Iterable, Iterator, Sequence
 
+from verity_vllm.query.call_scope import spec_base, spec_statics
 from verity_vllm.query.type_repr import parse_type_repr
 from verity_vllm.query.units import ValueRef
 
@@ -503,56 +504,6 @@ class _Builder:
 # ---------------------------------------------------------------------------------------------------------------------------------
 # spec ids and types
 # ---------------------------------------------------------------------------------------------------------------------------------
-
-def spec_base(spec: str) -> str:
-    """`Gemm_v1{K=2304,N=4096}` -> `Gemm_v1` (a fold's `prefix:` before the record dropped; a `:` inside the record is JSON)."""
-    head = spec.split("{", 1)[0]
-    return head.rsplit(":", 1)[-1]
-
-
-def _spec_record_id(spec: str) -> str:
-    head, sep, rec = spec.partition("{")
-    return head.rsplit(":", 1)[-1] + sep + rec
-
-
-def _static_value(v: Any) -> Any:
-    if isinstance(v, dict):
-        if set(v) == {"f64"}:
-            return float.fromhex(v["f64"])
-        if set(v) == {"fn"}:
-            return v["fn"]
-        if set(v) == {"dict"}:
-            return {k: _static_value(x) for k, x in v["dict"].items()}
-        return {k: _static_value(x) for k, x in v.items()}
-    if isinstance(v, list):
-        return tuple(_static_value(x) for x in v)
-    return v
-
-
-def spec_statics(spec: str) -> dict[str, Any]:
-    """The binding record of a spec id as Python values (`{"f64": hex}` -> float, lists -> tuples), in id order."""
-    from verity.ml.circuits.codec import _split_record
-    out: dict[str, Any] = {}
-    for k, v in _split_record(_spec_record_id(spec)):
-        try:
-            out[k] = _static_value(json.loads(v))
-        except ValueError:
-            out[k] = v
-    return out
-
-
-def bits_gates(group: dict[str, Any], specialize: Callable[[str, dict], Any], violations: list[dict[str, Any]]) -> int:
-    """The Boolean gates per Call of a `query.word.check_calls` group's `bits` Definition (a Boolean Program's word link), 0 for a
-    group without one; a `bits` that does not resolve is an `unresolved` violation, appended to ``violations``."""
-    bits = group.get("bits")
-    if not bits:
-        return 0
-    try:
-        return int(specialize(spec_base(bits), spec_statics(bits)).gates)
-    except (KeyError, TypeError, ValueError, AttributeError) as e:
-        violations.append({"definition": bits, "class": "unresolved", "why": f"{type(e).__name__}: {str(e)[:200]}"})
-        return 0
-
 
 def ports_of_type(t) -> tuple[Port, ...]:
     """The output ports of a `verity.ml.circuits.types.Type`: one `out` for a Value / Array, `"0"`.. for a Tuple, field names for a Record."""

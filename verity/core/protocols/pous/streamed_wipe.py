@@ -19,6 +19,7 @@ session has four steps:
    `WipeCommitment`: the server, the session, `N`, `k`, the batch size, the deadline a batch and the declared memory tiers,
    whose sizes add up to the fill.
 2. **Fill.** `fill(chunk)` streams `L_0 … L_{N-1}` in order; the challenger reads its clock at the first and last chunk.
+   `fill_by(send)` is the same fill streamed by `send`, a streamer on the challenger's own host given `K`.
 3. **Challenge.** Once the fill is complete the challenger draws its coins, then reveals them a batch at a time
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
@@ -274,6 +275,17 @@ class Challenger:
             yield start, labels(self.key, start, count)
             self.filled = start + count
         self.fill_end_ns = self.clock()
+
+    def fill_by(self, send: Callable[[bytes, int], Any]) -> Any:
+        """`fill`'s labels streamed by `send(K, N)`, which returns once it has sent the last; once only. Returns what
+        `send` returns. The answers are checked against this module's `label` whatever `send` streamed."""
+        if self.fill_start_ns is not None:
+            raise RuntimeError("the fill streams once")
+        self.fill_start_ns = self.clock()
+        out = send(self.key, self.params.labels)
+        self.filled = self.params.labels
+        self.fill_end_ns = self.clock()
+        return out
 
     def challenge(self) -> tuple[int, ...]:
         """Reveal the next batch's indices and read its send time; the coins are drawn at the first batch."""
