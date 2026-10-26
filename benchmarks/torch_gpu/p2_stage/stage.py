@@ -69,12 +69,12 @@ class Store:
     def __init__(self, layout: L.StoreLayout, rows: Any, first: int, lib_dir: str | Path, chunk: int = 1 << 16) -> None:
         if rows.dtype != torch.uint8 or rows.dim() != 2 or rows.shape[1] != L.ROW or not rows.is_contiguous():
             raise ValueError(f"the store's rows are a contiguous [n, {L.ROW}] uint8 tensor")
-        if not rows.is_cuda:
-            raise ValueError("the store's rows are on the GPU")
         if first < 0 or chunk < 1:
             raise ValueError("the first block is nonnegative and a chunk at least one block")
         self.layout, self.rows, self.first, self.chunk = layout, rows, first, chunk
         self.kernels = gpu.Kernels(str(lib_dir), "", L.SPEC, layout.prefix)
+        if rows.device.type != self.kernels.device.type:
+            raise ValueError(f"the store's rows are on {rows.device}, the decode on {self.kernels.device}")
         self.kernels.raised()
         self._counts = torch.zeros(2, dtype=torch.int64, device=rows.device)
         self._high: list[tuple[int, Any]] = []

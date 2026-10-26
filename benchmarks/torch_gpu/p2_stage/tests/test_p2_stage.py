@@ -29,22 +29,22 @@ def stream_manifest(width: int = 64, mlp: int = 256, layers: int = 2) -> dict:
     rows, at = [], 0
     kv = width // 4
 
-    def add(name, n):
+    def add(name, shape, size):
         nonlocal at
-        rows.append({"name": name, "offset": at, "nbytes": n})
-        at += n
+        rows.append({"name": name, "offset": at, "nbytes": size, "shape": shape})
+        at += size
 
-    add("tok", 2 * width * 256)
+    add("tok", [width, 256], 2 * width * 256)
     for i in range(layers):
-        add(f"l{i}.attn_norm", 2 * width)
+        add(f"l{i}.attn_norm", [width], 2 * width)
         for t, n, k in (("wq", width, width), ("wk", kv, width), ("wv", kv, width), ("wo", width, width)):
-            add(f"l{i}.{t}", n * k)
-            add(f"l{i}.{t}.scale", 4 * n)
-        add(f"l{i}.mlp_norm", 2 * width)
+            add(f"l{i}.{t}", [n, k], n * k)
+            add(f"l{i}.{t}.scale", [n], 4 * n)
+        add(f"l{i}.mlp_norm", [width], 2 * width)
         for t, n, k in (("wup", mlp, width), ("wdown", width, mlp)):
-            add(f"l{i}.{t}", n * k)
-            add(f"l{i}.{t}.scale", 4 * n)
-    return {"tensors": rows}
+            add(f"l{i}.{t}", [n, k], n * k)
+            add(f"l{i}.{t}.scale", [n], 4 * n)
+    return {"tensors": rows, "stream_bytes": at}
 
 
 def test_blocks_of():
@@ -179,3 +179,62 @@ def test_bf16_rn_is_round_to_nearest_even():
     f = torch.tensor([1.0, 1.00390625, 1.01171875, -2.5, 0.0, 3.0e38, float("inf")], dtype=torch.float32)
     want = f.to(torch.bfloat16).view(torch.int16).to(torch.int32) & 0xFFFF
     assert torch.equal(G.bf16_rn(f), want)
+
+
+class XorKernels:
+    """A stand-in for `p2_v1.gpu.Kernels` on the CPU: block j's row XOR a keystream of (prefix, j), so the driver's
+    plumbing (store, scatter, screen, staging, GEMM check) runs without the GPU library. Not P2."""
+
+    def __init__(self, lib_dir, build_dir, params, prefix):
+        self.prefix, self.device = bytes(prefix), torch.device("cpu")
+
+    def _pad(self, first, n):
+        import hashlib
+        pads = b"".join(hashlib.shake_256(self.prefix + (first + i).to_bytes(8, "big")).digest(L.ROW) for i in range(n))
+        return torch.frombuffer(bytearray(pads), dtype=torch.uint8).view(n, L.ROW)
+
+    def decode(self, c, first=0):
+        return c ^ self._pad(first, c.shape[0])
+
+    encode = decode
+
+    def raised(self):
+        return 0
+
+
+def test_layer_driver_stages_and_checks_on_a_stand_in_codec(tmp_path, monkeypatch):
+    import check
+    import layer
+
+    monkeypatch.setattr(S.gpu, "Kernels", XorKernels)
+    doc = stream_manifest()
+    w = np.random.default_rng(5).integers(0, 256, doc["stream_bytes"] + 4 * L.PAYLOAD, dtype=np.uint8)
+    for t in doc["tensors"]:
+        if t["name"].endswith(".scale"):
+            n = t["nbytes"] // 4
+            w[t["offset"]:t["offset"] + t["nbytes"]] = ((np.arange(n, dtype=np.float32) + 1) * 2.0 ** -14).view(np.uint8)
+    (tmp_path / "m.json").write_text(json.dumps(doc))
+    (tmp_path / "w.bin").write_bytes(w.tobytes())
+    out = tmp_path / "out"
+    base = ["--manifest", str(tmp_path / "m.json"), "--w", str(tmp_path / "w.bin"), "--store", str(tmp_path / "store"),
+            "--lib", "unused", "--salt", "00" * 24, "--out", str(out), "--layer", "1", "--device", "cpu",
+            "--m", "32", "--reps", "1", "--samples", "4", "--encode-chunk", "3"]
+    lay = L.layout_of(doc, L.registered_prefix(bytes(24)))
+    qkv = layer.matrix_blocks(lay, 1, "qkv")
+    first = lay.span(1).start
+    assert layer.main(base + ["--encode-blocks", str(qkv.stop - first)]) == 0
+    recs = [json.loads(x) for x in (out / "layer.json").read_text().splitlines()]
+    assert [r["ready"] for r in recs if "ready" in r] == [["qkv"]]
+    assert layer.main(base) == 0
+    recs = [json.loads(x) for x in (out / "layer.json").read_text().splitlines()]
+    staged = [r for r in recs if r["step"] == "stage" and r.get("matrix") in L.MATRICES]
+    assert [r["matrix"] for r in staged] == ["qkv", "qkv", "o", "up", "down"]
+    assert all(r["weights"]["mismatched_bytes"] == 0 and r["scales"]["mismatched_bytes"] == 0 for r in staged)
+    gemms = [r for r in recs if r["step"] == "gemm"]
+    assert len(gemms) == 5 and all(r["twin"]["mismatches"] == 0 for r in gemms)
+    assert [r["k"] for r in gemms[-4:]] == [64, 64, 64, 256] and [r["n"] for r in gemms[-4:]] == [96, 64, 256, 64]
+    ctl = [r for r in recs if r["step"] == "controls"][-1]["refused"]
+    assert ctl["other_keys"] and ctl["row_at_p"] and ctl["honest"] is None
+    assert any(r["step"] == "summary" for r in recs)
+    res = check.check_gemm(out)
+    assert set(res) == set(L.MATRICES) and all(v["mismatches"] == 0 and v["samples"] == 4 for v in res.values())
