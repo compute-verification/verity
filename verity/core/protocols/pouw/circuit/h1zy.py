@@ -117,8 +117,8 @@ combine's ok; `lane_chunk_carries` a lane's honest carries in chunks, and `lane_
 lane's, with ``j10r``: over J10-R's v5).
 `statement_rows` is a lane's, a chunk's and the combine's input rows as `class_statement.unit_lowering` takes them, and
 `statement_ports` their C-Flock ports, each input's and the output's bits in its port's row, which Lean states as
-`PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders (v1's
-forms; the J10-R forms are not in Lean yet).
+`PouwWindow.Lanes` (with each port's registered row, and each unit input wire's port and bit) for proofs' decoders: v1's
+lane and combine, and J10-R's lane, lane chunks and combine (`chunkPorts`, `combine2Ports`); not v1's lane chunks.
 """
 from __future__ import annotations
 
@@ -934,7 +934,7 @@ def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
     ``partials`` and ``pub`` (`PUBLIC`; a J10-R lane's `PUBLIC_J10R`); a chunk's the same rows of its entries, then those
     of ``carry_in``, ``admit``, ``zy``, ``partials`` and ``carry_out`` it reads, and ``pub``; the combine's ``p0`` ..
     ``p<lanes - 1>`` (its partials rows) and ``receipt``, and v2's ``ok0`` .. (its ``oks`` rows, statement i's at
-    ``ok<i>``); as #3116's `pouw.leaf_lanes` reads them (v1's forms)."""
+    ``ok<i>``); as `pouw.leaf_lanes` reads them."""
     ty = dict(d.signature()[0])
     pub = [("pub", list(PUBLIC_J10R if d.defn in (PouwH1LaneZy2, PouwH1LaneZyChunk2) else PUBLIC))]
     if d.defn in (PouwH1LaneZy, PouwH1LaneZy2):
