@@ -36,13 +36,13 @@ theorem ite_t {α : Sort _} {p : Prop} [Decidable p] {a b : α} (h : p) : (if p 
 theorem ite_f {α : Sort _} {p : Prop} [Decidable p] {a b : α} (h : ¬ p) : (if p then a else b) = b :=
   ite_cond_eq_false a b (eq_false h)
 
-theorem getD_set!_ne {acc : Array Bool} {i X : Nat} {v d : Bool} (h : i ≠ X) :
-    (acc.set! i v).getD X d = acc.getD X d := by
+theorem getD_set!_ne {acc : Array Bool} {i xc : Nat} {v d : Bool} (h : i ≠ xc) :
+    (acc.set! i v).getD xc d = acc.getD xc d := by
   simp only [Array.getD_eq_getD_getElem?, Array.set!_eq_setIfInBounds, Array.getElem?_setIfInBounds_ne h]
 
-theorem getD_set! {acc : Array Bool} {i X : Nat} {v : Bool} (hX : X < acc.size) :
-    (acc.set! i v).getD X false = if X = i then v else acc.getD X false := by
-  by_cases h : i = X
+theorem getD_set! {acc : Array Bool} {i xc : Nat} {v : Bool} (hX : xc < acc.size) :
+    (acc.set! i v).getD xc false = if xc = i then v else acc.getD xc false := by
+  by_cases h : i = xc
   · subst h
     simp [Array.getD_eq_getD_getElem?, Array.set!_eq_setIfInBounds, hX]
   · rw [getD_set!_ne h, ite_eq_right_iff.mpr fun e => absurd e.symm h]
@@ -52,34 +52,34 @@ theorem size_set! {acc : Array Bool} {i : Nat} {v : Bool} : (acc.set! i v).size 
 
 /-- A fold over `range m` whose step `t` writes at most column `col + t`, read at one column. -/
 theorem foldl_range_spec {f : Array Bool → Nat → Array Bool} {col : Nat} {cond : Nat → Bool} {val : Nat → Bool}
-    (hf : ∀ acc t, (f acc t).size = acc.size ∧ ∀ X < acc.size,
-      (f acc t).getD X false = if X = col + t ∧ cond t = true then val t else acc.getD X false) :
-    ∀ m (w : Array Bool), ((List.range m).foldl f w).size = w.size ∧ ∀ X < w.size,
-      ((List.range m).foldl f w).getD X false =
-        if col ≤ X ∧ X < col + m ∧ cond (X - col) = true then val (X - col) else w.getD X false := by
+    (hf : ∀ acc t, (f acc t).size = acc.size ∧ ∀ xc < acc.size,
+      (f acc t).getD xc false = if xc = col + t ∧ cond t = true then val t else acc.getD xc false) :
+    ∀ m (w : Array Bool), ((List.range m).foldl f w).size = w.size ∧ ∀ xc < w.size,
+      ((List.range m).foldl f w).getD xc false =
+        if col ≤ xc ∧ xc < col + m ∧ cond (xc - col) = true then val (xc - col) else w.getD xc false := by
   intro m w
   induction m with
-  | zero => exact ⟨rfl, fun X _ => by simp only [List.range_zero, List.foldl_nil]; split <;> first | omega | rfl⟩
+  | zero => exact ⟨rfl, fun xc _ => by simp only [List.range_zero, List.foldl_nil]; split <;> first | omega | rfl⟩
   | succ m ih =>
     rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
     obtain ⟨hs, hg⟩ := ih
     obtain ⟨hs', hg'⟩ := hf ((List.range m).foldl f w) m
-    refine ⟨hs'.trans hs, fun X hX => ?_⟩
-    rw [hg' X (hs ▸ hX), hg X hX]
-    by_cases hx : X = col + m
+    refine ⟨hs'.trans hs, fun xc hX => ?_⟩
+    rw [hg' xc (hs ▸ hX), hg xc hX]
+    by_cases hx : xc = col + m
     · subst hx
       simp only [Nat.add_sub_cancel_left]
       by_cases hc : cond m = true <;> simp [hc]
-    · have : (X < col + (m + 1)) ↔ X < col + m := by omega
+    · have : (xc < col + (m + 1)) ↔ xc < col + m := by omega
       simp only [hx, false_and, ite_false, this]
 
 theorem set_step_spec {cond : Nat → Bool} {val : Nat → Bool} {col : Nat} (acc : Array Bool) (t : Nat) :
-    (if cond t = true then acc.set! (col + t) (val t) else acc).size = acc.size ∧ ∀ X < acc.size,
-      (if cond t = true then acc.set! (col + t) (val t) else acc).getD X false =
-        if X = col + t ∧ cond t = true then val t else acc.getD X false := by
+    (if cond t = true then acc.set! (col + t) (val t) else acc).size = acc.size ∧ ∀ xc < acc.size,
+      (if cond t = true then acc.set! (col + t) (val t) else acc).getD xc false =
+        if xc = col + t ∧ cond t = true then val t else acc.getD xc false := by
   by_cases hc : cond t = true
   · simp only [hc, ite_true, and_true]
-    exact ⟨size_set!, fun X hX => getD_set! hX⟩
+    exact ⟨size_set!, fun xc hX => getD_set! hX⟩
   · simp [hc]
 
 /-- A fold that writes only at columns other than `t` leaves column `t`. -/
@@ -234,32 +234,32 @@ theorem evalNet_input {net : Net} {ins : Array Bool} {t : Nat} (ht : t < net.inW
     · exact getD_set!_ne (by omega)
 
 theorem orU16_spec (w : Array Bool) (col v : Nat) :
-    (orU16 w col v).size = w.size ∧ ∀ X < w.size, (orU16 w col v).getD X false =
-      if col ≤ X ∧ X < col + 16 ∧ (decide (col % 64 + (X - col) < 64) && v.testBit (X - col)) = true then true
-      else w.getD X false :=
+    (orU16 w col v).size = w.size ∧ ∀ xc < w.size, (orU16 w col v).getD xc false =
+      if col ≤ xc ∧ xc < col + 16 ∧ (decide (col % 64 + (xc - col) < 64) && v.testBit (xc - col)) = true then true
+      else w.getD xc false :=
   foldl_range_spec (col := col) (cond := fun t => decide (col % 64 + t < 64) && v.testBit t) (val := fun _ => true)
     (f := fun acc t => if (decide (col % 64 + t < 64) && v.testBit t) = true then acc.set! (col + t) true else acc)
     (fun acc t => set_step_spec (cond := fun t => decide (col % 64 + t < 64) && v.testBit t)
       (val := fun _ => true) (col := col) acc t) 16 w
 
 theorem putBytes_spec (w : Array Bool) (col : Nat) (b : ByteArray) :
-    (putBytes w col b).size = w.size ∧ ∀ X < w.size, (putBytes w col b).getD X false =
-      if col ≤ X ∧ X < col + 8 * b.size then (b.get! ((X - col) / 8)).toNat.testBit ((X - col) % 8)
-      else w.getD X false := by
+    (putBytes w col b).size = w.size ∧ ∀ xc < w.size, (putBytes w col b).getD xc false =
+      if col ≤ xc ∧ xc < col + 8 * b.size then (b.get! ((xc - col) / 8)).toNat.testBit ((xc - col) % 8)
+      else w.getD xc false := by
   have := foldl_range_spec (col := col) (cond := fun _ => true)
     (val := fun t => (b.get! (t / 8)).toNat.testBit (t % 8))
     (f := fun acc t => acc.set! (col + t) ((b.get! (t / 8)).toNat.testBit (t % 8)))
-    (fun acc t => ⟨size_set!, fun X hX => by rw [getD_set! hX]; simp⟩) (8 * b.size) w
-  exact ⟨this.1, fun X hX => by unfold putBytes; rw [this.2 X hX]; simp⟩
+    (fun acc t => ⟨size_set!, fun xc hX => by rw [getD_set! hX]; simp⟩) (8 * b.size) w
+  exact ⟨this.1, fun xc hX => by unfold putBytes; rw [this.2 xc hX]; simp⟩
 
 theorem putWords_size (w : Array Bool) (col : Nat) (ws : Array UInt64) : (putWords w col ws).size = w.size :=
   (foldl_range_spec (col := col) (cond := fun _ => true)
     (val := fun t => (ws.getD (t / 64) 0 >>> (t % 64).toUInt64) &&& 1 == 1)
     (f := fun acc t => acc.set! (col + t) ((ws.getD (t / 64) 0 >>> (t % 64).toUInt64) &&& 1 == 1))
-    (fun acc t => ⟨size_set!, fun X hX => by rw [getD_set! hX]; simp⟩) (64 * ws.size) w).1
+    (fun acc t => ⟨size_set!, fun xc hX => by rw [getD_set! hX]; simp⟩) (64 * ws.size) w).1
 
 theorem leaves_fold (rows : ByteArray) (li : Array Int) (bits : Array Nat) (w0 : Array Bool) (s0 : Nat)
-    (hw0 : ∀ X, w0.getD X false = false) (h64 : s0 % 64 = 0) (hb : ∀ j < li.size, bits.getD j 0 = 16) :
+    (hw0 : ∀ xc, w0.getD xc false = false) (h64 : s0 % 64 = 0) (hb : ∀ j < li.size, bits.getD j 0 = 16) :
     ∀ m ≤ li.size, ((List.range m).foldl (_root_.VStar.Trace.leafStep rows li bits) (w0, s0)).2 = s0 + 16 * m ∧
       ((List.range m).foldl (_root_.VStar.Trace.leafStep rows li bits) (w0, s0)).1.size = w0.size ∧
       ∀ kk < li.size, ∀ t < 16, s0 + 16 * kk + t < w0.size →
@@ -313,11 +313,11 @@ theorem off_zero (c : Circuit) : off c 0 = 0 := by simp [off]
 
 theorem off_mono (c : Circuit) {q m : Nat} (hqm : q ≤ m) (hm : m ≤ c.ports.size) : off c q ≤ off c m := by
   induction m with
-  | zero => rw [Nat.le_zero.mp hqm]; exact Nat.le_refl _
+  | zero => exact Nat.le_of_eq (congrArg (off c) (Nat.le_zero.mp hqm))
   | succ m ih =>
     rcases Nat.lt_or_ge q (m + 1) with h | h
     · rw [off_succ c (by omega)]; have := ih (by omega) (by omega); omega
-    · rw [show q = m + 1 by omega]; exact Nat.le_refl _
+    · exact Nat.le_of_eq (congrArg (off c) (by omega))
 
 theorem get!_eq (b : ByteArray) (i : Nat) : b.get! i = (b.data[i]?).getD default := by
   cases b with
@@ -414,7 +414,7 @@ theorem cuts_id {w : Array Bool} {u : Nat} {F : Array Bool → Nat × Nat × Nat
     rw [List.foldl_cons, ite_f (by simpa using h x List.mem_cons_self)]
     exact cuts_id l fun y hy => h y (List.mem_cons_of_mem _ hy)
 
-theorem replicate_getD (N X : Nat) : (Array.replicate N false).getD X false = false := by
+theorem replicate_getD (N xc : Nat) : (Array.replicate N false).getD xc false = false := by
   simp only [Array.getD_eq_getD_getElem?, Array.getElem?_replicate]
   split <;> rfl
 
