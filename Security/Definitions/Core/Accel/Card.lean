@@ -10,8 +10,8 @@ capture fixes yet (`Open`). Both instances (`Accel.H200`, `Accel.Sm120`) are tab
   the card.
 * **Resources** (`Res`): the tensor core (one pipe every format shares, a MAC of format `f` using `weight f` units:
   the formats' peaks are one pipe's rate at different widths), twice: at the tick's clock (`tensor`, the per-clock
-  peak) and at the data sheet's tensor clock (`tensorLong`, which over any window longer than the backlog caps the MMAs
-  at the sheet's figure), the warp schedulers' issue slots, the integer `alu` and
+  peak) and at a measured sustained clock (`tensorLong`, which over any window longer than the backlog caps the MMAs
+  there; at `tensor`'s on both instances for now, RT-MODEL M14), the warp schedulers' issue slots, the integer `alu` and
   `imad` pipes, the shuffle pipe, the FP64 pipe, shared memory's banks, and device memory's bandwidth. The FP32 pipe's
   rate is the issue rate, so it is not a resource of its own; L2's bandwidth and the register file's ports are in no
   document, so they are free.
@@ -47,8 +47,9 @@ inductive Store
 inductive Res
   /-- the tensor core, in s8 MACs, at the tick's clock: its per-clock peak, the short-window cap -/
   | tensor
-  /-- the tensor core over long windows, in s8 MACs: the data sheet's rate at its tensor clock, where that is below
-  the tick's (the H200's 1830 MHz against its 1980, RT-MODEL M1). Every tensor-core instruction, DMMA included (one
+  /-- the tensor core over long windows, in s8 MACs: a sustained clock below the tick's, where a measurement shows
+  the card can't exceed it (RT-MODEL M1, M14: θ never caps a rate below what the card might reach, so both instances
+  set it at `tensor`'s until CALIB's H200 clock check rules on 1830 MHz). Every tensor-core instruction, DMMA included (one
   datapath for every format, FP64 too: A100 whitepaper, 'Third-generation Tensor Cores'), uses as many units of it as
   of `tensor`, so the formats share one long-window budget -/
   | tensorLong
@@ -85,7 +86,8 @@ maybe `A`, there). Every unit is per word or per product, so a price vector over
 product, a lane function per result, and a copy per word moved; an MMA with `D ≠ C` delivers its accumulators to
 new words at no units beyond its own (P2's fork, RT-MODEL M5), so no such pricing covers a per-seed delivery cost.
 An `IMAD.HI` uses `hi` lanes of `imad`, its own
-price, not tied to `IMAD`'s. A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
+price, not tied to `IMAD`'s, and an `IMAD.WIDE` 2 (CUDA C++ Programming Guide §6.4.1 Table 7, footnote 6: 32 lanes
+for extended precision against 64; RT-UNITS U13). A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
 its source, as the card's port serves lanes that read one word at once (CUDA C++ Programming Guide, 'Shared
 Memory'; RT-MODEL M6(c): as `k` copies it paid `k·n` bank units, 32 × the card's on a whole-warp broadcast). -/
 def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
@@ -99,7 +101,7 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
     match r, g.pipe with
     | .issue, _ => 1 / 32
     | .alu, .alu => 1
-    | .imad, .imad => if g matches .madHi _ then hi else 1
+    | .imad, .imad => if g matches .madHi _ then hi else if g = .madWide then 2 else 1
     | .shfl, .shfl => 1
     | .f64, .f64 => 1
     | _, _ => 0
