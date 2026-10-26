@@ -536,6 +536,10 @@ def v2_frozen_print(budget: float = 0.0) -> list[dict]:
 WORLD_FLOP = {"week": 1.8e29, "month": 7.8e29, "year": 9.36e30}   # brief rule L2 (Sept 2027 rate, R-ACCEL-7)
 K_DRAWS = 13816                                                     # ε_S 0.1% at δ 1e-6
 C_MM, C_SHA = 1.0, 1.0   # public best over honest at the cheapest registrable instance; D5 v1 (12:00Z) replaces them
+# P1's lanes are nearly idle (lane load 0.05–0.15 on the RTX PRO 6000), ALGO-COST A10/A14's idle-lane regime: HK
+# ⟨2,3,3;15⟩ at 0.870 of a naive honest kernel, 0.994 of one that runs Strassen itself. The H200's port keeps
+# Strassen at ≥ 1.68 there (A10).
+P1_C_MM = {"H200": 1.0, "RTX PRO 6000": 0.870}
 
 
 def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_SHA, net: float = 0.0) -> float:
@@ -543,7 +547,7 @@ def eps_worksound(row: dict, delta: float, c_mm: float = C_MM, c_sha: float = C_
     resource (the dual's vertex under the per-resource maximum): an ALU-bound period prices its ALU (SHA-512 for the
     words, tree and coins; H_o 0, since wraps are outside credit), a tensor-bound one its tensor pipe (matmul, peels
     included). ε_alg (PD2-1's and the tiles' routes) is part of 1 − c_mm. `net` is βK/(kH), 0 at no import."""
-    alu_bound = row["A"] - row["wrap_share"] >= row["T"]
+    alu_bound = row["A"] - row["wrap_share"] > row["T"] * (1 + 1e-6)   # a balanced period also frees a matmul saving
     h_mm, h_sha = (0.0, 1.0) if alu_bound else (1.0, 0.0)
     eta = 1 - 2 ** -16
     return h_mm * (1 - c_mm + row["eps_alg"]) + h_sha * (1 - c_sha) + math.log(1 / delta) / (eta * K_DRAWS) + net
@@ -562,7 +566,8 @@ def d6(budget: float = 0.0) -> None:
         card = r["card"].split(" built")[0].split(" t=")[0].split(" P1")[0]
         built = " built" in r["card"]
         c_sha = SHA_BUILT[card] / V2_CARDS[card][1] if built else 1.0
-        r["eps"] = {d: eps_worksound(r, d, c_sha=c_sha) for d in (0.01, 1e-6)}
+        c_mm = P1_C_MM[card] if " P1" in r["card"] else C_MM
+        r["eps"] = {d: eps_worksound(r, d, c_mm=c_mm, c_sha=c_sha) for d in (0.01, 1e-6)}
         print(f"  {r['card']:34} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['util']:5.1%} "
               f"{r['eps'][0.01]:7.3%} {r['eps'][1e-6]:8.3%}" + (f"   (c_sha {c_sha:.3f})" if built else ""))
     print("  world model (V4 rows), FLOP a window: eps C at delta 1% / 1e-6; credited, ATT copy, uncredited (indexer)")
