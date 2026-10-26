@@ -88,7 +88,7 @@ class Target:
     weight_commitments: dict[str, Mapping[str, Any]] = field(default_factory=dict)
 
     def hooks(self, entry: str) -> Hooks:
-        """A fresh `Hooks` tagged with ``entry`` (``pous:band-chain/d12/v1``), for every patch and service the option makes."""
+        """A fresh `Hooks` tagged with ``entry`` (``pous:p2-16448/v4``), for every patch and service the option makes."""
         h = Hooks(tag=entry)
         self.made.append(h)
         return h

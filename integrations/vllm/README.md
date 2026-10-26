@@ -354,6 +354,14 @@ and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
+POUS (`pous:p2-16448/v4`, the one scheme it serves) holds the linears' weights as they are registered, int8 on the `int8_exact`
+target, only as `C* = P2-Enc(W, salt)` at P2's registered point, in the store's frozen layout (`benchmarks/pous/p2_v1/store.py`:
+each tensor from a block boundary, scales outside `W`), and decodes each layer's weight at its use by the staging decode
+(`benchmarks/torch_gpu/p2_stage`). Its settings are `salt_source` (the auditor's coin, drawn after the commitment: its hex, a
+callable of the commitment, or `{"command": argv}`; install refuses without one), `p2_lib` (`libp2v1.so`'s directory, for
+weights on a GPU) and `experimental`. Each period's audit is the installed option's `leg(period_dir, node, out)`: the memory
+challenger at `period.json`'s `challenger_host` (`verity.core.protocols.pous.challenger_party`), the answer stating the bits it
+certifies (`period.certify`).
 
 **PoUW is not auditable yet.**
 
