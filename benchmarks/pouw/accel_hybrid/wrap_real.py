@@ -28,7 +28,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
-US = (64, 96, 112, 127)
+US = tuple(range(64, 128, 4)) + (127,)
 WIKI = ("Salesforce/wikitext", "wikitext-2-raw-v1/test-00000-of-00001.parquet")
 
 
@@ -232,7 +232,8 @@ def run(a, scratch: str, t0: float) -> None:
     for kind, d in list(acc.items()) + [("total", {"hw": HW, "hx": HX, "nk": sum(d["nk"] for d in acc.values())})]:
         r = {"macs_per_token": d["nk"], "E|B|": float((d["hw"] * np.abs(vals)).sum() / d["hw"].sum()),
              "E|A|": float((d["hx"] * np.abs(vals)).sum() / d["hx"].sum()),
-             "p_W": {u: dens(d["hw"], u) for u in US}, "p_X": {u: dens(d["hx"], u) for u in US}}
+             "p_W": {u: dens(d["hw"], u) for u in US}, "p_X": {u: dens(d["hx"], u) for u in US},
+             "hist_W": d["hw"].tolist(), "hist_X": d["hx"].tolist()}
         (res["total"] if kind == "total" else res["kinds"]).update(r if kind == "total" else {kind: r})
     res["seconds"] = time.monotonic() - t0
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
