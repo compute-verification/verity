@@ -2,7 +2,7 @@
 reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
 §11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
-    tree = Tree(units, device)                 # the receipt tree's row table over one y buffer, built once
+    tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
     P = Pass(seed, units, device)              # pass i's signs S_i on the device (16 rows over a unit's 8,224 bytes)
     store.sketch = P                           # stage.Store.decode_rows sketches each chunk's units before its decode
     ...                                        # the step's decode
@@ -159,6 +159,11 @@ class Tree:
         self.plan = R.Plan.whole(units)
         self.y = torch.zeros(units, R.DIGEST_BYTES, dtype=torch.uint8, device=self.device)
         self.table = self._rows()
+        rows = np.zeros(self.G, dtype=SE.LEAF_ROW)
+        rows["rank"] = rows["position"] = np.arange(self.G, dtype=np.uint64)
+        rows["salt_row"] = np.arange(self.G, dtype=np.uint32)
+        self.leaf_rows = self.E._up(rows)
+        self.schema = self.E._schema(R.SCHEMA)
 
     def _arr(self, t: Any) -> Any:
         return t.numpy() if self.host else t
@@ -189,10 +194,15 @@ class Tree:
         return self._arr(t)
 
     def leaf_table(self, did: bytes) -> SE.LeafTable:
-        """Leaf c's frame leaf: rank and position c in the domain `did`, under its salt c."""
-        G = self.G
-        return self.E.leaf_table([did], np.zeros(G, dtype=np.uint32), np.arange(G, dtype=np.uint64), None,
-                                 np.arange(G, dtype=np.uint32), R.SCHEMA)
+        """Leaf c's frame leaf: rank and position c in the domain `did`, under its salt c. The rows are uploaded once;
+        the engine's leaf setup reads only their domain, rank and position, and writes each pass's prefixes over the
+        last pass's."""
+        E = self.E
+        d_did = E._up(SE._did_words([did]))
+        d_schema, n_schema = self.schema
+        rc = E.lib.sxr_leaf_setup(E._stream(), E._ptr(self.leaf_rows), self.G, E._ptr(d_did), E._ptr(d_schema), n_schema)
+        E._ok(rc, "leaf setup")
+        return SE.LeafTable(self.leaf_rows, (d_did, d_schema), self.G)
 
     def root(self, seed: bytes, salts: Any) -> bytes:
         """The root of the pass with seed `seed` over the receipts in `y`, leaf c hidden under salts[c]."""
