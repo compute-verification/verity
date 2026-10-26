@@ -10,7 +10,7 @@
 # with CERTIFIER_TAMPER=byte), which checks them (--check) before anything builds; ALLP_FLOCK_WORK=DIR keeps M0's build
 # across runs. S1's run of record, the one way a run of it counts (README), every layer chained and the output tied:
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
-#     bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
+#     bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
 set -uxo pipefail
 REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"' EXIT; mkdir -p $O
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH

@@ -55,18 +55,17 @@ opened from the rows and salts the certifier handed the prover (`serve --tie --o
 names the value, the port, the stratum the integrity audit proves whole (`tie.STRATUM`), the relay's run and
 link-window and the pinned root. ``--tie-tamper W,...``: those windows' output is the ``CERTIFIER_TAMPER=byte``
 relay's, one output byte changed on the egress, which Lean's registered read of ``o0`` must refuse. ``--tie`` needs a
-work law (``--law work:K``, default ``work:64``, and `WIRED_TIE_LAW` with ``--wired``): a5 proves the output class only
-beside a streamed work draw, so any other law is refused here rather than in every window's audit.
+work law (``--law work:K``, default ``work:64``, and with ``--wired`` every unit, `wired_units`): a5 proves the output
+class only beside a streamed work draw, so any other law is refused here rather than in every window's audit.
 
 ``--wired``: the loop's wired circuit (`serve --wired`), its weights with ``--registered`` committed one row a linear.
 With ``--tie`` each down_proj unit's ``o0`` reads its row of ``out``, request-major, and the next step's plain quantize
 unit's ``x`` the same row (`loop.TorchLoop.wired_circuit`).
 
-``--of-record``: S1's run of record (`OF_RECORD`), the one way a run counts as its evidence. It sets ``--tie --pouw h1
---registered --law work:64 --jobs 1 --session-jobs 1`` (with ``--wired`` ``--law`` `WIRED_TIE_LAW`; and
-``CERTIFIER_TAMPER=byte`` under ``--tie-tamper``) and refuses a command that contradicts any of them, with the reason
-(`of_record`). ``--of-record --wired`` is the joint run, every layer chained and the output tied; an unwired one names
-the gap in its mode (`WIRING_GAP`): the wiring is cited from the wired run of record (`COMPANION`). Every
+``--of-record``: S1's run of record (`OF_RECORD`), the one way a run counts as its evidence: the joint run, every layer
+chained and the output tied. It sets ``--tie --wired --pouw h1 --registered --jobs 1 --session-jobs 1`` and a work law
+that draws every unit (`wired_units`: ``work:14`` on the toy's 2 requests of 2 steps), and ``CERTIFIER_TAMPER=byte``
+under ``--tie-tamper``, and refuses a command that contradicts any of them, with the reason (`of_record`). Every
 run writes its mode, whether it is of record, and its exact flags to ``DIR/mode.json``, each window's ``period.json`` and
 report (``mode``) and its ``ALLP`` line, so a run's evidence says whether it counts. ``--check`` only checks the command
 and prints its mode, which ``run.sh`` does before it builds.
@@ -104,17 +103,22 @@ WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
 #: default with ``--tie``, whose output class a5 proves only beside a streamed work draw
 LAW, TIE_LAW = "subset:64", "work:64"
 CAP = 8
-#: the tie's work law on the wired toy, which has 14 units, so its work law draws at most k = 14
-WIRED_TIE_LAW = "work:14"
-#: S1's run of record (``--of-record``): the network certifier's output tie (``--tie``, network-accounting's), PoUW's
-#: window (``--pouw h1``, whose leg refuses a window without it), the weights as registered values (``--registered``:
-#: unregistered, they count as free input), the tie's work law (`WIRED_TIE_LAW` with ``--wired``), and one firewalled
-#: session at a time
-OF_RECORD = {"tie": True, "pouw": "h1", "registered": True, "law": TIE_LAW, "jobs": 1, "session_jobs": 1}
-#: what an unwired run of record leaves to the wired one (``--of-record --wired``), named in its mode
-WIRING_GAP = "the toy's wiring is cited from the wired run of record (--of-record --wired)"
-#: the wired run of record, every layer chained and the output tied to what the network certifier relayed
-COMPANION = "--of-record --wired --windows 2 --tie-tamper 0"
+#: S1's run of record (``--of-record``): the wired circuit (``--wired``, every layer chained), the network certifier's
+#: output tie (``--tie``, network-accounting's), PoUW's window (``--pouw h1``, whose leg refuses a window without it),
+#: the weights as registered values (``--registered``: unregistered, they count as free input) and one firewalled
+#: session at a time; its law draws every unit (`of_record_flags`)
+OF_RECORD = {"tie": True, "wired": True, "pouw": "h1", "registered": True, "jobs": 1, "session_jobs": 1}
+
+
+def wired_units(requests: int, steps: int) -> int:
+    """The wired toy's units (`loop.TorchLoop.wired_circuit`): two linears and a ReLU quantize a request's step, and the
+    plain quantize between steps; a work law draws at most this many (k ≤ population)."""
+    return 3 * requests * steps + requests * (steps - 1)
+
+
+def tie_law(a: argparse.Namespace) -> str:
+    """``--tie``'s default work law: `TIE_LAW`, and on the wired circuit every one of its units."""
+    return f"work:{wired_units(len(a.requests.split(',')), a.steps)}" if a.wired else TIE_LAW
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
@@ -298,9 +302,9 @@ one_session = only_one("an audit runs its sessions one at a time")
 
 
 def of_record(a: argparse.Namespace) -> str | None:
-    """``--of-record``'s flags (`OF_RECORD`, its law `WIRED_TIE_LAW` with ``--wired``) set on ``a``, or why the command
-    contradicts them. ``--tie`` and ``--pouw h1`` have no other value to contradict them, and ``--jobs`` and
-    ``--session-jobs`` take only 1 (`ONE_AT_A_TIME`)."""
+    """``--of-record``'s flags (`of_record_flags`) set on ``a``, or why the command contradicts them. ``--tie``,
+    ``--wired`` and ``--pouw h1`` have no other value to contradict them, and ``--jobs`` and ``--session-jobs`` take only
+    1 (`ONE_AT_A_TIME`)."""
     want = of_record_flags(a)
     if a.law not in (None, want["law"]):
         return (f"S1's run of record draws under {want['law']} (the tie's output class needs a streamed work draw, and "
@@ -317,8 +321,8 @@ def of_record(a: argparse.Namespace) -> str | None:
 
 
 def of_record_flags(a: argparse.Namespace) -> dict[str, Any]:
-    """The flags a run of record runs with: `OF_RECORD`, under ``--wired`` at `WIRED_TIE_LAW`."""
-    return {**OF_RECORD, **({"law": WIRED_TIE_LAW} if a.wired else {})}
+    """The flags a run of record runs with: `OF_RECORD`, its law drawing every unit of the wired circuit (`wired_units`)."""
+    return {**OF_RECORD, "law": f"work:{wired_units(len(a.requests.split(',')), a.steps)}"}
 
 
 def of_record_unmet(a: argparse.Namespace) -> list[str]:
@@ -333,8 +337,7 @@ def mode_of(a: argparse.Namespace, argv: Sequence[str]) -> dict[str, Any]:
                       "windows": a.windows, "start": a.start, "tamper": sorted(a.tamper),
                       "tie_tamper": sorted(a.tie_tamper), "registered": a.registered, "wired": a.wired,
                       "requests": a.requests, "steps": a.steps, "cap": a.cap, "delta": a.delta,
-                      "certifier_tamper": os.environ.get("CERTIFIER_TAMPER")},
-            **({"gap": WIRING_GAP, "companion": COMPANION} if a.of_record and not a.wired else {})}
+                      "certifier_tamper": os.environ.get("CERTIFIER_TAMPER")}}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -369,9 +372,9 @@ def main(argv: list[str] | None = None) -> int:
                     "relay's, one egress byte changed, e.g. 0")
     ap.add_argument("--wired", action="store_true", help="the loop's wired circuit (`serve --wired`: each linear and each "
                     "quantize one unit, every activation a tie; with --registered the weights one row a linear)")
-    ap.add_argument("--of-record", action="store_true", help="S1's run of record: --tie --pouw h1 --registered --law "
-                    f"work:64 ({WIRED_TIE_LAW} with --wired) --jobs 1 --session-jobs 1, refusing a command that "
-                    "contradicts them (OF_RECORD)")
+    ap.add_argument("--of-record", action="store_true", help="S1's run of record, the joint run: --tie --wired --pouw h1 "
+                    "--registered --jobs 1 --session-jobs 1 and a work law drawing every unit (work:14 on the toy), "
+                    "refusing a command that contradicts them (OF_RECORD)")
     ap.add_argument("--check", action="store_true", help="only check the command and print its mode (run.sh does, "
                     "before it builds, so a refused run of record costs nothing)")
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -390,11 +393,11 @@ def main(argv: list[str] | None = None) -> int:
     if a.wired and r % a.cap:
         ap.error(f"--wired --cap {a.cap}: a wired member must not straddle the step-0 up_proj units and the rest "
                  f"(`loop`), so the cap divides the request count, {r}: give --cap {math.gcd(a.cap, r)} or omit it")
-    a.law = a.law or (((WIRED_TIE_LAW if a.wired else TIE_LAW) if a.tie else LAW))
+    a.law = a.law or (tie_law(a) if a.tie else LAW)
     if a.tie and a.law.partition(":")[0] != "work":
         ap.error(f"--tie proves the output class whole beside a streamed work draw, and a5 refuses it under any other "
                  f"law (output-class-needs-a-streamed-work-draw): give --law work:K (the default with --tie is "
-                 f"{TIE_LAW}, and {WIRED_TIE_LAW} with --wired), not {a.law}")
+                 f"{TIE_LAW}, and with --wired every unit, work:{wired_units(r, a.steps)}), not {a.law}")
     if a.check:
         print(json.dumps(mode_of(a, argv), sort_keys=True))
         return 0
@@ -456,8 +459,7 @@ def summary_line(report: dict[str, Any]) -> dict[str, Any]:
     if "error" in report:
         return {"window": report["window"], "error": report["error"]}
     mode = report.get("mode") or {}
-    return {"window": report["window"], "of_record": bool(mode.get("of_record")),
-            **({"gap": mode["gap"]} if mode.get("gap") else {}), "tampered": report["loop"]["tampered"],
+    return {"window": report["window"], "of_record": bool(mode.get("of_record")), "tampered": report["loop"]["tampered"],
             **({"tie": report["loop"]["tie"]["strategy"]} if report["loop"].get("tie") else {}),
             "protocols": {n: {"verdict": r["verdict"],
                               **({"bound": r["quantity"].get("bound")} if isinstance(r.get("quantity"), dict)

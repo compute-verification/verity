@@ -1,8 +1,8 @@
-"""S1's run of record (``runner --of-record``): it sets ``--tie --pouw h1 --registered --law work:64 --jobs 1
---session-jobs 1`` (``--law work:14`` with ``--wired``, and ``CERTIFIER_TAMPER=byte`` under ``--tie-tamper``), each of
-them reaching the loop, and refuses a command that contradicts any of them with the reason; an unwired one names the
-wiring gap and the wired run of record. ``--tie`` and ``--wired`` combine. Every run records its mode and exact flags in
-``mode.json``, each window's ``period.json`` and report and its ``ALLP`` line."""
+"""S1's run of record (``runner --of-record``), the joint run: it sets ``--wired --tie --pouw h1 --registered --jobs 1
+--session-jobs 1`` and a work law drawing every unit (``work:14`` on the toy, `runner.wired_units`), and
+``CERTIFIER_TAMPER=byte`` under ``--tie-tamper``, each of them reaching the loop, and refuses a command that contradicts
+any of them with the reason. ``--tie`` and ``--wired`` combine, drawing every unit by default. Every run records its mode
+and exact flags in ``mode.json``, each window's ``period.json`` and report and its ``ALLP`` line."""
 from __future__ import annotations
 
 import json
@@ -52,47 +52,40 @@ def run_of_record(tmp_path, monkeypatch, argv: list[str]) -> tuple[list, list, l
     return shapes, loops, relays
 
 
-def test_a_run_of_record_applies_its_flags_and_records_them(tmp_path, monkeypatch, capsys):
+def test_a_run_of_record_is_the_joint_run_and_records_its_flags(tmp_path, monkeypatch, capsys):
+    """``--of-record`` alone is the joint run: the wired circuit with registered weights, the output tied at the
+    circuit's out shape, every unit drawn (``work:14`` on the toy), and no gap in its mode."""
     monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
     argv = ["--of-record", "--windows", "2", "--tie-tamper", "0"]
     shapes, loops, relays = run_of_record(tmp_path, monkeypatch, argv)
     commit, shape = shapes[0], shapes[1]
-    assert commit[0] == "--commit-weights" and "--wired" not in commit
-    assert shape[shape.index("--law") + 1] == "work:64" and "--tie" in shape and shape[shape.index("--pouw") + 1] == "h1"
-    assert "--registered" in shape and "--wired" not in shape and relays[0][-2] == SHAPE
-    assert [{k: v for k, v in x.items() if k not in ("shape", "cap")} for x in loops] == [
-        {"tie": True, "pouw": "h1", "registered": True, "law": "work:64", "jobs": 1, "session_jobs": 1,
-         "relay": {"h": 1}, "wired": False}] * 2
+    assert commit[0] == "--commit-weights" and "--wired" in commit
+    assert shape[shape.index("--law") + 1] == "work:14" and "--tie" in shape and shape[shape.index("--pouw") + 1] == "h1"
+    assert "--registered" in shape and "--wired" in shape and relays[0][-2] == SHAPE and relays[0][-3] is True
+    assert all({"--wired", "--registered", "--tie"} <= set(x["shape"]) for x in loops) and len(loops) == 2
+    assert [{k: v for k, v in x.items() if k != "shape"} for x in loops] == [
+        {"tie": True, "pouw": "h1", "registered": True, "law": "work:14", "jobs": 1, "session_jobs": 1,
+         "relay": {"h": 1}, "wired": True, "cap": 2}] * 2
     mode = json.loads((tmp_path / "out" / "mode.json").read_text())
     assert mode["of_record"] is True and mode["argv"][4:] == argv
     assert {k: mode["flags"][k] for k in ("tie", "pouw", "registered", "wired", "law", "jobs", "session_jobs",
                                           "tie_tamper", "certifier_tamper")} \
-        == {"tie": True, "pouw": "h1", "registered": True, "wired": False, "law": "work:64", "jobs": 1,
+        == {"tie": True, "pouw": "h1", "registered": True, "wired": True, "law": "work:14", "jobs": 1,
             "session_jobs": 1, "tie_tamper": [0], "certifier_tamper": "byte"}
-    assert mode["gap"] == RN.WIRING_GAP and "--of-record --wired" in mode["gap"] and mode["companion"] == RN.COMPANION
+    assert "gap" not in mode and "companion" not in mode
     for w in (0, 1):
         assert json.loads((tmp_path / "out" / f"w{w}" / "report.json").read_text())["mode"] == mode
     lines = [json.loads(x.split(" ", 1)[1]) for x in capsys.readouterr().out.splitlines() if x.startswith("ALLP ")]
     assert [x["window"]["of_record"] for x in lines] == [True, True]
-    assert [x["window"]["gap"] for x in lines] == [RN.WIRING_GAP] * 2
-
-
-def test_the_wired_run_of_record_ties_the_wired_circuit_at_its_law_and_names_no_gap(tmp_path, monkeypatch, capsys):
-    """``--of-record --wired`` (`COMPANION`): every layer chained and the output tied, at the wired toy's work law."""
-    monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
-    shapes, loops, relays = run_of_record(tmp_path, monkeypatch, RN.COMPANION.split())
-    assert shapes[0][0] == "--commit-weights" and "--wired" in shapes[0]
-    assert all({"--wired", "--registered", "--tie"} <= set(x["shape"]) for x in loops) and len(loops) == 2
-    assert all(x["law"] == "work:14" and x["tie"] and x["wired"] and x["cap"] == 2 for x in loops)
-    assert relays[0][-2] == SHAPE and relays[0][-3] is True
-    mode = json.loads((tmp_path / "out" / "mode.json").read_text())
-    assert mode["of_record"] is True and "gap" not in mode and "companion" not in mode
-    assert {k: mode["flags"][k] for k in ("wired", "registered", "tie", "pouw", "law", "tie_tamper", "certifier_tamper")} \
-        == {"wired": True, "registered": True, "tie": True, "pouw": "h1", "law": "work:14", "tie_tamper": [0],
-            "certifier_tamper": "byte"}
-    lines = [json.loads(x.split(" ", 1)[1]) for x in capsys.readouterr().out.splitlines() if x.startswith("ALLP ")]
-    assert [x["window"]["of_record"] for x in lines] == [True, True]
     assert all("gap" not in x["window"] for x in lines)
+
+
+def test_giving_wired_to_a_run_of_record_is_the_same_run(tmp_path, monkeypatch, capsys):
+    monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
+    for argv in (["--of-record"], ["--of-record", "--wired"]):
+        assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--check", *argv]) == 0
+        flags = json.loads(capsys.readouterr().out)["flags"]
+        assert (flags["wired"], flags["tie"], flags["law"], flags["cap"]) == (True, True, "work:14", 2)
 
 
 def test_a_wired_cap_must_divide_the_request_count(tmp_path, capsys):
@@ -101,15 +94,12 @@ def test_a_wired_cap_must_divide_the_request_count(tmp_path, capsys):
     assert x.value.code == 2 and "the cap divides the request count, 2: give --cap 2" in capsys.readouterr().err
 
 
-def test_a_wired_run_of_record_refuses_the_unwired_law(tmp_path, capsys):
-    err = refused(tmp_path, capsys, "--wired", "--law", "work:64")
-    assert "S1's run of record draws under work:14" in err and "not --law work:64" in err
-
-
-def test_the_tie_and_the_wired_circuit_combine(tmp_path, capsys):
-    assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--check", "--tie", "--wired"]) == 0
+@pytest.mark.parametrize("shape, law", [([], "work:14"), (["--requests", "3,7,9", "--steps", "3"], "work:33")])
+def test_the_tie_and_the_wired_circuit_combine_and_draw_every_unit(shape, law, tmp_path, capsys):
+    assert RN.wired_units(2, 2) == 14 and RN.wired_units(3, 3) == 33
+    assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--check", "--tie", "--wired", *shape]) == 0
     mode = json.loads(capsys.readouterr().out)
-    assert mode["flags"]["tie"] is True and mode["flags"]["wired"] is True and mode["flags"]["law"] == "work:14"
+    assert mode["flags"]["tie"] is True and mode["flags"]["wired"] is True and mode["flags"]["law"] == law
 
 
 def test_a_run_of_record_is_refused_when_a_flag_of_its_mode_is_unmet(tmp_path, monkeypatch, capsys):
@@ -128,18 +118,15 @@ def test_check_prints_a_run_of_records_mode_without_reading_its_tools(tmp_path, 
     monkeypatch.delenv("CERTIFIER_TAMPER", raising=False)
     assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--of-record", "--check"]) == 0
     mode = json.loads(capsys.readouterr().out)
-    assert mode["of_record"] is True and mode["flags"]["law"] == "work:64" and mode["flags"]["certifier_tamper"] is None
-    assert mode["flags"]["registered"] is True and mode["flags"]["wired"] is False and mode["gap"] == RN.WIRING_GAP
-    assert RN.main(["--out", str(tmp_path), "--tools", "/dev/null", "--of-record", "--wired", "--check"]) == 0
-    mode = json.loads(capsys.readouterr().out)
-    assert mode["of_record"] is True and mode["flags"]["law"] == "work:14" and mode["flags"]["wired"] is True
-    assert mode["flags"]["tie"] is True and "gap" not in mode
+    assert mode["of_record"] is True and mode["flags"]["law"] == "work:14" and mode["flags"]["certifier_tamper"] is None
+    assert mode["flags"]["registered"] is True and mode["flags"]["wired"] is True and mode["flags"]["tie"] is True
+    assert "gap" not in mode
 
 
-@pytest.mark.parametrize("law", ["subset:64", "work:4"])
+@pytest.mark.parametrize("law", ["subset:64", "work:64", "work:4"])
 def test_a_run_of_record_refuses_another_law(law, tmp_path, capsys):
     err = refused(tmp_path, capsys, "--law", law)
-    assert "S1's run of record draws under work:64" in err and f"not --law {law}" in err
+    assert "S1's run of record draws under work:14" in err and f"not --law {law}" in err
 
 
 def test_a_run_of_record_refuses_windows_audited_at_once(tmp_path, capsys):

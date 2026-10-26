@@ -89,9 +89,9 @@ every machine of a census deployment, the pooled total first and the per-window 
   `--wired` serves the loop's wired circuit (`serve --wired`).
   `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
   `verity_torch_loop.pouw_audit` before the legs.
-  `--tie` ties the outputs to the certified ones (`verity_all_protocols/tie.py`) under a work law (default `work:64`, any
-  other refused), and `--tie-tamper W,...` with `CERTIFIER_TAMPER=byte` ties those windows to a relay with one output
-  byte changed on the egress, which must reject.
+  `--tie` ties the outputs to the certified ones (`verity_all_protocols/tie.py`) under a work law (default `work:64`,
+  with `--wired` every unit; any other refused), and `--tie-tamper W,...` with `CERTIFIER_TAMPER=byte` ties those
+  windows to a relay with one output byte changed on the egress, which must reject.
   `--of-record` is S1's run of record (below). Every run writes its mode (`of_record` and its exact flags) to
   `$OUT/mode.json`, each window's `period.json` and report (`mode`) and its `ALLP` line, so its evidence says whether it
   counts.
@@ -106,20 +106,22 @@ every machine of a census deployment, the pooled total first and the per-window 
 
 ## S1's run of record
 
-This is the one way to run S1 so that it counts, the joint run: every layer chained (`--wired`) and the output tied to
-what the network certifier relayed:
+This is the one way to run S1 so that it counts, the joint run: every layer chained and the output tied to what the
+network certifier relayed:
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 --store-read -- \
-  bash benchmarks/all_protocols/run.sh --of-record --wired --windows 2 --tie-tamper 0
+  bash benchmarks/all_protocols/run.sh --of-record --windows 2 --tie-tamper 0
 ~~~
 
 `--of-record` sets the flags three lanes' work needs:
 
+- `--wired`, every layer chained;
 - `--tie`, network-accounting's output tie;
 - `--pouw h1`, whose work leg refuses a window without PoUW's window;
 - `--registered`, so the weights are counted registered, not free;
-- `--law work:64`, the work law the tie needs (`work:14` with `--wired`: the wired toy has 14 units);
+- a work law that draws every unit, which the tie needs (`work:14`: the wired toy's 2 requests of 2 steps are 14
+  units, `runner.wired_units`);
 - `--jobs 1 --session-jobs 1`, so one firewalled session runs at a time.
 
 Under `--tie-tamper` it also sets `CERTIFIER_TAMPER=byte`.
@@ -135,5 +137,4 @@ down_proj unit's `o0`), and window 1 is honest, so it must accept. Any other com
 In the wired circuit `out` is one row of h words a down_proj unit, request j's step s row `j·S + s`: each down_proj
 unit's `o0` reads its row, and the next step's plain quantize unit's `x` reads the same row in place of the `down` tie.
 The network certifier commits `out` at that width and the verifier pins it at that width, both from the circuit's
-registered read (`serve --circuit-only`'s `out_shape`). `--of-record` without `--wired` is the unwired run, one word a
-row; its mode names the gap (`gap`): the wiring is cited from the wired run of record.
+registered read (`serve --circuit-only`'s `out_shape`).

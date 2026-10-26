@@ -157,7 +157,7 @@ def test_the_tie_draws_under_a_work_law_and_refuses_any_other(tmp_path, monkeypa
         with pytest.raises(SystemExit) as x:
             RN.main([*base, "--tie", "--law", law])
         assert x.value.code == 2
-        assert f"give --law work:K (the default with --tie is work:64, and work:14 with --wired), not {law}" in \
+        assert f"give --law work:K (the default with --tie is work:64, and with --wired every unit, work:14), not {law}" in \
             capsys.readouterr().err
     (tmp_path / "tools.json").write_text("{}")
     base[3] = str(tmp_path / "tools.json")
