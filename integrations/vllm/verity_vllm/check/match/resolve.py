@@ -31,12 +31,11 @@ paths can be compared identity set by identity set.
 from __future__ import annotations
 
 import collections
-import json
 import os
 import re
 from array import array
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Iterator, Protocol
+from typing import Any, Callable, Iterable, Protocol
 
 from verity_vllm.check.match import batch_decomp as BD
 
@@ -139,7 +138,7 @@ class DescriptorCorrespondence:
         if table is None and RC._document_of(inst) is not None:                    # the record travels on the doc itself
             table = RC.load_correspondence(inst)
         if table is not None and len(table) != len(self.rows):
-            problem = (problem or "") + (f"; " if problem else "") + f"correspondence record has {len(table)} Calls, the Program {len(self.rows)}: the record is of another Program"
+            problem = (problem or "") + ("; " if problem else "") + f"correspondence record has {len(table)} Calls, the Program {len(self.rows)}: the record is of another Program"
             table = None
         self.table = table
         self.problem = problem
