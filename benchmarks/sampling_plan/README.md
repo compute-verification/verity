@@ -55,11 +55,14 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   window length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200 (PRF-166): plain INT8 weights, no P2 decode, a block of 16,384 requests at
-  CMP-92's 7.84 s step, 32 steps a request, on `h200.py`'s partition with statements shared per template per block. The
-  harm is Daniel's half skipped credited work (an s8 coordinate's K MACs, else 0), half leaked output bits, each half
+  CMP-92's 7.84 s step, 32 steps a request, on `h200.py`'s partition within C-Flock's k_log 27 (RMSNorm as
+  `RMSNormFusedCuda_v2`, every subcircuit past the cap split into equal parts), with statements shared per subcircuit
+  per sampling block. The harm is Daniel's half skipped work (each unit's own ANDs), half leaked output bits, each half
   weighted at each budget by the least bound that budget certifies for it alone; each point reports `certify`'s
-  `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the knee, and whether 1% of the block's GPU time
-  affords a plan.
+  `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, and the knee. The plan of record is proving within
+  1% of the sampling block's GPU time, for sampling blocks of one serving block, the least that affords a plan, a
+  week, a month and a year, with its draw a subcircuit; beside it, each Definition's share of the ANDs against the
+  step's GPU time.
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
