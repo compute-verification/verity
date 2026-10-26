@@ -55,7 +55,8 @@ POLLS = 300
 
 def config_of(value: str | None) -> dict[str, Any]:
     """``--protocols-config``: a JSON object, or a JSON file, ``{"pouw": {...}}``; empty for None. `UsageError` on any key
-    the server sets itself (`OWN`), one it can't serve yet (`SESSIONED`), or a value `pouw.Settings` refuses."""
+    the server sets itself (`OWN`), one a gate session sets (`SESSIONED`, from ``--challenger-gate``), or a value
+    `pouw.Settings` refuses."""
     from verity_vllm.config import UsageError
     from verity_vllm.protocols import load_settings
     from verity_vllm.protocols import pouw as PW
