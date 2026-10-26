@@ -1086,7 +1086,28 @@ def test_a_post_carries_slack_date_tokens_and_read_shows_both_zones(fake, regist
     assert "note:20260930T2020Z-handoff-infra" in posted and "`--since 2026-11-01T09:30Z`" in posted
     fake.messages[COORD][0]["ts"] = "1793525400.000100"
     rc, out, _ = run(capsys, "read", "--thread", "1793525400.000100")
-    assert rc == 0 and out.startswith("1793525400.000100 @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+    assert rc == 0 and out.startswith("1793525400.000100 09:30:00Z @infra: @memory-accounting freeze 1:30 AM PST (09:30Z), see note:")
+
+
+@pytest.mark.parametrize("text,stamped", [
+    ("compute-research 13:07Z: outcome 1 MET", "compute-research 13:07Z (sent 13:22Z): outcome 1 MET"),
+    ("*compute-accounting 11:45Z* (quiet): x", "*compute-accounting 11:45Z* (sent 13:22Z) (quiet): x"),
+    ("top 00:15Z, how this works", "top 00:15Z (sent 13:22Z), how this works"),
+    ("<!subteam^S1|@ci> infra 13:00Z: free", "<!subteam^S1|@ci> infra 13:00Z (sent 13:22Z): free"),       # --to's tag first
+    ("@top comms 13:21Z: on track", None),                                     # within 2 min of the send
+    ("can node 2 take a job by 20:00Z?", None), ("infra, outcomes by 18:40Z:", None),   # deadlines, not headers
+    ("The 13:00Z checkpoint is late", None), ("comms 23:59Z: late", "comms 23:59Z (sent 13:22Z): late"),
+])
+def test_a_hand_typed_header_time_gets_the_real_send_time_beside_it(text, stamped):
+    """26 Oct: hand-typed times in posts ran up to 15 min off, which misordered MEM-69's salts (top, TOP-90)."""
+    now = datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc)
+    assert slack.stamp_time(text, now) == (stamped or text)
+
+
+def test_send_stamps_a_hand_typed_header_time(fake, registry, capsys, monkeypatch):
+    monkeypatch.setattr(slack, "_now", lambda: datetime(2026, 10, 26, 13, 22, 10, tzinfo=timezone.utc))
+    assert run(capsys, "send", "--as", "infra", "--to", "@ci", "--kind", "fyi", "--text", "infra 13:00Z: node 2 is free")[0] == 0
+    assert "infra 13:00Z (sent 13:22Z): node 2 is free" in fake.messages[COORD][-1]["text"]
 
 
 def test_verify_author_fetches_the_message_and_fails_closed(fake, registry, capsys):
