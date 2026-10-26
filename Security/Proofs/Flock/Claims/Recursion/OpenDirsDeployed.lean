@@ -1,7 +1,7 @@
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
 import Proofs.Flock.C3.RegLevels.OpensRegs
-import Proofs.Flock.Claims.Recursion.CopySiteDeployed
+import Proofs.Flock.Claims.Recursion.LabelsDeployed
 import Proofs.Flock.Claims.Recursion.PartsVStar
 
 /-!
@@ -22,7 +22,8 @@ the table, not only the first two.
 * `dirsTie_staged`: the tie, at the position `openPos` reads off the inner session check 5 loads.
 * `dirsSideR_of`: `DirsSideR` from the verifier's checks at a dense statement, the deployed setup's listing
   (`hset`), check 5's inner session at the inner statement's `m` (`InnerMR`, `InnerAt`'s), its `dirs` rows at the
-  coins (`DirsCoinR`, `PosTieR`'s statement) and the staged tables' labels ascending (`LabelsAscendR`).
+  coins (`DirsCoinR`, `PosTieR`'s statement); the staged tables' labels ascend (`LabelsAscendR`) at every stage, from the
+  setup's checks (`labelsAscendR`, `CopySite.labels_staged`).
 -/
 
 namespace RecDeploy.OpenDirs
@@ -678,19 +679,24 @@ def LabelsAscendR (st : Stage) : Prop :=
   ∀ (s : ℕ) (x xO : Msg), StagedPart st s x xO → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
     setupO xO = some (i, spec, sts) → ∀ h0 : 0 < sts.size, CopySite.LabelsAscend sts[0].pub
 
+/-- **`LabelsAscendR` holds at every stage**: the recursive setup's own checks (`CopySite.labels_staged`). -/
+theorem labelsAscendR (st : Stage) : LabelsAscendR st :=
+  fun _ _ _ hS _ _ _ hsu h0 => CopySite.labels_staged hS hsu h0
+
 /-- **`DirsSideR` from the verifier's checks**, at the deployed reader's statements at the dense form and pieces in
 range: the part's circuit is the staged table's, whose unit check gives `dirs` among its inputs (`four_lt_nIn`); check
 5's site holds the registered reads, the inner session and its unit no other recursive unit (`copySite_staged`); the
 piece's instance is below the statement's `n = 2 q` (`levelMatch`), which is the table's population, at most its
 instances (`staged_scope`, `oneFull_staged`, `setupOne_n`), and check 5's `dirs` rows (`drSize_staged`, at `InnerMR`);
-so the labels are `0, …, n − 1` (`CopySite.idx_staged`, at `LabelsAscendR`), and the coin tie is `DirsCoinR`. -/
+so the labels are `0, …, n − 1` (`CopySite.idx_staged`, the labels ascending by `CopySite.labels_staged`), and the coin
+tie is `DirsCoinR`. -/
 theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))}
     {IV : Claims.Verifier Coin} {shape : Claims.Recursion.Form → Prop} {untr : TrReader} {cmt : Msg → ℕ → Msg → Msg}
     {Bd : Claims.Recursion.Bound Coin (List FlockLevel3.GF128) Claims.Flock.PlainTrace}
     (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
     (hP : ∀ x, (DR b elem IV).parse x = parse x) (hSh : ∀ f, shape f → Claims.Recursion.Form.Dense f)
     (hR : OpenLower.PiecesInRangeR pieces) (hset : ∀ xO, ∀ u ∈ resSetup xO, u ∈ b.setup xO)
-    (hasc : LabelsAscendR b.st) (hI : ∀ s x c, InnerMR untr b s x c)
+    (hI : ∀ s x c, InnerMR untr b s x c)
     (hpos : ∀ s x c, DirsCoinR untr b pieces posAt Bd.DE.V.k s x c) :
     DirsSideR b elem IV shape untr cmt Bd pieces posAt := by
   intro x st hx hf cs ws hJ r ss s lv LANES HH n hr hss hsv xO w p hst q hq ho ht
@@ -783,7 +789,7 @@ theorem dirsSideR_of {b : Brings} {elem : (r : XR) → List (Fin r.w.parts.lengt
   -- check 5's `dirs` rows are the statement's instances
   have hdrs : dr.size = n := drSize_staged hx' hd hr hss hsv hlev
     (hI s x cs xO (And.intro hshow hS) i0 hins f _ inn hf' hinn) hrows
-  have hidx := CopySite.idx_staged hsu h0 hown hdv (by omega) (hasc s x xO hS i0 spec sts hsu h0)
+  have hidx := CopySite.idx_staged hsu h0 hown hdv (by omega) (CopySite.labels_staged hS hsu h0)
   have htie := hpos s x cs xO (And.intro hshow hS) i0 spec sts hsu h0 f inn hf' hinn r ss lv LANES HH n hr hss hsv
     cr dr hrows q (by rw [← hxI]; exact hq) ho
   refine ⟨cc, i0, spec, sts, own, f, by rw [hr]; exact hpc, hdin, hsu, hown, hf', hset xO, by rw [e0']; exact hidx,
