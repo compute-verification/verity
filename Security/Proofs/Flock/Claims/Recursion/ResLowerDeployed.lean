@@ -685,7 +685,7 @@ theorem vCols_of_base {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.Wit}
   have hN := in_block hrows hout hqv
   obtain ⟨hqs, -, -⟩ := Array.findIdx?_eq_some_iff_getElem.1 hqv
   have hpq : p.sts[0].c.ports[qv] = ptv := Option.some.inj ((Array.getElem?_eq_getElem hqs).symm.trans hptv)
-  rw [getElem!_pos _ _ hqs] at hN
+  rw [getElem!_pos p.sts[0].c.ports qv hqs] at hN
   have hrh := rowHidden_eq n hl hqv hqs hN
   have hbits : ptv.bits = 16 * ptv.words := hpq ▸ (hv1 _ (Array.getElem_mem_toList hqs)).2.1
   rw [hpq] at hN hrh
@@ -876,7 +876,8 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
 
 /-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at copy
 `(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give there and the
-copy's columns. `resTie_staged` at `n`, with the copy's columns where the slots read (`hVc`, `hOc`) and the coins'
+copy's columns. `resTie_staged` at `n`, with the copy's `v` columns where its slot reads (`vCols_of_base`, wherever
+VBridge's `vBase` is the port's column, `hvb`), its residual columns where the `out` slot reads (`hOc`), and the coins'
 values check 5's row (`VVTie`). -/
 theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     {elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))} {s : ℕ} {x xO : Msg}
@@ -889,7 +890,8 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse xO w = true)
     {r : XR} (hr : readX x = some r) {ss : Array VStar.Stmt} (hss : RecVStar.statements r.shape = .ok ss)
     {j : ℕ} {nm' : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm' pt)) {c : Circuit}
-    (hpc : r.w.parts[s]?.bind partCircuit = some c) {p : Flock.Readable.Parsed} (ht : 0 < p.sts.size)
+    (hpc : r.w.parts[s]?.bind partCircuit = some c) {p : Flock.Readable.Parsed}
+    (hx : Flock.Readable.parseBytes readOfO xO = some p) (ht : 0 < p.sts.size)
     {i : RecIns} {spec : SessionSpec} {sts : Array Stmt} (hsu : setupO xO = some (i, spec, sts)) (h0 : 0 < sts.size)
     (hidx : Registered.unitIndices sts[0].pub = .ok (Array.range sts[0].pub.n))
     {own : Array Registered.Port} (hown : i.base.registered = some own)
@@ -913,9 +915,8 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
         8 * nv ≤ rows[n]!.size)
     (hwo : pto.words = (RecCoins.padTo (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!
       (Registered.rowWords (RecCoins.zeroRows 2 RecCoins.OUT_WORDS)[n]!.size 16)).size)
-    (hVc : ∀ i < 128 * nv, ∃ hl : i < (rowForms c "v" qv n).length,
-      Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) + i) =
-        formBit w (rowForms c "v" qv n)[i])
+    (hvb : FlockVBridge.OfVStar.vBase (FlockVBridge.OfVStar.partRep ns nv) =
+      (c.unit.inGroups.getD 0 default).col * Flock.WORD + 16 * (c.ports.extract 0 qv).foldl (· + ·.words) 0)
     (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
       Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.partBase S ns nv + q) =
         formBit w (rowForms c "out" qo n)[q]) :
@@ -924,6 +925,16 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
   obtain ⟨inn, rows, hinn, hrw, hall⟩ := resTie_staged hT hnc hsh.2 hck hr hss hsv hpc hsu h0 hidx hown hres hso hop
     hsp ho hf hset hn2 hnp hqv hqo hvin hoout hslo
   obtain ⟨hwv, hnr, hsz⟩ := hrows inn rows hinn hrw
+  obtain ⟨p', -, -, hx', ht', hpi, -, -, -, -⟩ := stagedTables hsh.2
+  rw [hx] at hx'
+  cases hx'
+  have hc0 : sts[0].c = c := by
+    have e := partCircuit_staged hsh.2 hx ht' hpi hr hpc ht
+    have hp : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
+    subst hp
+    exact e
+  have hVc := vCols_of_base hsh.2 hr hss hsv hpc hx ht hqv hvin hptv
+    (by rw [hwv]; exact le_trans hsz (size_padTo_ge _ _)) (hc0 ▸ hg) (by rw [← hc0]; exact hn) hvb
   rw [hvv xO hsh i spec sts hsu 0 h0 m k cl jj hres f inn rows hf hinn hrw sh holo S ns nv hshp hholo hpart o g hg
     (by rw [hn]; exact hn2), hn]
   exact hall hptv hpto hwv hwo hnr hsz hVc hOc
