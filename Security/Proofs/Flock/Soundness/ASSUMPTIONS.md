@@ -240,7 +240,7 @@ to prove: the derived column placements) in place of `pp`, and without `hA3`: th
 design, and the `_exec` forms at uniform byte tapes (`Binding/E2E.lean`). `flock_e2e_count_exec_hm96` takes `hks`
 and `hS`; the other three don't.
 
-**What it bounds.** The headline bounds faulty proof blocks of the pinned rows circuit; "computes the Definition" additionally
+**What it bounds.** The headline bounds faulty proof blocks of the pinned rows circuit; "computes the Definition" also
 needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).
 Once every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir; Daniel, Sep 30), a generic
 Boolean-semantics lemma replaces the per-template `RowsCert`.
