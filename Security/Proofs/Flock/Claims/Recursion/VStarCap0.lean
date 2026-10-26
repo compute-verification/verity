@@ -176,7 +176,7 @@ theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
       msgs := msgsOf rs (roundRows (I.fit x) w ρ hist), tops := topsOf rs (roundRows (I.fit x) w ρ hist) } 0 =
       .ok ⟨((List.range N).map fun n => fitRow 32 ((I.rows w ρ.1 []).getD n #[]) ++ Array.replicate 32 0).toArray,
         ((List.range N).map fun n => saltBytes (ρ.2 0 n)).toArray, F⟩ := by
-    refine ⟨_, (topsAt_same ht2 ht0 ht1 ha).trans ?_⟩
+    refine ⟨#[0, 0], (topsAt_same ht2 ht0 ht1 ha).trans ?_⟩
     congr 2
     · apply Array.toList_inj.1
       simp [topRows_fit, flatMap_single]

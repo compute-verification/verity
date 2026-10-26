@@ -98,9 +98,7 @@ theorem hmCommit_placed {c : Circuit} {pin : _root_.VStar.In.PartIn} {w : Claims
 /-- **Every slot `layoutBTops` reads at a staged part has its row's input columns**: each held port's (`heldRows`) and,
 at a RecCap, port `top`'s at every instance (`rowHidden_eq`, the ports among unit 0's leaves, as in
 `hmSlotsCommit_of_full`). -/
-theorem rowHidden_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} {s : ℕ} {w : Claims.Flock.Wit}
-    {r : XR} {c : Circuit} (hS : StagedPart st s x (staged st x ms s))
-    (hck : Claims.Flock.check (deployZkRec Flock.Readable.relation).parse (staged st x ms s) w = true)
+theorem rowHidden_staged {st : Stage} {x xO : Msg} {s : ℕ} {r : XR} {c : Circuit} (hS : StagedPart st s x xO)
     (hr : readX x = some r) (hpc : r.w.parts[s]?.bind partCircuit = some c) :
     (∀ h ∈ heldRows r s, ∃ ps, rowHidden c h.2.1 h.2.2.2 = some ps) ∧
       ∀ l N, (RecVStar.statements r.shape).toOption.bind (·[s]?) = some (.cap l N) → ∀ q, capPort c = some q →

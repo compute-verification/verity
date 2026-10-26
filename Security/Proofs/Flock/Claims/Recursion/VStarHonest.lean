@@ -22,9 +22,10 @@ Of `honest_partAccepts_layR`'s premises about the witness holding the run's mess
 
 namespace RecDeploy.VStarHonest
 
-open Flock
+open _root_.Flock
 open Claims (Msg Out)
 open FlockDeploy (Coin)
+open Claims.Recursion.VStarB (readForms)
 open RecDeploy.VStarBuild
 
 /-- **The deployed brings at `x`**: the reference prover's pieces at the deployed assigner and the fitted records. -/
