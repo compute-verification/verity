@@ -967,7 +967,8 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     have h2 : FlockSoundness.Discharge.Hidden.outAt st.c (q - HmOut.nIn st.c + 1) ≤
         FlockSoundness.Discharge.Hidden.outAt st.c st.c.outPorts.size := by
       unfold FlockSoundness.Discharge.Hidden.outAt
-      exact words_take_mono (·.2) st.c.outPorts.toList (by omega)
+      exact words_take_mono (·.2) st.c.outPorts.toList (a := q - HmOut.nIn st.c + 1) (b := st.c.outPorts.size)
+        (by omega)
     rw [FlockSoundness.Discharge.HiddenExec.outAt_size] at h2
     rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD'] at h1
     omega
@@ -1252,7 +1253,9 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
 /-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
 `s` accepts at an algebra part, each piece `ownQ` gives it holds where, at every staged statement and witness that pass
 `Flock.check`, agree with the messages and record true, collision-free calls, the piece sits at one of the statement's
-copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. Check 5 holds only
+copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. The piece's key is
+`(jj, o, g, u)`: the part's group `jj` (so pieces of different groups have different keys) and the copy `(o, g, u)` of
+the part's one table. Check 5 holds only
 two instances, so `resPieces_computes`' tie at every copy does not follow from it; this one asks it where the pieces
 are. -/
 theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {L : LayoutB}
@@ -1271,21 +1274,21 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
       showsPart untr b s x xO c → L.Agrees cmt x s w xO ms → (∀ e ∈ L.calls x s w, H e.1 = e.2) →
       (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false →
       ∀ q ∈ pieces (Claims.Recursion.xI D x), ownQ x q = some s →
-        ∃ ht : q.key.1 < p.sts.size, q.key.2.1 < 2 ^ (p.sts[q.key.1].m - p.sts[q.key.1].c.kLog) ∧
-          q.key.2.2.1 < p.sts[q.key.1].c.g ∧ q.key.2.2.2 < p.sts[q.key.1].c.upv ∧
+        ∃ ht : 0 < p.sts.size, q.key.2.1 < 2 ^ (p.sts[0].m - p.sts[0].c.kLog) ∧
+          q.key.2.2.1 < p.sts[0].c.g ∧ q.key.2.2.2 < p.sts[0].c.upv ∧
           ∀ (m k cl jj : ℕ) (sh : _root_.Flock.Shape) (holo : Bool) (S : _root_.Flock.RecOpen.GfS) (ns : List ℕ)
-            (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[q.key.1].c.unit.name = some (m, k, cl, jj) →
+            (nv : ℕ), _root_.Flock.RecResiduals.params p.sts[0].c.unit.name = some (m, k, cl, jj) →
             _root_.Flock.RecResiduals.shape? m k cl = some sh →
-            _root_.Flock.RecResiduals.holoOf p.sts[q.key.1].c = .ok holo →
+            _root_.Flock.RecResiduals.holoOf p.sts[0].c = .ok holo →
             _root_.Flock.RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
-            S = q.S ∧
+            S = q.S ∧ q.key.1 = jj ∧
             ResTie S ns nv
               (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
-              (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) ∧
+              (_root_.Flock.Readable.copyOf p 0 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) ∧
             ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
               _root_.Flock.Readable.rowsRead ns nv
-                  (_root_.Flock.Readable.copyOf p q.key.1 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
+                  (_root_.Flock.Readable.copyOf p 0 ht w q.key.2.1 q.key.2.2.1 q.key.2.2.2) =
                 elemAt (Claims.Recursion.xI D x) (Bd.opened os last) q.key) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
@@ -1304,9 +1307,9 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
   obtain ⟨ht', ho', hg, hu, hch⟩ := hpc xO w p hx hck' hs ⟨hh, hp, hm, hrw⟩ hT hc q hq ho
   obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
     _root_.Flock.Readable.innerCopies ht' ho' hg hu hcp
-  obtain ⟨rfl, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
+  obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
   have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv
-      (_root_.Flock.Readable.copyOf p q.key.1 ht' w q.key.2.1 q.key.2.2.1 q.key.2.2.2))
+      (_root_.Flock.Readable.copyOf p 0 ht' w q.key.2.1 q.key.2.2.1 q.key.2.2.2))
       (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :=
     resVal_zero_of_tie hro htie
   rw [hE os last hf hl] at hz
@@ -1316,8 +1319,8 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
 
 /-- **The coin tie**: at a V\* statement `xO` part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads
 a `rec-residuals` statement's inner session and computes its `v` rows (`residualRows`), the verifier's values the coins give
-at a copy (`vvAt` at the inner statement and the coins) are the elements of that copy's instance's row, at the
-verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
+at a copy (`vvAt` at the inner statement and the coins, keyed `(jj, o, g, 0)` by the part's group) are the elements
+of that copy's instance's row, at the verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
 def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),
@@ -1330,11 +1333,12 @@ def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × �
           RecResiduals.shape? m k cl = some sh → RecResiduals.holoOf sts[t].c = .ok holo →
           RecResiduals.part { sh with holo } jj = .ok (S, ns, nv) →
           ∀ o g, g < sts[t].c.g → instOf sts[t].c o g < 2 →
-            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (t, o, g, 0) =
+            vvAt (xIOf x) ((List.range (Bk (xIOf x))).map c) (jj, o, g, 0) =
               wordsElems nv rows[instOf sts[t].c o g]!
 
 /-- **Check 5's tie at a piece's copy** (the `ResTie` conjunct `resPieces_computesAt` asks of each piece): at copy
-`(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give there and the
+`(0, o, g, 0)` of an instance `n` check 5 holds (`n < 2`), between the verifier's values the coins give at the piece's
+key `(jj, o, g, 0)` and the
 copy's columns. `resTie_staged` at `n`, with the copy's `v` columns where its slot reads (`vCols_of_base`, VBridge's
 `vBase` being the port's column by `vBase_staged`), the `out` slot committing its output bits (`slotOut_staged`), its
 residual columns where the `out` slot reads (`hOc`), and the coins' values check 5's row (`VVTie`). -/
@@ -1375,7 +1379,7 @@ theorem resTie_copyOf {b : Brings} {IV : Claims.Verifier Coin}
     (hOc : ∀ q < 128 * S.res.length, ∃ hl : q < (rowForms c "out" qo n).length,
       Flock.Readable.copyOf p 0 ht w o g 0 (FlockVBridge.OfVStar.partBase S ns nv + q) =
         formBit w (rowForms c "out" qo n)[q]) :
-    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (0, o, g, 0))
+    ResTie S ns nv (vvAt (xIOf x) ((List.range (Bk (xIOf x))).map cs) (jj, o, g, 0))
       (Flock.Readable.copyOf p 0 ht w o g 0) := by
   obtain ⟨p', -, -, hx', ht', hpi, -, -, -, -⟩ := stagedTables hsh.2
   rw [hx] at hx'
