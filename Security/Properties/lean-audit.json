@@ -28,6 +28,7 @@
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
   "Properties.Pous.Period",
+  "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins",
@@ -413,6 +414,7 @@
    "except": [
     "Properties.Accounting.Compose",
     "Properties.Accounting.Served",
+    "Properties.Accounting.JointBridge.SpaceOfPeriodHeld",
     "Properties.Accounting.DeclaredCircuit",
     "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
    ],
@@ -478,6 +480,11 @@
    "imports": ["Definitions.Accounting", "Properties.RemoteAudit.Schedule"],
    "except": [],
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.DeclaredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+  },
+  "Properties.Accounting.JointBridge": {
+   "imports": ["Definitions.Accounting", "Properties.Pous.Period"],
+   "except": [],
+   "why": "a protocol's per-period guarantee read as `JointPeriod`'s input is stated over the period (`Definitions.Accounting.JointPeriod`), its bridge (`Definitions.Accounting.JointBridge`) and the protocol's own period statement (`Properties.Pous.Period`), never a proof"
   }
  },
  "reads_exempt": {
@@ -486,6 +493,12 @@
   "PouwWindow.Rounds": "PoUW window's rounds code, read by `PouwCheck.liveSaltCheck` through `Properties.Pouw.LiveSalt.oneRoot`: the salt epoch's rule (`SALT`, `SALT_FAMILIES`, `LIVE_SCHEME`, `saltEpochReason`); the window's lock declares no spec layer for `PouwWindow.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-81)"
  },
  "guarantees": {
+  "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
+   "owner": "@lean",
+   "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
+   "assumptions": [],
+   "type_hash": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263"
+  },
   "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": {
    "owner": "@lean",
    "signature": [
@@ -3245,7 +3258,8 @@
    "Properties.Pouw.Period.SecurityProofs.checkedCreditPeriod": "frozen (no-function,world-unlisted): CheckedWorkPeriod's credit in live words, CircuitCreditPeriod at the deployed check's accepted prefix (checkedRun): at a, b > 0 an accepted period has at least (1 - eps(j))+ of the check's accepted prefix's live words fixed right, eps at the realized prefix j (Windows.prefixLen), except with probability delta_s + n (delta_bind + delta_ks); not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list, with CheckedWorkPeriod's premises, of which RegisteredBeforeDraw, DrawIsCoin and ServiceSound are listed under assumptions (ASK-133, option A, decided by the lane: RegisteredBeforeDraw and DrawIsCoin protocol-code facts to prove, ServiceSound standard crypto, C-Flock's); proved from CircuitCreditPeriod (Proofs.Pouw.Period).",
    "Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod": "frozen (no-function,world-unlisted): CheckedCreditPeriod at H1's tile unit on the torch loop (PouwH1Tile_v1 K=64 R=4 C=8, N_p = 144, K_d = 24, one round a window, rho = 8/9, lucks 7/8 and 1/2, a = b = 1, Lambda = 67/8 from SplitRateClosed), Pins from SaltIsLiveCoin and StagedPins; not one acceptance hypothesis, a Pouw.RelativeSecurity.prob event that shape.events does not list. Its five premises beyond CheckedCreditPeriod's claims are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): DrawIsCoin, StagedPins and RegisteredBeforeDraw protocol-code facts to prove (the loop's registration has anchors [] and wires [], so it commits no row before the draw, CMP-91's to fix with ALLP-WIRE's anchors); ServiceSound standard crypto (C-Flock's soundness); SaltIsLiveCoin a deployment gap until CMP-90 (#4405: the loop is given its salt before serving and nothing binds it to a live coin). Non-vacuous: Proofs.Pouw.Period.Accept evaluates the deployed check to an accept at #4351's parameters for every draw (N = 144, K' = 24), and Proofs.Pouw.Period.Honest builds a live-salt period meeting every premise (h1_meets).",
    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod": "frozen (no-function,world-unlisted): the joint period's PoUW guarantee (Accounting.PeriodRun.Sound at .pouw, error delta_s + n (delta_bind + delta_ks)) for a period realizing H1's checked credit (RealizesWorkOfH1CheckedCreditPeriod), from Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod at the source's instance at each value of the other coins. As its source: no deployed function's outcome is one hypothesis (the verdict is a PeriodRun field), the event is a Pouw.pr through PeriodRun.Sound that shape.events does not list, and the source's premises stay as they are (SaltIsLiveCoin, RegisteredBeforeDraw, StagedPins off the premises list). The bridge's one added gap is RealizesWorkOfH1CheckedCreditPeriod.work_of_fixed (RT4-LOGIC-6): the words fixed right are within the compute account's work at p.",
-   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check."
+   "Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.DeclaredCircuitRequirement's game, premises and bound (its frozen reason in Security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
+   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": "frozen (premise,no-function): PeriodHeld read as JointPeriod's .pous input: under PeriodHeld's premises and RingDevice, a PeriodRun that realizes its PoUS audit as an abstract joint run's capacity audit (RealizesSpaceOfPeriodHeld) has PeriodRun.Sound at δ + ε_max, a bound on a Pouw.pr event of a verdict that is a field of the run, not a Lean function; it holds at the challenge times PoUS grades until Pous.Guarantees.ContinuousAudit is tied to the deployed check."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -3895,6 +3909,7 @@
     "_private.CoreProtocol.Protocol.0.Core.opt": "7720a69b388da12990009ab9c126a25370b5ea8b036100358463e2813c7a0710"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -4295,6 +4310,7 @@
     "Accounting.instFintypeOp": "215511804eac7984ffc432e02f18ff1db6a3ae8f96101691aa6f1d5338bddd4d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -4530,10 +4546,18 @@
     "Accounting.Run.win": "a7a7fea487eecd6284cf70c9c5c9b99f9ff6a9b7fdc6aa4214af12f6ebe3c114"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
    ]
+  },
+  "Definitions.Accounting.JointBridge.SpaceOfPeriodHeld": {
+   "digest": "b84f3fb3d8ba9016fe0ef5d330d43a2e3ec2fc607e325e9a327a31b5ca4ea856",
+   "definitions": {
+    "Accounting.RealizesSpaceOfPeriodHeld": "168d7c814d2dc214206e5591492054724d84a180759a4ce91a693e1df31fe7d0"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld"]
   },
   "Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
    "digest": "6805273d6b6792ae282bef0922788d3d8ae78e64fc91c1b284dfae17cb9a6373",
@@ -4575,7 +4599,10 @@
     "Accounting.PeriodRun.win": "80d4e5812f3db69b114ea8f3bf4be5c962e466ead6984657c30f390af92d183c",
     "Accounting.PeriodRun.work": "27c0e52af8765509bbce45b3428e2b0bfe368ce8f2d688e55ad8c79cb540cb67"
    },
-   "guarantees": ["Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod"
+   ]
   },
   "Definitions.Accounting.PerRun": {
    "digest": "b1c6c044380a189c68a4c095f815da1bb330274907bfcf0979276ad15954c950",
@@ -5057,6 +5084,7 @@
     "Verity.Containment.emb": "0ff2bc5d87819c1b137faf92b3e7ce7511dfd198564701bec4b8f44351c82644"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "NciCheck.Properties.SecurityProofs.CheckedCoverTraining",
     "NciCheck.Properties.SecurityProofs.Decodes",
@@ -5201,6 +5229,7 @@
     "Verity.Partition.wrong": "f743923e389a5a0fa4441ad0d02a28e57d61973f65e0a9b998dc6df6445139f8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "NciCheck.Properties.SecurityProofs.Decodes",
     "NciCheck.Properties.SecurityProofs.DescReports",
@@ -5732,6 +5761,7 @@
     "Pous.Scheme.stateBound": "f219b3199888b8a45eac393ac75becffadc935c7cd567be9198c400bd69c17d1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesRing",
@@ -5746,6 +5776,7 @@
     "Pous.P2.Assumptions.P2RingAuditSecure": "33437cb5d9c2843eea28dfd7c075918e9f0ee220c669491e29cf1e63d759acf3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.Period.SecurityProofs.periodCapacity",
@@ -5772,6 +5803,7 @@
     "Pous.Prog.run": "c0021163e15a15e3d0553d037f1a4752b6e69010f3dae00e0d5181e749eed9da"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5787,6 +5819,7 @@
     "Pous.pr": "e2d360abdc3bb446124cc63b9261aab7c0e25149c089edabce91272c925d6edb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -5815,6 +5848,7 @@
     "Pous.seqAnswers": "fa7d86156927a2653b23b9db3a28c80e980af999c7989217f0f078f60a80fed3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5829,6 +5863,7 @@
     "Pous.codeEquiv": "5431e034e408a3add1b4c547c4a73d431438e40ba35a2b2f767ced58e1f174ab"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5845,6 +5880,7 @@
     "Pous.bitsVal": "9ca9dd69750d9238934510695357469b0393ec4ba4b314b456379b5c612664d5"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5869,6 +5905,7 @@
     "Pous.Scheme.ℓ": "cc713501fb08eb0fb1403b0163bb043f5e39683832d9c644e0cf50c5d6000f9c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5935,6 +5972,7 @@
     "Pous.sqFix": "af2e924abf530e9aac7cc294dbe5208b2f7d8f4cc5d382a2e3644a35e525905b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -5949,6 +5987,7 @@
     "Pouw.pr": "c72cdec579500ec37c510210e22769c63de3d3f4f7e39a9f243452a0b22e4134"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -6296,6 +6335,7 @@
     "_private.Flock.Bytes.0.Flock.hexDigit": "242ae26c46d2dc228fe0433d3eaba3116be00c18226f89bb07d3bb80ff51768a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
@@ -6424,6 +6464,7 @@
     "_private.Flock.Canon.0.Flock.hex4": "7c4da174272bc28875627bc5c5f157d6d70a8c1163e8e6e961d111bf7cf9a56c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "NciCheck.Properties.SecurityProofs.AcceptsExactly",
     "NciCheck.Properties.SecurityProofs.BaselineProvenance",
@@ -6598,6 +6639,7 @@
     "Flock.Sha512.word": "b1086da4c00e9cf65abe8a24bde5bf83aa2e6897854b30766e6be070dc7de279"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
@@ -6736,6 +6778,7 @@
     "_private.Flock.Hm96.0.Flock.Hm96.tag": "824dbcae40eb3817e77d8bdc91e1a12f0b1fe7ccbebc0be5d3097e7c4fc436eb"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
@@ -6818,6 +6861,7 @@
     "Flock.HmRow.segmentPrefix": "4697fee7f838457c74b72c6ab88de0b73fee17b5d13b33dad5c6f5b2bcabf297"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictSigned",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
@@ -7116,6 +7160,7 @@
     "Flock.FV3.uint": "f00ede6b3df22859c2566c85b1665172f6061ba7a25333f7f96b23c90f52252c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
@@ -7350,6 +7395,7 @@
     "Identity.Sha512.init": "89edeb8d92675d3fd8c6aa32da7bb2b09cfb3c963165ed7e2202d607b57a03b1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -7388,6 +7434,7 @@
     "Identity.taggedState": "47ed529cb2cbb2d42fa243cf0c5d734417fb83045300c8c253efe871407407d1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
     "Proofs.NetworkCertifier.acceptedRunsAreProgramRuns",
@@ -7479,6 +7526,7 @@
     "Lms.verify": "e4b8065fd9ecda3f72f3a8d9cbd35b348ad16e89e96084e1cd081a7dd37b58de"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
@@ -7540,6 +7588,7 @@
     "FrameV3Sha512.verifyOpening": "68443bea98b29f3788ed3c094dc42608ed23c0167463aaee4cdf6f8aa2d5d847"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -7650,6 +7699,7 @@
     "_private.MemoryChallenger.Records.0.MemoryChallenger.hex4": "80136896de271de3b068aef00e4ff59d3d632b8b23fc484a59e049fdf9584d45"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -7671,6 +7721,7 @@
     "MemoryChallenger.memoryChallengerMessage": "4b46fac90caebee15a97b3bca859c66d5287df16dd5fab458fe07d05653ee07c"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -7705,6 +7756,7 @@
     "MemoryChallenger.verdict": "9078bf9dbf86f33bb6ca94a80c0f4b3e7177e5861a6e61316b64c385f6ac6dde"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -8469,7 +8521,11 @@
     "PousCheck.Commit.manifest": "7357976ad97043def87d98ca0169c9dd4e9783d99b1a147b8222fe4c50239309",
     "PousCheck.Commit.manifestJson": "09e6a40193c8ebf72415e83a7f610c7fe54fa3b9ad92e9836dd11fd4c2c512df"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld"
+   ]
   },
   "PousCheck.Keys": {
    "digest": "019e70aa3871b15c8acfd2beddc900e75fbd5cc6471b11af30081c200c71f81c",
@@ -8492,7 +8548,11 @@
     "PousCheck.Keys.packagePrefix": "6e874727f7f6dd9bd5310c06f1ef69a0b9a59b4a684371da2bbad9866462bcc0",
     "PousCheck.Keys.pad128": "b9c5905f71f7ee855b6342015267268bd819febb3b0e2707c70f7a0f2a2f9b3c"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld"
+   ]
   },
   "PousCheck.Merkle": {
    "digest": "d3c8c82be5fd8dcbe1b1d0b58a16652567730f832780488dcf06006eb3369fd2",
@@ -8507,6 +8567,7 @@
     "PousCheck.Merkle.split": "4bb1e1efa3bbbd5a85e23be9b73e4d0212fab4ec2a2e23aa5b576fed1231324a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -8547,6 +8608,7 @@
     "PousCheck.P2.square": "9cf00be25789c94955f710c2ba301938ba65e53bc0821f3c6262a37cf29efa0f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -8567,6 +8629,7 @@
     "PousCheck.W_BYTES": "b2aa7e1660031dc72c628103605c42c9e9958d1ae57378c78923458b5e1c7765"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
     "Pous.EndToEnd.SecurityProofs.honestPassesAccepts",
@@ -8584,7 +8647,11 @@
     "PousCheck.Prim.natOfBERange": "453b049a77a20be8b54f4d2067cfd242b7b38f41d5dfa72e16392cef7b24841e",
     "PousCheck.Prim.zeros": "d69ecaabe57a2ee3bb80328697532a0f36c5a73da5594922ea098ae8eb7d67a2"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld"
+   ]
   },
   "PousCheck.Randomness": {
    "digest": "c905b3f6142f2b9d069984668f3104ad69e4c2748f6ea8057b34e4a3354e7313",
@@ -8632,6 +8699,7 @@
     "PousCheck.Run.rowLeaves": "dfa5cfe42a5f55cca539b81b1033b796dfd910cb7d6e2716c9f1fa2d7b257915"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -8658,7 +8726,11 @@
     "PousCheck.Setup.segmentLeaves": "dab415d76f82e7cd2e29da5f158a219e9a6ae8481fa6cf03ce4060f53b91e918",
     "PousCheck.Setup.verifierKeyFromEncoding": "a151341775d2b482de1c14855ca7009c0b8743a11b2e9c4cecf08e748bfbe254"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld"
+   ]
   },
   "PousCheck.SetupProtocol": {
    "digest": "46a17ccd9e3f10771339d1f112da3b745391ec8a2915782bfd0d92dbcca04cb8",
@@ -8684,6 +8756,7 @@
     "_private.PousCheck.SetupProtocol.0.PousCheck.SetupProtocol.u32be": "f547e86afd95356c53630479070df0b45d34eeb962cdff80c3fea6d4c1a8fd16"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld"
@@ -9474,6 +9547,13 @@
    },
    "guarantees": ["Properties.DeclaredCircuit.SecurityProofs.scheduledRequirement"]
   },
+  "Properties.Accounting.JointBridge.SpaceOfPeriodHeld": {
+   "digest": "02b28929a7688f2ad46fa2f359e1bf292db7321b38e83bad85cd5342bc768369",
+   "definitions": {
+    "Accounting.Bridge.SpaceOfPeriodHeld": "0c7d1bd605bacf9a14a8a9d22ea5373354cdacef27a8fef98b734fd28872c3ec"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld"]
+  },
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod": {
    "digest": "7e01bb9dc433589159d1bb3c3990cb8d8a47a723963ef4088cdd2987e675f900",
    "definitions": {
@@ -10091,6 +10171,7 @@
     "PousCheck.Properties.leaves": "e61904c6a66752a477d96b3e0d26722603e21234f8467472407cd45e0a83174f"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
@@ -10137,6 +10218,7 @@
     "Pous.EndToEnd.tableStrings": "3f780560c4a6f6ed22c7f24f80f99482d7ad6c870d48f5a69b4cfa663001c65d"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.drawExact",
     "Pous.EndToEnd.SecurityProofs.endToEndRing",
     "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
@@ -10183,6 +10265,7 @@
     "MemoryChallenger.Properties.treeStrings": "adf666085371fdb2aac7db464982153cbe44290dec3ceff2f676e1ae6b104db8"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -10212,7 +10295,11 @@
     "Pous.Period.PeriodHeld": "ee03e6355aa5fe00233586f82e60dedd7d9cc0096b0b693f411208902b2e4bbc",
     "Pous.Period.RingDevice": "635c2edca25704b425275a4f2d3944bccd1dfc3878fc051e8b3700d198e7454d"
    },
-   "guarantees": ["Pous.Period.SecurityProofs.periodCapacity", "Pous.Period.SecurityProofs.periodHeld"]
+   "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Pous.Period.SecurityProofs.periodCapacity",
+    "Pous.Period.SecurityProofs.periodHeld"
+   ]
   },
   "Properties.Pous.TimedAudit": {
    "digest": "9d8c8364c8dcd1bd2ac7f8dfc27b0e41a6b43e3099d7575508555948d12f5440",
@@ -10229,6 +10316,7 @@
     "PousCheck.Properties.runStrings": "f34261036fb3997ade21148495d219eaadde9e4bf9fa30b1138115bb50f96ad1"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
     "Pous.EndToEnd.SecurityProofs.runCheckAccepts",
     "Pous.Period.SecurityProofs.periodCapacity",
     "Pous.Period.SecurityProofs.periodHeld",
