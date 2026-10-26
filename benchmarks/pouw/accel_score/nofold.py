@@ -388,9 +388,9 @@ def _dsv4():
 # a 4,500-token request processed causally; ATT's P̃ carries 8 fresh bits, its K̃ and Ṽ noise is streamed once a key.
 WORLD = [_dense("Llama-3.1-8B", 32, 4096, 32, 8, 128, 14336, 128256),
          _dense("Llama-3.1-70B", 80, 8192, 64, 8, 128, 28672, 128256), _dsv4()]
-WORLD_TOKENS, ATT_H_P, ATT_WRAP_P, SOFTMAX_PASS = 4500, 8, 0.0126, 1.0
+WORLD_TOKENS, ATT_WRAP_P, SOFTMAX_PASS = 4500, 0.0126, 1.0
 HBM = {"H200": 4.8e12, "RTX PRO 6000": 1.792e12}
-L_UNIT_ANDS, ANDS_PER_MAC, LOOKUP_G_MAX = 1.34e8, 370, 8
+LOOKUP_G_MAX = 8
 
 
 def world_macs(m: dict) -> tuple[dict, float, float, float, float]:
@@ -428,25 +428,19 @@ def static_pipes(card: str, model: str, budget: float, max_tiles: int = 6, froze
     return {"T": T / tot, "A_nw": A / tot, "wrap": W / tot, "saved": S / tot, "worst": worst}
 
 
-def att_pipes(card: str, m: dict, hist: dict, word_bits: int = 16, built: bool = False) -> tuple[float, float, float, float]:
-    """ATT a credited PV and QKᵀ MAC (tensor, ALU without wraps), MAC-weighted over the attended keys, with v2's words
-    and NF3's leaves. Tensor 2: the noised round and the plain stream that serves S and O; QKᵀ adds the two-pass
-    softmax's S pass. PV words every min(n, L_unit) keys; QKᵀ one word a GQA cell (inner H_kv·d) or a head (d_qk)."""
-    mac, sha, c_op, _ = V2_CARDS[card]
-    per_comp = ETA * mac / (SHA_BUILT[card] if built else sha)
-    C = per_comp * LEAF_BLOCKS * TREE / LEAF_DATA_BITS * word_bits
-    bit = per_comp / 512
-    g_heads = m["hq"] // m["hkv"]
-    L_unit = L_UNIT_ANDS / (ANDS_PER_MAC * (m["dqk"] + 1))
-    w = sum(c * n for n, c in hist.items())
-    pv_a = sum(c * n * (ATT_H_P * bit / m["dv"] + 8 * bit / (g_heads * n) + C / min(n, L_unit))
-               for n, c in hist.items()) / w
-    if m["hkv"] > 1:
-        qk_a = sum(c * n * (8 * bit / n + 8 * bit / (g_heads * n) + C / (m["hkv"] * m["dqk"]) + c_op / 2 / m["dqk"])
-                   for n, c in hist.items()) / w
-    else:
-        qk_a = sum(c * n * (8 * bit / n + 8 * bit / (g_heads * n) + C / m["dqk"]) for n, c in hist.items()) / w
-    return 2.0, pv_a, 2.0 + SOFTMAX_PASS, qk_a
+def pv_pipes(card: str, m: dict, hist: dict, budget: float, built: bool = False) -> tuple[float, float, float]:
+    """R-ACCEL-8's attention: PV credited as a v2 round with O bound (COVER-ATTN's PV design), K = n attended keys,
+    N = d_v, the weight side (Ṽ's dither and noise) streamed once a key, so a call expands only P̃'s side. Picked
+    like a static shape (overlapped) at each n rounded to 64; MAC-weighted (tensor, ALU without wraps, A = B = 0
+    saving) a PV MAC."""
+    picks, w, T, A, S = {}, 0.0, 0.0, 0.0, 0.0
+    for n, c in hist.items():
+        nb = max(64, 64 * round(n / 64))
+        if nb not in picks:
+            picks[nb] = v2_pick(card, nb, m["dv"], 16, budget, overlap=True, weight_coins=False, built=built)
+        r, x = picks[nb], c * n
+        w, T, A, S = w + x, T + x * r["T"], A + x * r["A_nw"], S + x * r["saved"]
+    return T / w, A / w, S / w
 
 
 def lookup_alu(card: str, hist: dict) -> float:
@@ -458,12 +452,14 @@ def lookup_alu(card: str, hist: dict) -> float:
 
 
 def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, cards=None, **kw) -> list[dict]:
-    """v2 static (tiles) plus ATT at the world model, the period's tensor and ALU pipes overlapped.
+    """v2 static (tiles) plus PV with O bound at the world model, the period's tensor and ALU pipes overlapped.
 
-    Credit is priced at max(T, A without wraps); the honest period takes max(T, A). Where the period is tensor-bound the
-    honest kernel moves PV round MACs to Four-Russians lookups on the ALU until the pipes meet (COVER-ATTN's RTX PRO
-    6000 kernel). ε_alg is what a prover at A = B = 0 (or low rank) saves within the tensor pipe's slack over the ALU
-    without wraps: PD2-1's routes first, at no ALU cost, then lookups at ℓ."""
+    R-ACCEL-8 (credited work is the useful product): static and PV rounds are credited; QKᵀ (both passes of the
+    two-pass softmax) and V4's indexer are served plain and uncredited. Credit is priced at max(T, A without wraps);
+    the honest period takes max(T, A). Where the period is tensor-bound the honest kernel moves PV round MACs to
+    Four-Russians lookups on the ALU until the pipes meet (COVER-ATTN's RTX PRO 6000 kernel). ε_alg is what a prover at
+    A = B = 0 (or low rank) saves within the tensor pipe's slack over the ALU without wraps: PD2-1's routes first, at
+    no ALU cost, then lookups at ℓ."""
     rows = []
     for card in cards or V2_CARDS:
         a_wrap = V2_CARDS[card][2] * ATT_WRAP_P / 2
@@ -471,17 +467,21 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
             hist, st, qk, pv, ix = world_macs(m)
             tot = st + qk + pv + ix
             s = static_pipes(card, m["name"], budget, max_tiles, built=built, **kw)
-            pv_t, pv_a, qk_t, qk_a = att_pipes(card, m, hist, built=built)
-            T = st * s["T"] + pv * pv_t + qk * qk_t + ix
-            A_nw = st * s["A_nw"] + pv * pv_a + qk * qk_a
-            Wr = st * s["wrap"] + (pv + qk) * a_wrap
+            pv_t, pv_a, pv_s = pv_pipes(card, m, hist, budget, built=built)
+            T = st * s["T"] + pv * pv_t + qk * (1 + SOFTMAX_PASS) + ix
+            A_nw = st * s["A_nw"] + pv * pv_a
+            Wr = st * s["wrap"] + pv * a_wrap
             g_add = (T + A_nw + Wr) / tot
             ell = lookup_alu(card, hist)
             x = min(pv, max(0.0, T - A_nw - Wr) / (1 + ell))
             T, A_nw = T - x, A_nw + ell * x
-            credit, honest = max(T, A_nw), max(T, A_nw + Wr)
-            slack = max(0.0, T - A_nw)
-            s1 = min(st * s["saved"], slack)
+            honest = max(T, A_nw + Wr)
+            # A prover after credit skips the uncredited QKᵀ and indexer, so credit and its slack are the credited
+            # rounds' own period.
+            T_c = T - qk * (1 + SOFTMAX_PASS) - ix
+            credit = max(T_c, A_nw)
+            slack = max(0.0, T_c - A_nw)
+            s1 = min(st * s["saved"] + pv * pv_s, slack)
             s2 = min(pv - x, (slack - s1) / (1 + ell))
             label = card + (" built" if built else "") + (" t=1" if max_tiles == 1 else "")
             label += " P1" if kw.get("p1") else ""
@@ -489,23 +489,23 @@ def v2_world(budget: float = 0.01, built: bool = False, max_tiles: int = 6, card
             label += f" V±{kw.get('u_x', V_WIDTH[card])}" if kw.get("frozen") else ""
             rows.append({"card": label, "model": m["name"], "gamma_add": g_add, "gamma": honest / tot,
                          "util": T / honest,
-                         "T": T / tot, "A": (A_nw + Wr) / tot, "eps_alg": (s1 + s2) / credit,
-                         "wrap_uncredited": (honest - credit) / honest, "lookup": x / pv,
-                         "copy_share": (qk + pv) / tot, "uncredited": ix / tot, "worst": s["worst"],
+                         "T": T_c / tot, "A": (A_nw + Wr) / tot, "eps_alg": (s1 + s2) / credit,
+                         "wrap_uncredited": (honest - max(T, A_nw)) / honest, "lookup": x / pv,
+                         "uncredited": (qk + ix) / tot, "worst": s["worst"],
                          "static_gamma": max(s["T"], s["A_nw"] + s["wrap"])})
     return rows
 
 
 def v2_world_print(budget: float = 0.01) -> None:
-    print(f"\nv2 at the world model (static with tiles + ATT, 16-bit words, overlapped pipes, eps_alg budget {budget:.0%}"
+    print(f"\nv2 at the world model (static with tiles + PV with O bound, QKᵀ uncredited; 16-bit words, overlapped pipes, eps_alg budget {budget:.0%}"
           f" a shape)")
     print(f"  {'card':18} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'eps_alg':>7} {'wraps':>6} "
-          f"{'lookup':>6} {'copy':>5} {'uncr':>5}  static, worst shape")
+          f"{'lookup':>6} {'uncr':>5}  static, worst shape")
     for r in v2_world(budget) + v2_world(budget, built=True) + v2_world(budget, max_tiles=1):
         g, (K, N, L, t) = r["worst"]
         print(f"  {r['card']:18} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
-              f"{r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['lookup']:6.1%} {r['copy_share']:5.1%} "
-              f"{r['uncredited']:5.2%}  {r['static_gamma']:.2f}, K {K} N {N} L {L} t {t}: {g:.2f}")
+              f"{r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['lookup']:6.1%} "
+              f"{r['uncredited']:5.1%}  {r['static_gamma']:.2f}, K {K} N {N} L {L} t {t}: {g:.2f}")
 
 
 def v2_frozen_print(budget: float = 0.0) -> list[dict]:
@@ -515,14 +515,14 @@ def v2_frozen_print(budget: float = 0.0) -> list[dict]:
     print(f"\nv2 as frozen at the world model (tiles H200 t={TILES['H200']}, RTX PRO 6000 t={TILES['RTX PRO 6000']}; "
           f"c_t A12/A13; 16-bit words; overlapped; eps_alg budget {budget:.0%} a shape)")
     print(f"  {'card':30} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'util':>5} {'eps_alg':>7} "
-          f"{'wraps':>6} {'copy':>5} {'uncr':>5}  static worst shape")
+          f"{'wraps':>6} {'uncr':>5}  static worst shape")
     rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True)
             + v2_world(budget, cards=["RTX PRO 6000"], frozen=True, u_x=96))
     for r in rows:
         g, (K, N, L, t) = r["worst"]
         print(f"  {r['card']:30} {r['model']:16} {r['gamma']:6.2f} {r['gamma_add']:6.2f} {r['T']:5.2f} {r['A']:5.2f} "
-              f"{r['util']:5.1%} {r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} {r['copy_share']:5.1%} "
-              f"{r['uncredited']:5.2%}  K {K} N {N} L {L}: {g:.2f}")
+              f"{r['util']:5.1%} {r['eps_alg']:7.2%} {r['wrap_uncredited']:6.1%} "
+              f"{r['uncredited']:5.1%}  K {K} N {N} L {L}: {g:.2f}")
     print("  each registrable static shape alone (prover's own model of that shape, A = B = 0): worst eps_alg, its L")
     for card in V2_CARDS:
         for u_x in sorted({V_WIDTH[card], 96}):
@@ -563,15 +563,15 @@ PPL_H1 = {"Llama-3.1-8B": "+0.80%", "Llama-3.1-70B": "+1.77%", "DeepSeek-V4-Pro"
 
 
 def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None) -> list[dict]:
-    """D6's number table, as markdown: v2 as frozen and P1 beside it, at the paper SHA-512 rate and at the built rate.
+    """D6's number table, as markdown: v2 at the paper SHA-512 rate and at the built rate. P1 and the twin are ruled out
+    by R-ACCEL-8 (credited work is the useful product), so they have no row.
 
     ε is WORKSOUND's form at δ 1% and 1e-6 with c_mm, c_sha per card (1 until D5 v1, so ε is a lower bound). The two
     ShaSpeed readings: (a) the paper ceiling, honest hashing at it (c_sha 1); (b) the built rate, today's kernel against
     hashcat's structured mode (C_SHA_TODAY). P1 on the RTX PRO 6000 takes P1_C_MM.
     Then the world model (rule L2; V4 is the world's request): εC and the uncredited FLOP a week, a month and a year."""
     c_mm, c_sha = c_mm or {}, c_sha or {}
-    rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True) + v2_world(budget, p1=True)
-            + v2_world(budget, built=True, p1=True))
+    rows = v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True)
     for r in rows:
         r["wrap_share"] = r["A"] - r["gamma"] * (1 - r["wrap_uncredited"]) if r["A"] >= r["T"] else 0.0
         card = r["card"].split(" built")[0].split(" t=")[0].split(" P1")[0]
@@ -597,13 +597,14 @@ def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None)
               + " / ".join(f"{r['util']:.0%}" for r in g) + f" | {v4['eps'][0.01]:.3%} | {v4['eps'][1e-6]:.3%} | "
               + " / ".join(f"{1 - r['uncredited']:.1%}" for r in g) + " | "
               + " / ".join(PPL_H1[r["model"]] for r in g) + " |")
-    print("\n| design, card, rate | window | world FLOP | εC δ 1% | εC δ 1e-6 | credited | by ATT's copy | uncredited |")
-    print("|---|---|---|---|---|---|---|---|")
+    print("\n| design, card, rate | window | world FLOP | εC δ 1% | εC δ 1e-6 | credited | uncredited (QKᵀ, indexer) |")
+    print("|---|---|---|---|---|---|---|")
     for (design, card, rate), g in groups.items():
         v4 = g[-1]
         for w, F in WORLD_FLOP.items():
-            print(f"| {design}, {card}, {rate} | {w} | {F:.2e} | {v4['eps'][0.01] * F:.1e} | {v4['eps'][1e-6] * F:.1e} "
-                  f"| {(1 - v4['uncredited']) * F:.2e} | {v4['copy_share'] * F:.1e} | {v4['uncredited'] * F:.1e} |")
+            C = (1 - v4["uncredited"]) * F
+            print(f"| {design}, {card}, {rate} | {w} | {F:.2e} | {v4['eps'][0.01] * C:.1e} | {v4['eps'][1e-6] * C:.1e} "
+                  f"| {C:.2e} | {v4['uncredited'] * F:.1e} |")
     return rows
 
 
