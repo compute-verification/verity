@@ -3,8 +3,8 @@
 # by every protocol's leg (verity_all_protocols.table: legs/<component>.py), each period's report in $OUT/p<P>/report.json and
 # $OUT/reports.jsonl (verity_all_protocols.runner). Builds what the legs run first, as benchmarks/prove_path/run.sh does:
 # M0's flock-circuit, Lean's flock-verify and flock-firewall, and the sampled-proofs verifier of record, in scratch and the
-# clone. Its arguments go to the runner (--periods N, --period-s S, --tamper P,..., --registered); ALLP_FLOCK_WORK=DIR
-# keeps M0's build across runs.
+# clone. Its arguments go to the runner (--periods N, --period-s S, --tamper P,..., --registered, --tie, --tie-tamper
+# P,... with CERTIFIER_TAMPER=byte); ALLP_FLOCK_WORK=DIR keeps M0's build across runs.
 #   research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 32 -- \
 #     bash benchmarks/all_protocols/run.sh --periods 2 --period-s 0 --tamper 1
 set -uxo pipefail

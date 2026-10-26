@@ -500,7 +500,7 @@ def audit(a: argparse.Namespace) -> int:
     row = {"seconds": round(time.time() - t0, 1), "verifier_window_s": window_s, "circuit": held["circuit"],
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                    "audit", "draw", "draw_counts", "negatives", "coins", "timing")}}
+                                    "audit", "draw", "draw_counts", "negatives", "coins", "timing", "outputs")}}
     bits = int((held["advice"] or {}).get("bits", 0))
     row["leak"] = (declared_count(doc, bits, lambda t: sets[t][1] if t in sets else IF.resolve(t))
                    if set(IF.DECLARED) & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))

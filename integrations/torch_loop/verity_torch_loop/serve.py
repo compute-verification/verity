@@ -10,7 +10,7 @@ their entries in the registration's window and their salts in `ACTIVATIONS_PRIVA
 SHA-512, the run root, the population and the units whose outputs are not their Definition's (`Window.mismatches`: none
 unless ``--tamper``). With ``--opening FILE`` the circuit is its compiler's (`compile`): the loop's schedule is committed as
 advice under that compiler, the registration binds both, and the advice's opening (the prover's private file) goes to
-``FILE``. The second prints the circuit record's SHA-512 alone, from the loop's shape and no value: the circuit the verifier
+``FILE``. The second prints the circuit record's SHA-512, from the loop's shape and no value: the circuit the verifier
 registers before the loop runs, when it has no compiler.
 
     python -m verity_torch_loop.serve --commit-weights OPENING --pin PIN [--h 128]

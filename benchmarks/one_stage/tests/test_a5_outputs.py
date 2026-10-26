@@ -72,7 +72,8 @@ def _ports() -> dict:
 
 def _record() -> dict:
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **e} for i, (p, e) in enumerate(_ports().items())]
-    return R.record(program(), QUERY, {"law": "work", "k": K}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0})
+    return R.record(program(), QUERY, {"law": "work", "k": K}, S.SCHEME, roots, {"kind": "served", "run": RUN, "row": 0},
+                    work_table=TABLE)
 
 
 def stream_of(coins) -> S.Stream:

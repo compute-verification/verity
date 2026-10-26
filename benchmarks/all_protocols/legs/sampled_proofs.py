@@ -12,8 +12,9 @@ against their pin (``records_audit.py --registered``).
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
 are the ones `SampledProofs.OneStage.check` makes public (the drawn and proved units, the bound on wrong units at δ, each
 template's under a stratified or work law; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
-draw (the records, a check on the registration, the draw) rejects with its codes. An audit that ended with no summary is
-the leg's error, not a verdict.
+draw (the records, a check on the registration, the draw) rejects with its codes; an audit record that doesn't accept,
+with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
+its port). An audit that ended with no summary is the leg's error, not a verdict.
 """
 from __future__ import annotations
 
@@ -68,8 +69,11 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         raise RuntimeError(f"the records audit wrote no audit record and no refusal under {out}")
     rec = json.loads(rec_file.read_text())
     if rec.get("accepted") is not True:
-        why = _codes(rec.get("checks") or {}) or sorted((summary.get("audit") or {}).get("why") or {}) or ["not accepted"]
-        return _refusal("audit record: " + ", ".join(why), commitment)
+        lean = {k: v for k, v in sorted(((summary.get("audit") or {}).get("why") or {}).items()) if v}
+        why = _codes(rec.get("checks") or {}) or sorted(lean) or ["not accepted"]
+        said = [f"{k}: {v}" for k, v in lean.items()]
+        more = f"; and {len(said) - 3} more" if len(said) > 3 else ""
+        return _refusal("audit record: " + ", ".join(why) + "".join(f"; {s}" for s in said[:3]) + more, commitment)
     fixed = summary.get("fixed_before_draw")
     if fixed is not None and not fixed.get("ok"):
         return _refusal("not fixed before the draw: " + ", ".join(fixed.get("codes") or []), commitment)

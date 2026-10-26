@@ -42,8 +42,13 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   the runner's scratch; `$OUT/certifier-session/` gets each run's deployment, calibration and client certificates only,
   and `summary.json` counts, N2's exit and its leak scan. Its `stubbed` names what the verdict still stands on: the
   records are the certifier-only path's, not the network certifier's own cells; the device runs beside the server,
-  not on the auditor's machine through the gate; and the output tie is computed in the clear, not proved.
-  `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
+  not on the auditor's machine through the gate; and the output tie is computed in the clear, not proved, unless the
+  runner ties it (`--tie`): then the output the network certifier relayed in each period's link-window is committed as
+  the registered value `out` and its head signed (`out_commit.commit_out`), the verifier pins its root from that record
+  alone (`check_out`), each output unit's `o0` reads it, the integrity audit proves the output class (every unit with an
+  uncut registered read of an output port) whole, and Lean's registered reads refuse an output unit whose row doesn't
+  open the signed root; the clear check is then a diagnostic, and `stubbed` names the out key the runner holds for the
+  network certifier instead. `CERTIFIER_PATH=warden` takes the network certifier's own cells instead (`warden_serve.py rehearse --ids --prompts
   --window-per-group`, the gate's scan rehearsal, a period's link-windows its group's in `groups.json`), honest and with
   the stub's tampers (`WARDEN_TAMPER`, default `late,byte`), publishing the gate's public files alone to
   `$OUT/warden-session/`. Its link-window 0 is proved by the scan (`scan_zk.py prove --warden-run --draw`), and a
@@ -53,6 +58,9 @@ W8A8 MLP on CPU) audited by every protocol's own code, each decided on its own a
   (`verity/block-record/v1`, CMP-95 item 6), the one shape a loop's leg and the H200 fallback write.
 - `verity_all_protocols/runner.py`: the periods, each report in `$OUT/p<P>/report.json` and `$OUT/reports.jsonl`, and one
   `ALLP` line per period. `--tamper P,...` makes those periods' loop record outputs that aren't its model's.
+  `--registered` reads the weights as registered values; `--tie` ties the outputs to the certified ones
+  (`verity_all_protocols/tie.py`), and `--tie-tamper P,...` with `CERTIFIER_TAMPER=byte` ties those periods to a relay
+  with one output byte changed on the egress, which must reject.
 
 | name | protocol | leg file | owner | state |
 | --- | --- | --- | --- | --- |

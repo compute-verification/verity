@@ -22,7 +22,8 @@ calibration and the client's certificates and clock certificates alone (`publish
 **A period** (`leg`): its link-window, and for the first period every link-window N2 decided before it and for the last
 every one after (`period_windows`), so each certified link-window is some period's. Their certified outputs (the egress
 records' canonical events, each response F of them in the plan's order) must be the period's registered outputs, the
-value files' last-linear outputs, request by request (`io`, the leg's own check, written to ``io.json``): while the
+value files' last-linear outputs, request by request (`io`, the leg's own check, written to ``io.json``; on a tied
+period a diagnostic, "The output tie" below): while the
 integrity leg accepts, a mismatch is the leg's error; when it refuses (a loop-tampered period), the mismatch is recorded
 (``refused``) and the case decides on that audit. The case (`case_of`) is the period's link-windows, each with its N2
 registration, its one-stage answer from N2's outcome of record (Selection All: its one unit, `answer_of_outcome`), its
@@ -33,7 +34,20 @@ re-decided by one-stage's own bound at its term's δ (`audit_answer`). Its answe
 At each δ every term of the case is decided at δ over the case's term count (`term_delta`: the answer's ``eps`` is the
 sum of its terms' δ), so an accepted answer's ``eps`` is δ itself, which the leg asserts (`holds_at`). The period
 holding the tampered link-window (`TAMPERED_WINDOW`) must reject there, which the leg asserts; the tampered run's other
-periods may accept.
+periods may accept. A run whose tamper N2 proves no member of (``byte``) has no link-window answer, and the leg decides
+only the runs N2 proved.
+
+**The output tie** (the runner's ``--tie``): the runner relays the session before the loop serves (`relay`), and for
+each period the network certifier commits the output it relayed in the period's link-window (`relayed`: the honest
+run's, or under ``--tie-tamper`` the ``CERTIFIER_TAMPER=byte`` run's, one output byte changed on the egress) as the
+registered value ``out``, its head signed (`out_commit.commit_out`). The verifier pins ``out``'s root from that record
+alone (`out_commit.check_out`), and each output unit's ``o0`` is a registered read of ``out``, so the integrity leg's
+audit proves the output class whole (every unit with an uncut registered read of an output port, records_audit's
+`output_class`, a5's output closure) and Lean's registered reads refuse any output unit whose row doesn't open the
+signed root. The leg reports what that audit established (`tie_of`, ``tie`` in ``summary.json``) and asserts it
+(`tie_holds`): an honest relay's accepted audit proved the whole class, a tampered relay's was refused by Lean at a
+registered read of ``o0``. `io` is then a diagnostic only, never the leg's error, and the leg's ``stubbed`` loses the
+clear check (`STUBBED`'s ``tied``).
 
 **The warden path** (``CERTIFIER_PATH=warden``, `warden_leg`; the default ``certifier`` is the path above, whose
 verdict the table keeps until this one decides every period): the records are the network certifier's own cells as one
@@ -127,9 +141,17 @@ _SCAN_GAP = {
            "own cells, `scan_free`), and its draw the verifier's own Lean coins on link-window 0 alone",
     "fix": "LEAK-LEAN's exact K terms against the Lean, and IO-TIE's scan_zk --window W on the challenger's coins "
            "(#4387)"}
+_OUT_KEY_GAP = {
+    "gap": "the output value is committed and its head signed after the relay, from the egress records the network "
+           "certifier certified, under a key the runner holds for it (verity_all_protocols.tie), not the session's own "
+           "key in its session",
+    "fix": "certifier_serve.py commits each egress link-window's output inside the relay (out_commit.commit_out under "
+           "its own Issuer), its out record beside the window's certificates"}
 #: what each path's verdict still stands on that isn't the network certifier's own, each with its fix (``stubbed`` in
-#: ``summary.json``)
-STUBBED = {"certifier": (_PROXY_GAP, _OFF_HOST_GAP, _TIE_GAP), "warden": (_OFF_HOST_GAP, _TIE_GAP, _SCAN_GAP)}
+#: ``summary.json``); ``tied``: the certifier path on a period whose outputs the runner tied (``--tie``), where Lean's
+#: registered reads refuse an output unit whose row doesn't open the certified value's root, so no clear check remains
+STUBBED = {"certifier": (_PROXY_GAP, _OFF_HOST_GAP, _TIE_GAP), "warden": (_OFF_HOST_GAP, _TIE_GAP, _SCAN_GAP),
+           "tied": (_PROXY_GAP, _OFF_HOST_GAP, _OUT_KEY_GAP)}
 #: a canonical event's most bytes (`active.TOKEN_BYTES`)
 TOKEN_BYTES = 64
 #: what `publish` copies of each run of the session into the runner's ``--out``: nothing the prover holds as witness
@@ -328,23 +350,25 @@ def _periods(period_dir: Path) -> int:
     return period["periods"]
 
 
-def session(period_dir: Path) -> dict[str, Any]:
-    """The run's one certifier session (module docstring), made at its first period in the runner's scratch beside the
-    period's window (``period_dir.parent``); its record ``session.json``."""
-    s = period_dir.parent / SESSION
-    if (s / "session.json").exists():
-        return json.loads((s / "session.json").read_text())
+def _env(tools: Mapping[str, str], exes: Mapping[str, str]) -> dict[str, str]:
+    return {**os.environ, "VERITY_NETWORK_RECORDS_EXE": exes["network-records"],
+            "PYTHONPATH": os.pathsep.join(filter(None, [tools["m0-pythonpath"], str(TRACES),
+                                                        str(ROOT / "tools" / "verity" / "circuit_check" / "src"),
+                                                        os.environ.get("PYTHONPATH")]))}
+
+
+def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str]) -> dict[str, Any]:
+    """The session's relay (module docstring): `certifier_serve.py rehearse` of the run's ``periods`` periods of
+    ``prompts`` through the network certifier into ``s``, honest and under `CERTIFIER_TAMPER`, before any proof; its
+    record ``relay.json``. The runner relays before the loop serves when the loop's outputs are tied to the certified
+    ones (``--tie``); `session` relays at the first period otherwise."""
+    if (s / "relay.json").exists():
+        return json.loads((s / "relay.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
-    tools, exes = _tools(period_dir), lean_exes()
-    prompts, steps, h = requests_of(period_dir)
-    periods, height = _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10)
+    exes, height = lean_exes(), _env_int("CERTIFIER_HEIGHT", 10)
     tamper = os.environ.get("CERTIFIER_TAMPER", "extra")
     strategies = ["honest", *([tamper] if tamper else [])]
     frames = steps * math.ceil(4 * h / TOKEN_BYTES)
-    env = {**os.environ, "VERITY_NETWORK_RECORDS_EXE": exes["network-records"],
-           "PYTHONPATH": os.pathsep.join(filter(None, [tools["m0-pythonpath"], str(TRACES),
-                                                       str(ROOT / "tools" / "verity" / "circuit_check" / "src"),
-                                                       os.environ.get("PYTHONPATH")]))}
     stub, url = _stub(steps, h, s / "stub.log")
     try:
         rc = _run([sys.executable, str(TRACES / "certifier_serve.py"), "rehearse", "--upstream", url,
@@ -352,12 +376,36 @@ def session(period_dir: Path) -> dict[str, Any]:
                    "--prompts", ";".join(map(str, prompts)), "--requests", str(len(prompts) * periods),
                    "--in-flight", str(len(prompts)), "--tokens", str(steps), "--response-frames", str(frames),
                    "--probes", str(len(prompts)), "--window-per-group", "--strategies", ",".join(strategies),
-                   "--height", str(height)], s / "rehearse.log", env)
+                   "--height", str(height)], s / "rehearse.log", _env(tools, exes))
     finally:
         stub.terminate()
         stub.wait()
     if not (s / "rehearsal" / "summary.json").exists():
         raise RuntimeError(f"certifier_serve.py rehearse exited {rc} with no summary ({s / 'rehearse.log'})")
+    rec = {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
+           "strategies": strategies, "tamper": tamper or None, "frames": frames, "rehearse_exit": rc, "exes": exes,
+           "dir": str(s)}
+    (s / "relay.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    return rec
+
+
+def session(period_dir: Path) -> dict[str, Any]:
+    """The run's one certifier session (module docstring), made at its first period in the runner's scratch beside the
+    period's window (``period_dir.parent``): its relay (`relay`, unless the runner relayed already) and N2's proofs;
+    its record ``session.json``."""
+    s = period_dir.parent / SESSION
+    if (s / "session.json").exists():
+        return json.loads((s / "session.json").read_text())
+    tools = _tools(period_dir)
+    prompts, steps, h = requests_of(period_dir)
+    if (s / "relay.json").exists():
+        rec = json.loads((s / "relay.json").read_text())
+        if (rec["prompts"], rec["steps"], rec["h"]) != (prompts, steps, h):
+            raise RuntimeError(f"the runner relayed prompts {rec['prompts']} for {rec['steps']} steps at H "
+                               f"{rec['h']}, and the loop served {prompts} for {steps} at {h}")
+    else:
+        rec = relay(s, prompts, steps, h, _periods(period_dir), tools)
+    strategies, tamper, env = rec["strategies"], rec["tamper"], _env(tools, rec["exes"])
     scratch = Path(tempfile.mkdtemp(prefix="certifier-leg-n2-"))
     try:
         n2 = [sys.executable, str(TRACES / "n2_zk.py"), "prove", "--run", str(s / "rehearsal" / "honest"),
@@ -371,9 +419,7 @@ def session(period_dir: Path) -> dict[str, Any]:
         shutil.rmtree(scratch, ignore_errors=True)
     if not (s / "n2zk" / "summary.json").exists():
         raise RuntimeError(f"n2_zk.py prove exited {n2_rc} with no summary ({s / 'n2zk.log'})")
-    rec = {"prompts": prompts, "steps": steps, "h": h, "periods": periods, "height": height, "strategies": strategies,
-           "tamper": tamper or None, "frames": frames, "rehearse_exit": rc, "n2_exit": n2_rc, "exes": exes,
-           "dir": str(s)}
+    rec = {**rec, "n2_exit": n2_rc}
     (s / "session.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     return rec
 
@@ -900,6 +946,32 @@ def _hex(text: bytes) -> bytes | None:
         return None
 
 
+def relayed(rec: Mapping[str, Any], strategy: str, period: int) -> tuple[int, list[bytes]]:
+    """What the network certifier relayed in period ``period`` of the session's ``strategy`` run (``rec``, `relay`'s
+    record): the period's one link-window, and each of its requests' response as the egress carried it, in the plan's
+    order, the hex text of its ``frames`` canonical events decoded (`match_outputs`'s reading), 2H bytes a step."""
+    sys.path.insert(0, str(TRACES))
+    import certifier_serve as cs
+
+    run = Path(rec["dir"]) / "rehearsal" / strategy
+    plan = json.loads((run / "plan.json").read_text())
+    per, frames, T = len(rec["prompts"]), rec["frames"], _window_buckets(plan)
+    rel = {int(k): v for k, v in plan["model_release"].items()}
+    ws = sorted({rel[q["stream"]] // T for q in plan["requests"][period * per:(period + 1) * per]})
+    if len(ws) != 1:
+        raise RuntimeError(f"period {period}'s requests are released in link-windows {ws}, not one")
+    setup = cs.ar.Setup(json.loads((run / "calibration.json").read_text()))
+    events = certified_events(run, setup.egress_params.frame_bytes, ws)
+    if len(events) != per * frames:
+        raise RuntimeError(f"the {strategy} run's link-window {ws[0]} carries {len(events)} canonical events, not "
+                           f"{per} responses of {frames}")
+    texts = [_hex(b"".join(events[j * frames:(j + 1) * frames])) for j in range(per)]
+    size = 2 * rec["h"] * rec["steps"]
+    if any(t is None or len(t) != size for t in texts):
+        raise RuntimeError(f"the {strategy} run's link-window {ws[0]}: a response is not the hex of {size} bytes")
+    return ws[0], texts
+
+
 def io(rw: Mapping[str, Any], period: int, windows: Sequence[int], outputs: Mapping[tuple[str, int], bytes],
        steps: int, frames: int) -> dict:
     """The period's certified outputs against its registered ones (`match_outputs`), read off the egress events of
@@ -963,6 +1035,35 @@ def _audit_records(period_dir: Path, out: Path) -> list[tuple[dict, dict, dict |
 
 def _audits(records: Sequence[tuple[dict, dict, dict | None]], delta: Fraction) -> list[tuple[dict, dict]]:
     return [(reg, audit_answer(reg, integrity, record, delta)) for reg, integrity, record in records]
+
+
+def tie_of(period_dir: Path, out: Path) -> dict[str, Any] | None:
+    """The period's output tie (module docstring, "The output tie"), None for a period the runner didn't tie: what the
+    runner pinned (``period.json``'s ``tie``) and what the integrity leg's audit established of it: its output class
+    (``outputs``: how many units, whether every one was proved) and each drawn member Lean refused at a registered read
+    of the output port (``refused``, Lean's message by member)."""
+    tie = json.loads((period_dir / "period.json").read_text()).get("tie")
+    if tie is None:
+        return None
+    f = out.parent / "integrity" / "audit" / "summary.json"
+    s = json.loads(f.read_text()) if f.exists() else {}
+    why = (s.get("audit") or {}).get("why") or {}
+    read = f"registered reads: port {tie['port']}:"
+    return {**tie, "outputs": s.get("outputs"),
+            "refused": {k: v for k, v in sorted(why.items()) if isinstance(v, str) and read in v}}
+
+
+def tie_holds(index: int, tie: Mapping[str, Any], integrity: str) -> None:
+    """The leg's assertion on a tied period: on an honest relay an accepted audit proved the whole output class; on a
+    tampered relay (``strategy`` not ``honest``) the integrity leg refused, with Lean refusing an output unit's
+    registered read of the certified value. Else the leg's error."""
+    if tie["strategy"] == "honest":
+        if integrity == "accept" and not (tie["outputs"] or {}).get("proved"):
+            raise RuntimeError(f"period {index}: the integrity leg accepted without proving the output class "
+                               f"({tie['stratum']}): {tie['outputs']}")
+    elif integrity == "accept" or not tie["refused"]:
+        raise RuntimeError(f"period {index}: the {tie['strategy']} relay's output is not refused by Lean's registered "
+                           f"read of {tie['value']!r} (integrity {integrity}, refused {sorted(tie['refused'])})")
 
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
@@ -1067,11 +1168,12 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     sess = session(period_dir)
     publish(sess, out.parent.parent / SESSION)
     n2 = n2_report(sess)
+    tie = tie_of(period_dir, out)
     summary: dict[str, Any] = {
         "path": "certifier",
         "session": {"requests": len(sess["prompts"]), **{k: sess[k] for k in (
             "steps", "h", "periods", "height", "strategies", "tamper", "rehearse_exit")}},
-        "n2": n2, "stubbed": list(STUBBED["certifier"])}
+        "n2": n2, "stubbed": list(STUBBED["certifier"] if tie is None else STUBBED["tied"])}
     if why := n2_refusal(n2):
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
         raise RuntimeError(why)
@@ -1081,16 +1183,29 @@ def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     integrity = json.loads((period_dir / "answers" / "sampled-proofs.json").read_text())["verdict"]
     per, exe, records = len(sess["prompts"]), sess["exes"]["network-period"], _audit_records(period_dir, out)
     summary["free_inputs"] = free
+    if tie is not None:
+        tie["io"] = io(run_windows(sess, tie["strategy"]), index, [tie["window"]], outputs, sess["steps"],
+                       sess["frames"])
+        summary["tie"] = tie
+        try:
+            tie_holds(index, tie, integrity)
+        except RuntimeError:
+            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+            raise
     answer = None
     for strategy in sess["strategies"]:
         rw = run_windows(sess, strategy)
+        if strategy not in n2["members"]:
+            summary[strategy] = {"decided": False, "why": f"N2 proves no {strategy} member (n2_zk.py's rounds), so "
+                                 "no link-window of the run has an answer"}
+            continue
         ws = period_windows(rw["plan"], index, per, sess["periods"], sorted(rw["windows"]))
         missing = [w for w in ws if w not in rw["windows"]]
         if missing:
             raise RuntimeError(f"{strategy}: N2 decided no link-window {missing} of period {index}")
         row = {"windows": ws, "io": io(rw, index, ws, outputs, sess["steps"], sess["frames"])}
         tag = "" if strategy == "honest" else "tamper."
-        if strategy == "honest" and not row["io"]["equal"]:
+        if strategy == "honest" and not row["io"]["equal"] and tie is None:
             (out / "io.json").write_text(json.dumps(row["io"], indent=1, sort_keys=True))
             if integrity == "accept":
                 raise RuntimeError(f"period {index}: the certified outputs are not the period's registered outputs, "
@@ -1160,6 +1275,7 @@ def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], so
 __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "PUBLIC_SESSION", "STUBBED",
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
            "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
+           "relay", "relayed", "tie_holds", "tie_of",
            "clock_evidence", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
            "match_outputs", "n2_refusal", "n2_report", "period_windows", "publish", "registered_outputs", "requests_of",
            "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule",

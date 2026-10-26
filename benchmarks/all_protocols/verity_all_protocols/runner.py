@@ -2,6 +2,7 @@
 
     python -m verity_all_protocols.runner --out DIR --tools FILE [--periods N] [--period-s S] [--node NAME]
         [--tamper P,...] [--law L] [--cap N] [--requests 3,7] [--steps 2] [--onsite EXE] [--scratch DIR] [--registered]
+        [--tie [--tie-tamper P,...]]
 
 Per period P (0-based): the verifier registers the loop's circuit from its shape and run id (``serve --circuit-only``),
 the loop serves once (`integrations/torch_loop`, run id ``RUN/pP``, so each period has a root of its own) and writes its
@@ -24,6 +25,16 @@ kept in ``DIR`` (never a prover's file: its rows and salts). ``--registered``: t
 values (`serve --registered`), committed once before the first period (`serve --commit-weights`), their opening in
 scratch and the verifier's pin in ``DIR/weights-pin.json``, which ``period.json`` names (``registered``) and the
 integrity leg's audit holds every period's reads to; its members are then shared-row.
+
+``--tie``: the loop's outputs tied to what the network certifier relayed (`tie`). Before the first period the
+communication leg's session is relayed (its `relay`, in scratch, where the leg finds it), and each period, before the
+loop serves, the output the network certifier relayed in the period's link-window is committed as the registered value
+``out`` and its head signed (``DIR/pP/out-record.json``), the verifier pins its root from that record alone
+(``DIR/pP/pin.json``, beside the weights' pin, which ``period.json`` then names), and the loop serves with each output
+unit's ``o0`` a registered read of ``out`` (`serve --tie --out-opening`). ``period.json``'s ``tie`` names the value,
+the port, the stratum the integrity audit proves whole (`tie.STRATUM`), the relay's run and link-window and the pinned
+root. ``--tie-tamper P,...``: those periods' output is the ``CERTIFIER_TAMPER=byte`` relay's, one output byte changed on
+the egress, which Lean's registered read of ``o0`` must refuse.
 """
 from __future__ import annotations
 
@@ -41,7 +52,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from . import compose as C
+from . import compose as C, tie as T
 from .table import ANSWERS, PERIOD, TABLE, Entry, LegFn, check_answer, leg_of
 
 FORMAT = "verity/all-protocols-period/v1"
@@ -107,7 +118,9 @@ def decide(period_dir: Path, node: str, out: Path, table: Sequence[Entry] = TABL
     p = json.loads((period_dir / PERIOD).read_text())
     report = {"format": FORMAT, "period": p["period"], "node": node, "run": os.environ.get("RESEARCH_RUN_ID"),
               "loop": {"circuit": p["circuit"], "run_root": p["run_root"], "law": p["law"], "cap": p["cap"],
-                       "tampered": bool(p.get("prover_env"))},
+                       "tampered": bool(p.get("prover_env")),
+                       **({"tie": {k: p["tie"][k] for k in ("strategy", "window", "stratum", "root")}}
+                          if p.get("tie") else {})},
               "protocols": rows, "seconds": seconds,
               "composed": C.composed(rows, {e.name: e.component if e.onsite else None for e in table}, cases, onsite, exe)}
     report["horizon"] = C.horizon([*earlier, report], period_s)
@@ -128,20 +141,31 @@ def serve(argv: Sequence[str]) -> dict[str, Any]:
 
 def loop_period(index: int, run: str, a: argparse.Namespace, scratch: Path, out: Path) -> tuple[Path, dict]:
     """The period's loop: the circuit registered before it runs, then its window in scratch with ``period.json``; its
-    public files in ``out/window``. -> the period's directory and what the loop printed."""
-    weights = a.weights
+    public files in ``out/window``. With ``--tie``, the output the network certifier relayed in the period's link-window
+    committed and pinned before the loop serves (`tie.period`), the period's pins ``out/pin.json`` (the weights' and
+    ``out``'s). -> the period's directory and what the loop printed."""
+    weights, tied = a.weights, getattr(a, "certifier", None)
     shape = ["--law", a.law, "--cap", str(a.cap), "--requests", a.requests, "--steps", str(a.steps), "--run-id",
-             f"{run}/p{index}", *(["--registered"] if weights else [])]
-    circuit = serve([*shape, "--circuit-only"])["circuit"]
+             f"{run}/p{index}", *(["--registered"] if weights else []), *(["--tie"] if tied else [])]
+    registered = serve([*shape, "--circuit-only"])
+    circuit, pins, tie = registered["circuit"], weights and weights["pin"], None
     window = scratch / f"p{index}"
     tampered = index in a.tamper
+    if tied:
+        rows = len(a.requests.split(",")) * a.steps * a.relay["h"]
+        tie = T.period(tied, a.relay, index, "byte" if index in a.tie_tamper else "honest", registered["program"], rows,
+                       scratch, out)
+        pins = out / "pin.json"
+        pins.write_text(json.dumps([*([json.loads(weights["pin"].read_text())] if weights else []), tie.pop("pin")],
+                                   indent=1, sort_keys=True))
     got = serve([*shape, "--out", str(window), *(["--tamper"] if tampered else []),
-                 *(["--weights", str(weights["opening"])] if weights else [])])
+                 *(["--weights", str(weights["opening"])] if weights else []),
+                 *(["--out-opening", str(tie.pop("opening"))] if tie else [])])
     (window / "serve.json").write_text(json.dumps(got, sort_keys=True))
     (window / PERIOD).write_text(json.dumps({
         "period": index, "periods": a.periods, "node": a.node, "circuit": circuit, "run_root": got["run"], "law": a.law,
         "cap": a.cap, "tools": a.tools, "prover_env": {"FC_ZK_SELF_CHECK": "skip"} if tampered else {},
-        **({"registered": str(weights["pin"])} if weights else {})}, sort_keys=True))
+        **({"registered": str(pins)} if pins else {}), **({"tie": tie} if tie else {})}, sort_keys=True))
     kept = out / "window"
     kept.mkdir(parents=True, exist_ok=True)
     for f in [*PUBLIC, *(p.name for p in window.glob("m*-public.bin"))]:
@@ -167,8 +191,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--scratch", help="where the loop's windows go (default a temporary directory, removed after)")
     ap.add_argument("--registered", action="store_true", help="the loop reads its weights as registered values "
                     "(`serve --registered`), committed once before the first period")
+    ap.add_argument("--tie", action="store_true", help="each output unit's o0 reads the output the network certifier "
+                    "relayed in the period's link-window, committed and signed by it and pinned from its record (`tie`)")
+    ap.add_argument("--tie-tamper", default="", help="with --tie: periods whose output is the CERTIFIER_TAMPER=byte "
+                    "relay's, one egress byte changed, e.g. 0")
     a = ap.parse_args(argv)
     a.tamper = {int(x) for x in a.tamper.split(",") if x.strip()}
+    a.tie_tamper = {int(x) for x in a.tie_tamper.split(",") if x.strip()}
+    if a.tie_tamper and not a.tie:
+        ap.error("--tie-tamper needs --tie")
     a.tools = json.loads(Path(a.tools).read_text())
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -179,6 +210,10 @@ def main(argv: list[str] | None = None) -> int:
         a.weights = {"opening": Path(scratch) / WEIGHTS_OPENING, "pin": out / WEIGHTS_PIN} if a.registered else None
         if a.weights:
             serve(["--commit-weights", str(a.weights["opening"]), "--pin", str(a.weights["pin"])])
+        if a.tie:
+            a.relay = T.relay(Path(scratch), [int(x) for x in a.requests.split(",")], a.steps, a.periods, a.tools,
+                              bool(a.tie_tamper))
+            a.certifier = T.certifier(Path(scratch) / "out-certifier")
         t0 = time.monotonic()
         for p in range(a.periods):
             wait = t0 + p * a.period_s - time.monotonic()
@@ -212,6 +247,7 @@ def summary_line(report: dict[str, Any]) -> dict[str, Any]:
     if "error" in report:
         return {"period": report["period"], "error": report["error"]}
     return {"period": report["period"], "tampered": report["loop"]["tampered"],
+            **({"tie": report["loop"]["tie"]["strategy"]} if report["loop"].get("tie") else {}),
             "protocols": {n: {"verdict": r["verdict"], **({"quantity": r["quantity"]} if r.get("quantity") else {}),
                               **({"epsilon": r["epsilon"], "delta": r["delta"]} if r.get("epsilon") else {}),
                               **({"reason": r["reason"][:300]} if r.get("reason") else {})}
