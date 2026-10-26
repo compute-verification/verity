@@ -37,7 +37,9 @@ opened from the rows and salts the certifier handed the prover (`serve --tie --o
 names the value,
 the port, the stratum the integrity audit proves whole (`tie.STRATUM`), the relay's run and link-window and the pinned
 root. ``--tie-tamper P,...``: those periods' output is the ``CERTIFIER_TAMPER=byte`` relay's, one output byte changed on
-the egress, which Lean's registered read of ``o0`` must refuse.
+the egress, which Lean's registered read of ``o0`` must refuse. ``--tie`` needs a work law (``--law work:K``, default
+``work:64``; ``subset:2`` without it): a5 proves the output class only beside a streamed work draw, so any other law is
+refused here rather than in every period's audit.
 """
 from __future__ import annotations
 
@@ -65,6 +67,8 @@ PUBLIC = ("registration.json", "window.json", "index.json", "circuit.json", "ser
 #: ``--registered``'s weights, committed once a run: their opening (the prover's salts) in scratch, the verifier's pin
 #: of their roots in ``DIR``
 WEIGHTS_OPENING, WEIGHTS_PIN = "weights-opening.json", "weights-pin.json"
+#: ``--law``'s default, and its default with ``--tie``, whose output class a5 proves only beside a streamed work draw
+LAW, TIE_LAW = "subset:2", "work:64"
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
@@ -192,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
                     "the one before (at once when the one before took longer), and the month's horizon counts them")
     ap.add_argument("--node", default=os.environ.get("RESEARCH_MACHINE") or os.uname().nodename)
     ap.add_argument("--tamper", default="", help="periods whose loop tampers with its outputs, e.g. 1,3")
-    ap.add_argument("--law", default="subset:2")
+    ap.add_argument("--law", help=f"the draw's law (default {LAW}, and {TIE_LAW} with --tie, which needs a work law)")
     ap.add_argument("--cap", type=int, default=8)
     ap.add_argument("--requests", default="3,7")
     ap.add_argument("--steps", type=int, default=2)
@@ -209,6 +213,11 @@ def main(argv: list[str] | None = None) -> int:
     a.tie_tamper = {int(x) for x in a.tie_tamper.split(",") if x.strip()}
     if a.tie_tamper and not a.tie:
         ap.error("--tie-tamper needs --tie")
+    a.law = a.law or (TIE_LAW if a.tie else LAW)
+    if a.tie and a.law.partition(":")[0] != "work":
+        ap.error(f"--tie proves the output class whole beside a streamed work draw, and a5 refuses it under any other "
+                 f"law (output-class-needs-a-streamed-work-draw): give --law work:K (the default with --tie is "
+                 f"{TIE_LAW}), not {a.law}")
     a.tools = json.loads(Path(a.tools).read_text())
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

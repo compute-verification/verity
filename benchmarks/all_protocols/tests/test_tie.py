@@ -119,6 +119,30 @@ def test_the_runner_reads_the_certifiers_out_record_witness_and_device_off_the_r
         TIE.certified_out(tmp_path / "run", 3)
 
 
+def test_the_tie_draws_under_a_work_law_and_refuses_any_other(tmp_path, monkeypatch, capsys):
+    """a5 proves the output class only beside a streamed work draw, so a ``--tie`` run under ``subset:2`` would reject
+    every period: the runner defaults ``--tie`` to ``work:64`` and refuses any other law before it relays."""
+    base = ["--out", str(tmp_path / "out"), "--tools", str(tmp_path / "missing.json")]
+    for law in ("subset:2", "stratified:4", "bernoulli:1/2"):
+        with pytest.raises(SystemExit) as x:
+            RN.main([*base, "--tie", "--law", law])
+        assert x.value.code == 2
+        assert f"give --law work:K (the default with --tie is work:64), not {law}" in capsys.readouterr().err
+    (tmp_path / "tools.json").write_text("{}")
+    base[3] = str(tmp_path / "tools.json")
+    laws = []
+
+    def serve(argv):
+        laws.append(argv[argv.index("--law") + 1])
+        raise SystemExit(0)
+
+    monkeypatch.setattr(RN, "serve", serve)
+    for argv, law in ((["--tie"], "work:64"), (["--tie", "--law", "work:4"], "work:4"), ([], "subset:2")):
+        with pytest.raises(SystemExit):
+            RN.main([*base, *argv, "--periods", "1"])
+        assert laws.pop() == law
+
+
 def _unopened(d: Path, period: dict) -> list[int]:
     """The positions of ``out`` whose output unit's ``o0`` row doesn't open the root the period pinned."""
     entry = RA.pinned(json.loads(Path(period["registered"]).read_text()))["out"]

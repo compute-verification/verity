@@ -42,7 +42,7 @@ nothing from the free inputs.
 
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
-        --out DIR [--delta D] [--port P] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
+        --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|gate:USER@HOST --main FILE] \\
         [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...]
 
@@ -109,8 +109,9 @@ REFUSED = 2
 
 def free_ports(span: int, bases: Iterable[int] | None = None) -> int:
     """A base port whose ``span`` loopback ports are all free now, the first of ``bases`` (default every base of `PORTS` in
-    random order). An audit's sessions listen at fixed offsets from it (``a5.RANK_PORTS`` a rank); a fixed default made two
-    audits on one node collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
+    random order). An audit's sessions listen at fixed offsets from it (here one a member with a proved unit, within
+    ``--ports``, `a5.port_refusal`; ``a5.RANK_PORTS`` a rank in prove_path's); a fixed default made two audits on one node
+    collide, the second's verifier failing to bind and its prover reaching the first's, which refused it."""
     if bases is None:
         bases = list(range(PORTS.start, PORTS.stop - span + 1, span))
         random.SystemRandom().shuffle(bases)
@@ -478,7 +479,8 @@ def audit(a: argparse.Namespace) -> int:
                     output=json.loads(output.read_text()) if compiled["ok"] else None)
     window_s = round(time.time() - t0, 2)
     more = negatives(w, held, doc, out / "negatives")
-    a.port = a.port if a.port is not None else free_ports(A5.RANK_PORTS)
+    a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
+    a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
     a.compose_cache = None
     a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else ())
@@ -490,7 +492,7 @@ def audit(a: argparse.Namespace) -> int:
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
-                         more, rank=0, registered=reads or None)
+                         more, rank=0, registered=reads or None, ports=a.ports)
     finally:
         if a.coins is not None:
             a.coins.skip(0)
@@ -572,7 +574,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--firewall", required=True)
     p.add_argument("--out", required=True)
     p.add_argument("--delta", type=float, default=0.5)
-    p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose ports are free now)")
+    p.add_argument("--port", type=int, default=None, help="the sessions' base port (default a base whose --ports ports are "
+                   "free now)")
+    p.add_argument("--ports", type=int, default=None, help="how many ports from --port are the audit's: a session each for "
+                   "every member with a proved unit, a draw needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")
     p.add_argument("--challenger", help="draw on the auditor's challenger's coins (a5_coins), not the verifier's: local, or "

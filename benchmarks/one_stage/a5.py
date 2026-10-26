@@ -285,6 +285,17 @@ def output_refusal(a: argparse.Namespace, mine: CS.Window, drawn_law: dict) -> d
     return {"output-class-mixes-a-member": mixed} if mixed else None
 
 
+def port_refusal(mine: CS.Window, draw: dict, port: int, ports: int | None) -> dict | None:
+    """Why the draw's sessions can't all listen inside the ``ports`` reserved from ``port``, or None (and None for
+    ``ports`` None, the caller's own ports): each member with a proved unit (`draw.proved`, its closure included) listens
+    on the next port from ``port``, so a session past the reservation could reach another audit's verifier."""
+    if ports is None:
+        return None
+    proved = set(D.proved(draw))
+    need = sum(1 for m in mine.members if not proved.isdisjoint(range(m.base, m.base + m.n)))
+    return {"sessions-past-the-reserved-ports": {"sessions": need, "ports": ports, "from": port}} if need > ports else None
+
+
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Window, members: list[dict], want: dict,
                leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes],
                                                 dict | None, dict | None, int | None]:
@@ -477,7 +488,8 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
 
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
-          step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None) -> tuple[dict, bool]:
+          step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
+          ports: int | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean draw by its law
@@ -488,7 +500,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
     summary and whether it was accepted with every negative refused. ``sets``: each template's input set and Definition, or
     a callable composing its circuit (``(out, partition digest, program digest) -> {"pin", "class_sha512", ...}``) and its
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
-    registered value, at the root its owner signed (a warden's cells), which the caller read before calling."""
+    registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
+    many ports from ``port`` the caller reserved, a draw whose sessions need more refused before any listens
+    (`port_refusal`); None for no reservation to hold them to."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
@@ -626,6 +640,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Window, served:
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
+    if (why := port_refusal(mine, union_draw, port, ports)) is not None:
+        summary["refused"] = why
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        print("A5 " + json.dumps(why))
+        return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
     linked = None       # the first drawn chunk with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each drawn chunk's Lean verdict with registered reads, whose finding the record carries
