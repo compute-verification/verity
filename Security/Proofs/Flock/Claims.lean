@@ -207,6 +207,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDTie
 import Proofs.Flock.Claims.Recursion.InnerAtCoins
 import Proofs.Flock.Claims.Recursion.InnerSetupSame
 import Proofs.Flock.Claims.Recursion.InnerExtras
+import Proofs.Flock.Claims.Recursion.VVTieOf
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
 import Proofs.Flock.Claims.Recursion.BoundWeightDeploy
