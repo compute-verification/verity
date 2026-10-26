@@ -284,6 +284,19 @@ def _stacked(world, monkeypatch) -> tuple[Review, str, str]:
     return h, two, three
 
 
+def test_a_proof_only_lean_change_lands_on_its_verdict_and_a_lock_or_code_lean_change_waits(world, monkeypatch):
+    """Daniel, 25 Oct 11:19 PM PDT: Lean in `Security/` that touches no lock is proofs and lands on its land verdict (the
+    after-landing lean-audit reverts it on a failure); a lock, or Lean outside `Security/` (it runs as code), still waits."""
+    h = Review(world, monkeypatch)
+    world.gh.put(1, world.change({"Security/lean-audit.json": "{}\n", "Security/Proofs/A.lean": "theorem A : True := trivial\n"}))
+    world.gh.put(2, world.change({"Security/Proofs/B.lean": "theorem B : True := trivial\n"}))
+    world.gh.put(3, world.change({"pkg/C.lean": "theorem C : True := trivial\n"}))
+    for n in (1, 2, 3):
+        h.review(n)
+    h.q.sync()
+    assert [lean_change(h.d.repo, m.commit) for m in h.q.chain()] == [True, False, True]
+
+
 def test_a_lean_check_is_stacked_at_nexts_top_for_a_lean_change_above_a_running_one(world, monkeypatch):
     """25 Oct: Lean changes that came onto `next` above a running Lean check's commit waited for it to pass, then for a whole
     check of their own (~1 h).  While it runs, one is stacked at `next`'s top, reviewed or not, with no free check slot needed,
