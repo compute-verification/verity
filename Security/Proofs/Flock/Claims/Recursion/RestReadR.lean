@@ -27,7 +27,7 @@ theorem act_not_coin {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} (hlast
   intro hc
   unfold FlockDeploy.act at hc
   repeat' (split at hc)
-  all_goals simp_all
+  all_goals first | exact absurd hlast.symm (ha _) | simp_all
 
 /-- **The last step decides** where the plain verifier answers no coin and `decR` reads. -/
 theorem actR_of_decR {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin} {a : Msg} {d : DecR}
@@ -55,7 +55,7 @@ def DecLive (rd : Msg → Option FinalP) : Prop :=
 it with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as the reps' blocks, every
 rep's block has a fit, and the record value reads as custody's. -/
 theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
-    {v : FlockDeploy.Ins × FlockDeploy.SessionSpec × Array FlockDeploy.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
+    {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
     {r₀ : List ByteArray} {rss : List (List ByteArray)}
     (hv : FlockDeploy.setupOf false x = some v) (hlast : ms.getLast? = some a) (ha : ∀ t, a ≠ 0 :: t)
     (hrd : rd a = some fl) (hc : cs.head? = some c₁) (h0 : rowsOf (ms.headD []) = some r₀)

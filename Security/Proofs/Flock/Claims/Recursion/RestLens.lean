@@ -447,7 +447,7 @@ theorem roundLens (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg ×
         rfl
       rw [hsum0, Nat.zero_add]
       by_cases hA : (rs.getD (i % rs.size) default).2.2.2 = true
-      · have hf : (layAt fin).fixedAt x (i + 1) = none := by simp [hfi, he, hA]
+      · have hf : (layAt fin).fixedAt x (i + 1) = none := by rw [hfi, he, hA] <;> rfl
         simp only [LayoutB.msg, hf, hpi, hpe, List.isEmpty_nil, ↓reduceIte, hA, Nat.mul_one]
         refine findSome_getD_length (L := 128) ?_ _ ?_
         · intro s b hb
@@ -468,11 +468,11 @@ theorem roundLens (fin : (r : XR) → List (Fin r.w.parts.length × List (Msg ×
             simp only [he, hA, ↓reduceIte, hr, Option.bind_some, hc, hh', Option.map_some]
           simp [LayoutB.held, hf, hms]
       · have hA' : (rs.getD (i % rs.size) default).2.2.2 = false := by simpa using hA
-        have hf : (layAt fin).fixedAt x (i + 1) = some [] := by simp [hfi, he, hA']
+        have hf : (layAt fin).fixedAt x (i + 1) = some [] := by rw [hfi, he, hA'] <;> rfl
         simp only [LayoutB.msg, hf, hA', Bool.false_eq_true, ↓reduceIte]
         rfl
     · have he' : (rs.getD (i % rs.size) default).2.1.isEmpty = false := by simpa using he
-      have hf : (layAt fin).fixedAt x (i + 1) = none := by simp [hfi, he']
+      have hf : (layAt fin).fixedAt x (i + 1) = none := by rw [hfi, he'] <;> rfl
       have hpt : topsPiecesAt r rs i = (List.range (rs.getD (i % rs.size) default).2.1.size).map
           (capPieceAt r rs i) ++ rowPiece r i := by
         unfold topsPiecesAt
