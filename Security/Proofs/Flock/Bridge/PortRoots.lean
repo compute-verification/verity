@@ -75,7 +75,7 @@ theorem step_inj' {a a' p p' : ByteArray} (hp : p.size = p'.size) (h : Registere
   rw [Registered.step_size, Registered.step_size, hp] at hs
   exact Registered.step_inj (by omega) hp h
 
-theorem drop_of_append_eq {X Y s t : List UInt8} (h : X ++ s = Y ++ t) (hl : t.length ≤ s.length) :
+theorem drop_of_append_eq {l₁ l₂ s t : List UInt8} (h : l₁ ++ s = l₂ ++ t) (hl : t.length ≤ s.length) :
     s.drop (s.length - t.length) = t := by
   have hs : s = s.take (s.length - t.length) ++ s.drop (s.length - t.length) := (List.take_append_drop _ _).symm
   rw [hs, ← List.append_assoc] at h

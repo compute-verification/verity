@@ -170,6 +170,7 @@ theorem rowDep_eq {c : Flock.Circuit} {W : ℕ} {bits : Msg → ℕ → Bool} (o
     simp [portOfPos, hr, hq]
   unfold rowDep
   rw [hport]
+  dsimp only
   exact rowMsg_eq_encPortH (by rw [hp1, hb]) (by rw [hp1]; exact h16) (by rw [hp1]; exact hW)
 
 /-- **A misshaped value's bytes are no shaped value's** at a port: a value that isn't `RowShaped` of the port's bits
