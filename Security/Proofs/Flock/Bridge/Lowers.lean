@@ -16,9 +16,10 @@ it at `r u := [unitGates P u]`, slot `u` of `partOf P` (`rus_partOf_getElem?`).
 * A row `(⊕ a) ∧ (⊕ b)` is lowered to the XOR of `a`'s positions, the XOR of `b`'s and their AND, at `posOf C g`. The
   two XORs are interior to the unit (`boundary_inner`): no output, input or gate of another unit reads them, so `Correct`
   asks nothing of their committed values, and the AND reads them as the unit computes them.
-* `runIn_posOf`: by induction over the wires, each wire's position computes its value in `C.eval`, reading from outside
-  the unit only positions of wires, whose committed values `Lowers` gives, or constants (`const_pos`), which `Prog.read`
-  reads with no committed value.
+* `runIn_posOf_of`: by induction over the wires, each wire's position computes its value at any wire values that apply
+  the unit's gates (`C.eval`'s, `runIn_posOf`; a unit's local evaluation's, `Flock.Bridge.correct_of_progCorrect`),
+  reading from outside the unit only positions of wires, whose committed values `Lowers` gives, or constants
+  (`const_pos`), which `Prog.read` reads with no committed value.
 -/
 
 namespace Flock.Bridge
@@ -358,20 +359,22 @@ theorem val_xorList {rd : ℕ → Option Bool} {v : Fin C.N → Bool} (ws : List
     (BGate.xor (ws.map (posOf C))).val rd own = some (xorSum ws v) := by
   simp [BGate.val, mapM_posOf ws h, xorSum, foldl_xor]
 
-/-- **Each wire's lowered gates compute its value** in the unit holding it, on committed values `ref` that carry the
-circuit's evaluation at every position the unit reads from outside. -/
-theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → Bool) (ref : ℕ → Option Bool)
+/-- **Each wire's lowered gates compute its value** in the unit holding it, at any wire values `V` that apply each of
+the unit's gates to its arguments, on committed values `ref` that carry `V` at every position the unit reads from
+outside. -/
+theorem runIn_posOf_of {n : ℕ} (P : Partition C n) (u : Fin n) (V : Fin C.N → Bool)
+    (hV : ∀ g, P.unit g = some u → V g = (C.op g).apply V) (ref : ℕ → Option Bool)
     (hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
-      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (C.eval Xv a)) :
+      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (V a)) :
     ∀ m (g : Fin C.N), g.val = m → P.unit g = some u →
-      (progOf C κ).runIn ref (unitGates P u) (posOf C g) = some (C.eval Xv g) := by
+      (progOf C κ).runIn ref (unitGates P u) (posOf C g) = some (V g) := by
   intro m
   induction m using Nat.strong_induction_on with
   | _ m ih =>
   intro g hgm hu
   have hfeed : ∀ a : Fin C.N, a ∈ (C.op g).args → ∀ p ∈ unitGates P u, off C g.val ≤ p →
       ∀ x, (progOf C κ).gates[p]? = some x → posOf C a ∈ x.reads →
-      feed (progOf C κ) ref (unitGates P u) p (posOf C a) = some (C.eval Xv a) := by
+      feed (progOf C κ) ref (unitGates P u) p (posOf C a) = some (V a) := by
     intro a ha p hp hp' x hx hr
     have hag := C.topo g a ha
     have hlt : posOf C a < p := lt_of_lt_of_le (posOf_lt_off hag) hp'
@@ -391,9 +394,9 @@ theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → 
     fun j hj => gates_off g hj
   have hin : ∀ j < gateSize (C.op g), ∀ x, (progOf C κ).gates[off C g.val + j]? = some x →
       ∀ a ∈ (C.op g).args, posOf C a ∈ x.reads →
-      feed (progOf C κ) ref (unitGates P u) (off C g.val + j) (posOf C a) = some (C.eval Xv a) :=
+      feed (progOf C κ) ref (unitGates P u) (off C g.val + j) (posOf C a) = some (V a) :=
     fun j hj x hx a ha hr => hfeed a ha _ (hmem j hj) (Nat.le_add_right _ _) x hx hr
-  rw [C.eval_op Xv hni, runIn_feed, posOf_eq]
+  rw [hV g hu, runIn_feed, posOf_eq]
   cases hop : C.op g with
   | input => simp [hop, Op.isInput] at hni
   | and a b =>
@@ -436,7 +439,7 @@ theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → 
     have hs : gateSize (Op.row a b : Op C.N) - 1 = 2 := rfl
     rw [hs, h2, Option.bind_some]
     have r0 : feed (progOf C κ) ref (unitGates P u) (off C g.val + 2) (off C g.val) =
-        some (xorSum a (C.eval Xv)) := by
+        some (xorSum a V) := by
       have hm := hmem 0 (by omega)
       rw [Nat.add_zero] at hm
       unfold feed
@@ -445,13 +448,21 @@ theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → 
       exact val_xorList a _ fun a' ha' =>
         hin 0 (by omega) _ h0 a' (by simp [hop, Op.args, ha']) (by simp [BGate.reads]; exact ⟨a', ha', rfl⟩)
     have r1 : feed (progOf C κ) ref (unitGates P u) (off C g.val + 2) (off C g.val + 1) =
-        some (xorSum b (C.eval Xv)) := by
+        some (xorSum b V) := by
       unfold feed
       simp only [hmem 1 (by omega), show off C g.val + 1 < off C g.val + 2 by omega, ↓reduceIte]
       rw [runIn_feed, h1, Option.bind_some]
       exact val_xorList b _ fun b' hb' =>
         hin 1 (by omega) _ h1 b' (by simp [hop, Op.args, hb']) (by simp [BGate.reads]; exact ⟨b', hb', rfl⟩)
     simp [BGate.val, List.mapM_cons, r0, r1, Op.apply]
+
+/-- `runIn_posOf_of` at the circuit's evaluation on `Xv`. -/
+theorem runIn_posOf {n : ℕ} (P : Partition C n) (u : Fin n) (Xv : Fin C.N → Bool) (ref : ℕ → Option Bool)
+    (hread : ∀ p ∈ unitGates P u, ∀ x, (progOf C κ).gates[p]? = some x → ∀ a : Fin C.N, posOf C a ∈ x.reads →
+      posOf C a ∉ unitGates P u → (progOf C κ).read ref (posOf C a) = some (C.eval Xv a)) :
+    ∀ m (g : Fin C.N), g.val = m → P.unit g = some u →
+      (progOf C κ).runIn ref (unitGates P u) (posOf C g) = some (C.eval Xv g) :=
+  runIn_posOf_of P u (C.eval Xv) (fun _ hu => C.eval_op Xv (isInput_of_unit hu)) ref hread
 
 /-! ## The lowering is correct, unit by unit -/
 
