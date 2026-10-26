@@ -178,8 +178,8 @@ def PlainClashRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.P
   ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → plainEv₁R rd P x ω (Φ (u, r'))
 
 /-- **A simulator of `P` at the plain table, at `VR rd`**: on every tape `u` it sends `plainRootR`'s roots, submits
-`repRounds` rounds on rep 0 and the rest on rep 1 at every link point (`SchedL`), and its live outcome is `P`'s run at
-`plainΦ`'s coins (`PlainSimRunR`). -/
+`repRounds` rounds on rep 0 and the rest on rep 1 at every link point (`SchedL`), its live outcome is `P`'s run at
+`plainΦ`'s coins (`PlainSimRunR`), and where `VR rd` refuses it sends no proofs. -/
 def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
     (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536) (P' : Claims.Prover (Ω × plainTape x)) : Prop :=
   (∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
@@ -189,7 +189,10 @@ def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover
       (plainN x) (fun _ _ => []) (repRounds false spec st)
       ((liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
         (ω, u)).2 pts)) ∧
-    PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P' (plainΦ x spec st)
+    PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P' (plainΦ x spec st) ∧
+    ∀ u r', (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out ≠ .acc →
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x (ω, u) r').proofs =
+        #[]
 
 open Classical in
 /-- **The plain mixture's first bound at the statement's draw, from a simulation, at `VR rd`**
@@ -621,7 +624,7 @@ theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) {x : Claims
     Array.getElem?_eq_getElem h0, hF, hF'.symm, ht, hsch, ?_⟩
   intro Ω _ _ P ω C hw hg rdD w hwj hrd
   obtain ⟨Lf, opn, hdec, hP⟩ := hIn s hs hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
-  obtain ⟨P', ⟨hσ, hS, hrun⟩, hC⟩ := hP P ω
+  obtain ⟨P', ⟨hσ, hS, hrun, -⟩, hC⟩ := hP P ω
   obtain ⟨hsc, hrel⟩ := hC C hw
   exact plain_accPr_le_rdLR rd Lf hset ht hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay opn hdec
     (plain_mPts hs hin hset).1 P ω C (hnc C hw hg) P' hσ hrun hsc
