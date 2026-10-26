@@ -21,9 +21,10 @@ functions of all of them, and so is each verdict.
 Each audit's per-period guarantee (`PeriodRun.Sound`) is stated in the shape of `Accounting.Run.ComputeSoundPerRun`:
 at any value of the other coins, the probability over the audit's own coins that it accepts while its claim fails on
 that run is at most its error. That is the form each protocol's own per-period guarantee is to give for a run that
-realizes its audit: `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod` for PoUW, `Bandwidth.Guarantees.AuditRO`
-for PoUB, `Pous.Guarantees.ContinuousAudit` for PoUS, the network certifier's leak over a period of sampled audits for
-communication, and the sampled audit's live knowledge soundness for integrity.
+realizes its audit: the per-component bound CMP-145 is stating for PoUW (not on `main` yet), the remote bandwidth
+audit's session for PoUB (`Accounting.RealizesBandwidthOfRemoteLinePeriod`), `Pous.Guarantees.ContinuousAudit` for
+PoUS, the network certifier's leak over a period of sampled audits for communication, and C-Flock's integrity audit for
+integrity (`Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod`).
 
 Two parts of the run are fields until their shared definitions exist: the verdicts (`accepts`), as in
 `Accounting.Run`, and the network certifier's claim (`commWithin`), which its period statement is to define.

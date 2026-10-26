@@ -16,8 +16,8 @@ from each audit's per-run guarantee (`Accounting.Run.ComputeSoundPerRun` and the
 
 The compute audit's per-run guarantee comes from PoUW by truncation (`PouwEndToEndPerRun`, `ComputeOfPouwPerRun`),
 under one more hypothesis on PoUW's cost model, that it truncates (`Accounting.BudgetAbort`); without it the per-run
-form does not follow from `Pouw.Assumptions.TT` (`Accounting.PerRunNecessity.tt_not_perRun`). The bandwidth audit's guarantee, `Bandwidth.Guarantees.AuditRO`, is
-already per-run: its event reads the ingress of the run itself. PoUS's `EndToEndRing` bounds a server's state by its
+form does not follow from `Pouw.Assumptions.TT` (`Accounting.PerRunNecessity.tt_not_perRun`). The bandwidth audit
+v0's guarantee, `Bandwidth.Guarantees.AuditRO`, is already per-run: its event reads the ingress of the run itself. PoUS's `EndToEndRing` bounds a server's state by its
 type, not a charge that varies with the coins, so its per-run form is a matter of how a run's device memory maps to a
 server's state, in the capacity embedding.
 
@@ -39,6 +39,13 @@ accounts' over one window (`Accounting.Run.ReadsAttributed`), so no bit read is 
 and the covert residual is one priced budget, `(F + pRead·BW)·T − (W + pRead·Q)` (`CovertResidualPerRunPriced`). The
 unpriced statements stay: a compute guarantee on the work alone gives the priced one at any `pRead ≥ 0`
 (`Accounting.Run.computeSoundPerRunPriced_of_perRun`).
+
+**Not the joint guarantee's sources.** PoUW's per-run forms bound an adversary within `q` oracle calls under `TT`
+(`CallsWithin`), the Pearl-C forms rest on `GγPerCoin`, a conjecture, and `AuditRO` is in the random-oracle model. The
+joint guarantee over a period (`Accounting.Guarantees.JointPeriod`, `JointHorizonBlocks`) takes every prover strategy,
+with PoUW's named random-oracle premises the one exception, so it takes none of them: its PoUW term is to be the
+per-component bound CMP-145 is stating for PoUW (not on `main` yet), and its PoUB term is the remote bandwidth audit's
+session (`Accounting.Guarantees.Bridge.BandwidthOfRemoteLinePeriod`).
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G`
 (`Proofs.Accounting.PerRunPouw`, `Proofs.Accounting.PerRunJoint`, `Proofs.Accounting.PerRunPriced` and

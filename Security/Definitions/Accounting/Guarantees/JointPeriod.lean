@@ -13,20 +13,24 @@ of them say, the probability that some audit of some period accepts while its cl
 errors summed (`JointHorizon`).
 
 Each audit's guarantee is to come from its protocol's own per-period statement, for a run that realizes the
-protocol's audit:
+protocol's audit, each against every prover strategy with no random oracle (PoUW's named random-oracle premises
+excepted):
 
-* PoUW: `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod`, the circuit's live words over the period's accepted
-  prefix, at `δ_s + n·(δ_bind + δ_ks)`; as device-model work, through a credit of words as work;
-* PoUB: `Bandwidth.Guarantees.AuditRO`, the device's ingress, at `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`;
+* PoUW: the per-component bound CMP-145 is stating for PoUW, which a `PeriodRun.Sound` at `.pouw` carries into; it is
+  not on `main` yet. Until then `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod` gives PoUW's from H1's
+  checked credit over the period's accepted prefix, at `δ_s + n·(δ_bind + δ_ks)`, through a credit of words as work;
+* PoUB: the remote bandwidth audit's session, through `Accounting.Guarantees.Bridge.BandwidthOfRemoteLinePeriod`, at the
+  bits-read form of its line (`Properties.RemoteAudit.Line.LineHeld`, MEM-97 item 4), which is not stated yet;
 * PoUS: `Pous.Guarantees.ContinuousAudit`, the freed share of memory over the period's challenges, at
   `βe + n·(β + 1)·π`, or the remote audit's memory line (`Properties.RemoteAudit.Line.LineHeld`);
 * the network certifier: the leak through the network certifiers over a period of sampled audits, each window at
   `δ + ε_ks + ε_bind`, whose count of secrets gives `K`;
-* sampled proofs: the sampled audit's live knowledge soundness, at `δ + ε_ks + δ_link`, read as a bound on the
-  committed transcript's wrong units.
+* sampled proofs: `Accounting.Guarantees.Bridge.IntegrityOfIntegrityPeriod`, from C-Flock's integrity audit over a
+  horizon of windows, a bound on the committed transcript's wrong units.
 
-None of those bridges is stated yet. Given the five per-period guarantees, both statements are proved
-(`Accounting.SecurityProofs.JointPeriod` and `JointHorizon`), by a union bound over the product of the audits' coins.
+The bandwidth audit v0's `Bandwidth.Guarantees.AuditRO` is in the random-oracle model, so it is no source here. Given
+the five per-period guarantees, both statements are proved (`Accounting.SecurityProofs.JointPeriod` and
+`JointHorizon`), by a union bound over the product of the audits' coins.
 -/
 
 namespace Accounting.Guarantees

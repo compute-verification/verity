@@ -95,7 +95,7 @@ block `b`'s sampled proofs, PoUW and network certifier have their per-period gua
 certifiers) is at most `∑_b (δ b sampled + δ b pouw + δ b network)`.
 
 The weights are pinned at their transfer in, like any ingress (ASK-130 A), not by PoUS. The memory and wipe terms
-join at M4 through `JointHorizonBlocks`. As there, the integrity leg is `PeriodRun.Sound` for `.sampled` in each
+join at M4 through `JointHorizonBlocks`. As there, sampled proofs' term is `PeriodRun.Sound` for `.sampled` in each
 block, not proofs' `Flock.Guarantees.IntegrityBlock`, which is stated over C-Flock's game rather than this coin space;
 and the state a block carries across a wipe is outside the integrity bound (PRF-167). -/
 def JointHorizonBlocksA : Prop :=
