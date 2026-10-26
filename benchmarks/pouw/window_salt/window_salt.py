@@ -14,7 +14,8 @@ its H1 tiles under the salt, then its registration with those same entries. The 
 coin follows it, so activations committed after the salt name another X, whose R no session was opened on.
 
 `gate` is `a5_coins.Local` (a development session on this machine, under a key made there: tests and demos) or
-`a5_coins.Gate` (vy-challenger-1 through infra's gate); `local(root, main)` makes the first. `main` is the verifier's own
+`a5_coins.Gate` (vy-challenger-1 through infra's gate); `local(root, main)` makes the first. The gate's open answers
+before its tunnel listens on the peer, so the client connects once the address listens (`a5_coins.connect_when_listening`). `main` is the verifier's own
 copy of main's first-parent history (``git rev-list --first-parent origin/main``, newest first). `anchors(weights,
 activations)` is the ``rec`` of a window whose weights are registered values (the torch loop's pinned ``w`` and ``sw``).
 """
@@ -76,7 +77,7 @@ def issue(gate: Any, rec: dict[str, Any], k: int, main: list[str], dest: Path, v
         raise Ch.CoinError(f"the window can't be salted yet: {got}")
     r = PS.anchored_epoch_root(*got, k)
     address, secret, commitment = gate.open(r.hex(), [list(f) for f in Wd.SALT_FAMILIES], scheme=Wd.LIVE_SCHEME)
-    with remote.RemoteChallenger.connect(address, bytes.fromhex(secret)) as client:
+    with a5_coins().connect_when_listening(address, bytes.fromhex(secret)) as client:
         c = client.commitment
         if c.root.hex() != commitment:
             raise Ch.CoinError(f"the challenger's hello answered commitment {c.root.hex()[:16]}..., not the gate's open's "
