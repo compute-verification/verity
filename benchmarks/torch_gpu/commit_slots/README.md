@@ -210,6 +210,11 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   +1.05 to +1.10 s. Below 48 SMs the commit alone outlasts the
   forward. SM clocks stay at 1,980 MHz with no clock event reason in every run; the high and equal runs from 56 to 88
   SMs draw 619 to 641 W median against the 700 W limit, and no sample exceeds 697.9 W, so power never binds.
+- **On circuits' final 1 KiB rows** (art:16f2faa0…, 21,857 rows a slot; run r20261026-191502-b4da, eager) the commit
+  alone takes 0.442 s on every SM and serving alone 3.286 s. Today's loop costs +0.424 s, 0.45 times CMP-149's 0.95 s,
+  and the uncapped commit at low priority +0.406 s. The least is the commit at high priority on 88 SMs, +0.334 s
+  (0.35), with 40 and 64 SMs at +0.340 and +0.338 s: the cap hides 48 to 75% of the capped commit. Every root equals
+  today's loop's; SM clocks stay at 1,980 MHz, at 644 to 647 W median, and no sample exceeds 690.9 W.
 - **The forward on the other SMs** (`:Nr`) is worse at every N (run r20261026-181159-8f26; `serve:shared:3:Nr` is the
   served step alone there), for two reasons. The forward slows on fewer SMs: 3.534 s on 124, 4.182 on 92, 5.201 on 68,
   against 3.274 s on all 132. And when the commit lags, torch's allocator, at 146.3 of 150.1 GB, frees its cache for
