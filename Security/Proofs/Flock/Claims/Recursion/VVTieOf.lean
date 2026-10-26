@@ -77,7 +77,7 @@ theorem residualRows_some {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extr
       | ok rows' =>
         rw [hr] at h
         cases h
-        exact ⟨gs, R, P, vs, rfl, rfl, rfl⟩
+        exact ⟨gs, R, P, vs, rfl, hj, hr⟩
 
 /-- **The part's `v` elements are its group's**: `part`'s `nv` is the number of group `j`'s `V` elements. -/
 theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
@@ -95,9 +95,9 @@ theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.Gf
   · obtain ⟨gs', hgs', hp⟩ := FlockVBridge.PartS.bind_ok hp
     rw [hg] at hgs'
     cases hgs'
-    dsimp only at hp
+    try dsimp only at hp
     rw [hj] at hp
-    dsimp only at hp
+    try dsimp only at hp
     obtain ⟨S2, -, hp⟩ := FlockVBridge.PartS.bind_ok hp
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hp
     exact hp.2.2.symm
@@ -111,7 +111,7 @@ theorem comb_of_row {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extras : A
       let comb ← if vs.any (· ≥ base.size) then inn.comb r rep else pure RecCoins.ZERO_COMB
       let full := base ++ comb
       pure (RecCoins.padTo (RecCoins.words (vs.map (full[·]!))) (RecResiduals.portWordsOf vs.size)) :
-        V (Array ℕ)) = .ok row)
+        _root_.Flock.V (Array ℕ)) = .ok row)
     {rep : RecCoins.Rep} (hrep : inn.rep sh extras r = .ok rep) (ha : vs.any (· ≥ rep.v.size - 64) = true) :
     ∃ cb, inn.comb r rep = .ok cb := by
   obtain ⟨rep', hrep', h⟩ := FlockVBridge.PartS.bind_ok h
@@ -198,7 +198,7 @@ theorem getD_nat (a : Array ℕ) (i : ℕ) : a.getD i 0 = a[i]! := by
   rw [Array.getElem!_eq_getD]
   rfl
 
-theorem append_cancel_right' {V V' Z : Array _root_.Flock.F128} (h : V ++ Z = V' ++ Z) : V = V' := by
+theorem append_cancel_right' {a a' z : Array _root_.Flock.F128} (h : a ++ z = a' ++ z) : a = a' := by
   have e := congrArg Array.toList h
   simp only [Array.toList_append] at e
   exact Array.toList_inj.1 (List.append_cancel_right e)
