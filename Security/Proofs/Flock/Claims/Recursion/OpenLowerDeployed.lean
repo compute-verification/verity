@@ -492,7 +492,7 @@ theorem sideSchR_sideAtR (rd : Msg → Option FinalP) (pieces : Msg → List Ope
     SideSchR H D shape untr b cmt L Bd (sideAtR rd) pieces := by
   unfold SideSchR AtPieces AtOpened
   intros
-  rfl
+  exact rfl
 
 /-- **`OpenTieR` is its two halves.** -/
 theorem openTieR_of (pieces : Msg → List OpenPiece) (posAt : Msg → List Coin → OpenPiece → ℕ)
