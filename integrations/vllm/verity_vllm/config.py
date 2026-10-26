@@ -149,6 +149,15 @@ class RowId:
                           f"o{self.max_output}", self.arrivals, self.sampling, self.execution))
 
 
+#: A row id inside text (a workload path, a log line): ten ``__``-separated fields, the four integer ones by their prefix.
+ROW_ID_PATTERN = r"[\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+"
+
+
+def row_tokens(row: str) -> list[str]:
+    """A row id's ``__``-separated fields as written, unvalidated (`RowId.parse` validates them)."""
+    return row.split("__")
+
+
 def row_int(row: str, prefix: str, default: int = 1) -> int:
     """The ``__<prefix><N>__`` field of a row id (``tp``, ``b``, ``i``, ``o``), ``default`` when the id has none."""
     for m in _TOKEN.finditer(str(row)):

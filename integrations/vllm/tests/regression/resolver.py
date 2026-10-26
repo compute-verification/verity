@@ -162,7 +162,7 @@ class Row:
             from . import store_io
             try:
                 self._fetched[art] = store_io.fetch(art)
-            except Exception as e:  # noqa: BLE001 -- the store not being reachable is a skip, not an error
+            except Exception as e:  # the store not being reachable is a skip, not an error
                 raise NotResolvable(f"{self.key}: store fetch of {label} {art} failed: {e}") from e
         return self._fetched[art]
 
@@ -350,7 +350,7 @@ class Row:
         from . import store_io
         try:
             return store_io.fetch_attempt(mine, dest)
-        except Exception as e:  # noqa: BLE001 -- the store not being reachable is a skip, not an error
+        except Exception as e:  # the store not being reachable is a skip, not an error
             raise NotResolvable(f"{self.key}: candidate attempts {mine} not fetchable here: {e}") from e
 
     def candidate_attempts(self) -> list[dict[str, Any]]:
@@ -419,7 +419,7 @@ def candidate_attempt_docs() -> list[dict[str, Any]]:
         if rid not in _ATTEMPT_DOCS:
             try:
                 _ATTEMPT_DOCS[rid] = store_io.attempt(rid)
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 raise NotResolvable(f"candidate attempt {rid} not readable here: {e}") from e
         doc = _ATTEMPT_DOCS[rid]
         out.append(doc)

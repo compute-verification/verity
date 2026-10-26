@@ -253,7 +253,11 @@ coins are the layout `live_families(R)` under `LIVE_SCHEME` (`"verity/pouw/epoch
 (`"pouw/salt"`), its draw coin (`"pouw/draw"`) and R round coins (`"pouw/round"`, rounds numbered from 0 as Compose's
 `Declared.round` numbers them), R the most rounds a window of the epoch takes, fixed when the challenger commits. The
 salt coin opens once, after the window's open root (`salt.window_open_root`, step 2), and `core_check.salt` (Lean
-`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. Round r's coin opens after
+`PouwCheck.saltCheck`) is the rule on it, read through the same session as the round coins. A Pearl-C pass's session
+takes its salt coin alone (`SALT_FAMILIES`, `salt_epoch_reason`; `Properties.Pouw.LiveSalt`), opened after its salt
+epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number k, the pass's `pass_index`, which
+the verifier recomputes and never reads from the pass), so it ends complete once that coin is released. Round r's coin
+opens after
 the verifier recorded round r's root, the root of the values round r commits, and round r's noise key is
 `derive(coin_r, "verity/pouw/round-noise/v1", {coins: root, epoch: e, root: root_r, round: r})`: the deferred noised
 products, keyed by a coin the prover could not see when it committed. `core_check.rounds` (Lean
@@ -268,6 +272,18 @@ another key or cut before the session's end, a second session for the window, an
 its pins log doesn't record, or from a branch commit merged into main but not on main's first-parent line, are
 refused; `core_check.salt` reads its session through the same `pinned_session`. A seeded epoch's commitment is unchanged (`SCHEME`, salt
 and draw only).
+
+**Pearl-C periods** (`credit.pearl_c_period_credit`, CMP-82). A live Pearl-C pass's salt is the coin of a salt-only
+session (`window.SALT_FAMILIES`) the gate opens on its salt epoch's root `salt.epoch_open_root(W, k)`
+(`core_check.live_salt`). Under that layout an abandoned session ends complete, like a used one, so a pass earns only
+inside a Pearl-C period, and the period earns only when all of these hold: its close's sessions are exactly the presented
+passes' epochs, in its order (`credit.period`), so a complete session no pass presents refuses it; each session is a
+Pearl-C salt session (``salt-only``; H1's checks refuse such a session, so the two never share a period); each session is
+credited toward the period (``circuit``, `challenger.credited_session`); each session is pinned within the period's
+freshness floor of its open pin (``pin``, H1's `credit.committed_pin` and `credit.committed_floor`); each pass's context
+is a string and the pass passes `core_check.pass_epoch` (``pass``); each W's epochs are numbered on from the lane's earlier credited periods with no gap or repeat (``index``),
+so a W whose numbering broke is spent; and no two passes of one epoch hold one call index (`credit.passes_distinct`).
+Its Lean port is open.
 
 ## Registered weights (`registration`)
 
