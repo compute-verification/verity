@@ -106,7 +106,7 @@ theorem bound_of_sound {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
   rw [hc]
   refine le_trans (ENNReal.ofReal_le_ofReal ?_) hδ
   exact le_trans (Pouw.pr_mono fun ξ ⟨h1, h2, h3, h4⟩ => ⟨hv ξ ⟨h1, h2, h4⟩, fun hh => h3 (hw ξ hh)⟩)
-    (Pouw.pr_le_of_update (r.own a) _ hr)
+    (Pouw.pr_le_of_update (r.own a) (fun ξ => r.accepts a ξ ∧ ¬ r.Holds (V.certOf θ) (V.priceOf θ) a ξ) hr)
 
 end Run
 
