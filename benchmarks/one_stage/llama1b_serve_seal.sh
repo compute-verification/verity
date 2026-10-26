@@ -118,7 +118,7 @@ advice_pass() {
     [ -f "$D/advice/.w$k/windows.json" ] && continue
     # shellcheck disable=SC2086
     vv advice "$D" --window "$k" --cap "$CAP" $CA --out "$D/advice/.w$k" >> "$OUT/advice.log" 2>&1; rc=$?
-    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace: next pass
+    [ -f "$D/advice/.w$k/windows.json" ] || continue        # not yet in the step trace, or pending (rc 3) on a record: next pass
     [ -d "$D/advice/.w$k/w$k" ] && mv "$D/advice/.w$k/w$k" "$D/advice/w$k"
     "$PY" - "$D/advice" "$k" "$rc" <<'EOF' | tee -a "$OUT/advice_windows.jsonl"
 import json, sys, time
