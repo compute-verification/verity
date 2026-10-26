@@ -337,7 +337,7 @@ def main(argv: list[str] | None = None) -> int:
         if a.tie:
             program = serve([*shape_of(a.start, run, a), "--circuit-only"])["program"]
             a.relay = T.relay(Path(scratch), [int(x) for x in a.requests.split(",")], a.steps, a.windows, a.tools,
-                              bool(a.tie_tamper), program)
+                              bool(a.tie_tamper), program, out)
         t0 = time.monotonic()
         jobs = []
         for i, w in enumerate(range(a.start, a.start + a.windows)):

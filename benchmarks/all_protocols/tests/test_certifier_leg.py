@@ -28,6 +28,9 @@
   its group's in ``groups.json``, and the certified ids match the registered outputs' by connection, else by content,
   and a stub's changed byte, extra id or lost id is no match;
 * only the warden session's public files are published, its certificates without the heads and salts they sign;
+* a session step that fails (the leg's relay or the runner's, N2's prove, a warden rehearse) raises an error carrying
+  its log's last `LOG_TAIL` lines and naming the log's copy where custody keeps it (the leg's ``out``, the runner's
+  ``--out/certifier-session``), since the scratch's is gone by the time anyone reads the error;
 * the scan's answer of link-window 0 is its audit record re-decided at the leg's δ, a refusal a reject, and
   `rows_case_of`'s case is the rows form's: a signed rows period of the mirror's (`period_case.build`), taken apart into
   a warden run's windows and scans and rebuilt, is the same commitment and evidence, and the mirror accepts it;
@@ -471,6 +474,74 @@ def test_the_warden_sessions_tampers_are_the_stubs(monkeypatch):
     monkeypatch.setenv("WARDEN_TAMPER", "drop")
     with pytest.raises(RuntimeError, match="WARDEN_TAMPER"):
         L.warden_tampers()
+
+
+TOOLS = {"flock-circuit": "fc", "flock-verify": "fv", "flock-firewall": "ff", "m0-pythonpath": ""}
+
+
+def failing(monkeypatch, fails: set[str]) -> None:
+    """The session's stub, Lean executables and requests stubbed; each step it runs writes 100 lines to its log, and
+    the steps in ``fails`` (``rehearse``, ``prove``) exit 3 with nothing else, the others as if they succeeded."""
+    class Stub:
+        def terminate(self) -> None:
+            pass
+
+        def wait(self) -> None:
+            pass
+
+    def run(argv, log, env=None) -> int:
+        log.write_text("".join(f"{log.stem} line {i}\n" for i in range(100)))
+        step = argv[2]
+        if step not in fails:
+            done = Path(argv[argv.index("--out") + 1]) / "summary.json"
+            done.parent.mkdir(parents=True, exist_ok=True)
+            done.write_text("{}")
+        return 3 if step in fails else 0
+
+    monkeypatch.setattr(L, "lean_exes", lambda: {"network-records": "nr"})
+    monkeypatch.setattr(L, "requests_of", lambda d: ([3, 7], STEPS, H))
+    monkeypatch.setattr(L, "_stub", lambda *a, **k: (Stub(), "http://127.0.0.1:1"))
+    monkeypatch.setattr(L, "scan_schedule", lambda env=None: [])
+    monkeypatch.setattr(L, "_run", run)
+
+
+def carries_tail(error: Exception, why: str, kept: Path) -> bool:
+    head, *tail = str(error).splitlines()
+    return (head == f"{why} ({kept}); its last {L.LOG_TAIL} lines:"
+            and tail == [f"{kept.stem} line {i}" for i in range(100 - L.LOG_TAIL, 100)]
+            and kept.read_text() == "".join(f"{kept.stem} line {i}\n" for i in range(100)))
+
+
+def test_a_failed_relay_or_prove_carries_its_logs_tail_and_keeps_the_log_where_custody_does(tmp_path, monkeypatch):
+    from verity_all_protocols import tie as TIE
+
+    period, out = tmp_path / "scratch" / "w0", tmp_path / "out"
+    period.mkdir(parents=True)
+    (period / "period.json").write_text(json.dumps({"periods": 1, "tools": TOOLS}))
+    failing(monkeypatch, {"rehearse"})
+    with pytest.raises(RuntimeError) as got:
+        L.session(period, out / "w0" / "certifier")
+    assert carries_tail(got.value, "certifier_serve.py rehearse exited 3 with no summary",
+                        out / "w0" / "certifier" / "rehearse.log")
+    monkeypatch.setattr(TIE, "load", lambda name: L)
+    monkeypatch.setattr(TIE, "_loop", lambda: Namespace(H=H))
+    with pytest.raises(RuntimeError) as got:
+        TIE.relay(tmp_path / "runner-scratch", [3, 7], STEPS, 1, TOOLS, False, "aa" * 64, out)
+    assert carries_tail(got.value, "certifier_serve.py rehearse exited 3 with no summary",
+                        out / L.SESSION / "rehearse.log")
+    failing(monkeypatch, {"prove"})
+    with pytest.raises(RuntimeError) as got:
+        L.session(period, out / "w1" / "certifier")
+    assert carries_tail(got.value, "n2_zk.py prove exited 3 with no summary", out / "w1" / "certifier" / "n2zk.log")
+
+
+def test_a_failed_warden_rehearse_carries_its_logs_tail_and_keeps_the_log_in_the_legs_out(tmp_path, monkeypatch):
+    failing(monkeypatch, {"rehearse"})
+    (tmp_path / "s").mkdir()
+    with pytest.raises(RuntimeError) as got:
+        L.warden_rehearse(tmp_path / "s", [3, 7], STEPS, H, 1, 7, ["honest"], {}, tmp_path / "out")
+    assert carries_tail(got.value, "warden_serve.py rehearse (honest) exited 3 with no check.json",
+                        tmp_path / "out" / "rehearse-honest.log")
 
 
 def test_a_warden_run_is_the_gates_scan_rehearsal_at_the_scans_schedule(tmp_path):

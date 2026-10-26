@@ -18,7 +18,10 @@ each proved ``--zk`` behind the Lean firewall one session at a time (`n2_zk.py p
 kept across both. Its records (heads and salts, syncs, request and response records, the shim's events, the plan's
 prompts) are witness and stay in the scratch; the runner's ``--out/certifier-session/`` gets each run's deployment,
 calibration, the client's certificates and clock certificates, and on a tied run the network certifier's out records
-alone (`publish`, `PUBLIC_SESSION`), and ``summary.json`` the session's counts.
+alone (`publish`, `PUBLIC_SESSION`), and ``summary.json`` the session's counts. A step that fails (a stub, a rehearse,
+N2's prove) raises with its log's last `LOG_TAIL` lines and copies that log, the step's own output and never a record,
+into the leg's ``out``, or the runner's ``--out/certifier-session/`` for its relay (`failed`): the scratch is gone by the
+time anyone reads the error.
 
 **A period** (`leg`): its link-window, and for the first period every link-window N2 decided before it and for the last
 every one after (`period_windows`), so each certified link-window is some period's. Their certified outputs (the egress
@@ -122,6 +125,8 @@ SESSION = "certifier-session"
 DELTAS = (Fraction(1, 100), Fraction(1, 10 ** 6))
 #: N2's stream decides at `certifier_serve.DELTA`
 N2_DELTA = Fraction(2) ** -40
+#: the lines of a failed session step's log its error carries (`failed`)
+LOG_TAIL = 40
 #: the leg's records, by ``CERTIFIER_PATH``: ``certifier`` (the default), `certifier_serve.py`'s certifier-only path
 #: (`session`, `certifier_leg`); ``warden``, the network certifier's own cells as one device (`warden_session`,
 #: `warden_leg`), which `verity/certifier/v0` decides once it has the device's form
@@ -321,14 +326,29 @@ def lean_exes() -> dict[str, str]:
     return {n: str(LEAN / ".lake" / "build" / "bin" / n) for n in ("network-period", "network-records")}
 
 
-def _stub(steps: int, h: int, log: Path, tamper: str | None = None) -> tuple[subprocess.Popen, str]:
+def failed(why: str, log: Path, keep: Path | None = None) -> RuntimeError:
+    """A session step's failure: ``why`` and the last `LOG_TAIL` lines of its ``log``, which is in the runner's scratch
+    and gone by the time anyone reads the error, so the log is copied into ``keep`` (custody's: the leg's ``out``, or
+    the runner's ``--out/certifier-session`` for its relay) and the error names that copy. A log is the step's own
+    output (its verdict tables, its announce line of public keys and ids, a traceback), never a record."""
+    lines = log.read_text(errors="replace").splitlines() if log.is_file() else []
+    if keep is not None and log.is_file():
+        keep.mkdir(parents=True, exist_ok=True)
+        log = Path(shutil.copy(log, keep / log.name))
+    tail = lines[-LOG_TAIL:]
+    return RuntimeError(f"{why} ({log}); its last {len(tail)} lines:\n" + "\n".join(tail))
+
+
+def _stub(steps: int, h: int, log: Path, tamper: str | None = None,
+          keep: Path | None = None) -> tuple[subprocess.Popen, str]:
     tampered = ["--tamper", tamper, "--tamper-at", "0"] if tamper else []
     proc = subprocess.Popen([sys.executable, str(TRACES / "torch_loop_stub.py"), "--steps", str(steps), "--h", str(h),
                              *tampered], stdout=subprocess.PIPE, stderr=open(log, "w"), text=True, cwd=ROOT)
     line = json.loads(proc.stdout.readline() or "{}")
     if "listening" not in line:
         proc.kill()
-        raise RuntimeError(f"the stub exited before listening ({log})")
+        proc.wait()
+        raise failed("the stub exited before listening", log, keep)
     return proc, line["listening"]
 
 
@@ -360,12 +380,13 @@ def _env(tools: Mapping[str, str], exes: Mapping[str, str]) -> dict[str, str]:
 
 
 def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, tools: Mapping[str, str],
-          out_program: str | None = None) -> dict[str, Any]:
+          out_program: str | None = None, keep: Path | None = None) -> dict[str, Any]:
     """The session's relay (module docstring): `certifier_serve.py rehearse` of the run's ``periods`` periods of
     ``prompts`` through the network certifier into ``s``, honest and under `CERTIFIER_TAMPER`, before any proof; its
     record ``relay.json``. The runner relays before the loop serves when the loop's outputs are tied to the certified
     ones (``--tie``), the network certifier then committing each link-window's output for the reading program
-    ``out_program`` (``--out-program``); `session` relays at the first period otherwise."""
+    ``out_program`` (``--out-program``); `session` relays at the first period otherwise. A step that fails copies its
+    log into ``keep`` (`failed`)."""
     if (s / "relay.json").exists():
         return json.loads((s / "relay.json").read_text())
     s.mkdir(parents=True, exist_ok=True)
@@ -373,7 +394,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
     tamper = os.environ.get("CERTIFIER_TAMPER", "extra")
     strategies = ["honest", *([tamper] if tamper else [])]
     frames = steps * math.ceil(4 * h / TOKEN_BYTES)
-    stub, url = _stub(steps, h, s / "stub.log")
+    stub, url = _stub(steps, h, s / "stub.log", keep=keep)
     try:
         rc = _run([sys.executable, str(TRACES / "certifier_serve.py"), "rehearse", "--upstream", url,
                    "--out", str(s / "rehearsal"), "--traffic", "fixed", "--profile", "planned",
@@ -386,7 +407,7 @@ def relay(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, too
         stub.terminate()
         stub.wait()
     if not (s / "rehearsal" / "summary.json").exists():
-        raise RuntimeError(f"certifier_serve.py rehearse exited {rc} with no summary ({s / 'rehearse.log'})")
+        raise failed(f"certifier_serve.py rehearse exited {rc} with no summary", s / "rehearse.log", keep)
     rec = {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
            "strategies": strategies, "tamper": tamper or None, "frames": frames, "rehearse_exit": rc, "exes": exes,
            "dir": str(s), "out_program": out_program}
@@ -405,14 +426,14 @@ def once(s: Path, make: Callable[[Path], dict[str, Any]]) -> dict[str, Any]:
         return make(s)
 
 
-def session(period_dir: Path) -> dict[str, Any]:
+def session(period_dir: Path, keep: Path | None = None) -> dict[str, Any]:
     """The run's one certifier session (module docstring), made at its first period in the runner's scratch beside the
     period's window (``period_dir.parent``): its relay (`relay`, unless the runner relayed already) and N2's proofs;
-    its record ``session.json`` (`once`)."""
-    return once(period_dir.parent / SESSION, lambda s: _session(period_dir, s))
+    its record ``session.json`` (`once`). A step that fails copies its log into ``keep`` (`failed`)."""
+    return once(period_dir.parent / SESSION, lambda s: _session(period_dir, s, keep))
 
 
-def _session(period_dir: Path, s: Path) -> dict[str, Any]:
+def _session(period_dir: Path, s: Path, keep: Path | None = None) -> dict[str, Any]:
     tools = _tools(period_dir)
     prompts, steps, h = requests_of(period_dir)
     if (s / "relay.json").exists():
@@ -421,7 +442,7 @@ def _session(period_dir: Path, s: Path) -> dict[str, Any]:
             raise RuntimeError(f"the runner relayed prompts {rec['prompts']} for {rec['steps']} steps at H "
                                f"{rec['h']}, and the loop served {prompts} for {steps} at {h}")
     else:
-        rec = relay(s, prompts, steps, h, _periods(period_dir), tools)
+        rec = relay(s, prompts, steps, h, _periods(period_dir), tools, keep=keep)
     strategies, tamper, env = rec["strategies"], rec["tamper"], _env(tools, rec["exes"])
     scratch = Path(tempfile.mkdtemp(prefix="certifier-leg-n2-"))
     try:
@@ -435,7 +456,7 @@ def _session(period_dir: Path, s: Path) -> dict[str, Any]:
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     if not (s / "n2zk" / "summary.json").exists():
-        raise RuntimeError(f"n2_zk.py prove exited {n2_rc} with no summary ({s / 'n2zk.log'})")
+        raise failed(f"n2_zk.py prove exited {n2_rc} with no summary", s / "n2zk.log", keep)
     rec = {**rec, "n2_exit": n2_rc}
     (s / "session.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     return rec
@@ -519,17 +540,19 @@ def scan_dry(run: Path, log: Path, env: Mapping[str, str] | None = None) -> dict
 
 
 def warden_rehearse(s: Path, prompts: Sequence[int], steps: int, h: int, periods: int, height: int,
-                    strategies: Sequence[str], env: Mapping[str, str] | None = None) -> dict[str, Any]:
+                    strategies: Sequence[str], env: Mapping[str, str] | None = None,
+                    keep: Path | None = None) -> dict[str, Any]:
     """Each strategy's warden run of the prompts into ``s/rehearsal/<strategy>``, a group of them a period, each
     behind its own stub (``honest``, else the stub's ``--tamper``), then the scan's dry chain over its link-window 0
-    (`scan_dry`); the prompts file (``s/prompts.json``) and every run's records stay in ``s``."""
+    (`scan_dry`); the prompts file (``s/prompts.json``) and every run's records stay in ``s``. A step that fails
+    copies its log into ``keep`` (`failed`)."""
     env = dict(env or _traces_env())
     (s / "prompts.json").write_text(json.dumps([[t] for t in prompts]))
     schedule = scan_schedule(env)
     exits, accepted, scans = {}, {}, {}
     for strategy in strategies:
         run = s / "rehearsal" / strategy
-        stub, url = _stub(steps, h, s / f"stub-{strategy}.log", None if strategy == "honest" else strategy)
+        stub, url = _stub(steps, h, s / f"stub-{strategy}.log", None if strategy == "honest" else strategy, keep)
         try:
             exits[strategy] = _run(warden_argv(url, run, s / "prompts.json", len(prompts) * periods, steps, height,
                                                schedule), s / f"rehearse-{strategy}.log", env)
@@ -537,8 +560,8 @@ def warden_rehearse(s: Path, prompts: Sequence[int], steps: int, h: int, periods
             stub.terminate()
             stub.wait()
         if not (run / "check.json").exists():
-            raise RuntimeError(f"warden_serve.py rehearse ({strategy}) exited {exits[strategy]} with no check.json "
-                               f"({s / f'rehearse-{strategy}.log'})")
+            raise failed(f"warden_serve.py rehearse ({strategy}) exited {exits[strategy]} with no check.json",
+                         s / f"rehearse-{strategy}.log", keep)
         accepted[strategy] = json.loads((run / "check.json").read_text()).get("accepted")
         scans[strategy] = scan_dry(run, s / f"scan-{strategy}.log", env)
     return {"prompts": list(prompts), "steps": steps, "h": h, "periods": periods, "height": height,
@@ -628,17 +651,18 @@ def warden_tampers() -> list[str]:
     return list(got)
 
 
-def warden_session(period_dir: Path) -> dict[str, Any]:
+def warden_session(period_dir: Path, keep: Path | None = None) -> dict[str, Any]:
     """The run's one warden session (module docstring), made at its first period in the runner's scratch beside the
-    period's window (``period_dir.parent``); its record ``session.json`` (`once`)."""
-    return once(period_dir.parent / WARDEN_SESSION, lambda s: _warden_session(period_dir, s))
+    period's window (``period_dir.parent``); its record ``session.json`` (`once`). A step that fails copies its log
+    into ``keep`` (`failed`)."""
+    return once(period_dir.parent / WARDEN_SESSION, lambda s: _warden_session(period_dir, s, keep))
 
 
-def _warden_session(period_dir: Path, s: Path) -> dict[str, Any]:
+def _warden_session(period_dir: Path, s: Path, keep: Path | None = None) -> dict[str, Any]:
     tools, exes = _tools(period_dir), lean_exes()
     prompts, steps, h = requests_of(period_dir)
     rec = warden_rehearse(s, prompts, steps, h, _periods(period_dir), _env_int("CERTIFIER_HEIGHT", 10),
-                          ["honest", *warden_tampers()])
+                          ["honest", *warden_tampers()], keep=keep)
     draw = _env_int("SCAN_DRAW", SCAN_DRAW)
     rec["scan_prove"] = {st: scan_prove(s / "rehearsal" / st, s, st, tools, draw) for st in rec["strategies"]
                          if rec["scan"][st]["accepted"]}
@@ -1099,7 +1123,7 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     tampered period must be refused. Its answer at δ = 1/100; a period with a link-window the scan didn't answer
     raises (`WARDEN_PENDING`)."""
     index = json.loads((period_dir / "period.json").read_text())["period"]
-    sess = warden_session(period_dir)
+    sess = warden_session(period_dir, out)
     warden_publish(sess, out.parent.parent / WARDEN_SESSION)
     summary: dict[str, Any] = {
         "path": "warden", "stubbed": list(STUBBED["warden"]),
@@ -1182,7 +1206,7 @@ def warden_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 def certifier_leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """The period on `certifier_serve.py`'s certifier-only path (module docstring); its answer at δ = 1/100."""
     index = json.loads((period_dir / "period.json").read_text())["period"]
-    sess = session(period_dir)
+    sess = session(period_dir, out)
     publish(sess, out.parent.parent / SESSION)
     n2 = n2_report(sess)
     tie = tie_of(period_dir, out)
@@ -1293,7 +1317,7 @@ __all__ = ["BLOCK_DELTAS", "BLOCK_ERROR_FROM", "DELTAS", "PATHS", "PROTOCOL", "P
            "TAMPERED_WINDOW", "WARDEN_PENDING", "WARDEN_PUBLIC", "WARDEN_TAMPERED_PERIOD", "WARDEN_TAMPERS",
            "answer_of_outcome", "audit_answer", "block_leg", "case_of", "certified_events", "certifier_leg", "check",
            "relay", "relayed", "tie_holds", "tie_of",
-           "clock_evidence", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
+           "clock_evidence", "failed", "free_inputs", "holds_at", "io", "layout", "leg", "loop_units", "match_ids",
            "match_outputs", "n2_refusal", "n2_report", "once", "period_windows", "publish", "registered_outputs", "requests_of",
            "rows_case_of", "SCAN_DRAW", "SCAN_KEEP", "scan_dry", "scan_free", "scan_prove", "scan_schedule",
            "scan_window", "session", "term_delta", "warden_argv", "warden_ids", "warden_io", "warden_leg",
