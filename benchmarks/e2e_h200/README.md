@@ -59,7 +59,12 @@ uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --de
     --prompt-bytes 8 --micro-batch 1024 --workers "$(nproc)" --open 2 --draw 1     # the skeleton at batch 4,096 (ATTN_REF_CUBIN set)
 bash benchmarks/e2e_h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: the research run)
 PYTHONPATH=benchmarks/e2e_h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
+uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --device cuda \
+    --weights-file W --weights-manifest M --workers "$(nproc)"                   # serve the loaded W (NET-76's sink), checked first
+E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE=W E2E_H200_WEIGHTS_MANIFEST=M PYTHONPATH=benchmarks/e2e_h200 \
+    python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:frozen   # the endpoint on it
 ~~~
 
 Exit 0: every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's own
-check holds; 3: one doesn't; 4: a leg's fixture check fails.
+check holds; 3: one doesn't; 4: a leg's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
+sha256, its size or its model), refused before the first step.
