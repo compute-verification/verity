@@ -82,6 +82,42 @@ def replay(shape, mp: Map, weights: Weights, fam: str, template: str, idx: int, 
     return np.asarray(want).reshape(-1), extra
 
 
+def lms_verify(key, message: bytes, signature: bytes) -> bool:
+    from verity.ml.crypto import lms
+    p = lms.Params(64, key.W, key.H)
+    try:
+        return lms.verify(p, key.public, message, lms.Signature.decode(p, signature))
+    except ValueError:
+        return False
+
+
+def session_audit(coin: dict, digest: str, d: Path, key_record: Path, main: Path) -> dict:
+    """The coin's session as core's verifier takes it: the one session the auditor's ledger opens on the registration's
+    digest under the pinned challenger key, run from a commit on main, whose signed log shows that digest as the only root
+    it received and whose commitment opens the recorded coin after it."""
+    from verity.core.protocols.sampled_proofs import challenger as Ch
+    from verity.core.protocols.sampled_proofs import remote as R
+    sid, window = coin["reserve"]["session"], {"root": digest}
+    out: dict = {"session": sid}
+    try:
+        key = Ch.key_of_record(json.loads(key_record.read_text()))
+        sdir = d / sid / "out" if (d / sid / "out").is_dir() else d / sid
+        ledger = d / f"{sid}.ledger.jsonl"
+        commitment, roots = R.trusted_session(sdir, [ledger], window, key, lms_verify)
+        pins = [x for x in (d / f"{sid}.pins.jsonl").read_text().split("\n") if x]
+        audited = Ch.pinned_session(Ch.ledger_head([R.ledger_lines(ledger)], key, lms_verify), window, key, pins,
+                                    R.main_lines(main), lms_verify)
+        after = bytes.fromhex(digest)
+        out.update(trusted=True, pinned=audited.session == sid,
+                   roots_ok=roots == {COIN.LABEL: (after,)},
+                   commitment_ok=commitment.root.hex() == coin["commitment"],
+                   coin_ok=Ch.live_reason(commitment, Ch.LiveOpening.from_json(coin["opening"]), COIN.LABEL, 0, after) is None)
+    except (Ch.CoinError, OSError, ValueError, KeyError) as e:
+        out.update(trusted=False, why=str(e))
+    out["ok"] = all(out.get(k) for k in ("trusted", "pinned", "roots_ok", "commitment_ok", "coin_ok"))
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--drawn", required=True)
@@ -89,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--coin", required=True)
     ap.add_argument("--payload", default="", help="drawn.bin (default: beside drawn.json)")
     ap.add_argument("--out", default="")
+    ap.add_argument("--key-record", default="", help="the challenger's challenger-key/v1 record: audit the coin's session")
+    ap.add_argument("--main", default="", help="main's first-parent history, with --key-record")
     a = ap.parse_args(argv)
     d = Path(a.drawn)
     doc = json.loads((d / "drawn.json").read_text())
@@ -139,8 +177,11 @@ def main(argv: list[str] | None = None) -> int:
         rows.append(row)
         print("CHECK " + json.dumps(row), flush=True)
     out["units"] = rows
+    if a.key_record:
+        out["session"] = session_audit(coin, digest, Path(a.coin).parent, Path(a.key_record), Path(a.main))
+        print("SESSION " + json.dumps(out["session"]), flush=True)
     out["ok"] = all(out[k] for k in ("registration_digest_ok", "payload_ok", "draw_ok", "step_root_ok", "context_ok", "layout_ok")) \
-        and all(r["ok"] for r in rows)
+        and all(r["ok"] for r in rows) and (not a.key_record or out["session"]["ok"])
     print("VERDICT " + json.dumps({k: v for k, v in out.items() if k != "units"}), flush=True)
     if a.out:
         Path(a.out).write_text(json.dumps(out, indent=1) + "\n")
