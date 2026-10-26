@@ -77,6 +77,15 @@ theorem accRow_site_eq {st st' : Stage} {x : Msg} {ms ms' : List (Msg × Claims.
   cases ha'
   rw [hs, hs']
 
+/-- Two ports of one site open under one root: their leaf counts, domains, schemas and roots agree (RECVCALLS'
+`Registered.SameRoot`, which `bc_eq_of_setup` takes). -/
+theorem sameRoot_of_site {a b : Registered.Port}
+    (h : FlockVBridge.Family.site a = FlockVBridge.Family.site b) :
+    b.leaves = a.leaves ∧ b.domain = a.domain ∧ b.schema = a.schema ∧ b.root = a.root := by
+  simp only [FlockVBridge.Family.site, Prod.mk.injEq] at h
+  obtain ⟨-, hr, hl, -, -, hd, hs⟩ := h
+  exact ⟨hl.symm, hd.symm, hs.symm, hr.symm⟩
+
 /-- **A staged rec-open part's setup holds the verifier's reads file**: its unit is the verifier's `rec-open/l<L>-h<H>`
 (`checkPart`'s name, `RecOpen.check` in the parse), and `RecCoins.check` refuses such a unit without `--registered`. -/
 theorem registered_recOpen {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR}
