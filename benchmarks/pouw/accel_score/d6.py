@@ -375,10 +375,10 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
     honest period, and PB4's c_inc, the credited rounds' share of the period's makespan increment over its fixed load
     alone (pub's period over OPT*'s, no duals)."""
     c = vc.CARDS[card][0]
-    hist, st, qk, pvm, ix = nf.world_macs(model)
+    hist, _, qk, pvm, ix = nf.world_macs(model)
     jobs, rounds = {"dense": [], "hull": []}, {"dense": 0.0, "hull": 0.0}
-    items = [(K, N, K * N * reps * nf.WORLD_TOKENS * st / (model["static"] * nf.WORLD_TOKENS), static[card, K, N],
-              True) for K, N, reps in nf.SHAPES[model["name"]]]
+    items = [(K, N, K * N * reps * nf.WORLD_TOKENS * shape_scale(model), static[card, K, N], True)
+             for K, N, reps in nf.SHAPES[model["name"]]]
     bins = {}
     for n, cnt in hist.items():
         bins[nf.pv_bucket(n)] = bins.get(nf.pv_bucket(n), 0) + cnt * model["hq"] * model["dv"] * n
@@ -480,6 +480,12 @@ def model_of(name: str) -> dict:
     return next(m for m in nf.WORLD if m["name"] == name)
 
 
+def shape_scale(model: dict) -> float:
+    """The model's stated static MACs a token over its listed shapes' (1 for the Llamas; V4's 49e9 against 47.46e9):
+    the shapes stand for the stated count as its mix, as nofold's `static_pipes` takes them."""
+    return model["static"] / sum(K * N * reps for K, N, reps in nf.SHAPES[model["name"]])
+
+
 def eps_terms(card: str, model: dict, eta_: float, per: dict) -> dict:
     """ε in model units, a share of C at every dual (P20): ε_S = ln(1/δ)/(ηk) with P15's Poisson draw (expected draws
     k Σ_w q_w); P16 per replica group, the union bound over G groups (ε_S at k a group, and the k a group that holds
@@ -564,7 +570,7 @@ def streaming(card: str, model: dict, row: dict, pv: dict) -> dict:
     toks = nf.WORLD_TOKENS
     t_req = row["gamma"] * (st + qk + pvm + ix) / (nf.ETA * nf.V2_CARDS[card][0]) / CLOCK[card]
     shapes = nf.SHAPES[model["name"]]
-    static_b = toks * sum(K * reps for K, _, reps in shapes)
+    static_b = toks * shape_scale(model) * sum(K * reps for K, _, reps in shapes)
     credited_n = {n: c for n, c in hist.items() if pv.get((card, nf.pv_bucket(n), model["dv"])) is not None}
     p_seed = sum(c * model["hq"] * min(n, 512) for n, c in credited_n.items())
     p_b = sum(c * model["hq"] * n for n, c in credited_n.items())
@@ -584,7 +590,7 @@ def streaming(card: str, model: dict, row: dict, pv: dict) -> dict:
         "raw (v3: b and P's b)": (static_b + p_b, max(n_static, model["dv"])),
         "P's b seeded per (head, row)": (static_b + p_seed, max(n_static, n_max_seed_pv)),
         "every credited coin seeded, ≤ 512·N_max MACs a seed (RT-PROTO-2's; adopted 07:04Z)": (
-            toks * sum(seeded(K, N)[0] * reps for K, N, reps in shapes) + p_seed,
+            toks * shape_scale(model) * sum(seeded(K, N)[0] * reps for K, N, reps in shapes) + p_seed,
             max([seeded(K, N)[1] for K, N, _ in shapes] + [n_max_seed_pv])),
         "floor (credited MACs / N_max)": (cred / n_static, n_static),
     }
@@ -714,17 +720,22 @@ def report(D: dict) -> str:
             L.append(f"| {card}, {short[m]} | {pct(r['eps']['at']['served']['eps'][1e-6], 3)} | "
                      f"{r['world']['gamma']:.2f} / {p['world']['gamma']:.2f} | {pct(1 - r['world']['uncredited'], 1)} | "
                      f"{PPL[m][2]} | {pct(r['share']['share'], 1)} |")
-    g = max((r["world"]["gamma"], k) for k, r in rows.items() if k[2] == "measured")
-    g_head = max(r["world"]["gamma"] for k, r in rows.items() if k[0] == HEADLINE and k[2] == "measured")
-    L.append(f"\nThe largest world-mix γ at measured hashing is {g_head:.2f} at the headline and {g[0]:.2f} over every "
-             f"design ({g[1][0]}, {g[1][1]}, {short[g[1][3]]}), so P-HYB3 "
-             + ("is not needed (its condition is a world-mix γ above 10)." if g[0] <= 10 else
-                "is needed: a world-mix γ exceeds 10.") + "\n")
+    def g_max(designs):
+        return max((r["world"]["gamma"], k) for k, r in rows.items() if k[0] in designs and k[2] == "measured")
+
+    g, g_all = g_max((HEADLINE, "v3")), g_max(DESIGNS)
+    L.append(f"\nP-HYB3's condition is a world-mix γ above 10 in the adopted protocol (v3 and {HEADLINE}). The largest "
+             f"there, at measured hashing, is {g[0]:.2f} ({g[1][0]}, {g[1][1]}, {short[g[1][3]]}), so P-HYB3 "
+             + ("is not needed." if g[0] <= 10 else "is needed.")
+             + (f" Over every design it is {g_all[0]:.2f} ({g_all[1][0]}, {g_all[1][1]}, {short[g_all[1][3]]}), a "
+                "sensitivity that isn't adopted." if g_all[1][0] not in (HEADLINE, "v3") else "") + "\n")
     L.append(f"### The world (rule L2): pooled, every window, both δ, {HEADLINE}, V4 as the world's request (8B, 70B "
              "below)\n")
     L.append("Two tables in different units. C is the world's FP8 FLOP in the window (brief rule L2). What is scaled: "
              "the whole fleet is taken to be one card serving one model, so every figure is that card's share times "
-             "C, and P16's groups are C's GPUs at the card's FP8 rate over 8 (not a census). εC is ε times the claim "
+             "C, and P16's groups are C's GPUs at the card's FP8 rate over 8 (not a census). V4's static MACs are its "
+             "stated 49e9 a token with its listed shapes (47.46e9) as their mix, as nofold takes them, so 3.2% of them "
+             "have no shape of their own. εC is ε times the claim "
              "beside it: ε is a share of the claim at every dual (P20), at 8-GPU groups, with ε_net's MACs each at the "
              "dearest credited round's price at that table's μ over the period's mean. (D6 v0 and v0.1 printed εC "
              "as ε times C, too large by the credited share; corrected here.) Credit at a period's duals adds up only "
