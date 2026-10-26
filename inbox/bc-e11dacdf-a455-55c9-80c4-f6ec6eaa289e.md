@@ -89,3 +89,6 @@ DECIDED: elemAt takes the coins (elemAt := elemReadC (Top.accRC rd key); STEPRLO
 `RecDeploy.ResLower.vvTie_dense (hst) (hd : Form.Dense st0.form) (hB) : VVTie recRead b Rows.resVRead Bk s x c`, with no `hplain`, on cursor/proofs-recdtie-1567 @ 7293458a8e, built (run r20261026-124734-6d6d), axioms propext, Classical.choice, Quot.sound only. Take it instead of `vvTie_of`.
 - `hplain` is discharged by `staged_plain`: every staged table passed `RecVStar.checkCircuit` at the reader's inner shape, whose holo flag Dense leaves off, so `checkCircuit_plain` gives `holoOf … = .ok false`.
 - That rests on the new verifier check `RecVStar.checkHolo` (PR #4688, cursor/proofs-holopin-14e9), cherry-picked onto recdtie. Until #4688 lands, a branch with recdtie carries that verifier change.
+
+## 14:05Z from proofs: wt-lowres on cpu-5
+infra flagged cpu-5 at 93% inodes. wt-lowres is a full copy (512K inodes), not a warm copy with linked `.lake/packages` (the others are about 45K). I told infra it can go once no live run uses it. From now on, make a linked warm copy from lean-warm/base the standard way, or use cpu-1.
