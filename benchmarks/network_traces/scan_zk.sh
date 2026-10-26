@@ -10,8 +10,10 @@
 #      SC_CLASS=w63|test (`prove --class`: test is the certifier tests' class, a CPU window)  SC_GROUP=G (`prove
 #      --group G`: link-windows 0 … G − 1 in one registration)
 #      SC_WARDEN_RUN=DIR (a warden_serve run's directory, `prove --warden-run`)  SC_REHEARSE=1 (first a rehearsal,
-#      `warden_serve.py rehearse --fake --ids` at scan_zk's schedule, SC_REQUESTS requests at SC_RATE a second, and
-#      prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on the verifier's coins)
+#      `warden_serve.py rehearse --fake --ids` at the class's schedule, SC_REQUESTS requests at SC_RATE a second, the
+#      fake's id-form answer SC_FIRST_MS after each (past the warden's delay: a void run), SC_PROMPT_MAX and
+#      SC_MAX_TOKENS its traffic's sizes, and prove its run)  SC_DRAW=K (`prove --draw K`: Lean draw --stratified K on
+#      the verifier's coins)
 #      SC_CHALLENGER=local|gate:USER@HOST (with SC_DRAW: the honest round's K on the challenger's coins, `prove
 #      --challenger`, pinned on main's first-parent history fetched from the clone's origin; gate: also SC_PEER, this
 #      node as the gate's /etc/vy/peers names it, SC_CHALLENGER_KEY, the deployment's challenger-key/v1 record, and
@@ -39,7 +41,10 @@ if [ -n "${SC_REHEARSE:-}" ]; then
   # shellcheck disable=SC2046
   "$PY" benchmarks/network_traces/warden_serve.py rehearse --fake --ids --out "$W/warden" \
     --requests "${SC_REQUESTS:-12}" --rate "${SC_RATE:-2}" --tail "${SC_TAIL:-6}" --start-in 2 \
-    $("$PY" benchmarks/network_traces/scan_zk.py schedule) 2>&1 | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
+    ${SC_FIRST_MS:+--first-ms "$SC_FIRST_MS"} ${SC_PROMPT_MAX:+--prompt-max "$SC_PROMPT_MAX"} \
+    ${SC_MAX_TOKENS:+--max-tokens "$SC_MAX_TOKENS"} \
+    $("$PY" benchmarks/network_traces/scan_zk.py schedule ${SC_CLASS:+--class "$SC_CLASS"}) 2>&1 \
+    | tee -a "$OUT/warden-rehearse.log" | cut -c1-4000
   log "sczk: rehearsal rc ${PIPESTATUS[0]}"
   mkdir -p "$OUT/warden"
   for f in deployment.json cells.jsonl certified.jsonl check.json client.json warden.json serve.log traffic.json; do

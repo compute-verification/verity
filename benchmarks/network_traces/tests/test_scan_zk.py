@@ -234,6 +234,58 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert sz.wired(h.rounds["honest"]) == []
 
 
+def test_the_rows_forms_case_is_each_link_windows_rows_certificates_and_the_scans_answer(tmp_path):
+    """`scan_period.rows_case` of a G = 2 group in the rows form's formats (`NetworkCheck.Period`, whose mirror and
+    Lean, on the rows form's branch, check it on a node: scan_period.sh): the deployment's key, session and schedule,
+    the scan's Program and layout terms, the group's registration for each link-window, and each one's answer, its
+    three records' certificates (requests, responses, fails: its own) and its two row registrations, each named by the
+    registration's roots; the tampered case the tampered round's registration with its refusal as each answer."""
+    import scan_period as SP
+
+    G = 2
+    run = published(tmp_path / "run", sz.TEST, windows=G)
+    h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
+    T, scan = h.at.T, tmp_path / "scan"
+    (scan / "tampered").mkdir(parents=True)
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
+    defs = {"first": FIRST, "ingress": ING, "egress": EG}
+    program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES])
+    query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
+    roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]])
+    reg = R.record(program, query, sz.DR.parse_law(f"stratified:{2 * G * T}"), sz.S.SCHEME, roots,
+                   {"kind": "stand-in"}, leaf_layer="ee" * 64)
+    other = {**reg, "program": "ab" * 64}
+    (scan / "tampered" / "registration.json").write_text(json.dumps(other))
+    answer = sz.window_answer(reg, None, None, "the scan refused")
+    (scan / "answers.json").write_text(json.dumps({"registration": reg, "windows": [
+        {"window": w, "answer": answer, "registrations": [h.at.sides[s][w].registration for s in ("ingress", "egress")]}
+        for w in range(G)]}))
+    bits = {f"{tp}/{r}": b for tp, (ins, outs) in sz.ports_of(sz.TEST.cls).items() for r, b in ins + outs}
+    (scan / "summary.json").write_text(json.dumps({"T": T, "bits": bits,
+                                                   "rounds": {"tampered": {"audit": {"why": {"x": "y"}}}}}))
+    dep, regs = json.loads((run / "deployment.json").read_text()), _cells(run)
+    case = SP.rows_case(run, scan)
+    p = case["params"]
+    assert sorted(p) == ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule",
+                         "session", "windows"]
+    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], dep["params"],
+                                                                  WS.LINK)
+    assert (p["program"], p["windows"], p["first"], p["audits"]) == (reg["program"], G, 0, [])
+    assert p["scan"] == {"free": T * sum(b for k, b in bits.items() if not k.endswith("/row")), "steps": T}
+    assert json.loads(bytes.fromhex(case["commitment"])) == {"audits": [], "windows": [reg] * G}
+    ev = json.loads(bytes.fromhex(case["evidence"]))
+    for w, x in enumerate(ev["windows"]):
+        assert x["answer"] == answer and x["registrations"] == [regs["ingress", w], regs["egress", w]]
+        assert [(c["link"], c["direction"], c["window"]) for c in x["certificates"]] == [
+            ("warden", "ingress", w), ("warden", "egress", w), ("warden-fails", "egress", w)]
+        assert all({"root": d["root"], "domain": d["domain"]} in [{"root": r["root"], "domain": r["domain"]}
+                                                                   for r in reg["roots"]] for d in x["registrations"])
+    t = SP.rows_case(run, scan, "tampered")
+    assert json.loads(bytes.fromhex(t["commitment"]))["windows"] == [other] * G and t["params"] == p
+    assert {(x["answer"]["verdict"], x["answer"]["commitment"]) for x in json.loads(bytes.fromhex(t["evidence"]))[
+        "windows"]} == {("reject", R.digest(other))}
+
+
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys):
     assert sz.main(["schedule", "--class", "test"]) == 0
     flags = capsys.readouterr().out.split()
