@@ -8,5 +8,6 @@ marked_after = "2026-10-12T06:00:00Z"
 # A move window's commits: commits of a layout move that never land as themselves, only inside the head of the open PR that lands
 # the move. `research queue ready` refuses a head that contains one of them, unless that head also contains PR `pr`'s current head
 # or the commit is already on `main` (`MoveWindow`), so no branch built on a window lands half a move. One entry a commit, the
-# full SHA: window_commits = [{commit = "<40 hex>", pr = N}]. Drop an entry once its PR lands.
-window_commits = []
+# full SHA: window_commits = [{commit = "<40 hex>", pr = N}]. Drop an entry once its PR lands. Unset means none; leave it unset
+# until every `research` that reads this file knows the key (an older one refuses unknown keys, and drive would stop).
+# window_commits = []
