@@ -6,6 +6,7 @@ import Definitions.NetworkCertifier.Guarantees.Warden
 import Definitions.NetworkCertifier.Guarantees.Horizon
 import Definitions.NetworkCertifier.Guarantees.Period
 import Definitions.NetworkCertifier.Guarantees.HorizonLeak
+import Definitions.NetworkCertifier.Guarantees.PeriodClaim
 import Proofs.NetworkCertifier.Lemmas
 import Proofs.NetworkCertifier.Occupancy
 import Proofs.NetworkCertifier.Counting
@@ -169,5 +170,6 @@ theorem EncardWardenDecodableLe : NetTiming.Guarantees.EncardWardenDecodableLe :
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe := NetTiming.horizonWrongUnits
 theorem HorizonLeakAccepted : NetTiming.Guarantees.HorizonLeakAccepted := NetTiming.horizonLeak
+theorem PeriodClaimSound : NetTiming.Guarantees.PeriodClaimSound := @NetTiming.SecurityProofs.PeriodClaim.sound
 
 end NetTiming.SecurityProofs
