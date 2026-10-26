@@ -397,7 +397,11 @@ def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_t
            "z.lean": "z\n"}
     world.gh.put(2, _pinned(world, two, ["lean-toolchain", "lakefile.toml", UP, "New2.lean"],
                             ["Security/Proofs/lakefile.toml", "x.lean", "z.lean"]))
-    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == sorted([TRUSTED, EXFIL])
+    raw = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", world.gh.prs[1].head,
+                          world.gh.prs[2].head], cwd=world.dev, capture_output=True, text=True)
+    assert sorted(raw.stdout.splitlines()[1:]) == sorted([TRUSTED, EXFIL])
+    # the preflight and `status` judge it as the sync merges it: no conflict (26 Oct: #4491 marked --no-preflight over it)
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == []
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1, 2], entries[2].why
@@ -419,6 +423,7 @@ def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
     paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
     for n, f in ((1, "lakefile.toml"), (2, "lean-toolchain")):
         world.gh.put(n, _pinned(world, {**tree, "a.txt": f"{n}\n", f"{POUS}/{f}": f"{n}\n"}, paths, ["x.lean"]))
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == sorted(["a.txt", TRUSTED])
     q = world.queue()
     members, entries = q.sync()
     assert [m.pr for m in members] == [1]

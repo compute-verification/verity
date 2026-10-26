@@ -1,4 +1,4 @@
-"""`verity_vllm.program.replay.substitute`: the O(1) path for scattered `Strided` arguments.
+"""`verity.ml.definitions.replay.substitute`: the O(1) path for scattered `Strided` arguments.
 
 A `Strided` whose runs are O(count) leaves (a transposed weight read, a column gather) used to be substituted run by
 run: the GLM-5.3 full-depth derive carries ~2e6-leaf transposed-weight arguments on every MLA-absorb BatchedGemm, so
@@ -14,7 +14,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided, concat, runs, strided_view
 from verity.ml.circuits.types import Array, Value
-from verity_vllm.program.replay import _substitute_scattered, replayer, substitute
+from verity.ml.definitions.replay import _substitute_scattered, replayer, substitute
 
 V32 = Value(32)
 Add32 = PrimitiveDefinition("TAdd32", 1, (("a", V32), ("b", V32)), V32, lambda a, b: (a + b) & 0xFFFFFFFF, register=False)
