@@ -29,7 +29,9 @@ Its instances, each a choice of counted operations, the values priced and the pr
   `b = p`, `Λ = 0`, with `in(S)` counted as the cover theorem counts it);
 * **fan-out**: products, pricing each activation occurrence at `β` (`Operations.ofActs`;
   `Guarantees.FanOutBoundPriced`);
-* **partial sums**: accumulation steps, pricing each partial sum that enters `S`, an operand computed outside it;
+* **partial sums**: accumulation steps, pricing their partial-sum operands. `Ops(S)` holds the partial sums `S`
+  computes as well as those entering it, so a price on every partial sum is stronger than the draft's, which prices
+  only the entering ones;
 * **recovery** (§5.3): output occurrences, pricing the coordinates of the update that their outputs determine, with
   `A S` the other inputs of `S` (the activations they multiply), which are free.
 
