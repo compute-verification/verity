@@ -464,9 +464,10 @@ SHA_MEASURED = {"H200": (4.79e9, 1980, "r20261018-062010-1c6b"), "RTX PRO 6000":
 # off exactly), and PV with the fresh bit on P in one block (COVER-ATTN's credited PV).
 PPL = {
     "Llama-3.1-8B": ("+1.38% (WT-2 2K, 3 seeds, r20261017-065449-b05b); +3.39% at 8K (seed 0, r20261017-070733-6851)",
-                     "+0.83% (r20261017-065449-b05b's adopted A)"),
-    "Llama-3.1-70B": ("+3.01% (C4 2K, seed 0, r20261017-063215-c9b2); 8K not run", "+1.68% (adopted A)"),
-    "DeepSeek-V4-Pro": ("not run", "not run"),
+                     "+0.83% (r20261017-065449-b05b's adopted A)", "+1.38% at 2K, +3.39% at 8K"),
+    "Llama-3.1-70B": ("+3.01% (C4 2K, seed 0, r20261017-063215-c9b2); 8K not run", "+1.68% (adopted A)",
+                      "+3.01% at 2K (8K not run)"),
+    "DeepSeek-V4-Pro": ("not run", "not run", "not run"),
 }
 PPL_ART = "art:02211b98fe2c3320134413f91f7e5a68b5d2fdbefc69675b354728f3648add35"
 
@@ -698,11 +699,27 @@ def report(D: dict) -> str:
 
     L.append("## D6: protocol v3 (D1) and v3.1 (v3's L′ by the 07:04Z rule), printed by "
              "`benchmarks/pouw/accel_score/d6.py`\n")
-    L.append(f"The headline is {HEADLINE}. Columns are 8B / 70B / V4 unless stated. ε is in model units, a share of C "
-             "at every dual price (P20). "
+    L.append(f"The headline is {HEADLINE}. Columns are 8B / 70B / V4 unless stated. ε is in model units, a share of "
+             "the credited claim at every dual price (P20). "
              "Credit is pub at the period's dual prices: one LP over the period's credited rounds with every public "
              "method and route of D5 v2's hull (its fast schemes and lookups, and the peels on DP4A beside the MMA; "
              "`d5_routes.period`). A route that wins there leaves honest time uncredited and never adds to ε.\n")
+    L.append(f"### The goals at the headline ({HEADLINE}, measured hashing, 8-GPU groups)\n")
+    L.append("| card, model | ε at δ 1e-6 (goal ≤ 1%) | γ overlapped, measured / paper (goal ≤ 10) | coverage (goal ≥ 95%) "
+             "| perplexity (goal < 5%) | credited share at μ° |")
+    L.append("|---|---|---|---|---|---|")
+    for card in vc.CARDS:
+        for m in models:
+            r, p = rows[HEADLINE, card, "measured", m], rows[HEADLINE, card, "paper", m]
+            L.append(f"| {card}, {short[m]} | {pct(r['eps']['at']['served']['eps'][1e-6], 3)} | "
+                     f"{r['world']['gamma']:.2f} / {p['world']['gamma']:.2f} | {pct(1 - r['world']['uncredited'], 1)} | "
+                     f"{PPL[m][2]} | {pct(r['share']['share'], 1)} |")
+    g = max((r["world"]["gamma"], k) for k, r in rows.items() if k[2] == "measured")
+    g_head = max(r["world"]["gamma"] for k, r in rows.items() if k[0] == HEADLINE and k[2] == "measured")
+    L.append(f"\nThe largest world-mix γ at measured hashing is {g_head:.2f} at the headline and {g[0]:.2f} over every "
+             f"design ({g[1][0]}, {g[1][1]}, {short[g[1][3]]}), so P-HYB3 "
+             + ("is not needed (its condition is a world-mix γ above 10)." if g[0] <= 10 else
+                "is needed: a world-mix γ exceeds 10.") + "\n")
     L.append(f"### The world (rule L2): pooled, every window, both δ, {HEADLINE}, V4 as the world's request (8B, 70B "
              "below)\n")
     L.append("Two tables in different units. C is the world's FP8 FLOP in the window (brief rule L2). What is scaled: "
@@ -814,6 +831,12 @@ def report(D: dict) -> str:
                          + " / ".join(pct(r["period"]["leak_job"]) for r in rr) + " | "
                          + " / ".join(pct(1 - r["world"]["uncredited"], 1) for r in rr) + " |")
     L.append("")
+    L.append("The paper-rate rows are the same period LP as the measured rows: the LP hashes at every schedule θ admits "
+             "(A27b), so one LP serves both rates and the routes column is that LP's. This is how D6 prices the RTX PRO "
+             "6000's paper-rate 70B row as one period LP (PROTO-DESIGN-3's open item). nofold's world-level 1.13% there "
+             "was a per-round ε_alg; under credit at pub a route's saving is uncredited honest time, never ε. The "
+             "paper-rate share is not printed, because credit is per second of the measured honest kernel and the "
+             "paper schedules are unbuilt.\n")
     L.append("### The credited share, decomposed (measured hashing; factors multiply to the share)\n")
     fac = list(next(iter(rows.values()))["share"]["factors"])
     L.append("| card, model | " + " | ".join(fac) + " | share | with hosts in C (U9) | PD3's r-reading of θ's hashing |")
