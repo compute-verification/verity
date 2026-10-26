@@ -54,7 +54,8 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 
 **Trees.**
 - Every gate run is pinned to `main` aec7f4ef.
-- Both endpoints run vllm's tree 1eb3995c56.
+- The endpoints 6541 and 9995 run vllm's tree 1eb3995c56. r20261026-000932-b50b runs 9995's settings and stamps
+  each request's arrival, submission, admission and first token in its `requests.jsonl`.
 - The record's jobs run `cursor/chain-record-tree-061a`:
   - for N2, 9c6d972cf7: aec7f4ef with #4384 at 6edd24102a, #4407 at 1868e6ff6c (with #4342 at f83d75a1ff) and #4387 at
     35bb96cd76;
@@ -68,8 +69,9 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
 | the network certifier functioning as an active warden | c20261025T230848Z-30ab | 6541 | void: lateness |
 | the same | c20261025T234322Z-0420 | r20261025-233025-9995 (:18098, `--window-requests 8`) | void: lateness |
 | the same, `--tokens 16` | c20261026T000242Z-89bf | 9995 | void: lateness |
+| the same, light traffic (`--requests 40 --tokens 16`) | c20261026T010321Z-d951 | r20261026-000932-b50b (:18099) | accepted |
 | N2 on 2982 | r20261025-231253-ebf6, r20261025-231301-6b61, r20261025-231310-20da | | accepted |
-| the scan | not run: every active-warden leg is void | | |
+| the scan on d951 | r20261026-011909-f489 | | accepted: honest 64 of 64, forged refused |
 
 - The network certifier leg ran `certifier-rehearse`: 100 varied requests of up to 64 tokens, 49 windows, the advice
   profile and an LMS key of H = 20. It is stored as art:fc8d4f61ebb0a45ecd47456d818bebcfeb0723ab1a8f00dd98f7983064eed76b.
@@ -77,6 +79,9 @@ that link's size class, T = 60 and R_in = 2, whose advised counts circuit-check 
   art:1aa7089c7e11b282335c44f79d07ee6a9278cc49141539d8d559d3af3d074e84 (30ab),
   art:8da6ee13709bab38668a08750095b24f3aa3229584335ff8995921f14ba2da85 (0420) and
   art:af3344f7e9466408d8eb598e1db69625c6d27fbd93c01444929166abc885ac95 (89bf), each labelled `void lateness`.
+- The network certifier's light-traffic active-warden run d951 ran `warden-rehearse --scan --minutes 20 --requests 40
+  --tokens 16`: 40 of 40 requests ended, 129 of 129 link-window certificates, a peak tick lateness of 2.19 ms. Its
+  public files are stored as art:763f549840c9882cfa3cadceb80187d974babefcd5570a4909e81d6aa0d269ab.
 
 **The steps on 2982.**
 
@@ -111,6 +116,24 @@ probability 37/49 ≈ 0.76.
 - No witness piece leaked to the verifier. The finds the scan lists are structured: each straddles the proof format's
   fields.
 
+**The scan on d951** (r20261026-011909-f489, one 8-core n1 slot, the gate's coins in challenger session
+s20261026T012652Z-6165).
+- Its sampling block is link-window 0 (T = 32 buckets), 64 units of two subcircuits:
+  - 32 of `IngressScanBucket_v1{B=512,r=4,lanes=4,C=47,IDB=17,EVERY=10,WITHIN=12,D=21,KO=64}`: 1,395,428 ANDs, k_log
+    26;
+  - 32 of `EgressBucket_v1{B=512,R=16,r=4,NR=4,K=64,IB=17,D=21}`: 77,099 ANDs, k_log 23.
+- Honest: 64 of 64 units drawn on the gate's coins, every proof held by Lean, accepted, and the gate's outcome
+  accepted. An accepting draw of all 64 hides no wrong unit except with probability 2⁻²⁰.
+- Forged (the 32 egress units, one of them forged): refused by Lean at the registration ("table row 22 does not open
+  warden/egress/0's registered root at position 22").
+- The cost a unit:
+  - ingress: 10.6 s of proving (a 12.1 s share of the session), 2,036,356 proof bytes, a Lean verify of 1.20 s;
+  - egress: 2.07 s of proving (2.56 s), 1,556,020 proof bytes, a Lean verify of 0.70 s.
+- `chain_record.py report` over the certificates, the endpoint, N2 on 2982 and this scan: accepted. Every negative is
+  refused, or escaped N2's draw within its bound.
+- d951 is light traffic: 40 requests of at most 16 tokens over 43 link-windows. Full traffic waits on vllm's endpoint
+  with `finalize` off the engine loop, r20261026-021253-83ee (:18100).
+
 **Why the active-warden legs are void.** The gate's traffic is seeded, so all three legs sent the same schedule. On
 every leg the network certifier itself kept time, and the endpoint served every request, to its end or to the client's
 abort after the network certifier had failed it. The lateness is between the endpoint's output and the egress
@@ -141,16 +164,18 @@ The third leg, 89bf, capped every output at 16 tokens (`--tokens 16`, the least 
   5.6–10.8 GB, against about 0.3 GB for a window of one request, and their seals were queued 47–72 s behind.
 - On 0420 the same bursts' windows sealed 7–29 s behind, and only the window carried across a close failed. Over 89bf
   the endpoint's seal queue grew from 0 to 97 s (114.6 GB sealed for 100 requests); over 0420 it reached 53 s.
-- So shorter outputs didn't help. The failures coincide with the endpoint's sealing load (large burst windows sealed
-  behind a backlog), not with output length. Which part of the endpoint's sealing delays its streaming isn't
-  established.
+- So shorter outputs didn't help.
 
-**K per monitoring period** (`chain_record.py leak`). These are 0420's files. 89bf's parameters and traffic are the
-same (100 requests over 75 link-windows), so the tables hold for it too. No scan ran, since every active-warden leg is
-void: K is the scan's terms on these legs' parameters with every unit drawn. K uses:
-- the leg's parameters (`deployment.json`): B = 512, lanes = 4, r = 4, D = 21, T = 32 buckets of 100 ms, and
-  egress_cells = 65;
-- its traffic: 100 requests over 75 link-windows, 1.33 a link-window;
+vllm traced the lateness to the endpoint's window close. While a window closes, its `finalize` (the committer
+draining) runs on the engine loop, so no step runs, nothing new is submitted and in-flight streams pause. Around the
+burst windows a close took 0.4–1.9 s, longer under seal load; the seal queue's depth alone doesn't predict lateness.
+r20261026-021253-83ee runs `finalize` off the loop: a close of 0.012 s at p90.
+
+**K per monitoring period** (`chain_record.py leak`). These are d951's files with its scan, every unit drawn and
+accepted. K uses:
+- the run's parameters (`deployment.json`), the same on every active-warden run: B = 512, lanes = 4, r = 4, D = 21,
+  T = 32 buckets of 100 ms, and egress_cells = 65;
+- its traffic: 40 requests over 43 link-windows, 0.93 a link-window;
 - the scan's class: B = 512, r = 4, lanes = 4, C = 47, IDB = 17 and KO = 64;
 - every unit drawn.
 
@@ -173,19 +198,19 @@ The two forms:
 The scale:
 - A week, a month and a year of one machine and of 1,000 machines: memory-accounting's census convention, on the
   census's `rtx-pro-6000-server`.
-- Each machine has one network certifier in front of all its compute, serving at the leg's rate.
+- Each machine has one network certifier in front of all its compute, serving at the run's rate.
 - The weights are Llama-3.2-1B's 1,235,814,400 BF16 parameters: 1.98·10^10 bits, 2.47 GB.
 
 **`prog` as registered today (the record's K)**, bits, and the share of the weights:
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,368 |
-| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,368 |
-| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,368 |
-| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,368 |
-| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,368 |
-| year | 1,000 | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 1.41·10^15 (71,456×) | 143,368 |
+| week | 1 | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 2.71·10^10 (1.37×) | 143,366 |
+| week | 1,000 | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 2.71·10^13 (1,370×) | 143,366 |
+| month | 1 | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 1.16·10^11 (5.87×) | 143,366 |
+| month | 1,000 | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 1.16·10^14 (5,873×) | 143,366 |
+| year | 1 | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 1.41·10^12 (71.5×) | 143,366 |
+| year | 1,000 | 1.41·10^15 (71,454×) | 1.41·10^15 (71,454×) | 1.41·10^15 (71,454×) | 143,366 |
 
 As registered today, K passes the size of the weights within one machine-week, so the record's K is vacuous for every
 monitoring period.
@@ -195,12 +220,12 @@ the weights:
 
 | period | machines | K pooled, δ = 1% | K pooled, δ = 1e-6 | K per period | a link-window |
 |---|---|---|---|---|---|
-| week | 1 | 2.85·10^8 (1.44%) | 2.86·10^8 (1.45%) | 2.84·10^8 (1.44%) | 1,501 |
-| week | 1,000 | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 2.84·10^11 (14.4×) | 1,501 |
-| month | 1 | 1.22·10^9 (6.15%) | 1.22·10^9 (6.16%) | 1.22·10^9 (6.15%) | 1,501 |
-| month | 1,000 | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1.22·10^12 (61.5×) | 1,501 |
-| year | 1 | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1.48·10^10 (74.8%) | 1,501 |
-| year | 1,000 | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1.48·10^13 (748×) | 1,501 |
+| week | 1 | 1.99·10^8 (1.01%) | 2·10^8 (1.01%) | 1.98·10^8 (1%) | 1,047 |
+| week | 1,000 | 1.98·10^11 (10×) | 1.98·10^11 (10×) | 1.98·10^11 (10×) | 1,047 |
+| month | 1 | 8.49·10^8 (4.29%) | 8.51·10^8 (4.3%) | 8.48·10^8 (4.29%) | 1,047 |
+| month | 1,000 | 8.48·10^11 (42.9×) | 8.48·10^11 (42.9×) | 8.48·10^11 (42.9×) | 1,047 |
+| year | 1 | 1.03·10^10 (52.2%) | 1.03·10^10 (52.2%) | 1.03·10^10 (52.2%) | 1,047 |
+| year | 1,000 | 1.03·10^13 (522×) | 1.03·10^13 (522×) | 1.03·10^13 (522×) | 1,047 |
 
 This second table is what the generator-form lowering would give if it registers `prog` everywhere but its anchors
 (ONE-TAP is on it). It is not the record's number.
@@ -210,12 +235,14 @@ K also rests on these conditions:
   reading is a claim, with lean and Daniel.
 - log2 #S_s = 0 only once the schedule's digest binds each connection's admission bucket and lane, and the server
   can't move an admission. Neither holds today.
-- The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the leg's rate.
+- The scan proves link-window 0. A period's figures scale its per-link-window and per-request terms at the run's rate.
+- At full traffic (0420's 1.33 requests a link-window, a void run) the anchored table's machine-week is 1.44% of the
+  weights and its machine-year 74.8%; as registered today it is 1.37× a machine-week either way.
 - The compute audit's free inputs don't enter K: its δ goes into JointPeriod's sum.
 
 **`stubbed`.**
 - NET-71: the units read the records through a stand-in until the rows form (#4452) and the generator-form lowering
-  land. N2 and the I/O tie are proved on 2982's records, not on an active-warden leg's.
+  land. N2 and the I/O tie are proved on 2982's records, not on an active-warden run's.
 - StandInTie: `IoTieRequest` doesn't read 2982's link format, so the endpoint step's tie runs in the clear on
   network-e2e's stand-ins.
   - r20261025-233707-ed7a (#4458) proved the tie at the served class on the active-warden link format: honest tied,
