@@ -80,7 +80,7 @@ theorem readsAt (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × 
     simp only [List.map_cons, List.map_nil, Nat.zero_div, show (1 : ℕ) / 2 = 0 from rfl, e0, hsc,
       Array.length_toList]
   refine readOkR_of (a := last) (fl := ⟨xIOf x, Json.null, ps⟩) (c₁ := c 0) (r₀ := rowsR o₀)
-    (rss := ot.map rowsR) hv (by simp) ?_ hrd ?_ ?_ ?_ ?_ (hps _ hv) ?_ ?_ ?_ hck (decLive rdR)
+    (rss := ot.map rowsR) hv (by exact List.getLast?_concat) ?_ hrd ?_ ?_ ?_ ?_ (hps _ hv) ?_ ?_ ?_ hck (decLive rdR)
   · intro t ht
     rw [ht] at hrd
     simp [rdR] at hrd
