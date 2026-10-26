@@ -2,7 +2,7 @@
 Program a request, every input row wired from its writer's row, a registered read of the weights or the slot's ingress, and
 nothing free. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small enough
 to slice TINY's GEMMs and cut its ports; the class's circuit is the same for two windows that differ in everything but their
-request count.
+request count, its bf16 linears and its exact-int8 ones alike.
 """
 from __future__ import annotations
 
@@ -11,8 +11,10 @@ from collections import Counter
 
 import pytest
 from tests.program.predict import test_steps as S
+from verity_vllm.program.model import INT8_EXACT_QUANT
 from verity_vllm.program.predict import window_circuit as WC
 from verity_vllm.program.predict.build import Unexpressible
+from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class_circuit, window_circuit
 
 from verity.ml.windows import interface as IF
@@ -230,3 +232,48 @@ def test_a_token_select_is_its_function_at_the_grains_chunk():
     assert not [t for t in n if t.startswith(("TokenSelectChunk_v2{C=64}", "TokenSelectCombine_v2{V=256,C=64}"))]
     assert {_source(circuit, ids["TokenSelectChunk_v2{C=128}"], "x", u)[0] for u in range(20)} == {ids["AllGather_v1{WORLD=16,N=8}"]}
     assert IF.input_count(circuit.description(), pins={WC.WEIGHTS})["free"] == 0
+
+
+def _int8_registered():
+    """TINY's exact-int8 checkpoint on a target serving its linears int8 (serve-openai's verity_int8)."""
+    phi = S.Phi(model={"repo": "org/m", "revision": "r", "hf_config": {**S.TINY, "quantization_config": dict(INT8_EXACT_QUANT)}},
+                target={**S.RTXPRO6000, "int8_exact": "linears"})
+    return S.Registered.of(phi, default_seed=7)
+
+
+def test_an_int8_linear_is_its_quantizer_and_s8_slices_at_the_gemms_weight_words():
+    """Each int8 linear is one `Int8RowQuant_v1{K}` unit and its `ScaledMmS8_v1{K, N}` in slices of 512 // (K / 2) columns (an
+    s8 weight row is K / 2 words: 16 columns at K = 64, 8 at K = 128), each slice's ``x`` and ``sx`` the quantizer's codes and
+    scale and its ``w`` and ``sw`` registered reads of the linear's s8 rows and f32 row scales (layer 0's q/k/v at words 16,384
+    and 20,480, a slice 16 rows on); the LM head stays bf16 `Gemm_v2`. Two windows of the class are still one circuit, and with
+    the weights pinned no input row is free."""
+    reg = _int8_registered()
+    circuit = window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN)
+    other = window_circuit(reg, S.compile_steps(reg, *S._session(*OTHER)), CLASS, GRAIN)
+    assert IF.circuit_bytes(circuit.description()) == IF.circuit_bytes(other.description())
+    n = {_label(fn): k for fn, k in circuit.templates}
+    ids = {_label(fn): IF.descriptor_id(fn) for fn, _ in circuit.templates}
+    assert {t: k for t, k in n.items() if t.startswith(("Int8RowQuant", "ScaledMmS8", "Gemm"))} == {
+        "Int8RowQuant_v1{K=64}": 60, "Int8RowQuant_v1{K=128}": 20, "ScaledMmS8_v1{K=64,N=16}": 560,
+        "ScaledMmS8_v1{K=128,N=8}": 160, "Gemm_v2{K=64,N=8}": 320, "Gemm_v2{K=64,N=1}": 10}
+    mm, q = ids["ScaledMmS8_v1{K=64,N=16}"], ids["Int8RowQuant_v1{K=64}"]
+    assert [(_source(circuit, mm, "x", u), _source(circuit, mm, "sx", u)) for u in (0, 7, 8, 12, 28, 56)] == [
+        ((q, k, "o0"), (q, k, "o1")) for k in (0, 0, 1, 2, 3, 6)]
+    assert _source(circuit, ids["ScaledMmS8_v1{K=128,N=8}"], "x", 0) == (ids["Int8RowQuant_v1{K=128}"], 0, "o0")
+    reads = sorted((r.port, r.at, r.radix, r.base, r.step) for r in circuit.registered.reads if r.reader == mm and r.at < 28)
+    assert reads == [("sw", 0, (8,), 20480, (32,)), ("sw", 8, (4,), 22784, (32,)), ("sw", 12, (16,), 31104, (32,)),
+                     ("w", 0, (8,), 16384, (512,)), ("w", 8, (4,), 20736, (512,)), ("w", 12, (16,), 22912, (512,))]
+    assert circuit.registered.params == {"weights": 56656}
+    assert IF.input_count(json.loads(json.dumps(circuit.description())), pins={WC.WEIGHTS})["free"] == 0
+
+
+def test_a_word_is_whole_leaves_of_one_byte_width():
+    """Weight and node-output reads are u16 words: s8 leaves two a word, f32 two words a leaf; a read starting inside a word,
+    and a field whose leaves don't fill whole words, are refused."""
+    spans = WC._spans("w", [("a", _arr((4,), 8)), ("b", _arr((2,), 32))])
+    assert spans == [(0, 0, 8), (4, 2, 32), (6, 6, 0)]
+    assert [WC._word(spans, leaf, "r") for leaf in (0, 2, 4, 5, 6)] == [0, 1, 2, 4, 6]
+    with pytest.raises(Unexpressible, match="r: leaf 1 starts inside a u16 word of 8-bit leaves"):
+        WC._word(spans, 1, "r")
+    with pytest.raises(Unexpressible, match=r"w a's 3 leaves are \[8\] bits, not one byte width filling whole u16 words"):
+        WC._spans("w", [("a", _arr((3,), 8))])

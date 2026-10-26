@@ -21,6 +21,7 @@ import pytest
 
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, UsageError
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
+from verity_vllm.program.model import INT8_EXACT_LMHEAD_QUANT, INT8_EXACT_QUANT
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, build_program, weight_leaves, model_shape
 from verity_vllm.program.predict.phi import Phi
@@ -36,6 +37,9 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
 STOCH = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": "derived"}
+#: TINY's exact-int8 checkpoint (`engine.int8_checkpoint`'s v1) on a target serving its linears int8 (serve-openai's verity_int8)
+INT8 = {**TINY, "quantization_config": dict(INT8_EXACT_QUANT)}
+INT8_LINEARS = {**RTXPRO6000, "int8_exact": "linears"}
 
 
 def _phi(cfg: dict, requests: list[dict] | None = None, **kw) -> Phi:
@@ -269,6 +273,24 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     assert names & {"GemmBias_v1", "GemmBias_v2", "BiasAdd_v1"} == {kind}
 
 
+def test_the_int8_linears_follow_the_build_of_records_rule():
+    """An exact-int8 checkpoint on a target serving its linears int8: each decoder linear is its quantizer `Int8RowQuant_v1{K}`
+    then its product `ScaledMmS8_v1{K,N,DOT}` (`rules.vllm_bindings.int8`), reading the linear's s8 weight [N, K] and its f32
+    row scales [N, 1], which the weights record carries in that order; the LM head (recipe v1's ``lm_head``, not converted)
+    stays the bf16 GEMM."""
+    r = build_program(_phi(INT8, target=INT8_LINEARS), "step")
+    layer = ["Int8RowQuant", "ScaledMmS8", "RoPE", "RoPE", "Attention", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda",
+             "Int8RowQuant", "ScaledMmS8", "SiluMul", "Int8RowQuant", "ScaledMmS8", "RMSNormFusedCuda"]
+    nodes = r.program.fn.body.nodes
+    assert [n.fn.name for n in nodes] == ["Embedding", "RMSNormTriton", *layer, *layer, "Gemm", "TokenSelect"]
+    assert [n.fn.id for n in nodes[2:4]] == ["Int8RowQuant_v1{K=64}", "ScaledMmS8_v1{K=64,N=128,DOT=BlackwellS8ImmaDot32_v1}"]
+    leaves = weight_leaves(model_shape(INT8))
+    assert [(n.split("layers.0.")[-1], t.leaves, sorted(t.width_set())) for n, t in leaves[1:5]] == [
+        ("self_attn.qkv_proj.weight", 128 * 64, [8]), ("self_attn.qkv_proj.weight_scale", 128, [32]),
+        ("self_attn.o_proj.weight", 64 * 64, [8]), ("self_attn.o_proj.weight_scale", 64, [32])]
+    assert len(leaves) == len(weight_leaves(model_shape(TINY))) + 4 * 2
+
+
 @pytest.mark.parametrize("cfg,phi_kw,fact", [
     ({**TINY, "model_type": "gpt2"}, {}, "model_type 'gpt2': not in the family facts table"),
     ({**TINY, "attention_bias": True}, {}, "attention_bias"),
@@ -292,6 +314,14 @@ def test_the_biased_linear_follows_the_targets_rule(target, kind):
     (TINY, {"engine": {"env": {"VLLM_USE_DEEP_GEMM": "0"}}}, "env VLLM_USE_DEEP_GEMM=0 (the switches modelled"),
     (TINY, {"engine": {"enforce_eager": False}}, "engine arg enforce_eager=False where the 'bi-eager' target applies True"),
     (TINY, {"engine": {"kv_cache_dtype": "fp8"}}, "engine arg kv_cache_dtype='fp8' (not modelled)"),
+    (INT8, {}, "an exact-int8 checkpoint on a target whose int8_exact is None"),
+    (TINY, {"target": INT8_LINEARS}, "a bf16 checkpoint on a target whose int8_exact is 'linears'"),
+    (INT8, {"target": {**RTXPRO6000, "int8_exact": "all"}}, "the exact-int8 attention (int8_exact 'all'"),
+    ({**TINY, "tie_word_embeddings": False, "quantization_config": dict(INT8_EXACT_LMHEAD_QUANT)}, {"target": INT8_LINEARS},
+     "an int8 LM head (verity-int8-channel127/v2"),
+    (INT8, {"target": INT8_LINEARS, "tp": {"world": 2, "rank": 0}}, "the int8 linears at TP2"),
+    ({**INT8, "model_type": "qwen2", "architectures": ["Qwen2ForCausalLM"], "use_sliding_window": False, "sliding_window": 32},
+     {"target": INT8_LINEARS}, "an int8 linear with a bias"),
 ])
 def test_unexpressible_names_the_fact(cfg, phi_kw, fact):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
