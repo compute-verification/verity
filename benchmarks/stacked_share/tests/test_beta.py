@@ -373,15 +373,19 @@ def spec(name: str) -> dict:
 
 def test_the_8b_decoder_adds_up_to_the_census_request():
     """The 8B spec's blocks are the census's request Program's budgeted units, 9,404,379,802 (its ``check``), and its data
-    products are 32 heads · 2 · 128 a (query row, key) pair a layer over the request's 256·257/2 + (257 + .. + 287) = 41,328
-    pairs: 32 steps, the KV of steps 0..30 (256 + 30 rows a layer) and 31 tokens written. A term one unit off is refused."""
+    products the Program's 11,418,992,640 (``check_products``): 32 heads · 128 a (query row, key) pair a layer for Q′K′ᵀ over
+    the request's 256·257/2 + (257 + .. + 287) = 41,328 pairs, and as many for P V′ over those rows' keys padded to 32, 45,792:
+    32 steps, the KV of steps 0..30 (256 + 30 rows a layer) and 31 tokens written. A term one unit off is refused."""
     s = spec("decoder-llama31-8b-int8.json")
     g, info = B.decoder(s)
     assert (info["budgeted_units"], info["steps"], info["writes"]) == (9_404_379_802, 32, 32 * 31 + 31)
-    assert info["products"] == 41_328 * 32 * 8192 and info["work_units"] == 9_404_379_802 + info["products"] == sum(g.work)
+    assert info["products"] == 32 * 4096 * (41_328 + 45_792) == 11_418_992_640 and info["products_checked"]
+    assert info["work_units"] == 9_404_379_802 + info["products"] == sum(g.work)
     assert g.m_dyn == 32 * (256 + 30) * 32768 + 31 * 32
-    with pytest.raises(ValueError, match="not the measured"):
+    with pytest.raises(ValueError, match="budgeted units .* not the measured"):
         B.decoder({**s, "sample": s["sample"] + 1})
+    with pytest.raises(ValueError, match="data products .* not the measured"):
+        B.decoder({**s, "check_products": s["check_products"] + 1})
 
 
 def test_decoder_prefill_rows_and_the_specs_build():

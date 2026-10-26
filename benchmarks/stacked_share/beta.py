@@ -485,18 +485,21 @@ def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
     - ``embed``: the rows' embedding (``row.embed`` a row), reading the prompt (a run input) or the token sampled a step before;
     - per layer, ``pre`` (``row.pre`` a row: norm, quantizer, QKV, RoPE), which writes the layer's KV rows and hands its queries
       to ``attn`` (the window's budgeted units(N, S) = r0 N + b_q R + b_kv S + w0 + w_start [N = S], R = N S - N (N - 1) / 2,
-      `units.py`'s fit, plus ``attention.products`` data products a (query row, key) pair, all times ``attention.calls``),
+      `units.py`'s fit, plus ``attention.products``'s data products, all times ``attention.calls``),
       whose output goes to ``post`` (``row.post``: O, residual, norm, MLP), which reads the layer's residual too;
     - ``head``: the final norm on every row (``row.final``) and the sample (``sample``), writing the next step's token.
 
-    ``attention.products`` is H·2·D for H query heads of D a call: `Int8LutAttentionRow`'s Q′K′ᵀ and P V′, 2·S·D a head's
-    row (`products_pass.py`). The rows, the sample and the rest of attention have none: their products are by weights.
+    ``attention.products`` is the data products a call: an int a (query row, key) pair, or ``{"per_key", "per_padded_key",
+    "block"}``, a row of s keys paying per_key·s + per_padded_key·block·⌈s/block⌉. `Int8LutAttentionRow` is the second, H·D
+    and H·D at block 32 for H query heads of D: its Q′K′ᵀ is S·D a head's row and its P V′ reads the keys 32 at a time, the s8
+    step's lanes (`products_pass.py` on the Program). The rows, the sample and the rest of attention have none: their products
+    are by weights.
 
     ``bits`` are a row's widths: ``hidden``, ``q``, ``kv`` (a layer's K and V), ``o`` and ``token``. A KV row or token a later
     step reads is a write. Each node's work is the sum of the nonlinear units of the Calls it stands for, and each value's
     bits are those of the Calls' outputs between them, so the bound is a coarse graph's (`coarsen`): valid and at least the
-    fine Program's, as far as the units and widths are the Program's. ``check`` (optional) holds the model's budgeted units
-    to a measured total."""
+    fine Program's, as far as the units and widths are the Program's. ``check`` and ``check_products`` (optional) hold the
+    model's budgeted units and data products to measured totals."""
     P, T, Lc = int(spec["prompt"]), int(spec["decode"]), int(spec["layers"])
     row, bits, at = spec["row"], spec["bits"], spec["attention"]
     if spec.get("prefill", "batched") not in ("batched", "rows"):
@@ -514,12 +517,17 @@ def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
         return len(work) - 1
 
     products = 0
+    pr = at.get("products", 0)
+    if isinstance(pr, Mapping):
+        per_key, per_padded, block = int(pr["per_key"]), int(pr["per_padded_key"]), int(pr["block"])
+    else:
+        per_key, per_padded, block = int(pr), 0, 1
 
     def units(N: int, S: int) -> int:
         nonlocal products
         R = N * S - N * (N - 1) // 2
         u = at["r0"] * N + at["b_q"] * R + at["b_kv"] * S + at["w0"] + at["w_start"] * (N == S)
-        p = int(at.get("products", 0)) * R
+        p = per_key * R + per_padded * sum(-(-s // block) * block for s in range(S - N + 1, S + 1))
         products += int(at.get("calls", 1)) * p
         return int(at.get("calls", 1)) * (u + p)
 
@@ -558,9 +566,13 @@ def decoder(spec: Mapping[str, Any]) -> tuple[Graph, dict]:
     if "check" in spec and total - products != spec["check"]:
         raise ValueError(f"the model's budgeted units {total - products} are not the measured {spec['check']}: a row, sample "
                          f"or attention term is off")
+    if "check_products" in spec and products != spec["check_products"]:
+        raise ValueError(f"the model's data products {products} are not the measured {spec['check_products']}: the attention's "
+                         f"products term is off")
     info = {"label": spec.get("label"), "nodes": len(work), "values": len(values), "steps": steps, "rows": P + T,
             "m_dyn_bits": g.m_dyn, "writes": sum(x.write for x in values), "work_units": total,
-            "budgeted_units": total - products, "products": products, "checked": "check" in spec}
+            "budgeted_units": total - products, "products": products, "checked": "check" in spec,
+            "products_checked": "check_products" in spec}
     return g, info
 
 

@@ -10,24 +10,26 @@ second. f past 1 means the stock outgrows the pool: no KV is credited.
 
 Nonlinear units are #4622's gate model (`Security/Definitions/Accounting/Gates/Model.lean`, `nonlinear`): property/v1's
 budgeted units plus data products, one a product of two run-time values. `units.py` counts the budgeted ones; the data
-products are the attention row's Q′K′ᵀ and P V′, 2·D a head a (query row, key) pair (`products_per_key`), and nothing else's: a
-MAC by a weight is a linear map, free.
+products are the attention row's Q′K′ᵀ, H·D a (query row, key) pair, and its P V′, H·D a key with the row's keys padded to the
+s8 step's `PAD` (`products_coefficients`, as `products_pass.py` counts the Program), and nothing else's: a MAC by a weight is
+a linear map, free.
 
 R_cap comes from `units.py`'s units for one model and a served trace (`benchmarks/serve_bandwidth/mix.py`'s mix.json). A step's
 units are
 
-    token T + sample X + A (r0 T + b_q Q + b_kv K + w0 n + w_start n0)
+    token T + sample X + A (r0 T + b_q Q + b_kv K + w0 n + w_start n0 + b_qp Qp)
 
 with T its token rows, X its sampled rows, K its requests' keys (mix.json's kv_tokens: each scheduled request's context after the
-step), n its requests, n0 its prefills from position 0, Q its token rows' keys and A the attention calls a request makes a step
-(a layer each, on every rank).
+step), n its requests, n0 its prefills from position 0, Q its token rows' keys, Qp those keys padded to `PAD` a row, and A the
+attention calls a request makes a step (a layer each, on every rank).
 Over the trace the totals are exact. T and K are measured; X is the output tokens; Q is the sum over the trace's requests of
 P (P + 1) / 2 + the sum over its decodes t = 1 .. O - 1 of P + t (a prompt token at position i reads i keys however vLLM chunks
-the prompt), on the trace's own requests (`benchmarks/kv_filler/serve.py`'s `trace`); n is the decoding requests a step
+the prompt), on the trace's own requests (`benchmarks/kv_filler/serve.py`'s `trace`), and Qp the same sum with each row's keys
+padded; n is the decoding requests a step
 (measured) plus one a request's prefill (n0: one a request), plus a bound on the prompts vLLM split over two steps (`exact`: K's excess over the keys
 one prefill a prompt reads is those splits' rereads, which it holds to the bound). A step's own Q and n with prefill aren't
 measured: `steps` spreads the trace's prompt-token keys and prefill calls over its prompt tokens evenly, which sums to the exact
-totals.
+totals, and a step's padding is the trace's mean a prompt row and a decode row.
 
 The rate is units over the trace's busy time (the union of its steps' spans) and, as the honest peak, the largest over windows of
 `width` seconds, each step's units spread over its span. A node runs gpus / tp engines, each serving the trace.
@@ -61,9 +63,12 @@ R_INS = (100_000, 1_000_000)
 BLOCK = 16
 WIDTH = 1.0
 CLASSES = ("roundings", "compare_select", "gathers", "folds", "products")
-COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start")
-#: the attention row whose Q′K′ᵀ and P V′ are data products, 2·S·D a head's row (`property_redteam/products_pass.py`)
+COEFFICIENTS = ("r0", "b_q", "b_kv", "w0", "w_start", "b_qp")
+#: the attention row whose Q′K′ᵀ and P V′ are data products, (S + PAD ⌈S / PAD⌉)·D a head's row
+#: (`property_redteam/products_pass.py` on the census's 8B Program, r20261026-085548-0287)
 ATTENTION_ROW = "Int8LutAttentionRow_v1"
+#: the s8 step's lanes (`stacking.FAMILY`'s k): P V′ reads a row's keys PAD at a time, and Q′K′ᵀ its D
+PAD = 32
 #: bytes a second the audit certifies (`P·N·4096/T` at 61 ms a pass; note:memory-accounting/20261018T0230Z-report-declared-circuit-g):
 #: c = caps.total is R_cap over it
 CERTIFIED_B_PER_S = 1.294e13
@@ -102,31 +107,36 @@ def add(*us: Mapping[str, Any]) -> dict[str, Fraction]:
     return {c: v for c, v in out.items() if v}
 
 
-def products_per_key(att: Mapping[str, Any]) -> int:
-    """The attention's data products a (query row, key) pair a call: H heads of `ATTENTION_ROW`, 2·D each (its Q′K′ᵀ and P V′
-    multiply run-time values by run-time values). The linears' MACs by weights and the KV quantizers have none."""
+def products_coefficients(att: Mapping[str, Any]) -> dict[str, Fraction]:
+    """The attention's data products a call, as coefficients: H heads of `ATTENTION_ROW`, H·D a (query row, key) pair for its
+    Q′K′ᵀ (``b_q``) and H·D a padded key for its P V′ (``b_qp``); both multiply run-time values by run-time values. The linears'
+    MACs by weights and the KV quantizers have none."""
     st = att.get("statics") or {}
     if ATTENTION_ROW not in att.get("families", ()) or "H" not in st or "D" not in st.get(ATTENTION_ROW, {}):
         raise ValueError(f"the attention's families {att.get('families')} and statics {st} don't give {ATTENTION_ROW}'s H and D, "
                          f"so its data products can't be priced")
-    return 2 * int(st["H"]) * int(st[ATTENTION_ROW]["D"])
+    H, D = int(st["H"]), int(st[ATTENTION_ROW]["D"])
+    if D % PAD:
+        raise ValueError(f"{ATTENTION_ROW}'s D = {D} isn't a multiple of the s8 step's {PAD}: its Q′K′ᵀ pads D, which "
+                         f"products_coefficients doesn't price")
+    return {name: F(H * D if name in ("b_q", "b_qp") else 0) for name in COEFFICIENTS}
 
 
 def model_units(doc: Mapping[str, Any]) -> dict:
     """`units.py`'s document as the step model's parts in nonlinear units: token, sample, the attention's coefficients (with
-    ``products``, `products_per_key` a key a query row, unless the document counts them) and its calls a request-step. The
-    token rows and the sample have no data products: their products are by weights."""
+    ``products``, `products_coefficients`, unless the document counts them) and its calls a request-step. The token rows and
+    the sample have no data products: their products are by weights."""
     att = doc["attention"]
     co = {c: {k: F(v) for k, v in att["coefficients"].get(c, {}).items()} for c in att["coefficients"]}
     if "products" not in co:
-        co["products"] = {name: F(products_per_key(att) if name == "b_q" else 0) for name in COEFFICIENTS}
+        co["products"] = products_coefficients(att)
     return {"token": {k: F(v) for k, v in doc["token"].items()}, "sample": {k: F(v) for k, v in doc["sample"].items()},
             "coefficients": co, "calls": int(att["calls"])}
 
 
-def step_units(m: Mapping[str, Any], *, T: Any, X: Any, Q: Any, K: Any, n: Any, n0: Any) -> dict[str, Fraction]:
-    """token T + sample X + A (r0 T + b_q Q + b_kv K + w0 n + w_start n0), by key."""
-    x = dict(zip(COEFFICIENTS, (F(T), F(Q), F(K), F(n), F(n0))))
+def step_units(m: Mapping[str, Any], *, T: Any, X: Any, Q: Any, K: Any, n: Any, n0: Any, Qp: Any) -> dict[str, Fraction]:
+    """token T + sample X + A (r0 T + b_q Q + b_kv K + w0 n + w_start n0 + b_qp Qp), by key."""
+    x = dict(zip(COEFFICIENTS, (F(T), F(Q), F(K), F(n), F(n0), F(Qp))))
     att = {c: m["calls"] * sum((co.get(name, Fraction(0)) * x[name] for name in COEFFICIENTS), Fraction(0))
            for c, co in m["coefficients"].items()}
     return add(scale(m["token"], T), scale(m["sample"], X), att)
@@ -147,11 +157,26 @@ def trace_requests(mix: Mapping[str, Any]) -> list[dict]:
     return [{"prompt": r["prompt"], "output": r["output"]} for r in reqs]
 
 
-MODEL = ("T", "X", "Q", "K", "n", "n0")
+MODEL = ("T", "X", "Q", "K", "n", "n0", "Qp")
+
+
+def padded_sum(a: int, b: int) -> int:
+    """The sum over s = a .. b of s padded to `PAD` (0 when b < a)."""
+    def upto(m: int) -> int:
+        q, r = divmod(max(m, 0), PAD)
+        return PAD * (PAD * q * (q + 1) // 2 + r * (q + 1))
+    return upto(b) - upto(a - 1) if b >= a else 0
+
+
+def padded_keys(requests: Sequence[Mapping[str, int]]) -> tuple[int, int]:
+    """The keys the requests' prompt rows and decode rows read, each row's padded to `PAD`: a prompt's row i reads i keys, its
+    decode t = 1 .. O - 1 reads P + t."""
+    return (sum(padded_sum(1, r["prompt"]) for r in requests),
+            sum(padded_sum(r["prompt"] + 1, r["prompt"] + r["output"] - 1) for r in requests))
 
 
 def exact(mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]]) -> dict[str, int]:
-    """The trace's T, X, Q, K, n and n0 (see the module docstring), and K's excess over the keys the requests read with every prompt
+    """The trace's T, X, Q, K, n, n0 and Qp (see the module docstring), and K's excess over the keys the requests read with every prompt
     in one step (``split_keys``). The excess is the prompts vLLM split over steps: a later chunk's call reads the chunks before
     it again, and adds a prefill. A prompt shorter than the token budget splits only at the end of a step whose tokens filled the
     budget with a prefill to follow, at most once there (``splits``, which n counts: a bound), and its later chunk rereads fewer
@@ -174,22 +199,28 @@ def exact(mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]]) -> dict
         raise ValueError(f"the steps' requests read {K} keys, one prefill a prompt reads {K - excess}: {splits} splits of prompts "
                          f"under {max(P)} tokens can't account for the difference")
     return {"T": T, "X": sum(O), "Q": Q, "K": K, "n": sum(s["decode_reqs"] for s in steps) + len(requests) + splits,
-            "n0": len(requests), "split_keys": excess, "splits": splits}
+            "n0": len(requests), "Qp": sum(padded_keys(requests)), "split_keys": excess, "splits": splits}
 
 
 def steps(mix: Mapping[str, Any], requests: Sequence[Mapping[str, int]], split_keys: int = 0,
           splits: int = 0) -> list[dict[str, Fraction]]:
-    """Each step's T, X, Q, K, n and n0: measured, but for a step's prefill, whose keys, requests and splits are the trace's means
-    over its prompt tokens."""
+    """Each step's T, X, Q, K, n, n0 and Qp: measured, but for a step's prefill, whose keys, requests and splits are the trace's
+    means over its prompt tokens, and its rows' padding, the trace's mean a prompt row and a decode row."""
     P = [r["prompt"] for r in requests]
+    O = [r["output"] for r in requests]
     q_pre = Fraction(sum(p * (p + 1) // 2 for p in P) - split_keys, sum(P))
     per_req = Fraction(len(P), sum(P))
     per_call = Fraction(len(P) + splits, sum(P))
+    pad_pre, pad_dec = padded_keys(requests)
+    ex_pre = Fraction(pad_pre - sum(p * (p + 1) // 2 for p in P), sum(P))
+    dec_rows = sum(o - 1 for o in O)
+    ex_dec = Fraction(pad_dec - sum((o - 1) * p + (o - 1) * o // 2 for p, o in zip(P, O)), dec_rows) if dec_rows else Fraction(0)
     out = []
     for s in mix["steps"]:
         pre, dec = s["prefill_tokens"], s["decode_reqs"]
-        out.append({"T": F(s["tokens"]), "X": dec + pre * per_req, "Q": s["kv_tokens"] - pre + pre * q_pre,
-                    "K": F(s["kv_tokens"]), "n": dec + pre * per_call, "n0": pre * per_req})
+        q = s["kv_tokens"] - pre + pre * q_pre
+        out.append({"T": F(s["tokens"]), "X": dec + pre * per_req, "Q": q, "K": F(s["kv_tokens"]), "n": dec + pre * per_call,
+                    "n0": pre * per_req, "Qp": q + pre * ex_pre + dec * ex_dec})
     return out
 
 
@@ -292,7 +323,7 @@ def primitives(doc: Mapping[str, Any], mix: Mapping[str, Any], requests: Sequenc
     under ``(TP all-reduce)``), a sampled row's times X / T, and each attention coefficient times its quantity a token."""
     pr = doc["levers"]["primitives"]
     t = exact(mix, requests)
-    x = dict(zip(COEFFICIENTS, (t["T"], t["Q"], t["K"], t["n"], t["n0"])))
+    x = dict(zip(COEFFICIENTS, (t["T"], t["Q"], t["K"], t["n"], t["n0"], t["Qp"])))
     out: Counter = Counter()
     for k, v in pr["token"].items():
         out[k] += F(v)
@@ -304,7 +335,7 @@ def primitives(doc: Mapping[str, Any], mix: Mapping[str, Any], requests: Sequenc
     if not any(k.endswith("|products") for k in att):
         att[f"{ATTENTION_ROW} Q'K'^T and P V'|products"] = model_units(doc)["coefficients"]["products"]
     for k, co in att.items():
-        out[k] += int(doc["attention"]["calls"]) * sum((F(co[c]) * x[c] for c in COEFFICIENTS), Fraction(0)) / t["T"]
+        out[k] += int(doc["attention"]["calls"]) * sum((F(co.get(c, 0)) * x[c] for c in COEFFICIENTS), Fraction(0)) / t["T"]
     return {k: v for k, v in sorted(out.items(), key=lambda kv: -kv[1]) if v}
 
 

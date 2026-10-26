@@ -212,8 +212,9 @@ def mix(kv=(4, 6, 3, 4)) -> dict:
 
 def test_the_trace_totals_are_exact_with_a_split_prompt():
     t = share.exact(mix(), REQUESTS)
-    # Q: A's rows 1 + 2 + 3 and its decode 4, B's rows 1 + 2 and its decodes 3 + 4; n: 6 calls, B's second chunk one of them
-    assert t == {"T": 8, "X": 5, "Q": 20, "K": 17, "n": 6, "n0": 2, "split_keys": 1, "splits": 1}
+    # Q: A's rows 1 + 2 + 3 and its decode 4, B's rows 1 + 2 and its decodes 3 + 4; n: 6 calls, B's second chunk one of them;
+    # Qp: those 8 rows' keys, each padded to 32
+    assert t == {"T": 8, "X": 5, "Q": 20, "K": 17, "n": 6, "n0": 2, "Qp": 8 * 32, "split_keys": 1, "splits": 1}
     per = share.steps(mix(), REQUESTS, t["split_keys"], t["splits"])
     assert {k: sum(s[k] for s in per) for k in share.MODEL} == {k: t[k] for k in share.MODEL}
     with pytest.raises(ValueError, match="can't account"):
@@ -225,7 +226,7 @@ def test_the_trace_totals_are_exact_with_a_split_prompt():
 DOC = {"program": {"function": "toy"}, "tokens": 4, "samples": 2, "token": {"roundings": 10}, "sample": {"compare_select": 3, "roundings": 10},
        "attention": {"coefficients": {"roundings": {"r0": 1, "b_q": 2, "b_kv": 5, "w0": 7, "w_start": -1}}, "calls": 3,
                      "families": ["Int8KvQuant_v1", "Int8LutAttentionRow_v1"],
-                     "statics": {"G": 1, "H": 2, "Int8LutAttentionRow_v1": {"D": 3}}},
+                     "statics": {"G": 1, "H": 1, "Int8LutAttentionRow_v1": {"D": 32}}},
        "callees": {"g": {"family": "Gemm_v2", "instances": 2, "units": {"roundings": 20}},
                    "q": {"family": "Int8RowQuant_v1", "instances": 8, "units": {"roundings": 24}}},
        "levers": {"attention_per_key": {"Int8StaticQuant_v1": {"roundings": 2}, "Int8ColumnQuant_v1": {"roundings": 1},
@@ -242,15 +243,17 @@ def test_rates_f_and_the_levers():
     m = share.model_units(DOC)
     t = share.exact(mix(), REQUESTS)
     u = share.step_units(m, **{k: t[k] for k in share.MODEL})
-    # token 8 rows, sample 5 rows, attention 3 calls of 8 + 2 * 20 + 5 * 17 + 7 * 6 - 2, and of H 2 · 2 · D 3 data products
-    # a (row, key) pair over Q's 20
-    assert u == {"roundings": 10 * 8 + 10 * 5 + 3 * (8 + 40 + 85 + 42 - 2), "compare_select": 15, "products": 3 * 12 * 20}
+    # token 8 rows, sample 5 rows, attention 3 calls of 8 + 2 * 20 + 5 * 17 + 7 * 6 - 2, and of H 1 · D 32 data products a
+    # (row, key) pair over Q's 20 (Q'K'^T) and a padded key over Qp's 256 (P V')
+    assert u == {"roundings": 10 * 8 + 10 * 5 + 3 * (8 + 40 + 85 + 42 - 2), "compare_select": 15, "products": 3 * 32 * (20 + 256)}
     r = share.rates(m, mix(), REQUESTS)
     assert r["busy_s"] == 2.0 and r["mean"] == float(share.total(u)) / 2.0
     with pytest.raises(ValueError, match="doesn't budget"):
         share.by_class({"family": 1})
     with pytest.raises(ValueError, match="can't be priced"):
         share.model_units({**DOC, "attention": {**DOC["attention"], "families": ["Int8KvQuant_v1"]}})
+    with pytest.raises(ValueError, match="multiple of the s8 step"):
+        share.model_units({**DOC, "attention": {**DOC["attention"], "statics": {"H": 1, "Int8LutAttentionRow_v1": {"D": 3}}}})
     assert share.pool(mix()) == 10 * 16 * 1024 * 2
     assert share.f(1e9, 6126, 600, 1e5, 1e12) == pytest.approx((128 * 1e9 * 600 / 6126 + 1e5 * 600) / 1e12)
     lv = share.lever_models(DOC)
@@ -267,6 +270,13 @@ def test_rates_f_and_the_levers():
     assert list(prims)[:2] == ["Int8LutAttentionRow_v1 Q'K'^T and P V'|products", "D|roundings"]
     assert prims["G|roundings"] == Fraction(50, 8) and toy["primitives_per_token"] == prims
     assert toy["levers"]["as built"]["c"] == toy["levers"]["as built"]["R_cap_node"]["peak"] / share.CERTIFIED_B_PER_S
+
+
+def test_padded_keys_sum_each_row_padded():
+    """`padded_sum` is the sum of each s in a..b padded to 32, `padded_keys` a request's prompt and decode rows' padded keys."""
+    for a, b in ((1, 1), (1, 32), (1, 33), (5, 4), (30, 97), (257, 287)):
+        assert share.padded_sum(a, b) == sum(-(-s // 32) * 32 for s in range(a, b + 1)), (a, b)
+    assert share.padded_keys([{"prompt": 256, "output": 32}]) == (36_864, 8_928)  # the census's 8B request, a layer and head
 
 
 def test_the_witness_lives_are_the_lean_statements():

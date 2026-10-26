@@ -71,7 +71,7 @@ What is measured and what is modeled:
 | T, K, decoding requests, step spans | measured: the served trace (vLLM's scheduler output) |
 | Q, n, X | exact from the trace's requests; prefill per step at the trace's means; split prompts bounded |
 | M_dyn | measured: vLLM's KV blocks × block × bytes a token × tp |
-| data products | modeled: H·2·D a (query row, key) pair a call, from the attention row's statics (`products_pass.py`'s count) |
+| data products | modeled from the attention row's statics: Q′K′ᵀ H·D a (query row, key) pair, P V′ H·D a key with a row's keys padded to 32; the 8B decoder's are held to the Program's own count (`products_pass.py`) |
 | E | `share.E_WORD`, in nonlinear units: SquaringFloor and ChainSum at 2^-40 and 2^-20 (conjectured), and the cheapest construction found (the seam square); none is proved |
 
 The served rate comes from stock FP8 serving (vLLM's FP8 linears, BF16 KV and LM head): the int8 Program's units are counted at
