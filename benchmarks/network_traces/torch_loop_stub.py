@@ -14,7 +14,7 @@ It prints ``{"listening": URL}`` once it listens, then serves until it is stoppe
   ``text`` is their hex, and its one token id the step's (`step_id`). The first chunk carries ``prompt_token_ids``, the
   last ``finish_reason`` "length". A request is greedy (temperature 0, top_p 1) and either varied, asking for its
   token ids (``return_token_ids``) with no stop strings, as the certifier's shim forwards a varied request
-  (`certifier_serve.varied_body`), or fixed, exactly its ``max_tokens`` (``min_tokens`` the same, ``ignore_eos``, at
+  (`certifier_serve.varied_body`), or fixed, exactly its ``max_tokens`` (``ignore_eos`` and no ``min_tokens``, at
   most ``--steps``), as a fixed plan's (`certifier_serve.request_body`), whose shim frames each chunk's text, 512 hex
   characters at H = 128, as 8 canonical events of 64 bytes (`active.TOKEN_BYTES`); any other is answered 400.
 - a warden's id request (`id_request_of`: `active.id_request` exactly, in the scan's B = P + 9-byte cells from their
@@ -22,6 +22,12 @@ It prints ``{"listening": URL}`` once it listens, then serves until it is stoppe
   prompt id below `loop.VOCAB`: answered id-form, the bytes the warden puts in its egress cells as they come, with no
   HTTP head: each step's `io_tie.id_event` of P = ``--id-payload`` bytes (`scan_id`, below 2^17, the scan's IDB),
   then `io_tie.TRAILER` (`id_response`), as vLLM's ``--protocol ids`` answers the warden's.
+
+``--tamper KIND`` makes the server a covert sender on one id request's answer, the ``--tamper-at``-th id request it
+serves (from 0, in arrival order), every other answered as before (`TAMPERS`, `tampered`): ``byte``, one output byte
+changed before its id is taken; ``extra``, one id event more before the trailer; ``late``, the first event at once and
+the rest ``--late-s`` seconds later, past the warden's release of the next cell, so the warden fails the connection at
+that slot.
 
 `test_certifier_serve.py`'s ``_Varied`` is the same endpoint with varied responses and EOS.
 """
@@ -48,6 +54,10 @@ ID_BITS = 30
 SCAN_ID_BITS = 17
 #: the scan's cell payload, P = B − 9 at its B = 512-byte cells: ``--id-payload``'s default
 ID_PAYLOAD = 503
+#: ``--tamper``'s kinds (module docstring)
+TAMPERS = ("byte", "extra", "late")
+#: ``late``'s hold, past the scan schedule's D = 21 buckets of 100 ms from admission to a connection's first egress cell
+LATE_S = 3.0
 
 
 def step_outputs(model: L.Model, token: int, steps: int) -> list[bytes]:
@@ -106,20 +116,31 @@ def id_response(outputs: list[bytes], payload: int) -> bytes:
     return b"".join(IT.id_event(scan_id(o), payload) for o in outputs) + IT.TRAILER
 
 
+def tampered(outputs: list[bytes], kind: str | None) -> list[bytes]:
+    """The outputs a ``byte`` or ``extra`` answer takes its ids from: the first output's first byte flipped, or the
+    last output once more; any other kind's are the outputs."""
+    if kind == "byte":
+        return [bytes([outputs[0][0] ^ 1]) + outputs[0][1:], *outputs[1:]]
+    if kind == "extra":
+        return [*outputs, outputs[-1]]
+    return list(outputs)
+
+
 def refusal(body: dict, steps: int | None = None) -> str | None:
     """Why the endpoint answers 400 (None: it serves the body): a varied body (module docstring), or a fixed one
-    (`certifier_serve.request_body`: exactly ``max_tokens`` tokens, ``min_tokens`` the same and ``ignore_eos``, at
-    most the endpoint's ``steps``)."""
-    fixed = body.get("ignore_eos") is True and "min_tokens" in body
-    if fixed:
-        if body["min_tokens"] != body.get("max_tokens") or (steps is not None and body["min_tokens"] > steps):
-            return f"min_tokens = max_tokens, at most the loop's {steps} steps"
-    elif body.get("return_token_ids") is not True:
-        return "return_token_ids must be true"
-    elif {"ignore_eos", "min_tokens"} & set(body):
-        return "ignore_eos and min_tokens together, or neither"
-    elif body.get("stop") != [] or type(body.get("seed")) is not int:
-        return "stop [] and an int seed"
+    (`certifier_serve.request_body`: exactly ``max_tokens`` tokens, ``ignore_eos`` and no ``min_tokens``, at most the
+    endpoint's ``steps``). A body with ``min_tokens`` is refused: it masks the EOS logit, which the served Program's
+    sampling doesn't model."""
+    if "min_tokens" in body:
+        return "no min_tokens (it masks the EOS logit, which the served Program's sampling doesn't model)"
+    fixed = body.get("ignore_eos") is True
+    if not fixed:
+        if body.get("return_token_ids") is not True:
+            return "return_token_ids must be true"
+        if "ignore_eos" in body:
+            return "ignore_eos true (a fixed body) or absent (a varied one)"
+        if body.get("stop") != [] or type(body.get("seed")) is not int:
+            return "stop [] and an int seed"
     if body.get("temperature") != 0 or body.get("top_p") != 1:
         return "greedy (temperature 0, top_p 1)"
     prompt = body.get("prompt")
@@ -127,14 +148,20 @@ def refusal(body: dict, steps: int | None = None) -> str | None:
         return "the prompt is a list of token ids"
     if not 0 <= prompt[-1] < L.VOCAB or type(body.get("max_tokens")) is not int or body["max_tokens"] < 1:
         return f"the last prompt id below {L.VOCAB} and max_tokens >= 1"
+    if fixed and steps is not None and body["max_tokens"] > steps:
+        return f"a fixed body's max_tokens at most the loop's {steps} steps"
     return None
 
 
 class Endpoint:
-    def __init__(self, model: L.Model, steps: int, id_payload: int = ID_PAYLOAD) -> None:
+    def __init__(self, model: L.Model, steps: int, id_payload: int = ID_PAYLOAD, tamper: str | None = None,
+                 tamper_at: int = 0, late_s: float = LATE_S) -> None:
         IT.id_event(0, id_payload)
+        if tamper is not None and tamper not in TAMPERS:
+            raise ValueError(f"--tamper: one of {TAMPERS}, not {tamper!r}")
         self.model, self.steps, self.name = model, steps, f"torch-loop/mlp-w8a8-h{model.h}"
-        self.id_payload = id_payload
+        self.id_payload, self.tamper, self.tamper_at, self.late_s = id_payload, tamper, tamper_at, late_s
+        self.id_requests = 0
 
     async def __call__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -153,7 +180,15 @@ class Endpoint:
             if (why := id_refusal(ids)) is not None:
                 return await self.json(writer, 400, {"error": why})
             outputs = step_outputs(self.model, ids["prompt"][-1], min(ids["max_tokens"], self.steps))
-            writer.write(id_response(outputs, self.id_payload))
+            k, self.id_requests = self.id_requests, self.id_requests + 1
+            kind = self.tamper if k == self.tamper_at else None
+            data = id_response(tampered(outputs, kind), self.id_payload)
+            if kind == "late":
+                writer.write(data[:self.id_payload])
+                await writer.drain()
+                await asyncio.sleep(self.late_s)
+                data = data[self.id_payload:]
+            writer.write(data)
             return await writer.drain()
         if not head.startswith(b"POST /v1/completions "):
             doc = ({"data": [{"id": self.name}]} if head.startswith(b"GET /v1/models ")
@@ -200,8 +235,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0, help="the model's weights' seed (`loop.Model`)")
     ap.add_argument("--id-payload", type=int, default=ID_PAYLOAD,
                     help="P: a warden's id requests' cells' payload, B - 9, each id-form event's bytes")
+    ap.add_argument("--tamper", choices=TAMPERS, help="one id request's answer tampered (module docstring)")
+    ap.add_argument("--tamper-at", type=int, default=0, help="the id request tampered, from 0 in arrival order")
+    ap.add_argument("--late-s", type=float, default=LATE_S, help="late's hold, in seconds")
     a = ap.parse_args(argv)
-    asyncio.run(serve(a.host, a.port, Endpoint(L.Model(h=a.h, seed=a.seed), a.steps, a.id_payload)))
+    asyncio.run(serve(a.host, a.port, Endpoint(L.Model(h=a.h, seed=a.seed), a.steps, a.id_payload, a.tamper,
+                                               a.tamper_at, a.late_s)))
     return 0
 
 
