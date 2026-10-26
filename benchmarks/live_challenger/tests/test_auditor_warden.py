@@ -77,8 +77,8 @@ def test_a_lane_key_starts_a_warden_rehearsal_and_one_rehearsal_of_either_device
     (["--peer", "vy-nebius-9"], "--peer"),
     (["--port", "80"], "--port '80': 1024 to 65535"),
     (["--port", "08011"], "--port"),
-    (["--minutes", "0"], "--minutes '0': 1 to 120"),
-    (["--minutes", "121"], "--minutes"),
+    (["--minutes", "0"], "--minutes '0': 1 to 170"),
+    (["--minutes", "171"], "--minutes '171': 1 to 170"),
     (["--minutes", "10"], "--minutes 10: 100 requests take 11 minutes"),
     (["--minutes", "10"], "the check and the key at height 20): give --minutes 11 or more"),
     (["--requests", "4", "--minutes", "7"], "give --minutes 8 or more"),
@@ -192,7 +192,8 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_re
     assert (d / A.WITNESS).stat().st_mode & 0o777 == 0o700
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-24T11:20:00Z" and "runs" not in end
-    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS}}
+    assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
+                                                                   if k != "load"}} and "load" not in end
     assert end["registrations"] == {"warden/egress/0": "ab" * 64}
     assert end["witness"] == {n: (d / A.WITNESS / n).stat().st_size for n in (
         "deployment.json", "cells.jsonl", "certified.jsonl", "cells.salts", "requests.records", "client.json",
