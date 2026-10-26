@@ -35,7 +35,8 @@ theorem fld_ok {j : Json} {k : String} {v : Json} (h : j.getObjVal? k = .ok v) :
 
 theorem array_mapM_ok_ex {α β : Type} (f : α → Flock.V β) (a : Array α) (P : ℕ → β → Prop)
     (h : ∀ (i : ℕ) (hi : i < a.size), ∃ y, f a[i] = .ok y ∧ P i y) :
-    ∃ ys : Array β, a.mapM f = .ok ys ∧ ys.size = a.size ∧ ∀ (i : ℕ) (hi : i < a.size) (h' : i < ys.size), P i ys[i] := by
+    ∃ ys : Array β, a.mapM f = .ok ys ∧ ys.size = a.size ∧
+      ∀ (i : ℕ) (hi : i < a.size) (h' : i < ys.size), P i ys[i] := by
   choose g hg using h
   refine ⟨Array.ofFn fun i : Fin a.size => g i.1 i.2, ?_, by simp, fun i hi h' => ?_⟩
   · exact array_mapM_ok_of f a _ (by simp) fun i h₁ h₂ => by simpa using (hg i h₁).1
@@ -199,7 +200,8 @@ theorem streamObj_name (q : (ℕ × ℕ × String) × Array Round) :
     getObjVal?_mkObj (streamList_distinct ..) (by simp [streamList])
   simp only [Json.getObjValAs?, Json.getObjValD, e] <;> rfl
 
-theorem nameOf_streamObj (q : (ℕ × ℕ × String) × Array Round) : nameOf (streamObj spec hh rootB q) = q.1.2.2 := by
+theorem nameOf_streamObj (q : (ℕ × ℕ × String) × Array Round) :
+    nameOf (streamObj spec hh rootB q) = q.1.2.2 := by
   simp only [nameOf, streamObj_name] <;> rfl
 
 theorem nameOf_mapStream (g : String → ℕ → Json → Json) (s : Json) : nameOf (mapStream g s) = nameOf s := by
@@ -247,7 +249,8 @@ theorem find_streamObj (hS : S.size = spec.repStreams.size) (hnd : (spec.repStre
 theorem roundJ_sub (k : ℕ) (r : Round) (v : Array F128) :
     roundJ (mapKey "coins" (fun _ => hexArr v) (mapKey "coins" (fun _ => .null) (roundObj spec hh k r))) =
       .ok ⟨r.n, ByteArray.empty, v, some (r.bytes.getD ByteArray.empty)⟩ := by
-  have gR : ∀ {key : String} {w : Json}, (key, w) ∈ roundList spec hh k r → (roundObj spec hh k r).getObjVal? key = .ok w :=
+  have gR : ∀ {key : String} {w : Json}, (key, w) ∈ roundList spec hh k r →
+      (roundObj spec hh k r).getObjVal? key = .ok w :=
     fun hm => getObjVal?_mkObj (roundList_distinct ..) hm
   have hn : Record.nat (roundObj spec hh k r) "n" = .ok r.n := by
     unfold Record.nat
@@ -274,8 +277,8 @@ theorem roundJ_sub (k : ℕ) (r : Round) (v : Array F128) :
       fld_mapKey_ne _ _ (by decide : ("msg" : String) ≠ "coins"), fld_ok hm]
     rfl
   unfold roundJ
-  rw [nat_mapKey_ne _ _ (by decide : ("n" : String) ≠ "coins"), nat_mapKey_ne _ _ (by decide : ("n" : String) ≠ "coins"),
-    hn]
+  rw [nat_mapKey_ne _ _ (by decide : ("n" : String) ≠ "coins"),
+    nat_mapKey_ne _ _ (by decide : ("n" : String) ≠ "coins"), hn]
   simp only [FlockComplete.ok_bind, hc, f128s_map, hnull, hstr, unhex_hexOf, Bool.false_eq_true, ite_false]
   rfl
 
@@ -332,7 +335,8 @@ theorem liveOfJ_rec (g : String → ℕ → Json → Json) (htn : spec.tables.to
     have hn0 : nameOf (mapStream (fun _ _ => mapKey "coins" fun _ => Json.null)
         (streamObj spec hh rootB (spec.repStreams[i], S[i]))) = spec.repStreams[i].2.2 := by
       rw [nameOf_mapStream, nameOf_streamObj]
-    have ha := arr_mapStream g hn0 (arr_mapStream _ (nameOf_streamObj spec hh rootB _) (streamObj_rounds spec hh rootB _))
+    have ha := arr_mapStream g hn0
+      (arr_mapStream _ (nameOf_streamObj spec hh rootB _) (streamObj_rounds spec hh rootB _))
     obtain ⟨rs, hrs, hsz, hP⟩ := array_mapM_ok_ex (fun r => roundJ r)
       ((((Array.range (S[i]).size).map fun k => roundObj spec hh k (S[i])[k]!).mapIdx
         ((fun _ _ => mapKey "coins" fun _ => Json.null) (spec.repStreams[i], S[i]).1.2.2)).mapIdx
