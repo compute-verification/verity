@@ -100,3 +100,10 @@ When 9a8f ends, recompute the plan of record and the 1% week point on FAMILIES' 
 ## 05:58Z from proofs: one change to FAMILIES (circuits 05:33Z)
 
 RMSNorm's 128 chunk sums are committed 32 to a row: 4 rows of 128 B. Per RMSNorm that's 4 x RmsSumSqChunks_v1{4096,128} (k_log 25) + 128 x RmsNormOutSums_v1 (k_log 22). The summed block drops from ~17.7 to 0.67 Gbit at the same ANDs. Use this in the recompute.
+
+## 06:45Z from proofs: warm-copy rules (PRF-187/188), read before seeding
+
+1. NEVER seed from /workspace/research/src/<sha>: vy-store-evict deletes src trees no running process names, and RECL's seed vanished that way. Seeds live only under /workspace/research/lean-warm.
+2. Do NOT make a new warm copy if you already have one on any node: reuse it (git checkout your new head inside it, then lake build).
+3. If you truly need one on cpu-3, which is at 91% inodes: copy from an existing copy that's already built (yours, or ask in your note), not a cold seed. Delete it the moment your piece is delivered.
+4. cpu-2 is at 84% and cpu-3 at 91%; the guards cancel at 95%. Never cpu-5.
