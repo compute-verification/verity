@@ -3,6 +3,12 @@ import Definitions.Core.Accel.H200
 /-!
 # The non-vacuity witness: an honest INT8 GEMM meets the H200's model (trusted)
 
+**Stale: `Witness` is false at the current model, to be restated with a looped `wgmma` kernel.** The straight-line plan
+below is its own code, fetched once (`Machine.CodeFetch`): at `n = 512` its 131,072 instructions are 524,288 HBM words
+beside its 393,216 words of data, past the 424,242 a 700-tick run has at `slack = 0`; and its `mma.sync` pays
+`Open.sync`, which the statement leaves free. A real kernel loops: the restated kernel takes `A` and `B` from shared
+memory through `wgmma` and loads them with bulk copies, in a loop of a few hundred instructions.
+
 An honest run meets every hypothesis (rule I): the naive tiled INT8 kernel below computes `C = A·B` exactly for any
 `n × n` `s8` matrices `A` and `B` (`n` a multiple of 512, the three matrices fitting in HBM), meets G1 and G2 on the
 H200 instance at every value of its open parameters, and takes at most `n³/540672 + n²/512` ticks, so its tensor rate
