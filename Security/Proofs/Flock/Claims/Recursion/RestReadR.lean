@@ -52,17 +52,21 @@ def DecLive (rd : Msg → Option FinalP) : Prop :=
   ∀ x ms cs d, decR rd x ms cs = some d → ∃ lv, liveOfJ d.spec (coinSubJ d.spec d.c₁ d.mids d.f.j) = .ok lv
 
 /-- **The last step reads**, at any reader: the statement sets up, the last message isn't tagged `0` and `rd` reads
-it with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as the reps' blocks, every
-rep's block has a fit, and the record value reads as custody's. -/
+it, for the statement, with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as
+the reps' blocks, every rep's block has a fit, the proofs read are shaped for their files, and the record value reads
+as custody's. -/
 theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
     {r₀ : List ByteArray} {rss : List (List ByteArray)}
     (hv : FlockDeploy.setupOf false x = some v) (hlast : ms.getLast? = some a) (ha : ∀ t, a ≠ 0 :: t)
-    (hrd : rd a = some fl) (hc : cs.head? = some c₁) (h0 : rowsOf (ms.headD []) = some r₀)
+    (hrd : rd a = some fl) (hst : fl.stmt = x) (hc : cs.head? = some c₁)
+    (h0 : (rowsOf (ms.headD [])).map (List.map FlockDeploy.nodeOf) = some r₀)
     (hr₀ : (level0Lens v.2.2).sum = r₀.length) (hmid : ms.tail.dropLast.mapM rowsOf = some rss)
     (hps : fl.ps.size = 2 * v.2.2.size) (hrss : (repLens v.2.1 v.2.2).sum = rss.length)
     (hfit : ∀ k < 2 * v.2.2.size, ∃ pT : Flock.Proof × F128,
       FitsRep (repCtx v.2.1 v.2.2 c₁ r₀ cs.tail.dropLast k) ((cutLens (repLens v.2.1 v.2.2) rss).getD k []) pT.1 pT.2)
+    (hsh : ∀ pf, FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf →
+      FlockDeploy.ShapedAt v.2.1 v.2.2 c₁ pf.1)
     (hlive : DecLive rd) : ReadOkR rd x ms cs := by
   obtain ⟨d, hd⟩ : ∃ d, decR rd x ms cs = some d := by
     have hm : ∃ a₁, ms.head? = some a₁ := by
@@ -70,7 +74,7 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
       | nil => cases hlast
       | cons b l => exact ⟨b, rfl⟩
     obtain ⟨a₁, ha₁⟩ := hm
-    have h0' : rowsOf a₁ = some r₀ := by
+    have h0' : (rowsOf a₁).map (List.map FlockDeploy.nodeOf) = some r₀ := by
       cases ms with
       | nil => cases ha₁
       | cons b l => cases Option.some.inj ha₁; exact h0
@@ -91,7 +95,12 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
       obtain ⟨ys, hys⟩ := mapM_some_of hk
       rw [hys]
       exact ⟨_, rfl⟩
-    simp only [decR, Option.bind_eq_bind, Option.pure_def, hv, hlast, ha₁, hc, hrd, h0', hmid, hl, hpf,
+    have hf1 : (rd a).filter (·.stmt == x) = some fl :=
+      Option.filter_eq_some_iff.2 ⟨hrd, by rw [hst]; exact beq_self_eq_true x⟩
+    have hf2 : (FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl).filter (fun pf =>
+        @decide (FlockDeploy.ShapedAt v.2.1 v.2.2 c₁ pf.1) (Classical.propDecidable _)) = some pf :=
+      Option.filter_eq_some_iff.2 ⟨hpf, @decide_eq_true _ (Classical.propDecidable _) (hsh pf hpf)⟩
+    simp only [decR, Option.bind_eq_bind, Option.pure_def, hv, hlast, ha₁, hc, hf1, h0', hmid, hl, hf2,
       Option.bind_some, Option.some.injEq, exists_eq']
   have ha := actR_of_decR hlast ha hd
   unfold ReadOkR

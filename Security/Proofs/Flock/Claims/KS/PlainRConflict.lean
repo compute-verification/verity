@@ -289,7 +289,7 @@ theorem plainR_opening {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Clai
     ∃ (s : Ins) (spec : SessionSpec) (sts : Array Flock.Stmt) (st : Flock.Stmt) (sch : Flock.Schedule)
       (r₀ : List ByteArray) (link : List ByteArray × List ByteArray) (row : Array F128),
       setupOf false x = some (s, spec, sts) ∧ sts[0]? = some st ∧ fast100 st.m = some sch ∧
-      rowsOf ((P.next x [] ω).eval sha512).1 = some r₀ ∧ linkR sts r₀ = some link ∧
+      (rowsOf ((P.next x [] ω).eval sha512).1).map (List.map nodeOf) = some r₀ ∧ linkR sts r₀ = some link ∧
       Opening (Setup.ofCircuit st).merkle (sch.levels.getD 0 default) (2 ^ (sch.levels.getD 0 default).lanes)
         link.1.toArray[0]! (Claims.run sha512 P (VR rd) x ω r).vLog q row ∧
       u = row.toList.map FlockLevel3.GF128.of := by

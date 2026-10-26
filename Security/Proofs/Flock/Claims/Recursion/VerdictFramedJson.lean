@@ -78,7 +78,7 @@ messages `ms` whose `k`-th block is rep `k`'s proof's framed bytes, at a `T` the
 theorem decR_framesR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
     ∃ (r₀ : List ByteArray) (rss : List (List ByteArray)) (ms : List Claims.Msg),
-      rowsOf (as.headD []) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
+      (rowsOf (as.headD [])).map (List.map nodeOf) = some r₀ ∧ as.tail.dropLast.mapM rowsOf = some rss ∧
       d.f.j = recJ d.spec d.sts d.link d.c₁ ms cs.tail.dropLast d.f.ps ∧
       ∀ k < 2 * d.sts.size, ∃ T, FitsRep (repCtx d.spec d.sts d.c₁ r₀ cs.tail.dropLast k)
         ((cutLens (repLens d.spec d.sts) rss).getD k []) d.f.ps[k]! T ∧
