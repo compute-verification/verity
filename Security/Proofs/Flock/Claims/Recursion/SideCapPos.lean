@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.SideCapUp
 import Proofs.Flock.Claims.Recursion.DecompBDeployed
+import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.NextRFits
 import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
@@ -116,7 +117,8 @@ theorem posAt_lt {x : Msg} {cs : List Coin} {q : OpenPiece} {v}
     have hlv' : ∀ i < sch.levels.size, FlockSoundness.Refine.LevelSeam (sch.levels.getD i default) := fun i hi => by
       rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
       exact hlv _ (Array.getElem_mem hi)
-    rw [FlockVBridge.Family.rows_pos (canonRounds_noEmpty _ _ _ _) (by omega) hds.1 hlv' h q.level hl]
+    rw [FlockVBridge.Family.rows_pos (canonRounds_noEmpty _ _ _ _)
+      (by show 14 ≤ (FlockDeploy.tabsOf v.2.2)[q.table]!.m; omega) hds.1 hlv' h q.level hl]
     exact positions_getElem!_lt hseam _ _
   · exact Nat.two_pow_pos _
 
