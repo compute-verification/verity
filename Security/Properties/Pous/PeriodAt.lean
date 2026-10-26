@@ -15,9 +15,9 @@ import Properties.Pous.EndToEndAt
 * `RingDeviceAt N pt`: `RingDevice` with `pt`'s certificate and the ring game at `N` (`ServerAt N`, `PassesAt N`, state
   bound `SAt N`): `pous-ring-device`, `pous-ring-instantiation` and `prf/sha-512` per run, read at `N`. It is meaningful
   at `N = pt.params.blocks`, the block count `pt`'s session challenges.
-* `PeriodHeldAt`: at every such `pt` and `N`, from the setup check's `AcceptsDecodes` and `PublishesRoot`, the coin
-  commitments' hiding at `N` and `P2RingRoundSecureWide`, the verifier's whole decision at `pt` accepts a period with no
-  break while the capacity account held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`.
+* `PeriodHeldAt`: at every such `pt` and `N`, from the coin commitments' hiding at `N` and `P2RingRoundSecureWide`, the
+  verifier's whole decision at `pt` accepts a period with no break while the capacity account held fewer than `S · len`
+  bit-ticks with probability at most `δ + ε_max`.
 * `PeriodHeldDemo`: `PeriodHeldAt` at `N = 1038·2^16`, whose state bound is 1,060,008,348,186 bits.
 -/
 
@@ -101,49 +101,47 @@ def RingDeviceAt (N : ℕ) [NeZero N] (pt : Run.Point) {ι : Type} [Fintype ι] 
 
 /-- **PoUS's per-period guarantee at any point and block count to `2^27`.** `PeriodHeld` with the composed check at
 `pt`, the ring game at `N` and `P2RingRoundSecureWide` (with `(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130`) in place of
-`P2RingAuditSecure`: given the setup check's `AcceptsDecodes` and `PublishesRoot` and the coin commitments' hiding at
-`N`, for every joint run whose capacity coins are the ring game's at `N`, every period's audit `P` whose device is a
-ring-model server at `N` for `pt` (`RingDeviceAt`), every certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤
-SAt N` and every value of the other audits' coins, the verifier's whole decision at `pt` accepts the period with no
-break while the capacity account held fewer than `S · len` bit-ticks with probability at most `δ + ε_max`. Rests on the
-open conjecture `P2RingRoundSecureWide`, unchecked in `N` above `2^25`. -/
+`P2RingAuditSecure`: given the coin commitments' hiding at `N`, for every joint run whose capacity coins are the ring
+game's at `N`, every period's audit `P` whose device is a ring-model server at `N` for `pt` (`RingDeviceAt`), every
+certificate `S` with `S · len + S_chip + ∑ cap_i · round ≤ SAt N` and every value of the other audits' coins, the
+verifier's whole decision at `pt` accepts the period with no break while the capacity account held fewer than `S · len`
+bit-ticks with probability at most `δ + ε_max`. Rests on the open conjecture `P2RingRoundSecureWide`, unchecked in `N`
+above `2^25`. -/
 def PeriodHeldAt : Prop :=
-  AcceptsDecodes → PublishesRoot →
-    ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
-      (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
-      Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
-        ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
-          Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
-          ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-            (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-            (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
-            RingDeviceAt N pt r P D Q L round →
-              S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ SAt N →
-                ∀ o : ΩW × ΩQ,
-                  Pouw.pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
-                      P.Accepts pt (o.1, o.2, x) ∧ ¬ P.Break pt (o.1, o.2, x) ∧
-                        (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
-                    (Params.δ : ℝ) + Params.εMax.toReal
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+      ∀ (pt : Run.Point) (N : ℕ) [NeZero N], 2 ^ 19 ≤ N → N ≤ 2 ^ 27 →
+        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
+        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+          (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+          (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
+          RingDeviceAt N pt r P D Q L round →
+            S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ SAt N →
+              ∀ o : ΩW × ΩQ,
+                Pouw.pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                    P.Accepts pt (o.1, o.2, x) ∧ ¬ P.Break pt (o.1, o.2, x) ∧
+                      (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
+                  (Params.δ : ℝ) + Params.εMax.toReal
 
 /-- **PoUS's per-period guarantee at Demo B's store**: `PeriodHeldAt` at `N = 1038·2^16` blocks, whose state bound
 `⌊ρ·|C|⌋` is 1,060,008,348,186 bits, at every point `pt` (the demo's is `pt.params = ⟨16448, 21065, 2^16, 1038⟩`).
 Rests on the open conjecture `P2RingRoundSecureWide`, unchecked in `N` above `2^25`. -/
 def PeriodHeldDemo : Prop :=
-  AcceptsDecodes → PublishesRoot →
-    ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
-      (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
-      Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
-        ∀ (pt : Run.Point) (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
-          Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
-          ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
-            (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-            (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
-            RingDeviceAt N pt r P D Q L round →
-              S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ 1060008348186 →
-                ∀ o : ΩW × ΩQ,
-                  Pouw.pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
-                      P.Accepts pt (o.1, o.2, x) ∧ ¬ P.Break pt (o.1, o.2, x) ∧
-                        (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
-                    (Params.δ : ℝ) + Params.εMax.toReal
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ),
+    (1 - p) ^ 105 + 105 * ε₀ ≤ ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+      ∀ (pt : Run.Point) (N : ℕ) [NeZero N], N = 1038 * 2 ^ 16 →
+        Pous.P2.Assumptions.CoinCommitHides (coinViewAt N) ((2⁻¹ : ℝ≥0∞) ^ 131) →
+        ∀ (ι α ΩW ΩQ : Type) [Fintype ι] [Fintype α] (d : Accounting.Device ι)
+          (r : Accounting.Run d α ΩW ΩQ ((ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
+          (P : AuditsAt N ΩW ΩQ) (round : ℕ) (S : ℝ),
+          RingDeviceAt N pt r P D Q L round →
+            S * (r.win .capacity).len + d.chip + ((∑ i, d.cap i * round : ℕ) : ℝ) ≤ 1060008348186 →
+              ∀ o : ΩW × ΩQ,
+                Pouw.pr (fun x : (ringRO N 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams =>
+                    P.Accepts pt (o.1, o.2, x) ∧ ¬ P.Break pt (o.1, o.2, x) ∧
+                      (r.held (o.1, o.2, x) : ℝ) < S * (r.win .capacity).len) ≤
+                  (Params.δ : ℝ) + Params.εMax.toReal
 
 end Pous.Period
