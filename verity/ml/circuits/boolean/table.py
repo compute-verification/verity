@@ -9,7 +9,7 @@ and an XOR of candidates: the circuit's own rows, with no lookup.
     TableRead{IB}x{EW}_v2   (index: Array<IW, Value<1>>, table: Array<2^IB EW / 64, Array<64, Array<16, Value<1>>>>)
                             -> Array<16 EW, Value<1>>; word view: TableRead{IB}x{EW}_v1, the word read it is made from
 
-`table_read(word, IB)` is the Boolean form of a word read ``word`` (`verity_vllm.program.registry.tables.table_read`, which makes
+`table_read(word, IB)` is the Boolean form of a word read ``word`` (`verity.ml.definitions.registry.tables.table_read`, which makes
 both): its signature on bits, the next version of its name, and ``word`` as its word. C-Flock lowers the word read by this
 form's builder (`verity_flock.ir_lower._boolean_build`). A table of more than `MAX_WORDS` words has no form, so a read of it
 stays a `NoPiece`.

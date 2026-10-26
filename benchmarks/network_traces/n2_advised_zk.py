@@ -7,7 +7,7 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
     python benchmarks/network_traces/n2_advised_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in] [--advice-from-io]]
       [--draw K [--challenger local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD [--gate-key KEY]]]]
-      [--delta D] [--members honest,moved,...] [--jobs 2] [--debug-clear] [--dry]
+      [--delta D] [--members honest,moved,...] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`simulated`). The advised tests' simulated vLLM serving (`advised_traffic.serve`: varied prompt and
   output lengths, chunked prefill, prefix-cache hits, a preemption resumed from a hit, the async row past a finish, a
@@ -74,7 +74,8 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   ``o0``, the verdict and deadline bits. A round registers, selects, proves live behind the firewall, delivers, and
   decides on the proof: the verifier's own Lean run, the ``pub`` row opened only to its own copy (its own view of the
   public advice) and the ``o0`` row read. Per window: prove (the session's wall time, the prover's ``prove_total_s``,
-  proof bytes) and verify (the verifier of record's run, Lean included): the per-window price.
+  proof bytes) and verify (the verifier of record's run, Lean included): the per-window price. The members run one
+  after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
 * **What the verifier receives** is `n2_zk.RECEIVED` per window and the advice (``advice.json``, with no tie),
   scanned for every piece of both ends' heads, head salts, siblings and certifier salts but those the public circuit
   or a window's ``pub`` row holds: on an advised link an accepted window's egress counts are its view's public
@@ -527,7 +528,7 @@ class Challenger:
     `records_audit` takes them (`a5_coins`): one session on `coins_root`, one rank per member, and each member's draw
     in its own turn on the session's one client (`a5_coins.RankCoins`), its coins committed to its period's commitment
     before any is read (`LinkWindows.period_draw`). Every rank plans its need together, before any member runs (the
-    members can outnumber ``--jobs``), so the session opens or is refused before anything is proved. Once every member
+    members prove one at a time), so the session opens or is refused before anything is proved. Once every member
     has drawn or won't, the session's evidence is published, and `check` holds each member's draw to it
     (`coins.coins_reason`, with `a5_coins.negatives` refused the same way)."""
 
@@ -701,8 +702,7 @@ def prove(a) -> int:
         return name, res
 
     try:
-        with ThreadPoolExecutor(max_workers=a.jobs) as pool:
-            done = dict(pool.map(lambda kv: go(*kv), enumerate(rounds)))
+        done = dict(go(k, name) for k, name in enumerate(rounds))
     finally:
         if challenger is not None:
             challenger.close()
@@ -802,12 +802,14 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=0, help="member k's window j listens on PORT + 100k + j; 0 (the "
                                                        "default): a free port for each session")
-    p.add_argument("--jobs", type=int, default=2, help="members proved at once")
+    p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (n2_zk.ONE_SESSION); "
+                                                       "more is refused")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or "
                                                       "proved")
     a = ap.parse_args(argv)
+    Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
     if a.challenger:

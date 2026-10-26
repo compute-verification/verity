@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Complete.Json.Decode
 `decode_recordObj` reads the printed honest record back through `JsonSpec`'s `parse_print`, which hands it a parsed
 value alike the record (`Same`), and every check after that reads the parsed value only through `Same`. So the same
 checks pass at any value alike the honest record (`decodeJ_same`): S1–S14 at `Record.decodeJWith`, no parse. It takes
-no JSON premise: S3 reads `require_link` by a match (`Record.isTrue`), and U1's `canon` is total (`canon_ok`,
+no JSON premise: S3 reads `require_link` by a match, and U1's `canon` is total (`canon_ok`,
 `canon_same`).
 
 * **Alike objects by lookup** (`same_mkObj`): a well-formed object (`WfObj`) is alike an object of distinct keys when
@@ -123,7 +123,7 @@ theorem decodeJ_same {h : ByteArray → ByteArray}
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
   unfold Record.decodeJWith
   simp only [hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
-    beq_self_eq_true, check_true, Record.isTrue]
+    beq_self_eq_true, check_true]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
   have hlm : Record.str l "mode" = .ok "exchange" := str_same hls (gL (by simp [linkList]))

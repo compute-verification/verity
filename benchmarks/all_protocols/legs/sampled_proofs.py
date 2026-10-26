@@ -4,7 +4,9 @@
 The audit is `benchmarks/prove_path/records_audit.py`'s, as `run.sh` with ``PP_TORCH_LOOP=1`` runs it: the registration
 held to the circuit the verifier registered before the loop ran (``--circuit``) and to the run root the loop published,
 the draw on live coins read after the receipt, C-Flock ``--zk`` behind the Lean firewall on the drawn members, and the
-audit record of the verifier of record (`one_stage.verifier.audit_record`, the Lean ``sampled-proofs-verifier``).
+audit record of the verifier of record (`one_stage.verifier.audit_record`, the Lean ``sampled-proofs-verifier``). A
+period whose loop reads registered weights (``period.json``'s ``registered``, the runner's ``--registered``) is audited
+against their pin (``records_audit.py --registered``).
 
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
@@ -162,7 +164,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
         argv = [sys.executable, str(RECORDS_AUDIT), "audit", "--window", str(period_dir), "--law", p["law"],
                 "--circuit", p["circuit"], "--run", p["run_root"], "--delta", repr(float(delta)), "--port", str(base),
                 "--m0-pythonpath", t["m0-pythonpath"], "--bin", t["flock-circuit"], "--lean", t["flock-verify"],
-                "--firewall", t["flock-firewall"], "--out", str(work)]
+                "--firewall", t["flock-firewall"], "--out", str(work),
+                *(["--registered", p["registered"]] if p.get("registered") else [])]
         with open(out / "audit.log", "w") as log, open(out / "audit.err", "w") as err:
             subprocess.run(argv, cwd=ROOT, env=env, stdout=log, stderr=err, check=False)
     keep(work, out / "audit")

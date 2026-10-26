@@ -284,8 +284,10 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
         pad = lambda a: np.concatenate([a[:, :T], np.zeros((len(a), 32 - T), a.dtype)], axis=1)
         want = E.evaluate_batch(coord, pad(xs), pad(ws))
         for k in (32, 48, 64):
-            got = E.evaluate_batch(bind(G.GemmCoordinatePad, T=T, K=k, **G.GEMM_HOPPER), xs[:, :T], ws[:, :T])
-            assert np.array_equal(got, want), (T, k)
+            pad_k = bind(G.GemmCoordinatePad, T=T, K=k, **G.GEMM_HOPPER)
+            assert np.array_equal(E.evaluate_batch(pad_k, xs[:, :T], ws[:, :T]), want), (T, k)
+            ref = E.evaluate_batch(pad_k, xs[:200, :T], ws[:200, :T], kernel="reference")
+            assert np.array_equal(ref, want[:200]), (T, k)
     step = G.GEMM_HOPPER["DOT"]
     acc, a, b = KT.sample_tc(np.random.default_rng(35), 50_000, E.batch.signature_of(step)[0])
     edge = np.array([0x80000000, 0, 1, 0x80000001, 0x7F800000, 0xFF800000, 0x7FC00001, 0xFFFFFFFF], np.uint32)
@@ -298,25 +300,57 @@ def test_the_padded_coordinate_is_the_coordinate_on_zero_padded_operands_at_ever
     assert not (E.evaluate_batch(step, acc[:50_000], a, b).astype(np.uint32) == 0x80000000).any()
 
 
-def test_the_padded_and_row_split_coordinates_refuse_t_and_r_outside_their_range() -> None:
+def test_the_pv_row_is_the_padded_coordinate_on_each_of_v_s_columns() -> None:
+    """`PvRow_v1{T, K=32, D=64}`'s dim d is `GemmCoordinatePad_v1{T, K=32}` of p and (v0[d], ..., v{T-1}[d]), at T = 1, 8 and
+    32, on the reference; the registered kernel gives the same words. Each key row is one 1,024-bit (128-byte) port, over the
+    111 bytes C-Flock needs of some row of a unit, and the output is one 1,024-bit row."""
+    import numpy as np
+
+    from verity.ml.circuits import evaluation as E
+    from verity.ml.kernels import tc as KT
+
+    n, D = 6, 64
+    coord = bind(G.GemmCoordinate, K=32, **G.GEMM_HOPPER)
+    xs, ws = KT.sample_tc(np.random.default_rng(36), n * D, E.batch.signature_of(coord)[0])
+    for T in (1, 8, 32):
+        p, v = xs[:n, :T], ws.reshape(n, D, 32)[:, :, :T].transpose(0, 2, 1)
+        vs = [np.ascontiguousarray(v[:, t]) for t in range(T)]
+        row = bind(G.PvRow, T=T, K=32, D=D, **G.GEMM_HOPPER)
+        got = E.evaluate_batch(row, p, *vs, kernel="reference").reshape(n, D)
+        pad = bind(G.GemmCoordinatePad, T=T, K=32, **G.GEMM_HOPPER)
+        cols = [E.evaluate_batch(pad, p, np.ascontiguousarray(v[:, :, d]), kernel="reference").reshape(n) for d in range(D)]
+        assert np.array_equal(got, np.stack(cols, axis=1)), T
+        assert np.array_equal(E.evaluate_batch(row, p, *vs).reshape(n, D), got), T
+        params, ret = row.signature()
+        assert [(name, sum(t.leaf_widths())) for name, t in params] == [("p", 16 * T), *((f"v{t}", 1024) for t in range(T))]
+        assert sum(ret.leaf_widths()) == 1024
+
+
+def test_the_padded_row_split_and_pv_forms_refuse_t_r_and_d_outside_their_range() -> None:
     for T in (0, -1, 33):
         with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
             bind(G.GemmCoordinatePad, T=T, K=32, **G.GEMM_HOPPER)
+        with pytest.raises(ValueError, match=re.escape(f"T={T} is not in 1..K=32")):
+            bind(G.PvRow, T=T, K=32, D=64, **G.GEMM_HOPPER)
     for R in (0, 3, 256):
         with pytest.raises(ValueError, match=re.escape(f"R={R} does not divide K=128")):
             bind(G.ScaledMmS8CoordinateRows, K=128, R=R, **G.GEMM_SM90_S8)
+    for D in (0, -64):
+        with pytest.raises(ValueError, match=re.escape(f"D={D} is not a head width")):
+            bind(G.PvRow, T=8, K=32, D=D, **G.GEMM_HOPPER)
 
 
 # ---- the K a Definition binds ---------------------------------------------------------------------------------------------
 
 #: each GEMM Definition, its step width k and the rest of a binding
 FAMILIES = [(G.DotBf16, 16, G.GEMM_HOPPER), (G.GemmCoordinate, 16, G.GEMM_AMPERE),
-            (G.GemmCoordinatePad, 16, {"T": 1, **G.GEMM_HOPPER}), (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
+            (G.GemmCoordinatePad, 16, {"T": 1, **G.GEMM_HOPPER}), (G.PvRow, 16, {"T": 1, "D": 2, **G.GEMM_HOPPER}),
+            (G.Gemm, 16, {"N": 3, **G.GEMM_AMPERE}),
             (G.GemmCoordinateE4m3, 32, G.GEMM_SM120_E4M3), (G.GemmCoordinateNvf4, 64, G.GEMM_SM120_NVF4),
             (G.GemmCoordinateMxf4, 64, G.GEMM_SM120_MXF4), (G.GemmAccumulatorS8, 32, G.GEMM_SM120_S8),
             (G.ScaledMmS8Coordinate, 32, G.GEMM_SM120_S8), (G.ScaledMmS8, 32, {"N": 2, **G.GEMM_SM120_S8}),
             (G.ScaledMmS8CoordinateRows, 32, {"R": 1, **G.GEMM_SM90_S8})]
-S8_FAMILIES = FAMILIES[7:]
+S8_FAMILIES = FAMILIES[8:]
 
 
 @pytest.mark.parametrize("defn,k,rest", FAMILIES, ids=[d.name for d, *_ in FAMILIES])

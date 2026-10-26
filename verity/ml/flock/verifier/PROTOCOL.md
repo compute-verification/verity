@@ -1181,7 +1181,7 @@ An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound
 check, as `Flock.Qcall` documents them.
 
 **σ, a Boolean Program's lift of its word Program** (`Flock.Sigma`, `flock-verify sigma-check WORD BITS`; the mirror is
-`verity_vllm.program.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
+`verity.ml.definitions.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
 partition of record is its word Program's, lifted by σ (each word Definition to its Boolean version), and the verifier checks
 the lift on the two descriptors, in their size and never over the unrolled circuit. The Boolean descriptor carries σ as data:
 `"word": {"program_sha512": <the word descriptor's SHA-512, hex>, "sigma": {<word definition id>: <Boolean definition id>}}`,
@@ -1678,8 +1678,8 @@ reason, and one whose verdict is `refused: <why>: a statement form the soundness
 4. at most one table without `--zk` (§16.12): `<J> tables in a session without --zk`; and at most
    `ProvedScope.zkTableCap` (2^16) with it, the bound ZK's tape premise holds over: `<J> tables in a --zk session, more
    than 65536`. Under `--plain-tables` (never with `--zk`), the plain path past one table, `ProvedScope.checkP`: a
-   statement with public outputs (`<name>, a statement with hidden outputs under --plain-tables`) at up to
-   `Tags.MAX_TABLES` (64) tables (`<J> tables in a session under --plain-tables, more than 64`), every other rule as
+   statement with public outputs, or with hidden outputs and `hm96-sha512/v1` leaves (`<name>, a statement with hidden
+   outputs and <leaf> leaves under --plain-tables`), at up to `Tags.MAX_TABLES` (64) tables (`<J> tables in a session under --plain-tables, more than 64`), every other rule as
    at one table without `--zk`, and the verifier's own program held to the circuit's (`ProvedScope.programP`): its
    `--program` bytes' digest (`programDigest`, the verdict's `program_sha512`) must be META's `program_sha512`, refused
    as `refused: the verifier's program (--program, program_sha512 <h>) is not the circuit's (META program_sha512 <m>)`,
@@ -1764,13 +1764,17 @@ statement's case (public or hidden outputs, `setupH` or `Stmt.setupHidden`; unde
 `--zk --registered F` at hidden outputs, `FailClosed.SoundZHJR`, `ZkReg.zk_session_soundHJR` over `VerifiesZKR`; without
 `--zk`, `--registered F` at hidden outputs, `FailClosed.SoundExecHR` over `VerifiesR`, the hidden headline with every
 drawn unit's registered reads checked; both on rows that read no `pub.tables = none` and so cover rule 6's shared-row
-exception), and elsewhere `--registered F` accepts no more than the verifier does without it. Its third conjunct, `FailClosed.SoundExecJ`, is `--plain-tables`': over
-`VerifiesP` (accepted and `ScopeP`, `checkP` passing), a plain session of public outputs at 1 to 64 tables under the
-live subset draw is bounded by the subset law's miss, the key-switch average and the link bound
-(`PlainJ.plain_session_soundJ`, at `Prog.flock_headline_live_tables_subset_miss`), with no named assumption beyond the
-one-table plain claim's. Its first part says what the bound is about: every session `--plain-tables` accepts is over a
-circuit whose META `program_sha512` is the verifier's own program's digest (`FailClosed.ProgramOfCircuit`), and the bound
-is at that circuit's unit's key program (`keyProg`). That the circuit's gates compute the program is META's binding, which
+exception), and elsewhere `--registered F` accepts no more than the verifier does without it. Its third conjunct is `--plain-tables`': over `VerifiesP` (accepted and
+`ScopeP`, `checkP` passing), a plain session at 1 to 64 tables under the live subset draw is bounded by the subset law's
+miss, the key-switch average and the link bound, with no named assumption beyond the one-table plain claims'. At public
+outputs it is `FailClosed.SoundExecJ` (`PlainJ.plain_session_soundJ`, at `Prog.flock_headline_live_tables_subset_miss`),
+at the circuit's unit's key program (`keyProg`). At hidden outputs it is `FailClosed.SoundExecHJ`
+(`PlainHJ.plain_session_soundHJ`, at `Prog.flock_headline_live_tables_subset_missX`), each table set up with
+`Stmt.setupHidden` and its rows, outputs included, bound as one-table hidden-output headlines bind them: at the unit's key
+program where the wires feed neither the unit nor the outputs (`SoundExecHJU`), and at the template instance's program
+(`instProg`) where they feed either (`SoundExecHJG`). Each one's first part says what the bound is about: every session
+`--plain-tables` accepts is over a circuit whose META `program_sha512` is the verifier's own program's digest
+(`FailClosed.ProgramOfCircuit`). That the circuit's gates compute the program is META's binding, which
 the verifier does not recompile. The claims layer (`FlockDeploy`, `InScope`) reads `check` without the flag, so its plain
 key-switch results stay at one table. The live server refuses the same statements with the same reason
 (`verity/ml/flock/live`'s `proved_scope`), also after the session's checks: its verdict is the refusal, and
