@@ -50,6 +50,33 @@ theorem tick_foldl (P : m.Prog Θ) : ∀ (θs : List Θ) (σ : m.State Θ) (l : 
     · rw [ih.2 θ' (fun e => hθ' (by simp [e]))]
       exact h2 θ' (fun e => hθ' (by simp [e]))
 
+/-- An instruction's effect on the stores (a branch has none). -/
+def instrExec : m.Instr → m.Mem → m.Mem
+  | .op o src dst pred, M => Machine.execOp o src dst pred M
+  | .bra _ _, M => M
+
+theorem step_mem (P : m.Prog Θ) (σ : m.State Θ) (θ : Θ) (h : σ.pc θ = 0) :
+    (Machine.step P σ θ).1.mem = ((P θ)[0]?.toList).foldl (fun M i => instrExec i M) σ.mem := by
+  unfold Machine.step
+  rw [h]
+  split <;> rename_i heq <;> simp [heq, instrExec]
+
+theorem tick_mem (P : m.Prog Θ) : ∀ (θs : List Θ) (σ : m.State Θ) (l : List m.Instr), θs.Nodup →
+    (∀ θ ∈ θs, σ.pc θ = 0) →
+    (θs.foldl (fun acc θ => let r := Machine.step P acc.1 θ; (r.1, acc.2 ++ r.2.toList)) (σ, l)).1.mem =
+      (θs.filterMap fun θ => (P θ)[0]?).foldl (fun M i => instrExec i M) σ.mem
+  | [], σ, l, _, _ => by simp
+  | θ :: θs, σ, l, hnd, hpc => by
+    obtain ⟨_, h2⟩ := step_spec P σ θ (hpc θ (by simp))
+    have hnd' := List.nodup_cons.mp hnd
+    have ih := tick_mem P θs (Machine.step P σ θ).1 (l ++ (Machine.step P σ θ).2.toList) hnd'.2
+      (fun θ' hθ' => by
+        rw [h2 θ' (fun e => hnd'.1 (e ▸ hθ'))]
+        exact hpc θ' (by simp [hθ']))
+    simp only [List.foldl_cons]
+    rw [ih, step_mem P σ θ (hpc θ (by simp))]
+    rcases hθ : (P θ)[0]? with _ | i <;> simp [hθ]
+
 end Run
 
 /-- The schedule of a plan's ticks from tick `t₀` on. -/
@@ -106,6 +133,51 @@ theorem run_schedFrom (plan : List (List Ins)) : ∀ (rest : List (List Ins)) (t
       simp only [Function.comp, prog, hget]
       cases is[s]? <;> rfl
     rw [List.nil_append, List.filterMap_map, hfun, filterMap_range_getElem]
+
+theorem tick_filterMap (plan : List (List Ins)) (t₀ : ℕ) (is : List Ins) (hget : plan.getD t₀ [] = is) :
+    ((List.range is.length).map fun s => (t₀, s)).filterMap
+      (fun θ => (prog (x := x) (cap := cap) (oracle := oracle) plan θ)[0]?) = is.map Ins.instr := by
+  have hfun : ((fun θ => (prog (x := x) (cap := cap) (oracle := oracle) plan θ)[0]?) ∘ fun s => (t₀, s)) =
+      fun s => is[s]?.map Ins.instr := by
+    funext s
+    simp only [Function.comp, prog, hget]
+    cases is[s]? <;> rfl
+  rw [List.filterMap_map, hfun, filterMap_range_getElem]
+
+/-- A plan's effect on the stores: its ticks in order, each tick's instructions in order. -/
+def execPlan (plan : List (List Ins)) (M : (machine x cap oracle).Mem) : (machine x cap oracle).Mem :=
+  plan.foldl (fun M is => is.foldl (fun M a => instrExec a.instr M) M) M
+
+theorem run_mem_schedFrom (plan : List (List Ins)) : ∀ (rest : List (List Ins)) (t₀ : ℕ)
+    (σ : (machine x cap oracle).State (ℕ × ℕ)), plan.drop t₀ = rest → (∀ θ, t₀ ≤ θ.1 → σ.pc θ = 0) →
+    (Machine.run (prog plan) σ (schedFrom t₀ rest)).1.mem = execPlan rest σ.mem
+  | [], _, _, _, _ => rfl
+  | is :: rest, t₀, σ, hd, hpc => by
+    have hget : plan.getD t₀ [] = is := by
+      have := congrArg (·[0]?) hd
+      simp only [List.getElem?_drop, Nat.add_zero, List.getElem?_cons_zero] at this
+      simp [List.getD_eq_getElem?_getD, this]
+    have hd' : plan.drop (t₀ + 1) = rest := by
+      rw [← List.drop_drop, hd]; rfl
+    have hnd : ((List.range is.length).map fun s => (t₀, s)).Nodup :=
+      (List.nodup_range).map (fun a b h => (Prod.mk.inj h).2)
+    have hpc0 : ∀ θ ∈ (List.range is.length).map (fun s => (t₀, s)), σ.pc θ = 0 := fun θ hθ => by
+      obtain ⟨s, _, rfl⟩ := List.mem_map.mp hθ
+      exact hpc _ le_rfl
+    obtain ⟨_, h2⟩ := tick_foldl (prog plan) _ σ [] hnd hpc0
+    have h3 := tick_mem (prog plan) _ σ [] hnd hpc0
+    simp only [schedFrom, Machine.run, Machine.tick]
+    rw [run_mem_schedFrom plan rest (t₀ + 1) _ hd' (fun θ hθ => by
+      rw [h2 θ (fun hm => by
+        obtain ⟨s, _, rfl⟩ := List.mem_map.mp hm
+        exact absurd hθ (by simp))]
+      exact hpc θ (by omega)), h3, tick_filterMap plan t₀ is hget, List.foldl_map]
+    rfl
+
+theorem run_mem (plan : List (List Ins)) (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
+    (Machine.run (prog plan) σ (sched plan)).1.mem = execPlan plan σ.mem := by
+  rw [sched_eq]
+  exact run_mem_schedFrom plan plan 0 σ List.drop_zero (fun θ _ => hpc θ)
 
 theorem run_plan (plan : List (List Ins)) (σ : (machine x cap oracle).State (ℕ × ℕ)) (hpc : ∀ θ, σ.pc θ = 0) :
     (Machine.run (prog plan) σ (sched plan)).2 = plan.map (List.map Ins.instr) := by
