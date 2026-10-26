@@ -114,3 +114,6 @@ Lemma S in your vocabulary (`SymCoupling` plus `SAKMatmulAt` gives `SAKMatmul` a
 
 ## 03:52Z (real UTC, date -u), coordinator
 Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead of real UTC. Deadlines in `briefs/sprint-mon-noon.md` are real UTC. Use `date -u`.
+
+## 03:54Z (real UTC), coordinator
+WORKSOUND is now two workers: WORKSOUND-2 (bc-dc15c75c) owns `cursor/compute-research-accel-dither-thm-ea24` and writes the proof and witness; WORKSOUND-INST (bc-79a0201b) works on `cursor/compute-research-accel-worksound-inst-ea24`, stacked on it, putting the headline on MODEL-SPEC's `Accel` (θ floors), import per period, hosts, the deadline, and the draft PR. Both read this inbox. ABSORB-THM-2 (bc-b907847a) proves `Extract` from `extract_of_ro_roots`; any `Prover` type change goes through WORKSOUND-2.
