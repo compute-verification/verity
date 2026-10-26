@@ -202,9 +202,10 @@ def v2_scan(budget: float = 0.004) -> None:
 V2_CARDS = {
     # name: (INT8 dense MAC/s, SHA-512 compressions/s at the public best, tensor MACs per ALU op, s_b)
     # SHA-512: RT-UNITS's paper IMAD schedules (H200 6.80 G/s; RTX PRO 6000 9.82 G/s at 2092 MHz); SHA_BUILT is the
-    # ALU-only build measured. RT-MODEL M2's 59.2 ALU op on the H200; M13's s_b (b1 wgmma 8×; 0/1 NVFP4 2×).
+    # ALU-only build measured. RT-MODEL M2's 59.2 ALU op on the H200. s_b: b1 wgmma 8× on the H200; on the RTX PRO 6000
+    # ALGO-COST A7's depth-2 Strassen in exact 0/1 FP4, c_bit = 0.5·(7/8)² (0.26 with emulated b1 on the ALU alongside).
     "H200": (MAC_RATE, 6.80e9, 59.2, 8),
-    "RTX PRO 6000": (1.0e15 / 2, 9.82e9, 8, 2),
+    "RTX PRO 6000": (1.0e15 / 2, 9.82e9, 8, 1 / (0.5 * (7 / 8) ** 2)),
 }
 SHA_BUILT = {"H200": 4.79e9, "RTX PRO 6000": 7.13e9}
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
