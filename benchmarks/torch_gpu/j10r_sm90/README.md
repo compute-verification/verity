@@ -50,16 +50,21 @@ INT8, and a slow but exact CUDA unit to fall back on. The fast units are kernels
   (receipts, z, seeds). Writes `check.json` and exits 4 on any difference.
 - `bench.py`: the call's arms interleaved, in an order that rotates each rep:
   - plain, s8_simple's `linear` (#4472, the file sent with the run);
+  - `wgmma`, KP2-S8's `wgmma.scaled_mm` (s8_linear, #4520, its files sent with the run) at its
+    tuned config for the linear and M, held to plain's output on every cell;
   - `torch._int_mm` alone;
   - each build's units (seeds plus `_sm`, the served launch);
-  - plain then the units, back to back;
+  - each plain arm then the units, back to back;
   - the fallback over every unit.
 
   Every arm's last run is held to the fixtures. Reports overhead (units / plain) and gamma ((plain + units) / plain)
-  per call, per layer (q, kv, o, up and down) and per step (52 layers and the head).
+  per call, per layer (q, kv, o, up and down) and per step (52 layers and the head), against s8_simple and against
+  wgmma.
 - `job.sh`: `gpu` runs on vy-dc-h200-3. Before the lease it computes the fixtures and builds the fallback where they
-  weren't sent, and generates the operands. Then, under one lease, it runs the check and the bench. `build` and `cpu`
-  do the build and fixtures on a CPU node. The file's header gives the commands.
+  weren't sent, builds HASH-21's three h1u arms (kr, kra and kraq: the defines and flags of KCOMMIT-FB's j10r90.sh)
+  from this tree where none was sent, builds s8_linear's cubin with its own `build.sh` where its files were
+  sent, and generates the operands. Then, under one lease, it runs the check and the bench. `build` and `cpu` do the
+  fallback's build and the fixtures on a node with nvcc. The file's header gives the commands.
 
 ## Results
 

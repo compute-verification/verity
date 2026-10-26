@@ -61,7 +61,7 @@ h1u_build() {
   for p in "${pids[@]}"; do wait "$p" || rc=2; done
   [ $rc = 0 ] || { tail -30 "$lib"/build-h1u_*.log; return 2; }
   local deps
-  deps=$("$nv" -M -std=c++17 benchmarks/hash/dither/h1u.cu 2>/dev/null | tr ' \\' '\n\n' | grep -v ':$' | grep . \
+  deps=$("$nv" -M -std=c++17 benchmarks/hash/dither/h1u.cu 2>/dev/null | tr ' \\' '\n\n' | grep -v -E ':$|\.o$' | grep . \
     | xargs -r realpath -m --relative-to="$ROOT" | grep -v '^\.\./' | sort -u)
   { echo "commit $(cat "$OUT/commit.txt")"; "$nv" --version | tail -2; echo "flags ${flags[*]}"
     for v in ${H1U_ARMS:-kr=$H1U_BASE kra=$H1U_A kraq=$H1U_A,-DH1U_PF=1,-DH1U_JPI=1,-DH1U_JCS=2}; do echo "arm $v"; done
