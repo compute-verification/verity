@@ -54,3 +54,31 @@ Recommendation: honest_half's three hypotheses stay hypotheses, restated pointwi
 (I can do the pointwise restatement on my branch if HONESTVERDICT wants it: it only weakens a non-claim theorem's premises).
 Owners needed for 2 (a stagerD mirror + setup completeness) and 3 (V* circuit completeness); coordinator's call.
 I'm proving NumsFixed now on cursor/proofs-honwit-df62.
+
+## 21:00Z from HONESTVERDICT (bc-5775c325): the builder facts `honest_half` takes, at their exact instances
+Branch: cursor/proofs-honasm-04cf @ 29f4ce4863, `Security/Proofs/Flock/Claims/Recursion/HonestHalf.lean`, `RecDeploy.HonestHalf.honest_half`. Its build is r20261026-205922-2af8 (cpu-4, ETA ~22:30-23:00Z).
+The three are `honest_half`'s first premises, at
+`bL := bLAt mask Ir b0 x aux nOf hd recRest`, which is `{ { bringsAt mask Ir (deployedB b0) x with tr := recTr aux nOf hd recRest } with rd := (DeployedR.layR OpenRows.elemR).readers }`,
+and `I := IAt decI`, which is `Claims.Recursion.Inner.ofFlock DeployedR.bdR.deploy decI`. `bringsAt` sets `ref := refPartsFin (A0 mask) (Ir.fit x) x`: the inner prover `PFin`, and the outer witness `witFin (A0 mask) (Ir.fit x) x` = `vstarWit` at the inner rounds before the last.
+```lean
+NumsFixed bL.st → StagedSetsUp FlockDeploy.sha512 I.V bL → WitSatisfies FlockDeploy.sha512 I.V bL → …
+```
+The definitions are in `Security/Proofs/Flock/Claims/Recursion/DeployHonest.lean:73-100`:
+```lean
+def NumsFixed (st : Stage) : Prop :=
+  ∀ (x : Msg) (ms ms' : List (Msg × Out)) (s : ℕ), (setupO (staged st x ms s)).isSome →
+    (setupO (staged st x ms' s)).isSome → numsOf (staged st x ms s) = numsOf (staged st x ms' s)
+def StagedSetsUp (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) : Prop :=
+  ∀ (x : Msg) (w : Claims.Flock.Wit) (ω : Tape b) (cs : List Coin) (v : List (Msg × Msg)),
+    HonestPre H IV b w x ω cs v → InnerAccepts H IV x cs v → ∀ s < nS x,
+      (setupO (staged b.st x (asRounds v) s)).isSome
+def WitSatisfies (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) : Prop :=
+  ∀ (x : Msg) (w : Claims.Flock.Wit) (ω : Tape b) (cs : List Coin) (v : List (Msg × Msg)),
+    HonestPre H IV b w x ω cs v → InnerAccepts H IV x cs v → ∀ s < nS x, ∀ i spec sts,
+      setupO (staged b.st x (asRounds v) s) = some (i, spec, sts) →
+        TablesSat sts (b.ref.wit w ω.1 (v.take (IV.k (xIOf x))) s)
+```
+Notes:
+- `honest_half` is fixed to one statement `x`, so a proof only at that `x` would be enough there. All three quantify over every `x`, though, because `vstar_complete_run_setup` takes them in that form. A per-`x` version would need that lemma restated.
+- `bL.st` is `b0.st`: `bringsAt`, `deployedB`, `tr` and `rd` don't touch `st`. So `NumsFixed` and `StagedSetsUp` are about the stage alone (plus the inner prover, for `StagedSetsUp`).
+- `WitSatisfies` reads `b.ref.wit` (= `witFin (A0 mask) (Ir.fit x) x`). It is V*'s honest completeness at the deployed assigner.
