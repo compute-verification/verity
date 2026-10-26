@@ -11,7 +11,7 @@ One distribution (`verity-vllm`), one package (`verity_vllm`), one subpackage pe
 (Draft 3.1): core Verity nouns get the shortest names (`program`, `query`, `commit`), integration concepts carry their
 qualifier (`runtime` correspondence, `weights_of_record`), implementation artefacts have descriptive compound names
 (`native_collect`).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
-Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocol_options` > `observe` | `commit` >
+Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocols` > `observe` | `commit` >
 `engine` > `query` | `correspondence` > `program` > `collectives` > `config` (lint P9).
 
 ~~~text
@@ -23,7 +23,7 @@ verity_vllm/
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py capture.py pinned.py kernel_trace.py fold/
   acquire/            value acquisition  plan.py install.py stage.py gate.py compiled.py sources/ *_tap_src/
-  protocol_options/   protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
+  protocols/          protocol options   __init__.py (selector, composition) interface.py sampled_proofs.py pous.py pouw.py
   commit/             commitment         merkle.py hashing.py identity.py binding.py padding_steps.py hidden_*.py committer/
   check/              checks -> verdicts match/ replay/ executed_prefix.py verdict.py gates.py weights_of_record.py fold_compare.py ...
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
@@ -266,7 +266,7 @@ parameters, prompt and generated token ids per request) to `llm.records`; `llm.p
 reports, the protocol composition record).  `llm.vllm` is the wrapped `vllm.LLM` (for driving its engine step by step) and
 `llm.model` the served model in this process, the object protocol options install on.
 
-A protocol option's settings that come from the engine are filled from the built one (`protocol_options.from_engine`),
+A protocol option's settings that come from the engine are filled from the built one (`protocols.from_engine`),
 and one that can't be filled there is refused by name.  PoUW's H1 needs only its public parameters: on an int8 pin, with
 the int8_exact parts registered (`engine.int8_ranks.register(("linears", "attention"))`),
 `LLM(model, revision=..., quantization="verity_int8", attention_backend="CUSTOM", max_num_batched_tokens=T,
@@ -287,16 +287,16 @@ else replaces an attribute on a vLLM, torch or Triton object.
 
 **What an add-on registers.**  Two kinds:
 
-- *A protocol option* is one adapter module in `protocol_options/` with `NAME`, `schemes()`, `refusals(scheme, ctx)` and
+- *A protocol option* is one adapter module in `verity_vllm/protocols/` with `NAME`, `schemes()`, `refusals(scheme, ctx)` and
   `install(scheme, target) -> Installed`, plus the optional `requires_build`, `EXECUTES`, `keeps_weight_copy` and
-  `commit_weights` (the contract is `protocol_options/interface.py`).  It finds its sites by type, never by module name,
+  `commit_weights` (the contract is `verity_vllm/protocols/interface.py`).  It finds its sites by type, never by module name,
   and patches only through `target.hooks(entry)`.  Its protocol logic stays in its `verity.core.protocols` package.
 - *A benchmark arm or experiment* patches only through a `Hooks` tagged by its id (`bench:<arm>`).  The harness
   (`verity_bench.vllm.runner`, benchmarks') calls its `install` before the engine is built, its `ready` once
   `llm.vllm` and `llm.model` exist, and its `begin_run` and `end_run` around every run; it refuses an arm whose
   `install` added a live entry outside its tag, and uninstalls the arm's hooks when the engine closes.
 
-**Order.**  At each site the nesting is `protocol_options.SITES`, outermost first: at `LinearBase.quant_method.apply`,
+**Order.**  At each site the nesting is `protocols.SITES`, outermost first: at `LinearBase.quant_method.apply`,
 POUS wraps PoUW, which executes (a site has at most one executor, `EXECUTES`).  Sampled proofs commits at module
 boundaries, outside every site.  A composition runs in two phases: every option first commits to the plaintext weights
 (`commit_weights`, model untouched), then each installs in `config.PROTOCOLS` order, innermost first.  Uninstall is the
@@ -332,17 +332,17 @@ measure on a stub clock.  The capture's timing-only mode (`observe.capture.Captu
 
 ## Protocol options
 
-PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocol_options/`), each enabled on its own and any of them
+PoUW, POUS and sampled proofs are protocol options (`verity_vllm/protocols/`), each enabled on its own and any of them
 in one run.  A set is `name:scheme` entries, one per protocol (`config.parse_protocols`), off by default: `LLM(protocols=...)`
 installs PoUW and POUS on a serving engine; a row takes its set from `verity-vllm row --protocols` (`PROTOCOLS`) or its
 row file's `engine.target`, every stage reads it as the target's `protocols` (`TargetProfile.protocols`; unset is sampled proofs
 alone, the Commit as it has always run), `run_row` refuses a set it cannot run before any stage, and the Commit installs
 the others once its committers registered the weights of record (the replay reads live weights through what an option
-released: `protocol_options.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
+released: `protocols.weights_view`).  Adapters install innermost first (PoUW replaces the linear GEMMs, POUS decodes the
 weights they read, sampled proofs commits what the model computed) and uninstall in reverse, every patch and service through
 `engine/hooks.py` tagged with its option.  The protocol logic is `verity.core.protocols.pouw`, `verity.core.protocols.pous` and `verity.core.protocols.sampled_proofs`';
 the adapters (`pouw.py`, `pous.py`, `sampled_proofs.py`) are thin.  A Commit admits only options its Program describes (POUS's
-bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocol_options.CIRCUITS` and
+bit-identical decode; an executor whose scheme has a circuit in its protocol package, `protocols.CIRCUITS` and
 `traced_as`: PoUW's `ncp-v2`), so its verdict is of record as usual and carries the set
 (`verdict.protocols`) and the composition record's digest.
 PoUW is refused beside sampled proofs until its modeled circuit lands (its `traced_as` is None).  PoUW's settings are `coins` (the epoch's challenger,
@@ -359,6 +359,11 @@ and `pouw_h1_challenger.session_reason` holds a pass to it, recomputing the root
 PoUW keeps no weight-derived copy and POUS composes with it. A call holds the formed operands of the one layer it
 executes (3 B per weight of that layer: 1.41 GB for a 70B gate_up), plus under `FORM_BYTES` (256 MiB) of host work. PoUW executes `ncp-v1` and `ncp-v1-shift24` on the host in numpy, and its
 placeholders are listed in its `info()`.
+POUS (`pous:p2-16448/v4`) holds the linears' registered weights only as `C* = P2-Enc(W, salt)` at P2's registered point
+(`benchmarks/pous/p2_v1/store.py`'s layout, scales outside `W`) and decodes each at use (`benchmarks/torch_gpu/p2_stage`).
+Settings: `salt_source` (the auditor's coin, drawn after the commitment), `p2_lib`, `experimental`. A period's audit is
+`leg(period_dir, node, out)`, via `challenger_party`. Wiring and GPU timings (`tests/protocols/pous_gpu.sh`):
+note:20261026T1739Z-report-vllm-pous.
 
 **PoUW is not auditable yet.**
 
