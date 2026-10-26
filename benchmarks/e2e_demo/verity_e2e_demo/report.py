@@ -741,7 +741,8 @@ def _sections(sections: Sequence[Mapping[str, Any]], rows: Sequence[Mapping[str,
 
 def _misses(rows: Sequence[Mapping[str, Any]], failures: Sequence[Mapping[str, Any]] | None) -> str:
     missed = [r for r in rows if r["met"] is False]
-    lines = [f"- {r['section']}: **{r['what']}**: {_fmt(r['value'])} against {_target(r)}"
+    lines = [f"- {r['section']}: **{r['what']}**: {_fmt(r['value'])}"
+             + (f" {r['unit']}" if r.get("unit") and not isinstance(r["value"], str) else "") + f" against {_target(r)}"
              + (f" (ratio {r['ratio']:.3g}×)" if r["ratio"] is not None else "") + f". Run {r['run']}." for r in missed]
     if failures:
         lines += [f"- Drawn proof block {_fmt(f['unit'])} ({f['subcircuit']}, step {_fmt(f['step'])}, slot "

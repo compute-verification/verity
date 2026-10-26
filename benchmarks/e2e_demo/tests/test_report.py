@@ -246,7 +246,7 @@ def test_the_fallback_starts_with_its_status_and_needs_no_block_record() -> None
 
 def test_a_missed_target_is_a_visible_failure() -> None:
     out = D.render([], _fallback(value=1.046)).split("## Visible failures")[1]
-    assert "**commit overhead at 4,096 slots**: 1.046 against target ≤ 0.95 s (ratio 1.1×). Run r20261026-191502-b4da." in out
+    assert "**commit overhead at 4,096 slots**: 1.046 s against target ≤ 0.95 s (ratio 1.1×). Run r20261026-191502-b4da." in out
     done = D.render([], _fallback(what="S1 on main", value="open", unit=None, target={"op": "==", "value": "merged"}))
     assert "**S1 on main**: open against target = merged. Run" in done
 
