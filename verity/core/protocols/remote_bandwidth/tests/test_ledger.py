@@ -31,42 +31,56 @@ def node(*, chip_blocks: int = 1, squarings: float = 0.0, disk: float = 0.0, lin
 
 
 def paced(store, p: audit.Params, plan=None):
-    """A paced session driven on its own schedule: each pass takes `PASS_NS` from its coin's arrival or the pass before,
-    each message `DOWN_NS` to the prover and `UP_NS` back; the prover runs at most k passes under a coin, moves to the
-    next coin once it has arrived, and stops at the close; the verifier sends each boundary message at
-    `Session.next_boundary_ns`, recomputed after every root.  Each pass's own coin (`Session.seed`) is asked for as
-    its root arrives, which keeps the pace's times; its round trip is `timing`'s.  Returns the session, prover,
-    passes, clock and each root's arrival."""
+    """A paced session driven on its own schedule, as `benchmarks/remote_session`'s prover runs one: each message takes
+    `DOWN_NS` to the prover and `UP_NS` back, and a pass `PASS_NS`.  The prover asks for each pass's coin
+    (`Session.seed`) as it sends the root before it, or once window t's challenge has arrived, after k passes in the
+    window before once its next challenge has; the pass is of the latest window whose challenge left before its coin,
+    from the coin's arrival, and none runs once the close left before its coin.  The verifier sends each boundary
+    message at `Session.next_boundary_ns`, recomputed after every event, ahead of a request that arrives with it.
+    Returns the session, prover, passes, clock and each root's arrival."""
     clock = Clock()
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     s.start()
-    coin_at, closed_at = {0: DOWN_NS}, None
+    sent = 0
+    coins_ = {0: (DOWN_NS, sent)}
+    closed = None
     passes, arrivals = {}, {}
-    t = i = ready = step = 0
-    pending = None
+    t = i = step = 0
+    ready, asked, flying, stopped = DOWN_NS, None, None, False
     while True:
-        if pending is None:
-            if i and t + 1 in coin_at and (coin_at[t + 1] <= ready or i == p.pace.k):
-                t, i = t + 1, 0
-            stopped = closed_at is not None and closed_at <= ready
-            if not stopped and i < p.pace.k and t in coin_at:
-                start = max(ready, coin_at[t])
-                pending, ready = (start + PASS_NS + UP_NS, t, i), start + PASS_NS
+        if asked is None and flying is None and not stopped:
+            if closed is not None and closed[0] <= ready:
+                stopped = True
+            elif i < p.pace.k:
+                asked = ready + UP_NS
+            elif t + 1 in coins_:
+                asked = max(ready, coins_[t + 1][0]) + UP_NS
+        due = [x for x in (asked, flying and flying[0]) if x is not None]
         b = s.next_boundary_ns()
-        if b is not None and (pending is None or b <= pending[0]):
-            clock.now = max(clock.now, b)
+        if b is not None and (not due or b <= min(due)):
+            clock.now, sent = max(clock.now, b), sent + 1
             if s.boundary() is None:
-                closed_at = clock.now + DOWN_NS
+                closed = (clock.now + DOWN_NS, sent)
             else:
-                coin_at[len(s.windows) - 1] = clock.now + DOWN_NS
+                coins_[len(s.windows) - 1] = (clock.now + DOWN_NS, sent)
             continue
-        if pending is None:
+        if not due:
             break
-        clock.now, u, j = pending
-        ps = prover.run(s.seed(), u, j, plan and plan(u, j))
+        if asked is not None:
+            clock.now, asked, sent = asked, None, sent + 1
+            opening, reply = s.seed(), clock.now + DOWN_NS
+            ready = reply + PASS_NS
+            if closed is not None and closed[1] < sent:
+                stopped = True
+                continue
+            if (u := max(u for u, (_, n) in coins_.items() if n < sent)) != t:
+                t, i = u, 0
+            flying = (ready + UP_NS, t, i, prover.run(opening, t, i, plan and plan(t, i)))
+            continue
+        clock.now, u, j, ps = flying
         assert s.receive(u, j, ps.root, ps.plan.runs, step=step) is None
-        passes[u, j], arrivals[u, j], pending, step, i = ps, clock.now, None, step + 1, i + 1
+        passes[u, j], arrivals[u, j], flying, step, i = ps, clock.now, None, step + 1, i + 1
     return s, prover, passes, clock, arrivals
 
 
@@ -80,17 +94,19 @@ def k1(store):
 
 
 def test_a_paced_session_releases_a_coin_every_k_passes_and_records_arrivals(store, k1) -> None:
-    """At k = 1 each window's boundary leaves once the window before has its root (window 0's at once), so the honest
-    prover never waits on a coin, and each window holds one pass, its root's arrival on the verifier's clock."""
+    """At k = 1 each window's boundary leaves once its pass's coin is out, so that pass is its last and the next
+    challenge is at the prover by its root: a pass every `PASS_NS` + `UP_NS` + `DOWN_NS`, its coin a round trip
+    after the root before it, and each window holds one pass, its root's arrival on the verifier's clock."""
     r, arrivals = k1
     assert r.pace == Pace(1, 1000) and r.public()["pace"] == {"k": 1, "window_ns": 1000}
-    assert [w.released_ns for w in r.windows] == [0, 1, 350, 650, 950]
-    assert [w.arrived_ns for w in r.windows] == [(350,), (650,), (950,), (1250,), (1550,)]
+    assert [w.released_ns for w in r.windows] == [0, 50, 400, 750, 1100]
+    assert [w.arrived_ns for w in r.windows] == [(400,), (750,), (1100,), (1450,), (1800,)]
+    assert PASS_NS + UP_NS + DOWN_NS == 350
     assert {(t, 0): a for t, (a,) in enumerate(w.arrived_ns for w in r.windows)} == arrivals
-    assert [w.deadline_ns for w in r.windows] == [1 + A, 350 + A, 650 + A, 950 + A, 1250 + A]
+    assert [w.deadline_ns for w in r.windows] == [50 + A, 400 + A, 750 + A, 1100 + A, 1450 + A]
     s, prover, passes, clock, _ = paced(store, params(windows=3, samples=N, window_ns=1, pace=Pace(3)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
-    assert all(1 <= w.passes <= 3 for w in s.record().windows)
+    assert [w.passes for w in s.record().windows] == [3, 3, 3]
 
 
 def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(store) -> None:
@@ -103,16 +119,18 @@ def test_next_boundary_is_the_stated_window_unpaced_and_the_pace_when_paced(stor
     p = params(windows=3, window_ns=5, pace=Pace(2))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     s.start()
-    assert s.next_boundary_ns() == A, "not due before its first root: at the latest one allowance after its coin"
+    assert s.next_boundary_ns() == 2 * A, "not due before its k-th pass's coin: at the latest k allowances after its coin"
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(s.seed(), 0, 0, None)
+    assert s.next_boundary_ns() == 2 * A, "its first pass's coin out: not due"
     assert s.receive(0, 0, ps.root, step=0) is None
-    assert s.next_boundary_ns() == 5, "due at k − 1 = 1 root: as soon as the stated window allows"
-    for i in (1, 2):
-        ps = prover.run(s.seed(), 0, i, None)
-        v = s.receive(0, i, ps.root, step=i)
-    assert v == audit.Verdict(0, False, "order"), "a window's (k + 1)-th root is out of turn"
+    assert s.next_boundary_ns() == 2 * A, "k − 1 = 1 root and no coin out: not due"
+    seed = s.seed()
+    assert s.next_boundary_ns() == 5, "due once its k-th pass's coin is out: as soon as the stated window allows"
+    assert s.receive(0, 1, prover.run(seed, 0, 1, None).root, step=1) is None
+    ps = prover.run(s.seed(), 0, 2, None)
+    assert s.receive(0, 2, ps.root, step=2) == audit.Verdict(0, False, "order"), "a window's (k + 1)-th root is out of turn"
 
 
 def test_a_pace_has_a_closing_window_and_a_record_of_one_window_has_no_time_held_line(k1) -> None:
@@ -168,22 +186,22 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
 
 
 def test_a_paced_session_reads_gamma_per_fixed_window(k1) -> None:
-    """`k1` spans [0, 1620) (its last deadline, 1250 + A), so at T = 1,000 its fixed windows are [0, 1000) and
-    [1000, 1620), whatever its coins' times.  A pass is in the one that holds it whole, from its challenge to its
-    root: windows 0 to 2's ([0, 350], [1, 650], [350, 950]) in the first, while windows 3's and 4's ([650, 1250] and
-    [950, 1550]) straddle 1,000 and are in neither, so the second credits nothing."""
+    """`k1` spans [0, 1820) (its last deadline, 1450 + A), so at T = 1,000 its fixed windows are [0, 1000) and
+    [1000, 1820), whatever its coins' times.  A pass is in the one that holds it whole, from its challenge to its
+    root: windows 0's and 1's ([0, 400], [50, 750]) in the first and window 4's ([1100, 1800]) in the second, while
+    windows 2's and 3's ([400, 1100] and [750, 1450]) straddle 1,000 and are in neither."""
     r, _ = k1
     n = node(chip_blocks=2, squarings=1e9)
-    assert ledger.windows(r) == [(0, 1000), (1000, 1620)]
+    assert ledger.windows(r) == [(0, 1000), (1000, 1820)]
     g = ledger.gamma(r, n, n.spec_bytes_per_s)
     assert [x.window for x in g.windows] == [0, 1] and len(g.ledger.windows) == 5
     first, second = g.windows
-    assert (first.span_ns, second.span_ns) == (1000, 620)
-    whole = n.spec_bytes_per_s * 1000 / 1e9
-    assert first.timing == pytest.approx(1 - 3 * N * B / whole, rel=1e-12)
-    assert first.chip == pytest.approx(3 * n.chip_bytes / whole, rel=1e-12)
-    assert first.counting == pytest.approx(3 * (audit.named_bits(N) + audit.SLACK_LOG2) / 8 / whole, rel=1e-12)
-    assert (second.timing, second.chip, second.counting, second.sample, second.horizon) == (1, 0, 0, 0, 0)
+    assert (first.span_ns, second.span_ns) == (1000, 820)
+    for x, passes in ((first, 2), (second, 1)):
+        whole = n.spec_bytes_per_s * x.span_ns / 1e9
+        assert x.timing == pytest.approx(1 - passes * N * B / whole, rel=1e-12)
+        assert x.chip == pytest.approx(passes * n.chip_bytes / whole, rel=1e-12)
+        assert x.counting == pytest.approx(passes * (audit.named_bits(N) + audit.SLACK_LOG2) / 8 / whole, rel=1e-12)
     assert first.rebuild == second.rebuild == g.ledger.rebuild > 0
     assert g.ledger == audit.ledger(r, capacity_bytes_per_s=n.spec_bytes_per_s, chip_bytes=n.chip_bytes,
                                     rebuild=n.rebuild(r.codec)), "the session's γ credits every pass"
@@ -269,8 +287,11 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
     record's draws there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
     more than AuditRO's slack covers.  At k = 70, windows of 80, 60 and 60 receipts draw 70, 60 and 60: the ledger
     charges 3·70 at the record's `samples`, so D − (E − Σ Adv) is the slack P·2^-SLACK_LOG2, up to its five additions'
-    rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ."""
-    s, prover, passes, clock = drive(store, params(samples=70), SCHEDULE)
+    rounding.  A record whose draws aren't min(samples, U_t) is refused, and one that states no samples has no δ.
+    Its passes are 250 ns, so window 0 holds four."""
+    four = timing.honest(1000, 3, 250, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
+    assert four.passes == (4, 3, 3)
+    s, prover, passes, clock = drive(store, params(samples=70), four)
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r, n = s.record(), node(squarings=1e9)
     k = [r.samples] * len(r.windows)
@@ -293,14 +314,14 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
 
 
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
-    """On `k1`'s schedule: s = (0, 1, 350, 650, 950), the arrivals 300 later each, so e_0 = 350, L = 650 − 1 and
-    Σ = 950 − 350; no receipt is wrong, so the line charges the chip and 2L·(X·(Σ + 2L) + B) over Σ, B the rebuild
-    and disk bursts and, link-charged, the link window too."""
+    """On `k1`'s schedule: s = (0, 50, 400, 750, 1100), the arrivals (400, 750, 1100, 1450, 1800), so e_0 = 400,
+    L = 750 − 50 and Σ = 1100 − 400; no receipt is wrong, so the line charges the chip and 2L·(X·(Σ + 2L) + B) over Σ,
+    B the rebuild and disk bursts and, link-charged, the link window too."""
     r, _ = k1
     X = 1e-3
     n = node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, bursts=(2, 3, 0))
     snap, held, links = ledger.memory(r, n)
-    L, span = 649, 600
+    L, span = 700, 700
     assert audit.pooled(r)[0] == 0
     assert held.lost_blocks == pytest.approx(1 + 2 * L * (X * (span + 2 * L) + 2 + 3) / span, rel=1e-12)
     assert links.lost_blocks == held.lost_blocks
@@ -362,13 +383,13 @@ def test_the_node_carries_a_write_ceiling_per_tier() -> None:
 
 def test_wrong_receipts_fill_the_groups_at_their_rates(store) -> None:
     """With 7 of 20 receipts drawn a window, the pooled wrong receipts W are spread over the groups at
-    v = (1, 349, 300, 300, L) a wrong read, highest first, at most N a group of one pass."""
+    v = (50, 350, 350, 350, L) a wrong read, highest first, at most N a group of one pass."""
     s, prover, passes, clock, _ = paced(store, params(windows=5, samples=7, window_ns=1, pace=Pace(1, 1000)))
     assert all(v.accepted for v in finish(s, prover, passes, clock))
     r = s.record()
-    W, L, span = audit.pooled(r)[0], 649, 600
+    W, L, span = audit.pooled(r)[0], 700, 700
     assert N < W < 2 * N
-    fill = N * L + (W - N) * 349
+    fill = N * L + (W - N) * 350
     assert ledger.memory(r, node(chip_blocks=0))[1].lost_blocks == pytest.approx(fill / span, rel=1e-12)
 
 

@@ -75,8 +75,10 @@ class Local:
 
     kind = "local"
 
-    def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1) -> Ch.LiveChallenger:
-        return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends, per_coin), secrets.token_bytes)
+    def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1,
+             passes: int = coins.PASSES) -> Ch.LiveChallenger:
+        return Ch.LiveChallenger(coins.SCHEME, k, coins.families(windows, appends, per_coin, passes),
+                                 secrets.token_bytes)
 
     def finish(self, s: audit.Session) -> dict:
         c = s.coins
@@ -96,10 +98,10 @@ class Serve:
         self._live: dict[int, tuple[subprocess.Popen, Path, str, remote.RemoteChallenger]] = {}
 
     def open(self, registration: bytes, k: int, windows: int, appends: int,
-             per_coin: int = 1) -> remote.RemoteChallenger:
+             per_coin: int = 1, passes: int = coins.PASSES) -> remote.RemoteChallenger:
         sid = session_id(registration, k, self.run)
         out = self.out / sid
-        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
+        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin, passes)])
         with open(self.out / f"{sid}.log", "w") as log:
             proc = subprocess.Popen(
                 [self.python, str(SERVE), "--out", str(out), "--port", "0", "--scheme", coins.SCHEME,
@@ -194,9 +196,9 @@ class Gate:
         return self._key
 
     def open(self, registration: bytes, k: int, windows: int, appends: int,
-             per_coin: int = 1) -> remote.RemoteChallenger:
+             per_coin: int = 1, passes: int = coins.PASSES) -> remote.RemoteChallenger:
         self.key()
-        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin)])
+        families = json.dumps([list(f) for f in coins.families(windows, appends, per_coin, passes)])
         r = json.loads(self._ask(["reserve", "--peer", self.peer, "--scheme", coins.SCHEME, "--families", families,
                                   "--epoch", str(k), "--minutes", str(self.minutes)]))
         if r.get("period") != self.period:

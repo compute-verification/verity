@@ -5,7 +5,7 @@ under the default codec and receipt kind, checked by the Python (`checks.check` 
 fresh process at each `--chunks` size: 1024 is `verifier.py`'s, the window's whole draw one thread).
 
 The window is synthetic, and each verifier checks it as it would a prover's: the payload is zero blocks under one
-salt, its tree built whole; each pass's seed chains from the root before it, its receipts real at the drawn positions
+salt, its tree built whole; each pass's seed is the live coin the session releases for it, its receipts real at the drawn positions
 and random elsewhere, committed in a tree whose subtrees off the drawn leaves are random digests (no verifier can tell
 them from a pass's). Every event of the session goes to both verifiers and their answers are compared, the draws
 among them, and the accepted session's record. A negative control flips a byte of the block at draw `samples // 2`,
@@ -269,7 +269,6 @@ def main(argv: list[str] | None = None) -> int:
 
     t0 = time.perf_counter_ns()
     step({"kind": "start"}, lv.released_json(s.start()))
-    challenge, previous = s.windows[0].challenge, reg.digest
     rdomain_depth = merkle_depth(receipts.leaves(N))
     by_pass = defaultdict(list)
     for i, p in draws:
@@ -277,7 +276,9 @@ def main(argv: list[str] | None = None) -> int:
     leaves: dict[tuple[int, int], tuple[bytes, bytes, tuple[bytes, ...]]] = {}
     plan = receipts.Plan.whole(N)
     for i in range(P):
-        seed = receipts.seed(challenge, i, previous)
+        opening = s.seed()
+        events.append(({"kind": "seed"}, lv.seeded_json(opening)))
+        seed = coins.seed(opening)
         cells: dict[int, list[bytes]] = {}
         if i in by_pass:
             receipter = receipts.receipter(reg.receipt, seed, reg.rows)
@@ -297,7 +298,7 @@ def main(argv: list[str] | None = None) -> int:
             root = rng.randbytes(receipts.DIGEST_BYTES)
         clock[0] = i + 1
         step(lv.receive_event(0, i, root, None, i + 1), lv.done_json(s.receive(0, i, root, step=i + 1)))
-        previous = root
+    session["pass_coins"] = [coins.seed(o).hex() for o in s.coins.opened(coins.PASS)]
     clock[0] = T
     step({"kind": "boundary"}, lv.released_json(s.boundary()))
     clock[0] = T + DEADLINE_NS + 1

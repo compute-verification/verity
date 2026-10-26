@@ -164,15 +164,17 @@ def lifetime_windows(window_ns: int, deferred: bool = False, life_ns: int = LIFE
 class Pace:
     """A paced session's schedule (`PROTOCOL.md` §7, "Pacing"): each window is a group of about `k` passes under a live
     coin of its own, the last the closing window, whose reads back the credited span's end (`ledger.memory`).  Window
-    t's boundary message is due once t has k − 1 roots, so that the pass in flight is its last (at k = 1, once window
-    t − 1 has its root, and window 0's at once), and leaves at the latest at max(its challenge + (k − 1)·A, D_(t−1)),
-    never sooner than `Params.window_ns` after its challenge (`Session.next_boundary_ns`).  When its coins leave
+    t's boundary message is due once its k-th pass's coin is out (`Session.seed`: k − 1 roots and the coin seeded in
+    t), so that the pass in flight is its last, whose root a seed released before the boundary keeps within A of it,
+    and leaves at the latest at its challenge + k·A, each pass a seed's round trip and its read after the root before
+    it, never sooner than `Params.window_ns` after its challenge (`Session.next_boundary_ns`).  When its coins leave
     follows its roots, so is a value: its γ is declared per fixed window of `window_ns`, the stated T, from its first
     challenge (`ledger.windows`).
 
     `in_flight` f is the windows in flight: at 2 (the default) the schedule above, the next coin out while the
     window's last pass runs.  At 1, window t's boundary message is due once t has its k roots and leaves after the
-    last of them arrived, at the latest at max(its challenge + k·A, D_(t−1)); a root of window t after its boundary
+    last of them arrived, at the latest at its challenge + (k + 1)·A, its first pass's coin asked for once the
+    challenge has arrived; a root of window t after its boundary
     is out of turn (`order`), so every coin leaves after the root before it (`coins.released_reason`), and the
     prover idles a round trip between windows.  `to_json` names `in_flight` only at 1."""
 
@@ -994,9 +996,9 @@ class Session:
 
     def next_boundary_ns(self) -> int | None:
         """When the next unended window's boundary message (`boundary`) is to leave on the verifier's clock, given the
-        roots received so far: `window_ns` after its challenge, or in a paced session (`Pace`) then once it is due,
-        and at the latest at max(its challenge + (k − 1)·A, the window before's deadline), at one window in flight
-        max(its challenge + k·A, that deadline).  None once every window has ended or before the session starts."""
+        roots received and the pass coin out: `window_ns` after its challenge, or in a paced session (`Pace`) then
+        once it is due, and at the latest at its challenge + k·A, at one window in flight its challenge + (k + 1)·A.
+        None once every window has ended or before the session starts."""
         t = next((t for t, w in enumerate(self.windows) if w.boundary_ns is None), None)
         if t is None:
             return None
@@ -1008,10 +1010,10 @@ class Session:
         if self._one_in_flight:
             if len(w.roots) >= k:
                 return max(soonest, w.arrived[-1])
-            return max(soonest, w.released_ns + k * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
-        if len(w.roots) >= k - 1 and (k > 1 or t == 0 or len(self.windows[t - 1].roots) >= 1):
+            return max(soonest, w.released_ns + (k + 1) * self.params.deadline_ns)
+        if len(w.roots) + (self._seeded is not None and self._seeded[0] == t) >= k:
             return soonest
-        return max(soonest, w.released_ns + (k - 1) * self.params.deadline_ns, self.deadline(t - 1) if t else 0)
+        return max(soonest, w.released_ns + k * self.params.deadline_ns)
 
     @property
     def _one_in_flight(self) -> bool:

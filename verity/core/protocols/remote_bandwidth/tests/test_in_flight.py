@@ -35,19 +35,20 @@ def test_two_in_flight_is_the_default_and_names_nothing(store) -> None:
             Pace(1, 1000, bad)
     s, r = honest(store, 1, 2)
     assert r.public()["pace"] == {"k": 1, "window_ns": 1000}
-    assert [w.released_ns for w in r.windows] == [0, 1, 350, 650, 950]
+    assert [w.released_ns for w in r.windows] == [0, 50, 400, 750, 1100]
     assert s.released_reason(*logged(s)) is None
 
 
 def test_an_honest_session_at_one_in_flight_is_accepted_each_coin_after_the_root_before_it(store) -> None:
-    """At k = 1 each window's boundary leaves once its own root is in, so the prover waits a round trip, `DOWN_NS` +
-    `UP_NS`, between passes: a pass every 350 ns, not 300.  Every challenge after window 0's is opened after the window
-    before's root, and the record names one in flight."""
+    """At k = 1 each window's boundary leaves once its own root is in, so between passes the prover waits a round
+    trip, `DOWN_NS` + `UP_NS`, for the next challenge and another for its pass's coin: a pass every 400 ns, not the
+    350 of two in flight.  Every challenge after window 0's is opened after the window before's root, and the record
+    names one in flight."""
     s, r = honest(store, 1, 1)
-    assert [w.released_ns for w in r.windows] == [0, 350, 700, 1050, 1400]
-    assert [w.arrived_ns for w in r.windows] == [(350,), (700,), (1050,), (1400,), (1750,)]
+    assert [w.released_ns for w in r.windows] == [0, 400, 800, 1200, 1600]
+    assert [w.arrived_ns for w in r.windows] == [(400,), (800,), (1200,), (1600,), (2000,)]
     assert all(r.windows[t + 1].released_ns >= max(w.arrived_ns) for t, w in enumerate(r.windows[:-1]))
-    assert PASS_NS + DOWN_NS + UP_NS == 350
+    assert PASS_NS + 2 * (DOWN_NS + UP_NS) == 400
     assert s.coins.afters(coins.CHALLENGE)[1:] == tuple(w.roots[-1] for w in s.windows[:-1])
     assert s.released_reason(*logged(s)) is None
     assert r.public()["pace"] == {"k": 1, "window_ns": 1000, "in_flight": 1}
@@ -61,14 +62,15 @@ def test_the_boundary_is_due_at_the_windows_kth_root_at_one_in_flight(store) -> 
     p = params(windows=3, window_ns=5, pace=Pace(2, 1000, 1))
     s = Session(p, store.registration, None, challenger(store, p), not_before_ns=0, clock=clock)
     s.start()
-    assert s.next_boundary_ns() == 2 * A, "not due before its k roots: at the latest k allowances after its coin"
+    assert s.next_boundary_ns() == 3 * A, "not due before its k roots: at the latest k + 1 allowances after its coin"
     prover = audit.Prover(store, None, s.commitment, entropy=Entropy(b"receipt salts"))
     clock.now = 100
     ps = prover.run(s.seed(), 0, 0, None)
     assert s.receive(0, 0, ps.root, step=0) is None
-    assert s.next_boundary_ns() == 2 * A, "at k − 1 roots it is still not due"
+    seed = s.seed()
+    assert s.next_boundary_ns() == 3 * A, "at k − 1 roots, the k-th pass's coin out, it is still not due"
     clock.now = 200
-    ps = prover.run(s.seed(), 0, 1, None)
+    ps = prover.run(seed, 0, 1, None)
     assert s.receive(0, 1, ps.root, step=1) is None
     assert s.next_boundary_ns() == 200, "due at its k-th root, when that root arrived"
 

@@ -152,10 +152,11 @@ def register_request(node: bytes, blocks: int, payload_root: bytes, c: codec.Cod
 
 
 def params_json(p: audit.Params) -> dict:
-    """A session's parameters as the Lean reads them (`Difftest.sessionOf`), naming `groups_per_coin` only above 1."""
+    """A session's parameters as the Lean reads them (`Difftest.sessionOf`), its receipt format `seed` among them,
+    naming `groups_per_coin` only above 1."""
     shared = {} if p.groups_per_coin == 1 else {"groups_per_coin": p.groups_per_coin}
     return {"deadline_ns": p.deadline_ns, "windows": p.windows, "samples": p.samples, "min_passes": p.min_passes,
-            "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred,
+            "window_ns": p.window_ns, "lifetime": p.lifetime, "deferred": p.deferred, "seed": p.seed,
             "pace": None if p.pace is None else p.pace.to_json()} | shared
 
 
@@ -195,6 +196,11 @@ def done_json(out: audit.Verdict | None) -> dict:
 
 def released_json(c) -> dict:
     return {"released": None if c is None else c.index}
+
+
+def seeded_json(out) -> dict:
+    """`Session.seed`'s answer as the Lean gives it: the pass's seed, its coin whole, or the rejection."""
+    return verdict_json(out) if isinstance(out, audit.Verdict) else {"seed": coins.seed(out).hex()}
 
 
 def appended_json(out) -> dict:
@@ -241,14 +247,16 @@ def record_of(j: dict, registration: audit.Registration, coins: bytes, delta: fl
         j.get("groups_per_coin", 1), samples=samples)
 
 
-def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes]]:
+def released_coins(c: coins.Coins) -> tuple[list[bytes], list[bytes], list[bytes]]:
     """The session's coins as the Lean's session takes them: its W + ⌈W/g⌉ committed coins (window t's challenge at t,
     draw d's openings coin at W + d, g windows a draw), each one the challenger never released 32 zero bytes, which no
-    event reads, and the append coins in the order released."""
+    event reads, the append coins in the order released, and the pass coins in the order released, each a pass's seed
+    whole, or 64 zero bytes, which no event reads, for a session that released none."""
     zero, w, d = bytes(coins.COIN_BYTES), c.windows, coins.openings_coins(c.windows, c.per_coin)
     out = [coins.coin(o) for o in c.opened(coins.CHALLENGE)], [coins.coin(o) for o in c.opened(coins.OPENINGS)]
     return ([*out[0], *[zero] * (w - len(out[0])), *out[1], *[zero] * (d - len(out[1]))],
-            [coins.coin(o) for o in c.opened(coins.APPEND)])
+            [coins.coin(o) for o in c.opened(coins.APPEND)],
+            [coins.seed(o) for o in c.opened(coins.PASS)] or [bytes(coins.SEED_BYTES)])
 
 
 class Transcript:
@@ -282,7 +290,7 @@ class Transcript:
         """The session's passes are over: openings held back until now may be written."""
         self.passes.set()
 
-    def close(self, released: tuple[list[bytes], list[bytes]]) -> dict:
+    def close(self, released: tuple[list[bytes], list[bytes], list[bytes]]) -> dict:
         self.passes.set()
         self.items.put(("close", released))
         self.thread.join()
@@ -306,7 +314,8 @@ class Transcript:
                     if item[0] == "close":
                         closed = True
                         put('],"coins":' + json.dumps([c.hex() for c in item[1][0]]) + ',"append_coins":'
-                            + json.dumps([c.hex() for c in item[1][1]]) + "}")
+                            + json.dumps([c.hex() for c in item[1][1]]) + ',"pass_coins":'
+                            + json.dumps([c.hex() for c in item[1][2]]) + "}")
                         break
                     put("," if events else "")
                     events += 1
