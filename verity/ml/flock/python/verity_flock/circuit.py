@@ -858,6 +858,54 @@ def share(rows: dict) -> tuple[dict, dict]:
     return tables, refs
 
 
+def check_shared_reads(meta: dict, n: int, counts: dict | None, refs: dict | None) -> None:
+    """META ``shared_reads`` (``[{port, group, position}]``) held to the public file the Lean verifier refuses otherwise
+    (``Flock.HmIn.parse`` and ``checkReads``, with its refusals): input row ``port`` is one table row per group of ``group``
+    instances, instance ``i`` reading row ``i // group``, and public input ``position`` is ``i % group`` (seed ``instance``,
+    derivation ``mod:G``): one writer a window of each shared row. ``counts`` and ``refs`` (``{port: R_p}``,
+    ``{port: (n,)}``): a shared-row file's tables, else ``None``."""
+    if "shared_reads" not in meta:
+        return
+    if "public_inputs" not in meta:
+        raise ValueError("META: shared_reads without public_inputs (a shared read's position is a public input)")
+    rs = meta["shared_reads"]
+    if not isinstance(rs, list):
+        raise ValueError("META shared_reads: not a list")  # noqa: TRY004 (one refusal type, the verifier's text)
+    if not rs:
+        raise ValueError("META: shared_reads names no port")
+    if counts is None or refs is None:
+        raise ValueError("shared reads: the public file is not a shared-row file (header shared_rows)")
+    rows = [p.name for p in _meta_ports(meta)[:meta["input_ports"]]]
+    pins = {pp["port"]: pp for pp in meta["public_inputs"]}
+    seen = set()
+    for r in rs:
+        if not isinstance(r, dict):
+            raise ValueError("META: a shared read is not an object")  # noqa: TRY004
+        port, pos, g = r.get("port"), r.get("position"), r.get("group")
+        if (sorted(r) != ["group", "port", "position"] or not isinstance(port, str) or not port or not isinstance(pos, str)
+                or not pos or type(g) is not int or g <= 0):
+            raise ValueError("META: a shared read names no port, position, or group (a positive count of instances)")
+        if port in seen:
+            raise ValueError(f"shared read {port}: named twice")
+        seen.add(port)
+        if port not in rows:
+            raise ValueError(f"shared read {port}: not an input row")
+        if pos not in pins:
+            raise ValueError(f"shared read {port}: its position {pos} is not a public input")
+        if pins[pos].get("seed") != "instance" or pins[pos].get("derivation") != f"mod:{g}":
+            raise ValueError(f"shared read {port}: its position {pos} is not the instance index mod {g} (seed instance, "
+                             f"derivation mod:{g})")
+        if n % g:
+            raise ValueError(f"shared read {port}: {n} instances are not whole groups of {g}")
+        if counts[port] != n // g:
+            raise ValueError(f"shared read {port}: its table is not one row per group of {g} ({n // g} rows)")
+        ref = np.asarray(refs[port]).reshape(-1)
+        bad = np.flatnonzero(ref != np.arange(n) // g)
+        if len(bad):
+            i = int(bad[0])
+            raise ValueError(f"shared read {port}: instance {i} reads table row {int(ref[i])}, not its group's {i // g}")
+
+
 PUBLIC_INPUTS_FORMAT = "verity/flock-public-inputs/v1"
 
 
@@ -973,6 +1021,7 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     rows = {**{p.name: rows[p.name] for p in ins}, **out_rows(outs, out_ports, orows, meta.get("out_row_ports"))}
     if refs is not None:
         refs.update({p.name: np.arange(n) for p in orows})
+    check_shared_reads(meta, n, {p.name: len(rows[p.name]) for p in ins} if refs is not None else None, refs)
     if salts is None:
         salts = stage_salts(input_set, lo, hi, ports, salt_key, {p.name: len(rows[p.name]) for p in ports} if share_rows else None)
     elif any(len(salts[p.name]) != len(rows[p.name]) or any(len(s) != SALT_BYTES for s in salts[p.name]) for p in ports):
