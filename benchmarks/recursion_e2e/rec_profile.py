@@ -703,7 +703,9 @@ def markdown(doc: dict[str, Any]) -> str:
     def each(q: dict[str, Any]) -> str:
         return (f"commit {str(q.get('commit'))[:12]}, the inner's {q.get('RUNS')} timed sessions after {q.get('WARM')} warm, "
                 f"each V* statement's {q.get('OPROVE_RUNS', q.get('RUNS'))} after {q.get('OPROVE_WARM', q.get('WARM'))} "
-                f"(lease {q.get('GPU_MAX_MIN', '?')} min), {q.get('REPEAT')} repeats per CPU step")
+                f"(lease {q.get('GPU_MAX_MIN', '?')} min)"
+                + (f", V* statements {q['OPROVE_JOBS']} at a time" if q.get("OPROVE_JOBS") else "")
+                + f", {q.get('REPEAT')} repeats per CPU step")
     runs = doc.get("run_params")
     h = doc.get("headline") or {}
     verdict = ("one whole recursive session, accepted" if h.get("ok") else

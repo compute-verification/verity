@@ -4,7 +4,9 @@ CA's served_h1 row) and served_h1's prompts (`tests.engine.int8_exact_gpu.PROMPT
 
 Measures, per arm and rep:
     tpot_b32_ms      decode at batch 32: 32 requests, greedy, ignore_eos; (t(N2) - t(N1)) / (N2 - N1) over two generate calls
-                     of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel
+                     of N1 and N2 output tokens, so prefill and the engine's per-call overhead cancel.  $SBENCH_B=B
+                     (B <= --t) decodes B requests instead, every decode step then of m = B: tpot_b<B>_ms, the gate's
+                     B requests and its checked step at m = B, and smq_sweep's and prof's rows at B
     tokens_per_s     at saturation: SAT_REQS requests of SAT_TOKENS output tokens each, max_num_seqs MAX_SEQS (requests wait
                      in the scheduler throughout), output tokens over wall time; under --stock-own-batch the stock arms
                      run at vLLM's own max_num_seqs and max_num_batched_tokens, not --t's (summary's scheduler_by_arm,
@@ -128,8 +130,10 @@ Arms:
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
                  regime while the units' span plus lm_head's 0.7 ms covers the step's cycle: without it, a step whose
                  units drain before the next dispatch lets them refill their SMs ahead of lm_head, which then runs on
-                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow; units that end sooner (h1u's
-                 H1U_JXS at 45/64) do that under it too
+                 the forward's SMs alone (2.9 ms, not 0.7) and the next steps stay slow.  Under it, h1u's H1U_JXS units
+                 stall on some steps (b32 and b64: their span about 2.3 times the median, the serving stream waiting
+                 about 20 ms on them), which their length doesn't explain: H1U_JPI's units, as long, never do, nor do
+                 H1U_JCS=2's, shorter; DITHER_SO_PREQ=0 makes the stalls rarer without removing them
     ARM-mc32     a dither arm whose worker has 32 hardware queues (CUDA_DEVICE_MAX_CONNECTIONS=32, set before its engine
                  makes the CUDA context)
     ARM-skip, ARM-rd0  a dither-a-so J10-R arm whose dead row blocks are the zero receipt (DITHER_UNITS_SKIP_DEAD=1), or
@@ -218,7 +222,9 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
-B = 32
+B_ENV = "SBENCH_B"
+B = int(os.environ.get(B_ENV) or 32)
+TPOT = f"tpot_b{B}_ms"
 N1, N2 = 32, 160
 SAT_REQS, SAT_TOKENS, MAX_SEQS, MAX_TOKENS_STEP = 768, 256, 256, 1024
 CT_CONFIG = {
@@ -765,7 +771,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             t1, _ = gen(ps, N1)
             m1 = time.monotonic_ns()
             t2, outs = gen(ps, N2)
-            conn.send({"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
+            conn.send({TPOT: round(1e3 * (t2 - t1) / (N2 - N1), 4), "t_n1_s": round(t1, 4), "t_n2_s": round(t2, 4),
                        "spans_ns": [m0, m1, time.monotonic_ns()], "tokens": [list(o.outputs[0].token_ids) for o in outs]})
         elif cmd["op"] == "gate":
             win = getattr(llm, "dither_win", None)
@@ -853,7 +859,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             if prof:
                 torch.cuda.profiler.stop()
             step = round(1e3 * (res[f"gen_n{counts[1]}_s"] - res[f"gen_n{counts[0]}_s"]) / (counts[1] - counts[0]), 4)
-            res["prefill_step_ms" if pf else "tpot_b32_ms" if reqs == B else f"step_m{reqs}_ms"] = step
+            res["prefill_step_ms" if pf else TPOT if reqs == B else f"step_m{reqs}_ms"] = step
             conn.send(res)
         elif cmd["op"] == "smq_sweep":
             from dither_so import smq_of
@@ -870,7 +876,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
                 else:
                     t1, _ = gen(ps, N1)
                     t2, _ = gen(ps, N2)
-                    row = {"tpot_b32_ms": round(1e3 * (t2 - t1) / (N2 - N1), 4)}
+                    row = {TPOT: round(1e3 * (t2 - t1) / (N2 - N1), 4)}
                 rows.append({"smq": v, **row, "phases_by_m": llm.dither_stats().get("phases_by_m")})
             sd.set_units_smq(q0, d0, c0)
             gen(ps, 8)
@@ -967,6 +973,10 @@ def main() -> int:
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")
     if a.bw_passes and a.serial:
         ap.error("--bw-passes runs beside every arm at once, which --serial never brings up")
+    if not 1 <= B <= a.t:
+        ap.error(f"${B_ENV}={B}: a decode step of m = B needs 1 <= B <= --t ({a.t}), its max_num_seqs")
+    if a.bw_passes and B != 32:
+        ap.error(f"--bw-passes calibrates on B32 decode reps (`dbw.report`): unset ${B_ENV}")
     os.environ["SBENCH_T"] = str(a.t)
     if a.prefill:
         os.environ[PREFILL_ENV] = "1"
@@ -991,7 +1001,7 @@ def main() -> int:
     smq_sweep = [v for v in (os.environ.get(SMQ_SWEEP_ENV) or "").split(",") if v]
     if not all(re.fullmatch(r"0|\d+(/\d+(/\d+)?)?", v) for v in smq_sweep):
         ap.error(f"${SMQ_SWEEP_ENV}={os.environ[SMQ_SWEEP_ENV]}: comma-separated q, q/den or q/den/cap")
-    sweep_key = "tokens_per_s" if a.ops == "sat" else "tpot_b32_ms"
+    sweep_key = "tokens_per_s" if a.ops == "sat" else TPOT
     ctx = mp.get_context("spawn")
     conns, procs, info = {}, {}, {}
     reps: list[dict] = []
@@ -1205,9 +1215,9 @@ def main() -> int:
                               "captures": list(PF_CAPTURES), "step": "one request of T prompt tokens, one output token"}
     plain = [x for x in reps if x.get("bw") in (None, "off")]
     for arm in arms:
-        tp = [x["tpot_b32_ms"] for x in plain if x["arm"] == arm and x["op"] == "decode"]
+        tp = [x[TPOT] for x in plain if x["arm"] == arm and x["op"] == "decode"]
         th = [x["tokens_per_s"] for x in plain if x["arm"] == arm and x["op"] == "sat"]
-        summary["per_arm"][arm] = {"tpot_b32_ms": statistics.median(tp) if tp else None, "tpot_all": tp,
+        summary["per_arm"][arm] = {TPOT: statistics.median(tp) if tp else None, "tpot_all": tp,
                                    "tokens_per_s": statistics.median(th) if th else None, "tokens_per_s_all": th}
         if a.prefill:
             pr = [x for x in plain if x["arm"] == arm and x["op"] == "prefill"]
@@ -1220,14 +1230,14 @@ def main() -> int:
     ef = summary["per_arm"].get("exact-fused", {})
     for arm in arms:
         p = summary["per_arm"][arm]
-        for k in ("tpot_b32_ms", "prefill_step_ms", "ttft_ms"):
+        for k in (TPOT, "prefill_step_ms", "ttft_ms"):
             if p.get(k) and ef.get(k):
                 p[f"gamma_{k}_vs_exact_fused"] = round(p[k] / ef[k], 4)
     base = summary["per_arm"][arms[0]]
     for arm in arms[1:]:
         p = summary["per_arm"][arm]
-        if p["tpot_b32_ms"] and base["tpot_b32_ms"]:
-            p["tpot_overhead_pct"] = round(100 * (p["tpot_b32_ms"] / base["tpot_b32_ms"] - 1), 3)
+        if p[TPOT] and base[TPOT]:
+            p["tpot_overhead_pct"] = round(100 * (p[TPOT] / base[TPOT] - 1), 3)
         if p["tokens_per_s"] and base["tokens_per_s"]:
             p["throughput_overhead_pct"] = round(100 * (1 - p["tokens_per_s"] / base["tokens_per_s"]), 3)
     summary["gate_failed"] = [x for x in gate_doc if x not in arms]

@@ -17,7 +17,7 @@ import Definitions.Flock.Arith
 import Definitions.Flock.Statement
 import Definitions.Flock.Piop
 import Definitions.Flock.Ligerito
-import Proofs.Flock.Soundness.Model.Session
+import Definitions.Flock.Session
 import Proofs.Flock.Soundness.Defs
 import Proofs.Flock.Soundness.Rounds
 import Proofs.Flock.Soundness.RepSound
@@ -48,7 +48,7 @@ import Proofs.Flock.Soundness.NovelBasis
 import Proofs.Flock.Soundness.PadCode
 import Definitions.Flock.Accounting.Padded
 import Proofs.Flock.Soundness.Accounting.PaddedNumbers
-import Proofs.Flock.Soundness.Model.LigeritoPad
+import Definitions.Flock.LigeritoPad
 import Proofs.Flock.Soundness.LigeritoPadLevel0
 import Proofs.Flock.Soundness.LigeritoPadDecode
 import Proofs.Flock.Soundness.LigeritoPadQuery
@@ -87,11 +87,13 @@ import Proofs.Flock.Soundness.TmplUnrollAt
 import Proofs.Flock.Soundness.TmplScope
 import Proofs.Flock.Soundness.TmplValue
 import Proofs.Flock.Soundness.TmplValueUnit
+import Proofs.Flock.Soundness.TmplUnitNet
 import Proofs.Flock.Soundness.TmplComputes
 import Proofs.Flock.Soundness.ExecCircuit
 import Proofs.Flock.Soundness.ExecCheck
 import Proofs.Flock.Soundness.ExecLookup
 import Proofs.Flock.Soundness.ExecSetup
+import Proofs.Flock.Soundness.TmplNetOK
 import Proofs.Flock.Soundness.ExecTyped
 import Proofs.Flock.Soundness.ExecTemplate
 import Proofs.Flock.Soundness.ExecTemplatePlace
@@ -118,6 +120,7 @@ import Proofs.Flock.Soundness.Audit.FlockBatched
 import Proofs.Flock.Soundness.Audit.Stratified
 import Proofs.Flock.Soundness.ExecDraw
 import Proofs.Flock.Soundness.ExecStratified
+import Proofs.Flock.Soundness.ExecStrataOf
 import Proofs.Flock.Soundness.ExecDrawOS
 import Randomness
 import Proofs.Flock.Soundness.PlanDraw

@@ -100,7 +100,9 @@ salt needs authenticity, not confidentiality: after t_d the block's server alrea
 `pouw.salt` as a public input, so nothing is encrypted. `serve_reveals(proxy, host, port)` serves both calls beside
 `run`, one JSON line per request and per answer, and `RemoteCertifier` is the challenger's client, which takes the
 certifier's key and run id from the deployment record and returns the value it verified, as a keyless proxy does in
-process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. What the keys
+process. A refusal is unsigned: forged on the path, it costs the window as dropping the answer would. Given
+`certificates`, the endpoint also serves each certifier window's certificates' public part to any caller, unsigned: each
+signs a salted digest of its record's head, a hiding commitment, and verifies on its own signature. What the keys
 leave on `trusted-nebius-host` is the certifier's own (its signing key and leaf state on its host, and its word on what
 it signs) and the deployment record's custody (the keys and the run id it gives each side). Without the keys,
 `reveal(p, registration)` and `committed(p, registration)` are the in-process calls the tests and replays make, and
@@ -177,7 +179,7 @@ import struct
 import threading
 import time
 from collections import defaultdict, deque
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping, Sequence
 from concurrent.futures import Executor, Future, ProcessPoolExecutor
 from dataclasses import dataclass, field
 
@@ -433,22 +435,27 @@ def compact_record_data(cell: bytes) -> tuple[int, int, str | None] | None:
         return None
 
 
-def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int]) -> list[bytes]:
+def compact_records_of(request: int, sampled: Sequence[int], eos: Iterable[int], aborted: bool = False) -> list[bytes]:
     """The compact records of a response whose sampled ids are `sampled`: each id unmarked but the last, a stop where
-    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't."""
+    it is one of the model's EOS ids (`eos`) and the length's mark where it isn't; every one unmarked when its client
+    aborted it (`aborted`), since no record says an abort."""
     stops = frozenset(eos)
-    return [compact_record(request, t, None if k < len(sampled) - 1 else "stop" if t in stops else "length")
+    return [compact_record(request, t, None if aborted or k < len(sampled) - 1 else "stop" if t in stops else "length")
             for k, t in enumerate(sampled)]
 
 
-def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int],
-                              cells: Iterable[bytes]) -> list[tuple[int, str]]:
+def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterable[int], cells: Iterable[bytes], *,
+                              max_tokens: Mapping[int, int], aborted: Collection[int] = ()) -> list[tuple[int, str]]:
     """A link's compact cells held to the Commit's sampled ids (`sampled`, each request's by its ingress ordinal):
-    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos)`, one for one, so each carries
-    the id the model sampled there, the response is as long as the Commit's, and its finish is the Commit's, a stop
-    only where the Commit sampled EOS. `cells` are the link's frames in canonical order, padding left out. A violation
-    is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits whatever ids and
-    finish the server writes; this is the rule the I/O tie holds each response's length and finish to."""
+    ordinal o's cells, in canonical order, are `compact_records_of(o, sampled[o], eos, o in aborted)`, one for one, so
+    each carries the id the model sampled there, the response is as long as the Commit's, and its finish is the
+    Commit's, a stop only where the Commit sampled EOS. `aborted` are the ordinals whose finish in the Commit is a
+    client's abort, each one's response held to 1 ≤ k < `max_tokens[o]` ids and none of them EOS; any other's length
+    finish is at `max_tokens[o]` exactly. `cells` are the link's frames in canonical order, padding left out. A
+    violation is (ordinal, why), at most one an ordinal, 0 for a cell that isn't a record. The certifier commits
+    whatever ids and finish the server writes; this is the rule the I/O tie holds each response's length and finish
+    to. An abort is the Commit's word, not something on the link: the advice charges its `output_len` in full."""
+    stops = frozenset(eos)
     got: dict[int, list[tuple[int, str | None]]] = defaultdict(list)
     out: list[tuple[int, str]] = []
     for cell in cells:
@@ -460,7 +467,8 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
         if o not in sampled:
             out.append((o, "no request of the Commit is this ordinal"))
             continue
-        want = [compact_record_data(r)[1:] for r in compact_records_of(o, sampled[o], eos)]
+        ids, m, gone = sampled[o], max_tokens[o], o in aborted
+        want = [compact_record_data(r)[1:] for r in compact_records_of(o, ids, stops, gone)]
         mine = got.get(o, [])
         k = next((k for k, (g, w) in enumerate(zip(mine, want)) if g != w), None)
         if k is not None and mine[k][0] != want[k][0]:
@@ -469,6 +477,14 @@ def compact_finish_violations(sampled: Mapping[int, Sequence[int]], eos: Iterabl
             out.append((o, f"finish {mine[k][1] or 'none'} on output {k} where the Commit's is {want[k][1] or 'none'}"))
         elif len(mine) != len(want):
             out.append((o, f"{len(mine)} records where the Commit sampled {len(want)} ids"))
+        elif gone and not ids:
+            out.append((o, "an abort before any output"))
+        elif gone and len(ids) >= m:
+            out.append((o, f"an abort at {len(ids)} outputs where max_tokens is {m}"))
+        elif gone and stops & set(ids):
+            out.append((o, "an abort on an EOS id"))
+        elif want and want[-1][1] == "length" and len(ids) != m:
+            out.append((o, f"a length finish at {len(ids)} outputs where max_tokens is {m}"))
     return out
 
 
@@ -1586,22 +1602,32 @@ class Proxy:
 
 _KINDS = {"salt": SALT_KIND, "weights": WEIGHTS_KIND}
 _MALFORMED = ("a request is a JSON object of window, kind (salt or weights), registration (record, receipt, digest) "
-              "and request (the challenger's signature, hex)")
+              "and request (the challenger's signature, hex), or of window and kind certificates")
 
 
 def _line(answer: Mapping) -> bytes:
     return json.dumps(answer).encode() + b"\n"
 
 
-def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
+def _reveal_answer(proxy: Proxy, line: bytes, certificates: Callable[[int], Mapping | None] | None = None) -> dict:
     """`serve_reveals`' answer to one request line."""
     try:
         req = json.loads(line)
-        what, reg = _KINDS[req["kind"]], req["registration"]
-        registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
-        window, request = req["window"], bytes.fromhex(req["request"])
+        window, what = req["window"], req["kind"]
+        if what != "certificates":
+            what, reg = _KINDS[what], req["registration"]
+            registration = Registration(reg["record"], reg["receipt"], reg["digest"], 0)
+            request = bytes.fromhex(req["request"])
     except (ValueError, KeyError, TypeError):
         return {"refused": _MALFORMED}
+    if what == "certificates":
+        if certificates is None:
+            return {"refused": "this certifier serves no certificates"}
+        if not (type(window) is int and window >= 0):
+            return {"refused": _MALFORMED}
+        if (public := certificates(window)) is None:
+            return {"refused": f"window {window}'s records aren't all certified, so its certificates aren't served"}
+        return dict(public) | {"window": window}
     try:
         out = (proxy.reveal if what == SALT_KIND else proxy.committed)(window, registration, request)
     except (RuntimeError, ValueError) as e:
@@ -1610,14 +1636,18 @@ def _reveal_answer(proxy: Proxy, line: bytes) -> dict:
             "key_id": out.key_id.hex(), "run_id": out.run_id.hex()}
 
 
-async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
+async def serve_reveals(proxy: Proxy, host: str, port: int, *,
+                        certificates: Callable[[int], Mapping | None] | None = None) -> asyncio.Server:
     """The certifier's reveal endpoint, on `run`'s loop: it answers each JSON line a connection sends, `{"window",
     "kind": "salt" | "weights", "registration": {"record", "receipt", "digest"}, "request"}` (the challenger's signature
     in hex), with one JSON line, `{"window", "value", "signature", "key_id", "run_id"}` (hex), the `Revealed` of
     `proxy.reveal` or `proxy.committed`, or `{"refused": reason}` for whatever they refuse and for a line that isn't a
     request. The registration's `order` isn't sent: the certifier reads its record, receipt and digest. It serves only
     a proxy with a challenger key and a signer, and each call runs off the loop, since verifying and signing hash for
-    milliseconds and the ticks have `slack`. Returns the listening server: `close()` stops it."""
+    milliseconds and the ticks have `slack`. With `certificates`, `{"window", "kind": "certificates"}`, which needs no
+    signature, is answered `certificates(window)` with its `window`: the public part of the window's certificates, the
+    caller's to keep (the module docstring's "The reveal over the network"), refused while it gives None, before every
+    record of the window is certified. Returns the listening server: `close()` stops it."""
     if proxy.challenger_key is None:
         raise ValueError("a proxy serves reveals only with a challenger key and a signer")
 
@@ -1633,7 +1663,7 @@ async def serve_reveals(proxy: Proxy, host: str, port: int) -> asyncio.Server:
                     break
                 if not line:
                     break
-                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line)))
+                writer.write(_line(await asyncio.to_thread(_reveal_answer, proxy, line, certificates)))
                 await writer.drain()
         except ConnectionError:
             pass

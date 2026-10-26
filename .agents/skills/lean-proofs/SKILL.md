@@ -1,8 +1,8 @@
 ---
 name: lean-proofs
 description: >
-  How to work on Lean in Verity: where a new Lean file or package goes, the inner loop (lake env lean on one file,
-  scratch probes with #print axioms, exact? and trace_state, profiling a slow proof), building and auditing with
+  How to work on Lean in Verity: where a new Lean file or package goes, the edit loop (verity lean try FILE on a node's
+  warm tree; scratch probes with #print axioms, exact? and trace_state; profiling a slow proof), building and auditing with
   tools/verity/lean/check.py and its fast path, stating assumptions as named Props, freezing and listing guarantees in
   lean-audit.json, moving them without a DM to Daniel (--moved), the shape of a property, watching dependencies for
   proofs of what we assume (tools/verity/lean/upstream.py), keeping parallel Lean lanes out of each other's files and
@@ -23,7 +23,7 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
   `Security/`: a definition in `Definitions/<Area>/`, an assumption or guarantee statement in
   `Models/<Area>/{Assumptions,Guarantees}` (package `security`, Mathlib only), a proof in `Proofs/<Area>/` (package
   `security_proofs`, ArkLib allowed), a property of code in `Properties.<Protocol>` with its proof in
-  `Properties.Proofs.<Protocol>` (package `security_properties`, never requiring `security_proofs`). No new package: an
+  `Proofs.Properties.<Protocol>` (package `security_properties`, never requiring `security_proofs`). No new package: an
   area is a directory in each tree.
 - **Lean is the definition and the verifier of record.** A verifier is Lean code and imports nothing from `verity.ml`;
   the Python that mirrors it is held to it by difftest (`verity/core/difftest/`).
@@ -47,19 +47,25 @@ The rules are in `AGENTS.md` ("Lean"); the Lean check's reference is `tools/veri
 ## Build, iterate, check
 
 ~~~text
-bash tools/verity/lean/setup.sh PKG    once per machine: elan, the toolchain, Mathlib's cache
-cd PKG && lake build                   once per checkout; incremental from then on
-lake env lean Pkg/Area/File.lean       each edit: elaborate one file against the built imports
-lake build Pkg.Area.File               after editing a file others import, so they see the change
-python tools/verity/lean/check.py PKG  once, before pushing
+verity lean try PKG/Area/File.lean     each edit: File's imports built, then `lake env lean` on it, on a node's warm tree
+lean_changed.py --records PKG --update the fast path (below), once the proofs elaborate: the lock and the mark
+python tools/verity/lean/check.py PKG  the full check, which the train's check runs; by hand only on a machine of your own
 ~~~
+
+- **The edit loop is `verity lean try FILE`** (FILE from the repository's root). It ships your checkout, uncommitted
+  edits and new files included, through `research run` (default vy-nebius-cpu-1's `research` pool; `--on NODE [--pool P]`
+  for another node with `build` Lean slots, e.g. `--on vy-nebius-cpu-5 --pool proofs`), takes a `build` slot's tree there, the one `--records` keeps warm, builds
+  only what changed among FILE's imports, runs `lake env lean FILE`, and prints Lean's output and the wall time, exiting
+  with lean's status. It never writes a record. After editing a file others import, try the importer: its imports'
+  build rebuilds the edited file.
 
 - **Where it runs.** Build on a CPU machine. Never `lake update`, and never change a `require`, a revision or
   `lean-toolchain` in a feature PR. `check.py` refuses an ArkLib package below 24 GiB (memory and swap, within its
   cgroup; `VERITY_LEAN_MEM_FLOOR_GIB` overrides, 0 for none) and a whole-Security audit (`Security` with Security/Proofs
   beside it) below 160 GiB, whose replay's resident base is about 120 GiB whatever its threads. The refusal prints where
   to run it instead; a queued Security audit takes `--kind lean-audit`.
-- **The fast path** gives your records, and the `--update` printout Daniel's DM carries, without a build of your own:
+- **The fast path is for the lock and the mark, not the edit loop**: it gives your records, and the `--update` printout
+  Daniel's DM carries, without a build of your own, once `verity lean try` passes on your files:
 
   ~~~text
   research run --on vy-nebius-cpu-1 --pool research --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- \
@@ -79,11 +85,14 @@ python tools/verity/lean/check.py PKG  once, before pushing
   result is `lean-fast/v1`, which no merge check accepts. A slot tree another run left mid-way (cancelled, timed out,
   killed for memory) is repaired before the build, with the reason printed, so don't delete or copy a slot tree by hand.
   A spec's failure `proved_in: P's build did not pass` points at P's own report, where its build failed.
+  A package whose records passed on the same Lean inputs on that node (or whose Lean check passed there) is skipped, and
+  so is one where HEAD only merged `main`, taking every Lean input of it whole from main's side and its lock from
+  `merge.py`: that lock is a candidate the train's Lean check rebuilds. With nothing left the run builds nothing and
+  takes no slot (`path: reused`); `--rebuild` runs it anyway.
 - **A full record on a pod**: `research run --on POD --project verity --source . --cwd clone -- python3
   tools/verity/lean/check.py --build --update PKG`, with no wrapper (vy-nebius-1 has no `python`). It exits 0 when the
   check passes; the record is at `lean-audit/audit-TAG/lean-audit.json`. Use `--cwd clone`: runs of one commit share
   `--cwd source`'s tree, and two Lake builds there break each other.
-- **While proving, check one file at a time**: `lake env lean FILE` prints its errors and writes nothing.
 - **Ask Lean in a scratch file** outside the repository, from the package directory: `lake env lean
   /tmp/scratch/Probe.lean` with `#print axioms X` (a `sorry` shows as `sorryAx`), or `example … := by exact?`. Probe what
   you build on too: a section `variable` whose type goes through a local notation can elaborate to `sorry` silently, or
@@ -131,7 +140,9 @@ python tools/verity/lean/check.py PKG  once, before pushing
   `G` unfolding to `e`) needs no map.
 - **One shape** (`shape` in `tools/verity/lean/README.md`). A property takes its inputs, one hypothesis that its function returned an outcome
   (`shape.properties`: `function` and `outcome`, `accept` by default), and premises (heads under `shape.premises`, or a
-  conjecture); the rest is its conclusion. A probability statement has its acceptance in the event (`shape.events`).
+  conjecture); the rest is its conclusion. Binder order and a hypothesis `x.f = y.f` between two inputs it accepts don't
+  matter: the check reads the statement reordered and with that field bound once, so don't restate for either. A
+  probability statement has its acceptance in the event (`shape.events`).
   What doesn't fit yet is under `shape.frozen` with a reason starting with its category (`restatable`, `frozen (hash)`,
   `lemma`, `completeness`, `falsified`); the check fails once it fits. A named conjecture is under `shape.conjectures`,
   open with a falsification test that runs (a pytest node id) or falsified with why; a falsified one takes every
@@ -147,6 +158,7 @@ python tools/verity/lean/check.py PKG  once, before pushing
   `lean-audit.json` merges without a rebuild; only a conflict it refuses needs `check.py --update` on the merged tree.
 - Record your lock at your own head, then mark the PR ready. A train regenerates records that differ only because
   another PR moved what yours reads; re-record yourself only what it can't (a refused conflict, `shape`, a move's map).
+  A clean merge of `main` after your records run needs no new one: the fast path says so and builds nothing.
 
 ## Standing rulings (Daniel)
 

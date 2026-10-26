@@ -1,4 +1,4 @@
-"""R15 `compiled`: value correspondence (C2) for the compiled boundary, from the COMMITTED bytes alone (no reference taps -- Python hooks
+"""`compiled`: value correspondence (C2) for the compiled boundary, from the COMMITTED bytes alone (no reference taps -- Python hooks
 cannot observe values inside a replayed CUDA graph, so the eager `ValueChecker` (tap clones) does not apply).
 
 Three relations the committed step streams must satisfy if every value was read at its module boundary at the right step:

@@ -447,8 +447,9 @@ def _sig_free(S):
             Tuple(_A(N * D * R), _A(N * D * S.SW), _A(R * Z.EW), _A(Z.BW), _A(S.SW), BIT))
 
 
-def _build_free(C, S, level, mask, stamp, spfx, pfx, hf, clock, sb, flags, held, ret):
-    """A free's returns and stamps, and the slot's walk entry after the call."""
+def _build_free(C, S, level, mask, stamp, spfx, pfx, hf, clock, sb, flags, held, ret, derive: bool = False):
+    """A free's returns and stamps, and the slot's walk entry after the call. With `derive` `ret` is unread and the
+    free's returns follow the outputs (HW + 1 bits)."""
     Z = widths(S)
     N, D, R, EW, HW, BW, SW = S.N, S.D, S.R, Z.EW, Z.HW, Z.BW, S.SW
     lev, msk, stp, sp = _cut(level, HW), _cut(mask, R), _cut(stamp, SW), _cut(spfx, EW)
@@ -462,8 +463,9 @@ def _build_free(C, S, level, mask, stamp, spfx, pfx, hf, clock, sb, flags, held,
     hl, under = sub(C, list(held), nh, W)
     t = add(C, list(clock), const_bits(Z.KU, SW), width=SW, carry_out=True)
     hf3 = add(C, list(hf), hl[:HW], width=max(BW, HW) + 1)
-    bad = [under, _eq(C, list(ret), add(C, no, hl[:HW], width=max(len(no), HW) + 1)).inv(),
-           _lt(C, const_bits(S.NB - 1, len(hf3)), hf3), t[SW]]
+    back = add(C, no, hl[:HW], width=max(len(no), HW) + 1)
+    bad = [under] + ([] if derive else [_eq(C, list(ret), back).inv()]) + [_lt(C, const_bits(S.NB - 1, len(hf3)), hf3),
+                                                                           t[SW]]
     at = [sub(C, t[:SW], lev[x], SW)[0] for x in range(N)]
     stamp2 = [b for k in range(N * D) for b in mux(C, only[k], at[k // D], stp[k])]
     stay = C.AND(admit, take.inv())
@@ -472,7 +474,7 @@ def _build_free(C, S, level, mask, stamp, spfx, pfx, hf, clock, sb, flags, held,
     for s in range(R):
         spfx2 += mux(C, fs[s], root, mux(C, and_reduce(C, [sb[s], free.inv(), stay.inv()]), pfx, sp[s]))
     return [_flat(cleared), stamp2, spfx2, mux(C, free, hf3[:BW], list(hf)), mux(C, free, t[:SW], list(clock)),
-            [C.AND(free, or_reduce(C, bad)).inv()]]
+            [C.AND(free, or_reduce(C, bad)).inv()]] + ([back] if derive else [])
 
 
 def _sig_end(S):

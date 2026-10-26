@@ -45,8 +45,10 @@ def outside_a_run(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def outside_a_slot(monkeypatch):
-    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once."""
+    """A check runs these tests inside its own slot, whose CHECK_SLOT would otherwise make main() run CMD in it at once, and a
+    `research run --mem-gb` (an agent-test job's 16 GiB) sets RUN_MEM_ENV, which would raise every slot's mem= the tests name."""
     monkeypatch.delenv("CHECK_SLOT", raising=False)
+    monkeypatch.delenv(SLOT.RUN_MEM_ENV, raising=False)
 
 
 def test_a_slot_py_inside_a_held_slot_runs_its_command_there_and_a_stale_check_slot_waits_its_turn(tmp_path, monkeypatch):
@@ -535,6 +537,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setenv("RESEARCH_AGENT_URL", "https://cursor.com/agents/bc-1")
+    monkeypatch.setenv("RESEARCH_SOURCE_SHA", "6b3d704c8" * 4 + "abcd")
     monkeypatch.chdir(tmp_path)
     real, tickets = SLOT.join, []
 
@@ -552,7 +555,7 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     with pytest.raises(Exec) as e:
         SLOT.main(["--by", "lander", "--", "true"], now=lambda: NOW)
     assert e.value.args[0] == ["true"]
-    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "by": "lander"}
+    me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "commit": "6b3d704c8" * 4 + "abcd", "by": "lander"}
     who = tmp_path / "check-a.who"
     assert tickets == [me] and json.loads(who.read_text()) == me and stat.S_IMODE(who.stat().st_mode) == 0o664
     assert sorted(p.name for p in tmp_path.iterdir()) == ["check-a.lock", "check-a.who", SLOT.LINE, "slots"]
