@@ -492,6 +492,13 @@ def main(argv=None) -> int:
     if args.gemm_layer is not None:
         read = L.reader(args.w) if args.w else L.generator_reader(args.generator, args.shape, args.weights_seed)
         ok &= gemm_pass(args, lay, src, read, out)
+    rc = summary.get("receipts")
+    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
+          f"decode step {summary['decode_step_s']} s"
+          + (f"; receipts pass {rc['pass']} over {rc['units']} units, root {rc['root'][:16]}..., step with receipts "
+             f"{rc['receipts_step_s']} s (decode with the sketch {rc['decode_sketch_step_s']} s + padding "
+             f"{rc['gap_sketch_s']} s + y and root {rc['finish_s']} s), overhead {rc['overhead_s']} s, ratio "
+             f"{rc['step_ratio']}" if rc else ""), flush=True)
     return 0 if ok else 1
 
 
