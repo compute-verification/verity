@@ -34,9 +34,9 @@ readings (`Verdict`, `Readings`), every period `Pd` whose credited unit `hon` is
 every price `μ` that is the period's dual price at that unit (`Period.DualOpt μ 1`): if each registrable instance's
 honest round costs `H = H_mm + H_sha + H_o` at `μ` (its words and commitment, both positive, and the rest, `H_o ≥ 0`),
 its public bests cost `pub_mm ≤ H_mm` and `pub_sha ≤ H_sha`, the registered rounds' honest costs sum to `μ · hon`,
-`0 < δ ≤ 1`, `η > 0`, `β, K, ξ ≥ 0`, the degenerate dithers' probabilities are `≥ 0`, an oracle call costs
-`shaPub_μ > 0` and `Q` calls cost at least the period's capacity (`μ · cap ≤ Q shaPub_μ`, so at most `Q` calls fit:
-RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
+`0 < δ ≤ 1`, `η > 0`, `β, K, ξ ≥ 0`, the degenerate dithers' probabilities are `≥ 0`, `Q` oracle calls use at least
+the period's capacity of some resource `r` a call uses (`cap_r ≤ Q callUse_r`, so at most `Q` calls fit, whatever the
+price: RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 
 * SAK(matmul) holds on the words at `μ` on every registrable instance, at rate `η H/H_mm` against `pub_mm`, outside
   degenerate dithers of probability `κ_dmm(B)` at `B` bits of advice,
@@ -53,8 +53,8 @@ RT-LEAN-2 L39), the devices meet (G1), (G2), (G3), (P1) and (P2), and
 
 then for every prover `A`, the probability over the oracle and the verifier's coins that the service accepts its
 period and other work `z` fits on the period's devices beside its rounds' work (`Prover.workUse`) with
-`rv + W_other(z) > OPT_honest + ε_A C` is at most `δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`,
-with `C = μ · hon = Σ_w H(reg w)` and
+`rv + W_other(z) > OPT_honest + ε_A C` is at most
+`δ + κ_S + κ_x(A) + κ_sha(A) + k (κ_dmm(B_adv(A)) + κ_dsha(B_adv(A)))`, with `C = μ · hon = Σ_w H(reg w)` and
 `ε_A = (Σ_w (H − pub_mm − pub_sha)(reg w) + ln(1/δ)/η + β K)/C + μ · ξ_A/C` (`epsWorkSound`).
 
 The rate `η` is one rate a unit of priced cost for every round (RT-PROTO-2 P15, P20): a round selected by a Bernoulli
@@ -64,14 +64,18 @@ and hashing are the public best), the honest work that is neither (no lower boun
 the exchanged bits, and the walk and log the extraction adds.
 
 The cap (L39): on the event bounded, the prover's work fits the devices, so by (G3) it makes at most `Q` oracle calls
-(`calls_le_of_fits` in the proof); `ExtractAdv` is needed only there. `WorkSoundNoFold` reads it at a query budget
-`⌈Q⌉ + V` that serves every prover, so `ε` and `κ` are one bound. The rounds of a period are one sequence; a fleet
-whose units' coins aren't serialized is one prover per unit (`FleetSound`, RT-PROTO-2 P16).
+(`calls_le_of_fits` in the proof); `ExtractAdv` is needed only there. `WorkSoundNoFold` reads it at the query budget
+`⌈Q⌉ + V` for every prover, so `ε` and `κ` are one bound. The rounds of a period are one sequence; a fleet whose
+units' coins aren't serialized is one prover per unit (`FleetSound`, RT-PROTO-2 P16).
 
 Open (stated so the red team can aim at them):
 * the split of a program's use into a words part and a commitment part is `ExtractAdv`'s cost clause (the
   realization's, in `WorkSoundNoFold`): the oracle calls are priced steps (G3), but the machine's composition doesn't
   yet say which steps of a program are its commitment path (RT-LEAN-2 L28's remainder);
+* the cap reads only the rounds' `work` calls (the timed window, I1). The answers' calls aren't capped, though they can
+  reach later roots, so `WorkSoundNoFold`'s realization premise at `⌈Q⌉ + V` is false for a prover that hashes in its
+  answers (L39's answer half; `Definitions.Pouw.Assumptions.ShaRealize`'s Open). This statement, at each prover's
+  own `κ_x(A)`, is unaffected;
 * `G` is the abstract interface, not yet MODEL-SPEC's machine at a card's θ with its floors (RT-LEAN L4, L9;
   RT-MODEL M12);
 * import is per period with no `n_max · E_out` form (RT-PROTO P2);
@@ -86,7 +90,7 @@ def WorkSound : Prop :=
     (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
     ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
     0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K → (∀ A r, 0 ≤ ξ A r) → (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) →
-    0 < G.shaPub μ → ∑ r, μ r * Pd.cap r ≤ Q * G.shaPub μ →
+    (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     G.G1 → G.G2 → G.G3 → G.P1 → G.P2 →
     SAKMatmul G P μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
     ShaSpeed G P k reg μ pubsha (fun a => η * (Hmm a + Hsha a + Ho a) / Hsha a) κdsha κsha →
@@ -105,13 +109,15 @@ oracle (`Definitions.Pouw.Guarantees.ShaRealize.ExtractOfRealize`) rather than a
 `eo : nf.Orc ≃ (X → D)` under which the verifier's opening check is the Merkle path check, programs reach it only
 through their calls (`Accel.OracleCalls`), and the realization premise `ShaRealize` holds on runs within the cap `Q` at
 the query budget and schedule `q = ⌈Q⌉ + V` for every prover, `V` the verifier's evaluations: a run within the cap
-makes at most `Q` calls, so its commitment path's distinct queries, with the verifier's, are at most `q`, and a
-prover can't buy a larger `q` by padding. With SHA-512's speed at one `κ_sha` and one advice size `B_adv` for every
-prover, every prover gets the same bound:
+makes at most `Q` calls in its rounds' work, so its work's distinct queries, with the verifier's, are at most `q`.
+The answers' calls aren't capped (the timed window is the work's, I1), so the premise is false for a prover that
+hashes in its answers toward a later root (L39's answer half, open). With SHA-512's speed at one `κ_sha` and one
+advice size `B_adv` for every prover, every prover gets the same bound:
 `ε = epsWorkSound + μ · (k ξw + q ξl) / C` and
 `κ = δ + κ_S + (q² + k q (2q + 1)) / |D| + κ_sha + k (κ_dmm(B_adv) + κ_dsha(B_adv))`, with `|D| = 2^512`.
-The log's term `μ · q ξl / C` is about `(μ · ξl / shaPub_μ) (μ · cap / C)`: one bound for every prover is small only
-where a log entry's upkeep is small next to a call; `WorkSound` keeps each prover's own `q_A`. -/
+The log's term `μ · q ξl / C` is `Q` log entries' upkeep against the credited cost: at `Q = cap_r / callUse_r` it is
+about `(μ · ξl / shaPub_μ) (μ · cap / C)` when `r` binds, small only where a log entry's upkeep is small next to a call
+(`Accel.shaPub`); `WorkSound` keeps each prover's own `q_A`. -/
 def WorkSoundNoFold : Prop :=
   ∀ (G : Accel) (nf : NoFold) (k : ℕ) (Reg : Set (noFoldRound nf).Inst) (reg : Fin k → (noFoldRound nf).Inst)
     (Obs : Type) (verdict : Verdict (noFoldRound nf) k Obs) (dev : Readings G (noFoldRound nf) k Obs) (Pd : Period G)
@@ -123,7 +129,7 @@ def WorkSoundNoFold : Prop :=
     (∀ a ∈ Reg, 0 < Hmm a ∧ 0 < Hsha a ∧ 0 ≤ Ho a ∧ pubmm a ≤ Hmm a ∧ pubsha a ≤ Hsha a) →
     ∑ w, (Hmm (reg w) + Hsha (reg w) + Ho (reg w)) = ∑ r, μ r * Pd.hon r →
     0 < η → 0 < δ → δ ≤ 1 → 0 ≤ β → 0 ≤ K → (∀ r, 0 ≤ ξw r) → (∀ r, 0 ≤ ξl r) →
-    (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → 0 < G.shaPub μ → ∑ r, μ r * Pd.cap r ≤ Q * G.shaPub μ →
+    (∀ B, 0 ≤ κdmm B ∧ 0 ≤ κdsha B) → (∃ r, 0 < G.callUse r ∧ Pd.cap r ≤ Q * G.callUse r) →
     (∀ o r c v p, nf.opens o r c v p → Opens (eo o) E (rD r) (pl p) v ∧ (pl p).map Prod.fst = dirs c) →
     G.G1 → G.G2 → G.G3 → G.OracleCalls eo → G.P1 → G.P2 →
     SAKMatmul G (noFoldRound nf) μ Reg pubmm (fun a => η * (Hmm a + Hsha a + Ho a) / Hmm a) κdmm →
@@ -146,26 +152,30 @@ verdict `verdict u` on its transcript and its devices' readings `dev u`. One ora
 draws its own coins, which reach no other machine before that unit has them. Unit `u`'s prover `A u` may read every
 other unit's coins, past and future (a coalition of units at its worst); what other units compute for it is work it
 exchanges with machines outside its devices, which the network certifier counts. If every unit's period is
-`(1 − ε_u)`-work-sound at one bound `κ_u ≥ 0` for every prover (`WorkSoundNoFold`), the probability over the oracle and
-every unit's coins that some unit's period is accepted while it frees more than `ε_u C_u` is at most `Σ_u κ_u`. Each
-unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the fleet `δ` for the luck, with `k` rounds a unit. -/
+`(1 − ε_u(A))`-work-sound but with probability `κ_u(A)` for every prover `A` (`WorkSound`, or `WorkSoundNoFold` at
+one bound for every prover), and `κ_u(A u y) ≤ κmax_u` at every value `y` of the other units' coins, the probability
+over the oracle and every unit's coins that some unit's period is accepted while it frees more than
+`ε_u(A u y) C_u` is at most `Σ_u κmax_u`. Each unit at `δ/N`, so a luck term `ln(N/δ)/η` in its `ε_u`, gives the
+fleet `δ` for the luck, with `k` rounds a unit. -/
 def FleetSound : Prop :=
   ∀ (G : Accel) (P : RoundProto) (k N : ℕ) (Obs : Type) (verdict : Fin N → Verdict P k Obs)
-    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε C κ : Fin N → ℝ),
-    (∀ u, 0 ≤ κ u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (fun _ => ε u) (C u) (fun _ => κ u)) →
+    (dev : Fin N → Readings G P k Obs) (Pd : Fin N → Period G) (ε κ : Fin N → Prover G P k → ℝ)
+    (C κmax : Fin N → ℝ),
+    (∀ u, 0 ≤ κmax u) → (∀ u, FreedSound G P k (verdict u) (dev u) (Pd u) 1 (ε u) (C u) (κ u)) →
     ∀ A : (u : Fin N) → ({v : Fin N // v ≠ u} → Fin k → P.Draw × P.Chk) → Prover G P k,
+      (∀ u y, κ u (A u y) ≤ κmax u) →
       prob (fun ox : P.Orc × (Fin N → Fin k → P.Draw × P.Chk) => ∃ u,
         (A u fun v => ox.2 v.1).Passes (verdict u) (dev u) ox.1 (ox.2 u) ∧
           ∃ z, (Pd u).Fits ((A u fun v => ox.2 v.1).workUse ox.1 (ox.2 u)) z ∧
-            ¬ (Pd u).FreedWithin 1 z (ε u) (C u)) ≤ ∑ u, κ u
+            ¬ (Pd u).FreedWithin 1 z (ε u (A u fun v => ox.2 v.1)) (C u)) ≤ ∑ u, κmax u
 
 /-- **Freed compute is at most `ε C` at the period's dual price** (R-ACCEL-1). On a period's devices (`Period`), let
 `μ ≥ 0` be a dual price for the other work (every job worth at most its use at `μ`) at which an honest strategy
 credited `W` with other work `z'` is optimal (its other work worth exactly the capacity it leaves, at `μ`:
 complementary slackness). Any strategy credited the same `W`, whose credited part uses `X` and whose other work `z`
 fits beside it, and whose credited part meets the work floor at `μ` (`μ · X ≥ (1 − ε) μ · W hon`), frees at most
-`ε C` with `C = μ · W hon`, the credited rounds' honest cost at the dual price (RT-LEAN L25). The floor on the whole run would not be enough here:
-it would count the other work `z` toward the credited part's floor. -/
+`ε C` with `C = μ · W hon`, the credited rounds' honest cost at the dual price (RT-LEAN L25). The floor on the whole
+run would not be enough here: it would count the other work `z` toward the credited part's floor. -/
 def FreedOfFloor : Prop :=
   ∀ (G : Accel) (Pd : Period G) (W ε : ℝ) (X μ : G.Res → ℝ) (z z' : Pd.J → ℝ),
     (∀ r, 0 ≤ μ r) → (∀ j r, 0 ≤ Pd.needs j r) → (∀ j, Pd.val j ≤ ∑ r, μ r * Pd.needs j r) → 0 ≤ W → 0 ≤ ε →

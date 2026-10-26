@@ -321,7 +321,8 @@ noncomputable def workUse (o : P.Orc) (x : Fin k → P.Draw × P.Chk) (r : G.Res
   ∑ w, G.use (A.work w) (A.workIn o x w) r
 
 /-- **The rounds' oracle calls**: every round's `work` at its input (RT-LEAN-2 L39). On a run whose work fits the
-period's devices, (G3) caps them at the capacity over a call's cost. -/
+period's devices, (G3) caps them at a resource's capacity over a call's use of it. The answers' calls aren't counted:
+answers are untimed (I1), so nothing caps them. -/
 noncomputable def calls (o : P.Orc) (x : Fin k → P.Draw × P.Chk) : ℝ :=
   ∑ w, G.calls (A.work w) (A.workIn o x w)
 
