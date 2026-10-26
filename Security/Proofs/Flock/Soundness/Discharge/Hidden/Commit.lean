@@ -328,6 +328,32 @@ theorem Committed.check (hty : tags.typed = false) (h : Committed tags cf tables
     obtain ⟨ls, hcheck⟩ := P.check
     exact ⟨by rw [he]; exact P.typed, ⟨ls, by rw [he]; exact hcheck⟩, by rw [he]; exact hck⟩
 
+/-- **A committed circuit's nets store `A` and `B` at their slots' widths**, flat (`Integrate.net_width`) or templated
+(`parseTmpl_net_width`). -/
+theorem Committed.netWidths (hty : tags.typed = false) (h : Committed tags cf tables c) : Integrate.NetWidths c := by
+  rcases h with h | h
+  · exact Integrate.netWidths_of (parse_facts (parse_untyped hty h).1)
+  · exact fun _ hn => have w := parseTmpl_net_width h hn; ⟨w.1, w.2.1, w.2.2.1⟩
+
+theorem Committed.netKinds (hty : tags.typed = false) (h : Committed tags cf tables c) : Integrate.NetKinds c := by
+  rcases h with h | h
+  · exact (parse_facts (parse_untyped hty h).1).kinds
+  · obtain ⟨tu, c₀, P, -, he, -, -⟩ := TmplValue.parseTmpl_facts h
+    subst he
+    exact P.kinds
+
+/-- **A session's layout**, flat or templated (`hidden_layoutC`). -/
+theorem SpecC.layout (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) : Layout st :=
+  Or.elim s (hidden_layoutC ht) fun s => by
+    obtain ⟨hp, hc⟩ := parse_untyped ht s.parse
+    have P := parse_facts hp
+    exact hidden_layout_of (layout_of P s.pin rfl rfl s.m s.kLog) P.typed s.da s.db (outPairs_inBit hp hc)
+
+/-- **A session's layout model is `stmtOf` of its statement**, flat or templated (`Integrate.model_eqW`). -/
+theorem SpecC.model_eq (ht : tags.typed = false) (s : SpecC tags cf pf coins tables draw st) (L : Layout st)
+    (hwf : StmtWF st) (regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))) : L.model regs = stmtOf st hwf regs :=
+  Integrate.model_eqW (Committed.netWidths ht s.committed) (Committed.netKinds ht s.committed) L s.self.leaf hwf regs
+
 /-- **A flat session's circuit is `HmOut.parse`'s.** -/
 theorem SpecC.parse_flat (hi : tags.isTmpl = false) (s : SpecC tags cf pf coins tables draw st) :
     HmOut.parse tags cf tables = .ok st.c :=

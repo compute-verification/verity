@@ -47,11 +47,10 @@ noncomputable def acc : AcceptedH x.T.S where
   st := x.st
   ht := ht
   h := Hidden.setupHidden_specCC x.h
-  L := Hidden.hidden_layout ht x.h
-  hR := unitRowsFlat ht x.h (by rw [x.c_eq hc]; exact hv1.1)
+  L := (Hidden.setupHidden_specCC x.h).layout ht
+  hR := unitRowsFlatC ht (Hidden.setupHidden_specCC x.h) (by rw [x.c_eq hc]; exact hv1.1)
   regs := x.regs
-  hT := (Integrate.model_eq (parse_facts (parse_untyped ht (setupHidden_parseC x.h)).1) _
-    (Hidden.setupHidden_spec x.h).leaf x.hwf x.regs).trans x.hT.symm
+  hT := ((Hidden.setupHidden_specCC x.h).model_eq ht _ x.hwf x.regs).trans x.hT.symm
 
 /-- **A drawn table's statement circuit is the session's one circuit**: its committed circuit is `c`, which is flat, so
 its own statement circuit (`HmOut.unrolled`). -/
