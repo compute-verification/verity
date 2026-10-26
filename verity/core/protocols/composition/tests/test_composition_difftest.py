@@ -67,21 +67,21 @@ def empty_draws(draw) -> dict:
 
 
 #: One change to a v2 case that v2 refuses: verdicts handed in, no proofs, a circuit that is no digest, a public file in
-#: no blob, a session the proofs name that the evidence doesn't; or that integrity refuses: params or evidence naming no
+#: no blob, a session the proofs name that the evidence doesn't; or that `VStar.Recursive.Sampled` refuses: params or evidence naming no
 #: form, another form, or the recursive form with none of its files.
 V2_BREAKS = ["verdicts", "no-proofs", "circuit", "public", "session", "params-no-form", "params-form-other",
              "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
 def _with_form(x, br: str | None, side: str):
-    """Integrity's form on the params or the evidence (`VStar.Recursive.Integrity`): ``one-stage``, unless `br` breaks it."""
+    """Sampled proofs' form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks it."""
     if not isinstance(x, dict) or br == f"{side}-no-form":
         return x
     return {**x, "form": {f"{side}-form-other": "two-stage", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
 
 
 def v2_case(a: dict, br: str | None = None) -> dict:
-    """An audit (`{"params", "record", "evidence"}`) as integrity's one-stage case (`SampledProofs.OneStageZk`, under the
+    """An audit (`{"params", "record", "evidence"}`) as sampled proofs' one-stage case (`SampledProofs.OneStageZk`, under the
     form ``one-stage``): the params naming `CIRCUIT` by its digest and no registered file, the evidence its sessions' files
     in place of verdicts (each record in no blob), with one of `V2_BREAKS`."""
     e = {k: v for k, v in a["evidence"].items() if k != "verdicts" or br == "verdicts"} \

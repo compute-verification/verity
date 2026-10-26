@@ -15,8 +15,8 @@ template's under a stratified or work law; `audit.profile` as `Core.Integrity`, 
 draw (the records, a check on the registration, the draw) rejects with its codes. An audit that ended with no summary is
 the leg's error, not a verdict.
 
-The audit also writes sampled proofs' case for onsite (`a5.write_case`), whose integrity component is
-``verity/sampled-proofs/integrity/v1`` (`VStar.Recursive.Integrity`), here in its one-stage form, the audit on the proofs
+The audit also writes sampled proofs' case for onsite (`a5.write_case`), whose sampled proofs component is
+``verity/sampled-proofs/v1`` (`VStar.Recursive.Sampled`), here in its one-stage form, the audit on the proofs
 themselves (``verity/sampled-proofs/one-stage/v2``, `SampledProofs.OneStageZk`): ``{"blobs", "commitment", "evidence",
 "params"}``, the params and the evidence each naming ``"form": "one-stage"``, the evidence naming the session's files by SHA-512 in place of verdicts and ``blobs`` the paths
 of those files, which the leg hands on as ``out/sampled-proofs.case.json``. v2 verifies one table's ``--zk`` sessions, so

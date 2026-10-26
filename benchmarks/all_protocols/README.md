@@ -42,9 +42,9 @@ every machine of a census deployment, the pooled total first and the per-window 
 - `legs/sampled_proofs.py`: integrity, real. `benchmarks/prove_path/records_audit.py` on the window, from its records
   alone, at k = 64 and δ = 1/100 by default: live coins, C-Flock `--zk` behind the Lean firewall, the Lean verifier of
   record's audit record, turned into sampled proofs' answer (`verity/sampled-proofs/one-stage/v1`). It also hands on
-  `sampled-proofs.case.json`, onsite's integrity case (`VStar.Recursive.Integrity`, `verity/sampled-proofs/integrity/v1`)
+  `sampled-proofs.case.json`, onsite's sampled proofs case (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`)
   in its one-stage form, the one `SampledProofs.OneStageZk` reads (one-stage v2, the audit on the proofs themselves:
-  written by `benchmarks/one_stage/a5.py`, `case_integrity` naming the form, its `blobs` the session's files, which `onsite
+  written by `benchmarks/one_stage/a5.py`, `case_with_form` naming the form, its `blobs` the session's files, which `onsite
   check` reads after the evidence). v2 verifies one table's `--zk` sessions, so a window of several drawn members or of
   plain sessions has none (`case-check.json`'s `v2_error`) and onsite rejects integrity there. The v1 case stays beside
   it (`sampled-proofs.v1.case.json`), with whether `OneStage.check`'s Python on it gives the leg's verdict.

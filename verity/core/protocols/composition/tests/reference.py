@@ -194,11 +194,11 @@ def one_stage_zk(case: Any) -> dict:
                     digest=lambda c: c[1], check=_v2_check(case.get("blobs", []) if isinstance(case, dict) else []))
 
 
-INTEGRITY = "verity/sampled-proofs/integrity/v1"
+SAMPLED_PROOFS_V1 = "verity/sampled-proofs/v1"
 
 
 def _form(j: Any, what: str) -> tuple[str, dict]:
-    """`VStar.Recursive.Integrity`'s split: the object's ``form`` and the rest."""
+    """`VStar.Recursive.Sampled`'s split: the object's ``form`` and the rest."""
     if not isinstance(j, dict):
         raise Reject(f"the {what} is not an object")
     if not isinstance(j.get("form"), str):
@@ -214,7 +214,7 @@ def _recursive(rest: dict, what: str):
     raise Reject(f"the {what} name no recursive")
 
 
-def _integrity_params(j: Any) -> dict:
+def _form_params(j: Any) -> dict:
     form, rest = _form(j, "parameters")
     if form == "one-stage":
         return _v2_params(rest)
@@ -223,7 +223,7 @@ def _integrity_params(j: Any) -> dict:
     raise Reject(f"the parameters' form {form} is not one-stage or recursive")
 
 
-def _integrity_evidence(b: bytes) -> dict:
+def _form_evidence(b: bytes) -> dict:
     form, rest = _form(P.canonical_json(b), "evidence")
     if form == "one-stage":
         return _v2_evidence(canonical(rest).encode())
@@ -232,19 +232,19 @@ def _integrity_evidence(b: bytes) -> dict:
     raise Reject(f"the evidence's form {form} is not one-stage or recursive")
 
 
-def integrity(case: Any) -> dict:
-    """`VStar.Recursive.Integrity.protocol` on a case and its ``blobs``: one-stage v2 (`one_stage_zk`) when its params
+def sampled_proofs(case: Any) -> dict:
+    """`VStar.Recursive.Sampled.protocol` on a case and its ``blobs``: one-stage v2 (`one_stage_zk`) when its params
     and evidence name the form ``one-stage``, a refusal of any other form on the cases the mirror decides."""
-    return P.answer(INTEGRITY, case, params=_integrity_params, commitment=ONE_STAGE.decode_commitment,
-                    evidence=_integrity_evidence, digest=lambda c: c[1],
+    return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
+                    evidence=_form_evidence, digest=lambda c: c[1],
                     check=_v2_check(case.get("blobs", []) if isinstance(case, dict) else []))
 
 
 CERTIFIER = Ported("verity/certifier/v0", PERIOD.reference)
 POUW = Ported("verity/pouw/v1", core_check.case)
-#: Integrity (`VStar.Recursive.Integrity`): one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`),
+#: Sampled proofs (`VStar.Recursive.Sampled`): one-stage v2, the audit on the proofs themselves (`SampledProofs.OneStageZk`),
 #: or the recursive audit, as the params' form names it.
-SAMPLED_PROOFS = Ported(INTEGRITY, integrity, blobs=True)
+SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 BANDWIDTH = Recorded("verity/remote-bandwidth/v0")
