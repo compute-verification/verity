@@ -11,8 +11,10 @@ DeepSeek-V4-Pro, 49e9 active), so a dense model's mean attended context is about
 from __future__ import annotations
 
 import math
+import sys
 
 RHO8, SHA, ETA = 9.895e14, 4.79e9, 0.85
+E = float(sys.argv[1]) if len(sys.argv) > 1 else 0.01  # the serving skip's budget
 MT_COMP = RHO8 / SHA
 BIT = MT_COMP * ETA / 512
 ALU_MT = 4096 / 64
@@ -118,10 +120,10 @@ def attn_gamma(m, C, e, design, n_tokens=4500, offset=0, rho=1.0):
 
 
 DESIGNS = [  # (name, skip budget e or None when designed away, PV form or None, QKᵀ form or None)
-    ("static only", 0.01, None, None),
-    ("A1 PV per head", 0.01, "head", None),
-    ("A2 PV head-batched", 0.01, "mqa", None),
-    ("A3 PV per head + QKᵀ batched", 0.01, "head", "batched"),
+    ("static only", E, None, None),
+    ("A1 PV per head", E, "head", None),
+    ("A2 PV head-batched", E, "mqa", None),
+    ("A3 PV per head + QKᵀ batched", E, "head", "batched"),
     ("B1 skip fixed: PV + QKᵀ per head", None, "head", "head"),
     ("B2 skip fixed: PV per head + QKᵀ batched", None, "head", "batched"),
 ]
@@ -171,13 +173,13 @@ if __name__ == "__main__":
     for m in MODELS:
         for off in (0, 5750):
             for nb in (4, 2):
-                for e in (0.01, None):
+                for e in (E, None):
                     C = c_word(nb)
                     gs = static_gamma(m["name"], C, e)
                     pv, qh = attn_gamma(m, C, e, "head", offset=off)
                     _, qg = attn_gamma(m, C, e, "gqa", offset=off)
                     pvb, qm = attn_gamma(m, C, e, "mqa", offset=off)
-                    print(f"| {m['name']} | {off + 2250} | {nb} B | {'e 1%' if e else 'fixed'} | {gs:.1f} | {pv:.1f} | "
+                    print(f"| {m['name']} | {off + 2250} | {nb} B | {f'e {e:.2%}' if e else 'fixed'} | {gs:.1f} | {pv:.1f} | "
                           f"{pvb:.1f} | {qh:.1f} | {qg:.1f} | {qm:.1f} |")
     print()
     print("| model | word | design | γ total | coverage of all matmul MACs | attention's share of γ total |")
