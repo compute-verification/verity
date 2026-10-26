@@ -49,8 +49,8 @@ theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
 def toVec (a : F128) : List.Vector UInt8 16 := ⟨a.toBytes.data.toList, FlockSoundness.Refine.toBytes_length a⟩
 
 theorem toVec_inj : Function.Injective toVec := fun a b h => by
-  have e : a.toBytes.data.toList = b.toBytes.data.toList := congrArg Subtype.val h
-  exact FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 e))
+  simp only [toVec, Subtype.mk.injEq] at h
+  exact FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 h))
 
 theorem card_F128_vec : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) := by
   rw [card_vector, card_F128, card_UInt8]
@@ -59,7 +59,8 @@ theorem card_F128_vec : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) 
 /-- **Any 16 bytes are an element's.** -/
 theorem toBytes_surj (l : List UInt8) (hl : l.length = 16) : ∃ a : F128, a.toBytes.data.toList = l := by
   obtain ⟨a, ha⟩ := ((Fintype.bijective_iff_injective_and_card toVec).2 ⟨toVec_inj, card_F128_vec⟩).2 ⟨l, hl⟩
-  exact ⟨a, congrArg Subtype.val ha⟩
+  simp only [toVec, Subtype.mk.injEq] at ha
+  exact ⟨a, ha⟩
 
 /-- **Any whole 16-byte blocks are some elements' bytes.** -/
 theorem colBytes_surj : ∀ (n : ℕ) (l : List UInt8), l.length = 16 * n →
@@ -300,6 +301,28 @@ theorem fill_inj {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ
   simp only [Prod.mk.injEq, F256.mk.injEq] at hi
   exact Prod.ext (Prod.ext hi.1.1 hi.1.2) (Prod.ext hi.2.1 hi.2.2)
 
+/-- **As many slots as absorbed values**, counted as `F128`s. -/
+theorem card_slots {st : Setup} {sch : Flock.Schedule} {e : ℕ} {q : Proof} (hq : ProofSizes (shapeOf st sch e) q)
+    (hL : 2 ≤ sch.levels.size) :
+    Fintype.card (Slots q) = Fintype.card F128 ^ (64 + 64 + 2 * (st.m - 6) + 2 + 2 * (st.kLog - 6) + 64 +
+      128 * (2 + e) + (4 * sch.k0 + 36 + 30 * (sch.levels.size - 2) + 2 ^ (sch.ext + 1))) := by
+  simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin, hq.r1ab, hq.r1c, hq.zcRounds, hq.lcRounds,
+    hq.zPartial, hq.rs, hq.messages, hq.oodValues, hq.yr]
+  have h2 : 2 * (sch.levels.size - 1) = 2 * (sch.levels.size - 2) + 2 := by omega
+  have h7 : sch.levels.size - 1 - 1 = sch.levels.size - 2 := by omega
+  simp only [shapeOf, h7, h2]
+  ring
+
+/-- The absorbed values at the slots `d`, as a vector of their count. -/
+def slotVals (st : Setup) (sch : Flock.Schedule) (d₀ : ByteArray) (e : ℕ) (q : Proof) (n : ℕ)
+    (hn : ∀ d : Slots q, (vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2)).length = n) (d : Slots q) :
+    List.Vector F128 n :=
+  ⟨vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2), hn d⟩
+
+theorem slotVals_val {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ} {q : Proof} {n : ℕ}
+    (hn : ∀ d : Slots q, (vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2)).length = n) (d : Slots q) :
+    (slotVals st sch d₀ e q n hn d).val = vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2) := rfl
+
 /-- **Every value list of the frames' count is some proof's**: a proof of `q`'s shape with `q`'s cap, recursive caps
 and nonces, and a `T`, whose rep frames absorb exactly `W`. -/
 theorem realize {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ} {q : Proof}
@@ -312,18 +335,24 @@ theorem realize {st : Setup} {sch : Flock.Schedule} {d₀ : ByteArray} {e : ℕ}
       vals (repFrames st sch d₀ (2 + e) p T) = W := by
   have hlen : ∀ d : Slots q, (vals (repFrames st sch d₀ (2 + e) (fill q d).1 (fill q d).2)).length = W.length :=
     fun d => by rw [vals_repFrames_length (fill_sizes hq d) hk hL, hW, vals_repFrames_length hq hk hL]
-  let f : Slots q → List.Vector F128 W.length := fun d => ⟨_, hlen d⟩
-  have hf : Function.Injective f := fun a b h => fill_inj (d₀ := d₀) hq hk hL (congrArg Subtype.val h)
+  have hf : Function.Injective (slotVals st sch d₀ e q W.length hlen) := fun a b h => by
+    have h' := congrArg Subtype.val h
+    rw [slotVals_val, slotVals_val] at h'
+    exact fill_inj hq hk hL h'
   have hc : Fintype.card (Slots q) = Fintype.card (List.Vector F128 W.length) := by
     rw [card_vector, hW, vals_repFrames_length hq hk hL]
-    simp only [Fintype.card_prod, Fintype.card_fun, Fintype.card_fin, hq.r1ab, hq.r1c, hq.zcRounds, hq.lcRounds,
-      hq.zPartial, hq.rs, hq.messages, hq.oodValues, hq.yr]
-    have h2 : 2 * (sch.levels.size - 1) = 2 * (sch.levels.size - 2) + 2 := by omega
-    have h7 : sch.levels.size - 1 - 1 = sch.levels.size - 2 := by omega
-    simp only [shapeOf, h7, h2]
-    ring
-  obtain ⟨d, hd⟩ := ((Fintype.bijective_iff_injective_and_card f).2 ⟨hf, hc⟩).2 ⟨W, rfl⟩
-  exact ⟨(fill q d).1, (fill q d).2, fill_sizes hq d, rfl, rfl, rfl, rfl, rfl, congrArg Subtype.val hd⟩
+    exact card_slots hq hL
+  obtain ⟨d, hd⟩ :=
+    ((Fintype.bijective_iff_injective_and_card (slotVals st sch d₀ e q W.length hlen)).2 ⟨hf, hc⟩).2 ⟨W, rfl⟩
+  have hv := congrArg Subtype.val hd
+  rw [slotVals_val] at hv
+  have hs := fill_sizes hq d
+  have h1 : (fill q d).1.cap = q.cap := rfl
+  have h2 : (fill q d).1.ligerito.recursiveCaps = q.ligerito.recursiveCaps := rfl
+  have h3 : (fill q d).1.ligerito.queryNonces = q.ligerito.queryNonces := rfl
+  have h4 : (fill q d).1.ligerito.claimNonces = q.ligerito.claimNonces := rfl
+  have h5 : (fill q d).1.ligerito.consistencyNonces = q.ligerito.consistencyNonces := rfl
+  exact ⟨(fill q d).1, (fill q d).2, hs, h1, h2, h3, h4, h5, hv⟩
 
 /-! ## The recursive caps change bytes frames only -/
 
