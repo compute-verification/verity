@@ -73,3 +73,11 @@ def test_the_least_sampling_block_is_the_first_that_affords_a_plan():
     one = D.plan_at(D.SHAPE, "one block", 1)
     assert not one["affordable"] and "at" not in one
     assert D.spans(periods={"week": 7 * 86400})["week"] == floor(7 * 86400 / D.SHAPE.block_s)
+
+
+def test_the_knee_is_where_the_certified_shares_stop_falling_fast():
+    def at(share):
+        return {"0.01": {"free_compute": share, "leak": share}}
+
+    pts = [D.Point(b, 1.0, 1.0, None, at(s)) for b, s in ((1, 1.0), (2, 1e-3), (4, 5e-4), (8, 2.5e-4))]
+    assert D.knee(pts, 1.0, 1.0) == 1

@@ -65,7 +65,7 @@ PERIODS = H.PERIODS
 #: Daniel's budget (25 Oct 6:05 PM PDT): proving at this share of the sampling block's GPU time
 BUDGET_SHARE = 0.01
 #: the budgets swept, in multiples of one serving block's GPU time, past the cheapest plan's
-GRID = (0.1, 1, 12.5, 15, 20, 30, 50, 100, 300, 1000, 3000, 1e4)
+GRID = (1, 8.5, 10, 12.5, 15, 20, 30, 50, 100, 300, 1000)
 S8 = "ScaledMmS8Coordinate_v1"
 #: C-Flock's largest statement (r20261026-004208-a28d refused k_log 28)
 K_LOG_MAX = 27
@@ -275,11 +275,12 @@ def ands_against_gpu(m: H.Shape = SHAPE, *, pad: bool = False) -> dict:
             "rest": {"ands_share": 1 - s8 / ands, "gpu_share": 1 - STEP_SPLIT[S8] / gpu}}
 
 
-def knee(points: list[Point]) -> int:
-    """The point farthest below the chord between the ends of log(cost) against log(mixed harm), each half at its
-    budget's rate (`kneedle` on the log-log frontier)."""
+def knee(points: list[Point], ands: float, bits: float) -> int:
+    """The point farthest below the chord between the ends of log(cost) against the log of the geometric mean of the two
+    certified shares at delta = 1%, `free_compute` of the block's ANDs and `leak` of its output bits (`kneedle` on the
+    log-log frontier). Each point's own rate normalizes each half by that point's best, so it cannot rank points."""
     xs = [log(p.budget) for p in points]
-    ys = [log(0.5 * p.at["0.01"]["free_compute"] / p.h_work + 0.5 * p.at["0.01"]["leak"] / p.h_bits) for p in points]
+    ys = [0.5 * log(p.at["0.01"]["free_compute"] / ands) + 0.5 * log(p.at["0.01"]["leak"] / bits) for p in points]
     if len(points) < 3:
         return 0
     (x0, y0), (x1, y1) = (xs[0], ys[0]), (xs[-1], ys[-1])
@@ -290,6 +291,7 @@ def frontier_report(m: H.Shape = SHAPE, *, pad: bool = False) -> dict:
     cands, cm = candidates(m, pad=pad), costs(m)
     s = sweep(cands, cm, m)
     pts = s["points"]
+    ands, bits = sum(c.units * c.ands for c in cands), sum(c.units * c.out_bits for c in cands)
 
     def row(p: Point) -> dict:
         return {"proving": p.budget, "of_block": p.budget / m.block_s, "cost": dict(p.plan.cost),
@@ -298,10 +300,10 @@ def frontier_report(m: H.Shape = SHAPE, *, pad: bool = False) -> dict:
                 "statements": dict(p.plan.statement_size)}
 
     return {"shape": vars(m) | {"block_s": m.block_s}, "pad": pad, "templates": len(cands),
-            "units": sum(c.units for c in cands), "ands": sum(c.units * c.ands for c in cands),
-            "bits": sum(c.units * c.out_bits for c in cands), "commit": s["commit"], "cheapest": s["cheapest"],
+            "units": sum(c.units for c in cands), "ands": ands, "bits": bits, "commit": s["commit"],
+            "cheapest": s["cheapest"],
             "unaffordable": s["skipped"], "complete": s["complete"], "share": BUDGET_SHARE,
-            "frontier": [row(p) for p in pts], "knee": knee(pts) if pts else None,
+            "frontier": [row(p) for p in pts], "knee": knee(pts, ands, bits) if pts else None,
             "ands_against_gpu": ands_against_gpu(m, pad=pad)}
 
 
