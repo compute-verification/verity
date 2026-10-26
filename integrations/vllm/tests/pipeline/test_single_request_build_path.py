@@ -30,6 +30,7 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
+from verity_vllm.records import workload as WL
 from verity.ml.definitions.registry import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
@@ -98,8 +99,9 @@ def test_a_single_request_stochastic_workload_composes_as_the_build_does(tmp_pat
     assert any(n.fn.id == f"GumbelTopPTokenSelect_v2{{V={V},S={S}}}" for n in rep.flat_definition.body.nodes)
     _write_request(rep, tmp_path / "build_request", LP, STEPS, S)
     wl = tmp_path / "workload.json"
-    json.dump({"requests": [{"request_id": "r-0", "prompt_token_ids": list(range(1, LP + 1)), "max_tokens": STEPS + 1, "arrive_step": 0}],
-               "sampling": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}, "seeds": [7], "execution": "bi-eager"}, open(wl, "w"))
+    json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
+               "requests": [{"request_id": "r-0", "prompt_token_ids": list(range(1, LP + 1)), "max_tokens": STEPS + 1, "arrive_step": 0}],
+               "sampling": {"variant": "stoch-t0.8-p0.95", "seed": 7}, "sweep": {"execution": "bi-eager"}}, open(wl, "w"))
     r = _compose(wl, tmp_path / "build_request", tmp_path / "build_workload", eos=0)
     assert r["requests"] == 1
     assert _decode_cold(tmp_path / "build_workload" / "descriptor.json.gz") == r["gates"]
