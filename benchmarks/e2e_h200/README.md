@@ -32,6 +32,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | Piece | Here now | Replaced by |
 |---|---|---|
 | Weights | ALLP-IFACE's generator and weights stream (`verity_torch_loop.weights`, CMP-95 item 1), every linear generated once into the device's memory (`driver.Params`, over `--workers` processes); the record carries the registration digest under the test salt key for small shapes | the prover's salt key's digest |
+| Weights registration (CMP-160) | `weights_commit.py`: every tensor committed as the registered value the served Program reads (`registered.domain` under its digest, its widths from the Program's parameter types, never its gate lists), streamed a chunk a worker under the operating system's salts into a 0600 witness; `open` opens a ScaledMm proof block's `wrow`/`sw` reads against it (`verify_read`) | — |
 | Store and decode call (M4) | `--weights staged`: `store.py`'s P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`, a layer a step | memory-accounting's layout and decode call (CMP-95 item 2), MEM-69's store on the card |
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (an exact f64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
@@ -63,6 +64,10 @@ uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --de
     --weights-file W --weights-manifest M --workers "$(nproc)"                   # serve the loaded W (NET-76's sink), checked first
 E2E_H200_SEED=demo E2E_H200_WEIGHTS_FILE=W E2E_H200_WEIGHTS_MANIFEST=M PYTHONPATH=benchmarks/e2e_h200 \
     python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:frozen   # the endpoint on it
+PYTHONPATH=benchmarks/e2e_h200:integrations/torch_loop python -m e2e_h200.weights_commit commit --shape h200 --seed demo \
+    --program DIGEST --state STATE --out OUT/registration.json        # the H200 weights registration (STATE private)
+PYTHONPATH=benchmarks/e2e_h200:integrations/torch_loop python -m e2e_h200.weights_commit open --state STATE --seed demo \
+    --op l0.wup --coordinate N                                        # a ScaledMm proof block's reads opened: OPEN or REFUSED
 ~~~
 
 Exit 0: every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's own
