@@ -78,9 +78,10 @@ What doesn't change:
 One property covers both configurations. 2a, the served window under `--zk`, is the demo (top, 25 Oct). 2b, plain on the
 CPU TP stand-in, has soundness as its only guarantee (Daniel, 24 Oct, #4016). Each layer is proved once over the layer
 below and instantiated per configuration. On main since 25 Oct, the property (#4054) and the leak step (#4055 with
-#4044) are proved given sampling's KS, and sampling's KS is proved under `--zk` and at plain's trimmed record given the
-run's facts (#4037, #4075). **No theorem yet connects the session verdicts the verifier of record runs to that chain**
-(the broken shared row below). So 2b demonstrates per-session plain soundness, not an audit guarantee.
+#4044) are proved given sampling's KS and listed in the lock, both at option A since #4090, and sampling's KS is proved
+under `--zk` and at plain's trimmed record given the run's facts (#4037, #4075). **No theorem yet connects the
+session verdicts the verifier of record runs to that chain** (the broken shared row below). So 2b demonstrates
+per-session plain soundness, not an audit guarantee.
 
 **2a's demo audits a stand-in, not the whole window.** The units it draws from are the ones its partition file picks,
 not a draw from every unit of the window's computation. At the demo of record they are 320 RoPE heads
@@ -94,8 +95,8 @@ units, with every input free. NET-68, below, makes the circuit the whole window.
     drawn, and 25 of 25 negatives refused, R4 and `advice-root-after-the-draw` among them.
   - The forged arm, on local coins (r20261025-093852-2ec5), was refused by Lean: M0's R7, no proof for the forged rep.
   - The charge: at most 2 wrong units of 328 at δ = 0.5, with 1,679 advice bits under a cap of 8,388,608.
-  - #`freeInputs` is 2,752,512 bits, or 2,097,152 if the RoPE stand-ins' inputs counted as ingress. So the leak bound is
-    vacuous until NET-68.
+  - #`freeInputs` is 2,752,512 bits, or 2,097,152 if the RoPE stand-ins' inputs counted as ingress. 2a registers none of
+    them, so c is all of them even under option A, and the leak bound is vacuous until NET-68.
 - **First demo of record:** r20261025-041404-a1c5, on the code before #4061's interface. It drew from 8 layer-0
   `SiluMul_v2{I=8192}` units, with 2,097,152 free input bits against 1,687 declared.
 
@@ -103,29 +104,34 @@ units, with every input free. NET-68, below, makes the circuit the whole window.
 PRF-144). It is stated once, at any sampling record `D`:
 `∀ H D L K S lay k, Claims.Sampling.KS H D → KSAccepted H D L K S lay k`, with `D.flock = deployZk rel` under `--zk` and
 Flock's plain record otherwise. It is proved on main (#4054) as `NetTiming.SecurityProofs.SampledAuditAccepted`, with no
-new assumption. The lock holds its text through `SampledAuditAcceptedStated` until proofs' #4083 lists the proof.
+new assumption, and the lock lists it as that guarantee (owner proofs) since #4090, which landed #4083's lock entry.
+`SampledAuditAcceptedStated`, which held its text until then, is retired.
 
 On the statements in scope (`ScopeAcc`), at every δ ≥ 0, every decoder within Flock's radius and every prover,
 Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ(δ) − δ + √(γ·Pr[B]) and ε_bind = Pr[B_ext]. Pr[B] and Pr[B_ext] are
 the chances of finding a SHA-512 collision in the run, not an assumption. `RAcc δ` holds when:
 - the faulty set is in M_δ = {B : P_a(B) > δ} (`RelS`);
 - no faulty unit is in a class drawn `all`: the transfer-gate units and N2's head checks (`allSlots`);
-- some advice (a, free), with `free` holding values only at the faulty units' committed gates (`FaultyGate`), makes NetTiming's
-  `Accepted` hold over every observation sequence the trace's transfer gates carry (`Carries`), with every status complete
-  (`Covered`). With no unit faulty, `free` is empty and `Accepted` is exact.
+- the advice (`traceVal`, free), its inputs the trace's committed values and `free` holding values exactly at the faulty
+  units' committed gates (`FaultyGate`), makes NetTiming's `Accepted` hold over every observation sequence the trace's
+  transfer gates carry (`Carries`), with every status complete (`Covered`). With no unit faulty, `free` is empty and
+  `Accepted` is exact. Before #4090 (option A) the advice's inputs could be any values.
 
-**The leak bound that follows.** The theorem is `NetTiming.sampledLeak_free` (proofs' #4055). The lock-listed guarantee
-is `NetTiming.Guarantees.SampledLeakAccepted`, proved as
-`NetTiming.SecurityProofs.SampledLeakAccepted := fun hSA => NetTiming.sampledLeak_free hSA` (#4044, owner
-network-accounting; `SampledAuditAccepted` and `Claims.Sampling.KS` owned by proofs). Status: proved and listed in the
-lock on main, with #4073's `check.py` fix, on `propext`, `Classical.choice` and `Quot.sound`.
+**The leak bound that follows.** The theorem is `NetTiming.sampledLeak_reg` (proofs' #4090, over #4055's
+`NetTiming.sampledLeak`). The lock-listed guarantee is `NetTiming.Guarantees.SampledLeakAccepted`, proved as
+`NetTiming.SecurityProofs.SampledLeakAccepted := fun hSA => NetTiming.sampledLeak_reg hSA` (#4044, restated by #4090;
+owner network-accounting; `SampledAuditAccepted` and `Claims.Sampling.KS` owned by proofs). Status: proved and listed in
+the lock on main, with #4073's `check.py` fix, on `propext`, `Classical.choice` and `Quot.sound`. Its one hypothesis,
+`SampledAuditAccepted`, is a listed guarantee since #4090. The lock keeps `NetTiming.Guarantees.SampledAuditAccepted`
+under `assumptions` too, as the premise this statement takes.
 
 It composes the property with the count `EncardAccSeqsSampledLe`, over any deployment. Given `SampledAuditAccepted` and
 `Claims.Sampling.KS` at the deployment, except with probability δ + ε_ks + ε_bind, an accepted audit's carried
-sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n. So the audit leaks at most
-c + λ_δ + β_δ + n·log2 D bits:
-- c = #`freeInputs`, the circuit's input gates that no step before the horizon lists as ingress. `RAcc` lets the advice
-  take any value there, so the bound charges every one of them;
+sequences, cut at the horizon, number at most 2^c · #faultySets(δ) · 2^β · D^n, at whatever values the statement's
+registered inputs `reg` hold (`AsReg`). So the audit leaks at most c + λ_δ + β_δ + n·log2 D bits:
+- c = #(`freeInputs` \ `reg`): the free inputs are the circuit's input gates that no step before the horizon lists as
+  ingress. `RAcc` pins the inputs to the trace, so the count leaves out the trace's values at `reg` and charges every
+  other free input. With `reg` empty it is #`freeInputs`, the bound before #4090;
 - λ_δ, which units are faulty;
 - β_δ, the faulty units' committed bits;
 - n·log2 D, the timing (J's D classes over n steps).
@@ -133,15 +139,21 @@ c + λ_δ + β_δ + n·log2 D bits:
 At δ ≥ miss(1) no unit is faulty, and the bound is c + n·log2 D. Take 2a's circuit at the demo of record (334e). Its
 328 units have 172,032 16-bit inputs, and no step lists any of them as ingress. So #`freeInputs` = 2,752,512 bits,
 against the advice's declared 1,679. At a1c5 it was 2,097,152 against 1,687, and 2b's advice declares 169
-(r20261025-032237-db01). So the bound as stated is vacuous at 2a's size. A smaller c, the advice's declared bits, needs
-`SampledAuditAccepted` to pin the registered input gates to the registration. That is option A, EVALCOMP's ask on
-#ask-daniel (card ddf12c5c, [its page](https://app.notion.com/p/404399515d9e81d99e61f6534b54b291)), decided
-provisionally as A on 25 Oct. Under A, c = #(`freeInputs` \ Reg): the registered-read binding pins the registered gates.
-`--zk` has that binding, and plain has it at one table since PR C (#4079). Until A is proved, the page states the larger c.
+(r20261025-032237-db01). So the bound is vacuous at 2a's size.
 
-A alone doesn't shrink 2a's c (proofs). 2a has no registered inputs, and its bits are layer-0 values that the layout
-doesn't declare as ingress, so 2a's bound is vacuous until that changes. The change is a layout and compiler change, not
-a claim: NET-68, owned by network-accounting, with vllm's compiler part as VLLM-103 under it.
+**Option A is on main** (proofs' #4090, NET-68's P1a). It is EVALCOMP's ask on #ask-daniel (card ddf12c5c,
+[its page](https://app.notion.com/p/404399515d9e81d99e61f6534b54b291)), decided provisionally as A on 25 Oct: `RAcc` pins
+the inputs to the trace's committed values, and `SampledLeakAccepted` counts at the registered inputs pinned, so
+c = #(`freeInputs` \ `reg`) and the registered inputs, the weights among them, stop counting. That the trace's values
+at `reg` are the registration's, and so public, is P1b: every registered gate is opened under the registration's root,
+and binding fixes its value there except at ε_bind. P1b is on proofs' branches, with no PR yet. `--zk` has the
+registered-read binding. Plain's `SoundExecHR` (PR C, #4079, at one table) is in the game form, so it gives that
+binding only through the broken shared row below.
+
+A doesn't shrink 2a's c (proofs). 2a registers none of its inputs, and its bits are layer-0 values that the layout
+doesn't declare as ingress. So 2a's c is still all of its free inputs, non-ingress and non-registered, and its bound is
+vacuous until NET-68's whole-window circuit lands. That is a layout and compiler change, not a claim: NET-68, owned by
+network-accounting, with vllm's compiler part as VLLM-103 under it.
 - The window's circuit becomes the whole window under a step-indexed scan router. `Fits` is structural, and arrival
   steps and prompt lengths stay private (#4087 landed; #4102, #4108 and #4175 are open).
 - The start cadence is ASK-122, top's #ask-daniel card for Daniel. If each second's admission count is public, the
@@ -152,11 +164,11 @@ Until then, vllm's #4061 has `records_audit` label the bound vacuous whenever #`
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; with #4047, each rank's
 `ranks.<r>.charge` holds `advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
-- c, as the statement stands, is #`freeInputs`, which the run doesn't print: 2,752,512 bits for 2a, counted from
-  334e's `window/program.json` by `freeInputs`'s definition (#4055). Under option A (decided provisionally, card
-  ddf12c5c), once the advice is the only free input outside the registration (for 2a, after NET-68), c is
-  `advice.bits`, the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as
-  `bits`. Over several windows, `BitsCount` charges their sum.
+- c is #(`freeInputs` \ `reg`) (#4090), which the run doesn't print. For 2a, which registers no inputs, it is all
+  2,752,512 free input bits, counted from 334e's `window/program.json` by `freeInputs`'s definition (#4055). Once the
+  advice is the only free input outside the registration (for 2a, after NET-68), c is `advice.bits`, the
+  registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
+  several windows, `BitsCount` charges their sum.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are faulty, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -182,9 +194,9 @@ classes. Where proofs' reading of `main` differs from lean's table, or a later l
 | Flock's claims | `FlockDeploy.Assembled.flock_zk_assembled`, at `deployZkTrim` | proved | proved, with KS, completeness, the ZK models' links and `Claims.Hm96Hiding` as hypotheses | `Security/Proofs/Flock/Claims/Assembled.lean` |
 | Flock KS ⇒ sampling KS (shared) | `Claims.Sampling.SessionKS_of`, `Claims.Sampling.KS_of` | proved | proved, at any record | `Security/Proofs/Flock/Claims/Sampling/Session.lean`, `Security/Proofs/Flock/Claims/Sampling/KS.lean` |
 | Sampling KS | `Claims.Sampling.sampling_assembled`, `SamplingDeploy.sampling_deployed_sha512` | proved (a lemma, not in the lock) | proved at `deployZk` (the deployed record `SamplingDeploy.deploy` fixes it), with the run's facts as hypotheses: `DrawFixed`, `SessionRuns`, `SessionsIn`, `DrawSlots`, `SessionOpens`, `InteriorFixed`, `ProgramScope`, `ChecksScope`, `RevealsLe`. Since #4037, `sampling_assembled` is the `deployZk` instance of `sampling_assembled_of`, which plain shares, and #4075 gives one deployed record over any Flock record (`deployOf`, `sampling_deployed_of`) | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/DeployedSha512.lean` |
-| Accepted audit ⇒ `Accepted` (shared) | `NetTiming.Guarantees.SampledAuditAccepted` | open at e743d6d146; proved since #4054 | proved on main (#4054, proofs, lean's item 10) as `NetTiming.SecurityProofs.SampledAuditAccepted`, at the statement as it stands, with no new assumption. The lock still holds its text through `SampledAuditAcceptedStated`; #4083 (open) lists the proof in its place. Option A adds a conjunct (EVALCOMP's ask, decided provisionally); its registered-read binding at plain is #4079's `SoundExecHR`, at one table | `Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean`, `Security/Proofs/NetworkCertifier/SampledAuditAccepted.lean` |
+| Accepted audit ⇒ `Accepted` (shared) | `NetTiming.Guarantees.SampledAuditAccepted` | open at e743d6d146; proved since #4054; listed since #4090 | proved on main (#4054, proofs, lean's item 10) as `NetTiming.SecurityProofs.SampledAuditAccepted`, with no new assumption: `Claims.Sampling.KS` is its one hypothesis. The lock lists it as that guarantee (owner proofs) since #4090, which landed #4083's lock entry; `SampledAuditAcceptedStated` is retired. Since #4090, option A (EVALCOMP's ask, decided provisionally): `RAcc` pins the advice's inputs to the trace's committed values (`traceVal`), with `free` exactly at the faulty units' committed gates. At plain, #4079's `SoundExecHR` (one table) is in the game form, so it gives the registered-read binding only through the broken shared row | `Security/Definitions/NetworkCertifier/Guarantees/SampledAudit.lean`, `Security/Definitions/NetworkCertifier/SampledAudit.lean`, `Security/Proofs/NetworkCertifier/SampledAuditAccepted.lean` |
 | Leak count (shared) | `NetTiming.SecurityProofs.EncardAccSeqsSampledLe`, by `NetTiming.encard_accSeqsSampled_le` | proved | proved. No named assumption: its premises (\|As\| ≤ 2^c, the layout fits) are inside the statement, and it doesn't read the property | `Security/Proofs/NetworkCertifier.lean`, `Security/Proofs/NetworkCertifier/SampledCharge.lean` |
-| Accepted audit ⇒ leak bound (shared) | `NetTiming.sampledLeak_free` (#4055); the guarantee `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted` (#4044) | broken at e743d6d146; proved since #4055 and #4044 | proved and listed in the lock on main (#4055, #4044, with #4073's `check.py` fix), over any deployment, with `SampledAuditAccepted` as its hypothesis, on `propext`, `Classical.choice` and `Quot.sound`. c is #`freeInputs` until option A, since `RAcc` doesn't bound the run's inputs to `As` | `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`, `Security/Proofs/NetworkCertifier/SampledCharge.lean`, `Security/Proofs/NetworkCertifier/SampledLeak.lean` |
+| Accepted audit ⇒ leak bound (shared) | `NetTiming.sampledLeak_reg` (#4090, over #4055's `NetTiming.sampledLeak`); the guarantee `NetTiming.SecurityProofs.SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted` (#4044, restated by #4090) | broken at e743d6d146; under a named assumption (`SampledAuditAccepted`) with #4055 and #4044; proved since #4090, which landed #4083's lock entry | proved and listed in the lock on main (#4055, #4044, #4090, with #4073's `check.py` fix), over any deployment, on `propext`, `Classical.choice` and `Quot.sound`. Its one hypothesis, `SampledAuditAccepted`, is a listed guarantee since #4090; the lock keeps `NetTiming.Guarantees.SampledAuditAccepted` under `assumptions` too, as the premise this statement takes. Since #4090 it counts at the registered inputs pinned (`AsReg`): at whatever values each statement's `reg` holds, at most 2^#(`freeInputs` \ `reg`) · #faultySets(δ) · 2^β · Dj^k sequences, so c = #(`freeInputs` \ `reg`). With `reg` empty it is the old bound. That the trace's values at `reg` are the registration's is P1b (proofs, no PR yet) | `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`, `Security/Proofs/NetworkCertifier/SampledCharge.lean`, `Security/Proofs/NetworkCertifier/SampledLeak.lean` |
 
 **The plain chain (2b).** The shared links above hold as they are. Plain's own links:
 
@@ -192,15 +204,17 @@ classes. Where proofs' reading of `main` differs from lean's table, or a later l
 |---|---|---|---|---|
 | A session's verdict | `flock_verify_sound`, plain part: `SoundExec` (public outputs), `SoundExecH` (hidden outputs); at 2^−205 a table, `flock_verify_sound_205` | under a named assumption (A3) | proved, at one table and the stratified draw. Premises inside the statement: A3, the record's custody (`RecordsLive`, `DrawOk`) and `TableCRL`; the link term is ⊤ unless `LinkCRL`. The custody is named and listed on main as `FlockSoundness.Assumptions.RecordCustodyExec` and `RecordCustodyExecH` (#4048). `TableCRL` and `LinkCRL` become `Assumptions.TableCRAt` and `LinkCRAt` on #4107 (open) | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`, `Security/Proofs/Flock/Soundness/Discharge/FailClosed/Numeric.lean` |
 | Flock KS at the trimmed record | `FlockDeploy.KS.plain_KS`, at `deployPlainTrim` | proved | proved, no hypothesis. `plain_KS_of_liveAcc` (from `PlainLiveAcc`) and `plain_KS_of_w` (from `PlainLiveW`) reach the same record. lean's table read only the `PlainLiveAcc` route; `plain_KS` needs no hypothesis | `Security/Proofs/Flock/Claims/KS/PlainLeafKS.lean` |
-| Flock KS at the untrimmed record, as `--zk`'s sampling reads | `FlockDeploy.KS.plain_KS_of_acc`, `plain_KS_sha512`, at the untrimmed `deployPlain` | open at e743d6d146; proved since #4081 | at e743d6d146, proved only from the full-width table bound (`TableBoundθ` at `orZero (wide false)`), which is open. The trimmed KS doesn't carry over: the bridge runs only from untrimmed to trimmed (`plain_KS_trim_of_KS`; `hole_agree`). Since #4081, DECOMPB's `FlockDeploy.KS.plain_KS_untrim` proves it with no premise: the full-width bound at the plain code through the extension shared with `--zk` (`plain_extend`) | `Security/Proofs/Flock/Claims/KS/PlainUntrim.lean`, `Security/Proofs/Flock/Claims/KS/TableBound.lean`, `Security/Proofs/Flock/Claims/KS/Width.lean`, `Security/Proofs/Flock/Claims/KS/TrimBridge.lean` |
+| Flock KS at the untrimmed record, as `--zk`'s sampling reads | `FlockDeploy.KS.plain_KS_of_acc`, `plain_KS_sha512`, at the untrimmed `deployPlain` | open at e743d6d146; proved (a lemma, not in the lock) since #4081 | at e743d6d146, proved only from the full-width table bound (`TableBoundθ` at `orZero (wide false)`), which is open. The trimmed KS doesn't carry over: the bridge runs only from untrimmed to trimmed (`plain_KS_trim_of_KS`; `hole_agree`). Since #4081, DECOMPB's `FlockDeploy.KS.plain_KS_untrim` proves it with no premise: the full-width bound at the plain code through the extension shared with `--zk` (`plain_extend`) | `Security/Proofs/Flock/Claims/KS/PlainUntrim.lean`, `Security/Proofs/Flock/Claims/KS/TableBound.lean`, `Security/Proofs/Flock/Claims/KS/Width.lean`, `Security/Proofs/Flock/Claims/KS/TrimBridge.lean` |
 | Flock's claims | `FlockDeploy.Assembled.flock_plain_assembled`, at `deployPlainTrim` | proved | proved, with KS and completeness as hypotheses. `flock_plain_assembled_trim` takes `PlainLiveAcc` in place of KS: an open hypothesis of a superseded route, since `plain_KS` proves the same KS with none. No locked statement reads it, so listing it would list nothing (REROWS). REROWS recommends retiring `plain_KS_of_liveAcc` and taking `plain_KS` in `flock_plain_assembled_trim`: DECOMPB's call, with no date posted | `Security/Proofs/Flock/Claims/Assembled.lean`, `Security/Proofs/Flock/Claims/KS/PlainAcc.lean` |
-| Sampling KS | `Claims.Sampling.sampling_assembled_plain` and `sampling_assembled_plain_sha512`, at `deployPlainTrim` (#4037) | broken at e743d6d146 (lean: every sampling theorem was pinned to `deployZk`); proved since #4037 | proved on main (#4037, FINTAU, lean's item 1): one theorem, `sampling_assembled_of`, at any Flock record with its decoder's facts, with `sampling_assembled` (`deployZk`) and `sampling_assembled_plain` its instances. The plain one takes `sampling_assembled`'s run facts, no ZK hypothesis, and, at SHA-512, Flock's KS from `plain_KS`, with no hypothesis. #4075's deployed plain record is at the trimmed Flock record too (`deployPlain_flock`). At the trimmed record its sampling KS covers fewer decoders. An instance at the untrimmed record, over the row two above, isn't on main | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/AssembledPlain.lean`, `Security/Proofs/Flock/Claims/Sampling/Deployed.lean` |
-| Registered reads | `FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR` | broken in plain at e743d6d146; proved at one table since #4079 | checked by the verifier (`buildStmt` runs `checkRegistered` in both modes). Since PR C (PLAINC, #4079), `flock_verify_sound` states it at plain with hidden outputs: `SoundExecHR`, at one table, with every drawn unit's registered reads checked. `sharedRowsOk` accepts a plain shared-row public file only at hidden outputs with `--registered` and hm96-sha512 leaves. The lift to J tables follows PRs A and B | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`, `verity/core/service/flock/FlockVerify.lean`, `verity/core/service/flock/Flock/ProvedScope.lean` |
+| Sampling KS | `Claims.Sampling.sampling_assembled_plain` and `sampling_assembled_plain_sha512`, at `deployPlainTrim` (#4037) | broken at e743d6d146 (lean: every sampling theorem was pinned to `deployZk`); proved (a lemma, not in the lock) since #4037 | proved on main (#4037, FINTAU, lean's item 1): one theorem, `sampling_assembled_of`, at any Flock record with its decoder's facts, with `sampling_assembled` (`deployZk`) and `sampling_assembled_plain` its instances. The plain one takes `sampling_assembled`'s run facts, no ZK hypothesis, and, at SHA-512, Flock's KS from `plain_KS`, with no hypothesis. #4075's deployed plain record is at the trimmed Flock record too (`deployPlain_flock`). At the trimmed record its sampling KS covers fewer decoders. An instance at the untrimmed record, over the row two above, isn't on main | `Security/Proofs/Flock/Claims/Sampling/Assembled.lean`, `Security/Proofs/Flock/Claims/Sampling/AssembledPlain.lean`, `Security/Proofs/Flock/Claims/Sampling/Deployed.lean` |
+| Registered reads | `FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR` | broken in plain at e743d6d146; under a named assumption (A3) at one table since #4079 | checked by the verifier (`buildStmt` runs `checkRegistered` in both modes). Since PR C (PLAINC, #4079), `flock_verify_sound` states it at plain with hidden outputs: `SoundExecHR`, at one table, with every drawn unit's registered reads checked. It takes A3, the custody (`RecordsLive`, `DrawOkH`), `LinkCRL` and `TableCRL`: the session verdict's premises. It is in the game form, so it gives option A's registered-read binding only through the broken shared row. Option A's statement is on main (#4090). `sharedRowsOk` accepts a plain shared-row public file only at hidden outputs with `--registered` and hm96-sha512 leaves. The lift to J tables follows PRs A and B | `Security/Proofs/Flock/Soundness/Discharge/FailClosed/One.lean`, `verity/core/service/flock/FlockVerify.lean`, `verity/core/service/flock/Flock/ProvedScope.lean` |
 
-So on main, every link of 2a's claims chain is proved: the property (#4054) and the leak step (#4055 with #4044). 2b's
-is too at the trimmed record, with #4037's plain sampling KS. Sampling at the untrimmed record, whose KS admits more
-decoders, has Flock's KS there (#4081) but no instance of `sampling_assembled_of` at it yet. In both chains, the session
-verdicts the verifier of record runs connect to that chain through no theorem yet (the broken shared row).
+So on main, every link of 2a's claims chain is proved and listed in the lock: the property (#4054, listed since #4090)
+and the leak step (#4055 with #4044, at the registered inputs pinned since #4090). 2b's chain is proved at the trimmed
+record too, with #4037's plain sampling KS. Sampling at the untrimmed
+record, whose KS admits more decoders, has Flock's KS there (#4081) but no instance of `sampling_assembled_of` at it
+yet. In both chains, the session verdicts the verifier of record runs connect to that chain through no theorem yet (the
+broken shared row).
 
 **The named assumptions.** The session links read the first three, in both chains. Sampling's KS and the property read
 none: their bounds carry the collision events.
@@ -242,8 +256,8 @@ and what is moved and listed) are in [e2e_chains/README.md](e2e_chains/README.md
   C (#4079), a plain session's registered reads are inside the plain theorem at one table (`SoundExecHR`).
 - **A plain served window waits for proofs' PRs.**
   - A, J tables (1 to 64) and the subset draw: DECOMPCOMP, Mon 26 Oct.
-  - C, checked registered reads and shared rows: PLAINC, on main at one table with its proof `SoundExecHR` (#4079),
-    lifted after B (Tue 27 Oct at the earliest).
+  - C, checked registered reads and shared rows: PLAINC, on main at one table as `SoundExecHR` (#4079), under A3 and
+    the session verdict's premises, lifted after B (Tue 27 Oct at the earliest).
   - B, hidden outputs at J tables, beyond `SoundExecH` at one table: PLAINB, Tue 27 Oct.
 
   A plain one_stage audit follows, Wed 28 Oct at the earliest. Tonight the served window runs under `--zk` (2a), which
@@ -332,8 +346,11 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
     (`code_identity`: `verity` and `verity_vllm` as git lists them, docs and ignored build outputs aside), φ, the seed and ℓ.
     A Program's body is read from the Build dir whose `result.json` names I2's digest, refused where none does, and held to
     that digest (`build_of`): recomputed from its `descriptor.json.gz`, with every recorded digest and every
-    `instances.json.gz` row held to it, so a Build whose body was swapped under its old `result.json` is refused. Row names,
-    parameter names and the correspondence stay the Build's word: no Program digest covers them. On
+    `instances.json.gz` row held to it, so a Build whose body was swapped under its old `result.json` is refused. No Program
+    digest covers the rows' names, the parameters' names and types, `supplied`, the correspondence or `prefix_cache.json`, so
+    the verifier (`audit`, and the compile command `circuit`) reads them only from its own Build of each Program: the trace
+    `steps.trace_commands` names, run with the pinned vLLM (`--vllm-python`, `own_builds`) into `--builds` (default
+    `OUT/builds`, never under the row dir), each held to I2's digest. The prover's Builds are its row dir's. On
     Llama-3.2-1B's TP1 Commit r20261024-055630-5377, I2's four Programs equal the Build's `build_request_LP*` digests
     (`commit.json`'s and the audit summary's `i2`).
   - on a served window, the same over φ of the served engine as vllm's advice compiler (#3619) compiles under (`phi_of_serve`:
@@ -356,14 +373,16 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   by SHA-512; the registered compiler and the advice's root and length; the registration and the committed values; and the
   advice's opening, the named gap. The verifier's window is the circuit record's, each template's Definition from Verity's
   catalog or the verifier's own input set. The compile check runs the registered compiler as the command the verifier's
-  table names for it (`prove_path.py circuit` for a served window), on advice that opens the registered root, and holds its
-  output to the circuit record (less the run root and the coins' context) and its charged length to the registered one. It
+  table names for it (`prove_path.py circuit` for a served window, which takes no row dir and compiles over its own trace of
+  each Program), on advice that opens the registered root, and holds its output to the circuit record (less the run root and
+  the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
+  unchanged digests is refused (`circuit`). It
   imports no `verity_vllm` code. The exception is a template whose Definition is still vLLM's (`SiluMul_v2`, `RoPEHead_v1`):
   the input set loads it from `verity.ml.definitions.registry` until #3927 moves those Definitions into `verity`.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
-  Programs come from `--row-dir`, and the Build manifest falls back to `<row dir>/manifest.json`, checked against the record's
-  sha256.
+  prover's Programs come from `--row-dir` and the verifier's from its own trace, and the Build manifest falls back to
+  `<row dir>/manifest.json`, checked against the record's sha256.
 - **The advice** is I1's canonical encoding. A declared run's comes from its workload (`advice_windows.advice_of_workload`), a
   served run's from ADVICE-SRC's step trace.
 - **The opening** is the named gap above. `run.sh` keeps neither the advice nor its opening in `$OUT`.

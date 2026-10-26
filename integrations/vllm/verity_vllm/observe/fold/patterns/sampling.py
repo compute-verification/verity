@@ -247,7 +247,7 @@ def _f32_bits(x: float) -> int:
 
 @dataclass
 class TokenSelectGumbelTopP:
-    """[R15 stoch] vLLM V2 sampler (d9105ea80 `Sampler.sample`), the SEEDED temperature + top-p path (an explicit `SamplingParams.seed`
+    """vLLM V2 sampler (d9105ea80 `Sampler.sample`), the SEEDED temperature + top-p path (an explicit `SamplingParams.seed`
     disables FlashInfer sampling; `top_k` off).  The launch chain of one sampling step, on `logits32 = f32(logits)` (the exact widening
     `classify_transparent` records):
 
@@ -267,7 +267,7 @@ class TokenSelectGumbelTopP:
     -- the registry composite (`verity/ml/definitions/registry/sampling.py`: TemperatureScale -> TopPMask{V} (topp_split model) -> GumbelSelectF32),
     the same instance the derived Program's `GumbelTopPTokenSelect[vllm]` rule emits: temperature / top_p / pos are Program constants
     (the fold emits their `Const` instances in operand order right before the select), the seed is the request's `seed` PARAMETER.  S
-    ([R16 stoch, coord M-0169] the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
+    (the 6th operand, `Const32[S]` "splits") is read from the split kernels' constexpr (the launch geometry:
     live batch x SM count), must agree across the three kernels, and is bound at compare to the request Program's `splits` Input entry
     for the event (or held equal to a single-request Program's own `Const32[S]`); the relation S = SplitsFor_v1(|live(t)|, num_SMs) is
     checked per engine step by GM-01 G6.  Values (which seed / T / p the kernels consumed) are NOT read from device memory here: they

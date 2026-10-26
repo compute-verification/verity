@@ -1,14 +1,12 @@
 {
   "rule": "P10 (size ratchet)",
   "entries": [
-    {"file": "verity_vllm/check/c2_rules.py", "kind": "function", "symbol": "c2_rules", "detail": "lines", "count": 159},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 897},
     {"file": "verity_vllm/check/gates.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1397},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "function", "symbol": "decompose", "detail": "lines", "count": 348},
     {"file": "verity_vllm/check/match/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "function", "symbol": "oracle_compare", "detail": "lines", "count": 196},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 932},
-    {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "function", "symbol": "CompiledKernelCheck.run", "detail": "lines", "count": 215},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1088},
     {"file": "verity_vllm/check/replay/coverage.py", "kind": "function", "symbol": "query_population", "detail": "lines", "count": 373},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "function", "symbol": "sampled_replay", "detail": "lines", "count": 219},
@@ -38,7 +36,6 @@
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 168},
     {"file": "verity_vllm/pipeline/match.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1184},
     {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1106},
-    {"file": "verity_vllm/pipeline/topp_split_probe.py", "kind": "function", "symbol": "produce", "detail": "lines", "count": 183},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 687},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 896},
     {"file": "verity_vllm/pipeline/tp/match.py", "kind": "function", "symbol": "_check_main", "detail": "lines", "count": 195},

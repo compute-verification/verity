@@ -304,7 +304,7 @@ FP8_LINEAR_FIELDS: tuple[tuple[str, str], ...] = (("qkv_w", "qkv_ws"), ("o_w", "
 
 
 def dense_layer_weights_type(C: dict[str, Any]) -> Record:
-    """[R15 fp8] `b1.layer_weights_type(C)` with the two family facts a dense Llama-architecture layer may add:
+    """`b1.layer_weights_type(C)` with the two family facts a dense Llama-architecture layer may add:
     * `C["QK_NORM"] == "head"` (Qwen3): `q_norm`, `k_norm` bf16 `[D]` after `qkv_w`/`qkv_b` (vLLM `self_attn.q_norm.weight`,
       `self_attn.k_norm.weight`: ONE head-width vector shared by every head);
     * `C["FP8_BLOCK"] == G`: every linear's weight is e4m3 `[N][K]` (`Value<8>` words, the checkpoint's stored bytes) followed by its
@@ -428,7 +428,7 @@ def weights_type(C: dict[str, Any]) -> Record:
     [SHARED-CODE lane cov-ln] a configuration with `C["NORM"] == "layernorm"` (GPT-NeoX / Pythia) gets
     `layernorm_layer_weights_type(C)` as its `layers` element, a `norm_b` `[H]` field (the final LayerNorm's bias) after
     `norm`, and a `cos_sin` table of width `rotary_dim(C)` (partial rotary); RMSNorm configurations are unchanged.
-    [R15 fp8] `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
+    `C["QK_NORM"] == "head"` (Qwen3) and/or `C["FP8_BLOCK"]` (block-scaled FP8 checkpoint) get
     `dense_layer_weights_type(C)` as the `layers` element (per-head norm weights; e4m3 weights + f32 block scales); a fused-MoE one
     takes `moe_layer_weights_type(C)`, which states both itself.  A configuration with `KV_LORA` (multi-head latent attention)
     gets `mla_weights_type(C)`."""

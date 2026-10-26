@@ -10,12 +10,12 @@ an explicit `seed`, no penalties / logit bias / min_p / logprobs):
     _gumbel_sample_kernel:    y = logits32 + g(tl.randint(seed, pos))     # Gumbel-max; `pos` = positions[logits_indices]
     token = first index of max_v y[v]                            # block argmax + torch.argmax + gather
 
-Operand roles (the coordinator's ruling on M-0049 / M-0107; R16 M-0169 for S): `seed` is a RUNTIME input of the Program (a forward
+Operand roles (the coordinator's rulings): `seed` is a RUNTIME input of the Program (a forward
 input of the wrapper, `request[r].seed` in the workload Program); `temperature`, `top_p` and `pos` are STRUCTURAL (the declared policy
 and the step's row position, constants of the Program: `Const32[f32 bits]`, `Const64[pos]`); `S` (splits) is a DERIVED input of the
 workload -- S_t = SplitsFor_v1(|live(t)|, num_SMs) (registry/topp_split.py) -- that the request wrapper reads from its request-owned
 `splits` Input (int32 [T+1], one entry per sampling event) and the op takes as a 1-element int32 value collection: the 6th operand of
-the composite, never a static of the Definition (R15's `{V,S}` static form is gone; a literal S inside forward is hidden state and is
+the composite, never a static of the Definition (the earlier `{V,S}` static form is gone; a literal S inside forward is hidden state and is
 refused like a literal seed).  [single-request workloads] A single-request workload's wrapper passes
 `splits=None` and `S` = SplitsFor_v1(1, num_SMs): the one live request makes S that constant at every event, and the rule emits it as
 `Const32[S]`, the 4th constant of the row in operand order (after temperature), exactly as the fold emits the observed S.  Only the logits
