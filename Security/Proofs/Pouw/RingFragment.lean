@@ -507,8 +507,8 @@ theorem word_injOn (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np → R
     Set.InjOn word (certified pc vq w P word : Set (DCells n n' B)) := by
   intro e he e' he' h
   by_contra hne
-  have hc : Certified pc vq w P word e := (Finset.mem_filter.mp (Finset.mem_coe.mp he)).2
-  have hc' : Certified pc vq w P word e' := (Finset.mem_filter.mp (Finset.mem_coe.mp he')).2
+  have hc : Certified pc vq w P word e := by simpa [certified] using he
+  have hc' : Certified pc vq w P word e' := by simpa [certified] using he'
   have hrank := (hR φ w p₀ hp₀ pc vq).2 e e' hne 1
   have hle := theoremK φ (∅ : Finset ℕ) (fun _ => (0 : R)) (fun _ => (⟨0, 0⟩ : BitAff (DBits n L np B n') R))
     (fun _ => ⟨0, 0⟩) ⟨0, 0⟩
