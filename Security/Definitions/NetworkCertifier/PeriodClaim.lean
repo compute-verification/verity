@@ -1,16 +1,20 @@
 import Definitions.NetworkCertifier.Period
-import Definitions.NetworkCertifier.Warden
+import Definitions.NetworkCertifier.Tap
 
 /-!
 # The network certifier's claim over a monitoring period of sampled audits
 
 Definitions only. `Accounting.PeriodRun.commWithin K` is the network certifier's claim at `K`: what the network
 certifiers saw the node move in the period is within `K` bits. `NetworkPeriod` is the monitoring period that
-`NetTiming.Guarantees.PeriodLeakAccepted` is about, its windows' registrations and the network certifier's schedules,
-with each window's statement, the audit's extracted witness and the network certifier's record at the coins.
-`NetworkPeriod.commWithin` defines the claim from it: every window meets its good event (`WindowGood`), and `K` bits
-name every secret whose every window does, which `PeriodLeakAccepted` counts at most `NetworkPeriod.count` of:
-`count ≤ 2^b` for a whole number of bits `b ≤ K`.
+`NetTiming.Guarantees.PeriodLeakAccepted` is about, its windows' registrations and the deployed network certifier (one
+device on the server's uplink, its record format and its schedules), with each window's statement, the audit's
+extracted witness and the network certifier's record at the coins. `NetworkPeriod.commWithin` defines the claim from
+it: every window meets its good event (`WindowGood`), and `K` bits name every secret whose every window does, which
+`PeriodLeakAccepted` counts at most `NetworkPeriod.count` of: `count ≤ 2^b` for a whole number of bits `b ≤ K`.
+
+A fleet is `m` network certifier devices, each with its own monitoring period. `NetworkPeriod.fleetCount` is the
+product of their counts: a fleet's secret whose parts on the devices determine it, and whose every device's windows
+meet their good events, is one of at most that many.
 -/
 
 namespace NetTiming
@@ -23,8 +27,12 @@ connections `Conn`, at the coins `X`, as `PeriodLeakAccepted` takes it:
 
 * each window's registration (`sw`), its partition (`Pw`), the values it commits at its registered inputs (`ρ`), and
   `β` bounding the committed bits of each of its possible faulty sets;
-* the network certifier's schedules (`Ss`), each giving connection `c` at most `cap c` cells, and its openings at each
-  statement (`tops`);
+* the deployed network certifier: one device (`device`) on the server's uplink, with its cells `Cell` and the
+  server's state `Srv`, whose run (`run`) on a schedule and the server's state gives the cells the client receives and
+  its records of the period's windows; what reaches it from the server on each connection (`arr`) and its record
+  format (`fmt`);
+* its schedules (`Ss`), each held by its record format and giving connection `c` at most `cap c` cells, and its
+  openings at each statement (`tops`);
 * at the coins, each window's statement (`stmt`), the audit's extracted witness there (`wit`) and the network
   certifier's record of the window (`obs`). -/
 structure NetworkPeriod {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
@@ -42,12 +50,29 @@ structure NetworkPeriod {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inha
   β : Fin n → ℕ
   /-- `β` bounds them -/
   hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i
+  /-- the cells the network certifier carries -/
+  Cell : Type
+  /-- the server's state, which fixes what reaches the network certifier -/
+  Srv : Type
+  /-- the network certifier's devices -/
+  Dev : Type
+  /-- what reaches the network certifier from the server on each connection, at the server's state -/
+  arr : Srv → Conn → Arrivals Cell
+  /-- the network certifier's record format over the period's windows -/
+  fmt : TapRecord Conn Cell (Fin n → List (Obs L Kₒ S))
+  /-- the deployed network certifier -/
+  device : Dev
+  /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
+  records of the period's windows -/
+  run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
   /-- each connection's cap on the cells a schedule gives it -/
   cap : Conn → ℕ
   /-- the network certifier's schedules -/
   Ss : Set (WardenSchedule Conn)
   /-- every schedule keeps to the caps -/
   hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c
+  /-- the record format holds every schedule -/
+  hfit : ∀ s ∈ Ss, fmt.fits s
   /-- the network certifier's openings at each statement, under its roots -/
   tops : Stmt → List (Opening Bool)
   /-- each window's statement at the coins -/
@@ -78,6 +103,12 @@ period's count bounds (`Bits`), and every window meets its good event at its sta
 and the network certifier's record. -/
 def commWithin (H : Msg → Msg) (N : NetworkPeriod D L Kₒ S lay k δ reg Dj n Conn X) (K : ℝ) (x : X) : Prop :=
   N.Bits K ∧ ∀ i, WindowGood H D L Kₒ S lay k δ reg Dj (N.sw i) (N.ρ i) N.tops (N.stmt x i) (N.wit x i) (N.obs x i)
+
+/-- **A fleet's count**: over `m` network certifier devices, device `j`'s monitoring period `N j` of `n j` windows on
+its connections `Conn j`, the product of the devices' counts. -/
+noncomputable def fleetCount {m : ℕ} {n : Fin m → ℕ} {Conn : Fin m → Type} [∀ j, Fintype (Conn j)]
+    (N : ∀ j, NetworkPeriod D L Kₒ S lay k δ reg Dj (n j) (Conn j) X) : ℕ∞ :=
+  ∏ j, (N j).count
 
 end NetworkPeriod
 

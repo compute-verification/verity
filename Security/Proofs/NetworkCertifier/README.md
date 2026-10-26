@@ -340,8 +340,9 @@ The other 29 are the rest of the Capacity table's bounds and the schedule's caus
   every window meets its leak relation) with probability at most `δ + Σ_i e_i + Σ_i e'_i`, and at each draw the secrets
   meeting it number at most
   `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b·Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i`: the
-  faulty units cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b = 16` by a proof
-  unit's output limit. The network certifier is one device, as in the period's bound: on every schedule its record
+  faulty units cost `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits once over the monitoring period, `b` each unit's
+  committed bits as its Program has them (`faultyBits`): only a proof unit's public outputs are at most 16 bits, and
+  its committed outputs count by their bits. The network certifier is one device, as in the period's bound: on every schedule its record
   format holds, the cells the client receives read back from its record (`tap_cells_read`), so its one named assumption is `trusted-host`. Over live audits the two
   inputs are `Flock.Guarantees.SampledKSLive` at each window's history and the live `SampledLeakAccepted` (P2),
   neither discharged, so it is not the deployed system's bound over a monitoring period until they are.

@@ -23,7 +23,9 @@ argument with the escape as the input); and the secrets whose every window meets
 under `Fmax` (`HorizonGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
 period's units and `b` each unit's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the faulty units,
-plus the advice and timing terms and the schedule terms. A proof unit's outputs are at most 16 bits, so `b = 16`.
+plus the advice and timing terms and the schedule terms. `b` is the Program's (`hb`: at least the committed bits
+`faultyBits` of each one-unit faulty set), not 16: only a proof unit's public outputs are at most 16 bits, and its
+committed outputs, the values other units or the client read, count by their bits.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
 (`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
