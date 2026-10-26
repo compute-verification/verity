@@ -353,6 +353,43 @@ theorem accLast_VR (rd : Claims.Msg → Option FinalP) : AccLast sha512 (VR rd) 
     dsimp only
     omega
 
+/-- **At SHA-512, `VR rd` decides without the round's coin** (`decideFree_VK`'s proof, at `nextR`): an accepting
+decision is past the link's coin (`accLast_VR`), its last message asks no coin, and `decR` reads only the coins before
+the last (`decR`'s `cs.head?` and `cs.tail.dropLast`). -/
+theorem decideFree_VR (rd : Claims.Msg → Option FinalP) : DecideFree sha512 (VR rd) := by
+  intro x as cs c c' hl hacc
+  show (nextR rd x as (cs ++ [c'])).eval sha512 = (nextR rd x as (cs ++ [c])).eval sha512
+  have hacc' : ((nextR rd x as (cs ++ [c])).eval sha512).1 = .acc := hacc
+  cases hact : actR rd x as (cs ++ [c]) with
+  | rej => revert hacc'; simp [nextR, hact, Claims.OC.eval]
+  | coin c₂ => revert hacc'; simp [nextR, hact, Claims.OC.eval]
+  | decide s spec sts link c₁ mids f =>
+    have hso := actR_setupOf hact
+    have hk := accLast_VR rd x as (cs ++ [c]) (by simp [hl]) hacc'
+    change as.length = (match setupOf false x with
+      | some (_, spec, sts) => 2 + rounds false spec sts | none => 1) at hk
+    rw [hso] at hk
+    dsimp only at hk
+    obtain ⟨c₀, cs', rfl⟩ : ∃ c₀ cs', cs = c₀ :: cs' := by
+      rcases cs with _ | ⟨c₀, cs'⟩
+      · simp only [List.length_nil, zero_add] at hl
+        omega
+      · exact ⟨c₀, cs', rfl⟩
+    have ha : ∀ t, as.getLast? ≠ some (0 :: t) := fun t hlast => by
+      have hcoin : act false x as (c₀ :: cs' ++ [c]) = .coin c := by
+        unfold act
+        rw [hso]
+        simp only [List.getLast?_concat, hlast]
+      have e := hact
+      unfold actR at e
+      rw [hcoin] at e
+      cases e
+    have hd : decR rd x as (c₀ :: cs' ++ [c']) = decR rd x as (c₀ :: cs' ++ [c]) := by
+      unfold decR
+      simp only [List.cons_append, List.head?_cons, List.tail_cons, List.dropLast_concat]
+    unfold nextR actR
+    rw [act_cons_snoc false x as c₀ cs' c c' ha, hd]
+
 /-! ## `KSFlockLin` at the trimmed record -/
 
 /-- **`KSFlockLin` at the plain record at `VR rd`**, at SHA-512, at the trimmed record and the deployed caps `CpDep`:
