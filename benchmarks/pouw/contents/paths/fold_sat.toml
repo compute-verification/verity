@@ -1,0 +1,4 @@
+order = 367
+path = "`theory/fold_sat.py`"
+runs_on = "CPU"
+what = "FOLD-SAT: whether any straight-line program of k instructions computes one step of segment.py's li, duo or fx1 fold (or the step with each word split into summands, ABSORB in cost form), at full 32-bit width by z3 CEGIS over exact models of LOP3 (every LUT), IADD3, IMAD, IMAD.HI, IMAD.WIDE, IADD.64, SHF, LEA, LEA.HI, PRMT, IMNMX, the unary ops and SEL, with every immediate symbolic; UNSAT is a lower bound over that set"
