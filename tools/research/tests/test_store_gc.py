@@ -79,6 +79,15 @@ def test_an_uncited_old_record_goes_after_a_grace_and_a_young_one_stays(env):
     assert (b / "manifests").is_dir() and len(list((b / "manifests").iterdir())) == 2
 
 
+def test_a_multipart_sidecar_beside_a_record_is_no_record(env):
+    """`manifests/<hex>.json.parts.json` (a large manifest's multipart sidecar, 26 Oct on the bucket) stopped the first pass."""
+    b, notes, cache, _ = env
+    a = artifact(b, "run-record/v1", blob(b, b"x"), age_days=40)
+    _put(b, f"manifests/{ids.hex_of(a)}.json.parts.json", b'{"parts": []}')
+    _put(b, "attempts/r20261001-000000-0001.json.parts.json", b'{"parts": []}')
+    assert set(gc.plan(FsRemote(b), cache, [notes], now=NOW).expired) == {a}
+
+
 def test_a_blob_a_kept_artifact_also_holds_stays(env):
     b, notes, cache, _ = env
     shared = blob(b, b"circuit.txt")

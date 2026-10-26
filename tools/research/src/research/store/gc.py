@@ -54,6 +54,9 @@ ART_TEXT = re.compile(r"art:([0-9a-f]{8,64})(?![0-9a-f])")
 RUN_TEXT = re.compile(r"(?<![0-9A-Za-z])(r\d{8}-\d{6}-[0-9a-f]{4})(?![0-9a-f])")
 SCAN_MAX_BYTES = 8 << 20
 PARSE_ERRORS = (ValueError, KeyError, TypeError, AttributeError)
+MANIFEST_KEY = re.compile(r"manifests/([0-9a-f]{64})\.json")
+ATTEMPT_KEY = re.compile(r"attempts/(r\d{8}-\d{6}-[0-9a-f]{4})\.json")
+"""The records' keys exactly: a multipart sidecar (`<key>.parts.json`) beside a large one is no record."""
 
 
 class GcError(Exception):
@@ -219,7 +222,7 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
         say(f"{root}: names {len(a)} art ids, {len(r)} runs")
         cited_hex |= a
         cited_runs |= r
-    listing = {k[len("manifests/"):-len(".json")]: _epoch(t) for k, t in remote.list_times("manifests/") if k.endswith(".json")}
+    listing = {m.group(1): _epoch(t) for k, t in remote.list_times("manifests/") if (m := MANIFEST_KEY.fullmatch(k))}
     say(f"{len(listing)} manifests listed")
     with tempfile.TemporaryDirectory(prefix="store-gc-", dir=work) as tmp:
         db = sqlite3.connect(Path(tmp) / "blobs.sqlite")
@@ -233,13 +236,13 @@ def plan(remote: Any, cache: Path, cite: list[Path], *, now: float, ttl: dict[st
             if i % 20000 == 0 and i:
                 say(f"{i} manifests read")
         ordered = sorted(arts)
-        label_keys = [k for k in remote.list("labels/") if k.endswith(".json")]
+        label_keys = [k for k in remote.list("labels/") if k.endswith(".json") and not k.endswith(".parts.json")]
         for k, (a, r) in rd.each(label_keys, lambda body: named(body.decode(errors="replace"))):
             ta, tr = named(_label_target(k))
             cited_hex |= a | ta
             cited_runs |= r | tr
         say(f"{len(label_keys)} labels read; cited: {len(cited_hex)} art ids, {len(cited_runs)} runs")
-        attempts = {k[len("attempts/"):-len(".json")] for k in remote.list("attempts/") if k.endswith(".json")}
+        attempts = {m.group(1) for k in remote.list("attempts/") if (m := ATTEMPT_KEY.fullmatch(k))}
         p = Plan(listed=set(arts))
         keep = _keep(arts, ordered, cited_hex, cited_runs, attempts, ttl, rd, p)
         for why in keep.values():
@@ -328,7 +331,7 @@ def apply(remote: Any, p: Plan, cache: Path, state: Path, *, now: float, grace_s
     say = log or (lambda s: None)
     marks = load_marks(state)
     due = {b for b, t in marks.items() if b in p.candidates and now - t >= grace_s}
-    new = [k for k in remote.list("manifests/") if k.endswith(".json") and k[len("manifests/"):-len(".json")] not in p.listed]
+    new = [k for k in remote.list("manifests/") if (m := MANIFEST_KEY.fullmatch(k)) and m.group(1) not in p.listed]
     rescued: set[str] = set()
     for _, parsed in Reader(remote, cache, jobs).each(new, _parse_manifest):
         rescued |= {d.hex() for d, _ in parsed[5]} & p.candidates.keys()
