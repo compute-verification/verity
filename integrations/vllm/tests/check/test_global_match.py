@@ -1671,9 +1671,9 @@ def test_g6_consumes_the_programs_declared_lag_and_the_record_must_attest_the_sa
 
     # (8) a pre-R17-1 Program (no lag declared): an EOS stop FAILS by name -- the record's attestation is NOT read as the rule (True attested,
     # the lag row present: a ruling-21 reader would have passed it); with every request at its cap the record passes, labelled exercised=false
-    from verity_vllm.pipeline import global_program as G
-    assert G.eos_lag_rows_declared({"async_scheduling": True}) == 1 and G.eos_lag_rows_declared({"async_scheduling": False}) == 0
-    assert G.eos_lag_rows_declared({}) is None and G.eos_lag_rows_declared(None) is None and G.eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
+    from verity_vllm.program.workload import eos_lag_rows_declared
+    assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
+    assert eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None and eos_lag_rows_declared({"async_scheduling": "maybe"}) is None
     gp8, oracle8 = assemble([R0, R1_LAG], tmp_path / "undeclared", lag=None)
     assert gp8["lag"] is None and "lag" not in gp8["stop_rule"] and "async_scheduling" not in gp8["applicability"]["engine"]
     _set_async_scheduling(oracle8, True)

@@ -266,13 +266,14 @@ def stop_rule_of_record(eng, wl: dict, versions: dict) -> dict[str, Any]:
     out: dict[str, Any] = {"eos": None, "lag": None, "declared_lag": None, "engine_lag": None, "async_scheduling": None, "notes": [], "srule": None}
     try:
         from verity_vllm.pipeline import global_program as _GP
+        from verity_vllm.program.workload import eos_lag_rows_declared
         _srule = _GP.stop_rule(eng.cp.get("local_path"), None, wl)
         out["srule"] = {k: _srule.get(k) for k in ("eos_token_ids", "source", "refusal") if k in _srule}
         out["eos"] = None if _srule.get("refusal") else _srule.get("eos_token_ids")
         _decl_lag = _GP.workload_target(wl.get("target")).lag()
         _eng_async = (versions.get("engine_kwargs") or {}).get("async_scheduling")
         # one field, one reader (padrev M-0517): GP-01's eos_lag_rows_declared over the engine's resolved read-back
-        _eng_lag = _GP.eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
+        _eng_lag = eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})
         out["declared_lag"], out["engine_lag"], out["async_scheduling"] = _decl_lag, _eng_lag, _eng_async
         if _eng_lag is None:
             out["notes"].append(f"R17-1: the Program declares LAG {_decl_lag} but this engine does not attest async_scheduling: EOS stops fail by name")

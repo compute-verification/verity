@@ -20,7 +20,6 @@
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "engine <-> pipeline"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "engine <-> properties"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "observe <-> program"},
-    {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "pipeline <-> program"},
     {"file": "verity_vllm", "kind": "package-cycle", "symbol": "<package>", "detail": "program <-> query"},
     {"file": "verity_vllm/acquire/plan.py", "kind": "layer", "symbol": "<module>", "detail": "acquire.plan -> check.root_policy"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "layer", "symbol": "<module>", "detail": "check.match.batch_decomp -> pipeline.gc_tuning"},
@@ -132,7 +131,6 @@
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> check.fold_compare"},
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> observe.events"},
     {"file": "verity_vllm/program/kernels/sampling_rng.py", "kind": "layer", "symbol": "<module>", "detail": "program.kernels.sampling_rng -> observe.log"},
-    {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "layer", "symbol": "<module>", "detail": "program.lifting.lifted_records -> pipeline.global_program"},
     {"file": "verity_vllm/program/lifting/lifted_records.py", "kind": "layer", "symbol": "<module>", "detail": "program.lifting.lifted_records -> query.query_artifact"},
     {"file": "verity_vllm/program/twins_check.py", "kind": "layer", "symbol": "<module>", "detail": "program.twins_check -> check.fold_compare"}
   ]

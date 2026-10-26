@@ -220,7 +220,7 @@
     {"file": "tests/program/test_lifted_moe_padrev.py", "kind": "F841", "symbol": "_call_range", "detail": "Local variable `lo` is assigned to but never used"},
     {"file": "tests/program/test_lifted_moe_padrev.py", "kind": "F841", "symbol": "test_p3_closure_the_moe_block_uses_only_lselect_and_lgatherrow_from_the_specified_class_and_the_gather_count_is_fixed", "detail": "Local variable `families` is assigned to but never used"},
     {"file": "tests/program/test_lifted_r17.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.defs.REGISTRY` imported but unused"},
-    {"file": "tests/program/test_lifted_r17.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `E402`)", "count": 8},
+    {"file": "tests/program/test_lifted_r17.py", "kind": "RUF100", "symbol": "<module>", "detail": "Unused `noqa` directive (unused: `E402`)", "count": 7},
     {"file": "tests/program/test_lifted_request.py", "kind": "F401", "symbol": "<module>", "detail": "`tests.program.test_serve3.EOS_FOR` imported but unused"},
     {"file": "tests/program/test_lifted_request.py", "kind": "F401", "symbol": "test_boundary_detection_refuses_a_body_whose_steps_do_not_consume_the_token", "detail": "`verity.ml.circuits.defs.PrimitiveDefinition` imported but unused"},
     {"file": "tests/program/test_lifted_request.py", "kind": "F841", "symbol": "test_boundary_detection_refuses_a_body_whose_steps_do_not_consume_the_token", "detail": "Local variable `d` is assigned to but never used"},
