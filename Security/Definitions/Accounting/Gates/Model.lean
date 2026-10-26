@@ -656,7 +656,7 @@ structure Caps where
   /-- `L`: the engine steps a value may be read after the step that produced it -/
   life : ℕ
 
-/-- The budgeted units the caps allow per certified byte read. -/
+/-- The capped units (budgeted units and thin lanes) the caps allow per certified byte read. -/
 def Caps.total (k : Caps) : ℚ := k.rounding + k.compareSelect + k.gather + k.fold
 
 /-- The audit's windows: `windows` of them, the window `win t` of each engine step `t`, and the bytes the audit

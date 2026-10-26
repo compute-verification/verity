@@ -2,7 +2,7 @@ import Mathlib.Data.Int.ModEq
 import Mathlib.Data.Nat.Prime.Defs
 import Definitions.Accounting.Gates
 import Definitions.Core.Prims
-import Definitions.Accounting.Assumptions.EncodeChain
+import Definitions.Accounting.Assumptions.SquaringChain
 
 /-!
 # The circuit model's window, and its lower bounds: the fooling bound, the carry bound and the encode budget (trusted)
@@ -39,19 +39,24 @@ on, from the most general to the one 6a's carrier lemma takes as its `q`:
 * `SquaringUnits`: the two together. A circuit that squares the nibble family, its registered inputs fixed and its
   coin inputs `a`'s bytes, has `4s ≤ runBits C + w · budgeted C`: at p1024 with no run input, 8 units at `w = 33` (or
   `w = 32`, s32's window), 32 were each budgeted gate a byte (`w = 8`).
+* `FoolingCap`: why counting stops there. A set of inputs that pairwise differ mod `2^j` in some output of `out` has at
+  most `2^(j·|out|)` members, so a fooling bound in units is at most `j·|out|/w`: one squaring's outputs cap what it
+  can charge (252 nibble bits, about 8 units at `w = 33`), and a chain's intermediate squarings, which are not
+  outputs, add nothing. A floor per squaring and a chain's sum are premises (`SquaringFloor`, `ChainSum`), not counts.
 * `Renormalization`: the step the encode bound needs and no counting argument gives, stated and unproved (the red
   team's Lemma R): returning a square's limbs to byte format takes `L − c − d(ε)` budgeted units, `d(ε) =
   d₀ + log₂(1/ε)/8`, at every `ε` above a floor `2^−t` (claimed at p1024 with `d₀ = 4`, `t = 64`; false with no
-  floor). `EncodeChainHardness` is its composition over the chain.
+  floor). `SquaringFloor` is it at `c = 0` in capped units, and `ChainSum` composes it over the chain.
 * `RhoPairs`: the parity-free target's symmetry. `ρ(p − x) = p − ρ(x)`, and `ρ(x)`'s parity, the bit the target
   drops, is the Legendre symbol of `x`.
 * `EncodeBudget`: the connection. For a declared circuit `W` that satisfies the stacking property `P` and is in the
   restricted class, the words of fresh encodings `W`'s values hold on more than `ε` of the draws number at most
-  `(budget)/E + (run-input bits)/(n − 1)`, under `EncodeChainHardness` at `E`: the budget is the caps (rational
-  units per certified byte) times the audit's certified reads, summed over the windows, and the run inputs are each
-  window's `R_in` bound, summed over the windows.
-* `EncodeCost`: under `EncodeChainHardness` at `E`, the encode cost (`encodeCost`) of `q` words is at least `q · E`
-  (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
+  `(budget)/E + (run-input bits)/(n − 1)`, under `SquaringFloor` at `e` and `ChainSum` with `E ≤ k · S · e`: the
+  budget is the caps (rational units per certified byte, a thin lane counted as a compare-select unit) times the
+  audit's certified reads, summed over the windows, and the run inputs are each window's `R_in` bound, summed over the
+  windows.
+* `EncodeCost`: under the same premises, the encode cost (`encodeCost`, in capped units) of `q` words is at least
+  `q · E` (`⊤` when no circuit computes them): the cost 6a's `encodeBitsCost` reads.
 * `FmaxfRange`, `FminfRange`, `RzByteRange`: property/v1's interval rules for P's producers hold their evaluators'
   values (`Definitions/Accounting/Gates/Ranges`), the intervals `DeclaredHold` asks of those budgeted gates.
 * `QuantRange`, `DitherRange`, `LutSoftmaxRange`: the quantizers', the dither's and the LUT softmax's values lie in
@@ -149,6 +154,15 @@ def SquaringUnits : Prop :=
     (∀ t ∈ G, InWindow C (x t) ∧ ∀ l < n, val C (x t) (out l) = byte (nibbles s t ^ 2 % p) l) →
     G.card ≤ 2 ^ (runBits C + w * budgeted C)
 
+/-- **The fooling bound's information cap.** For any circuit `C` and any set `F` of inputs that pairwise differ mod
+`2^j` in some output gate of `out`: `|F| ≤ 2^(j · |out|)`. So the fooling bounds (`Fooling`, `UnitsFooling`) charge a
+circuit at most `j · |out|` bits, `j · |out| / w` units, whatever it computes between its inputs and its outputs: a
+squaring's floor and a chain's sum can't come from counting. -/
+def FoolingCap : Prop :=
+  ∀ {ι κ : Type} (C : Dag ι) (F : Finset κ) (x : κ → ι → ℤ) (j : ℕ) (out : List ℕ),
+    (∀ s ∈ F, ∀ s' ∈ F, s ≠ s' → ∃ o ∈ out, ¬ val C (x s) o ≡ val C (x s') o [ZMOD 2 ^ j]) →
+    F.card ≤ 2 ^ (j * out.length)
+
 /-- **Re-normalization** (the red team's Lemma R, note:20261017T1859Z-report-property-redteam R3.3 and R4.1;
 unproved): a square's limbs come back to byte format only through budgeted gates, about one a limb. Take a circuit
 whose window is proven, with no run input, whose registered inputs are fixed and whose coin inputs are bytes of `a` or
@@ -195,30 +209,34 @@ def RhoPairs : Prop :=
 (`Restricted B`) whose census satisfies the stacking property `P` (`Property caps A W`), whose registered and coin
 inputs are the codec's (`CodecInputs`), and whose values hold, byte for byte less parity, the encodings of the `q`
 distinct words `words` on more than `ε` of the fresh draws, its inputs and budgeted gates but gathers there in
-their declared intervals (its window is then `ProvenWindow`'s, never a hypothesis): under
-`EncodeChainHardness F k B E ε`, inside its floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`),
+their declared intervals (its window is then `ProvenWindow`'s, never a hypothesis): under `SquaringFloor F e ε` and
+`ChainSum F k B e ε`, at `E ≤ k · S · e` (`S = Field.squarings F`) and inside their floor (`ε ≥ 2^−64`, `k ≥ 1`,
+`p ≥ 2^66`, `p ≡ 3 mod 4`),
 
   `q · E · (n − 1) ≤ (c · Σ_w reads_w) · (n − 1) + 8 · (Σ_w R_in,w) · E`,
 
-with `c` the caps' budgeted units per certified byte read, a rational (property/v1's units: gathers by fresh index
-bits), and `R_in,w` window `w`'s run-input bytes: `q ≤ c · reads / E + 8 · Σ_w R_in,w / (n − 1)`. -/
+with `c` the caps' units per certified byte read, a rational (property/v1's units: gathers by fresh index bits, and
+a thin lane a compare-select unit), and `R_in,w` window `w`'s run-input bytes:
+`q ≤ c · reads / E + 8 · Σ_w R_in,w / (n − 1)`. -/
 def EncodeBudget : Prop :=
-  ∀ (F : Field) (k B E εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
+  ∀ (F : Field) (k B E e εnum εden : ℕ) {ι : Type} (W : Dag ι) (caps : Caps) (A : Audit) (m : ℕ → ℕ)
     (x : Draw k → ι → ℤ) (words : List ℕ) (out : ℕ → ℕ → ℕ),
-    EncodeChainHardness F k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
+    SquaringFloor F e εnum εden → ChainSum F k B e εnum εden → E ≤ k * F.squarings * e →
+    εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 →
     Property caps A W → Restricted B W → CodecInputs F W (draws F k) m x → words.Nodup →
     (∀ i ∈ words, i < F.p) → ComputesWords F k W x m words out εnum εden →
     ((words.length * E * (F.n - 1) : ℕ) : ℚ) ≤
       caps.total * (∑ v ∈ Finset.range A.windows, A.reads v : ℕ) * (F.n - 1 : ℕ) +
         (8 * (∑ v ∈ Finset.range A.windows, caps.runBytes v) * E : ℕ)
 
-/-- **The encode cost, bounded.** Under `EncodeChainHardness F k B E ε`, inside its floor (`ε ≥ 2^−64`, `k ≥ 1`,
-`p ≥ 2^66`, `p ≡ 3 mod 4`), with `n ≥ 2`, `q` distinct words cost at
-least `q · E` budgeted units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input
-computes them on more than `ε` of the draws. -/
+/-- **The encode cost, bounded.** Under `SquaringFloor F e ε` and `ChainSum F k B e ε`, at `E ≤ k · S · e` and inside
+their floor (`ε ≥ 2^−64`, `k ≥ 1`, `p ≥ 2^66`, `p ≡ 3 mod 4`), with `n ≥ 2`, `q` distinct words cost at least `q · E`
+capped units: `q · E ≤ encodeCost F k B ε q`, which is `⊤` when no restricted circuit with no run input computes them
+on more than `ε` of the draws. -/
 def EncodeCost : Prop :=
-  ∀ (F : Field) (k B E εnum εden q : ℕ),
-    EncodeChainHardness F k B E εnum εden → εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 → 2 ≤ F.n →
+  ∀ (F : Field) (k B E e εnum εden q : ℕ),
+    SquaringFloor F e εnum εden → ChainSum F k B e εnum εden → E ≤ k * F.squarings * e →
+    εden ≤ 2 ^ 64 * εnum → 0 < k → 2 ^ 66 ≤ F.p → F.p % 4 = 3 → 2 ≤ F.n →
       ((q * E : ℕ) : ℕ∞) ≤ encodeCost F k B εnum εden q
 
 /-! ## Primitives' output intervals
