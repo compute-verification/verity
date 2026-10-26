@@ -7166,7 +7166,7 @@
    ]
   },
   "PouwCheck.Inputs": {
-   "digest": "bbc0458adbfddedb07e13b0e53375d062f757aa2911c6b802121e44007c0ec9c",
+   "digest": "8d06cdf102b416fcc7a3960a75c356d1aa0d420901a2bd93a30e0eed80552bd7",
    "definitions": {
     "PouwCheck.CheckItem": "a8c3b6782e136e39d6ba8abc4ad388ca594f2ae5ed7f0e9a20bf108367f859ce",
     "PouwCheck.CheckItem.coins": "967fa4f2acda567918b67eb4dbe81db67c0ef1a754b208dc248f40874af1f926",
@@ -7251,7 +7251,7 @@
     "PouwCheck.rangeOf": "9d7c2f9b2d0c19ea4ade7014c7e80a84bba91983cf3d01c0d56bdbb54d0867a2",
     "PouwCheck.ratioField": "fbe08744ccfadc8920d70bae2d203c1892927538c395ea279081c209ec005acc",
     "PouwCheck.ratioField._sparseCasesOn_1": "6b14fb22bf6a44b230e8ca60b8a77910dcba107a7e80cad48f643b1fb18c2e86",
-    "PouwCheck.registrationOf": "cd98dfcf14188c540e7b49b9184e31976b3c1f6fbc7137f95432cfa02503bc74",
+    "PouwCheck.registrationOf": "979a694e0463b53d95815c3e04f88e2ae2ba244e18cd87b735e516521cf6efd9",
     "PouwCheck.rootOf?": "7b0cddacb4a5f93ab1971d436fe5e52b097baeb015a1be59b5ef1fa782fb8c2a",
     "PouwCheck.scheme": "c21179b23322516caea0dbb602dda5df958eee98fa9739db17e2961e11e0d4ab",
     "PouwCheck.strataOf": "25d1c61b52a2b4d495e007ef0e12e1abbd6524b7f64f46818eee95ce5db733e9",
