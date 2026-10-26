@@ -492,11 +492,12 @@ def v2_world_print(budget: float = 0.01) -> None:
               f"{r['uncredited']:5.2%}  {r['static_gamma']:.2f}, K {K} N {N} L {L} t {t}: {g:.2f}")
 
 
-def v2_frozen_print(budget: float = 0.01) -> list[dict]:
+def v2_frozen_print(budget: float = 0.0) -> list[dict]:
     """v2 as frozen: the card's tile count, A12/A13's c_t, V ±80 on the H200, and both A10 options on the RTX PRO 6000
     (V ±96; V ±80 with the honest kernel running Strassen or HK, whose overlapped γ is v2's at ±80 wherever the period
     is ALU-bound). Then ε_alg at every registrable static shape on its own, the prover's cheapest instance (A = B = 0,
-    its own model of one shape), not only the world mix."""
+    its own model of one shape), not only the world mix. v2's budget is 0: at 1% a lone K 65536 shape leaks 0.50% (H200)
+    and 0.76% (RTX PRO 6000); at 0 the world γ is unchanged and that shape alone costs 1.53 (from 1.46) and 1.09 (1.02)."""
     print(f"\nv2 as frozen at the world model (tiles H200 t={TILES['H200']}, RTX PRO 6000 t={TILES['RTX PRO 6000']}; "
           f"c_t A12/A13; 16-bit words; overlapped; eps_alg budget {budget:.0%} a shape)")
     print(f"  {'card':30} {'model':16} {'g_ovl':>6} {'g_add':>6} {'T':>5} {'A':>5} {'util':>5} {'eps_alg':>7} "
