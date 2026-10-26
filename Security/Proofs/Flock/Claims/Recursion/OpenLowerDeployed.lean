@@ -53,21 +53,26 @@ open RecDeploy.OpenedPlain (QueryOpens queryOpens_of_outs)
 
 /-! ## `DecompB` reads the parts' checks only at their own messages -/
 
-/-- **Every part's `chk` at the parts' own messages**: `nS` witnesses, their recorded calls true, and every part's
-check at the messages the layout reads off them. -/
+/-- **Every part's `chk` at the parts' own messages**: `nS` witnesses, their recorded calls true and free of
+collisions, and every part's check at the messages the layout reads off them. -/
 def Joint (H : Msg → Msg) (D : Claims.Recursion.Deploy Coin) (L : LayoutB)
     (chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop) (x : Msg) (c : ℕ → Coin) (ws : List Claims.Flock.Wit) : Prop :=
-  ws.length = D.nS x ∧ (∀ e ∈ L.allCalls x ws, H e.1 = e.2) ∧ ∀ s < D.nS x, chk s x c (L.msgs x ws)
+  ws.length = D.nS x ∧ (∀ e ∈ L.allCalls x ws, H e.1 = e.2) ∧ (Claims.findColl (L.allCalls x ws)).isSome = false ∧
+    ∀ s < D.nS x, chk s x c (L.msgs x ws)
 
 /-- **`DecompB` is antitone in the parts' checks at their own messages**: it holds at `chk'` wherever it holds at
-`chk` and every part's `chk'` at the parts' own messages gives every part's `chk` there. -/
+`chk` and every part's `chk'` at the parts' own messages gives every part's `chk` there. A collision among the
+recorded calls is `DecompB`'s own second outcome, so `Joint` may assume none. -/
 theorem decompB_of_joint {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {IV : Claims.Verifier Coin}
     {L : LayoutB} {shape : Claims.Recursion.Form → Prop} {chk chk' : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
     (hle : ∀ (x : Msg) (st : Claims.Recursion.Stmt), D.parse x = some st → shape st.form →
       ∀ (c : ℕ → Coin) (ws : List Claims.Flock.Wit), Joint H D L chk' x c ws →
         ∀ s < D.nS x, chk s x c (L.msgs x ws))
-    (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' :=
-  fun x st hx hf c ws hl hT hC => hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨hl, hT, hC⟩)
+    (hD : DecompB H D IV L shape chk) : DecompB H D IV L shape chk' := by
+  intro x st hx hf c ws hl hT hC
+  cases hcol : (Claims.findColl (L.allCalls x ws)).isSome
+  · exact hD x st hx hf c ws hl hT (hle x st hx hf c ws ⟨hl, hT, hcol, hC⟩)
+  · exact Or.inr hcol
 
 section Compose
 
@@ -127,7 +132,7 @@ theorem decompB_lastSplitP_sharesJ (ownB : Msg → VerdictR → Option ℕ) (own
   refine decompB_of_joint ?_ hD
   intro x st hx hf c ws hJ s hs
   exact partComputes_of_shares H rd pieces pholds hpieces rel colsE wE rowIn final w ownB ownQ _ L
-    (hlowR s x c _ (hJ.2.2 s hs)) (hlowP x st hx hf c ws hJ s hs)
+    (hlowR s x c _ (hJ.2.2.2 s hs)) (hlowP x st hx hf c ws hJ s hs)
 
 end Compose
 
@@ -225,10 +230,11 @@ def copyAtR (p : _root_.Flock.Readable.Parsed) (xI : Msg) (q : OpenPiece) : ℕ 
   let n := q.rep * qAt xI q.level + q.query
   (n / p.sts[0]!.c.g, n % p.sts[0]!.c.g, 0)
 
-/-- **The level-0 cap a piece opens against**: rep `k = 2 table + rep`'s table's level-0 top's nodes, round 0's rows
-for the table (`repCtx`'s `cap0`, which `readRep` holds the proof's cap to: `FitsRep.cap`). -/
+/-- **The level-0 cap a piece opens against**: rep `k = 2 table + rep`'s table's level-0 top's nodes, the nodes of
+round 0's rows for the table (`nodeOf`, as `decR` reads its `r₀`; `repCtx`'s `cap0`, which `readRep` holds the proof's
+cap to: `FitsRep.cap`). -/
 def capR (x : Msg) (ms : List Msg) (q : OpenPiece) : Array ByteArray :=
-  match setupOf false x, rowsOf (ms.headD []) with
+  match setupOf false x, (rowsOf (ms.headD [])).map (List.map FlockDeploy.nodeOf) with
   | some v, some r₀ => ((repCtx v.2.1 v.2.2 default r₀ [] (2 * q.table + q.rep)).cap0).toArray
   | _, _ => default
 
@@ -764,7 +770,7 @@ theorem openPieces_deployed (pieces : Msg → List OpenPiece) (posAt : Msg → L
     PiecesComputes Bd D pieces (openHolds side posAt) ownQR s x c (L.msgs x ws) := by
   intro q hq ho
   obtain ⟨-, r, ss, hr, hss, LANES, HH, n, hsv⟩ := ownQR_some ho
-  refine openPieces_computesA (hJ.2.2 s hs) hr hss (Or.inl hsv) Bd pieces ownQR side posAt
+  refine openPieces_computesA (hJ.2.2.2 s hs) hr hss (Or.inl hsv) Bd pieces ownQR side posAt
     (fun xO w p hxO hsz hcp hA hT' hc hsh hck hsg q' hq' ho' => ?_) q hq ho
   have hst : StagedAt H D untr b cmt L s x c (L.msgs x ws) (.recOpen q.level LANES HH n) xO w p :=
     ⟨hxO, hsz, hcp _ hsv, hA, hT', hc, hsh, hck, hsg⟩
