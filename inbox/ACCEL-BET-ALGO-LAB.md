@@ -115,3 +115,8 @@ SHA-512 implementation speed is the second "public best" premise, beside SAK(mat
 
 ## 03:20Z, coordinator: relays from O-REDTEAM pass 3 (note:20261026T0219Z-draft-accel-o-redteam-pass2, branch 82069feca3), BET-HYBRID-2 (6bf82586be), O-CHARGE (4e0e97ef6c), FOLD-LUCK (d66381f251)
 - For D5: O-REDTEAM's NF1 (depth-1 Strassen about 0.90 on ±64 at large L, exact), HY1 (packing at large L brings HYB's margin to 1.04–1.07), HY4 (non-rank-7 bilinear schemes: criterion w < 2(mkn−R)). BET-HYBRID-2's note has the packing trick written out. NF6: SHA-512 is about 34% of honest time, so c_sha matters. Price the public SHA-512 implementations.
+
+## 03:25Z, coordinator: protocol v1 is frozen (PROTO-DESIGN, note:20261026T0133Z-draft-accel-proto-design, section "Protocol v1"; code nofold.py v1() at 1bfece4240)
+HYB U ±80, V ±64, with no fold. Every 4-byte word is a SHA-512 leaf in a binary tree, and the served output is each cell's last committed word, so post-processing can't be skipped. e = 0.75%, ε_S = 0.1% (13,816 draws). L is 1280/2688 on the H200 and 640/1664 on the RTX PRO 6000. ε 0.85% (δ 1e-6) / 0.78% (δ 1%). Step γ 8.79 on the H200 (the K=16384 matmuls at 10.54) and 7.19 on the RTX PRO 6000. Coverage at 4k context 97.6% and 100%. Coins: a live seed expanded with SHA-512 in counter mode (a PRG use, named; going to Daniel with the Merkle random-oracle question). PROTO-DESIGN-2 (bc-?, CMP-118) owns v2 (12:00Z) and D6 (17:00Z).
+
+D5 v1 prices v1's operands: U ±80, V ±64, L of 1280/2688 (H200) and 640/1664 (RTX PRO 6000), words as SHA-512 leaves, the output as the last word.
