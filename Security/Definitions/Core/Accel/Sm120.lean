@@ -27,7 +27,8 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   tighten it (RT-MODEL M11);
 * issue: 4 warp instructions an SM clock (four sub-partitions, one warp scheduler each), so 752;
 * `alu` and `imad`: 64 lanes an SM clock each (the DS-120 census: `LOP3` and `IMAD` two cycles a warp instruction on a
-  sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each;
+  sub-partition; CUDA C++ Programming Guide §6.4.1 Table 7), so 12,032 each; `IMAD.WIDE` uses 2 `imad` lanes (Table 7's
+  footnote 6, 32 for extended precision; RT-UNITS U13), and the pools overlap in full, generous as on the H200;
 * `f64`: 2 lanes an SM clock (Programming Guide Table 7, CC 12.0: 64-bit floating-point multiply-add 2), so 376; DMMA
   (`Op.dmma`; PTX gives `mma` `.f64` to sm_80 and later) has no documented rate on this card, and CALIB measured
   1.75 MACs an SM clock (`DMMA.8x8x4`, run r20261017-041103-d35d, note:20261017T0321Z-draft-eps1-tensor): 32 tensor

@@ -13,8 +13,9 @@ import Mathlib.Tactic.Ring
 The run of a plan issues exactly the plan's instructions, tick by tick (`run_plan`), since each thread's text is one
 instruction and each thread steps once. The kernel's length is within the bound (`kernel_length_le`). Every tick is
 within every resource's rate but `tensorLong`'s; for `tensorLong`, 21 consecutive ticks hold an idle one
-(`block_long`), so a window of `L` ticks uses at most `524,288 (L - ⌊L/21⌋)` units, within `499,712 (L + 1)`
-(`window_long`): the run meets G2's rates at a backlog of a tick (`kernel_rate`).
+(`block_long`), so a window of `L` ticks uses at most `524,288 (L - ⌊L/21⌋)` units (`window_long`), within
+`tensorLong`'s 540,672 a tick, and within M1's 499,712 with a backlog of a tick should CALIB's clock check reinstate
+it (RT-MODEL M14): the run meets G2's rates (`kernel_rate`).
 -/
 
 open scoped NNRat
@@ -384,8 +385,8 @@ theorem kernel_rate (n : ℕ) (hn : n ≤ 2048) (hs : 1 ≤ x.slack) (σ : (mach
           Finset.sum_le_sum fun t _ => by rw [usage_plan]; exact kernel_long n t
       _ ≤ 524288 * ((w.len - w.len / 21 : ℕ) : ℚ≥0) := window_long (19 * n) w.len w.start
       _ ≤ ρ .tensorLong * ((w.len + x.slack : ℕ) : ℚ≥0) := by
-          have h : 524288 * (w.len - w.len / 21) ≤ 499712 * (w.len + x.slack) := by omega
-          rw [show ρ .tensorLong = 499712 by norm_num [ρ]]
+          have h : 524288 * (w.len - w.len / 21) ≤ 540672 * (w.len + x.slack) := by omega
+          rw [show ρ .tensorLong = 540672 by norm_num [ρ]]
           exact_mod_cast h
   · calc ∑ t ∈ w.ticks, Machine.usage (m := machine x cap oracle) ((kernel n).map (List.map Ins.instr)) t r
         ≤ ∑ _t ∈ w.ticks, ρ r :=

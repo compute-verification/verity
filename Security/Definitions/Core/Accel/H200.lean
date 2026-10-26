@@ -20,24 +20,31 @@ reports.
 **Rates** (units a tick):
 * tensor: 4096 s8 MACs an SM clock (`Accounting.TS.Sheets.H200` A3: the data sheet's 1,979 dense INT8 TOPS over
   2 · 132 SMs at the 1830 MHz tensor boost clock), so 540,672 a tick at the tick's clock (`tensor`, the per-clock
-  peak); the sheet's 1,979 TOPS is at 1830 MHz, so over long windows an MMA's units are capped at
-  132 · 4096 · 1830/1980 = 499,712 a tick (`tensorLong`, RT-MODEL M1: whitepaper V1.04 Table 3's 1830 MHz boost clock
-  for the FP8, FP16, BF16, TF32 and INT8 tensor figures, against 1980 MHz for FP64 tensor, FP32 and FP64; measured
-  1,942.7 TOPS at about 1797 MHz under saturated `wgmma`, r20261019-053910-d2c9); a MAC of `e4m3` or `e5m2` uses 1 unit (the same
+  peak); `tensorLong` is the same 540,672, the tensor core at the 1980 MHz boost clock (RT-MODEL M14; coordinator,
+  26 Oct 06:23Z: θ never caps a rate below what the card might reach). The sheet quotes its 1,979 TOPS at 1830 MHz
+  (whitepaper V1.04 Table 3's boost clock for the FP8, FP16, BF16, TF32 and INT8 tensor figures, against 1980 MHz for
+  FP64 tensor, FP32 and FP64), and the card measured 1,942.7 TOPS at about 1797 MHz under saturated `wgmma`
+  (r20261019-053910-d2c9). Neither shows that no operand class sustains a higher clock, so the long-window cap at
+  132 · 4096 · 1830/1980 = 499,712 (RT-MODEL M1) waits on CALIB's check, locked at 1980 MHz with zero, constant and
+  uniform operands (CMP-115), and returns with that run's id if none sustains above 1830 MHz; a MAC of `e4m3` or `e5m2` uses 1 unit (the same
   1,979 TFLOPS), of `f16` or `bf16` 2 (989.5), of `tf32` 4 (494.5); `b1` has no peak in any document (`Open.b1`);
 * `mma.sync`: its tensor rate apart from `wgmma`'s, which is the data sheet's (no document gives `mma.sync`'s on
   Hopper, where it runs below `wgmma`), is `Open.sync` (`scale`) until CALIB measures it;
 * issue: 4 warp instructions an SM clock (whitepaper, 'H100 SM Architecture': four partitions, each a warp scheduler
   dispatching one warp instruction a clock), so 528;
 * `alu` and `imad`: 64 lanes an SM clock each (CUDA C++ Programming Guide 12.9 §6.4.1 Table 7, CC 9.0: 32-bit integer
-  add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each;
+  add, compare, min, max, logic and shift 64; multiply and multiply-add 64), so 8448 each. `IMAD.WIDE`
+  (`Lane.madWide`) uses 2 `imad` lanes (Table 7's footnote 6: 32 for extended precision; RT-UNITS U13; CALIB's
+  lane-pipe probe hasn't measured it yet) and `IMAD.HI` `Open.madHi`. The two pools overlap in full in the model,
+  which is generous: the card's don't (HASH-23's IMAD-balanced SHA-512 took 58.1 SM-clocks a compression against
+  the 41.2 full overlap predicts, r20261026-045623-03b9), and CALIB's joint ALU + IMAD facet for sm_90 is pending;
 * `f64`: 64 lanes an SM clock (Programming Guide Table 7, CC 9.0: 64-bit floating-point add, multiply, multiply-add
   64), so 8448: the FP64 cores, 64 an SM apart from the tensor cores (whitepaper Table 3, 'FP64 Cores / SM (excl.
   Tensor)'); DMMA (`Op.dmma`) runs on the tensor cores (A100 whitepaper: the third-generation Tensor Cores accelerate
   'all data types including FP16, BF16, TF32, FP64, INT8'), 128 MACs an SM clock at 1980 MHz (whitepaper: FP64 Tensor
-  Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2), so a DMMA MAC uses 32 · 1830/1980 units of `tensor` and of
-  `tensorLong`: over a long window DMMA alone reaches the sheet's 67 TFLOPS, and DMMA beside the low-precision
-  formats shares their one budget;
+  Core 67 TFLOPS over 132 SMs at 1980 MHz is 128.2), so a DMMA MAC uses 32 units of `tensor` and of `tensorLong`, as
+  measured (ALGO-COST A18: DMMA at 1/32 of s8 a MAC beside a saturated `wgmma`, `benchmarks/pouw/sass_census/
+  diff_menu.py` ESCAPE), and DMMA beside the low-precision formats shares their one budget;
 * shared memory: 32 banks of one 32-bit word a clock an SM (Programming Guide, 'Shared Memory', CC 9.0), so 4224;
 * HBM: 4.8 TB/s (H200 data sheet, 'GPU Memory Bandwidth 4.8TB/s'), 4.8 · 10¹² / (4 · 1.98 · 10⁹) = 20000/33 words;
 * the L2's reads (`l2`, RT-MODEL M6(b)): no document gives them and CALIB hasn't measured them on this card (θ's
@@ -103,7 +110,7 @@ def size : Store → ℕ
 /-- Each resource's units a tick. -/
 def ρ : Res → ℚ≥0
   | .tensor => 132 * 4096
-  | .tensorLong => 132 * 4096 * 1830 / 1980
+  | .tensorLong => 132 * 4096
   | .issue => 132 * 4
   | .alu => 132 * 64
   | .imad => 132 * 64
@@ -118,7 +125,7 @@ def weight : Fmt → ℚ≥0
   | .s8 | .u8 | .e4m3 | .e5m2 => 1
   | .f16 | .bf16 => 2
   | .tf32 => 4
-  | .f64 => 32 * 1830 / 1980
+  | .f64 => 32
   | _ => 0
 
 /-- PTX's `k` for each format, `mma.sync`'s (PTX ISA 9.0 §9.7.14); `wgmma` takes one of them, `wgK`. -/

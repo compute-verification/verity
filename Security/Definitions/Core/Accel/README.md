@@ -37,14 +37,14 @@ Where the two cards differ, a row says which. Otherwise it holds for both.
 | QMMA.SF (sm_120 `kind::mxf8f6f4`) | `mma.sync` `.block_scale` | missing | block-scaled FP8 and FP6 |
 | HMMA.SP, IMMA.SP, QMMA.SP, the sparse GMMA | `mma.sp`, `wgmma.mma_async.sp` | covered | `Op.mmaSp`: the kept pairs (each kept element of A with the element of B its 2-bit selector names) at the dense forms' tensor units a real product, so twice the logical rate; dots `Open.dotSp` under `AccelProductForm` |
 | OMMA.SP (sm_120) | `mma.sp` `kind::mxf4nvf4` | missing | block-scaled sparse FP4 |
-| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 · 1830/1980 units of `tensor` and `tensorLong` a MAC, so it shares the low-precision formats' long-window budget) |
+| DMMA (sm_90) | `mma.sync` `.f64` | over-approximated | `Op.dmma`: exact integer MMA on FP64's exact integers, on the tensor cores at 128 MACs an SM clock at 1980 MHz (32 units of `tensor` and `tensorLong` a MAC, as ALGO-COST A18 measured it beside `wgmma`, so it shares the low-precision formats' budget) |
 | DMMA (sm_120) | `mma.sync` `.f64` | over-approximated | `Op.dmma` at 32 MACs an SM clock; rate undocumented, CALIB measured 1.75 (r20261017-041103-d35d) |
 
 ## Integer and floating-point lanes
 
 | SASS | Mark | Model, or what is missing |
 |---|---|---|
-| IADD3, IMAD, IMAD.WIDE, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, LEA | covered | `Lane` (`iadd3`, `mad`, `madWide` coarsely at one lane, `lop3`, `shf`, `prmt`, `popc`, `flo`, `brev`, `setp`, `sel`, `min`, `max`, `lea`) |
+| IADD3, IMAD, IMAD.WIDE, LOP3, SHF, PRMT, POPC, FLO, BREV, ISETP, SEL, IMNMX, LEA | covered | `Lane` (`iadd3`, `mad`, `madWide` at two `imad` lanes (CPG Table 7 footnote 6, RT-UNITS U13), `lop3`, `shf`, `prmt`, `popc`, `flo`, `brev`, `setp`, `sel`, `min`, `max`, `lea`) |
 | IMAD.HI, LEA.HI | covered, semantics not captured | `Lane.madHi` (PTX `mad.hi`), `Lane.leaHi` (the high word of the funnel shift, plus `b`); added at FOLD-SAT's report (CMP-131); their SASS semantics are to capture, and FOLD-SAT's SMT models are to align |
 | IDP.4A (dp4a) | covered | `Lane.dp4a` |
 | IDP.2A (dp2a) | missing | |

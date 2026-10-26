@@ -104,8 +104,13 @@ the card holds float codes, so the refinement is up to `decode`, which reads a r
 within its format's exact range as that integer. Code that uses these units in range on registers is inside the
 claim. **Scope limit:** the card's results on non-integers and its roundings past the exact range are outside it (the
 model reads an out-of-range operand as zero; coordinator's ruling, 26 Oct 04:00Z), and so are float reductions whose
-accumulator is a nonzero float code in shared or device memory, which `decode` reads as it is. The node's host CPUs and its host and peer
-links are other devices of the period (RT-PROTO P9, RT-UNITS U9), not units of the card. -/
+accumulator is a nonzero float code in shared or device memory, which `decode` reads as it is.
+
+**Other devices of the period** (RT-PROTO P9, RT-UNITS U9): the node's host CPUs, with their AMX units, and its host
+and peer links are not units of the card, and this Prop says nothing of them. They count in the period's capacity
+`C` instead, at θ's rows (CALIB): the host CPUs' SHA-512 at 4.90% (H200 node) and 5.07% (RTX PRO 6000 node) of the
+card's measured hashing, and AMX's exact s8 MACs at 3.15% and 9.51% of its dense INT8; the inventory premise is the
+coordinator's (A4). -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
     Prop :=
   ∃ x : Accel.Open, c.floors x ∧ AccelProductForm x ∧
