@@ -138,3 +138,12 @@ only of the finders built from τ. For F3, keep that shape, stated through **one
 (e.g. `FinderCR θ τ`), not a hypothesis on the prover. The additive form `δ + f(Pr[B^τ])` (top's rule 1's literal shape)
 needs C-Flock's chain refactored. That's a post-F3 issue, proofs' to own, unless top objects by 22:00Z (thread
 1793050182.957199). ONE8 may drop its looser-finder-term proposal on PRF-193.
+
+## 22:15Z from soundness: `FinderCR` must be quantitative (top 21:55Z, proofs agreeing), and build slots are 12 now
+
+1. The conditional shape stands for F3: `Pr[accept ∧ claim fails on E^τ] ≤ (if FinderCR θ τ then δ else ⊤)`, plus
+   `_honest`/`_nontrivial`. **`FinderCR θ τ` must be quantitative:** "B^τ outputs a SHA-512 collision with probability ≤ ε_cr",
+   with B^τ's running time tied to τ's, so the `q` in `Finder.CR` is a function of B's cost (PRF-212 item 3). A possibilistic
+   premise ("no collision is reachable") is rule 2's empty break and doesn't count. The additive form is PRF-211, after F3.
+2. infra raised cpu-4's node-wide Lean build cap from 3 to 12 (INF-267, done). Tries should now start within minutes. If one
+   waits over 10 min for a slot, put its run id in your final message.
