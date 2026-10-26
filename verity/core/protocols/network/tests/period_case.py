@@ -10,10 +10,11 @@ public, profile and digest are Lean's exactly; its reason is its own. Public is 
 own `delta`, and `eps`, the union of those deltas as an exact ratio string.
 
 `build(m, seed, small)` makes a period with one change `m` (`EXPECT`, each aimed at one path of the check, or malformed
-parameters, commitments, evidence and cases): the link-windows of one link, each registered under the link's Program
-with its provenance, certified at both ends and on its clock by a small LMS key in a drawn network certifier session,
-and answered by one-stage with its one unit proved; beside them the compute audits, each answered with a subset draw and
-its bound on wrong units. `case(kind, seed)` is a small period aimed at a verdict, or at a decoding failure (`KINDS`),
+parameters, commitments, evidence and cases): the link-windows of one link from the session's window `first`, each
+registered under the link's Program with its provenance, certified at both ends by a small LMS key in a drawn network
+certifier session, its clock certificate signing a sync of Σ_sync salted (`clock_commitment`, the sync and the salt in
+no case), and answered by one-stage with its one unit proved; beside them the compute audits,
+each answered with a subset draw and its bound on wrong units. `case(kind, seed)` is a small period aimed at a verdict, or at a decoding failure (`KINDS`),
 and `cases(seed)` one of each with its answer, as a composition's difftest takes a real component's cases.
 
 This is test-side Python (it imports `verity_difftest` and PoUW's `core_check`, which the certifier's package may not),
@@ -32,8 +33,8 @@ from functools import lru_cache
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.core.protocols.certifier.certificate import (Certificate, ClockCertificate, Direction, LmsKey,
-                                                            clock_digest)
+from verity.core.protocols.certifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
+                                                            certificate_digest, clock_digest)
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 from verity.core.protocols.pouw import core_check as CC
 from verity.ml.commitments.identity import tagged_sha512
@@ -48,7 +49,7 @@ OUT_BITS = 16
 UNIT = "unit"
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 ACCEPT, REJECT, UNDECIDED = "accept", "reject", "undecided"
-PARAMS_KEYS = ["audits", "cells", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 DIGEST = re.compile("[0-9a-f]{128}")
 
@@ -59,6 +60,7 @@ DIGEST = re.compile("[0-9a-f]{128}")
 class Params:
     audits: tuple[tuple[int, int], ...]
     cells: tuple[int, ...]
+    first: int
     jitter: int
     link: str
     key: LmsKey
@@ -85,7 +87,7 @@ class Commitment:
 class Window:
     answer: dict
     certificates: list[Certificate]
-    clock: ClockCertificate
+    clock: Certificate
 
 
 @dataclasses.dataclass(frozen=True)
@@ -140,6 +142,7 @@ def params(j) -> Params:
         _exactly(a, ["free", "steps"], "an audit")
         audits.append((_nat(a["free"], "an audit"), _nat(a["steps"], "an audit")))
     cells = tuple(_nat(x, "cells") for x in _of(j["cells"], list, "cells"))
+    first = _nat(j["first"], "first")
     jitter = _nat(j["jitter"], "jitter")
     if jitter < 1:
         raise D.Reject("jitter: the observations' jitter bound is at least 1")
@@ -165,7 +168,7 @@ def params(j) -> Params:
     windows = _nat(j["windows"], "windows")
     if windows < 1:
         raise D.Reject("windows: a period has at least one link-window")
-    return Params(tuple(audits), cells, jitter, link, LmsKey(lp, key), session, program, sync_set, windows)
+    return Params(tuple(audits), cells, first, jitter, link, LmsKey(lp, key), session, program, sync_set, windows)
 
 
 def registration_digest(record: dict) -> bytes:
@@ -206,19 +209,11 @@ def _certificate(j, ctx: str) -> Certificate:
                        P.unhex(_of(j["signature"], str, ctx)))
 
 
-def _sync(j) -> ClockSync:
-    if not isinstance(j, list) or len(j) != 3:
-        raise D.Reject("a sync is [delta, num, den]")
-    return ClockSync(_nat(j[0], "a sync's delta"), _rho(j[1:], "a sync's rho"))
-
-
 def _window(j, ctx: str) -> Window:
     _exactly(j, ["answer", "certificates", "clock"], ctx)
     answer = _answer(j["answer"], f"{ctx}.answer")
     certificates = [_certificate(c, f"{ctx}.certificates") for c in _of(j["certificates"], list, ctx)]
-    c = j["clock"]
-    _exactly(c, ["certificate", "sync"], f"{ctx}.clock")
-    return Window(answer, certificates, ClockCertificate(_sync(c["sync"]), _certificate(c["certificate"], f"{ctx}.clock")))
+    return Window(answer, certificates, _certificate(j["clock"], f"{ctx}.clock"))
 
 
 def evidence(b: bytes) -> tuple[list[dict], list[Window]]:
@@ -247,6 +242,12 @@ def _clock_digest(s: ClockSync) -> bytes | None:
         return None
 
 
+def clear_clocks(ss: SyncSet) -> set[bytes]:
+    """Each sync of Σ_sync's `clock_digest` itself: the unsalted form, whose digest shows the sync to anyone holding
+    Σ_sync."""
+    return {d for d in (_clock_digest(ClockSync(x, rho)) for x in ss.deltas for rho in ss.rhos) if d is not None}
+
+
 def _answered(what: str, reg: Registration, a: dict) -> tuple[dict, object]:
     if a["protocol"] != ONE_STAGE:
         raise Finding(REJECT, f"{what}: protocol {a['protocol']}")
@@ -264,7 +265,7 @@ def served(w: int) -> dict:
     return {"kind": "served", "window": w}
 
 
-def _window_check(p: Params, w: int, reg: Registration, x: Window) -> None:
+def _window_check(p: Params, clear: set[bytes], earlier: list[bytes], w: int, reg: Registration, x: Window) -> None:
     what = f"window {w}"
     if not (reg.record.get("program") == p.program
             and D.canonical(reg.record.get("window")) == D.canonical(served(w))):
@@ -272,11 +273,12 @@ def _window_check(p: Params, w: int, reg: Registration, x: Window) -> None:
     if not (len(x.certificates) == 2
             and all(_certifies(p, d, w, c) for c, d in zip(x.certificates, (EGRESS, INGRESS)))):
         raise Finding(REJECT, f"{what}: certificates")
-    c = x.clock.certificate
-    if not (_certifies(p, EGRESS, w, c) and _clock_digest(x.clock.sync) == c.digest):
+    if not _certifies(p, EGRESS, w, x.clock):
         raise Finding(REJECT, f"{what}: clock")
-    if x.clock.sync not in p.sync_set:
-        raise Finding(REJECT, f"{what}: advice")
+    if x.clock.digest in clear:
+        raise Finding(REJECT, f"{what}: clock: unsalted")
+    if x.clock.digest in earlier:
+        raise Finding(REJECT, f"{what}: clock: reused")
     prof, _ = _answered(what, reg, x.answer)
     if ([(lv["name"], lv["size"], lv["draw"]) for lv in prof["levels"]] != [(UNIT, 1, {"subset": 1})]
             or prof["drawn"] != [(UNIT, 1)]):
@@ -328,10 +330,10 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return REJECT, "evidence: another number of link-windows"
     if len(audits) != len(c.audits):
         return REJECT, "evidence: another number of audits' answers"
-    findings, facts = [], []
-    for w, (reg, x) in enumerate(zip(c.windows, windows)):
+    findings, facts, clear = [], [], clear_clocks(p.sync_set)
+    for i, (reg, x) in enumerate(zip(c.windows, windows)):
         try:
-            _window_check(p, w, reg, x)
+            _window_check(p, clear, [y.clock.digest for y in windows[:i]], p.first + i, reg, x)
         except Finding as f:
             findings.append(f)
     for i, (reg, a) in enumerate(zip(c.audits, audits)):
@@ -343,9 +345,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
         return REJECT, rejected.reason
     if findings:
         return UNDECIDED, findings[0].reason
-    return ACCEPT, public(p, facts), {
-        "link": p.link, "syncs": [[x.clock.sync.delta, x.clock.sync.rho.numerator, x.clock.sync.rho.denominator]
-                                  for x in windows], "windows": p.windows}
+    return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
 
 
 def reference(case) -> dict:
@@ -373,13 +373,14 @@ EXPECT = {
     "program": REJECT, "provenance": REJECT,
     "cert-swap": REJECT, "cert-count": REJECT, "cert-forged": REJECT, "cert-window": REJECT, "cert-link": REJECT,
     "cert-session": REJECT, "cert-key": REJECT,
-    "clock-ingress": REJECT, "clock-digest": REJECT, "clock-window": REJECT, "advice": REJECT,
+    "clock-ingress": REJECT, "clock-forged": REJECT, "clock-window": REJECT, "clock-session": REJECT,
+    "clock-reused": REJECT, "clock-unsalted": REJECT,
     "answer-protocol": REJECT, "answer-other": REJECT, "answer-reject": REJECT, "answer-undecided": UNDECIDED,
     "answer-profile": REJECT,
     "audit-other": REJECT, "audit-reject": REJECT, "audit-undecided": UNDECIDED, "audit-profile": REJECT,
     "audit-bound": REJECT,
     "undecided-and-reject": REJECT,
-    "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
+    "first": REJECT, "count-windows": REJECT, "count-audits": REJECT, "evidence-count": REJECT,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT, "case": REJECT,
 }
 MUTATIONS = list(EXPECT)
@@ -395,8 +396,10 @@ def _cert_json(c: Certificate) -> dict:
             "signature": c.signature.hex(), "window": c.window}
 
 
-def _sync_json(s: ClockSync) -> list[int]:
-    return [s.delta, s.rho.numerator, s.rho.denominator]
+def clock_commitment(salt: bytes, sync: ClockSync) -> bytes:
+    """The digest a salted clock certificate signs (`certificate.CertifiedClock`): the sync's clock digest under the
+    certifier's salt, SHA-512("verity/net-cert/v1" ‖ salt_c ‖ clock digest)."""
+    return certificate_digest(salt, clock_digest(sync))
 
 
 def _accepted(digest: bytes, program: str, query: str, size: int, k: int, delta: str, bound: int) -> dict:
@@ -424,35 +427,35 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     session = r.randbytes(lms.SESSION_BYTES)
     link = r.choice(["eth0", "a", "dé"])
     program = hashlib.sha512(b"link program %d" % r.randrange(3)).hexdigest()
-    least_windows = 2 if m == "undecided-and-reject" else 1
+    least_windows = 2 if m in ("undecided-and-reject", "clock-reused") else 1
     least_audits = 1 if m.startswith("audit") or m in ("undecided-and-reject", "count-audits") else 0
     n_windows = r.randint(least_windows, least_windows if small else 3)
     n_audits = r.randint(least_audits, max(least_audits, 1) if small else 2)
+    first = r.choice([0, 0, r.randrange(1, 6)])
     deltas = r.sample(range(4), r.randint(1, 3))
     rhos = r.sample([Fraction(1), Fraction(2), Fraction(1, 2), Fraction(3, 2)], r.randint(1, 3))
-    t, a = r.randrange(n_windows), r.randrange(max(n_audits, 1))
+    t = r.randrange(1, n_windows) if m == "clock-reused" else r.randrange(n_windows)
+    a = r.randrange(max(n_audits, 1))
     signed = iter(range(1 << 30))
 
     def sign(link: str, d: Direction, w: int, digest: bytes, k: lms.PrivateKey = key, s: bytes = session) -> Certificate:
         c = Certificate(k.I, link, d, w, digest, b"")
         return dataclasses.replace(c, signature=lms.sign_at(k, next(signed) % 2 ** k.params.H, c.message(s)).encode())
 
-    window_regs, windows = [], []
-    for w in range(n_windows):
+    window_regs, windows, clocks = [], [], []
+    for w in range(first, first + n_windows):
         rec = {"format": r.choice(FORMATS), "law": {"k": 1, "law": "subset"}, "partition": f"{link}/{w}",
                "population": 1, "program": program, "protocol": ONE_STAGE, "window": served(w)}
         sync = ClockSync(r.choice(deltas), r.choice(rhos))
-        aimed = w == t
+        aimed = w == first + t
         if aimed and m == "program":
             rec["program"] = r.choice([hashlib.sha512(b"another program").hexdigest(), program.upper(), None])
         elif aimed and m == "provenance":
             rec["window"] = r.choice([served(w + 1), {"kind": "batch", "window": w}, served(w) | {"run": 0}, None])
-        elif aimed and m == "advice":
-            sync = r.choice([ClockSync(max(deltas) + 1, sync.rho), ClockSync(sync.delta, Fraction(5, 7))])
         digest = registration_digest(rec)
         egress = sign(link, EGRESS, w, r.randbytes(64))
         ingress = sign(link, INGRESS, w, r.randbytes(64))
-        clock = sign(link, EGRESS, w, clock_digest(sync))
+        clock = sign(link, EGRESS, w, clock_commitment(r.randbytes(SALT_BYTES), sync))
         answer = _accepted(digest, program, rec["partition"], 1, 1, r.choice(["1/100", "1/1000000"]), 0)
         if aimed:
             if m == "cert-forged":
@@ -471,11 +474,18 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                 ingress = sign(link, INGRESS, w, ingress.digest, k=_key(ki, 1, r.random() < 0.5))
             elif m == "clock-ingress":
                 clock = sign(link, INGRESS, w, clock.digest)
-            elif m == "clock-digest":
-                clock = sign(link, EGRESS, w, r.choice([clock_digest(ClockSync(sync.delta + 1, sync.rho)),
-                                                        r.randbytes(64)]))
+            elif m == "clock-forged":
+                sig, dig = clock.signature, clock.digest
+                clock = r.choice([dataclasses.replace(clock, signature=s) for s in (_flip(sig, seed), sig[:-1], b"")]
+                                 + [dataclasses.replace(clock, digest=d) for d in (_flip(dig, seed), dig[:-1])])
             elif m == "clock-window":
                 clock = sign(link, EGRESS, w + 1, clock.digest)
+            elif m == "clock-session":
+                clock = sign(link, EGRESS, w, clock.digest, s=_flip(session, seed))
+            elif m == "clock-reused":
+                clock = sign(link, EGRESS, w, r.choice(clocks).digest)
+            elif m == "clock-unsalted":
+                clock = sign(link, EGRESS, w, clock_digest(sync))
             elif m == "answer-protocol":
                 answer["protocol"] = "verity/sampled-proofs/two-stage/v1"
             elif m == "answer-other":
@@ -494,8 +504,9 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         elif aimed and m == "cert-count":
             certificates = r.choice([[egress], [egress, ingress, ingress], []])
         window_regs.append(rec)
+        clocks.append(clock)
         windows.append({"answer": answer, "certificates": [_cert_json(c) for c in certificates],
-                        "clock": {"certificate": _cert_json(clock), "sync": _sync_json(sync)}})
+                        "clock": _cert_json(clock)})
 
     audit_params, audit_regs, audits = [], [], []
     for i in range(n_audits):
@@ -526,14 +537,16 @@ def build(m: str, seed: int, small: bool = False) -> dict:
         audit_regs.append(rec)
         audits.append(answer)
 
-    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))],
+    case_params = {"audits": audit_params, "cells": [r.randint(0, 100) for _ in range(r.randint(0, 3))], "first": first,
                    "jitter": r.randint(1, 5), "key": lms.public_key(key).hex(), "link": link,
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "sync_set": {"deltas": deltas, "rhos": [[x.numerator, x.denominator] for x in rhos]},
                    "windows": n_windows}
     c_json = {"audits": audit_regs, "windows": window_regs}
     e_json = {"audits": audits, "windows": windows}
-    if m == "count-windows":
+    if m == "first":
+        case_params["first"] = first + r.choice([1, -1] if first else [1])
+    elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {"free": 0, "steps": 0}]])
@@ -567,7 +580,7 @@ def _bad_params(p: dict, n: int) -> list:
            p | {"sync_set": p["sync_set"] | {"rhos": [[1, 0]]}}, p | {"sync_set": p["sync_set"] | {"deltas": [1, 1]}},
            p | {"sync_set": p["sync_set"] | {"rhos": [[1, 2], [2, 4]]}}, p | {"sync_set": p["sync_set"] | {"x": 0}},
            p | {"audits": [{"free": 0}]}, p | {"audits": [{"free": -1, "steps": 0}]}, p | {"audits": "x"},
-           p | {"cells": [-1]}, p | {"cells": [True]}]
+           p | {"cells": [-1]}, p | {"cells": [True]}, p | {"first": -1}, p | {"first": True}, p | {"first": "0"}]
     return out
 
 
@@ -583,9 +596,10 @@ def _bad_evidence(e: dict, b: bytes) -> list[bytes]:
     """Evidence that doesn't decode, each one change to `e`."""
     enc = lambda j: D.canonical(j).encode()  # noqa: E731
     x, rest = e["windows"][0], e["windows"][1:]
-    cert, clock = x["certificates"][0] if x["certificates"] else x["clock"]["certificate"], x["clock"]
-    bad_windows = [{k: v for k, v in x.items() if k != "clock"}, x | {"clock": clock | {"sync": [0, 0, 1]}},
-                   x | {"clock": clock | {"sync": [0, 1]}}, x | {"clock": clock | {"x": 0}},
+    cert, clock = x["certificates"][0] if x["certificates"] else x["clock"], x["clock"]
+    bad_windows = [{k: v for k, v in x.items() if k != "clock"},
+                   x | {"clock": {"certificate": clock, "sync": [0, 1, 1]}}, x | {"clock": clock | {"x": 0}}, x | {"clock": {k: v for k, v in clock.items() if k != "signature"}},
+                   x | {"clock": clock | {"direction": "up"}}, x | {"clock": [clock]},
                    x | {"certificates": [cert | {"direction": "up"}]}, x | {"certificates": [cert | {"key_id": "abc"}]},
                    x | {"certificates": [cert | {"window": -1}]}, x | {"certificates": [cert | {"x": 0}]},
                    x | {"certificates": "x"}, x | {"answer": {k: v for k, v in x["answer"].items() if k != "reason"}},

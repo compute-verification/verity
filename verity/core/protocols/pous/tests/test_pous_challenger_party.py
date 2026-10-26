@@ -1,7 +1,8 @@
 """`challenger_party`: the memory challenger's side and the prover's over a socket pair, each in its own thread, the
 challenger on an injected clock. Given the period's coins, the challenger's side designates the id `period.run` does in
 one process and challenges the same indices. The run's check accepts its session against the honest prover and refuses
-it against one that answers zeros. The prover answers with the collector paused, as the challenger does. `Party.of` reads
+it against one that answers zeros. The warm-ups before round 0 are on a public index, and neither timed nor judged. The
+prover answers with the collector paused, as the challenger does. `Party.of` reads
 `period.json`'s challenger host, and `placement` says whether `trusted-nebius-host`'s premise holds."""
 
 from __future__ import annotations
@@ -44,7 +45,8 @@ def _in_process() -> tuple[period.Period, run.Point, run.Setup, list[bytes], byt
     return p, point, published, blocks, b"".join(mc.block_digest(b) for b in blocks)
 
 
-def _split(point: run.Point, root: bytes, respond, signer: mc.Signer) -> tuple[bytes, run.Session, int]:
+def _split(point: run.Point, root: bytes, respond, signer: mc.Signer,
+           warmups: int = CP.WARMUPS) -> tuple[bytes, run.Session, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()
     got: dict = {}
@@ -52,7 +54,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer) -> tuple[b
     def side() -> None:
         with a, a.makefile("rwb") as f:
             got["session"] = CP.serve(f, CP.request_of("n0", point, root), signer=signer, log=ts.session_log(),
-                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock())
+                                      coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(), warmups=warmups)
 
     t = threading.Thread(target=side)
     t.start()
@@ -69,7 +71,8 @@ def test_the_split_session_is_the_periods() -> None:
     mine = run.Session.from_json(json.loads(bytes.fromhex(p.case["evidence"]))["session"])
     assert sid.hex() == p.case["params"]["session_id"]
     assert [r.index for r in session.signed.rounds] == [r.index for r in mine.signed.rounds]
-    assert rounds == len(session.signed.rounds) == point.k and session.signed.ended == mc.COMPLETE
+    assert rounds == CP.WARMUPS + len(session.signed.rounds) == CP.WARMUPS + point.k
+    assert session.signed.ended == mc.COMPLETE
     inputs = period.setup_inputs(p.setup_case)
     a = period.answer(point, ts.SCHEMES, (signer.public_key,), published, digests, session, sid, TEST_ID,
                       setup_inputs=inputs)
@@ -78,6 +81,29 @@ def test_the_split_session_is_the_periods() -> None:
     refused = period.answer(point, ts.SCHEMES, (signer.public_key,), published, digests, zeros[1], zeros[0], TEST_ID,
                             setup_inputs=inputs)
     assert refused["verdict"] == "reject" and refused["reason"].endswith("answers are not their blocks of C"), refused
+
+
+def test_the_warmups_come_first_and_are_neither_timed_nor_judged() -> None:
+    """The prover sees `WARMUPS` frames on `WARMUP_INDEX`, then the session's indices. The session is the one served with
+    no warm-up, round for round under the same clock, so no warm-up read it; a prover whose warm-up answers are zeros is
+    accepted."""
+    p, point, published, blocks, digests = _in_process()
+    seen: list[int] = []
+    sid, session, _ = _split(point, published.root, lambda i: (seen.append(i), blocks[i])[1], ts.TestSigner(b"w", 2))
+    bare_sid, bare, _ = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"w", 2), warmups=0)
+    assert seen == [CP.WARMUP_INDEX] * CP.WARMUPS + [r.index for r in session.signed.rounds]
+    assert (sid, session.signed.ended, session.signed.rounds) == (bare_sid, bare.signed.ended, bare.signed.rounds)
+    n = [0]
+
+    def cold(i: int) -> bytes:
+        n[0] += 1
+        return bytes(len(blocks[i])) if n[0] <= CP.WARMUPS else blocks[i]
+
+    key = ts.TestSigner(b"cold", 2)
+    sid, session, _ = _split(point, published.root, cold, key)
+    a = period.answer(point, ts.SCHEMES, (key.public_key,), published, digests, session, sid, TEST_ID,
+                      setup_inputs=period.setup_inputs(p.setup_case))
+    assert a["verdict"] == "accept", a
 
 
 def test_a_short_answer_is_refused_by_the_prover() -> None:
