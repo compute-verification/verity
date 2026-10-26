@@ -17,8 +17,9 @@ if ! "$PY" -c 'import torch, triton, pynvml' 2>/dev/null; then
   TMP=/workspace/tmp; [ -w "$TMP" ] || TMP=${TMPDIR:-/tmp}
   S=$(mktemp -d "$TMP/tmp-s8corun.XXXXXX"); trap 'rm -rf "$S"' EXIT
   export UV_CACHE_DIR=${UV_CACHE_DIR:-/workspace/cache/uv}
-  { { uv venv -q -p 3.12 "$S/venv" || uv venv -q "$S/venv"; } && uv pip install -q -p "$S/venv/bin/python3" --index-url https://download.pytorch.org/whl/cu129 \
-      --extra-index-url https://pypi.org/simple torch==2.13.0 numpy nvidia-ml-py; } > "$OUT/venv.txt" 2>&1 \
+  # uv asks an --extra-index-url before the --index-url: torch and its CUDA wheels from cu129, the rest from PyPI
+  { { uv venv -q -p 3.12 "$S/venv" || uv venv -q "$S/venv"; } && uv pip install -q -p "$S/venv/bin/python3" --index-url https://pypi.org/simple \
+      --extra-index-url https://download.pytorch.org/whl/cu129 torch==2.13.0+cu129 numpy nvidia-ml-py; } > "$OUT/venv.txt" 2>&1 \
     || { tail -20 "$OUT/venv.txt"; echo "venv 3" | tee "$OUT/status.txt"; exit 3; }
   PY=$S/venv/bin/python3
 fi

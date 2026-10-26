@@ -13,12 +13,14 @@ with CUDA events, each phase's reps queued back to back (a rep starts when every
   with that stream at the highest priority;
 * ``linears`` and ``commit`` again (``*_again``), so a drift in the clock shows.
 
-The overlap won is linears + commit - corun, each the median of its reps. Every co-run's words (each linear's bf16
-output and each leaf) must be the alone run's, and each linear's fused kernel must pass `check.ptx_audit` (its digest is
-`check.py gpu`'s name for it), or the exit is 1. An NVML thread samples the leased GPU (by its UUID)
-through every phase: the SM clock, power (the driver's average over the last second, and its instant reading where it
-has one), the temperature and the clock's throttle reasons; a phase's statistics skip its first second. The codes are
-uniform s8 and the commit's bytes uniform, so power reads high for served values.
+The overlap won is linears + commit - corun, each the median of its reps. Where the GPU runs at its power cap, the
+co-run's time sits near its energy bound: the alone runs' joules (each median ms times its median power) over the
+co-run's median power. Every co-run's words (each linear's bf16 output and each leaf) must be the alone run's, and each
+linear's fused kernel must pass `check.ptx_audit` (its digest names the PTX text, whose `.file` line holds the tree's
+path), or the exit is 1. An NVML thread samples the leased GPU (by its UUID) through every phase: the SM clock, power
+(the driver's average over the last second, and its instant reading where it has one), the temperature and the clock's
+throttle reasons; a phase's statistics skip its first second. The codes are uniform s8 and the commit's bytes uniform,
+so power reads high for served values.
 """
 from __future__ import annotations
 
@@ -304,11 +306,16 @@ def at(m: int, engine: E.Engine, a: argparse.Namespace, telemetry: Telemetry) ->
     res["alone_ms"] = {"linears": alone_l, "commit": alone_c}
     res["sum_ms"] = alone_l + alone_c
     res["drift"] = {"linears": p["linears_again"]["ms"] / alone_l - 1, "commit": p["commit_again"]["ms"] / alone_c - 1}
+    watts = {n: p[n]["telemetry"].get("power_w", {}).get("median") for n in PHASES}
+    joules = (None if watts["linears"] is None or watts["commit"] is None
+              else alone_l * watts["linears"] / 1e3 + alone_c * watts["commit"] / 1e3)
+    res["alone_joules"] = joules
     res["corun"] = {}
     for name in ("corun", "corun_commit_high", "corun_linears_high"):
         r = p[name]
         won = res["sum_ms"] - r["ms"]
         res["corun"][name] = {"ms": r["ms"], "overlap_won_ms": won, "commit_hidden": won / alone_c,
+                              "energy_bound_ms": None if joules is None or not watts[name] else 1e3 * joules / watts[name],
                               "linears_end_ms": r["streams_ms"]["linears"], "commit_end_ms": r["streams_ms"]["commit"],
                               "linears_slowdown": r["streams_ms"]["linears"] / alone_l - 1,
                               "commit_slowdown": r["streams_ms"]["commit"] / alone_c - 1,
@@ -336,8 +343,9 @@ def summary(doc: dict[str, Any]) -> str:
         for name in ("linears", "commit"):
             lines.append(f"  {name:20s} {p[name]['ms']:9.3f} ms x{p[name]['reps']:<4d} {_t(p[name]['telemetry'])}")
         for name, c in r["corun"].items():
+            bound = "-" if c.get("energy_bound_ms") is None else f"{c['energy_bound_ms']:.3f}"
             lines.append(f"  {name:20s} {c['ms']:9.3f} ms x{p[name]['reps']:<4d} won {c['overlap_won_ms']:7.3f} ms "
-                         f"({100 * c['commit_hidden']:.1f}% of the commit); linears end {c['linears_end_ms']:.3f} "
+                         f"({100 * c['commit_hidden']:.1f}% of the commit), energy bound {bound} ms; linears end {c['linears_end_ms']:.3f} "
                          f"({100 * c['linears_slowdown']:+.1f}%), commit end {c['commit_end_ms']:.3f} "
                          f"({100 * c['commit_slowdown']:+.1f}%); words equal {c['words_equal']}; {_t(p[name]['telemetry'])}")
     lines.append(f"words equal everywhere: {doc['words_equal']}")
