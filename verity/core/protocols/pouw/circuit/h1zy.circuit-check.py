@@ -23,7 +23,8 @@ def _pouw_roots() -> list[Any]:
     `PouwH1TileZyChunks_v2` the same over J10-R's v5 and v6 units, passing their call and blocks on. J10-R's lanes over
     `PouwH1Tile_v5` at that leaf: `PouwH1LaneZy_v2`, v1's lane with its seed_c and σ_R from one `PouwCallSeeds_v2` and each
     block's counter the picked offset plus the call's blocks (`PouwAdd64_v2`), `PouwH1LaneZyChunk_v2` at v1's three
-    chunks, and `PouwH1Combine_v1` over the v5 leaf. All are bound as
+    chunks, and `PouwH1Combine_v2` over the v5 leaf, v1's receipt check AND its 4 lanes' ok rows (each the word 1). All
+    are bound as
     Definitions, since `h1zy.lane`, `h1zy.lane_chunk` and `h1zy.combine` stage only a
     leaf whose R is a multiple of 16, and the combine only at K >= 384 (`h1zy.LEAST_K`). None where
     `circuit.segment` is not on the tree, which is where `PouwH1Tile` is registered. `PouwZyDequant`, `PouwZyCell`,
@@ -46,6 +47,6 @@ def _pouw_roots() -> list[Any]:
             + [bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile, 8, 16))]
             + [bind(Z.PouwH1LaneZyChunk, TILE=tile(H.PouwH1Tile, 8, 16, k), CHUNKS=n, CHUNK=c)
                for k, n, c in ((64, 2, 0), (64, 2, 1), (96, 3, 1))]
-            + [bind(Z.PouwH1LaneZy2, TILE=tile(H.PouwH1Tile5, 8, 16)), bind(Z.PouwH1Combine, TILE=tile(H.PouwH1Tile5, 8, 16))]
+            + [bind(Z.PouwH1LaneZy2, TILE=tile(H.PouwH1Tile5, 8, 16)), bind(Z.PouwH1Combine2, TILE=tile(H.PouwH1Tile5, 8, 16))]
             + [bind(Z.PouwH1LaneZyChunk2, TILE=tile(H.PouwH1Tile5, 8, 16, k), CHUNKS=n, CHUNK=c)
                for k, n, c in ((64, 2, 0), (64, 2, 1), (96, 3, 1))])

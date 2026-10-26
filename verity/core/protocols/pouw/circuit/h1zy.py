@@ -100,7 +100,11 @@ halves: `Accounting.Served.ValueChecked`'s product and dequant are checked by th
 * **A J10-R leaf's lanes.** A drawn per-call unit over `PouwH1Tile_v5` is proved as v1's leaf is, its 32 lanes and their
   combine, a lane past `CHUNK_MAX` in `chunks`(K) chunks: `PouwH1LaneZy_v2{TILE}` and `PouwH1LaneZyChunk_v2{TILE, CHUNKS,
   CHUNK}` are v1's lane and lane chunk with the unit's ``call`` and ``blocks`` after ``roots`` (`PUBLIC_J10R`), and
-  `PouwH1Combine_v1` takes the v5 leaf as it is (it reads only the layout). Their noise is v5's: seed_c from one
+  `PouwH1Combine_v2{TILE}` is v1's combine that also folds the leaf's 32 n statements' oks into its own (an AND tree):
+  it reads ``oks``, each lane's and lane chunk's ok row (`OK_WORD`, the word 1 when it computed 1) in statement order
+  (`leaf_statements`), and its ok is 1 exactly when v1's is and every ok row is 1. So a J10-R leaf has one output bit
+  however many chunks its lanes take, and the other statements' oks are committed values like the partials (each
+  statement's ``o0`` opens its row of them), not outputs. Their noise is v5's: seed_c from one
   `seeds.PouwCallSeeds` (every chunk; a chunk past the first leaves its σ_R unread), each block's counter the leaf's row or
   column offset, picked over the index as v1's is, plus ``blocks[0]`` or ``blocks[1]`` (`seeds.PouwAdd64`), so row i's
   blocks are blocks[0] + i RB + t and column j's blocks[1] + j CB + t, `h1tile.j10r_noise`'s; their keys are v1's, block
@@ -513,10 +517,42 @@ def _combine_body(B: Any, S: Any, partials: Coll, receipt: Coll) -> Coll:
 
 PouwH1Combine = CompositeDefinition(
     "PouwH1Combine", 1, ("TILE",), _combine_signature, _combine_body, conformance="protocol-defined",
-    refuse=lambda b: _refuse_lane(b, TILES + J10R_LANE_TILES), register=H.SG is not None,
+    refuse=_refuse_lane, register=H.SG is not None,
     doc="The receipt check of TILE's leaf over its lanes' committed partials (`circuit.h1zy`): ok is 1 exactly when, word "
         "by word, the XOR over the lanes in lane order of each partial's word (PouwXor32_v2) is the leaf's committed "
-        "receipt's. It reads only the leaf's layout, so it is one Definition over v1's, v3's and J10-R's v5 lanes.")
+        "receipt's. It reads only the leaf's layout, so it is one Definition over v1's and v3's lanes.")
+
+#: a lane or lane chunk statement's ok row, as the combine reads it: one 16-bit word, the ok in bit 0 and the rest 0
+OK_WORD = Array(16, BIT)
+
+
+def leaf_statements(lay: H.Layout) -> int:
+    """The lane and lane chunk statements of a leaf, the combine's ``oks``: each lane's `chunks`(K)."""
+    return lay.lanes * chunks(lay.k)
+
+
+def _combine2_signature(S: Any) -> tuple:
+    lay = _lane_layout(S)
+    params, ret = _combine_signature(S)
+    return (*params, ("oks", Array(leaf_statements(lay), OK_WORD))), ret
+
+
+def _combine2_body(B: Any, S: Any, partials: Coll, receipt: Coll, oks: Coll) -> Coll:
+    receipt_ok = _combine_body(B, S, partials, receipt).field("ok")
+    n = leaf_statements(_lane_layout(S))
+    high = _or_all(B, [oks[i][t] for i in range(n) for t in range(1, OK_WORD.n)])
+    folded = _and_all(B, [receipt_ok] + [oks[i][0] for i in range(n)])
+    return Coll(_combine2_signature(S)[1], B.call(PouwMuxBit, high, folded, Coll(BIT, Explicit((_consts(B)(0),)))).refs)
+
+
+PouwH1Combine2 = CompositeDefinition(
+    "PouwH1Combine", 2, ("TILE",), _combine2_signature, _combine2_body, conformance="protocol-defined",
+    refuse=lambda b: _refuse_lane(b, J10R_LANE_TILES), register=H.SG is not None,
+    doc="v1's receipt check folding the leaf's statements' oks (`circuit.h1zy`), TILE J10-R's PouwH1Tile_v5: v1's "
+        "partials and receipt, then oks, each lane's and lane chunk's ok row in statement order (lane by lane, a lane's "
+        "chunks in chain order), a 16-bit word. ok is 1 exactly when the partials' XOR is the receipt and every ok row is "
+        "the word 1, so it is the leaf's one ok, an AND tree over its statements', and theirs are committed values, never "
+        "outputs.")
 
 
 #: the least K at which a leaf's combine is proved (`combine`); a lane is proved at any K the Definitions bind (64 <= K)
@@ -546,7 +582,8 @@ def lane(tile: Any) -> Any:
 
 
 def combine(tile: Any) -> Any:
-    """`PouwH1Combine` over ``tile``, the leaf's H1 tile, at an R `_leaf` takes and a K of at least `LEAST_K`: the combine
+    """`PouwH1Combine` over ``tile``, the leaf's H1 tile (v1 over PouwH1Tile_v1 and _v3, v2, which folds the leaf's
+    statements' oks, over J10-R's PouwH1Tile_v5), at an R `_leaf` takes and a K of at least `LEAST_K`: the combine
     reads only the partials and the receipt, 8 (KS + m)-byte rows, and C-Flock proves a statement only with a row that
     compresses before its last block (``no row has a compression before its last block``, `verity_flock.circuit`'s and
     `Flock.HmRow`'s), a row of at least 112 bytes, whose 17 bytes of SHA-512 padding spill past its first block."""
@@ -556,7 +593,7 @@ def combine(tile: Any) -> Any:
         raise ValueError(f"K = {k}: the combine reads only a lane's partials and the receipt, {n}-byte rows, but C-Flock "
                          f"proves a statement only with a row that compresses before its last block, at least 112 bytes: "
                          f"K = {LEAST_K} is the least K the combine is proved at")
-    return bind(PouwH1Combine, TILE=tile)
+    return bind(PouwH1Combine2 if tile.defn.id in J10R_TILES else PouwH1Combine, TILE=tile)
 
 
 # -- a lane in chunks along K ---------------------------------------------------------------------------------------------------
@@ -896,7 +933,8 @@ def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
     (``a[0]`` row 0 of ``a``): a lane's ``a0`` .. ``a3`` (its A rows by row slot), ``b0`` .. ``b7``, ``admit``, ``zy``,
     ``partials`` and ``pub`` (`PUBLIC`; a J10-R lane's `PUBLIC_J10R`); a chunk's the same rows of its entries, then those
     of ``carry_in``, ``admit``, ``zy``, ``partials`` and ``carry_out`` it reads, and ``pub``; the combine's ``p0`` ..
-    ``p<lanes - 1>`` (its partials rows) and ``receipt``; as #3116's `pouw.leaf_lanes` reads them (v1's forms)."""
+    ``p<lanes - 1>`` (its partials rows) and ``receipt``, and v2's ``ok0`` .. (its ``oks`` rows, statement i's at
+    ``ok<i>``); as #3116's `pouw.leaf_lanes` reads them (v1's forms)."""
     ty = dict(d.signature()[0])
     pub = [("pub", list(PUBLIC_J10R if d.defn in (PouwH1LaneZy2, PouwH1LaneZyChunk2) else PUBLIC))]
     if d.defn in (PouwH1LaneZy, PouwH1LaneZy2):
@@ -905,10 +943,11 @@ def statement_rows(d: Any) -> list[tuple[str, list[str]]]:
     elif d.defn in (PouwH1LaneZyChunk, PouwH1LaneZyChunk2):
         rows = ([(f"{n}{i}", [f"{n}[{i}]"]) for n in ("a", "b") for i in range(ty[n].n)]
                 + [(n, [n]) for n in ("carry_in", "admit", "zy", "partials", "carry_out") if n in ty] + pub)
-    elif d.defn is PouwH1Combine:
+    elif d.defn in (PouwH1Combine, PouwH1Combine2):
         rows = [(f"p{x}", [f"partials[{x}]"]) for x in range(ty["partials"].n)] + [("receipt", ["receipt"])]
+        rows += [(f"ok{i}", [f"oks[{i}]"]) for i in range(ty["oks"].n)] if "oks" in ty else []
     else:
-        raise ValueError(f"a leaf's statement is PouwH1LaneZy, PouwH1LaneZyChunk (v1 or v2) or PouwH1Combine_v1, not "
+        raise ValueError(f"a leaf's statement is PouwH1LaneZy, PouwH1LaneZyChunk or PouwH1Combine (v1 or v2), not "
                          f"{d.defn.id}")
     if {p.partition("[")[0] for _port, ps in rows for p in ps} != set(ty):
         raise AssertionError(f"{d.defn.id}: the ports {rows} are not its parameters {list(ty)}")
@@ -1035,12 +1074,14 @@ def lane_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]], sa: S
     return int([v & M32 for v in partial] == want and check([zy[0][u] for u in cells], [zy[1][u] for u in cells], z, sa, sw))
 
 
-def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int]) -> int:
-    """`PouwH1Combine` on words: 1 exactly when the lanes' partials XORed word by word are ``receipt``."""
+def combine_reference(partials: Sequence[Sequence[int]], receipt: Sequence[int],
+                      oks: Sequence[int] | None = None) -> int:
+    """`PouwH1Combine` on words: 1 exactly when the lanes' partials XORed word by word are ``receipt``; with ``oks`` (v2,
+    the statements' ok rows' u16 words) and every one of them 1."""
     out = [0] * len(receipt)
     for p in partials:
         out = [x ^ (v & M32) for x, v in zip(out, p, strict=True)]
-    return int(out == [v & M32 for v in receipt])
+    return int(out == [v & M32 for v in receipt] and all(int(w) & 0xFFFF == 1 for w in oks or ()))
 
 
 def carry_words(carry: dict) -> list[int]:
@@ -1138,12 +1179,12 @@ def lane_chunk_reference(a: Sequence[Sequence[int]], b: Sequence[Sequence[int]],
 
 
 __all__ = ["BF16", "CARRY", "CHUNKED", "CHUNK_ALIGN", "CHUNK_MAX", "F32", "J10R", "J10R_LANE_TILES", "LANE", "LEAST_K",
-           "PUBLIC", "PUBLIC_J10R", "S32", "S8",
-           "PouwAndBit", "PouwH1Combine", "PouwH1LaneZy", "PouwH1LaneZy2", "PouwH1LaneZyChunk", "PouwH1LaneZyChunk2",
-           "PouwH1TileZy", "PouwH1TileZyChunks", "PouwH1TileZyChunks2", "PouwMuxBit",
+           "OK_WORD", "PUBLIC", "PUBLIC_J10R", "S32", "S8",
+           "PouwAndBit", "PouwH1Combine", "PouwH1Combine2", "PouwH1LaneZy", "PouwH1LaneZy2", "PouwH1LaneZyChunk",
+           "PouwH1LaneZyChunk2", "PouwH1TileZy", "PouwH1TileZyChunks", "PouwH1TileZyChunks2", "PouwMuxBit",
            "PouwZyCell", "PouwZyCheck", "PouwZyDequant", "PouwZyDequantWord", "RECORD", "ROW", "J10R_TILES", "TILES",
            "carry_words",
            "check", "chunk_leaves", "chunk_words", "chunks", "chunks_reference", "combine", "combine_reference", "dequant",
            "lane", "lane_bits", "lane_cells", "lane_chunk", "lane_chunk_carries", "lane_chunk_reference", "lane_partial",
-           "lane_reference", "lane_statements", "records", "reference", "statement_ports", "statement_rows", "unit",
-           "unit_chunks", "window_unit", "zy_cell"]
+           "lane_reference", "lane_statements", "leaf_statements", "records", "reference", "statement_ports",
+           "statement_rows", "unit", "unit_chunks", "window_unit", "zy_cell"]
