@@ -19,3 +19,4 @@ import PousCheck.TimedAudit
 import PousCheck.Run
 import PousCheck.Verdict
 import PousCheck.VerdictDifftest
+import PousCheck.RunProtocol

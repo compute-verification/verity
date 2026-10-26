@@ -343,7 +343,8 @@ def test_p2_ring_audit_secure_at_a_scaled_point(case: Case):
 
 @pytest.mark.parametrize("case", cases())
 def test_p2_ring_round_secure_at_a_scaled_point(case: Case):
-    """`Pous.P2.Assumptions.P2RingRoundSecure` at the same point, with `1 − p = KEPT/B`: given the first `j` answers
+    """`Pous.P2.Assumptions.P2RingRoundSecure` at the same point, and so `P2RingRoundSecureWide`, the same statement to
+    `2^27` blocks, which the scaled point doesn't tell apart, with `1 − p = KEPT/B`: given the first `j` answers
     right, the next uniform challenge is answered right with probability at most `KEPT/B`, at every `j < K`. Given the
     draw `ω` a responder answers each challenge right with probability exactly `s_ω/B`, so over the draws the rate at
     round `j` is `Σ (s_ω/B)^(j+1) / Σ (s_ω/B)^j`, and it is above `KEPT/B` only if some draw has `s_ω > KEPT`. That

@@ -504,7 +504,7 @@ def test_claims_resolve_and_local_ones_are_not_in_core():
             core_claim(c)
         assert "/" not in c and c == c.lower()
     assert protocol.claim("cr/sha-512").kind == "assumption"
-    assert protocol.claim("trusted-nebius-host").kind == "assumption"
+    assert protocol.claim("trusted-host").kind == "assumption"
 
 
 def test_p2_is_experimental_and_says_so():
@@ -522,7 +522,7 @@ def test_p2_is_experimental_and_says_so():
         cert = sch.certificate
         assert (cert.theorem, cert.k, cert.rounds, cert.work, cert.call_ns, cert.segments, cert.hypotheses) == (
             "Pous.SecurityProofs.P2SlackFamilyUncond", 105, 0, 1 << 20, ROOT_CALL_NS, 8, ())
-        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-nebius-host"} <= set(
+        assert {"m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "cr/sha-512", "trusted-host"} <= set(
             cert.claims) and not any("sha-256" in c for c in cert.claims)
         one = schemes.get(name)
         vk = VerifierKey.from_leaves(one.params, SALT, [bytes(64)] * one.params.blocks)
@@ -545,6 +545,39 @@ def test_p2_is_experimental_and_says_so():
         schemes.get("p2-16448/v4", params=P2Params(16448, 21065, 1 << 16, 1, CHACHA8))
     with pytest.raises(ValueError, match="expander"):
         P2Params(128, 173, 8, 1, "chacha20")
+
+
+def test_p2_family_certificate_is_the_proved_block_range():
+    """`p2.family_certificate` is `P2SlackFamilyUncond`'s `λ = 128` row at k = 105, the registered certificate's every
+    field but its segment pin, for a v4 store of 2^8 to 2^23 blocks at the registered width and prime in any number of
+    segments; there is none off that range, at another width, or for v2's ChaCha8 keys."""
+    from verity.core.protocols.pous.schemes.p2 import CERT_FAMILY_BLOCKS, family_certificate
+
+    reg = schemes.get("p2-16448/v4", segments=8).certificate
+    assert CERT_FAMILY_BLOCKS == (1 << 8, 1 << 23)
+    for bps, segments in ((256, 1), (128, 2), (1 << 16, 1), (1 << 16, 8), (1 << 16, 128)):
+        cert = family_certificate(P2Params(16448, 21065, bps, segments))
+        assert cert.to_json() == reg.to_json() | {"segments": None}, (bps, segments)
+        assert cert.theorem == "Pous.SecurityProofs.P2SlackFamilyUncond" and cert.claims == reg.claims
+    for q in (P2Params(16448, 21065, 255, 1), P2Params(16448, 21065, 1 << 16, 129), P2Params(128, 173, 256, 1),
+              P2Params(16448, 21065, 256, 1, CHACHA8)):
+        assert family_certificate(q) is None, q
+    assert schemes.P2(P2Params(16448, 21065, 256, 1)).certificate is None
+
+
+def test_p2_encode_blocks_are_slices_of_the_segment():
+    """`p2.encode_blocks` from block `j0` of a segment gives those blocks of `encode_segment`, and refuses payloads that
+    are not whole blocks inside the segment."""
+    from verity.core.protocols.pous.schemes.p2 import encode_blocks, encode_segment
+
+    params = P2Params(128, 173, 8, 2)
+    w = bytes(range(112))
+    c = encode_segment(params, None, SALT, 1, w)
+    assert encode_blocks(params, SALT, 1, 0, w) == c and encode_blocks(params, SALT, 1, 8, b"") == []
+    assert encode_blocks(params, SALT, 1, 3, w[3 * 14:6 * 14]) == c[3:6] != encode_blocks(params, SALT, 0, 3, w[42:84])
+    for j0, payloads in ((0, w[:13]), (6, w[:42]), (-1, w[:14])):
+        with pytest.raises(ValueError, match="whole blocks"):
+            encode_blocks(params, SALT, 1, j0, payloads)
 
 
 @pytest.mark.parametrize("expander", ["sha512-ctr-v4", CHACHA8])

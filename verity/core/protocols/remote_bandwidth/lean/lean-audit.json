@@ -1,14 +1,15 @@
 {
- "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier"],
+ "roots": ["RemoteAudit", "RemoteAudit.Difftest", "RemoteAudit.Verifier", "RemoteAudit.Protocol"],
  "exempt": {
+  "RemoteAudit.ProtocolMain": "the remote-audit-protocol executable's entry point, one line; its command is Core.Protocol.main of RemoteAudit.Protocol.protocol, audited under RemoteAudit.Protocol and CoreProtocol",
   "RemoteAudit.DifftestMain": "the remote-audit-difftest executable's entry point, one line; it serves RemoteAudit.Difftest.table, audited under RemoteAudit.Difftest, through the difftest server's line protocol: a test and not a proof",
   "RemoteAudit.VerifierMain": "the remote-audit-verifier executable's entry point, one line; it runs RemoteAudit.Verifier.serve, audited under RemoteAudit.Verifier"
  },
  "layers": {
   "RemoteAudit": {
-   "imports": ["Std", "Flock", "Randomness", "RemoteAudit"],
+   "imports": ["Std", "Flock", "Randomness", "CoreProtocol", "RemoteAudit"],
    "except": ["RemoteAudit.Difftest"],
-   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, and core's randomness; no Mathlib and nothing of Security. The difftest's table (RemoteAudit.Difftest) also imports the difftest server"
+   "why": "the verifier is code: Lean core, C-Flock's hashes, bytes and hm96, core's randomness, and the core protocol interface its session is a component through (RemoteAudit.Protocol); no Mathlib and nothing of Security. The difftest's table (RemoteAudit.Difftest) also imports the difftest server"
   }
  },
  "dependencies": {
