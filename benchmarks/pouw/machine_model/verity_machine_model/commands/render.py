@@ -200,8 +200,8 @@ def _theta(data: Path) -> str | None:
                   [[f"`{c.key}`", c.what, f"{c.value:g}", c.unit, c.grade, c.source,
                     c.measured or (c.gap and f"gap: {c.gap}")] for c in t.capacities.values()]),
            "### Exact paths",
-           _table(["format", "native", "exact", "ISA"], [[p["format"], p["native"], p["exact"], p["isa"]]
-                                                          for p in t.paths]),
+           _table(["format", "native", "exact", "ISA", "measured"],
+                  [[p["format"], p["native"], p["exact"], p["isa"], p.get("measured")] for p in t.paths]),
            "### FP8 atoms",
            _table(["form", "products", "group", "alignment", "accumulation", "promotion", "rate", "source"],
                   [[x[k] for k in ("form", "products", "group", "alignment", "accumulation", "promotion", "rate",

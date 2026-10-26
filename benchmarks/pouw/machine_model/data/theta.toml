@@ -1,4 +1,4 @@
-# θ for the RTX PRO 6000 Blackwell Server Edition (sm_120; ACCEL CALIB, CMP-115; note:compute-research/20261026T0155Z-draft-
+# θ for the RTX PRO 6000 Blackwell Server Edition (sm_120; ACCEL CALIB, CMP-115; note:compute-research/20261026T0140Z-draft-
 # accel-calib): every rate, capacity and clock the accelerator model reads, each with its vendor document first (`sheet`,
 # `grade`, `source`), then the census or a measured run (`measured`, `runs`), or the run that would measure it (`gap`).
 # The schema is data/devices/sm_90/theta.toml's. The census is at the node's 2,092 MHz lock, and a SM-clock's rate holds at

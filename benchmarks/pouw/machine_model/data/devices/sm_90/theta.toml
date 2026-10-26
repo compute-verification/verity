@@ -1,4 +1,4 @@
-# θ for the H200 SXM 141 GB (ACCEL CALIB, CMP-115; note:compute-research/20261026T0155Z-draft-accel-calib): every rate,
+# θ for the H200 SXM 141 GB (ACCEL CALIB, CMP-115; note:compute-research/20261026T0140Z-draft-accel-calib): every rate,
 # capacity and clock the accelerator model reads, each with its vendor document first (`sheet`, `grade`, `source`), then
 # the census or a measured run (`measured`, `runs`), or the run that would measure it (`gap`). A rate is a SM-clock's
 # (MACs, results or bytes a SM-clock); `clock` names the clock its per-second figure is at, and `figure` is the number the
@@ -475,6 +475,7 @@ format = "s8/u8"
 native = "wgmma m64nNk32 (IGMMA), mma.sync m16n8k32, m16n8k16, m8n8k16 (IMMA)"
 exact = "s8·s8 into s32, exact (wraps mod 2^32 without .satfinite)"
 isa = "PTX §9.7.15.5 (wgmma .s8/.u8: k32 only), §9.7.14.5"
+measured = "exactness pinned on the H200: wgmma m64n64k32, m64n128k32 and m64n256k32 .s8 against HOPPER_SM90_S8_K32, 8 forms each, 0 mismatches over about 10.3-10.6 M elements a form, extreme and clamp tiles included (r20261026-010336-7755; registry entries in PR #4512, HASH-18); mma.sync m16n8k32 .s8 pinned by DPRE (HASH-8). That run times nothing: the shapes' rates are the census's (tensor.s8.k32 N256 4095.6, N128 4095.4, N64 4095.0; tensor.s8.k32.n32 2729.9; tensor.s8.k32.sync 2687.1; tensor.s8.k16 1995.7)"
 
 [[path]]
 format = "e4m3/e5m2"
