@@ -97,10 +97,10 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
-  rw [hb] at z9
-  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at z9
-  rw [← z9]
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, hm, hd9⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  rw [hb] at hm
+  simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at hm
+  rw [hd9, ← hm]
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
