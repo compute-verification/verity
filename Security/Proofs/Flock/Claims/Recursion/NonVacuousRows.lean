@@ -146,7 +146,7 @@ theorem targets_of_open (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
     (hR : TargetRDep rd (RowsHold rows holds) acc) (hD : TargetDMerkle rd (RowsHold rows holds) acc)
     (hE : TargetE rd (RowsHold rows holds) acc) (hDec : TargetDecode rd (RowsHold rows holds)) :
     Targets rd rows holds acc :=
-  ⟨fun x ms cs hA D cls i hi r =>
+  ⟨fun x ms cs hA D cls _ hi r =>
       let ⟨_, _, hst, hf, hx⟩ := hA.1
       D.framed_dense cls (acc x ms cs) r hst hf hx hi,
     targetL_holds acc, targetD_of hR (targetDDep_of_merkle hD), targetR_of hR, hE, hDec,
