@@ -167,6 +167,14 @@ import Proofs.Flock.Claims.Recursion.OpenPieces
 import Proofs.Flock.Claims.Recursion.VerdictRowDPieces
 import Proofs.Flock.Claims.Recursion.VerdictRun
 import Proofs.Flock.Claims.Recursion.VerdictAssembly
+import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+import Proofs.Flock.Claims.Recursion.NonVacuous
+import Proofs.Flock.Claims.Recursion.VerdictRowL
+import Proofs.Flock.Claims.Recursion.RoundCounts
+import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.RoundSizes
+import Proofs.Flock.Claims.Recursion.RowDLevels
 import Proofs.Flock.Claims.Recursion.DecRRecJ
 import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 import Proofs.Flock.Claims.Counted
