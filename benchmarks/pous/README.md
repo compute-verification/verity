@@ -88,9 +88,10 @@ Implementations:
   - `serve.py`: the toy served from that store under the remote bandwidth audit (`remote_bandwidth.p2`), the CPU
     reference of the serving loop: each engine step decodes the store layer by layer, runs the layer's matmuls on what
     it decoded, sketches each block's bytes as it decodes them, and commits one root, which the next step's seed chains
-    from; each window's openings are answered before the next step. `store-toy/receipts.json` (`serve.py fixture`) is
-    the decode kernel's sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's
-    sketch and receipt (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). `tests/test_pous_p2_serve.py`
+    from; each window's openings are answered before the next step. `serve.py fixture` writes the decode kernel's
+    sketch fixture: two chained passes' seeds, sign rows, every block's partial and every unit's sketch and receipt
+    (the interface is `remote_bandwidth`'s `PROTOCOL.md` §11). It isn't tracked: `FIXTURE_SHA512` pins its bytes, and
+    they're published as `art:23a1667b4d4515f46fabea029492a1ca3788eef0771b115642f21e18f58f3da2`. `tests/test_pous_p2_serve.py`
     regenerates it.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**

@@ -2,7 +2,7 @@
 serving loop, and the fixture a decode kernel's sketch is held to.
 
     serve.py [--steps 12] [--per-window 3] [--prompt 1]   # serve the toy, print its tokens and each window's verdict
-    serve.py fixture [--out store-toy/receipts.json]       # write the kernel fixture
+    serve.py fixture [--out receipts.json]                 # write the kernel fixture (stdout by default)
 
 **The step.** Each engine step is one pass of the audit (`remote_bandwidth.p2`). It decodes the store layer by layer
 (`store.decode_block`: block `i`'s 2,056 bytes of `C*` to its 2,054 of `W`), runs the layer's matmuls on the staging
@@ -17,10 +17,11 @@ has passed, the next step's root goes to the next window, and that root makes th
 draws its openings, and the prover answers them before its next step, while serving goes on. The session's last
 window closes at its deadline.
 
-**The fixture** (`store-toy/receipts.json`, `fixture`): two chained passes over the toy's `C*` at 16 sign rows under a
-fixed challenge and fixed leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π,
-every unit's σ and y, and the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
-`verity/core/protocols/remote_bandwidth` is the interface).
+**The fixture** (`fixture`): two chained passes over the toy's `C*` at 16 sign rows under a fixed challenge and fixed
+leaf salts, each with its seed, the 16 sign rows the kernel reads, every block's partial π, every unit's σ and y, and
+the pass's root. A decode kernel's sketch matches it block for block (`PROTOCOL.md` §11 of
+`verity/core/protocols/remote_bandwidth` is the interface). It is regenerated, not tracked: the repository's data
+budget has no room for it, and `FIXTURE_SHA512` pins its bytes.
 """
 from __future__ import annotations
 
@@ -44,8 +45,9 @@ from verity.core.protocols.pous import setup
 from verity.core.protocols.pous.schemes.p2 import expand_prefix
 from verity.core.protocols.remote_bandwidth import audit, coins, p2, receipts
 
-FIXTURE = S.TOY_DIR / "receipts.json"
 FIXTURE_SCHEMA = "verity-remote-bandwidth/p2-sketch-fixture/v0"
+FIXTURE_SHA512 = ("658f6d40a5ecdcb252ca2d4b844f41c6b2af0550f291a4d2e33f975d3158fac2"
+                  "b3da2a65666d146f6aabac37167b4d21aaf4d1ef5c02127ac1ad2f8380f88b9a")
 NODE = b"p2-toy-node"
 EMBED = b"verity-pous/p2-serve/toy/embedding/v0\0"
 FIXTURE_CHALLENGE = hashlib.sha512(b"verity-pous/p2-serve/fixture/challenge/v0").digest()[:receipts.CHALLENGE_BYTES]
@@ -289,8 +291,8 @@ def fixture(passes: int = 2) -> dict:
     }
 
 
-def _dump(doc: dict) -> str:
-    return json.dumps(doc, indent=1) + "\n"
+def fixture_bytes() -> bytes:
+    return (json.dumps(fixture(), indent=1) + "\n").encode()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -299,11 +301,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--steps", type=int, default=12)
     ap.add_argument("--per-window", type=int, default=3)
     ap.add_argument("--prompt", type=int, default=1)
-    ap.add_argument("--out", type=Path, default=FIXTURE)
+    ap.add_argument("--out", type=Path)
     a = ap.parse_args(argv)
     if a.command == "fixture":
-        a.out.write_text(_dump(fixture()))
-        print(f"wrote {a.out}")
+        data = fixture_bytes()
+        if hashlib.sha512(data).hexdigest() != FIXTURE_SHA512:
+            print("the fixture moved: update FIXTURE_SHA512 and republish it", file=sys.stderr)
+            return 1
+        if a.out is None:
+            sys.stdout.buffer.write(data)
+        else:
+            a.out.write_bytes(data)
+            print(f"wrote {a.out}", file=sys.stderr)
         return 0
     if a.steps % a.per_window:
         ap.error("--steps is a whole number of windows of --per-window steps")
