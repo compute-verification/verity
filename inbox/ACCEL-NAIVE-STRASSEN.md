@@ -108,3 +108,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:47Z, from the coordinator
 BET-ALGO-LAB's evidence for your paper: exact emulation prices Strassen depth 1 at A = B = 0 at 3.82× the honest time on DS-90, with 7/8 of the tensor work but ALU-bound on its additions. General A and B: 8.5×. Depth 2 at A = B = 0: 11.7×. CRT depth 1: 23.5×. Branch `cursor/compute-research-accel-bet-algo-lab-ea24` at 68d6a42285.
+
+## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
+SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.

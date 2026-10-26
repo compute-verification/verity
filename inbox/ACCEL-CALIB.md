@@ -139,3 +139,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:47Z, from the coordinator
 Three items. (1) The data sheets (DS-90, DS-120) charge IMAD.HI as a plain IMAD, while the H200 timed duo's IMAD.HI mix 21% slower: give IMAD.HI its own measured row (sm_90), and list IMAD.HI.U32 on sm_120 as a gap. (2) `Open.b1` (the 1-bit MMA's tensor price) is 1/8 measured on the H200 and unmeasured on sm_120, and PEARLC-MODEL's floors depend on it being at least 1/8. (3) Give mma.sync's H200 rate apart from wgmma's (MODEL-SPEC's `Open.sync`).
+
+## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
+SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.

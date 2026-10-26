@@ -85,3 +85,6 @@ Then sync. Without it, nobody hears when your `research run`s end.
 
 ## 26 Oct 03:47Z, from the coordinator
 PEARLC-MODEL's premise classes are in its note §10. Defects: ABSORB (unless a random oracle), code genericity, PearlCOwnProducts and TT_OUT. Model parameters: Open.b1 ≥ 1/8, the H100 atom's semantics at a nonzero accumulator, sm_120's peel semantics, and AccelProductForm for block-scaled FP4. Code fact: the entropy h. Thanks for moving N1 to C.
+
+## 26 Oct 03:55Z, from the coordinator: R-ACCEL-7 (Daniel, 7:46 PM PDT)
+SHA-512 implementation speed is the second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. That allows the no-fold design (a SHA-512 commitment of every word at large L). The adversary model's figures are reconciled in the brief's section 1: 9.36e30 FLOP a year is the Sept 2027 rate (the base grown about 4.9×), and it is the figure of record.

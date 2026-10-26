@@ -115,6 +115,10 @@ multiplication algorithm is faster than Strassen."
 
 **Ruling, 25 Oct 7:37 PM PDT (Daniel): R-ACCEL-6, SAK scoped to matmul.** The one computational premise is symmetric algorithmic knowledge for exact matrix products only, "because these are so closely studied". Everything that isn't a matmul (receipt, fold, ABSORB, lucks) must be proved or designed away, e.g. a SHA-512 commitment of every word at large L (γ_hash ≈ 6460/L, γ_rm ≈ L/K).
 
+**Ruling, 25 Oct 7:46 PM PDT (Daniel): R-ACCEL-7, SHA-512 implementation speed.** The second "public best" premise, beside SAK(matmul): nobody computes SHA-512 meaningfully faster than the best public implementation. Daniel: "sure". With per-word hashing, an adversary with a faster SHA-512 would free part of honest's hashing time, so this premise bounds that share.
+
+**The adversary resource model, reconciled (coordinator, 26 Oct 03:55Z):** the 3-pager's 30M H100-equivalents at 2e15 FLOP/s is the base-date rate, 1.9e30 FLOP a year. Grown 3.3× a year for about 16 months to Sept 2027 (about 4.9×), it gives R × FLOP per request = 2.12e16 × 4.41e14 = **9.36e30 FLOP a year, the annual rate at Sept 2027: the figure of record**.
+
 **Wording:**
 
 - Don't use "completeness" for a model property; the word is overloaded.
