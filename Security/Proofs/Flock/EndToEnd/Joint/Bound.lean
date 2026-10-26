@@ -142,7 +142,7 @@ theorem JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon := by
         value_or_le _ _ _
     _ ≤ (∑ t ∈ Finset.range T, ((W t).epsKs + (W t).link)) + ENNReal.ofReal δ := by
         gcongr
-        · simpa only [zero_add] using hA
+        · simpa [Stratified.run] using hA
         · exact hB
     _ = ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).epsKs + (W t).link) := add_comm _ _
 
