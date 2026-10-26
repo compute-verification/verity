@@ -2794,14 +2794,13 @@
    "assumptions": [],
    "type_hash": "5b43ea7add7e18ec16cfa2f824e6c5e94892f3b787641a39b8ad3d9ef890f284"
   },
-  "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated": {
+  "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow": {
    "owner": "@training",
    "signature": [
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated :",
-    "  Accounting.Guarantees.Compose.CircuitCreditPerWindowStated"
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow : Accounting.Guarantees.Compose.CircuitCreditPerWindow"
    ],
    "assumptions": [],
-   "type_hash": "8b373b011161f04878a924756debb3799c8a99ada6e2b62a091d9eeaad96625e"
+   "type_hash": "519750d9d51b8f1c2da81d8653b1b6998775f0bab5d69bfe16d50b3942ff0994"
   },
   "Accounting.SecurityProofs.Compose.CircuitCreditSeeded": {
    "owner": "@compute-accounting",
@@ -11772,7 +11771,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -11938,7 +11937,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
@@ -12005,7 +12004,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -12553,7 +12552,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -12733,7 +12732,7 @@
     "Accounting.SecurityProofs.BandwidthOfAuditPerRun",
     "Accounting.SecurityProofs.CapacityOfStateBound",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced",
     "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced",
@@ -13032,7 +13031,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -13379,13 +13378,12 @@
    ]
   },
   "Definitions.Accounting.Guarantees.ComposeWindow": {
-   "digest": "c9e342de531538aacf880c62beb198a1843abaef632d5a611deb0642c9c41f66",
+   "digest": "f0ce654ec28e8faf9ee052a8cf30a928ed10044c74201616b12077586833f022",
    "definitions": {
     "Accounting.Guarantees.Compose.CircuitCreditPerWindow": "4ab91af47fa0ba47136022a6c9b2e4eae9db179e362eb1be8940885e51ec35ee",
-    "Accounting.Guarantees.Compose.CircuitCreditPerWindowStated": "84cb7770405f4cf14f86a240cb6dd50084db32690fb23526bdf4964134590b6a",
     "Accounting.Guarantees.Compose.CreditPlayOn": "3219b86e30d412b987cf267e278e276400592bfd5c04fbd66fce6dc1f90b2311"
    },
-   "guarantees": ["Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated"]
+   "guarantees": ["Accounting.SecurityProofs.Compose.CircuitCreditPerWindow"]
   },
   "Definitions.Accounting.Guarantees.Confidence": {
    "digest": "efce790a6464ea41d877ef6d1bf1c6db1c02c97c43a096e52b0936b6c9b035dc",
@@ -14204,7 +14202,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
@@ -15600,7 +15598,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Compose.BindingOfECR",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -15704,7 +15702,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -15756,7 +15754,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -15823,7 +15821,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Compose.BindingOfECR",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -15926,7 +15924,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
@@ -15961,7 +15959,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod",
     "Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod",
@@ -16051,7 +16049,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -16123,7 +16121,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CreditOfWork",
     "Accounting.SecurityProofs.FpG1.Sm120FpG1SheetHeadline",
@@ -20719,7 +20717,7 @@
     "Nci.Dampener.wrongCapacity": "f561edf3f609baac913a6308e14142fd4ef5fdc88eedd5b6e8857aa4a7ff7767"
    },
    "guarantees": [
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Flock.SecurityProofs.HiddenWindowPerWindowStated",
     "Nci.SecurityProofs.CertificateSlack",
     "Nci.SecurityProofs.DampenerRemote",
@@ -28191,7 +28189,7 @@
     "Accounting.SecurityProofs.CoinFlow.PointMass",
     "Accounting.SecurityProofs.Compose.BindingOfECR",
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
@@ -28339,7 +28337,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Compose.CircuitCredit",
-    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindowStated",
+    "Accounting.SecurityProofs.Compose.CircuitCreditPerWindow",
     "Accounting.SecurityProofs.Compose.CircuitCreditSeeded",
     "Accounting.SecurityProofs.Compose.CircuitWork",
     "Accounting.SecurityProofs.Compose.CircuitWorkSeeded",
