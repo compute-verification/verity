@@ -86,6 +86,7 @@ DELTAS = (1e-2, 1e-6)
 STATEMENT_LANES = 256
 V1_DRAW_S = 180.0
 STEP_S = (3.7, 7.5)
+HBM_BPS = 4.8e12
 PERIODS = (("week", 7 * 86_400), ("month", 30 * 86_400), ("year", 365 * 86_400))
 
 
@@ -278,6 +279,35 @@ def crosscheck() -> dict:
     return {"h1jr_cols_ms_model": cols / SHA_RATE * 1e3, "h1jr_cols_ms_measured": H1JR_COLS_MS, "m8192": rows}
 
 
+def v5v6_row(row: dict) -> dict:
+    """CMP-126's row for J10-R as built, a sampling block being one step (M rows through every static INT8 matmul, all
+    its units registered): commit bytes, the range, SHA-512 seconds, the unit against C-Flock, and γ and coverage against
+    the linears alone at P and against the 3.7–7.5 s step, from the projection and from the measured kernel γ."""
+    macs = M * MACS_PER_TOKEN
+    units = sum(cnt * (M // 32) * (n // 32) for _, n, k, cnt in LINEARS)
+    z = sum(cnt * M * n * 4 for _, n, k, cnt in LINEARS)
+    receipts = sum(cnt * (M // 32) * (n // 32) * 8 * HT.Layout(32, 32, k).sets for _, n, k, cnt in LINEARS)
+    t_rho = macs / RHO_8
+    t_lin = P * t_rho
+    noise = row["compressions_per_mac"]["noise"]
+    out = {"units": units, "range_log2": math.log2(units), "commit_bytes": {"z": z, "receipts": receipts},
+           "a_row_bytes": sum(cnt * M * k for _, n, k, cnt in LINEARS), "sha_s": row["compressions_per_mac_total"]
+           * macs / SHA_RATE, "noise_sha_s": noise * macs / SHA_RATE, "noise_over_plain": noise
+           * MAC_TIMES_PER_COMPRESSION / P, "hbm_commit_s": 2 * (z + receipts) / HBM_BPS, "t_linears_s": t_lin,
+           "unit_ands": {k: 32 * (1_912_609 + 11_297 * k) for k in (16_384, 65_536)}, "chunk_ands": 1_912_609
+           + 11_297 * 4096}
+    for src, total in (("projected", row["hash_mac_times"] + row["lane_projected_mac_times"]),
+                       ("measured kernel γ", MEASURED_GAMMA[0][2] * P)):
+        t_units = total * t_rho
+        out[src] = {"gamma_full_linears": {"side": 1 + total / P, "one": total / P},
+                    "f_linears": {"side": min(1.0, (GAMMA - 1) * P / total),
+                                  "one": min(1.0, (GAMMA - 1) / (total / P - 1))},
+                    "gamma_full_step": {s: {"side": 1 + t_units / s, "one": 1 + (t_units - t_lin) / s} for s in STEP_S},
+                    "f_step": {s: {"side": min(1.0, (GAMMA - 1) * s / t_units),
+                                   "one": min(1.0, (GAMMA - 1) * s / (t_units - t_lin))} for s in STEP_S}}
+    return out
+
+
 def windows(delta: float) -> int:
     return math.floor(float(LAMBDA) * math.log(1 / delta) / EPS) + 1
 
@@ -332,7 +362,7 @@ def report() -> dict:
             "mac_times_per_compression": MAC_TIMES_PER_COMPRESSION, "P": P, "budget_mac_times": (GAMMA - 1) * P,
             "macs_per_step": M * MACS_PER_TOKEN, "windows": {str(d): windows(d) for d in DELTAS},
             "lane_chunk_s": lane_chunk_s(), "rows": rows, "pearl_c_h3": pearl_c_h3(), "operand_rows": operand_rows(),
-            "crosscheck": crosscheck(),
+            "crosscheck": crosscheck(), "v5v6": v5v6_row(by["j10r-asbuilt"]),
             "periods": {name: period_rows(by[name]["f_side"], by[name]["draw_s"])
                         for name in ("v1-4x8-k64", "j10r-asbuilt", "j10r-k4096", "j10r-wcall-li")}}
 
@@ -376,6 +406,22 @@ def markdown(rep: dict) -> str:
     for r in x["m8192"]:
         out.append(f"| {r['arm']} | {r['measured_gamma']:.2f} | {r['model_gamma']:.2f} | {r['f_one_measured']:.1%} | "
                    f"{r['f_side_measured']:.1%} | {r['run']} |")
+    v = rep["v5v6"]
+    out += ["", f"v5/v6 a step (one sampling block): {v['units']:,} units (range 2^{v['range_log2']:.2f}); commit z "
+            f"{v['commit_bytes']['z']:.3e} B + receipts {v['commit_bytes']['receipts']:.3e} B (A rows, integrity's, "
+            f"{v['a_row_bytes']:.3e} B); SHA-512 {v['sha_s']:.2f} s a step at full coverage, of it noise "
+            f"{v['noise_sha_s']:.3f} s ({v['noise_over_plain']:.1%} of plain); HBM for the commit {v['hbm_commit_s']:.2f} s "
+            f"(not in γ); linears {v['t_linears_s']:.2f} s; a unit {v['unit_ands'][16_384]:.3e} ANDs at K = 16,384, "
+            f"{v['unit_ands'][65_536]:.3e} at 65,536; a lane chunk {v['chunk_ands']:.3e}", "",
+            "| source | γ full, linears (side / one) | f at γ ≤ 10, linears | γ full, 3.7 s step | γ full, 7.5 s step | "
+            "f at γ ≤ 10, 3.7 s step | f, 7.5 s step |", "|---|---|---|---|---|---|---|"]
+    for src in ("projected", "measured kernel γ"):
+        s = v[src]
+        g, f = s["gamma_full_step"], s["f_step"]
+        out.append(f"| {src} | {s['gamma_full_linears']['side']:.1f} / {s['gamma_full_linears']['one']:.1f} | "
+                   f"{s['f_linears']['side']:.1%} / {s['f_linears']['one']:.1%} | "
+                   f"{g[3.7]['side']:.1f} / {g[3.7]['one']:.1f} | {g[7.5]['side']:.1f} / {g[7.5]['one']:.1f} | "
+                   f"{f[3.7]['side']:.1%} / {f[3.7]['one']:.1%} | {f[7.5]['side']:.1%} / {f[7.5]['one']:.1%} |")
     for name, rows in rep["periods"].items():
         out += ["", f"{name}:", "", "| period | δ | served MACs | credited MACs | draws | prove + Lean process-days | "
                 "processes |", "|---|---|---|---|---|---|---|"]
