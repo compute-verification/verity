@@ -11,22 +11,25 @@ import PousCheck.Run
 
 * params `{"point": {"k", "limit_ns", "params": {"blocks_per_segment", "c0", "segments", "w"}}, "session_id": hex,
   "trusted": [hex, …]}`: the point the run is checked at, the id the auditor designated for the period's session, and
-  the verifier's list of memory-challenger keys, which never comes from the run's record;
+  the verifier's list of memory-challenger keys, which never comes from the run's record; and, for a store the
+  verifier's setup check already accepted, `"setup": {"answer": Core.Answer.toJson, "params": manifest, "record": id}`
+  (`SetupRef`): the verifier's citation of that check's recorded answer, the parameters it checked at
+  (`SetupProtocol.params`' manifest) and where the record is (a run or `art:` id), so a store too large to decode every
+  period (Demo B's 130 GiB) is checked once, at setup. It is the verifier's, as `trusted` is: an answer the prover
+  supplied would certify a store no check decoded;
 * the commitment: the setup's public outputs (`SetupProtocol.Public.toJson`), which the prover published before any
   challenge; its digest SHA-512 of those bytes;
-* the evidence: `{"digests": hex, "session": Run.Session.toJson, "setup": S}`, the memory challenger's table of `C*`,
-  the session it signed, and the setup in one of two forms (`SetupCase`):
-  - inline, `S = {"commitment": hex, "evidence": hex}`: the setup's own commitment and evidence as its case carries
-    them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*` framed), which the check decodes again;
-  - cited, `S = {"answer": Core.Answer.toJson, "params": manifest, "record": id}` (`SetupRef`): the setup check's
-    recorded answer, the parameters it checked at (`SetupProtocol.params`' manifest) and where the record is (a run or
-    `art:` id), so a store too large to decode every period (Demo B's 130 GiB) is checked once, at setup;
-* the check: `decision`, the verifier's whole decision, its first refusal the reason. Inline it is `accepts`: setup
-  accepts `C*` against the server's commitment and salt at the point's parameters and publishes exactly the commitment
-  (`tie`), and `checkAt` accepts the run against it. Cited it is `acceptsCited`: the cited answer is the setup
-  protocol's acceptance, at the point's parameters, publishing exactly the commitment (`cite`; a setup that refused is
-  refused with its reason), and `checkAt` accepts the run against it, reading no block of `C*`. A run committed to any
-  other setup, or to outputs no accepted setup published, is refused. At P2's deployed point under S1's LMS, `accepts`
+* the evidence: `{"digests": hex, "session": Run.Session.toJson}`, the memory challenger's table of `C*` and the session
+  it signed, and, when the params cite no setup, `"setup": {"commitment": hex, "evidence": hex}` (`SetupEvidence`): the
+  setup's own commitment and evidence as its case carries them (`SetupProtocol`'s `w_commitment ‖ salt` and `C*`
+  framed), which the check decodes again;
+* the check: `decision`, the verifier's whole decision, its first refusal the reason: the setup is given exactly once,
+  cited in the params or carried in the evidence. Carried it is `accepts`: setup accepts `C*` against the server's
+  commitment and salt at the point's parameters and publishes exactly the commitment (`tie`), and `checkAt` accepts the
+  run against it. Cited it is `acceptsCited`: the cited answer is the setup protocol's acceptance, at the point's
+  parameters, publishing exactly the commitment (`cite`; a setup that refused is refused with its reason), and `checkAt`
+  accepts the run against it, reading no block of `C*`. A run committed to any other setup, or to outputs no accepted
+  setup published, is refused. At P2's deployed point under S1's LMS, `accepts`
   is `SetupProtocol.protocol.check q c C = .accept pub ()` and `Run.check trusted pub digests r sid = .ok ()`
   (`accepts_deployed`), the body of `Pous.EndToEnd.Accepted`, the decision `Pous.Period.PeriodHeld` is about, and
   `acceptsCited` is `cite` and `Run.check` (`acceptsCited_deployed`): with the acceptance the citation records it is
@@ -53,10 +56,31 @@ open Flock MemoryChallenger
 
 def ID : String := "verity/pous/p2/v4/run"
 
+/-- The verifier's citation of its setup check's recorded acceptance, in place of the setup's inputs: the answer
+`verity/pous/p2/v4/setup` returned (`Core.Answer`), the parameters it checked at, and where its record is (a run or
+`art:` id). -/
+structure SetupRef where
+  answer : Core.Answer
+  params : P2.Params
+  record : String
+
+def SetupRef.toJson (s : SetupRef) : Json :=
+  Json.mkObj [("answer", s.answer.toJson), ("params", Commit.manifestJson s.params), ("record", .str s.record)]
+
+/-- The answer read by `Core.Answer.ofJson`, the parameters by `SetupProtocol.params` (valid, and exactly their
+manifest). -/
+def SetupRef.ofJson (j : Json) : V SetupRef := do
+  let ctx := "params.setup"
+  let params ← match SetupProtocol.params (← J.get j "params" ctx) with
+    | .ok q => pure q
+    | .error e => throw s!"{ctx}.params: {e}"
+  pure ⟨← Core.Answer.ofJson (← J.get j "answer" ctx) s!"{ctx}.answer", params, ← J.str j "record" ctx⟩
+
 structure Params where
   point : Run.Point
   sessionId : ByteArray
   trusted : Array ByteArray
+  setup : Option SetupRef
 
 private def natJ (n : Nat) : Json := .num (JsonNumber.fromNat n)
 private def hexJ (b : ByteArray) : Json := .str (hexOf b)
@@ -67,11 +91,15 @@ def pointJson (pt : Run.Point) : Json :=
     ("blocks_per_segment", natJ q.blocksPerSegment), ("c0", natJ q.c0), ("segments", natJ q.segments), ("w", natJ q.w)])]
 
 def Params.toJson (p : Params) : Json :=
-  Json.mkObj [("point", pointJson p.point), ("session_id", hexJ p.sessionId), ("trusted", .arr (p.trusted.map hexJ))]
+  Json.mkObj ([("point", pointJson p.point), ("session_id", hexJ p.sessionId), ("trusted", .arr (p.trusted.map hexJ))] ++
+    (p.setup.map fun s => ("setup", s.toJson)).toList)
 
 def decodeParams : Json → V Params :=
   exactly (fun j => do
-    pure ⟨← Run.Point.ofJson (← J.get j "point" "params"), ← hexField j "session_id" "params", ← hexArr j "trusted" "params"⟩)
+    pure ⟨← Run.Point.ofJson (← J.get j "point" "params"), ← hexField j "session_id" "params", ← hexArr j "trusted" "params",
+      ← match j.getObjVal? "setup" with
+        | .ok s => some <$> SetupRef.ofJson s
+        | .error _ => pure none⟩)
     Params.toJson
 
 def decodeCommitment (b : ByteArray) : V SetupProtocol.Public := do Run.decodeSetup (← Core.canonicalJson b)
@@ -97,52 +125,20 @@ def SetupEvidence.ofJson (j : Json) : V SetupEvidence := do
     | .error e => throw s!"{ctx}.evidence: {e}"
   pure ⟨c, store⟩
 
-/-- A citation of the setup check's recorded acceptance, in place of its inputs: the answer `verity/pous/p2/v4/setup`
-returned (`Core.Answer`), the parameters it checked at, and where its record is (a run or `art:` id). -/
-structure SetupRef where
-  answer : Core.Answer
-  params : P2.Params
-  record : String
-
-def SetupRef.toJson (s : SetupRef) : Json :=
-  Json.mkObj [("answer", s.answer.toJson), ("params", Commit.manifestJson s.params), ("record", .str s.record)]
-
-/-- The answer read by `Core.Answer.ofJson`, the parameters by `SetupProtocol.params` (valid, and exactly their
-manifest). -/
-def SetupRef.ofJson (j : Json) : V SetupRef := do
-  let ctx := "evidence.setup"
-  let params ← match SetupProtocol.params (← J.get j "params" ctx) with
-    | .ok q => pure q
-    | .error e => throw s!"{ctx}.params: {e}"
-  pure ⟨← Core.Answer.ofJson (← J.get j "answer" ctx) s!"{ctx}.answer", params, ← J.str j "record" ctx⟩
-
-/-- How a run's case gives its setup: the setup's own inputs (`inline`), or a citation of the setup check's recorded
-acceptance (`cited`). -/
-inductive SetupCase where
-  | inline (s : SetupEvidence)
-  | cited (s : SetupRef)
-
-def SetupCase.toJson : SetupCase → Json
-  | .inline s => s.toJson
-  | .cited s => s.toJson
-
-/-- A citation when the setup has an `answer`, else the setup's own inputs. -/
-def SetupCase.ofJson (j : Json) : V SetupCase :=
-  match j.getObjVal? "answer" with
-  | .ok _ => return .cited (← SetupRef.ofJson j)
-  | .error _ => return .inline (← SetupEvidence.ofJson j)
-
 structure Evidence where
   digests : ByteArray
   session : Run.Session
-  setup : SetupCase
+  setup : Option SetupEvidence
 
 def Evidence.toJson (e : Evidence) : Json :=
-  Json.mkObj [("digests", hexJ e.digests), ("session", e.session.toJson), ("setup", e.setup.toJson)]
+  Json.mkObj ([("digests", hexJ e.digests), ("session", e.session.toJson)] ++
+    (e.setup.map fun s => ("setup", s.toJson)).toList)
 
 def decodeEvidence (b : ByteArray) : V Evidence := do
   exactly (fun j => do pure ⟨← hexField j "digests" "evidence", ← Run.Session.ofJson (← J.get j "session" "evidence"),
-      ← SetupCase.ofJson (← J.get j "setup" "evidence")⟩)
+      ← match j.getObjVal? "setup" with
+        | .ok s => some <$> SetupEvidence.ofJson s
+        | .error _ => pure none⟩)
     Evidence.toJson (← Core.canonicalJson b)
 
 /-- SHA-512 of the setup's public outputs as canonical JSON, the bytes they decoded from. -/
@@ -245,12 +241,14 @@ def acceptsCited (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray)
   cite pt pub s
   Run.checkAt schemes pt trusted pub digests r sid
 
-/-- The verifier's whole decision on a case, in the setup's form: `accepts` on its own inputs, `acceptsCited` on a
-citation. -/
+/-- The verifier's whole decision on a case, given its setup exactly once: `accepts` on the setup's own inputs in the
+evidence, `acceptsCited` on the params' citation. -/
 def decision (schemes : Schemes) (p : Params) (pub : SetupProtocol.Public) (e : Evidence) : Except String Unit :=
-  match e.setup with
-  | .inline s => accepts schemes p.point p.trusted.toList s.commitment s.store pub e.digests e.session p.sessionId
-  | .cited s => acceptsCited schemes p.point p.trusted.toList s pub e.digests e.session p.sessionId
+  match p.setup, e.setup with
+  | none, some s => accepts schemes p.point p.trusted.toList s.commitment s.store pub e.digests e.session p.sessionId
+  | some s, none => acceptsCited schemes p.point p.trusted.toList s pub e.digests e.session p.sessionId
+  | some _, some _ => throw "the setup is both cited in the params and carried in the evidence"
+  | none, none => throw "no setup: the params cite none and the evidence carries none"
 
 def check (schemes : Schemes) (p : Params) (pub : SetupProtocol.Public) (e : Evidence) :
     Core.Outcome Public Run.Point :=
@@ -401,8 +399,9 @@ private def TIE_REF : SetupRef := ⟨setupAnswer SetupProtocol.COMMITMENT, TIE_P
   .error "the cited setup was checked at other parameters than the run's"
 #guard cite TIE_POINT TIE_PUB { TIE_REF with record := "" } matches
   .error "the citation names no record of the setup check"
-#guard (SetupCase.ofJson (SetupRef.toJson TIE_REF)) matches .ok (.cited _)
-#guard (SetupCase.ofJson (SetupEvidence.toJson ⟨TIE_C, TIE_STORE⟩)) matches .ok (.inline _)
+#guard ((decodeParams (Params.toJson ⟨TIE_POINT, Sha512.hash .empty, #[], some TIE_REF⟩)).toOption.bind (·.setup)).isSome
+#guard ((decodeParams (Params.toJson ⟨TIE_POINT, Sha512.hash .empty, #[], none⟩)).toOption.map (·.setup.isNone)) ==
+  some true
 
 #guard (certify Run.DEPLOYED).sBits == 2 ^ 19 * 16448 * 18 / 19
 #guard (certify Run.DEPLOYED).eps.toString == s!"{2 ^ 126 + 25}/{25 * 2 ^ 128}"

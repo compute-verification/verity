@@ -13,9 +13,9 @@ is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and
    answers (`prover`, by default the honest one that holds `C*`), signed under `signer`;
 5. the verifier judges the run, setup's acceptance of `C*` publishing exactly the run's commitment (`tie`) and then
    `run.check_at`, and answers in the core interface's canonical form (`answer`); the case carries setup's own inputs,
-   or, for a store too large to decode every period, a citation of the setup check's recorded acceptance (`citation`,
-   of `setup_answer`), which the verifier checks published exactly the run's commitment (`cite`) instead of decoding
-   `C*` again.
+   or, for a store too large to decode every period, the verifier's citation of its setup check's recorded acceptance
+   in the case's params (`citation`, of `setup_answer`), which the verifier checks published exactly the run's
+   commitment (`cite`) instead of decoding `C*` again.
 
 What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
@@ -136,13 +136,17 @@ def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published:
          session: R.Session, setup_of: Mapping[str, Any] | None = None, *,
          cited: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
-    evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case, or `cited`, a
-    citation of the setup check's recorded acceptance (`citation`); exactly one of the two."""
+    evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case, or its params
+    carry `cited`, the verifier's citation of its setup check's recorded acceptance (`citation`); exactly one of the
+    two. The citation is the verifier's, as its list of keys is: never the prover's."""
     if (setup_of is None) == (cited is None):
         raise TypeError("a run's case carries the setup's case or a citation of its acceptance, exactly one")
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
-    s = dict(cited) if setup_of is None else {"commitment": setup_of["commitment"], "evidence": setup_of["evidence"]}
-    evidence = {"digests": digests.hex(), "session": session.to_json(), "setup": s}
+    evidence: dict[str, Any] = {"digests": digests.hex(), "session": session.to_json()}
+    if cited is not None:
+        params["setup"] = dict(cited)
+    else:
+        evidence["setup"] = {"commitment": setup_of["commitment"], "evidence": setup_of["evidence"]}
     return {"commitment": canonical_json_bytes(published.to_json()).hex(),
             "evidence": canonical_json_bytes(evidence).hex(), "params": params}
 
@@ -155,8 +159,9 @@ def setup_answer(published: R.Setup) -> dict[str, Any]:
 
 
 def citation(answer: Mapping[str, Any], q: P2.P2Params, record: str) -> dict[str, Any]:
-    """A run case's citation of the setup check's recorded answer (`PousCheck.RunProtocol.SetupRef`): `answer`, the
-    parameters `q` it checked at, and `record`, where the check's record is (a run or `art:` id)."""
+    """The verifier's citation of its setup check's recorded answer, for a run case's params
+    (`PousCheck.RunProtocol.SetupRef`): `answer`, the parameters `q` it checked at, and `record`, where the check's record
+    is (a run or `art:` id)."""
     return {"answer": dict(answer), "params": q.manifest(), "record": record}
 
 
@@ -359,8 +364,9 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
           party: challenger_party.Party | None = None, cited: Mapping[str, Any] | None = None) -> Period:
     """One period's audit of the store `held` on `node` (module docstring, steps 4 and 5): the memory challenger's session
     under the id the auditor designates from `coins` and the setup's root, then the run's check and answer, the tie on
-    the setup case `held` keeps, which the run's case carries; with `cited`, a citation of the setup check's recorded
-    acceptance (`citation`), the case carries it instead and the check reads no block of `C*` (`cite`). With `party`,
+    the setup case `held` keeps, which the run's case carries; with `cited`, the verifier's citation of its setup
+    check's recorded acceptance (`citation`), the case's params carry it instead and the check reads no block of `C*`
+    (`cite`). With `party`,
     the memory challenger is a party of its own (`challenger_party`): its side runs where `party` starts it, with its
     own coins, key and session log, and the prover
     answers it over a socket; `signer`, `log` and `clock` are unused, and the verifier's list is by default the key the

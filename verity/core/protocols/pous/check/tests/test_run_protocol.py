@@ -1,20 +1,21 @@
 """`pous-run-protocol serve` (`PousCheck.RunProtocol`, onsite Verity's PoUS component) against the Python verifier of the
-same case (`answer_of`: the case decoded as the Lean decodes it, then `pous.period`'s `tie` or, when the case cites the
-setup check's recorded acceptance, `cite`, and `run.check_at`, and its `certify` and `profile`): every field of the
-answer but its reason, the certified `s_bits`, `eps` and the profile's gaps among them.
+same case (`answer_of`: the case decoded as the Lean decodes it, then `pous.period`'s `tie` or, when the case's params
+cite the setup check's recorded acceptance, `cite`, and `run.check_at`, and its `certify` and `profile`): every field of
+the answer but its reason, the certified `s_bits`, `eps` and the profile's gaps among them.
 
 Under `--test` (`testProtocol`, the test signers' schemes alone) the cases are `test_run`'s drawn runs over honest setups,
 honest and under one edit of the run, of its session or of its JSON, each as the protocol's case with its setup's own
-commitment and evidence and with a citation of the setup protocol's answer on them (`cited_case_of`), those under one
-edit of the case's framing, those under one edit of the setup's evidence (another setup's, a bit of its commitment, salt
-or `C*` off, `C*` cut short, the setup missing), and those under one edit of the citation (`CITE_EDITS`). Under the
-deployed
-protocol (S1's LMS alone) they are a small period of `pous.period.run`, signed by a key at S1's deployed parameters
-(`mc_cases.deployed_signer`), honest and under a prover that answers every other round with zeros; each protocol refuses
-the other's signer; and the same two at the certified point (`period.certified_point`) on a store set up there, where
-the honest one certifies its store (slow: a 256-block encode). The period's setup case is the setup protocol's
-(`pous-setup`), which accepts it; the period's case with another store's setup (a run committed to a different setup) is
-refused, for the tie's reason."""
+commitment and evidence and with its params citing the setup protocol's answer on them instead (`cited_case_of`), those
+under one edit of the case's framing, those under one edit of the setup's evidence (another setup's, a bit of its
+commitment, salt or `C*` off, `C*` cut short, the setup missing), those under one edit of the citation (`CITE_EDITS`),
+and those with the setup given twice. Under the deployed protocol (S1's LMS alone) they are a small period of
+`pous.period.run`, signed by a key at S1's deployed parameters (`mc_cases.deployed_signer`), honest and under a prover
+that answers every other round with zeros; each protocol refuses the other's signer; and the same two at the certified
+point (`period.certified_point`) on a store set up there, where the honest one certifies its store (slow: a 256-block
+encode). The period's setup case is the setup protocol's (`pous-setup`), which accepts it; the period's case with
+another store's setup (a run committed to a different setup) is refused, for the tie's reason. The same period with its
+params citing `pous-setup`'s answer is answered as the period carrying the setup, and citations of a setup that
+refused, of another setup and of the rest of `cite`'s refusals are refused, each for its reason."""
 
 from __future__ import annotations
 
@@ -56,17 +57,6 @@ def _canonical(j, holds: dict) -> None:
         raise D.Reject("not the canonical JSON of what it holds (a field extra, or a constant not the protocol's)")
 
 
-def _params(j) -> tuple:
-    pt = _point_of(M._get(j, "point"))
-    sid, trusted = M.hex_(j, "session_id"), tuple(M.hexes(j, "trusted"))
-    _canonical(j, {"point": period.point_json(pt), "session_id": sid.hex(), "trusted": [t.hex() for t in trusted]})
-    return pt, sid, trusted
-
-
-def _setup(b: bytes):
-    return M._exactly(_decode_setup, P.canonical_json(b))
-
-
 ANSWER_KEYS = ("commitment", "profile", "protocol", "public", "reason", "verdict")
 
 
@@ -97,27 +87,45 @@ def _setup_ref(s) -> dict:
     return {"answer": _answer(M._get(s, "answer")), "params": s["params"], "record": M._str(s, "record")}
 
 
+def _params(j) -> tuple:
+    """The params as `decodeParams` reads them, the verifier's citation of its setup check (`setup`) when they have one."""
+    pt = _point_of(M._get(j, "point"))
+    sid, trusted = M.hex_(j, "session_id"), tuple(M.hexes(j, "trusted"))
+    ref = _setup_ref(j["setup"]) if "setup" in j else None
+    _canonical(j, {"point": period.point_json(pt), "session_id": sid.hex(), "trusted": [t.hex() for t in trusted]}
+               | ({} if ref is None else {"setup": ref}))
+    return pt, sid, trusted, ref
+
+
+def _setup(b: bytes):
+    return M._exactly(_decode_setup, P.canonical_json(b))
+
+
 def _evidence(b: bytes) -> tuple:
-    """The evidence as `decodeEvidence` reads it: the setup cited when it has an `answer` (`SetupCase.ofJson`), else the
-    setup's own commitment and evidence; as `period.answer`'s keyword for that form."""
+    """The evidence as `decodeEvidence` reads it, the setup's own commitment and evidence when it has them."""
     j = P.canonical_json(b)
-    digests, session, s = M.hex_(j, "digests"), _decode_session(M._get(j, "session")), M._get(j, "setup")
-    if isinstance(s, dict) and "answer" in s:
-        ref = _setup_ref(s)
-        _canonical(j, {"digests": digests.hex(), "session": session.to_json(), "setup": ref})
-        return digests, session, {"cited": ref}
+    digests, session = M.hex_(j, "digests"), _decode_session(M._get(j, "session"))
+    if not (isinstance(j, dict) and "setup" in j):
+        _canonical(j, {"digests": digests.hex(), "session": session.to_json()})
+        return digests, session, None
+    s = j["setup"]
     commitment, salt = _setup_commitment(M.hex_(s, "commitment"))
     store = _setup_evidence(M.hex_(s, "evidence"))
     _canonical(j, {"digests": digests.hex(), "session": session.to_json(),
                    "setup": {"commitment": (commitment + salt).hex(), "evidence": _evidence_bytes(store).hex()}})
-    return digests, session, {"setup_inputs": (commitment, salt, store)}
+    return digests, session, (commitment, salt, store)
 
 
 def answer_of(protocol: str, schemes: dict):
-    """`PousCheck.RunProtocol.mkProtocol protocol schemes`'s answer in Python."""
+    """`PousCheck.RunProtocol.mkProtocol protocol schemes`'s answer in Python: `decision`'s setup exactly once, cited in
+    the params or carried in the evidence, then `period.answer` on that form."""
     def check(p, setup, e) -> tuple:
-        (point, sid, trusted), (digests, session, form) = p, e
-        a = period.answer(point, schemes, trusted, setup, digests, session, sid, protocol, **form)
+        (point, sid, trusted, ref), (digests, session, inputs) = p, e
+        if ref is not None and inputs is not None:
+            return "reject", "the setup is both cited in the params and carried in the evidence"
+        if ref is None and inputs is None:
+            return "reject", "no setup: the params cite none and the evidence carries none"
+        a = period.answer(point, schemes, trusted, setup, digests, session, sid, protocol, setup_inputs=inputs, cited=ref)
         return (a["verdict"], a["public"], a["profile"]) if a["verdict"] == "accept" else (a["verdict"], a["reason"])
 
     def answer(case) -> dict:
@@ -145,16 +153,17 @@ RECORD = "art:pous-setup-record"
 
 
 def cited_case_of(doc, edit=None, x: int = 0) -> dict:
-    """`case_of` with the setup cited instead of carried: the setup protocol's answer on the run's setup case
-    (`setup_protocol`, the Python of `pous-setup`), at that case's parameters, under `RECORD`; with `edit`, that
-    citation under `edit(citation, setup case, x)`. A run with no setup case has nothing to cite."""
+    """`case_of` with the setup cited in the params instead of carried in the evidence: the setup protocol's answer on
+    the run's setup case (`setup_protocol`, the Python of `pous-setup`), at that case's parameters, under `RECORD`; with
+    `edit`, that citation under `edit(citation, setup case, x)`. A run with no setup case has nothing to cite."""
     c, d = case_of(doc), doc if isinstance(doc, dict) else {}
     of = d.get("setup_of") if isinstance(d.get("setup_of"), dict) else None
     if of is None:
         return c
     ref = {"answer": setup_protocol(of), "params": of.get("params"), "record": RECORD}
-    ev = _json(c["evidence"]) | {"setup": ref if edit is None else edit(ref, of, x)}
-    return c | {"evidence": D.canonical(ev).encode().hex()}
+    ev = {k: v for k, v in _json(c["evidence"]).items() if k != "setup"}
+    return c | {"evidence": D.canonical(ev).encode().hex(),
+                "params": c["params"] | {"setup": ref if edit is None else edit(ref, of, x)}}
 
 
 def _json(h: str):
@@ -253,6 +262,11 @@ CITE_EDITS = [
     lambda ref, of, x: ref | {"extra": x},
     lambda ref, of, x: {k: v for k, v in ref.items() if k != "params"},
 ]
+
+
+def given_twice(doc) -> dict:
+    """`cited_case_of`'s case with the setup's own inputs in its evidence too: the setup given twice."""
+    return cited_case_of(doc) | {"evidence": case_of(doc)["evidence"]}
 #: Honest setups `(q, W, salt, C*)` at the reduced widths, whose encodings the setup protocol accepts.
 SETUPS = st.sampled_from(WIDTHS).flatmap(lambda wc: st.builds(honest, st.just(wc[0]), st.just(wc[1]), st.integers(1, 3),
                                                               st.integers(1, 2), st.integers(0, 3)))
@@ -385,9 +399,10 @@ def _deployed_audit(held: period.Store, prover=period.honest, **kw) -> period.Pe
 
 def test_a_cited_setup_is_answered_as_its_inputs(deployed_server, setup_server) -> None:
     """The reference form, under the deployed protocol: `pous-setup`'s answer on a small store's setup case is
-    `period.setup_answer`'s, and the period audited with its case citing that answer (`period.audit(cited=...)`, no
-    block of `C*` in the case) is answered by the Lean and the Python as the period whose case carries the setup's own
-    inputs: accepted for the honest prover, refused for the one that answers every other block with zeros."""
+    `period.setup_answer`'s, and the period audited with its case's params citing that answer
+    (`period.audit(cited=...)`, no block of `C*` in the case) is answered by the Lean and the Python as the period whose
+    case carries the setup's own inputs: accepted for the honest prover, refused for the one that answers every other
+    block with zeros."""
     held = period.setup_store(STORE, COINS)
     recorded = json.loads(D.replay(setup_port(), held.setup_case, setup_server)[1])
     assert recorded == period.setup_answer(held.published), recorded
@@ -395,7 +410,7 @@ def test_a_cited_setup_is_answered_as_its_inputs(deployed_server, setup_server) 
     verdicts = {}
     for name, prover in (("honest", period.honest), ("zeros", _zeros_on_odd_rounds)):
         inline, cited = _deployed_audit(held, prover), _deployed_audit(held, prover, cited=ref)
-        assert _json(cited.case["evidence"])["setup"] == ref
+        assert cited.case["params"]["setup"] == ref and "setup" not in _json(cited.case["evidence"])
         lean = json.loads(D.replay(DEPLOYED, cited.case, deployed_server)[1])
         assert _part(lean) == _part(DEPLOYED.reference(cited.case)) == _part(cited.answer) == _part(inline.answer), name
         verdicts[name] = lean["verdict"]
@@ -403,11 +418,12 @@ def test_a_cited_setup_is_answered_as_its_inputs(deployed_server, setup_server) 
 
 
 def test_a_citation_of_a_setup_that_did_not_accept_is_refused(deployed_server, setup_server) -> None:
-    """The citation's refusals, under the deployed protocol, on the honest small period whose case cites its setup's
+    """The citation's refusals, under the deployed protocol, on the honest small period whose params cite its setup's
     acceptance: citing instead `pous-setup`'s answer on that setup case with one bit of `C*` off, which refused it, is
     refused with the setup's reason; citing another store's accepted setup, because the run's commitment is not what it
     published; a citation at other parameters, of the run protocol's answer, or naming no record, each for its own
-    reason. The Lean and the Python agree on each, reason and all."""
+    reason; the setup given twice, cited and carried, for that. The Lean and the Python agree on each, reason and all.
+    And the citation in the evidence, where the prover would supply it, is not read as one: that case is refused."""
     held, other = period.setup_store(STORE, COINS), period.setup_store(OTHER_STORE, COINS)
     q, accepted = held.point.params, period.setup_answer(held.published)
     _, _, store = period.setup_inputs(held.setup_case)
@@ -415,14 +431,16 @@ def test_a_citation_of_a_setup_that_did_not_accept_is_refused(deployed_server, s
         [[M._flip(b, 3) if (s, j) == (0, 0) else b for j, b in enumerate(seg)] for s, seg in enumerate(store)]).hex()}
     refused = json.loads(D.replay(setup_port(), flipped, setup_server)[1])
     assert refused["verdict"] == "reject" and _part(refused) == _part(setup_protocol(flipped)), refused
-    p = _deployed_audit(held, cited=period.citation(accepted, q, RECORD))
+    ref = period.citation(accepted, q, RECORD)
+    p = _deployed_audit(held, cited=ref)
     assert p.verdict == "accept", p.answer
     ev = _json(p.case["evidence"])
 
     def citing(answer: dict, at: P2.P2Params = q, record: str = RECORD) -> dict:
-        return p.case | {"evidence": D.canonical(ev | {"setup": period.citation(answer, at, record)}).encode().hex()}
+        return p.case | {"params": p.case["params"] | {"setup": period.citation(answer, at, record)}}
 
     tie = "the run's commitment is not what its setup published"
+    carried = {"commitment": held.setup_case["commitment"], "evidence": held.setup_case["evidence"]}
     cases = {
         "refused": (citing(refused), f"the cited setup did not accept: {refused['reason']}"),
         "other-setup": (citing(period.setup_answer(other.published)), tie),
@@ -431,25 +449,34 @@ def test_a_citation_of_a_setup_that_did_not_accept_is_refused(deployed_server, s
         "other-protocol": (citing(accepted | {"protocol": period.PROTOCOL}),
                            f"the cited answer is {period.PROTOCOL}'s, not the setup check's"),
         "no-record": (citing(accepted, record=""), "the citation names no record of the setup check"),
+        "given-twice": (p.case | {"evidence": D.canonical(ev | {"setup": carried}).encode().hex()},
+                        "the setup is both cited in the params and carried in the evidence"),
     }
     for name, (c, reason) in cases.items():
         python, lean = DEPLOYED.reference(c), json.loads(D.replay(DEPLOYED, c, deployed_server)[1])
         assert _part(lean) == _part(python), name
         assert lean["verdict"] == "reject" and lean["reason"] == python["reason"] == reason, (name, lean, python)
+    in_evidence = p.case | {"params": {k: v for k, v in p.case["params"].items() if k != "setup"},
+                            "evidence": D.canonical(ev | {"setup": ref}).encode().hex()}
+    python, lean = DEPLOYED.reference(in_evidence), json.loads(D.replay(DEPLOYED, in_evidence, deployed_server)[1])
+    assert _part(lean) == _part(python) and lean["verdict"] == "reject", (lean, python)
+    assert lean["reason"].startswith("evidence: "), lean
 
 
 @pytest.mark.slow
 def test_drawn_runs_agree(test_server) -> None:
     """`test_run`'s drawn runs over honest setups (`SETUPS`) as cases under `--test`, with the setup's own inputs and
     with the setup cited (`cited_case_of`), and under one edit of the case's framing, of its setup's commitment and
-    evidence, or of its citation (`CITE_EDITS`)."""
+    evidence, or of its citation (`CITE_EDITS`), or with the setup given twice (`given_twice`)."""
     rs = runs(stores=SETUPS)
     cases, cited = documents(rs).map(case_of), documents(rs).map(cited_case_of)
     framed = st.builds(lambda c, m: m(c), st.builds(case_of, documents(rs)), st.sampled_from(FRAMING))
     setup_edited = st.builds(lambda c, m, x: m(c, x), st.builds(case_of, st.builds(Run.doc, rs)),
                              st.sampled_from(SETUP_EDITS), st.integers(0, 2 ** 16))
     cite_edited = st.builds(cited_case_of, st.builds(Run.doc, rs), _any(CITE_EDITS), st.integers(0, 2 ** 16))
-    port = D.ProtocolPort(EXE, TEST.reference, st.one_of(cases, cases, cited, cited, framed, setup_edited, cite_edited),
+    twice = st.builds(given_twice, st.builds(Run.doc, rs))
+    port = D.ProtocolPort(EXE, TEST.reference,
+                          st.one_of(cases, cases, cited, cited, framed, setup_edited, cite_edited, cite_edited, twice),
                           package=LEAN, serve=("--test", "serve"))
     stats = D.run(port, examples=400, server=test_server)
     assert stats.counts.get("accept", 0) > 20 and stats.counts.get("reject", 0) > 100, stats

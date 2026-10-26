@@ -4,9 +4,11 @@ import Properties.Pous.EndToEnd
 /-!
 # A run that cites the setup check's recorded acceptance
 
-A run's case may cite the setup check's recorded acceptance (`PousCheck.RunProtocol.SetupRef`: the setup protocol's
-answer, the parameters it checked at, and where its record is) instead of carrying `C*` for the run's check to decode
-again: at Demo B's 130 GiB `C*` is decoded once, at setup. The run's check then reads no block of `C*`: the cited answer
+A run's params may cite the verifier's setup check's recorded acceptance (`PousCheck.RunProtocol.SetupRef`: the setup
+protocol's answer, the parameters it checked at, and where its record is) instead of the case carrying `C*` for the run's
+check to decode again: at Demo B's 130 GiB `C*` is decoded once, at setup. The citation is the verifier's, as its list of
+memory-challenger keys is, and the premise both statements take, the setup check's acceptance, is what its record
+holds; a prover never supplies it. The run's check then reads no block of `C*`: the cited answer
 must be the setup protocol's acceptance, at the run's parameters, publishing exactly the run's commitment (the server's
 commitment to `W`, the salt, the root and the block count: `RunProtocol.cite`), and the composed check (`Run.checkAt`)
 must accept the run against that commitment. Two statements say what that keeps:
