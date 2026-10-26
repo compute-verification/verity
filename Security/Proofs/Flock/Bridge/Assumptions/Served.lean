@@ -16,9 +16,9 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The deployed session's files parse.** There are a circuit file and a public file with the SHA-512 digests of the
-row/v1 session fixture `art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b` (at the verifier's coin schedule,
-`rounds_log` 9; `stage/circuit.txt`,
-56,327,749 bytes, and `stage/pub-32.bin`, 44,158 bytes) such that, under the tags `verify --zk --statement
+row/v1 session fixture `art:88544efa5af6f50ab24ad04a8e8d3118075e9f62898e41bbfb45ec3f3bc3d85b`, recorded at the
+verifier's coin schedule (`rounds_log` 9): `stage/circuit.txt`, 56,327,749 bytes, and `stage/pub-32.bin`, 44,158 bytes,
+such that, under the tags `verify --zk --statement
 verity/flock-circuit` sets one session up with (`Witness.zkTags`: `Tags.circuit`, one table, no session tables), the
 circuit file parses to a descriptor `D` (`Desc.parse`), `D` is in the hidden-output headlines' scope
 (`ProvedScope.scopeOkH`), and the public file loads at `D` (`HmOut.loadPublic`) with no shared-row tables.
