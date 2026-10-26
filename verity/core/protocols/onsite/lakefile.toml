@@ -1,6 +1,6 @@
 # Onsite Verity as one `Core.Protocol` (`verity/onsite/v0`): the composition of integrity (sampled proofs), work (PoUW),
 # space (PoUS's run check), bandwidth (the remote bandwidth session) and communication (the network certifier over the
-# period, `verity/certifier/v0`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
+# period, `verity/certifier/v0`), after NCI's registration check (`verity/nci/v1`). Its executable is the core CLI (`onsite id | check | serve`), which the difftest
 # drives. Code: no Mathlib.
 name = "core_onsite"
 defaultTargets = ["CoreOnsite", "onsite"]
@@ -35,6 +35,11 @@ path = "../pouw/lean/check"
 [[require]]
 name = "network_check"
 path = "../network/lean"
+
+# The registration check: NCI's check of record, on C-Flock's program decoder.
+[[require]]
+name = "nci_check"
+path = "../network/nci/lean"
 
 # Space: PoUS's check of a run, on the memory challenger's Lean.
 [[require]]
