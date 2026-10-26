@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.VStarHh
+import Proofs.Flock.Claims.Recursion.VStarDeployed
 
 /-!
 # Where the stager places the inner prover's rows (the port mapping)

@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.VStarPorts
+import Proofs.Flock.Claims.Recursion.VStarFit
 
 /-!
 # The deployed assigner fits the port inputs to the circuit (`fitPin`, `A0`)
@@ -81,5 +81,30 @@ theorem portWords_of {c : Circuit} {nm : String} {q : ℕ} (hq : c.ports.findIdx
   unfold portWords
   rw [Array.find?_eq_getElem?_findIdx?, hq]
   simp [Array.getElem?_eq_getElem hqs]
+
+/-- **`TraceOk.rows` at the fitted port inputs**, where each port's name gives its words (`portWords`): its rows are of
+the port's words, its salts 192 bytes. -/
+theorem rows_fitPin (c : Circuit) (pin : VStar.In.PartIn)
+    (hw : ∀ q (hq : q < c.ports.size), portWords c c.ports[q].name = c.ports[q].words) :
+    ∀ q (hq : q < c.ports.size) n r, portRow (fitPin c pin) c.ports[q].name n = some r →
+      r.words.size = c.ports[q].words ∧ r.salt.size = HmRow.SALT_BYTES := by
+  intro q hq n r h
+  rw [portRow_fitPin] at h
+  obtain ⟨r0, -, rfl⟩ := Option.map_eq_some_iff.1 h
+  exact ⟨by simp [fitPortRow, fitRow_size, hw q hq], fitSalt_size _⟩
+
+/-- **`TraceOk.refs` at the fitted port inputs**: `fitPin` keeps every port's refs. -/
+theorem refs_fitPin {c : Circuit} {pin : VStar.In.PartIn}
+    (h : ∀ x ∈ pin.toList, x.2.refs.size = VStar.Trace.count pin) :
+    ∀ x ∈ (fitPin c pin).toList, x.2.refs.size = VStar.Trace.count (fitPin c pin) := by
+  have hc : VStar.Trace.count (fitPin c pin) = VStar.Trace.count pin := by
+    unfold VStar.Trace.count fitPin
+    rw [Array.getElem?_map]
+    cases pin[0]? <;> rfl
+  intro x hx
+  rw [hc]
+  simp only [fitPin, Array.toList_map, List.mem_map] at hx
+  obtain ⟨e, he, rfl⟩ := hx
+  exact h e he
 
 end RecDeploy.VStarBuild
