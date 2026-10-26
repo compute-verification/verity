@@ -89,8 +89,9 @@ The data, each kind of thing a file or a line of its own:
   capacities and clocks, each with its vendor document and page first, then the census or run that measured it, or the
   run that would (`gap`); the exact paths (b1, INT4, FP4) with their ISA reference; the FP8 atoms' semantics; the
   units that write registers, which B_RF's LP reads; a verdict for every unit RT-UNITS lists (`[[unit]]`); the
-  public SHA-512 figures our compressions are read against (`[[public]]`); and a compression's instruction mix
-  (`[sha512_mix]`), which SHA-512's ceiling on the card's pipes reads.
+  public SHA-512 figures our compressions are read against (`[[public]]`); our kernel's SASS a compression
+  (`[sha512_mix]`), which SHA-512's ceiling on the card's pipes reads; and the host the card sits in on the node we
+  run (`host.*`: cores a GPU, SHA-512 and AMX INT8 a core, DRAM a socket).
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:

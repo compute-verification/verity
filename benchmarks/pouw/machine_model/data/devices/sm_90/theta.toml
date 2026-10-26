@@ -816,6 +816,44 @@ grade = "data sheet"
 source = "DS 'PCIe Gen5: 128GB/s' (both directions, 64 each way); PCIe 5.0's 32 GT/s a lane, 128b/130b, on 16 lanes: 63.0 GB/s each way"
 gap = "a pinned device-to-host cudaMemcpy bandwidth test on an H200 (GPU queue)"
 
+# The host the card sits in (P9): a Xeon Platinum 8468 VM with 8 cores a GPU on the node we run. The prover chooses
+# its host, so these rates describe our node, not a bound on every host.
+
+[[rate]]
+key = "host.sha512"
+what = "SHA-512 compressions a second on one host core (AVX-512, eight blocks across a 512-bit register's 64-bit lanes)"
+unit = "compressions/s a core"
+sheet = 2.9344e7
+grade = "count (an upper bound: 2,072 512-bit operations per 8 blocks on two vector ports at the max turbo)"
+source = "Xeon Platinum 8468 (Intel ARK: 48 cores, max turbo 3.80 GHz, all-core 3.1 GHz); Intel: two 512-bit FMA units a core, the two ports 512-bit integer operations issue to; a block in VPROLQ, VPSRLQ, VPTERNLOGQ and VPADDQ: 80 rounds of 17 (Σ0 and Σ1 three rotates and a ternlog each, Ch and Maj a ternlog each, 7 adds), 64 schedule words of 11, 8 feed-forward adds = 2,072; 3.8e9 · 8 / (2,072 / 2) = 2.934e7"
+gap = "isa-l_crypto's multi-buffer sha512_mb on the node's host (CPU only, but on the GPU node: the H200 census batch, rule G)"
+
+[[rate]]
+key = "host.int8"
+what = "AMX INT8 MACs a second on one host core (TDPBSSD: s8 × s8 into s32, exact)"
+unit = "MACs/s a core"
+sheet = 3.8912e12
+grade = "Intel brief"
+source = "Intel, 'Accelerate AI Workloads with Intel AMX' (cdrdv2-public.intel.com/785250): 4th Gen Xeon 'running Intel AMX can perform 2,048 INT8 operations per cycle', 1,024 MACs a cycle a core; at the 8468's max turbo 3.80 GHz (Intel ARK)"
+gap = "an AMX TDPBSSD loop on the node's host (CPU only; the H200 census batch, rule G)"
+
+[[rate]]
+key = "host.dram"
+what = "host DRAM bandwidth, one socket"
+unit = "B/s"
+sheet = 307.2e9
+grade = "Intel ARK"
+source = "Xeon Platinum 8468 (Intel ARK): 8 memory channels, DDR5-4800 at one DIMM a channel: 8 · 4800e6 · 8 B"
+gap = "a STREAM triad on the node's host (CPU only; the H200 census batch, rule G)"
+
+[[capacity]]
+key = "host.cores"
+what = "host cores a GPU on the node we run"
+value = 8
+unit = "cores/GPU"
+grade = "measured (the VM's CPU count)"
+source = "vy-dc-h200-2: a Xeon 8468 VM, 8 cores / 16 threads, one H200 (r20261026-000854-1494, note:memory-accounting/20261025T2333Z-report-pous-remote-fb)"
+
 [[unit]]
 key = "tensor"
 what = "tensor cores, every format and shape the H200 has (INT8, FP8, FP16/BF16, TF32, FP64, b1; 2:4 sparse INT8 and FP8)"
@@ -959,11 +997,11 @@ why = "moves bytes and adds nothing; it bounds what host.cpu can take off the ca
 key = "host.cpu"
 what = "the host's CPUs (or any machine behind the NICs), hashing words the card sends them (NF4)"
 verdict = "open"
-rates = ["host.link", "sha512"]
-bound = 0.00191307
+rates = ["host.link", "sha512", "host.sha512", "host.int8", "host.dram"]
+bound = 0.00382614
 against = "sha512"
-why = "the host computes every compression of data it holds, so what bounds it is the words' bytes, not compressions: host.link's 64e9 B/s carry 0.5e9 · κ compressions' worth of words a second, which at κ = 1 is 0.5e9 / (132 SMs · 1,980 MHz, sha512's measured clock) = 0.00191307 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to the hashing's own share of device time. NVLink peers are cards the audit counts"
-gap = "κ, the receipt's compressions a 128 B of words: about 1 for a long run of words a leaf, 2 for a binary tree over 128-B leaves (PROTO-DESIGN's no-fold receipt fixes it); a pinned device-to-host copy test for host.link (GPU queue)"
+why = "the host computes every compression of data it holds, so for any host the words' bytes bound it: the no-fold receipt's v1 packs 32 four-byte words into a 1024-bit hiding leaf block under a binary tree, κ = 2 compressions a 128 B of words, so host.link's 64e9 B/s carry 1e9 compressions' worth a second, 1e9 / (132 SMs · 1,980 MHz, sha512's measured clock) = 0.00382614 a SM-clock; the share of device time it frees is that over the card's hashing rate whatever L is (the link runs through the tensor time too), up to hashing's own share. Our node binds first at its cores: 8 a GPU at host.sha512's 2.934e7 = 2.35e8 a second, 8.98e-4 a SM-clock, 4.90% of the measured sha512. Its AMX: 8 cores at host.int8 = 3.11e13 exact s8 MACs a second, 3.15% of the DS's 1,979 TOPS dense (9.89e14 MACs). NVLink peers are cards the audit counts"
+gap = "the prover chooses the host (P9), so a bound tighter than the link's needs the node's inventory from someone other than the prover, a claim for Daniel; κ of the receipt PROTO-DESIGN freezes (v2's 8-block leaves and 16-ary tree: about 1.1); sha512_mb, an AMX loop and a pinned device-to-host copy on the node (the H200 census batch, rule G)"
 
 # The built kernel's SASS a compression, for SHA-512's ceiling on the card's pipes (`sha_ceiling`): `alu` on the ALU
 # pipe, `imad` on the IMAD pipe, `other` elsewhere; `rotates` rotations or shifts (two SHF each) and `adds` 2-input

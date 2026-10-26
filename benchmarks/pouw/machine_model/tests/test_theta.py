@@ -84,11 +84,17 @@ def test_every_unit_has_a_verdict_and_the_bounded_ones_a_share():
         assert all(u.gap for u in t.units.values() if u.verdict == "open")
     rt = T.theta(SM120).units["rt"]
     assert rt.verdict == "open" and T.share(T.theta(SM120), rt, "sheet") == pytest.approx(386.2 / 1024)
-    for data, cps in ((SM90, 4.79e9), (SM120, 7.13e9)):
+    for data, cps, mhz, cpu, amx, int8 in ((SM90, 4.79e9, 1980, 0.0490, 0.0315, 1979e12),
+                                           (SM120, 7.13e9, 2092, 0.0507, 0.0951, 1007.6e12)):
         t = T.theta(data)
         host = t.units["host.cpu"]
         assert host.verdict == "open" and "κ" in host.gap
-        assert T.share(t, host, "measured") == pytest.approx(64e9 / 128 / cps, rel=2e-3)
+        assert T.share(t, host, "measured") == pytest.approx(2 * 64e9 / 128 / cps, rel=2e-3)
+        cores = t.capacities["host.cores"].value
+        node = cores * t.rates["host.sha512"].sheet / (t.sms * mhz * 1e6) / t.rates["sha512"].measured
+        assert node == pytest.approx(cpu, abs=5e-4) and f"{100 * cpu:.2f}%" in host.why
+        assert cores * t.rates["host.int8"].sheet / (int8 / 2) == pytest.approx(amx, abs=5e-4)
+        assert f"{100 * amx:.2f}%" in host.why
 
 
 def test_sha512_against_the_public_figures():
