@@ -59,6 +59,8 @@ import Proofs.Pouw.HiddenCredit
 import Proofs.Pouw.H1Zy
 import Proofs.Pouw.LiveCredit
 import Proofs.Pouw.M1
+import Proofs.Pouw.MerkleExtract
+import Proofs.Pouw.ShaRealize
 import Proofs.Pouw.Milestone
 import Proofs.Pouw.NCP
 import Proofs.Pouw.NCP.ChainProofs
