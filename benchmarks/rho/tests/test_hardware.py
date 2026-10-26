@@ -26,7 +26,7 @@ def test_a_location_is_its_census_devices_where_the_census_has_them(name, device
 @pytest.mark.parametrize("name", REG.names("fleet"))
 def test_every_fleet_is_on_a_location(name):
     f = hardware.fleet(REG, name)
-    assert hardware.location(REG, f.location).phi > 0 and f.count > 0 and 0 <= f.dark < 1
+    assert hardware.location(REG, f.location).phi > 0 and f.count > 0 and 0 <= f.eps_dark < 1
 
 
 @pytest.mark.parametrize(("name", "gpus"), [("reference-h100", 1e5), ("reference-h200", 1e5), ("reference-b200", 1e5),
@@ -49,10 +49,10 @@ def test_a_location_without_hosts_is_one_host_with_nothing_counted():
 
 
 def test_the_dark_pool_counts_at_its_own_mfu():
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).dark_effective == 0.01
-    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.4).dark_effective == pytest.approx(0.01)
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4).eps_dark_rate == 0.01
+    assert Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.4).eps_dark_rate == pytest.approx(0.01)
     fast = Fleet("f", "h200-hgx", 1, 0.01, 0.4, 0.4, 0.55)
-    assert fast.dark_effective > 0.01
+    assert fast.eps_dark_rate > 0.01
     # ρ at the effective share is the ratio of progress rates, each pool at its own MFU, the monitored one slowed to g
-    d, mt, md, g = fast.dark, fast.mfu_train, fast.mfu_dark, 0.3
-    assert rho(fast.dark_effective, g) == pytest.approx((d * md + (1 - d) * mt) / (d * md + (1 - d) * mt * g))
+    d, mt, md, g = fast.eps_dark, fast.mfu_train, fast.mfu_dark, 0.3
+    assert rho(fast.eps_dark_rate, g) == pytest.approx((d * md + (1 - d) * mt) / (d * md + (1 - d) * mt * g))

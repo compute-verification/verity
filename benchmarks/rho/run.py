@@ -77,19 +77,22 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
                 points: list[operating.Point], faulty: list[str]) -> list[str]:
     s = r.scenario
     c = s.context
-    setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (dark share {c.fleet.dark:g}), policy "
+    delta = s.regime.delta()
+    setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (ε_dark {c.fleet.eps_dark:g}), policy "
                f"{c.policy.name} (Γ = {c.policy.gamma:.3g} FLOP, k = {c.policy.k:.3g} bit), {c.horizon.name}; target "
                f"{s.run.name} ({s.run.target(s.model):.3g} FLOP, {when(s, 1.0)} unencumbered).")
     out = [f"## {s.name}", "", setting, "",
-           f"**ρ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target.", "",
+           f"**ρ̄ ∈ [{fmt(r.lo)}, {fmt(r.hi)}]**: {when(s, r.lo)} to {when(s, r.hi)} to the target; the lower end holds "
+           f"except with probability δ_coin = {fmt(delta['coin'])} (the coins' draws) plus δ_crypto = "
+           f"{fmt(delta['crypto'])} (binding and knowledge soundness), under the hardware model and the inventory.", "",
            "ρ's lower end from only the bounds and cuts at least as strong as: "
            + ", ".join(f"{st} {fmt(v)}" for st, v in by_status.items()) + ".", "",
-           "What sets ρ (each part's share of the adversary's rate `d + (1 − d) g`, and the most ρ can be while it "
-           "remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
+           "What sets ρ̄ (each part's share of the adversary's rate `ε_dark + (1 − ε_dark) g`, and the most ρ̄ can be "
+           "while it remains): " + ", ".join(f"{t.name} {t.share:.1%} (≤ {fmt(t.ceiling)})" for t in terms) + ".", "",
            f"The adversary does {monitored(r):.1%} of its training on monitored compute.", ""]
     out += operating_md(points) + faulty
     for f in r.families:
-        out += [f"### {f.family} (m = {fmt(f.profile.efficiency)})", "",
+        out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", "",
                 "| argument | side | status | premises | ρ | g | ρ in one declared block | binding cut |",
                 "|---|---|---|---|---|---|---|---|"]
         for e in f.bounds + (f.combined,) + f.attacks:
@@ -189,7 +192,8 @@ def main() -> None:
                        f"{monitored(r):.1%} | " + (f"{terms[0].name} {terms[0].share:.0%}" if terms else "")
                        + f" | {fmt(corner.rho)} |")
         record["scenarios"][name] = {
-            "lo": r.lo, "hi": r.hi, "years_lo": r.scenario.years(r.lo), "lo_by_status": by_status,
+            "lo": r.lo, "hi": r.hi, "delta": r.scenario.regime.delta(), "years_lo": r.scenario.years(r.lo),
+            "lo_by_status": by_status,
             "attribution": [vars(t) for t in terms], "monitored": monitored(r),
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
             "faulty_outputs": {"capacity_bits": fo.capacity, "detect": dict(fo.detect)},

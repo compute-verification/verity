@@ -70,7 +70,7 @@ def test_the_wrapper_gives_episodes_the_forward_cut_and_leaves_nci_blocks_withou
     s, inner = reference()
     (r0,), (r,) = inner.regions, pofc.wrap(s.regime, RULES, s.model).partition(s.context).regions
     cuts = {c.name: c for c in r.cuts}
-    assert set(cuts) == {"declared", "physical", "declared+pofc"}
+    assert set(cuts) == {"declared", "serving", "declared+pofc"}
     assert r.cuts[:2] == r0.cuts and all(math.isinf(b.budget.cut) for c in r0.cuts for b in c.blocks)
     (ep,), (decl,) = cuts["declared+pofc"].blocks, cuts["declared"].blocks
     assert ep.kind == "episode" and ep.budget.cut == RULES.n_max * s.model.d_model * RULES.act_bits
@@ -96,9 +96,9 @@ def test_the_physical_instantiation_gives_the_window_the_links_bits():
     bw = pofc.link(REG, s.context.location.name)
     r = pofc.wrap(s.regime, RULES, s.model, bw).partition(s.context).regions[0]
     cuts = {c.name: c for c in r.cuts}
-    (phys,) = cuts["physical+pofc"].blocks
-    assert math.isclose(phys.budget.cut, bw * s.regime.wipe_s) and pofc.PHYSICAL in cuts["physical+pofc"].cites
-    assert all(math.isinf(b.budget.cut) for b in cuts["physical"].blocks)
+    (phys,) = cuts["serving+pofc"].blocks
+    assert math.isclose(phys.budget.cut, bw * s.regime.wipe_s) and pofc.PHYSICAL in cuts["serving+pofc"].cites
+    assert all(math.isinf(b.budget.cut) for b in cuts["serving"].blocks)
     assert math.isinf({b.kind: b.budget for b in r.layout.blocks}["uncertified"].cut)
     # the window's link carries many episodes' cuts: a matched link is three orders slower than NVLink's forward half
     assert 1e3 < bw / pofc.matched_link(RULES, s.model, s.context) < 1e4

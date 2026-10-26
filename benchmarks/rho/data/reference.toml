@@ -34,14 +34,14 @@ k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruling: Da
 [fleet.world-h200]
 location = "h200-hgx"
 count = { value = 4.42e7, unit = "location", source = "8.82e30 / (1.583e16 x 3.1536e7 x 0.4); top's 1.8e7 is at 100% use", status = "derived" }
-dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
+eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
 [fleet.world-nvl72]
 location = "gb200-nvl72"
 count = { value = 1.94e6, unit = "location", source = "8.82e30 / (3.6e17 x 3.1536e7 x 0.4); top's 7.8e5 is at 100% use", status = "derived" }
-dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
+eps_dark = { value = 0.01, low = 0.001, high = 0.05, source = "ruling: Daniel 25 Oct, one connected unencumbered pool, operating points 0.1% and 1%", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 

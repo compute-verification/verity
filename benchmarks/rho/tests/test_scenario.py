@@ -56,5 +56,5 @@ def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
 
 def test_a_scenario_reads_its_own_tables_and_not_the_others():
     keys = reads(REG, "reference-onsite-h200")
-    assert "fleet.world-h200.dark" in keys and "regime.onsite.residual_bits" in keys
+    assert "fleet.world-h200.eps_dark" in keys and "regime.onsite.residual_bits" in keys
     assert not any(k.startswith(("fleet.world-nvl72.", "model.kimi-k2.")) for k in keys)

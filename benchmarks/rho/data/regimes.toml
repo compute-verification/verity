@@ -15,6 +15,8 @@ clock_share = { value = 0.064, low = 0, high = 0.3, source = "benchmarks/nci/tie
 host = { value = 1, low = 0, high = 1, source = "benchmarks/nci/tiers.py audited_residual: the host CPUs count at their INT8 datasheet peak until something credits or bounds them; low: credited or bounded", status = "assumed" }
 eps_w = { value = 0.00744, low = 6e-4, high = 0.00917, source = "benchmarks/nci/tiers.py DEFAULTS eps_w (CircuitCredit, draft #2638); low: best plausible design (C7 dossier); high: CircuitCredit at r = 4 (exposure.RANGES)", status = "derived" }
 eps_agg = { value = 1e-4, low = 1e-6, high = 1e-3, source = "benchmarks/nci/tiers.py DEFAULTS eps_agg: per-window failure 3 x 2^-40 at the theorem's delta 2.7e-8 (Markov over the windows)", status = "derived" }
+window_delta_coin = { value = 9.09e-13, source = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks = 3 x 2^-40 (eps_agg's source): delta_s = 2^-40, the coins' draw", status = "derived" }
+window_delta_crypto = { value = 1.82e-12, source = "CircuitCredit's per-window failure: delta_bind + delta_ks = 2 x 2^-40, commitment binding (SHA-512) and the proof system's knowledge soundness", status = "derived" }
 identities = { value = 1, unit = "identity", low = 1, high = 1000, source = "benchmarks/nci/tiers.py DEFAULTS identities: detection is terminal (J = 1); high: identities a detection doesn't end", status = "assumed" }
 lag_s = { value = 3600, unit = "s", low = 60, high = 86400, source = "benchmarks/nci/tiers.py DEFAULTS lag_s: a window plus the verdict delay", status = "assumed" }
 

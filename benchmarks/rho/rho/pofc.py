@@ -397,9 +397,12 @@ class Pofc:
     def _touches(self, c: Cut) -> bool:
         return any(b.kind == "declared" or self.link is not None for b in c.blocks)
 
+    def delta(self) -> dict[str, float]:
+        return self.regime.delta()
+
     def partition(self, ctx: Context) -> Partition:
         inner = self.regime.partition(ctx)
-        # the blocks a link cuts carry peak compute (the physical block is Φ Δτ), so their time is compute over Φ
+        # the blocks a link cuts carry peak compute (the serving block is Φ Δτ), so their time is compute over Φ
         rate = ctx.location.phi
         regions = tuple(
             replace(r, cuts=r.cuts + tuple(self._under(c, f"{c.name}+pofc", rate, self.link)

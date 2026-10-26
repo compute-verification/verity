@@ -8,14 +8,16 @@ location over one window), and a **cut** of it is one way of covering it with bl
 constrains and which count at face value. Every cut is an upper bound, so under a bound a region contributes the least
 of its cuts, and never more than its own compute. An attack is a construction, so it is evaluated on the region's
 *layout* instead: the blocks and free FLOPs a strategy that obeys every protocol actually gets there (no layout: the
-region is unconstrained). The adversary's dark share `d` runs unencumbered:
+region is unconstrained). The dark pool's share `ε_dark` of the adversary's training rate runs unencumbered:
 
     g = Σ_R n_R · min(κ C_R / 2, min_cuts Σ_B n_B · min(a(B), κ C_B / 2) + κ · free / 2) / Σ_R n_R · κ C_R / 2
 
 (an attack's `g` takes the layout in place of the least cut)
-    ρ = m / (d + (1 − d) · g)
+    ρ̄ = μ / (ε_dark + (1 − ε_dark) · g)
 
-where `m` is the compute the algorithm needs to reach the target, in multiples of the reference algorithm's.
+where `μ` is the compute the algorithm needs to reach the target, in multiples of the reference algorithm's (the
+working draft's `|C_{0,m}(G)|/T_0`), and the other escapes (`ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`) are the free FLOPs
+inside `g`.
 
 This module knows no GPU, protocol or training class: `regimes` builds the partition from the actual datacenter,
 `classes` and `attacks` give allowances, and `families` the algorithm's profile.
@@ -79,10 +81,11 @@ class Region:
 
 @dataclass(frozen=True)
 class Partition:
-    """The monitored fleet over the horizon as regions, and the adversary's dark share of compute outside them."""
+    """The monitored fleet over the horizon as regions, and `ε_dark`, the dark pool's share of the adversary's training
+    rate outside them."""
 
     regions: tuple[Region, ...]
-    dark: float
+    eps_dark: float
 
 
 @dataclass(frozen=True)
@@ -116,12 +119,12 @@ def share(region: Region, allowance: Allowance, kappa: float, side: Side = "boun
 
 @dataclass(frozen=True)
 class Slowdown:
-    """ρ for one algorithm under one allowance: `rho = efficiency / (dark + (1 − dark) g)`, with each region's share and
+    """ρ for one algorithm under one allowance: `rho = efficiency / (ε_dark + (1 − ε_dark) g)`, with each region's share and
     `g`'s terms summed over regions (each a share of the monitored fleet's unencumbered products)."""
 
     rho: float
     g: float
-    dark: float
+    eps_dark: float
     efficiency: float
     regions: Mapping[str, Share]
     terms: Mapping[str, float]
@@ -130,8 +133,8 @@ class Slowdown:
     def monitored(self) -> float:
         """The share of the adversary's training done on monitored compute: the protocols do their job for this
         algorithm when it is small (`g ≪ d`), and not when it is near 1."""
-        rate = self.dark + (1 - self.dark) * self.g
-        return (1 - self.dark) * self.g / rate if rate > 0 else 0.0
+        rate = self.eps_dark + (1 - self.eps_dark) * self.g
+        return (1 - self.eps_dark) * self.g / rate if rate > 0 else 0.0
 
 
 def slowdown(partition: Partition, allowance: Allowance, kappa: float, efficiency: float = 1.0,
@@ -144,12 +147,13 @@ def slowdown(partition: Partition, allowance: Allowance, kappa: float, efficienc
         for term, v in s.terms.items():
             terms[term] = terms.get(term, 0.0) + weights[name] * v / total
     g = math.fsum(weights[n] * s.value for n, s in shares.items()) / total if total else 0.0
-    return Slowdown(rho(partition.dark, g, efficiency), g, partition.dark, efficiency, shares, terms)
+    return Slowdown(rho(partition.eps_dark, g, efficiency), g, partition.eps_dark, efficiency, shares, terms)
 
 
-def rho(dark: float, g: float, efficiency: float = 1.0) -> float:
-    """The slowdown when a `dark` share of compute runs unencumbered and the rest at `g` of its unencumbered rate."""
-    rate = dark + (1 - dark) * g
+def rho(eps_dark: float, g: float, efficiency: float = 1.0) -> float:
+    """The slowdown when an `ε_dark` share of the training rate runs unencumbered and the rest at `g` of its unencumbered
+    rate."""
+    rate = eps_dark + (1 - eps_dark) * g
     return efficiency / rate if rate > 0 else math.inf
 
 

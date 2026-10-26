@@ -3,8 +3,8 @@
 Each figure writes `<name>.png` and `<name>.json` (the numbers it plots) into an output directory, never the repository
 (`tests/test_repository.py` forbids tracked renders):
 
-* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the declared block's
-  compute and at the physical block's (a location between two wipes), and where each becomes vacuous.
+* `class-vs-k`: each class's per-block slowdown against the block's novel input budget `k`, at the inference block's
+  compute and at the serving block's (a location between two wipes), and where each becomes vacuous.
 * `brackets`: ρ's bracket per scenario and family: the lower end from the bounds at each status, the upper from the
   attacks.
 * `dark`: ρ against the dark share, per scenario.
@@ -38,7 +38,7 @@ WINDOWED = "onsite-h200-kimi"
 PHASES = (
     ("onsite-h200-kimi", ("regime", "residual_bits"), ("regime", "wipe_s")),
     ("onsite-h200-kimi", ("regime", "side"), ("regime", "ingress")),
-    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "dark")),
+    ("remote-h200-kimi", ("regime", "residual"), ("fleet", "eps_dark")),
 )
 STATUS_COLORS = {"proved": "#1a9850", "conditional": "#2c7bb6", "draft": "#f28e2b", "absent": "#999999",
                  "outside": "#cccccc"}
@@ -122,8 +122,8 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
     """Each class's per-block slowdown `κC / (2 a(C, k))` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
-    declared block's compute `Γ` and (for a regime with a physical block) at the physical block's compute, with the
-    declared policy's `k` and the physical block's input `K` marked. Below 1 a class is vacuous: it lets the block run
+    declared block's compute `Γ` and (for a regime with serving blocks) at the serving block's compute, with the
+    declared policy's `k` and the serving block's input `K` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
     points = 6 * grid + 1
     plt = _plt()
@@ -136,9 +136,9 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     p = fam.profile(s.model, s.run)
     gamma, k_policy = s.context.policy.gamma, s.context.policy.k
     win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
-    panels = [("the declared block's compute Γ", gamma)]
+    panels = [("the inference block's compute Γ", gamma)]
     if win is not None:
-        panels.append(("the physical block's compute Φ·Δτ·MFU", win.compute))
+        panels.append(("the serving block's compute Φ·Δτ·MFU", win.compute))
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
@@ -209,7 +209,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                                          label=f"declared policy k = {k_policy:.2g} bits")
         if win is not None:
             lines["window K"] = ax.axvline(win.inputs, c="#d7191c", lw=1, ls="-.",
-                                           label=f"physical block K = {win.inputs:.2g} bits")
+                                           label=f"serving block k_S = {win.inputs:.2g} bits")
         ax.set_xscale("log")
         ax.set_yscale("log")
         ax.set_xlim(ks[0], ks[-1])
@@ -293,20 +293,20 @@ def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
 
 def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targets: Sequence[float] = (10.0, 100.0),
          grid: int = 30) -> list[Path]:
-    """ρ (lower end solid, upper dashed) against the dark share `d` (`grid + 11` points), per scenario, with `m/d`, the
-    most the dark pool alone allows."""
+    """ρ (lower end solid, upper dashed) against the dark share `ε_dark` (`grid + 11` points), per scenario, with `μ/ε_dark`,
+    the most the dark pool alone allows."""
     points = grid + 11
     plt = _plt()
-    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "dark"))]
+    names = [n for n in (names or registry.names("scenario")) if _key(registry, n, ("fleet", "eps_dark"))]
     if not names:
         return []
-    p0 = registry.param(_key(registry, names[0], ("fleet", "dark")))
+    p0 = registry.param(_key(registry, names[0], ("fleet", "eps_dark")))
     ds = _logspace(min(1e-4, p0.low / 10), 0.5, points)
     data: dict = {"d": ds, "scenarios": {}}
     fig, ax = plt.subplots(figsize=(8, 5.2))
     ms = set()
     for i, name in enumerate(names):
-        key = _key(registry, name, ("fleet", "dark"))
+        key = _key(registry, name, ("fleet", "eps_dark"))
         lo = analysis.sweep(registry, name, key, ds, LO)
         hi = analysis.sweep(registry, name, key, ds, analysis.HI)
         base = analysis.result(registry, name)
@@ -324,9 +324,9 @@ def dark(registry: Registry, out: Path, names: Sequence[str] | None = None, targ
     _targets(ax, targets)
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_xlabel("dark share d (adversary's compute outside every monitored region)")
+    ax.set_xlabel("dark share ε_dark (adversary's compute outside every monitored region)")
     ax.set_ylabel("ρ")
-    ax.set_title("ρ against the dark share, per scenario (• at today's d)", fontsize=11)
+    ax.set_title("ρ̄ against the dark share, per scenario (• at today's ε_dark)", fontsize=11)
     ax.grid(True, which="major", alpha=0.3)
     ax.legend(fontsize=8, loc="upper left", bbox_to_anchor=(1.01, 1.0))
     return _save(fig, out, "dark", data)

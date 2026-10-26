@@ -3,7 +3,7 @@
 A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
 lists some). With `pofc = "<rules>"` its declared work also runs under the proof of forward computation's rules
-(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the physical block. Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
+(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the serving block. Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
 `evaluate` gives, for each family, ρ under each bound alone, under every bound it meets at once (`lo`: each block gets
 the least of their caps, under the union of their premises) and under each attack (`hi`: the best construction). The
@@ -46,9 +46,9 @@ class Scenario:
     @property
     def rate(self) -> float:
         """The adversary's whole unencumbered training rate, in reference FLOP/s: the monitored fleet's, and the dark
-        pool's share of progress (`Fleet.dark_effective`) beside it."""
+        pool's share of progress (`Fleet.eps_dark_rate`) beside it."""
         f = self.context.fleet
-        return f.count * self.context.location.phi * f.mfu_train / (1 - f.dark_effective)
+        return f.count * self.context.location.phi * f.mfu_train / (1 - f.eps_dark_rate)
 
     def years(self, rho: float) -> float:
         """Years to reach the run's target at slowdown `rho`."""

@@ -13,8 +13,8 @@ its compute (15 times at today's numbers), so a bound linear in `K` gives it a s
 (`CoverTraining`'s `k²/b`) may give it a larger one; and a state that fits in one location's `K` trains there
 unthrottled (Kimi K2's 16-bit state fits a rack's day, not a server's).
 
-A **fleet** is the adversary's monitored locations and its dark share of compute: one connected pool outside every
-monitored region, which runs unencumbered (Daniel, 25 Oct), at its own utilization `mfu_dark`. A **horizon** is the
+A **fleet** is the adversary's monitored locations and its dark share `ε_dark` of compute: one connected pool outside
+every monitored region, which runs unencumbered (Daniel, 25 Oct), at its own utilization `mfu_dark`. A **horizon** is the
 monitoring period a result is over.
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
@@ -53,8 +53,8 @@ class Fleet:
     location: str
     #: monitored locations
     count: float
-    #: share of the adversary's compute (peak FLOP/s) outside every monitored region, as one connected pool
-    dark: float
+    #: `ε_dark`: share of the adversary's compute (peak FLOP/s) outside every monitored region, as one connected pool
+    eps_dark: float
     #: model FLOP utilization an unencumbered trainer gets on the monitored fleet, and the one its served work runs at
     mfu_train: float
     mfu_serve: float
@@ -63,13 +63,14 @@ class Fleet:
     mfu_dark: float | None = None
 
     @property
-    def dark_effective(self) -> float:
-        """The dark pool's share of the adversary's unencumbered training progress: `d` weighted by its utilization,
-        `d μ_d / (d μ_d + (1 − d) μ_t)`, which is `d` when the pool trains like the monitored fleet."""
+    def eps_dark_rate(self) -> float:
+        """`ε_dark` as a share of the adversary's unencumbered training rate: the compute share weighted by its
+        utilization, `ε μ_d / (ε μ_d + (1 − ε) μ_t)`, which is the compute share when the pool trains like the monitored
+        fleet."""
         if self.mfu_dark is None:
-            return self.dark
-        dark = self.dark * self.mfu_dark
-        return dark / (dark + (1 - self.dark) * self.mfu_train)
+            return self.eps_dark
+        dark = self.eps_dark * self.mfu_dark
+        return dark / (dark + (1 - self.eps_dark) * self.mfu_train)
 
 
 @dataclass(frozen=True)

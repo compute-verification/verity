@@ -65,8 +65,8 @@ def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
     free = sampled.free(ctx)
     assert sampled.injected() == pytest.approx(t5["cheat_bits"], rel=1e-12)
     assert sampled.chord == pytest.approx(T.chord(p, t5["cheat_bits"]), rel=1e-7)
-    assert math.fsum(v for k, v in free.items() if k != "cheat") == pytest.approx(t5["residual"], rel=1e-9)
-    assert free["cheat"] == pytest.approx(t5["cheat"], rel=1e-7)
+    assert math.fsum(v for k, v in free.items() if k != "exfil.faulty") == pytest.approx(t5["residual"], rel=1e-9)
+    assert free["exfil.faulty"] == pytest.approx(t5["cheat"], rel=1e-7)
 
 
 def test_at_todays_defaults_the_remote_bound_is_one_as_tiers_dampener_is():
@@ -80,7 +80,7 @@ def test_with_nothing_else_bounding_rho_is_lean_remote_dampener():
     ctx = tiers_context(reg)
     remote = regimes.regime(reg, "remote")
     part = remote.partition(ctx)
-    lean_rho = max(1.0, 1 / (part.dark + (1 - part.dark) * remote.uncertified(ctx) / ctx.fleet.mfu_train))
+    lean_rho = max(1.0, 1 / (part.eps_dark + (1 - part.eps_dark) * remote.uncertified(ctx) / ctx.fleet.mfu_train))
     assert slowdown(part, lambda b: 0.0, 0.6).rho == pytest.approx(lean_rho, rel=1e-12)
     assert lean_rho > 10
 
@@ -98,9 +98,9 @@ def test_the_layout_gets_only_what_an_abiding_strategy_gets():
     sampled = regimes.regime(REG, "remote-sampled")
     layout = sampled.partition(ctx).regions[0].layout
     assert set(layout.free) == set(Remote.ABIDING)
-    assert set(sampled.free(ctx)) - set(layout.free) == {"slack", "lag", "escape", "cheat"}
+    assert set(sampled.free(ctx)) - set(layout.free) == {"skip.certs", "break.lag", "break.escape", "exfil.faulty"}
     work = ctx.location.phi * ctx.horizon.seconds * ctx.fleet.mfu_train
-    assert layout.free["residual"] == pytest.approx(sampled.residual * work)
+    assert layout.free["gap.floor"] == pytest.approx(sampled.residual * work)
 
 
 def test_a_regime_inherits_its_base_and_overrides_what_differs():
@@ -150,12 +150,12 @@ def test_four_servers_as_one_location_have_four_times_a_servers_budget():
     assert four.compute == pytest.approx(4 * one.compute) and four.inputs == pytest.approx(4 * one.inputs)
 
 
-def test_without_pouw_only_the_physical_cut_bounds():
+def test_without_pouw_only_the_serving_cut_bounds():
     ctx = context("reference-h200")
     region = regimes.regime(REG, "onsite-no-pouw").partition(ctx).regions[0]
-    declared, physical = region.cuts
+    declared, serving = region.cuts
     assert declared.blocks[0].count == 0 and math.fsum(declared.free.values()) >= region.compute
-    assert physical.name == "physical"
+    assert serving.name == "serving"
 
 
 def test_an_nvl72_rack_takes_kimi_k2s_state_in_one_day_where_an_hgx_server_does_not():
@@ -170,3 +170,23 @@ def test_every_regime_builds_and_cites_only_locked_names_or_drafts(name):
     r = regimes.regime(REG, name)
     cites = getattr(r, "CITES", ()) + (r.cites() if isinstance(r, Onsite) else ())
     assert all(lean.status(c) != "absent" for c in cites), cites
+
+
+def test_every_free_source_is_keyed_by_the_route_it_escapes_by():
+    """The working draft's §8: each declared-cut FLOP that no inference block constrains names its route."""
+    ctx = context("reference-h200")
+    for name in ("remote", "remote-sampled"):
+        free = regimes.regime(REG, name).free(ctx)
+        assert free and all(k.split(".")[0] in regimes.ROUTES for k in free)
+
+
+def test_the_declared_cuts_delta_splits_into_coins_and_cryptography():
+    """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
+    theorem's `δ = p/ε'` (2.7e-8 at `p = 3 · 2⁻⁴⁰`, `ε' = 10⁻⁴`), and sampled proofs add their escape bound's `δ`."""
+    remote, sampled = regimes.regime(REG, "remote"), regimes.regime(REG, "remote-sampled")
+    d = remote.delta()
+    assert d["coin"] == pytest.approx(2**-40 / remote.eps_agg, rel=1e-2)
+    assert d["crypto"] == pytest.approx(2 * d["coin"], rel=1e-2)
+    assert d["coin"] + d["crypto"] == pytest.approx(3 * 2**-40 / 1e-4, rel=1e-2)
+    assert sampled.delta()["coin"] == pytest.approx(d["coin"] + sampled.p_evade)
+    assert regimes.regime(REG, "unmonitored").delta() == {"coin": 0.0, "crypto": 0.0}

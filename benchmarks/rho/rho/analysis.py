@@ -340,9 +340,9 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 
 @dataclass(frozen=True)
 class Term:
-    #: `dark`, or one of g's terms: a block kind or a free source (`Slowdown.terms`)
+    #: `dark` (`ε_dark`), or one of g's terms: a block kind or a free source (`Slowdown.terms`)
     name: str
-    #: its part of the adversary's rate `d + (1 − d) g`, in multiples of the unencumbered rate, and its share of the rate
+    #: its part of the adversary's rate `ε_dark + (1 − ε_dark) g`, in multiples of the unencumbered rate, and its share of the rate
     part: float
     share: float
     #: `m / part`: ρ can't exceed it while this term remains
@@ -350,7 +350,7 @@ class Term:
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets ρ, largest first: the adversary's rate `d + (1 − d) g` split into the dark pool and g's terms, for the
+    """What sets ρ, largest first: the adversary's rate `ε_dark + (1 − ε_dark) g` split into the dark pool and g's terms, for the
     family the adversary picks (the least `lo`; with `side="attack"`, the least `hi` under its best attack)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: f.lo, default=None)
@@ -361,7 +361,7 @@ def attribution(r: Result, side: str = "bound") -> list[Term]:
         s = best.slowdown if best else None
     if s is None:
         return []
-    parts = {"dark": s.dark} | {t: (1 - s.dark) * v for t, v in s.terms.items()}
+    parts = {"dark": s.eps_dark} | {t: (1 - s.eps_dark) * v for t, v in s.terms.items()}
     rate = math.fsum(parts.values())
     return sorted((Term(t, v, v / rate, s.efficiency / v) for t, v in parts.items() if v > 0),
                   key=lambda t: -t.part)

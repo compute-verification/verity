@@ -6,13 +6,20 @@ the declared blocks. A regime says, for one location over one window (a **region
 valid, and cites what makes each valid:
 
 * **declared** (remote and onsite): the remote composition, `Nci.Guarantees.DampenerRemote`, term for term. The
-  certified work `(1 − ε_W) W_cert` runs declared blocks `(Γ, k)`, and every other FLOP of the location's capacity is
-  free at face value: the audited residual `r̂` (the GPUs' uncredited time, their clock above the credited one, the host
-  CPUs at peak), PoUW's deficit `ε_W W_cert/C`, the certificate slack `ε'`, the verdict lag `JΔ/H`, the escape slack `θ`
-  and the cheating share `χ` (with sampled proofs). The residual is a share of peak capacity, as Lean counts it
+  certified work `(1 − ε_W) W_cert` runs inference blocks `(Γ, k)`, and every other FLOP of the location's capacity is
+  free at face value, keyed by the route it escapes by (the working draft's §8; `ROUTES`):
+  - `undecl`, known compute running no declared work: the host CPUs at peak;
+  - `gap`, declared work certified for less than it occupied: PoUW's floor credit (`residual`) and the clock above the
+    credited one (together with `undecl`, the audited residual `r̂`);
+  - `skip`, credited without running: PoUW's deficit `ε_W W_cert/C` and the certificate slack `ε'`;
+  - `break`, declared work that fails a check, run until its identity halts: the verdict lag `JΔ/H` and, with sampled
+    proofs, the escaped faulty blocks `θ`;
+  - `exfil`, the bits the accepted faulty blocks write to their outputs (`k_exfil`), still converted to FLOPs at
+    `chord` products a bit as Lean's cheating share `χ` does. The residual is a share of peak capacity, as Lean counts it
   (`M_r ≤ κ (C − (1 − ε_W) W_cert + …)/2`), so its free FLOPs are `share · Φ Δτ`: `g`'s free share is the Lean
   dampener's `share / MFU₀`. `benchmarks/nci/tiers.py` computes the same terms (`tests/test_regimes.py` holds them to it).
-* **physical** (onsite only): the whole location-window is one block, its budget `(Φ ω, K_ω)`, by causality on the
+* **serving** (onsite only): the whole serving block (a location between two wipes) is one block, its budget
+  `(Φ ω, K_ω)`, by causality on the
   actual circuit's annotation (`WindowsAt` and `Windows` on `Accounting.Placed`; ASK-141). Its form says what `K_ω` is:
   `links`, what Lean proves today (`Windows`: the location's memory plus its line rate `β_X` over the window), or
   `certified`, what a wipe leaves plus what the certifier admits and the side channels carry, which needs `WindowsAt`'s
@@ -65,6 +72,8 @@ class Regime(Protocol):
 
     def partition(self, ctx: Context) -> Partition: ...
 
+    def delta(self) -> dict[str, float]: ...
+
 
 @dataclass(frozen=True)
 class Unmonitored:
@@ -74,7 +83,10 @@ class Unmonitored:
 
     def partition(self, ctx: Context) -> Partition:
         f, loc, h = ctx.fleet, ctx.location, ctx.horizon
-        return Partition((Region("location", loc.phi * h.seconds * f.mfu_train, f.count, ()),), f.dark_effective)
+        return Partition((Region("location", loc.phi * h.seconds * f.mfu_train, f.count, ()),), f.eps_dark_rate)
+
+    def delta(self) -> dict[str, float]:
+        return {"coin": 0.0, "crypto": 0.0}
 
 
 SAMPLING = ("proof_share", "overhead", "replay", "step_flop", "p_evade", "luck", "step_bits", "floor_steps", "chord",
@@ -97,6 +109,10 @@ class Remote:
     #: `J`: identities a detection doesn't end; `Δ`: the verdict lag in seconds
     identities: float
     lag_s: float
+    #: a window's certificate is wrong with probability `p = δ_s + δ_bind + δ_ks` (`PouwSound`): `δ_s` from the coins'
+    #: draw, `δ_bind + δ_ks` from the cryptography (commitment binding, the proof system's knowledge soundness)
+    window_delta_coin: float = 0.0
+    window_delta_crypto: float = 0.0
     #: the GPUs' capacity above the clock PoUW credits, as a share
     clock_share: float = 0.0
     #: the host CPUs counted at `host` times their peak (`Location.host_ops`): 1 until something credits or bounds them
@@ -124,7 +140,7 @@ class Remote:
              "Nci.Assumptions.PouwSound", "Nci.Assumptions.TerminalDetection", "Nci.Assumptions.SampledDetection",
              "Nci.Assumptions.BaselineRegistered")
     #: the free sources a strategy that never cheats gets: no wrong certificate, faulty block or detection
-    ABIDING = ("residual", "clock", "host", "pouw")
+    ABIDING = ("undecl.host", "gap.floor", "gap.clock", "skip.pouw")
 
     def __post_init__(self) -> None:
         unset = [k for k in SAMPLING if self.sampled and not math.isfinite(getattr(self, k))]
@@ -134,6 +150,13 @@ class Remote:
     def audited(self, loc: Location) -> float:
         """`r̂ = 1 − W_cert/C`: the GPUs' uncredited share, their clock above the credited one, and the host CPUs."""
         return min(1.0, self.residual + self.clock_share + self.host * loc.host_ops / loc.phi)
+
+    def delta(self) -> dict[str, float]:
+        """The chance the declared cut's escapes exceed their stated shares, split by what fails: `δ_coin` (the work
+        draw's `δ_s / ε'` by Markov, and with sampled proofs the escape bound's `δ`) and `δ_crypto` (`(δ_bind + δ_ks) / ε'`).
+        Onsite, the wipe's and the certifier's own failure probabilities are not modeled here."""
+        coin = self.window_delta_coin / self.eps_agg + (self.p_evade if self.sampled else 0.0)
+        return {"coin": coin, "crypto": self.window_delta_crypto / self.eps_agg}
 
     def q(self) -> float:
         """The detection probability per faulty block: the proof share over the cost of proving a unit."""
@@ -149,16 +172,16 @@ class Remote:
         """Shares of the location's peak capacity that are free, by source (`DampenerRemote`'s terms)."""
         loc, c = ctx.location, ctx.capacity
         r = self.audited(loc)
-        out = {"residual": self.residual, "clock": self.clock_share, "host": self.host * loc.host_ops / loc.phi,
-               "pouw": self.eps_w * (1 - r), "slack": self.eps_agg,
-               "lag": min(1.0, self.identities * self.lag_s / ctx.horizon.seconds)}
+        out = {"undecl.host": self.host * loc.host_ops / loc.phi, "gap.floor": self.residual,
+               "gap.clock": self.clock_share, "skip.pouw": self.eps_w * (1 - r), "skip.certs": self.eps_agg,
+               "break.lag": min(1.0, self.identities * self.lag_s / ctx.horizon.seconds)}
         if self.sampled:
             steps = self.luck * self.identities * math.log(1 / self.p_evade) / self.q()
-            out["escape"] = steps * self.step_flop / c
+            out["break.escape"] = steps * self.step_flop / c
         cheat = self.cheat if self.cheat is not None else (
             2 * self.chord * self.injected() / (self.chord_kappa * c) if self.sampled else 0.0)
         if cheat:
-            out["cheat"] = min(1.0, cheat)
+            out["exfil.faulty"] = min(1.0, cheat)
         return out
 
     def uncertified(self, ctx: Context) -> float:
@@ -186,7 +209,7 @@ class Remote:
         layout = Cut("layout", (self.blocks(ctx, s),), self.abiding(ctx, s), self.CITES)
         region = Region("location", ctx.location.phi * s * ctx.fleet.mfu_train, ctx.fleet.count,
                         (self.declared(ctx, s),), layout)
-        return Partition((region,), ctx.fleet.dark_effective)
+        return Partition((region,), ctx.fleet.eps_dark_rate)
 
 
 FORMS = ("certified", "links")
@@ -195,7 +218,7 @@ FORMS = ("certified", "links")
 @dataclass(frozen=True)
 class Onsite(Remote):
     """The remote audit's mechanisms, plus memory wipes every `wipe_s` seconds, a network certifier on each host's
-    links and side channels: each location-window gets the physical cut as well, and contributes the lesser."""
+    links and side channels: each serving block gets the serving cut as well, and contributes the lesser."""
 
     wipe_s: float = 86400.0
     #: what a wipe leaves per device, and per host (host memory the fill doesn't reach, DPU, BMC and flash), bits
@@ -256,18 +279,22 @@ class Onsite(Remote):
         w = self.wipe_s
         budget = self.budget(ctx)
         declared = self.declared(ctx, w)
-        physical = Cut("physical", (Blocks("physical", budget, 1.0),), {}, self.cites())
+        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
         # The uncertified block may take the whole window's input: generous to the adversary, since the declared
         # blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, w).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, w), Blocks("uncertified", uncertified, 1.0)), {}, self.cites())
         windows = ctx.fleet.count * ctx.horizon.seconds / w
-        region = Region("location-window", ctx.location.phi * w * ctx.fleet.mfu_train, windows,
-                        (declared, physical), layout)
-        return Partition((region,), ctx.fleet.dark_effective)
+        region = Region("serving-block", ctx.location.phi * w * ctx.fleet.mfu_train, windows,
+                        (declared, serving), layout)
+        return Partition((region,), ctx.fleet.eps_dark_rate)
 
 
 KINDS: Mapping[str, type] = {"unmonitored": Unmonitored, "remote": Remote, "onsite": Onsite}
+
+#: the routes by which declared-cut FLOPs escape the inference blocks, the prefix of each free source's key (the
+#: working draft's §8: `ε_undecl`, `ε_gap`, `ε_skip`, `ε_break`, and `k_exfil` counted as FLOPs)
+ROUTES = ("undecl", "gap", "skip", "break", "exfil")
 
 
 def policy(registry: Registry, name: str) -> Policy:
