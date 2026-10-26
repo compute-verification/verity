@@ -6,19 +6,23 @@ import Definitions.Core.NaiveStrassen
 ACCEL NAIVE-STRASSEN (CMP-110; note:compute-research/20261026T0140Z-draft-accel-naive-strassen). The three statements
 are open here: their paper proofs are the note's Theorems 1 and 2, by the exact cost tables of
 `benchmarks/pouw/machine_model/verity_machine_model/strassen`
-(art:a3e04d2dcf334f79a8e00e4801f786c3d678c85e142491a28c85413a4d23c1a6). The witnesses are proved: the schemes satisfy Brent's equations, the hypotheses of each statement hold of some
-schedule, Theorem 1's bound is attained at `l = 1`, and without `fast` it fails (naive tiled itself).
+(art:a3e04d2dcf334f79a8e00e4801f786c3d678c85e142491a28c85413a4d23c1a6). The witnesses are proved: the schemes
+satisfy Brent's equations, the hypotheses of each statement hold of some schedule, Theorem 1's bound is attained at
+`l = 1`, and without `fast` it fails (naive tiled itself). The RTX PRO 6000's root-CRT bound is added once its tables
+with b1 are in.
 -/
 
 namespace Verity.Accel.NaiveStrassen
 
-theorem naive_beats_strassen : ∀ fs ∈ instances, NaiveBeatsStrassen fs := by
+theorem naive_beats_strassen :
+    NaiveBeatsStrassen h200Sheet 13 ∧ NaiveBeatsStrassen h200Measured 13 ∧ NaiveBeatsStrassen rtx6000Sheet 12 ∧
+      NaiveBeatsStrassen rtx6000Measured 13 := by
   sorry
 
 theorem naive_beats_strassen_up_to : NaiveBeatsStrassenUpTo h200Sheet 16113 := by
   sorry
 
-theorem naive_beats_crt_strassen : ∀ fs ∈ instances, NaiveBeatsCrtStrassen fs := by
+theorem naive_beats_crt_strassen : NaiveBeatsCrtStrassen h200Sheet 494 ∧ NaiveBeatsCrtStrassen h200Measured 494 := by
   sorry
 
 theorem schemes_correct : strassen.correct = true ∧ winograd.correct = true ∧ trivial.correct = true := by

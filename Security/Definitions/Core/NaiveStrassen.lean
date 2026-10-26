@@ -162,10 +162,12 @@ def instances : List (List Atom) := [h200Sheet, h200Measured, rtx6000Sheet, rtx6
 
 /-! ## The statements -/
 
-/-- **Theorem 1**: at every depth budget `l ≤ 13`, every schedule over `fs` for int8 operands that applies Strassen
-or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive. -/
-def NaiveBeatsStrassen (fs : List Atom) : Prop :=
-  ∀ l ≤ 13, ∀ S : Sched, S.valid fs schemes 0 l 256 256 = true → S.fast = true → 8 ^ (l + 1) + 32 ≤ S.cost l
+/-- **Theorem 1**: at every depth budget `l ≤ L`, every schedule over `fs` for int8 operands that applies Strassen
+or Winograd somewhere costs at least naive tiled's `8^(l+1)` plus 32, i.e. `1 + 4·8^(-l)` times naive. `L` is 13 on
+the H200 (both `k`) and the RTX PRO 6000 at the measured `k`, and 12 on the RTX PRO 6000's data sheet, where with b1
+at `1/8` a schedule reaches `0.998267` of naive at depth 13. -/
+def NaiveBeatsStrassen (fs : List Atom) (L : Nat) : Prop :=
+  ∀ l ≤ L, ∀ S : Sched, S.valid fs schemes 0 l 256 256 = true → S.fast = true → 8 ^ (l + 1) + 32 ≤ S.cost l
 
 /-- **Theorem 1 in size**: an `n × n` product padded to `2^l` leaves of size `b` loses to naive tiled's `8 n³`
 whenever `n ≤ c·b` (`c = 16113` on the H200's data sheet: `2^14 G_14^(1/3) = 16113.9`, `G_14` the least cost at
@@ -188,10 +190,10 @@ def crtValid (fs : List Atom) (K l : Nat) (rs : List (Nat × Sched)) : Bool :=
     rs.all fun (m, S) => 2 ≤ m && S.valid fs schemes m l (min 256 m) (min 256 m)
 
 /-- **Theorem 2 (root CRT)**: every root-CRT schedule for an `n × n` int8 product, padded to `2^l` leaves of size
-`b`, with at least two moduli or a fast scheme, costs more than naive tiled for every `2 ≤ n ≤ 494` (at `n = 1`
-the count `128·(255K − 381)` is vacuous). -/
-def NaiveBeatsCrtStrassen (fs : List Atom) : Prop :=
-  ∀ (l b n : Nat) (rs : List (Nat × Sched)), 2 ≤ n → n ≤ 494 → n ≤ 2 ^ l * b → crtValid fs n l rs = true →
+`b`, with at least two moduli or a fast scheme, costs more than naive tiled for every `2 ≤ n ≤ N` (`N = 494` on the
+H200; at `n = 1` the count `128·(255K − 381)` is vacuous). -/
+def NaiveBeatsCrtStrassen (fs : List Atom) (N : Nat) : Prop :=
+  ∀ (l b n : Nat) (rs : List (Nat × Sched)), 2 ≤ n → n ≤ N → n ≤ 2 ^ l * b → crtValid fs n l rs = true →
     (2 ≤ rs.length ∨ rs.any (·.2.fast) = true) → 8 * n ^ 3 < b ^ 3 * (rs.map fun r => r.2.cost l).foldl (· + ·) 0
 
 /-! ## The non-vacuity witness -/
