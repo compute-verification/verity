@@ -14,6 +14,10 @@
    "owner": "@memory-accounting",
    "digest": "3dee4687f0a5685366080d463e9353692d5143af24e7a7600de6e093a4e07d2d"
   },
+  "Accounting.Assumptions.ChainSum": {
+   "owner": "@memory-accounting",
+   "digest": "7ad0fc65bedd3bcb11daf125be103ea1315686f4dd0d691971d279a0c78ec748"
+  },
   "Accounting.Assumptions.CircuitCarriers": {
    "owner": "@compute-accounting",
    "digest": "86eefefedabfc6f9913256922f58342cd1e1e7afa87e9777317b9668dd15f48a"
@@ -93,6 +97,10 @@
   "Accounting.Assumptions.SquaringCeiling": {
    "owner": "@memory-accounting",
    "digest": "4bd7f6457fb6df920661b769a3ad9517f6e4f0e7a2fd0d36a43e376a2deeaca9"
+  },
+  "Accounting.Assumptions.SquaringFloor": {
+   "owner": "@memory-accounting",
+   "digest": "e0aa827864a696741c2cb8ba8c9718b34c4e4a3c1ff37866299d9402d025fe1e"
   },
   "Accounting.Assumptions.SteeredLayout": {
    "owner": "@compute-accounting",
@@ -392,7 +400,7 @@
   },
   "Accounting.Gates.Property": {
    "owner": "@memory-accounting",
-   "digest": "7dbcb1491549e3c0f0ba62f9ccf37f76cba1b8f229f6fdebdb99650023409073"
+   "digest": "3d33cb0c18636cb807e368907da364b916b5ed0386ebee59e4a94b389c8c872b"
   },
   "Accounting.Gates.Proven": {
    "owner": "@memory-accounting",
@@ -3217,6 +3225,12 @@
    "signature": ["Accounting.SecurityProofs.Gates.Fooling : Accounting.Guarantees.Gates.Fooling"],
    "assumptions": [],
    "type_hash": "d11e89c1bfbcc555adf41b1d45f9dc704ea0d62c60243fe5b1a5e59a90930097"
+  },
+  "Accounting.SecurityProofs.Gates.FoolingCap": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.FoolingCap : Accounting.Guarantees.Gates.FoolingCap"],
+   "assumptions": [],
+   "type_hash": "361782bd44155d1b66316d513745e8fac784a912b508174350c2af9d63a7cc17"
   },
   "Accounting.SecurityProofs.Gates.Int8ClampRange": {
    "owner": "@memory-accounting",
@@ -11372,8 +11386,8 @@
    "Accounting.SecurityProofs.RequirementMoved": "frozen (no-function): A counting bound over a declared circuit's wiring, its execution and a pass's plan (Security/Definitions/Accounting/Requirement.lean): once the plan covers the complete blocks W reads at the step, filler allowed (PlanMatches), moved blocks carry all of the bits W reads from complete blocks but b per planned block not moved; about no function of the code.",
    "Accounting.SecurityProofs.Gates.Fooling": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean) and every set of inputs, not a property of a Lean function: the property's census check has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.SquaringCarry": "frozen (no-function): The carry bound over every circuit of the gate model that squares on the sparse family (Accounting.Gates.sparse), a counting bound from Fooling, not a property of a Lean function.",
-   "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
-   "Accounting.SecurityProofs.Gates.EncodeCost": "frozen (conjecture,no-function): It is a consequence of the named open conjecture EncodeChainHardness, a bound on Accounting.Gates.encodeCost (an infimum over every circuit of the gate model), not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.EncodeBudget": "frozen (conjecture,no-function): It is a consequence of the named open conjectures SquaringFloor and ChainSum (the encode bound at E ≤ k·S·e), in nonlinear units, over every declared circuit of the gate model that satisfies the stacking property, not a property of a Lean function: the property's check has no Lean code yet.",
+   "Accounting.SecurityProofs.Gates.EncodeCost": "frozen (conjecture,no-function): It is a consequence of the named open conjectures SquaringFloor and ChainSum (the encode bound at E ≤ k·S·e), a bound on Accounting.Gates.encodeCost (an infimum of nonlinear units over every circuit of the gate model), not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.ProvenWindow": "frozen (no-function): The soundness of the gate model's interval analysis (Accounting.Gates.Proven) over every circuit and input, not a property of a Lean function: property/v1's interval analysis has no Lean code yet.",
    "Accounting.SecurityProofs.Gates.ClampOrWrap": "frozen (no-function): A corollary of ProvenWindow over every circuit of the gate model and its s8-family steps' clamp or wrap, not a property of a Lean function.",
    "Accounting.SecurityProofs.Gates.RhoPairs": "frozen (no-function): A fact about the gate model's codec square root (Accounting.Gates.rho) at every prime p ≡ 3 mod 4, not a property of the codec's code: remote_bandwidth's codec has no Lean port.",
@@ -11447,10 +11461,10 @@
    "FlockSoundness.Audit.Partition.Refines.twoStage_influence": "frozen (obligation,no-function): It takes the two-stage KnowledgeSound and LinkSound (Security/Proofs/Flock/Soundness/Audit/TwoStage.lean:121, :130), open obligations of the backend, as hypotheses, and it is about the abstract two-stage audit rather than a Lean function.",
    "Verity.SecurityProofs.ComposeCone": "frozen (no-function): It is stated over an arbitrary partition and transcript, and takes the anchors' inputs (InputsAgree) and that no unit of the cone is wrong as hypotheses, conditions on the run that are not on the premises list, rather than a function's acceptance.",
    "Accounting.SecurityProofs.CarrierBits": "frozen (no-function): A counting bound over abstract provenances of a circuit's values (Security/Definitions/Accounting/Carrier.lean: the store reached only through the circuit's inputs and its own encodes), about no function of the code.",
-   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed on a store per pass made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), each pass reading the blocks its layout names at the coins drawn before it (RateSketch.coinStore), for devices whose rebuilds beyond X are their carriers' sectors (Accounting.RateSketch.Carrier), at rebuilt bits X + C with C the carriers' input and encoded bits under the property's budgets, with delta once a pass and no advice, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
-   "Accounting.SecurityProofs.StackedSessionConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationRelay on a store, one for the session, made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), for pass devices that also read a carrier at odd side addresses (Accounting.Rate.PassProvenance, whose inputs may depend on the pass's stream and oracle), at side link L + C with C the carriers' input and encoded bits under the property's budgets, with delta once and no advice, under the named assumptions Accounting.Assumptions.EncodeChainHardness and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
-   "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
-   "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, EncodeChainHardness and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed on a store per pass made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), each pass reading the blocks its layout names at the coins drawn before it (RateSketch.coinStore), for devices whose rebuilds beyond X are their carriers' sectors (Accounting.RateSketch.Carrier), at rebuilt bits X + C with C the carriers' input and encoded bits under the property's budgets, with delta once a pass and no advice, under the named assumptions Accounting.Assumptions.SquaringFloor, Accounting.Assumptions.ChainSum and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.StackedSessionConservationRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.RemoteSessionConservationRelay on a store, one for the session, made by the append-coin rule (Accounting.appendCoinBlocks: each append's blocks keyed by a live coin drawn after its root commits their digests, so the writers' choices are fixed before it), for pass devices that also read a carrier at odd side addresses (Accounting.Rate.PassProvenance, whose inputs may depend on the pass's stream and oracle), at side link L + C with C the carriers' input and encoded bits under the property's budgets, with delta once and no advice, under the named assumptions Accounting.Assumptions.SquaringFloor, Accounting.Assumptions.ChainSum and Accounting.Assumptions.KeyBinding: abstract chip programs in the random-oracle and ideal encoding models, not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.StackedRequirementSketchDeployed": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*32768 by RequirementHeld and RequirementMoved; abstract chip programs in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.SketchRank, SketchHashBudget, SquaringFloor, ChainSum and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.StackedRequirementRelay": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationRelay with its shortfall read against a declared circuit's requirement (Requirement.creditedBits and Requirement.creditedReadBits, Security/Definitions/Accounting/Requirement.lean): when the memory map and each pass's plan hold W's credited blocks (one-sided: other blocks may be resident or planned) at the at most n*P steps the passes are bound to (StoreMatches, PlanMatches, at most N blocks each), W's credited live and read bits are at most the store's n*P*N*b by RequirementHeld and RequirementMoved; abstract pass devices in the random-oracle and ideal encoding models under the named assumptions Accounting.Assumptions.WorkHardness, SquaringCeiling, SquaringFloor, ChainSum and KeyBinding (the writers' choices fixed before each append's coin), not the rate audit's code. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
    "Pous.SecurityProofs.StreamedWipe": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Pous.SecurityProofs.StreamedWipeMeets2600GB": "frozen (no-function): A bound in the streamed-label wipe's game (Security/Definitions/Pous/Model/StreamedWipe.lean), whose acceptance is the model's Accepts over an arbitrary prover, not a run of streamed_wipe.verdict or any Lean function; it fits once the memory challenger's check has a Lean function to state it against.",
    "Accounting.SecurityProofs.TS.Sm120SheetHeadline": "frozen (conjecture,no-function,world-unlisted): sm_120's headline at 5.860%, under full checking with live coins (epsilon_sample and the Fiat-Shamir premium are separate lines), Whole.sheetDIdealFloor_whole at the exact data of DS-120 and H1 + fx1 (Definitions.Accounting.Headline.Sm120) with pi* 3564/3761 on issue and 197/3761 on shared memory (the least weight there at which the bulk-reduction floors cost N_w phi*, RT4-SHEET-1), p = 7/8, p0 = 1/2, Lambda = max(kappa/ln(8/7), (kappa + f)/ln 2), S = 48,000 and delta = 2^-40, over every play of 48,000 equal live rounds (the window's shape: with S rounds its two branches never give epsilon < 5.779% and give under 6% only from 17,460; Compose's live line is under 1% only from 10,552, RT-INT-1) and window of proofs on any finite coins and every unfolded share, not a Lean function, the unfolded branch binding (5.859%; the folded one gives 5.805%); A1-A7 (A2 with A2u, a uniform-datapath instruction an issue slot, which no vendor document states and which alone holds this epsilon: RT-MACHINE-4; measured to hold at saturation, r20261019-120714-132b, RT2-120-4; A5 with A5b, a bulk or TMA instruction holding its size of bank bytes, which no vendor document states either and without which a fold on the bulk engine costs less than the menu's: RT4-SHEET-1), FOLD-OPT per word folded at pi* (FoldOptFoldedAt at pi* and the run's unfolded share, ASK-6 = A; an open conjecture under shape.conjectures, RT2-LOGIC-1, checked within a stated menu: the Lean menu, the bit-exact lane folds, the bulk-reduction floors and fold_bulk.cu's whole-block folds), so fold skippers are charged, the receipt split (the play's ideal game a ReceiptGame's and Pinned, with two luck premises: OperandHMu at 3/4, H-mu at the deficient words, the first, and ReceiptLuckAt at 1/2, HMU's B' case, the second, which give p = 7/8 by LemmaB at fibre 1 and LuckOfReceipt), WholeLuckAt at 1/2 (B' at a unit whose fold the run skips, ASK-9 = A at p0 = 1/2 for live coins only; the whole-unit guess bound 2^-64 is not granted), binding in its fork form at delta_fork (BindingForkAt, binding at sqrt(delta_fork) by BindingOfFork, so the budget asks delta_fork <= (2^-41/48,000)^2), proof soundness at delta_ZK (ProofSoundAt, which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (ProofsPin, which no Lean checks of the served relations: PouwSegCheck_v2 lacks it, PIN's checks of #2417 recompute every word they absorb; RT3-LOGIC-3), named assumptions of Definitions.Accounting.Assumptions.TS (RT2-LOGIC-2), RightFixed, and the play being its proofs' (ProofLayer.Of) and the receipt game's openings pinned (ReceiptGame.Pinned), hypotheses over Definitions, are not on the premises list.",
@@ -11693,7 +11707,7 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, advice v1's charge (AdviceV1.bits, the mirror of arith_encode.py's reference_charge) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Nci.Cover.SecurityProofs.CoverTrainingChained": "frozen (no-function): Like CoverTraining, it is about an arbitrary reference training circuit, here as its bits made a declaration (bitDecl, Security/Definitions/Nci/BitDecl.lean) with its multiplication blocks and token computations (Nci.Covering.MulBlocks), and a declaration that contains it with its baseline registered (the named BaselineRegistered, Security/Definitions/Nci/Assumptions/Baseline.lean), under the named ParameterHardAt on those bits and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; Security/Proofs/Nci/Cover/CheckedChained.lean joins it to a verdict (coverTrainedChained, from NciCheck.Properties.Witnesses), and stating that join among the properties is what would give it an acceptance.",
    "Nci.SecurityProofs.CoveringBoundPriced": "frozen (no-function): CoveringBoundTwoCosts's twin with a price per weight in place of one weight cost c_w, beside it: it is about an arbitrary declaration, its multiplication blocks and token computations (Nci.Covering.MulBlocks) and a covering by inference blocks (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), under the named ParameterHardPricedAt (Security/Definitions/Nci/Assumptions/CoveringPriced.lean) and with ActivationChainedAt read in its statement (Security/Definitions/Nci/Assumptions/CoveringTwoCosts.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance.",
-   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, EncodeChainHardness (at its floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest budgeted gates of Gates.encodeCosts, ⊤ where there is none).",
+   "Accounting.SecurityProofs.DeclaredCircuitRequirement": "frozen (no-function,hash): It is Accounting.SecurityProofs.StackedSessionConservationSketchDeployed's game (sketch receipts at 16 rows, 2,773 openings a window, a store per pass made by the append-coin rule) on a layout that reads the codec and the append coins through an a-bit summary the pass's devices are told (Accounting.Assumptions.SteeredLayout: RateSketch.steeredStore, RateSketch.SketchSummarySession), each append's blocks read within the lifetime cap L of the window it joined (RateSketch.LifetimeCapped), a layer-1 bound on the prover system parametric in its resources a pass within the pass deadline tau (kept S, link Lr*tau, hash budget qr*tau, rebuilds Xr*tau), carriers of a declared circuit passing the stacking property (Gates.Property, Gates.Restricted) within its caps, charged over L windows (Accounting.Assumptions.CircuitCarriers, RateSketch.Provenance.OfCircuit: C = 8*R_L + ceil(1024*L*c*P*N*4096/E), R_L the most run-input bytes of L windows, a window certifying at most P*N*4096 bytes), slack k tiles a pass traded against k+1 query guesses ((qr*tau/2^96)^(k+1), 2^a once per pass), and its shortfall read pass by pass: the distinct sectors each pass read (RateSketch.SketchDeployedWindow.readsIn) from the tiles holding the appended blocks of the circuit's credited reads at the step it is bound to (strictly increasing), against the larger of the circuit's credited live bits in those blocks and its read bits in appended blocks less a block a group (Requirement.bitsAt, bits, OneBlockEach), with the memory map holding the circuit's credited blocks and each pass's plan covering its reads (Requirement.StoreMatches, PlanMatches: one-sided, other blocks may be resident or planned and earn nothing) and the plan's blocks at distinct positions of the pass's store, for a placed execution (Requirement.Placement, Placement.Deadlines: each pass tau ticks of the devices' clocks), layout, groups, binding, memory map, plans and addresses chosen after every coin; abstract verbatim pass devices in the random-oracle and ideal encoding models under the named assumptions SketchRank, SketchHashBudget, SquaringFloor and ChainSum (at their floor, epsilon at least 2^-64), KeyBinding, CircuitCarriers and SteeredLayout, not the rate audit's, the memory map's or the engine's code; attribution to the node's devices and tiers is not here. Encodes are charged at the gate model's cost (encodeBitsCost: the fewest nonlinear units, budgeted units and data products, of Gates.encodeCosts, ⊤ where there is none).",
    "NetTiming.SecurityProofs.EncardChargedLeCounted": "frozen (no-function): It counts each window's decision stream and counts by AdviceV1.chargesCounted, the decisions' charge (the definitions' mirror of arith_encode.py's reference_charge, ChargeCount_v1{N}'s charge) plus any count code's length (lengths meeting Kraft), not a compiled program's code: circuit-check holds ChargeCount_v1's circuit to that reference, no circuit codes the counts yet, and no Lean program of the network check computes the charge, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Counted": "frozen (no-function): It bounds AccSeqsWithin with each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -11729,7 +11743,8 @@
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": "frozen (no-function): It is JointHorizonBlocks with each block's integrity leg from IntegrityOfIntegrityBlock, over an abstract horizon of blocks of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each server-time block's integrity leg from IntegrityOfIntegrityBlock, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function."
+   "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function.",
+   "Accounting.SecurityProofs.Gates.FoolingCap": "frozen (no-function): A counting bound over every circuit of the gate model (Security/Definitions/Accounting/Gates/Model.lean), every set of inputs and every list of outputs read mod 2^j, not a property of a Lean function: the property's census check has no Lean code yet."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11753,9 +11768,9 @@
     "why": "P2 in the ring model per round, at every block count from 2^19 to 2^25: at a boundary held at most rho*|C| bits, outside an event of mass k*eps0 over k rounds, a uniform challenge is answered with probability at most 1 - p given the earlier answers; open, and, if p is prime, it forces p = 0 at D >= 32,894 (Q >= 2, L >= 65,789) whenever eps0 < 1 and m/N <= 1 - p + eps0 at L >= 2^(t+1) for m blocks kept without t low bits (p = 0.043 false from L >= 2^167 at 2^19 when eps0 <= 2^-130), which Security/Proofs/Pous/P2/RoundTests.lean proves."
    },
    "Accounting.Assumptions.EncodeChainHardness": {
-    "status": "open",
-    "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_encode_chain_hardness_known_constructions",
-    "why": "In the circuit model (Definitions/Accounting/Gates: window proven by interval analysis, each budgeted gate reading at most B operand bits, costs in property/v1's units), computing q distinct words of the masked k-round codec's encoding, less parity, on more than ε of the draws costs q·E budgeted units less E/(n−1) per run-input bit, inside the floor its statement carries (ε ≥ 2^−64, k ≥ 1, p ≥ 2^66, p ≡ 3 mod 4: below it a circuit of one draw's constant target, or a field of no bytes, refutes it, the red team's counterexamples in art:6bf31146fd1239ee0a07b05eae88f827c9b31948128a6d4a4c58c4b96d0a124e); open, with E = k·S·(n/8 − d(ε)) and d(ε) = d₀ + log₂(1/ε)/8 at ε ≥ 2^−64 (d₀ = 4 taken; the red team's Lemma R, Renormalization, for one squaring, whose floor on ε is needed: circuits with no budgeted gate are exact on the a whose squares don't carry, which refute any fixed d₀ below ε = 2^−182), false without B (one gate reading a word's bits computes a byte of its root). Its test runs the known constructions of a p1024 squaring within B = 128 (ripple carries, 3-limb look-ahead) and checks each costs at least n/8 − d₀; its regressions check that the non-carrying families refute Renormalization with no floor and sit below 2^−64."
+    "status": "falsified",
+    "test": "benchmarks/property_redteam/tests/test_bitwise_codec.py::test_the_conjecture_fails_at_p1024",
+    "why": "In the circuit model, computing q distinct words of the masked k-round codec's encoding, less parity, on more than ε of the draws costs q·E budgeted units less E/(n−1) per run-input bit, inside the floor its statement carries (ε ≥ 2^−64, k ≥ 1, p ≥ 2^66, p ≡ 3 mod 4); false at every E ≥ 1 and every B inside that floor (26 Oct 2026, Accounting.SecurityProofs.Gates.EncodeChainRefuted, note:20261026T0110Z-report-s5-lowerbounds): an AND of two bits is a free s8-family MAC and NOT a free affine map, so a restricted circuit with no budgeted gate and no run input computes any number of words for the key's gather units (bitwise_codec.py, 8 units a key byte). The model now charges every product of two data values a unit (Gates.nonlinear), and SquaringFloor and ChainSum replace it; it stays listed so that anything citing it shows up."
    },
    "Accounting.Assumptions.TS.LinSteer": {
     "status": "falsified",
@@ -11796,6 +11811,16 @@
    "Nci.Assumptions.WeightsSupportFmt": {
     "status": "falsified",
     "why": "WeightsSupport with each thread charged by its work at log2 n - mu; false at the deployed point (d = 2048, e = 4e4, E4M3 at rate 4, S = 2e7, b_w = 2.5) on its weight term and its margin (19 Oct 2026, NCI-FALSIFY, note:compute-accounting/20261019T0725Z-finding-nci-falsify, art:11fe95233ee17d4b013ddb1699b39f8e9656adc48ae17909efa46bc4ecbcccf2): one AdamW step after the checkpoint a weight lies in an interval theta fixes, so one token's 16,384 fprop products on a DeepSeek-V3 128 x 128 E4M3 block are charged 40,961.6 bits against <= 29,113 (false for b_w > 1.78 at sigma 0.006, over the first 1, 3 and 7 steps at sigma 0.006, 0.01 and 0.02); an NVFP4 16 x 16 2D-block weight quantized for fprop and again for dgrad is two weight gates, charged 1,280 against <= 1,269 (false for every b_w > 2.153); llama-3-405b's gate+up fan-out 106,496 exceeds e log2 n / rate, and its FP8 run is charged 2.077e7 against <= 1.947e7. Nci.SecurityProofs.ThreadedReadsInfoFmt, ThreadedContainedInfoFmt and ThreadedOfStateFmt rest on it; WeightsSupportFmt2 restates it."
+   },
+   "Accounting.Assumptions.SquaringFloor": {
+    "status": "open",
+    "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_squaring_floor_known_constructions",
+    "why": "In the circuit model's nonlinear units (Definitions/Accounting/Gates: window proven by interval analysis; the only free operations are linear maps with coefficients fixed before the coins, so a cost is the budgeted units and a unit per data product, an s8-family lane whose two multiplicands both depend on run or coin data, whatever their range), one squaring mod p from a word's canonical bytes to n/8 byte-format limbs congruent to its square, right on more than ε of the words, costs at least e nonlinear units, at ε ≥ 2^−64 and p ≥ 2^66; open, priced e = (2L − 1) + (L − d(ε)), d(ε) = 4 + ⌈log₂(1/ε)/8⌉ (374 at p1024 and ε = 2^−40): the 2L − 1 column sums' multiplicative complexity (sketched) plus the red team's Lemma R at c = 0. Every known construction sits above it (ripple carries 16,896, 3-limb look-ahead 16,726). Its test builds them and checks each costs at least e, its column sums L² data products."
+   },
+   "Accounting.Assumptions.ChainSum": {
+    "status": "open",
+    "test": "verity/core/protocols/remote_bandwidth/tests/test_encode_chain.py::test_chain_sum_known_chains",
+    "why": "In the circuit model's nonlinear units, if one squaring mod p costs e nonlinear units (SquaringFloor), the masked k-round codec's words cost k·S·e nonlinear units each (S = Field.squarings, 1,021 at p1024), less a word per n − 1 run-input bits (Gates.EncodeBound at E = k·S·e), at ε ≥ 2^−64, k ≥ 1, p ≥ 2^66 and p ≡ 3 mod 4: Sloth's sequentiality (Lenstra–Wesolowski) in the model, the roots' squarings in sequence and no work shared across words; open. Its test chains the known squarings at p1024 and checks the chain costs their sum, and the bitwise codec's data products are measured in benchmarks/property_redteam/tests/test_bitwise_codec.py."
    }
   },
   "events": ["FlockSoundness.Game.prob"]
@@ -11932,16 +11957,7 @@
    "definitions": {
     "Accounting.Assumptions.EncodeChainHardness": "5498d5e7d18daccbeca6770254fcff11cf1f52a2e00a0e92c5f9fd897d84610d"
    },
-   "guarantees": [
-    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
-    "Accounting.SecurityProofs.Gates.EncodeBudget",
-    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
-    "Accounting.SecurityProofs.Gates.EncodeCost",
-    "Accounting.SecurityProofs.StackedRequirementRelay",
-    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
-    "Accounting.SecurityProofs.StackedSessionConservationRelay",
-    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
-   ]
+   "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
   },
   "Definitions.Accounting.Assumptions.PouwFloor": {
    "digest": "4f9b562c931e2da9c956607655fcd71f416e3789589c2c2a40b16527b84a2885",
@@ -12097,6 +12113,22 @@
     "Accounting.SecurityProofs.TS.Sm120SheetHeadline",
     "Accounting.SecurityProofs.TS.Sm90MeasuredHeadline",
     "Accounting.SecurityProofs.TS.Sm90SheetHeadline"
+   ]
+  },
+  "Definitions.Accounting.Assumptions.SquaringChain": {
+   "digest": "d3f557ec4786889bf3792a5089fb223da3e0e107fb8c472003a10cf4d4974fe9",
+   "definitions": {
+    "Accounting.Assumptions.ChainSum": "7ad0fc65bedd3bcb11daf125be103ea1315686f4dd0d691971d279a0c78ec748",
+    "Accounting.Assumptions.SquaringFloor": "e0aa827864a696741c2cb8ba8c9718b34c4e4a3c1ff37866299d9402d025fe1e"
+   },
+   "guarantees": [
+    "Accounting.SecurityProofs.DeclaredCircuitRequirement",
+    "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeCost",
+    "Accounting.SecurityProofs.StackedRequirementRelay",
+    "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+    "Accounting.SecurityProofs.StackedSessionConservationRelay",
+    "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed"
    ]
   },
   "Definitions.Accounting.Assumptions.Stacking": {
@@ -12448,7 +12480,7 @@
    "guarantees": ["Accounting.SecurityProofs.CapacityOfStateBound", "Accounting.SecurityProofs.DerivedStateResidual"]
   },
   "Definitions.Accounting.Carrier": {
-   "digest": "3ad1293eeeecf14ee461aa300f485eb4adbd1d94341151ecd03bebee935fb5ba",
+   "digest": "e774dbe51a4f648b550a7613cc33e7a99d0752c0a75347e760aa92aace4f8864",
    "definitions": {
     "Accounting.Rate.PIChip.linkBitsEven": "664fdfcc22cb307c84e0dced36156f3512a82bd18bac34e67c7f1b1b3020dca6",
     "Accounting.Rate.PassProvenance": "ee44265e1c690be67eb25e35098885dc2a5c05ae23924c5202dbff4731579ede",
@@ -12469,7 +12501,7 @@
     "Accounting.RateSketch.Chip.rebuildsIn": "b82fb553e10657675bf1cb590e7449d30004993e1ffea93a7df6dabad9a62dd5",
     "Accounting.RateSketch.LifetimeCapped": "27d307bce051e699aa03ae7de515da270bfbe86912958602ac0daa75628bce55",
     "Accounting.RateSketch.Provenance": "e1c403ace5ce67331b8bc30903a25604bdb1c5587793475ffc4fd90c358bd839",
-    "Accounting.RateSketch.Provenance.OfCircuit": "9720606afac4619092f0e2efcf182e32bcd3177e20723733f6a8d25c6fc72304",
+    "Accounting.RateSketch.Provenance.OfCircuit": "099e6740b94fbac4eb4be8c7a1a6521751236459f96c932f1ab891870cf64272",
     "Accounting.RateSketch.Provenance.below": "4a48f157a7503f7554ee492f74fbecd0ceb6fc0bec60f0972ca47d597325c54b",
     "Accounting.RateSketch.Provenance.brecOn": "ff2bee70e358db270dc1f9003b9314e630160852d793ad5f482f796f4e21359f",
     "Accounting.RateSketch.Provenance.brecOn.go": "291335639b407bf01e1245cbca082ba4f9a9b58751242c79fe55b0d9ace72021",
@@ -12955,19 +12987,21 @@
    ]
   },
   "Definitions.Accounting.Gates.Codec": {
-   "digest": "7212e4cf8b274c11125dfc7d224c3f0a9fce4ef1012175f1a37574a260419357",
+   "digest": "cf768b61ce143b88d69d67188f51a470cc52e46238305228cecb240191c44f9e",
    "definitions": {
     "Accounting.Gates.CodecInputs": "6524cf356d674b61ff89e4e77fc979bf4fdf415765b98fc7d50cdaa86792d328",
     "Accounting.Gates.ComputesWords": "85f4401b8abbfdaffb2549e6593b93091410d66af43060b81a1e4e35215ba56c",
     "Accounting.Gates.Draw": "50deda17b9d1bcc6700e615c7ede160095ecbd48c5d560135589790fceb651f8",
     "Accounting.Gates.Draw.key": "6dad2d133e6707aad372e0cf61b6006820806f2089588c465d798690b2f44db0",
     "Accounting.Gates.Draw.tweak": "ff514570f3f06d0ff3eeb94803b514d56bd49608dadc6ce1c8546ebbe7fdde74",
+    "Accounting.Gates.EncodeBound": "6b53fd5c2b5d97e97a457acc1f1d35c3ebb7ace9b4e02a3a63f35616c8630b4f",
     "Accounting.Gates.Encodes": "9e390a178a7a8a76a8a39df058924230c05b0643dbe5ad6dd54c8dfc44774845",
     "Accounting.Gates.Field": "0696561576ed1787739a841cb54d8ab9021fd089f23579d7ccb59d60507563d6",
     "Accounting.Gates.Field.bytes": "0fbe042dd76b28731226e125cb8b5cbf37374ff48bdb6c9625a5c5731661f2e7",
     "Accounting.Gates.Field.c": "a29e754e40f18e03d4a3f39281867624376aa27203ff0ff46dcfffde85477531",
     "Accounting.Gates.Field.n": "af1819f039912e5b63629a4360d32ddfbf3cb20124fc8feae794e94b58ea8d5a",
     "Accounting.Gates.Field.p": "87b68352241b466a1848e386fe375f86236681978616c72cc19027dde3fd8391",
+    "Accounting.Gates.Field.squarings": "fde54483ef3e2ad049700ee876b336d61db476d1c8ce889d2350cdcde45f9860",
     "Accounting.Gates.Key": "1208172ccf34d57ca3f9fabd92df3d8d239c7c4a81d184776bb256d9252a2836",
     "Accounting.Gates.Key.c": "ede382da747dff7b52e659220d9681b35ed6634915a5a71fca79090dc0826f7d",
     "Accounting.Gates.Key.mask": "16fc2ad8620dcfd05e377c8a41425802a2c79c569bea6089b229dd5a7baf36df",
@@ -12983,7 +13017,7 @@
     "Accounting.Gates.byte": "b0f7db41b980d006780ca44a0e30f7a47c2c4b99f40cbcc44310be453bc4e4cf",
     "Accounting.Gates.draws": "05e2b2d92f4dc4e0ad5172eab703b7ad8afd60ebe362cd9ac4f2dde8fb340e1f",
     "Accounting.Gates.encodeCost": "be1125adec260dd551916c793fbb6c7d04a7731af5549bf4ece1f3423636fd4f",
-    "Accounting.Gates.encodeCosts": "cf565cad456cfec121f966f7fc0f13304eea82116e2214f4665d0655e99b8b87",
+    "Accounting.Gates.encodeCosts": "5d19c55ebb2d329635f8d630f51396a4f85905f6628d900ba7ef57c1a9c66e8a",
     "Accounting.Gates.encodeWord": "554d51815728fecb57794d50b9fa8e5af60363cefaa851eb9b4bf664a685222d",
     "Accounting.Gates.lessParity": "31e8614acb1229ac42def0795071f4ba897d3a8e60746ca526ff33e13bcb305b",
     "Accounting.Gates.nibbles": "c60b1f41d51faa275217f9e6b6a02d6623ed725af591a0f08398faf099670b86",
@@ -13028,7 +13062,7 @@
    ]
   },
   "Definitions.Accounting.Gates.Model": {
-   "digest": "24e85b2ffbae109cc74aed59ebda9dc4c62a4a4edbd2667a5d67b2acf408321c",
+   "digest": "1a91531c65239b40e20f745e5f69f369876fe4745ba87ccef005201657f890b4",
    "definitions": {
     "Accounting.Gates.Audit": "fe61c4f5697390b50450c728a1be07af859a208e40eb950dcabcb11d1ec58ce1",
     "Accounting.Gates.Audit.reads": "777cbb0f97dae2e1110f03d6eeaa958843d1e2c9b625cb1a1fcab1c386384c7e",
@@ -13050,14 +13084,15 @@
     "Accounting.Gates.Budget.neutral": "a324e3f4000c6f37d8d765fa8509ef0e3bd2dc216ddfe90d66cfaea874249b9b",
     "Accounting.Gates.Budget.rec": "ded40ddefba0dabe0932ca79c4d0df61056f954393ce87e48965b76e5ee695d6",
     "Accounting.Gates.Budget.rounding": "f73354f2aef603e9f1794323a0d5ea196714059020beb1f90e3864b12b8155c7",
-    "Accounting.Gates.Caps": "656b5a6c1d3f2dd2f6678743cd60cda49900069dca0e24c78895ae3a9f28fe7e",
+    "Accounting.Gates.Caps": "f51f23097f4a0e24fdca40e25f4c1e2ff989d4fcaf7f43494ea00124eb756411",
     "Accounting.Gates.Caps.compareSelect": "ad76012de719d04983943e3368a5513ece8750020b6cc5791b40e72d5ec9ec75",
     "Accounting.Gates.Caps.fold": "6177bd0c3269b162cc1324191c0eb1c92233194984e04f59f866b04753e4ea1c",
     "Accounting.Gates.Caps.gather": "dc87f0cf4d2955652b60f3e573ad8b0b563755a0b033188e2ba64f33241772d0",
-    "Accounting.Gates.Caps.life": "73d056a3bbbb7bd8e4b50620caa2b1ac38b04174e664859b8de3fb57dfbd73f9",
+    "Accounting.Gates.Caps.life": "f1e5b7927d7f10b9a589e346f3a4ae4af468b65e9ad0e9bba5089b55107e32e3",
+    "Accounting.Gates.Caps.products": "7ba7efac434cbe9031479f9a7379f9b069e44f778ccfd1f92c4a1a08d4a21610",
     "Accounting.Gates.Caps.rounding": "d79413a782a7c0bea0165c1ca14ea66d6a03c551d7b9ff63c53e4ce570233220",
-    "Accounting.Gates.Caps.runBytes": "05abd9abe93cd26c6ebb40d858cae0bfdf71f9cef71d76e97021add4d38d5339",
-    "Accounting.Gates.Caps.total": "1f3a1226ba6a85a4db23c823457896014ccd7af3628864447de6689f3bcbb9ce",
+    "Accounting.Gates.Caps.runBytes": "16cca1ae5b5cbe0a7dc1e7253494e1ee5520bcf080b870f846981fe852648870",
+    "Accounting.Gates.Caps.total": "d5376e1ed48f264572d56a7f165d702b1a4ce9918ca5c01b98e4a9776fa369d2",
     "Accounting.Gates.Census": "86d06c3962effe92d4d181104847b73e9fb55a49086fd48656621a85dd8996ba",
     "Accounting.Gates.Census.budgeted": "4344ab37db3b0429b3dccb0cdfc837831094e6d415e51d8523fde3233c7cb486",
     "Accounting.Gates.Census.compareSelect": "f5c3b1014eaedcd3898a73d1533171313dcae62b3aff3911c03f02a06d5621df",
@@ -13133,7 +13168,7 @@
     "Accounting.Gates.Op.raw": "983681333d4452f33885acab5f0192cb5771b8cd728e598e4aa6a7867ebff6ff",
     "Accounting.Gates.Op.rec": "5e3c361001ae319e4fcff94e247ddec40927bd0a144577c0e7d4e066b0e16338",
     "Accounting.Gates.OperandBits": "bf91430f4f2d5609770e6b91da83fcaf6e1e11e9add48c853f206058aeccab69",
-    "Accounting.Gates.Property": "7dbcb1491549e3c0f0ba62f9ccf37f76cba1b8f229f6fdebdb99650023409073",
+    "Accounting.Gates.Property": "3d33cb0c18636cb807e368907da364b916b5ed0386ebee59e4a94b389c8c872b",
     "Accounting.Gates.Proven": "ec56bf697fb590083009ec388a272db9416c378411d7cbbb4f2a48e1115f1f1d",
     "Accounting.Gates.Role": "5c00cb74dc61eb5cd0cd53b26d18320d5de3591cd4bbd0f759ca4ad200f63431",
     "Accounting.Gates.Role.casesOn": "c843f17882d958aaa99b327f03ebb07d236f0f9ef19f4b835665fa261d629242",
@@ -13160,6 +13195,7 @@
     "Accounting.Gates.census._sparseCasesOn_1": "9d8f7c3d164bb3158f346bf487e1b012b31faba291a6a468c8c5590cd1fdb442",
     "Accounting.Gates.clampS32": "a9e8cefc19985df52cd8f4ddb16087d5179aa73d3f0558ce886e5b6d0efe1014",
     "Accounting.Gates.countAt": "374c1ffdf00cad4b6ac57ed9d45cb1ed7d3257084565696c98d5a9bd0afc585f",
+    "Accounting.Gates.dataProducts": "4f97b27d9c65efd7c5a8a88cc371bc6d843e49378a263a354cd978a8ee79e89e",
     "Accounting.Gates.dot": "13372addc9becac5919595193564006afbcf0a43b11a48d69ef97af0602e2fde",
     "Accounting.Gates.dynamic": "79a038b4849945cce3b7ac71ed224f925387bb5d8d22e1593af747e357062e0a",
     "Accounting.Gates.dynamic._sparseCasesOn_1": "b98f2283bbcb33b587aba72321a2c7447a7756850861a59088089b2127540eb3",
@@ -13172,6 +13208,9 @@
     "Accounting.Gates.instReprInt8Fmt.repr.match_1": "27b187bac098a49a6690f49a6e16e36a222794d0eeb13b8fbb7e3c49a36e4193",
     "Accounting.Gates.instReprSite.repr.match_1": "bb1680845d03568fe9d22e2ff7775881d0064b870e7076ddb9eca0cf162b0b2f",
     "Accounting.Gates.intervals": "9993429af07ac947d5ed6caa8eb580766f809611089baadd207afd5f71fefc48",
+    "Accounting.Gates.nonlinear": "9d6e4f738bab3e2e9640e5bfb66c48e8c53459d1f2943c0db684b4cc0686f9f1",
+    "Accounting.Gates.products": "d97d6059f120162e1901753992eedf4a3ad3681eafdbdff25a1390c9b55c5fb9",
+    "Accounting.Gates.productsAt": "886e96a531c6e3f7f5cf0bba5e77b9166890cba30085e2a09e665dcfadf0ef7a",
     "Accounting.Gates.roleOf": "7b10ee19248d1ee053858f7e0dde1113cb824e82ca599b53cdf22c1eed51f2ef",
     "Accounting.Gates.runBits": "a7ee65e9ad11e592baadd01f2308ee8e89d98c8438bf85b6bc367a154bb2e979",
     "Accounting.Gates.s32Max": "727421d80050be3308e1178902145012bbd03c32195c51f29f54f87d4b03add9",
@@ -13209,6 +13248,7 @@
     "Accounting.SecurityProofs.Gates.FmaxfRange",
     "Accounting.SecurityProofs.Gates.FminfRange",
     "Accounting.SecurityProofs.Gates.Fooling",
+    "Accounting.SecurityProofs.Gates.FoolingCap",
     "Accounting.SecurityProofs.Gates.Int8ClampRange",
     "Accounting.SecurityProofs.Gates.Int8LinearWindow",
     "Accounting.SecurityProofs.Gates.LutIndexRange",
@@ -13544,9 +13584,9 @@
    "guarantees": ["Accounting.SecurityProofs.Composition", "Accounting.SecurityProofs.Fit"]
   },
   "Definitions.Accounting.Guarantees.DeclaredCircuit": {
-   "digest": "86adcdb25af4fde56e3ef3b6d8921a6e2105e82da737bdf158f0c4fbc6aeb4a7",
+   "digest": "92000c7e7211272de4dd14a4c6a84e7e0d9400d6ae043689da403eba578756ce",
    "definitions": {
-    "Accounting.Guarantees.DeclaredCircuitRequirement": "e150559da199b64cd22be96eafa8607e3328b3ff011e44ad4c0662863fa05564"
+    "Accounting.Guarantees.DeclaredCircuitRequirement": "239d3b7d79863a6c5a2def0c008d712adcbbfee1795166d90bc78815260e712f"
    },
    "guarantees": ["Accounting.SecurityProofs.DeclaredCircuitRequirement"]
   },
@@ -13591,19 +13631,20 @@
    ]
   },
   "Definitions.Accounting.Guarantees.Gates": {
-   "digest": "15f71b2a75a14fe80ed54679f4ff9e94146db79e7604e27c33cf7492db88321d",
+   "digest": "7adfbaa899c97b9a87b2b6b3defce61badf2307f0f351b844a09078dc6d5c599",
    "definitions": {
     "Accounting.Guarantees.Gates.Bf16ToF32Affine": "ad0f596e9c972f0c4af0f2681bd01990d37c5334323160b71a48ee5e1b8b057b",
     "Accounting.Guarantees.Gates.ClampOrWrap": "318ac8e1baab7cf1f890e087111f044112c4815c8348e5c89a0c5551ac132bb6",
     "Accounting.Guarantees.Gates.DeclaredWindow": "cd4123da8244df3f67895fb2097631e8e500b72670c4f54af0d8a9d92beb11f1",
     "Accounting.Guarantees.Gates.DitherRange": "75d5cc47e783cf8a5696461c0ac93515fe0e495b8c5e6aa6cf721be61b9587fb",
-    "Accounting.Guarantees.Gates.EncodeBudget": "552438c9bb6b371534ca7be28ba35aefbdec5f9f964a441c7b8e7f8af8563994",
-    "Accounting.Guarantees.Gates.EncodeCost": "3d63115952fadd7c8aacd9e609176a14236484e953cc0348a2934ced3dbaf023",
+    "Accounting.Guarantees.Gates.EncodeBudget": "7ec899d1c11c7424930356ce603d00de217a1587ba1acc4f9ebf88e07d462af6",
+    "Accounting.Guarantees.Gates.EncodeCost": "a41dd9b2fd5ec17f8aea5d4dce90b973fef7275f8478ad4b00b1020110c28570",
     "Accounting.Guarantees.Gates.Exp2Lut127Range": "6aa55bb19329dda4bfc6f62b774f571a3883184ac25b9a13b4b6ea3575dc75cb",
     "Accounting.Guarantees.Gates.F32ToS8RziRange": "659d65346bbf983bce895851eeb6cbaf77eb574f9c8b2d4307c2d442e0930a7a",
     "Accounting.Guarantees.Gates.FmaxfRange": "899b6996a5ed29d5e8a3aa7389c3dba21c99cbc460102fb6401b26ebb287eeb6",
     "Accounting.Guarantees.Gates.FminfRange": "b25f7af4f33bcea2b9bfc4c74e64702caf8d03953a1cbbaeb0f10a711b8f9f56",
     "Accounting.Guarantees.Gates.Fooling": "eedaa48214224046edc4ca0d9bcdbb0674b53e614a2d9223901d102085d6b20d",
+    "Accounting.Guarantees.Gates.FoolingCap": "c9feb37ff7e4f24456d2fcd37b7209ab32ca0b63f8b83af5ddf3938bf2e4867d",
     "Accounting.Guarantees.Gates.Int8ClampRange": "132fcca5c0c3130353da330e78661d3c076471f107f31c3496359d8914a23dcd",
     "Accounting.Guarantees.Gates.Int8LinearWindow": "6c0b96814edfab313987bc2c39dd180bac846ef25741e98315ff10b1673b516a",
     "Accounting.Guarantees.Gates.LutIndexRange": "f3a97df2aa1986fe47f34e832f79741385031e11ac15159e5f9b469d583fd493",
@@ -13631,6 +13672,7 @@
     "Accounting.SecurityProofs.Gates.FmaxfRange",
     "Accounting.SecurityProofs.Gates.FminfRange",
     "Accounting.SecurityProofs.Gates.Fooling",
+    "Accounting.SecurityProofs.Gates.FoolingCap",
     "Accounting.SecurityProofs.Gates.Int8ClampRange",
     "Accounting.SecurityProofs.Gates.Int8LinearWindow",
     "Accounting.SecurityProofs.Gates.LutIndexRange",
@@ -14141,13 +14183,13 @@
    ]
   },
   "Definitions.Accounting.Guarantees.Stacking": {
-   "digest": "d87218616c2cab5a2b3b144c891294159f03a38c66cca461a9f6085ea3a8c965",
+   "digest": "cb502c2bcf82000e164371a0af175ebe4ee419177b137c9baf070d31585cc756",
    "definitions": {
     "Accounting.Guarantees.CarrierBits": "20428995c2321369af63229df03218efa0f480d915fc3d6b52a08f798f159c97",
-    "Accounting.Guarantees.StackedRequirementRelay": "bc2977d035678eff0d639dc0560a8723310f3fffeb0c32df3f9480a193287613",
-    "Accounting.Guarantees.StackedRequirementSketchDeployed": "ac2e77ec236e65d0a3e3d905412b9127914a85cfedb53906fa37d630cc1a3218",
-    "Accounting.Guarantees.StackedSessionConservationRelay": "8670b758f76bb42c12221ddc8786d73d933917525d0af7d7ede093e657322b29",
-    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "5b20439e6afa58217871e789f60529bf9163bb3b3e29984f339aa2e441006959"
+    "Accounting.Guarantees.StackedRequirementRelay": "66226db138df647b06b0eb7f8f2e7eefe2f8b15a5d39d3d5f3ba6dedbec12e93",
+    "Accounting.Guarantees.StackedRequirementSketchDeployed": "41affddfa6f33b5d29f2d3b19502f8e7eedf25e533e94bdceb38ec0539121ef6",
+    "Accounting.Guarantees.StackedSessionConservationRelay": "65997133c40c32c1df664b496e503df6c5218f0c596ddca5ec8dad99bd546c9e",
+    "Accounting.Guarantees.StackedSessionConservationSketchDeployed": "5bc65ac03c11621bb8d44355d3b516957cd645591086508a2a8bc0dff38673e2"
    },
    "guarantees": [
     "Accounting.SecurityProofs.CarrierBits",
