@@ -40,7 +40,7 @@ theorem partAccepts_staged {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} 
       _root_.Flock.Readable.parseBytes readOfO xO = some p ∧ p.tags.typed = false ∧ p.publicInputs = none ∧
       readX x = some r ∧ (∃ ss, _root_.Flock.RecVStar.statements r.shape = .ok ss ∧ ss[s]? = some sv) ∧
       0 < p.sts.size ∧ _root_.Flock.Readable.StmtCopies sv p w ∧ L.Agrees cmt x s w xO ms ∧
-      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w)).isSome = false ∧
+      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧
       showsTr untr s x xO c := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r, sv, hx, ht, hpi, hr, hss, hsz, htab⟩ := stagedReads hs
@@ -64,7 +64,7 @@ theorem partAccepts_inner {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {
     {j : ℕ} {nm : String} {pt : VStar.Part} (hsv : ss[s]? = some (.inner j nm pt)) :
     ∃ (xO : Msg) (w : Claims.Flock.Wit) (p : _root_.Flock.Readable.Parsed),
       _root_.Flock.Readable.parseBytes readOfO xO = some p ∧ 0 < p.sts.size ∧ L.Agrees cmt x s w xO ms ∧
-      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w)).isSome = false ∧
+      (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧ (Claims.findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧
       showsTr untr s x xO c ∧
       ∀ t (ht : t < p.sts.size) (o g u : ℕ), o < 2 ^ (p.sts[t].m - p.sts[t].c.kLog) → g < p.sts[t].c.g →
         u < p.sts[t].c.upv →

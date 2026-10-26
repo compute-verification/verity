@@ -44,17 +44,19 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
 /-- **What V\* part `s`'s circuit accepts, read at the inner messages `ms`**, at the coins `c`: `x` is a compiled
 statement of the shape, and some V\* statement `xO` showing `c` for the part (`shows`) has an outer witness `w` passing
-`Flock.check`, its recorded calls true evaluations and none colliding, that agrees with `ms` at each round the part
+`Flock.check`, its recorded calls true evaluations and none colliding with another or with the compiled verifier's at
+`xO` (`vcallsAt`), that agrees with `ms` at each round the part
 holds whole and at each of its pieces, at its offset, whose commit strings (`cmt`) are `ms`'s at the rounds read
 whole off the run (`LayoutB.CmtAgrees`), and whose shared rows are `ms`'s where `ms` carries them (`LayoutB.RowsRead`).
-It is the least inner check `PartChecksB` admits (`partChecksB_partAccepts`,
-`partAccepts_chk`). -/
+It is the least inner check `PartChecksBV` admits (`partChecksBV_partAccepts`, `partAccepts_chk`). Refusing a
+collision with the verifier's evaluations ties the rows the part commits to the ones the verifier recomputes the
+commitments of (check 5, `partAccepts_tie`). -/
 def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) (x : Msg)
     (c : ℕ → Coin) (ms : List Msg) : Prop :=
   (∃ st : Stmt, D.parse x = some st ∧ shape st.form) ∧
     ∃ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true ∧ (∀ e ∈ L.calls x s w, H e.1 = e.2) ∧
-      (findColl (L.calls x s w)).isSome = false ∧ shows s x xO c ∧
+      (findColl (L.calls x s w ++ vcallsAt H D xO)).isSome = false ∧ shows s x xO c ∧
       (∀ i < L.rounds x, ∀ m, L.held x s w i = some m → ms.getD i [] = m) ∧
       (∀ i < L.rounds x, ∀ o m, (o, m) ∈ L.piecesOf x s w i → ((ms.getD i []).drop o).take m.length = m) ∧
       L.CmtAgrees cmt x xO ms ∧ L.RowsRead x s w ms
@@ -62,11 +64,11 @@ def PartAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **`PartChecksB` at what each part's circuit accepts**, at every deployment, layout, shape and staging: a witness
 whose calls collide takes the escape, and any other is its own `PartAccepts`. -/
-theorem partChecksB_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
+theorem partChecksBV_partAccepts (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (L : LayoutB)
     (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) (s : ℕ) :
-    PartChecksB H D DO L shape shows cmt (PartAccepts H D DO L shape shows cmt) s := by
+    PartChecksBV H D DO L shape shows cmt (PartAccepts H D DO L shape shows cmt) s := by
   intro x st hx hf xO w hck hT
-  cases hc : (findColl (L.calls x s w)).isSome
+  cases hc : (findColl (L.calls x s w ++ vcallsAt H D xO)).isSome
   · exact Or.inl fun c hs ms hh hp hm hr => ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp, hm, hr⟩
   · exact Or.inr rfl
 
@@ -75,7 +77,7 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 `PartChecksB` holds. -/
 theorem partAccepts_chk {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
     {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg}
-    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hP : ∀ s, PartChecksB H D DO L shape shows cmt chk s)
+    {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop} (hP : ∀ s, PartChecksBV H D DO L shape shows cmt chk s)
     {s : ℕ} {x : Msg} {c : ℕ → Coin} {ms : List Msg} (h : PartAccepts H D DO L shape shows cmt s x c ms) :
     chk s x c ms := by
   obtain ⟨⟨st, hx, hf⟩, xO, w, hck, hT, hc, hs, hh, hp, hm, hr⟩ := h
@@ -96,10 +98,23 @@ theorem decompB_mono {H : Msg → Msg} {D : Deploy Coin} {IV : Verifier Coin} {L
 theorem exists_chk_iff (H : Msg → Msg) (D : Deploy Coin) (DO : Flock.Deploy Coin Col T) (IV : Verifier Coin)
     (L : LayoutB) (shape : Form → Prop) (shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop) (cmt : Msg → ℕ → Msg → Msg) :
     (∃ chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop,
-        (∀ s, PartChecksB H D DO L shape shows cmt chk s) ∧ DecompB H D IV L shape chk) ↔
+        (∀ s, PartChecksBV H D DO L shape shows cmt chk s) ∧ DecompB H D IV L shape chk) ↔
       DecompB H D IV L shape (PartAccepts H D DO L shape shows cmt) :=
   ⟨fun ⟨_, hP, hD⟩ => decompB_mono (fun _ _ _ _ => partAccepts_chk hP) hD,
-    fun hD => ⟨_, partChecksB_partAccepts H D DO L shape shows cmt, hD⟩⟩
+    fun hD => ⟨_, partChecksBV_partAccepts H D DO L shape shows cmt, hD⟩⟩
+
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
+/-- **Check 5's tie at what a part's circuit accepts**: `PartAccepts` names a V\* statement `xO` showing the coins and
+an outer witness `w` there, and wherever `w`'s recorded calls hold `frame v σ` with the output `d` to which the compiled
+verifier at `xO` evaluates `frame v₀ σ₀` (`Deploy.setup`), `v = v₀` (`row_tie`): the part's row is the verifier's. -/
+theorem partAccepts_tie {H : Msg → Msg} {D : Deploy Coin} {DO : Flock.Deploy Coin Col T} {L : LayoutB}
+    {shape : Form → Prop} {shows : ℕ → Msg → Msg → (ℕ → Coin) → Prop} {cmt : Msg → ℕ → Msg → Msg} {s : ℕ} {x : Msg}
+    {c : ℕ → Coin} {ms : List Msg} (h : PartAccepts H D DO L shape shows cmt s x c ms) :
+    ∃ (xO : Msg) (w : Flock.Wit), Flock.check DO.parse xO w = true ∧ shows s x xO c ∧
+      ∀ (frame : Msg → Msg → Msg), (∀ v σ v' σ', frame v σ = frame v' σ' → v = v') → ∀ v σ v₀ σ₀ d : Msg,
+        (frame v σ, d) ∈ L.calls x s w → frame v₀ σ₀ ∈ D.setup xO → H (frame v₀ σ₀) = d → v = v₀ := by
+  obtain ⟨-, xO, w, hck, hT, hc, hs, -⟩ := h
+  exact ⟨xO, w, hck, hs, fun _ hinj _ _ _ _ _ hm hv hd => row_tie hinj hm hT hv hd hc⟩
 
 end Facts
 
