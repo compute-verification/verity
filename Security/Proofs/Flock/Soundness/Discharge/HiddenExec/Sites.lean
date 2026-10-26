@@ -1,4 +1,5 @@
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+import Proofs.Flock.Soundness.Discharge.HiddenExec.PinnedOne
 
 /-!
 # The sites of a one-table hidden-output session
@@ -56,6 +57,19 @@ theorem twin_sat_of_unpinned {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
   rw [eA, eB]
   exact hz
 
+/-- **With every pinned bit a linear row, a witness of a statement equal to `stmtOf st` satisfies its `unpin` twin**
+(`sat_pinned`). -/
+theorem twin_sat_of_linear {tags : Tags} {T : Model.Statement} {st : Stmt} {hwf : StmtWF st}
+    {regs : List (Model.Region st.c.kLog (st.m - st.c.kLog))} (hT : T = stmtOf st hwf regs)
+    (L : FlockSoundness.Layout (Hidden.unpin st)) (F : Aliased.UnitFacts tags (Hidden.flatTwin st))
+    (hleaf : st.leaf = default) (hda : st.da = (HmOut.delta st.c st.pin).1)
+    (hdb : st.db = (HmOut.delta st.c st.pin).2) (hlin : ∀ y ∈ Hidden.pinnedCols st.c, LinearBit st.c y)
+    {z : Model.Witness T.m} (hz : T.Satisfies z) :
+    (twin T (fun r j => matA (Hidden.unpin st) r.val j.val) (fun r j => matB (Hidden.unpin st) r.val j.val)).Satisfies
+      z := by
+  subst hT
+  exact sat_pinned L F hleaf hda hdb hwf hlin regs hz
+
 namespace TableH
 
 variable {S : Finset (Fin n)} (x : TableH I mPts S)
@@ -98,6 +112,14 @@ include ht hc hv1 in
 theorem sat (z : Model.Witness x.T.S.m) (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
   twin_sat_of_unpinned x.hT (Hidden.setupHidden_spec x.h).da (Hidden.setupHidden_spec x.h).db
     (Hidden.pinnedCols_nil (Hidden.setupHidden_unpinned ht x.h (by rw [x.c_eq hc]; exact hv1.1.1))) hz
+
+include ht in
+/-- **A witness of a drawn table satisfies its statement without Δ's pinned copies**, pinned outputs or not, when every
+pinned bit is a linear row (`twin_sat_of_linear`). -/
+theorem sat_linear (hlin : ∀ y ∈ Hidden.pinnedCols x.st.c, LinearBit x.st.c y) (z : Model.Witness x.T.S.m)
+    (hz : x.T.S.Satisfies z) : (twin x.T.S x.twinA x.twinB).Satisfies z :=
+  twin_sat_of_linear x.hT (Hidden.unpin_layout ht x.h) (flat_unitFacts ht x.h) (Hidden.setupHidden_spec x.h).leaf
+    (Hidden.setupHidden_spec x.h).da (Hidden.setupHidden_spec x.h).db hlin hz
 
 end TableH
 

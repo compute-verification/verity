@@ -73,4 +73,24 @@ theorem zero_block {S : Model.Statement} {A B : Matrix (Fin (2 ^ S.kLog)) (Fin (
   rw [mulVec_pin S.A₀ A (fun j => (h zero j).1), hμ0, ha, zero_mul, add_zero, zero_mul] at hr
   exact hr.symm
 
+/-- **The forced-zero row carries 0** in every block of a satisfying witness, when its `A` without the copies is empty,
+whatever its own copies: at row `zero` they add `μ zero · (e_zero + e_zero)`, which is 0 over GF(2). -/
+theorem zero_block' {S : Model.Statement} {A B : Matrix (Fin (2 ^ S.kLog)) (Fin (2 ^ S.kLog)) (ZMod 2)}
+    {zero : Fin (2 ^ S.kLog)} {μ : Fin (2 ^ S.kLog) → ZMod 2} (h : PinRows S A B zero μ)
+    (hA0 : ∀ j, A zero j = 0) {z : Model.Witness S.m} (hz : S.Satisfies z) (o : Fin (2 ^ S.nbl)) :
+    S.block z o zero = 0 := by
+  have hr := hz.1 o zero
+  have ha : A.mulVec (S.block z o) zero = 0 := by
+    simp only [Matrix.mulVec, dotProduct, hA0, zero_mul, Finset.sum_const_zero]
+  have hxx : S.block z o zero + S.block z o zero = 0 := by
+    have key : ∀ x : ZMod 2, x + x = 0 := by decide
+    exact key _
+  rw [mulVec_pin S.A₀ A (fun j => (h zero j).1), ha, hxx, mul_zero, add_zero, zero_mul] at hr
+  exact hr.symm
+
+/-- A row that is `e_k` reads `v k`. -/
+theorem mulVec_single {N : ℕ} (M : Matrix (Fin N) (Fin N) (ZMod 2)) {r k : Fin N}
+    (h : ∀ j, M r j = if j = k then 1 else 0) (v : Fin N → ZMod 2) : M.mulVec v r = v k := by
+  simp only [Matrix.mulVec, dotProduct, h, ite_mul, one_mul, zero_mul, Finset.sum_ite_eq', Finset.mem_univ, if_true]
+
 end FlockSoundness.Discharge.Pinned
