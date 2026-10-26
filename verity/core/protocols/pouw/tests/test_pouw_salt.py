@@ -180,6 +180,32 @@ def test_epoch_open_root_form():
             PS.epoch_open_root(weights, bad)
 
 
+def test_anchored_epoch_root_form():
+    """An H1 window's salt epoch's open root is SHA-512(b"verity/pouw-epoch-open/v2" ‖ W ‖ X ‖ u64be(k)), 161 bytes
+    hashed, pinned on one vector: another W, X or epoch is another root, none is a Pearl-C epoch's root, and a root
+    that isn't 64 bytes or an epoch number that isn't an integer in [0, 2^64) is refused."""
+    weights, anchors = bytes(range(64)), bytes(range(64, 128))
+    root = PS.anchored_epoch_root(weights, anchors, 0)
+    assert root.hex() == (
+        "9a94dc1e8c5ea75e23145eb1f4f384ce8f7b516f555d746ce45ceba6bfdea693"
+        "09f2889235afecd91aa709280bbbff11148c45ec97b2cad9c11a364c39a619ed")
+    assert PS.ANCHORED_EPOCH_TAG == b"verity/pouw-epoch-open/v2"
+    assert len(PS.ANCHORED_EPOCH_TAG + weights + anchors + bytes(8)) == 161
+    assert PS.anchored_epoch_root(weights, anchors, 258) == hashlib.sha512(
+        PS.ANCHORED_EPOCH_TAG + weights + anchors + bytes(6) + b"\1\2").digest()
+    assert len({root, PS.anchored_epoch_root(weights, anchors, 1), PS.anchored_epoch_root(bytes(64), anchors, 0),
+                PS.anchored_epoch_root(weights, bytes(64), 0), PS.anchored_epoch_root(anchors, weights, 0),
+                PS.epoch_open_root(weights, 0)}) == 6
+    for bad in (weights[:32], weights + b"\0", bytearray(weights), weights.hex(), None):
+        with pytest.raises(DomainError, match="weights' root is 64 bytes"):
+            PS.anchored_epoch_root(bad, anchors, 0)
+        with pytest.raises(DomainError, match="anchors' root is 64 bytes"):
+            PS.anchored_epoch_root(weights, bad, 0)
+    for bad in (-1, 1 << 64, 1.0, True, "0", None):
+        with pytest.raises(DomainError, match="salt epoch's number"):
+            PS.anchored_epoch_root(weights, anchors, bad)
+
+
 def test_a_context_names_its_pouw_window():
     """`context` names the window before the manifest's digest, which stays the last segment (`pass_epoch`'s), and
     `window_of` reads it back; anything else names no window."""
