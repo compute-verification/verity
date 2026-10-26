@@ -194,6 +194,53 @@ def test_the_registration_names_each_link_windows_warden_rows_its_ports_read(tmp
     assert all(tampered[x]["root"] == regs["egress", x]["root"] for x in range(G) if x != w)
 
 
+def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the_prover_committed(tmp_path):
+    """The verifier's own ``--registered`` file of each member (`registered_file`: `stage` writes it, `a0.lean_verify`
+    passes it, and a Lean verdict's ``registered`` reports its roots) holds each warden port at the root and domain of
+    the row registration the deployment's key signed (`warden_rows.check_registration`, read here afresh from the
+    run's ``cells.jsonl``), the root `warden_roots` registers for that direction and link-window. A member whose rows
+    the prover committed afresh, under salts of its own, is still read at the signed root, and refused there; and a
+    statement whose header names a port registered that the verifier's file doesn't is refused, as Lean refuses it
+    (`header_refusal`, `Flock.Registered.check`)."""
+    G = 2
+    run = published(tmp_path / "run", sz.TEST, windows=G)
+    h = sz.host(tmp_path / "host", run, setup=sz.TEST, group=G)
+    dep = json.loads((run / "deployment.json").read_text())
+    key, session, params = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"]), sz.W.WardenParams(**dep["params"])
+    signed = {}
+    for (d, w), doc in _cells(run).items():
+        head, dom = sz.WR.check_registration(doc, key, session, params, WS.LINK, sz.Direction(d), w)
+        signed[f"rows/{d}/{w}"] = (head.root.hex(), dom.domain_id.hex())
+    assert len(signed) == 2 * G
+    honest = h.rounds["honest"]
+    roots = sz.warden_roots([{"warden": m.warden} for m in honest])
+    assert {r["port"]: (r["root"], r["domain"]) for r in roots} == signed
+    read: dict[str, set] = {}
+    for m in honest:
+        ports = sz.registered_file(m)["ports"]
+        for p, doc in m.warden.items():
+            read.setdefault(f"rows/{doc['direction']}/{doc['window']}", set()).add((ports[p]["root"], ports[p]["domain"]))
+    assert read == {r: {x} for r, x in signed.items()}
+
+    w = 1
+    side = h.at.sides["egress"][w]
+    c = side.cells
+    mine = sz.WR.Cells.commit(c.link, c.direction, c.window, c.rows, c.wiring, c.params, c.session)
+    assert mine.rows == c.rows and mine.head.root != side.head.root
+    egress = [*h.at.sides["egress"][:w], SimpleNamespace(**{**vars(side), "cells": mine}), *h.at.sides["egress"][w + 1:]]
+    at = SimpleNamespace(**{**vars(h.at), "sides": {**h.at.sides, "egress": egress}})
+    mb = next(mb for mb in sz.members_of(sz.TEMPLATES, G, h.at.T) if mb.template == "egress" and mb.window == w)
+    m = sz.member(at, "honest", mb)
+    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"warden": m.warden}])[0]["root"]) == (
+        signed[f"rows/egress/{w}"][0],) * 2
+    assert m.refused == "registered reads: table row 0 does not open the registered root at position 0"
+
+    m = next(x for x in honest if x.template == "egress" and x.window == w)
+    assert m.refused is None and sz.header_refusal(m.ports, m.entries) is None
+    assert sz.header_refusal(m.ports, {**m.entries, "o9": m.entries["o1"]}) == (
+        "registered reads: the statement names port o9 registered, and the verifier's registered reads do not")
+
+
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     """`window_answer` as the rows form reads a link-window's scan answer (`pouw.core_check.answer_of` and `integrity`,
     the period mirror's own reads): every unit of a G = 2 group drawn, one level drawn stratified over the three

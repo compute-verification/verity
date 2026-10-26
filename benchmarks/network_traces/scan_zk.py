@@ -489,6 +489,22 @@ def _bits(reg: ADV.Registration, i: int) -> list[int]:
     return [row[k // 8] >> k % 8 & 1 for k in range(reg.n_bits)]
 
 
+def header_refusal(ports: dict, entries: dict) -> str | None:
+    """The first rule of Lean's registered reads (`Flock.Registered.check`): a statement's header names a port
+    registered only where the verifier's own ports do, since a header entry carries no root and its rows would open
+    none the verifier named. None when it holds."""
+    extra = next((p for p in entries if p not in ports), None)
+    return None if extra is None else (f"registered reads: the statement names port {extra} registered, and the "
+                                       "verifier's registered reads do not")
+
+
+def registered_file(mr: SimpleNamespace) -> dict:
+    """Member `mr`'s `--registered` file, the verifier's own (`stage` writes it, `a0.lean_verify` passes it, and a Lean
+    verdict's `registered` reports its roots): each warden port at the head `warden_rows.check_registration` read
+    under the deployment's key, never a root of the prover's."""
+    return WR.reads_file(mr.ports)
+
+
 def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespace:
     """Round `name`'s member `mb` (`members_of`): each unit's input rows (in its signature's order, as bits or bytes),
     the salts its rows, inputs and outputs but o0, are committed under, its header's `registered` entries and the
@@ -528,7 +544,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         ports[p] = tree_port(kind, reg, ps, mb.base)
         bcs[p] = [None if p in made and made[p][k] is None else tree_bc(reg, i, made[p][k] if p in made else None)
                   for k, i in enumerate(ps)]
-    refused = None
+    refused = header_refusal(ports, entries)
     for p in [r for r, _b in ins] + [o for o, _b in outs]:
         refused = refused or (WR.refusal(ports[p], warden[p].dom, entries[p], bcs[p]) if p in warden else
                               tree_refusal(ports[p], reads[p][1], entries[p], bcs[p]))
@@ -665,7 +681,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    (out / "registered.json").write_text(json.dumps(WR.reads_file(mr.ports), sort_keys=True))
+    (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "template": mr.template, "window": mr.window,
          "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512, "set": set_name,
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
