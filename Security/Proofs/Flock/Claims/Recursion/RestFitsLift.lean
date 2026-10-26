@@ -49,8 +49,8 @@ theorem byteArray_ext {x y : ByteArray} (h : x.data = y.data) : x = y := by
 def toVec (a : F128) : List.Vector UInt8 16 := ⟨a.toBytes.data.toList, FlockSoundness.Refine.toBytes_length a⟩
 
 theorem toVec_inj : Function.Injective toVec := fun a b h => by
-  simp only [toVec, Subtype.mk.injEq] at h
-  exact FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 h))
+  simp only [toVec] at h
+  exact FlockSoundness.Refine.toBytes_inj (byteArray_ext (Array.toList_inj.1 (Subtype.mk.inj h)))
 
 theorem card_F128_vec : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) := by
   rw [card_vector, card_F128, card_UInt8]
@@ -59,8 +59,8 @@ theorem card_F128_vec : Fintype.card F128 = Fintype.card (List.Vector UInt8 16) 
 /-- **Any 16 bytes are an element's.** -/
 theorem toBytes_surj (l : List UInt8) (hl : l.length = 16) : ∃ a : F128, a.toBytes.data.toList = l := by
   obtain ⟨a, ha⟩ := ((Fintype.bijective_iff_injective_and_card toVec).2 ⟨toVec_inj, card_F128_vec⟩).2 ⟨l, hl⟩
-  simp only [toVec, Subtype.mk.injEq] at ha
-  exact ⟨a, ha⟩
+  simp only [toVec] at ha
+  exact ⟨a, Subtype.mk.inj ha⟩
 
 /-- **Any whole 16-byte blocks are some elements' bytes.** -/
 theorem colBytes_surj : ∀ (n : ℕ) (l : List UInt8), l.length = 16 * n →
@@ -311,6 +311,7 @@ theorem card_slots {st : Setup} {sch : Flock.Schedule} {e : ℕ} {q : Proof} (hq
   have h2 : 2 * (sch.levels.size - 1) = 2 * (sch.levels.size - 2) + 2 := by omega
   have h7 : sch.levels.size - 1 - 1 = sch.levels.size - 2 := by omega
   simp only [shapeOf, h7, h2]
+  generalize Fintype.card F128 = N
   ring
 
 /-- The absorbed values at the slots `d`, as a vector of their count. -/
