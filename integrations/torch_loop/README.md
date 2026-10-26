@@ -16,11 +16,20 @@ committed row longer than one SHA-512 block.
   `benchmarks/prove_path/records_audit.py`): the schedule to the circuit record, exit 2 on advice that is not a schedule.
   It registers under its name, the digest over its code (this package and `verity/`, `interface.compiler_digest`) and the
   commit that code is at; the audit runs it from its own checkout of that commit (`--table ARGV...`: the verifier's entry).
+- `verity_torch_loop/checkpoint.py`, `checkpoint/` and `manifests/checkpoints-int8.json`: the loop's model as the int8
+  checkpoint role `TORCH_LOOP_MLP_H128_W8A8`. The auditor's gate (`benchmarks/live_challenger/models.py`) registers that role
+  to sign the loop's weights root.
+  - The files are the weights `Model()` serves (H = 128, seed 0) in the gate's layout: each linear's s8 codes and s_w under
+    its op path, plus the embedding, in `model.safetensors`, beside `config.json`.
+  - The manifest entry pins each file's size and sha256 and lists `linears`, the loop's op paths in order.
+  - `python -m verity_torch_loop.checkpoint` writes the files, and `--check` checks them.
+  - The gate reads this manifest only once its `MANIFEST` names it; today that is vLLM's alone.
 - `tests/`: the loop's outputs are the Definition's, unit by unit; core's registration check passes the written window and
   refuses a port under another domain; the verifier's window from the records (`interface.of_records`) is the loop's; its
   compiler compiles its committed schedule to the circuit it registers and refuses advice that is not a schedule; its unit
   composes into C-Flock's unit statement (slow); a tampering loop's outputs are not its Definition's; the loop loads no
-  vLLM.
+  vLLM. The checkpoint role's files are the served weights bit for bit, its entry pins them and names the linears in order,
+  and the gate's own code reads the loop's rows from them and digests them to the role's checkpoint digest.
 - `verity_torch_loop/frozen.py` and `serve_frozen.py`: one decode step of the frozen H200 shape (CMP-92 Phase 2: width
   16,384, 256 query heads of 64 with one KV head, MLP 65,536), the first `--layers` of its 52, every matmul coordinate a unit
   on the H200's bindings (`ScaledMmS8Coordinate_v1{K=16384}` and `{K=65536}` on `GEMM_SM90_S8`, `GemmCoordinate{K=64}` on

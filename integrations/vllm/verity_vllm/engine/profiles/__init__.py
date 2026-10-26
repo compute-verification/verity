@@ -1,6 +1,6 @@
 """Pinned capture profiles: pattern registrations and accepted constexpr/geometry values per (vLLM, torch, Triton, GPU) tuple.
 
-[P6, 2026-09-23] There is no per-model profile module and no role -> module table.  A checkpoint role's κ profile is
+There is no per-model profile module and no role -> module table.  A checkpoint role's κ profile is
 `profiles.generic.build_profile(role, world)` -- the κ pins of `vllm_d9105ea80_sm89_eager`, the architecture's pattern libraries
 (`gen_*_patterns`) and the role's HF `config.json` plus the declared family facts (`family_facts.FAMILY_FACTS[model_type]`, the one place a
 family name appears).  `verity_vllm.engine.profiles.derived_<ROLE>[_tp<W>]` (and the X-07 name `dense_<ROLE>`) is materialised on import by the

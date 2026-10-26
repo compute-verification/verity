@@ -64,7 +64,13 @@ answer after reading its receipt time (`block_digest`, its `sha512/row/v2` diges
 `answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's root of `C*`.
 A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
 signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
-(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
+(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
+`PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof unit, its one output bit the public verdict: 1
+iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
+the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
+Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
+(`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
+compiled circuit to that code.
 
 ~~~python
 from verity.ml.crypto import lms
