@@ -55,18 +55,19 @@ outputs, replay of the layer-steps the draw meets (to build their witnesses), an
   sampling block length in blocks that proves within its own GPU time, and the faulty ANDs (`Stratified.harm_bound`, not a Lean
   guarantee).
 - `demo_a.py`: Demo A's frontier on one H200 (PRF-166): plain INT8 weights, no P2 decode, a block of 16,384 requests at
-  CMP-92's 7.84 s step, 32 steps a request, on `h200.py`'s partition within C-Flock's k_log 27 (RMSNorm as
-  `RMSNormFusedCuda_v2`, every subcircuit past the cap split into equal parts), with statements shared per subcircuit
-  per sampling block. The harm is Daniel's half skipped work (each unit's own ANDs), half leaked output bits, each half
-  weighted at each budget by the least bound that budget certifies for it alone; each point reports `certify`'s
-  `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, and the knee. The plan of record is proving within
-  1% of the sampling block's GPU time, for sampling blocks of one serving block, the least that affords a plan, a
-  week, a month and a year, with its draw a subcircuit; beside it, each Definition's share of the ANDs against the
-  step's GPU time.
+  HASH-20's 6.35 s step, 32 steps a request, on circuits' FAMILIES map (every subcircuit a Definition C-Flock stages,
+  at its measured ANDs and staged k_log) with PoUW's tile lanes as one more subcircuit (`PouwH1Tile_v1`'s size), and
+  statements shared per subcircuit per sampling block. The harm is Daniel's half skipped work (each unit's own ANDs),
+  half leaked output bits, each half weighted at each budget by the least bound that budget certifies for it alone;
+  each point reports `certify`'s `free_compute` and `leak` from its one draw at δ = 1% and 1e-6, the tile stratum's ε
+  (`eps_at`), and the knee. The plan of record is proving within 1% of the sampling block's GPU time, for sampling
+  blocks of one serving block, the least that affords a plan, a week, a month and a year, with its draw a subcircuit
+  and the commits beside it; then M3's uniform 8-unit draw against the block's GPU time, and each Definition's share
+  of the ANDs against the step's GPU time.
 
 ```text
 uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
 uv run python benchmarks/sampling_plan/transformer.py --out DIR [--model large] [--share S] [--delta D]
 uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
-uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--pad]
+uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
 ```
