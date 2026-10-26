@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.NextS
 import Proofs.Flock.Claims.Complete.Encode
 import Proofs.Flock.Claims.Recursion.RepFramesBind
+import Proofs.Flock.Claims.Recursion.VarLen
 
 /-!
 # `IVStar`'s last step at the deployed reader (`nextR`)
@@ -11,7 +12,7 @@ fixed: every absorbed value of a decided proof is read from an opened round, the
 openings, and the fields the transcript never absorbs are what V\* takes for them (`params` the pinned ones,
 `ligerito.initialCap` the cap, `zerocheck.finalC` V\*'s `v_C`).
 
-* **How a round's rows join** (`joinR`, `rowsOf`, `rowsOf_joinR`): tag `0`, then the rows, so each element-level
+* **How a round's rows join** (`joinR`, `rowsOf`, `rowsOf_joinR'`): tag `0`, then the rows, so each element-level
   message reads back as its opened rows.
 * **Node rows** (`nodeRow`, `nodeOf`, `isNodeRow`): a cap node is opened as a 128-byte row, the node then 64 zero
   bytes, as the deployed verifier registers it (`rec_live.top_rows`, RecCap's `top`); the reader takes each round-0
@@ -21,7 +22,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   carries is a `root_B` node (`linkR_rootB`), which `rec-cap` holds.
 * **A rep's proof** (`FitsRep`, `readRep`): rep `k`'s rounds are the schedule's (`RecDeploy.repSchedAt`); round `j`'s
   rows are its committed tops' node rows, then, where it absorbs, one row of the element values its squeeze answers (`vals`
-  of the `j`-th chunk of `repFrames`, `T` among them). The proof's cap is round 0's nodes for its table, its recursive
+  of the `j`-th chunk of `repFrames`, `T` among them), zero-padded to whole 128-byte blocks as the deployed prover writes
+  it (`padRow`; the frames' skeleton fixes how many values the row holds). The proof's cap is round 0's nodes for its table, its recursive
   caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
   (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, with
   the last message's openings and the unabsorbed fields as V\* takes them (`absorbedFrom`, `repFrames_absorbedFrom`):
@@ -36,6 +38,9 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   proves it (`readsBack`).
 * **The round messages custody and the verdict read** (`framesOf`): each round's framed bytes, the chunks of the
   decided proof's `repFrames`, with the round's coin.
+* **What the reading refuses** (`decR_stmt`, `decR_shaped`): a last message whose statement is not the statement, as
+  the checks after the verdict do (`checksAtJ`), and proofs not shaped for their files (`ShapedAt`), as decoding each
+  file at its shape gives.
 * **The record custody and the verdict read** (`recJ`, `recStreams`): the reader's, not the prover's: the honest
   record's form at SHA-512, whose rep streams retain the round messages, each round counting its schedule's coins
   (`RecDeploy.repSchedAt`) and holding its coin's first that many. This is what the shipped recursion enforces of the
@@ -60,28 +65,24 @@ noncomputable section
 
 /-! ## Rows -/
 
-/-- **How a round's rows join**: tag `0`, then the rows. -/
-def joinR (rs : List Claims.Msg) : Claims.Msg := 0 :: encList encBytes (rs.map fun r => (⟨r.toArray⟩ : ByteArray))
+/-- **How a round's rows join**: tag `0`, then the rows, every length in variable-length bytes (`encV`). -/
+def joinR (rs : List Claims.Msg) : Claims.Msg := 0 :: encVL encVB (rs.map fun r => (⟨r.toArray⟩ : ByteArray))
 
 theorem joinR_head (rs : List Claims.Msg) : ∃ a, joinR rs = 0 :: a := ⟨_, rfl⟩
 
 /-- An element-level message read back as its rows. -/
 def rowsOf : Claims.Msg → Option (List ByteArray)
   | 0 :: body =>
-    match (rdList rdBytes).run body with
+    match (rdVLs rdVB).run body with
     | some (v, []) => some v
     | _ => none
   | _ => none
 
-/-- **A joined round reads back as its rows**, where its lengths fit their words. -/
-theorem rowsOf_joinR {rs : List Claims.Msg} (hl : rs.length < 2 ^ 64) (hb : ∀ r ∈ rs, r.length < 2 ^ 64) :
+/-- **A joined round reads back as its rows**, at every length. -/
+theorem rowsOf_joinR' (rs : List Claims.Msg) :
     rowsOf (joinR rs) = some (rs.map fun r => (⟨r.toArray⟩ : ByteArray)) := by
-  have h := FlockComplete.rdList_encList (r := rdBytes) (e := encBytes) (l := rs.map fun r => (⟨r.toArray⟩ : ByteArray)) (fun b hb' => by
-      obtain ⟨r, hr, rfl⟩ := List.mem_map.1 hb'
-      refine FlockComplete.rdBytes_encBytes ?_
-      show r.toArray.size < 2 ^ 64
-      rw [List.size_toArray]
-      exact hb r hr) (by rw [List.length_map]; exact hl) []
+  have h := rdVLs_encVL (r := rdVB) (e := encVB) (l := rs.map fun r => (⟨r.toArray⟩ : ByteArray))
+    (fun b _ rest => rdVB_encVB b rest) []
   rw [List.append_nil] at h
   unfold rowsOf joinR
   simp only [h]
@@ -130,6 +131,11 @@ theorem isNodeRow_nodeRow {node : ByteArray} (h : node.data.size = 64) : isNodeR
     rw [List.size_toArray, List.length_append, hl, List.length_replicate]
   · show (node.data.toList ++ List.replicate 64 0).toArray.toList.drop 64 = List.replicate 64 0
     rw [List.toList_toArray, ← hl, List.drop_left]
+
+/-- `rowsOf_joinR'` at its earlier bounds. -/
+theorem rowsOf_joinR {rs : List Claims.Msg} (_hl : rs.length < 2 ^ 64) (_hb : ∀ r ∈ rs, r.length < 2 ^ 64) :
+    rowsOf (joinR rs) = some (rs.map fun r => (⟨r.toArray⟩ : ByteArray)) :=
+  rowsOf_joinR' rs
 
 /-- Consecutive blocks of the given lengths. -/
 def cutLens {α : Type} : List ℕ → List α → List (List α)
@@ -200,11 +206,25 @@ def vals : List Frame → List F128
   | .vec vs :: fs => vs ++ vals fs
   | _ :: fs => vals fs
 
+/-- **A round's value row as the deployed prover writes it**: the values' bytes, then zero bytes up to whole 128-byte
+blocks (`rec_live.message_rows`, `Firewall.messageRows`: 64 u16 words a block). -/
+def padRow (l : List UInt8) : List UInt8 := l ++ List.replicate ((128 - l.length % 128) % 128) 0
+
+theorem padRow_length_le (l : List UInt8) : (padRow l).length ≤ l.length + 127 := by
+  simp only [padRow, List.length_append, List.length_replicate]
+  omega
+
+/-- **A padded row fixes its bytes at their length.** -/
+theorem padRow_inj {l l' : List UInt8} (h : padRow l = padRow l') (hl : l.length = l'.length) : l = l' := by
+  have e := congrArg (List.take l.length) h
+  unfold padRow at e
+  rwa [List.take_left' rfl, List.take_left' hl.symm] at e
+
 /-- **Round `s`'s opened rows hold the values `vs` its squeeze answers**: its committed tops' nodes, then, where it
-absorbs, one row of `vs`; a round that absorbs nothing answers no value. -/
+absorbs, one row of `vs`, padded to whole blocks (`padRow`); a round that absorbs nothing answers no value. -/
 def RowsAt (s : RecVStar.SchedRound) (rs : List ByteArray) (vs : List F128) : Prop :=
   rs.length = s.2.1.toList.sum + (if s.2.2.2 then 1 else 0) ∧
-    rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(colBytes vs).toArray⟩ : ByteArray)] else []) ∧
+    rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(padRow (colBytes vs)).toArray⟩ : ByteArray)] else []) ∧
     (s.2.2.2 = false → vs = [])
 
 /-- The tops the rounds commit, in order: each round's first rows, cut at its tops' node counts, each row's node. -/
@@ -449,21 +469,28 @@ def recJ (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List 
   FlockComplete.JsonRT.recordObj spec (Claims.hOf sha512) link.1.toArray (pointsOf spec c₁)
     (recStreams spec sts ms cs) (filesAt (tabsOf sts) (pointsOf spec c₁) ps)
 
+/-- **The proofs are shaped for their files**: each at the shape its file is read at (`shapeAt`), as decoding a file
+at its shape gives. -/
+def ShapedAt (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (ps : Array Flock.Proof) : Prop :=
+  ∀ (k : ℕ) (hk : k < ps.size), FlockVBridge.Family.ProofShaped (shapeAt (tabsOf sts) (pointsOf spec c₁) k) ps[k]
+
 /-- **The reading at a decision**: at a statement that sets up, the last message's proof (`rd`, for what no frame
-reads), round 0's rows' nodes as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), the round
-messages their framed bytes, each with its round's coin, and the record the reader's (`recJ`). -/
+reads) where its statement is the statement, round 0's rows' nodes as the link (`linkR`), the rounds after it as the
+reps' proofs (`readPs`) where they are shaped for their files (`ShapedAt`), the round messages their framed bytes,
+each with its round's coin, and the record the reader's (`recJ`) at the statement. -/
 def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Option DecR := do
   let v ← setupOf false x
   let a ← as.getLast?
   let a₁ ← as.head?
   let c₁ ← cs.head?
-  let fl ← rd a
+  let fl ← (rd a).filter (·.stmt == x)
   let r₀ ← (rowsOf a₁).map (List.map nodeOf)
   let rss ← as.tail.dropLast.mapM rowsOf
   let link ← linkR v.2.2 r₀
-  let pf ← readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl
+  let pf ← (readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl).filter fun pf =>
+    @decide (ShapedAt v.2.1 v.2.2 c₁ pf.1) (Classical.propDecidable _)
   pure ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
-    ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩
+    ⟨x, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩
 
 theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
@@ -473,7 +500,7 @@ theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
       as.tail.dropLast.mapM rowsOf = some rss ∧ linkR v.2.2 r₀ = some link ∧
       readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
       d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
-        ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩ := by
+        ⟨x, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩ := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
   obtain ⟨v, h1, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨a, -, h⟩ := Option.bind_eq_some_iff.1 h
@@ -488,7 +515,31 @@ theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
     cases as with
     | nil => cases h3
     | cons b l => exact Option.some.inj h3
-  exact ⟨v, c₁, r₀, rss, fl, link, pf, h1, h4, (by rw [ha]; exact h6), h7, h8, h9, (Option.some.inj h).symm⟩
+  exact ⟨v, c₁, r₀, rss, fl, link, pf, h1, h4, (by rw [ha]; exact h6), h7, h8,
+    (Option.filter_eq_some_iff.1 h9).1, (Option.some.inj h).symm⟩
+
+/-- **The reading fixes the last message's statement**: a decision's statement is the statement. -/
+theorem decR_stmt {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    {d : DecR} (h : decR rd x as cs = some d) : d.f.stmt = x := by
+  obtain ⟨v, c₁, r₀, rss, fl, link, pf, -, -, -, -, -, -, rfl⟩ := decR_some h
+  rfl
+
+/-- **The reading refuses proofs not shaped for their files**: a decision's proofs are each shaped at the shape its
+file is read at. -/
+theorem decR_shaped {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    {d : DecR} (h : decR rd x as cs = some d) : ShapedAt d.spec d.sts d.c₁ d.f.ps := by
+  simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
+  obtain ⟨v, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨c₁, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨_, -, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain ⟨pf, h9, h⟩ := Option.bind_eq_some_iff.1 h
+  obtain rfl := Option.some.inj h
+  exact @of_decide_eq_true _ (Classical.propDecidable _) (Option.filter_eq_some_iff.1 h9).2
 
 /-- **(a) Every absorbed value of a decided proof is read from an opened round**: at a decision, round 0's rows and
 the later rounds' rows read back from the element-level messages, and rep `k`'s proof fits the `k`-th block of the

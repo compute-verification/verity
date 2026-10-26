@@ -202,7 +202,8 @@ def zAtP (resp : ℕ → Claims.Msg) (spec : SessionSpec) (sts : Array Stmt) (k 
 at tables that are `TableOk` with at most 2,048 extra claims at `c₁`'s link points, there are two files a table, and
 file `k` decodes at `shapeAt` to the proof table `k / 2`'s rep returned (`filePs`), whose cap is its table's, of the
 table's level-0 node count, which is an honest rep of `repCtx` at the coins `cs` wherever its `finalC` is the
-zerocheck's at that rep's `z`, and whose `finalC` is the zerocheck's at the reply `zAtP`. -/
+zerocheck's at that rep's `z`, whose `finalC` is the zerocheck's at the reply `zAtP`, and which is shaped at
+`shapeAt`. -/
 theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {resp : ℕ → Claims.Msg}
     {spec : SessionSpec} {sts : Array Stmt} {w : Claims.Flock.Wit} {ω : Tape} {c₁ : Coin} (hc : resp 0 = c₁.bytes)
     (hts : sts.size = spec.tables.size)
@@ -219,7 +220,8 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
       (filePs spec sts c₁ pfs)[k]!.cap = (filePs spec sts c₁ pfs)[2 * (k / 2)]!.cap ∧
       (filePs spec sts c₁ pfs)[k]!.cap.size = RecDeploy.level0Nodes sts[k / 2]! ∧
       (filePs spec sts c₁ pfs)[k]!.zerocheck.finalC = dot (lagrange nodesL den6Inv
-        (FlockComplete.coinOf (resp (zAtP resp spec sts k)) 0)) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c := by
+        (FlockComplete.coinOf (resp (zAtP resp spec sts k)) 0)) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c ∧
+      FlockVBridge.Family.ProofShaped (shapeAt (tabsOf sts) (pointsOf spec c₁) k) (filePs spec sts c₁ pfs)[k]! := by
   have htabs : (tabsOf sts).size = sts.size := by
     unfold tabsOf
     rw [Array.size_map]
@@ -236,7 +238,8 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
       (filePs spec sts c₁ pfs)[k]!.cap = cms[k / 2]!.cap ∧
       (filePs spec sts c₁ pfs)[k]!.cap.size = RecDeploy.level0Nodes sts[k / 2]! ∧
       (filePs spec sts c₁ pfs)[k]!.zerocheck.finalC = dot (lagrange nodesL den6Inv
-        (FlockComplete.coinOf (resp (zAtP resp spec sts k)) 0)) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c := by
+        (FlockComplete.coinOf (resp (zAtP resp spec sts k)) 0)) (filePs spec sts c₁ pfs)[k]!.zerocheck.round1c ∧
+      FlockVBridge.Family.ProofShaped (shapeAt (tabsOf sts) (pointsOf spec c₁) k) (filePs spec sts c₁ pfs)[k]! := by
     intro k hk'
     have hk2 : k / 2 < sts.size := by omega
     obtain ⟨e, pt, l, l', he, hls, hrun, hf⟩ := hk k hk'
@@ -261,7 +264,7 @@ theorem sessionS_reps {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {re
       (by exact le_trans (by decide) (htab _ hk2).1.m22) _ hrun
     rw [hls] at hfz
     rw [hget]
-    refine ⟨hdec, schedOf_repCtx hk2 (by simp [hs']) he, hon, hcap, ?_, hfz⟩
+    refine ⟨hdec, schedOf_repCtx hk2 (by simp [hs']) he, hon, hcap, ?_, hfz, by rw [hsh]; exact hp⟩
     have hsz' := FlockSoundness.Discharge.DecodeZL.decodeProof_sizes _ _ _
       (FlockVBridge.Family.decodeProof_encodeProof _ _ hp)
     rw [hsz'.cap]
@@ -308,8 +311,8 @@ def FilesFinalC (spec : SessionSpec) (sts : Array Stmt) (c₁ : Coin) (cs : List
 /-- **The honest run decides at its own proofs**: at a statement that sets up, where the pure session returns at
 replies that start with the first coin `c₁` and its tables are `TableOk` with at most 2,048 extra claims at `c₁`'s link
 points, `decR` decides on the honest messages from the proofs the session's files decode to (`filePs`) and their
-tables' caps (`fileCaps`), wherever their rows fit a message, the last message reads as `filePs` and the files'
-`finalC` are at the reader's `z` (`FilesFinalC`). -/
+tables' caps (`fileCaps`), wherever their rows fit a message, the last message reads as `filePs` at the statement and
+the files' `finalC` are at the reader's `z` (`FilesFinalC`). The files decode to proofs shaped for them. -/
 theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H) {rd : Claims.Msg → Option FinalP}
     {x last : Claims.Msg} {cs : List Coin} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {resp : ℕ → Claims.Msg} {w : Claims.Flock.Wit} {ω : Tape} {Ts : ℕ → F128} {fl : FinalP}
@@ -324,11 +327,18 @@ theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H
     (hfit : ∀ k < (filePs spec sts c₁ pfs).size,
       ∀ rs ∈ repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k)
         (filePs spec sts c₁ pfs)[k]! (Ts k), RowsFit rs)
-    (hrd : rd last = some fl) (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hrd : rd last = some fl) (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
       repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
         (Ts k)) last) cs = some d := by
   obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts htab hS (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
+  have hsh : ShapedAt spec sts c₁ (filePs spec sts c₁ pfs) := fun k hk => by
+    have hk' : k < 2 * sts.size := by
+      have h := hk
+      rw [filePs_size, hsz] at h
+      exact h
+    have h := (hall k hk').2.2.2.2.2.2
+    rwa [getElem!_pos (filePs spec sts c₁ pfs) k hk] at h
   have hcaps : ∀ i < (fileCaps spec sts c₁ pfs).size,
       (fileCaps spec sts c₁ pfs)[i]!.size = RecDeploy.level0Nodes sts[i]! := by
     intro i hi
@@ -351,6 +361,6 @@ theorem sessionRun_decides {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out64 H
     simp only [fileCaps, JsonRT.range_map_getElem! _ (show k / 2 < sts.size by omega)]
     exact h4
   exact ⟨_, readsBack rd x last cs s spec sts c₁ (fileCaps spec sts c₁ pfs) (filePs spec sts c₁ pfs) Ts fl hx hcs
-    (fileCaps_size ..) hcaps (by rw [filePs_size, hsz]) hrep hfit0 hfit hrd hps⟩
+    (fileCaps_size ..) hcaps (by rw [filePs_size, hsz]) hrep hfit0 hfit hrd hps hst hsh⟩
 
 end FlockDeploy

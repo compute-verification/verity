@@ -253,7 +253,7 @@ theorem flatMap_length_le {B : ℕ} : ∀ {l : List (Array ByteArray)}, (∀ a �
 value row. -/
 theorem honestRows_rows : ∀ (ss : List RecVStar.SchedRound) (chs : List (List Frame)) (caps : List (Array ByteArray)),
     ∀ rs ∈ honestRows ss chs caps, rs.length ≤ (caps.flatMap Array.toList).length + 1 ∧
-      ∀ r ∈ rs, (∃ a ∈ caps, ∃ b ∈ a, r = nodeRow b) ∨ ∃ ch ∈ chs, r = ⟨(colBytes (vals ch)).toArray⟩
+      ∀ r ∈ rs, (∃ a ∈ caps, ∃ b ∈ a, r = nodeRow b) ∨ ∃ ch ∈ chs, r = ⟨(padRow (colBytes (vals ch))).toArray⟩
   | s :: ss, ch :: chs, caps, rs, hrs => by
     simp only [honestRows, List.mem_cons] at hrs
     rcases hrs with rfl | hrs
@@ -323,8 +323,10 @@ theorem repRows_fit {c : RepCtx} {p : Flock.Proof} (T : F128) (hs : SchedOf c) (
     have : b.size = c.st.merkle.digestLen := (hps.rcapsEach i hi).2 b hb
     rw [size_nodeRow]
     omega
-  · show (colBytes (vals ch)).toArray.size < 2 ^ 64
-    rw [List.size_toArray, Frame.colBytes_length]
+  · show (padRow (colBytes (vals ch))).toArray.size < 2 ^ 64
+    rw [List.size_toArray]
+    have hp := padRow_length_le (colBytes (vals ch))
+    rw [Frame.colBytes_length] at hp
     have := vals_chunk_le (fs := repFrames c.st c.sch c.dom c.n p T) hch
     omega
 
@@ -396,13 +398,13 @@ theorem sessionRun_decides_fit {H : Claims.Msg → Claims.Msg} (h64 : Claims.Out
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS H resp spec sts w ω = (.ok (rec, pfs), bs))
     (hfc : FilesFinalC spec sts c₁ cs.tail.dropLast pfs) (hrd : rd last = some fl)
-    (hps : fl.ps = filePs spec sts c₁ pfs) :
+    (hps : fl.ps = filePs spec sts c₁ pfs) (hst : fl.stmt = x) :
     ∃ d, decR rd x (honestMsgs (fileCaps spec sts c₁ pfs) ((List.range (filePs spec sts c₁ pfs).size).map fun k =>
       repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k) (filePs spec sts c₁ pfs)[k]!
         (Ts k)) last) cs = some d := by
   obtain ⟨h64t, hts⟩ := setup_tables hx
   obtain ⟨hsz, hall⟩ := sessionS_reps h64 hc hts.symm htab hS (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
-  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps
+  refine sessionRun_decides h64 hx hcs hc hts.symm htab hS hfc ?_ ?_ hrd hps hst
   · refine capRows_fit (by rw [fileCaps_size]; exact h64t) fun a ha => ?_
     obtain ⟨i, hi, rfl⟩ := Array.mem_map.1 ha
     have hi' := Array.mem_range.1 hi
