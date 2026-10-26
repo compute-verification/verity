@@ -208,7 +208,13 @@ installs it first, so a machine without elan works), must pass clean and fail on
   data. `--no-runs` skips them.
 - `assumptions`: the named assumptions, by name, each with its `owner`: the `Prop` definitions a guarantee may take as a
   closed hypothesis, or reads in its statement. Each premise a statement takes whose head the repository builds is
-  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner.
+  listed too (`Facts.lean`'s `premises`), and an unlisted one fails until `--update` adds it with its guarantees' owner;
+  its failure prints the entry `--update` would write, and what the premise unfolds to. A premise that is an alias of
+  listed assumptions is no new one, open or closed: a definition whose value asserts, through `∧`, the bodies of `∀` and
+  `→` and reducible unfolding, only listed assumptions or such aliases (`Facts.lean`'s `unfolds`; what it takes, an
+  antecedent or a binder's type, may mention only listed ones). Its parts are held to the lock in its place, and a closed
+  one's are the guarantee's named assumptions. One that asserts anything else (an unlisted `Prop`, `False`, a bound
+  predicate, a constant applied to a proposition or a predicate, a recursive definition) is a new one.
   In a conclusion, and under a definition outside a `Guarantees` module, a premise is a constant of an assumptions
   module or of a module under `shape.premises` that a hypothesis mentions. `--update` writes each one's `digest`, the one
   its `reads` record holds, so

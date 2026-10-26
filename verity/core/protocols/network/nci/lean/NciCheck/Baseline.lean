@@ -315,20 +315,20 @@ def fixOf : String → Option String
   | "theta-width" => some "the cited value's rows, words and word bits must give the theta node's parameter"
   | _ => none
 
-/-- A refusal as JSON: `{"error": code}`, with its `message` (`fixOf`, else as `NciCheck.Desc.refusal` writes it). -/
-def refusal (code : String) : Json :=
+/-- A refusal of `j` as JSON: `{"error": code}`, with its `message` (`fixOf`, else as `NciCheck.Desc.refusal` writes it). -/
+def refusal (j : Json) (code : String) : Json :=
   match fixOf code with
   | some m => Json.mkObj [("error", Json.str code), ("message", Json.str m)]
-  | none => Desc.refusal code
+  | none => Desc.refusal j code
 
 def check (j tr : Json) : Json :=
   match evaluate j tr with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 def checkUnrolled (j tr : Json) : Json :=
   match evaluateUnrolled j tr with
   | .ok r => r
-  | .error code => refusal code
+  | .error code => refusal j code
 
 end NciCheck.Baseline

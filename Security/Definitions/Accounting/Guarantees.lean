@@ -23,6 +23,7 @@ import Definitions.Accounting.Guarantees.Gates
 import Definitions.Accounting.Guarantees.Headline
 import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
+import Definitions.Accounting.Guarantees.JointBlocks
 import Definitions.Accounting.Guarantees.JointPeriod
 import Definitions.Accounting.Guarantees.JointBlocksAbstract
 import Definitions.Accounting.Guarantees.Localization
@@ -40,6 +41,7 @@ import Definitions.Accounting.Guarantees.RateAuditSketch
 import Definitions.Accounting.Guarantees.Responder
 import Definitions.Accounting.Guarantees.RemoteHeld
 import Definitions.Accounting.Guarantees.RemoteDraw
+import Definitions.Accounting.Guarantees.RemoteBinding
 import Definitions.Accounting.Guarantees.RemoteSketch
 import Definitions.Accounting.Guarantees.RemoteSketchLine
 import Definitions.Accounting.Guarantees.Requirement
@@ -59,7 +61,8 @@ import Definitions.Accounting.Guarantees.TS.LowBit
 import Definitions.Accounting.Guarantees.TS.Fixed
 
 /-! Resource accounting's guarantee statements: the joint guarantee and its covert residual, the joint guarantee over
-a period audited by every protocol and over a horizon of periods, PoUW's and the bandwidth
+a period audited by every protocol, over a horizon of periods and over a horizon of server-time blocks and the
+wipes between them, PoUW's and the bandwidth
 audit's guarantees as a joint run's compute and bandwidth guarantees, each family's headline `ε` on its exact data,
 the filler's per-check luck, a state-bounded game's soundness as its capacity
 guarantee, derived state's share of the capacity residual, the rate audit's residency and bandwidth with the rebuild

@@ -78,16 +78,15 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open Classical
 
-/-- **C-Flock's rows link at served roots.** At a C-Flock session (`RowsSession`) whose circuit names each port once,
-at every outcome of its live audit (draw `S`, registration `R`, the record `wr` writes) that flock-verify `--zk
---registered` accepts, a drawn unit `u` whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads
-exactly its rows at the ports `own` names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`)
-has, on each of its wires at a served read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's
-row's. With `RelOfRows`, a relation that reads its operand leaves and receipt at served reads then reads the committed
-trees'. -/
+/-- **C-Flock's rows link at served roots.** At a C-Flock session (`RowsSession`), at every outcome of its live audit
+(draw `S`, registration `R`, the record `wr` writes) that flock-verify `--zk --registered` accepts, a drawn unit `u`
+whose served roots are registered (`ServedRegistered`: its opening `rdU u` reads exactly its rows at the ports `own`
+names, as `own` gives them) and whose rows are right at its owned reads (`RowsAt`) has, on each of its wires at a served
+read, the committed tree's row: the value layer's bit (`Xv`) is the registrant's row's. Acceptance names each port of
+the circuit once (`Registered.namesOnce`), so nothing is asked of the circuit's names. With `RelOfRows`, a relation that
+reads its operand leaves and receipt at served reads then reads the committed trees'. -/
 def ServedRowsLinked : Prop :=
-  ∀ (s : RowsSession), (∀ q q' : Fin s.c.ports.size, s.c.ports[q].name = s.c.ports[q'].name → q = q') →
-    ∀ (S : Finset (Fin s.n)) (R : s.Reg)
+  ∀ (s : RowsSession) (S : Finset (Fin s.n)) (R : s.Reg)
       (o : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))) (u : Fin s.n),
       LiveAcceptsZKR s.I s.own (R, S, s.wr S R o) → u ∈ S → s.ServedRegistered u →
       s.RowsAt (R, S, s.wr S R o) u →

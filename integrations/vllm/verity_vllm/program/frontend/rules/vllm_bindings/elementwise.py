@@ -11,7 +11,7 @@ from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInf
 from verity_vllm.program.frontend.rules.common import call_args, dtype_is, from_rows, rows_of, scalar_kind, shape
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, aten
-from verity_vllm.program.registry.dsv4_moe import limit_bits
+from verity.ml.definitions.registry.dsv4_moe import limit_bits
 
 
 # -- generic elementwise / activation bindings (dense2 vocabulary; none names a model) ----------------------------------------
