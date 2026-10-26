@@ -152,7 +152,9 @@ first coin.
   default. `--window-per-group` (at most the scan's 4 lanes of prompts) sends them a group at a time, group g's half a
   bucket into link-window g·G (G = `scan_group_windows` of the tokens), so that group g's cells are exactly windows
   g·G … (g+1)·G − 1, which `out/groups.json` publishes, and `--minutes` must cover `warden_group_minutes` of its
-  groups. Its request carries `device: warden`; it
+  groups. The demo's stand-in (`benchmarks/network_traces/demo_stub.py`) serves the demo's class, prompts of exactly 8
+  byte ids and exactly 24 out, id-form, and prints its prompts: `demo_stub.py prompts | … warden-rehearse --scan
+  --prompts --tokens 24`. Its request carries `device: warden`; it
   shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and

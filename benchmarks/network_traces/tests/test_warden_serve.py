@@ -237,6 +237,44 @@ def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_grou
     assert (ws.group_windows(p, 2), ws.group_windows(p, 64)) == (1, 2)
 
 
+def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
+        tmp_path):
+    """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
+    prompt as it is, with exactly 24 tokens and greedy; on the warden at the scan's schedule, the stand-in, given exactly
+    what the warden sent the server (its release headers on), serves every request and answers the bytes the warden
+    certified, every connection ends within one link-window, and the check accepts the run."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import demo_stub as D
+    import scan_zk as sz
+    from verity.core.protocols.certifier.release import release_of
+    prompts = D.prompts(4)
+    req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
+           "prompts": True, "temperature": 0.0, "top_p": 1.0}
+    (tmp_path / A.PROMPTS).write_bytes(A.warden_prompts(req, json.dumps(prompts).encode()))
+    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    params = ws._params(args)
+    assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
+    traffic = ws.traffic_of(args, D.Shape().name)
+    assert [x["ids"]["prompt"] for x in traffic] == prompts
+    assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(24, 0.0, 1.0)}
+    requests = [ws.id_request(**x["ids"], frame_bytes=params.cell_bytes, offset=0) for x in traffic]
+    responses, servers, out = [D.answer(p) for p in prompts], [], tmp_path / "run"
+    out.mkdir()
+    assert ws.group_windows(params, 24) == 1
+    warden = _run(out, tmp_path / "key", requests, responses, params=params, id_payload=params.payload, servers=servers)
+    assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
+    for j, (server, response) in enumerate(zip(servers, responses)):
+        sent = b"".join(data for _, data in server.writes)
+        fields = D.warden_request(sent)
+        assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and D.refusal(fields) is None
+        assert D.answer(fields["prompt"]) == response
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, 1)
+
+
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     """Over loopback: the request's bytes reach the endpoint, which answers a chunked event stream and closes; the
     response parses to the endpoint's tokens, its finish reason and usage, and a cut response isn't complete."""
