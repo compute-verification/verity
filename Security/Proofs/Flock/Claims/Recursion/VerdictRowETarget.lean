@@ -13,7 +13,7 @@ fixes that `acc` and proves `TargetE` from the `rec-open` pieces' running sums.
   `accR` is `D.accE` at every decision `D` (`accR_eq`). Every rep's `accR` has four elements (`accR_size`).
 * **The target** (`targetE`): at `accR`, the chain `chainAt x ms i` from `r · N`. `ReadsEnds` is `readsEnds_accE`
   (row G from the dense inner statement, row C's sizes from the reading and the `shaped` base check, and row C's
-  points `hpts`); `UnitSums` is `unitSums_of_pieces` at pieces that hold where `P` does.
+  points `DecAt.points_eq`); `UnitSums` is `unitSums_of_pieces` at pieces that hold where `P` does.
 -/
 
 namespace RecDeploy
@@ -66,11 +66,10 @@ namespace Top
 /-- **Row E's target at `accR`**: each table's chain `chainAt x ms i`, rep `r` from `r · N`. `pieces x` are the
 `rec-open` pieces, which hold their running sums (`accHolds`) where `P` does (`hholds`), read the decision's side
 (`hside`) and the verifier's `coef` (`hcoef`, the coin tie), and cover every query of every level of each rep
-(`hcover`). Row C's points are `TargetPoints` (`hpts`). -/
+(`hcover`). Row C's points are the first coin's (`DecAt.points_eq`). -/
 theorem targetE (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin → Prop)
     (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (pieces : Msg → List OpenPiece)
     (sideAt : Msg → List Msg → OpenPiece → OpenSide) (coefAt : Msg → List Coin → OpenPiece → Array F128)
-    (hpts : TargetPoints rd P)
     (hholds : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), P x ms cs →
       ∀ q ∈ pieces x, accHolds sideAt coefAt chainAt q x ms cs)
     (hside : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs →
@@ -93,7 +92,7 @@ theorem targetE (rd : Msg → Option FinalP) (P : Msg → List Msg → List Coin
   refine ⟨fun _ => chainAt x ms i, fun r => r * nOpen (D.files cls i).sch, fun r => ?_, fun r => ?_⟩
   · exact D.unitSums_of_pieces cls (D.accE chainAt) i r (pieces x) sideAt coefAt chainAt (hholds x ms cs hP)
       (hside x ms cs hA D cls i hi r) (hco r) (hcover x ms cs hA D cls i hi r)
-  · exact D.readsEnds_accE cls (D.accE chainAt) i r chainAt hG (hpts x ms cs hA D) (idx_lt D hi r)
+  · exact D.readsEnds_accE cls (D.accE chainAt) i r chainAt hG D.points_eq (idx_lt D hi r)
       (shaped_of_base hr hb D _ (idx_lt D hi r))
 
 end Top
