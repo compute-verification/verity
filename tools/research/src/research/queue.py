@@ -102,8 +102,10 @@ gate).  `--no-preflight` skips it, for the lander.
 `next`.  Its first-parent chain above `main` is the queue, and each merge commit's trailers name its PR, head and owner: git holds
 the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
 order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
-that conflicts costs one call).  So a new push moves its PR to the tip, a dropped PR takes the commits after it along (they're
-merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
+that conflicts costs one call).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
+sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
+change a pinned input both change its pin.  So a new push moves its PR to the tip, a dropped PR takes the commits after it
+along (they're merged again), and a `main` that moved outside the queue rebuilds `next` on it, unless it moved only by files a train whose check
 runs doesn't change (`hold`): then every sync, drive's, `eject`'s or a hand one, leaves `next` as it is until that check ends.  A
 PR whose head contains another open PR's head goes in after it and waits while that one waits, unless it carries that one's
 change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  What a sync merges on top goes non-Lean first
@@ -142,6 +144,7 @@ clone fetched last.
 from __future__ import annotations
 
 import argparse
+import ast
 import concurrent.futures
 import contextlib
 import dataclasses
@@ -152,6 +155,7 @@ import importlib.util
 import json
 import math
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -174,6 +178,8 @@ RULES = "ci/queue.toml"
 RULES_BEFORE_MOVE = "tools/verity/check/queue.toml"
 #: drive's flags of record (`DriveFlags`, `--config`)
 DRIVE_FLAGS = "tools/verity/check/drive.toml"
+#: the pins tool, whose `PINS` names the generated files a merge rebuilds (`repinned`): after the repository move, and before it
+PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 MARK_TIME_RE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 IDENTITY = {"GIT_AUTHOR_NAME": "research queue", "GIT_AUTHOR_EMAIL": "queue@research.invalid",
             "GIT_COMMITTER_NAME": "research queue", "GIT_COMMITTER_EMAIL": "queue@research.invalid"}
@@ -993,8 +999,9 @@ class Queue:
         """(``pr``'s head merged onto ``tip``, "") or (None, why not), as `git merge --no-ff` in a checkout of ``tip`` gives them,
         without the checkout: `git merge-tree` merges, with ``tip``'s merge drivers (`--attr-source`), and `git commit-tree`
         makes the merge commit, so a candidate that conflicts costs one call (25-26 Oct: a sync that merged each candidate in
-        the worktree, ~70 of them conflicting, took 40 min).  A git without `--attr-source` (before 2.40) merges in the
-        worktree (`_merge_in_worktree`)."""
+        the worktree, ~70 of them conflicting, took 40 min).  A merge whose every conflict is in a pin is kept, each pin rebuilt
+        from the merged tree (`repinned`).  A git without `--attr-source` (before 2.40) merges in the worktree
+        (`_merge_in_worktree`), which refuses any conflict."""
         if not self._attr_source:
             return self._merge_in_worktree(tip, pr, members)
         r = _git(self.workdir, f"--attr-source={tip}", "merge-tree", "--write-tree", "--name-only", "--no-messages", tip, pr.head,
@@ -1002,14 +1009,19 @@ class Queue:
         if r.returncode == 129 and "attr-source" in r.stderr:
             self._attr_source = False
             return self._merge_in_worktree(tip, pr, members)
-        if r.returncode == 0:
-            if not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
-                return tip, ""                                  # already merged: `merge --no-ff` makes no commit either
-            commit = _git(self.workdir, "commit-tree", r.stdout.split()[0], "-p", tip, "-p", pr.head, "-m", _message(pr),
-                          env=IDENTITY).stdout.strip()
-            return commit, ""
-        files = list(dict.fromkeys(r.stdout.splitlines()[1:])) if r.returncode == 1 else []
-        return None, self._unmerged(r, files, members)
+        if r.returncode == 1:
+            files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
+            if not (tree := repinned(self.workdir, r.stdout.split()[0], tip, pr.head, files)):
+                return None, self._unmerged(r, files, members)
+            self.log(f"research queue: #{pr.number} conflicts only in pins: {', '.join(files)} rebuilt from the merged tree")
+        elif r.returncode:
+            return None, self._unmerged(r, [], members)
+        elif not _git(self.workdir, "merge-base", "--is-ancestor", pr.head, tip, check=False).returncode:
+            return tip, ""                                      # already merged: `merge --no-ff` makes no commit either
+        else:
+            tree = r.stdout.split()[0]
+        commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-p", pr.head, "-m", _message(pr), env=IDENTITY).stdout.strip()
+        return commit, ""
 
     def _merge_in_worktree(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` by `git merge --no-ff` in the clone's worktree, checked out at ``tip``."""
@@ -1303,6 +1315,89 @@ def conflicting_files(repo: Path, base: str, head: str) -> list[str]:
     `status` names a conflict on any VM, not only on the one whose last sync recorded it; [] when it merges cleanly."""
     r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", base, head, check=False)
     return sorted({f for f in r.stdout.splitlines()[1:] if f}) if r.returncode == 1 else []
+
+
+def pins_at(repo: Path, ref: str) -> dict[str, tuple[str | None, str]]:
+    """{path: (key, under)} of each `Pin` in the pins tool's `PINS` on ``ref`` (`PINS_FILES`), read from its text with `ast`,
+    since research imports nothing from Verity; {} when ``ref`` holds none or it doesn't parse."""
+    for path in PINS_FILES:
+        if (r := _git(repo, "show", f"{ref}:{path}", check=False)).returncode == 0:
+            break
+    else:
+        return {}
+    try:
+        [calls] = [n.value.elts for n in ast.parse(r.stdout).body if isinstance(n, ast.Assign) and isinstance(n.value, ast.Tuple)
+                   and any(isinstance(t, ast.Name) and t.id == "PINS" for t in n.targets)]
+        out = {}
+        for c in calls:
+            args = {**dict(zip(("path", "key", "under"), c.args)), **{k.arg: k.value for k in c.keywords}}
+            path, key, under = (ast.literal_eval(args[a]) for a in ("path", "key", "under"))
+            out[path] = (key, under)
+        return out
+    except (SyntaxError, ValueError, KeyError, AttributeError):
+        return {}
+
+
+def _blobs(repo: Path, specs: list[str]) -> dict[str, bytes]:
+    """{spec: its blob's bytes} for each of ``specs`` (`<tree>:<path>`) that names a blob, by one `git cat-file --batch`."""
+    out = subprocess.run(["git", "cat-file", "--batch"], cwd=repo, input="".join(f"{s}\n" for s in specs).encode(),
+                         capture_output=True, env=git_env(GIT_TERMINAL_PROMPT="0"), check=True).stdout
+    got, i = {}, 0
+    for s in specs:
+        j = out.index(b"\n", i)
+        head, i = out[i:j].split(), j + 1
+        if head[-1] in (b"missing", b"ambiguous"):
+            continue
+        if head[1] == b"blob":
+            got[s] = out[i:i + int(head[2])]
+        i += int(head[2]) + 1
+    return got
+
+
+def repinned(repo: Path, tree: str, ours: str, theirs: str, conflicted: list[str]) -> str | None:
+    """The merged ``tree`` with each conflicted pin rebuilt, when every path in ``conflicted`` is a pin (`pins_at` ``ours``);
+    else None.  A pin records the union of the paths both sides' versions record, OURS's in its order then THEIRS's new
+    ones, less those the merged tree lacks, each with the sha256 of its blob there; a JSON pin keeps the rest of OURS's text.
+    `pins.py --merged` would run each pin's command instead, which needs a checkout and Lake: two PRs that each changed a
+    pinned input both changed the pin, and drive ejected the second (#4605, over the PoUS TRUSTED.sha256)."""
+    pins = pins_at(repo, ours)
+    if not conflicted or any(p not in pins for p in conflicted):
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        env = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
+        _git(repo, "read-tree", tree, env=env)
+        for path in conflicted:
+            key, under = pins[path]
+            if not (sides := _blobs(repo, [f"{ours}:{path}", f"{theirs}:{path}"])):
+                return None
+            recorded: dict[str, str] = {}
+            try:
+                for text in (b.decode() for b in sides.values()):
+                    pairs = ([ln.split("  ", 1)[::-1] for ln in text.splitlines() if ln.strip()] if key is None
+                             else json.loads(text)[key].items())
+                    recorded |= {p: h for p, h in pairs if p not in recorded}
+            except (ValueError, KeyError, TypeError, AttributeError):
+                return None
+            full = {p: posixpath.normpath(posixpath.join(under, p)) for p in recorded}
+            found = _blobs(repo, [f"{tree}:{f}" for f in full.values()])
+            digests = {p: hashlib.sha256(found[f"{tree}:{f}"]).hexdigest() for p, f in full.items() if f"{tree}:{f}" in found}
+            text = ("".join(f"{h}  {p}\n" for p, h in digests.items()) if key is None
+                    else _with_json(next(iter(sides.values())).decode(), key, digests))
+            blob = subprocess.run(["git", "hash-object", "-w", "--stdin"], cwd=repo, input=text.encode(), capture_output=True,
+                                  env=git_env(GIT_TERMINAL_PROMPT="0"), check=True).stdout.decode().strip()
+            mode = _out(repo, "ls-tree", tree, "--", path).split(" ", 1)[0] or "100644"
+            _git(repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{path}", env=env)
+        return _git(repo, "write-tree", env=env).stdout.strip()
+
+
+def _with_json(text: str, key: str, value: dict) -> str:
+    """``text``, a JSON object written with `indent=1`, with its top-level ``key`` set to ``value`` and every other byte kept."""
+    doc = json.loads(text)
+    if m := re.search(rf"^([ \t]*){re.escape(json.dumps(key))}:\s*(?=\{{)", text, re.M):
+        old, end = json.JSONDecoder().raw_decode(text, m.end())
+        if old == doc[key]:
+            return text[:m.end()] + json.dumps(value, indent=1).replace("\n", "\n" + m.group(1)) + text[end:]
+    return json.dumps({**doc, key: value}, indent=1) + "\n"
 
 
 def rules_at(repo: Path, ref: str) -> Rules | None:

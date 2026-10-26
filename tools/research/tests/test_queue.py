@@ -4,8 +4,10 @@ PRs and writes their `refs/pull/{n}/head`."""
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import os
+import posixpath
 import re
 import shlex
 import shutil
@@ -19,7 +21,8 @@ import pytest
 
 from research.cli import _custody_ttl_problem, main as research_main
 from research.pods.nebius import slot_only
-from research.queue import DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, credential_args, label_target
+from research.queue import (DRIVE_FLAGS, PR, SHADOW_BRANCH, Queue, QueueError, Rules, conflicting_files, credential_args,
+                            label_target)
 from research.store import ids, labels_sync, vocab
 from research.store.local import LocalStore
 from research.store.model import Label
@@ -73,11 +76,14 @@ class World:
         self.gh, self.logs = FakeGitHub(self.origin), []
         self.store = LocalStore(tmp / "store")
 
-    def change(self, files: dict[str, str], base: str = "origin/main") -> str:
-        """A commit on `base` writing `files`; returns its sha."""
+    def change(self, files: dict[str, str | None], base: str = "origin/main") -> str:
+        """A commit on `base` writing `files` (deleting those whose text is None); returns its sha."""
         _git(self.dev, "fetch", "-q", "origin")
         _git(self.dev, "checkout", "-q", "--detach", base)
         for rel, text in files.items():
+            if text is None:
+                (self.dev / rel).unlink()
+                continue
             (self.dev / rel).parent.mkdir(parents=True, exist_ok=True)
             (self.dev / rel).write_text(text)
         _git(self.dev, "add", "-A")
@@ -344,6 +350,80 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
     assert q.load_state()["conflicts"]["2"]["why"] == entries[2].why
     assert not (world.tmp / "notes").exists()
     assert q.status()[2].why == "conflicts with `next` in a.txt (touched by #1) (at the last sync)"
+
+
+POUS = "verity/core/protocols/pous/lean"
+TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json"
+UP = "../../../../../Security/Proofs/lakefile.toml"
+
+
+def _trusted(paths: list[str], tree: dict[str, str]) -> str:
+    """PoUS's pin, a sha256sum listing of ``paths`` (relative to its directory) as ``tree`` holds them."""
+    return "".join(f"{hashlib.sha256(tree[posixpath.normpath(f'{POUS}/{p}')].encode()).hexdigest()}  {p}\n" for p in paths)
+
+
+def _exfil(paths: list[str], tree: dict[str, str]) -> str:
+    """A JSON pin under `inputs`, followed by vectors one per line as its generate.sh writes them."""
+    doc = {"source": "s", "inputs": {p: hashlib.sha256(tree[p].encode()).hexdigest() for p in paths}}
+    return json.dumps(doc, indent=1)[:-2] + ',\n "vectors": [\n{"a": 1},\n{"b": 2}\n ]\n}\n'
+
+
+def _pinned(world: World, tree: dict[str, str], trusted: list[str], exfil: list[str], base: str = "origin/main") -> str:
+    return world.change({**tree, TRUSTED: _trusted(trusted, tree), EXFIL: _exfil(exfil, tree)}, base=base)
+
+
+def _pin_main(world: World) -> dict[str, str]:
+    """`main` with the real pins tool and both pins over a few inputs; returns those inputs."""
+    tree = {f"{POUS}/lakefile.toml": "l0\n", f"{POUS}/lean-toolchain": "t0\n", f"{POUS}/Old.lean": "o0\n",
+            "Security/Proofs/lakefile.toml": "s0\n", "x.lean": "x0\n"}
+    pins = (Path(__file__).resolve().parents[2] / "verity" / "check" / "pins.py").read_text()
+    base = _pinned(world, {**tree, "tools/verity/check/pins.py": pins}, ["lean-toolchain", "lakefile.toml", "Old.lean", UP],
+                   ["Security/Proofs/lakefile.toml", "x.lean"])
+    _git(world.dev, "push", "-q", "origin", f"{base}:refs/heads/main")
+    return tree
+
+
+def test_prs_whose_only_conflicts_are_in_pins_merge_with_each_pin_rebuilt_from_the_merged_tree(world):
+    """26 Oct: drive ejected proofs' #4605 over PoUS's TRUSTED.sha256, which it and a memory-accounting PR each regenerated
+    for their own change to a pinned input.  Both now merge onto `next`: each conflicted pin records both sides' paths (OURS's
+    order, then THEIRS's new ones) that the merged tree still holds, at their digests there, and a JSON pin keeps the rest of
+    its text byte for byte."""
+    tree = _pin_main(world)
+    one = {**tree, f"{POUS}/lakefile.toml": "l1\n", "Security/Proofs/lakefile.toml": "s1\n", f"{POUS}/New1.lean": "n1\n",
+           "y.lean": "y\n"}
+    world.gh.put(1, _pinned(world, one, ["lean-toolchain", "lakefile.toml", "Old.lean", UP, "New1.lean"],
+                            ["Security/Proofs/lakefile.toml", "x.lean", "y.lean"]))
+    two = {**tree, f"{POUS}/lean-toolchain": "t1\n", f"{POUS}/Old.lean": None, f"{POUS}/New2.lean": "n2\n", "x.lean": "x1\n",
+           "z.lean": "z\n"}
+    world.gh.put(2, _pinned(world, two, ["lean-toolchain", "lakefile.toml", UP, "New2.lean"],
+                            ["Security/Proofs/lakefile.toml", "x.lean", "z.lean"]))
+    assert conflicting_files(world.dev, world.gh.prs[1].head, world.gh.prs[2].head) == sorted([TRUSTED, EXFIL])
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1, 2], entries[2].why
+    assert f"research queue: #2 conflicts only in pins: {', '.join(sorted([TRUSTED, EXFIL]))} rebuilt from the merged tree" in world.logs
+    merged = {k: v for k, v in {**one, **two, f"{POUS}/lakefile.toml": "l1\n", "Security/Proofs/lakefile.toml": "s1\n"}.items()
+              if v is not None}
+    assert all(_git(world.origin, "show", f"refs/heads/next:{p}") + "\n" == t for p, t in merged.items())
+    show = lambda p: subprocess.run(["git", "show", f"refs/heads/next:{p}"], cwd=world.origin, check=True, capture_output=True,
+                                    text=True).stdout
+    assert show(TRUSTED) == _trusted(["lean-toolchain", "lakefile.toml", UP, "New1.lean", "New2.lean"], merged)
+    assert show(EXFIL) == _exfil(["Security/Proofs/lakefile.toml", "x.lean", "y.lean", "z.lean"], merged)
+    tip = _git(world.origin, "rev-parse", "refs/heads/next")
+    assert _git(world.origin, "rev-parse", f"{tip}^2") == world.gh.prs[2].head
+    assert _git(world.origin, "log", "-1", "--format=%B", tip) == f"Queue: #2 change 2\n\nPR: #2\nHead: {world.gh.prs[2].head}\nOwner: lane-2"
+
+
+def test_a_conflict_in_any_file_besides_the_pins_still_refuses_the_merge(world):
+    tree = _pin_main(world)
+    paths = ["lean-toolchain", "lakefile.toml", "Old.lean", UP]
+    for n, f in ((1, "lakefile.toml"), (2, "lean-toolchain")):
+        world.gh.put(n, _pinned(world, {**tree, "a.txt": f"{n}\n", f"{POUS}/{f}": f"{n}\n"}, paths, ["x.lean"]))
+    q = world.queue()
+    members, entries = q.sync()
+    assert [m.pr for m in members] == [1]
+    assert entries[2].state == "refused" and entries[2].why == f"conflicts with `next` in a.txt, {TRUSTED} (touched by #1)"
+    assert _git(world.origin, "show", f"refs/heads/next:{TRUSTED}") + "\n" == _trusted(paths, {**tree, f"{POUS}/lakefile.toml": "1\n"})
 
 
 #: a landing gate: refuses a head whose change touches a file `gates/banned.txt` at `main` names, and can't judge one touching
