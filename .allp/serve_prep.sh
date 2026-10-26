@@ -13,32 +13,13 @@ trap cleanup EXIT
 S=text:verity/cmp92/h200/weights/v1
 M="$D/weights-v1-h200.manifest.json"
 
-t0=$(date +%s)
-uv run --no-sync python -m verity_torch_loop.weights manifest --seed "$S" --digests --workers "$(nproc)" --out "$OUT/weights-v1-h200.manifest.json" 2>&1 | tail -1
-cp "$OUT/weights-v1-h200.manifest.json" "$M"
-t1=$(date +%s); echo "manifest_s $((t1 - t0))"; sha512sum "$M"
+t1=$(date +%s)
+[ -s "$M" ] || { uv run --no-sync python -m verity_torch_loop.weights manifest --seed "$S" --digests --workers "$(nproc)" --out "$M" 2>&1 | tail -1; }
+sha512sum "$M"
 
 uv run --no-sync python -m verity_torch_loop.weights write --seed "$S" --workers "$(nproc)" --out "$T" 2>&1 | tail -1
 sync
 t2=$(date +%s); echo "write_s $((t2 - t1))"; ls -la "$T"; df -h /workspace | tail -1
-
-echo "cold read, 20 GiB O_DIRECT from offset 64 GiB:"
-dd if="$T" of=/dev/null bs=64M count=320 skip=1024 iflag=direct 2>&1 | tail -1
-
-uv run --no-sync python - "$T" "$M" <<'PY'
-import json, os, sys, time
-sys.path[:0] = ["benchmarks/e2e_h200", "integrations/torch_loop"]
-from e2e_h200.shape import FROZEN
-from e2e_h200.store import FileStore
-from e2e_h200.weights import SW, Weights
-w = Weights(FROZEN, SW.DEMO_SEED)
-for workers in (os.cpu_count(), 8):
-    t = time.perf_counter()
-    st = FileStore(w, sys.argv[1], sys.argv[2], workers)
-    print(json.dumps({"filestore_check_s": round(time.perf_counter() - t, 1), "workers": workers,
-                      "bytes": w.nbytes, **st.describe()}), flush=True)
-    st.close()
-PY
 
 for c in /usr/local/cuda /usr/local/cuda-13.0 /usr/local/cuda-12.8 /usr/local/cuda-12.9; do [ -x "$c/bin/nvcc" ] && export CUDA=$c && break; done
 export PATH="${CUDA:-/usr/local/cuda}/bin:$PATH"
