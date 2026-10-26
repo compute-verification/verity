@@ -296,9 +296,9 @@
    "why": "the bridge is stated against core's identity hash and C-Flock's SHA-512, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier": {
-   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity"],
+   "imports": ["NetworkCheck.Check", "NetworkCheck.LinkWindow", "Properties.Identity", "Lms.Sign"],
    "except": [],
-   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, never a proof"
+   "why": "the properties are stated against the code's own functions, the check's and N2's link-window verdict of record's, and the certificates the certifier's device signs against LMS's own signer (`CertifierSigned`), never a proof"
   },
   "Properties.Evaluate": {
    "imports": ["Evaluate", "Definitions.Core.Scalar", "Definitions.Core.Fp32", "Definitions.Core.Prims"],
