@@ -1,0 +1,13 @@
+# Randomized int8 arithmetic against the stacking cheater: the honest cost on a served model (`honest.py`, GPU, run by
+# `job.sh`), the cheater's cheapest squaring mod p1024 under randomized gates (`cheater.py`) and f at the census's operating
+# points (`verdict.py`). Not a package: the tests put this directory on sys.path, like benchmarks/property_redteam.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# cheater.py builds on the property red team's port of Model.lean (squaring.py), which imports the remote audit's codec for
+# p1024; the codec hashes rows through the commitments, on the crypto package.
+inputs = ["benchmarks/property_redteam/squaring.py", "verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py",
+          "verity/ml/commitments", "verity/ml/crypto", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+          "verity/core/protocols/remote_bandwidth"]

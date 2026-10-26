@@ -30,7 +30,8 @@ CENSUS = {
 }
 E_WORD = {"conjectured": 364497, "red team (#2420)": 490080}
 LIFETIMES = {"10 min": 600, "1 h": 3600}
-R_IN = 1e6
+#: the census headline's run-input rate (`stacked_share/share.py`'s first `R_INS`), so the `none` row is the census's f
+R_IN = 1e5
 SQUARINGS_PER_WORD = 3063
 GPUS = 8
 #: H100 SXM dense int8, 1,979 TOPS (NVIDIA's datasheet; assumed: the census's served trace ran on H100s)

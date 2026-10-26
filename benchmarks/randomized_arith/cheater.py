@@ -23,6 +23,13 @@ The coins are never inputs the cheater's gates read; predicting them means compu
 (`prf_units`). Every construction is run on random inputs and fresh coins and checked exact mod p, `Proven` and within
 `OperandBits 128`; its units are counted by class, with its MACs (products summed by its dots).
 
+**The seam.** Each construction folds its top carry `c_top` back into a low window of `w` digits (`2^(bn) ≡ δ`), which
+it computed before `c_top` existed, so it is wrong on inputs where `c_top·δ` moves that window's carry out.
+`window_fail_log2` bounds the share of such inputs from the gates' derived intervals, with the window's own value uniform
+over its `R^w` values (modeled); a randomized law's window is centered, so it can be exact. The reference, `seam_square`,
+is wrong on 2^−12.4 of inputs (measured in `squaring.py`), and every construction takes the narrowest window whose bound,
+computed the same way, is at most the reference's (`reference_fail_log2`): compared like with like.
+
 **The constructions** (`CONSTRUCTIONS`), each one squaring of a 1024-bit word:
 
 * `anyfn_seam`: property/v1's cheapest, `squaring.seam_square` (160 units), the reference.
@@ -36,6 +43,8 @@ The coins are never inputs the cheater's gates read; predicting them means compu
 
 from __future__ import annotations
 
+import functools
+import math
 import random
 import sys
 from collections import Counter
@@ -79,6 +88,7 @@ class RBuilder(Q.Builder):
         self.rng = random.Random(0)
         self.macs = 0
         self.coins: list[tuple[int, int, int]] = []  # (slot, lo, hi) of each accumulator-noise coin
+        self.seam_fail_log2 = -math.inf
 
     def mma(self, head, a, b, fa, fb):  # noqa: D102
         self.macs += len(a)
@@ -160,7 +170,45 @@ def fold_split(b: int) -> list[int]:
     while delta:
         out.append(delta % (1 << b))
         delta >>= b
+    # a third digit would carry the top column's fold past position n − 1, which needs a second fold
+    assert len(out) <= 2, f"δ has {len(out)} radix-2^{b} digits; the one-pass fold needs at most 2"
     return out
+
+
+def window_fail_log2(a: tuple[int, int], d: tuple[int, int], low: tuple[int, int], ok: tuple[int, int],
+                     width: int) -> float:
+    """log2 of the share of inputs on which a seam is wrong: the window's value `A` (interval `a`, uniform over its
+    `width` values) plus the fold's `D` less the lower digits' `L` must stay in `ok`, at `D` and `L` extreme."""
+    over = max(0, a[1] + d[1] - low[0] - ok[1]) + max(0, ok[0] - (a[0] + d[0] - low[1]))
+    return math.log2(over / width) if over else -math.inf
+
+
+def fold_term(c_top: tuple[int, int], split: list[int], b: int) -> tuple[int, int]:
+    """`D = c_top·δ`'s interval, `δ`'s digits at their window positions."""
+    dw = value(split, b)
+    return min(c_top[0] * dw, c_top[1] * dw), max(c_top[0] * dw, c_top[1] * dw)
+
+
+def group_fail_log2(c_top: tuple[int, int], split: list[int], b: int, w: int) -> float:
+    """A window of `w` digits recomputed as one group (`seam_square`'s limbs 0..3, `anyfn_fixup`'s fixup digits): wrong
+    when `A + D` leaves `[0, R^w)`."""
+    width = 1 << (b * w)
+    return window_fail_log2((0, width - 1), fold_term(c_top, split, b), (0, 0), (0, width - 1), width)
+
+
+def ripple_fail_log2(c_top: tuple[int, int], split: list[int], b: int, s: int, digits: tuple[int, int],
+                     centered: bool) -> float:
+    """`restricted_ripple`'s low window: its last digit is `(A + D − L) / R^(s−1)`, `A` the window's value less `R^s`
+    times the precomputed carry, `L` the lower `s − 1` digits. Under `det` the digits are canonical, so the last digit
+    is `⌊(A + D) / R^(s−1)⌋` and the window is a group's. Under a randomized law the precomputed carry rounds to
+    nearest (`A ∈ [−R^s/2, R^s/2)`) and `L` is any value its redundant digits reach."""
+    if not centered:
+        return group_fail_log2(c_top, split, b, s)
+    R = 1 << b
+    Rs, Rs1 = R ** s, R ** (s - 1)
+    S = (Rs1 - 1) // (R - 1)
+    return window_fail_log2((-(Rs // 2), Rs // 2 - 1), fold_term(c_top, split, b), (digits[0] * S, digits[1] * S),
+                            (digits[0] * Rs1, digits[1] * Rs1 + Rs1 - 1), Rs)
 
 
 def to_digits(x: int, b: int, signed: bool) -> list[int]:
@@ -248,6 +296,8 @@ def restricted_ripple(bld: RBuilder, f: list[int], b: int, s: int, signed_out: b
     lo, hi = digit_range(mech, b)
     if not signed_out:
         assert mech.kind == "det"
+    split = fold_split(b)
+    assert len(split) <= s, "the fold's δ must land inside the low window"
     c = bld.const(0)
     for j in range(s):
         x = bld.affine(0, [(1, f[j]), (1, c)])
@@ -260,7 +310,8 @@ def restricted_ripple(bld: RBuilder, f: list[int], b: int, s: int, signed_out: b
         c = bld.nfloor([(1, x)], b)
         out[j] = bld.clamp(bld.affine(0, [(1, x), (-R, c)]), lo, hi)
     c_top = c
-    split = fold_split(b)
+    ct = bld.gates[c_top]
+    bld.seam_fail_log2 = ripple_fail_log2((ct.lo, ct.hi), split, b, s, (lo, hi), mech.kind != "det")
     c = bld.const(0)
     for j in range(s):
         terms = [(1, f[j]), (1, c)]
@@ -275,7 +326,7 @@ def restricted_ripple(bld: RBuilder, f: list[int], b: int, s: int, signed_out: b
     return out
 
 
-def restricted(bld: RBuilder, a: list[int], b: int, s: int = 5) -> list[int]:
+def restricted(bld: RBuilder, a: list[int], b: int, s: int) -> list[int]:
     """One squaring in the restricted model: honest columns, the fold, `restricted_ripple`."""
     signed = bld.mech.kind != "det"
     f = fold(bld, unfolded_columns(bld, a, S8 if signed else U8), b)
@@ -287,7 +338,7 @@ def clean_column(bld: RBuilder, y: int, G: int) -> int:
     return exact_floor(bld, y, G, 1 << (G - 1))
 
 
-def restricted_acc(bld: RBuilder, a: list[int], b: int, g: int, rep: int, s: int = 5) -> list[int]:
+def restricted_acc(bld: RBuilder, a: list[int], b: int, g: int, rep: int, s: int) -> list[int]:
     """Both mechanisms: noisy dots (`g`) with `rep` repetition bits and `b`-bit digits scaled into s8 (guard
     `2(7 − b) + rep ≥ g`... the clean needs `G ≥ g`), every unfolded column cleaned exactly, then the ripple."""
     signed = bld.mech.kind != "det"
@@ -310,7 +361,7 @@ def anyfn_fixup(bld: RBuilder, a: list[int], b: int, g: int = 0, rep: int = 0, f
     """One greedy carry pass of any-function gates over `b`-bit canonical digits (scaled into u8 by `2^(8−b)`, so the
     dots carry `2(8 − b) + rep` guard bits), each group gate reading the carry in and its positions' noisy columns and
     cleaning them inside; the top carry folded into the low digits and one fixup group of `fixup` digit gates (no carry,
-    wrong with probability about `δ·c_top / R^fixup`)."""
+    wrong when `δ·c_top` moves the group's carry out: `group_fail_log2`)."""
     assert bld.mech.kind == "det"
     n, R = n_digits(b), 1 << b
     scale_bits = 8 - b
@@ -372,6 +423,8 @@ def anyfn_fixup(bld: RBuilder, a: list[int], b: int, g: int = 0, rep: int = 0, f
         base += w
     if fixup is None:
         fixup = -(-48 // b)
+    assert len(split) <= fixup, "the fold's δ must land inside the fixup group"
+    bld.seam_fail_log2 = group_fail_log2((0, carry_hi), split, b, fixup)
     t0 = bld.affine(0, [(1, out[0])] + ([(split[0], carry)] if split[0] else []))
     low = [t0] + [bld.affine(0, [(1, out[i])] + ([(split[i], carry)] if i < len(split) and split[i] else []))
                   for i in range(1, fixup)]
@@ -383,15 +436,32 @@ def anyfn_fixup(bld: RBuilder, a: list[int], b: int, g: int = 0, rep: int = 0, f
 # ---- measuring ------------------------------------------------------------------------------------------------------------
 
 
+def seam_square(bld: RBuilder, a: list[int]) -> list[int]:
+    """`squaring.seam_square`, its seam's bound recorded."""
+    out, c_top = Q.seam_square(bld, a)
+    ct = bld.gates[c_top]
+    bld.seam_fail_log2 = group_fail_log2((ct.lo, ct.hi), [Q.DELTA], 8, Q.SEAM_W)
+    return out
+
+
+@functools.cache
+def reference_fail_log2() -> float:
+    """`seam_square`'s bound, the one every construction's window is held to."""
+    bld = RBuilder()
+    seam_square(bld, [bld.inp(i, *U8) for i in range(Q.N_LIMBS)])
+    return bld.seam_fail_log2
+
+
 @dataclass
 class Spec:
     name: str
     mech: Mech
     b: int
-    build: Callable[[RBuilder, list[int]], list[int]]
+    build: Callable[[RBuilder, list[int], int], list[int]]  # (builder, input digits, seam window) → output digits
     digits: tuple[int, int]  # the input digits' range, which is the output's (squarings chain)
     noise_g: int = 0
     rep: int = 0
+    window: bool = True  # whether the construction takes a seam window to size (`seam_square`'s is fixed)
 
 
 def spec(name: str) -> Spec:
@@ -401,25 +471,35 @@ def spec(name: str) -> Spec:
     kw = {p[0]: int(p[1:]) for p in parts if len(p) > 1 and p[0] in "bgr" and p[1:].isdigit()}
     b, g, rep = kw.get("b", 8), kw.get("g", 0), kw.get("r", 0)
     if name == "anyfn_seam":
-        return Spec(name, DET, 8, lambda bld, a: Q.seam_square(bld, a)[0], U8)
+        return Spec(name, DET, 8, lambda bld, a, w: seam_square(bld, a), U8, window=False)
     if name.startswith("anyfn_fixup"):
-        return Spec(name, DET, b, lambda bld, a: anyfn_fixup(bld, a, b, g, rep), (0, (1 << b) - 1), g, rep)
+        return Spec(name, DET, b, lambda bld, a, w: anyfn_fixup(bld, a, b, g, rep, w), (0, (1 << b) - 1), g, rep)
     acc = name.startswith("restricted_acc")
     mech = {"det": DET, "sr": SR, "noise1": Mech("noise", 1)}[parts[2] if acc else parts[1]]
     if acc:
-        return Spec(name, mech, b, lambda bld, a: restricted_acc(bld, a, b, g, rep), digit_range(mech, b), g, rep)
-    return Spec(name, mech, b, lambda bld, a: restricted(bld, a, b), digit_range(mech, b))
+        return Spec(name, mech, b, lambda bld, a, w: restricted_acc(bld, a, b, g, rep, w), digit_range(mech, b), g,
+                    rep)
+    return Spec(name, mech, b, lambda bld, a, w: restricted(bld, a, b, w), digit_range(mech, b))
+
+
+def build(sp: Spec) -> tuple[RBuilder, list[int], int | None]:
+    """The construction with the narrowest seam window whose bound is at most the reference's."""
+    n = n_digits(sp.b)
+    for w in range(len(fold_split(sp.b)), n) if sp.window else [None]:
+        bld = RBuilder(sp.mech)
+        out = sp.build(bld, [bld.inp(i, *sp.digits, "coin") for i in range(n)], w)
+        if not sp.window or bld.seam_fail_log2 <= reference_fail_log2():
+            return bld, out, w
+    raise AssertionError("no seam window keeps the construction within the reference's failure bound")
 
 
 def measure(name: str, trials: int = 32, seed: int = 20261026) -> dict:
     """Build the construction once; run it on `trials` random digit vectors over the whole input range (so redundant
     and out-of-[0, p) values too), each with fresh coins; check the output ≡ input² (mod p); count units and MACs."""
     sp = spec(name)
-    bld = RBuilder(sp.mech)
+    bld, out, seam_window = build(sp)
     n = n_digits(sp.b)
     lo, hi = sp.digits
-    a = [bld.inp(i, lo, hi, "coin") for i in range(n)]
-    out = sp.build(bld, a)
     rng = random.Random(seed)
     right = window = hold = 0
     for t in range(trials):
@@ -442,6 +522,8 @@ def measure(name: str, trials: int = 32, seed: int = 20261026) -> dict:
             "units": units, "units_by_class": bld.units_by_class(), "macs": bld.macs, "gates": len(bld.gates),
             "proven": Q.proven(bld.gates) == [], "operand_bits_128": Q.operand_bits(128, bld.gates),
             "max_operand_bits": max((sum(bld.gates[j].bits for j in g.args) for g in budgeted), default=0),
+            "seam_window": seam_window,
+            "seam_fail_log2": None if bld.seam_fail_log2 == -math.inf else round(bld.seam_fail_log2, 2),
             "trials": trials, "right": right, "in_window": window, "declared_hold": hold}
 
 
@@ -476,12 +558,13 @@ NOISE_BITS = (4, 6, 8, 10, 12)
 
 
 def grid() -> list[str]:
-    """Every accumulator-noise construction the cheater could pick at each noise `g`: each digit width `b`, with just
-    enough repetition bits to reach `g` guard bits (digits scaled into the operand give `2(8 − b)`, or `2(7 − b)` signed)."""
+    """Every accumulator-noise construction the cheater could pick at each noise `g`: each digit width `b ≥ 4` (below
+    that `δ` has three radix digits, `fold_split`), with just enough repetition bits to reach `g` guard bits (digits
+    scaled into the operand give `2(8 − b)`, or `2(7 − b)` signed)."""
     names = []
     for g in NOISE_BITS:
-        names += [f"anyfn_fixup_b{b}_g{g}_r{max(0, g - 2 * (8 - b))}" for b in range(8, 1, -1)]
-        names += [f"restricted_acc_sr_b{b}_g{g}_r{max(0, g - 2 * (7 - b))}" for b in range(7, 1, -1)]
+        names += [f"anyfn_fixup_b{b}_g{g}_r{max(0, g - 2 * (8 - b))}" for b in range(8, 3, -1)]
+        names += [f"restricted_acc_sr_b{b}_g{g}_r{max(0, g - 2 * (7 - b))}" for b in range(7, 3, -1)]
     return names
 
 
