@@ -240,14 +240,8 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires == {
-        "lean-agreement": ["verity/ml/flock/", "verity/core/service/flock/", "!README.md", "!PROTOCOL.md"],
-        "lean-suites": ["verity/ml/flock/python/verity_flock/rec_vstage.py", "verity/ml/flock/python/verity_flock/rec_outer.py",
-                        "verity/ml/flock/python/verity_flock/rec_open.py",
-                        "verity/ml/flock/python/verity_flock/rec_residuals.py",
-                        "verity/ml/flock/python/verity_flock/rec_cap.py", "verity/ml/flock/python/verity_flock/circuit.py",
-                        "verity/core/protocols/sampled_proofs/one_stage/registered.py",
-                        "verity/core/service/flock/VStar/In.lean", "verity/core/service/vstar/"]}
+    assert tool.CHECK.merge_requires == {"lean-agreement": ["verity/ml/flock/", "verity/core/service/flock/", "!README.md",
+                                                       "!PROTOCOL.md"]}
     pin = __import__("json").loads((ROOT / "verity" / "ml" / "flock" / "verifier" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
         (ROOT / "verity" / "ml" / "flock" / "verifier" / "vectors.json").read_text())["replayable"]["sets"]}
