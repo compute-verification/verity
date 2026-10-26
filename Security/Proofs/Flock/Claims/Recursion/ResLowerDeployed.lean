@@ -1470,7 +1470,9 @@ theorem resTie_staged {b : Brings} {IV : Claims.Verifier Coin}
 /-- **`resPieces_computes` with the tie at the pieces' copies only**, and the whole acceptance at hand: wherever part
 `s` accepts at an algebra part, each piece `ownQ` gives it holds where, at every staged statement and witness that pass
 `Flock.check`, agree with the messages and record true, collision-free calls, the piece sits at one of the statement's
-copies, of its group, at which check 5's tie holds (`ResTie`) and whose rows are what `elemAt` reads. The piece's key is
+copies, of its group, at which check 5's tie holds (`ResTie`) and whose residuals vanish at what `elemAt` reads wherever
+they vanish at the copy's rows (`ResZero`; the copy's rows being `elemAt`'s gives it, and so does their being
+`elemAt`'s up to an offset the residuals cancel, `PartS.resZero_off`). The piece's key is
 `(jj, o, g, u)`: the part's group `jj` (so pieces of different groups have different keys) and instance `o + g`'s unit
 `u` of the part's one table (`keyCopy`: block `(o + g) / c.g`, VU `(o + g) % c.g` at the part's own `c.g`, which the
 prover chooses), so the pieces needn't know `c.g`. Check 5 holds only
@@ -1506,9 +1508,11 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
               (keyCopy p ht w q.key) ∧
             ∀ os last, Bd.final (ms.getD (Bd.DE.V.k (Claims.Recursion.xI D x) - 1) []) = some (os, last) →
               os.length + 1 = Bd.DE.V.k (Claims.Recursion.xI D x) →
-              _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key) =
-                elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
-                  ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :
+              ResZero S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht w q.key))
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) →
+                ResZero S (elemAt (Claims.Recursion.xI D x) (Bd.opened os last)
+                    ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)
+                  (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key)) :
     PiecesComputes Bd D pieces (resHolds elemAt vvAt) ownQ s x c ms := by
   obtain ⟨-, xO, w, hck, hT, hc, hs, hh, hp, hm, hrw⟩ := h
   obtain ⟨p, r', sv, hx, ht, hpi, hr', ⟨ss', hss', hsv'⟩, -, htab⟩ := stagedReads hs
@@ -1527,11 +1531,7 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
   obtain ⟨m, k, cl, jj, sh, holo, S, ns, nv, h1, h2, h3, h4, hro⟩ :=
     _root_.Flock.Readable.innerCopies ht' ho' (Nat.mod_lt _ hG) hu hcp
   obtain ⟨rfl, -, htie, hE⟩ := hch m k cl jj sh holo S ns nv h1 h2 h3 h4
-  have hz : ResZero q.S (_root_.Flock.Readable.rowsRead ns nv (keyCopy p ht' w q.key))
-      (vvAt (Claims.Recursion.xI D x) ((List.range (Bd.DE.V.k (Claims.Recursion.xI D x))).map c) q.key) :=
-    resVal_zero_of_tie hro htie
-  rw [hE os last hf hl] at hz
-  exact hz
+  exact hE os last hf hl (resVal_zero_of_tie hro htie)
 
 /-! ## The statements -/
 
