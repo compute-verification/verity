@@ -39,6 +39,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.config import option
 from verity_vllm.protocols.pouw.h1 import SCHEME
 
 ENTRY = f"pouw:{SCHEME}"
@@ -51,6 +52,19 @@ SESSIONED = ("challenger", "session", "gate", "period")
 AT = "127.0.0.1:7811"
 #: how many times, a second apart, a session's state is polled: its ``ssh -R`` port listening here, its end entry
 POLLS = 300
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class GateOptions:
+    """serve-openai's ``--challenger-gate`` and ``--challenger-peer`` (its ``gate`` group, `sessions_of`)."""
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
+                                         help="with --protocols: the auditor host's challenger gate, its command as one string "
+                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
+                                              "session of its own there and draws its coins from it (serve_h1.GateSessions); "
+                                              "without it they are in-process and credit nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
+                                         help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
+                                              "challenger reaches the server (ssh -R)")
 
 
 def config_of(value: str | None) -> dict[str, Any]:
@@ -84,13 +98,16 @@ def config_of(value: str | None) -> dict[str, Any]:
 
 
 def refusal(opts: Any) -> str | None:
-    """Why ``opts`` can't serve ``--protocols`` (None when they can, or none is asked for)."""
-    gate, peer = getattr(opts, "challenger_gate", None), getattr(opts, "challenger_peer", None)
+    """Why ``opts`` can't serve ``--protocols`` (None when they can, or none is asked for); `config_of`'s `UsageError` when
+    it refuses ``--protocols-config``."""
+    gate, peer = opts.gate.challenger_gate, opts.gate.challenger_peer
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
+    if opts.protocols_config and not opts.protocols:
+        return "--protocols-config without --protocols"
     if not opts.protocols:
         return None
     if opts.protocols != ENTRY:
@@ -100,6 +117,7 @@ def refusal(opts: Any) -> str | None:
                 "--commit, --scheme rows-sha512 and the bench row's --required-manifest")
     if opts.max_num_batched_tokens % 32:
         return f"--protocols {ENTRY}: H1's T, --max-num-batched-tokens {opts.max_num_batched_tokens}, is a multiple of 32"
+    config_of(opts.protocols_config)
     return None
 
 
@@ -188,18 +206,19 @@ class GateSessions:
         except (ValueError, OSError) as e:
             return {"opened": None, "error": f"{type(e).__name__}: {e}"[:300]}
         end = s.get("end")
-        body = (end.get("body") or {}) if isinstance(end, Mapping) else {}
-        return {"opened": s.get("open") is not None, **{k: body.get(k) for k in ("rc", "closed", "complete")}}
+        body = end.get("body") if isinstance(end, Mapping) else None
+        return {"opened": s.get("open") is not None,
+                **{k: body.get(k) if isinstance(body, Mapping) else None for k in ("rc", "closed", "complete")}}
 
 
 def sessions_of(opts: Any) -> GateSessions | None:
     """The server's `GateSessions` from ``--challenger-gate`` and ``--challenger-peer`` (`refusal` holds them together),
     for windows of ``--window-steps``; None without a gate."""
-    if not getattr(opts, "challenger_gate", None):
+    if not opts.gate.challenger_gate:
         return None
     from verity_vllm.pipeline import commit_coins as CC
 
-    return GateSessions(CC.Gate(opts.challenger_gate), opts.challenger_peer, opts.window_steps)
+    return GateSessions(CC.Gate(opts.gate.challenger_gate), opts.gate.challenger_peer, opts.window_steps)
 
 
 class H1Windows:
@@ -313,5 +332,5 @@ class H1Windows:
                                         if o["gate"]["gate_passed"] is not None)}
 
 
-__all__ = ["AT", "ENTRY", "GateSessions", "H1Windows", "OWN", "POLLS", "SCHEME", "SESSIONED", "config_of", "listening",
-           "refusal", "sessions_of", "units"]
+__all__ = ["AT", "ENTRY", "GateOptions", "GateSessions", "H1Windows", "OWN", "POLLS", "SCHEME", "SESSIONED", "config_of",
+           "listening", "refusal", "sessions_of", "units"]

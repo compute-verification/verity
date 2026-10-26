@@ -228,14 +228,7 @@ class Options:
                                    help=f"{SH.ENTRY}: PoUW H1 on this server's Commit, one H1 window a Commit window (serve_h1)")
     protocols_config: str | None = option("--protocols-config", default=None,
                                           help="--protocols' settings, {\"pouw\": {...}}: a JSON object, or a JSON file (serve_h1.config_of)")
-    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
-                                         help="with --protocols: the auditor host's challenger gate, its command as one string "
-                                              "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
-                                              "session of its own there and draws its coins from it (serve_h1.GateSessions); "
-                                              "without it they are in-process and credit nothing")
-    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
-                                         help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
-                                              "challenger reaches the server (ssh -R)")
+    gate: SH.GateOptions = group(SH.GateOptions)
     remote: SR.RemoteOptions = group(SR.RemoteOptions)
 
 
@@ -658,9 +651,6 @@ def preflight(opts: Options, which: Callable[[str], str | None] = shutil.which,
         raise UsageError(why)
     if why := SH.refusal(opts) or SR.refusal(opts):
         raise UsageError(why)
-    if opts.protocols_config and not opts.protocols:
-        raise UsageError("--protocols-config without --protocols")
-    SH.config_of(opts.protocols_config)
     if opts.required_manifest and not Path(opts.required_manifest).is_file():
         raise UsageError(f"--required-manifest {opts.required_manifest}: no such file")
     if opts.commit and opts.gpu_tree and which("ninja") is None:
