@@ -119,11 +119,14 @@ def PortsAt (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Opt
         ((_root_.RecDeploy.bdR rd wE final w).opened os last) p ht wt q ns nv
 
 /-- **P2, the frame ports**: in a piece's port context, on every row element of its group whose `w` index is a frame
-value (below `accBase`), the copy's row is what `elemReadC acc` reads, at every `acc`. -/
+value (below `accBase`), the copy's row is what `elemReadC acc` reads, at every `acc`, where the opened messages decode
+(`Rows.DecAt`, which `ReadsAt` and `BasesHold` give at a joint acceptance; at one, `shI_alg` (ResLowerDA) ties `shI` to
+table 0's `shapeNoCoin`). -/
 def FramePorts (rd : Msg → Option FinalP) (wE : Msg → ℝ) (final : Msg → Option (List (List (Msg × Salt)) × Msg))
     (w : Msg → ℝ) (b : Brings) (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin)))
     (shape : Claims.Recursion.Form → Prop) (untr : TrReader) (cmt : Msg → ℕ → Msg → Msg) : Prop :=
   PortsAt rd wE final w b elem shape untr cmt fun xi cs ms' p ht wt q ns nv =>
+    Nonempty (Rows.DecAt rd xi ms' cs) →
     ∀ (acc : Msg → List Msg → List Coin → ℕ → Array _root_.Flock.F128) (e j : ℕ), elemPort xi q.key.1 e = some j →
       j < accBase xi →
       _root_.Flock.Readable.rowsRead ns nv (keyCopy p ht wt q.key) e = Rows.elemReadC acc xi ms' cs q.key e

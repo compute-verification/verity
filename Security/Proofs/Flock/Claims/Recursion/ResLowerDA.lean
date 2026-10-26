@@ -317,7 +317,8 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
       hrows hwo
   · -- the residuals, at the decision `ReadsAt` gives
     intro os last hfin hos hz
-    have hRk := hRd x ⟨st, hx, hf⟩ c ws hJ.1 (fun e he => hJ.2.1 e (DecompBR.allCalls_layR elem x ws he)) os last hfin hos
+    have hRk := hRd x ⟨st, hx, hf⟩ c ws hJ.1 (fun e he => hJ.2.1 e (DecompBR.allCalls_layR elem x ws he)) os last
+      hfin hos
     have hos' : os.length + 1 = RestRead.kI x := hos
     have hlen : (os.map (fun o => FlockDeploy.joinR (o.map Prod.fst)) ++ [last]).length =
         ((List.range (RestRead.kI x)).map c).length := by
@@ -326,7 +327,7 @@ theorem resLowered_D (rd : Msg → Option FinalP) (key : ℕ → ℕ → ℕ →
     obtain ⟨D⟩ := decAt_of (xo := x) (sto := st) S hBs hx hf hRk hlen
     have hshI := shI_alg (xo := x) (sto := st) D hx hf rfl hv
     obtain ⟨δ, hδ⟩ := hAc os last hfin hos ⟨D⟩
-    have hFr' := hFr os last hfin hos
+    have hFr' := hFr os last hfin hos ⟨D⟩
     obtain ⟨S1, gs, R, P, V, hS1, hgs, hgj, hpS⟩ := part_partS hpart'
     refine FlockVBridge.PartS.resZero_off hpS ?_
       (shift_of (fun e => elemPort_eq hv hshI hS1 hgs hgj e) (fun e j hj hl => hFr' (Top.accRC rd key) e j hj hl)
