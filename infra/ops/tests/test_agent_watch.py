@@ -1504,6 +1504,23 @@ def test_a_silent_worker_is_rung_once_then_once_more_a_window_later_then_not_unt
     assert [r["window"] for r in silent(tmp_path)] == [1, 2, 1] and silent(tmp_path)[-1]["since"] == W.iso(p.stat().st_mtime)
 
 
+def test_a_silent_worker_still_showing_nothing_six_hours_on_is_one_no_step_for_top(tmp_path):
+    """top, 26 Oct: nine workers sat ACTIVE with no step for 30-64 h, each rung twice as silent and then by no one."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits worker W3 ({W1_}); code cursor/w3-branch-c7a9", age_s=2 * 3600)
+    sh = FakeSh({"cursor/w3-branch-c7a9": "a" * 40})
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("ACTIVE", W.iso(T0 - 3 * 3600))}, notes=notes,
+                                 git_remote=REMOTE, sh=sh)
+    w.sweep(lambda r: None)
+    sweeps(w, clock, 359)
+    assert [r["kind"] for r in records(tmp_path) if r["kind"] in ("silent", "no_step")] == ["silent", "silent"]
+    sweeps(w, clock, 1)
+    sweeps(w, clock, 600)
+    got = [r for r in records(tmp_path) if r["kind"] == "no_step"]
+    assert [{k: r[k] for k in ("agent", "since", "hours", "handle", "owner")} for r in got] == [
+        {"agent": W1_, "since": W.iso(T0), "hours": 6, "handle": "circuits", "owner": "top"}]
+
+
 def test_a_push_to_an_agents_branch_is_activity(tmp_path):
     """A coordinator's branches: its runs' `git.branches` and every head ending in its id's last four (`cursor/...-cccc`)."""
     run = {"status": "RUNNING", "createdAt": W.iso(T0), "updatedAt": W.iso(T0),
