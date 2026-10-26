@@ -182,7 +182,7 @@ def test_cuda_seq_sum_is_the_hosts():
     from e2e_h200 import ops as O
     g = torch.Generator().manual_seed(11)
     x = torch.randn(300, 4099, generator=g) * torch.exp2(torch.randint(-140, 40, (300, 4099), generator=g).float())
-    x[0], x[1, ::2], x[2] = 1e-45, -x[1, 1::2][:2050], torch.tensor([3.0e38, -3.0e38] * 2050)[:4099]
+    x[0], x[1, 1::2], x[2] = 1e-45, -x[1, 0::2][:2049], torch.tensor([3.0e38, -3.0e38] * 2050)[:4099]
     host = O.seq_sum(x)
     assert O._seq_sum_kernel() is not None
     assert torch.equal(O.seq_sum(x.cuda()).cpu().view(torch.int32), host.view(torch.int32))
