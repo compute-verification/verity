@@ -99,7 +99,7 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   have ha := actR_of_decR hlast ha hd
   unfold ReadOkR
   rw [ha]
-  obtain ⟨v', -, -, -, -, -, -, hv', -, -, -, -, -, hdd⟩ := FlockDeploy.decR_some hd
+  obtain ⟨v', _, _, _, _, _, _, hv', -, -, -, -, -, hdd⟩ := FlockDeploy.decR_some hd
   have e : v' = v := Option.some.inj (hv'.symm.trans hv)
   subst e
   exact hlive x ms cs d hlen hd (by rw [hdd]; exact hck)
