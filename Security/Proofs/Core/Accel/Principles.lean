@@ -7,7 +7,8 @@ import Mathlib.Tactic.NormNum
 The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's halves that need no capture: an MMA's
 output reads only its own row, column and accumulator (`p2Local`), its outputs are distinct products' destinations
 (`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share
-of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`).
+of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`). The integer
+path's dots have the product form (`intProductForm`, the integer half of `CapturedProductForm`).
 -/
 
 open scoped NNRat
@@ -65,5 +66,24 @@ theorem H200.refines : H200.card.Refines := by
 theorem Sm120.refines : Sm120.card.Refines := by
   refine ⟨?_, ?_, ?_, rfl⟩ <;> simp only [Sm120.card, Sm120.ρ] <;> rw [← NNRat.coe_le_coe] <;>
     push_cast <;> norm_num
+
+/-- The integer path's dot has the product form: the products' signs and magnitudes, summed into the accumulator. -/
+theorem intProductForm (fa fb : Fmt) (sat : Bool) (k : ℕ) (h : intPair fa fb = true) :
+    ProductForm fa fb k (intDot fa fb sat) := by
+  refine ⟨fun c ms _ _ =>
+    let s : ℤ := c.toInt + (ms.map fun m => if m.2.2.1 then -(m.2.2.2.1 : ℤ) else (m.2.2.2.1 : ℤ)).sum
+    BitVec.ofInt 32 (if sat then max (-2 ^ 31) (min (2 ^ 31 - 1) s) else s), ?_⟩
+  intro c a b ha hb
+  have hka : fa.rowLen k = k := by cases fa <;> cases fb <;> simp_all [intPair, Fmt.rowLen]
+  have hkb : fb.rowLen k = k := by cases fa <;> cases fb <;> simp_all [intPair, Fmt.rowLen]
+  rw [hka] at ha
+  rw [hkb] at hb
+  rw [List.take_of_length_le (le_of_eq ha), List.take_of_length_le (le_of_eq hb)]
+  have hp : ∀ x y, (if (mulOut fa fb x y).2.2.1 = true then -((mulOut fa fb x y).2.2.2.1 : ℤ)
+      else ((mulOut fa fb x y).2.2.2.1 : ℤ)) = fa.intVal x * fb.intVal y := by
+    intro x y
+    simp only [mulOut, h, ite_true]
+    split <;> simp_all <;> omega
+  simp only [List.map_zipWith, hp, intDot]
 
 end Verity.Accel
