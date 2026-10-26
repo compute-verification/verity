@@ -1,4 +1,4 @@
-"""The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``), and the bound over a horizon of periods.
+"""The composed verdict through onsite Verity (`core_onsite`, ``verity/onsite/v0``).
 
 Onsite's check (verity/core/protocols/composition/README.md) runs each component's own ``answer`` on that component's
 case and decides, reject first: any component's rejection rejects onsite whatever the others answer; otherwise onsite
@@ -23,12 +23,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import math
 import re
 import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
-from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -37,8 +35,6 @@ from verity.ml.circuits.codec import canonical_json
 ROOT = Path(__file__).resolve().parents[3]
 ONSITE = ROOT / "verity" / "core" / "protocols" / "onsite" / "CoreOnsite.lean"
 PROTOCOL = "verity/onsite/v0"
-#: a month, the horizon `horizon` projects to
-MONTH_S = 30 * 86400
 
 
 def onsite_components(source: str | None = None) -> list[str]:
@@ -175,30 +171,5 @@ def composed(rows: Mapping[str, Mapping[str, Any]], components: Mapping[str, str
     return {**out, "verdict": verdict, "reason": got.get("reason")}
 
 
-def horizon(reports: Sequence[Mapping[str, Any]], period_s: float, month_s: float = MONTH_S) -> dict[str, Any]:
-    """The integrity bound over the periods so far and projected to a month of ``period_s`` periods: each period is its
-    own audit on its own live coins, so by a union bound, except with probability at most the sum of their δ, every
-    accepted period's wrong units are within its bound, and the horizon's wrong units within their sum. ``vacuous`` when
-    that probability reaches 1. A period that didn't accept certifies nothing, and counts in ``refused``."""
-    rows = [r["protocols"]["integrity"] for r in reports]
-    accepted = [r for r in rows if r.get("verdict") == "accept"]
-    delta = sum((Fraction(r["delta"]) for r in accepted), Fraction(0))
-    so_far = {"periods": len(rows), "accepted": len(accepted), "refused": len(rows) - len(accepted),
-              "wrong_units_bound": sum(r["quantity"]["bound"] for r in accepted),
-              "units": sum(r["answer"]["profile"]["levels"][-1]["size"] for r in accepted),
-              "delta": str(min(delta, Fraction(1))), "vacuous": delta >= 1}
-    n = max(1, math.floor(month_s / period_s)) if period_s > 0 else None
-    month: dict[str, Any] = {"periods": n, "period_s": period_s}
-    if n is not None and accepted:
-        per = delta / len(accepted)
-        month.update(delta=str(min(n * per, Fraction(1))), vacuous=n * per >= 1,
-                     wrong_units_bound=n * so_far["wrong_units_bound"] // len(accepted),
-                     units=n * so_far["units"] // len(accepted))
-    worst = "reject" if any(r["composed"]["verdict"] == "reject" for r in reports) else \
-        "accept" if reports and all(r["composed"]["verdict"] == "accept" for r in reports) else "pending-ports"
-    return {"rule": "union bound over periods, each audited on its own live coins", "integrity": so_far, "month": month,
-            "composed": worst}
-
-
-__all__ = ["MONTH_S", "NO_CASE", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "component_of", "composed", "horizon",
-           "onsite_cases", "onsite_check", "onsite_components", "onsite_inputs", "stub_component"]
+__all__ = ["NO_CASE", "PORTS", "PROTOCOL", "STUB_CASE", "bind", "component_of", "composed", "onsite_cases",
+           "onsite_check", "onsite_components", "onsite_inputs", "stub_component"]
