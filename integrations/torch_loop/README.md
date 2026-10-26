@@ -33,8 +33,8 @@ committed row longer than one SHA-512 block.
   `python -m verity_torch_loop.weights manifest|write|root|fixture`; the fixture is `tests/fixtures/weights-v1.json`.
   The H200 demo's manifest under its seed (`DEMO_SEED`), with each tensor's SHA-256, and its registration digest under
   the test salt key for the placeholder program `TEST_PROGRAM` are
-  art:3683a02687286d9f36801bac54842dceb66595a497c00e621d03294a12ab4664 (run r20261026-002244-d3a7, 48 workers on
-  vy-nebius-cpu-4: 32 s for the digests, 2 min 32 s for the root).
+  art:96ea3632ed1923fc5e3838fd6e92d14af228cc5fb0d8f2e611d84883756bff81 (run r20261026-014601-bb9f, 48 workers on
+  vy-nebius-cpu-4: 34 s for the digests, 2 min 47 s for the root).
 
 ## The demo of record
 
