@@ -506,8 +506,10 @@ theorem planBlocks_of (b : ℕ) (rs : Array (ℕ × ℕ)) (ends : Array ℕ) (hP
   rw [Array.getElem_toList] at this
   exact this
 
-theorem whole_prefix (blocks : ℕ) : PrefixSums #[blocks] ((#[(0, blocks)] : Array (ℕ × ℕ)).toList.map (·.2)) :=
-  ⟨rfl, fun i hi => by obtain rfl : i = 0 := by simpa using hi; rfl⟩
+theorem whole_prefix (blocks : ℕ) : PrefixSums #[blocks] ((#[(0, blocks)] : Array (ℕ × ℕ)).toList.map (·.2)) := by
+  refine ⟨rfl, fun i hi => ?_⟩
+  obtain rfl : i = 0 := by simpa using hi
+  first | rfl | simp
 
 theorem planBlocks : PlanBlocks := by
   refine ⟨fun runs blocks pl h => ?_, fun blocks p hp => ?_⟩
