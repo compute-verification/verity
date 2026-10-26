@@ -2236,6 +2236,7 @@
    "imports": [
     "Mathlib",
     "Definitions.Core",
+    "Definitions.Core.Assumptions",
     "Definitions.Pouw",
     "Definitions.Pouw.Assumptions",
     "Definitions.Pouw.Guarantees"
