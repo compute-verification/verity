@@ -13,11 +13,11 @@ namespace Verity
 
 open scoped ENNReal
 
-variable {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {j : Fin B} {Ω Ch : Type}
+variable {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {Ω Ch : Type}
 
 /-- The wipe that clears the device's state: the fill covers the whole store and leaves every bit of the device's state
 false, nothing leaves the device, the challenger always accepts, and the spot reads change nothing. -/
-def Wipe.blank (d : Device ι) (s : Blocks C B) (j : Fin B) (Ω Ch : Type) : Wipe d s j Ω Ch where
+def Wipe.blank (d : Device ι) (s : Blocks C B) (b : Fin B) (Ω Ch : Type) : Wipe d s b Ω Ch where
   fill := d.mem
   fill_le := le_rfl
   egress := 0
@@ -27,17 +27,17 @@ def Wipe.blank (d : Device ι) (s : Blocks C B) (j : Fin B) (Ω Ch : Type) : Wip
   after σ _ _ := σ
 
 theorem Wipe.blank_separates {Y : Type} :
-    (Wipe.blank d s j Ω Ch).Separates fun σ ω c (_ : Y) => (Wipe.blank d s j Ω Ch).start σ ω c :=
+    (Wipe.blank d s b Ω Ch).Separates fun σ ω c (_ : Y) => (Wipe.blank d s b Ω Ch).start σ ω c :=
   ⟨fun st _ _ => st, fun _ _ _ _ => rfl⟩
 
 theorem Wipe.blank_survivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] {foreignBits : ℕ}
-    (h : 128 ≤ foreignBits) : (Wipe.blank d s j Ω Ch).SurvivorBound foreignBits (2⁻¹ ^ 128) := by
+    (h : 128 ≤ foreignBits) : (Wipe.blank d s b Ω Ch).SurvivorBound foreignBits (2⁻¹ ^ 128) := by
   classical
   intro S hS hold keep
   have hS' : 128 ≤ S := by omega
   set P : (Fin S → Bool) × Ω × Ch → Prop := fun x =>
-    (Wipe.blank d s j Ω Ch).accepts (hold x.1) x.2.1 x.2.2 ∧
-      keep ((Wipe.blank d s j Ω Ch).filled (hold x.1) x.2.1).1 ((Wipe.blank d s j Ω Ch).filled (hold x.1) x.2.1).2
+    (Wipe.blank d s b Ω Ch).accepts (hold x.1) x.2.1 x.2.2 ∧
+      keep ((Wipe.blank d s b Ω Ch).filled (hold x.1) x.2.1).1 ((Wipe.blank d s b Ω Ch).filled (hold x.1) x.2.1).2
         x.2.2 = x.1
   have hcard : (Finset.univ.filter P).card ≤ Fintype.card (Ω × Ch) := by
     rw [← Finset.card_univ]
