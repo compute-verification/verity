@@ -35,7 +35,6 @@
   "Proofs.Properties.NetworkRecords",
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
-  "Proofs.Properties.SampledProofs.OneStageZk",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.Run",
