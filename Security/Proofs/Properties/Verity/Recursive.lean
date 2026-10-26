@@ -31,9 +31,10 @@ the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. Thi
     the value most often read off the witnesses `RecursiveKSAt`'s extractor returns, over the draws and the accepted
     runs that draw the gate's unit. The circuit is the committed file's (R6, `Vocab.Registered`).
   - Daniel's per-prover form: the bound holds at every strategy, with no hypothesis on it but `live-verifier`. It is
-    conditional (`Dep.bound`): where the finders built from the strategy meet their named SHA-512 premises
-    (`Dep.FinderCR`: C-Flock's at each session prover, `ExpectedCR` at each binding finder `Dep.bindAt`), the draw's
-    miss plus `t · 2^{-λ}` at the strategy's calls plus the binding term; elsewhere `⊤`.
+    ONE8's `condError FinderCR δ` (`Dep.err`, the shape of `Vocab.error`): where the finders built from the strategy
+    meet their named SHA-512 premises (`Dep.FinderCR`: C-Flock's at each session prover, `ecr/sha-512` at each
+    binding finder `Dep.bindAt` at its budget), the draw's miss plus `t' · 2^{-λ}` plus the binding term (`Dep.delta`);
+    elsewhere `⊤`. Every budget is a defined function of the strategy's cost `t'` (`Vocab.cost`), with no call model.
   - Beside it, `sampledProofsRecursive_nontrivial` (an accept-everything verifier breaks the bound) and
     `sampledProofsRecursive_honest` (the hypotheses that are the deployment's choices hold at the honest one).
 
@@ -234,7 +235,16 @@ def R : Claims.Rel Claims.Flock.Wit := Claims.Recursion.R q.D q.I
 noncomputable def E : Claims.Extractor Coin Claims.Flock.Wit q.D.V :=
   Claims.Recursion.E FlockDeploy.sha512 q.D q.I (deployZkRec _root_.Flock.Readable.relation) q.decO
 
+/-- **The extractor's reruns at `x`**, at most (`Claims.Recursion.Efficient`'s worst-case count): `1 + waits · cap` for
+the inner protocol, times `1 + Σ waits · cap` over the outer sessions. -/
+def runs (x : Msg) : ℕ :=
+  (1 + q.I.waits (Claims.Recursion.xI q.D x) * q.I.cap (Claims.Recursion.xI q.D x)) *
+    (1 + ∑ s : Fin (q.D.nS x), (q.D.nums x s).waits * (q.D.nums x s).cap)
+
 end Dep
+
+/-- The SHA-512 calls of one run: the prover's and the verifier's. -/
+def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
 
 /-- **The recursive session inside the causal game** at `θ`, `F`, `c` and the strategy `σ`: the coupling of ONE-4's
 device log (`Vocab.rounds`, `Vocab.coinsRead`) with the session.
@@ -245,7 +255,9 @@ device log (`Vocab.rounds`, `Vocab.coinsRead`) with the session.
   device's uniform releases is distributed so (`prob_le`).
 * `drawOf ξ` is the units `ξ` draws.
 * Wherever the recursive component accepts on blobs `bs`, the parameters and evidence it decodes name `x ξ`, and the
-  blobs show the run (`names_shows`). -/
+  blobs show the run (`names_shows`).
+* Each run of the session is part of one run of `σ`, so its SHA-512 calls are at most the strategy's, `V.cost`
+  (`calls_le`). -/
 structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)) where
   Ξ : Type
   Ω : Type
@@ -267,15 +279,13 @@ structure SessionIn (V : Vocab d α) (q : Dep) (θ F c : ByteArray) (σ : Game.S
     Names p e (Core.Blobs.ofArray bs) (x ξ) ∧
       Shows q.Bd.IVStar q.st (x ξ) e.proofs (Core.Blobs.ofArray bs)
         (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) s.1 s.2).seen
+  calls_le : ∀ ξ ω r, runCalls (Claims.run FlockDeploy.sha512 (P ξ) q.D.V (x ξ) ω r) ≤ V.cost θ F c σ
 
 attribute [instance] SessionIn.finΞ SessionIn.neΞ SessionIn.finΩ SessionIn.neΩ
 
 namespace Dep
 
 variable (q : Dep) (V : Vocab d α) {θ F c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
-
-/-- The SHA-512 calls of one run: the prover's and the verifier's. -/
-def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
 
 /-- **A run of the session with the extractor's seed** at `ξ`: the tape, the session's coins and the seed. -/
 abbrev Sample (S : SessionIn V q θ F c σ) (ξ : S.Ξ) : Type :=
@@ -342,47 +352,54 @@ def SessionCR (n v : ℕ) (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : 
         (deployZkRec _root_.Flock.Readable.relation) q.decO P x R).charge
           (Claims.Recursion.setupLen q.D x + (q.I.k (Claims.Recursion.xI q.D x) + 1) * (n + v))))
 
+/-- **The strategy's cost parameter `t'`**: its SHA-512 calls in one run (`Vocab.cost`, ONE8's `t' τ`), at least one.
+Every finder budget below is a defined function of it and of public counts. -/
+def tCost (_ : SessionIn V q θ F c σ) : ℕ := max 1 (V.cost θ F c σ)
+
+/-- **The binding finder's budget at the draws `ξ₁`, `ξ₂`**, a defined function of the strategy's cost `t'`: two runs,
+and two extractions of at most `runs` reruns each (every rerun a run of the session, so at most `t'` calls), plus each
+extraction's rerun count and `collOf`'s `dColl`: `(2 + r₁ + r₂) · t' + r₁ + r₂ + dColl`. -/
+def bindBudget (S : SessionIn V q θ F c σ) (dColl : ℕ) (ξ₁ ξ₂ : S.Ξ) : ℕ :=
+  (2 + q.runs (S.x ξ₁) + q.runs (S.x ξ₂)) * q.tCost V S + q.runs (S.x ξ₁) + q.runs (S.x ξ₂) + dColl
+
 /-- **`FinderCR`: the named SHA-512 premises at the strategy, asked only of the finders built from it.** Each session
-prover's finders meet C-Flock's premises (`SessionCR`, at the inner and setup call bounds `nI` and `vS`), and each binding
-finder meets `ExpectedCR`. Each is quantitative: a finder outputs a SHA-512 collision with probability at most its own
-(expected) SHA-512 calls squared over `2^513`, or over `2^256`, and those calls are a function of the strategy's. -/
+prover's finders meet C-Flock's premises (`SessionCR`, at the inner and setup call bounds `nI` and `vS`; `B`'s runs are
+the session's, at most `t'` calls each). Each binding finder (`bindAt`) outputs a SHA-512 collision with probability at
+most its budget over `2^256`: `ecr/sha-512` (`Claims.ExpectedCR`) asked at `bindBudget`, a defined function of the
+strategy's cost parameter `t' = tCost` (`Vocab.cost`), as ONE8's `qF`/`qS` are of `t' τ`. Quantitative, so `⊤` is the
+error only where a finder built from the strategy beats its budget. -/
 def FinderCR (S : SessionIn V q θ F c σ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) : Prop :=
   (∀ ξ, q.SessionCR (nI (S.x ξ)) (vS (S.x ξ)) (S.x ξ) S.Ω (S.P ξ)) ∧
-    ∀ ξ₁ ξ₂, Claims.ExpectedCR FlockDeploy.sha512 (q.bindAt V S collOf dColl ξ₁ ξ₂)
+    ∀ ξ₁ ξ₂, (q.bindAt V S collOf dColl ξ₁ ξ₂).Pr FlockDeploy.sha512 ≤
+      (q.bindBudget V S dColl ξ₁ ξ₂ : ℝ) / 2 ^ (256 : ℝ)
 
-/-- **The strategy's SHA-512 calls**: the most a run of its session makes, over the draws, tapes and coins, at least
-one. -/
-noncomputable def calls (S : SessionIn V q θ F c σ) : ℕ :=
-  max 1 (Finset.univ.sup fun ξ : S.Ξ => Finset.univ.sup fun s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin) =>
-    runCalls (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2))
-
-/-- **The binding finders' expected SHA-512 calls**, over pairs of draws. -/
-noncomputable def bindCost (S : SessionIn V q θ F c σ)
-    (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ) : ℝ :=
-  Claims.Ex fun p : S.Ξ × S.Ξ => Claims.Ex fun s : (q.bindAt V S collOf dColl p.1 p.2).S =>
-    ((q.bindAt V S collOf dColl p.1 p.2).cost s : ℝ)
+/-- **The error's number at the strategy**, from `t'` and public parameters: the draw's miss `δs`, plus `BitsLin2On`'s
+`t' · 2^{-λ}`, plus the binding term, the file's wire bits times `√(E[bindBudget] / 2^256)` over pairs of draws. -/
+noncomputable def delta (S : SessionIn V q θ F c σ) (dColl : ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
+  ENNReal.ofReal (δs + q.tCost V S * (2 : ℝ) ^ (-lam) +
+    (∑ g, (V.circuitOf F).w g : ℕ) *
+      Real.sqrt (Claims.Ex (fun p : S.Ξ × S.Ξ => (q.bindBudget V S dColl p.1 p.2 : ℝ)) / 2 ^ (256 : ℝ)))
 
 open Classical in
-/-- **The bound at the strategy**: where `FinderCR` holds, the draw's miss `δs`, plus `BitsLin2On`'s `t · 2^{-λ}` at the
-strategy's calls, plus the binding term, the file's wire bits times `√(bindCost / 2^256)`; elsewhere `⊤`. -/
-noncomputable def bound (S : SessionIn V q θ F c σ)
+/-- **The error at the strategy `τ`**, ONE8's `condError FinderCR δ τ := if FinderCR τ then δ τ else ⊤` (the shape of
+`Vocab.error`): `delta` where the finders built from `τ` meet `FinderCR`, and `⊤` elsewhere. -/
+noncomputable def err (Sof : (τ : Game.Strategy (V.game θ F c)) → SessionIn V q θ F c τ)
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
-    (nI vS : Msg → ℕ) (δs lam : ℝ) : ℝ≥0∞ :=
-  if q.FinderCR V S collOf dColl nI vS then
-    ENNReal.ofReal (δs + q.calls V S * (2 : ℝ) ^ (-lam) +
-      (∑ g, (V.circuitOf F).w g : ℕ) * Real.sqrt (q.bindCost V S collOf dColl / 2 ^ (256 : ℝ)))
-  else ⊤
+    (nI vS : Msg → ℕ) (δs lam : ℝ) (τ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
+  if q.FinderCR V (Sof τ) collOf dColl nI vS then q.delta V (Sof τ) dColl δs lam else ⊤
 
 end Dep
 
 /-- **ONE-9p's target: sampled proofs at the recursive configuration**, in Daniel's per-prover form (26 Oct) over the
 causal game (R4′, R5, R6), with the recursive configuration's verdict (`RecVerdict`). At all parameters `θ`, circuit
 files `F` and commitments `c`, and for every strategy `σ`, the probability that the recursive component accepts while
-sampled proofs' claim fails on the extractor's transcript (`¬ Holds .sampled`) is at most `Dep.bound`: where `FinderCR`
-holds at the finders built from `σ`, `δs + calls(σ) · 2^{-λ} + bits · √(bindCost(σ) / 2^256)`, and `⊤` elsewhere.
-There is no hypothesis on the strategy but `live-verifier`.
+sampled proofs' claim fails on the extractor's transcript (`¬ Holds .sampled`) is at most `Dep.err` at `σ`, ONE8's
+`condError FinderCR δ σ`: where `FinderCR` holds at the finders built from `σ`,
+`δs + t'(σ) · 2^{-λ} + bits · √(E[bindBudget(σ)] / 2^256)`, and `⊤` elsewhere, with `t'(σ)` the strategy's SHA-512
+calls in one run (`Vocab.cost`) and every finder's budget defined from it. There is no hypothesis on the strategy but
+`live-verifier`.
 
 It takes these hypotheses:
 * `RecursiveKSAt` at the deployed brings (`hKS`), and the honest half (`HonestHalf`, HONESTIV);
@@ -431,26 +448,24 @@ theorem sampledProofsRecursive (q : Dep)
       (Claims.run FlockDeploy.sha512 ((Sof θ F c σ).P ξ) q.D.V ((Sof θ F c σ).x ξ) ω r).seen) :
     ∀ (θ F c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
       Game.prob (fun o => RecVerdict V o ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ ≤
-        q.bound V (Sof θ F c σ) (collOf F) dColl nI vS δs lam := by
+        q.err V (Sof θ F c) (collOf F) dColl nI vS δs lam σ := by
   sorry
 
 /-- **Its conclusion fails for a verifier that accepts everything**: at a strategy whose extracted transcript fails
-the claim, where the finders built from it meet `FinderCR` and the bound's number is below one. -/
+the claim, where the finders built from it meet `FinderCR` and the error's number (`Dep.delta`) is below one. -/
 theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (θ F c : ByteArray)
-    (σ : Game.Strategy (V.game θ F c)) (S : SessionIn V q θ F c σ)
+    (Sof : (τ : Game.Strategy (V.game θ F c)) → SessionIn V q θ F c τ) (σ : Game.Strategy (V.game θ F c))
     (collOf : Msg → Claims.Flock.Wit → Msg → Claims.Flock.Wit → Option (Msg × Msg)) (dColl : ℕ)
     (nI vS : Msg → ℕ) (δs lam : ℝ)
     (hbad : ¬ V.Holds θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty⟩)
-    (hcr : q.FinderCR V S collOf dColl nI vS)
-    (hlt : ENNReal.ofReal (δs + q.calls V S * (2 : ℝ) ^ (-lam) +
-      (∑ g, (V.circuitOf F).w g : ℕ) * Real.sqrt (q.bindCost V S collOf dColl / 2 ^ (256 : ℝ))) < 1) :
+    (hcr : q.FinderCR V (Sof σ) collOf dColl nI vS) (hlt : q.delta V (Sof σ) dColl δs lam < 1) :
     ¬ Game.prob (fun o => True ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ ≤
-      q.bound V S collOf dColl nI vS δs lam := by
+      q.err V Sof collOf dColl nI vS δs lam σ := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
     prob_play_eq_one (V.rounds θ) θ F c (fun o => True ∧ ¬ V.Holds θ F c σ .sampled o)
       (fun _ _ => ⟨trivial, hbad⟩) σ
-  rw [Dep.bound, if_pos hcr] at h
+  rw [Dep.err, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 
 /-- **Its hypotheses hold at the honest deployment where they are choices of the deployment**: `K₀ = ⌊ε n⌋ + 1` covers
