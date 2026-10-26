@@ -12,8 +12,6 @@ The row kernels register from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 import json
 from typing import Any, Callable, Sequence
 

@@ -178,7 +178,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     if "rms" in need:
         try:
             from verity_vllm.program.kernels import prims_twins
-            rm, _t = prims_twins._rms()
+            rm, _t = prims_twins.rms_twin()
             rm.lib()
             out["rms_triton_model"] = str(rm.LIB)
         except Exception as e:  # noqa: BLE001
@@ -186,7 +186,7 @@ def _prewarm_evaluators(picked: list[dict]) -> dict[str, str]:
     if "fa2" in need:
         try:
             from verity_vllm.program.kernels import prims_twins
-            _fa2_model, _tables = prims_twins._fa2()
+            _fa2_model, _tables = prims_twins.fa2_twin()
             out["fa2_mufu_tables"] = f"loaded ({type(_tables).__name__})"
         except Exception as e:  # noqa: BLE001
             out["fa2_mufu_tables"] = f"prewarm failed: {type(e).__name__}: {str(e)[:120]}"

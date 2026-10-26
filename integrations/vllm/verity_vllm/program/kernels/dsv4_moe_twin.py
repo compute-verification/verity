@@ -5,8 +5,6 @@ Programs are the reference: tests/properties/test_dsv4_moe_capture.py holds each
 capture tests/properties/dsv4_moe_capture_gpu.py holds the kernels to the twins on every captured row."""
 from __future__ import annotations
 
-__models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
-
 from functools import lru_cache
 
 import numpy as np
@@ -14,7 +12,7 @@ import numpy as np
 from verity.ml.circuits.ops import mufu as MU
 from verity_vllm.program.kernels import derived_rows as DR
 from verity_vllm.program.kernels.act_rows import silu_mul_expf_rows
-from verity_vllm.program.kernels.libdevice_sampling import nv_logf
+from verity_vllm.program.kernels.libdevice import nv_logf
 from verity_vllm.program.registry import dsv4_moe as D
 from verity_vllm.program.registry import mla_check as MC
 

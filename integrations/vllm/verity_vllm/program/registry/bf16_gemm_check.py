@@ -33,8 +33,6 @@ an operand's.
 """
 from __future__ import annotations
 
-__models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
-
 import json
 from functools import cache
 from importlib import resources
@@ -103,15 +101,17 @@ def default_cublas_split_k(phase: str, M: int, K: int, N: int) -> int | None:
     return run[2] if run else None
 
 
-#: each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
-#: library versions and cuBLAS routes
-PINS = resources.files("verity_vllm") / "pins"
+def _pins():
+    """Each pinned device's measured facts, `<its name in vLLM's file-name form>.json`: its compute capability, multiprocessor count,
+    library versions and cuBLAS routes.  They are the integration's, read when asked for, so loading the Definitions imports
+    nothing of it."""
+    return resources.files("verity_vllm") / "pins"
 
 
 @cache
 def device_pin(device: str) -> dict[str, Any]:
     """The pin of the device that reports `device` (`torch.cuda.get_device_name`)."""
-    path = PINS / f"{device.replace(' ', '_')}.json"
+    path = _pins() / f"{device.replace(' ', '_')}.json"
     if not path.is_file():
         raise KeyError(f"no device pin {path.name} in verity_vllm/pins")
     return json.loads(path.read_text())
@@ -120,7 +120,7 @@ def device_pin(device: str) -> dict[str, Any]:
 @cache
 def capability_pin(cc: tuple[int, int]) -> dict[str, Any]:
     """The one pinned device of compute capability `cc`."""
-    pins = [json.loads(p.read_text()) for p in PINS.iterdir() if p.name.endswith(".json")]
+    pins = [json.loads(p.read_text()) for p in _pins().iterdir() if p.name.endswith(".json")]
     got = [p for p in pins if tuple(p["compute_capability"]) == tuple(cc)]
     if len(got) != 1:
         raise KeyError(f"{len(got)} device pins of compute capability {cc} in verity_vllm/pins; one is required")
