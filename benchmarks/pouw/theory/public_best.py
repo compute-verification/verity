@@ -1207,23 +1207,17 @@ def _tile_operands(t: int, v: int):
     return eX, eW, Leaf(1.0, _stats("A", eX, (1,) * t), _stats("B", eW, (1,)), 1)
 
 
-def route_peels(Lp: int, K: int) -> float:
-    """The tile route's own peels, int8 products of inner L' a naive MAC. Its Z U^T summed over a call's segments is
-    the peel Z_X U^T; V Y_W^T is its V (sum c)^T summed plus Z_V U^T = (Z - Z_b) U^T, which needs one call-level
-    product Z_b U^T, Z_b the call's permuted bits summed (entries 0..K/L', base-128 digits)."""
-    return math.ceil(math.log2(K / Lp + 1) / 7) * Lp / K
-
-
 def tile_route(card: Card, t: int, Lp: int, K: int, n: int, bit: float, v: int = V2_V, **kw) -> dict:
     """The tile route at A = B = 0 against the honest kernel, both standalone at θ, a naive MAC: honest 1 (plus its peels,
     V2_PEEL_DIGITS products of inner L' a call); the route b c^T at `bit` over the whole segment, V (sum c)^T one int8
-    product of inner L', Z U^T priced by `price` (Z a t-term form of b + V entries, its excess on any route) and
-    `route_peels`."""
+    product of inner L', and Z U^T priced by `price` (Z a t-term form of b + V entries, its excess on any route). The
+    route pays no peels: at A = B = 0 the served output is 0 and the O unit's identity holds of the true words
+    (nofold.v2_round's reading)."""
     _, _, zleaf = _tile_operands(t, v)
     honest = 1 + V2_PEEL_DIGITS * Lp / K
     z = price(card, [zleaf], Lp, n, TOKENS, **kw)
     vc = 1.0
-    route = bit + (vc + z.c) / t + route_peels(Lp, K)
+    route = bit + (vc + z.c) / t
     return dict(honest=honest, z=z.c, z_routes=z.routes, route=route, c=route / honest)
 
 
@@ -1233,7 +1227,7 @@ def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int
     product of X = b + V and W' = c + U pi (both within int8 at A = B = 0, so no wraps), v2's peels and every word's
     SHA-512 leaf at the best schedule. Route: the same words and hashing; b c^T (`bit` of tensor time, its MMAs' lane
     loads in proportion, and at Strassen `depth` its output assembly and one conversion a word on the ALU) and
-    V (sum c)^T as fixed loads; Z U^T a leaf of weight 1/t priced on any route beside the hash; `route_peels`."""
+    V (sum c)^T as fixed loads; Z U^T a leaf of weight 1/t priced on any route beside the hash; no peels."""
     eX, eW, zleaf = _tile_operands(t, v)
     L = t * Lp
     hs = sha_menu(card)
@@ -1247,10 +1241,26 @@ def tile_job(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int
         ops = (assembly(STRASSEN, depth) + 1) / L
         for r, x in (("alu", ops), ("issue", ops), ("rf", 3 * ops), ("vec", ops)):
             fixed[r] = fixed.get(r, 0.0) + x
-    own = ("peels", route_peels(Lp, K), items[1][2])
-    route = price(card, [replace(zleaf, weight=1 / t)], L, n, TOKENS, beside=True, items=(own, items[2]),
+    route = price(card, [replace(zleaf, weight=1 / t)], L, n, TOKENS, beside=True, items=(items[2],),
                   extra_fixed=fixed)
-    return dict(lane=lane_load(honest), honest=honest, route=route, c=route.c / honest.c)
+    return dict(lane=lane_load(honest), alu=honest.loads["alu"] / honest.loads["tensor"], honest=honest, route=route,
+                c=route.c / honest.c)
+
+
+def tile_job_at(card: Card, t: int, Lp: int, K: int, n: int, bit: float, depth: int, v: int, alu: float,
+                s_max: float = 4.0, steps: int = 30) -> dict | None:
+    """`tile_job` with the hashing scaled so that the honest kernel's ALU time over its tensor time is `alu` (the
+    lane load nofold states), by bisection on the scale; None if no scale up to s_max reaches it."""
+    lo, hi = 0.0, s_max
+    if tile_job(card, t, Lp, K, n, bit, depth, v, hi)["alu"] < alu:
+        return None
+    for _ in range(steps):
+        mid = (lo + hi) / 2
+        if tile_job(card, t, Lp, K, n, bit, depth, v, mid)["alu"] < alu:
+            lo = mid
+        else:
+            hi = mid
+    return tile_job(card, t, Lp, K, n, bit, depth, v, hi)
 
 
 def tile_report(Lps=(256, 512, 1024), ts=(2, 3, 4, 5, 6)) -> dict:
@@ -1277,17 +1287,76 @@ def tile_report(Lps=(256, 512, 1024), ts=(2, 3, 4, 5, 6)) -> dict:
     return out
 
 
-V2_LP = {"sm_90": (512, 1792), "sm_120": (256,)}    # L' = L / t at v2's segment lengths (L up to 3584 and 1024)
+V2_LP = {"sm_90": (768, 1024, 1792), "sm_120": (192, 256)}    # the L' that V2_PICKS uses
+
+# v2 as frozen, nofold.v2_pick at 070e970980 (ε_alg budget 0, overlapped, 16-bit words): per static shape (model, K, N,
+# layers), the tile period L' (L = t L') and the honest ALU time without wraps over tensor time (A_nw / T).
+V2_PICKS = {
+    "sm_90": (
+        ("frozen", 16384, 16512, 1, 1024, 1.100), ("frozen", 16384, 16384, 1, 1024, 1.100),
+        ("frozen", 16384, 65536, 1, 1024, 1.087), ("frozen", 65536, 16384, 1, 1088, 1.060),
+        ("Llama-3.1-8B", 4096, 6144, 32, 1024, 1.150), ("Llama-3.1-8B", 4096, 4096, 32, 1024, 1.180),
+        ("Llama-3.1-8B", 4096, 28672, 32, 1024, 1.104), ("Llama-3.1-8B", 14336, 4096, 32, 1216, 1.005),
+        ("Llama-3.1-8B", 4096, 128256, 1, 1024, 1.094),
+        ("Llama-3.1-70B", 8192, 10240, 80, 1024, 1.118), ("Llama-3.1-70B", 8192, 8192, 80, 1024, 1.126),
+        ("Llama-3.1-70B", 8192, 57344, 80, 1024, 1.092), ("Llama-3.1-70B", 28672, 8192, 80, 1152, 1.034),
+        ("Llama-3.1-70B", 8192, 128256, 1, 1024, 1.089),
+        ("DeepSeek-V4-Pro", 7168, 43008, 61, 896, 1.244), ("DeepSeek-V4-Pro", 3072, 50176, 61, 768, 1.448),
+        ("DeepSeek-V4-Pro", 7168, 1536, 61, 1216, 1.154), ("DeepSeek-V4-Pro", 1536, 65536, 61, 768, 1.452),
+        ("DeepSeek-V4-Pro", 7168, 576, 61, 1792, 1.272), ("DeepSeek-V4-Pro", 4096, 16384, 61, 1024, 1.114),
+        ("DeepSeek-V4-Pro", 16384, 7168, 61, 1024, 1.123), ("DeepSeek-V4-Pro", 7168, 129280, 1, 896, 1.239),
+    ),
+    "sm_120": (
+        ("frozen", 16384, 16512, 1, 192, 1.054), ("frozen", 16384, 16384, 1, 192, 1.055),
+        ("frozen", 16384, 65536, 1, 192, 1.051), ("frozen", 65536, 16384, 1, 192, 1.006),
+        ("Llama-3.1-8B", 4096, 6144, 32, 192, 1.262), ("Llama-3.1-8B", 4096, 4096, 32, 192, 1.270),
+        ("Llama-3.1-8B", 4096, 28672, 32, 192, 1.250), ("Llama-3.1-8B", 14336, 4096, 32, 192, 1.076),
+        ("Llama-3.1-8B", 4096, 128256, 1, 192, 1.247),
+        ("Llama-3.1-70B", 8192, 10240, 80, 192, 1.109), ("Llama-3.1-70B", 8192, 8192, 80, 192, 1.111),
+        ("Llama-3.1-70B", 8192, 57344, 80, 192, 1.102), ("Llama-3.1-70B", 28672, 8192, 80, 192, 1.027),
+        ("Llama-3.1-70B", 8192, 128256, 1, 192, 1.101),
+        ("DeepSeek-V4-Pro", 7168, 43008, 61, 192, 1.148), ("DeepSeek-V4-Pro", 3072, 50176, 61, 192, 1.187),
+        ("DeepSeek-V4-Pro", 7168, 1536, 61, 192, 1.207), ("DeepSeek-V4-Pro", 1536, 65536, 61, 192, 1.318),
+        ("DeepSeek-V4-Pro", 7168, 576, 61, 256, 1.001), ("DeepSeek-V4-Pro", 4096, 16384, 61, 192, 1.252),
+        ("DeepSeek-V4-Pro", 16384, 7168, 61, 192, 1.061), ("DeepSeek-V4-Pro", 7168, 129280, 1, 192, 1.147),
+    ),
+}
 
 
-def tile_lane_report(shown=(0.0, 0.25, 0.5, 1.0, 2.0, 4.0), grid_=tuple(i / 16 for i in range(65))) -> dict:
-    """The tile route inside the job against the honest kernel's lane load, at v2's frozen t per card (and t - 1,
-    t + 1) and v2's L': the job's hashing scaled by s sets the lane load, as in `lane_report`. On a grid of s, the
-    highest lane load at which the route still wins (c < 1), and its least c."""
+def v2_report(ts: dict | None = None) -> dict:
+    """c_mm of v2 as frozen per static shape: the tile route inside the job at the shape's L' and honest ALU/tensor
+    (V2_PICKS), c = min(1, route / honest); per model the leak sum w h (1 - c) / sum w h, w the shape's MACs and h the
+    honest cost a MAC. ts overrides the card's tile count (the same L')."""
     out = {}
-    print("\n== v2's tile route inside the job (θ's max with facets) against the honest kernel's lane load, hashing "
-          "scaled by s (1: v1's words, 4 bytes a word, two compressions a 32 words); cells: lane load, c; then the "
-          "highest lane load where the route wins on s in [0, 4] and its least c")
+    print("\n== v2 as frozen (V ±80, nofold.v2_pick at 070e970980): the tile route inside the job per static shape at "
+          "its L' and honest ALU/tensor; cells: K x N, L', ALU/T: c; per model the MAC-and-cost-weighted leak")
+    for card in (H200, H200_M1, SM120):
+        t = (ts or V2_T)[card.family]
+        _, bit, depth = BIT_COST[card.family][0]
+        for model in ("frozen", "Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro"):
+            num = den = 0.0
+            cells = []
+            for mdl, K, N, reps, Lp, alu in V2_PICKS[card.family]:
+                if mdl != model:
+                    continue
+                r = tile_job_at(card, t, Lp, K, N, bit, depth, V2_V, alu)
+                c = min(1.0, r["c"])
+                w = K * N * reps * r["honest"].c
+                num, den = num + w * (1 - c), den + w
+                out[card.name, t, model, K, N] = dict(Lp=Lp, alu=alu, c=c)
+                cells.append(f"{K}x{N} {Lp} {alu:.2f}: {c:.3f}")
+            out[card.name, t, model] = num / den
+            print(f"  {card.name:12} t {t} {model:16} leak {num / den:6.2%} | " + "; ".join(cells))
+    return out
+
+
+def tile_lane_report(alus=(0.6, 0.82, 1.0, 1.05, 1.1, 1.5, 2.0)) -> dict:
+    """The tile route inside the job against the honest kernel's lane load, at v2's frozen t per card (and t - 1,
+    t + 1) and v2's L': the job's hashing scaled so that the honest ALU time over tensor time (nofold's lane load) is
+    each of `alus`; c = min(1, route / honest), since the honest kernel is itself a public program."""
+    out = {}
+    print("\n== v2's tile route inside the job (θ's max with facets) at the honest kernel's ALU/tensor (nofold's lane "
+          "load; v2 as frozen: ≥ 1.00, 0.82 if the network certifier expanded the coins); cells: ALU/tensor: c")
     for v in (V2_V, V2_V_MARGIN):
         for card in (H200, H200_M1, SM120):
             t0 = V2_T[card.family]
@@ -1297,15 +1366,13 @@ def tile_lane_report(shown=(0.0, 0.25, 0.5, 1.0, 2.0, 4.0), grid_=tuple(i / 16 f
                 for t in sorted({max(2, t0 - 1), t0, t0 + 1}):
                     for K, n in ((16384, 16512), (65536, 4096)):
                         for Lp in V2_LP[card.family]:
-                            rs = {s: tile_job(card, t, Lp, K, n, bit, depth, v, s) for s in sorted({*grid_, *shown})}
-                            wins = [r for r in rs.values() if r["c"] < 1 - 1e-9]
-                            top = max((r["lane"] for r in wins), default=None)
-                            low = min(r["c"] for r in rs.values())
-                            out[v, card.name, bname, t, K, Lp] = dict(cells=rs, wins_to_lane=top, least_c=low)
-                            cells = "; ".join(f"s {s:g}: {rs[s]['lane']:.2f} {rs[s]['c']:.3f}" for s in shown)
-                            verdict = f"wins up to lane {top:.2f}, least c {low:.3f}" if top else "never wins"
-                            print(f"  V ±{v} {card.name:12} {bname[:20]:20} t {t} K {K:5} L' {Lp:4} | {cells} | "
-                                  f"{verdict}")
+                            cells = []
+                            for a in alus:
+                                r = tile_job_at(card, t, Lp, K, n, bit, depth, v, a)
+                                out[v, card.name, bname, t, K, Lp, a] = r
+                                cells.append(f"{a:.2f}: " + (f"{min(1.0, r['c']):.3f}" if r else "-"))
+                            print(f"  V ±{v} {card.name:12} {bname[:20]:20} t {t} K {K:5} L' {Lp:4} | "
+                                  + "; ".join(cells))
     return out
 
 
@@ -1335,6 +1402,8 @@ def main() -> None:
     if args.tiles:
         tile_report()
         tile_lane_report()
+        v2_report()
+        v2_report({"sm_90": 2, "sm_120": 3})
         return
     print("catalogue: " + ", ".join(f"{k} rank {len(v[0])}, {len(v)} orientations" for k, v in cat.items())
           + "; not integral (left out): " + ", ".join(n for n in CATALOGUE if n not in cat))
@@ -1357,6 +1426,8 @@ def main() -> None:
     lane_report(menu)
     tile_report()
     tile_lane_report()
+    v2_report()
+    v2_report({"sm_90": 2, "sm_120": 3})
 
 
 if __name__ == "__main__":

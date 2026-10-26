@@ -81,14 +81,21 @@ def test_fixed_tensor_load_counts_in_the_joint_facets():
     assert max(p.loads.values()) <= p.c * (1 + 1e-6)
 
 
-def test_v2_tile_route_in_the_job_needs_lane_load_at_four_tiles_on_sm120():
+def test_v2_tile_route_on_h200_wins_through_the_joint_facet_when_peels_pass_three_eighths():
+    _, bit, depth = PB.BIT_COST["sm_90"][0]
+    big = PB.tile_job_at(PB.H200, 2, 1024, 4096, 6144, bit, depth, 80, 1.15)
+    small = PB.tile_job_at(PB.H200, 2, 384, 4096, 6144, bit, depth, 80, 1.10)
+    assert "joint0" in big["honest"].binding and big["c"] < 0.9
+    assert small["c"] >= 1
+
+
+def test_v2_tile_route_in_the_job_beats_four_tiles_on_sm120_at_alu_load_one_but_not_three():
     _, bit, depth = PB.BIT_COST["sm_120"][0]
-    lo = PB.tile_job(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 0.25)
-    hi = PB.tile_job(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 0.5)
-    three = PB.tile_job(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 0.25)
-    assert lo["lane"] < 1 and lo["c"] < 0.95
-    assert hi["lane"] > 1.4 and hi["c"] > 1
-    assert three["lane"] > 1 and three["c"] > 1.05
+    four = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.0)
+    past = PB.tile_job_at(PB.SM120, 4, 256, 16384, 16512, bit, depth, 80, 1.1)
+    three = PB.tile_job_at(PB.SM120, 3, 256, 16384, 16512, bit, depth, 80, 0.82)
+    assert four["alu"] == pytest.approx(1.0, abs=1e-3) and four["c"] < 0.98
+    assert past["c"] >= 1 and three["c"] >= 1
 
 
 def test_sha_schedules_match_rt_units():
