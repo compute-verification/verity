@@ -46,7 +46,7 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
   have hmode : Record.str j "link_mode" = .ok "exchange" := str_same hs (gR (by simp [recordList]))
   obtain ⟨l, hl, hls⟩ := fld_same hs (gR (k := "link") (v := linkObj spec h #[rb] points) (by simp [recordList]))
   unfold Record.decodeJWith
-  simp only [hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, ok_bind,
+  simp only [hct, pure_bind, liftM, monadLift_self, hkind, hhello, habort, hcfg, hreq, hmode, hl, FlockComplete.ok_bind,
     beq_self_eq_true, check_true, S.beq_same _ _ (.bool true)]
   have gL : ∀ {k v}, (k, v) ∈ linkList spec h #[rb] points → (linkObj spec h #[rb] points).getObjVal? k = .ok v :=
     fun hm => getObjVal?_mkObj (linkList_distinct ..) hm
@@ -55,7 +55,7 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
     str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
   obtain ⟨dv, hdv, hdvs⟩ := hs.getObjVal (gR (k := "unit_draw") (v := spec.unitDraw.getD Json.null)
     (by simp [recordList]))
-  simp only [hlm, hsg, ok_bind, beq_self_eq_true, check_true, hdv]
+  simp only [hlm, hsg, FlockComplete.ok_bind, beq_self_eq_true, check_true, hdv]
   have hdc : ∀ o : Option Json, (dv = Json.null → o = none) → (dv ≠ Json.null → o = some dv) →
       Draw.check o spec.unitDraw spec.instances = .ok () := by
     intro o ho₁ ho₂
@@ -74,10 +74,10 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
       obtain ⟨c, hc⟩ := S.canon_ok d hg
       have hc' : canon dv = .ok c := by rw [← S.canon_same _ _ hdvs, hc]
       rw [ho₂ hn']
-      simp only [Draw.check, hc, hc', ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
+      simp only [Draw.check, hc, hc', FlockComplete.ok_bind, bne_self_eq_false, Bool.false_eq_true, ite_false, hD, hDs]
       rfl
   rw [hdc _ (fun e => by subst e; rfl) (fun hn => by cases dv <;> first | rfl | exact absurd rfl hn)]
-  simp only [ok_bind]
+  simp only [FlockComplete.ok_bind]
   -- S5
   obtain ⟨ob, hob, hobs⟩ := fld_same hls (gL (k := "root_b") (v := Json.mkObj (rootBList spec id #[rb]))
     (by simp [linkList]))
@@ -91,32 +91,32 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
   rw [array_mapM_ok_of _ spec.tables #[rb] (by simp [ht]) fun i h₁ h₂ => by
     have hi : i = 0 := by simp [ht] at h₁; omega
     subst hi
-    simp only [ht, Array.getElem_singleton, hob, hod, hobt, hodt, ok_bind, unhex_hexOf, dgWith_ofSha512,
+    simp only [ht, Array.getElem_singleton, hob, hod, hobt, hodt, FlockComplete.ok_bind, unhex_hexOf, dgWith_ofSha512,
       decide_eq_true hrb, check_true, beq_self_eq_true]
     rfl]
-  simp only [ok_bind]
+  simp only [FlockComplete.ok_bind]
   -- S6
   have hrf : Record.str l "root_f" = .ok (hexOf spec.sigma) := str_same hls (gL (v := hexJ spec.sigma) (by simp [linkList]))
   have hrfd : Record.str l s!"root_f_{spec.dk}" = .ok (hexOf (dgOf spec h spec.sigma)) :=
     str_same hls (gL (v := hexJ (dgOf spec h spec.sigma)) (by simp [linkList]))
-  simp only [hrf, hrfd, ok_bind, unhex_hexOf, dgWith_ofSha512, decide_eq_true hsig, check_true, beq_self_eq_true,
+  simp only [hrf, hrfd, FlockComplete.ok_bind, unhex_hexOf, dgWith_ofSha512, decide_eq_true hsig, check_true, beq_self_eq_true,
     bytes_beq_self]
   -- S7
   obtain ⟨op, hop, hops⟩ := fld_same hls (gL (k := "publics") (v := Json.mkObj []) (by simp [linkList]))
   obtain ⟨oq, hoq, hoqs⟩ := fld_same hls (gL (k := s!"publics_{spec.dk}") (v := Json.mkObj []) (by simp [linkList]))
-  simp only [hop, hoq, ok_bind]
+  simp only [hop, hoq, FlockComplete.ok_bind]
   rw [array_mapM_ok _ (fun _ => ByteArray.empty) spec.tables fun t' _ => by
     simp only [isNull_none hops (k := t') rfl, isNull_none hoqs (k := t') rfl, ByteArray.size_empty, beq_self_eq_true,
       Bool.and_self, Bool.not_true, Bool.false_eq_true, ite_true, ite_false]
     rfl]
-  simp only [ok_bind]
+  simp only [FlockComplete.ok_bind]
   -- S9, S10
   have hpt : Record.arr l "points" = .ok (points.map fun p => Json.arr (p.map f128J)) :=
     arr_plain hls (gL (by simp [linkList])) (.arr fun x hx => by
       obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
       exact plain_arr_str p)
   have hy : Record.arr l "y" = .ok ((yOf spec).map f128J) := arr_plain hls (gL (by simp [linkList])) (plain_arr_str _)
-  simp only [hpt, hy, ok_bind, f128s_map]
+  simp only [hpt, hy, FlockComplete.ok_bind, f128s_map]
   rw [array_mapM_ok_of _ _ points (by simp) fun i h₁ h₂ => by
     simp only [Array.getElem_map]
     exact f128s_map _]
@@ -125,11 +125,11 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
   have hyz : ((yOf spec).all fun x => x.isZero) = true := Array.all_eq_true.2 fun i hi => by simp [yOf]; decide
   simp only [hpts] at hall
   simp only [yOf, Array.size_replicate] at hyz
-  simp only [ok_bind, hpts, hall, beq_self_eq_true, Bool.and_self, check_true, hyz, yOf, Array.size_replicate]
+  simp only [FlockComplete.ok_bind, hpts, hall, beq_self_eq_true, Bool.and_self, check_true, hyz, yOf, Array.size_replicate]
   -- S12
   obtain ⟨sj, hsj, hsjs, hsje⟩ := arr_same hs (gR (k := "streams")
     (v := Json.arr ((spec.repStreams.zip streams).map (streamObj spec h #[rb]))) (by simp [recordList]))
-  simp only [hsj, ok_bind]
+  simp only [hsj, FlockComplete.ok_bind]
   have hdsz : ∀ b, (dgOf spec h b).size = (dgOf spec h ByteArray.empty).size := by
     intro b; unfold dgOf; split <;> simp [h64, Sha256.hash_size]
   rw [array_mapM_ok_of _ sj ((spec.repStreams.zip streams).map (streamRec spec h #[rb]))
@@ -152,7 +152,7 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
     have hlab : Record.str s' "label" = .ok (spec.domain spec.tables[q.1.1]! q.1.2.1) :=
       str_same hq (gS (by simp [streamList]))
     have hat : Record.nat s' "at" = .ok 0 := nat_same hq (gS (by simp [streamList]))
-    simp only [hname, hrj, ok_bind]
+    simp only [hname, hrj, FlockComplete.ok_bind]
     rw [array_mapIdxM_ok_of _ rj (q.2.map (roundRec spec h)) (by rw [← hrjs]; simp) fun k h₁ h₂ => by
       have hk : k < q.2.size := by simpa using h₂
       have hr := hrje k (by simpa using hk) h₁
@@ -176,13 +176,13 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
         nat_same hr (gRd (by simp [roundList]))
       have hsz : ((dgOf spec h (r.bytes.getD ByteArray.empty)).size == (dgOf spec h ByteArray.empty).size) = true := by
         rw [hdsz]; exact beq_self_eq_true _
-      simp only [hk', hn, hsha, hco, hmsg, hmn, hml, ok_bind, unhex_hexOf, f128s_map,
+      simp only [hk', hn, hsha, hco, hmsg, hmn, hml, FlockComplete.ok_bind, unhex_hexOf, f128s_map,
         beq_self_eq_true, check_true, bytes_beq_self, hsz, decide_eq_true hn1, decide_eq_true hn2, hcs, Bool.and_self,
         Bool.not_false, Bool.or_true, Bool.false_eq_true, ite_false]
       rfl]
-    simp only [ok_bind, hroot, hpar, hlab, hat]
+    simp only [FlockComplete.ok_bind, hroot, hpar, hlab, hat]
     rfl]
-  simp only [ok_bind]
+  simp only [FlockComplete.ok_bind]
   -- S11, S13
   have hrs1 : spec.repStreams = #[(0, 0, s!"{t}/rep{(0 : Nat)}"), (0, 1, s!"{t}/rep{(1 : Nat)}")] := by
     unfold SessionSpec.repStreams
@@ -208,17 +208,17 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
   simp only [List.all_toArray, List.any_toArray]
   simp only [pure_bind, List.size_toArray, List.length_cons, List.length_nil, List.all_cons,
     List.any_cons, List.all_nil, List.any_nil, streamRec, beq_self_eq_true, hne, hne', Bool.or_false, Bool.false_or,
-    check_true, ok_bind, List.forIn_toArray, List.forIn_cons, List.forIn_nil, List.find?_toArray,
+    check_true, FlockComplete.ok_bind, List.forIn_toArray, List.forIn_cons, List.forIn_nil, List.find?_toArray,
     List.find?_cons, Array.size_map, decide_eq_true h0, decide_eq_true h1, Bool.and_self]
   -- S14
   have hlk : Record.str j s!"link_{spec.dk}" = .ok (hexOf (dgOf spec h (lbOf spec #[rb] points))) :=
     str_same hs (gR (v := hexJ (dgOf spec h (lbOf spec #[rb] points))) (by simp [recordList]))
   simp only [lbOf, yOf] at hlk
-  simp only [Array.forIn_pure_yield_eq_foldl, pure_bind, hlk, ok_bind, beq_self_eq_true, check_true]
+  simp only [Array.forIn_pure_yield_eq_foldl, pure_bind, hlk, FlockComplete.ok_bind, beq_self_eq_true, check_true]
   -- the proof digests
   obtain ⟨pj, hpj, hpjs, hpje⟩ := arr_same hs (gR (k := s!"proof_{spec.dk}")
     (v := Json.arr ((spec.repStreams.zip proofs).map (proofObj spec h))) (by simp [recordList]))
-  simp only [hpj, ok_bind]
+  simp only [hpj, FlockComplete.ok_bind]
   rw [array_mapM_ok_of _ pj ((spec.repStreams.zip proofs).map fun q => (q.1.2.2, hexOf (dgOf spec h q.2)))
     (by rw [← hpjs]; simp) fun i h₁ h₂ => by
     have hi : i < (spec.repStreams.zip proofs).size := by simpa using h₂
@@ -231,9 +231,9 @@ theorem decodeJ_recordObj (S : Claims.JsonSpec printJ Flock.canon) {h : ByteArra
     have e₁ : Record.str p' "stream" = .ok q.1.2.2 := str_same hq (gP (by simp [proofList]))
     have e₂ : Record.str p' spec.dk = .ok (hexOf (dgOf spec h q.2)) :=
       str_same hq (gP (v := hexJ (dgOf spec h q.2)) (by simp [proofList]))
-    simp only [e₁, e₂, ok_bind]
+    simp only [e₁, e₂, FlockComplete.ok_bind]
     rfl]
-  simp only [ok_bind, sessOf, hsr, yOf, streamRec]
+  simp only [FlockComplete.ok_bind, sessOf, hsr, yOf, streamRec]
   rfl
 
 end FlockComplete.JsonRT
@@ -562,7 +562,7 @@ theorem same_coinSub_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray
     · subst hs
       rw [hst] at ha
       cases ha
-      simp only [eq_self_iff_true, ↓reduceIte, Ne.symm hps, mapArr]
+      simp only [↓reduceIte, Ne.symm hps, mapArr]
       refine .arr (by simp) fun i h₁ h₂ => ?_
       have hi : i < spec.repStreams.size := by simp at h₁; omega
       have hiS : i < S.size := by omega
@@ -572,13 +572,13 @@ theorem same_coinSub_recordObj (spec : SessionSpec) (h : ByteArray → ByteArray
       · subst hl
         rw [hli] at ha
         cases ha
-        simp only [eq_self_iff_true, ↓reduceIte, Ne.symm hpl]
+        simp only [↓reduceIte, Ne.symm hpl]
         exact same_link_points spec h rb (pointsOf spec c₁) hga
       · by_cases hp : k = s!"proof_{spec.dk}"
         · subst hp
           rw [hpf] at ha
           cases ha
-          simp only [eq_self_iff_true, ↓reduceIte, hps, hpl, shaArr_honest]
+          simp only [↓reduceIte, hps, hpl, shaArr_honest]
           exact same_refl hga
         · simp only [hs, hl, hp, ↓reduceIte]
           exact same_refl hga
