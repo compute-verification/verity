@@ -199,15 +199,21 @@ def v2_scan(budget: float = 0.004) -> None:
                   + "; ".join(cells))
 
 
+# CALIB's θ (#4513 at 188907341d), priced per SM-clock and stated at the tensor clock (SMs × MHz): ρ₈ INT8 MACs a
+# SM-clock, and SHA-512 compressions a SM-clock at the paper ceiling with IMAD.HI (38.29 SM-clocks a compression on
+# the H200, 38.11 on sm_120), today's kernel (0.018327, 0.018129 a SM-clock) and hashcat's structured mode (0.020717,
+# 0.020646), so c_sha = today / hashcat is 0.885 and 0.878.
+THETA = {"H200": (4096, 132, 1830e6, 1 / 38.29, 0.018327, 0.020717),
+         "RTX PRO 6000": (1024, 188, 2617e6, 1 / 38.11, 0.018129, 0.020646)}
 V2_CARDS = {
-    # name: (INT8 dense MAC/s, SHA-512 compressions/s at the public best, tensor MACs per ALU op, s_b)
-    # SHA-512: RT-UNITS's paper IMAD schedules (H200 6.80 G/s; RTX PRO 6000 9.82 G/s at 2092 MHz); SHA_BUILT is the
-    # ALU-only build measured. RT-MODEL M2's 59.2 ALU op on the H200. s_b: b1 wgmma 8× on the H200; on the RTX PRO 6000
-    # ALGO-COST A7's depth-2 Strassen in exact 0/1 FP4, c_bit = 0.5·(7/8)² (0.26 with emulated b1 on the ALU alongside).
-    "H200": (MAC_RATE, 6.80e9, 59.2, 8),
-    "RTX PRO 6000": (1.0e15 / 2, 9.82e9, 8, 1 / (0.5 * (7 / 8) ** 2)),
+    # name: (INT8 dense MAC/s, SHA-512 compressions/s at the ceiling, tensor MACs per ALU op, s_b)
+    # RT-MODEL M2's 59.2 ALU op on the H200. s_b: b1 wgmma 8× on the H200; on the RTX PRO 6000 ALGO-COST A7's depth-2
+    # Strassen in exact 0/1 FP4, c_bit = 0.5·(7/8)² (0.26 with emulated b1 on the ALU alongside).
+    "H200": (4096 * 132 * 1830e6, 132 * 1830e6 / 38.29, 59.2, 8),
+    "RTX PRO 6000": (1024 * 188 * 2617e6, 188 * 2617e6 / 38.11, 8, 1 / (0.5 * (7 / 8) ** 2)),
 }
-SHA_BUILT = {"H200": 4.79e9, "RTX PRO 6000": 7.13e9}
+SHA_BUILT = {c: sms * hz * today for c, (_, sms, hz, _, today, _) in THETA.items()}
+C_SHA_TODAY = {c: today / hashcat for c, (*_, today, hashcat) in THETA.items()}
 U_W, U_X = 80, 96              # BET-HYBRID-2 K (±80 both) and NAIVE-STRASSEN (V ±96 to depth 13): the larger of each
 P_W, P_X = 0.0119, 0.0042      # wrap densities at those widths, Llama-3.1-8B (BET-HYBRID-2 H; 70B p_X 0.64%)
 P_X_AT = {80: 0.0016, 96: 0.0042}   # p_X by V's width, Llama-3.1-8B (BET-HYBRID-2 table (c))
@@ -559,8 +565,9 @@ PPL_H1 = {"Llama-3.1-8B": "+0.80%", "Llama-3.1-70B": "+1.77%", "DeepSeek-V4-Pro"
 def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None) -> list[dict]:
     """D6's number table, as markdown: v2 as frozen and P1 beside it, at the paper SHA-512 rate and at the built rate.
 
-    ε is WORKSOUND's form at δ 1% and 1e-6 with c_mm, c_sha per card (1 until D5 v1, so ε is a lower bound); at the
-    built rate c_sha is built/paper (credit priced at the deployed kernel). P1 on the RTX PRO 6000 takes P1_C_MM.
+    ε is WORKSOUND's form at δ 1% and 1e-6 with c_mm, c_sha per card (1 until D5 v1, so ε is a lower bound). The two
+    ShaSpeed readings: (a) the paper ceiling, honest hashing at it (c_sha 1); (b) the built rate, today's kernel against
+    hashcat's structured mode (C_SHA_TODAY). P1 on the RTX PRO 6000 takes P1_C_MM.
     Then the world model (rule L2; V4 is the world's request): εC and the uncredited FLOP a week, a month and a year."""
     c_mm, c_sha = c_mm or {}, c_sha or {}
     rows = (v2_world(budget, frozen=True) + v2_world(budget, built=True, frozen=True) + v2_world(budget, p1=True)
@@ -571,11 +578,11 @@ def d6(budget: float = 0.0, c_mm: dict | None = None, c_sha: dict | None = None)
         r["base"] = card
         r["design"] = "P1" if " P1" in r["card"] else "v2"
         r["rate"] = "built" if " built" in r["card"] else "paper"
-        cs = c_sha.get(card, 1.0) * (SHA_BUILT[card] / V2_CARDS[card][1] if r["rate"] == "built" else 1.0)
+        cs = c_sha.get(card, 1.0) * (C_SHA_TODAY[card] if r["rate"] == "built" else 1.0)
         cm = c_mm.get(card, 1.0) * (P1_C_MM[card] if r["design"] == "P1" else 1.0)
         r["eps"] = {d: eps_worksound(r, d, c_mm=cm, c_sha=cs) for d in (0.01, 1e-6)}
     print(f"\nD6 (c_mm {c_mm or 'pre-D5: 1'}, c_sha {c_sha or 'pre-D5: 1'}; eps is a lower bound until D5; theta: "
-          f"V2_CARDS, CALIB pending)")
+          f"CALIB's θ #4513)")
     print("| design, card, SHA-512 rate | γ overlapped 8B / 70B / V4 | γ additive | tensor util. | ε δ 1% (V4) | "
           "ε δ 1e-6 (V4) | coverage | perplexity (H1's) |")
     print("|---|---|---|---|---|---|---|---|")
