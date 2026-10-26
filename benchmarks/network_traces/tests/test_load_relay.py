@@ -1,8 +1,10 @@
 """load_relay's streamed, multi-process commit of the weights' load against its references: the manifest and generator
-are CMP-95 interface 1's (its fixture's TINY manifest and tensor digests, and at H200 its stream's length, head and every
-tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts and domain, over one
-process and several, whatever the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness
-it writes) and the verifier's domain, pads and many chunks a value included; a P2 link (interface 2's layout over a
+are CMP-95 interface 1's (its fixture's TINY manifest, tensor digests and entries, and at H200 its stream's length, head
+and every tensor's first and last rows); the relayed roots are interface 1's fixture roots under its salts, for its
+reader named by digest, whose domains are the verifier's (``tok`` row-seg rows, a scale 32-bit leaves), over one process
+and several, whatever the reads' sizes, and `Registered.commit`'s under the certifier's own salts (the witness it
+writes) and the verifier's domain, pads, many chunks a value and both widths and row formats included; a P2 link
+(interface 2's layout over a
 small field, so that the test encodes its own store) decodes to the same roots, and a block that isn't a codeword, a
 nonzero byte past a store tensor's end and a short link are refused; at H200 the store's layout is interface 2's; and
 the command signs one load head a value, each registration read by the verifier for the load it expects."""
@@ -44,8 +46,14 @@ LR = _load()
 TINY = LR.manifest(LR.TINY)
 
 
-def interface_1_domain(v):
-    return G.domain(FIXTURE["tiny"]["manifest"]["program"], v.name, v.words, v.leaves)
+#: interface 1's fixture reader is a program digest, so its domains are the verifier's own
+interface_1_domain = LR.verifier_domain(FIXTURE["program"])
+
+
+def leaves(v, data: bytes) -> list[list[int]]:
+    """`data`'s rows of `v` as `Registered.commit` takes them: each row's leaves of `v.word_bits`."""
+    cut = memoryview(data).cast("H" if v.word_bits == 16 else "I")
+    return [list(cut[v.reg_words * r:v.reg_words * (r + 1)]) for r in range(len(data) // v.row_bytes)]
 
 
 def stream(values=TINY) -> bytes:
@@ -56,10 +64,14 @@ def stream(values=TINY) -> bytes:
 
 def test_the_manifest_and_generator_are_interface_1s():
     ref = FIXTURE["tiny"]["manifest"]
-    fields = lambda vs: [(v.name, v.offset, v.nbytes, v.words, v.leaves, v.kind, v.rows, v.exponent) for v in vs]  # noqa: E731
+    fields = lambda vs: [(v.name, v.offset, v.nbytes, v.words, v.leaves, v.kind, v.rows, v.exponent, v.schema)  # noqa: E731
+                         for v in vs]
     assert fields(TINY) == fields(LR.read_manifest(ref))
     assert {v.name: hashlib.sha256(LR.generate(SEED, v)).hexdigest() for v in TINY} == \
         {t["name"]: t["sha256"] for t in ref["tensors"]}
+    assert [(v.name, v.leaves, v.reg_words, v.word_bits, interface_1_domain(v).domain_id.hex()) for v in TINY] == \
+        [(e["value"], e["leaves"], e["words"], e.get("word_bits", 16), e["domain"]) for e in FIXTURE["tiny"]["values"]]
+    assert (TINY[0].name, TINY[0].schema, TINY[0].rows, TINY[0].words) == ("tok", G.SCHEMA_SEG, 256, 32)
     h200, want = LR.manifest(LR.H200), FIXTURE["h200"]
     assert len(h200) == 733 and h200[-1].offset + h200[-1].nbytes == want["stream_bytes"] == 139_736_443_904
     assert (LR.generate(SEED, h200[0], 0, 1)[:64]).hex() == want["stream_head"]
@@ -81,10 +93,14 @@ def test_the_relayed_roots_are_interface_1s_registration(workers, read):
 
 
 def odd_values() -> tuple:
-    """Values whose rows are no power of two, of several widths, so their trees have pads, in chunks of a few rows."""
+    """Values whose rows are no power of two, of several widths, so their trees have pads, in chunks of a few rows: one
+    of 32-bit leaves (``f``, a scale's) and one of row-seg rows longer than a segment (``g``)."""
     out, at = [], 0
-    for name, rows, words in (("a", 5, 3), ("b", 1, 128), ("c", 37, 2), ("d", 64, 1), ("e", 3, 8)):
-        out.append(LR.Value(name, at, 2 * words * rows, words))
+    for name, rows, words, kind, schema in (("a", 5, 3, "s8", G.SCHEMA_V2), ("b", 1, 128, "s8", G.SCHEMA_V2),
+                                            ("c", 37, 2, "s8", G.SCHEMA_V2), ("d", 64, 1, "gain", G.SCHEMA_V2),
+                                            ("e", 3, 8, "s8", G.SCHEMA_V2), ("f", 11, 2, "scale", G.SCHEMA_V2),
+                                            ("g", 3, 600, "embed", G.SCHEMA_SEG)):
+        out.append(LR.Value(name, at, 2 * words * rows, words, kind, schema=schema))
         at += 2 * words * rows
     return tuple(out)
 
@@ -99,10 +115,9 @@ def test_the_relayed_roots_are_registered_commits_under_the_certifiers_salts(tmp
     assert len(salts) == TR.SALT_BYTES * sum(v.leaves for v in values)
     at = 0
     for v in values:
-        rows = [list(memoryview(data[v.offset + v.row_bytes * r:v.offset + v.row_bytes * (r + 1)]).cast("H"))
-                for r in range(v.leaves)]
         mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
-        t = TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name, rows, mine)
+        t = TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name,
+                               leaves(v, data[v.offset:v.offset + v.nbytes]), mine, v.word_bits, v.schema)
         assert t.root == got.roots[v.name] and t.head.domain == LR.verifier_domain(PROGRAM)(v).domain_id, v.name
         at += TR.SALT_BYTES * v.leaves
     assert len(set(salts[i:i + TR.SALT_BYTES] for i in range(0, len(salts), TR.SALT_BYTES))) == len(salts) // 192
@@ -201,16 +216,16 @@ def test_the_command_signs_a_load_head_a_value(tmp_path):
     for v, reg in zip(TINY, doc["values"]):
         head, dom = TR.check_registration(reg, key, bytes.fromhex(doc["session"]), link=LR.LINK,
                                           direction=Direction.INGRESS, window=0, kind="load", value=v.name,
-                                          program=PROGRAM, words=v.words, rows=v.leaves)
-        assert dom.domain_id == TR.domain(PROGRAM, v.name, v.words, v.leaves).domain_id
+                                          program=PROGRAM, words=v.reg_words, rows=v.leaves, word_bits=v.word_bits,
+                                          schema=v.schema)
+        assert dom.domain_id == TR.domain(PROGRAM, v.name, v.reg_words, v.leaves, v.word_bits).domain_id
     salts = (out / "load-witness.bin").read_bytes()
-    v = TINY[3]
-    rows = [list(memoryview(LR.generate(SEED, v)[v.row_bytes * r:v.row_bytes * (r + 1)]).cast("H"))
-            for r in range(v.leaves)]
-    at = TR.SALT_BYTES * sum(x.leaves for x in TINY[:3])
-    mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
-    assert TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name, rows, mine).root.hex() == \
-        doc["values"][3]["root"]
+    for i in (0, 3, 4):
+        v, at = TINY[i], TR.SALT_BYTES * sum(x.leaves for x in TINY[:i])
+        mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
+        t = TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name, leaves(v, LR.generate(SEED, v)),
+                               mine, v.word_bits, v.schema)
+        assert t.root.hex() == doc["values"][i]["root"], v.name
     src.write_bytes(src.read_bytes()[:-1])
     assert LR.main(["relay", "--program", PROGRAM, "--out", str(tmp_path / "short"), "--shape", "tiny", "--source",
                     str(src), "--key", str(out / "certifier"), "--workers", "1"]) == 1

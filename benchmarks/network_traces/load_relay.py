@@ -1,8 +1,11 @@
 """load-relay: the network certifier's relay of the weights' load to the H200 and its commit of what crosses, in the exact
 form the units read it. The certifier reads the load from a source (a file, a pipe, another host's stream), writes every
 byte on to the sink (the H200's) as it reads it, and commits every tensor of CMP-95 interface 1's manifest as a
-registered value: its rows of ``words`` u16 words under ``hm96-sha512/row/v2``, each row under its own salt, in a
-frame-v3-sha512 tree under the value's domain, the root `Registered.commit`'s (`transfer_rows.Transfer`). It then signs
+registered value, as the reading program's units read it (interface 1's registration for a program named by its
+digest): an f32 scale one 32-bit leaf a row, every other tensor 16-bit leaves, a linear's row ``row_codes`` codes, in
+``hm96-sha512/row/v2`` rows but ``tok``'s, one token's embedding a ``hm96-sha512/row-seg/v1`` row (`EmbeddingRead_v1`'s);
+each row under its own salt, in a frame-v3-sha512 tree under the value's domain, the root `Registered.commit`'s
+(`transfer_rows.Transfer`). It then signs
 each value's head (`transfer_rows.TransferHead`: kind ``load``, ingress, window 0, the server session's) and writes the
 registrations the verifier pins each load value from (`blocks.pins`).
 
@@ -31,7 +34,7 @@ registrations the verifier pins each load value from (`blocks.pins`).
   alone, 104.8 GB at H200. `keyed_salts` is interface 1's prover-side derivation (C-Flock's ``hm96_salt``), here only to
   hold this commit to interface 1's fixture roots.
 * **The domain** is a parameter, by default the one the verifier derives (`transfer_rows.domain`: the reading program's
-  digest ``--program``, a value held across windows dropping only the window).
+  digest ``--program``, the value's leaf width, a value held across windows dropping only the window), interface 1's.
 * **The certifier's key** is ``--key``'s (`certifier_serve.load_key`'s layout), one LMS leaf a value (733 at H200), in
   session ``--session``: the verifier pins a load and the windows' transfers under one key and session, so the load's
   session is the serving certifier's.
@@ -63,7 +66,7 @@ sys.path.insert(0, str(HERE))
 from verity.ml.commitments import hm96  # noqa: E402
 from verity.ml.commitments.hm96 import batch as HB  # noqa: E402
 from verity.ml.commitments.merkle import _FRAME, _LEAF, _NODE, CommitmentDomain, _uint, merkle_depth  # noqa: E402
-from verity.ml.commitments.rowleaf import sha512_row_v2_prefix  # noqa: E402
+from verity.ml.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix  # noqa: E402
 from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
@@ -109,8 +112,9 @@ SHAPES = {"h200": H200, "tiny": TINY}
 @dataclass(frozen=True)
 class Value:
     """One registered value of the load: interface 1's tensor ``name``, its bytes ``[offset, offset + nbytes)`` of the
-    weights stream, in ``leaves`` rows of ``words`` u16 words; and how interface 1 generates it, ``rows`` generation rows
-    of ``kind`` elements (``s8``, ``scale`` with exponent ``exponent``, ``gain``, ``embed``)."""
+    weights stream, in ``leaves`` rows of ``words`` u16 words, each row ``schema``'s bit row of `reg_words` leaves of
+    `word_bits`; and how interface 1 generates it, ``rows`` generation rows of ``kind`` elements (``s8``, ``scale`` with
+    exponent ``exponent``, ``gain``, ``embed``)."""
 
     name: str
     offset: int
@@ -119,6 +123,7 @@ class Value:
     kind: str = "s8"
     rows: int = 1
     exponent: int = 0
+    schema: str = SCHEMA
 
     @property
     def row_bytes(self) -> int:
@@ -128,26 +133,38 @@ class Value:
     def leaves(self) -> int:
         return self.nbytes // self.row_bytes
 
+    @property
+    def word_bits(self) -> int:
+        """Its leaves' width read by a program named by its digest: its elements' rounded up to 16 or 32 bits
+        (interface 1's `Tensor.word_bits`)."""
+        return 32 if self.kind == "scale" else 16
+
+    @property
+    def reg_words(self) -> int:
+        """Its leaves of `word_bits` a registered row (the same row bytes)."""
+        return 16 * self.words // self.word_bits
+
 
 def manifest(shape: Shape) -> tuple[Value, ...]:
-    """Interface 1's tensors in stream order, each a value: ``tok`` (a column of V words a row), ``pos`` (1), then per
-    layer ``attn_norm``, ``wq``, ``wk``, ``wv``, ``wo``, ``mlp_norm``, ``wup``, ``wdown``, each linear its s8 rows of
-    ``row_codes`` codes then its f32 ``.scale`` (2 words a row), a gain 1 word a row; then ``final_norm``, ``head`` and
-    ``head.scale``."""
+    """Interface 1's tensors in stream order, each a value: ``tok`` (a token's embedding, H words, a row-seg row),
+    ``pos`` (1 word), then per layer ``attn_norm``, ``wq``, ``wk``, ``wv``, ``wo``, ``mlp_norm``, ``wup``, ``wdown``,
+    each linear its s8 rows of ``row_codes`` codes then its f32 ``.scale`` (one 32-bit leaf a row), a gain 1 word a
+    row; then ``final_norm``, ``head`` and ``head.scale``."""
     s, out, off = shape, [], 0
 
-    def add(name: str, nbytes: int, words: int, kind: str, rows: int = 1, exponent: int = 0) -> None:
+    def add(name: str, nbytes: int, words: int, kind: str, rows: int = 1, exponent: int = 0,
+            schema: str = SCHEMA) -> None:
         nonlocal off
         if nbytes % (2 * words):
             raise ValueError(f"{name}: {nbytes} bytes are no whole rows of {words} words")
-        out.append(Value(name, off, nbytes, words, kind, rows, exponent))
+        out.append(Value(name, off, nbytes, words, kind, rows, exponent, schema))
         off += nbytes
 
     def linear(name: str, n: int, k: int, shift: int = 0) -> None:
         add(name, n * k, s.row_codes // 2, "s8", n)
         add(name + ".scale", 4 * n, 2, "scale", 1, -(7 + _log2(k) // 2) + shift)
 
-    add("tok", 2 * s.width * s.vocab, s.vocab, "embed", s.width)
+    add("tok", 2 * s.width * s.vocab, s.width, "embed", s.vocab, schema=G.SCHEMA_SEG)
     add("pos", 2 * s.width * s.context, 1, "embed", s.width)
     q, kv = s.heads * s.head_dim, s.kv_heads * s.head_dim
     for i in range(s.layers):
@@ -214,9 +231,11 @@ def read_manifest(doc: dict) -> tuple[Value, ...]:
     if doc.get("format") != "verity/seeded-weights/manifest/v1":
         raise ValueError(f"not interface 1's manifest: {doc.get('format')!r}")
     out = tuple(Value(t["name"], t["offset"], t["nbytes"], t["words"], t["kind"], t["shape"][0] if len(t["shape"]) == 2
-                      else 1, t.get("exponent", 0)) for t in doc["tensors"])
+                      else 1, t.get("exponent", 0), t.get("schema", SCHEMA)) for t in doc["tensors"])
     if any(v.leaves != t["leaves"] for v, t in zip(out, doc["tensors"])):
         raise ValueError("a tensor's leaves are not its bytes in rows of its words")
+    if bad := [v.name for v in out if v.schema not in TR.SCHEMAS]:
+        raise ValueError(f"{bad}: a load value's rows are {' or '.join(TR.SCHEMAS)} rows")
     return out
 
 
@@ -367,9 +386,9 @@ class Frame:
     """A frame-v3-sha512 domain's leaf and node hashes with their framing before the varying fields precomputed: each
     `CommitmentDomain.leaf`'s and `node`'s."""
 
-    def __init__(self, domain_id: bytes) -> None:
+    def __init__(self, domain_id: bytes, schema: str = SCHEMA) -> None:
         d = len(domain_id).to_bytes(8, "big") + domain_id
-        s = SCHEMA.encode()
+        s = schema.encode()
         self.leaf_head = _FRAME + len(_LEAF).to_bytes(4, "big") + _LEAF + d
         self.leaf_tail = len(s).to_bytes(8, "big") + s + (64).to_bytes(8, "big")
         self.node_head = _FRAME + len(_NODE).to_bytes(4, "big") + _NODE + d
@@ -386,19 +405,25 @@ class Frame:
                               + b"\0" * 7 + b"\x40" + left + b"\0" * 7 + b"\x40" + right).digest()
 
 
-def subtree(dom: CommitmentDomain, row_bytes: int, data: bytes, salts: bytes, j0: int, bits: int) -> bytes:
+def subtree(dom: CommitmentDomain, row_bytes: int, data: bytes, salts: bytes, j0: int, bits: int,
+            schema: str = SCHEMA) -> bytes:
     """The subtree root over ranks ``[j0, j0 + 2^bits)`` of a registered value's tree: `data`'s whole rows from rank
-    `j0`, each under its salt of `salts`, then pads (`tree_levels`' levels of `Registered.commit`)."""
+    `j0`, each `schema`'s bit row of its bytes (whatever its leaves' width) under its salt of `salts`, then pads
+    (`tree_levels`' levels of `Registered.commit`)."""
     n = len(data) // row_bytes
     if len(data) != n * row_bytes or len(salts) != n * SALT_BYTES or n > 1 << bits:
         raise ValueError(f"{len(data)} bytes and {len(salts)} of salts are not as many rows of {row_bytes} bytes, "
                          f"at most 2^{bits}")
-    f = Frame(dom.domain_id)
-    xh, xs = hashlib.sha512(sha512_row_v2_prefix(8 * row_bytes)), bytearray()
-    for k in range(n):
-        h = xh.copy()
-        h.update(data[row_bytes * k:row_bytes * (k + 1)])
-        xs += h.digest()
+    f, xs = Frame(dom.domain_id, schema), bytearray()
+    if schema == G.SCHEMA_SEG:
+        for k in range(n):
+            xs += sha512_row_seg_digest(data[row_bytes * k:row_bytes * (k + 1)], 8 * row_bytes)
+    else:
+        xh = hashlib.sha512(sha512_row_v2_prefix(8 * row_bytes))
+        for k in range(n):
+            h = xh.copy()
+            h.update(data[row_bytes * k:row_bytes * (k + 1)])
+            xs += h.digest()
     level = [f.leaf(j0 + k, t) for k, t in enumerate(HB.tree_leaves(_INST, _KEY, bytes(xs), salts))]
     level += [dom.pad(j) for j in range(j0 + n, j0 + (1 << bits))]
     for d in range(bits):
@@ -434,6 +459,7 @@ class Task:
 
     job: Job
     row_bytes: int
+    schema: str
     domain: CommitmentDomain
     witness: str | None
     witness_at: int
@@ -458,7 +484,7 @@ def run_task(task: Task, data: bytes) -> tuple[int, int, bytes]:
             os.pwrite(fd, salts, task.witness_at + SALT_BYTES * j.j0)
         finally:
             os.close(fd)
-    return j.value, j.chunk, subtree(task.domain, task.row_bytes, data, salts, j.j0, j.bits)
+    return j.value, j.chunk, subtree(task.domain, task.row_bytes, data, salts, j.j0, j.bits, task.schema)
 
 
 def _work(args: tuple[Task, bytes]) -> tuple[int, int, bytes]:
@@ -513,7 +539,7 @@ def relay(values: Sequence[Value], source: BinaryIO, sink: BinaryIO | None, doma
 
     def submit(j: Job, data: bytes) -> None:
         v = values[j.value]
-        task = Task(j, v.row_bytes, doms[j.value], wpath, offsets[j.value], salts, params, salt)
+        task = Task(j, v.row_bytes, v.schema, doms[j.value], wpath, offsets[j.value], salts, params, salt)
         if pool is None:
             try:
                 r = run_task(task, data)
@@ -562,7 +588,7 @@ def relay(values: Sequence[Value], source: BinaryIO, sink: BinaryIO | None, doma
     roots = {}
     for i, v in enumerate(values):
         level, d = [got[i][c] for c in range(len(got[i]))], chunk_bits(v, chunk_bytes)
-        f = Frame(doms[i].domain_id)
+        f = Frame(doms[i].domain_id, v.schema)
         while len(level) > 1:
             level = [f.node(d, q // 2, level[q], level[q + 1]) for q in range(0, len(level), 2)]
             d += 1
@@ -572,7 +598,7 @@ def relay(values: Sequence[Value], source: BinaryIO, sink: BinaryIO | None, doma
 
 def verifier_domain(program: str) -> Callable[[Value], CommitmentDomain]:
     """The domain the verifier derives for a load value read by the program of digest `program`."""
-    return lambda v: TR.domain(program, v.name, v.words, v.leaves)
+    return lambda v: TR.domain(program, v.name, v.reg_words, v.leaves, v.word_bits)
 
 
 def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots: dict[str, bytes],
@@ -580,8 +606,8 @@ def sign(issuer: Issuer, link: str, program: str, values: Sequence[Value], roots
     """Each value's head signed for the load's link-window: its registration (`transfer_rows.registration`)."""
     out = []
     for v in values:
-        head = TR.TransferHead(link, Direction.INGRESS, WINDOW, KIND, v.name, bytes.fromhex(program), v.words, v.leaves,
-                               domain(v).domain_id, roots[v.name])
+        head = TR.TransferHead(link, Direction.INGRESS, WINDOW, KIND, v.name, bytes.fromhex(program), v.reg_words,
+                               v.leaves, domain(v).domain_id, roots[v.name], v.word_bits, v.schema)
         cert = issuer.sign(link, Direction.INGRESS, WINDOW, head.digest())
         if cert is None:
             raise Refused(f"{v.name}: the network certifier's signer refused: {issuer.refused}")
