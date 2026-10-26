@@ -1104,9 +1104,9 @@ requests, whose frames are a function of the prompt's length alone), for every p
     one that releases the frame, so a floor that read a declaration would carry one window's word into another's
     view. No floor reads one, so a wrong declaration refuses its own window and no other (REDTEAM phase 15), and the
     link's verdict, the AND over its windows, refuses the link. The verifier takes the sync the certifier ran each
-    window under only from the certifier's clock certificate of the window, verified under its key and session, and
-    a window without a valid one is refused, and the link with it
-    ([protocol/clock-certificate.md](protocol/clock-certificate.md));
+    window under only from the certifier's salted clock certificate of the window, opened against the digest it signs
+    under its key and session (the sync and the salt are witness, the certificate public), and a window without a
+    valid one is refused, and the link with it ([protocol/clock-certificate.md](protocol/clock-certificate.md));
   - `received`, `received[w]`.
 - **The unit** is `NetworkAdvisedLinkWindow` v2{EGRESS, INGRESS, ADVISED}: `NetworkLinkWindow`'s checks, and one gate
   (`advised.gate`) naming `advised.NetworkAdvisedCounts_v1{T, RIN, OWN}` and its circuit digest pinned in
@@ -1195,9 +1195,19 @@ requests, whose frames are a function of the prompt's length alone), for every p
   `RecordHead.encode`, and the unit reads them from the head it opens. It changes the head encoding that Lean pins, so
   it lands with the head check's and the Lean model's change, not before. With CERT-VARLEN's FIFO change the
   completed requests follow from the signed counts and the certified prompt lengths, so on ingress what's left is
-  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's clock certificate
-  beside its egress record, which the verifier holds the public declared sync to in the clear, so it needs no head
-  change ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+  holding v0's prompt lengths to the certified bodies. Each window's sync is signed: the certifier's salted clock
+  certificate beside its egress record, so it needs no head change
+  ([protocol/clock-certificate.md](protocol/clock-certificate.md)).
+- **Named gap: the clock's opening** (owned by network-accounting). What the certifier signs is witness, so a window's
+  clock certificate signs its sync salted (`certificate.clock_commitment`), and the verifier reads the sync only
+  through the opening, the sync and `salt_c`, against that digest (`advised.SignedClocks`). Until N2's advised unit
+  opens it, the verifier of record opens it on the host, as the in-the-clear check opens a record
+  (`CertifiedRecord.verify`): on an accepted window the sync it reads is the declared one, a public output already,
+  and on a refused one it reads the sync the certifier ran. Design: the unit takes each window's clock opening as
+  witness, checks it against the certificate's signed digest (the clock digest and its salted digest, two SHA-512s
+  of a few blocks, as the head check computes a head's signed digest), and computes the floor from the opened syncs
+  inside the unit, so the floor leaves the public row; the verifier then reads no sync. It changes N2's advised unit, its pinned digest and its public
+  row, so it lands with that unit's change.
 - **Premises** of "an honest advised link is accepted", on which N2's claim doesn't rest:
   - `release` is the certified egress record's: each kept output is one egress frame, in the link's canonical order,
     which IO-TIE fixes (within a bucket the order doesn't change the counts);
