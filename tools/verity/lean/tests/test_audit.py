@@ -1767,6 +1767,8 @@ def test_a_property_of_an_acceptance_has_an_honest_witness_that_the_deployment_i
     assert A.witness_failures({**pol, "witnesses": {}}, f, WOWN)[0].startswith(
         "witnesses: P.sound states what an acceptance means (a property of P.verify accepting) and lists no witnesses that "
         "it says something: prove `P.sound_honest : P.Compiled d … ∧ P.verify accepts d …`")
+    both = witnessed({"body": wbody("And", conclusion=[wk("P.Holds"), wk("P.Bound")])})[1]["pins"]["P.sound"]
+    assert "`P.sound_nontrivial : ¬ (one of P.Holds, P.Bound) at acceptAll …`" in A.witness_shapes("P.sound", both, {}, WOWN)
     rejects = {"properties": {"P.sound": {"function": "P.verify", "outcome": "reject"}}}
     assert witness_codes({**pol, "witnesses": {}, "shape": rejects}, f) == []
 

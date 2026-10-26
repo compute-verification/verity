@@ -1656,7 +1656,9 @@ def witness_shapes(name: str, pin: dict, policy: dict, own: set[str]) -> str:
     head = statement_read(pin).get("head")
     honest = " ∧ ".join([*(f"{p} d …" for p in need), *([f"{' or '.join(fns)} accepts d …"] if fns else [])]) or \
         "each of its hypotheses at d"
-    nontrivial = f"{'∀ X…, ' if exists else ''}¬ {'(… ∨ …)' if head == 'Or' else head or '(its conclusion)'} at acceptAll …"
+    parts = [h for h in heads if h not in ("And", head)] if head == "And" else []
+    shown = "(… ∨ …)" if head == "Or" else f"(one of {', '.join(parts)})" if parts else head or "(its conclusion)"
+    nontrivial = f"{'∀ X…, ' if exists else ''}¬ {shown} at acceptAll …"
     why = (", the break included, so a break that always holds can't make the bound say nothing" if head == "Or" else "") + (
         f", each of the {exists} `∃` of its conclusion a `∀` before the `¬`, since a value the prover picks fits anything "
         f"there" if exists else "")
