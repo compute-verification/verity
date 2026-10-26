@@ -120,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
                 "stands_in_for": "kernels' commit tree with one subtree per slot (CMP-95 item 3)"},
         results=results, prompts=prompts, replay=replay, legs=legs,
         extra={"tamper": a.tamper or None, "attention": "Definition numpy kernels on the CPU (KP2-ATTN pending)",
-               "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "int64 matmul + torch epilogue"})
+               "gemm": "torch._int_mm + torch epilogue" if a.device.startswith("cuda") else "exact f64 matmul + torch epilogue"})
     print(json.dumps({"replay": {k: replay[k] for k in ("drawn", "mismatches", "families")},
                       "legs": {k: v["status"] for k, v in legs.items()}}), flush=True)
     if replay["mismatches"]:

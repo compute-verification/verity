@@ -21,7 +21,7 @@ linear, QK^T and PV coordinate is one unit (`ScaledMmS8Coordinate_v1{K}`, no K-s
 |---|---|---|
 | Weights | ALLP-IFACE's generator and weights stream (`verity_torch_loop.weights`, CMP-95 item 1); the record carries the registration digest under the test salt key for small shapes | the prover's salt key's digest |
 | Store and decode call | `store.py`: P2 v4 (`p2-16448/v4`) rows over the weights stream, the P2 reference decode on the CPU, or kernels' `Stage.decode` with `--stage-lib`; `--store generator` regenerates instead, over `--workers` processes | memory-accounting's layout and decode call (CMP-95 item 2), MEM-69's store on the card |
-| W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (int64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
+| W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (an exact f64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' KP2-S8 |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
 | Attention | `attention.py`: `GemmCoordinate_v2{GEMM_HOPPER}` and the MUFU ex2 table, numpy on the CPU | KP2-ATTN |
 | Commit | `commit.py`: `verity_vllm.commit.row_tables` (`--commit reference`), its C++ twin (`host`) or its CUDA kernel (`device`); one table an op, a row a slot | kernels' commit tree with a subtree a slot (CMP-95 item 3) |

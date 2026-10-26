@@ -13,7 +13,7 @@ blocked sums), every bf16 rounding RNE. NaN words are not modelled: no op here m
     embed      the embedding row: bf16(RN(tok[token] + pos[:, t]))
     argmax     the argmax row: the first index of the greatest logit
 
-The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and an int64 matmul on the CPU: the stand-in for
+The s32 sum is `torch._int_mm` on CUDA (exact for K < 2^17 in any order) and a float64 matmul in row chunks on the CPU (exact: integers below 2^53): the stand-in for
 kernels' KP2-S8 GEMM until it is handed over.
 """
 from __future__ import annotations
@@ -22,6 +22,9 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
+
+#: f64 elements of one weight chunk in the CPU's s32 sum (1 GiB)
+F64_CHUNK = 2 ** 27
 
 
 def f32(x: torch.Tensor) -> torch.Tensor:
@@ -89,7 +92,15 @@ def s32_mm(xq: torch.Tensor, wq: torch.Tensor) -> torch.Tensor:
         if m != b:
             xq = torch.cat([xq, torch.zeros(m - b, xq.shape[1], dtype=torch.int8, device=xq.device)])
         return torch._int_mm(xq, wq.t())[:b]
-    return (xq.to(torch.int64) @ wq.to(torch.int64).t()).to(torch.int32)
+    # f64 is exact in any summation order: every partial sum is an integer of magnitude <= K * 2^14 < 2^53
+    if xq.shape[1] > 2 ** 38:
+        raise ValueError(f"K = {xq.shape[1]} is past f64's exact range")
+    x, n = xq.to(torch.float64), wq.shape[0]
+    rows = max(1, F64_CHUNK // xq.shape[1])
+    out = torch.empty(xq.shape[0], n, dtype=torch.int32)
+    for lo in range(0, n, rows):
+        out[:, lo:lo + rows] = (x @ wq[lo:lo + rows].to(torch.float64).t()).to(torch.int32)
+    return out
 
 
 def s8_linear(q: Quant, wq: torch.Tensor, sw: torch.Tensor) -> torch.Tensor:

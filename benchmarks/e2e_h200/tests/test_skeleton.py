@@ -116,6 +116,17 @@ def test_store_layout_stages_and_loads_every_tensor(weights, monkeypatch):
     assert list(STO.blocks_of(STO.PAYLOAD, STO.PAYLOAD)) == [1]
 
 
+def test_cpu_s32_sum_is_exact_across_chunks(monkeypatch):
+    from e2e_h200 import ops as O
+    monkeypatch.setattr(O, "F64_CHUNK", 3 * 4096)
+    g = torch.Generator().manual_seed(7)
+    x = torch.randint(-128, 128, (3, 4096), dtype=torch.int8, generator=g)
+    w = torch.randint(-128, 128, (11, 4096), dtype=torch.int8, generator=g)
+    x[0], w[0] = -128, -128
+    want = (x.to(torch.int64) @ w.to(torch.int64).t()).to(torch.int32)
+    assert torch.equal(O.s32_mm(x, w), want) and int(want[0, 0]) == 4096 * 2 ** 14
+
+
 def test_parallel_generator_stages_the_serial_codes():
     w = Weights(SMALL)
     s = GeneratorStore(w, workers=2)
