@@ -6,7 +6,7 @@ A device engine for the commitment's hashes, bit for bit the CPU reference's (`v
 - its hm96-sha512 hiding leaf: b = x ⊕ M·y, c = SHA-512(salt prefix ‖ y), h = SHA-512(leaf prefix(key) ‖ b ‖ c), `hm96.SHA512`;
 - that leaf's frame-v3-sha512 leaf, and frame-v3-sha512 nodes and pads a level at a time, `merkle.CommitmentDomain`.
 
-It is built for commit_slots (HASH-13, `benchmarks/torch_gpu/commit_slots/`) to adopt where it's faster: the calls below
+It is built for commit_slots (HASH-13, KCOMMIT's commit path beside this directory) to adopt where it's faster: the calls below
 are its inner "hash these rows" and "hash this level" steps. The compression is `sha512x.cuh`'s `compress<V, ROLL>`, with
 `sha::compress`'s contract (`benchmarks/pouw/commit_gpu/sha512.cuh`), so a kernel can also swap just the compression in.
 
@@ -43,10 +43,18 @@ tensors, which at 4,096 slots fills the GPU better than one layer a call (25 row
 - 1: the high half of each rotation as mul.hi/mad.lo on the FMA pipe;
 - 2: both halves on the FMA pipe.
 
-On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a balanced split can issue more than the
-ALU alone. That is the opposite of sm_120, where commit_gpu measured `SHA_ROT` slower. `rows.cu` builds the row kernel in
-every variant in `VARIANTS`, plus `pouw` (commit_gpu's `sha::compress`, the loop commit_slots runs); `SHA512_ROWS_V` sets the
-other kernels' variant.
+On sm_90 IMAD issues to the FMA pipe, beside the ALU's SHF, LOP3 and IADD3, so a split could issue more than the ALU alone,
+but on the H200 every variant that moves rotations there measured slower, as `SHA_ROT` did for commit_gpu on sm_120. The
+default is `0000`, plain funnel shifts, and `pouw` (commit_gpu's `sha::compress`, the loop commit_slots runs) is within 1%
+of it. `rows.cu` builds the row kernel in every variant in `VARIANTS`; `SHA512_ROWS_V` sets the other kernels' variant.
+
+## Measured
+
+On the H200 at 1,980 MHz (run r20261026-011257-b954, bench.py at 4 layers a call), a whole step at the frozen shape takes
+0.257 s at 4,096 slots (141.4 GB committed, 551 GB/s) and 1.015 s at 16,384 (565.6 GB, 557 GB/s). That covers every row's
+digest and hm96 leaf, each slot's tree over its 1,300 units and the step's tree. The row kernel is 91% of it, at 4.8 G
+compressions a second. Its limit is integer-ALU issue: memory traffic is 0.6 TB/s of the 4.8 available, and power is 530 of
+700 W, with the clock at its maximum.
 
 ## Files
 
@@ -56,7 +64,7 @@ other kernels' variant.
 - `rows_host.cpp`: the host twin.
 - `engine.py`: the call.
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
-- `bench.py`: the variant sweep and whole steps at the frozen H200 shape.
+- `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the frozen H200 shape.
 - `sass.py`: opcode counts per variant.
 - `gpu.sh`: one leased GPU session.
 - `tests/`: the host twin always, every variant on a CUDA device.
