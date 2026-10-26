@@ -262,12 +262,13 @@ theorem honestShaped (h64 : Claims.Out64 H) : HonestShaped H := by
   cases hs
   have hx := o.setup
   obtain ⟨-, hts⟩ := setup_tables hx
-  have hsz := (sessionS_reps h64 (c₁ := o.recC₁) rfl hts.symm o.recTabsOk o.ran [] []).1
+  have hc : o.resp 0 = o.recC₁.bytes := rfl
+  have hsz := (sessionS_reps h64 hc hts.symm o.recTabsOk o.ran [] []).1
   have hk' : k < 2 * o.sts.size := by
     have : k < o.recPs.size := hk
     unfold Run.recPs at this
     rwa [filePs_size, hsz] at this
-  have h := sessionS_shaped h64 (c₁ := o.recC₁) rfl hts.symm o.recTabsOk o.ran k hk'
+  have h := sessionS_shaped h64 hc hts.symm o.recTabsOk o.ran k hk'
   show FlockVBridge.Family.ProofShaped _ o.recPs[k]
   rw [← getElem!_pos o.recPs k hk]
   exact h
@@ -296,7 +297,9 @@ theorem honest_actR (h64 : Claims.Out64 H) (o : Run H rel) {cs : List Coin} (hcs
     actR rd o.x (o.recMsgs cs last) cs = .decide (o.recDec cs).s (o.recDec cs).spec (o.recDec cs).sts
       (o.recDec cs).link (o.recDec cs).c₁ (o.recDec cs).mids (o.recDec cs).f := by
   have hd := honest_decR h64 o hcs hrd hst hps
-  have hl : (o.recMsgs cs last).getLast? = some last := by simp [Run.recMsgs, honestMsgs]
+  have hl : (o.recMsgs cs last).getLast? = some last := by
+    unfold Run.recMsgs honestMsgs
+    exact List.getLast?_concat
   unfold actR
   cases ha : act false o.x (o.recMsgs cs last) cs with
   | coin c => exact absurd ha (act_ne_coin hl h0 c)
