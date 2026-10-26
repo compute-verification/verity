@@ -3009,49 +3009,6 @@ __device__ __forceinline__ void jx_digits(const UCallR& c, u32 M, u32 ri, const 
       for (int r = 0; r < 4; ++r) o[32 * (8 * d + 4 * mt + r) + lane] = ad[d][mt][r];
 }
 
-// h1jr_x's X and Y, thread (r, sub) 16 bytes of row r at a time
-__device__ __forceinline__ void jx_x_rows(const UCallR& c, u32 M, u32 ri, int (&Ys)[32][33]) {
-  const u32 K = c.K, rb = K / 512 + 1, r = threadIdx.x >> 4, sub = threadIdx.x & 15, row = 32 * ri + r;
-  const u32* bits = c.rws + 16ull * row * rb;
-  const int8_t* a = c.A + (u64)row * K;
-  int8_t* x = reinterpret_cast<int8_t*>(c.rws) + jx_x_off(M, K) + (H1U_JXS ? (u64)(32 * ri) * K : (u64)row * K);
-  int acc[16];
-#pragma unroll
-  for (int i = 0; i < 16; ++i) acc[i] = 0;
-#pragma unroll 4
-  for (u32 gi = sub; gi < K / 16; gi += 16) {
-    const u32 k0 = 16 * gi;
-    const uint4 av = __ldg(reinterpret_cast<const uint4*>(a + k0));
-    const u32 w = __ldg(bits + 16 * (k0 / 512) + (k0 / 32) % 16) >> (k0 % 32);
-    const u32 xw[4] = {add01(av.x, expand4(w & 15u)), add01(av.y, expand4((w >> 4) & 15u)),
-                       add01(av.z, expand4((w >> 8) & 15u)), add01(av.w, expand4((w >> 12) & 15u))};
-    if constexpr (H1U_JXS) {
-      // bytes 8 q' + 4 hf .. of row r (mt = r / 16, g = r % 8, h = r / 8 % 2) are word h + 2 hf of lane 4 g + q'
-      u32* xo = reinterpret_cast<u32*>(x + 512ull * (2 * (gi / 2) + r / 16) + 16 * (4 * (r % 8) + 2 * (gi % 2))) +
-                (r / 8) % 2;
-      xo[0] = xw[0];
-      xo[2] = xw[1];
-      xo[4] = xw[2];
-      xo[6] = xw[3];
-    } else {
-      *reinterpret_cast<uint4*>(x + k0) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
-    }
-#pragma unroll
-    for (int i = 0; i < 16; ++i) acc[i] += (int)(int8_t)(xw[i >> 2] >> (8 * (i & 3)));
-  }
-  // the 8 threads of a row with one parity of sub hold rho 16 (sub & 1) + i
-#pragma unroll
-  for (int i = 0; i < 16; ++i) {
-    acc[i] += __shfl_xor_sync(0xFFFFFFFFu, acc[i], 2);
-    acc[i] += __shfl_xor_sync(0xFFFFFFFFu, acc[i], 4);
-    acc[i] += __shfl_xor_sync(0xFFFFFFFFu, acc[i], 8);
-  }
-  if (sub < 2) {
-#pragma unroll
-    for (int i = 0; i < 16; ++i) Ys[r][16 * sub + i] = acc[i];
-  }
-}
-
 // H1U_JPC's: warp wi's lane (g, q) writes its slot of row tile mt = wi % 2 in segments sg = wi / 2 (mod 8), rows
 // 16 mt + g and 16 mt + 8 + g at k = 32 sg + 8 q .., and adds those rows' sums at rho = 8 q .. into Ys
 __device__ __forceinline__ void jx_x_pc(const UCallR& c, u32 M, u32 ri, int (&Ys)[32][33]) {
@@ -3094,10 +3051,50 @@ __global__ void __launch_bounds__(512) h1jr_x(const UCallR* __restrict__ calls, 
   const u32 ri = blockIdx.x;
   if (live && !live[ri]) return;
   __shared__ int Ys[32][33];
-  if constexpr (H1U_JXS && H1U_JPC)
+  if constexpr (H1U_JXS && H1U_JPC) {
     jx_x_pc(c, M, ri, Ys);
-  else
-    jx_x_rows(c, M, ri, Ys);
+  } else {
+    // thread (r, sub) 16 bytes of row r at a time
+    const u32 K = c.K, rb = K / 512 + 1, r = threadIdx.x >> 4, sub = threadIdx.x & 15, row = 32 * ri + r;
+    const u32* bits = c.rws + 16ull * row * rb;
+    const int8_t* a = c.A + (u64)row * K;
+    int8_t* x = reinterpret_cast<int8_t*>(c.rws) + jx_x_off(M, K) + (H1U_JXS ? (u64)(32 * ri) * K : (u64)row * K);
+    int acc[16];
+#pragma unroll
+    for (int i = 0; i < 16; ++i) acc[i] = 0;
+#pragma unroll 4
+    for (u32 gi = sub; gi < K / 16; gi += 16) {
+      const u32 k0 = 16 * gi;
+      const uint4 av = __ldg(reinterpret_cast<const uint4*>(a + k0));
+      const u32 w = __ldg(bits + 16 * (k0 / 512) + (k0 / 32) % 16) >> (k0 % 32);
+      const u32 xw[4] = {add01(av.x, expand4(w & 15u)), add01(av.y, expand4((w >> 4) & 15u)),
+                         add01(av.z, expand4((w >> 8) & 15u)), add01(av.w, expand4((w >> 12) & 15u))};
+      if constexpr (H1U_JXS) {
+        // bytes 8 q' + 4 hf .. of row r (mt = r / 16, g = r % 8, h = r / 8 % 2) are word h + 2 hf of lane 4 g + q'
+        u32* xo = reinterpret_cast<u32*>(x + 512ull * (2 * (gi / 2) + r / 16) + 16 * (4 * (r % 8) + 2 * (gi % 2))) +
+                  (r / 8) % 2;
+        xo[0] = xw[0];
+        xo[2] = xw[1];
+        xo[4] = xw[2];
+        xo[6] = xw[3];
+      } else {
+        *reinterpret_cast<uint4*>(x + k0) = make_uint4(xw[0], xw[1], xw[2], xw[3]);
+      }
+#pragma unroll
+      for (int i = 0; i < 16; ++i) acc[i] += (int)(int8_t)(xw[i >> 2] >> (8 * (i & 3)));
+    }
+    // the 8 threads of a row with one parity of sub hold rho 16 (sub & 1) + i
+#pragma unroll
+    for (int i = 0; i < 16; ++i) {
+      acc[i] += __shfl_xor_sync(0xFFFFFFFFu, acc[i], 2);
+      acc[i] += __shfl_xor_sync(0xFFFFFFFFu, acc[i], 4);
+      acc[i] += __shfl_xor_sync(0xFFFFFFFFu, acc[i], 8);
+    }
+    if (sub < 2) {
+#pragma unroll
+      for (int i = 0; i < 16; ++i) Ys[r][16 * sub + i] = acc[i];
+    }
+  }
   __syncthreads();
   if (threadIdx.x >= 32) return;
   if (c.md == 3)
