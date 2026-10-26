@@ -245,6 +245,7 @@ import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.LastCallsR
+import Proofs.Flock.Claims.Recursion.ResSite
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
 import Proofs.Flock.Claims.Recursion.LabelsFull
 import Proofs.Flock.Claims.Recursion.VerdictRowECommit
@@ -299,6 +300,9 @@ import Proofs.Flock.Claims.Recursion.ResPiecesD
 import Proofs.Flock.Claims.Recursion.SideCapPos
 import Proofs.Flock.Claims.Recursion.ResLowJD
 import Proofs.Flock.Claims.Recursion.ResLowerD
+import Proofs.Flock.Claims.Recursion.LabelsFull
+import Proofs.Flock.Claims.Recursion.ResSiteD
+import Proofs.Flock.Claims.Recursion.ResLowerDD
 
 /-! `Flock.SecurityProofs.ClaimsStated : Flock.Guarantees.ClaimsStated`, by reflexivity: the guarantee is there for its
 record, which holds the claims' text.
