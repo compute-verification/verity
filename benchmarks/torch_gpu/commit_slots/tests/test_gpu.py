@@ -100,6 +100,59 @@ def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
     assert {k[-1] for k in plan._graphs} == {plan.sms}
 
 
+@pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
+def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: bool) -> None:
+    """At the HBM cap, a producer that frees each group's tables once it has added them (e2e_h200's loop: a table lives
+    until the next group's are allocated, and the producer's stream waits for the reads ``LAG`` groups back) gets their
+    memory back for its next tables while the side stream lags its reads, so across two steps the allocator never
+    retries (a retry frees its cache and waits on every stream), and the roots are an unpressured run's. What it catches
+    that the roots' tests can't: a commit that keeps a freed table from the producer's next allocation, as
+    ``record_stream`` onto the side stream did (a table was reusable only once that stream had run everything queued on
+    it when the table was freed, so with three groups' tables free here the fourth group's retried)."""
+    dev, width, slots, lag = torch.device("cuda"), 4 << 20, 64, 2
+    group = S.Group((width,), tuple((S.Row((S.Part(0, a, 32 << 10),)),) for a in range(0, width, 32 << 10)))
+    plan = G.Plan(CTX, S.Layout("commit-slots/test-hbm-cap/v1", (group,) * 6))
+    gen = torch.Generator(device=dev)
+
+    def table(step: int, g: int) -> object:
+        gen.manual_seed(100 * step + g)
+        return torch.randint(-128, 128, (slots, width), dtype=torch.int8, device=dev, generator=gen)
+
+    def steps(sleep: int) -> tuple[list[S.StepCommit], list[bool]]:
+        out, lagged = [], []
+        for step, key in ((0, KEY), (1, bytes(range(32)))):
+            sc, reads, t = G.StepCommitter(plan, step, slots, key, graphs=graphs), [], None
+            for g in range(len(plan.groups)):
+                if sleep:
+                    with torch.cuda.stream(plan.stream):
+                        torch.cuda._sleep(sleep)
+                t = table(step, g)
+                reads.append(sc.add([t]))
+                lagged.append(not reads[-1].query())
+                if len(reads) > lag:
+                    torch.cuda.current_stream(dev).wait_event(reads.pop(0))
+            del t
+            out.append(sc.finish().result())
+        return out, lagged
+
+    want, _ = steps(0)
+    torch.cuda.synchronize(dev)
+    torch.cuda.empty_cache()
+    free, _ = torch.cuda.mem_get_info(dev)
+    ballast = torch.empty(free - 3 * slots * width - (128 << 20), dtype=torch.uint8, device=dev)
+    try:
+        before = torch.cuda.memory_stats(dev)
+        got, lagged = steps(50_000_000)
+        after = torch.cuda.memory_stats(dev)
+    finally:
+        del ballast
+        torch.cuda.synchronize(dev)
+        torch.cuda.empty_cache()
+    assert all(lagged)
+    assert {k: after[k] - before[k] for k in ("num_alloc_retries", "num_ooms")} == {"num_alloc_retries": 0, "num_ooms": 0}
+    assert got == want
+
+
 def test_a_plan_has_one_step_on_graphs_open() -> None:
     layout = S.edge_layout()
     plan = G.Plan(CTX, layout)

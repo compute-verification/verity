@@ -7,14 +7,19 @@ A step is committed as its groups' outputs arrive::
 
     sc = StepCommitter(plan, step, slots, salt_key)     # salt_key: slots.fresh_salt_key(), the prover's
     for tensors in each group's outputs:                 # e.g. a layer's ops, (slots, ...) CUDA tensors
-        done = sc.add(tensors)                           # on the plan's side stream behind the current stream; reuse the
-                                                         # tensors' memory only after the event `done`
+        done = sc.add(tensors)                           # on the plan's side stream behind the current stream; overwrite
+                                                         # the tensors in place only after the event `done`
     pending = sc.finish()                                # no host sync
     pending.result()                                     # slots.StepCommit(root, slot_roots), the reference's
 
 or at once, ``commit(plan, step, salt_key, outputs, slots)``, the reference's ``slots.commit`` signature with the plan in place
 of the context and layout. ``Plan(..., device="host")`` runs the same calls on the engine's host twin (g++), with numpy arrays
 for tensors: what the CPU tests hold to the reference.
+
+The plan holds each add's tensors until the side stream has read them (``Plan.release``), so a producer may free its
+tables once it has added them: their memory goes back to the producer's stream once they are read, not at the side
+stream's tail, and at the HBM cap its next tables find it there without the allocator's retry (which frees the cache and
+waits on every stream).
 
 With ``graphs=True`` (``StepCommitter``, ``commit``), each add is one CUDA graph launch: the group's passes, captured on its
 first add and replayed with the tensors' addresses and the salt key as data, so the same kernels give the same roots while
@@ -36,9 +41,11 @@ and about one slot-tree node (two).
 """
 from __future__ import annotations
 
+import collections
 import contextlib
 import importlib.util
 import sys
+import threading
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,10 +56,11 @@ import slots as S
 
 from verity.ml.commitments.merkle import merkle_depth
 
-__all__ = ["TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "regroup"]
+__all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "regroup"]
 
 HERE = Path(__file__).resolve().parent
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
+LAG = 2               # adds a plan holds unread tensors for before their producer waits for the read (e2e_h200.commit.LAG)
 TEMP_BYTES = 1 << 30
 TEMP_BUFFERS = 4      # a pass's live (rows, slots) digest buffers at most: row digests, the run, the rest's leaves, a level
 PAD_CHUNK = 16        # pads alone are hashed 2^16 at a time
@@ -240,6 +248,8 @@ class Plan:
         self._pool: Any = None
         self._frontiers: dict[int, Any] = {}
         self._open: StepCommitter | None = None
+        self._held: collections.deque[tuple[Any, Any, tuple[Any, ...]]] = collections.deque()
+        self._held_lock = threading.Lock()
         shapes: dict[int, _Shape] = {}
         with self.side():
             self.slot_dw = self.engine._wordsof([self.slot_did])
@@ -260,6 +270,26 @@ class Plan:
     def side(self) -> Any:
         """The plan's side stream as the current stream (nothing on the host)."""
         return contextlib.nullcontext() if self.host else self.torch.cuda.stream(self.stream)
+
+    def hold(self, read: Any, producer: Any, tensors: Sequence[Any]) -> None:
+        """Holds an add's ``tensors`` until the side stream has read them (``read``, an event there); ``producer`` is the
+        stream that made them."""
+        with self._held_lock:
+            self._held.append((read, producer, tuple(tensors)))
+
+    def release(self, keep: int | None = None) -> None:
+        """Drops the held tensors whose read has passed, oldest first, and with ``keep`` all but the last ``keep`` adds' too,
+        each once its producer's stream waits for its read. A tensor its producer has freed then goes back to that stream's
+        pool after its read, in the stream's order, with no event for the allocator to wait on (``record_stream``'s would
+        be the side stream's tail when the producer frees it)."""
+        with self._held_lock:
+            while self._held:
+                read, producer = self._held[0][:2]
+                if not read.query():
+                    if keep is None or len(self._held) <= keep:
+                        break
+                    producer.wait_event(read)
+                self._held.popleft()
 
     def put(self, a: np.ndarray) -> Any:
         """An index or word array on the plan's device (int64 there)."""
@@ -496,10 +526,11 @@ class Plan:
 
 
 class Pending:
-    """A finished step's commitment in flight: ``result()`` waits for it (``ready()`` doesn't)."""
+    """A finished step's commitment in flight: ``result()`` waits for it (``ready()`` doesn't), and then drops the tensors
+    its plan holds that are read."""
 
-    def __init__(self, event: Any, root: Any, slot_roots: Any) -> None:
-        self.event, self._root, self._slot_roots = event, root, slot_roots
+    def __init__(self, event: Any, root: Any, slot_roots: Any, plan: Plan | None = None) -> None:
+        self.event, self._root, self._slot_roots, self._plan = event, root, slot_roots, plan
 
     def ready(self) -> bool:
         return self.event is None or self.event.query()
@@ -507,15 +538,19 @@ class Pending:
     def result(self) -> S.StepCommit:
         if self.event is not None:
             self.event.synchronize()
+            if self._plan is not None:
+                self._plan.release()
         return S.StepCommit(E.digests(self._root)[0], tuple(E.digests(self._slot_roots)))
 
 
 class StepCommitter:
     """Step ``step`` of ``slots`` slots under ``plan``, its salts under ``salt_key`` (32 bytes, the prover's): ``add`` each
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every call goes on the plan's side stream after
-    what the current stream has enqueued, and each added tensor is held for that stream (``record_stream``). With ``marks``
-    (a list), each phase appends ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier
-    (``frontier``, (slots, depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
+    what the current stream has enqueued, and the plan holds each add's tensors until they are read (``Plan.release``),
+    those of the add ``lag`` adds back no longer: the stream current when the step was made (``producer``, the tensors'
+    own) waits for their read instead, as `e2e_h200.commit`'s loop does. With ``marks`` (a list), each phase appends
+    ``(name, event)``, its end on the side stream (timing only). It holds each slot's frontier (``frontier``, (slots,
+    depth + 1, 8)) and a pass's temporaries, never a slot's leaves.
 
     With ``graphs`` (a CUDA plan), each add is one CUDA graph launch: the group's passes, captured on the first add of that
     group at these slots, pass size and leaf kernel (``Plan.graph``), and replayed with the tensors' addresses and the salt
@@ -525,13 +560,16 @@ class StepCommitter:
     ``finish``'s."""
 
     def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes, marks: list[tuple[str, Any]] | None = None,
-                 graphs: bool = False) -> None:
+                 graphs: bool = False, lag: int = LAG) -> None:
         if len(salt_key) != 32:
             raise ValueError("a salt key is 32 bytes")
         if graphs and plan.host:
             raise ValueError("a step on graphs is on a CUDA plan")
+        if lag < 0:
+            raise ValueError("a lag is 0 or more adds")
         self.step_did = S.step_domain(plan.context, plan.layout, step, slots).domain_id
-        self.plan, self.slots, self.k, self.marks, self.graphs = plan, slots, 0, marks, graphs
+        self.plan, self.slots, self.k, self.marks, self.graphs, self.lag = plan, slots, 0, marks, graphs, lag
+        self.producer = None if plan.host else plan.torch.cuda.current_stream(plan.device)
         self.capturing = False
         self.salts = E.SaltKey(salt_key)
         if graphs:
@@ -555,7 +593,7 @@ class StepCommitter:
     def add(self, tensors: Sequence[Any]) -> Any:
         """The next group's outputs: tensor i of shape (slots, ...), each slot's bytes contiguous, ``group.sources[i]`` of them.
         Returns an event on the side stream after which the tensors may be overwritten (a producer that reuses its buffers
-        waits on it), or None on the host."""
+        waits on it; one that frees them needn't), or None on the host."""
         plan, layout = self.plan, self.plan.layout
         if self.k >= len(layout.groups):
             raise ValueError("every group is in")
@@ -572,6 +610,9 @@ class StepCommitter:
             with plan.side():
                 done = self._passes(grp, plan.rows(grp.shape, tensors), True)
         self.k += 1
+        if done is not None:
+            plan.hold(done, self.producer, tensors)
+            plan.release(self.lag)
         return done
 
     def _passes(self, grp: _Group, table: Any, signal: bool) -> Any:
@@ -635,7 +676,6 @@ class StepCommitter:
         if t.device != self.plan.device or t.shape[0] != self.slots or not t[0].is_contiguous() \
                 or t[0].numel() * t.element_size() != n:
             raise ValueError(f"a tensor is (slots={self.slots}, ...) on {self.plan.device} with {n} contiguous bytes a slot")
-        t.record_stream(self.plan.stream)
 
     def finish(self) -> Pending:
         plan = self.plan
@@ -658,7 +698,7 @@ class StepCommitter:
             sr.copy_(slot_roots, non_blocking=True)
             ev = torch.cuda.Event()
             ev.record(plan.stream)
-        return Pending(ev, r, sr)
+        return Pending(ev, r, sr, plan)
 
 
 def commit(plan: Plan, step: int, salt_key: bytes, outputs: Sequence[Sequence[Any]], slots: int,
