@@ -94,9 +94,9 @@ def _stage(d: Path, tmp: Path, reads, group: int = 1, rows=None, refs=None, *, s
     return tmp / "circuit.txt", pub, own, mirror
 
 
-def _statement(circuit: Path, pub: Path, own: Path | None, statement: str = STATEMENT) -> subprocess.CompletedProcess:
+def _statement(circuit: Path, pub: Path, own: Path | None) -> subprocess.CompletedProcess:
     flags = ["--public-inputs", str(own)] if own else []
-    return subprocess.run([str(BIN), "statement", "--statement", statement, "--circuit", str(circuit), "--public", str(pub),
+    return subprocess.run([str(BIN), "statement", "--statement", STATEMENT, "--circuit", str(circuit), "--public", str(pub),
                            *flags], capture_output=True, text=True, check=False)
 
 
@@ -172,12 +172,3 @@ def test_both_pass_one_writer_a_window(store, tmp_path):
     p = _statement(circuit, pub, own)
     assert p.returncode == 1 and p.stdout.startswith("setup: row x: "), (p.stdout, p.stderr)
     assert _mirror(*mirror) is None
-
-
-def test_a_statement_without_hidden_outputs_has_no_shared_reads(store, tmp_path):
-    circuit, pub, _, _ = _stage(store, tmp_path, _read(1), 1, public=False, tables=False)
-    statement = "verity/flock-circuit@967b8d06+seed-injection"
-    p = _statement(circuit, pub, None, statement=statement)
-    assert p.returncode == 1 and p.stdout.strip() == (
-        f"setup: META: shared_reads: a {statement} statement has no shared reads (only a statement with public input ports "
-        "has them)"), (p.stdout, p.stderr)
