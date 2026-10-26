@@ -177,7 +177,7 @@ theorem prob_rounds_le {Ω Adv : Type} [Fintype Ω] {k : ℕ} (adv : (Fin k → 
     (hadv : ∀ x x' w, (∀ v : Fin k, v < w → x v = x' v) → adv x w = adv x' w) (F : Fin k → Adv → Ω → ℝ)
     (h0 : ∀ w s ω, 0 ≤ F w s ω) (h1 : ∀ w s, expect (F w s) ≤ 1) (t : ℝ) {E : (Fin k → Ω) → Prop}
     (hsub : ∀ x, E x → Real.exp t ≤ ∏ w, F w (adv x w) (x w)) : prob E ≤ Real.exp (-t) :=
-  prob_le_of_expect_le_one (fun x => Finset.prod_nonneg fun w _ => h0 _ _ _) (expect_prod_rounds adv hadv F h0 h1) t
+  prob_le_of_expect_le_one (fun _ => Finset.prod_nonneg fun _ _ => h0 _ _ _) (expect_prod_rounds adv hadv F h0 h1) t
     hsub
 
 /-- **One round's event on adapted advice**: an event of round `w`'s advice and coin of probability at most `κ` over
@@ -253,9 +253,9 @@ theorem combined_moment_le (G : Accel) (P : RoundProto) (μ : G.Res → ℝ) (pm
   have hsum : Hmm / (Hmm + Hsha + Ho) + Hsha / (Hmm + Hsha + Ho) + Ho / (Hmm + Hsha + Ho) = 1 := by
     rw [← add_div, ← add_div, div_self hH']
   have hra : Hmm / (Hmm + Hsha + Ho) * (η * (Hmm + Hsha + Ho) / Hmm) = η := by
-    first | (field_simp; ring) | field_simp
+    field_simp
   have hrb : Hsha / (Hmm + Hsha + Ho) * (η * (Hmm + Hsha + Ho) / Hsha) = η := by
-    first | (field_simp; ring) | field_simp
+    field_simp
   have hie : ∀ (p : Prop) [Decidable p] (r : ℝ), 0 ≤ (if p then Real.exp r else 0) := fun p _ r => by
     split_ifs
     · exact (Real.exp_pos r).le
