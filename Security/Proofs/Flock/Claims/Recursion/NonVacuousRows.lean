@@ -1,4 +1,4 @@
-import Proofs.Flock.Claims.Recursion.VerdictTargetL
+import Proofs.Flock.Claims.Recursion.VerdictPublics
 import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
@@ -15,7 +15,12 @@ import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
   at the decision (`DecAt.hside`, `DecAt.hpos`) and `TargetRDep`'s `hsz` for the verifier rows' run
   (`DecAt.rowsRun_of`): `DecAt.rowD_target`.
 
-`Top.targetL` (`VerdictTargetL`) gives `TargetL` from the coin tie `TargetZ`.
+* `targetDDep_of_merkle`: `TargetDDep` from `TargetDMerkle`, each rep's `MerkleOk` and the coin tie of its
+  positions (`DecAt.levels_of_merkleOk`).
+
+`Top.targetL` (`VerdictTargetL`) gives `TargetL` from the coin tie `TargetZ`, and `TargetPublics` is proved
+(`Top.targetPublics`, `VerdictPublics`). `targets_of_open`: every target from rows B and E, `TargetZ`, `TargetRDep`,
+`TargetDMerkle` and `TargetDecode`.
 -/
 
 namespace RecDeploy
@@ -78,6 +83,20 @@ def TargetDDep : Prop :=
             Rows.levelCheck (D.files cls i).sch ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito ℓ
               (info.lg.conss[ℓ]!).pos = .ok ()
 
+/-- **Row D's level checks from the Merkle checks**: each rep's decoded proof passes `MerkleOk` at the standard hashes
+at query coins `cf` from round `k`, and any run of its verifier rows draws its positions from those coins. -/
+def TargetDMerkle : Prop :=
+  ∀ (x : Msg) (ms : List Msg) (cs : List Coin), At rd P x ms cs → ∀ (D : DecAt rd x ms cs) (cls : HClass) (i : ℕ),
+    i < D.sts.size → ∀ r : Fin 2, ∃ (cf : ℕ → ℕ → F128) (k : ℕ),
+      FlockComplete.Replay.Lg.MerkleOk Flock.With.std FlockVBridge.Family.plain (D.files cls i).sch
+        ((D.files cls i).proof r).cap ((D.files cls i).proof r).ligerito cf k ∧
+      ∀ v info kappa,
+        verifierRows (D.sh cls i) (D.rep cls (acc x ms cs) i r).rounds (D.rep cls (acc x ms cs) i r).extras
+          (D.rep cls (acc x ms cs) i r).comb = .ok (v, info, kappa) →
+        ∀ ℓ < (D.files cls i).sch.levels.size, (info.lg.conss[ℓ]!).pos =
+          Flock.positions ((D.files cls i).sch.levels[ℓ]!) ((Array.range ((D.files cls i).sch.levels[ℓ]!).q).map
+            (cf (k + FlockComplete.Replay.Lg.qOff (D.files cls i).sch ℓ)))
+
 end Targets
 
 variable {rd : Msg → Option FinalP} {P : Msg → List Msg → List Coin → Prop}
@@ -110,6 +129,25 @@ theorem targetD_of (hR : TargetRDep rd P acc) (h : TargetDDep rd P acc) : Target
     (D.hside cls i hi (Rows.DecAt.rowDPiecesAt key i x))
     (D.hpos cls (acc x ms cs) i hst hf hx hi hti (Rows.DecAt.rowDPiecesAt key i x))
     (D.rowsRun_of cls (acc x ms cs) hti hS hsz) hlev
+
+/-- **`TargetDDep` from the Merkle checks** (`DecAt.levels_of_merkleOk`), at the copies `(t, r, ℓ, j)`. -/
+theorem targetDDep_of_merkle (h : TargetDMerkle rd P acc) : TargetDDep rd P acc := by
+  intro x ms cs hA D cls i hi
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
+  have hG := D.rowG cls (acc x ms cs) hst hf hx hi
+  refine ⟨fun t r ℓ j => (t, r, ℓ, j), fun r => ?_⟩
+  obtain ⟨cf, k, hM, htie⟩ := h x ms cs hA D cls i hi r
+  exact D.levels_of_merkleOk cls (acc x ms cs) r Rows.plain_opsWith_std hG.fast hM htie
+
+/-- **Every target from what stays open**: rows B and E, row L's coin tie, rows R's and D's deployed forms and the
+decoded record. -/
+theorem targets_of_open (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → List Q)
+    (holds : Q → Msg → List Msg → List Coin → Prop) (acc : Msg → List Msg → List Coin → ℕ → Array F128)
+    (hB : TargetB rd (RowsHold rows holds) acc) (hZ : TargetZ rd (RowsHold rows holds))
+    (hR : TargetRDep rd (RowsHold rows holds) acc) (hD : TargetDMerkle rd (RowsHold rows holds) acc)
+    (hE : TargetE rd (RowsHold rows holds) acc) (hDec : TargetDecode rd (RowsHold rows holds)) :
+    Targets rd rows holds acc :=
+  ⟨hB, targetL acc hZ, targetD_of hR (targetDDep_of_merkle hD), targetR_of hR, hE, hDec, targetPublics rd _⟩
 
 end Top
 
