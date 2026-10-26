@@ -470,9 +470,17 @@ theorem ivstarR_honest_session (rel : _root_.Flock.Readable.Parsed → _root_.Fl
   · rw [salted_fst, ← honestMsgs_rounds]
     exact hacc
 
+/-- **The tables' facts the files-level results take** (`htab`), at a statement `verify --plain-tables` admits. -/
+theorem tabsOk_of_plain {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt}
+    (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) (c₁ : Coin) :
+    ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048 :=
+  fun i hi => ⟨(tablesOk_of_plainTables hx hP i hi).1, (tablesOk_of_plainTables hx hP i hi).2 c₁⟩
+
 /-- **The honest session passes `IVStar` at `bdR (nextR rd)` at its own files**: `ivstarR_honest_session` at the caps
-and proofs the pure session's files decode to (`fileCaps`, `filePs`), at a statement `verify --plain-tables` admits,
-with replies that are the coins' bytes (as `sessionRun_decides_tables`). -/
+and proofs the pure session's files decode to (`fileCaps`, `filePs`), at `TableOk` tables with at most 2,048 extra
+claims at the first coin's points (`tabsOk_of_plain` at a statement `verify --plain-tables` admits; `Run.recTabsOk` at a
+plain completeness run), with replies that are the coins' bytes (as `sessionRun_decides_tables`). -/
 theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
     (rd : Claims.Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128))
     (wE : Claims.Msg → ℝ) (rowIn : Claims.Msg → Claims.Msg)
@@ -480,7 +488,8 @@ theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin} {cs : List Coin}
     {resp : ℕ → Claims.Msg} {wI : Claims.Flock.Wit} {ω : FlockComplete.Tape} {Ts : ℕ → F128}
     {ys : ℕ → ℕ → RecDeploy.Salt} {last lastO : Claims.Msg} (hx : setupOf false x = some (s, spec, sts))
-    (hP : PlainTablesOk s.read sts) (hc1 : cs.head? = some c₁)
+    (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) (hc1 : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (V false).k x)
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
@@ -497,7 +506,6 @@ theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Floc
         repRows (repCtx spec sts c₁ (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast k)
           (filePs spec sts c₁ pfs)[k]! (Ts k)) ys lastO))
       (bdC rel rd cols wE joinR rowIn final w).IVStar x () fun i => cs.getD i.val default).out = .acc := by
-  have htab := tablesOk_of_plainTables hx hP
   have hc : resp 0 = c₁.bytes := by
     cases cs with
     | nil => simp at hc1
@@ -505,12 +513,9 @@ theorem ivstarR_honest_files (rel : _root_.Flock.Readable.Parsed → _root_.Floc
       simp only [List.head?_cons, Option.some.injEq] at hc1
       subst hc1
       simpa using hresp 0 (by simp)
-  have htab' : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
-      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048 :=
-    fun i hi => ⟨(htab i hi).1, (htab i hi).2 c₁⟩
-  have hfc := filesFinalC out64_sha512 hc (setup_tables hx).2.symm htab' hS hresp
+  have hfc := filesFinalC out64_sha512 hc (setup_tables hx).2.symm htab hS hresp
     (hlen_of_k hx (fun i hi => (htab i hi).1) hk)
-  obtain ⟨hsz, hall⟩ := sessionS_reps out64_sha512 hc (setup_tables hx).2.symm htab' hS
+  obtain ⟨hsz, hall⟩ := sessionS_reps out64_sha512 hc (setup_tables hx).2.symm htab hS
     (capRows (fileCaps spec sts c₁ pfs)) cs.tail.dropLast
   have hcaps : ∀ i < (fileCaps spec sts c₁ pfs).size,
       (fileCaps spec sts c₁ pfs)[i]!.size = RecDeploy.level0Nodes sts[i]! := by
@@ -552,7 +557,9 @@ theorem innerAccepts_honest (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     {xC : Claims.Msg} {v : List (Claims.Msg × Claims.Msg)} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {cs : List Coin} {resp : ℕ → Claims.Msg} {wI : Claims.Flock.Wit}
     {ω : FlockComplete.Tape} {Ts : ℕ → F128} {ys : ℕ → ℕ → Salt} {last lastO : Claims.Msg}
-    (hx : setupOf false (xIOf xC) = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) (hc1 : cs.head? = some c₁)
+    (hx : setupOf false (xIOf xC) = some (s, spec, sts))
+    (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) (hc1 : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (V false).k (xIOf xC))
     {rec : String} {pfs : Array ByteArray} {bs : Array Claims.Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
@@ -572,7 +579,7 @@ theorem innerAccepts_honest (rel : _root_.Flock.Readable.Parsed → _root_.Flock
     InnerAccepts sha512 (bdC rel rd cols wE joinR rowIn final w).IVStar xC cs v := by
   unfold InnerAccepts
   rw [hv]
-  exact ivstarR_honest_files rel rd cols wE rowIn final w hx hP hc1 hresp hk hS hfin hacc
+  exact ivstarR_honest_files rel rd cols wE rowIn final w hx htab hc1 hresp hk hS hfin hacc
 
 end RecDeploy
 
@@ -652,7 +659,9 @@ theorem ivstar_honest_filesR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (rd : Msg → Option FinalP) (cols : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ)
     (rowIn : Msg → Msg) (w : Msg → ℝ) {x : Msg} {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {c₁ : Coin}
     {cs : List Coin} {resp : ℕ → Msg} {wI : Claims.Flock.Wit} {ω : FlockComplete.Tape} {Ts : ℕ → F128}
-    {ys : ℕ → ℕ → Salt} {last : Msg} (hx : setupOf false x = some (s, spec, sts)) (hP : PlainTablesOk s.read sts)
+    {ys : ℕ → ℕ → Salt} {last : Msg} (hx : setupOf false x = some (s, spec, sts))
+    (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048)
     (hc1 : cs.head? = some c₁) (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes)
     (hk : cs.length = (V false).k x) {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
@@ -664,7 +673,7 @@ theorem ivstar_honest_filesR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (Claims.run sha512 (Claims.replay (honestAsR rel rd cols wE rowIn finalR w (fileCaps spec sts c₁ pfs)
       (filesReps spec sts c₁ pfs cs Ts) ys (lastOR (filesOs spec sts c₁ pfs cs Ts ys) last)))
       (bdC rel rd cols wE joinR rowIn finalR w).IVStar x () fun i => cs.getD i.val default).out = .acc :=
-  ivstarR_honest_files rel rd cols wE rowIn finalR w hx hP hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc
+  ivstarR_honest_files rel rd cols wE rowIn finalR w hx htab hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc
 
 /-- **Recursion completeness's inner premise at `final := finalR`** (`InnerAccepts`): `innerAccepts_honest` with the
 honest last message `lastOR`, which `finalR` reads. -/
@@ -673,7 +682,9 @@ theorem innerAccepts_honestR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
     (rowIn : Msg → Msg) (w : Msg → ℝ) {xC : Msg} {v : List (Msg × Msg)} {s : Ins} {spec : SessionSpec}
     {sts : Array Stmt} {c₁ : Coin} {cs : List Coin} {resp : ℕ → Msg} {wI : Claims.Flock.Wit}
     {ω : FlockComplete.Tape} {Ts : ℕ → F128} {ys : ℕ → ℕ → Salt} {last : Msg}
-    (hx : setupOf false (xIOf xC) = some (s, spec, sts)) (hP : PlainTablesOk s.read sts) (hc1 : cs.head? = some c₁)
+    (hx : setupOf false (xIOf xC) = some (s, spec, sts))
+    (htab : ∀ (i : ℕ) (hi : i < sts.size), JsonRT.TableOk sts[i] ∧
+      ∀ e, sts[i].extraClaims (pointsOf spec c₁) = .ok e → e.size ≤ 2048) (hc1 : cs.head? = some c₁)
     (hresp : ∀ i < cs.length, resp i = (cs.getD i default).bytes) (hk : cs.length = (V false).k (xIOf xC))
     {rec : String} {pfs : Array ByteArray} {bs : Array Msg}
     (hS : FlockComplete.sessionS sha512 resp spec sts wI ω = (.ok (rec, pfs), bs))
@@ -686,6 +697,6 @@ theorem innerAccepts_honestR (rel : _root_.Flock.Readable.Parsed → _root_.Floc
       honestAsR rel rd cols wE rowIn finalR w (fileCaps spec sts c₁ pfs) (filesReps spec sts c₁ pfs cs Ts) ys
         (lastOR (filesOs spec sts c₁ pfs cs Ts ys) last)) :
     InnerAccepts sha512 (bdC rel rd cols wE joinR rowIn finalR w).IVStar xC cs v :=
-  innerAccepts_honest rel rd cols wE rowIn finalR w hx hP hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc hv
+  innerAccepts_honest rel rd cols wE rowIn finalR w hx htab hc1 hresp hk hS (finalR_lastOR _ _ hl hl' hh) hacc hv
 
 end RecDeploy.DeployedR
