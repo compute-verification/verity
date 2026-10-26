@@ -14,11 +14,12 @@ Then `d6.period` at each beside load, with and without the route, on the RTX PRO
 priced as a whole) on both cards.
 
     PUBLIC_BEST_DIR=<D5 v2>/benchmarks/pouw/theory python3 b1alu_check.py <D6 accel_score dir> PICKS OUT_PREFIX
-        [--cost 0.77,1.25] [--pipes alu,fma] [--skip-menu]
+        [--cost 0.77,1.25] [--pipes alu,fma] [--skip-menu | --menu-only]
 
 --cost: emulated b1's ALU time in INT8 product-times (A7's 0.77; AND + POPC + an add on D5's 64 ALU lanes is about
 1.25, and 1.6 with Harley-Seal's adds), one pass each; --pipes: the pipes it may run on (fma: LOP3 on all 128 INT32
-lanes of sm_120, which D5's card doesn't model); --skip-menu: skip the unpatched pass.
+lanes of sm_120, which D5's card doesn't model); --skip-menu: skip the unpatched pass; --menu-only: run only it (D5
+v2.1's menu carries the census routes itself, so its unpatched pass is the check against `--census` at D5 v2).
 
 --census: instead of one route at a fixed cost, every strategy of `b1_census.py` (the carry-save trees with either
 accumulator, and dp4a2 on the IMAD pipe) is a route of its own, each with its instruction counts on D5's resources:
@@ -146,6 +147,9 @@ if __name__ == "__main__":
     P = pickle.load(open(sys.argv[2], "rb"))
     static, pv = P["v3.1"]
     out = {} if "--skip-menu" in sys.argv else {"menu": run(("RTX PRO 6000", "H200"), "D5 v2 menu (D6)")}
+    if "--menu-only" in sys.argv:
+        dump(out, sys.argv[3])
+        sys.exit()
     pb.tile_methods = patched
     if CENSUS:
         cap0 = pb.cap
