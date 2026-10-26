@@ -2,6 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Defs
 import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.SpecP
 import Proofs.Flock.Soundness.Discharge.Hidden.PortsP
+import Proofs.Flock.Soundness.Discharge.Hidden.DerivedP
 import Proofs.Flock.Soundness.Discharge.Hidden.Facts
 import Proofs.Flock.Soundness.Discharge.Hidden.Binding
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
@@ -33,6 +34,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 * `Spec`: `setupHidden_spec'`, the walk of `Stmt.setupHidden` to its `Spec`;
 * `PortsP`: the public leaves `HmIn.parse` accepted (`publicCol_at`), and the rows `HmIn.delta` keeps (`keepCol`,
   `deltaEntry_inDelta`);
+* `DerivedP`: the public inputs the verifier derives itself (`derivedGroup_some`, `checkDerived_words`: instance `i`'s
+  word `i mod G`);
 * `Facts`: what is read off `Spec` and `HmOut.parse` (`setupHidden_hm96`, `setupHidden_wf`, `parse_untyped`, ...);
 * `Binding`: the row commitment's extractor (`commitPair_spec'`) and `OutputsBinding` from `OutputsCommitted`;
 * `Public`: what the statement takes from the public file (`public_exposes'`);
