@@ -71,6 +71,17 @@ LOCAL_CLAIMS: dict[str, Entry] = {e.id: e for e in (
     Entry("seq-root", "assumption",
           "One modular square root at the scheme's width takes longer than twice the deadline on the fastest core, "
           "with up to 8 cores of one chiplet cooperating", "SeqRoot", "measured"),
+    # Lean's `Pous.P2.Assumptions.P2RingRoundSecureWide` (Security/Definitions/Pous/Assumptions/P2.lean)
+    Entry("p2-ring-round-secure-wide", "assumption",
+          "P2 in the ring model, per round, at every block count N from 2^19 to 2^27: outside a bad event of mass k·ε₀, "
+          "a state of at most ⌊ρ·|C|⌋ bits answers each fresh uniform challenge with probability at most 1 − p, with "
+          "(1 − p)^105 + 105·ε₀ ≤ 1% + 2^-129 + 2^-130; nobody has checked a proof's ε₀ against N above 2^25",
+          "P2 ring rounds to 2^27", "conjectured"),
+    # Lean's `Pous.Period.RingDeviceAt` (Security/Properties/Pous/PeriodAt.lean)
+    Entry("pous-ring-device-at", "model",
+          "PoUS ring device at the store's block count: pous-ring-device, pous-ring-instantiation and prf/sha-512 per "
+          "run, read over the ring game at N, the blocks the point's session challenges",
+          "PoUS ring device at N"),
 )}
 """Claims a certificate cites that `verity.core.claims` does not hold yet, in its id format.  Each moves to core when a
 render cites it; the tests fail once core defines an id this table still holds."""
