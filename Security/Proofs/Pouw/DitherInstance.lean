@@ -1,5 +1,6 @@
 import Definitions.Pouw.Guarantees.DitherInstance
 import Proofs.Pouw.RelativeSecurity
+import Proofs.Pouw.Dither
 
 /-!
 # The headline on the cards from the headline on the model
@@ -8,7 +9,8 @@ import Proofs.Pouw.RelativeSecurity
   at the counted and timed verdict, which accepts no more than the service's verdict, with the import bound from the
   certifier's counts. The rounds' work fits the period from the deadline: the certifier's clock bounds each round's
   work to `Δ` of wall time, G2 bounds its use by `ρ_r Δ`, and `k Δ ≤ T`.
-* `workSoundH200_of_workSound`, `workSoundSm120_of_workSound`: the two instances.
+* `workSoundH200_of_workSound`, `workSoundSm120_of_workSound`: the two instances, and `WorkSoundH200`,
+  `WorkSoundSm120` from `Proofs.Pouw.Dither.WorkSound`.
 * `h200_floors`, `sm120_floors`: θ's floors with the product form are met by some open parameter on each card, so
   `WorkSoundAt`'s hypotheses on `x` are not empty.
 * `h200_onCard`, `sm120_onCard` (rule I): at those parameters, on any period's devices, `cardAccel` (programs as runs
@@ -57,6 +59,14 @@ theorem workSoundH200_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : Work
 
 theorem workSoundSm120_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) : WorkSoundSm120 :=
   workSoundAt_of_workSound h _ _
+
+/-- **The headline on the H200 at θ**, from `WorkSound`'s proof. -/
+theorem WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200 :=
+  workSoundH200_of_workSound Pouw.SecurityProofs.Dither.WorkSound
+
+/-- **The headline on the RTX PRO 6000 at θ**, from `WorkSound`'s proof. -/
+theorem WorkSoundSm120 : Pouw.Guarantees.DitherInstance.WorkSoundSm120 :=
+  workSoundSm120_of_workSound Pouw.SecurityProofs.Dither.WorkSound
 
 /-- An open parameter at θ's floors: every dot, dense and sparse, the constant zero (in product form), `sync = 1`,
 `b1 = 1/8`, `madHi = 2`, no backlog. -/

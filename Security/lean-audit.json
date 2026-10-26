@@ -2504,6 +2504,18 @@
  },
  "four_names": ["Nci", "NetTiming", "Accounting", "Hash"],
  "guarantees": {
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundH200": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundH200 : Pouw.Guarantees.DitherInstance.WorkSoundH200"],
+   "assumptions": [],
+   "type_hash": ""
+  },
+  "Pouw.SecurityProofs.DitherInstance.WorkSoundSm120": {
+   "owner": "@compute-research",
+   "signature": ["Pouw.SecurityProofs.DitherInstance.WorkSoundSm120 : Pouw.Guarantees.DitherInstance.WorkSoundSm120"],
+   "assumptions": [],
+   "type_hash": ""
+  },
   "Accounting.SecurityProofs.Actual.AnsweredOfQuiet": {
    "owner": "@memory-accounting",
    "signature": [
