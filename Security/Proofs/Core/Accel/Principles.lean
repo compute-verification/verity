@@ -6,7 +6,7 @@ import Mathlib.Tactic.NormNum
 
 The integer path is exact on the s32 range, saturating or not (`p1Int`). P2's halves that need no capture: an MMA's
 output reads only its own row, column and accumulator (`p2Local`), its outputs are distinct products' destinations
-(`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share of an issue slot (`p2Priced`).
+(`p2Distinct`), an opcode writes no word but its outputs (`p2Frame`), and every opcode takes at least a lane's share of an issue slot (`p2Priced`). Each card refines its coarse `Device` (`H200.refines`, `Sm120.refines`).
 -/
 
 open scoped NNRat
@@ -56,5 +56,13 @@ theorem p2Frame : P2Frame := by
       cases hx : Machine.Operand.locIn (m.outStore o i) (dst i) M with
       | none => rfl
       | some l' => exact Function.update_of_ne (fun e => this (by rw [hx, e])) _ _
+
+theorem H200.refines : H200.card.Refines := by
+  refine ⟨?_, ?_, ?_, rfl⟩ <;> simp only [H200.card, H200.ρ] <;> rw [← NNRat.coe_le_coe] <;>
+    push_cast <;> norm_num
+
+theorem Sm120.refines : Sm120.card.Refines := by
+  refine ⟨?_, ?_, ?_, rfl⟩ <;> simp only [Sm120.card, Sm120.ρ] <;> rw [← NNRat.coe_le_coe] <;>
+    push_cast <;> norm_num
 
 end Verity.Accel
