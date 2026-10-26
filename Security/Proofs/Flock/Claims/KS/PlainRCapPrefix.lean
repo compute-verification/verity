@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.KS.PlainRCaps
 import Proofs.Flock.C3.Compose.HoloStreamSizes
+import Proofs.Flock.Claims.Recursion.NextRHonest
 
 /-!
 # The cap two accepted runs of `VR rd` absorb, from the rows before its round
@@ -532,7 +533,7 @@ theorem vals_capChunk (m : F256 × F256) (cap : Array ByteArray) (sch : Flock.Sc
 
 /-- **`CapPrefixR` holds.** At two accepted runs of `VR rd` whose coins agree before the plain fork round, the rows
 they open agree up to the cap's round (`depMsg_congr`), so the proofs `readRep` fits there commit one cap there
-(`FitsRep.tops`, `flatMap_zip_congr`) and absorb one message there (`FitsRep.elems`, `colBytes_inj`), and their
+(`FitsRep.tops`, `flatMap_zip_congr`) and absorb one message there (`FitsRep.elems`, `RowsAt.vals_eq`), and their
 chunks there are one (`repFrames_capChunk`). The decoded proofs' chunks there have those bytes (`plainR_capChunk`), so
 they absorb one cap (`capFr_eq_of_chunk`). -/
 theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
@@ -549,7 +550,7 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have hn0 : sch.n ≠ 0 := by rw [hdim.1, hsm]; omega
   have hm : 14 ≤ (Setup.ofCircuit st).m := by show 14 ≤ st.m; omega
   obtain ⟨hRS, hcapS⟩ := repSchedAt_cap (spec := spec) hsch
-  obtain ⟨hsum, hone, habs⟩ := hcapS ℓ hℓ
+  obtain ⟨hsum, hone, -⟩ := hcapS ℓ hℓ
   have hJR : preLig spec st + capRound sch.k0 (ℓ + 1) < repRounds false spec st := by
     rw [repRounds_plain hsch]
     have := capRound_lt (k0 := sch.k0) (show 2 ≤ sch.levels.size by omega) (show ℓ + 1 ≤ sch.levels.size by omega)
@@ -604,7 +605,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have htops : (q₁.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? =
       (q₂.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? := by
     rw [hfit₁.tops, hfit₂.tops, hsched₁, hsched₂]
-    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) => cutLens u.2.1.toList rs)
+    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) =>
+        (cutLens u.2.1.toList rs).map (List.map nodeOf))
       (fun u : Flock.RecVStar.SchedRound => u.2.1.size)
       (fun u b => by simp [cutLens_length]) _ _ _ (preLig spec st + capRound sch.k0 (ℓ + 1) + 1)
       (fun j hj => hrow j (by omega)) (by omega) ℓ (by rw [hsumJ]; omega)
@@ -636,13 +638,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
     generalize (cutLens (repLens spec sts) rss₁).getD r [] = A at hh ⊢
     generalize (cutLens (repLens spec sts) rss₂).getD r [] = B at hh ⊢
     rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, hh]
-  unfold RowsAt at hel₁ hel₂
   rw [hrJ] at hel₁
-  have hd := hel₁.2.1.symm.trans hel₂.2.1
-  simp only [habs, ↓reduceIte, List.cons.injEq, and_true] at hd
-  have hcb := congrArg (fun b : ByteArray => b.data.toList) hd
-  simp only at hcb
-  have hvv := colBytes_inj hcb
+  have hvv := hel₁.vals_eq hel₂ (by first | rfl | simp)
   have hkf : kFr q₁.ligerito.messages[capMsg sch.k0 ℓ]! = kFr q₂.ligerito.messages[capMsg sch.k0 ℓ]! := by
     simp only [List.cons.injEq, and_true] at hvv
     obtain ⟨e1, e2, e3, e4⟩ := hvv
