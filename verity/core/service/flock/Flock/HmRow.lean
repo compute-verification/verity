@@ -591,6 +591,13 @@ def outNetEntries (a : Array Json) : V (Array Nat × Option (Array Nat)) := do
     | x => do pure (0, ← J.asNat x "out_net_ports")
   pure (e.map (·.2), if a.any (fun x => x matches .arr _) then some (e.map (·.1)) else none)
 
+/-- How many of the last output ports META `pinned_outputs` names (CMP-149's form B): its array's length, else 0. They have
+no output row, so the runs of `out_row_ports` cover the others; `HmOut.checkPinned` holds the key to its form. -/
+def pinnedCount (mj : Json) : Nat :=
+  match mj.getObjVal? "pinned_outputs" with
+  | .ok (.arr a) => a.size
+  | _ => 0
+
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
@@ -694,14 +701,14 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -851,14 +858,14 @@ the branch that reads it, which here is the last. -/
     if a.size != 2 then throw "META: an out port is not [name, words]"
     pure (← J.asStr a[0]! "out port name", ← J.asNat a[1]! "out port words")
   let outRowPorts ← match mj.getObjVal? "out_row_ports" with
-    | .error _ => pure (Array.replicate outPorts.size 1)
+    | .error _ => pure (Array.replicate (outPorts.size - pinnedCount mj) 1)
     | .ok v => do
       let bad := "META: out_row_ports is not each output row's run of output ports, in order, covering every output port once"
       let r ← (← J.asArr v "out_row_ports").mapM fun x => do
         let k ← J.asNat x "out_row_ports"
         if k < 1 || k > outPorts.size then throw bad
         pure k
-      if r.foldl (· + ·) 0 != outPorts.size then throw bad
+      if r.foldl (· + ·) 0 != outPorts.size - pinnedCount mj then throw bad
       pure r
   let mut perVu := (Array.replicate nets.size 0).set! unitNet upv
   match mj.getObjVal? "per_vu" with
@@ -1612,6 +1619,49 @@ def outGroup (c : Circuit) (j : Nat) : Nat × Nat × Nat × Nat :=
   let k := c.outRowPorts.getD j 0
   (first, k, (c.outPorts.extract 0 first).foldl (· + ·.2) 0, (c.outPorts.extract first (first + k)).foldl (· + ·.2) 0)
 
+/-- The output words past the rowed output ports: where the pinned ones (META `pinned_outputs`) start. -/
+def pinnedFrom (c : Circuit) : Nat :=
+  (c.outPorts.extract 0 (c.outPorts.size - HmRow.pinnedCount c.metaJ)).foldl (· + ·.2) 0
+
+/-- Output word `o`'s first row in the net that computes it, `(net, row)`, 16 rows from it: the last stage's output port,
+or the unit's output group where the unit returns it (`outCol`'s column within its slot). -/
+def outRow (c : Circuit) (o : Nat) : Nat × Nat :=
+  if c.outNet != c.unitNet then
+    (c.outNet, ((portCols (c.nets.getD c.outNet default).2.outGroups).getD (c.outNetPorts.getD o 0) default).1)
+  else
+    let ret := (List.range c.upv).foldl (fun r u =>
+      ((c.leavesOut.getD u #[]).foldl (fun (r, q) o => (r.set! o (u, q), q + 1)) (r, 0)).1) (Array.replicate c.outWords (0, 0))
+    (c.unitNet, ((portCols #[c.unit.outGroups.getD 0 default]).getD (ret.getD o (0, 0)).2 default).1)
+
+def pinnedRefused : String :=
+  "META: pinned_outputs is not the last output ports' names, each once, at least one, of an untyped statement of bit rows (row_schemas) whose padding instance's pinned outputs are zero"
+
+def pinnedLinear : String :=
+  "META: a pinned output's bit is not a linear row (its B the constant alone), which its Δ copy of the forced-zero row pins to zero"
+
+/-- META `pinned_outputs` (CMP-149's form B), as the prover's `Composite::parse` reads it: the names of the last output
+ports, each once, at least one, in a flat statement of bit rows (META `row_schemas`) whose padding instance's pinned output
+words are zero; and each pinned bit's row a linear row (its B the constant alone), so that Δ's copy of the forced-zero
+row onto it (`delta`) pins the bit and its linear form to zero. -/
+def checkPinned (c : Circuit) : V Unit := do
+  match c.metaJ.getObjVal? "pinned_outputs" with
+  | .error _ => pure ()
+  | .ok v =>
+    let k := HmRow.pinnedCount c.metaJ
+    let names : Option (Array String) := match v with
+      | .arr a => a.mapM fun x => x.getStr?.toOption
+      | _ => none
+    let w0 := pinnedFrom c
+    if k == 0 || k > c.outPorts.size || names != some ((c.outPorts.extract (c.outPorts.size - k) c.outPorts.size).map (·.1))
+        || c.typed.isSome || c.cls.isSome || J.has c.metaJ "template" || !J.has c.metaJ "row_schemas"
+        || (List.range' w0 (c.outWords - w0)).any (fun o => c.dummyOutputs.getD o 1 != 0) then
+      throw pinnedRefused
+    if (List.range' w0 (c.outWords - w0)).any (fun o =>
+        let (n, r) := outRow c o
+        let net := (c.nets.getD n default).2
+        (List.range 16).any fun t => net.b.row (r + t) != #[net.constPos]) then
+      throw pinnedLinear
+
 /-- What makes the rows inputs then outputs: META `input_ports` is the rows before one output row per output port, each
 named after its port with its words zero-padded to whole SHA-512 blocks (a bit row of all their bits; a `sha512/row/v2`
 row may instead be exactly its port's words), or per run of output ports (META `out_row_ports`) a `sha512/row-seg/v1` row
@@ -1631,6 +1681,7 @@ def checkRows (c : Circuit) : V Unit := do
   let w := inWords c
   if c.leavesIn.any (·.any (· ≥ (w : Int))) || c.leafCuts.any (·.2.2 ≥ w) then
     throw "a unit's leaf or leaf cut reads an output row: units read the input rows only"
+  checkPinned c
 
 /-- Parse the circuit file as `HmRow.parse` (a typed one as `HmRow.parseTyped`) reads it, its rows every row, and check
 them (`checkRows`). `HmRow.checkTyped` holds a template's instance inputs to every row, so it reads the template with the
@@ -1754,6 +1805,10 @@ def delta (c : Circuit) (pin : Nat) : Array (Nat × Nat) × Array (Nat × Nat) :
         for t in [0:16] do
           let i := msgCol g (k0 + j) (2 * k + t / 8) (t % 8)
           d := d.push (i, i) |>.push (i, if k < w then col g (at_ + k) + t else forcedZero)
+  for g in [0:c.g] do
+    for o in [pinnedFrom c:c.outWords] do
+      for t in [0:16] do
+        d := d.push (col g o + t, col g o + t) |>.push (col g o + t, forcedZero)
   return (da ++ d, db ++ d)
 
 /-- The regions: each row's `b ‖ c` of every VU (its hm96 slot's output; a padding VU's the pinned dummy). -/
@@ -2178,6 +2233,7 @@ def Stmt.setupHidden (tags : Tags) (circuitFile publicFile : ByteArray) (coins :
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
@@ -2328,6 +2384,7 @@ def Stmt.setupHiddenOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArra
     (c.ports.getD (c.ports.size - c.outRowPorts.size + j) default).segs.isNone && c.outRowPorts[j]! > 1
   let identity := if !J.has c.metaJ "out_row_ports" then identity
     else if v2Run then Tags.outRowsV2Identity identity else Tags.outRowsIdentity identity
+  let identity := if HmRow.pinnedCount c.metaJ > 0 then Tags.pinnedIdentity identity else identity
   let mut h := tags.statement.toUTF8 ++ c.sha ++ (← canon identity).toUTF8
   for x in [n, blocksReal, nbl, m, c.kLog, pin, regions.size, c.g] do h := pushLe64 h x
   for d in [da, db] do
