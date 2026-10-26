@@ -80,10 +80,12 @@ def AccelProductForm (x : Accel.Open) : Prop :=
 theorem about `c.machine` reaches the card only through it). `can f t` says the card, running any code on its units
 other than the exclusions below, takes every content `M` of its stores to `f M` within `t` ticks of the instance's
 clock. Then the card's true open parameters are some `x` meeting θ's floors (`c.floors`) with the product form
-(`AccelProductForm x`), and some program of `c.machine x` does the same on every content within `t` ticks, meeting
-G1 and G2 (`Machine.Fits`). So a theorem that holds over the instance at every `x` meeting the floors and the product
-form holds on the card: the open parameters are not a premise of their own, θ's floors and the product form are
-the whole of what is assumed about them.
+(`AccelProductForm x`), and some program of `c.machine x`, under some encoding `e` of the card's register words
+(`Accel.Card.decode`), takes `decode e M` to `decode e (f M)` on every content `M` within `t` ticks, meeting G1 and
+G2 (`Machine.Fits`). The encoding reads every word outside the registers as it is. So a theorem that holds over the
+instance at every `x` meeting the floors and the product form holds on the card for those words: the open
+parameters are not a premise of their own, θ's floors and the product form are the whole of what is assumed about
+them. With every register word `raw`, `decode` is the identity and this is a bit-for-bit refinement.
 
 **Exclusions**, each a unit `can` doesn't use because it can't compute a committed word or a hash more cheaply than
 the model prices (the reasons are rows of the coverage table, `Accel/README.md`): the video and JPEG engines
@@ -95,19 +97,21 @@ and incompressible; a method bound by device memory or L2 on compressible data o
 **Gaps**, units the card has that the instances don't have yet, so the claim is open for code that uses them until each
 is added with its rate: `f16` accumulators, the 64-bit and `inc`/`dec` reductions, sm_120's block-scaled sparse MMA, and
 NVSwitch `multimem` reductions, and the H200's `mma.sync` FP8. **Over-approximated units:** DMMA, the FP64 lanes,
-`HFMA2`, the float reductions and `redux.sync` are in the model as exact integer versions at the unit's rate, each at
-least as capable as the unit on the integers it computes exactly (`Accel.Isa`'s docstring). **Scope limit** (RT-LEAN
-L30; coordinator, 26 Oct 04:25Z): the model reads their operands as two's-complement integers and an operand out of
-range as zero, where the card reads float codes, and this Prop equates the stores bit for bit. So `can` covers code
-that uses these units only where the two readings agree, which on nonzero float operands is almost nowhere: code that
-uses them on nonzero operands is outside the claim, as are the card's results on non-integers and its roundings past
-the exact range (coordinator's ruling, 26 Oct 04:00Z). The node's host CPUs and its host and peer
+`HFMA2`, the float reductions and `redux.sync` are in the model as exact integer versions at the unit's rate and in
+its register layout, computing what the unit does on the integers it computes exactly (`Accel.Isa`'s docstring).
+**Encoding** (RT-LEAN-2 L30; coordinator, 26 Oct 04:30Z): the model's versions read two's-complement integers where
+the card holds float codes, so the refinement is up to `decode`, which reads a register's float code of an integer
+within its format's exact range as that integer. Code that uses these units in range on registers is inside the
+claim. **Scope limit:** the card's results on non-integers and its roundings past the exact range are outside it (the
+model reads an out-of-range operand as zero; coordinator's ruling, 26 Oct 04:00Z), and so are float reductions whose
+accumulator is a nonzero float code in shared or device memory, which `decode` reads as it is. The node's host CPUs and its host and peer
 links are other devices of the period (RT-PROTO P9, RT-UNITS U9), not units of the card. -/
 def CardWithinAccel {ι : Type} (c : Accel.Card) (cap : ι → ℕ) (oracle : ℕ) (can : (c.Mem → c.Mem) → ℕ → Prop) :
     Prop :=
   ∃ x : Accel.Open, c.floors x ∧ AccelProductForm x ∧
-    ∀ f t, can f t → ∃ (P : (c.machine x cap oracle).Prog ℕ) (sched : List (List ℕ)), sched.length ≤ t ∧
-      ∀ σ : (c.machine x cap oracle).State ℕ, (∀ θ, σ.pc θ = 0) →
-        Accel.Machine.Fits P σ sched ∧ (Accel.Machine.run P σ sched).1.mem = f σ.mem
+    ∀ f t, can f t → ∃ (e : ℕ → Accel.Enc) (P : (c.machine x cap oracle).Prog ℕ) (sched : List (List ℕ)),
+      sched.length ≤ t ∧ ∀ (M : c.Mem) (σ : (c.machine x cap oracle).State ℕ), (∀ θ, σ.pc θ = 0) →
+        σ.mem = c.decode e M →
+          Accel.Machine.Fits P σ sched ∧ (Accel.Machine.run P σ sched).1.mem = c.decode e (f M)
 
 end Verity.Assumptions

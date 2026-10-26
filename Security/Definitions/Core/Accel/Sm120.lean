@@ -34,7 +34,11 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
   units a MAC, 32 MACs an SM clock, 18 × that, stays as a generous figure, since a measured rate bounds the card's
   from below only;
 * shared memory: 32 banks of a 32-bit word a clock an SM (Programming Guide, 'Shared Memory'), so 6016;
-* GDDR7: 1597 GB/s (product page, 'Memory Bandwidth 1597 GB/s'), 1597 · 10⁹ / (4 · 2.43 · 10⁹) = 39925/243 words.
+* GDDR7: 1597 GB/s (product page, 'Memory Bandwidth 1597 GB/s'), 1597 · 10⁹ / (4 · 2.43 · 10⁹) = 39925/243 words;
+* the L2's reads (`l2`, RT-MODEL M6(b)): no document gives them; CALIB's census read at most 7.10 TB/s, 18.05 bytes an
+  SM-clock at 2092 MHz (ROW_L2RD `l2_g256cg_line_q16_w16`, run r20261017-065855-c8a9). The instance takes 20 bytes an
+  SM-clock, 5 words, so 940 (9.14 TB/s at the tick): 11% above the measurement even if the L2 kept pace with the SM
+  clock. This is a measured cap, like `shfl`'s: the claim takes no L2 pattern to read faster.
 
 **Opcodes** (PTX ISA 9.0 §9.7.14): `mma.sync` at `m16n8`, both operands in registers (sm_120 has no `wgmma`), `k` per
 format (`ks`), no `b1` form (ptxas emulates every one, at 99–436 SMSP-cycles, CALIB run r20260930-111747-26f3, so it
@@ -94,6 +98,7 @@ def ρ : Res → ℚ≥0
   | .f64 => 188 * 2
   | .smem => 188 * 32
   | .dram => 39925 / 243
+  | .l2 => 188 * 5
 
 /-- The tensor units a MAC of each format uses. -/
 def weight : Fmt → ℚ≥0
@@ -127,6 +132,7 @@ def Avail : Op Store → Prop
   | .lane g => g.warp = false
   | .uni g => g.uniform = true
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
+  | .bcast s n k => s ≠ .reg ∧ n ≤ 4 ∧ k ≤ 32
   | .atom s _ => s ≠ .reg
   | .red s t n g => g.reduces ∧ ((s = .reg ∧ t ≠ .reg ∧ n ≤ 8) ∨ (s = .smem ∧ (t = .l2 ∨ t = .dram)))
   | .dmma sh => (sh.m = 8 ∧ sh.n = 8 ∧ sh.k = 4) ∨ (sh.m = 16 ∧ sh.n = 8 ∧ (sh.k = 4 ∨ sh.k = 8 ∨ sh.k = 16))

@@ -66,6 +66,8 @@ inductive Res
   | smem
   /-- device memory's bandwidth, in words -/
   | dram
+  /-- the L2's read bandwidth, in words the L2 serves (RT-MODEL M6(b)) -/
+  | l2
   deriving DecidableEq
 
 /-- A copy's units, per word, at one endpoint: shared memory's banks or device memory's bandwidth. -/
@@ -74,13 +76,18 @@ def port : Store → Res → ℚ≥0
   | .dram, .dram => 1
   | _, _ => 0
 
+/-- A read's units, per word, at its source: `port`, and a word of the L2's read bandwidth when the L2 serves it. -/
+def rd (s : Store) (r : Res) : ℚ≥0 := port s r + if s = .l2 ∧ r = .l2 then 1 else 0
+
 /-- **The units an opcode uses**, `weight f` tensor units a MAC of format `f` at shape scale `scale sh`. An MMA's
 operand words read from shared memory pay its banks, a word a bank unit, as a copy's do (`wgmma` reads `B`, and
 maybe `A`, there). Every unit is per word or per product, so a price vector over the resources prices an MMA per
 product, a lane function per result, and a copy per word moved; an MMA with `D ≠ C` delivers its accumulators to
 new words at no units beyond its own (P2's fork, RT-MODEL M5), so no such pricing covers a per-seed delivery cost.
 An `IMAD.HI` uses `hi` lanes of `imad`, its own
-price, not tied to `IMAD`'s. -/
+price, not tied to `IMAD`'s. A broadcast load to `k` lanes pays `k` lanes' share of a slot and its `n` words once at
+its source, as the card's port serves lanes that read one word at once (CUDA C++ Programming Guide, 'Shared
+Memory'; RT-MODEL M6(c): as `k` copies it paid `k·n` bank units, 32 × the card's on a whole-warp broadcast). -/
 def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) : Op Store → Res → ℚ≥0
   | .mma fa fb _ sh sa sb, r =>
     (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight fa * scale sh else 0) + (if r = .issue then 1 else 0) +
@@ -98,10 +105,11 @@ def opUse (weight : Fmt → ℚ≥0) (scale : Shape → ℚ≥0) (hi : ℚ≥0) 
     | _, _ => 0
   | .uni _, r => if r = .issue then 1 else 0
   | .copy s t n, r =>
-    (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r) +
+    (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (rd s r + port t r) +
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)
-  | .atom s _, r => (if r = .issue then 1 / 32 else 0) + port s r
-  | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r)
+  | .bcast s n k, r => (if r = .issue then ((max k 1 : ℕ) : ℚ≥0) / 32 else 0) + (n : ℚ≥0) * rd s r
+  | .atom s _, r => (if r = .issue then 1 / 32 else 0) + rd s r
+  | .red s t n _, r => (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + rd t r)
   | .dmma sh, r =>
     (if r = .tensor ∨ r = .tensorLong then (sh.m * sh.n * sh.k : ℕ) * weight .f64 else 0) + (if r = .issue then 1 else 0)
 
@@ -152,10 +160,56 @@ structure Card where
   every `Open` that does. -/
   floors : Open → Prop
 
+/-- The integer a float code `c` represents (IEEE 754 binary: `F` fraction bits, `E` exponent bits above them, then
+the sign), if it is one within ±2^(F+1), the format's exact integers; `none` for every other code. -/
+def floatInt (E F c : ℕ) : Option ℤ :=
+  let m := c % 2 ^ F
+  let e := c / 2 ^ F % 2 ^ E
+  let bias := 2 ^ (E - 1) - 1
+  let w := (2 ^ F + m) * 2 ^ (e - bias)
+  let sign : ℤ := if c / 2 ^ (F + E) % 2 = 1 then -1 else 1
+  if e = 0 ∧ m = 0 then some 0
+  else if bias ≤ e ∧ e ≤ bias + F + 1 ∧ w % 2 ^ F = 0 ∧ w / 2 ^ F ≤ 2 ^ (F + 1) then some (sign * (w / 2 ^ F : ℕ))
+  else none
+
+/-- A `bits`-wide float code as the `bits`-wide two's complement of its exact integer (`floatInt`), unchanged if it
+represents none. -/
+def decInt (E F bits c : ℕ) : ℕ :=
+  match floatInt E F c with
+  | some n => (BitVec.ofInt bits n).toNat
+  | none => c
+
+/-- How the refinement reads a register word of the card (`Card.decode`): as it is, or as a float code of an
+over-approximated unit (`Accel.Isa`'s docstring), an FP64 code's low or high word. -/
+inductive Enc
+  | raw | f32 | f16x2 | bf16x2 | f64lo | f64hi
+  deriving DecidableEq
+
+/-- Word `w` read under encoding `e`, `w'` an FP64 code's other word. -/
+def Enc.dec : Enc → Word → Word → Word
+  | .raw, w, _ => w
+  | .f32, w, _ => BitVec.ofNat 32 (decInt 8 23 32 w.toNat)
+  | .f16x2, w, _ => BitVec.ofNat 32 (decInt 5 10 16 (w.toNat % 2 ^ 16) + decInt 5 10 16 (w.toNat / 2 ^ 16) * 2 ^ 16)
+  | .bf16x2, w, _ => BitVec.ofNat 32 (decInt 8 7 16 (w.toNat % 2 ^ 16) + decInt 8 7 16 (w.toNat / 2 ^ 16) * 2 ^ 16)
+  | .f64lo, w, hi => BitVec.ofNat 32 (decInt 11 52 64 (hi.toNat * 2 ^ 32 + w.toNat))
+  | .f64hi, w, lo => BitVec.ofNat 32 (decInt 11 52 64 (w.toNat * 2 ^ 32 + lo.toNat) / 2 ^ 32)
+
 namespace Card
 
 /-- The card's stores' contents: a word at every location (`Machine.Mem` of `machine` at any parameters). -/
 abbrev Mem (c : Card) : Type := (Σ s : Store, Fin (c.size s)) → Word
+
+/-- **The card's contents as the model reads them** under register encodings `e` (RT-LEAN-2 L30): register word `q`
+read by `e q` (an FP64 code's other word at `q + 1` for `f64lo`, `q - 1` for `f64hi`), so a float code that
+represents an integer exactly, within its format's exact range, reads as that integer's two's complement, and every
+other word, and every word of every other store, as it is. Each word's reading depends on at most it and one
+neighbour, so the reading computes nothing a program would otherwise pay for. -/
+def decode (c : Card) (e : ℕ → Enc) (M : c.Mem) : c.Mem := fun l =>
+  if l.1 = .reg then
+    let q := l.2.val
+    let q' := if e q = .f64lo then q + 1 else q - 1
+    (e q).dec (M l) (M ⟨.reg, ⟨q' % c.size .reg, Nat.mod_lt _ (c.size_pos _)⟩⟩)
+  else M l
 
 variable (c : Card) (x : Open)
 
