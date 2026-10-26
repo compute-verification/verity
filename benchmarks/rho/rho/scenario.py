@@ -3,7 +3,7 @@
 A scenario names a fleet (with its location and dark share), a regime, the NCI policy, a horizon, a run (the target and
 its model), the algorithm families the adversary may use, and the bounds and attacks to apply (all of them unless it
 lists some). With `pofc = "<rules>"` its declared work also runs under the proof of forward computation's rules
-(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the serving block. Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
+(`rho.pofc`), and `pofc_physical = true` adds the forward-only links to the server-time block. Every choice is a registry key (`scenario.<name>.<choice>`), so a sweep can vary a choice like any number.
 
 `evaluate` gives, for each family, ρ under each bound alone, under every bound it meets at once (`lo`: each block gets
 the least of their caps, under the union of their premises) and under each attack (`hi`: the best construction). The
@@ -87,7 +87,7 @@ class Estimate:
     #: where its premises stand at the largest block that bounds it (`classes.premise_status`: supported, assumed,
     #: contested, refuted); empty for an attack
     premise: str = ""
-    #: ρ inside one declared block `(Γ, k)` alone: `κ Γ / (2 a(Γ, k))`, the declared circuit's slowdown
+    #: ρ inside one inference block `(Γ, k)` alone: `κ Γ / (2 a(Γ, k))`, the declared circuit's slowdown
     declared: float = math.nan
 
     @property

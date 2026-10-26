@@ -150,12 +150,12 @@ def test_four_servers_as_one_location_have_four_times_a_servers_budget():
     assert four.compute == pytest.approx(4 * one.compute) and four.inputs == pytest.approx(4 * one.inputs)
 
 
-def test_without_pouw_only_the_serving_cut_bounds():
+def test_without_pouw_only_the_server_time_cut_bounds():
     ctx = context("reference-h200")
     region = regimes.regime(REG, "onsite-no-pouw").partition(ctx).regions[0]
-    declared, serving = region.cuts
+    declared, server_time = region.cuts
     assert declared.blocks[0].count == 0 and math.fsum(declared.free.values()) >= region.compute
-    assert serving.name == "serving"
+    assert server_time.name == "server-time"
 
 
 def test_an_nvl72_rack_takes_kimi_k2s_state_in_one_day_where_an_hgx_server_does_not():

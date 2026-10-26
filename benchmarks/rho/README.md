@@ -73,7 +73,7 @@ implementation (or different numbers in `data/`), never an edit to the layers ar
 | families | `families.py` | `Family.profile(Model, Run) → Profile`; precisions; a table may take its premises from another (`premises = "full"`) | full, adapter (LoRA kin, TinyLoRA), seed (ES, MeZO), low-comm (DiLoCo, SparseLoCo, DeMo), partial, distill, and any `benchmarks/nci` algorithm by its traits (`nci:<id>`) | an algorithm family and its parameters |
 | instances | `instances.py` | `Model` (with weight matrices: `derived_legs`, `derived_fanout`), `Run` (a target: `6 N_active T` FLOPs unless given; kind pretrain, sft, rl-elicit or rl-agentic) | kimi-k2, deepseek-v3, deepseek-v4-pro, llama3-405b, dense-100b, qwen25-7b, qwen25-1b5; pretraining, RL and SFT runs | an architecture, a scale |
 | hardware | `hardware.py` | `Location` (Φ, memory, hosts, host memory and ops, line rate), `Fleet` (count, `ε_dark`, MFU, the dark pool's MFU: `eps_dark_rate`), `Horizon` | h100-hgx, h200-hgx, b200-hgx, gb200-nvl72, rtx-pro-6000-server, h200-hgx-rack4; 100k-GPU fleets, a 400k NVL72 fleet, the world-scale reference fleets | the actual datacenter |
-| regimes | `regimes.py` | `Regime.partition(Context) → Partition`, with `Policy` (Γ, k); a table may name a `base` and override what differs | unmonitored; remote (`DampenerRemote`'s terms, matching `tiers.py`), remote-sampled; onsite (`certified` or `links` serving cut), onsite-5gb, onsite-links, onsite-no-pouw | what the protocols certify, and how |
+| regimes | `regimes.py` | `Regime.partition(Context) → Partition`, with `Policy` (Γ, k); a table may name a `base` and override what differs | unmonitored; remote (`DampenerRemote`'s terms, matching `tiers.py`), remote-sampled; onsite (`certified` or `links` server-time cut), onsite-5gb, onsite-links, onsite-no-pouw | what the protocols certify, and how |
 | params | `params.py` | `Registry`: dotted keys over `data/*.toml`, `override`, `fields` | — | every number, with `low`/`high`, `source`, `status` |
 | scenario | `scenario.py` | `build`, `evaluate → Result` (per family: each bound, all bounds at once, each attack, each with its status and premise standing), `reads` | `data/scenarios*.toml`, `data/reference.toml` | a choice per layer |
 | analysis | `analysis.py` | over any keys: `sweep`, `tornado`, `threshold`, `dangers` and `rescues`, `corner` (every range at its worse end), `margins`, `phase` and `frontier`, `attribution` (what sets ρ), `upto(status)` | — | — |
@@ -90,15 +90,15 @@ under these names, not a validation of §8.
 
 | draft | here | meaning |
 |---|---|---|
-| declared block `I`, `(c, k)` | `Blocks("declared")`, `Policy` `(Γ, k)` | an element of the declared partition |
-| serving block `S`, `(c_S, k_S)` | the `serving` cut, `Onsite.budget` | one location between two wipes |
+| inference block `I`, `(c, k)` | `Blocks("declared")`, `Policy` `(Γ, k)` | an element of the declared partition |
+| server-time block `S`, `(c_S, k_S)` | the `server-time` cut, `Onsite.budget` | one location between two wipes |
 | `ε_dark` | `fleet.<name>.eps_dark`, `Fleet.eps_dark_rate`, `Partition.eps_dark` | compute nobody found, a share of the fleet's |
 | `ε_undecl` | free source `undecl.host` | known compute running no declared work |
 | `ε_gap` | `gap.floor` (`residual`), `gap.clock` | declared work certified for less than it occupied |
 | `ε_skip` | `skip.pouw` (`ε_W`), `skip.certs` (`ε'`) | credited without running |
 | `ε_break` | `break.lag` (`JΔ/H`), `break.escape` (`θ`) | fails a check, runs until its identity halts |
 | Lean's `χ`; `k_exfil` of unchecked blocks | `exfil.faulty`; the faulty-outputs row | the compute injected bits buy; what they carry out |
-| `k_wipe`, `r_in`, `r_side` | `residual_bits` and `host_residual_bits`, certified ingress, `timing` and `side` | what enters a serving block |
+| `k_wipe`, `r_in`, `r_side` | `residual_bits` and `host_residual_bits`, certified ingress, `timing` and `side` | what enters a server-time block |
 | `δ_coin`, `δ_crypto` | `Regime.delta()`, from `window_delta_coin` and `window_delta_crypto` | the declared partition's terms only: not the wipe's or the certifier's |
 | `\|C_{0,m}(G)\|/T_0`, `ρ̄` | `Profile.efficiency`, `Slowdown.rho` | a method's cost relative to the reference; the deployment slowdown, a proposed quantity |
 
@@ -111,12 +111,12 @@ what they carry out. They answer different questions. Replacing `χ` by per-bloc
 The NCI verifier of record enforces the policy `(Γ, k)` on the **declared** circuit. The **actual** circuit is what the
 fleet computes, and the regimes map it onto blocks:
 
-- **declared cut** (remote and onsite): the certified share of a region runs declared blocks `(Γ, k)`; every other
+- **declared cut** (remote and onsite): the certified share of a region runs inference blocks `(Γ, k)`; every other
   unit of capacity is free at face value, at peak as Lean counts it, keyed by its route: `undecl` (host
   CPUs), `gap` (the GPUs' uncredited floor and clock above the credit; with `undecl`, `r̂`), `skip` (PoUW's deficit
   `ε_W`, the slack `ε'`), `break` (the verdict lag `JΔ/H`, the slack `θ` for faulty blocks accepted before detection) and `exfil` (Lean's `χ`). It rests on `DampenerRemote`'s premises (PoUW, terminal and sampled detection) and the
   verifier's enforcement.
-- **serving cut** (onsite): a serving block, a location between two wipes, is one block, `(Φ Δτ, K)`, by causality on the actual
+- **server-time cut** (onsite): a server-time block, a location between two wipes, is one block, `(Φ Δτ, K)`, by causality on the actual
   circuit's annotation (`width_into_region_le`, `Links`, `Covered`; ASK-141). In its `links` form, what Lean proves
   today (`Windows`), `K` is the location's memory plus its line rate over the window. In its `certified` form (the
   default), `K = R + I_cert Δτ + (timing + β_side) Δτ`: what a wipe leaves per device and per host, the certifier's
@@ -124,7 +124,7 @@ fleet computes, and the regimes map it onto blocks:
   draft.
 
 A location is the largest set of devices joined by links no certifier sees (an HGX server's NVLink domain, an NVL72
-rack). Remotely nothing bounds what enters a location, so free FLOPs are free; onsite the serving cut puts all of a
+rack). Remotely nothing bounds what enters a location, so free FLOPs are free; onsite the server-time cut puts all of a
 location's compute in one block, which rests on `WindowsAt` and the cut's other citations.
 
 ### Conventions
@@ -139,7 +139,7 @@ every bracket: remote's `[1, 2.35]` at today's audited residual is mostly that.
 
 Every estimate carries the weakest status among its citations, read from the locks (`lean.py`): `proved`,
 `conditional` (proved under named assumptions), `draft` (a paper statement not in Lean) or `absent`. Its citations are
-its argument's and those of the cuts that bound it (the declared cut's `DampenerRemote` premises, the serving cut's
+its argument's and those of the cuts that bound it (the declared cut's `DampenerRemote` premises, the server-time cut's
 `WindowsAt`). Every number in
 `data/` carries its own `status` (`datasheet`, `measured`, `declared`, `assumed`, `ruled`, `conjecture`, `derived`) and
 `source`.

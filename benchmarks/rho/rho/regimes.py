@@ -2,11 +2,11 @@
 
 The NCI verifier of record sees only the *declared* circuit: blocks of `Γ` FLOPs reading at most `k` novel bits (the
 `Policy`). What the fleet actually computes is more: work the audits don't certify and whatever runs between and around
-the declared blocks. A regime says, for one location over one window (a **region**), which cuts of it the protocols make
+the inference blocks. A regime says, for one location over one window (a **region**), which cuts of it the protocols make
 valid, and cites what makes each valid:
 
 * **declared** (remote and onsite): the remote composition, `Nci.Guarantees.DampenerRemote`, term for term. The
-  certified work `(1 − ε_W) W_cert` runs declared blocks `(Γ, k)`, and every other FLOP of the location's capacity is
+  certified work `(1 − ε_W) W_cert` runs inference blocks `(Γ, k)`, and every other FLOP of the location's capacity is
   free at face value, keyed by its route (the working draft's §8; `ROUTES`):
   - `undecl`, known compute running no declared work: the host CPUs at peak;
   - `gap`, declared work certified for less than it occupied: PoUW's floor credit (`residual`) and the clock above the
@@ -18,14 +18,14 @@ valid, and cites what makes each valid:
     products a bit. The residual is a share of peak capacity, as Lean counts it
   (`M_r ≤ κ (C − (1 − ε_W) W_cert + …)/2`), so its free FLOPs are `share · Φ Δτ`: `g`'s free share is the Lean
   dampener's `share / MFU₀`. `benchmarks/nci/tiers.py` computes the same terms (`tests/test_regimes.py` holds them to it).
-* **serving** (onsite only): the whole serving block (a location between two wipes) is one block, its budget
+* **server-time** (onsite only): the whole server-time block (a location between two wipes) is one block, its budget
   `(Φ ω, K_ω)`, by causality on the
   actual circuit's annotation (`WindowsAt` and `Windows` on `Accounting.Placed`; ASK-141). Its form says what `K_ω` is:
   `links`, what Lean proves today (`Windows`: the location's memory plus its line rate `β_X` over the window), or
   `certified`, what a wipe leaves plus what the certifier admits and the side channels carry, which needs `WindowsAt`'s
   information form (its reads are bounded by width at line rate, the certifier and the wipes bound information).
 
-A region's *layout* is what a protocol-abiding attack gets: the declared blocks, and the location's time outside the
+A region's *layout* is what a protocol-abiding attack gets: the inference blocks, and the location's time outside the
 certified work that a strategy which never cheats can use (`ABIDING`), at the training MFU; remotely as free FLOPs
 (nothing bounds what enters a location), onsite as one block with the window's input.
 
@@ -190,7 +190,7 @@ class Remote:
         return math.fsum(self.free(ctx).values())
 
     def blocks(self, ctx: Context, seconds: float) -> Blocks:
-        """The declared blocks run over `seconds`: the certified work that ran, `(1 − ε_W) W_cert`, in blocks of `Γ`."""
+        """The inference blocks run over `seconds`: the certified work that ran, `(1 − ε_W) W_cert`, in blocks of `Γ`."""
         loc, pol = ctx.location, ctx.policy
         n = (1 - self.audited(loc)) * (1 - self.eps_w) * loc.phi * seconds / pol.gamma
         return Blocks("declared", Budget(pol.gamma, pol.k), n)
@@ -219,7 +219,7 @@ FORMS = ("certified", "links")
 @dataclass(frozen=True)
 class Onsite(Remote):
     """The remote audit's mechanisms, plus memory wipes every `wipe_s` seconds, a network certifier on each host's
-    links and side channels: each serving block gets the serving cut as well, and contributes the lesser."""
+    links and side channels: each server-time block gets the server-time cut as well, and contributes the lesser."""
 
     wipe_s: float = 86400.0
     #: what a wipe leaves per device, and per host (host memory the fill doesn't reach, DPU, BMC and flash), bits
@@ -280,14 +280,14 @@ class Onsite(Remote):
         w = self.wipe_s
         budget = self.budget(ctx)
         declared = self.declared(ctx, w)
-        serving = Cut("serving", (Blocks("serving", budget, 1.0),), {}, self.cites())
+        server_time = Cut("server-time", (Blocks("server-time", budget, 1.0),), {}, self.cites())
         # The uncertified block may take the whole window's input: generous to the adversary, since the declared
         # blocks' prompts come out of it too.
         uncertified = Budget(math.fsum(self.abiding(ctx, w).values()), budget.inputs)
         layout = Cut("layout", (self.blocks(ctx, w), Blocks("uncertified", uncertified, 1.0)), {}, self.cites())
         windows = ctx.fleet.count * ctx.horizon.seconds / w
-        region = Region("serving-block", ctx.location.phi * w * ctx.fleet.mfu_train, windows,
-                        (declared, serving), layout)
+        region = Region("server-time-block", ctx.location.phi * w * ctx.fleet.mfu_train, windows,
+                        (declared, server_time), layout)
         return Partition((region,), ctx.fleet.eps_dark_rate)
 
 

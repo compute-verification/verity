@@ -11,11 +11,11 @@ computed. What is matched, and what each side does differently:
   products against `kappa_forward` = κ · forward/counted (0.298 at κ = 0.602: a forward product is 6.71 FLOP of the
   recipe, attention included); thread and cover count κ's own set. Matched: κ_forward = 1/3 for fan, κ = 2/3 for thread,
   κ = 1/3 for cover.
-* **Compute.** Mine runs at σ = 1 throughout. rho counts free capacity and declared blocks at peak (as Lean does) and the
+* **Compute.** Mine runs at σ = 1 throughout. rho counts free capacity and inference blocks at peak (as Lean does) and the
   region's training at `mfu_train`, so `g`'s free share is share/MFU₀. Matched: `mfu_train` = 1. At rho's defaults the
   remote audit's r̂ = 0.323 + 0.064 + 0.029 (GPU floor, clock, host CPUs at peak) is 0.416 of peak, more than the 0.4
   the location trains at, so remote g = 1: no slowdown, against my 131 at r̂ = 0.
-* **The declared block.** Mine is c = k φ_F with φ_F = 2 × 49e9 / 17 FLOP per novel bit (17-bit tokens). rho's
+* **The inference block.** Mine is c = k φ_F with φ_F = 2 × 49e9 / 17 FLOP per novel bit (17-bit tokens). rho's
   Γ = 9.8e16 is a 1M-token session. Matched to mine.
 * **U.** Mine is r̂ + ε_W(1 − r̂) + p_fail/δ + JΔ/H, with r̂ = 0 and p_fail/δ = 3·2⁻⁴⁰/1e-6. Matched: `residual`,
   `clock_share` and `host` 0, `eps_agg` p_fail/δ. The lag is over a 365-day year here and a Julian one in mine. Mine also

@@ -25,7 +25,7 @@ only the uncertified capacity bounds. Both are cuts the wrapped regime already h
 
 PoFC enters ρ beside the layers it touches, never in them:
 
-* `Pofc` wraps any regime: every cut with declared blocks gains a copy whose declared work runs as episodes
+* `Pofc` wraps any regime: every cut with inference blocks gains a copy whose declared work runs as episodes
   (`episode`), and so does the layout. With `link`, the physical instantiation (forward-only links, each GPU reading only
   its own static memory), every other block of those copies gets the link's bits over its time as its forward cut.
   `apply` wraps a scenario's regime and adds PoFC's bounds and attacks to its own.
@@ -369,7 +369,7 @@ FAMILIES: Mapping[str, str] = {
 
 @dataclass(frozen=True)
 class Pofc:
-    """`regime` under PoFC. Every cut with declared blocks gains a copy (`<cut>+pofc`) whose declared compute runs as
+    """`regime` under PoFC. Every cut with inference blocks gains a copy (`<cut>+pofc`) whose declared compute runs as
     `episode`s (`n_max` tokens forward, `X` novel bits, `n_max s` bits across the narrowest forward cut), valid under
     the page's rules as well as the cut's own citations; NCI's cuts keep their blocks, whose cut stays `math.inf`. The
     layout's declared work runs as episodes. With `link` (bit/s; the physical instantiation: forward-only links, each
@@ -402,7 +402,7 @@ class Pofc:
 
     def partition(self, ctx: Context) -> Partition:
         inner = self.regime.partition(ctx)
-        # the blocks a link cuts carry peak compute (the serving block is Φ Δτ), so their time is compute over Φ
+        # the blocks a link cuts carry peak compute (the server-time block is Φ Δτ), so their time is compute over Φ
         rate = ctx.location.phi
         regions = tuple(
             replace(r, cuts=r.cuts + tuple(self._under(c, f"{c.name}+pofc", rate, self.link)

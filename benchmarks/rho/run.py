@@ -94,7 +94,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     out += operating_md(points) + faulty
     for f in r.families:
         out += [f"### {f.family} (μ = {fmt(f.profile.efficiency)})", "",
-                "| argument | side | status | premises | ρ | g | ρ in one declared block | binding cut |",
+                "| argument | side | status | premises | ρ | g | ρ in one inference block | binding cut |",
                 "|---|---|---|---|---|---|---|---|"]
         for e in f.bounds + (f.combined,) + f.attacks:
             d = row(e)
