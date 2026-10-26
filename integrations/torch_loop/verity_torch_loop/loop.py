@@ -10,11 +10,14 @@
 * **The wired circuit** (``wired``): each linear at each token row is one `ScaledMmS8_v1{K=H, N=H}` unit (`linear_template`),
   its H outputs one row, and each ReLU and quantize one `QuantRowS8_v1{N=H, RELU}` unit (`quant_template`: RELU on the
   up_proj -> down_proj edge, not on down_proj -> the next step's up_proj), which reads that row whole and writes the codes
-  and the scale the next linear reads (`interface.Wire`, every port one writer). Only the request's own row, the step-0
-  up_proj's ``x`` and ``sx`` (the embedding quantized), is a free input, so a changed activation is a drawn unit's
-  refusal, not a free choice. Linear unit (request r, step s, layer l) is index ``l·R·S + s·R + r`` (R requests, S steps),
-  and quantize unit (r, s) of either edge ``s·R + r``, so each wire is an offset; a member must not straddle the step-0
-  up_proj units and the rest (``cap`` divides R). The run is computed first and recorded in that order.
+  and the scale the next linear reads. Each tie is a per-window value (`TorchLoop.ties_of`) that its writer's output port
+  and its reader's input port both read, row for row (registered reads of output ports), committed after the run, before
+  the window closes, under a domain bound to the run root (`commit_ties`), so the Lean verifier opens the reader's row
+  against the root the writer's row opens. Only the request's own row, the step-0 up_proj's ``x`` and ``sx`` (the
+  embedding quantized), is a free input, so a changed activation is a drawn unit's refusal, not a free choice. Linear unit
+  (request r, step s, layer l) is index ``l·R·S + s·R + r`` (R requests, S steps), and quantize unit (r, s) of either edge
+  ``s·R + r``, so each read is an offset; a member must not straddle the step-0 up_proj units and the rest (``cap``
+  divides R). The run is computed first and recorded in that order.
   ``tamper_activations``: bit 0 of every quantize unit's first code flipped, the next linear computed on the flipped
   codes, so every linear's Definition holds and every quantize unit's doesn't.
 * **Serving** (:class:`TorchLoop`, an `interface.Integration`): each request is one token, embedded and run through the MLP
@@ -317,8 +320,12 @@ class TorchLoop:
 
     def output_units(self) -> list[list[int]]:
         """The units whose outputs the loop serves out, as ascending ``[lo, hi)`` ranges: the last linear's at every request
-        and step (`run`'s order: request, step, layer, then output coordinate), from the loop's shape alone."""
+        and step (`run`'s order: request, step, layer, then output coordinate; in the wired circuit down_proj's units),
+        from the loop's shape alone."""
         h, last = self.model.h, len(self.model.layers) - 1
+        if self.wired:
+            rs = len(self.requests) * self.steps
+            return [[rs, 2 * rs]]
         per = len(self.model.layers) * h
         return [[(r * self.steps + s) * per + last * h, (r * self.steps + s) * per + per]
                 for r in range(len(self.requests)) for s in range(self.steps)]
@@ -326,7 +333,9 @@ class TorchLoop:
     def work_table(self, law: dict) -> dict[str, int] | None:
         """Under a ``work`` law, every unit of the circuit's one template credited alike (work 1, floor 1), so the law draws
         its ``k`` as a uniform ``k``-subset; None under any other law."""
-        return {IF.descriptor_id(template(self.model.h)): 1} if law.get("law") == "work" else None
+        if law.get("law") != "work":
+            return None
+        return {descriptor_id(fn): 1 for fn, _n in self.circuit().templates} if self.wired else {IF.descriptor_id(template(self.model.h)): 1}
 
     def _layers(self) -> list[Layer]:
         """The linears served: the model's, or under ``tamper_weights`` the tampered weights' codes."""

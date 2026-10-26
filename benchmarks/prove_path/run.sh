@@ -43,7 +43,8 @@
 #     --registered), plus an arm serving other weights under the registered salts (--tamper-weights), which Lean's
 #     registered reads must refuse.
 #     PP_TORCH_LOOP_WIRED=1: the wired circuit (serve.py --wired: each linear one ScaledMmS8_v1{K=128,N=128} unit and each
-#     ReLU and quantize one QuantRowS8_v1{N=128,RELU}, wired, so only each request's own row is free), in members of one unit
+#     ReLU and quantize one QuantRowS8_v1{N=128,RELU}, each tie a registered read of the writer's output and the reader's
+#     input, so only each request's own row is free), in members of one unit
 #     (PP_TORCH_LOOP_CAP default 1) under stratified:3 (a unit of every template), with its weights one row a linear, plus
 #     an arm whose quantize units' codes are tampered (--tamper-activations), which the drawn quantize unit must refuse.
 #   PP_TORCH_DECODER=1: the same for the torch loop's decoder (verity_torch_loop.serve_transformer, CMP-92's 2-layer

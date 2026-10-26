@@ -448,9 +448,9 @@ def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()
         base[t], at = at, at + n
     units = {u for lo, hi in given for u in range(lo, hi)}
     reads = (circuit.get("registered") or {}).get("reads", ())
-    tied = {r["param"] for r in reads if not re.fullmatch(r"o[0-9]+", r["port"])}
+    tied = {r["param"] for r in reads if "param" in r and not re.fullmatch(r"o[0-9]+", r["port"])}
     for r in reads:
-        if re.fullmatch(r"o[0-9]+", r["port"]) and r.get("cut", [0, 1]) == [0, 1] and r["param"] not in tied:
+        if re.fullmatch(r"o[0-9]+", r["port"]) and r.get("cut", [0, 1]) == [0, 1] and r.get("param") not in tied:
             units.update(range(base[r["reader"]] + r["at"], base[r["reader"]] + r["at"] + math.prod(r["radix"])))
     out: list[list[int]] = []
     for u in sorted(units):
