@@ -2174,6 +2174,31 @@ def test_a_gh_call_that_never_answers_fails_the_tick_instead_of_holding_it(monke
     assert asked == [Q.GH_TIMEOUT_S, M.GH_TIMEOUT_S]
 
 
+def test_handle_reads_mains_registry_once_per_fetch(world, monkeypatch):
+    """26 Oct: a review tick asks `handle` of every member of `next` (`Driver._owners`), and each read of main's registry was a
+    `git show` of ~70 ms in drive's clone on the network volume, 127 members a tick.  A fetch reads it afresh."""
+    from research import queue as Q
+
+    def registry(*handles: str) -> None:
+        main = world.change({".agents/skills/using-slack/registry.json": json.dumps({"handles": [{"handle": h} for h in handles]})})
+        _git(world.dev, "push", "-q", "origin", f"{main}:refs/heads/main")
+
+    registry("circuits")
+    q = world.queue()
+    q._clone()
+    q.fetch()
+    shows = []
+    real = Q._git
+    monkeypatch.setattr(Q, "_git", lambda repo, *a, **kw: (shows.append(a) if a[:1] == ("show",) else None) or real(repo, *a, **kw))
+    prs = [PR(n, "h", "t", body) for n, body in ((1, "Lane circuits"), (2, "Lane infra"), (3, "Lane circuits"))]
+    assert [q.handle(p) for p in prs] == ["circuits", None, "circuits"]
+    assert len(shows) == 1
+    registry("circuits", "infra")
+    q.fetch()
+    assert [q.handle(p) for p in prs] == ["circuits", "infra", "circuits"]
+    assert len(shows) == 2
+
+
 def test_a_lane_line_names_its_handle_without_a_trailing_period():
     """23 Oct: #3427's body said `Lane proofs.`, and the queue's owner was `proofs.`, a handle no one holds."""
     for body, lane in (("Lane proofs.", "proofs"), ("Lane `lane-2`.", "lane-2"), ("Lane a.", "a"), ("Lane ci-x_", "ci-x"),

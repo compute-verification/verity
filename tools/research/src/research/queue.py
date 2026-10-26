@@ -759,6 +759,8 @@ class Queue:
         self._attr_source = True
         #: the files each merge commit of `next` changed (`touched_by`)
         self._touched: dict[str, set[str]] = {}
+        #: main's registry as `handle` reads it (its handles, {agent id: handle}), until the next `fetch`
+        self._registry: tuple[set, dict[str, str]] | None = None
 
     # -- the clone and its state
 
@@ -792,6 +794,7 @@ class Queue:
         """Forced refspecs only: `main`, the queue's branch when it exists, and each open PR's head as `refs/queue/pr/{n}`;
         return each fetched pull ref's commit, which can briefly differ from GitHub's API head."""
         prs = list(prs)
+        self._registry = None
         specs = ["+refs/heads/main:refs/remotes/origin/main", *(f"+refs/pull/{p.number}/head:refs/queue/pr/{p.number}" for p in prs)]
         self._remote(self.workdir, "fetch", "-q", "--prune", "origin", *specs)
         # exit 2: no such branch; any other failure is the remote's, never an empty queue
@@ -1044,14 +1047,9 @@ class Queue:
         """The Slack handle of the lane that owns ``pr``, from main's registry (`.agents/skills/using-slack/registry.json`): the
         lane its body names, the agent id it carries, the ready mark's author, else the agent whose id ends in its branch's
         suffix (`cursor/<name>-4292`); None when none of them is a handle."""
-        r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
-        try:
-            reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
-        except (ValueError, AttributeError):
+        if (got := self._read_registry()) is None:
             return None
-        names = {h.get("handle") for h in reg if isinstance(h, dict)}
-        holders = {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
-                   for a in AGENT_RE.findall(str(h.get("holder", "")))}
+        names, holders = got
         by = self.marked_by(pr.number, pr.head) if self.marked_by else None
         suffix = pr.branch.rpartition("-")[2] if "-" in pr.branch else ""
         tail = sorted({n for a, n in holders.items() if len(suffix) == 4 and a.endswith(suffix)})
@@ -1059,6 +1057,21 @@ class Queue:
             if c in names:
                 return c
         return None
+
+    def _read_registry(self) -> tuple[set, dict[str, str]] | None:
+        """(the handles, {agent id: handle}) of `main`'s registry, read once per `fetch`: a review tick asks `handle` of each
+        member of `next` (`Driver._owners`), and each `git show` is ~70 ms in drive's clone on the control pod's network volume
+        (26 Oct: 127 members).  None when it can't be parsed."""
+        if self._registry is None:
+            r = _git(self.workdir, "show", f"origin/main:{REGISTRY}", check=False)
+            try:
+                reg = json.loads(r.stdout).get("handles", []) if r.returncode == 0 else []
+            except (ValueError, AttributeError):
+                return None
+            self._registry = ({h.get("handle") for h in reg if isinstance(h, dict)},
+                              {a: h["handle"] for h in reg if isinstance(h, dict) and "handle" in h
+                               for a in AGENT_RE.findall(str(h.get("holder", "")))})
+        return self._registry
 
     def _held(self, state: dict) -> str | None:
         """`hold` with drive's launches (`drive.launched` in ``state``): a member's check runs while a run of its launch is active
