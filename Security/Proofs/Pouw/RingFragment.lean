@@ -119,26 +119,26 @@ def prodPart (P : SlpG V R N) (j : Fin N) (z : V → R) : R :=
 /-- **One accumulator step**: a linear slot with no delivery reads its products, at most one linear slot (the
 accumulator it updates in place, unique by `Flow.WF`) and its offset. -/
 theorem val_step (P : SlpG V R N) (F : Flow N) (hF : F.WF P) (j : Fin N) (hj : P.isProd j = false)
-    (hnd : ∀ k : Fin j.val, P.lin j k ≠ 0 → F.free ⟨k.val, k.isLt.trans j.isLt⟩ = some j) (z : V → R) :
-    (∃ k : Fin j.val, P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = false ∧ P.lin j k ≠ 0 ∧
+    (hnd : ∀ k : Fin j.val, P.lin j k ≠ 0 → F.free ⟨k.val, k.isLt.trans j.isLt⟩ = some j) :
+    (∃ k : Fin j.val, P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = false ∧ P.lin j k ≠ 0 ∧ ∀ z,
       P.val z j = P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩ + prodPart P j z + (P.off j).eval z) ∨
-    P.val z j = prodPart P j z + (P.off j).eval z := by
+    ∀ z, P.val z j = prodPart P j z + (P.off j).eval z := by
   classical
   have hnp : ¬P.isProd j = true := by simp [hj]
-  have hv : P.val z j =
-      (∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) + (P.off j).eval z := by
+  have hv : ∀ z, P.val z j =
+      (∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) + (P.off j).eval z := fun z => by
     rw [SlpG.val, ite_eq_right hnp]
-  have hsplit : (∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) =
+  have hsplit : ∀ z, (∑ k : Fin j.val, P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) =
       (∑ k : Fin j.val, if P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true then 0 else
-        P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) + prodPart P j z := by
+        P.lin j k * P.val z ⟨k.val, k.isLt.trans j.isLt⟩) + prodPart P j z := fun z => by
     rw [prodPart, ← Finset.sum_add_distrib]
     refine Finset.sum_congr rfl fun k _ => ?_
     split_ifs <;> simp
-  rw [hv, hsplit]
   by_cases hex : ∃ k : Fin j.val, P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = false ∧ P.lin j k ≠ 0
   · obtain ⟨k, hk, hl⟩ := hex
     left
-    refine ⟨k, hk, hl, ?_⟩
+    refine ⟨k, hk, hl, fun z => ?_⟩
+    rw [hv, hsplit]
     have hk2 : ¬P.isProd ⟨k.val, k.isLt.trans j.isLt⟩ = true := by simp [hk]
     rw [Finset.sum_eq_single k, ite_eq_right hk2]
     · intro k' _ hk'
@@ -153,7 +153,8 @@ theorem val_step (P : SlpG V R N) (F : Flow N) (hF : F.WF P) (j : Fin N) (hj : P
     · intro h
       exact absurd (Finset.mem_univ k) h
   · right
-    rw [Finset.sum_eq_zero, zero_add]
+    intro z
+    rw [hv, hsplit, Finset.sum_eq_zero, zero_add]
     intro k _
     split_ifs with hp
     · rfl
@@ -196,6 +197,169 @@ theorem prodPart_eq (P : SlpG (Vl ⊕ Vr) R N) (hP : AffOps P) (j : Fin N) :
   · rfl
 
 end Ops
+
+section Walk
+
+variable {V R : Type} [Fintype V] [CommRing R] {N : ℕ}
+
+/-- The first slot of `stop` on slot `t`'s forward free path, `t` included. -/
+def owner (F : Flow N) (stop : Finset (Fin N)) (t : Fin N) : Option (Fin N) :=
+  if t ∈ stop then some t else
+    match F.free t with
+    | none => none
+    | some j => if h : t < j then owner F stop j else none
+termination_by N - t.val
+decreasing_by have := j.isLt; have : t.val < j.val := h; omega
+
+theorem owner_of_mem (F : Flow N) {stop : Finset (Fin N)} {t : Fin N} (h : t ∈ stop) :
+    owner F stop t = some t := by
+  rw [owner, if_pos h]
+
+theorem owner_of_free (F : Flow N) {stop : Finset (Fin N)} {t j : Fin N} (h : t ∉ stop) (hj : F.free t = some j)
+    (hlt : t < j) : owner F stop t = owner F stop j := by
+  rw [owner, if_neg h]
+  simp [hj, hlt]
+
+/-- A slot's owner is no earlier than the slot. -/
+theorem owner_le (F : Flow N) (stop : Finset (Fin N)) {o : Fin N} (t : Fin N) (h : owner F stop t = some o) :
+    t ≤ o := by
+  suffices H : ∀ m (t : Fin N), N - t.val = m → owner F stop t = some o → t ≤ o from H _ t rfl h
+  intro m
+  induction m using Nat.strong_induction_on with
+  | _ m ih =>
+    intro t hm h
+    rw [owner] at h
+    by_cases hs : t ∈ stop
+    · rw [if_pos hs] at h
+      exact le_of_eq (Option.some_injective _ h)
+    · rw [if_neg hs] at h
+      rcases hf : F.free t with _ | j
+      · simp [hf] at h
+      · by_cases hlt : t < j
+        · simp only [hf, hlt, dite_true] at h
+          have hm' : N - j.val < m := by have := j.isLt; have : t.val < j.val := hlt; omega
+          exact le_trans hlt.le (ih _ hm' j rfl h)
+        · simp [hf, hlt] at h
+
+/-- Slot `s`'s value is `base` plus a combination of the slots in `S` plus a bit-affine word, uniformly in the
+bits. -/
+def ValForm (P : SlpG V R N) (S : Finset (Fin N)) (s : Fin N) (base : (V → R) → R) : Prop :=
+  ∃ (lam : Fin N → R) (r : BitAff V R), ∀ z, P.val z s = base z + ∑ k ∈ S, lam k * P.val z k + r.eval z
+
+/-- What linear slot `s` reads from products, as a combination over a set holding every product it reads. -/
+theorem prodPart_sum (P : SlpG V R N) (S : Finset (Fin N)) (s : Fin N)
+    (hS : ∀ k : Fin s.val, P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true → P.lin s k ≠ 0 →
+      (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∈ S) :
+    ∃ mu : Fin N → R, ∀ z, prodPart P s z = ∑ k ∈ S, mu k * P.val z k := by
+  classical
+  let mu : Fin N → R := fun k =>
+    if h : k.val < s.val then (if P.isProd k = true then P.lin s ⟨k.val, h⟩ else 0) else 0
+  refine ⟨mu, fun z => ?_⟩
+  let G : Fin N → R := fun k => if k ∈ S then mu k * P.val z k else 0
+  have e1 : prodPart P s z = ∑ k ∈ univ.map (Fin.castLEEmb s.isLt.le), G k := by
+    rw [Finset.sum_map, prodPart]
+    refine Finset.sum_congr rfl fun k _ => ?_
+    have hk : (Fin.castLEEmb s.isLt.le k) = ⟨k.val, k.isLt.trans s.isLt⟩ := rfl
+    rw [hk]
+    simp only [G, mu, dif_pos k.isLt]
+    by_cases hp : P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true
+    · by_cases hl : P.lin s k = 0
+      · simp [hl]
+      · rw [if_pos (hS k hp hl)]
+        simp [hp]
+    · simp [hp]
+  have e2 : ∑ k ∈ univ.map (Fin.castLEEmb s.isLt.le), G k = ∑ k, G k := by
+    refine Finset.sum_subset (Finset.subset_univ _) fun k _ hk => ?_
+    have hks : ¬k.val < s.val := fun hks => hk (Finset.mem_map.mpr ⟨⟨k.val, hks⟩, Finset.mem_univ _, rfl⟩)
+    simp [G, mu, hks]
+  rw [e1, e2, Finset.sum_ite_mem, Finset.univ_inter]
+
+theorem valForm_of (P : SlpG V R N) (S : Finset (Fin N)) (s : Fin N) (base : (V → R) → R) (lam0 : Fin N → R)
+    (r0 : BitAff V R)
+    (hS : ∀ k : Fin s.val, P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true → P.lin s k ≠ 0 →
+      (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∈ S)
+    (hv : ∀ z, P.val z s =
+      base z + (∑ k ∈ S, lam0 k * P.val z k + r0.eval z) + prodPart P s z + (P.off s).eval z) :
+    ValForm P S s base := by
+  obtain ⟨mu, hmu⟩ := prodPart_sum P S s hS
+  refine ⟨fun k => lam0 k + mu k, ⟨r0.c + (P.off s).c, fun v => r0.α v + (P.off s).α v⟩, fun z => ?_⟩
+  rw [hv, hmu]
+  simp only [BitAff.eval, add_mul, Finset.sum_add_distrib]
+  ring
+
+/-- One step back along the chain: a value form of the in-place predecessor gives one of the slot. -/
+theorem valForm_step (P : SlpG V R N) (S : Finset (Fin N)) (s k : Fin N) (l : R) (base : (V → R) → R)
+    (hk : ValForm P S k base)
+    (hS : ∀ k : Fin s.val, P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true → P.lin s k ≠ 0 →
+      (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∈ S)
+    (hv : ∀ z, P.val z s = l * P.val z k + prodPart P s z + (P.off s).eval z) :
+    ValForm P S s fun z => l * base z := by
+  obtain ⟨lam, r, hr⟩ := hk
+  refine valForm_of P S s _ (fun k => l * lam k) ⟨l * r.c, fun v => l * r.α v⟩ hS fun z => ?_
+  rw [hv, hr]
+  simp only [BitAff.eval, mul_add, Finset.mul_sum, mul_assoc]
+  ring
+
+open Classical in
+/-- The deliveries, as a set of reads (`deliveries` is its size). -/
+noncomputable def delSet (P : SlpG V R N) (F : Flow N) : Finset (Σ j : Fin N, Fin j.val) :=
+  univ.filter fun e : Σ j : Fin N, Fin j.val =>
+    P.isProd e.1 = false ∧ P.lin e.1 e.2 ≠ 0 ∧ F.free ⟨e.2.val, e.2.isLt.trans e.1.isLt⟩ ≠ some e.1
+
+theorem deliveries_eq (P : SlpG V R N) (F : Flow N) : deliveries P F = (delSet P F).card := rfl
+
+open Classical in
+/-- The products whose free path first meets `stop` at `o`. -/
+noncomputable def ownProds (P : SlpG V R N) (F : Flow N) (stop : Finset (Fin N)) (o : Fin N) : Finset (Fin N) :=
+  univ.filter fun k => P.isProd k = true ∧ owner F stop k = some o
+
+/-- **The walk back** from a linear slot `s` owned by `o`, along its in-place chain: it meets a delivery on a slot
+`o` owns, or `s`'s value is a combination of `o`'s own products plus a bit-affine word, plus a multiple of the
+first earlier slot of `stop` it meets, if any. -/
+theorem walk (P : SlpG V R N) (F : Flow N) (hF : F.WF P) (stop : Finset (Fin N))
+    (hstop : ∀ s ∈ stop, P.isProd s = false) (o s : Fin N) (hs : P.isProd s = false)
+    (ho : owner F stop s = some o) :
+    (∃ e ∈ delSet P F, owner F stop e.1 = some o) ∨ ValForm P (ownProds P F stop o) s (fun _ => 0) ∨
+      ∃ a ∈ stop, a ≠ o ∧ ∃ c : R, ValForm P (ownProds P F stop o) s fun z => c * P.val z a := by
+  classical
+  suffices H : ∀ m (s : Fin N), s.val = m → P.isProd s = false → owner F stop s = some o →
+      (∃ e ∈ delSet P F, owner F stop e.1 = some o) ∨ ValForm P (ownProds P F stop o) s (fun _ => 0) ∨
+        ∃ a ∈ stop, a ≠ o ∧ ∃ c : R, ValForm P (ownProds P F stop o) s fun z => c * P.val z a from
+    H _ s rfl hs ho
+  intro m
+  induction m using Nat.strong_induction_on with
+  | _ m ih =>
+  intro s hm hs ho
+  subst hm
+  by_cases hd : ∃ k : Fin s.val, P.lin s k ≠ 0 ∧ F.free ⟨k.val, k.isLt.trans s.isLt⟩ ≠ some s
+  · obtain ⟨k, hl, hf⟩ := hd
+    exact Or.inl ⟨⟨s, k⟩, by simp [delSet, hs, hl, hf], ho⟩
+  push_neg at hd
+  have hS : ∀ k : Fin s.val, P.isProd ⟨k.val, k.isLt.trans s.isLt⟩ = true → P.lin s k ≠ 0 →
+      (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∈ ownProds P F stop o := by
+    intro k hp hl
+    have hns : (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∉ stop := fun h => by simp [hstop _ h] at hp
+    simp only [ownProds, Finset.mem_filter, Finset.mem_univ, true_and]
+    exact ⟨hp, (owner_of_free F hns (hd k hl) k.isLt).trans ho⟩
+  rcases val_step P F hF s hs hd with ⟨k, hk, hl, hv⟩ | hv
+  · by_cases hks : (⟨k.val, k.isLt.trans s.isLt⟩ : Fin N) ∈ stop
+    · refine Or.inr (Or.inr ⟨_, hks, fun h => ?_, P.lin s k, valForm_of P _ s _ 0 ⟨0, 0⟩ hS fun z => ?_⟩)
+      · have h1 := owner_le F stop s ho
+        rw [← h] at h1
+        exact absurd k.isLt (not_lt.mpr h1)
+      · rw [hv z]
+        simp [BitAff.eval]
+    · have hko : owner F stop ⟨k.val, k.isLt.trans s.isLt⟩ = some o :=
+        (owner_of_free F hks (hd k hl) k.isLt).trans ho
+      rcases ih k.val k.isLt _ rfl hk hko with h | h | ⟨a, ha, hao, c, h⟩
+      · exact Or.inl h
+      · refine Or.inr (Or.inl ?_)
+        simpa using valForm_step P _ s _ (P.lin s k) _ h hS hv
+      · refine Or.inr (Or.inr ⟨a, ha, hao, P.lin s k * c, ?_⟩)
+        simpa [mul_assoc] using valForm_step P _ s _ (P.lin s k) _ h hS hv
+  · exact Or.inr (Or.inl (valForm_of P _ s _ 0 ⟨0, 0⟩ hS fun z => by rw [hv z]; simp [BitAff.eval]))
+
+end Walk
 
 section Design
 
@@ -637,11 +801,13 @@ theorem own_card_ge_step (hR : PrefixDiffRank) (φ : R →+* ZMod 2) (w : Fin np
   omega
 
 /-- **The split from its owners**: if the certified cell-blocks in `A` each own `L` products, pairwise disjoint, and
-the rest each own a delivery, injectively, then `RingKCount`'s split holds. -/
-theorem split_of_owners {E X D : Type} [DecidableEq E] [DecidableEq X] (L : ℕ) (cert A : Finset E) (hA : A ⊆ cert)
+the rest each own a delivery (one whose `key` is the block's `f`, with `f` injective), then `RingKCount`'s split
+holds. -/
+theorem split_of_owners {E X D K : Type} [DecidableEq E] [DecidableEq X] [DecidableEq K] (L : ℕ)
+    (cert A : Finset E) (hA : A ⊆ cert)
     (prods : Finset X) (own : E → Finset X) (hown : ∀ e ∈ A, L ≤ (own e).card ∧ own e ⊆ prods)
-    (hdisj : (A : Set E).PairwiseDisjoint own) (dels : Finset D) (del : E → D)
-    (hdel : ∀ e ∈ cert \ A, del e ∈ dels) (hinj : Set.InjOn del (cert \ A : Finset E)) :
+    (hdisj : (A : Set E).PairwiseDisjoint own) (dels : Finset D) (key : D → K) (f : E → K)
+    (hdel : ∀ e ∈ cert \ A, ∃ d ∈ dels, key d = f e) (hinj : Set.InjOn f (cert \ A : Finset E)) :
     ∃ a b : ℕ, a + b = cert.card ∧ L * a ≤ prods.card ∧ b ≤ dels.card := by
   refine ⟨A.card, (cert \ A).card, ?_, ?_, ?_⟩
   · have h := Finset.card_sdiff_add_card_eq_card hA
@@ -650,7 +816,78 @@ theorem split_of_owners {E X D : Type} [DecidableEq E] [DecidableEq X] (L : ℕ)
       _ ≤ ∑ e ∈ A, (own e).card := Finset.sum_le_sum fun e he => (hown e he).1
       _ = (A.biUnion own).card := (Finset.card_biUnion hdisj).symm
       _ ≤ prods.card := Finset.card_le_card (Finset.biUnion_subset.mpr fun e he => (hown e he).2)
-  · exact Finset.card_le_card_of_injOn del (by intro e he; exact hdel e (by simpa using he)) hinj
+  · calc (cert \ A).card = ((cert \ A).image f).card := (Finset.card_image_of_injOn hinj).symm
+      _ ≤ (dels.image key).card := Finset.card_le_card fun k hk => by
+          obtain ⟨e, he, rfl⟩ := Finset.mem_image.mp hk
+          obtain ⟨d, hd, hdk⟩ := hdel e he
+          exact Finset.mem_image.mpr ⟨d, hd, hdk⟩
+      _ ≤ dels.card := Finset.card_image_le
+
+/-- **`RingKCount` from `PrefixDiffRank`.** Each certified block's word slot is a slot of `stop` (the certified
+word slots), owned by itself. Walking back from it, either it meets a delivery on a slot it owns (a delivery of its
+own, since owners are functions and word slots are distinct), or its word is its own products plus a bit-affine word
+plus a multiple of an earlier certified block's word, so `theoremK` and `PrefixDiffRank` give it `L` products of its
+own. -/
+theorem ringKCount_of_rank (hR : PrefixDiffRank) : RingKCount := by
+  intro R _ φ n L np B n' w p₀ hw pc vq N P F hF hA word hword
+  classical
+  rcases Nat.eq_zero_or_pos L with hL | hL
+  · exact ⟨(certified pc vq w P word).card, 0, rfl, by rw [hL, zero_mul]; exact Nat.zero_le _, Nat.zero_le _⟩
+  set cert := certified pc vq w P word with hcert
+  have hcertE : ∀ e ∈ cert, Certified pc vq w P word e := fun e he => by simpa [hcert, certified] using he
+  have hinj := word_injOn hR φ w p₀ hw hL pc vq P word
+  set stop := cert.image word with hstopdef
+  have hstop : ∀ s ∈ stop, P.isProd s = false := by
+    intro s hs
+    obtain ⟨e, -, rfl⟩ := Finset.mem_image.mp hs
+    exact hword e
+  have hAB : ∀ k : Fin N, ∃ AB : BitAff (DBits n L np B n') R × BitAff (DBits n L np B n') R,
+      P.isProd k = true → ∀ z, P.val z k = AB.1.eval z * AB.2.eval z := by
+    intro k
+    by_cases hk : P.isProd k = true
+    · obtain ⟨A, Bo, h⟩ := hA k hk
+      exact ⟨(A, Bo), fun _ z => by rw [SlpG.val, if_pos hk]; exact h z⟩
+    · exact ⟨(⟨0, 0⟩, ⟨0, 0⟩), fun h => absurd h hk⟩
+  choose AB hAB using hAB
+  have hsum : ∀ (lam : Fin N → R) (o : Fin N) z, ∑ k ∈ ownProds P F stop o, lam k * P.val z k =
+      ∑ k ∈ ownProds P F stop o, lam k * ((AB k).1.eval z * (AB k).2.eval z) := by
+    intro lam o z
+    refine Finset.sum_congr rfl fun k hk => ?_
+    simp only [ownProds, Finset.mem_filter, Finset.mem_univ, true_and] at hk
+    rw [hAB k hk.1 z]
+  rw [deliveries_eq]
+  refine split_of_owners L cert (cert.filter fun e => ¬∃ d ∈ delSet P F, owner F stop d.1 = some (word e))
+    (Finset.filter_subset _ _) (univ.filter fun k => P.isProd k = true) (fun e => ownProds P F stop (word e))
+    ?_ ?_ (delSet P F) (fun d => owner F stop d.1) (fun e => some (word e)) ?_ ?_
+  · intro e he
+    rw [Finset.mem_filter] at he
+    refine ⟨?_, fun k hk => ?_⟩
+    · have hwe : word e ∈ stop := Finset.mem_image_of_mem word he.1
+      rcases walk P F hF stop hstop (word e) (word e) (hword e) (owner_of_mem F hwe) with
+        h | ⟨lam, r, hv⟩ | ⟨a, ha, hao, c, lam, r, hv⟩
+      · exact absurd h he.2
+      · exact own_card_ge_start hR φ w p₀ hw pc vq P word (hcertE e he.1) _ lam (fun k => (AB k).1)
+          (fun k => (AB k).2) r fun z => by rw [hv z, ← hsum]; simp
+      · obtain ⟨e', he', rfl⟩ := Finset.mem_image.mp ha
+        have hne : e ≠ e' := fun h => hao (h ▸ rfl)
+        exact own_card_ge_step hR φ w p₀ hw pc vq P word hne (hcertE e he.1) (hcertE e' he') c _ lam
+          (fun k => (AB k).1) (fun k => (AB k).2) r fun z => by rw [hv z, ← hsum]
+    · simp only [ownProds, Finset.mem_filter, Finset.mem_univ, true_and] at hk ⊢
+      exact hk.1
+  · intro e he e' he' hne
+    simp only [Function.onFun]
+    rw [Finset.disjoint_left]
+    intro k hk hk'
+    simp only [ownProds, Finset.mem_filter, Finset.mem_univ, true_and] at hk hk'
+    exact hne (hinj (Finset.mem_filter.mp (Finset.mem_coe.mp he)).1 (Finset.mem_filter.mp (Finset.mem_coe.mp he')).1
+      (Option.some_injective _ (hk.2.symm.trans hk'.2)))
+  · intro e he
+    obtain ⟨he1, he2⟩ := Finset.mem_sdiff.mp he
+    rw [Finset.mem_filter, not_and, not_not] at he2
+    exact he2 he1
+  · intro e he e' he' h
+    exact hinj (Finset.mem_sdiff.mp (Finset.mem_coe.mp he)).1 (Finset.mem_sdiff.mp (Finset.mem_coe.mp he')).1
+      (Option.some_injective _ h)
 
 end Count
 
