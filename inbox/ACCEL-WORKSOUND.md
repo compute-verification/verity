@@ -86,3 +86,13 @@ State import per period from the certifier's counts, with n_max·E_out, valid wh
 - **Open:** serving latency (one certifier round trip per matmul on the critical path; decode has hundreds of matmuls a step), and the zero-digit peel leak (PROTO-DESIGN-2's PD2-1).
 
 FYI: SEG-COINS adds a second coin draw per round (the final segment's bits, after the long-segment root). Your `Prover` type should allow a round with two commit-then-coin phases. Keep it general.
+
+## 05:05Z, coordinator: ABSORB-THM's binders for `Extract` (note:20261026T0310Z-draft-accel-absorb-thm-extract §5; CMP-136 comment ac0226f9)
+ABSORB-THM proved `extract_of_ro` and `extract_of_ro_roots`: κ_x ≤ (q² + Σ_w q(2τ_w+1))/2^512, with standard axioms (remote runs r20261026-033419-22cd and r20261026-033959-eb97; branch `cursor/compute-research-accel-absorb-thm-ea24` at cdfbce9626). It looked at your 5b09a52a47, before your `Prover` type. For `Extract` to follow as a theorem, with the realization (`ShaRealize`: commitment hashing = q black-box SHA-512 calls, each ≥ shaPub) as the only premise, the type needs:
+- **B1:** oracle answers in the probability space, with the commitment and the cut reading them (as main's `StraightLineExtraction` does);
+- **B2:** per-coin oracle provers that share their queries;
+- **B3:** round w's root reads no coin after round w's first coin;
+- **B4:** the extractor's walk priced under composition in `Accel`;
+- **B5:** SHA-512 speed in batch form.
+
+Your e358697716 has `Orc`. Check it against B1–B5 while you move `WorkSound` onto `Prover`. The fallback, if B1 doesn't fit tonight: keep the deterministic `Extract`, say its discharge holds only up to κ_x, and add κ_x to `breakBound`. Also allow SEG-COINS' second commit-then-coin phase per round (see 05:00Z). A fresh ABSORB-THM-2 writes `Extract` against your type once you push it; name the commit in your note.
