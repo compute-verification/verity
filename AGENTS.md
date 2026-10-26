@@ -51,7 +51,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
 - `integrations/`: one directory per serving stack, holding only what attaches Verity to it. `integrations/vllm/`
   (`verity_vllm`) builds each served workload's circuit and commits its values while serving.
 - `examples/`: one directory per example: its workload, its placement and the commands that serve and audit it
-  (`examples/README.md`). `verity` imports none.
+  (`examples/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, and the benchmark tools.
   - `benchmarks/census/`: data only. `verity` never reads it; it takes such numbers as parameters.
@@ -204,9 +204,9 @@ the standing rulings stated nowhere else.
   - on a draw, the drawn units' openings, to the prover behind the firewall.
 
   What the circuit means, and how it was built, is the integration's; that it computes what is served is completeness
-  (above). Any serving stack plugs in the same way without changing `verity/`, and `integrations/vllm/` is the only one
-  so far. Nothing under `verity/` imports an integration (the import rules, above), and the serving notions `verity/`
-  still holds (the certifier's advice format, vLLM's scheduler, among them) move out to the integration.
+  (above). Any serving stack plugs in the same way without changing `verity/`. Nothing under `verity/` imports an
+  integration (the import rules, above), and the serving notions `verity/` still holds (the certifier's advice format,
+  vLLM's scheduler, among them) move out to the integration.
 - **Results are per monitoring period, over all compute** (Daniel, 25 Oct). The time length of interest is the
   *monitoring period* (`ARCHITECTURE.md`, Glossary), not the window, the run or the demo. Every result, in a report, a
   table, a PR or a message to Daniel, is presented for monitoring periods of one week, one month and one year, and over
