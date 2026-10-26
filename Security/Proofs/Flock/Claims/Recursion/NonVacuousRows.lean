@@ -6,6 +6,7 @@ import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 import Proofs.Flock.Claims.Recursion.VerdictRowRDeployed
 import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+import Proofs.Flock.Claims.Recursion.DecodeAt
 
 /-!
 # `NonVacuous`'s row targets from the rows' deployed forms
@@ -23,7 +24,8 @@ shape's sizes from `Top.hsz` (`RoundSizes`):
 
 `TargetB` (`DecAt.framed_dense`), `TargetL` (`Top.targetL_holds`) and `TargetPublics` (`DecAt.publics_empty`) are
 proved. `targets_of_open`: every target from row E, `TargetRDep`, `TargetDMerkle` and `TargetDecode`;
-`targets_of_rows`: the same at row E's accumulators `accR`, with row E from its pieces' running sums (`targetE_rowD`).
+`targets_of_rows`: the same at row E's accumulators `accR`, with row E from its pieces' running sums (`targetE_rowD`);
+`targets_of_rowsJ`: with `TargetDecode` from `DecodeAt.decode_at`, under the locked `Claims.JsonSpec`.
 -/
 
 namespace RecDeploy
@@ -163,6 +165,18 @@ theorem targets_of_rows (rd : Msg → Option FinalP) {Q : Type} (rows : Msg → 
     (hDec : TargetDecode rd (RowsHold rows holds)) :
     Targets rd rows holds (accR rd chainAt) :=
   targets_of_open rd rows holds _ hR hD (targetE_rowD rd _ chainAt key hholds) hDec
+
+/-- **Every target from rows R, D and E, under the JSON library's specification** (`S`, the locked completeness
+assumption): `targets_of_rows` with `TargetDecode` from `DecodeAt.decode_at`. -/
+theorem targets_of_rowsJ (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) (rd : Msg → Option FinalP) {Q : Type}
+    (rows : Msg → List Q) (holds : Q → Msg → List Msg → List Coin → Prop)
+    (chainAt : Msg → List Msg → ℕ → ℕ → Array F128) (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ)
+    (hR : TargetRDep rd (RowsHold rows holds) (accR rd chainAt))
+    (hD : TargetDMerkle rd (RowsHold rows holds) (accR rd chainAt))
+    (hholds : ∀ (x : Msg) (ms : List Msg) (cs : List Coin), RowsHold rows holds x ms cs →
+      ∀ q ∈ Rows.rowDPieces key x, Rows.accHolds (Rows.sideAt rd) Rows.coefRead chainAt q x ms cs) :
+    Targets rd rows holds (accR rd chainAt) :=
+  targets_of_rows rd rows holds chainAt key hR hD hholds (DecodeAt.decode_at S rd (RowsHold rows holds))
 
 end Top
 
