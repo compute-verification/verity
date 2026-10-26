@@ -3176,6 +3176,12 @@
    "assumptions": [],
    "type_hash": "99a6dd943ff4b0f93d32cee23f1a9a0b38c571fcde163c3b96d9fbaf700c32d9"
   },
+  "Accounting.SecurityProofs.Gates.EncodeChainRefuted": {
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted : Accounting.Guarantees.Gates.EncodeChainRefuted"],
+   "assumptions": [],
+   "type_hash": "8d77a81116cefbba9ece553211efa41bd1aca9497500487ccfb33ab4c42746af"
+  },
   "Accounting.SecurityProofs.Gates.EncodeCost": {
    "owner": "@memory-accounting",
    "signature": ["Accounting.SecurityProofs.Gates.EncodeCost : Accounting.Guarantees.Gates.EncodeCost"],
@@ -11722,7 +11728,8 @@
    "Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod": "frozen (no-function,hash): It is BandwidthOfAuditPerRun on a period's coins: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to PoUB's per-period guarantee (PeriodRun.Sound at .poub) of an abstract period of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/JointPeriod.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.IntegrityOfIntegrityBlock": "frozen (no-function): It carries C-Flock's integrity audit of one server-time block (Flock.Guarantees.IntegrityBlock) to block b's sampled audit's per-period guarantee (PeriodRun.Sound) in a horizon of blocks of the device model whose verdicts are fields of the run, not Lean functions, through a realization whose fields are properties of the deployed run (Accounting.RealizesIntegrityOfIntegrityBlock, Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean): wrong_eq is the program-from-circuit correspondence (M1) until Lowers/progOf/partOf land, and units_eq with gates_nonempty is the partition's public unit-size property. It bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Bridge.JointHorizonBlocksOfIntegrityBlock": "frozen (no-function): It is JointHorizonBlocks with each block's integrity leg from IntegrityOfIntegrityBlock, over an abstract horizon of blocks of the device model whose verdicts, and each wipe's surviving foreign content, are fields of the run, not Lean functions (Security/Definitions/Accounting/JointBlocks.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each server-time block's integrity leg from IntegrityOfIntegrityBlock, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.Bridge.JointHorizonBlocksAOfIntegrityBlock": "frozen (no-function): It is Demo A's JointHorizonBlocksA (sampled proofs, PoUW and the network certifier) with each server-time block's integrity leg from IntegrityOfIntegrityBlock, over abstract periods of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointPeriod.lean), through each block's realization of C-Flock's integrity audit of that block (Accounting.RealizesIntegrityOfIntegrityBlock), and it bounds a Pouw.pr event, which shape.events does not list.",
+   "Accounting.SecurityProofs.Gates.EncodeChainRefuted": "frozen (no-function): A counterexample to the named conjecture EncodeChainHardness, a circuit of the gate model with no budgeted gate that computes more words of the codec than its units allow, inside the conjecture's floor at every field of whole bytes with room for them, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -11928,6 +11935,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.StackedRequirementRelay",
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
@@ -12987,6 +12995,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.RhoPairs",
     "Accounting.SecurityProofs.Gates.SquaringCarry",
@@ -13193,6 +13202,7 @@
     "Accounting.SecurityProofs.Gates.DeclaredWindow",
     "Accounting.SecurityProofs.Gates.DitherRange",
     "Accounting.SecurityProofs.Gates.EncodeBudget",
+    "Accounting.SecurityProofs.Gates.EncodeChainRefuted",
     "Accounting.SecurityProofs.Gates.EncodeCost",
     "Accounting.SecurityProofs.Gates.Exp2Lut127Range",
     "Accounting.SecurityProofs.Gates.F32ToS8RziRange",
@@ -13636,6 +13646,13 @@
     "Accounting.SecurityProofs.Gates.SquaringUnits",
     "Accounting.SecurityProofs.Gates.UnitsFooling"
    ]
+  },
+  "Definitions.Accounting.Guarantees.GatesBitwise": {
+   "digest": "11bf9ade6456b8e9875feeb541fbca8b8fab63db904bdc9515603832d9dcc060",
+   "definitions": {
+    "Accounting.Guarantees.Gates.EncodeChainRefuted": "34f205a158aa075674d9945f3302b515802336831d6bc535a60b883391d0ec0a"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Gates.EncodeChainRefuted"]
   },
   "Definitions.Accounting.Guarantees.HMu": {
    "digest": "b08f25418b8b3ef93f63d5d8f7b9c510362dcaae40b3dd50eac0975a13776b68",

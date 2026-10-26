@@ -20,6 +20,7 @@ import Definitions.Accounting.Guarantees.FpG1
 import Definitions.Accounting.Guarantees.HMu
 import Definitions.Accounting.Guarantees.DeclaredCircuit
 import Definitions.Accounting.Guarantees.Gates
+import Definitions.Accounting.Guarantees.GatesBitwise
 import Definitions.Accounting.Guarantees.Headline
 import Definitions.Accounting.Guarantees.HeadlineDc
 import Definitions.Accounting.Guarantees.Joint
