@@ -7,7 +7,10 @@ buffers every step (`store.Store.stage`). The small tensors (scales, gains, embe
 
 A step (`Driver.step_slots`) runs rows b = 0 .. B - 1, row b the KV pool's slot ``slots[b]`` at its own position
 ``positions[b]`` on byte ``tokens[b]``; `Driver.step` is the lockstep step (every slot at one position) that `Driver.run`
-drives: position t reads byte t of each prompt while t < P, else the previous step's argmax. Per layer, in micro-batches of
+drives: position t reads byte t of each prompt while t < P, else the previous step's argmax. `Driver.serve` runs requests
+through `slots.SlotKV`'s sequence slots by continuous batching: each step admits queued requests into the lowest free slots,
+runs every active slot at its own position through `step_slots` (K and V written to and read from the SlotKV), and frees the
+slots whose request finished, for a later step to reuse. Per layer, in micro-batches of
 rows written into the layer's full-batch tables: RMSNorm, quantize, Q, K and V; the slot's key and value into its KV cache;
 scores, softmax and PV over the slot's first position + 1 keys (`attention.Attention`); quantize, O, the residual add;
 RMSNorm, quantize, up; ReLU and quantize, down, the residual add. Then the final RMSNorm, quantize, the head and argmax.
@@ -36,6 +39,7 @@ from . import attention as A
 from . import ops as O
 from .commit import Committer, StepTables, tables
 from .shape import EPS, Shape, check
+from .slots import Finished, Request, SlotKV
 from .store import Store
 from .weights import LINEARS
 
@@ -109,6 +113,8 @@ class StepResult:
     positions: np.ndarray | None = None
     slot_roots: tuple[bytes, ...] = ()
     salt_key: bytes | None = field(default=None, repr=False)
+    seqs: tuple[int, ...] = ()                                  # served: row b's request
+    finished: list[Finished] = field(default_factory=list)      # served: the requests whose last position this was
 
 
 class Driver:
@@ -128,11 +134,12 @@ class Driver:
         self.subcircuits = list(subcircuits)
         self.attn = A.Attention(self.device, attention)
         self.groups = tables(shape)
-        kv = (shape.layers, batch, shape.context, shape.head_dim)
-        self.k = torch.zeros(kv, dtype=torch.int16, device=self.device)
-        self.v = torch.zeros(kv, dtype=torch.int16, device=self.device)
+        self.k: torch.Tensor | None = None      # the driver's own KV pool, (layers, batch, context, head_dim) int16
+        self.v: torch.Tensor | None = None
+        self.kv: SlotKV | None = None           # serving: the slots' KV cache instead
         self.steps: list[StepTables] = []
         self.results: list[StepResult] = []
+        self.finished: list[Finished] = []
 
     @property
     def tok(self) -> torch.Tensor:
@@ -147,6 +154,12 @@ class Driver:
         t1 = self.clock()
         sec[key] = sec.get(key, 0.0) + t1 - t0
         return t1
+
+    def _pool(self) -> None:
+        if self.k is None:
+            kv = (self.shape.layers, self.batch, self.shape.context, self.shape.head_dim)
+            self.k = torch.zeros(kv, dtype=torch.int16, device=self.device)
+            self.v = torch.zeros(kv, dtype=torch.int16, device=self.device)
 
     def _alloc(self, st: StepTables, group: int) -> dict[str, tuple[torch.Tensor, torch.Tensor]]:
         return {t.op: st.alloc(t, self.device) for t in self.groups[group]}
@@ -185,6 +198,9 @@ class Driver:
             raise ValueError("a step's rows are distinct slots, each with a position and a byte")
         if slots.min() < 0 or slots.max() >= self.batch or positions.min() < 0 or positions.max() >= sh.context:
             raise ValueError(f"slots are below {self.batch} and positions below {sh.context}")
+        kv = self.kv
+        if kv is None:
+            self._pool()
         st = StepTables(len(self.results), positions, n, slots=slots)
         self.committer.begin(st, salt_key, nonce0)
         sec: dict[str, float] = {}
@@ -217,10 +233,15 @@ class Driver:
                 vv = O.s8_linear(q, w["wv"], self.params.sw[p + "wv"])
                 self._bf(T["wk"])[lo:hi], self._bf(T["wv"])[lo:hi] = kk, vv
                 s_c, p_c = sl[lo:hi], pos[lo:hi]
-                self.k[layer, s_c, p_c] = kk.view(torch.int16)
-                self.v[layer, s_c, p_c] = vv.view(torch.int16)
-                keys = (self.k[layer, lo:hi] if whole else self.k[layer, s_c]).view(torch.bfloat16)
-                vals = (self.v[layer, lo:hi] if whole else self.v[layer, s_c]).view(torch.bfloat16)
+                if kv is None:
+                    self.k[layer, s_c, p_c] = kk.view(torch.int16)
+                    self.v[layer, s_c, p_c] = vv.view(torch.int16)
+                    keys = (self.k[layer, lo:hi] if whole else self.k[layer, s_c]).view(torch.bfloat16)
+                    vals = (self.v[layer, lo:hi] if whole else self.v[layer, s_c]).view(torch.bfloat16)
+                else:
+                    kv.write(layer, kk, vv, rows=(lo, hi))
+                    ka, va, _ = kv.read(layer)
+                    keys, vals = ka[lo:hi], va[lo:hi]
                 a0 = self._tick(sec, "forward", c0)
                 sc, pr, att = self.attn(qv.view(m, sh.heads, sh.head_dim), keys, vals, p_c + 1)
                 c0 = self._tick(sec, "attention", a0)
@@ -277,6 +298,24 @@ class Driver:
 
     def value_bytes(self, n: int) -> int:
         return n * sum(t.nbytes + 4 * t.quant for g in self.groups for t in g)
+
+    def serve(self, kv: SlotKV, requests: Sequence[Request], steps: int | None = None,
+              salt_keys: list[bytes] | None = None) -> list[StepResult]:
+        """Continuous batching: ``requests`` through ``kv``'s slots (one a driver slot), step after step until every one has
+        finished (or ``steps`` steps). Finished requests are in ``self.finished``."""
+        sh = self.shape
+        if (kv.shape.slots, kv.shape.layers, kv.shape.ctx, kv.shape.head_dim) != \
+                (self.batch, sh.layers, sh.context, sh.kv_heads * sh.head_dim):
+            raise ValueError(f"the slots' {kv.shape} aren't {self.batch} slots of {sh.name}'s KV (layers, context, head_dim)")
+        self.kv = kv
+        kv.submit(requests)
+        while not kv.idle and (steps is None or len(self.results) < steps):
+            plan = kv.begin()
+            res = self.step_slots(plan.slots.cpu().numpy(), plan.positions.cpu().numpy(), plan.tokens.cpu().numpy(),
+                                  salt_key=salt_keys[plan.step] if salt_keys else None)
+            res.seqs, res.finished = plan.seqs, kv.end(res.tokens_out)
+            self.finished += res.finished
+        return self.results
 
     def run(self, prompts: np.ndarray, steps: int, salt_keys: list[bytes] | None = None) -> list[StepResult]:
         """``prompts`` (B, P) bytes; positions 0 .. steps - 1 (prefill one byte a step, then decode)."""

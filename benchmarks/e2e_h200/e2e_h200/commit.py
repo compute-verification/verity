@@ -133,6 +133,13 @@ class StepTables:
             raise ValueError(f"step {self.step} runs its slots at several positions")
         return int(self.positions[0]) if self.batch else 0
 
+    def row_of(self, slot: int) -> int:
+        """The row of sequence slot ``slot`` in this step's tables."""
+        rows = np.flatnonzero(self.slots == slot)
+        if not len(rows):
+            raise KeyError(f"slot {slot} has no row at step {self.step}")
+        return int(rows[0])
+
     def put(self, op: str, value: Any, word: Any = None) -> None:
         if op in self.tables:
             raise ValueError(f"{op} written twice at step {self.step}")
