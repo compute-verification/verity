@@ -3,7 +3,7 @@
 Program brief, compute-research lane (coordinator bc-ebc09a9a, handle @compute-research). Written 26 Oct 00:50Z. Every ACCEL
 worker reads all of it, then does its own section. Rules: `briefs/brief-rules.md` on this branch (cloud overrides first).
 
-## 0. The target end state (agreed with Daniel, 26 Oct 02:15Z; trust base restated 03:50Z with R-ACCEL-6/7, and Daniel's go at 03:51Z: "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and it should be getting red-teamed in parallel")
+## 0. The target end state (agreed with Daniel, 26 Oct 02:15Z; trust base restated 02:50Z with R-ACCEL-6/7, and Daniel's go at 02:51Z: "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and it should be getting red-teamed in parallel")
 
 The deliverable is one theorem in Lean, with nothing else in the lock. Every workstream works toward it. **The sprint to
 Mon 26 Oct 19:00Z (noon PDT) is `briefs/sprint-mon-noon.md`: who builds what, who red-teams it, and when.**

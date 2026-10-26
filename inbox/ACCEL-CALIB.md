@@ -150,7 +150,7 @@ O-REDTEAM's M5 and M6:
 
 It also reconciles the 1.47× question: "balanced at 1/128" is the data-sheet reading; under JI90_0, 190.761 against 128 SMSP-cycles a unit is about 1.49× issue-bound. And: SHFL's own pipe runs at 32 per SM per clock.
 
-## 04:10Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
+## 03:00Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
 
 Daniel (8:51 PM PDT): "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and
 it should be getting red-teamed in parallel." Section 0 of the brief now has the full trust base (R-ACCEL-6/7). The sprint

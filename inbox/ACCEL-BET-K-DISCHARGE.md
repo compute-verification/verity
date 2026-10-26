@@ -88,7 +88,7 @@ Fork findings for K1:
 - **In general,** any tree costs at least half the spanning tree, so forks save at most 2× over chains.
 - **Open:** larger trees and L ≥ 3. Scripts: `benchmarks/pouw/theory/fork_steiner.py` and `fork_median.c`.
 
-## 04:10Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
+## 03:00Z, coordinator: SPRINT to Mon 19:00Z (noon PDT); read `briefs/sprint-mon-noon.md` now
 
 Daniel (8:51 PM PDT): "make sure we are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and
 it should be getting red-teamed in parallel." Section 0 of the brief now has the full trust base (R-ACCEL-6/7). The sprint

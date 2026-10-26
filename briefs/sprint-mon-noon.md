@@ -1,8 +1,8 @@
 # Sprint: the end state by Mon 26 Oct 19:00Z (noon PDT)
 
-Written 26 Oct 04:10Z by the coordinator (bc-ebc09a9a, @compute-research). Daniel, 8:51 PM PDT 25 Oct: "Ok make sure we
+Written 26 Oct 03:00Z by the coordinator (bc-ebc09a9a, @compute-research). Daniel, 8:51 PM PDT 25 Oct: "Ok make sure we
 are pushing hard to achieve this goal -- I would love to be done by tomorrow ~noon, and it should be getting red-teamed in
-parallel." The goal is `briefs/accel-program.md` section 0. Every ACCEL worker reads this file at each inbox read.
+parallel." Linear: CMP-135 (sprint), CMP-136 WORKSOUND, CMP-137 SKIP-FIX, CMP-138 COVER-ATTN, CMP-139 RT-UNITS, CMP-140 RT-PROTO, CMP-141 RT-LEAN, CMP-142 RT-MODEL. The goal is `briefs/accel-program.md` section 0. Every ACCEL worker reads this file at each inbox read.
 
 ## What "done at 19:00Z" means
 
@@ -19,7 +19,7 @@ parallel." The goal is `briefs/accel-program.md` section 0. Every ACCEL worker r
 Not by noon: the GPU demonstration (the served kernel's γ on real H200s), which waits for M3 (Mon 23:00Z). Until then γ is
 by data sheet, and the table says so.
 
-## Where it stands (04:10Z)
+## Where it stands (03:00Z)
 
 - **Protocol candidate (PROTO-DESIGN, `note:20261026T0133Z-draft-accel-proto-design`, "No-fold receipt"):** HYB noise
   (BET-HYBRID-2) with every word a SHA-512 Merkle leaf, no fold. Binding = collision resistance + Theorem S. At skip
@@ -32,7 +32,7 @@ by data sheet, and the table says so.
   **Open: commit-and-open.** Collision resistance gives binding, not that the committed words were computed: a root
   produced some cheaper way and lazily opened is not excluded. Closing it needs SHA-512 as a random oracle for the
   commitments (each query priced at the public-best speed, R-ACCEL-7), or SAK(matmul) in a commit-and-open reading.
-  Asked of Daniel 04:10Z with the random oracle recommended; state the headline with a named `Extract` premise now, so
+  Asked of Daniel 03:05Z with the random oracle recommended; state the headline with a named `Extract` premise now, so
   either answer slots in.
 - **Model (MODEL-SPEC, head 5f9f1bb594 on #4389):** P1Int, P2Local/Distinct/Frame/Priced and both refinements proved;
   looped wgmma witness, P1Float, P1Captured in progress. CALIB's θ table in progress.
