@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.VerdictRowEBytes
 import Proofs.Flock.Claims.Recursion.CapLowerPin
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # A level part's copy's `out` columns are its instance's `out` row (`OutSlotTie`'s column read)
