@@ -832,10 +832,10 @@ def select(j):
 
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its draw's
-    checked proof units. The population's strata are `partition.strata`'s, each unit a replay unit of one proof unit, its
+    checked proof blocks. The population's strata are `partition.strata`'s, each unit a replay unit of one proof block, its
     gates (`partition.unit_gates`); the input class is one stratum of every gate of the root's input nodes
     (`program.is_input`), each its own replay unit. A replay unit's slot is its index in that order, and the checked proof
-    units are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
+    blocks are `(slot, 0)` of each unit the draw proves (`draw.proved`) and of each input gate, in slot order."""
     out = select(j)
     j = _json(j)
     program = PROGRAMS[PO.program_sha512(j["program"])]
@@ -2975,7 +2975,7 @@ def test_the_select_piece_draws_every_rule(pieces):
 def test_the_slots_follow_the_strata(pieces):
     """On the partition whose `PAIR` stratum is two ranges apart, Lean's slots are the Python's whole: the population's
     slots run through `PAIR`'s units, then `TRIPLE`'s, then `QUAD`'s, so units 2 to 8 move; the replay units' gates and
-    the input class's are every gate of the program once; and the checked proof units are the drawn units' slots and
+    the input class's are every gate of the program once; and the checked proof blocks are the drawn units' slots and
     every input slot, in slot order."""
     desc = json.loads(_population(((0, 2), (1, 3), (0, 4), (2, 1))))
     query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
