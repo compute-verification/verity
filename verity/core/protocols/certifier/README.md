@@ -170,7 +170,8 @@ A spec-level reference for network accounting's timing channel:
   private (`NetTiming.Layout`). `checked_refusal` checks that the layout fits the circuit (`NetTiming.Layout.Fits`, its
   first conjunct taking a frame gate that is an input) at the record's grain, which contains the gate grain's, held to
   `prog_fits`, `Layout.Fits` itself on a flattened program. `refusal`, the verifier's check before it draws, refuses
-  what passes it by name until Lean's `Layout.Fits` takes the checked row. `Fits` stays structural: a served window fits
+  what passes it by name: Lean's `Layout.Fits` takes no egress gate that is an input, so the checked row isn't its form,
+  and a window fits it when its units compute and return its egress rows. `Fits` stays structural: a served window fits
   in the step-indexed scan's form, and a window in any other form is refused;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
   warden ingress row, the slot state the bucket before carries and the Programs' row (registered reads), and computes
@@ -210,7 +211,8 @@ A spec-level reference for network accounting's timing channel:
   (63,031 ANDs at T = 600, R_in = 1), which holds the egress head's counts to the releases of the prover's advice
   (`LinkAdvice`: I1's `advice.Advice` and each window's request frames), and the ingress head's counts to the advice:
   each release eligible under the sync the certifier ran its window under (the verifier's own clock source,
-  `LinkWindows.clock_source`: the certifier's clock certificates, `certificate.ClockCertificate`, which each window's
+  `LinkWindows.clock_source`: the certifier's salted clock certificates, `certificate.CertifiedClock`, each sync read
+  through its opening, witness, against the digest the public certificate signs, which each window's
   declared sync must match, one of Σ_sync, or that window is refused), so never before the bucket of its request's
   last frame (the request's end on the ingress link, which `advised.ends` derives from v0's prompt lengths and the
   link's public framing), and each window's ingress total the advice's. Carry-over between windows is the advice's.
@@ -245,7 +247,7 @@ what `lean/scripts/charge_vectors.py` writes from `arith_encode.reference_charge
 `window_charge.reference_window`.
 
 The two terms of the charge the capacity bounds leave open are fixed in the trusted text, in the last section of
-`Security/Models/NetworkCertifier/Guarantees.lean`'s documentation:
+`Security/Definitions/NetworkCertifier/Guarantees.lean`'s documentation:
 - the content advice `A_c`, which is the schedule. It gets a bound once the deployment declares a deterministic
   scheduler, admission on a step clock and a registered list of N profiles: `log2 N` once per audit, or
   `log2(N · #Σ_sync)` per window when the profile may switch at window boundaries;
