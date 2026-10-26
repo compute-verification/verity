@@ -204,6 +204,11 @@ def _phases(laps: Sequence[tuple[str, float]]) -> dict[str, float]:
     return {name: round(t - s, 4) for (_, s), (name, t) in zip(laps, laps[1:])}
 
 
+def _lap(laps: list[tuple[str, float]], clock: Callable[[], float], name: str) -> None:
+    """The end of a close's phase ``name``, marked in ``laps`` (`_phases` reads them)."""
+    laps.append((name, clock()))
+
+
 class CommitWindows:
     """The committer's windows over a serving engine, and every request's `Ledger`. ``committer`` is a
     `NativeHostCommitter` with a `served_record.SamplerInputsSource` attached (or its offline stand-in in the tests:
@@ -335,7 +340,7 @@ class CommitWindows:
         the window's finalize and everything that reads it, then runs on the sealer's thread in window order, and this returns None."""
         t0 = self.clock()
         laps = [("", t0)]
-        lap = lambda name: laps.append((name, self.clock()))  # noqa: E731
+        lap = functools.partial(_lap, laps, self.clock)
         if self.off_loop:
             return self._close_off_loop(laps, lap)
         rc = self.com.finalize() if int(self.com._step_index) else None    # a window whose one step() only drained outputs
@@ -390,7 +395,7 @@ class CommitWindows:
         queued.wait()
         t0 = self.clock()
         laps = [("", t0)]
-        lap = lambda name: laps.append((name, self.clock()))  # noqa: E731
+        lap = functools.partial(_lap, laps, self.clock)
         job: Any = None
         waited, checking = 0.0, False
         try:
