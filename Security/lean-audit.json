@@ -8198,6 +8198,9 @@
    "assumptions": [],
    "type_hash": "050a6a71067b4a587ac6b196844f86d1b35fe2ea863657b2695c575a06c1d95e"
   },
+  "Nci.SecurityProofs.PartitionCovers": {
+   "owner": "@lean"
+  },
   "Nci.SecurityProofs.ReadBound": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ReadBound : Nci.Guarantees.ReadBound"],
@@ -10464,6 +10467,12 @@
    "assumptions": [],
    "type_hash": "cf6ae741ac5e875201f2ca2733ffda1969bd047946b299c8af7546edd595eaf8"
   },
+  "Verity.SecurityProofs.BlockDescription": {
+   "owner": "@lean"
+  },
+  "Verity.SecurityProofs.CKSize": {
+   "owner": "@lean"
+  },
   "Verity.SecurityProofs.Compose": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.Compose : Verity.Guarantees.Compose"],
@@ -10487,6 +10496,12 @@
    "signature": ["Verity.SecurityProofs.CorrectOfOpening : Verity.Guarantees.CorrectOfOpening"],
    "assumptions": [],
    "type_hash": "d31e6511bb4fdd3d42e665caac936737a4de4cc765e689f6eb61e9543ede9762"
+  },
+  "Verity.SecurityProofs.Counting": {
+   "owner": "@lean"
+  },
+  "Verity.SecurityProofs.CountingSum": {
+   "owner": "@lean"
   },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
@@ -11686,7 +11701,12 @@
    "Accounting.SecurityProofs.JointHorizonBlocksLegs": "frozen (no-function): Like JointHorizon, over a horizon of server-time blocks on one coin space, for a set of the audits: each block's per-period guarantees for the audits of the set are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksA": "frozen (no-function): Demo A's composed theorem, JointHorizonBlocksLegs at sampled proofs, PoUW and the network certifier: each block's three per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.Remote.ReceiptsBindingOfFork": "lemma: the forking step behind the remote audit's receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which PooledDraw and the drawn memory-line guarantees charge, over a session and its receipts, not a Lean function: with the held row by definition the plurality of the rows the receipt shows over window t's continuations (Accounting.Remote.Draw.Receipts.held, at Accounting.Remote.Draw.cont) and no premise beyond L_t holding every receipt window t opens, the binding term is at most sum_t sqrt(|L_t| s_t (fork_t + split_t)), fork_t the chance that two runs from window t's cut on independent openings coins hash a SHA-512 collision between one receipt's two openings' checks (Receipts.Broken, Hash.SecurityProofs.RowBinding) and split_t the chance that their roots, ranks or verifiers differ (Receipts.Split); split_t is not bounded for the deployed committed play, whose prover may compute window t's roots from the coin commitment (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
-   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close)."
+   "Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR": "lemma: ReceiptsBindingOfFork under claim cr/sha-512 (Claims.StrictBirthday) at each window's fork finder (Accounting.Remote.Draw.Receipts.finder, at q_t SHA-512 calls): the receipts' binding term is at most sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), not a Lean function; where the window's cut fixes its roots split_t = 0 and it is sum_t sqrt(|L_t| s_t) q_t/2^256.5 (Accounting.SecurityProofs.Remote.Binding.binding_le_of_fixed), ledger.binding's form, which the code charges at the session's bounds (L_t the most receipts a window of the session can have, s_t its draw cap), not at one record's U_t and s'_t; the deployed committed play doesn't fix the roots (the gap binding-split; note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close).",
+   "Verity.SecurityProofs.CKSize": "frozen (no-function): It is about an arbitrary Boolean declaration and a (c,k)-partition of it (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean), the working draft's |C| = c B, not about a function's code; the NCI check joined to it is what would give it an acceptance.",
+   "Verity.SecurityProofs.BlockDescription": "frozen (no-function): It is the working draft's Lemma 1, about an arbitrary registration of a (c,k)-partition, a decoder and an extraction rule that a fixed evaluator performs (Verity.Registration, Verity.Decoder, Verity.LDL, Verity.Evaluates, Security/Definitions/Core/Formalism.lean), not about a function's code; a check of declared blocks joined to it is what would give it an acceptance.",
+   "Verity.SecurityProofs.CountingSum": "frozen (no-function): It is the working draft's Theorem 3 summed over any partition (Verity.Partition, Security/Definitions/Core/Partition.lean) with per-block allowances, about an arbitrary circuit, not about a function's code; the serving-block bound applies it to the actual circuit's partitions.",
+   "Verity.SecurityProofs.Counting": "frozen (no-function): It is the working draft's Theorem 3, about an arbitrary (c,k)-partition, counted gates and an allowance (Verity.Partition.IsCK, Verity.slowdown, Security/Definitions/Core/Formalism.lean), not about a function's code; the NCI check joined to it is what would give it an acceptance.",
+   "Nci.SecurityProofs.PartitionCovers": "frozen (no-function): It is the working draft's Lemma A.1, about an arbitrary (c,k)-partition (Verity.Partition.IsCK, Security/Definitions/Core/Formalism.lean) and the covering its completed blocks give (Nci.Covering.Covers, Security/Definitions/Nci/Covering.lean), not about the NCI check's code; joining it to NciCheck.Properties.Witnesses is what would give it an acceptance."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
