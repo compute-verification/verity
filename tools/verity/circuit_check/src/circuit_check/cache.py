@@ -129,6 +129,9 @@ from . import entries as E
 
 SCHEMA = "circuit-check-cache/v3"
 _ROOT: list[Path] = []
+#: each link in an import path directory outside the tree that leads into it, with where it leads (`_links`): `research run`
+#: puts such a shim first on the path (``pyshim/<key>/verity -> <tree>/verity``), so the tree's modules have their files there
+_LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 _UNTRACED: list[str] = []
@@ -259,13 +262,36 @@ def _rel(path: Any) -> str | None:
         return None
     try:
         p = Path(os.fsdecode(path))
-        p = p if p.is_absolute() else Path.cwd() / p
-        rel = os.path.relpath(os.path.normpath(p), _ROOT[0])
+        p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
+        rel = os.path.relpath(p, _ROOT[0])
+        if rel.startswith("..") and _LINKS:            # a file through a link into the tree is the tree's (`_LINKS`)
+            rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
+                        if p == k or p.startswith(k + os.sep)), rel)
     except (TypeError, ValueError):
         return None
     if rel.startswith("..") or "__pycache__" in rel.split(os.sep) or rel.split(os.sep)[0] == ".venv":
         return None
     return rel
+
+
+def _links(root: Path) -> dict[str, str]:
+    """`_LINKS`: the links in the import path's directories outside ``root`` that lead into it, each with where it leads.  Read
+    once, when tracing starts: neither its listings nor its ``lstat``s are a check's reads, and `_rel`, which every ``stat``
+    calls, resolves no path itself."""
+    out: dict[str, str] = {}
+    for e in sys.path:
+        d = os.path.abspath(e or os.getcwd())
+        if not os.path.relpath(d, root).startswith(".."):
+            continue
+        try:
+            names = os.listdir(d)
+        except OSError:
+            continue
+        for n in names:
+            p = os.path.join(d, n)
+            if os.path.islink(p) and not os.path.relpath(t := os.path.realpath(p), root).startswith(".."):
+                out[p] = t
+    return out
 
 
 _TARGETS_REL: list[str | None] = [None]
@@ -647,6 +673,7 @@ def trace(root: Path) -> None:
     the code that runs through `sys.monitoring`, and the Definitions' builds and reads (`_instrument`)."""
     if not _ROOT:
         _ROOT.append(Path(root).resolve())
+        _LINKS.update(_links(_ROOT[0]))
         _TARGETS_REL[0] = _rel(TARGETS)
         unit_files(())
         sys.addaudithook(_hook)

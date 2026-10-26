@@ -1147,6 +1147,32 @@ def test_a_target_named_on_the_command_line_reruns_when_its_descriptor_changes_w
     assert _values(root, "SynKn_v1") == [[3 + 2 * 0x0105], [3 + 3 * 0x0105]]
 
 
+def _shimmed(harness: str) -> str:
+    """``harness`` with the synthetic package imported through a link outside the tree (``shim/syn -> tree/syn``) first on the
+    import path, as `research run` puts its shim (``pyshim/<key>/verity -> <tree>/verity``)."""
+    return harness.replace("sys.path.insert(0, str(root))",
+                           "sys.path.insert(0, str(root))\nsys.path.insert(0, str(root.parent / 'shim'))")
+
+
+@pytest.mark.parametrize("named", [False, True], ids=["all", "named"])
+def test_a_module_imported_through_a_link_into_the_tree_is_held(tmp_path, named):
+    """CIR-116: under `research run` every module of `verity` has its file in the shim, outside the root, so no entry held one
+    (a real target's held only `verity_flock`'s), and an edit to a primitive's evaluator, which changes no descriptor, was
+    reused.  A file through a link into the tree is the tree's (`cache._LINKS`)."""
+    root, shim = _tree(tmp_path / "tree"), tmp_path / "shim"
+    shim.mkdir()
+    (shim / "syn").symlink_to(root / "syn", target_is_directory=True)
+    harness = _shimmed(_named("SynTop_v1") if named else HARNESS)
+    targets = ["SynTop_v1"] if named else ["SynOther_v1", "SynTop_v1"]
+    assert _run(root, harness)["hits"] == []
+    assert _run(root, harness)["hits"] == targets
+    assert {"syn.top", "syn.sub", "syn.prims"} <= set(_entry(root, "SynTop_v1")["reads"]["modules"])
+    _edit(root, "syn/prims.py", "(a + b) & 0xFFFF", "(a + b + 1) & 0xFFFF")
+    out = _run(root, harness)
+    assert out["hits"] == [] and out["stats"]["stored"] == len(targets)
+    assert _values(root, "SynTop_v1") == [[3 + 0x0105], [3 + 0x0105 + 1]]
+
+
 #: the harness with each target checked in a process of its own, forked from a zygote that is itself forked from the harness's
 #: process once the task list is built (`cli.Zygote` ``fork``, as `circuit-check` runs), so it holds this process's catalog
 FORKED = HARNESS.replace("log=None, cache=", "log=None, jobs=2, isolate=True, fork=True, cache=")
