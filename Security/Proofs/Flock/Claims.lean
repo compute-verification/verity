@@ -207,6 +207,7 @@ import Proofs.Flock.Claims.KS.ZkAcceptsAt
 import Proofs.Flock.Claims.KS.ZkAcceptsRun
 import Proofs.Flock.Claims.CompleteFails
 import Proofs.Flock.Claims.Sampling
+import Proofs.Flock.Claims.KS.ZkAccepts
 import Proofs.Flock.Claims.Witnesses
 import Proofs.Flock.Claims.WrongUnits
 
