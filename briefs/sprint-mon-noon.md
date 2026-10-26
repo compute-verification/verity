@@ -59,6 +59,8 @@ by data sheet, and the table says so.
 >
 > **Opening a PR when your tools have no PR action (10:10Z):** `research queue open --head <your pushed branch> --sha <head> --title "..." --body-file <file> --base main`. The body's first line must be `Lane compute-research`. It prints the PR's URL. The D3 model is now **#4662** (clean history), which replaces #4553.
 >
+> **`git merge-tree` the way drive does it (10:24Z):** `git fetch` `main` and `next` first. Drive's clones merge `lean-audit.json`, `lakefile.toml` and `.lean` imports through `merge.py` drivers, so a check without those drivers can disagree with drive. Configure them as drive does, or at least fetch fresh before you run the check.
+>
 > **Before you mark (ci, 09:06Z):** sync the checkout you run `research queue ready --mark` from to `origin/main` (`git pull` + `uv sync`). An older research client doesn't know drive.toml's new keys, and its preflight skips landing gates.
 >
 > **Before you report that a Lean head builds (RT-LEAN-2, 08:40Z):** run one probe that imports the package root, e.g. `import Proofs.Pouw`. A single-file `lean try` builds only that file's imports, so it can pass while the package root fails.
