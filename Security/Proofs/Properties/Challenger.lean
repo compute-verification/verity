@@ -33,4 +33,19 @@ theorem liveAnswer : LiveAnswer := by
           exact h
         · split at h <;> simp at h
 
+/-- ONE-4's target from the reader's property: `liveAnswer` gives the coins read, `DrawnByDevice` what they are. -/
+theorem coinsFromLog (hd : DrawnByDevice) : CoinsFromLog := by
+  intro P L R dev a b e h
+  obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer P L a b e h
+  refine ⟨p, c, ev, ξ, hp, hc, hev, hacc, ?_⟩
+  rw [R.reads] at hξ
+  cases hraw : drawCoins (R.key p) (Flock.hexOf (R.window p c)) R.label (R.after p c) (R.record ev) with
+  | error r => rw [hraw] at hξ; cases hξ
+  | ok raw =>
+    rw [hraw] at hξ
+    rcases hd dev (R.key p) (R.window p c) R.label (R.after p c) (R.record ev) raw hraw with
+      ⟨s, hs, hopen, hrel⟩ | hb
+    · exact .inl ⟨s, hs, hopen, by rw [← hrel]; exact hξ⟩
+    · exact .inr hb
+
 end Properties.Challenger

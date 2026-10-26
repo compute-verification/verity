@@ -2,9 +2,6 @@
 A protocol whose draw reads live coins (`Live`): its check is a check at the coins (`checkAt`), run on the coins it reads
 from its evidence (`coins`), the challenger's signed record of them under the key its parameters pin.
 
-* `Source`: where the coins come from, as the verifier holds it: the challenger's key, the session its parameters
-  designate (a window's open root, or the id the auditor designated for PoUS's session), and the digest the coins were
-  released after (the commitment's);
 * `Live P`: `P`'s check factors through the coins (`factors`): `check` is `checkAt` at what `coins` reads, and refuses
   with its reason when nothing reads;
 * `Protocol.answerAt`: `Protocol.answer` with `checkAt` at coins `ξ` in place of `check`, the verdict the protocol
@@ -21,20 +18,10 @@ namespace Core
 
 open Flock (V)
 
-/-- Where a draw's live coins come from, as the verifier holds it. -/
-structure Source where
-  /-- The challenger's LMS public key (`I ‖ T[1]`), the verifier's own, never the prover's. -/
-  key : ByteArray
-  /-- The session the parameters designate: the window's open root, or the session id the auditor designated. -/
-  session : ByteArray
-  /-- The digest the coins were released after: the commitment's. -/
-  after : ByteArray
-
 /-- `P`'s check reads its draw's live coins and decides at them: `check p c e` is `checkAt p c ξ e` at the coins `ξ`
 that `coins p c e` reads, and a refusal with its reason when it reads none. -/
 structure Live (P : Protocol) where
   Coins : Type
-  source : P.Params → P.Commitment → P.Evidence → Source
   coins : P.Params → P.Commitment → P.Evidence → V Coins
   checkAt : P.Params → P.Commitment → Coins → P.Evidence → Outcome P.Public P.Profile
   factors : ∀ p c e, P.check p c e = match coins p c e with
