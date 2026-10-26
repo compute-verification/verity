@@ -435,6 +435,13 @@ theorem steered_of_checked {Pfx Y : Type} {N T M : ℕ} {blocks a : ℕ} {idx : 
   have : Nonempty {sc : Schedule.Schedule // Schedule.malformed sc blocks = none} := ⟨⟨⟨#[], #[], #[]⟩, rfl⟩⟩
   steered_of_scheduleDeterministic (scheduleDeterministic_of_checked (idx := idx) gap checked)
 
+/-- **`ScheduleLayoutGap` holds of the verifier's layout**: `sessionLayout` is `codeLayout` of the session's appends and
+the runs the pass sent, at every prefix and coin. -/
+theorem scheduleLayoutGap_code {Pfx Y : Type} {N T M : ℕ} (blocks : ℕ) (dflt : Pfx → Fin N ↪ Fin T × Fin M)
+    (appended sent : Pfx → Y → Array (ℕ × ℕ)) :
+    ScheduleLayoutGap (fun c => codeLayout blocks (dflt c)) appended sent (sessionLayout blocks dflt appended sent) :=
+  fun _ _ => rfl
+
 /-- One block, put at position `y` of one append: the coin bit `y` steers it. -/
 def coinLayout : Unit → Fin 2 → Fin 1 ↪ Fin 1 × Fin 2 :=
   fun _ y => ⟨fun _ => (0, y), fun _ _ _ => Subsingleton.elim _ _⟩

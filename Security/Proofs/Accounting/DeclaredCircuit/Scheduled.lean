@@ -90,11 +90,11 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
 /-- **A declared circuit's held and moved bits from an accepted stacked audit, at the committed steering cap**,
 `Properties.DeclaredCircuit.ScheduledRequirement`. -/
 theorem scheduledRequirement : ScheduledRequirement := by
-  intro n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose layout steer
-    joined A blocks cap idx pos appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr hn hP hN hE0 hrank hKB hE hε hB
-    hCC hgap hlife _hres hprop hreads hx RL C γ owned credit tiles store win accepted
-  obtain ⟨sched, slot, hslot⟩ := steered_on (blocks := blocks) (cap := cap) (idx := idx) hgap accepted
-    fun _ _ h => h
+  intro n P N ρ S q G Xr Lr qr τ k a L E B εnum εden T M ε δ ιW Wc caps Aud Ω Ca Ch _ _ enc choose dflt steer
+    joined A blocks cap idx appended sent V Kg Dv _ _ W pl ℓ grp bind mm plan addr layout hn hP hN hE0 hrank hKB hE hε
+    hB hCC hlife _hres hprop hreads hx RL C γ owned credit tiles store win accepted
+  obtain ⟨sched, slot, hslot⟩ := steered_on (blocks := blocks) (cap := cap) (idx := idx) (layout := layout)
+    (Properties.RemoteAudit.scheduleLayoutGap_code blocks dflt appended sent) accepted fun _ _ h => h
   have hB' : ∀ s w η j pre, Assumptions.SketchHashBudget
       ((((A.widen (cap + 1)).session s).window w η).device j pre) (qr * τ) :=
     fun s w η j pre => hB (fun i => s (Fin.castAdd (cap + 1) i)) w η j pre

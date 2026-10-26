@@ -18,12 +18,12 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   session it plays that record's opening draw `recordDraw`, one window for each of the session's, window `t` with the
   receipts it has in the state the record's session reaches, drawing `min(s, U_t)` at the session's `samples` s) and
   the record of outcome `ω` the prover's holding the deployed commitment `com ω` (`played`), whose trace of record
-  (`ofRecord`, the trace with the Lean verifier's verdict on the record as its own) meets the memory model's premises
-  (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`, `Paced` at the record's groups
-  `recordPace`, `Covers`, `SketchBoundAt` at `δs` and `NoOutsideCompute`, statement C in full: no device outside the
-  node computes on a registered block or a receipt during the session, and the draw's `Live` at every fixed coin
-  commitment, `Refused` at the receipts `R`, `Counted`, of the session the prover plays holding `com`, `play com`) and
-  the record's one code-to-model premise (`Registered`, `Properties.RemoteAudit.Line.Premises`), the probability that
+  (`ofRecord`, the trace over the registration's blocks with the Lean verifier's verdict on the record as its own)
+  meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`,
+  `Paced` at the record's groups `recordPace`, `Covers`, `SketchBoundAt` at `δs` and `NoOutsideCompute`, statement C in
+  full: no device outside the node computes on a registered block or a receipt during the session, and the draw's
+  `Live` at every fixed coin commitment, `Refused` at the receipts `R`, `Counted`, of the session the prover plays
+  holding `com`, `play com`; no code-to-model premise, `Properties.RemoteAudit.Line.Premises`), the probability that
   the Lean verifier accepts the record's session and the line it reads off the Lean verifier's record (`lineOf`: its
   groups, windows and registered blocks the record's) credits a stretch more than the trace held over its span
   (`Credits`) is at most `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t + bind)`, `δ` the one the line reads its
@@ -75,6 +75,17 @@ def LineChecked : Prop :=
       0 ≤ rates.linkBytesPerS ∧ 0 ≤ rates.rebuildBurstBytes ∧ 0 ≤ rates.diskBurstBytes ∧
       0 ≤ rates.linkBurstBytes ∧ 0 ≤ l.wrong
 
+/-- **The verifier refuses a line that isn't registered.** A line `line_record` computes off a record given bare
+(`lineOfRegistered`) is of a record of the registration given with it: the record names that registration's digest,
+its registered blocks, which the line credits, are the registration's, and the line is the record's
+(`lineOfRecordOn`). -/
+def LineRegistered : Prop :=
+  ∀ (onRecord : Bool) (reg : RemoteAudit.Registration) (digest : ByteArray) (sm : RemoteAudit.Session.Summary)
+    (samples : ℕ) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : ℕ) (δ : ℚ) (rates : Rates) (l : Line),
+    lineOfRegistered onRecord reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l →
+    digest = reg.digest ∧ sm.blocks = reg.blocks ∧
+      lineOfRecordOn onRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates = .ok l
+
 /-- **The arithmetic link.** Each stretch `x` of form `i` (time-held, link-charged) of a line the code computes: its
 closing group is a group of the record, its span is `[spanStart, spanStop)` on the record's clock, nonempty, ending at
 its paced session's `stop` and starting at its `ended 0` (the first stretch) or its `released 0` (the rest), its form's
@@ -124,9 +135,9 @@ def HeldAt {Ω : Type} (T : Trace Ω) (ω : Ω) (node : Node) (r : Record) (form
 
 /-- **The memory line of record, link-charged.** On a trace over a session's coins, the prover's records read through
 the coin commitment (`recordCommitted`, each record's opening draw at its `samples` s) and the record of each outcome
-the one played holding the deployed commitment (`played`), whose trace of record (`ofRecord`: its verdict the Lean
-verifier's on the record) meets the memory model's premises at the node's rates and the record's groups and the
-record's code-to-model premise (`Registered`), the probability that the Lean verifier accepts the record's session and
+the one played holding the deployed commitment (`played`), whose trace of record (`ofRecord`: over the registration's
+blocks, its verdict the Lean verifier's on the record) meets the memory model's premises at the node's rates and the
+record's groups, the probability that the Lean verifier accepts the record's session and
 a stretch of the record's link-charged line credits more than the trace held over its span is at most
 `δs + (δ + Σ_t s / 2^64 + Σ_t adv_t + Σ_t hide_t + bind)`, `δ` the line's, `adv_t` the advantage on `prf t` of window
 `t`'s distinguisher at it with leaf `t` of the coin commitment committing zeros, `hide_t` window `t`'s hiding term and
@@ -145,7 +156,6 @@ def LineHeld : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 1) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.windows, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)
@@ -168,7 +178,6 @@ def LineHeldIdentity : Prop :=
     Routed (ofRecord T node r) → Paced (ofRecord T node r) (recordPace node r) → Covers (ofRecord T node r) →
     SketchBoundAt (ofRecord T node r) O δs → NoOutsideCompute (ofRecord T node r) O → (∀ c, Live (F.view c)) →
     Refused (F.play com) prf rest (ofRecord T node r) R → Counted (F.play com) (ofRecord T node r) →
-    Registered (ofRecord T node r) node →
     Pouw.pr (fun ω => Verified node (r ω) ∧ ¬ HeldAt (ofRecord T node r) ω node (r ω) 0) ≤
       δs + ((node.delta : ℝ) + ((∑ _t : Fin node.windows, node.params.samples : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t)

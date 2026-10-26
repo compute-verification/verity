@@ -265,6 +265,24 @@ def lineOfRecordOn (onRecord : Bool) (sm : Session.Summary) (samples : Nat) (see
   | .ok _, some why => .error why
   | _, _ => lineOfRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
 
+/-- Why a record `sm` naming registration `digest` is not a record of registration `reg`: it names another, or its
+registered blocks are not `reg`'s; none if it is. -/
+def unregistered (reg : Registration) (digest : ByteArray) (sm : Session.Summary) : Option String :=
+  if digest != reg.digest then some "the record is not of the registration given"
+  else if sm.blocks != reg.blocks then
+    some s!"the record's {sm.blocks} registered blocks are not the registration's {reg.blocks}"
+  else none
+
+/-- `lineOfRecordOn` of a record given bare, without the session's transcript, which names registration `digest`:
+refused first unless it is a record of the registration `reg` given with it (`unregistered`), so that the line credits
+the registration's registered blocks. -/
+def lineOfRegistered (onRecord : Bool) (reg : Registration) (digest : ByteArray) (sm : Session.Summary)
+    (samples : Nat) (seen : Array Seen) (per blockBytes chipBytes nodeBytes : Nat) (δ : Rat) (rates : Rates) :
+    Except String Line :=
+  match unregistered reg digest sm with
+  | some why => .error why
+  | none => lineOfRecordOn onRecord sm samples seen per blockBytes chipBytes nodeBytes δ rates
+
 /-- The record `Session.run` makes of a session from `s` over `events`, none where the run fails or doesn't accept
 (`Session.State.summary`): `LineHeld`'s `Record.summary`. -/
 def summaryOfRun (s : Session.State) (events : Array Session.Event) : Option Session.Summary :=

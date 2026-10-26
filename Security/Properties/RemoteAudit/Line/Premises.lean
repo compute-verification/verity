@@ -1,25 +1,20 @@
 import Properties.RemoteAudit.Line.Record
 
 /-!
-# What the line of record assumes of its record (`Properties.RemoteAudit.Line`)
+# What the line of record reads of its record (`Properties.RemoteAudit.Line`)
 
-The code-to-model premise of `Properties.RemoteAudit.Line.LineHeld`, a named `Prop` taken as a hypothesis: what ties
-the record a gate run's line reads (`Record`, through the Lean verifier's record of the session, `Record.summary`) to
-the trace (`Accounting.Remote.Held.Trace`) the memory model states its guarantees over. `LineHeld` reads it, like the
-model's premises, at the trace of record (`ofRecord`), whose verdict is the Lean verifier's on the record.
+What ties the record a gate run's line reads (`Record`, through the Lean verifier's record of the session,
+`Record.summary`) to the trace (`Accounting.Remote.Held.Trace`) the memory model states its guarantees over. Nothing of
+it is a premise: `LineHeld` reads the model's premises at the trace of record (`ofRecord`), whose verdict is the Lean
+verifier's on the record.
 
-* `Registered`: the trace's registered blocks are those of the registration the session ran on (`Node.blocks`). The
-  line reads N off the Lean verifier's record (`Summary.blocks`, which a run gives as the node's registration's), and
-  the line of record credits a session only when the verifier's process held that registration's hello to the pinned
-  model's store (`RemoteAudit.Store.hold`, `auditor_line.py`'s *bound*): what is left is the model's naming of its
-  store, that the trace is over that registration's blocks. It closes once the trace is indexed by its registered
-  blocks (`Trace N`, `Trace.blocks` gone), a change to `Definitions.Accounting.Remote.Held` that retypes every remote
-  guarantee: `Definitions.Accounting.Remote.Held`, `Definitions.Accounting.Assumptions.RemoteHeld`,
-  `Definitions.Accounting.Assumptions.RemoteDraw`, `Definitions.Accounting.Assumptions.RemoteSketch`,
-  `Definitions.Accounting.Guarantees.RemoteHeld`, `Definitions.Accounting.Guarantees.RemoteDraw`,
-  `Definitions.Accounting.Guarantees.RemoteSketch`, `Proofs.Accounting.RemoteHeld` and its `Draw`, `Line`, `Meets`,
-  `OverTime`, `Sketch` and `Window`, and `Properties.RemoteAudit.Line` with its `Premises` and `Record`; with it every
-  lock record that reads `Trace` changes.
+* `Registered`: the trace's registered blocks are those of the registration the session ran on (`Node.blocks`). It
+  holds of the trace of record, which is over the registration's blocks (`ofRecord`, `overBlocks`;
+  `registered_ofRecord`): a trace's registered blocks are the model's name for the store, which the verifier can't see,
+  and the model's store is the registration's. What the verifier sees, it checks: the line reads N off the Lean
+  verifier's record (`Summary.blocks`, the registration's on an accepted run, `record_summary`), and the verifier's
+  `line_record` refuses a record given bare that is not of the registration it is given, its digest and its registered
+  blocks (`RemoteAudit.Line.lineOfRegistered`, `Properties.RemoteAudit.Line.LineRegistered`).
 
 The rest of what the line reads of its record is code, proved. The draw's sizes are the record's: `LineHeld` reads the
 draw at `recordDraw`, window `t`'s size the receipts it has in the state the record's session reaches, and on an

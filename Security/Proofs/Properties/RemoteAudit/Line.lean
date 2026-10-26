@@ -622,4 +622,19 @@ theorem stretchBound : StretchBound := by
     obtain ⟨a1, a2, a3, a4, a5, a6, a7⟩ := stretch_bound_of hb hW h2r h2b hls hx
     exact ⟨a1, a2, a3, a4, a5, by simp, a6, a7⟩
 
+local instance lawfulBEqByteArrayLine : LawfulBEq ByteArray where
+  eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
+  rfl {a} := by show (a.data == a.data) = true; exact beq_self_eq_true _
+
+/-- **LineRegistered**, proved: `lineOfRegistered` refuses unless `unregistered` finds nothing, and then it is
+`lineOfRecordOn`. -/
+theorem lineRegistered : LineRegistered := by
+  intro onRecord reg digest sm samples seen per blockBytes chipBytes nodeBytes δ rates l h
+  by_cases hd : digest = reg.digest
+  · by_cases hb : sm.blocks = reg.blocks
+    · refine ⟨hd, hb, ?_⟩
+      simpa [lineOfRegistered, unregistered, hd, hb] using h
+    · simp [lineOfRegistered, unregistered, hd, hb] at h
+  · simp [lineOfRegistered, unregistered, hd] at h
+
 end Properties.RemoteAudit.Line
