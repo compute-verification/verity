@@ -691,7 +691,11 @@ theorem schedBridge' {x : Msg} (hx : DenseX x) :
   obtain ⟨st0, hst, hf⟩ := hx
   obtain ⟨r, hr, ha, rfl⟩ := parse_read hst
   have hh : r.shape.holo = false := hf.1
-  have hsp : r.shape.sparse = none := hf.2
+  have hsp : r.shape.sparse = none := by
+    have h2 : (r.shape.sparse.map fun sp => (sp.nu, sp.ell, sp.sLog, sp.tLog)) = none := hf.2
+    cases hs : r.shape.sparse with
+    | none => rfl
+    | some _ => simp [hs] at h2
   obtain ⟨f, spec', st', s, spec, st, hfs, hstm, hset, hm, hk, hreg, hpts, htags, hpi⟩ := innerSetup_files hr ha
   unfold RecScope.accepts at ha
   simp only [Bool.and_eq_true, RecScope.isOk_iff] at ha
@@ -912,7 +916,8 @@ committing round's, of `rounds`' `kk`-th size. -/
 theorem rowSlot_len {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.holo = false)
     (hsp : r.shape.sparse = none) {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) {j : ℕ}
     {σ : Slot} (h : rowSlot r j = some σ) :
-    ∃ sch kk, fast100 r.shape.m = some sch ∧ (RecVStar.commitRounds rs)[kk]? = some (j % rs.size) ∧
+    ∃ (sch : _root_.Flock.Schedule) (kk : ℕ), fast100 r.shape.m = some sch ∧
+      (RecVStar.commitRounds rs)[kk]? = some (j % rs.size) ∧
       (σ.row.length + 7) / 8 = 2 * _root_.VStar.portWordsOf
         ((_root_.VStar.Algebra.rounds ⟨r.shape.m, r.shape.kLog, r.shape.claims⟩ sch)[kk]!.size) := by
   obtain ⟨s, -, hs⟩ := List.exists_of_findSome?_eq_some h
@@ -928,7 +933,7 @@ theorem rowSlot_len {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shape.hol
     rw [hvs]
     simp only [Except.toOption, Option.bind_some]
     exact Array.getElem?_eq_getElem (by omega)
-  have hdj : hd.1 = j := beq_iff_eq.1 (List.find?_some hf)
+  have hdj : hd.1 = j := beq_iff_eq.1 (_root_.List.find?_some hf)
   obtain ⟨q, hq, k', rs', hck, -, hname, hfi, hrs', hmr⟩ :=
     mem_heldRows_round hst hc (List.mem_of_find?_eq_some hf)
   rw [hrs] at hrs'
@@ -1057,7 +1062,8 @@ theorem roundSlots_sizes {x : Msg} {r : XR} (hr : readX x = some r) (hh : r.shap
         have hf : ((heldRows r s).find? (·.1 == j)).isSome := List.find?_isSome.2 ⟨hd, hhd, by simp [hdj]⟩
         obtain ⟨h', hh'⟩ := Option.isSome_iff_exists.1 hf
         simp [rowSlotAt, hh', hc] at hfs
-      simp [hA]
+      rw [hA]
+      simp
     | some σ =>
       obtain ⟨sch', kk, hsch', hkk, hlen⟩ := rowSlot_len hr hh hsp hrs hσ
       rw [hsch] at hsch'
@@ -1167,7 +1173,7 @@ theorem openedSized_of (elem : (r : XR) → List (Fin r.w.parts.length × List (
   · simp at hos'
   simp only [List.map_cons, List.cons.injEq] at hos'
   obtain ⟨h0, h1⟩ := hos'
-  dsimp only [List.headD, List.tail]
+  simp only [List.headD_cons, List.tail_cons]
   have hlen0 : (rowsR o0).length = level0Nodes st := by
     simpa [capSlots] using congrArg List.length h0
   have hcs := capAt_stmt hr hc0
@@ -1267,7 +1273,7 @@ theorem openedSized_of (elem : (r : XR) → List (Fin r.w.parts.length × List (
   have hlenB : ((((List.range (2 * rs.size)).map fun j =>
       (roundSlots r rs j).map fun σ => (σ.row.length + 7) / 8).drop (k * rs.size)).take rs.size).length =
         C.sched.length := by
-    rw [hCsched, Array.length_toList, List.length_take, List.length_drop, List.length_map, List.length_range]
+    rw [hCsched, List.length_take, List.length_drop, List.length_map, List.length_range, Array.length_toList]
     rcases (show k = 0 ∨ k = 1 by omega) with rfl | rfl <;> omega
   have hblk : ∀ t < C.sched.length, ((((List.range (2 * rs.size)).map fun j =>
       (roundSlots r rs j).map fun σ => (σ.row.length + 7) / 8).drop (k * rs.size)).take rs.size).getD t [] =
@@ -1283,7 +1289,7 @@ theorem openedSized_of (elem : (r : XR) → List (Fin r.w.parts.length × List (
       rw [Nat.add_comm, Nat.add_mul_mod_self_right, Nat.mod_eq_of_lt ht]
     rw [getD_block _ hk2 ht]
     try dsimp only
-    rw [roundSlots_sizes hr hh hsp hrs hsch' hrr hj, hmod, hCsched, arr_toList_getD, hCsch, hCm, hCk, he2]
+    rw [roundSlots_sizes hr hh hsp hrs hsch' hrr hj, hmod, hCsched, arr_toList_getD rs, hCsch, hCm, hCk, he2]
   refine ⟨hsc', ?_⟩
   obtain ⟨p, T, hp, hcp, hpB⟩ := rep_sized hsc' hCn hcap hcapE hdig _ hlenB hblk
   exact ⟨p, T, hp, hcp, hBeq.trans hpB⟩
