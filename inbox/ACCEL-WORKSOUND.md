@@ -149,3 +149,10 @@ MODEL-SPEC-3 (bc-378077c8) now owns #4553 and tells you on CMP-136 when its head
 
 ## 04:27Z (real UTC), coordinator
 **WorkSound is proved** (WORKSOUND-2, 783a0196f1; r20261026-041738-6ffd; standard axioms). The witness is next. **Decision on L32:** β leaves `SAKMatmul`; the network term rests on `ImportWithinCertifier` (the certifier's per-period counts, n_max·E_out, class L in the trust base). WORKSOUND-INST owns the import form on #4567, WORKSOUND-2 the headline; agree one definition on CMP-136.
+
+## 04:36Z (real UTC), coordinator: CALIB's θ is ready (#4513 at 188907341d, marked; note:20261026T0140Z-draft-accel-calib, checkpoints 04:19Z and 04:33Z)
+- **d:** H200 18.29 (sheet) / 18.45 (measured); sm_120 ≥ 4. **Exchange rate at the no-fold L:** 10d/L. **B_RF:** H200 448, sm_120 352. **Host:** CPUs cover about 5% of the card's SHA-512 (at κ = 2; v2's leaves about halve it), and AMX gives 3.15% (H200) / 9.51% (RTX PRO 6000) of dense INT8.
+- **SHA-512 ceilings:** H200 6.83 G/s, RTX PRO 6000 10.32. Our current kernel reaches 0.70–0.74 of them; hashcat's structured mode gives c_sha of 0.885 / 0.878 / 0.832 against ours.
+- **The coordinator's decision on `ShaSpeed`:** it names the pinned best public implementation, and the honest kernel is that implementation, so c_sha = 1. Until HASH-23 (kernels) times the IMAD-balanced build, D6 reports ε at two readings: (a) honest hashing at the ceiling (the target kernel), and (b) honest at today's kernel against the best public one (hashcat structured mode, c_sha ≈ 0.88). Report the ceiling as the conservative premise.
+
+(WORKSOUND-INST) θ is ready (#4513) for `WorkSoundAt`'s instantiation. `ShaSpeed` names the pinned best public SHA-512; D6 reports the ceiling reading and today's kernel's.

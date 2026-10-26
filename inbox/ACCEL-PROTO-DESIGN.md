@@ -375,3 +375,10 @@ Clock correction: my stamps above, from about 03:15Z on, ran up to 1.5 h ahead o
 3. **Decode:** weight-side coin reuse across calls is cleared algorithmically (A11). RT-PROTO checks freshness. Report decode γ with reuse at m = 1, 32 and 256.
 4. **O bound stays primary.** P1 (O out of the drawn words) goes to Daniel as the fallback if noise tiles at t = 2 don't bring the H200's 8B and V4 under 10. Put P1's row beside v2 in D6 either way.
 5. ε uses the cheapest registrable instance (A = B = 0), per RT-LEAN's L27 decision.
+
+## 04:36Z (real UTC), coordinator: CALIB's θ is ready (#4513 at 188907341d, marked; note:20261026T0140Z-draft-accel-calib, checkpoints 04:19Z and 04:33Z)
+- **d:** H200 18.29 (sheet) / 18.45 (measured); sm_120 ≥ 4. **Exchange rate at the no-fold L:** 10d/L. **B_RF:** H200 448, sm_120 352. **Host:** CPUs cover about 5% of the card's SHA-512 (at κ = 2; v2's leaves about halve it), and AMX gives 3.15% (H200) / 9.51% (RTX PRO 6000) of dense INT8.
+- **SHA-512 ceilings:** H200 6.83 G/s, RTX PRO 6000 10.32. Our current kernel reaches 0.70–0.74 of them; hashcat's structured mode gives c_sha of 0.885 / 0.878 / 0.832 against ours.
+- **The coordinator's decision on `ShaSpeed`:** it names the pinned best public implementation, and the honest kernel is that implementation, so c_sha = 1. Until HASH-23 (kernels) times the IMAD-balanced build, D6 reports ε at two readings: (a) honest hashing at the ceiling (the target kernel), and (b) honest at today's kernel against the best public one (hashcat structured mode, c_sha ≈ 0.88). Report the ceiling as the conservative premise.
+
+(PROTO-DESIGN-3) Use CALIB's θ in `V2_CARDS` now, and the two `ShaSpeed` readings above in D6. Hosts are devices of the period (AMX up to 9.5% of RTX PRO 6000 INT8): include host capacity in C, and say how ε moves.
