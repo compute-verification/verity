@@ -55,6 +55,16 @@ negatives.
   bi-eager TP1 (one RTX PRO 6000 of vy-nebius-1): the row's Build and Match of record, a config-run Commit that seals
   `commit/replay_bundle_p0/` (a single-GPU row defers only as a config run), its replay on CPU, and the row dir in the evidence
   store. A deferred single-GPU Commit's window comes from its bundle through `verity-vllm serving-rows`, not `tp-serving-rows`.
+- `served_verdicts.sh` (with `served_verdicts.py`): the Wed 28 run (VLLM-33), one served window through every subprotocol
+  (`research run --on vy-dc-h200 --project verity --cwd clone -- bash benchmarks/one_stage/served_verdicts.sh`). It serves
+  Llama-3.2-1B int8 on one H200 under `gpu-lease` (`serve-openai --scheme rows-sha512 --seal --admit release-order`), sends a
+  few greedy requests from the certifier's traffic generator, and seals each window. On the window holding the most requests,
+  none carried, it runs sampled proofs: the window's advice and request Programs, V3b's window circuit at each class of
+  `CLASSES`, then the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is C-Flock `--zk` on the drawn proof blocks
+  and the Lean verifier. Then come PoUW, the bandwidth audit, PoUS and the network certifier. Each runs its piece where
+  `POUW_CMD`, `BANDWIDTH_CMD`, `POUS_CMD` or `CERTIFIER_CMD` names one; otherwise its `MISSING` line names its issue, and it
+  gets no verdict. Finally the all-protocols window report and CMP-153's block record. Each step's verdict line is in
+  `out/verdicts.txt`.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified law, stand-in values
   staged by C-Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
