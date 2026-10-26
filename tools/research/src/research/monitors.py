@@ -710,7 +710,23 @@ def fixtures_public(ctx: Ctx) -> list[Finding]:
 
 #: drive's queue state on the control pod, whose `drive.postland.verified` is the last `main` a post-landing run passed
 DRIVE_STATE = "root/.research/queue/verity.state.json"
+DRIVE_LOG = "data/drive/drive.log"
 UNVERIFIED_S = 3 * 3600
+DRIVE_TICK_STALE_S = 30 * 60
+TICK_RE = re.compile(rb"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ) tick rc=", re.M)
+
+
+def drive_ticking(ctx: Ctx) -> bool:
+    """Whether drive's log (`DRIVE_LOG`) has a `tick rc=` line from the last `DRIVE_TICK_STALE_S`: drive is alive, so its own
+    `_behind` alarm speaks for a main left unverified (ci and top, 26 Oct)."""
+    try:
+        with open(ctx.root / DRIVE_LOG, "rb") as f:
+            f.seek(max(0, f.seek(0, 2) - (1 << 20)))
+            ticks = TICK_RE.findall(f.read())
+    except OSError:
+        return False
+    return bool(ticks) and ctx.now - datetime.strptime(ticks[-1].decode(), "%Y-%m-%dT%H:%M:%SZ").replace(
+        tzinfo=timezone.utc).timestamp() < DRIVE_TICK_STALE_S
 
 
 def unverified_main(ctx: Ctx) -> list[Finding]:
@@ -720,7 +736,10 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
     committed when drive merged it (`git log --first-parent` in `$RESEARCH_DEPLOY_REPO`, the relay's clone, fetched here).
     GitHub's compare won't do: it lists each PR's own commits too, dated when their branch made them, and a long range's oldest
     hundreds hold no landing (ci, 26 Oct). One event per further hour behind, to ci and top, until a post-landing run verifies
-    main again; read from drive's state, not its log, so it still rings while drive is down."""
+    main again; read from drive's state, not its log, so it still rings while drive is down. Quiet while drive ticks
+    (`drive_ticking`): drive's own `_behind` alarm rings then, and this one covers drive being dead."""
+    if drive_ticking(ctx):
+        return []
     state = json.loads((ctx.root / DRIVE_STATE).read_text())
     verified = ((state.get("drive") or {}).get("postland") or {}).get("verified")
     if not verified:

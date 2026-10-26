@@ -1405,12 +1405,19 @@ def test_unverified_main_rings_ci_and_top_each_hour_past_three_until_a_post_land
                                                   (0, log, "")))
 
     run = git(T0 - 60, T0 - 1800, since)                                    # git log lists the newest first
+    log = tmp_path / M.DRIVE_LOG
+    log.parent.mkdir(parents=True)
+    log.write_text(f"{M.iso(T0 - 31 * 60)} tick rc=0 1\n{M.iso(T0 - 31 * 60)} other line\n")      # drive's last tick: 31 min ago
     (f,) = M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run))
     assert f.key == "595cce6ddaf6:3" and f.owners == ("ci", "top")
     assert "3 h" in f.text and "`595cce6ddaf6`" in f.text and "3 landing(s)" in f.text
     assert ["git", "-C", str(tmp_path / "repo"), "fetch", "-q", "origin", "main"] in [c for c, _ in run.calls]
     assert M.unverified_main(M.Ctx(now=T0 - 120, root=tmp_path, run=run)) == [], "under 3 h behind: quiet"
     assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=git())) == [], "main is its last verified commit"
+    with open(log, "a") as fh:
+        fh.write(f"{M.iso(T0 - 120)} tick rc=1 1\n")
+    assert M.unverified_main(M.Ctx(now=T0, root=tmp_path, run=run)) == [], "drive ticks: its own _behind alarm rings"
+    log.unlink()
 
     m, alerts, st = M.BY_ID["unverified-main"], tmp_path / "alerts", M.new_state()
     for now in (T0, T0 + 600, T0 + 3600):                                  # primed, the same hour again, the next hour
