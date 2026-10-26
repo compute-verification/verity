@@ -235,9 +235,13 @@ SHAPES = {                     # (K, N, layers): the frozen model, and COVER-ATT
     "frozen": [(16384, 16512, 1), (16384, 16384, 1), (16384, 65536, 1), (65536, 16384, 1)],
     "Llama-3.1-8B": [(4096, 6144, 32), (4096, 4096, 32), (4096, 28672, 32), (14336, 4096, 32), (4096, 128256, 1)],
     "Llama-3.1-70B": [(8192, 10240, 80), (8192, 8192, 80), (8192, 57344, 80), (28672, 8192, 80), (8192, 128256, 1)],
-    "DeepSeek-V4-Pro": [(7168, 7 * 6144, 61), (3072, 7 * 7168, 61), (7168, 1536, 61), (1536, 65536, 61),
-                        (7168, 576, 61), (4096, 16 * 1024, 61), (16384, 7168, 61), (7168, 129280, 1)],
+    # Every static matmul a token at vLLM's served instances, from the pinned checkpoint's weight shapes (b5968e9190;
+    # ALGO-COST-3's A39): the compressors, the indexer's, the router and mHC's F32 pre GEMMs (last) included.
+    "DeepSeek-V4-Pro": [(7168, 43008, 61), (3072, 50176, 61), (7168, 1536, 61), (1536, 65536, 61), (7168, 512, 91),
+                        (4096, 16384, 61), (16384, 7168, 61), (7168, 129280, 1), (7168, 2048, 30), (7168, 1024, 31),
+                        (1536, 8192, 30), (7168, 384, 61), (7168, 64, 30), (28672, 24, 122)],
 }
+V4_F32 = {(28672, 24)}         # mHC's F32 GEMMs: credited at INT8 like V4's BF16 weights, an assumption of the world model
 
 
 def v2_round(card: str, K: int, N: int, L: int, word_bits: int, m: int = M_PREFILL, commit_a: bool = False,
@@ -379,16 +383,15 @@ def _dense(name, layers, hidden, hq, hkv, d, ffn, vocab):
             "att": lambda t: [(layers, t)], "indexer": lambda t: 0}
 
 
-V4_EMBED = 129_280 * 7_168    # V4's input embedding (vocab × hidden): inside its 49e9 active parameters, a lookup
-
-
 def _dsv4():
     def att(t):
         w = min(t, 128)
         return [(30, w + min(1024, t // 4)), (31, w + t // 128)]
 
-    # Static MACs a token: the 49e9 active parameters less the input embedding, which does no MACs (RT-PROTO-2's P24).
-    return {"name": "DeepSeek-V4-Pro", "static": 49e9 - V4_EMBED, "hq": 128, "hkv": 1, "dqk": 512, "dv": 512,
+    # Static MACs a token are its listed matmuls' (the input embedding is a lookup); the stated 49e9 active parameters
+    # exclude the embedding and sit 0.31% above that sum (A39).
+    static = sum(K * N * L for K, N, L in SHAPES["DeepSeek-V4-Pro"])
+    return {"name": "DeepSeek-V4-Pro", "static": static, "hq": 128, "hkv": 1, "dqk": 512, "dv": 512,
             "att": att, "indexer": lambda t: 30 * 64 * 128 * (t // 4)}
 
 

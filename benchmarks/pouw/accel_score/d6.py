@@ -396,7 +396,7 @@ def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0, 
     c = vc.CARDS[card][0]
     hist, _, qk, _, ix = nf.world_macs(model)
     jobs, rounds = {"dense": [], "hull": []}, {"dense": 0.0, "hull": 0.0}
-    items = [(K, N, K * N * reps * nf.WORLD_TOKENS * shape_scale(model), static[card, K, N], True)
+    items = [(K, N, K * N * reps * nf.WORLD_TOKENS, static[card, K, N], True)
              for K, N, reps in nf.SHAPES[model["name"]]]
     bins = {}
     for n, cnt in hist.items():
@@ -506,13 +506,6 @@ def n_gpus(card: str) -> float:
 
 def model_of(name: str) -> dict:
     return next(m for m in nf.WORLD if m["name"] == name)
-
-
-def shape_scale(model: dict) -> float:
-    """The model's static MACs a token over its listed shapes' (1 for the Llamas; V4's 48.07e9, its 49e9 active
-    parameters less the input embedding (P24), against 47.46e9): the shapes stand for the count as its mix, as
-    nofold's `static_pipes` takes them (12:02Z: V4's 0.61e9 without a listed shape are credited at that mix)."""
-    return model["static"] / sum(K * N * reps for K, N, reps in nf.SHAPES[model["name"]])
 
 
 def group_gpus(card: str, model: dict) -> int:
@@ -639,7 +632,7 @@ def streaming(card: str, model: dict, row: dict, pv: dict) -> dict:
     toks = nf.WORLD_TOKENS
     t_req = row["gamma"] * (st + qk + pvm + ix) / (nf.ETA * nf.V2_CARDS[card][0]) / CLOCK[card]
     shapes = nf.SHAPES[model["name"]]
-    static_b = toks * shape_scale(model) * sum(K * reps for K, _, reps in shapes)
+    static_b = toks * sum(K * reps for K, _, reps in shapes)
     credited_n = {n: c for n, c in hist.items() if pv.get((card, nf.pv_bucket(n), model["dv"])) is not None}
     p_seed = sum(c * model["hq"] * min(n, 512) for n, c in credited_n.items())
     p_b = sum(c * model["hq"] * n for n, c in credited_n.items())
@@ -659,7 +652,7 @@ def streaming(card: str, model: dict, row: dict, pv: dict) -> dict:
         "raw (v3: b and P's b)": (static_b + p_b, max(n_static, model["dv"])),
         "P's b seeded per (head, row)": (static_b + p_seed, max(n_static, n_max_seed_pv)),
         "every credited coin seeded, ≤ 512·N_max MACs a seed (RT-PROTO-2's; adopted 07:04Z)": (
-            toks * shape_scale(model) * sum(seeded(K, N)[0] * reps for K, N, reps in shapes) + p_seed,
+            toks * sum(seeded(K, N)[0] * reps for K, N, reps in shapes) + p_seed,
             max([seeded(K, N)[1] for K, N, _ in shapes] + [n_max_seed_pv])),
         "floor (credited MACs / N_max)": (cred / n_static, n_static),
     }
@@ -789,8 +782,9 @@ def report(D: dict) -> str:
              "D5 v2.1 (0588f18015) carries route (iii), so the RTX PRO 6000's x > 0 cells are no longer upper bounds "
              "(x = 0 doesn't move); the period's registered total is published before its first check (P21, in the "
              "spec below, with the no-publication variant beside ε); a group is a serving replica, V4's 12 H200s or "
-             "17 RTX PRO 6000s with the network certifier's boundary around it (P23); V4's input embedding is "
-             "credited no MACs (P24); the timed answers are priced (P25); the week, month and year rows carry the "
+             "17 RTX PRO 6000s with the network certifier's boundary around it (P23); V4's static MACs are its "
+             "checkpoint's matmuls at their own shapes, 48.85e9 a token, with no credit for the input embedding and "
+             "no shape scale (P24, A39); the timed answers are priced (P25); the week, month and year rows carry the "
              "union over periods (P26); and the world rows say what they bound, with credit at a fixed served price "
              "μ¹ as one alternative row (P22).\n")
 
@@ -810,21 +804,29 @@ def report(D: dict) -> str:
             L.append(f"| {card}, {short[m]} | {r['eps']['g']} | {pct(r['eps']['head'][1e-6], 3)} | "
                      f"{gamma_ans(r):.2f} / {gamma_ans(p):.2f} | {pct(cov, 1)}{'' if cov >= 0.95 else ' (miss)'} | "
                      f"{PPL[m][2]} | {pct(r['share']['share'], 1)} |")
-    v4 = next(m for m in nf.WORLD if shape_scale(m) != 1)
+    v4 = model_of("DeepSeek-V4-Pro")
     _, st, qk, pvm, ix = nf.world_macs(v4)
-    unshaped = st * (1 - 1 / shape_scale(v4)) / (st + qk + pvm + ix)
-    listed = {card: 1 - rows[HEADLINE, card, "measured", v4["name"]]["world"]["uncredited"] - unshaped
-              for card in vc.CARDS}
-    L.append(f"\n{short[v4['name']]}'s static MACs are its 49e9 active parameters a token less its input embedding "
-             f"(129,280 × 7,168 = {nf.V4_EMBED / 1e9:.3f}e9, a lookup with no MACs: P24), {v4['static'] / 1e9:.2f}e9. Its "
-             f"listed shapes hold {v4['static'] / shape_scale(v4) / 1e9:.2f}e9; the other "
-             f"{v4['static'] * (1 - 1 / shape_scale(v4)) / 1e9:.2f}e9 have no listed shape (the router and other "
-             "projections, presumably), and the coverage above credits them at the listed shapes' mix (shape scale "
-             f"{shape_scale(v4):.4f}; 12:02Z), an assumption. Credited at its listed shapes only, V4's coverage is "
-             + " and ".join(f"{pct(x, 1)} ({card})" for card, x in listed.items()) + ". "
-             + " ".join(f"That is a goal miss for {card}'s V4 row in that reading." for card, x in listed.items()
-                        if x < 0.95)
-             + " Which reading holds is a world-model question: what the unlisted MACs are, at what shapes.")
+    f32 = nf.WORLD_TOKENS * sum(K * N * reps for K, N, reps in nf.SHAPES[v4["name"]] if (K, N) in nf.V4_F32)
+    cov4 = {card: 1 - rows[HEADLINE, card, "measured", v4["name"]]["world"]["uncredited"] for card in vc.CARDS}
+    no_f32 = {card: x - f32 / (st + qk + pvm + ix) for card, x in cov4.items()}
+
+    def v4_goal(card):
+        least = min(cov4[card], no_f32[card])
+        if least >= 0.95:
+            return f"V4 on the {card} meets the 95% goal in both readings, by {(least - 0.95) * 100:.2f} points at the least."
+        return f"That is a goal miss for the {card}'s V4 row" + (" with the F32 GEMMs uncredited." if cov4[card] >= 0.95
+                                                                   else ".")
+
+    L.append(f"\n{short[v4['name']]}'s static MACs are its pinned checkpoint's matmuls a token at their own shapes, "
+             f"{v4['static'] / 1e9:.3f}e9 (ALGO-COST-3's A39, CMP-118 ecee1a19), every one listed and credited at "
+             "its own shape: D6 v1's list left out the compressors, the indexer's compressor and query projection, "
+             "the router and mHC's pre GEMMs (1.42e9), and had wkv at 576 columns, V4's being 512. The input "
+             "embedding is a lookup and is credited no MACs; the stated 49e9 active parameters already exclude it "
+             "and sit 0.31% above the real sum, so P24's gap was real matmuls, not the embedding. The world model "
+             "credits V4's BF16 and F32 weights at INT8, as it does V4's BF16 head, an assumption. With mHC's F32 "
+             "GEMMs uncredited, V4's coverage is "
+             + " and ".join(f"{pct(x, 1)} ({card})" for card, x in no_f32.items()) + ". "
+             + " ".join(v4_goal(card) for card in vc.CARDS))
 
     def g_max(designs):
         return max((r["world"]["gamma"], k) for k, r in rows.items() if k[0] in designs and k[2] == "measured")
@@ -891,9 +893,8 @@ def report(D: dict) -> str:
     L.append("Two tables in different units. C is the world's FP8 FLOP in the window (brief rule L2). What is scaled: "
              "the whole fleet is taken to be one card serving one model, so every figure is that card's share times "
              "C, and P16's groups are C's GPUs at the card's FP8 rate over the model's group (not a census). V4's "
-             "static MACs are 48.07e9 a token (its 49e9 active parameters less the input embedding), with its listed "
-             "shapes (47.46e9) as their mix. εC is ε times the claim beside it: ε is a share of the claim at every "
-             "dual (P20), at the model's group, with ε_net's MACs each at the dearest credited round's price at that "
+             "static MACs are its checkpoint's matmuls, 48.85e9 a token at their own shapes (A39). εC is ε times the "
+             "claim beside it: ε is a share of the claim at every dual (P20), at the model's group, with ε_net's MACs each at the dearest credited round's price at that "
              "table's μ over the period's mean, times 1 + H_o/H, plus the union over the window's periods (P26: "
              + ", ".join(f"{win} {WINDOW_S[win] / PERIOD_S:.2f}" for win in WINDOW_S)
              + " one-week periods). Credit at a period's duals adds up only if everything credited in the period is "
