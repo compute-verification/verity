@@ -1632,7 +1632,7 @@ site that fills none (decode's few tokens); the vLLM integration serving the com
 
 ## Not here yet
 
-- The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocol_options/pouw.py`)
+- The fast implementations: the RTX 4090 kernels and the vLLM adapter (`integrations/vllm/verity_vllm/protocols/pouw/__init__.py`)
   are gated by these vectors when they land. Pearl-C's sm_120 kernel is `benchmarks/pouw/pearl_c_sm120/`; its H100
   kernel (-h1, BLAKE3) is kept unmaintained in `archive/pouw-blake3/pearl_c/`.
 - The per-weight share of the honest reference's work in `wref`, and a `TargetProfile` Definition of the NCP GEMM.
