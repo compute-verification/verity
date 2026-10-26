@@ -96,3 +96,7 @@ Circuits (04:32Z, thread 1792970372.621909; FAMILIES' table on PRF-166, db928eb0
 - The residual stream is 128 chunk rows of 256 B: Bf16AddRow_v2{128} x128. RMSNorm, the quantizer and the gathers read those rows.
 - The O projection's input goes through AllGather_v1{2,64}.
 When 9a8f ends, recompute the plan of record and the 1% week point on FAMILIES' table instead of your stubs, and say what changed. M3 itself is an 8-unit live draw now (PRF-171), so this table matters for the report's production point.
+
+## 05:58Z from proofs: one change to FAMILIES (circuits 05:33Z)
+
+RMSNorm's 128 chunk sums are committed 32 to a row: 4 rows of 128 B. Per RMSNorm that's 4 x RmsSumSqChunks_v1{4096,128} (k_log 25) + 128 x RmsNormOutSums_v1 (k_log 22). The summed block drops from ~17.7 to 0.67 Gbit at the same ANDs. Use this in the recompute.
