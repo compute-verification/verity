@@ -59,6 +59,7 @@ uv run python benchmarks/e2e_h200/run.py --out OUT --shape h200 --seed demo --de
     --prompt-bytes 8 --micro-batch 1024 --workers "$(nproc)" --open 2 --draw 1     # the skeleton at batch 4,096 (ATTN_REF_CUBIN set)
 bash benchmarks/e2e_h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: the research run)
 PYTHONPATH=benchmarks/e2e_h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
+python benchmarks/e2e_h200/rowsize.py --shared SHARED.layout.json --bindings BINDINGS.json   # CMP-149: the shared row's size, costed
 ~~~
 
 Exit 0: every drawn unit replays to its committed word, every opened slot to its committed root and every subcircuit's own
