@@ -1,10 +1,13 @@
 """The loop's PoUW window (`verity_torch_loop.pouw`): its linears as the pinned H1 tile carry the loop's own output, a
 tampering loop's tiles are not the tile's function, every tile's ``a`` and ``b`` are the committed operand rows its
 ports' reads name, and PoUW's window check (`core_check`) takes the written registration, its operands among it, under
-the verifier's parameters and accepts a proof service's answer for it."""
+the verifier's parameters and accepts a proof service's answer for it; a live window's salt session, opened on its
+weights' and operands' roots, is accepted, and one opened on other operands is refused."""
 from __future__ import annotations
 
 import json
+import sys
+import tempfile
 from fractions import Fraction
 
 import numpy as np
@@ -127,3 +130,54 @@ def test_core_registers_the_written_window_and_accepts_a_service_answer_for_it(t
     assert CC.answer(CC.line(p).encode(), CC.line(rec).encode(), CC.line(other).encode())["verdict"] == "reject"
     eps = {**p, "eps": "1/4"}
     assert CC.answer(CC.line(eps).encode(), CC.line(rec).encode(), CC.line(ans).encode())["verdict"] == "reject"
+
+
+@pytest.fixture
+def gate(tmp_path, monkeypatch):
+    """A local gate under `tmp_path` (`window_salt.local`), its challenger under live_challenger's stub of the Lean
+    verifier's coins, so the test builds no `sampled-proofs-verifier`."""
+    WS = PW.window_salt()
+    AC = WS.a5_coins()
+    auditor = AC._module("a5_auditor", WS.TREE / "benchmarks" / "live_challenger" / "auditor.py")
+    real, stub = auditor.serve_argv, WS.TREE / "benchmarks" / "live_challenger" / "tests" / "stub_serve.py"
+    monkeypatch.setattr(auditor, "serve_argv", lambda *a, **k: [sys.executable, str(stub), *real(*a, **k)[2:]])
+    monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    main = [AC.on_main([])]
+    return WS, WS.local(tmp_path / "host", main), main
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("late", [False, True], ids=["salt-after-operands", "operands-after-salt"])
+def test_a_live_windows_salt_is_released_against_its_operands(tmp_path, gate, late):
+    """Builds and writes a live H1 window (about a minute): its registration names the pinned weights and the operands
+    and no W root, its salt session opens on R over their roots, and PoUW accepts its answer; a session opened on other
+    operands (the prover took the salt, then committed the rows its tiles read) is refused at the salt."""
+    WS, g, main = gate
+    loop = L.TorchLoop(L.Model(), [3, 7], 1, run_id="live")
+    weights = PW.weights_group(loop.model, L.commit_weights(loop.model))
+    h1 = PW.H1Loop(loop, weights=weights, live=True)
+    anchors = h1.anchors()
+    if late:
+        early = OP.block(h1.program, OP.commit(h1.program, loop.run_root,
+                                               {v: [[0] * e["words"]] for v, e in h1.operands["values"].items()}))
+        anchors = {**anchors, "window": {**anchors["window"], OP.KEY: early}}
+    issued = WS.issue(g, anchors, 0, main, tmp_path / "salt-session")
+    rec = h1.write(h1.window(issued.salt), tmp_path / "pouw", {"loop": "torch-loop/pouw-h1"}, salt_key=bytes(32),
+                   issued=issued)
+    assert json.loads((tmp_path / "pouw" / PW.SALT).read_text()) == {"answer": issued.answer, "live": issued.live}
+    assert rec["window"]["registered"] == weights and not any(r["port"] == "W" for r in rec["roots"])
+    assert CC.window_anchors(rec) == (CC.values_root(weights), h1.X)
+    p = h1.params(issued.live)
+    assert p["check"][Wd.COINS] == "live" and CC.registered(CC.params(p), CC.commitment(CC.line(rec).encode())) is None
+    draw = {"k": h1.k, "law": "subset", "population": h1.work.n, "units": list(range(h1.k))}
+    profile = A.profile(rec, draw, float(PW.DELTA)).to_json() | {"delta": str(PW.DELTA)}
+    ans = {"commitment": R.digest(rec), "profile": profile, "protocol": R.PROTOCOL,
+           "public": {"draw": draw, "salt": issued.answer}, "reason": None, "verdict": "accept"}
+    got = CC.answer(CC.line(p).encode(), CC.line(rec).encode(), CC.line(ans).encode())
+    if late:
+        assert got["verdict"] == "reject" and got["reason"].startswith("salt: the challenger's session is not trusted"), got
+    else:
+        assert got["verdict"] == "accept", got["reason"]
+        unsalted = {**ans, "public": {"draw": draw}}
+        assert CC.answer(CC.line(p).encode(), CC.line(rec).encode(), CC.line(unsalted).encode())["verdict"] == "reject"

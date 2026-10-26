@@ -16,7 +16,8 @@ from verity.core.protocols.pouw import window as Wd
 from verity_torch_loop import serve
 
 UNPINNED = "params: check.template is not a tile template the verifier pins"
-NOT_POUWS = "commitment: window is not {context, kind, public} with strings and an object"
+NOT_POUWS = ("commitment: window is not {context, kind, public}, with strings and an object, and optionally activations "
+             "and registered")
 TEMPLATE = 'ScaledMmS8Coordinate_v1{K=128,DOT={"fn":"BlackwellS8ImmaDot32_v1"}}'
 
 

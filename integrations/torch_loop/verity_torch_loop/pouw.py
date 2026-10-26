@@ -19,19 +19,25 @@ credit them: no new pin; PoUW's check takes the window's operands (`operands`) b
   64 codes, each with one zero row for the fillers: per-window values of PoUW's `operands` (domains binding the run
   root), named in the registration's window (``activations``). The tiles' ``a`` and ``b`` ports declare reads of them
   (`interface.Read`), so a member commits each row under the value's salt and Lean's registered reads open it against
-  the value's root; the tiles' roots are those two roots. Their root X (`H1Loop.X`) is what the window's salt is released
-  against, so the salt comes after them (`H1Loop.window`'s ``salt``), the same for every tile.
+  the value's root; the tiles' roots are those two roots. Their root X (`H1Loop.X`, `core_check.values_root` of
+  ``activations``) is what the window's salt is released against, so the salt comes after them (`H1Loop.window`'s
+  ``salt``), the same for every tile.
+* **The live salt** (``live``, CMP-90): the registration names the pinned weights' entries (``registered``,
+  `weights_group`) and no ``W`` root, so W is their root; `window_salt.issue` opens one salt-only session on
+  R = `salt.anchored_epoch_root(W, X, k)` (`H1Loop.anchors`) and the tiles take its salt. `SALT` beside the window holds
+  the answer's ``public.salt`` and the verifier's ``live`` params, and the check item's coins are live.
 * **The registration** is one-stage's record whose window is PoUW's form, ``{context, kind: "served", public}``
   (`core_check.registered`): ``public`` holds the registered items (`window.REGISTERED`: work, check, sampling, length,
   root_W), ``context`` is the run root and ``activations`` the operands. What one-stage's window would name (the
   circuit record's digest, the run root, the index's digest, the order) goes to ``provenance.json`` beside it
-  (`Registrar`), which the audit holds to the circuit the verifier registered (`pouw_audit`). The check item names no coin mode (seeded: nothing ties the tile's salt
-  to a live session yet), and ε, δ and the entries bound are all-protocols' PoUW leg's (`EPS`, `DELTA`, `ENTRIES`).
+  (`Registrar`), which the audit holds to the circuit the verifier registered (`pouw_audit`). The check item's coins are
+  live for a live window and seeded otherwise, and ε, δ and the entries bound are all-protocols' PoUW leg's (`EPS`,
+  `DELTA`, `ENTRIES`).
   `params` gives the verifier's parameters it is checked under.
 * **Tamper** flips bit 0 of every real tile's z before it is recorded: a drawn real tile's proof refuses it.
 
-Gaps, stated: the salt is given to the loop and nothing in the record binds it to a live coin yet (`core_check.salt` is
-not part of `answer`; ALLP-SALT releases it against X); the A rows are not proved to be the served ``x`` rows (one token's
+Gaps, stated: a live window's salt is the session's, but the tiles' salt port is a value the prover records, so nothing
+in the proof yet ties the proved tiles to it (the statement takes no coin input from the verifier); the A rows are not proved to be the served ``x`` rows (one token's
 row each, an A row R tokens' half rows: a gather, CIR-100), and the B rows not to be the registered weights' (one
 channel's row each); the roots port holds the operands' roots but no read declares it, so the tile's receipt binds them
 only as the prover recorded them; the unit's proof is of the window's staged statement, not the pinned flat circuit
@@ -39,8 +45,10 @@ only as the prover recorded them; the unit's proof is of the window's staged sta
 """
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
+import sys
 from fractions import Fraction
 from pathlib import Path
 from collections.abc import Mapping
@@ -71,6 +79,8 @@ RANGE = (1, 1 << 16)
 CAP = 8
 #: the operands' salts, the prover's, beside the window
 OPERANDS_PRIVATE = "operands-private.json"
+#: a live window's salt session, beside the window (the leg's ``SALT``): ``{answer, live}``
+SALT = "salt.json"
 SALT_BYTES = Ht.SALT_BYTES
 
 
@@ -88,23 +98,30 @@ def resolve(tid: str) -> Any:
     return t
 
 
-def check_item(entries: int = ENTRIES) -> dict[str, Any]:
-    return {"entries": entries, "scheme": CC.SCHEME, "template": tile().id, "tile_work": TILE_WORK}
+def check_item(entries: int = ENTRIES, live: bool = False) -> dict[str, Any]:
+    """The check item, its coins live (`window.COINS`) when the window's salt is a live session's."""
+    return {**({Wd.COINS: "live"} if live else {}), "entries": entries, "scheme": CC.SCHEME, "template": tile().id,
+            "tile_work": TILE_WORK}
 
 
 class Registrar:
     """One-stage's registrar (`registration`), the record's window replaced by PoUW's ``{context, kind, public}``:
     ``public`` the registered ``items``, ``context`` the run root, ``activations`` the tiles' operands
-    (`operands.block`), and the window one-stage would name kept as ``provenance``."""
+    (`operands.block`), ``registered`` the pinned weights' entries when given (the W `core_check.window_anchors` reads),
+    and the window one-stage would name kept as ``provenance``."""
     KINDS, FORMAT, digest = R.KINDS, R.FORMAT, staticmethod(R.digest)
 
-    def __init__(self, items: Mapping[str, Any], operands: Mapping[str, Any]) -> None:
+    def __init__(self, items: Mapping[str, Any], operands: Mapping[str, Any],
+                 registered: Mapping[str, Any] | None = None) -> None:
         self.items, self.operands, self.provenance = dict(items), dict(operands), None
+        self.registered = None if registered is None else dict(registered)
 
     def record(self, program, query, law, scheme, roots, window, **kw) -> dict[str, Any]:
         self.provenance = dict(window)
         return R.record(program, query, law, scheme, roots, {"context": window["run"], "kind": window["kind"],
-                                                             "public": self.items, OP.KEY: self.operands}, **kw)
+                                                             "public": self.items, OP.KEY: self.operands,
+                                                             **({} if self.registered is None
+                                                                else {"registered": self.registered})}, **kw)
 
 
 def _u32(xs) -> np.ndarray:
@@ -118,14 +135,20 @@ def _words(rows: np.ndarray) -> list[int]:
 
 class H1Loop:
     """``loop``'s linears as H1 tiles (module docstring) at ε ``eps`` and δ ``delta``: the loop served and the tiles'
-    operands committed (`operands`) on construction, before any salt; the tiles recorded under one (`window`)."""
+    operands committed (`operands`) on construction, before any salt; the tiles recorded under one (`window`).
+    ``weights``: the pinned weights' entries (``{program, values}``, `weights_group`), which the registration names as
+    ``registered``; ``live``: the salt is a live session's (`anchors`, `window_salt`), which needs them."""
 
     def __init__(self, loop: L.TorchLoop, eps: Fraction = EPS, delta: Fraction = DELTA, bits: int = Wd.GRID_BITS,
-                 salts: Mapping[str, list[bytes]] | None = None) -> None:
+                 salts: Mapping[str, list[bytes]] | None = None, weights: Mapping[str, Any] | None = None,
+                 live: bool = False) -> None:
         h = loop.model.h
         if h % TILE_K or h % TILE_C:
             raise ValueError(f"width {h}: the tiles need a multiple of {TILE_K} and {TILE_C}")
+        if live and weights is None:
+            raise ValueError("a live window's salt binds its registered weights' root W: give the pinned weights")
         self.loop, self.eps, self.delta, self.bits = loop, Fraction(eps), Fraction(delta), bits
+        self.weights, self.live = (None if weights is None else dict(weights)), live
         self.blocks = -(-len(loop.requests) // TILE_R)
         self.calls = loop.steps * len(loop.model.layers)
         self.cols, self.ks = h // TILE_C, h // TILE_K
@@ -153,6 +176,11 @@ class H1Loop:
         """The operands' root (`operands.root`), fixed before the window's salt."""
         return OP.root(self.operands)
 
+    def anchors(self) -> dict[str, Any]:
+        """The ``roots`` and ``window`` `core_check.window_anchors` reads of this window's registration: no ``W`` root, its
+        registered weights (W) and its operands (X), which `window_salt.issue` opens the salt session over."""
+        return {"roots": [], "window": {OP.KEY: self.operands, "registered": self.weights}}
+
     @property
     def law(self) -> dict[str, Any]:
         return D.parse_law(f"subset:{self.k}")
@@ -173,7 +201,7 @@ class H1Loop:
 
     def items(self) -> dict[str, Any]:
         """The registered items (`window.REGISTERED`), as `core_check.expected_items` computes them."""
-        return {"check": check_item(), "root_W": None, "work": self.work.to_json(TILE_WORK),
+        return {"check": check_item(live=self.live), "root_W": None, "work": self.work.to_json(TILE_WORK),
                 "sampling": Wd.sampling(self.eps, self.delta, self.work, TILE_WORK, self.bits),
                 "length": Wd.length_item([self.loop.steps] * len(self.loop.requests))}
 
@@ -235,26 +263,46 @@ class H1Loop:
         self.run(win, salt)
         return win
 
-    def write(self, win: IF.Window, out: str | Path, provenance: Mapping[str, Any], salt_key: bytes | None = None
-              ) -> dict[str, Any]:
-        """The window's files (`Window.write`) under PoUW's registration (`Registrar`), ``provenance.json`` and
-        ``operands-private.json`` (the operands' salts, the prover's)."""
-        reg = Registrar(self.items(), self.operands)
+    def write(self, win: IF.Window, out: str | Path, provenance: Mapping[str, Any], salt_key: bytes | None = None,
+              issued: Any = None) -> dict[str, Any]:
+        """The window's files (`Window.write`) under PoUW's registration (`Registrar`), ``provenance.json``,
+        ``operands-private.json`` (the operands' salts, the prover's) and, for a live window, `SALT` (``issued``,
+        `window_salt.issue`'s: its answer's ``public.salt`` and the verifier's ``live`` params)."""
+        reg = Registrar(self.items(), self.operands, self.weights)
         win.write(win.close(salt_key=salt_key), out, provenance, registrar=reg)
+        if issued is not None:
+            (Path(out) / SALT).write_text(json.dumps({"answer": issued.answer, "live": issued.live}, sort_keys=True))
         (Path(out) / "provenance.json").write_bytes(canonical_json(reg.provenance))
         fd = os.open(Path(out) / OPERANDS_PRIVATE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(fd, "w") as f:
             json.dump({"program": self.program, "salts": {v: [x.hex() for x in r.salts] for v, r in self.values.items()}}, f)
         return json.loads((Path(out) / "registration.json").read_text())
 
-    def params(self) -> dict[str, Any]:
+    def params(self, live: Mapping[str, Any] | None = None) -> dict[str, Any]:
         """The verifier's parameters of the window (`core_check.params`): the pinned tile, the run root as its context, ε,
-        δ, the grid, the requests' max_tokens and the declared work range `RANGE`."""
-        return {"check": check_item(), "context": self.loop.run_root,
+        δ, the grid, the requests' max_tokens and the declared work range `RANGE`; a live window's salt session's inputs
+        ``live`` (`window_salt.Issued.live`)."""
+        return {"check": check_item(live=self.live), "context": self.loop.run_root,
                 "delta": str(self.delta), "eps": str(self.eps), "grid_bits": self.bits,
                 "length": {"max_tokens": [self.loop.steps] * len(self.loop.requests), "stop": Wd.STOP_FIXED},
-                "query": CC.TILES[tile().id].query, "range": list(RANGE)}
+                "query": CC.TILES[tile().id].query, "range": list(RANGE), **({CC.LIVE_PARAM: dict(live)} if live else {})}
 
 
 def fresh_salt() -> bytes:
     return os.urandom(SALT_BYTES)
+
+
+def weights_group(model: L.Model, values: Mapping[str, Any]) -> dict[str, Any]:
+    """The pinned weights' entries as the registration's window names them (``registered``, `loop.pin`'s program and
+    values): the group whose root `core_check.values_root` is the window's W."""
+    return {"program": model.name, "values": {v: r.entry() for v, r in values.items()}}
+
+
+def window_salt() -> Any:
+    """`benchmarks/pouw/window_salt/window_salt.py`, which opens a live window's salt session (`issue`)."""
+    if "window_salt" not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            "window_salt", Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "window_salt" / "window_salt.py")
+        module = sys.modules["window_salt"] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+    return sys.modules["window_salt"]

@@ -1,7 +1,7 @@
 """The audit of the loop's PoUW window (`pouw`) and PoUW's answer on it.
 
     python -m verity_torch_loop.pouw_audit --window DIR --circuit SHA512 --run HEX --m0-pythonpath PATH --bin flock-circuit \\
-        --lean flock-verify --firewall flock-firewall --out DIR [--forged] [--pouw-check BIN] [--skip-negatives]
+        --lean flock-verify --firewall flock-firewall --out DIR [--forged | --late] [--pouw-check BIN] [--skip-negatives]
 
 The audit is one-stage's from the records alone (`benchmarks/prove_path/records_audit.py`, `a5.audit`): the registration
 checked by Lean and Python, the draw on the verifier's live coins read after the receipt, C-Flock ``--zk`` behind the Lean
@@ -25,7 +25,10 @@ public ``{"draw": ...}``, the profile at the verifier's δ), written to ``DIR/an
 given ``--pouw-check``, Lean's) decides the window at the verifier's parameters (`pouw`'s ε, δ, check item and range, the
 published run as the context; the requests' max_tokens as registered), written to ``--out``'s
 ``pouw.json``: verdict, reason, W (the credited MACs), ε, δ, K′. ``--forged``: the window holds tampered tiles, and the
-audit passes when Lean refused them.
+audit passes when Lean refused them. A live window (``salt.json`` beside it, `pouw.SALT`) is checked with its coins live
+and the salt session's ``live`` params, its answer carrying the session's ``public.salt``; ``--late``: its session was
+opened on other operands (`serve`'s ``--pouw-late``), and the audit passes when the tiles' proofs are accepted and PoUW
+refuses the salt.
 """
 from __future__ import annotations
 
@@ -96,7 +99,7 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
     """`records_audit.source` on the window one-stage would name: a PoUW window's provenance when its context is the
     provenance's run; any other window as given (so a registration naming another circuit or run is refused)."""
     w = dict(w or {})
-    if sorted(set(w) - {OP.KEY}) == ["context", "kind", "public"]:
+    if sorted(set(w) - set(CC.WINDOW_VALUES)) == ["context", "kind", "public"]:
         prov = held["provenance"]
         v = _source({**prov, "kind": w["kind"]} if w["context"] == prov.get("run") else {}, held)
         return v
@@ -111,9 +114,11 @@ def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
     return _activations(w)
 
 
-def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
+def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction, salt: Mapping[str, Any] | None = None
+           ) -> dict[str, Any]:
     """The proof service's answer for ``rec`` in PoUW's evidence form, from the audit records_audit wrote under
-    ``audit_out``: on acceptance public ``{"draw": d}`` and the profile at ``delta``."""
+    ``audit_out``: on acceptance public ``{"draw": d}`` and the profile at ``delta``, and a live window's ``salt`` (its
+    salt session's answer, `window_salt.Issued.answer`)."""
     commitment = R.digest(rec)
 
     def refuse(why: str) -> dict[str, Any]:
@@ -137,7 +142,8 @@ def answer(audit_out: Path, rec: Mapping[str, Any], delta: Fraction) -> dict[str
     draw = a["draw"]
     profile = A.profile(a["registration"], draw, float(delta)).to_json()
     profile["delta"] = str(delta)
-    public = {"draw": {"k": draw["k"], "law": draw["law"], "population": draw["population"], "units": sorted(draw["units"])}}
+    public = {"draw": {"k": draw["k"], "law": draw["law"], "population": draw["population"], "units": sorted(draw["units"])},
+              **({"salt": dict(salt)} if salt is not None else {})}
     return {"commitment": commitment, "profile": profile, "protocol": R.PROTOCOL, "public": public, "reason": None,
             "verdict": "accept"}
 
@@ -180,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
         ap.add_argument(f, required=True)
     ap.add_argument("--delta-audit", default="0.5", help="the one-stage audit's own δ (records_audit's --delta)")
     ap.add_argument("--forged", action="store_true")
+    ap.add_argument("--late", action="store_true", help="the salt session names other operands: PoUW must refuse the salt")
     ap.add_argument("--pouw-check", help="a built Lean pouw-check, which must agree with core_check")
     ap.add_argument("--skip-negatives", action="store_true", help="records_audit's --skip-negatives: a run of several "
                     "periods runs the negatives in its first")
@@ -201,18 +208,23 @@ def main(argv: list[str] | None = None) -> int:
                   "--registered", str(out / "operands.json"),
                   *(["--forged"] if a.forged else []), *(["--skip-negatives"] if a.skip_negatives else [])])
     items = rec["window"]["public"]
-    params = {"check": PW.check_item(), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
+    salt = json.loads((wdir / PW.SALT).read_text()) if (wdir / PW.SALT).exists() else None
+    params = {"check": PW.check_item(live=salt is not None), "context": a.run, "delta": str(PW.DELTA), "eps": str(PW.EPS),
               "grid_bits": Wd.GRID_BITS, "length": {"max_tokens": items["length"]["max_tokens"], "stop": Wd.STOP_FIXED},
-              "query": CC.TILES[PW.tile().id].query, "range": list(PW.RANGE)}
-    ans = answer(out / "audit", rec, PW.DELTA)
+              "query": CC.TILES[PW.tile().id].query, "range": list(PW.RANGE),
+              **({CC.LIVE_PARAM: salt["live"]} if salt is not None else {})}
+    ans = answer(out / "audit", rec, PW.DELTA, salt["answer"] if salt is not None else None)
     (wdir / "answer.json").write_text(CC.line(ans) + "\n")
     got = decide(params, rec, ans, a.pouw_check)
-    got |= {"audit_rc": rc, "forged": a.forged, "params": params}
+    got |= {"audit_rc": rc, "forged": a.forged, "live": salt is not None, "params": params}
     (out / "pouw.json").write_text(json.dumps(got, indent=1, sort_keys=True, default=str) + "\n")
     print("POUW " + json.dumps({k: got.get(k) for k in ("verdict", "reason", "W", "tiles", "eps", "delta", "k", "agree",
-                                                       "audit_rc", "forged")}, sort_keys=True, default=str))
+                                                       "audit_rc", "forged", "live")}, sort_keys=True, default=str))
     if a.forged:
         return 0 if rc == 0 and got["verdict"] != "accept" else 1
+    if a.late:
+        return 0 if rc == 0 and got["verdict"] != "accept" and str(got["reason"]).startswith("salt") \
+            and got.get("agree", True) else 1
     return 0 if got["verdict"] == "accept" and got.get("agree", True) else 1
 
 
