@@ -17,7 +17,8 @@ S.commit(context, layout, step, salt_key, outputs, slots) -> S.StepCommit(root, 
 
 # GPU, the same signature with a plan in place of (context, layout)
 plan = G.Plan(context, layout)                     # once a run: domains, pad tails, midstates, hm96's table on the device;
-                                                   # temp_bytes= bounds a step's temporaries (default 1 GiB)
+                                                   # temp_bytes= bounds a step's temporaries (default 1 GiB), leaf_minb=
+                                                   # runs the leaf kernel at 1 or 2 blocks an SM (same bytes)
 G.commit(plan, step, salt_key, outputs, slots) -> S.StepCommit(root, slot_roots)
 
 # GPU, streaming as a step's groups (e.g. layers) come out of the forward pass
@@ -160,6 +161,17 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
 - **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 939 TOPS): the GEMMs take 93.7 ms alone and
   107.1 ms beside the commit (+14%). Overlapped, a layer takes 107.1 ms, against 114.5 ms run one after the other, so
   overlap saves little. Over a step, the commit costs 22% of the GEMMs' 4.87 s.
+- **CIR-113's shared rows at 4,096 slots** (run r20261026-161032-934f, vy-dc-h200-3, `gpu.sh`'s tests, check and step).
+  `step.py export --shared` writes FAMILIES' layout with the gathered tables' producers dropped, circuits' layout: its
+  digest is theirs (`27dfdf843d4b6944…`), 101,718 units of 102,448 rows, 27.4 MB a slot. A row-slot costs 11.03
+  compressions (row digests 3.03, most rows being 256 B; leaves 5.99; the fold 1.99), 4.63G a step, 0.97 s at 4.79 G/s.
+  A step takes 1.330 s and 0.51 GiB beyond its plan and inputs (2.36 GiB): hiding leaves 0.820 s at 3.06 G
+  compressions/s (64% of peak, the ChaCha20 blocks and the mask not counted), row digests 0.287 s at 4.42 (92%), the
+  fold 0.219 s at 3.81 (80%), the multi-row units 7 ms. That is with the leaf kernel at 2 blocks an SM (1.401 s at 1)
+  and `add` no longer synchronizing the side stream (1.429 s before, the GPU idle 51 ms of it, against 9 ms); passes of
+  4 GiB take 1.318 s. Six sampled slots' roots equal the reference's, and the step root the reference's step tree. The
+  host still spends about 1.07 s in a step's `add`s, with no upload or sync left in them: it waits on the launch queue
+  (5,108 launches a step, 1,379 of them the fold's levels).
 
 ## Files
 
@@ -168,7 +180,9 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
   cached under `~/.cache/verity/sha512_rows`). Its uploads go through pinned memory, so no call waits on the side stream.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
-  GEMMs; `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
+  GEMMs; `step.py`: one step at a layout file (`slots._layout_json`'s form) timed by phase against the engine's peak,
+  with its peak memory, the leaf kernel alone, a profile and sampled slots against the reference, and `export --shared`,
+  CIR-113's layout; `gpu.sh`: these, with the tests, under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a

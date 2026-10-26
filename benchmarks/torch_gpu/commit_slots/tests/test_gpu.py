@@ -35,6 +35,14 @@ def test_two_h200_layers() -> None:
     assert G.commit(G.Plan(CTX, layout), 2, KEY, _cuda(out), 3) == S.commit(CTX, layout, 2, KEY, out, 3)
 
 
+@pytest.mark.parametrize("leaf_minb", [1, 2])
+def test_either_leaf_kernel_gives_the_reference_s_roots(leaf_minb: int) -> None:
+    layout = S.h200_layout(layers=2)
+    out = S.random_outputs(layout, 3, np.random.default_rng(5))
+    plan = G.Plan(CTX, layout, leaf_minb=leaf_minb)
+    assert G.commit(plan, 3, KEY, _cuda(out), 3) == S.commit(CTX, layout, 3, KEY, out, 3)
+
+
 @pytest.mark.parametrize("temp_bytes", [1, 4 * 64 * 25 * 2], ids=["1-slot-passes", "2-slot-passes"])
 def test_passes_on_the_device_give_the_reference_s_roots(temp_bytes: int) -> None:
     """Passes over a few slots at a time (each pass's row table moved on its first slot, its salts' nonces from there) and the

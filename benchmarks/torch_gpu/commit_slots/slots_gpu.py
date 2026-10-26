@@ -124,11 +124,13 @@ class Plan:
     """What a run's ``context`` and ``layout`` fix, on ``device`` (a CUDA device, or ``"host"`` for the engine's host twin).
     Its work is linear in the layout's units: each unit's domain id is hashed once (``slots.unit_domain_ids``), each group
     the layout repeats is laid out once, and the pads that close a slot's tree are hashed once. A step's passes keep their
-    temporaries within ``temp_bytes``."""
+    temporaries within ``temp_bytes``, and run the leaf kernel at ``leaf_minb`` blocks an SM (the engine's ``minb``: 0, the
+    build's default, 1; on an H200, 1 is 4% faster at FAMILIES' passes of 35 slots of 117k rows and 2 is 8% faster at
+    CIR-113's shared rows, 2,134 slots of 1,965 rows, with the same bytes)."""
 
     def __init__(self, context: bytes, layout: S.Layout, device: Any = "cuda", arch: str | None = None,
-                 temp_bytes: int = TEMP_BYTES) -> None:
-        self.context, self.layout, self.temp_bytes = context, layout, temp_bytes
+                 temp_bytes: int = TEMP_BYTES, leaf_minb: int = 0) -> None:
+        self.context, self.layout, self.temp_bytes, self.leaf_minb = context, layout, temp_bytes, leaf_minb
         self.engine = _Engine(device, arch)
         self.host, self.torch, self.device = self.engine.host, self.engine.torch, self.engine.device
         self.unit_dids = E.words(S.unit_domain_ids(context, layout))
@@ -228,8 +230,7 @@ class Plan:
             torch = self.torch
             spec = shape.spec.clone()
             w = spec.view(torch.int64).reshape(shape.rows, -1)
-            b = torch.tensor(base, dtype=torch.int64, device=self.device)
-            s = torch.tensor(stride, dtype=torch.int64, device=self.device)
+            b, s = (self.engine._up(np.asarray(v, dtype=np.int64)).view(torch.int64) for v in (base, stride))
             src = shape.src
             two = (w[:, 4] >> 32) > 0
             w[:, 0] = b[src[0]] + w[:, 0]
@@ -430,8 +431,8 @@ class StepCommitter:
             done.record(plan.stream)
         S_ = table.slots
         run, rest = plan.empty(S_, shape.units), plan.empty(shape.rest, S_)
-        eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, frames=frames, dest=shape.dest,
-                   run=run)
+        eng.leaves(grp.leaf_table, x, E.SaltKey(self.salts.key, self.salts.nonce0 + s0), rest, plan.leaf_minb, frames=frames,
+                   dest=shape.dest, run=run)
         del x
         self._mark("leaves")
         if shape.multi:
