@@ -468,7 +468,7 @@ def _module_name(ctx, field_name: str) -> str:
 # the registered families of the vLLM eager profile
 # ---------------------------------------------------------------------------------------------------------
 
-from verity_vllm.program.registry import b1 as _b1  # noqa: E402
+from verity.ml.definitions.registry import b1 as _b1  # noqa: E402
 
 
 def _serve_binder(flat_sd, ctx):
@@ -512,7 +512,7 @@ def _serve_v3_binder(flat_sd, ctx):
     return {"C": C, "LP": LP, "D_MAX": out_t.n - 1, "GEMM": recs["GEMM"], "ATTENTION": recs["ATTENTION"], "NORM": recs["NORM"](C)}
 
 
-from verity_vllm.program.registry import serve3 as _serve3  # noqa: E402
+from verity.ml.definitions.registry import serve3 as _serve3  # noqa: E402
 
 SERVE_V3_FAMILY = RegisteredFamily("Family[Serve_v3]", 1, _serve3.ServeV3, _serve_v3_binder,
                                    "structural: verified isomorphism to Serve_v3{C3,LP,D_MAX,GEMM,ATTENTION,NORM} (the padded circuit, serve3-spec)")

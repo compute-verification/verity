@@ -29,6 +29,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.records import workload as workload_record
+
 #: The source tree holding the ``verity_vllm`` package, ``manifests/`` and ``workloads/``.
 ROOT = Path(str(resources.files("verity_vllm"))).resolve().parent
 MANIFESTS = ROOT / "manifests"
@@ -292,8 +294,9 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
 #: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
 VLLM = "d9105ea80"
 
-#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`).
-WORKLOAD_SCHEMA = "verity-vllm/workload/v2"
+#: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`), the typed record
+#: ``records.workload.Workload``.
+WORKLOAD_SCHEMA = workload_record.SCHEMA
 
 #: How a row's requests are done: at their public cap (``sampling.ignore_eos``: every request runs its ``max_tokens`` steps), or at an
 #: EOS the model samples before it.  A row of record is done only at its public cap (Daniel, ASK-39, 18 Oct), so its served length is

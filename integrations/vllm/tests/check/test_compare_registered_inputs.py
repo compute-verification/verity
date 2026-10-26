@@ -9,7 +9,7 @@ from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value
 from verity_vllm.check.match import program_compare as C
-from verity_vllm.program.registry import prims as P
+from verity.ml.definitions.registry import prims as P
 
 PARAMS = (("prompt", Array(1, Value(32))), ("seed", Array(1, Value(64))), ("k", Array(1, Value(64))), ("weights", Array(2, Value(16))))
 

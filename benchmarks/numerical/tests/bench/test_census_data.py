@@ -14,7 +14,7 @@ from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
 
-FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads", "adversary")
+FILES = ("hardware", "datatypes", "networks", "subcircuits", "input_sets", "workloads", "deployments", "adversary")
 
 #: The ids renders cite.  Removing or renaming one breaks every consumer's history: add a new entry instead.
 PINNED = {
@@ -22,6 +22,7 @@ PINNED = {
                  "rtx-4090/e4m3": 330.3e12, "rtx-5090/e2m1": 1676e12, "rtx-pro-6000-server/bf16": 500e12,
                  "rtx-pro-6000-server/e4m3": 1000e12, "rtx-pro-6000-server/e2m1": 2000e12, "l40s-48gb/bf16": 362.05e12,
                  "l40s-48gb/e4m3": 733e12},
+    "deployments": {"dc-12500-machines-600s": (12500, 600)},
     "networks": {"dc-1ms-100gbps": (0.001, 100e9), "rtt-20ms-100gbps": (0.020, 100e9), "rtt-100ms-100gbps": (0.100, 100e9),
                  "dc-1ms-10gbps": (0.001, 10e9)},
     "subcircuit_templates": {"gemm-coordinate": ("K", "datatype", "semantics"), "attention-head": ("D", "BN", "semantics"), "rope-head": ("D",),
@@ -72,6 +73,7 @@ def test_ids_are_pinned_with_their_values() -> None:
     assert set(census.INPUT_SETS) == PINNED["input_sets"]
     assert {k: d.display for k, d in census.DATATYPES.items()} == PINNED["datatypes"]
     assert {k: h.name for k, h in census.HARDWARE.items()} == PINNED["names"]
+    assert {d["id"]: (d["machines"], d["window_s"]) for d in census.raw("deployments")} == PINNED["deployments"]
     assert {k: (a.total_flop, a.requests) for k, a in census.load("adversary").items()} == PINNED["adversary"]
 
 

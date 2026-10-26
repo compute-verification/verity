@@ -231,9 +231,9 @@ none: their bounds carry the collision events.
   `PlainLiveAcc` isn't listed, since no locked statement reads it.
 - The rest of what locked statements take from `trees.except`: [e2e_chains/README.md](e2e_chains/README.md).
 
-No link above reads the rest. `TrustedNebiusHost` is why `Carries` holds of the real run, and the wire and advice
+No link above reads the rest. `TrustedHost` is why `Carries` holds of the real run, and the wire and advice
 assumptions enter through the wire bounds, which have no sampled form yet.
-- `Verity.Assumptions.TrustedNebiusHost` (`Security/Definitions/Core/Assumptions.lean`).
+- `Verity.Assumptions.TrustedHost` (`Security/Definitions/Core/Assumptions.lean`).
 - The certifier's wire (`Security/Definitions/NetworkCertifier/Assumptions.lean`): W2 `NetTiming.Regenerates`, W4
   `NetTiming.Packed` and `NetTiming.Allocated`, and J `NetTiming.JitterBounded`. W3 (`Padded`), W5 (`UntimedStatus`) and W6
   (`FailClosed`) are stated there, but no listed guarantee reads them, so the lock doesn't list them.
@@ -378,7 +378,7 @@ now (the certifier's protocol, on branch `cursor/io-tie-061a`).
   the coins' context) and its charged length to the registered one, so a row dir whose names make another circuit under
   unchanged digests is refused (`circuit`). It
   imports no `verity_vllm` code. The exception is a template whose Definition is still vLLM's (`SiluMul_v2`, `RoPEHead_v1`):
-  the input set loads it from `verity_vllm.program.registry` until #3927 moves those Definitions into `verity`.
+  the input set loads it from `verity.ml.definitions.registry` until #3927 moves those Definitions into `verity`.
 - **A single-GPU window** is a stand-in of the Commit's `rows-sha512` run root (`stand_in1`, held by `source1`), as
   `deferred_rows.from_bundle` writes one. The sealed bundle records the Commit's absolute node paths, and none is read: the
   prover's Programs come from `--row-dir` and the verifier's from its own trace, and the Build manifest falls back to

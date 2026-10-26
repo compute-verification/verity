@@ -376,13 +376,14 @@ def recorded_memory(session: dict, *, chip_bytes: int = timing.CHIP_BYTES, host_
 def memory_error(ledgers: dict) -> float | None:
     """The memory line's failure probability from `Verifier.ledgers`' output: its floors are the pooled event's, so the
     horizon's error (δ once, and AuditRO's 2^-slack a pass), plus the sketch's (`RateAuditSketch`), plus the coin
-    commitment's hiding terms and the draw's rejection (`ledger.hiding`, `ledger.rejection`, the ledger's `delta`
-    parts); `delta` alone understates it by the passes' slack.  None when no reading has a ledger."""
+    commitment's hiding terms, the receipts' binding term and the draw's rejection (`ledger.hiding`, `ledger.binding`,
+    `ledger.rejection`, the ledger's `delta` parts); `delta` alone understates it by the passes' slack.  None when no
+    reading has a ledger."""
     for name in ("spec", "measured"):
         if "error" in ledgers.get(name, {}):
             d = ledgers.get("delta", {})
             return (ledgers[name]["error"]["horizon"] + 2.0 ** ledgers.get("sketch_failure", {}).get("log2", -math.inf)
-                    + d.get("hiding", 0.0) + d.get("rejection", 0.0))
+                    + d.get("hiding", 0.0) + d.get("binding", 0.0) + d.get("rejection", 0.0))
     return None
 
 
@@ -944,12 +945,12 @@ class Pair:
             self._disagree(len(self.s.windows) - 1, "record", got, mine)
 
     def record(self) -> audit.Record:
-        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it), or under
-        `python` the books'."""
+        """The accepted session's record: the Lean's (its `outcome` at `end`, as `lv.record_of` reads it, with the
+        session's bounds, `audit.Session.bounded`), or under `python` the books'."""
         if self.lean is None:
             return self.s.record()
-        return lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
-                            self.s.params.delta, self.s.params.samples)
+        return self.s.bounded(lv.record_of(self.outcome_json["record"], self.s.registration, self.s.commitment.root,
+                                           self.s.params.delta, self.s.params.samples))
 
     def _fail_books(self, failure: dict) -> None:
         t = failure["t"]
@@ -1458,7 +1459,7 @@ class Verifier:
                "samples": samples, "delta": self.delta, "window_ns": window_ns, "windows": W, "pace": pace,
                "lifetime": params.lifetime,
                "registration": reg.digest.hex(), "coins": session.commitment.root.hex(),
-               "appended": session.extent - reg.blocks, "released": session.released,
+               "appended": session.extent - reg.blocks, "released": session.released, "append_coins": appends,
                "verdict": self.verdict, "disagreement": session.disagreement, "challenger": coin_check,
                "transcript": None if case is None else case.close(lv.released_coins(session.coins)),
                "verify_cpu_ns": {t: v["cpu_ns"] for t, v in sorted(verdicts.items())},
@@ -1541,7 +1542,7 @@ class Verifier:
         (`timing_parts`) when the calibration has a bare read of each tier covering the registered store and a window
         had two roots.  A reading the ledger refuses carries why, and the session then declares nothing.  With the
         session's plans, `memory` is the node's HBM it shows held by kind (`memory`), KV credited on no verdict yet.
-        `delta` is the memory line's δ in its five parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
+        `delta` is the memory line's δ in its six parts (`ledger.delta_parts`), whose sum `declared`'s forms carry.
         Each window's bound on wrong receipts is computed once for both readings, exactly, in the check workers when
         there are some (`checks.Checks.bounds`).  `inputs` carries the AuditRO slack γ and δ were charged at
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""

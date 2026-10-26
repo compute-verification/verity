@@ -463,7 +463,7 @@ def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_pa
     (urllib) the same."""
     ids = proto.IdsProtocol(True, payload=proto.ID_PAYLOAD, base=proto.PlainProtocol(True))
     with Serving(tmp_path, commit=False, protocol=ids) as s:
-        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]
+        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]  # noqa: S310 (the test's own 127.0.0.1 endpoint)
         assert json.loads(s.post("/tokenize", {"model": "m", "prompt": "a bb ccc"})[1])["tokens"] == [1, 101, 102, 103]
         head, body = dechunked(s.send(shims_request(s.http.address[1])))
         status, probed = s.post("/v1/completions", dict(CERTIFIER_BODY, max_tokens=2, return_token_ids=True))
@@ -554,6 +554,26 @@ def test_the_gpu_arms_client_serves_shared_prefix_turns_that_the_server_checks(t
     bad = records(tmp_path, "client.jsonl")
     bad[0]["streamed_ids"] = bad[0]["streamed_ids"][:-1]
     assert not client.compare(bad, records(tmp_path, "requests.jsonl"))["passed"]
+
+
+def test_each_request_records_when_it_was_received_submitted_admitted_and_first_streamed(tmp_path):
+    """The wall-clock stamps that tell late bytes (``received``) from a hold before the engine (``submitted``,
+    ``admitted``), on one clock the server, the engine loop and the windows share."""
+    ticks, lock = iter(range(1, 1_000_000)), threading.Lock()
+
+    def clock() -> float:
+        with lock:
+            return float(next(ticks))
+
+    s = Serving(tmp_path)
+    s.server.clock = s.loop.clock = s.windows.wall = clock
+    with s:
+        assert s.post("/v1/completions", dict(CERTIFIER_BODY, prompt=[1, 2, 3]))[0] == 200
+    (rec,) = records(tmp_path, "requests.jsonl")
+    order = ["head", "received", "submitted", "admitted", "first_token"]
+    assert set(rec["times"]) == set(order), rec["times"]
+    stamps = [rec["times"][k] for k in order]
+    assert stamps == sorted(stamps) and len(set(stamps)) == len(stamps), rec["times"]
 
 
 @pytest.mark.parametrize("idle_close_steps, windows", [(1, 3), (100, 1)])
