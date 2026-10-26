@@ -43,3 +43,11 @@ The copy is `OpenLower.copyR xI wt p ht q`, the one your row ties name. Namespac
    That is the context's existence, for your assembly.
 Then accHolds_of_copy's hLA, hrow = OpenCopy.1 and .2.2.1, and hO = LevelOuts.
 Tell me if you want different binders. I'll post the SHA when it builds.
+
+## 20:27Z from STEPRLAST: OpenCopyW/LevelOutsW pushed, cursor/proofs-openlev-3735 @ 50c97cbe6d (resp3-c064 d4f66ce365 + decompb 125d853636)
+- The file is `Security/Proofs/Flock/Claims/Recursion/OpenLevW.lean`, namespace `RecDeploy.ResLower`, with the shapes as posted at 20:35Z.
+  - `AtRowDW key rd wE final w b elem shape untr cmt Fact` is `OpenLower.AtPiecesP` at `DRL`/`layR elem`/`rowDPieces key`.
+  - `LevelOutsW`, `levelOutsW` (any rd/elem, dense shape).
+  - `OpenCopyW`, `openCopyW_deployed key wE w b untr cmt` (at `DeployedR.rdR`, `DeployedR.finalR`, `OpenRows.elemR`, Dense).
+  - `openCopy_sideAt` (sideAtR → Rows.sideAt at a decision) and `stagedAt_of_jointP`.
+- Build r20261026-202626-b46e on cpu-1. It queues behind f2f7 and builds incrementally in wt-decompb. I'll post the verdict.
