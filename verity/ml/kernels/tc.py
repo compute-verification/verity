@@ -375,6 +375,36 @@ def gemm_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
     return kernel
 
 
+def gemm_coordinate_pad_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
+    """`GemmCoordinatePad_v1{T, K, DOT}`: the coordinate on ``x`` and ``w`` (B, T), each padded with K - T +0 words."""
+    coord = gemm_coordinate_kernel(steps)
+
+    def kernel(x: np.ndarray, w: np.ndarray, *, T: int, K: int, DOT: Any):
+        pad = lambda a: np.pad(a, ((0, 0), (0, K - T)))
+        return coord(pad(x), pad(w), K=K, DOT=DOT)
+
+    return kernel
+
+
+def pv_row_kernel(steps: Mapping[Any, GroupSum]) -> Callable[..., Any]:
+    """`PvRow_v1{T, K, D, DOT}`: ``p (B, T)`` and the T key rows ``v_t (B, D)`` -> ``(B, D)``, dim d the padded coordinate of
+    ``p`` and ``(v_0[d], ..., v_{T-1}[d])``."""
+    coord = gemm_coordinate_kernel(steps)
+
+    def kernel(p: np.ndarray, *vs: np.ndarray, T: int, K: int, D: int, DOT: Any):
+        b = p.shape[0]
+        xs = np.zeros((b, D, K), p.dtype)
+        xs[:, :, :T] = p[:, None, :]
+        ws = np.zeros((b, D, K), p.dtype)
+        ws[:, :, :T] = np.stack(vs, axis=2)
+        res = coord(xs.reshape(b * D, K), ws.reshape(b * D, K), K=K, DOT=DOT)
+        if res is NotImplemented:
+            return res
+        return res[0].reshape(b, D), res[1].reshape(b, D).any(axis=1)
+
+    return kernel
+
+
 # ---- instance sampling for self_check ------------------------------------------------------------------------------------
 
 def _words(rng: np.random.Generator, fmt, shape: tuple[int, ...], specials: tuple[int, ...], p_special: np.ndarray,
