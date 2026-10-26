@@ -604,7 +604,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have htops : (q₁.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? =
       (q₂.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? := by
     rw [hfit₁.tops, hfit₂.tops, hsched₁, hsched₂]
-    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) => cutLens u.2.1.toList rs)
+    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) =>
+        (cutLens u.2.1.toList rs).map (List.map nodeOf))
       (fun u : Flock.RecVStar.SchedRound => u.2.1.size)
       (fun u b => by simp [cutLens_length]) _ _ _ (preLig spec st + capRound sch.k0 (ℓ + 1) + 1)
       (fun j hj => hrow j (by omega)) (by omega) ℓ (by rw [hsumJ]; omega)

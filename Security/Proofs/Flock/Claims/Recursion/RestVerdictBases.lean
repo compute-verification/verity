@@ -54,10 +54,11 @@ def DecShaped (rd : Msg → Option FinalP) : Prop :=
     ∀ (k : ℕ) (hk : k < d.f.ps.size),
       FlockVBridge.Family.ProofShaped (shapeAt (tabsOf d.sts) (pointsOf d.spec d.c₁) k) d.f.ps[k]
 
-/-- The draw `drawOfJ` reads off a record whose `unit_draw` is `u`, or `null` where there is none. -/
+/-- The draw `drawOfJ` reads off a record whose `unit_draw` is `u`, rebuilt (`Flock.norm`), or none where it is `null`
+or there is none. -/
 def drawOfU : Option Json → Option Json
   | some .null => none
-  | some d => some d
+  | some d => some (Flock.norm d)
   | none => none
 
 /-- **The session's draw is the statement's**: at every statement that sets up and passes its scope check, the draw a

@@ -797,7 +797,7 @@ theorem v_words {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VSt
     simp
   rw [List.findIdx?_map] at hfind
   have hq : c.ports.findIdx? (·.name == "v") = some pt.S.ports.length := by
-    rw [← List.findIdx?_toArray, Array.toArray_toList]
+    rw [← Array.toArray_toList (xs := c.ports), List.findIdx?_toArray]
     exact hfind
   rw [hqv] at hq
   cases hq
