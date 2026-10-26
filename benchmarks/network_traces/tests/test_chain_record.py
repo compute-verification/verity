@@ -5,13 +5,17 @@ certificate's, a kept certificate whose signature is changed, and a key under `l
 the report needs the endpoint's step on the advice profile and never accepts a stand-in, merges N2's members proved in
 several runs, and counts a negative that escaped a sampled draw within the draw's bound but never one whose faulty
 window was drawn; the draw's bound at δ is C(n − b − 1, k) / C(n, k)'s; leak counts the scan's widths and terms on a
-warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve."""
+warden run's files, and refuses a sampled draw and a warden the scan's class doesn't serve. On the certifier-only path
+the report needs no scan, names what it stubs, and counts the rehearsal's refused runs and the I/O tie's verdict on
+each tampered run the check let through as negatives; d1's K is #4404's horizon count over the compute audits' draws
+and free inputs and the network's own terms."""
 
 from __future__ import annotations
 
 import hashlib
 import importlib.util
 import json
+import math
 import shutil
 import sys
 from fractions import Fraction
@@ -228,3 +232,51 @@ def test_subset_bound():
     assert cr.subset_bound(256, 64, 0.5) == 2
     assert cr.subset_bound(256, 2, 0.5) == 74
     assert cr.subset_bound(0, 0, 0.5) is None
+
+
+def test_the_certifier_only_path_needs_no_scan_names_its_stubs_and_counts_the_tampers(tmp_path):
+    job = {"profile": "advice", "rc": {"n2": "0", "scan": "2"}, "path": cr.CERTIFIER_ONLY}
+    steps = _steps(tmp_path, job)
+    steps.scan = steps.warden_run = None
+    Path(steps.custody).write_text(json.dumps({"verdict": "accepted", "gate_runs": [
+        {"gate_run": "c1", "request": {"where": "off-host: a pool slot", "engine": "seeded:phase1"},
+         "strategies": {"honest": "accepted", "late": "refused", "extra": "refused", "token": "accepted"}}]}))
+    ep = json.loads(Path(steps.endpoint).read_text())
+    ep["chain"]["tie"]["runs"] |= {"token": {"verdict": "refused", "ok": True}, "extra": {"verdict": "n/a"},
+                                   "late": {"verdict": "refused", "ok": None}}
+    ep["negatives"] = {"late": {"own_code": "audit.status:coverage-never-established"}, "token": {"own_code": None}}
+    Path(steps.endpoint).write_text(json.dumps(ep))
+    got = cr.report(steps)
+    assert got["verdict"] == "accepted" and got["steps"]["scan"]["verdict"] == "not run"
+    assert got["stubbed"][:3] == list(cr.STUBBED) and len(got["stubbed"]) == 5
+    assert got["negatives_refused"] == {"rehearsal/c1/late": True, "rehearsal/c1/extra": True, "tie/token": True,
+                                        "n2/tampered": True}
+    assert "on the certifier-only path" in cr.markdown(got) and "Stubbed:" in cr.markdown(got)
+    ep["chain"]["tie"]["runs"]["token"] = {"verdict": "accepted", "ok": False}
+    Path(steps.endpoint).write_text(json.dumps(ep))
+    assert cr.report(steps)["negatives_refused"]["tie/token"] is False
+    Path(steps.job).write_text(json.dumps(job | {"path": None}))
+    off = cr.report(steps)
+    assert off["verdict"] == "refused" and off["stubbed"] == []
+
+
+def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_period(tmp_path):
+    h = cr.horizon_k([{"units": 6, "drawn": 6, "free": 2, "jitter": 4}], Fraction(1, 100),
+                     {"advice": 8, "syncs": 0, "cells": 6})
+    assert (h["Fmax"], h["terms"]["faulty_sets"], h["K"]) == (5, 15, 8 + 6 + 80 + 15 + 2 + 4)
+    assert h["conditional"] == cr.HORIZON_CONDITION
+    circuit = {"templates": [["T", 4]], "external": ["T/y"], "wires": [],
+               "statements": {"T": {"in_rows": [["x", 0, 8, ["x"]], ["y", 1, 16, ["y"]]]}}}
+    assert cr.free_inputs(circuit) == 4 * 8
+    (tmp_path / "circuit.json").write_text(json.dumps(circuit))
+    (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
+    audit = cr.audit_of(tmp_path)
+    assert (audit["units"], audit["drawn"], audit["free"], audit["jitter"]) == (4, 2, 32, 0)
+    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)]}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
+                                                                                        "cells": 0}
+    assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
+    d1 = cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}}, [audit])
+    k = d1["K"][f"{2.0 ** -20:.3g}"]
+    assert k["Fmax"] == math.ceil(20 * math.log(2) * 2) and k["K"] == sum(k["terms"].values())
+    assert "open" in cr.d1_terms(cert, {}, {}, {}, {"advice_bits": {"derived": 40}})["K"]
