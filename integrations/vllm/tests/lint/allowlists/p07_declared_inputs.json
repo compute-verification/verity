@@ -31,8 +31,6 @@
     {"file": "verity/ml/definitions/numerics/twins.py", "kind": "seed-default", "symbol": "admit", "detail": "seed"},
     {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "environ", "symbol": "decompose", "detail": "os.environ"},
     {"file": "verity_vllm/check/match/projection.py", "kind": "seed-default", "symbol": "Projection.__init__", "detail": "seed_node"},
-    {"file": "verity_vllm/observe/chunks.py", "kind": "broad-except", "symbol": "Collector.on_step", "detail": "except Exception"},
-    {"file": "verity_vllm/observe/chunks.py", "kind": "broad-except", "symbol": "scheduler_of", "detail": "except Exception"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "broad-except", "symbol": "_view", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "broad-except", "symbol": "log_header", "detail": "except Exception"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "broad-except", "symbol": "_rid_of", "detail": "except Exception"},
@@ -143,6 +141,8 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "CUDA_VISIBLE_DEVICES"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"}
+    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
+    {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "Collector.on_step", "detail": "except Exception"},
+    {"file": "verity_vllm/engine/chunks.py", "kind": "broad-except", "symbol": "scheduler_of", "detail": "except Exception"}
   ]
 }

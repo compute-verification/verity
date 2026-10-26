@@ -96,7 +96,6 @@
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> pipeline.tp.rank_replay"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> pipeline.tp.xrank_dump"},
     {"file": "verity_vllm/engine/rank_worker.py", "kind": "layer", "symbol": "<module>", "detail": "engine.rank_worker -> properties.census"},
-    {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "layer", "symbol": "<module>", "detail": "engine.vllm_adapter -> observe.chunks"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "forbidden-import", "symbol": "<module>", "detail": "research.pythonpath"},
     {"file": "verity_vllm/pipeline/research_tools.py", "kind": "forbidden-import", "symbol": "<module>", "detail": "research.store.tool"},
     {"file": "verity_vllm/pipeline/source_identity.py", "kind": "forbidden-import", "symbol": "<module>", "detail": "research.pythonpath"},
