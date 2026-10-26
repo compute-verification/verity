@@ -568,8 +568,10 @@ def canonText (j : Json) : Option String := (Flock.canon j).toOption
 /-- The link-window's registered root: its registration's `roots` entry for the `certificates` port
 (`LinkWindows.registration`), empty for none. -/
 def rootOf (reg : Registration) : ByteArray :=
-  let roots := match reg.record.getObjValD "roots" with | .arr rs => rs | _ => #[]
-  match (roots.find? (·.getObjValD "port" == .str LinkWindow.value)).map (·.getObjValD "root") with
+  let roots : Array Json := match reg.record.getObjValD "roots" with | .arr rs => rs | _ => #[]
+  let root : Option Json :=
+    (roots.find? fun r => r.getObjValD "port" == .str LinkWindow.value).map fun r => r.getObjValD "root"
+  match root with
   | some (.str h) => (Flock.unhex h).toOption.getD .empty
   | _ => .empty
 
