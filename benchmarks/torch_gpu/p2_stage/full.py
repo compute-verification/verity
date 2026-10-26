@@ -19,6 +19,13 @@ encoded store, read only, under the salt `setup.draw_salt` of the coin and commi
   - its rows and its buffer freed, so one tensor's rows and staging buffer are on the device at a time.
 - **summary**: each tensor's fastest decode summed, which is the decode of a step measured tensor by tensor, and the peak
   HBM torch allocated and reserved over the pass.
+- **receipts** (`--receipts`): the remote bandwidth audit's pass over the whole store beside the stage pass
+  (`sketch.py`), under the seed `receipts.seed(CHALLENGE, PASS, PREVIOUS)`: each tensor's rows taken in whole units
+  (up to three blocks more at each end), the sketch attached to the warm-up decode (the pass's σ), and its timed
+  decodes with the sketch and without, and the sketch alone; the units no tensor's rows hold (the store's encoded
+  padding past the head) read from their segments and sketched alone; then y and the root under fresh salts. The
+  summary's `receipts` gives the root, the pass's timestamps, each stage's time summed like the decode's, and the
+  overhead on the decode; with `--keep`, σ, y, the salts and the pass go to that directory for `bw_ref.py`.
 - **gemm**, after the pass, `--gemm-layer`'s matrices staged again one at a time: x [M, K] s8 and sx [M] f32 seeded on the
   device (rows 0, 1 and 2 all -128, all 127 and all 0), the stream's f32 scales (held to the manifest's SHA-256),
   `s8_simple.linear` (fused epilogue on CUDA) on `n_chunk` output channels at a time, every word against `gemm.twin`, and
@@ -32,6 +39,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import sys
 import time
 from collections import deque
@@ -120,7 +128,8 @@ class Segments:
         return self.held[s]
 
     def rows(self, blocks: range) -> torch.Tensor:
-        """The rows of `blocks` ([n, 2056] uint8) on the device; the segments before the last one they touch let go."""
+        """The rows of `blocks` ([n, 2056] uint8) on the device; the segments before the one before the last they touch
+        let go (the next tensor's rows in whole units can start a few blocks before these end)."""
         out = torch.empty(len(blocks), L.ROW, dtype=torch.uint8, device=DEVICE)
         last = (blocks.stop - 1) // self.bps
         for s in range(blocks.start // self.bps, last + 1):
@@ -130,18 +139,96 @@ class Segments:
             if len(part) != (hi - lo) * L.ROW:
                 raise ValueError(f"segment {s} ends before block {hi}")
             out[lo - blocks.start:hi - blocks.start] = torch.from_numpy(part.reshape(hi - lo, L.ROW)).to(DEVICE)
-        for s in [s for s in self.held if s < last]:
+        for s in [s for s in self.held if s < last - 1]:
             del self.held[s]
         return out
 
 
-def segments_of(tensors: list[L.Tensor], bps: int) -> list[int]:
+def segments_of(tensors: list[L.Tensor], bps: int, ranges: list[range] | None = None) -> list[int]:
     out: list[int] = []
-    for t in tensors:
-        for s in range(t.first_block // bps, (t.block_range.stop - 1) // bps + 1):
+    for r in ranges if ranges is not None else [t.block_range for t in tensors]:
+        for s in range(r.start // bps, (r.stop - 1) // bps + 1):
             if not out or s > out[-1]:
                 out.append(s)
     return out
+
+
+FULL_CHALLENGE = hashlib.sha512(b"verity/kernels-kstage/bw-full/challenge/v0").hexdigest()[:64]
+FULL_PREVIOUS = hashlib.sha512(b"verity/kernels-kstage/bw-full/previous/v0").hexdigest()
+
+
+class Audit:
+    """The bandwidth audit's pass over the whole store (`--receipts`): its seed, tree, salts and `sketch.Pass`."""
+
+    def __init__(self, args, lay: L.StoreLayout) -> None:
+        import sketch as K
+        from verity.core.protocols.remote_bandwidth import receipts as R
+
+        self.K, self.R = K, R
+        self.blocks = lay.params.blocks_per_segment * lay.params.segments
+        self.units = self.blocks // K.PER
+        self.challenge, self.index, self.previous = bytes.fromhex(args.challenge), args.pass_index, bytes.fromhex(args.previous)
+        self.seed = R.seed(self.challenge, self.index, self.previous)
+        self.tree = K.Tree(self.units, DEVICE)
+        self.salts_raw = args.salts.read_bytes() if args.salts else os.urandom(R.SALT_BYTES * self.tree.G)
+        if len(self.salts_raw) != R.SALT_BYTES * self.tree.G:
+            raise SystemExit(f"--salts holds {len(self.salts_raw)} bytes, not {self.tree.G} leaves' {R.SALT_BYTES}")
+        self.salts = self.tree.salts(self.salts_raw)
+        self.P = K.Pass(self.seed, self.units, DEVICE)
+        self.gap_s = 0.0
+        self.gap_units = 0
+
+    def rows_range(self, t: L.Tensor) -> range:
+        """`t`'s blocks, widened to the units they lie in (blocks past the last whole unit are in none)."""
+        u = self.P.units_of(t.first_block, t.block_range.stop)
+        return range(min(t.first_block, self.K.PER * u.start), max(t.block_range.stop, self.K.PER * u.stop))
+
+    def items(self, tensors: list[L.Tensor]) -> list[tuple[range, L.Tensor | None]]:
+        """In block order: each tensor with its rows' range, and the runs of units no tensor's rows hold, at most a
+        decode chunk at a time, with None."""
+        out: list[tuple[range, L.Tensor | None]] = []
+        at = 0
+
+        def gap(u0: int, u1: int) -> None:
+            for v in range(u0, u1, (1 << 16) // self.K.PER):
+                out.append((range(self.K.PER * v, self.K.PER * min(u1, v + (1 << 16) // self.K.PER)), None))
+
+        for t in tensors:
+            u = self.P.units_of(t.first_block, t.block_range.stop)
+            if u.start > at:
+                gap(at, u.start)
+            out.append((self.rows_range(t), t))
+            at = max(at, u.stop)
+        if at < self.units:
+            gap(at, self.units)
+        return out
+
+    def read_gap(self, segs: Segments, r: range, reps: int) -> None:
+        rows = segs.rows(r)
+        self.gap_s += min(events(partial(self.P.read, rows, r.start, r.start, r.stop), reps))
+        self.gap_units += len(r) // self.K.PER
+        del rows
+
+    def finish(self, reps: int) -> dict:
+        P, tree = self.P, self.tree
+        y_s = min(events(partial(self.K.receipts, self.seed, P.sigma, 0, tree.y), reps))
+        root_s = min(events(partial(tree.root, self.seed, self.salts), reps))
+        finish_s = min(events(partial(P.finish, tree, self.salts), reps))
+        return {"seed": self.seed.hex(), "challenge": self.challenge.hex(), "pass": self.index,
+                "previous": self.previous.hex(), "units": self.units, "leaves": tree.G, "root": P.root.hex(),
+                "start_ns": P.start_ns, "end_ns": P.end_ns, "pass_wall_s": round((P.end_ns - P.start_ns) / 1e9, 3),
+                "gap_units": self.gap_units, "gap_sketch_s": round(self.gap_s, 6), "y_s": round(y_s, 6),
+                "root_s": round(root_s, 6), "finish_s": round(finish_s, 6),
+                "sigma_sha512": hashlib.sha512(P.sigma.cpu().numpy().astype("<i4").tobytes()).hexdigest(),
+                "y_sha512": hashlib.sha512(tree.y.cpu().numpy().tobytes()).hexdigest(),
+                "salts_sha512": hashlib.sha512(self.salts_raw).hexdigest()}
+
+    def keep(self, path: Path, rec: dict) -> None:
+        path.mkdir(parents=True, exist_ok=True)
+        self.P.sigma.cpu().numpy().astype("<i4").tofile(path / "sigma.bin")
+        self.tree.y.cpu().numpy().tofile(path / "y.bin")
+        (path / "salts.bin").write_bytes(self.salts_raw)
+        (path / "pass.json").write_text(json.dumps(rec, indent=1) + "\n")
 
 
 def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
@@ -154,13 +241,17 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
     return out
 
 
-def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor) -> tuple[torch.Tensor | None, S.Store, dict]:
-    """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings."""
+def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
+           ) -> tuple[torch.Tensor | None, S.Store, dict]:
+    """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
+    With `audit`, the rows are of whole units and the decode sketches them."""
     t0 = time.perf_counter()
-    rows = segs.rows(t.block_range)
+    r = audit.rows_range(t) if audit else t.block_range
+    rows = segs.rows(r)
     sync()
     rows_s = time.perf_counter() - t0
-    store = S.Store(lay, rows, t.first_block, args.lib, chunk=args.chunk)
+    store = S.Store(lay, rows, r.start, args.lib, chunk=args.chunk)
+    store.sketch = audit.P if audit else None
     w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
     S.flat(w).fill_(0xA5)
     rec = {"layer": t.layer, "tensor": t.name, "shape": [t.n, t.k], "blocks": [t.first_block, t.block_range.stop],
@@ -173,12 +264,20 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor) -> tuple[torch
     return w, store, rec
 
 
+def sketched(store: S.Store, sk, layer: int, name: str, w: torch.Tensor) -> None:
+    store.sketch = sk
+    S.decode_matrix(store, layer, name, w)
+
+
 def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor], out: Out) -> tuple[dict, bool]:
     bps = lay.params.blocks_per_segment
     ok, done, total_s, layers = True, deque(), 0.0, {}
+    audit = Audit(args, lay) if args.receipts else None
+    items = audit.items(tensors) if audit else [(t.block_range, t) for t in tensors]
+    with_s, sketch_s = 0.0, 0.0
     t_start = time.perf_counter()
     with ThreadPoolExecutor(args.readers) as readers, ThreadPoolExecutor(args.hashers) as hashers:
-        segs = Segments(args.encoded, bps, segments_of(tensors, bps), readers, args.readers)
+        segs = Segments(args.encoded, bps, segments_of(tensors, bps, [r for r, _ in items]), readers, args.readers)
 
         def drain(keep: int) -> None:
             nonlocal ok
@@ -188,12 +287,20 @@ def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor]
                 ok &= bool(rec["sha256"]) and all(rec["sha256"].values()) and "refused" not in rec
                 out.record(step="stage", **rec)
 
-        for t in tensors:
-            w, store, rec = decode(args, lay, segs, t)
+        for r, t in items:
+            if t is None:
+                audit.read_gap(segs, r, args.reps)
+                continue
+            w, store, rec = decode(args, lay, segs, t, audit)
             fut = None
             if w is not None:
-                ts = events(partial(S.decode_matrix, store, t.layer, t.name, w), args.reps,
-                            partial(S.flat(w).fill_, 0xA5))
+                poison = partial(S.flat(w).fill_, 0xA5)
+                if audit:
+                    tw = events(partial(sketched, store, audit.P, t.layer, t.name, w), args.reps, poison)
+                    tk = events(partial(audit.P.read, store.rows, store.first, t.first_block, t.block_range.stop), args.reps)
+                    rec.update(decode_sketch_s=[round(x, 6) for x in tw], sketch_s=[round(x, 6) for x in tk])
+                    with_s, sketch_s = with_s + min(tw), sketch_s + min(tk)
+                ts = events(partial(sketched, store, None, t.layer, t.name, w), args.reps, poison)
                 host = S.flat(w).to("cpu", copy=True).numpy()
                 fut = hashers.submit(digests, src, t, host)
                 rec.update(decode_s=[round(x, 6) for x in ts], decode_gb_s=round(t.size / min(ts) / 1e9, 2),
@@ -206,6 +313,16 @@ def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor]
             drain(2 * args.hashers)
         drain(0)
         read = segs.read
+    receipts = None
+    if audit:
+        receipts = audit.finish(args.reps)
+        step = with_s + receipts["gap_sketch_s"] + receipts["finish_s"]
+        receipts.update(decode_sketch_step_s=round(with_s, 6), sketch_step_s=round(sketch_s, 6),
+                        decode_step_s=round(total_s, 6), receipts_step_s=round(step, 6),
+                        overhead_s=round(step - total_s, 6), overhead_ratio=round((step - total_s) / total_s, 5),
+                        step_ratio=round(step / total_s, 5))
+        if args.keep:
+            audit.keep(args.keep, receipts)
     wall = time.perf_counter() - t_start
     nbytes = sum(t.size for t in tensors)
     per = [v for k, v in layers.items() if k < lay.tensors[-1].layer]
@@ -213,7 +330,7 @@ def stage_pass(args, lay: L.StoreLayout, src: L.Weights, tensors: list[L.Tensor]
                "decode_step_s": round(total_s, 6), "decode_gb_s": round(nbytes / total_s / 1e9, 2) if total_s else None,
                "layer_s": {"min": round(min(per), 6), "max": round(max(per), 6), "mean": round(sum(per) / len(per), 6)}
                if per else None, "head_s": round(layers[lay.tensors[-1].layer], 6) if lay.tensors[-1].layer in layers
-               else None, "wall_s": round(wall, 3), **peak()}
+               else None, "wall_s": round(wall, 3), **peak(), **({"receipts": receipts} if receipts else {})}
     return summary, ok
 
 
@@ -336,6 +453,12 @@ def main(argv=None) -> int:
     ap.add_argument("--hashers", type=int, default=4)
     ap.add_argument("--samples", type=int, default=24, help="GEMM words sampled per call for check.py")
     ap.add_argument("--seed", type=int, default=12)
+    ap.add_argument("--receipts", action="store_true", help="the bandwidth audit's pass beside the stage pass")
+    ap.add_argument("--challenge", default=FULL_CHALLENGE, help="the pass's window challenge (32 bytes, hex)")
+    ap.add_argument("--pass-index", type=int, default=0, help="the pass's index in its window")
+    ap.add_argument("--previous", default=FULL_PREVIOUS, help="the root before (the registration's digest at pass 0)")
+    ap.add_argument("--salts", type=Path, help="with --receipts: the leaves' salts, 192 bytes each (default fresh)")
+    ap.add_argument("--keep", type=Path, help="with --receipts: σ, y, the salts and the pass for bw_ref.py")
     ap.add_argument("--device", default="cuda")
     args = ap.parse_args(argv)
     DEVICE = torch.device(args.device)
