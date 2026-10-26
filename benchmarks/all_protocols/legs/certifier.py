@@ -656,8 +656,7 @@ def warden_ids(run: Path, windows: Sequence[int]) -> dict[int, list[int]]:
     warden's ordinal), in cell order: the id-form data cells of ``responses.records`` (`io_tie.parse_cell`)."""
     sys.path.insert(0, str(TRACES))
     import warden_serve as WS
-    from verity.ml.protocols.certifier import io_tie as IT
-    from verity.core.protocols.certifier import warden as W, warden_rows as WR
+    from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR
 
     params = W.WardenParams(**json.loads((run / "deployment.json").read_text())["params"])
     B, ids = params.cell_bytes, {}

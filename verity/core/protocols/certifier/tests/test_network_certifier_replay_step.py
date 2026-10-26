@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.protocols.certifier import replay_step as RS
+from verity.core.protocols.certifier import replay_step as RS
 from verity.core.protocols.certifier.head_check import ands
 
 FIXTURE = Path(__file__).parent / "fixtures" / "replay_step_vectors.json"

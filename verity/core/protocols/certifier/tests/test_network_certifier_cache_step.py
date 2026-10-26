@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.protocols.certifier import cache_step as CS
+from verity.core.protocols.certifier import cache_step as CS
 
 SMALL = CS.statics(8, 4, 8, 4, 32)
 S = SimpleNamespace(**SMALL)

@@ -282,7 +282,7 @@ def python_ref(run, rec: dict, fixture) -> dict:
     inline: the Commit-style tree over its BF16 rows), its row digests (`pearl_c.row_digest` of the rows its seeds read),
     seed_A over the root it read, each row's seed and E_A line, and the padding rows' lines from seed_A."""
     from verity.core.protocols.pouw.audit import HM96, ROW_SCHEMA, activation_binding, rows_domain
-    from verity.ml.protocols.pouw.schemes import pearl_c as C
+    from verity.core.protocols.pouw.schemes import pearl_c as C
     b, w, i, m16, mp, mode = rec["bytes"], rec["w"], rec["index"], rec["m16"], rec["mp"], rec["mode"]
     salt, root_b = run.salt, run.roots[w]
     k = len(b["f32"]) // (4 * m16)

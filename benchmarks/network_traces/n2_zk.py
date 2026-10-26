@@ -68,7 +68,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.ml.protocols.certifier import advised as AD  # noqa: E402
+from verity.core.protocols.certifier import advised as AD  # noqa: E402
 from verity.core.protocols.certifier import head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402

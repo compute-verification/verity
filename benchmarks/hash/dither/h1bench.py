@@ -40,7 +40,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[2]))
 from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
-from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.core.protocols.pouw.circuit import h1tile as HT
 
 NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0")
 KEY_BLOCKS = 32

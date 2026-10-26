@@ -88,9 +88,9 @@ from verity.core.protocols.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Wo
 from verity.core.protocols.pouw.coins import Challenger  # noqa: E402
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul  # noqa: E402
 from verity.core.protocols.pouw.protocol import Shape as MShape  # noqa: E402
-from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.ml.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
-from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES  # noqa: E402
 
 T = W.T
 KEYS = R.TIMING_KEYS

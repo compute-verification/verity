@@ -43,8 +43,7 @@ from pathlib import Path
 
 import torch
 
-from verity.core.protocols.certifier import active as A, release as REL
-from verity.ml.protocols.certifier import io_tie as IT
+from verity.core.protocols.certifier import active as A, io_tie as IT, release as REL
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "integrations" / "torch_loop"))
 from verity_torch_loop import loop as L  # noqa: E402

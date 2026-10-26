@@ -3,7 +3,7 @@
 that registers more, changes the count and fails here.  Change `COUNT` in the change that adds or removes a Definition.
 
 The count is the registry's own: 1,287 on main before the move less PoUW's circuit (the 47 `Ncp*` and `Pouw*` Definitions
-`verity.ml.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
+`verity.core.protocols.pouw.circuit` registers), which `pouw_rows` stopped importing once `NcpDequant` moved to
 `verity.ml.circuits.ops.ncp`, 1,242 since `AttentionHead_v18` and `Attention_v18` (bcf1e1aade), 1,250 since
 `AttentionHead_v19`, `Attention_v19`, `AttnBlockFirst_v1` and `AttnHeadEnd_v1` (d37b243ac6) and ops' `GemmCoordinatePad_v1`,
 `_v2`, `ScaledMmS8CoordinateRows_v1` and `_v2` (fa7065c758), and 1,256 since ops' `F32ToS8RniSat_v1`, `_v2`, `U32Hi16_v1`

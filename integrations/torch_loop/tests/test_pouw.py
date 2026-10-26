@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from verity.core.protocols.pouw import core_check as CC, window as Wd
-from verity.ml.protocols.pouw.circuit import h1tile as Ht
+from verity.core.protocols.pouw.circuit import h1tile as Ht
 from verity.core.protocols.sampled_proofs.one_stage import audit as A, registration as R
 from verity_torch_loop import loop as L, pouw as PW, pouw_audit as PA
 

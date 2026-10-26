@@ -69,8 +69,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2
-from verity.ml.protocols.certifier import advised as AD, io_request as Q
-from verity.core.protocols.certifier import head_check as HC
+from verity.core.protocols.certifier import advised as AD, head_check as HC, io_request as Q
 from verity.core.protocols.certifier import service as SVC, warden_rows as WR
 from verity.core.protocols.certifier.certificate import Direction
 from verity.core.protocols.certifier.warden import WardenParams

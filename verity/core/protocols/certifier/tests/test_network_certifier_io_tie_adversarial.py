@@ -22,8 +22,7 @@ import numpy as np
 
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
-from verity.core.protocols.certifier import head_check as HC
-from verity.ml.protocols.certifier import io_tie as IT
+from verity.core.protocols.certifier import head_check as HC, io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER
 
 from test_network_certifier_io_tie import (BIG, V, _cell_tampers, _content_ok, busiest, busy, commit, serve, wardens,

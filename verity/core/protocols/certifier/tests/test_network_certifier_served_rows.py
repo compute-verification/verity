@@ -11,8 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.protocols.certifier import compile_slice as CS, served_statics as SS
-from verity.core.protocols.certifier import served_rows as SR
+from verity.core.protocols.certifier import compile_slice as CS, served_rows as SR, served_statics as SS
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 
 FIXTURE = Path(__file__).parent / "fixtures" / "compile_slice_smallkv.json"

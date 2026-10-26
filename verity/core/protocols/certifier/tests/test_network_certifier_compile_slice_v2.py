@@ -16,8 +16,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.ml.protocols.certifier import compile_slice as CS, compile_slice_v2 as V2, replay_chain as RC
-from verity.ml.protocols.certifier import replay_step as RS
+from verity.core.protocols.certifier import compile_slice as CS, compile_slice_v2 as V2, replay_chain as RC
+from verity.core.protocols.certifier import replay_step as RS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

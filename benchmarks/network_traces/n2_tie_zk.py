@@ -68,8 +68,8 @@ import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
 from verity.core.protocols.certifier import advice as ADV, head_check as HC  # noqa: E402
-from verity.ml.protocols.certifier import advised as AD  # noqa: E402
-from verity.ml.protocols.certifier import io_request as Q  # noqa: E402
+from verity.core.protocols.certifier import advised as AD  # noqa: E402
+from verity.core.protocols.certifier import io_request as Q  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402

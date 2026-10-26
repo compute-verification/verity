@@ -1,7 +1,7 @@
 // The served receipt folds as per-lane word chains, for the SASS instruction mix FOLD-OPT prices on each device: fx1 on
 // sm_120, li on the H200 (sm_90a) and li heavy (li + keyed rounds) on the B200 (sm_100a), and li heavy with its keyed
 // rounds' constant XOR on the IMAD pipe (`fold_min.py`): key-oblivious (61 IMAD-pipe instructions a round) and at li's
-// cheapest key LK[6][0] (25). Each kernel is the reference fold of `verity/ml/protocols/pouw/circuit/segment.py`
+// cheapest key LK[6][0] (25). Each kernel is the reference fold of `verity/core/protocols/pouw/circuit/segment.py`
 // (`_fx1_absorb`, `_li_absorb`, and the keyed round `y <- (y ^ k) * a + c`), one chain a lane. The absorbed words are
 // per-lane registers (loaded before the clock starts); keys and multipliers are in constant memory, uniform as in the
 // served kernels, so ptxas can neither specialise a multiplier into a shift nor move a word's work to the uniform

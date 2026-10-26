@@ -1,4 +1,4 @@
-"""The difftest of the replay step circuit (`verity.ml.protocols.certifier.replay_step`) against the replay itself.
+"""The difftest of the replay step circuit (`verity.core.protocols.certifier.replay_step`) against the replay itself.
 
 `vectors(trace, R=, W=, A=)` replays a trace (`replay.replay` with the trace's own decisions, sync or async scheduling)
 with its scheduler instrumented, and returns each executed step as the step circuit sees it (under async scheduling a
@@ -42,7 +42,7 @@ import replay as RP  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[3]
 
-from verity.ml.protocols.certifier import replay_step as RS  # noqa: E402
+from verity.core.protocols.certifier import replay_step as RS  # noqa: E402
 
 
 class _Recorder:

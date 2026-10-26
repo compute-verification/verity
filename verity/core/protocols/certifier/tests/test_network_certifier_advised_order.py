@@ -17,8 +17,7 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.certifier import advice as I1, tie_service as TS
-from verity.ml.protocols.certifier import advised as AD, io_request as Q
+from verity.core.protocols.certifier import advice as I1, advised as AD, io_request as Q, tie_service as TS
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import id_request, id_request_frames
 from verity.core.protocols.certifier.grid import GridParams

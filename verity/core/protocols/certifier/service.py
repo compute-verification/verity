@@ -210,8 +210,7 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain, tree_levels
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest
-from verity.ml.protocols.certifier import advised as AD
-from verity.core.protocols.certifier import audit as host_audit, head_check as HC, served as SV
+from verity.core.protocols.certifier import advised as AD, audit as host_audit, head_check as HC, served as SV
 from verity.core.protocols.certifier.lean_audit import Audit
 from verity.core.protocols.certifier.certificate import Certificate, CertifiedClock, CertifiedRecord, PublicKey, \
     parameters_digest
