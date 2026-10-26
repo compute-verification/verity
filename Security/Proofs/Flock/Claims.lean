@@ -182,6 +182,9 @@ import Proofs.Flock.Claims.Recursion.KSLin2R
 import Proofs.Flock.Claims.Recursion.RoundSizes
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.Recursion.LastSharedR
+import Proofs.Flock.Claims.Recursion.LastFilesR
+import Proofs.Flock.Claims.Recursion.LastCallsR
+import Proofs.Flock.Claims.Recursion.KSFlockLinR
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.CapPieces
 import Proofs.Flock.Claims.Recursion.RestVerdictDraw
