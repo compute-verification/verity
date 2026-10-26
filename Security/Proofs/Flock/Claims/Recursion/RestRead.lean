@@ -124,7 +124,8 @@ theorem hrest_len (hF : FinalReads final fin) (hL : RoundLens fin) {x : Msg} (hx
   have hf'' : final (lastAt fin x ws) = some (os', last') := hf'
   rw [hf] at hf''
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hf'')
-  rw [hL x hx ws hl j hj, hcnt j (by omega)]
+  rw [hL x hx ws hl j hj]
+  exact congrArg (128 * ·) (hcnt j (by omega)).symm
 
 /-- **The record's reading holds at every witnesses**, where the last step reads the opened messages. -/
 theorem hrest_read (hR : ReadsAt rd final fin) {x : Msg} (hx : DenseX x) (c : ℕ → Coin)
