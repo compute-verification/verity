@@ -32,9 +32,9 @@ from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_dsa import _missing, _value
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity.ml.definitions.numerics import marlin_moe_rows as MR
-from verity.ml.definitions.registry import marlin_moe as MM
-from verity.ml.definitions.registry.prims import F32 as F32_WORD, I32 as I32_WORD
+from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity_vllm.program.registry import marlin_moe as MM
+from verity_vllm.program.registry.prims import F32 as F32_WORD, I32 as I32_WORD
 
 __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 

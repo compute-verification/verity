@@ -36,10 +36,10 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.pipeline.cli import MACHINE
-from verity.ml.definitions.numerics import cuda_rmsnorm_rows as R
-from verity.ml.definitions.numerics import derived_rows as D
-from verity.ml.definitions.registry import cuda_rmsnorm as M
-from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.kernels import cuda_rmsnorm_rows as R
+from verity_vllm.program.kernels import derived_rows as D
+from verity_vllm.program.registry import cuda_rmsnorm as M
+from verity_vllm.program.registry import prims as P
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-cuda-rmsnorm-capture/v2"

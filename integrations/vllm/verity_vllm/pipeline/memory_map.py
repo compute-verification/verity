@@ -157,7 +157,7 @@ def of_build(d: str | Path, digest: str, at: str | Path | None = None) -> MM.Row
     """The KV rows of Build dir ``d``'s request Program ``digest``: its `KV_ROWS` when they name the Program, else computed from its
     descriptor (refused unless that is Program ``digest``) and cached beside it (`cache`), once per Program digest; read and
     cached at ``at`` in place of ``d`` when given, ``d`` only read."""
-    from verity.ml.definitions.boolean import load_program
+    from verity_vllm.program.boolean import load_program
 
     d = Path(d)
     at = d if at is None else Path(at)

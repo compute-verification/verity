@@ -1,4 +1,4 @@
-"""The Boolean-first fill (`verity.ml.definitions.boolean`): the Boolean versions of the word Definitions the served rows reached
+"""The Boolean-first fill (`verity_vllm.program.boolean`): the Boolean versions of the word Definitions the served rows reached
 with none.
 
 * each new Boolean leaf (`ops.boolean.scalar`'s I32/bit/f32 scalars, `ops.boolean.attention`'s GPU-NaN FTZ arithmetic,
@@ -24,9 +24,9 @@ from verity.ml.circuits.ops import fp32 as W
 from verity.ml.circuits.ops import prims as MP
 from verity.ml.circuits.ops import scalar as S
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions import boolean as BB
-from verity.ml.definitions.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
-from verity.ml.definitions.registry import prims as P, ref_prims as R, tp_allreduce as TA
+from verity_vllm.program import boolean as BB
+from verity_vllm.program.registry import b1, b1_tp2, dsv4_decode_indices as DI, hopper, inductor as I, marlin_moe as MM, moe
+from verity_vllm.program.registry import prims as P, ref_prims as R, tp_allreduce as TA
 
 F32 = Value(32)
 SPECIAL32 = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x00000001, 0x807FFFFF, 0x3F800000,

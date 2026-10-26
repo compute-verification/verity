@@ -24,11 +24,11 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.defs import REGISTRY, bind
 from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.boolean.forms import Circuit
-from verity.ml.definitions.numerics import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
-from verity.ml.definitions.numerics.twins import rand_bf16, tie_pairs_mul
-from verity.ml.definitions.registry import b1
-from verity.ml.definitions.registry import boolean_rope as R
-from verity.ml.definitions.registry import ref_prims
+from verity_vllm.program.kernels import twins  # noqa: F401  (registers RoPE_v1's kernel, which the served shapes' word side runs)
+from verity_vllm.program.kernels.twins import rand_bf16, tie_pairs_mul
+from verity_vllm.program.registry import b1
+from verity_vllm.program.registry import boolean_rope as R
+from verity_vllm.program.registry import ref_prims
 
 U16 = np.uint16
 HALVES = [R.RopeOut, R.RopeOutAdd]

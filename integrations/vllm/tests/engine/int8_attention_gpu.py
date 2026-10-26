@@ -34,7 +34,7 @@ from tests.engine import fattn_oracle as O
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity_vllm.engine import int8_attention as A
-from verity.ml.definitions.registry import int8_exact as X
+from verity_vllm.program.registry import int8_exact as X
 
 #: fattn_ref.py reads 128-wide rows (fattn.cu's head dimension); at any other the oracle and the Definitions are the checks
 FATTN_REF_HEAD_DIM = 128

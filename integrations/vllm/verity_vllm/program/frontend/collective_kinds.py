@@ -3,8 +3,8 @@ the cross-rank families of a world: what the Commit's cross-rank pass and the qu
 
 from __future__ import annotations
 
-from verity.ml.definitions.registry.b1_tp2 import AllGather, AllGather2, AllReduce, AllReduce2, EmbeddingShard, all_gather, all_reduce
-from verity.ml.definitions.registry.tp_allreduce import (AllReduceCustom, AllReduceMnnvl, AllReduceMultimem, AllReduceNcclTree,
+from verity_vllm.program.registry.b1_tp2 import AllGather, AllGather2, AllReduce, AllReduce2, EmbeddingShard, all_gather, all_reduce
+from verity_vllm.program.registry.tp_allreduce import (AllReduceCustom, AllReduceMnnvl, AllReduceMultimem, AllReduceNcclTree,
                                                       AllReduceRmsNormMnnvl)
 
 

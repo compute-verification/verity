@@ -7,7 +7,7 @@ from dataclasses import replace
 from verity.ml.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
-from verity.ml.definitions.boolean import NoBooleanVersion, boolean_function, sigma_check
+from verity_vllm.program.boolean import NoBooleanVersion, boolean_function, sigma_check
 from verity_vllm.program.frontend.derive import DeriveReport, Unsupported
 from verity_vllm.program.frontend.program_identity import check_identity
 

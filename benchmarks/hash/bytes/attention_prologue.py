@@ -165,9 +165,9 @@ def check() -> list[str]:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.bits import compile as compile_bits
     from verity.ml.circuits.ops.boolean import mufu as BM
-    from verity.ml.definitions.registry import boolean_attention as BA
-    from verity.ml.definitions.registry import boolean_norms as BN
-    from verity.ml.definitions.registry import boolean_rope as BR
+    from verity_vllm.program.registry import boolean_attention as BA
+    from verity_vllm.program.registry import boolean_norms as BN
+    from verity_vllm.program.registry import boolean_rope as BR
 
     def ands(d) -> int:
         return compile_bits(d).counts["and"]

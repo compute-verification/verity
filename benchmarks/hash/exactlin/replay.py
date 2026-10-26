@@ -4,7 +4,7 @@ on the kernel's xq and s_a, row by row, against its y.  The npz files are `kgate
 throughout; CPU only.
 
 `--evaluators` is an int8_rows.py (default: the installed verity_vllm's), e.g. #2694's, which has ScaledMmS8_v1:
-    git show origin/cursor/vllm-int8-build-8350:verity/ml/definitions/numerics/int8_rows.py > /tmp/int8_rows.py
+    git show origin/cursor/vllm-int8-build-8350:integrations/vllm/verity_vllm/program/kernels/int8_rows.py > /tmp/int8_rows.py
     python replay.py RUN/out/replay --evaluators /tmp/int8_rows.py
 """
 from __future__ import annotations
@@ -21,7 +21,7 @@ import numpy as np
 def load(path: str | None):
     if path is None:
         try:
-            from verity.ml.definitions.numerics import int8_rows
+            from verity_vllm.program.kernels import int8_rows
         except ImportError as e:
             raise SystemExit(f"replay.py: {e}; int8_rows is PR #2694's: pass --evaluators (see the docstring)") from e
         return int8_rows
@@ -61,7 +61,7 @@ def main() -> int:
     for r in rows:
         print(json.dumps(r), flush=True)
     doc = {"ok": bool(rows) and all(r["ok"] for r in rows), "files": len(rows), "scaled_mm": hasattr(ev, "scaled_mm"),
-           "evaluators": a.evaluators or "verity.ml.definitions.numerics.int8_rows"}
+           "evaluators": a.evaluators or "verity_vllm.program.kernels.int8_rows"}
     print(json.dumps(doc), flush=True)
     return 0 if doc["ok"] else 4
 

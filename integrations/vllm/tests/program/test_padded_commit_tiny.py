@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from verity.ml.definitions.registry import lifted as L
+from verity_vllm.program.registry import lifted as L
 from tests.program import padded_commit_tiny as PC
 
 pytestmark = pytest.mark.skipif(PC.pos_leaf is None, reason=f"host core unavailable: {PC.CORE}")

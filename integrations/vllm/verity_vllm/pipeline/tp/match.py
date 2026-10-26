@@ -38,6 +38,7 @@ from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.config import option
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
+from verity_vllm import settings
 
 
 def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
@@ -83,7 +84,7 @@ def _engine_main(args) -> None:
     topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout) if instrumented else None
     (out / "topology.json").write_text(json.dumps({"arm": args.arm, "tp": args.tp, "build_s": round(build_s, 1),
                                                     "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
-                                                    "env": {k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))},
+                                                    "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
@@ -219,7 +220,7 @@ def _check_main(args) -> int:
     # [lane vllm-tp-n] world > 2: the Definition's chain of one-rounding bf16 adds in `allreduce_order(world)` (AllReduce_v2{WORLD,N}),
     # world 8 the routed Definition (`_route`); a mismatch is a named finding.  Diagnostics travel with it: how many received values equal
     # the f32-accumulate-then-round-once alternative (`alt_f32_once_equal`) and the ascending rank-order chain (`alt_ascending_equal`).
-    from verity.ml.definitions.registry.b1_tp2 import allreduce_order
+    from verity_vllm.program.registry.b1_tp2 import allreduce_order
     order = allreduce_order(world)
     prov["definition_order"] = ("world 2: bf16(f32(part0) + f32(part1)); world > 2: acc = part[order[0]]; acc = bf16(f32(acc) + f32(part[r])) "
                                 f"for r in order[1:], order = {list(order)} (b1_tp2.allreduce_order); world 8: the routed Definition")

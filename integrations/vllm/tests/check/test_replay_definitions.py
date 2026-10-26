@@ -100,7 +100,7 @@ def test_the_c2_replay_refuses_it_too(tmp_path, program):
 def test_both_loaders_refuse_a_row_kernel_that_is_not_its_definition(tmp_path, program, monkeypatch):
     """The Build is of record, but the row kernel the replay grades its norm rows by is one bit off its Definition: refused by
     name before any row is graded, by the kernel's self-check."""
-    from verity.ml.definitions.numerics import derived_rows as DR
+    from verity_vllm.program.kernels import derived_rows as DR
 
     dg = _build(tmp_path / "built", program)
     monkeypatch.setattr(DF, "_KERNEL_CHECKS", {})

@@ -23,7 +23,7 @@ that shortens the Program.  This module is the SEMANTIC core: the spec's referen
 independently written three-state reference machine (SERVING / LAG / INACTIVE), the checker's recurrence over a RAW transcript
 (`recurrence`), the named invariants (`invariants`), rev's Match-side checks (`check_transcript`), the slot <-> engine-iteration map
 (revb R1: `slot_map` -- a STATED fact, contiguity + unchunked prefill or FAIL by name), and the derived invariant.  The registered gates
-(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity/ml/definitions/registry/lifted.py` (`continuation_chain`); the
+(`LIsEOS<E>_v1`, `LEmitNext_v1`, `LRunNext<A>_v1`) and the construction live in `verity_vllm/program/registry/lifted.py` (`continuation_chain`); the
 R17-1 lag unit (`LStepLive`/`LSelect` guard chain) is proven to compute exactly `r` / `u` of this rule (`chain_bits`, tested exhaustively).
 
 Indexing: slot `t` <-> the Build's sampling EVENT / step `s = t - 1` (`out[s]`; the lifted tool's `a_r` is the first event with `r = 0`).
@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Iterable, Sequence
 
-from verity.ml.definitions.registry import lifted as L
+from verity_vllm.program.registry import lifted as L
 from verity_vllm.program.lifting import lifted_records
 
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (spec s1: recorder, builder, Match share one version)
@@ -247,7 +247,7 @@ def invariants(slots: Sequence[Slot], *, cap: int, A: int) -> dict[str, bool]:
 
 
 def executed_prefix_by_rule(served: Sequence[int], *, cap: int, A: int, eos: Iterable[int]) -> dict[str, Any]:
-    """The per-request block of moe's `executed_prefix_of_record` (`verity_vllm/check/executed_prefix.py`) computed FROM the rule: the
+    """The per-request block of moe's `executed_prefix_of_record` (`verity_vllm/commit/executed_prefix.py`) computed FROM the rule: the
     recurrence over the SERVED list as the raw prefix.  `executed_prefix_len = |{t : r_t = 1}|`, `eos_step` = the FIRST EOS's request-relative
     row, `lag_steps` = the (0, 1) slot(s) as request-relative rows (`t - 1`).  A served token AFTER the first EOS is `served_past_first_eos`
     (the rule stops at the first EOS; a last-token test would accept `[EOS, x, EOS]`), a last served token outside the pinned

@@ -46,12 +46,12 @@ from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
-from verity.ml.definitions.registry import sparse_mla_split
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
+from verity_vllm.program.kernels.serve3_reference import materialize
+from verity_vllm.program.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
+from verity_vllm.program.registry import sparse_mla_split
+from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity_vllm.program.registry.boolean_rope import RoPEHeadGptJV2
+from verity_vllm.program.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora

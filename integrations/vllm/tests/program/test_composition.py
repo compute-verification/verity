@@ -46,7 +46,7 @@ TC_HOPPER = Path(os.environ.get("VERITY_HP_ARCHIVE", Path.home() / "veritor-arti
 from verity.ml.circuits import Program, bind  # noqa: E402
 from verity.ml.circuits.evaluate import evaluate_call  # noqa: E402
 from verity_vllm.program.frontend.correspond import correspond, correspond_rebound  # noqa: E402
-from verity.ml.definitions.registry import b1, hopper as H, prims as P  # noqa: E402
+from verity_vllm.program.registry import b1, hopper as H, prims as P  # noqa: E402
 from verity_vllm.program.frontend import serve_families
 from tests.program.crosscheck import _standalone  # noqa: E402
 
@@ -343,8 +343,8 @@ def test_attention_on_ampere_captured_calls(T, layer, heads, recorded_cross):
     locally); the two differ on the recorded number of words. T = 100/193/300 are held-out positions (composition.md §3:
     2/4/5 FA2 blocks, the last-visited one partial; 1/2/3 FA3 blocks)."""
     _need(W11 / "natural" / "index.json", "W11 attention fixtures")
-    from verity.ml.definitions.numerics import fa2_model as FA2, fa3_model as FA3
-    from verity.ml.definitions.numerics.fa2_relation import tables_dir
+    from verity_vllm.program.kernels import fa2_model as FA2, fa3_model as FA3
+    from verity_vllm.program.kernels.fa2_relation import tables_dir
     try:
         FA3.lib()
     except Exception as e:  # noqa: BLE001

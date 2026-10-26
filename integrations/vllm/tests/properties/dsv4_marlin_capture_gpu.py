@@ -129,7 +129,7 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties.glm53_block_fp8_capture_gpu import _activation, _error, _load, _save, _u16, _u32
-from verity.ml.definitions.numerics import marlin_moe_rows as MR
+from verity_vllm.program.kernels import marlin_moe_rows as MR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-marlin-capture/v3"
@@ -882,8 +882,8 @@ def compare_reference(job: dict[str, Any]) -> dict[str, Any]:
     coordinates, and for the w2 launch one coordinate through the expert gather over every expert's rows."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.definitions.numerics.derived_rows import f2fp_bf16
-    from verity.ml.definitions.registry import marlin_moe as MM
+    from verity_vllm.program.kernels.derived_rows import f2fp_bf16
+    from verity_vllm.program.registry import marlin_moe as MM
 
     TK, TN, GRID = job["statics"]
     K, N, E, P, par = job["K"], job["N"], job["E"], job["pairs"], job["par"]
@@ -963,8 +963,8 @@ def bind_check(served: set[tuple[str, int, int, int]]) -> dict[str, Any]:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation.batch import type_shape
-    from verity.ml.definitions.boolean import boolean_version
-    from verity.ml.definitions.registry import marlin_moe as MM
+    from verity_vllm.program.boolean import boolean_version
+    from verity_vllm.program.registry import marlin_moe as MM
 
     out: dict[str, Any] = {}
     for kind, TK, TN, GRID in sorted(served):

@@ -39,6 +39,7 @@ from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASS
 from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
+from verity_vllm import settings
 
 
 def repo_modules_loaded() -> dict[str, Any]:
@@ -147,7 +148,7 @@ def _tp_facts(worker: Any) -> dict[str, Any]:
         out["tp"]["pp_world_size"] = int(ps.get_pp_group().world_size)
     except Exception as e:  # noqa: BLE001
         out["tp_error"] = repr(e)
-    out["nccl_env"] = {k: v for k, v in os.environ.items() if k.startswith("NCCL_")}
+    out["nccl_env"] = settings.redact({k: v for k, v in os.environ.items() if k.startswith("NCCL_")})
     pc = worker.vllm_config.parallel_config
     out["parallel_config"] = {k: getattr(pc, k, None) for k in ("tensor_parallel_size", "pipeline_parallel_size", "world_size",
                                                                  "distributed_executor_backend", "disable_custom_all_reduce",
@@ -1081,7 +1082,7 @@ class TP2CaptureWorkerExtension:
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD
-        from verity.ml.definitions.registry.tp_allreduce import device_of, settings_of
+        from verity_vllm.program.registry.tp_allreduce import device_of, settings_of
 
         settings = settings_of(self.vllm_config.parallel_config.disable_custom_all_reduce, engine_env.snapshot())
         p = torch.cuda.get_device_properties(torch.cuda.current_device())

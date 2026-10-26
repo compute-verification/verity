@@ -64,17 +64,17 @@ from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.program import REGISTRATION, Program, input_id
 from verity.ml.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple, type_from_json
-from verity.ml.definitions.registry import act as ACT
-from verity.ml.definitions.registry import dense as DENSE
-from verity.ml.definitions.registry import dsa as DSA
-from verity.ml.definitions.registry import hopper as HOP
-from verity.ml.definitions.registry import moe as MOE
-from verity.ml.definitions.registry import pouw_rows as PR
-from verity.ml.definitions.registry import prims as VP
-from verity.ml.definitions.registry import ref_prims as RP
-from verity.ml.definitions.registry import sampling as SPL
-from verity.ml.definitions.registry import tables as TB
-from verity.ml.definitions.registry import topp_word_gates as TW
+from verity_vllm.program.registry import act as ACT
+from verity_vllm.program.registry import dense as DENSE
+from verity_vllm.program.registry import dsa as DSA
+from verity_vllm.program.registry import hopper as HOP
+from verity_vllm.program.registry import moe as MOE
+from verity_vllm.program.registry import pouw_rows as PR
+from verity_vllm.program.registry import prims as VP
+from verity_vllm.program.registry import ref_prims as RP
+from verity_vllm.program.registry import sampling as SPL
+from verity_vllm.program.registry import tables as TB
+from verity_vllm.program.registry import topp_word_gates as TW
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

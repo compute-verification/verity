@@ -20,9 +20,9 @@ import numpy as np
 import pytest
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.registry import tp_allreduce as T
-from verity.ml.definitions.registry import tp_allreduce_check as K
+from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.registry import tp_allreduce as T
+from verity_vllm.program.registry import tp_allreduce_check as K
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 N = 1536

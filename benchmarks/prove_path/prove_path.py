@@ -345,7 +345,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.ml.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.ml.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity.ml.definitions.registry.catalog import load
+    from verity_vllm.program.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"

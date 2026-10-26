@@ -12,7 +12,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
-from verity.ml.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
+from verity_vllm.program.registry.fp8 import QUANT_GROUPS, weight_blocks
 
 
 # -- [R15 fp8] block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------

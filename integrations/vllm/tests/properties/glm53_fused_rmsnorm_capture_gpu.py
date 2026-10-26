@@ -54,8 +54,8 @@ import numpy as np
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from tests.properties import glm53_dsa_capture_gpu as DS
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.numerics import dsa_norm_rows as NR
+from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.kernels import dsa_norm_rows as NR
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-fused-rmsnorm-capture/v2"
@@ -121,8 +121,8 @@ def model_r(x: np.ndarray, eps: float, layout: str = "strided", chains: str = "o
     8-element vector added in order (`chains` "one" / "per_vector"), each warp's butterfly, the CTA's two adds ("02_13" =
     (w0 + w2) + (w1 + w3), "01_23" = (w0 + w1) + (w2 + w3)), then `epilogue` "rsqrt" (RsqrtApprox(eps + DivFull(sum, N))) or
     "sqrt" (`RMSNormTriton_v1`'s DivFull(1, MufuSqrtFtz(fma(DivFullRcp(N), sum, eps))))."""
-    from verity.ml.definitions.registry import dsa_norm as DN
-    from verity.ml.definitions.registry.prims import bits_of
+    from verity_vllm.program.registry import dsa_norm as DN
+    from verity_vllm.program.registry.prims import bits_of
 
     R, N = x.shape
     E = N // DN.THREADS
@@ -346,8 +346,8 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     from verity.ml.circuits.defs import bind
-    from verity.ml.definitions import boolean as SW
-    from verity.ml.definitions.registry import dsa_norm as DN
+    from verity_vllm.program import boolean as SW
+    from verity_vllm.program.registry import dsa_norm as DN
 
     out: dict[str, Any] = {}
     for _, N, _, _ in NORMS:
@@ -371,7 +371,7 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate
-    from verity.ml.definitions.registry import dsa_norm as DN
+    from verity_vllm.program.registry import dsa_norm as DN
 
     (r0, r1), N = job["span"], job["N"]
     a = DS._load(job["paths"])

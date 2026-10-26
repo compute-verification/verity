@@ -26,11 +26,11 @@ from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.observe.fold.patterns.fp8 import CutlassScaledMmFp8Block, PerTokenGroupFp8Quant
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
-from verity.ml.definitions import boolean as SW
+from verity_vllm.program import boolean as SW
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
-from verity.ml.definitions.registry import boolean_fp8 as BF
-from verity.ml.definitions.registry import fp8 as F
-from verity.ml.definitions.registry import fp8_vocab
+from verity_vllm.program.registry import boolean_fp8 as BF
+from verity_vllm.program.registry import fp8 as F
+from verity_vllm.program.registry import fp8_vocab
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
 from tests.program import test_fp8_profile as FP
@@ -306,7 +306,7 @@ def test_the_quant_rule_binds_every_registered_group(G: int, ue8m0: bool) -> Non
     (Fp8GroupQuantUe8m0_v1, registry.deepgemm) -- the MoE experts' input quant when DeepGEMM is on, vLLM's sm_90 default."""
     from verity_vllm.program.frontend.rules.vllm_bindings import fp8 as R
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as V
-    from verity.ml.definitions.registry import deepgemm as DG
+    from verity_vllm.program.registry import deepgemm as DG
 
     (x, xq, xs), ctx = _quant_rule_ctx(6144, G)
     node = types.SimpleNamespace(args=(x, xq, xs, G, 1e-10, -448.0, 448.0, ue8m0, False, False), kwargs={})

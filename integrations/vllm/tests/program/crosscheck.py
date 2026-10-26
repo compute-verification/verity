@@ -1,5 +1,5 @@
 """Cross-check: the registered composites, evaluated gate by gate by the IR oracle, against the validated
-C++/CPU models of the numerics lane (`verity.ml.definitions.numerics`) on random and adversarial inputs.
+C++/CPU models of the numerics lane (`verity_vllm.program.kernels`) on random and adversarial inputs.
 
 This is conformance evidence for the *definitions* (the IR body reproduces the frozen model the lane
 measured bit-exact against production); correspondence against captured production values is the
@@ -19,8 +19,8 @@ from verity.ml.circuits.layout import FunctionCall
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Coll
 from verity.ml.circuits.types import Array, Record
-from verity.ml.definitions.registry import b1, prims as P
-from verity.ml.definitions.registry.b1 import B1_CONFIG as C
+from verity_vllm.program.registry import b1, prims as P
+from verity_vllm.program.registry.b1 import B1_CONFIG as C
 
 
 from verity.ml.circuits.defs import CompositeDefinition
@@ -53,7 +53,7 @@ def _u16(v: list[int]) -> np.ndarray:
 
 
 def check_rmsnorm(rng, rows=4, N=1536, eps=1e-6):
-    from verity.ml.definitions.numerics import rms_relation, rms_triton_model
+    from verity_vllm.program.kernels import rms_relation, rms_triton_model
     prog, call = _standalone(bind(b1.RMSNormTriton, N=N, EPS=eps))
     tabs = rms_relation.tables("triton")
     mism = 0
@@ -67,7 +67,7 @@ def check_rmsnorm(rng, rows=4, N=1536, eps=1e-6):
 
 
 def check_gemm_coordinate(rng, n=64, K=1536):
-    from verity.ml.definitions.numerics import mma
+    from verity_vllm.program.kernels import mma
     prog, call = _standalone(bind(b1.GemmCoordinate, K=K))
     mism = 0
     for _ in range(n):
@@ -81,7 +81,7 @@ def check_gemm_coordinate(rng, n=64, K=1536):
 
 
 def check_attention_head(rng, Ts=(1, 5, 64, 65, 130, 200), D=128):
-    from verity.ml.definitions.numerics import fa2_relation
+    from verity_vllm.program.kernels import fa2_relation
     res = []
     for T in Ts:
         prog, call = _standalone(bind(b1.AttentionHead, T=T, D=D))

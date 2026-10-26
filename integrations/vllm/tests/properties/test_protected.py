@@ -11,9 +11,9 @@ from verity_vllm.properties import protected
 
 PKG = "integrations/vllm"
 #: lane-writable; written out whole so a layout move rewrites it
-QUARANTINE = "integrations/vllm/verity_vllm/program/quarantine"
+QUARANTINE = "integrations/vllm/verity_vllm/program/registry/quarantine"
 #: a registered primitive's module, which moves to verity/ml/definitions/ with the Definitions
-PRIMS = "verity/ml/definitions/registry/prims.py"
+PRIMS = "integrations/vllm/verity_vllm/program/registry/prims.py"
 
 
 def _git(root: Path, *args: str) -> str:

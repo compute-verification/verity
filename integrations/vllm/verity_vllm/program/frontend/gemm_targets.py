@@ -19,12 +19,12 @@ What a record says
   (`verity_vllm.engine.engine_profile.gpu_info`).
 * `tuned_table` — the pinned copy of vLLM's tuned table for that family (identity = `table_sha256()`, an applicability
   condition), `{}` for a family without one.  `launch_config(M, N, K)` mirrors `_get_matmul_config` on that table.
-* `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity.ml.definitions.registry.b1.GemmV2` with
+* `dot` — the k16 tensor-core step the registered Definition binds: `Gemm_v1{K,N}` (`verity_vllm.program.registry.b1.GemmV2` with
   `DOT = AmpereBF16TcDot16`, `mma.sync.m16n8k16` bf16 -> f32) — per output coordinate one f32 accumulator advanced over the
   K/16 k16 steps in ascending k order from zero, RNE to bf16.  The tile constants and the pipeline depth decide which output
   coordinates a CTA owns and how the k tiles are staged, NOT the per-coordinate arithmetic — but that is a claim per
   target, established by `evidence`, never assumed from the kernel source being the same.
-* `evidence` — the correspondence runs (`verity_vllm/program/gemm_target_correspondence.py`: the production
+* `evidence` — the correspondence runs (`verity_vllm/program/kernels/gemm_target_correspondence.py`: the production
   launch on the model's GEMM shapes incl. M tails, bit-exact against `cpu_model.gemm_model` under the single ascending
   chain of the target's own instruction model) that admitted the record.
 
@@ -184,14 +184,14 @@ REGISTERED: dict[str, GemmTarget] = {
                   "(default tiling and the (2048,2048) table buckets M<=1 / M<=32) bit-exact against Gemm_v1{K,N} — tests/observe/test_gen_llama.py, "
                   "the numerics lane (mma.AMPERE_BF16: Ada's bf16 mma.sync is parameter-identical to Ampere's, verity.ml.circuits.silicon.models.ADA_BF16_M16N8K16)",
                   # [R15 moe GEMM-ADA-TABLE] the four Qwen3-class rows of the table were registered without their own launches until R15
-                  "R15 lane moe: verity_vllm/program/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
+                  "R15 lane moe: verity_vllm/program/kernels/gemm_target_correspondence.py --model ada-tuned-table on cp-moe3 (L40S, cc 8.9, 142 SMs, "
                   "vLLM d9105ea80 family 'ada'): ALL five tuned (N,K) rows x M in {1,2,4,5,8,9,16,17,32,33,64,65,256,257,512,513,1024,1033,2048,2049} "
                   "(+ stress families at M 1/17/257 on (2048,6144)/(4096,2048)) = 124 cases, 30 distinct launch configs (every tabled bm 16/32/64/128 "
                   "bucket incl. (151936,2048) M<=4 bm16 and the block_k-128 row (2048,6144)), 152,105,216 coordinates bit-exact against Gemm_v1{K,N}, "
                   "GPU re-run deterministic — out/gen/sweep/evidence/ada/gemm_target_l40s_ada_table.json",)),
     "ampere": GemmTarget(
         key="ampere", compute_capabilities=((8, 0),), vllm_arch_family=None, dot="AmpereBF16TcDot16", tuned_table={},
-        evidence=("R13 lane ampere: verity_vllm/program/gemm_target_correspondence.py on cp-a100 (A100-SXM4-80GB, cc 8.0, 108 SMs): "
+        evidence=("R13 lane ampere: verity_vllm/program/kernels/gemm_target_correspondence.py on cp-a100 (A100-SXM4-80GB, cc 8.0, 108 SMs): "
                   "all 5 Llama-3.2-1B GEMM shapes x M in {1,2,7,13,32,128,129,515,1024} (+ stress families at M 1/7/129) launched with the default "
                   "128/128/64 8w/3s tiling (vLLM family None), Triton PTX sm_80 mma.sync.m16n8k16 bf16 only, bit-exact against the single ascending "
                   "k16 chain of mma.AMPERE_BF16 — out/gen/sweep/evidence/ampere/gemm_target_a100.json",)),
@@ -202,7 +202,7 @@ REGISTERED: dict[str, GemmTarget] = {
         key="hopper", compute_capabilities=((9, 0),), vllm_arch_family="hopper", dot="HopperBF16WgmmaDot16", tuned_table=HOPPER_TUNED_GEMM,
         kind="Gemm_v2{K,N,DOT=HopperBF16WgmmaDot16_v1}", fp8_block_dot="HopperE4m3QgmmaDot32", fp8_moe_dot="HopperE4m3QgmmaDot32",
         evidence=("lane HP CONF-b1-hopper (Qwen2.5-1.5B on an H100: GemmHopper = Gemm with DOT=HopperBF16WgmmaDot16 exact on every GEMM leaf); "
-                  "R13 lane hopper: verity_vllm/program/gemm_target_correspondence.py on cp-h100a (cc 9.0, 132 SMs, family 'hopper': the "
+                  "R13 lane hopper: verity_vllm/program/kernels/gemm_target_correspondence.py on cp-h100a (cc 9.0, 132 SMs, family 'hopper': the "
                   "(2048,2048) tuned rows BLOCK_SIZE_M 16 / BLOCK_SIZE_K 128 at M<=16 and the default tiling elsewhere, Triton PTX sm_90 wgmma) — "
                   "out/gen/sweep/evidence/hopper/gemm_target_h100.json; row llama32-1b__bf16__h100__…__bi-eager-fa2 Match replay (o_proj M=1 tuned row + "
                   "the default-tiled GEMMs bit-exact against Gemm_v2{K,N,DOT=Hopper})",)),
@@ -219,7 +219,7 @@ REGISTERED: dict[str, GemmTarget] = {
         evidence=("core verity.ml.circuits.silicon.instructions: the cc 12.0 mma.sync.aligned.m16n8k16.row.col.f32.bf16.bf16.f32 entry is pinned to "
                   "HOPPER_BF16_M16N8K16 (one group of 16, width 26, floor -133; dossier art:b87e5a5b4dfaa5e4cfc501fa834df2c968e5ce3d53839660e37a42a2525218d2, "
                   "run r20260922-182911-1f10: 204,800/204,800 elements, the Ampere/Ada pipeline fails 48,569 of them)",
-                  "the cc 12.0 port's GEMM lane: verity_vllm/program/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
+                  "the cc 12.0 port's GEMM lane: verity_vllm/program/kernels/gemm_target_correspondence.py on an RTX PRO 6000 (188 SMs, driver "
                   "595.91.07, torch 2.13.0+cu129, vLLM d9105ea80 under VLLM_BATCH_INVARIANT=1: cuBLASLt with split-K disabled), run "
                   "r20260930-031354-3b6d: every linear (K, N) of the 14 bf16 HF configs of engine/profiles/hf_configs at TP1 and TP2 x M in "
                   "{1..8,12,13,16,17,31,32,33,64,65,127,128,129,255,256,257,512,515,1024,1033,2048,2049,4096,8192} (+ four stress families at M "

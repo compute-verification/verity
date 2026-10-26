@@ -328,7 +328,7 @@ def _merged(rs: list[tuple]) -> list[tuple]:
 def _folded_routed(rank: int):
     """`_folded` with a stand-in captured route for this model's [M, 4096] all-reduces at the capture's settings (batch-invariant
     pynccl over SHM on 8 RTX PRO 6000; no world-8 chain is recorded), so the fold takes the Build's one call per all-reduce."""
-    from verity.ml.definitions.registry import tp_allreduce as T
+    from verity_vllm.program.registry import tp_allreduce as T
 
     extra = (T.Captured(T.BATCH_INVARIANT, H, "pynccl_comm", 1, 2048, "AllReduceNcclTree_v1", {"CHAIN": CHAIN}, (), world=WORLD,
                         device=T.RTX_PRO_6000, transport="shm"),)

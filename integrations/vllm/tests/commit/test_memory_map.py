@@ -29,7 +29,7 @@ from verity.ml.circuits.types import Array, Record, Value
 from verity_vllm.commit import memory_map as MM
 from verity_vllm.program.predict.build import BF16, I32, build_program, decoder
 from verity_vllm.program.predict.common import _Peers
-from verity.ml.definitions.replay import replayer
+from verity_vllm.program.replay import replayer
 
 WIDE = TINY | {"hidden_size": 512, "num_key_value_heads": 4}
 LAYOUT = MM.Layout(block_size=4)

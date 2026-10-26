@@ -52,7 +52,7 @@ from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import Registration, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DeriveSession
 from verity_vllm.program.prune import kept_records
-from verity.ml.definitions.replay import replayer
+from verity_vllm.program.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.rules.base import ANY, InPlaceRule, Rule, RuleSet, StateRule, ViewRule
 
@@ -362,7 +362,7 @@ class Ctx:
         return self._registered(node, f"value {name!r}", lambda r: r.value(name, int(width), int(bits), distinct))
 
     def table(self, name: str, node=None) -> Coll:
-        """The registered table `name` (`verity.ml.definitions.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
+        """The registered table `name` (`verity_vllm.program.registry.tables`), declared by a rule (`Rule.registered_tables`)."""
         return self._registered(node, f"table {name!r}", lambda r: r.table(name))
 
     def _registered(self, node, what: str, read) -> Coll:

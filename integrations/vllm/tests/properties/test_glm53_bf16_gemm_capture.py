@@ -18,8 +18,8 @@ import torch
 
 from tests.properties import glm53_bf16_gemm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry import mla_check as MK
+from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity_vllm.program.registry import mla_check as MK
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 DOTPROD = {"kind": "dotprod", "BS": 32, "VEC": 8}

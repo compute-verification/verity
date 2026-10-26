@@ -61,9 +61,9 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCH
 from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
-from verity.ml.definitions.numerics import derived_rows as DR
-from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, moe, ref_prims, sparse_mla
-from verity.ml.definitions.registry import boolean_fp8 as BF
+from verity_vllm.program.kernels import derived_rows as DR
+from verity_vllm.program.registry import act, b1, dsa, fp8_moe, moe, ref_prims, sparse_mla
+from verity_vllm.program.registry import boolean_fp8 as BF
 
 
 def bf16(v: np.ndarray) -> np.ndarray:

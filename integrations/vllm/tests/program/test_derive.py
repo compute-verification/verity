@@ -20,8 +20,8 @@ from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.refs import Coll
-from verity.ml.definitions.registry import b1, prims as P
-from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity_vllm.program.registry import b1, prims as P
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 from verity_vllm.program.frontend import examples
 from verity_vllm.program.frontend.correspond import correspond_rebound
@@ -246,7 +246,7 @@ def test_gpt2_greedy_request_reference_mode_tokens_match_torch():
     assert kinds["ArgmaxRef_v1"] == 3 and kinds["I64ToI32_v1"] == 4 and kinds["EagerAttentionRef_v1"] == 2 * (2 + 3 + 4)
     assert "IntCatNarrow[reference]_v1" in rep.provenance["rules_applied"]
     ids = torch.tensor([3, 17])
-    from verity.ml.definitions.numerics.serve3_reference import materialize
+    from verity_vllm.program.kernels.serve3_reference import materialize
     wbits = np.concatenate([_bits(dict(g.named_parameters())[w["name"]]) for w in rep.provenance["weights"]])
     t = materialize(rep.program, [[int(v) for v in ids.tolist()], [int(v) for v in wbits]])
     got = [int(t[o]) for o in rep.program.circuit.root_outputs()]
@@ -560,7 +560,7 @@ PROF_V2 = dict(mode="profile", profile="b1-eager-v2")
 
 
 def _serve_v3_oracle_digest(C3, LP, D_MAX) -> str:
-    from verity.ml.definitions.registry import serve3
+    from verity_vllm.program.registry import serve3
     return program_digest(Program(serve3.serve_v3(C3, LP, D_MAX)))
 
 

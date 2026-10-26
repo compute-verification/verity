@@ -214,6 +214,17 @@ def test_G1_layers_mismatch_fails(tmp_path):
     assert r.status == "fail" and "expected_layers" in r.reason and "NL" in r.reason
 
 
+def test_G1_a_profile_that_cannot_be_loaded_fails_by_name_rather_than_skipping_the_NL_check(tmp_path):
+    arts = passing_artifacts()
+    del arts["run.json"]["C"]
+    arts["run.json"]["profile"] = "no_such_profile_zz"
+    r = gate(tmp_path, arts, "G1")
+    assert r.status == "fail" and f"expected_layers={NL} not checked against the profile's NL" in r.reason
+    assert "profile 'no_such_profile_zz' could not be loaded: ModuleNotFoundError" in r.reason
+    with pytest.raises(G.ArtifactError, match="no_such_profile_zz"):
+        _ = G.RunArtifacts(tmp_path).C
+
+
 def test_G1_steps_hashes_census(tmp_path):
     arts = passing_artifacts()
     arts["nonint/noninterference.json"]["steps"] = arts["nonint/noninterference.json"]["steps"][:-1]
@@ -369,7 +380,7 @@ def test_G4_quarantine(tmp_path):
     r = gate(tmp_path, arts, "G4")
     assert r.status == "fail" and "quarantine.json missing" in r.reason
     arts = passing_artifacts()
-    arts["resolution.json"]["spec_modules"] = {"NewOp_v1{N=8}": "verity_vllm.program.quarantine"}
+    arts["resolution.json"]["spec_modules"] = {"NewOp_v1{N=8}": "verity_vllm.program.registry.quarantine"}
     assert G.quarantine_specs(arts["resolution.json"]) == ["NewOp_v1{N=8}"]
 
 

@@ -154,7 +154,7 @@ def evaluate_strata(rep: Any, report: dict, by_spec: dict[str, list[dict]], snap
         _run(rep, report, by_spec, snap_steps, k, max_arg_leaves, rng, _Inline(rep))
         return
     global _REP
-    from verity.ml.definitions.numerics.twins import preload
+    from verity_vllm.program.kernels.twins import preload
     preload()
     _REP = rep
     collected = gc.collect()

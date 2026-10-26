@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-REGISTRY = "verity.ml.definitions.registry"
+REGISTRY = "verity_vllm.program.registry"
 REGISTRY_DIR = Path(importlib.util.find_spec(REGISTRY).origin).parent
 FAMILY = ("dense", "act", "boolean_dense", "boolean_dense_norm", "boolean_norms", "boolean_activation", "boolean_silu",
           "boolean_rope", "boolean_tanh", "cuda_rmsnorm", "gemm_bias", "layer_norm", "gelu_erf_table", "traced_parts")
@@ -23,7 +23,7 @@ THIRD_PARTY = ("numpy",)
 #: the catalog, where the layout move put core's Definitions and silicon models
 CATALOG = "verity.ml.circuits"
 MOVED = ("verity_vllm.properties.difftests.rope_difftest", "verity_vllm.properties.difftests.rope_gptj_difftest",
-         "verity_vllm.program.rmsnorm_fused_sweep", "verity_vllm.program.frontend.gemm_targets")
+         "verity_vllm.program.kernels.rmsnorm_fused_sweep", "verity_vllm.program.frontend.gemm_targets")
 
 
 def _imports(path: Path) -> list[tuple[int, str, tuple[str, ...]]]:

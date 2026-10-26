@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 from verity_vllm.check.replay import driver as SR, index as IX, opening as OP
-from verity.ml.definitions.numerics import rows as RK
+from verity_vllm.program.kernels import rows as RK
 from tests.check.test_sampled_replay import Honest, _bf16, _program, _programs, _weights
 
 # the rope / attention Program is dense's (ruling R17-9 / R17-11 units, on the int line); a tree without it cannot run this end to end

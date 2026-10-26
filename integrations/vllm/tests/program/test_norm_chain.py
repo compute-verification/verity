@@ -1,5 +1,5 @@
 """R15 dense (F-dense-05) — the unfused norm chain (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as ATen on an f32 copy, vLLM
-`GemmaRMSNorm.forward_native`) derived by the op-shaped rules of `vllm_bindings` into the promoted `verity.ml.definitions.registry.dense` kinds of
+`GemmaRMSNorm.forward_native`) derived by the op-shaped rules of `vllm_bindings` into the promoted `verity_vllm.program.registry.dense` kinds of
 the pinned `b1-eager-v3` vocabulary — the SAME specialization ids, in the SAME order, as the eager Match fold resolves the chain to
 (`verity_vllm/engine/profiles/gen_dense_gemma2_patterns.py`), so `cb_a.compare` can be canonical-equal.
 
@@ -25,7 +25,7 @@ import torch.nn as nn
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import MEAN_PINS, clear_observations, observe_export_facts, vllm_ruleset
-from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity_vllm.program.kernels.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16
@@ -249,8 +249,8 @@ def test_rsqrt_of_widened_refused():
 
 def test_kinds_registered_in_the_pinned_vocabulary_only():
     from verity_vllm.program.frontend.rules.vocab import PROFILES
-    from verity.ml.definitions.registry import dense as DN
-    from verity_vllm.program.quarantine.dense import mean_triton as q
+    from verity_vllm.program.registry import dense as DN
+    from verity_vllm.program.registry.quarantine.dense import mean_triton as q
     v3 = PROFILES["b1-eager-v3"]
     assert v3.kinds["mean_triton"](N=2304).id == "MeanTriton_v1{N=2304}"
     assert v3.kinds["attention_softcap"](T=5, NH=8, KVH=4, D=256, CAP=50.0).id == "AttentionSoftcap_v1{T=5,NH=8,KVH=4,D=256,BN=64,CAP=50.0}"

@@ -18,7 +18,7 @@ import numpy as np
 
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity_vllm.config import UsageError, option
-from verity.ml.definitions.numerics.twins import LIBRARIES, SCHEMA, U64, check_families, check_spec
+from verity_vllm.program.kernels.twins import LIBRARIES, SCHEMA, U64, check_families, check_spec
 
 
 def _captured_providers(result, vals, store, spec_id: str, rng: np.random.Generator, limit: int) -> list[Callable]:

@@ -33,7 +33,7 @@ from verity_vllm import settings
 from verity_vllm.config import RowEngine, done_source_refusal, option
 from verity_vllm.pipeline import layout as build_paths
 from verity_vllm.program import prefix_plan as PP, workload as W
-from verity.ml.definitions.registry.catalog import load as _load_registry
+from verity_vllm.program.registry.catalog import load as _load_registry
 
 # the request descriptors decode through the registry the Match reads (`program_compare._registry`): every registry module loaded
 for _e in _load_registry()[1]:
@@ -118,20 +118,6 @@ def compilation_facts(block: dict | None) -> dict:
 # vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
 # TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable (M-0261)
 _MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
-
-
-def eos_lag_rows_declared(engine: dict | None) -> int | None:
-    """The post-EOS rows a DECLARED engine block computes: async_scheduling True -> 1, False -> 0, undeclared /
-    non-boolean -> None.  GP-01 always declares it (`workload_lag`), so None here means a Program built before it did: GM-01 G6 then FAILS
-    by name on any EOS stop (nothing is read from the record as the rule) and labels a record without an EOS stop `lag.exercised false`."""
-    if not isinstance(engine, dict):
-        return None
-    v = engine.get("async_scheduling")
-    if isinstance(v, bool):
-        return 1 if v else 0
-    if isinstance(v, str) and v.strip().lower() in ("true", "false"):
-        return 1 if v.strip().lower() == "true" else 0
-    return None
 
 
 def workload_target(target: dict | None):
@@ -420,13 +406,13 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
-           "source": "verity.ml.definitions.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
+           "source": "verity_vllm.program.registry.topp_geometry.registered_splits; num_SMs = applicability.components.num_sms",
            "component_splits": samp.get("splits")}
     if nsm is None:
         out["refusal"] = ("stochastic sampler but the components declare no num_SMs (applicability.num_sms): the registered split count "
                           "cannot be evaluated -- the Program does not model this row's sampler geometry")
         return out
-    from verity.ml.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.program.registry.topp_geometry import registered_splits
     out["splits"] = S = int(registered_splits(int(nsm)))
     if samp.get("splits") != S:
         out["refusal"] = (f"the components declare splits {samp.get('splits')!r}, not the registered split count {S} of num_SMs={nsm}: "
@@ -727,7 +713,7 @@ def build(workload_path: str, derived_dirs: list[str], out: str, checkpoint_dir:
     art["stop_rule"]["eos_lag_rows"] = art["stop_rule"]["lag"] = wl.lag
     art["stop_rule"]["eos_lag_source"] = ("Workload_v1 static `lag` = TargetProfile.lag() of the row's declared target (" + lag["source"] + "); "
                                           "applicability.engine.async_scheduling carries the resolved value the record must attest (G1/G6)")
-    assert eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
+    assert W.eos_lag_rows_declared(app.get("engine")) == wl.lag, "applicability.engine.async_scheduling and the lag static disagree"
     # a stochastic row declares its top-p split geometry: the registered split count of the declared num_SMs, which GM-01 holds every
     # launch to. Greedy rows carry no declaration (None -> omitted).
     sgeo = sampler_geometry(app, reqs)

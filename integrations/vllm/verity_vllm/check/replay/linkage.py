@@ -9,7 +9,7 @@ import numpy as np
 
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.commit.opened import UnverifiedUnlinked
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.program.kernels.rows import SAMPLED_MEMBER
 from verity_vllm.program.sampling_event import circuit_token_id
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore
@@ -270,7 +270,7 @@ def prescribed_input_linkage(store: Any, workload_requests: list[dict[str, Any]]
         splits_rec["why"] = f"num_SMs of record disagree across the request Programs: {sorted(nsms)}"
         unlinked.append({"request_id": None, "engine_step": None, "kind": "splits", "why": "num_SMs of record disagree across the request Programs: " + str(sorted(nsms))})
     else:
-        from verity.ml.definitions.registry.topp_geometry import splits_for_v1
+        from verity_vllm.program.registry.topp_geometry import splits_for_v1
         nsm = nsms.pop()
         splits_rec["num_sms"] = nsm
         sched: dict[int, int] = {}

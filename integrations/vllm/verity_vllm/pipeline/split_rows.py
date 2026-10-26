@@ -72,9 +72,9 @@ def unit_rows(tp: Template) -> tuple[list[tuple[str, str, int, list[str]]], list
 def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, float]:
     """A row's dot step, inverse and scale; ``statics`` as a binding holds them or as the record spells them (every value a string,
     SCALE ``{"f64":"<hex>"}``)."""
-    from verity.ml.definitions.numerics import derived_rows as D
-    from verity.ml.definitions.numerics.ir_rows import f64_statics
-    from verity.ml.definitions.numerics.kernel_registry import prim_static
+    from verity_vllm.program.kernels import derived_rows as D
+    from verity_vllm.program.kernels.ir_rows import f64_statics
+    from verity_vllm.program.kernels.kernel_registry import prim_static
 
     dot, inv = prim_static(statics, "DOT", what), prim_static(statics, "INV", what)
     if dot not in D.TC_DOT16_BY_PRIM or inv not in D.INV_SUM_BY_PRIM:
@@ -85,7 +85,7 @@ def _twins(statics: dict[str, Any], what: str) -> tuple[Callable, Callable, floa
 def splits(qn: np.ndarray, qr: np.ndarray, kv: np.ndarray, statics: dict[str, Any], what: str) -> tuple[np.ndarray, np.ndarray]:
     """A row's split ends by the twin: q_nope (NH, DV), q_rope (NH, DR), kv (T, DV + DR) bf16 words -> (o_partial (NH, NSPLIT, DV),
     lse (NH, NSPLIT)) f32 words, each split's `part_rows` on its own keys; refused where a dot reads a non-finite operand."""
-    from verity.ml.definitions.numerics.sparse_mla_split_twins import part_rows
+    from verity_vllm.program.kernels.sparse_mla_split_twins import part_rows
 
     DR, DV, BN = (int(statics[k]) for k in ("DR", "DV", "BN"))
     dot16, inv, scale = _twins(statics, what)
@@ -104,7 +104,7 @@ def read(m: CS.Member, rows: Sequence[Row], store: Any, weights: Callable, arriv
          slices: Callable) -> tuple[dict[str, Any], list[list[Any]]]:
     """Member ``m``'s units (the module's order and ports), every port its elements' bytes in u16 words, the row's argument groups
     read by ``slices`` (`serving_rows._slices`); one index entry per row."""
-    from verity.ml.definitions.numerics.sparse_mla_split_twins import combine_rows
+    from verity_vllm.program.kernels.sparse_mla_split_twins import combine_rows
 
     tp = template(m.template)
     names = [q for q, _ in m.rows + m.outs]

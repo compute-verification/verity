@@ -15,9 +15,9 @@ from verity.ml.circuits import library
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops import mufu as MU
-from verity.ml.definitions.numerics import dsv4_moe_twin as T
-from verity.ml.definitions.registry import dsv4_moe as D
-from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.kernels import dsv4_moe_twin as T
+from verity_vllm.program.registry import dsv4_moe as D
+from verity_vllm.program.registry import prims as P
 
 from tests.properties import dsv4_moe_capture_gpu as S
 

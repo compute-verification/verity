@@ -136,7 +136,8 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by: no input of any target, since they decide only which targets run beside
+#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
+#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
 #: which, and a target whose process the OOM killer took is never stored
 HEAVY = _HERE / "heavy.json"
 #: the failures `main` already has (`circuit_check.known`): no input of any target, since they decide only the run's summary
@@ -196,6 +197,8 @@ class Frame:
 
 #: the open recordings, innermost last; the first holds what the process read outside every recording
 _FRAMES: list[Frame] = [Frame()]
+#: bumped each time a recording opens or closes: a specialization whose body was last read at another count is noted again
+_EPOCH = [0]
 #: what was read and run while each module was first imported (after `trace`), by module name
 _MODULES: dict[str, Frame] = {}
 #: what each binding unit read and ran while it made its roots
@@ -331,7 +334,7 @@ def _importing() -> bool:
 
 #: the functions (module, qualified name) that list a package with ``pkgutil`` only to import each module it lists, naming any
 #: that fails: what they list and import is held by the package's modules (`_children`); one moved is no longer one of them
-_ENUMERATORS = frozenset({("verity.ml.definitions.registry.catalog", "load"), ("verity.ml.definitions.boolean", "_load")})
+_ENUMERATORS = frozenset({("verity_vllm.program.registry.catalog", "load"), ("verity_vllm.program.boolean", "_load")})
 
 
 def _enumerator(f) -> bool:
@@ -485,12 +488,14 @@ def recording(merge: bool = True) -> Iterator[Frame]:
         yield fr
         return
     _FRAMES.append(fr)
+    _EPOCH[0] += 1
     if _TOOL:
         sys.monitoring.restart_events()
     try:
         yield fr
     finally:
         _FRAMES.pop()
+        _EPOCH[0] += 1
         if merge and len(_FRAMES) > 1:
             _FRAMES[-1].merge(fr)
 
@@ -613,11 +618,17 @@ def _instrument() -> None:
     for cls in (D.PrimitiveDefinition, D.CompositeDefinition, D.SpecializedDefinition):
         marking(cls)
     get = D.SpecializedDefinition.body.fget
+    D.SpecializedDefinition._circuit_check_read = -1
 
     def body(self):
+        # the layout's walks read a body millions of times a check: noted once under each innermost recording
+        if self._circuit_check_read == _EPOCH[0] and (b := self._body) is not None:
+            return b
         if len(_FRAMES) > 1:
             _FRAMES[-1].defs.setdefault(id(self), self)
-        return get(self)
+        b = get(self)
+        self._circuit_check_read = _EPOCH[0]
+        return b
 
     D.SpecializedDefinition.body = property(body)
     sig = D.SpecializedDefinition.signature

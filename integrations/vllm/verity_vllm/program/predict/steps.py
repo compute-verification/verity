@@ -77,8 +77,8 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
-from verity.ml.definitions.registry import io_shell as IO
-from verity.ml.definitions.registry.topp_geometry import registered_splits
+from verity_vllm.program.registry import io_shell as IO
+from verity_vllm.program.registry.topp_geometry import registered_splits
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi

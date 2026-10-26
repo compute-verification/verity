@@ -19,10 +19,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.ml.circuits.evaluation.bits import evaluate_words
 from verity.ml.kernels import tc as CK
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import flashmla_twin as T
-from verity.ml.definitions.registry import boolean_flashmla as BF
-from verity.ml.definitions.registry import flashmla as F
+from verity_vllm.program import boolean as SW
+from verity_vllm.program.kernels import flashmla_twin as T
+from verity_vllm.program.registry import boolean_flashmla as BF
+from verity_vllm.program.registry import flashmla as F
 
 U = np.uint32
 DEFS = {d.id: d for d in F.FLASHMLA_COMPOSITES}
@@ -51,7 +51,7 @@ def test_the_twin_is_the_reference(target):
 
 def test_the_twin_claims_only_the_hopper_step():
     from verity.ml.circuits.ops.prims import AmpereBF16TcDot16
-    from verity.ml.definitions.numerics import kernel_registry as KR
+    from verity_vllm.program.kernels import kernel_registry as KR
 
     hopper = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=F.HopperBF16WgmmaDot16, SCALE=0.25)
     ampere = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=AmpereBF16TcDot16, SCALE=0.25)

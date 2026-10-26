@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("verity.ml.definitions.registry.prims")
+pytest.importorskip("verity_vllm.program.registry.prims")
 from verity_flock import lean_rows  # noqa: E402
 from verity_flock.templates import rope_head  # noqa: E402
 

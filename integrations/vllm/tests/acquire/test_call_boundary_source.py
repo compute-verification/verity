@@ -18,7 +18,7 @@ from tests.acquire.call_boundary_programs import DENSE, EMB, EPS, H, IL, LP, PF,
 from verity.ml.circuits.evaluation import evaluate, evaluate_batch
 from verity_vllm.commit.binding import build_binding_map, logical_request
 from verity_vllm.query.compose import compose_global
-from verity.ml.definitions.call_scope import specialization
+from verity_vllm.query.call_scope import specialization
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import definition_ports, spec_statics
 
@@ -379,7 +379,7 @@ def test_a_definition_past_the_reference_bound_is_its_row_kernels_alone(dense, m
     assert len(com.errors) == 1 + T and all(f"the row kernel of Gemm_v1{{K={H},N={V}}} declines an instance" in e for e in com.errors)
     assert com.acquired and not any(n.startswith("logits_processor") for _s, n, _t in com.acquired)
     monkeypatch.setattr(CP, "REFERENCE_LEAVES", 12)
-    from verity.ml.definitions.numerics import kernel_registry
+    from verity_vllm.program.kernels import kernel_registry
     monkeypatch.delitem(kernel_registry._REGISTERED, ("Bf16DivScalar_v1", "rows"))
     why = " ".join(CB.plan_of(dense.man, dense.pdir).uncovered)
     assert "Bf16DivScalar_v1" in why and "past the reference's bound, and no rows kernel registered" in why

@@ -41,7 +41,7 @@ from verity_vllm.observe.fold.resolve_log import collect_roots, make_context
 from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, Transparent, resolve_step
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import read_log, split_steps
-from verity.ml.definitions.registry import moe as MOE
+from verity_vllm.program.registry import moe as MOE
 
 FIXTURE = Path(__file__).parent / "fixtures" / "glm53_tp8_moe_l3.rank0.jsonl.gz"
 CONFIG = Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json"

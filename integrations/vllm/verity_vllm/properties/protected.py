@@ -11,7 +11,7 @@ counts land on the card's top section (`PROTECTED FILES MODIFIED`, `EXISTING PRI
 candidate commit is judged.
 
 Also reports the informational rows: `new_patterns` (pattern names in head's profiles that the base profiles lack) and
-`new_definitions` (definitions added under `verity_vllm/program/quarantine/`).
+`new_definitions` (definitions added under `verity_vllm/program/registry/quarantine/`).
 """
 from __future__ import annotations
 
@@ -56,10 +56,10 @@ PROTECTED_EXISTING: tuple[str, ...] = (
 )
 #: Frozen.  Lane-writable exceptions inside otherwise protected trees.
 WRITABLE_EXCEPTIONS: tuple[str, ...] = (
-    "verity_vllm/program/quarantine/*",
+    "verity_vllm/program/registry/quarantine/*",
 )
 #: Existing registered primitive semantics (a change here is `EXISTING PRIMITIVES MODIFIED`).
-PRIMITIVE_PATHS: tuple[str, ...] = ("verity/ml/definitions/registry/*",)
+PRIMITIVE_PATHS: tuple[str, ...] = ("verity_vllm/program/registry/*",)
 #: The checkpoint manifest: appending entries is lane work; changing an existing entry is not.
 MANIFEST = "manifests/checkpoints.json"
 
@@ -155,7 +155,7 @@ def new_definitions(changed: list[tuple[str, str]], head: str, cwd: Path = REPO)
     import re
     out = []
     for st, path in changed:
-        if path.startswith("verity_vllm/program/quarantine/") and path.endswith(".py"):
+        if path.startswith("verity_vllm/program/registry/quarantine/") and path.endswith(".py"):
             try:
                 src = _git("show", f"{head}:./{path}", cwd=cwd)
             except subprocess.CalledProcessError:

@@ -22,7 +22,7 @@ from verity.ml.circuits.program import Program
 ROOT = Path(__file__).resolve().parents[4]
 FILES = {
     "core": ROOT / "verity" / "ml" / "circuits" / "ops" / "annotations.json",
-    "vllm": ROOT / "verity" / "ml" / "definitions" / "registry" / "annotations.json",
+    "vllm": ROOT / "integrations" / "vllm" / "verity_vllm" / "program" / "registry" / "annotations.json",
 }
 _TARGET = re.compile(r"^(def|node|wire|port):([^/]+)")
 #: specializations of one Definition validated against, smallest first

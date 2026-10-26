@@ -88,7 +88,7 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as G  # no
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
-from verity.ml.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402
+from verity_vllm.program.registry.b1_tp2 import AllReduce2  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 
 #: the stand-in's TP run root, which every rank's window and every partial's domain bind

@@ -28,7 +28,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.check.commit_rules import REJECT
 from verity_vllm.check.cublas_route_pin import stamp as route_pin_stamp
 from verity_vllm.check.result import MISSING_INPUT, CheckResult, code_of, outcome_of
-from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity_vllm.program.registry import bf16_gemm_check as BC
 from verity_vllm.properties.record import REGISTRY, PropertyRecord, digest_of, seal
 
 RUN_ROOT = "71f69377" + "ab" * 28
@@ -528,7 +528,13 @@ def test_correspondence_digest_is_the_builds_own_or_absent(tmp_path):
     v = V.from_record(d, rc=0, stage_ok="PASS")
     assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step" and v.correspondence_digests == {"request": req, "step": step}
     assert V.correspondence_of_build(None) == (None, "absent", {})
-    assert V.correspondence_of_build({"request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+    assert V.correspondence_of_build({"step": {"ok": True}, "request": {"correspondence_digest": req}}) == (req, "build_summary.json:request", {"request": req})
+    # a summary its record refuses: a note, and the wrappers' own result.json
+    (d / "build_summary.json").write_text(json.dumps({"step": {"ok": True, "program_digest": "p1" * 32, "correspondence_digest": "zz" * 32, "digest": "x"},
+                                                      "request": {"ok": True}}))
+    v = V.from_record(d, rc=0, stage_ok="PASS")
+    assert v.correspondence_digest == step and v.correspondence_digest_source == "result.json:step"
+    assert any("build_summary.json not read" in n and "'step.digest'" in n for n in v.notes)
 
 
 # ---------------------------------------------------------------------------------------------------------------- (9) property citations

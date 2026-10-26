@@ -93,7 +93,7 @@ class Gap(Exception):
 
 def _registry() -> None:
     """Every Definition a recorded program may call: the circuit ops and vLLM's program registry."""
-    for name in ("verity.ml.circuits.ops", "verity.ml.definitions.registry"):
+    for name in ("verity.ml.circuits.ops", "verity_vllm.program.registry"):
         pkg = importlib.import_module(name)
         for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
             importlib.import_module(m.name)

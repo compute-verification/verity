@@ -67,17 +67,17 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend.export_ops import CollectiveBus, TPStub
 from verity_vllm.program.frontend.loader_parity import fp8_block_weights_as_the_loader_does, post_load_tensors_as_the_loader_does
 from verity_vllm.program.frontend.vllm_meta import ScheduledWithPeers, with_peers
-from verity.ml.definitions.numerics import deepgemm_twins as DT
-from verity.ml.definitions.numerics import dsv4_compressor_twin as DC
-from verity.ml.definitions.numerics import dsv4_qnorm_insert_twin as TQ
-from verity.ml.definitions.numerics import flashmla_prefill_twin as FP
-from verity.ml.definitions.numerics import flashmla_twin as FT
-from verity.ml.definitions.numerics import marlin_moe_rows as MR
-from verity.ml.definitions.numerics import mhc_twin as W
-from verity.ml.definitions.numerics.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
-from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import bf16_gemm_check as BC
-from verity.ml.definitions.registry import hopper
+from verity_vllm.program.kernels import deepgemm_twins as DT
+from verity_vllm.program.kernels import dsv4_compressor_twin as DC
+from verity_vllm.program.kernels import dsv4_qnorm_insert_twin as TQ
+from verity_vllm.program.kernels import flashmla_prefill_twin as FP
+from verity_vllm.program.kernels import flashmla_twin as FT
+from verity_vllm.program.kernels import marlin_moe_rows as MR
+from verity_vllm.program.kernels import mhc_twin as W
+from verity_vllm.program.kernels.dsv4_moe_twin import clamp_twin, hash_twin, router_twin
+from verity_vllm.program.kernels.serve3_reference import materialize
+from verity_vllm.program.registry import bf16_gemm_check as BC
+from verity_vllm.program.registry import hopper
 from tests.program.test_dsa_norm import ptx_block_model
 from tests.program.test_dsv4_indexer import head as inv_rope_head
 

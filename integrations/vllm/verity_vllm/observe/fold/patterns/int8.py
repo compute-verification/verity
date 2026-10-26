@@ -65,7 +65,7 @@ class Int8RowQuant:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if not _is_op(node, "row_quant"):
             return None
-        from verity.ml.definitions.registry import int8_exact
+        from verity_vllm.program.registry import int8_exact
         x = bound_args(node).get("x")
         outs = list(node.outs or ())
         if not isinstance(x, ViewDesc) or len(outs) != 2 or not all(isinstance(v, ViewDesc) for v in outs):
@@ -95,7 +95,7 @@ class Int8ScaledMm:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if not _is_op(node, "scaled_mm"):
             return None
-        from verity.ml.definitions.registry import int8_exact
+        from verity_vllm.program.registry import int8_exact
         a = bound_args(node)
         xq, s_a, w, sw = a.get("xq"), a.get("s_a"), a.get("w"), a.get("s_w")
         outs = list(node.outs or ()) if isinstance(node.outs, (list, tuple)) else [node.outs]
@@ -163,7 +163,7 @@ class Int8AttentionScope:
             return None
         cws = find_descendants(node, lambda n: _is_op(n, "credited_window"))
         css = find_descendants(node, lambda n: _is_op(n, "credited_step"))
-        from verity.ml.definitions.registry import int8_exact
+        from verity_vllm.program.registry import int8_exact
         sa = bound_args(node)
         query, output = sa.get("query"), sa.get("output")
         layer = kv_layer_of(node) or ""

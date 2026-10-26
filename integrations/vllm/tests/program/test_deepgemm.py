@@ -29,12 +29,12 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.definitions import boolean as SW
-from verity.ml.definitions.numerics import deepgemm_twins as T
-from verity.ml.definitions.numerics import derived_rows as R
-from verity.ml.definitions.registry import boolean_deepgemm as BDG
-from verity.ml.definitions.registry import deepgemm as DG
-from verity.ml.definitions.registry import prims as P
+from verity_vllm.program import boolean as SW
+from verity_vllm.program.kernels import deepgemm_twins as T
+from verity_vllm.program.kernels import derived_rows as R
+from verity_vllm.program.registry import boolean_deepgemm as BDG
+from verity_vllm.program.registry import deepgemm as DG
+from verity_vllm.program.registry import prims as P
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_dsa import _ceil_ftz, _e4m3, _ex2_integer, _ftz, _is_nan, _val, log2f
 from tests.program.test_fp8_moe import _q, _rn
@@ -259,8 +259,8 @@ def test_replay_evaluates_the_linears_with_their_row_kernels() -> None:
     the largest finite; FlashInfer: its all-subnormal group's NaN words; the einsum: a NaN e4m3 byte in one token): the row kernel
     declines it by name, and the reference evaluates it."""
     from verity.ml.circuits.evaluation.reference import statics_of
-    from verity.ml.definitions.numerics import kernel_registry as KR
-    from verity.ml.definitions.numerics import rows
+    from verity_vllm.program.kernels import kernel_registry as KR
+    from verity_vllm.program.kernels import rows
 
     rng = np.random.default_rng(8)
     K, N, H, G = 256, 130, 2, 128

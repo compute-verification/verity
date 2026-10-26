@@ -84,8 +84,8 @@ def split_call(tp, n_call: int, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import deepgemm_twins as DT
-    from verity.ml.definitions.numerics import fp8_moe_rows as FR
+    from verity_vllm.program.kernels import deepgemm_twins as DT
+    from verity_vllm.program.kernels import fp8_moe_rows as FR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S = {**SRW.COORDS[spec_base(tp.word)], **spec_statics(tp.word)}
@@ -151,9 +151,9 @@ def cols_call(tp, w_call: int, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import rows as KR
-    from verity.ml.definitions.registry import tp_allreduce as TA
-    from verity.ml.definitions.registry import tp_allreduce_check as TAC
+    from verity_vllm.program.kernels import rows as KR
+    from verity_vllm.program.registry import tp_allreduce as TA
+    from verity_vllm.program.registry import tp_allreduce_check as TAC
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     axis, S = SRW.COLS[spec_base(tp.word)], spec_statics(tp.word)
@@ -197,9 +197,9 @@ def parts_call(tp, row: str, rng: np.random.Generator) -> dict:
     template's word on every unit's rows."""
     from verity.ml.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import deepgemm_twins as DT
-    from verity.ml.definitions.registry import tp_allreduce_check as TAC
-    from verity.ml.definitions.registry.fp8 import FP8_BLOCK
+    from verity_vllm.program.kernels import deepgemm_twins as DT
+    from verity_vllm.program.registry import tp_allreduce_check as TAC
+    from verity_vllm.program.registry.fp8 import FP8_BLOCK
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     S, p = spec_statics(row), SRW.part(tp.word, row)
@@ -267,8 +267,8 @@ def slice_call(tp, row: str, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline import slice_rows as SL
-    from verity.ml.definitions.numerics import cublas_gemm_rows as CGR
-    from verity.ml.definitions.numerics import glm53_rows as GR
+    from verity_vllm.program.kernels import cublas_gemm_rows as CGR
+    from verity_vllm.program.kernels import glm53_rows as GR
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     fn, S = SRW._bind(row), spec_statics(row)
@@ -344,8 +344,8 @@ def chunk_call(tp, k_call: int, rng: np.random.Generator) -> dict:
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate_batch
     from verity_vllm.pipeline import serving_rows as SRW
-    from verity.ml.definitions.numerics import fp8_moe_rows as FR
-    from verity.ml.definitions.registry import fp8_moe_experts as X
+    from verity_vllm.program.kernels import fp8_moe_rows as FR
+    from verity_vllm.program.registry import fp8_moe_experts as X
     from verity_vllm.query.program_view import spec_statics
 
     S = spec_statics(tp.word)
@@ -380,7 +380,7 @@ def vchunk_call(tp, v_call: int, rng: np.random.Generator) -> dict:
     `TokenSelect_v1{V}`, which is the first of the two largest words."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.evaluation import evaluate_batch
-    from verity.ml.definitions.registry import b1
+    from verity_vllm.program.registry import b1
     from verity_vllm.query.program_view import spec_statics
 
     def ev(fn, *xs):

@@ -76,8 +76,8 @@ def _bind(relation: dict):
     from verity.ml.circuits.defs import bind
     from verity_sp1.proofs.reduce_mufu import div_full_rcp_index, mufu_sqrt_index, rsqrt_approx_index
     from verity_sp1.ir_call import Table
-    from verity.ml.definitions.numerics import rms_relation
-    from verity.ml.definitions.registry import b1
+    from verity_vllm.program.kernels import rms_relation
+    from verity_vllm.program.registry import b1
 
     statics = relation["statics"]
     definition = relation["definition"]

@@ -27,7 +27,7 @@ def test_an_unreadable_versions_json_is_named(tmp_path):
     assert bad["engine"] == {"enforce_eager": True, "enable_prefix_caching": False}
 
 
-def test_g1_fails_by_name_on_an_unreadable_versions_json(memory, tmp_path):  # noqa: F811
+def test_g1_fails_by_name_on_an_unreadable_versions_json(memory, tmp_path):
     gp, oracle = assemble([R0, R1], tmp_path)
     assert gm.check(gp, oracle)["verdict"] == "PASS"
     (Path(oracle) / "capture" / "versions.json").write_text("not json")

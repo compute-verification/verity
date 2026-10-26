@@ -1,5 +1,5 @@
 """Evaluating one sampled VU: its operands from the committed store and the weights, the registered row kernel
-(`verity.ml.definitions.numerics.rows`), and the comparison of every member it produces with the committed words.  A VU whose
+(`verity_vllm.program.kernels.rows`), and the comparison of every member it produces with the committed words.  A VU whose
 inputs cannot be resolved is not evaluable by name (`_Unresolved`), never skipped."""
 from __future__ import annotations
 
@@ -10,8 +10,8 @@ import numpy as np
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.check.replay.replay_dump import dump_row_words
 from verity_vllm.commit.opened import OpeningNotVerified, opened_check
-from verity.ml.definitions.numerics.kernel_registry import Declined
-from verity.ml.definitions.numerics.rows import EVALUATORS, ROWS
+from verity_vllm.program.kernels.kernel_registry import Declined
+from verity_vllm.program.kernels.rows import EVALUATORS, ROWS
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, row_args
 from verity_vllm.check.replay.opening import _ITEMSIZE, CommittedStore
 from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, lifted_compare, padded_slot_enable
@@ -53,7 +53,7 @@ ROW_EVALUATORS: list[Callable[..., dict[str, np.ndarray]]] = []
 
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None], *,
              refs: list[dict[str, Any] | None] | None = None) -> dict[str, np.ndarray]:
-    """F_V for the supported families: the family's row kernel (`verity.ml.definitions.numerics.rows`) on the row's operands (`_Operands`).
+    """F_V for the supported families: the family's row kernel (`verity_vllm.program.kernels.rows`) on the row's operands (`_Operands`).
     Returns {member: words}."""
     k = ROWS.get(family)
     if k is None:

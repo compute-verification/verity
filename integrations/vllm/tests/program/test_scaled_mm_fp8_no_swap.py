@@ -10,10 +10,10 @@ from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.ml.definitions.registry import fp8
-from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.registry import fp8
+from verity_vllm.program.registry import prims as P
 from verity_vllm.program.frontend import targets as TG
-from verity.ml.definitions import word as W
+from verity_vllm.query import word as W
 
 K, N = 32, 4
 DOT = BlackwellE4m3QmmaDot32

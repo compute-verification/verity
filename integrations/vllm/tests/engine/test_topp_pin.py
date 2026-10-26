@@ -8,7 +8,7 @@ import types
 import pytest
 
 from verity_vllm.engine import topp_pin
-from verity.ml.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits, splits_for
+from verity_vllm.program.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits, splits_for
 
 #: the RTX PRO 6000, the L40S, the H100, and two SM counts below 32
 SM_COUNTS = (188, 142, 132, 16, 6)

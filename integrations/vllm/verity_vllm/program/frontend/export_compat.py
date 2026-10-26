@@ -586,7 +586,7 @@ def moe_gate_leaf(model=None, site=None):
         site = importlib.import_module(_LL_BF16_SITE)
     from verity_vllm.program.frontend.rules import vllm_iface  # noqa: F401  (registers the op)
     from verity_vllm.program.frontend.rules.vllm_bindings.observations import traced_launch_tokens
-    from verity.ml.definitions.registry.bf16_gemm_check import LL_MAX_M
+    from verity_vllm.program.registry.bf16_gemm_check import LL_MAX_M
     cublas_tier = all(getattr(g, "allow_cublas_router_gemm", False) and not getattr(g, "allow_fp32_router_gemm", False)
                       and not getattr(g, "allow_bf16x3_router_gemm", False) for g in gates)
 

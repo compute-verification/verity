@@ -1181,7 +1181,7 @@ An input node is `Input<w>_v1` (bound per run) or `RegisteredInput<w>_v1` (bound
 check, as `Flock.Qcall` documents them.
 
 **σ, a Boolean Program's lift of its word Program** (`Flock.Sigma`, `flock-verify sigma-check WORD BITS`; the mirror is
-`verity.ml.definitions.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
+`verity_vllm.program.boolean.sigma_check`, held to it by the `verity/core/service/sigma` difftest). A Boolean Program's
 partition of record is its word Program's, lifted by σ (each word Definition to its Boolean version), and the verifier checks
 the lift on the two descriptors, in their size and never over the unrolled circuit. The Boolean descriptor carries σ as data:
 `"word": {"program_sha512": <the word descriptor's SHA-512, hex>, "sigma": {<word definition id>: <Boolean definition id>}}`,

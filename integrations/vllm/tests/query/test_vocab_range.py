@@ -17,7 +17,7 @@ V, VS = 16, 8
 
 @pytest.mark.parametrize("VS_,H,START", [(8, 32, 0), (8, 32, 8), (24576, 4, 24576)])
 def test_the_shard_commits_the_shifted_id_and_both_range_bits(VS_, H, START):
-    from verity.ml.definitions import word as W_
+    from verity_vllm.query import word as W_
 
     G = W_.Graph(VR.shard_fn(VS_, H, START))
     cut = W_.units(G, 16, 32)["cut"]
@@ -71,7 +71,7 @@ def test_the_family_is_in_every_vocabulary():
     from verity_vllm.acquire import plan
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import coverage
-    from verity.ml.definitions import word as W_
+    from verity_vllm.query import word as W_
 
     assert VR.FAMILY in fmt.FAMILIES and plan.ROUTE_OF_FAMILY[VR.FAMILY] == "vocab_tap" and VR.FAMILY in coverage.QUERY_FAMILY_MECHANISM
     entry = {"identity": {"op_path": "model.embed_tokens", "output_member": VR.MEMBER}, "name": f"model.embed_tokens/{VR.MEMBER}"}

@@ -30,7 +30,7 @@ from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity.ml.definitions.registry import b1
+from verity_vllm.program.registry import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 #: #101's Build on `edac1cf6` (main 432edb3b + #297; run r20260928-160311-303b): `build_request/` (the derived request Program) and
@@ -160,8 +160,8 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
     build = _build_101(tmp_path)
     code = ("import json, sys\n"
             "from verity_vllm.query import program_view as PV\n"
-            "from verity.ml.definitions import word as WQ\n"
-            "from verity.ml.definitions.numerics.rows import EVALUATORS\n"
+            "from verity_vllm.query import word as WQ\n"
+            "from verity_vllm.program.kernels.rows import EVALUATORS\n"
             "P = PV.from_instances(sys.argv[1] + '/build_request/instances.json.gz')\n"
             "specs = {(c.family, json.dumps(c.statics, sort_keys=True, default=str)): c for c in P.calls}\n"
             "for (fam, st), c in specs.items():\n"
@@ -182,13 +182,13 @@ def test_101s_program_view_and_word_lookups_resolve_every_call(tmp_path):
 def test_every_consumers_registry_holds_every_registered_definition():
     """GP-01, the Match, the query views and the descriptor equivalence each look Definitions up through their own entry point: in a
     fresh interpreter each one's registry holds every Definition and primitive the registry package registers."""
-    want = _run("from verity.ml.definitions.registry.catalog import load\nprint(len(load()[0].defs))")
+    want = _run("from verity_vllm.program.registry.catalog import load\nprint(len(load()[0].defs))")
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
     for setup in ("import verity_vllm.pipeline.global_program as m; from verity.ml.circuits.defs import REGISTRY as R",
                   "from verity_vllm.check.match.instance_sequence import _registry; R = _registry()",
                   "from verity_vllm.query.program_view import _registry; R = _registry()[0]",
-                  "from verity.ml.definitions import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
+                  "from verity_vllm.query import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
                   "from verity.ml.circuits.defs import REGISTRY as R"):
         p = _run(setup + "\nfor k in ('GumbelTopPTokenSelect_v2', 'TopPMask_v2', 'TopPKeepWord_v1', 'NvLogf_v1', 'TopPNumkeep_v1'):\n"
                  "    assert k in R.defs, k\nprint(len(R.defs))")

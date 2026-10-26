@@ -10,9 +10,9 @@ from verity.ml.circuits import constants as K
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits import operations as O
-from verity.ml.definitions.registry import b1, boolean_dsv4_moe as BD, dense, dsv4_moe as D, hopper
-from verity.ml.definitions.registry import int8_exact as X
-from verity.ml.definitions.registry import prims as P
+from verity_vllm.program.registry import b1, boolean_dsv4_moe as BD, dense, dsv4_moe as D, hopper
+from verity_vllm.program.registry import int8_exact as X
+from verity_vllm.program.registry import prims as P
 
 
 def test_the_program_tables_are_declared_and_the_library_table_is_not_data():
