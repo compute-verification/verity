@@ -76,7 +76,7 @@ from verity_vllm.engine import arrivals as AR, served as SV, vllm_adapter as va 
 from verity_vllm.pipeline.timeline import Timeline  # noqa: E402  (torch-free; VERITY_TIMELINE -> append-only JSONL, else a no-op sink)
 from verity_vllm.pipeline.commit_attach import attach_of_record, classes_of_record  # noqa: E402
 from verity_vllm.commit import challenge as CH, opened as OV, scheme as SCH, step_rows as SR  # noqa: E402
-from verity_vllm.pipeline import admission_planner as AP, boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
+from verity_vllm.pipeline import boundary_plan as BP, c2_replay as C2, commit_plan as CP, gpu_lease as GL, group_reuse as GR, replay_bundle as RB  # noqa: E402
 from verity_vllm.pipeline.c2_replay import rss_kb  # noqa: E402
 from verity_vllm.pipeline.report import bootstrap_ci  # noqa: E402
 from verity_vllm.pipeline import commit_coins as CC, remote_session as RS  # noqa: E402
@@ -1599,39 +1599,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 print(f"[delta] windowed staging (P0): {wi['slots']} x {wi['window_bytes'] >> 20} MiB ring + scratch (largest tensor bound "
                       f"{wi['largest_tensor_bound'] >> 20} MiB); layout {wi['layout']}; in-place hashing: {wi['in_place_hashing']}", flush=True)
                 (out / f"window_ring_{kind}.json").write_text(json.dumps(wi, indent=1, default=str) + "\n")
-            # [COORD R17-29 planner, RECORD ONLY] the one planner's plan beside the governing admission -- admission_planner_<kind>.json +
-            # its DOMINANT line, printed before the run; it does not refuse or admit tonight (the admission_of_record above governs); every
-            # Commit thereby yields the per-term predicted-vs-measured line (calibrate on verdict.json / footprint.jsonl at the end)
-            try:
-                from verity_vllm.pipeline.admission_planner import CALIBRATION as _cal_path, plan as _planner_plan
-                _others = 0
-                with contextlib.suppress(Exception):          # co-tenants: the cgroup's ANON bytes minus this process (file cache is reclaimable)
-                    for _ln in Path("/sys/fs/cgroup/memory.stat").read_text().splitlines():
-                        if _ln.startswith("anon "):
-                            _others = max(0, int(_ln.split()[1]) - int((rss_kb()[0] or 0) * 1024))
-                _wi = locals().get("wi") or {}
-                _mode = {"retain": getattr(com, "retain", None), "bounded": bool(getattr(com, "bounded", False)),
-                         "retain_exclude": sorted(getattr(com, "retain_exclude", ()) or ()), "open_after_release": bool(getattr(args, "open_after_release", False)),
-                         "openings": int(args.openings), "pairs": int(getattr(args, "pairs", 1) or 1),
-                         "window_bytes": int(_wi.get("window_bytes") or getattr(com, "win_bytes", 0) or (256 << 20)), "slots": int(_wi.get("slots") or 8),
-                         "scratch_bytes": _wi.get("largest_tensor_bound"), "learn_budget_bytes": int(getattr(com, "learn_budget_bytes", 0) or (4 << 30)),
-                         "chunk_bytes": int(getattr(com, "chunk", 256) or 256)}
-                _smp_max = int((sampling or {}).get("max_tokens") or 1)
-                _preqs = [{**r, "max_tokens": int(r.get("max_tokens") or _smp_max)} for r in reqs]
-                _cal = [json.loads(_l) for _l in _cal_path.read_text().splitlines() if _l.strip()]
-                _pl = _planner_plan(asz, _preqs, mode=_mode, engine_rss_bytes=int((rss_kb()[0] or 0) * 1024), host_cap_bytes=host_cap,
-                                    host_cap_source=asz.get("host_memory_cap_source"), others_current_bytes=_others,
-                                    max_num_batched_tokens=(asz.get("envelope") or {}).get("max_num_batched_tokens"), calibration=_cal)
-                _pl.pop("_sched", None)
-                _pl["record_only"] = True
-                _pl["governing_admission"] = (asz.get("admission_of_record") or {}).get("governing")
-                _pl["admission_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                (out / f"admission_planner_{kind}.json").write_text(json.dumps(_pl, indent=1, default=str) + "\n")
-                print(f"[delta] PLANNER (R17-29, record only; {_pl['mode_key']}): host bound {_pl['host_bound_mib']} MiB, calibrated {_pl['calibrated_bound_bytes'] >> 20} MiB "
-                      f"(x{_pl['calibration']['factor']:.3f}, {_pl['calibration']['entries']} records), effective cap {((_pl['effective_cap_bytes'] or 0) >> 20) or None} MiB "
-                      f"(co-tenants {_others >> 20} MiB) -> would {_pl['decision']}; DOMINANT: {_pl['dominant']['text']}", flush=True)
-            except Exception as _pe:                          # the planner is on the record tonight, never on the path of the Commit
-                print(f"[delta] PLANNER (record only) not computed: {type(_pe).__name__}: {_pe}", flush=True)
         if args.flip_weight:
             # NEGATIVE TEST ONLY: one element of one served parameter, changed before registration -- the pin (below, per pair) must name it
             _fw = str(args.flip_weight).split(":")
@@ -1790,7 +1757,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
                 if served is not None:
                     served.src.begin_run()
                 com.install()
-            t_run0 = time.perf_counter()
             r = run_workload(eng, reqs, sampling, step=None if _lock is None else _lock.step)
             if _lock is not None:
                 r["remote_session"] = RS.end_run(_rs, pair, arm)
@@ -2466,7 +2432,6 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     RB.seal_all(out, deferred, rows, verdict, pending, tl=TL)
     RS.into_verdict(_rs, verdict)
     (out / "verdict.json").write_text(json.dumps(verdict, indent=1) + "\n")
-    AP.calibrate_commit(out, row=str(getattr(args, "row_id", None) or Path(args.out).name))  # the planner's measured vs predicted, per plan
     TL.end("closure.summary", commit_pass=verdict["commit_pass"], runs=verdict["runs_instrumented"])
     TL.event("process.end", "mark", rc=(3 if fails else 0), s=round(time.time() - _T_PROCESS0, 3), commit_pass=verdict["commit_pass"])
     if fails:

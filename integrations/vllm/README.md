@@ -40,7 +40,7 @@ workloads/ manifests/ fixtures/ data/ docs/    records of the qualification tabl
 **`pipeline/`** holds the stage drivers (Build / Match / Commit): `build.py`, `match.py`, `commit.py`, `hot.py`, `report.py`,
 `global_program.py` (the rooted workload Program of a Build), `m1_capture.py`, `layout.py` (Build / run directory layout),
 `cli.py` (the one CLI, `verity-vllm`), `row.py` / `row_*.py` (`verity-vllm row`: a sweep row's
-stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py` / `admission_planner.py`,
+stages), `llm.py` (the public `verity_vllm.LLM`), `timeline.py` / `spans.py` / `telemetry/`, `admission_bound.py`,
 `research_outputs.py` / `research_result.py`, `commit_arb.py` (`verity-vllm commit-arb`: the served Commit under seeded
 varied traffic, its records held to the streamed I/O), `source_identity.py`, `release_json.py`, `workload.py` /
 `coverage_workloads.py`, `experiment.py`, `research_tools.py` (the `vllm.build` / `vllm.match` / `vllm.commit` Tools of

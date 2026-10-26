@@ -21,7 +21,6 @@
     {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1339},
     {"file": "verity_vllm/engine/chunks.py", "kind": "function", "symbol": "attribute", "detail": "lines", "count": 193},
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1273},
-    {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "function", "symbol": "plan", "detail": "lines", "count": 180},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "binding_record", "detail": "lines", "count": 199},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 1430},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "function", "symbol": "openings_after_release", "detail": "lines", "count": 179},
