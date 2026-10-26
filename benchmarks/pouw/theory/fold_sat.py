@@ -34,11 +34,18 @@ IMAD, IMAD.HI, IMAD.WIDE, SHF, LEA/LEA.HI, PRMT, IMNMX, POPC, FLO, BREV, BMSK, S
   PRMT(a, b, c; mode)       default: byte i = byte (c >> 4 i) & 7 of {b:a}, replicated sign if (c >> 4 i) & 8; or
                             f4e, b4e, rc8, ecl, ecr, rc16 on c[1:0]
   IMNMX(a, b; s, max)       min or max, signed or unsigned
-  UNARY(a; f)               POPC, FLO (clz), BREV, NOT, IABS, SGXT(a, n), BMSK(a, n)
+  UNARY(a; f)               POPC, CLZ, BREV, NOT, IABS, SGXT(a, n), BMSK(a, n), FLO.U32 (the highest set bit's index,
+                            all ones for zero)
   SEL(a, b, c, d; cmp)      ISETP + SEL fused in one slot: (a cmp b) ? c : d, six comparisons, signed or unsigned
+  IDP.4A(a, b, c; sa, sb)   c + the four byte products of a and b, each side signed or not
+
+This covers every integer lane function of MODEL-SPEC's instruction set (`Security/Definitions/Core/Accel/Isa.lean`'s
+`Lane`, branch cursor/compute-research-accel-model-spec-ea24 at 738a30c30f): iadd3, mad, madWide, lop3, shf, prmt, popc,
+flo, brev, setp, sel, min, max, lea and dp4a, each as a special case of a slot here. Its FP32 lane functions (ffma, fadd,
+fmul) are not modelled.
 
 MOV with an immediate is an operand; IADD (32) is IADD3 with RZ. Not modelled, so not covered: the FP pipes (FFMA,
-HFMA2, DFMA on integer bit patterns), IDP.4A and IDP.2A, memory (table lookups through LDS or constant memory),
+FADD, FMUL, HFMA2, DFMA on integer bit patterns), IDP.2A, memory (table lookups through LDS or constant memory),
 shuffles, a predicate read by more than one instruction (predicated execution beyond one fused SEL), and carry chains
 other than IADD64 (IADD3.X and IMAD.X with a three-input low half). A bound from this file is a bound over the
 modelled set.
@@ -141,11 +148,13 @@ TARGETS = {
 
 # ---- the instruction models (z3, symbolic parameters) ---------------------------------------------------------------------
 
-OPS = ("LOP3", "IADD3", "IMAD", "IMAD.HI", "IMAD.WIDE", "IADD64", "SHF", "LEA", "LEA.HI", "PRMT", "IMNMX", "UNARY", "SEL")
+OPS = ("LOP3", "IADD3", "IMAD", "IMAD.HI", "IMAD.WIDE", "IADD64", "SHF", "LEA", "LEA.HI", "PRMT", "IMNMX", "UNARY", "SEL",
+       "IDP.4A")
 TWO_OUT = {"IMAD.WIDE", "IADD64"}
 PIPE = {"LOP3": "alu", "IADD3": "alu", "IMAD": "imad", "IMAD.HI": "imad", "IMAD.WIDE": "imad", "IADD64": "alu",
-        "SHF": "alu", "LEA": "alu", "LEA.HI": "alu", "PRMT": "alu", "IMNMX": "alu", "UNARY": "alu", "SEL": "alu"}
-UNARY_FNS = ("POPC", "FLO", "BREV", "NOT", "IABS", "SGXT", "BMSK")
+        "SHF": "alu", "LEA": "alu", "LEA.HI": "alu", "PRMT": "alu", "IMNMX": "alu", "UNARY": "alu", "SEL": "alu",
+        "IDP.4A": "imad"}
+UNARY_FNS = ("POPC", "CLZ", "BREV", "NOT", "IABS", "SGXT", "BMSK", "FLO")
 CMPS = ("LT", "LE", "EQ", "NE", "GT", "GE")
 
 
@@ -317,6 +326,15 @@ class Slot:
                 res[name] = (_funnel_l(a, b, self.n) + c, _bv(0))
             elif name == "PRMT":
                 res[name] = (_prmt(a, b, c, self.fn), _bv(0))
+            elif name == "IDP.4A":
+                sa = z3.Extract(0, 0, self.mode) == 1
+                sb = z3.Extract(1, 1, self.mode) == 1
+                acc = c
+                for i in range(4):
+                    xa, xb = z3.Extract(8 * i + 7, 8 * i, a), z3.Extract(8 * i + 7, 8 * i, b)
+                    acc = acc + z3.If(sa, z3.SignExt(24, xa), z3.ZeroExt(24, xa)) * \
+                        z3.If(sb, z3.SignExt(24, xb), z3.ZeroExt(24, xb))
+                res[name] = (acc, _bv(0))
             elif name == "IMNMX":
                 mx = z3.Extract(0, 0, self.mode) == 1
                 lt = z3.If(self.signed, a < b, z3.ULT(a, b))
@@ -325,7 +343,8 @@ class Slot:
                 n32 = z3.ZeroExt(W - 6, self.n)
                 fns = [_popc(a), _clz(a), _brev(a), ~a, z3.If(a < 0, -a, a),
                        z3.If(self.n == 0, a, (a << (W - n32)) >> (W - n32)),   # SGXT: sign-extend the low n bits
-                       z3.If(z3.UGE(n32, W), _bv(M32), (_bv(1) << n32) - 1)]   # BMSK: n ones
+                       z3.If(z3.UGE(n32, W), _bv(M32), (_bv(1) << n32) - 1),   # BMSK: n ones
+                       z3.If(a == 0, _bv(M32), _bv(W - 1) - _clz(a))]          # FLO.U32: the highest set bit's index
                 v = fns[0]
                 for k in range(1, len(fns)):
                     v = z3.If(self.fn == k, fns[k], v)
