@@ -122,3 +122,14 @@ def test_a_record_passes_through_and_the_digest_is_of_the_document_read():
     edited = copy.deepcopy(doc)
     edited["requests"][0]["seed"] = 5
     assert Workload.of(edited, "w").doc_sha256 != w.doc_sha256
+
+
+def test_a_requests_arrival_is_its_own_else_the_sweeps_else_zero():
+    doc = _v2()
+    r = doc["requests"][0]
+    doc["requests"] = [r, *({k: v for k, v in r.items() if k != "arrive_step"} | {"request_id": x} for x in "bc")]
+    assert [Workload.of(doc, "w").arrive_step(i) for i in range(3)] == [0, 0, 0]
+    doc["requests"][0]["arrive_step"] = 4
+    doc["sweep"] = {"arrive_steps": [9, 5]}
+    w = Workload.of(doc, "w")
+    assert [w.arrive_step(i) for i in range(3)] == [4, 5, 0]
