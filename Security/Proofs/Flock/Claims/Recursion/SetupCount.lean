@@ -1306,4 +1306,314 @@ theorem rowParse_cost (tags : Tags) (bytes : ByteArray) (tables : List (String �
     all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *); all_goals omega
   · omega
 
+
+/-! ## The public file's frame-v3 roots: a cost that depends on the rows' counts -/
+
+/-- On success, the value satisfies `Q`. -/
+def okC {α : Type} (x : CountV α) (Q : α → Prop) : Prop := ∀ k a k', x.go k = (.ok a, k') → Q a
+
+theorem okC_pure {α : Type} {Q : α → Prop} {a : α} (h : Q a) : okC (pure a : CountV α) Q := by
+  intro k b k' hb
+  cases hb
+  exact h
+
+theorem okC_bind {α β : Type} {x : CountV α} {f : α → CountV β} {R : α → Prop} {Q : β → Prop} (hx : okC x R)
+    (hf : ∀ a, R a → okC (f a) Q) : okC (x >>= f) Q := by
+  intro k b k'' hb
+  rw [go_bind] at hb
+  rcases hr : x.go k with ⟨r, k'⟩
+  rw [hr] at hb
+  cases r with
+  | error e => cases hb
+  | ok a => exact hf a (hx k a k' hr) k' b k'' hb
+
+theorem bindQ {α β : Type} {x : CountV α} {f : α → CountV β} {Q : α → Prop} {n m N : Nat} (hx : countC.P x n)
+    (hq : okC x Q) (hf : ∀ a, Q a → countC.P (f a) m) (hN : n + m ≤ N) : countC.P (x >>= f) N := by
+  intro k
+  rw [go_bind]
+  have h1 := hx k
+  rcases hr : x.go k with ⟨r, k'⟩
+  rw [hr] at h1
+  cases r with
+  | error e => dsimp only at h1 ⊢; omega
+  | ok a => have := hf a (hq k a k' hr) k'; dsimp only at h1 ⊢; omega
+
+theorem mapM_list_cost {α β : Type} (l : List α) {f : α → CountV β} {c : Nat} (hf : ∀ a, countC.P (f a) c) :
+    countC.P (l.mapM f) (l.length * c) := by
+  induction l with
+  | nil => exact countC.mono (countC.pure _) (Nat.zero_le _)
+  | cons a l ih =>
+    rw [List.mapM_cons]
+    refine countC.mono (countC.bind (hf a) fun b => countC.bind ih fun bs => countC.pure _) ?_
+    rw [List.length_cons, Nat.succ_mul]
+    omega
+
+theorem mapM_array_cost {α β : Type} (xs : Array α) {f : α → CountV β} {c : Nat} (hf : ∀ a, countC.P (f a) c) :
+    countC.P (xs.mapM f) (xs.size * c) := by
+  rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind]
+  refine countC.mono (countC.bind (mapM_list_cost xs.toList hf) fun _ => countC.pure _) ?_
+  rw [Array.length_toList]
+  omega
+
+theorem mapM_list_ok {α β : Type} (l : List α) (f : α → CountV β) : okC (l.mapM f) (·.length = l.length) := by
+  induction l with
+  | nil => exact okC_pure rfl
+  | cons a l ih =>
+    rw [List.mapM_cons]
+    exact okC_bind (R := fun _ => True) (fun _ _ _ _ => trivial) fun b _ =>
+      okC_bind ih fun bs hbs => okC_pure (by rw [List.length_cons, List.length_cons, hbs])
+
+theorem mapM_array_ok {α β : Type} (xs : Array α) (f : α → CountV β) : okC (xs.mapM f) (·.size = xs.size) := by
+  rw [Array.mapM_eq_mapM_toList, map_eq_pure_bind]
+  exact okC_bind (mapM_list_ok xs.toList f) fun bs hbs =>
+    okC_pure (by rw [List.size_toArray, hbs, Array.length_toList])
+
+/-- A loop whose steps each cost at most `c` while an invariant `I` of its state holds, and keep it. -/
+theorem forIn_list_inv {α β : Type} (l : List α) (b : β) {f : α → β → CountV (ForInStep β)} (I : β → Prop) {c : Nat}
+    (hb : I b) (hc : ∀ a s, I s → countC.P (f a s) c)
+    (hI : ∀ a s, I s → okC (f a s) (fun r => match r with | .done s' => I s' | .yield s' => I s')) :
+    countC.P (forIn l b f) (l.length * c) := by
+  induction l generalizing b with
+  | nil => rw [List.forIn_nil]; exact countC.mono (countC.pure _) (Nat.zero_le _)
+  | cons a l ih =>
+    rw [List.forIn_cons]
+    refine bindQ (hc a b hb) (hI a b hb) (fun r hr => ?_) (m := l.length * c) ?_
+    · cases r with
+      | done s' => exact countC.mono (countC.pure _) (Nat.zero_le _)
+      | yield s' => exact ih s' hr
+    · rw [List.length_cons, Nat.succ_mul]
+      omega
+
+theorem forIn_upto_inv {β : Type} (L : Nat) (b : β) {f : Nat → β → CountV (ForInStep β)} (I : β → Prop) {c : Nat}
+    (hb : I b) (hc : ∀ a s, I s → countC.P (f a s) c)
+    (hI : ∀ a s, I s → okC (f a s) (fun r => match r with | .done s' => I s' | .yield s' => I s')) :
+    countC.P (forIn [0:L] b f) (L * c) := by
+  rw [Std.Legacy.Range.forIn_eq_forIn_range']
+  have := forIn_list_inv (List.range' [0:L].start [0:L].size [0:L].step) b I hb (fun a s => hc a s) fun a s => hI a s
+  rw [List.length_range'] at this
+  simpa [Std.Legacy.Range.size] using this
+
+theorem log2ceil_le {n K : Nat} (h : n ≤ 2 ^ K) : log2ceil n ≤ K := by
+  unfold log2ceil
+  split
+  · exact Nat.zero_le _
+  · have hlt : (n - 1).log2 < K := (Nat.log2_lt (by omega)).2 (by omega)
+    omega
+
+theorem nextPow2_le {n K : Nat} (h : n ≤ 2 ^ K) : nextPow2 n ≤ 2 ^ K :=
+  Nat.pow_le_pow_right (by decide) (log2ceil_le h)
+
+theorem hash_cost (tag : String) (parts : List ByteArray) :
+    countC.P (FV3.hashWith (Hashes.counted h) tag parts) 1 := sha_cost h _
+
+/-- `FV3.rootWith`'s calls: a pad leaf to the next power of two, and every node on the levels above. -/
+theorem root_cost (dom : ByteArray) (leaves : Array ByteArray) :
+    countC.P (FV3.rootWith (Hashes.counted h) dom leaves)
+      ((nextPow2 leaves.size - leaves.size)
+        + log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size))) := by
+  unfold FV3.rootWith
+  dsimp only
+  refine bindQ (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _) (mapM_array_ok _ _) (fun pads hp => ?_)
+    (m := log2ceil (nextPow2 leaves.size) * (leaves.size + (nextPow2 leaves.size - leaves.size)) + 0) ?_
+  · refine countC.bind (forIn_upto_inv _ _
+      (fun lv : Array ByteArray => lv.size ≤ leaves.size + (nextPow2 leaves.size - leaves.size)) ?_ ?_ ?_)
+      fun _ => countC.pure _
+    · show (leaves ++ pads).size ≤ _
+      rw [Array.size_append, hp, Array.size_range]
+      exact Nat.le_refl _
+    · intro i s hs
+      refine countC.mono (countC.bind (mapM_array_cost _ (c := 1) fun _ => hash_cost h _ _)
+        fun _ => countC.pure _) ?_
+      rw [Array.size_range]
+      omega
+    · intro i s hs
+      exact okC_bind (mapM_array_ok _ _) fun lv hlv => okC_pure (by show lv.size ≤ _; rw [hlv, Array.size_range]; omega)
+  · rw [Array.size_range]
+    omega
+
+/-- The bound on one row's leaves and root, at a row count of at most `2 ^ K`. -/
+def perRow (K : Nat) : Nat := (K + 3) * 2 ^ K
+
+/-- One row's leaves (a tree leaf and a frame leaf each) and the root over them, then anything at no calls. -/
+theorem leavesRoot_cost {β : Type} {K count : Nat} (hc : count ≤ 2 ^ K) (dom : ByteArray)
+    {g : Nat → CountV ByteArray} (hg : ∀ r, countC.P (g r) 2) {k : ByteArray → CountV β} (hk : ∀ x, countC.P (k x) 0) :
+    countC.P ((Array.range count).mapM g >>= fun leaves => FV3.rootWith (Hashes.counted h) dom leaves >>= k)
+      (perRow K) := by
+  refine bindQ (mapM_array_cost _ hg) (mapM_array_ok _ _) (fun leaves hl => ?_)
+    (m := (nextPow2 count - count) + log2ceil (nextPow2 count) * (count + (nextPow2 count - count)) + 0) ?_
+  · have := countC.bind (root_cost h dom leaves) hk
+    rwa [hl, Array.size_range] at this
+  · have hw := nextPow2_le hc
+    have hl : log2ceil (nextPow2 count) ≤ K := log2ceil_le hw
+    have hm : log2ceil (nextPow2 count) * (count + (nextPow2 count - count)) ≤ K * 2 ^ K :=
+      Nat.mul_le_mul hl (by omega)
+    rw [Array.size_range, perRow, Nat.add_mul]
+    omega
+
+theorem leafPair_cost (bc dom : ByteArray) (r : Nat) (schema : String) :
+    countC.P (Hm96.Default512.treeLeafWith (Hashes.counted h) bc >>= fun x => FV3.leafWith (Hashes.counted h) dom r schema x)
+      2 :=
+  countC.bind (sha_cost h _) fun _ => sha_cost h _
+
+theorem getElem!_le {xs : Array Nat} {B : Nat} (h : ∀ r ∈ xs, r ≤ B) (p : Nat) : xs[p]! ≤ B := by
+  by_cases hp : p < xs.size
+  · rw [getElem!_pos xs p hp]; exact h _ (Array.getElem_mem hp)
+  · rw [getElem!_neg xs p hp]; exact Nat.zero_le _
+
+/-- **`HmOut.checkPublicWith`'s calls**: each port's rows hashed into leaves and a frame-v3 root, at most `2 ^ K` rows a
+port. -/
+theorem checkPublic_cost (c : Circuit) (pub : Public) (K : Nat)
+    (hT : ∀ t, pub.tables = some t → ∀ r ∈ t.counts, r ≤ 2 ^ K)
+    (hN : (pub.population.getD (pub.n, pub.digests, pub.outputs)).1 ≤ 2 ^ K) :
+    countC.P (HmOut.checkPublicWith (Hashes.counted h) c pub) (c.ports.size * perRow K) := by
+  obtain ⟨header, n0, digests, outputs, sha, population, tables⟩ := pub
+  have hpop : ∃ n bcs o, population.getD (n0, digests, outputs) = (n, bcs, o) ∧ n ≤ 2 ^ K :=
+    ⟨_, _, _, rfl, hN⟩
+  obtain ⟨n, bcs, o, hp, hn⟩ := hpop
+  unfold HmOut.checkPublicWith
+  dsimp only
+  rw [hp]
+  cases tables with
+  | none =>
+    cases hd : header.getObjVal? "unit_draw"
+    all_goals
+      simp only [hd]
+      apply countC.mono
+      · repeat (first
+          | extract_lets
+          | (with_reducible apply leavesRoot_cost h)
+          | (with_reducible apply leafPair_cost h)
+          | (with_reducible apply throwBind)
+          | (with_reducible apply Cost.bind)
+          | (with_reducible apply bindAny)
+          | (with_reducible apply Cost.forIn_upto)
+          | (with_reducible intro _)
+          | (with_reducible apply Cost.pure)
+          | (with_reducible apply pureAny)
+          | (with_reducible apply throw0)
+          | (with_reducible apply Cost.throw)
+          | (with_reducible apply Cost.lift)
+          | (with_reducible apply liftAny)
+          | (with_reducible apply Cost.forIn_array)
+          | (with_reducible apply Cost.forIn_array0)
+          | (with_reducible apply forIn_array0Any)
+          | (with_reducible apply Cost.forIn_list)
+          | (with_reducible apply Cost.forIn_list0)
+          | (with_reducible apply forIn_list0Any)
+          | (with_reducible apply forIn_range0)
+          | (with_reducible apply forIn_range0Any)
+          | (with_reducible apply Cost.mapM_array)
+          | (with_reducible apply mapM_array0Any)
+          | (with_reducible apply Cost.ite)
+          | (with_reducible apply iteAny)
+          | (with_reducible apply diteMax)
+          | (with_reducible apply diteAny)
+          | split)
+        iterate 40
+          all_goals try (dsimp +zetaDelta -zeta only)
+          all_goals repeat (first
+            | extract_lets
+            | (with_reducible apply leavesRoot_cost h)
+            | (with_reducible apply leafPair_cost h)
+            | (with_reducible apply throwBind)
+            | (with_reducible apply Cost.bind)
+            | (with_reducible apply bindAny)
+            | (with_reducible apply Cost.forIn_upto)
+            | (with_reducible intro _)
+            | (with_reducible apply Cost.pure)
+            | (with_reducible apply pureAny)
+            | (with_reducible apply throw0)
+            | (with_reducible apply Cost.throw)
+            | (with_reducible apply Cost.lift)
+            | (with_reducible apply liftAny)
+            | (with_reducible apply Cost.forIn_array)
+            | (with_reducible apply Cost.forIn_array0)
+            | (with_reducible apply forIn_array0Any)
+            | (with_reducible apply Cost.forIn_list)
+            | (with_reducible apply Cost.forIn_list0)
+            | (with_reducible apply forIn_list0Any)
+            | (with_reducible apply forIn_range0)
+            | (with_reducible apply forIn_range0Any)
+            | (with_reducible apply Cost.mapM_array)
+            | (with_reducible apply mapM_array0Any)
+            | (with_reducible apply Cost.ite)
+            | (with_reducible apply iteAny)
+            | (with_reducible apply diteMax)
+            | (with_reducible apply diteAny)
+            | split)
+        all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
+        all_goals first | omega | exact Nat.le_refl _
+      · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega | exact Nat.le_refl _
+  | some t =>
+    have hT' := hT t rfl
+    cases hd : header.getObjVal? "unit_draw"
+    all_goals
+      simp only [hd]
+      apply countC.mono
+      · repeat (first
+          | extract_lets
+          | (with_reducible apply leavesRoot_cost h)
+          | (with_reducible apply leafPair_cost h)
+          | (with_reducible apply throwBind)
+          | (with_reducible apply Cost.bind)
+          | (with_reducible apply bindAny)
+          | (with_reducible apply Cost.forIn_upto)
+          | (with_reducible intro _)
+          | (with_reducible apply Cost.pure)
+          | (with_reducible apply pureAny)
+          | (with_reducible apply throw0)
+          | (with_reducible apply Cost.throw)
+          | (with_reducible apply Cost.lift)
+          | (with_reducible apply liftAny)
+          | (with_reducible apply Cost.forIn_array)
+          | (with_reducible apply Cost.forIn_array0)
+          | (with_reducible apply forIn_array0Any)
+          | (with_reducible apply Cost.forIn_list)
+          | (with_reducible apply Cost.forIn_list0)
+          | (with_reducible apply forIn_list0Any)
+          | (with_reducible apply forIn_range0)
+          | (with_reducible apply forIn_range0Any)
+          | (with_reducible apply Cost.mapM_array)
+          | (with_reducible apply mapM_array0Any)
+          | (with_reducible apply Cost.ite)
+          | (with_reducible apply iteAny)
+          | (with_reducible apply diteMax)
+          | (with_reducible apply diteAny)
+          | split)
+        iterate 40
+          all_goals try (dsimp +zetaDelta -zeta only)
+          all_goals repeat (first
+            | extract_lets
+            | (with_reducible apply leavesRoot_cost h)
+            | (with_reducible apply leafPair_cost h)
+            | (with_reducible apply throwBind)
+            | (with_reducible apply Cost.bind)
+            | (with_reducible apply bindAny)
+            | (with_reducible apply Cost.forIn_upto)
+            | (with_reducible intro _)
+            | (with_reducible apply Cost.pure)
+            | (with_reducible apply pureAny)
+            | (with_reducible apply throw0)
+            | (with_reducible apply Cost.throw)
+            | (with_reducible apply Cost.lift)
+            | (with_reducible apply liftAny)
+            | (with_reducible apply Cost.forIn_array)
+            | (with_reducible apply Cost.forIn_array0)
+            | (with_reducible apply forIn_array0Any)
+            | (with_reducible apply Cost.forIn_list)
+            | (with_reducible apply Cost.forIn_list0)
+            | (with_reducible apply forIn_list0Any)
+            | (with_reducible apply forIn_range0)
+            | (with_reducible apply forIn_range0Any)
+            | (with_reducible apply Cost.mapM_array)
+            | (with_reducible apply mapM_array0Any)
+            | (with_reducible apply Cost.ite)
+            | (with_reducible apply iteAny)
+            | (with_reducible apply diteMax)
+            | (with_reducible apply diteAny)
+            | split)
+        all_goals (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero] at *)
+        all_goals first | omega | exact Nat.le_refl _ | exact getElem!_le hT' _
+      · (try simp only [Nat.mul_zero, Nat.zero_mul, Nat.add_zero, Nat.zero_add, Nat.max_self, Nat.zero_max, Nat.max_zero]); first | omega | exact Nat.le_refl _
+
 end RecDeploy.SetupCount
