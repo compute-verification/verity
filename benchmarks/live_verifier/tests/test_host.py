@@ -702,3 +702,14 @@ def test_a_party_is_killed_when_its_minutes_run_out_and_its_log_says_so(tmp_path
     rc = H.exec_party([sys.executable, "-c", child], sink, log, 2)     # a party under a parent, as under runuser
     assert armed == [120] and rc == -9
     assert json.loads(log.read_bytes().splitlines()[-1]) == {"killed": "the session's 2 min ran out"}
+
+
+def test_party_log_reads_the_sessions_and_each_ones_stdout_as_the_host_kept_it_for_any_key(svc):
+    (rc, _), _ = party(svc, ["wipe_party", "--reads", "64"], out=b'{"listening": 47611}\n{"window": {"t0": "a", "t1": "b"}}\n')
+    rc, out = call(svc, ["party_log", "wipe"], key="-")
+    sessions = json.loads(out)["sessions"]
+    assert rc == 0 and [s.get("rc") for s in sessions] == [None, 0]
+    rc, out = call(svc, ["party_log", "wipe", sessions[0]["log"]], key="-")
+    assert rc == 0 and json.loads(out)["lines"] == [{"listening": 47611}, {"window": {"t0": "a", "t1": "b"}}]
+    assert "party_log" in refused(call(svc, ["party_log", "wipe", "../../etc/passwd"], key="-"))
+    assert "no session log" in refused(call(svc, ["party_log", "pous", "20261026T000000Z.jsonl"], key="-"))

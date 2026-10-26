@@ -67,7 +67,9 @@ pinned, one run at a time, each run's parameters a lane's request held to a fixe
   on the gate's stdin, `{"listening"}` and the signed report on its stdout, as a lane's `--challenger-command` expects
   (`benchmarks/pous/block/block.py`). The prover connects to the host's address at the port over direct TCP, which the
   security groups admit from the card only. Each party's LMS key and session log are `<root>/parties/<wipe|pous>/`, made
-  on the host, never leaving it; `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`. A lane
+  on the host, never leaving it; `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
+  `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
+  t1). A lane
   never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
   count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
@@ -649,6 +651,33 @@ def gate_party(verb: str, rest: list[str], host: Host, *, by: str, now: datetime
     return rc
 
 
+LOG_NAME = re.compile(r"\d{8}T\d{6}Z\.jsonl")
+
+
+def gate_party_log(rest: list[str], host: Host) -> dict:
+    """`party_log wipe|pous [LOG]`: a party's sessions (each request and end, `requests.jsonl`), or one session's stdout as the
+    host kept it (`log/LOG`: `{"listening"}` and the signed report, whose `window` is t0 and t1 on this host's clock), so a
+    reader takes them from the challenger's host and never through the card. Any key reads it."""
+    names = {n for n, _, _ in PARTIES.values()}
+    if not rest or rest[0] not in names or len(rest) > 2 or (len(rest) == 2 and not LOG_NAME.fullmatch(rest[1])):
+        raise Refused(f"party_log {'|'.join(sorted(names))} [LOG]")
+    d = host.parties / rest[0]
+    if len(rest) == 1:
+        reqs = d / "requests.jsonl"
+        return {"party": rest[0], "sessions": [json.loads(ln) for ln in reqs.read_text().splitlines() if ln.strip()]
+                if reqs.is_file() else []}
+    f = d / "log" / rest[1]
+    if not f.is_file():
+        raise Refused(f"no session log {rest[1]} for {rest[0]}")
+    lines = []
+    for ln in f.read_text(errors="replace").splitlines():
+        try:
+            lines.append(json.loads(ln))
+        except ValueError:
+            lines.append(ln)
+    return {"party": rest[0], "log": rest[1], "lines": lines}
+
+
 KEYGEN = "import sys; from verity.core.protocols.pous import period; print(period.challenger(sys.argv[1]).public_key.hex())"
 
 
@@ -682,7 +711,8 @@ USAGE = ("verbs: run --peer NAME --port P --period P --pin SHA512 (--paced SPEC 
          "[--verdict lean|both] [--model ROLE [--engines E] --arena-blocks A] | replay RUN | stop RUN | close NODE_HEX "
          "| wipe_party [--reads K] [--native [--threads T]] [--minutes M] | challenger_party [--minutes M] (the request line "
          "on stdin) "
-         "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous")
+         "(a lane's own gate key, or vy-admin) | status [RUN] | fetch RUN [--transcripts] | party_key wipe|pous "
+         "| party_log wipe|pous [LOG]")
 
 
 def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **hooks: Any) -> int:
@@ -746,6 +776,8 @@ def gate(argv: list[str], host: Host = Host(), sink: BinaryIO | None = None, **h
         elif verb in PARTIES:
             return gate_party(verb, rest, host, by=by, now=now, busy=busy, own=own, run=hooks.get("party") or exec_party,
                               sink=sink)
+        elif verb == "party_log":
+            doc = gate_party_log(rest, host)
         elif verb == "party_key":
             doc = gate_party_key(rest, host, own=own, keygen=hooks.get("keygen") or run_keygen)
         else:
