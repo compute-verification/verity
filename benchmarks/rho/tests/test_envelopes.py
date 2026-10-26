@@ -148,10 +148,24 @@ def test_the_serving_block_is_a_server_between_two_wipes_and_k_wipe_per_server()
     assert r.budget(ctx) == Budget(float(math.floor(loc.phi * w)), loc.hosts * r.wipe.k_wipe + rate * w)
     # an H200 server: 5 GB, and α Φ = 4.9e6 bit/s for a day
     assert r.budget(ctx).inputs == pytest.approx(4.67e11, rel=0.01)
-    # today's wipe, per device: 8 x 10 GB, 36.5 GB of host
-    today = envelopes.regime(REG, "onsite-per-device")
-    state = loc.devices * today.wipe.residual_bits + loc.hosts * today.wipe.host_residual_bits
-    assert today.budget(ctx).inputs == pytest.approx(state + rate * w) == pytest.approx(1.36e12, rel=0.01)
+    # per device: 8 x 10 GB, 36.5 GB of host
+    per_device = envelopes.regime(REG, "onsite-per-device")
+    state = loc.devices * per_device.wipe.residual_bits + loc.hosts * per_device.wipe.host_residual_bits
+    assert per_device.budget(ctx).inputs == pytest.approx(state + rate * w) == pytest.approx(1.36e12, rel=0.01)
+
+
+def test_todays_wipe_leaves_about_12_gb_a_server_and_its_boot_disk():
+    """`regime.onsite-today`: `k_wipe` of about 12 GB a server plus each server's (or compute tray's) boot disk, which
+    the wipe doesn't reach; without the boot disk an H200 serving block's input is within 2x of the 5 GB reference's."""
+    onsite, today = envelopes.regime(REG, "onsite"), envelopes.regime(REG, "onsite-today")
+    for fleet in ("reference-h200", "reference-gb200"):
+        loc = context(fleet).location
+        assert today.wipe.state(loc) == pytest.approx(loc.hosts * (9.6e10 + 1.536e13))
+        assert onsite.wipe.state(loc) == loc.hosts * 4e10 and onsite.wipe.boot_disk_bits == 0
+    ctx = context("reference-h200")
+    bare = envelopes.regime(REG.override({"regime.onsite-today.boot_disk_bits": 0}), "onsite-today")
+    assert onsite.budget(ctx).inputs < bare.budget(ctx).inputs < 2 * onsite.budget(ctx).inputs
+    assert today.budget(ctx).inputs > 30 * onsite.budget(ctx).inputs
 
 
 def test_the_links_form_is_what_windows_proves():
@@ -178,19 +192,19 @@ def test_without_pouw_only_the_serving_cut_bounds():
     assert serving.name == "serving"
 
 
-def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_today_an_nvl72_rack_does():
+def test_at_5_gb_a_server_no_location_takes_kimi_k2s_state_in_a_day_and_per_device_an_nvl72_rack_does():
     def inputs(registry: Registry, name: str):
         r = evaluate_named(registry, name)
         return r, r.scenario.regime.budget(r.scenario.context).inputs
 
-    today = REG.override({f"scenario.{n}.regime": "onsite-per-device" for n in ("onsite-gb200-kimi",
-                                                                                "onsite-h200-kimi")})
+    per_device = REG.override({f"scenario.{n}.regime": "onsite-per-device" for n in ("onsite-gb200-kimi",
+                                                                                     "onsite-h200-kimi")})
     (rack, rack_in), (_, server_in) = inputs(REG, "onsite-gb200-kimi"), inputs(REG, "onsite-h200-kimi")
-    (rack_today, rack_today_in), (server_today, server_today_in) = (inputs(today, "onsite-gb200-kimi"),
-                                                                    inputs(today, "onsite-h200-kimi"))
+    (rack_pd, rack_pd_in), (server_pd, server_pd_in) = (inputs(per_device, "onsite-gb200-kimi"),
+                                                        inputs(per_device, "onsite-h200-kimi"))
     state = rack.families[0].profile.state_bits
-    assert rack_today_in > state > rack_in > server_today_in > server_in
-    assert rack_today.hi < server_today.hi
+    assert rack_pd_in > state > rack_in > server_pd_in > server_in
+    assert rack_pd.hi < server_pd.hi
 
 
 @pytest.mark.parametrize("name", REG.names("regime"))

@@ -173,3 +173,18 @@ def test_run_writes_markdown_json_and_figures_into_out(tmp_path, monkeypatch, ca
     assert set(record["scenarios"]) == {NAMES[0]}
     assert {"corner", "lo_by_status", "attribution", "dangers", "rescues"} <= set(record["scenarios"][NAMES[0]])
     assert drawn == [(tmp_path / "figures", [10.0])]
+
+
+def test_run_prints_the_comparator_beside_rho_and_flags_a_vacuous_lower_end(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "reference-remote-h200"])
+    run.main()
+    text = capsys.readouterr().out
+    assert "| reference-remote-h200 | [2.35 (vacuous), 5.87] | 2.5 |" in text
+    assert "With no protocol the adversary sits at **ρ = 2.5**" in text and "**vacuous**" in text
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["reference-remote-h200"]
+    assert record["vacuous"] and record["unmonitored"] == pytest.approx(2.5)

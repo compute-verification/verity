@@ -75,16 +75,19 @@ class _Restricted:
 
 
 def restrict(s: Scenario, status: str) -> Scenario:
-    """`s` with only the bounds and cuts whose status is `status` or stronger, and no attacks."""
+    """`s` with only the bounds and cuts whose status is `status` or stronger, and no attacks; the uncertified and dark
+    gates at the elementary cap where `s_×`'s straddling premise is weaker than `status`."""
     top = STATUSES.index(status)
+    st = s.structure if _rank(s.structure.cites()) <= top else s.structure.elementary()
     return replace(s, regime=_Restricted(s.regime, status), bounds=tuple(b for b in s.bounds if _rank(b.cites) <= top),
-                   attacks=())
+                   attacks=(), structure=st)
 
 
 @cache
 def upto(status: str) -> Metric:
     """`LO` from only the bounds and cuts at least as strong as `status`: `upto("conditional")` drops the draft
-    statements, `upto("proved")` keeps only what needs no named premise."""
+    statements (the straddling premise among them, so the uncertified and dark gates count at the elementary cap),
+    `upto("proved")` keeps only what needs no named premise."""
     if status not in STATUSES:
         raise ValueError(f"status {status!r} is not one of {STATUSES}")
 

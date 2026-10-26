@@ -72,7 +72,8 @@ def test_a_scenario_reads_its_own_tables_and_not_the_others():
                                   "reference-onsite-h200-per-device"])
 def test_rho_and_the_time_to_the_target_do_not_depend_on_gates_per_flop(name):
     """Every FLOP-model input becomes gates through the one `units.gates_per_flop`, and the bound compares gates with
-    gates, so the conversion cancels: at its low and high ends ρ's bracket and its times are today's."""
+    gates (`s_×` at the reference's gates per counted product moves with it), so the conversion cancels: at its low
+    and high ends ρ's bracket and its times are today's."""
     def numbers(g: float) -> tuple[float, ...]:
         r = evaluate_named(REG.override({"units.gates_per_flop": g}), name)
         return r.lo, r.hi, r.scenario.seconds(r.lo), r.scenario.seconds(r.hi)
@@ -83,6 +84,32 @@ def test_rho_and_the_time_to_the_target_do_not_depend_on_gates_per_flop(name):
         assert numbers(g) == pytest.approx(base, rel=1e-9)
     assert build(REG.override({"units.gates_per_flop": p.high}), name).context.c == pytest.approx(
         build(REG, name).context.c * p.high / p.value)
+
+
+def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise():
+    """`structure.reference` is `s_×` at the reference's gates per counted product (`2G/κ`, so `u = w` and ρ is what it
+    was), and every bound that counts uncertified or dark gates there cites `draft:no-straddle`. The elementary cap
+    (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower end down by
+    `2G/κ` (inference is 0.0% of it), and is what `upto("conditional")` falls back to."""
+    r, e = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-remote-h200-elementary")
+    st, f = r.scenario.structure, r.families[0]
+    w = classes.weight_per_gate(f.profile, r.scenario.context.units)
+    assert st.s_times == classes.REFERENCE and st.weight(w) == w and st.gates(w) == pytest.approx(2 * 250 / 0.602)
+    assert "draft:no-straddle" in f.combined.cites and f.combined.status == "draft"
+    assert not any("draft:no-straddle" in a.cites for a in f.attacks)
+    assert e.scenario.structure.cites() == () and "draft:no-straddle" not in e.families[0].combined.cites
+    assert e.hi == pytest.approx(r.hi, rel=1e-12) and e.lo * st.gates(w) == pytest.approx(r.lo, rel=1e-3)
+    assert analysis.upto("conditional")(r) == pytest.approx(analysis.upto("conditional")(e), rel=1e-12)
+
+
+def test_the_comparator_is_the_unmonitored_adversary_at_its_mfu():
+    """`Result.unmonitored` is `μ / MFU`, the best construction's ρ with no protocol at all; a lower end below it is
+    vacuous, as remote's is and onsite H200's isn't."""
+    u = evaluate_named(REG, "unmonitored-h200-kimi")
+    assert u.unmonitored == pytest.approx(u.hi, rel=1e-12)
+    remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
+    assert remote.unmonitored == pytest.approx(1 / 0.4) and remote.vacuous(remote.lo)
+    assert not onsite.vacuous(onsite.lo) and onsite.vacuous(2.0)
 
 
 def test_the_time_to_the_target_is_rho_reference_gates_over_the_inventorys_capacity():

@@ -14,8 +14,9 @@ inference block constrains) and its `delta`, split into the coins' draws and the
   accepted faulty blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
 * `Wipe`: at each wipe a server keeps at most `k_wipe` bits of the prior content of its whole memory `M_s` (`per =
-  "server"`, Daniel's operating point, 26 Oct 12:16 PM PDT), or, today's wipe and the per-device sensitivity, each
-  device `residual_bits` and each host `host_residual_bits` (`per = "device"`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
+  "server"`, Daniel's operating point, 26 Oct 12:16 PM PDT), or, the per-device sensitivity, each device
+  `residual_bits` and each host `host_residual_bits` (`per = "device"`); a boot disk the wipe doesn't reach keeps
+  `boot_disk_bits` more a server (today's wipe, `regime.onsite-today`). Its δ is `2⁻¹²⁸ + Adv_PRF` per game,
   one game per server (or device) per wipe, summed over the horizon.
 * `Certifier`: a serving block behind certifiers reads at most `(r_in + r_side) Δ_wipe` unregistered bits from outside,
   `r_in` the certified prompt ingress and `r_side` the timing and side channels no certifier reads. Its δ is 0: the
@@ -204,13 +205,15 @@ class Wipe:
     """The wipe every `wipe_s` seconds."""
 
     wipe_s: float = 86400.0
-    #: `server` (`k_wipe` per server, of its whole memory `M_s`) or `device` (today's wipe: `residual_bits` per device
-    #: and `host_residual_bits` per host, the host's memory, DPU, BMC and flash unwiped)
+    #: `server` (`k_wipe` per server, of its whole memory `M_s`) or `device` (the sensitivity: `residual_bits` per
+    #: device and `host_residual_bits` per host, the host's memory, DPU, BMC and flash unwiped)
     per: str = "server"
     #: `k_wipe`: bits a wipe leaves of one server's whole memory
     k_wipe: float = 0.0
     residual_bits: float = 0.0
     host_residual_bits: float = 0.0
+    #: bits each server's boot disk keeps through a wipe that doesn't reach it (today's), on top of either form
+    boot_disk_bits: float = 0.0
     #: one game's failure: the coins' `2⁻¹²⁸` and the pseudorandom function's advantage (#4707's retention game)
     game_delta_coin: float = 2.0**-128
     prf_advantage: float = 0.0
@@ -228,10 +231,11 @@ class Wipe:
         return self.SERVER + self.DEVICE if self.per == "server" else self.DEVICE
 
     def state(self, loc: Location) -> float:
-        """`k_wipe` of a location's serving block: what the wipe leaves of its servers' memory."""
+        """`k_wipe` of a location's serving block: what the wipe leaves of its servers' memory, and their boot disks."""
+        disks = loc.hosts * self.boot_disk_bits
         if self.per == "server":
-            return loc.hosts * self.k_wipe
-        return loc.devices * self.residual_bits + loc.hosts * self.host_residual_bits
+            return loc.hosts * self.k_wipe + disks
+        return loc.devices * self.residual_bits + loc.hosts * self.host_residual_bits + disks
 
     def games(self, ctx: Context) -> float:
         """Wipe games over the horizon: one per server (or device) per wipe."""

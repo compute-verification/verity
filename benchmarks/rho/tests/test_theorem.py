@@ -82,6 +82,21 @@ def test_the_bound_counts_the_dark_leaves_at_capacity_and_an_attack_at_its_mfu()
     assert attack.dark == pytest.approx(0.0055) and attack.rho == pytest.approx(1 / (0.0055 + 0.99 * 0.4))
 
 
+def test_a_bound_holds_uncertified_and_dark_gates_and_every_block_at_u_and_an_attack_at_w():
+    """`u = ω_max / s_×` against the reference's `w`: the uncertified routes and the dark leaves scale by `u/w`, no
+    block holds more than `u c`, and a serving block at most `u/w` of the reference's weight in it. An attack is a
+    construction of the reference's operations, so `u` doesn't move it."""
+    w, u = 0.5, 2.0
+    part = Partition((block(Cut("c", (Blocks("x", Budget(200, 1e9), 1),), {"gap.floor": 100}), mfu=0.4),), 0.01)
+    s = slowdown(part, lambda b: b.inputs, w, u=u)
+    # x: min(1e9, u·200) / (w·1000) = 0.8; gap.floor: u·100 / 500 = 0.4; dark: (u/w)·0.01
+    assert dict(s.terms) == pytest.approx({"x": 0.8, "gap.floor": 0.4}) and s.dark == pytest.approx(0.04)
+    assert s.rho == pytest.approx(1 / (0.04 + 0.99 * 1.2))
+    assert local(block(), lambda b: math.inf, w, u=u).value == pytest.approx(u / w)
+    assert slowdown(part, lambda b: 0.0, w, side="attack", u=u) == slowdown(part, lambda b: 0.0, w, side="attack")
+    assert slowdown(part, lambda b: b.inputs, w, u=w) == slowdown(part, lambda b: b.inputs, w)
+
+
 def test_slowdown_weights_serving_blocks_by_their_gates():
     free = ServingBlock("free", 3000.0, 1.0, ())
     locked = ServingBlock("locked", 1000.0, 1.0, (Cut("c", (Blocks("x", Budget(1000, 0), 1),)),))
