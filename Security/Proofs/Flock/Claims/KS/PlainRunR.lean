@@ -433,13 +433,13 @@ theorem plainClashRunR_of (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {
         EntriesClashJK id ins.read.I d (wrPDJK id ins.read.I d o) ∨
           LaterEntriesClashJK id ins.read.I d (wrPDJK id ins.read.I d o))
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (P' : Claims.Prover (Ω × plainTape x))
-    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
       (plainΦ x spec st))
     (hnil : ∀ u r', (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out ≠ .acc →
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
         sha512 P' x (ω, u) r').proofs = #[])
     (C : Fin (wordLen false x) → List 𝔽) :
-    PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+    PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
       (plainΦ x spec st)
       (LiveSelfClash H512 enc512 Lf sch (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDec T)
         (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
@@ -529,17 +529,17 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
         ∀ r < 2, LaterEntriesAtJK id sch ins.read.I d (wrPDJK id ins.read.I d o)
           (tableOutL H512 enc512 Lf (capOfRoot o.rootB[0]!) pend' (opn o.proofs 0)) r)
     {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (P' : Claims.Prover (Ω × plainTape x))
-    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+    (hsim : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1) P'
       (plainΦ x spec st))
     (hnil : ∀ u r', (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, r'))).out ≠ .acc →
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
         sha512 P' x (ω, u) r').proofs = #[])
     (C : Fin (wordLen false x) → List 𝔽) (u : plainTape x) (rr : Fin (plainN x + 2) → LCoin 65536)
     (a : List (Model.OutCL 𝔽 Dig (List UInt8)))
     (ha : Claims.Bridge.RetOK (fun _ cap pend os => tableOutL H512 enc512 Lf cap pend os)
       (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDec T) (fun _ _ => true) (fun _ _ _ => [])
       (fun rs _ => capOfRoot rs[0]!) (fun j => repsOf (D := Dig) execArith ([T].get j))
-      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+      (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainWR spec (plain_mPts hs hin hset).1)
         sha512 P' x (ω, u) rr) a)
     (r : Fin 2) (ℓ : ℕ) (q : Fin (2 ^ (lvOf sch (ℓ + 1)).logLen)) (v : Fin (2 ^ (lvOf sch (ℓ + 1)).lanes) → 𝔽)
     (hv : opCapL H512 enc512 Lf sch r.val ℓ a q = some v) :
@@ -576,7 +576,7 @@ theorem plainRel_ofR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {s : C
   have hcols := plainRawLevelColsRV_plain (congrFun (runOfRV_run hacc) 0) hact hlv hvd (by simp) hf' hp2 r.isLt (ℓ + 1)
   rw [hcols, ← hpr]
   have hmem := List.mem_map_of_mem (f := fun x => (x.1, x.2.1)) hy
-  rw [hent (ℓ + 1) (by omega), plainLevelColsOf_congr _ _ _ (hco spec #[st'] sess hsu hdec r.val r.isLt y₀ hy₀),
+  rw [hview, hent (ℓ + 1) (by omega), plainLevelColsOf_congr _ _ _ (hco spec #[st'] sess hsu hdec r.val r.isLt y₀ hy₀),
     ← getD_empty] at hmem
   exact hmem
 
