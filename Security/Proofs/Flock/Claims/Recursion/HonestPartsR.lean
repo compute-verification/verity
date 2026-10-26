@@ -46,7 +46,7 @@ theorem partAccepts_of_run {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W
     (hr : L.RowsRead x s w ms) :
     PartAccepts H D DO L shape shows cmt s x (coinSeq r) ms := by
   obtain ⟨hsh, hcm⟩ := hSt x st hx hf Ω P ω r hacc s hs
-  exact ⟨⟨st, hx, hf⟩, _, w, hck, hT, hnc, hsh, hh, hp, fun i hi _ _ => (hms i hi).trans (hcm i hi).symm, hr⟩
+  exact ⟨⟨st, hx, hf⟩, _, w, hck, hT, hnc, hsh, hh, hp, LayoutB.cmtAgrees_of_eq fun i hi _ => (hms i hi).trans (hcm i hi).symm, hr⟩
 
 end Honest
 

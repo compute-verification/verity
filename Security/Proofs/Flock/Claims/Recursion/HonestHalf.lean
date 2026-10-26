@@ -38,7 +38,8 @@ the compiled verifier accepts the reference prover's run. V\*'s gate-level compl
 `HonestWitSatisfies`, and the inner prover's openings at the run are `IrShaped` (`Ir` is not fixed in Lean: the
 theorem holds for every inner prover `Ir` with `IrShaped` at the run, the facts of `Ir.rest`, which the deployed
 builder's `rec_vstage`, `rec_vstar` and `verifier_rows` build, that the stager's checks read). These three are
-witnessed outside Lean at the deployed builder: by the honest deployed recursive run (PRTRIAGE; no passing run yet) and
+witnessed outside Lean at the deployed builder: by every V\* part's session of the honest deployed recursive run being
+accepted by the compiled `flock-verify` (pending: r20261026-223243-c2a7; no passing run yet) and
 by CAPLOWER's `IrShaped` and gate-level checks in the deployed V\* difftest (no passing run yet). No collision among a
 part's recorded calls is `NoCollAt`, SHA-512's collision event.
 
@@ -100,11 +101,10 @@ abbrev DAt : Claims.Recursion.Deploy Coin :=
 /-- **The verifier accepts the reference prover's run, at an instance that exists** (witnessed outside Lean). The
 statement `x` with witness `w` is in the compiled record's relation, parses to `st` at the dense form, and the compiled
 verifier accepts the reference prover's run on tape `ω` and coins `r`. A concrete statement can't be evaluated in Lean
-(its circuit is 22 MB and `Json.parse` is not kernel-evaluable), so this is witnessed by running the deployed verifier
-on the honest deployed recursive run. No witness of this outer run exists yet (PRTRIAGE is producing it). The inner
-session's honest run is witnessed: run r20261026-212829-1d52 (the Lean `flock-verify` accepts the honest rec-inner
-session), fixture art:f9bfe23d58c7a10a6d8c26f24bceefe826594182a1a4e2841be1ca5b3a6f45c7, check r20261026-221519-0452;
-that witnesses the inner session only, not this premise. -/
+(its circuit is 22 MB and `Json.parse` is not kernel-evaluable), so this is witnessed outside Lean: every V\* part's
+session of the honest deployed recursive run is accepted by the compiled `flock-verify` (composed per part; no single
+compiled verdict exists). The pending witness is run r20261026-223243-c2a7 (`benchmarks/recursion_e2e --e2e --cpu`);
+no passing witness run exists yet. -/
 def HonestRunAccepted (w : Claims.Flock.Wit) (st : Claims.Recursion.Stmt)
     (ω : Tape (bLAt mask Ir b0 x aux nOf hd recRest))
     (r : Fin ((DAt mask Ir b0 x aux nOf hd recRest).V.k x) → Coin) : Prop :=
@@ -146,9 +146,10 @@ end Premises
 at the deployed brings at `x` under `deployedB` (`bringsAt_deployedB`), V\*'s layout of record `layR elemR` and the
 deployed bound record, where the compiled verifier accepts the reference prover's run (`HonestRunAccepted`), each part
 `s < nS x`'s circuit accepts. `HonestRunAccepted`, `IrShaped` and `HonestWitSatisfies` are witnessed outside Lean at the
-deployed builder: by the honest deployed recursive run and by CAPLOWER's `IrShaped` and gate-level checks in the
-deployed V\* difftest. No passing witness run exists yet; each premise's docstring is to name its run id or art id when
-it passes.
+deployed builder: by every V\* part's session of the honest deployed recursive run being accepted by the compiled
+`flock-verify` (composed per part; pending run r20261026-223243-c2a7) and by CAPLOWER's `IrShaped` and gate-level
+checks in the deployed V\* difftest. No passing witness run exists yet; each premise's docstring is to name its run id or
+art id when it passes.
 
 Besides those it takes no collision among each part's recorded calls (`NoCollAt`, SHA-512's collision event), the
 fitted rows (`RowsFit`) and the tape exception (`hTops`: the reps' tops differ at every level above 0). The stager
