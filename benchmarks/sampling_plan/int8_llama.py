@@ -1,7 +1,7 @@
 """The sampling plan for an int8 row under C-Flock (`verity.core.protocols.sampled_proofs`), Llama-3.1-8B or Qwen3-8B: the
 fitted cost model, the cuts the generator finds, the frontier of ε against the verification overhead B, the break-even
 granularity by window, ε and commitment regime, the frontier's sensitivity to its inputs, the tensors committed at more
-than one scale, and the block kinds' weights at each target.
+than one scale, and the weight classes' weights at each target.
 
 Units are decision 106's: every s8 dot unit checks its seed and derives its own noise (2 + 2 ceil(L b / 512) SHA-512
 compressions), opens its operand rows and its output in circuit, and carries its own work (MACs, W_ref's proxy).  A dot
@@ -9,7 +9,7 @@ may be cut into K-chunks (`S8Dot{T0 = input}`), each committing its running sum,
 each a unit when its outputs fit a size class.  B is GPU-seconds of overhead per plain GPU-second over a window (BUDGET's unit), the
 total: everything is committed at serve time (ASK-25), so B holds every scale's serve-time commitments under the PoUW
 scheme (`inputs.serve_rows`: the Commit's taps, PoUW's work blocks, the bits they pin, the remote audit's receipts) beside
-the proving, the units' commitments, the witnesses' replay and the zero-work templates.  The `floor` scheme is #2457's
+the proving, the units' commitments, the witnesses' replay and the zero-work subcircuits.  The `floor` scheme is #2457's
 accounting, its one measured term (`commit_floor`) and nothing else.
 
     uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]
@@ -176,7 +176,7 @@ def cut_of(p, alts: dict) -> dict:
 
 
 def at_budget(b: float, plans, cands, costs: CostModel, objective: Objective, w: dict, extra: float):
-    """The least-ε plan whose B, the serve-time commitments and the zero-work templates included, is at most `b`."""
+    """The least-ε plan whose B, the serve-time commitments and the zero-work subcircuits included, is at most `b`."""
     return for_budget(plans, b * w["window_gpu_s"] - extra, candidates=cands, costs=costs, objective=objective,
                       exact=False)
 
@@ -191,7 +191,7 @@ def summarize(p, w: dict, extra: float, alts: dict) -> dict:
 
 
 def zero_work_cost(costs: CostModel, v: dict) -> float:
-    """The zero-work templates at their floor: one unit each in a one-unit statement of a small template."""
+    """The zero-work subcircuits at their floor: one unit each in a one-unit statement of a small subcircuit."""
     small = s8_coord_ands(2048)
     return v["zero_work_templates"] * (costs.statement_fixed + costs.statement_per_and * small
                                        + costs.staged_per_and * small + costs.per_and * small)
@@ -281,7 +281,7 @@ def overlap_table(v: dict, m: Model, scheme: str, w: dict) -> list[dict]:
 
 
 def weights_at(cands, costs: CostModel, objective: Objective, w: dict, extra: float, alts: dict) -> list[dict]:
-    """At each ε target, the plan at equal weights and the one `weigh` chooses, each kind (template) weighed alone."""
+    """At each ε target, the plan at equal weights and the one `weigh` chooses, each class (subcircuit) weighed alone."""
     out = []
     for target in TARGETS:
         flat = for_target(cands, costs, objective, target * w["work"], grid=31, exact=False)
@@ -297,7 +297,7 @@ def main(argv=None) -> None:
     ap.add_argument("--model", choices=sorted(MODELS), default="llama-3.1-8b")
     ap.add_argument("--scheme", choices=SCHEMES, default="h1", help="the PoUW scheme whose serve-time commitments B holds")
     ap.add_argument("--kv", action="store_true", help="count the remote KV append (live KV credited) in B")
-    ap.add_argument("--weights", action="store_true", help="choose the block kinds' weights at each ε target")
+    ap.add_argument("--weights", action="store_true", help="choose the weight classes' weights at each ε target")
     ap.add_argument("--grid", type=int, default=61)
     args = ap.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
