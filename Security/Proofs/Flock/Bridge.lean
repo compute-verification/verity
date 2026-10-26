@@ -13,6 +13,7 @@ import Proofs.Flock.Bridge.KSLive
 import Proofs.Flock.Bridge.V5.Statement
 import Proofs.Flock.Bridge.V5.EndToEndHidden
 import Proofs.Flock.Bridge.V5.Assembly
+import Proofs.Flock.Bridge.V5.OpeningsCanon
 
 /-! `Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated`, by reflexivity: the statement
 of `SampledKSLive` is recorded. `KSLive`: `Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2`,
@@ -24,7 +25,7 @@ verifiers' acceptance (`Refused`). `Lowers`: the claims program `progOf C κ` lo
 `FaultyRightC`: a unit right on its shaped openings is not faulty (`Flock.Bridge.faultyRightC`).
 `V5/Statement`: `Flock.Guarantees.SampledKSLiveV5`, V2 at the verifier's public inputs with or without shared rows, and
 the targets its assembly takes (stated). `V5/EndToEndHidden`: `endToEndHiddenV5_of`, from `OpeningsCanonTargetV5`.
-`V5/Assembly`: `assemblyTargetV5`. -/
+`V5/Assembly`: `assemblyTargetV5`. `V5/OpeningsCanon`: `openingsCanonV5`. -/
 
 /-- **`SampledKSLive` is stated** (`Flock.Guarantees.SampledKSLiveStated`). -/
 theorem Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated := rfl

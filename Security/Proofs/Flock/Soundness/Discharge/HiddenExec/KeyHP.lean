@@ -15,13 +15,13 @@ public input word's in the population's public file (`pubBitOf`):
 * `pub_siteHP`: at a drawn unit's site (`BcSiteHP`), a stacked unit input whose key is bit `t` of public word `q` holds
   bit `t` of word `q` of the proved unit's public inputs (`pub_block`, `Hidden.inVal_drawnP`);
 * `rowOfHP`, `keyReadersHP`: `Layout.Readers.ofRows` at those rows, at each drawn unit's site (`siteAddrHP`), and single
-  gates with `Layout.keyGateP (pubBitOf pi popOf) (fun _ _ => false)`;
+  gates with `Layout.keyGateP (pubBitOf pi popOf) (fun _ _ => false)`; a public gate is no row's bit (`rowOfHP_pub`);
 * `keyProgHP_copies`: Δ's copies, from `copy_siteHP` at an input row (its key a message bit, so off a public leaf) and
   `out_copyHP` at an output row (`out_copy_keyP`);
 * `keyProgHP_bcPinned`: each row's `b ‖ c` at a drawn unit's site is the population's (`bc_site_ofHP`);
-* `keyProgHP_valPinned`: the single gates are the constant, the zero and the public gates (`Layout.single_gateP`, with
-  every computed committed gate an output row's bit, `OutsOutP`), holding 1, 0 (`constCols_keyProgHP`,
-  `zeroCols_keyProgHP`) and the public input words' bits (`pub_siteHP`);
+* `keyProgHP_gate`, `keyProgHP_valPinned`: the single gates are the constant, the zero and the public gates
+  (`Layout.single_gateP`, with every computed committed gate an output row's bit, `OutsOutP`), holding 1, 0
+  (`constCols_keyProgHP`, `zeroCols_keyProgHP`) and the public input words' bits (`pub_siteHP`);
 * `keyLayoutHP`, `keyRowsHP` and `keyRowsHP_computes`, `HmRowComputes` at them (`bc_site_commitHP`, `keyRowHP_enc`).
 -/
 
@@ -183,6 +183,23 @@ theorem rowOfHP_none (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)}
   · exact ⟨rfl, (rowOfHP_of_none outs hk).symm.trans h⟩
   · rw [rowOfHP_of_key outs hk] at h
     cases h
+
+/-- **A public gate is no row's bit**: its key is a public word's bit, so it is no input row's (`keyRowOfP`), and it is
+an input gate of `keyProgP` (`Layout.unit_uniform_input`), so no unit computes it (`outRowOfP`). -/
+theorem rowOfHP_pub (outs : Finset (Fin (keyN c hU n))) {g : Fin (keyN c hU n)} {u : Fin n} {q t : ℕ}
+    (h : keyPubOf c hU n pi g = some (u, q, t)) : rowOfHP c hU n pi outs g = none := by
+  obtain ⟨h2, hlt, -, hk⟩ := Layout.keyPubOf_spec h
+  have hkr : keyRowOfP c hU n pi (portRowW c) g = none := by
+    unfold keyRowOfP
+    simp only [h2, hlt, and_self, ↓reduceDIte, hk]
+  rw [rowOfHP_of_none outs hkr]
+  have hun : (keyProgP c pi hU n).unit g = none :=
+    Layout.unit_uniform_input (k := Placed.inGates n (Layout.keyB c hU)) (R := Placed.circuitRows c hU)
+      (ins := Placed.insOf n (Layout.keyB c hU) (Aliased.keyIdxP c pi (Layout.keyB c hU)))
+      (one := Placed.oneGate n (Layout.keyB c hU))
+      (hone := Placed.insOf_ne_one n (Layout.keyB c hU) (Aliased.keyIdxP c pi (Layout.keyB c hU))) n g hlt
+  unfold outRowOfP
+  rw [hun]
 
 /-- **A row bit of a unit's own instance is that unit's row**. -/
 theorem rowOfHP_wire_unit (outs : Finset (Fin (keyN c hU n))) {u u' : Fin n}
@@ -351,20 +368,22 @@ theorem keyProgHP_bcPinned
   exact this
 
 include hparse hpi ho hrf houts in
-/-- **The single gates at `keyProgP`'s sites in hidden-output tables hold the registration's bits**: when every input a
-row reads has a key with public inputs (`KeysRowP`), a committed gate that is no row's bit is the zero, the constant, a
-public gate of the unit, or a computed gate (`Layout.single_gateP`); a computed one is a returned output's (`OutsOutP`),
-so an output row's bit. So the gates hold 0, 1 (`zeroCols_keyProgHP`, `constCols_keyProgHP`) and, at a public gate, the
-unit's public input word's bit (`pub_siteHP`, at each drawn unit's site, `BcSiteHP`). -/
-theorem keyProgHP_valPinned (hkeys : KeysRowP c hU pi (portRowW c))
+/-- **A single gate at a drawn unit's site holds the registration's bit**: when every input a row reads has a key with
+public inputs (`KeysRowP`), a committed gate that is no row's bit is the zero, the constant, a public gate of the unit,
+or a computed gate (`Layout.single_gateP`); a computed one is a returned output's (`OutsOutP`), so an output row's bit.
+So the gate holds 0, 1 (`zeroCols_keyProgHP`, `constCols_keyProgHP`) or, at a public gate, the unit's public input
+word's bit (`pub_siteHP`, at each drawn unit's site, `BcSiteHP`). -/
+theorem keyProgHP_gate (hkeys : KeysRowP c hU pi (portRowW c))
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
-      BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
-    (keyReadersHP hparse hpi outs popOf).ValPinned (P := (keyProgP c pi hU n).partition outs) := by
-  refine Layout.ofRows_valPinned _ fun S R u hu M hM g hg hr => ?_
+      BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val)
+    {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) {M : Binding.Msg plan tab S R u}
+    (hM : Binding.Sat plan tab S R u M) {g : Fin (keyN c hU n)} (hg : g ∈ ((keyProgP c pi hU n).partition outs).io u)
+    (hr : rowOfHP c hU n pi outs g = none) :
+    bit (Binding.wit plan tab S R u M (Layout.gateAt (keyPlaceHP hparse hpi outs) S R u g)) =
+      keyGateP c hU n pi (pubBitOf pi popOf) (fun _ _ => false) R g := by
   have hpub := Layout.gate_pub (keyPlaceHP hparse hpi outs) (constCols_keyProgHP hU hparse hpi outs)
     (zeroCols_keyProgHP hU hparse hpi outs) hu hM hg
   obtain ⟨x, hx⟩ := Layout.exists_col_of_io ((keyPlaceHP hparse hpi outs) S R u hu).inst hg
-  change bit _ = keyGateP c hU n pi (pubBitOf pi popOf) (fun _ _ => false) R g
   obtain ⟨hk, hno⟩ := rowOfHP_none outs hr
   rcases Layout.single_gateP outs hkeys ⟨x, hx⟩ hg hk with rfl | rfl | ⟨q, t, hpq⟩ | ⟨hm, -, -⟩
   · rw [hpub.2 (Finset.mem_singleton_self _)]
@@ -403,6 +422,16 @@ theorem keyProgHP_valPinned (hkeys : KeysRowP c hU pi (portRowW c))
       rw [← hget]
       exact Array.getElem_mem_toList _
     exact outBitRow_ne_none hcr hrf u hwlt ht hno'
+
+include hparse hpi ho hrf houts in
+/-- **The single gates at `keyProgP`'s sites in hidden-output tables hold the registration's bits**
+(`keyProgHP_gate`). -/
+theorem keyProgHP_valPinned (hkeys : KeysRowP c hU pi (portRowW c))
+    (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
+      BcSiteHP (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
+    (keyReadersHP hparse hpi outs popOf).ValPinned (P := (keyProgP c pi hU n).partition outs) :=
+  Layout.ofRows_valPinned _ fun _ _ _ hu _ hM _ hg hr =>
+    keyProgHP_gate hparse hpi outs popOf ho hrf houts hkeys hsite hu hM hg hr
 
 /-- **`lay` at `keyProgP`'s places in hidden-output tables**: the readers' layout, with `bitCode` for the single gates
 and Δ's copies from `keyProgHP_copies`. -/
