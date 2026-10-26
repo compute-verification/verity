@@ -21,21 +21,26 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
 * **The device's state** (`Device.State`): its on-chip state, `chip` bits, and its store, `mem` bits.
 * **The state a block holds** (`Blocks.State`): the carried state's value it re-reads, and the device's state, its store
   among it.
-* **The wipe** at boundary `j` (`Wipe`): the memory challenger sends a fresh seed, the device fills `fill` bits of its
-  store with labels derived from it, and the challenger runs timed spot reads. Its verdict, and the state block `j`
-  starts from (`Wipe.start`), are functions of the device's state at the boundary and the wipe's coins alone.
-* **What block `j` may depend on** (`Wipe.Separates`): of the device's state at the boundary, only the state block `j`
-  starts from. Everything else the device held there is wiped. What the prover kept off the device (on NVMe, or over
-  the network) can come back after the wipe over the side channels: `Device.cap` limits that per tick, and no wipe
-  bounds it.
-* **The wipe's survivor bound** (`Wipe.SurvivorBound f ε`), in the form of PoUS's secure-erasure requirement
-  (`Pous.EraseMeets`, which `Pous.Guarantees.SecureErasureMeetsFamily` proves at `f = 1/19`, `ε = 2^-128`): foreign
-  content of at least `f · fill + 2λ` bits (`λ = 128`), plus the state the fill leaves out, is read back from what block
-  `j` starts from with probability at most `ε`.
+* **The wipe** at boundary `j` (`Wipe`), the streamed-label wipe: the memory challenger sends a fresh seed, the device
+  fills `fill` bits of its store with labels derived from it, and once the fill ends the challenger reveals spot reads
+  one at a time and reads the labels back under a deadline. The wipe's egress, every bit that leaves the device during
+  it, is counted (`egress` bits, `E`, as the network certifier counts them). The state block `j` starts from
+  (`Wipe.start`) is a function of the device's state at the boundary, the seed and the spot reads.
+* **What block `j` may depend on** (`Wipe.Separates`): of the device's state at the boundary and the seed, only the
+  state block `j` starts from; the spot reads are public. What the prover kept off the device (the egress, NVMe, the
+  network) can come back after the wipe over the side channels: `Device.cap` limits that per tick, and no wipe bounds
+  it.
+* **The wipe's survivor bound** (`Wipe.SurvivorBound foreignBits ε`), the pair an accepted verdict of the deployed wipe
+  publishes (`foreign_bits = ⌈fill/19⌉ + E` at `eps = 2^-128`): foreign content of at least `foreignBits` bits, plus the
+  store the fill leaves out, plus the on-chip state, is read back from the device's state when the fill ends, the egress
+  and the spot reads, with the challenger accepting, with probability at most `ε`.
 
 **One GPU, one store** (Daniel's rulings of 25 Oct): the device is one GPU, and its one store is the GPU's HBM
-(`Device.mem`, M). The model has no host store. During a wipe nothing enters the device, as in PoUS's secure-erasure
-game (perfect isolation).
+(`Device.mem`, M). The model has no host store.
+
+**The blocks are private.** The blocks' gate sets split the circuit's gates over time, as a partition does, and like a
+partition's they are private: a statement over a schedule reads `Blocks` as the prover's value, never as a public
+parameter. Its properties (the number of blocks, the carried state's size) may be public.
 -/
 
 namespace Verity
@@ -101,62 +106,79 @@ structure Blocks.State {C : Circuit} {B : ℕ} (s : Blocks C B) (d : Device ι) 
   /-- the device's state: its on-chip state and its store -/
   device : d.State
 
-/-- **The wipe at boundary `j`** of the schedule `s` on the device `d`, with coins `Ω` (the seed and the spot reads'
-indices, drawn once the device's state at the boundary is fixed): the device fills `fill` bits of its store with labels
-derived from the seed, and the memory challenger reads them back at random places under a deadline.
+/-- **The wipe at boundary `j`** of the schedule `s` on the device `d`, the streamed-label wipe, with the seed drawn from
+`Ω` and the spot reads from `Ch`, each uniform once the device's state at the boundary is fixed: the device fills `fill`
+bits of its store with labels derived from the seed, then the memory challenger reveals the spot reads one at a time
+and reads the labels back under a deadline.
 
 * `carry σ`: the carried state's value as the device in state `σ` holds it at the boundary. The device commits it before
   the wipe and re-reads it after. The check of what it re-reads against that commitment isn't in `accepts`.
-* `accepts σ ω`: the memory challenger's verdict. `after σ ω`: the device's state when block `j` starts. Nothing enters
-  the device during the wipe, so both are functions of its state at the boundary and the coins alone. -/
-structure Wipe (d : Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (j : Fin B) (Ω : Type) where
+* `filled σ ω`: the device's state when the fill ends, and the egress: the `egress` bits that left the device during the
+  wipe, as the network certifier counts them. Nothing enters the device during the fill but the seed.
+* `accepts σ ω c`: the memory challenger's verdict.
+* `after σ' ξ c`: the device's state when block `j` starts, from its state `σ'` when the fill ends, the egress `ξ` and
+  the spot reads `c`. During the spot reads nothing enters the device but the spot reads and what the outside sends
+  back, a function of the egress and the spot reads. -/
+structure Wipe (d : Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (j : Fin B) (Ω Ch : Type) where
   /-- the bits of the device's store the fill covers -/
   fill : ℕ
   fill_le : fill ≤ d.mem
+  /-- the bits that leave the device during the wipe (`E`) -/
+  egress : ℕ
   /-- the carried state's value, as the device holds it at the boundary -/
   carry : d.State → s.Carried j
+  /-- the device's state when the fill ends, and the egress -/
+  filled : d.State → Ω → d.State × (Fin egress → Bool)
   /-- the memory challenger's verdict -/
-  accepts : d.State → Ω → Prop
+  accepts : d.State → Ω → Ch → Prop
   /-- the device's state when block `j` starts -/
-  after : d.State → Ω → d.State
+  after : d.State → (Fin egress → Bool) → Ch → d.State
 
 namespace Wipe
 
-variable {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {j : Fin B} {Ω : Type} (w : Wipe d s j Ω)
+variable {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {j : Fin B} {Ω Ch : Type} (w : Wipe d s j Ω Ch)
 
-/-- **The state block `j` starts from**, when the device's state at the boundary is `σ` and the wipe's coins are `ω`:
-the carried value it re-reads, and the device's state the wipe leaves. -/
-def start (σ : d.State) (ω : Ω) : s.State d j := ⟨w.carry σ, w.after σ ω⟩
+/-- **The state block `j` starts from**, when the device's state at the boundary is `σ`, the seed `ω` and the spot reads
+`c`: the carried value it re-reads, and the device's state the wipe leaves. -/
+def start (σ : d.State) (ω : Ω) (c : Ch) : s.State d j :=
+  ⟨w.carry σ, w.after (w.filled σ ω).1 (w.filled σ ω).2 c⟩
 
-/-- The bits of the device's state the fill leaves out: its on-chip state, and the store the fill doesn't reach. -/
-def unfilled : ℕ := d.chip + (d.mem - w.fill)
+/-- The bits of the store the fill doesn't reach. -/
+def unfilled : ℕ := d.mem - w.fill
 
 /-- **Only the carried state crosses the boundary, besides what the wipe leaves**: what the device does from block `j`
-on, `next σ ω y`, from its state `σ` at the boundary, the wipe's coins `ω` (public) and everything that reaches it
-later `y` (its ingress over the side channels and the auditors' later coins), depends on `σ` only through the state
-block `j` starts from. This is the device's side: `y` is an argument, so what reaches the device after the wipe is not
-bounded here, including content the prover kept off the device before it and sends back over a side channel. -/
-def Separates {Y Z : Type} (next : d.State → Ω → Y → Z) : Prop :=
-  ∃ g : s.State d j → Ω → Y → Z, ∀ σ ω y, next σ ω y = g (w.start σ ω) ω y
+on, `next σ ω c y`, from its state `σ` at the boundary, the seed `ω`, the spot reads `c` and everything that reaches it
+later `y` (its ingress over the side channels and the auditors' later coins), depends on `σ` and `ω` only through the
+state block `j` starts from. The spot reads are public. The seed reaches block `j` only through the device's state, so a
+statement in which the seed is published later and reaches the device in `y` has to account for it there. This is the
+device's side: `y` is an argument, so what reaches the device after the wipe is not bounded here, including content the
+prover kept off the device (the egress among it) and sends back over a side channel. -/
+def Separates {Y Z : Type} (next : d.State → Ω → Ch → Y → Z) : Prop :=
+  ∃ g : s.State d j → Ch → Y → Z, ∀ σ ω c y, next σ ω c y = g (w.start σ ω c) c y
 
-/-- **The wipe's survivor bound** at fraction `f` and error `ε`, in the form of `Pous.EraseMeets`' erasure clause, over
-the device's whole state: for every `S_φ` of at least `f · fill + 2λ` bits (`λ = 128`) plus the unfilled state, every
-way `hold` that the device's state at the boundary holds foreign content `z` of `S_φ` bits, and every way `keep` of
-reading it back from the device's state block `j` starts from and the wipe's coins, the probability over a uniform `z`
-and the wipe's uniform coins that the memory challenger accepts and `keep` gives back `z` is at most `ε`. The
-probability is the value of a draw of `(z, ω)` with no prover move (`Game.value` on `Game.draw`).
+/-- **The wipe's survivor bound** at `foreignBits` and `ε`, the pair an accepted verdict of the deployed wipe publishes
+(`foreign_bits = ⌈fill/19⌉ + E` at `eps = 2^-128`, `E` the egress), in the streamed-label wipe's game
+(`Pous.StreamedWipe`): for every `S_φ` of at least `foreignBits` bits plus the unfilled store plus the on-chip state,
+every way `hold` that the device's state at the boundary holds foreign content `z` of `S_φ` bits, and every way `keep`
+of reading it back from the device's state when the fill ends, the egress and the spot reads, the probability over a
+uniform `z`, a uniform seed and uniform spot reads that the memory challenger accepts and `keep` gives back `z` is at
+most `ε`. The probability is the value of a draw with no prover move (`Game.value` on `Game.draw`).
 
-So `z` is foreign content as in PoUS's secure-erasure game: uniform, and independent of the wipe's coins. `keep` doesn't
-read the carried value: once bound to the committed transcript, it is fixed before `z` is drawn. Two things differ from
-`EraseMeets`, and a bridge from `Pous.Guarantees.SecureErasureMeetsFamily` to this bound has to cover both. `keep` reads
-the state the next block starts from, after the last spot read, and the wipe's coins, which the device saw: what block
-`j` may read (`Separates`). `EraseMeets`' keep reads the memory alone, at every spot read's arrival. And the fill may
-cover less than the device's state (it never covers the on-chip state), the rest added to what may survive;
-`EraseMeets` takes a fill that covers the prover's whole volatile memory. -/
-def SurvivorBound [Fintype Ω] [Nonempty Ω] (f : ℚ) (ε : ℝ≥0∞) : Prop :=
-  ∀ S_φ : ℕ, f * w.fill + 2 * 128 + w.unfilled ≤ (S_φ : ℚ) →
-    ∀ (hold : (Fin S_φ → Bool) → d.State) (keep : d.State → Ω → Fin S_φ → Bool),
-      Game.value (fun x : (Fin S_φ → Bool) × Ω => w.accepts (hold x.1) x.2 ∧ keep (w.after (hold x.1) x.2) x.2 = x.1)
+`z` is foreign content as in PoUS's games: uniform, and independent of the wipe's coins. `keep` reads all that the state
+block `j` starts from is a function of, besides the carried value, which, once bound to the committed transcript, is
+fixed before `z` is drawn. The on-chip state is counted, not assumed wiped: chip bits may survive any wipe.
+
+The bound is a parameter. `Pous.Guarantees.SecureErasureMeetsFamily` is the proved family bound underneath it, and
+`Pous.Guarantees.StreamedWipe` the streamed game's proved bound. The bridge from an accepted verdict to this bound is
+memory-accounting's, in a package that sees both, and it has to account for the labels' PRF advantage, which the
+published `eps` leaves out. -/
+def SurvivorBound [Fintype Ω] [Nonempty Ω] [Fintype Ch] [Nonempty Ch] (foreignBits : ℕ) (ε : ℝ≥0∞) : Prop :=
+  ∀ S_φ : ℕ, foreignBits + w.unfilled + d.chip ≤ S_φ →
+    ∀ (hold : (Fin S_φ → Bool) → d.State) (keep : d.State → (Fin w.egress → Bool) → Ch → Fin S_φ → Bool),
+      Game.value
+        (fun x : (Fin S_φ → Bool) × Ω × Ch =>
+          w.accepts (hold x.1) x.2.1 x.2.2 ∧
+            keep (w.filled (hold x.1) x.2.1).1 (w.filled (hold x.1) x.2.1).2 x.2.2 = x.1)
         (Game.draw _) ≤ ε
 
 end Wipe
