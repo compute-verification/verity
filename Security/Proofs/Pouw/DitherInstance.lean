@@ -28,17 +28,16 @@ open scoped NNRat
 /-- `WorkSound` gives the headline on every card table. -/
 theorem workSoundAt_of_workSound (h : Pouw.Guarantees.Dither.WorkSound) (c : Verity.Accel.Card)
     (pb : PubBest c) (hr : HostRow) : WorkSoundAt c pb hr := by
-  intro x _ _ D P L G e _ _ k verdict Pd μ Hmm Hsha Ho η δ nmax macs comps Ein Eout κS κx Δ t cin cout arrive
-    hdual hmm hsha ho hH hpm hps hη hδ hδ1 hn hm hEi hEo hkΔ g1 g2 p1 p2 sak sha svc sees clock ext
-  have hβ : 0 ≤ nmax * Hmm / macs := div_nonneg (mul_nonneg hn hmm.le) hm.le
+  intro x _ _ D P L G e _ _ k verdict Pd μ Hmm Hsha Ho η δ nmax macs comps Ein Eout κS Δ ξ κx t cin cout arrive
+    hdual hmm hsha ho hH hpm hps hη hδ hδ1 hn hm hEi hEo hkΔ hξ g1 g2 p1 p2 sak sha svc sees clock ext
+  have hβ : 0 ≤ nmax * (Hmm + Hsha + Ho) / macs := div_nonneg (mul_nonneg hn (add_nonneg (add_nonneg hmm.le hsha.le) ho)) hm.le
   have hK : 0 ≤ Ein + Eout := add_nonneg hEi hEo
   have svc' : ServiceSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) κS := fun A =>
     le_trans (prob_mono fun ox hox => ⟨hox.1.1.1, hox.2⟩) (svc A)
   have imp : ImportWithinCertifier G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) (Ein + Eout) :=
     fun A o x hv => (sees A o x).trans (hv.1.2.1.trans (le_add_of_nonneg_right hEo))
-  refine ⟨h G P k _ Pd μ (pubCost e μ pb.mm macs) (pubCost e μ pb.sha comps) Hmm Hsha Ho η δ (nmax * Hmm / macs)
-    (Ein + Eout)
-    κS κx hdual hmm hsha ho hH hpm hps hη hδ hδ1 hβ hK g1 g2 p1 p2 sak sha svc' imp ext, ?_⟩
+  refine ⟨h G P k _ Pd μ (pubCost e μ pb.mm macs) (pubCost e μ pb.sha comps) Hmm Hsha Ho η δ (nmax * (Hmm + Hsha + Ho) / macs)
+    (Ein + Eout) κS ξ κx hdual hmm hsha ho hH hpm hps hη hδ hδ1 hβ hK hξ g1 g2 p1 p2 sak sha svc' imp ext, ?_⟩
   intro A o x hv r
   have hrate : 0 ≤ G.rate r := (g2.1 r).le
   have hw : ∀ w, G.use (A.work w) (A.workIn o x w) r ≤ G.rate r * Δ := fun w => by

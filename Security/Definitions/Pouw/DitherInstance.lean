@@ -204,16 +204,16 @@ def pubMmSm120 : List Units :=
 RT-UNITS U13: `ShaSpeed` is in model units, so `c_sha = 1` in the model): the default build of `commit_gpu`
 (r20261018-062010-1c6b, measured 4.79 G/s; SHF 1,728, LOP3 912, IADD3 760, IMAD 152), A-wide + R-hi (D5's
 `pub_sha.H200`; IMAD 546, IMAD.WIDE 546, IMAD.HI 394) and A-wide + R-shf (IMAD 850, IMAD.WIDE 850), with RT-UNITS'
-counts a compression (`note:20261026T0320Z-draft-accel-rt-units`). Priced as the model prices a lane: one ALU or
-`imad` lane, `IMAD.WIDE` one `imad` lane, `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot. -/
+counts a compression (`note:20261026T0320Z-draft-accel-rt-units`). Priced as the model prices a lane (`opUse`): one
+ALU or `imad` lane, `IMAD.WIDE` two `imad` lanes (U13), `IMAD.HI` at its floor `madHi = 2`, `1/32` of an issue slot. -/
 def pubShaH200 : List Units :=
-  [shaUnits 3400 152 (3608 / 32), shaUnits 2460 1880 (4002 / 32), shaUnits 2550 1700 (4306 / 32)]
+  [shaUnits 3400 152 (3608 / 32), shaUnits 2460 2426 (4002 / 32), shaUnits 2550 2550 (4306 / 32)]
 
 /-- **The pinned public SHA-512 schedules on the RTX PRO 6000, at the model's prices** (as on the H200): the default
 build (r20261016-110413-c5d1, measured 7.13 G/s; SHF 1,728, LOP3 927, IADD.64 760), R-shf (IMAD 852, IMAD.WIDE 852)
 and R-hi (D5's `pub_sha.RTXPRO6000`; IMAD 487, IMAD.WIDE 487, IMAD.HI 487). -/
 def pubShaSm120 : List Units :=
-  [shaUnits 3415 0 (3415 / 32), shaUnits 2563 1704 (4267 / 32), shaUnits 2441 1948 (3902 / 32)]
+  [shaUnits 3415 0 (3415 / 32), shaUnits 2563 2556 (4267 / 32), shaUnits 2441 2435 (3902 / 32)]
 
 /-- The H200's public best methods: D5 v1's named programs. -/
 def pubBestH200 : PubBest Verity.Accel.H200.card := ⟨pubMmH200, pubShaH200⟩
@@ -268,7 +268,9 @@ abbrev Count (G : Accel) (P : RoundProto) (k : ℕ) : Type 1 :=
 
 /-- **The verdict with the network certifier's counts** (RT-PROTO P2, RT-LEAN L32): the service's verdict, and the
 certifier's signed counts of the bits into (`cin`) and out of (`cout`) the period's devices are within the caps
-`E_in` and `E_out`, fixed before the period; a period past either is refused. -/
+`E_in` and `E_out`, fixed before the period at served traffic; a period past either is refused. The counts exclude the
+certifier's own coin stream (RT-PROTO-2 P18): the dither coin is the round's `Draw`, an input of its programs, not an
+import (`Accel.ext`). -/
 def Counted {G : Accel} {P : RoundProto} {k : ℕ} (verdict : Verdict G P k) (cin cout : Count G P k)
     (Ein Eout : ℝ) : Verdict G P k :=
   fun A o x => verdict A o x ∧ cin A o x ≤ Ein ∧ cout A o x ≤ Eout

@@ -30,20 +30,23 @@ credited rounds: with `WorkSound`'s hypotheses, and
   `C` counts them (RT-UNITS U9);
 * the network term from the network certifier's counts: the verdict refuses a period whose signed counts into or out
   of the devices pass the caps `E_in`, `E_out` (`Counted`), the certifier counts every imported bit
-  (`CertifierSeesImports`), and `K = E_in + E_out` (egress counted as well as ingress), with `β = n_max H_mm / macs`,
-  `n_max` MACs' honest cost a bit, `macs` the honest round's MACs: a bit across the certifier carries the coin of at
-  most `n_max` MACs when one coin side is streamed by the certifier (RT-PROTO P2 (i), O-IO P11 (i)), so the units
-  outsourced are at most `n_max E_out` MACs. Without a streamed side, about 1 kbit carries a whole round, and
-  `SAKMatmul` at this `β` is false;
+  (`CertifierSeesImports`), and `K = E_in + E_out` (egress counted as well as ingress), with
+  `β = n_max H / macs`, `n_max` MACs' honest cost a bit, `macs` the honest round's MACs, `H = H_mm + H_sha + H_o`
+  (RT-PROTO-2 P18: an outside machine that returns the root saves the round's hashing too). The counts exclude the
+  certifier's own coin stream, and the caps are set at served traffic (P18). A bit across the certifier carries the
+  coin of at most `n_max` MACs when the certifier streams the dither bits `b` (RT-PROTO P2, the coordinator's 06:20Z
+  decision; `n_max = N` for a static call, `d_v` for PV), so the units outsourced are at most `n_max E_out` MACs.
+  Without a streamed side, about 1 kbit carries a whole round, and `SAKMatmul` at this `β` is false;
 * the deadline from the auditor's clocks: every round's coin drawn at least `Δ` before the period's end on the
   challenger's schedule `t`, the period refused if the network certifier saw a commitment arrive later than `Δ` after
   its coin (`Timed`, RT-PROTO P5), a commitment arriving no sooner than its work (`RootAfterCoin`), and the period's
   boundary `k Δ ≤ T`,
 
 for every prover, the probability over the oracle and the verifier's coins that the verdict accepts its period and
-other work fits on the devices beside its rounds' use with `k rv + W_other > OPT_honest + ε C` is at most
-`δ + κ_S + κ_x`, at `C = k H` and
-`ε = (H_mm (1 − c_mm) + H_sha (1 − c_sha) + H_o)/H + ln(1/δ)/(η k) + n_max (H_mm/macs) (E_in + E_out)/(k H)`;
+other work fits on the devices beside its rounds' use with `k rv + W_other > OPT_honest + ε_A C` is at most
+`δ + κ_S + κ_x(A)`, at `C = k H` and
+`ε_A = (H_mm (1 − c_mm) + H_sha (1 − c_sha) + H_o)/H + ln(1/δ)/(η k) + n_max (E_in + E_out)/(k macs) + μ·ξ_A/(k H)`,
+with `ξ_A` and `κ_x(A)` the prover's extraction slack and failure (`ExtractAdv`, ABSORB-THM-2's per-prover form);
 and every period the verdict accepts did its rounds' work within the period's capacity (`TimedWorkFits`), which is
 what the deadline buys.
 
@@ -55,20 +58,21 @@ def WorkSoundAt (c : Verity.Accel.Card) (pb : PubBest c) (hr : HostRow) : Prop :
   ∀ (D : Devices c) (P : RoundProto) (L : Layout (D.machine x) P) (G : Accel)
     (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res), OnCard G c x D P L e → HostsCounted D hr →
   ∀ (k : ℕ) (verdict : Verdict G P k) (Pd : Period G) (μ : G.Res → ℝ)
-    (Hmm Hsha Ho η δ nmax macs comps Ein Eout κS κx Δ : ℝ) (t : Fin k → ℝ) (cin cout : Count G P k)
-    (arrive : Arrival G P k),
+    (Hmm Hsha Ho η δ nmax macs comps Ein Eout κS Δ : ℝ) (ξ : Prover G P k → G.Res → ℝ)
+    (κx : Prover G P k → ℝ) (t : Fin k → ℝ) (cin cout : Count G P k) (arrive : Arrival G P k),
     Pd.DualOpt μ k → 0 < Hmm → 0 < Hsha → 0 ≤ Ho → Hmm + Hsha + Ho = ∑ r, μ r * Pd.hon r →
     pubCost e μ pb.mm macs ≤ Hmm → pubCost e μ pb.sha comps ≤ Hsha → 0 < η → 0 < δ → δ ≤ 1 → 0 ≤ nmax →
-    0 < macs → 0 ≤ Ein → 0 ≤ Eout → k * Δ ≤ Pd.T →
+    0 < macs → 0 ≤ Ein → 0 ≤ Eout → k * Δ ≤ Pd.T → (∀ A r, 0 ≤ ξ A r) →
     G.G1 → G.G2 → G.P1 → G.P2 →
-    SAKMatmul G P μ (pubCost e μ pb.mm macs / Hmm) η (nmax * Hmm / macs) Hmm →
-    ShaSpeed G P μ (pubCost e μ pb.sha comps / Hsha) η (nmax * Hmm / macs) Hsha →
+    SAKMatmul G P μ (pubCost e μ pb.mm macs / Hmm) η (nmax * (Hmm + Hsha + Ho) / macs) Hmm →
+    ShaSpeed G P μ (pubCost e μ pb.sha comps / Hsha) η (nmax * (Hmm + Hsha + Ho) / macs) Hsha →
     ServiceSound G P k verdict κS → CertifierSeesImports G P k cin → RootAfterCoin G P k t arrive →
-    ExtractAdv G P k κx →
+    ExtractAdv G P k ξ κx →
     FreedSound G P k (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) Pd k
-      (epsWorkSound (pubCost e μ pb.mm macs / Hmm) (pubCost e μ pb.sha comps / Hsha) Hmm Hsha Ho η δ
-        (nmax * Hmm / macs) (Ein + Eout) k)
-      (∑ r, μ r * (k * Pd.hon r)) (δ + κS + κx) ∧
+      (fun A => epsWorkSound (pubCost e μ pb.mm macs / Hmm) (pubCost e μ pb.sha comps / Hsha) Hmm Hsha Ho η δ
+          (nmax * (Hmm + Hsha + Ho) / macs) (Ein + Eout) k +
+        (∑ r, μ r * ξ A r) / (k * (Hmm + Hsha + Ho)))
+      (∑ r, μ r * (k * Pd.hon r)) (fun A => δ + κS + κx A) ∧
     TimedWorkFits (Timed (Counted verdict cin cout Ein Eout) Pd Δ t arrive) Pd
 
 /-- **The headline on the H200 SXM at θ**: `WorkSoundAt` on `Verity.Accel.H200.card`, whose floors are `sync ≥ 1`
