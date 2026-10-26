@@ -2,8 +2,8 @@
 circuits' shared-row commit, CIR-113). A shared row is one committed row that several proof blocks' outputs tile; the writer
 proves its segment holds its output, and a reader takes its input from a segment of the row it reads.
 
-    SharedRowCheck_v1{W, ROW, OFF, G}       (y: Array<W, U16>, row: Array<ROW, U16>, j: U16) -> U16
-    SharedRowWindow_v1{FN, ROW, OFF, G}     (FN's parameters, row: Array<ROW, U16>, j: U16 of kind position) -> U16:
+    SharedRowCheck_v1{W, ROW, OFF, G}       (y: Array<W, U16>, row: Array<ROW, U16>, j: U16) -> Array<W, U16>
+    SharedRowWindow_v1{FN, ROW, OFF, G}     (FN's parameters, row: Array<ROW, U16>, j: U16 of kind position) -> Array<W, U16>:
                                             `SharedRowCheck_v1{W, ROW, OFF, G}` of FN's output, the row and j
     SharedRowSelect_v1{W, ROW, OFF, G}      (row: Array<ROW, U16>, j: U16) -> Array<W, U16>
     SharedRowRead_v1{FN, PORT, ROW, OFF, G} (FN's parameters with PORT's an Array<ROW, U16>, and at G > 1 PORT_j: U16 of kind
@@ -19,22 +19,24 @@ block's whole output (a quant chunk's codes and scale) is that block's own outpu
 A segment's words are its value's bits, 16 a word, least significant first: an f32 is two words, its low half first, as the
 tensor's bytes are in memory. FN's return, or PORT's type, is any type of bits whose count is a multiple of 16 (W words).
 
-**The writer.** `SharedRowCheck_v1` is
+**The writer.** `SharedRowCheck_v1` is the difference d, bit for bit,
 
-    c = OR over w < W of (row[OFF + W·j + w] XOR y[w]),   every bit of c set when j >= G (j unsigned),
+    d[w] = (row[OFF + W·j + w] XOR y[w]) OR (j >= G)   for w < W (j unsigned),
 
-so c is 0 exactly when j < G and segment j is y. `SharedRowWindow_v1`'s proof block has no output row: c is pinned to
-forced-zero cells, and the row is the committed one its readers read, so a proof binds FN's output to segment j of that row.
-c is one word whatever W is, so the block's outputs are 16 bits. j is one unsigned 16-bit word of kind position (`ports.In`),
-as `softmax_row.QkSoftmaxRowPad_v1`'s n is: a public input, the verifier's own derivation from the proof block's index i
-(j = i mod G), never a value the prover chooses. A j >= G names no segment of the family, even where the row goes on (another
-family's segment, at another OFF), so it is refused there too. The ports FN declares carry over.
+so d is segment j XOR y when j < G and every bit set when j >= G: d is 0 exactly when j < G and segment j is y.
+`SharedRowWindow_v1`'s proof block has no output row: d is its pinned output (C-Flock's META ``pinned_outputs``, each bit a
+copy of a forced-zero row), and the row is the committed one its readers read, so a proof binds FN's output to segment j of
+that row. Each bit of d is one linear form over the circuit's wires, as a pinned bit's row must be. j is one unsigned
+16-bit word of kind position (`ports.In`), as `softmax_row.QkSoftmaxRowPad_v1`'s n is: a public input, the verifier's own
+derivation from the proof block's index i (j = i mod G), never a value the prover chooses. A j >= G names no segment of the
+family, even where the row goes on (another family's segment, at another OFF), so it is refused there too. The ports FN
+declares carry over.
 
 The segment is `boolean.gather`'s multiplexer over j's low ceil(log2 G) bits, one whole segment at each leaf (a missing
 partner, which only a j >= G selects, meets 0); j >= G is the OR of j's other bits, or the borrow of j - G when G isn't a
-power of two. The XORs are free and the OR over W words is (W - 1)·16 ANDs, so the check is (G - 1)·16·W + (W - 1)·16 + 16
-ANDs and the range bit's: at a 1 KiB row tiled by one family (ROW = 512, G·W = 512), 8,198 for W = 1, 8,203 for W = 32 and
-8,204 for W = 64; at G = 4 of W = 128 (the norm's and the residual's rows), 8,205.
+power of two. The XORs are free and setting d's bits past G is 16·W ANDs, so the check is (G - 1)·16·W + 16·W ANDs and the
+range bit's: at a 1 KiB row tiled by one family (ROW = 512, G·W = 512), 8,198 for W = 1, 8,203 for W = 32 and 8,204 for
+W = 64; at G = 4 of W = 128 (the norm's and the residual's rows), 8,205.
 
 **The reader.** `SharedRowRead_v1` gives FN's parameter PORT segment PORT_j of the row in its place. At G = 1 it is wiring:
 PORT's W words are the row's words [OFF, OFF + W), FN reads the rest of the row not at all, and it costs no gate. That is the
@@ -91,15 +93,12 @@ def _segment(C, row, j, G: int, OFF: int, W: int):
 
 
 def window_check(C, y, row, j, G: int, OFF: int):
-    """``c``: the OR over the segment's words of ``row[OFF + W·j + w] ^ y[w]``, all ones when ``j >= G`` (``y`` W words,
-    ``row`` the row's words, ``j`` 16 bits, each a list of forms LSB first)."""
+    """``d``: W words, ``row[OFF + W·j + w] ^ y[w]``, every bit set when ``j >= G`` (``y`` W words, ``row`` the row's words,
+    ``j`` 16 bits, each a list of forms LSB first)."""
     W = len(y)
     got, past = _segment(C, row, j, G, OFF, W)
     diff = [g ^ v for g, v in zip(got, (x for word in y for x in word))]
-    c = diff[:16]
-    for w in range(1, W):
-        c = [OR(C, a, d) for a, d in zip(c, diff[16 * w:16 * (w + 1)])]
-    return [OR(C, x, past) for x in c]
+    return [[OR(C, x, past) for x in diff[16 * w:16 * (w + 1)]] for w in range(W)]
 
 
 def window_select(C, row, j, G: int, OFF: int, W: int):
@@ -129,14 +128,14 @@ def segments(ROW: Any, OFF: Any, G: Any, W: Any) -> int:
 
 def _check_signature(S: Any):
     segments(S.ROW, S.OFF, S.G, S.W)
-    return (("y", Array(S.W, U16)), ("row", Array(S.ROW, U16)), ("j", U16)), U16
+    return (("y", Array(S.W, U16)), ("row", Array(S.ROW, U16)), ("j", U16)), Array(S.W, U16)
 
 
 SharedRowCheck = specialized(
     "SharedRowCheck", 1, ("W", "ROW", "OFF", "G"),
     lambda S: lambda C, *e: window_check(C, e[:S.W], e[S.W:-1], e[-1], S.G, S.OFF), _check_signature,
-    doc="a shared row's segment check on bits: c = OR over w < W of (row[OFF + W·j + w] XOR y[w]), every bit set when j >= G "
-        "(j unsigned), so c = 0 exactly when j < G and segment j is y; a row of ROW words, G segments of W words from word OFF")
+    doc="a shared row's segment check on bits: d[w] = row[OFF + W·j + w] XOR y[w] for w < W, every bit set when j >= G "
+        "(j unsigned), so d = 0 exactly when j < G and segment j is y; a row of ROW words, G segments of W words from word OFF")
 
 
 def _select_signature(S: Any):
@@ -198,9 +197,13 @@ def _window_ports(S: Any) -> Ports:
     return Ports(params={**_declared(_producer(S.FN)[0]), "j": WINDOW})
 
 
-@composite("SharedRowWindow", 1, ["FN", "ROW", "OFF", "G"],
-           lambda S: ((*_producer(S.FN)[0].signature()[0], ("row", Array(S.ROW, U16)), ("j", U16)), U16),
-           conformance="protocol-defined", refuse=_refuse_window, ports=_window_ports)
+def _window_signature(S: Any):
+    f, W = _producer(S.FN)
+    return (*f.signature()[0], ("row", Array(S.ROW, U16)), ("j", U16)), Array(W, U16)
+
+
+@composite("SharedRowWindow", 1, ["FN", "ROW", "OFF", "G"], _window_signature, conformance="protocol-defined",
+           refuse=_refuse_window, ports=_window_ports)
 def SharedRowWindow(B, S, *ports):
     """FN's output bound to segment j of the shared row: `SharedRowCheck_v1{W, ROW, OFF, G}` of FN's W words, the row and j,
     0 exactly when j < G and the row's segment j is FN's output."""
@@ -263,7 +266,7 @@ def SharedRowRead(B, S, *ports):
 
 def shared_row_check_reference(y, row, j, G: int, OFF: int = 0) -> np.ndarray:
     """What `SharedRowCheck_v1{W, ROW, OFF, G}` computes, for a batch: ``y`` ``(N, W)``, ``row`` ``(N, ROW)`` 16-bit words and
-    ``j`` ``(N,)`` unsigned 16-bit words, each instance's c a uint16."""
+    ``j`` ``(N,)`` unsigned 16-bit words, each instance's d ``(N, W)``."""
     y, row, j = (np.asarray(a, dtype=np.uint16) for a in (y, row, j))
     N, W = y.shape
     if row.ndim != 2 or row.shape[0] != N or j.shape != (N,):
@@ -271,8 +274,7 @@ def shared_row_check_reference(y, row, j, G: int, OFF: int = 0) -> np.ndarray:
     segments(row.shape[1], OFF, G, W)
     inside = j.astype(np.int64) < G
     at = OFF + np.where(inside, j, 0).astype(np.int64)[:, None] * W + np.arange(W)[None, :]
-    c = np.bitwise_or.reduce(np.take_along_axis(row, at, axis=1) ^ y, axis=1)
-    return np.where(inside, c, 0xFFFF).astype(np.uint16)
+    return np.where(inside[:, None], np.take_along_axis(row, at, axis=1) ^ y, 0xFFFF).astype(np.uint16)
 
 
 def shared_row_read_reference(row, j, W: int, G: int = 1, OFF: int = 0) -> np.ndarray:

@@ -1,5 +1,6 @@
-"""`verity.ml.circuits.ops.boolean.shared_row`: `SharedRowCheck_v1{W, ROW, OFF, G}` is 0 exactly when j < G and segment j
-(words [OFF + W·j, OFF + W·j + W) of the row) is y, at every 16-bit j, for rows that one family tiles and rows it shares with
+"""`verity.ml.circuits.ops.boolean.shared_row`: `SharedRowCheck_v1{W, ROW, OFF, G}` is segment j XOR y bit for bit, every
+bit set past G, so 0 exactly when j < G and segment j (words [OFF + W·j, OFF + W·j + W) of the row) is y, at every 16-bit
+j, for rows that one family tiles and rows it shares with
 another family's segments before and after its own, with every one-bit change of the segment caught, every word outside it
 the block's to ignore, and a j >= G refused even where the row goes on holding y; `SharedRowSelect_v1` is segment j, 0 where
 j >= G, at every j; `SharedRowWindow_v1{FN, ROW, OFF, G}` is its producer's words then that check, for the writers table's
@@ -42,7 +43,7 @@ def _words(target, *args) -> np.ndarray:
 
 
 def _check(y, row, j, W: int, OFF: int, G: int) -> np.ndarray:
-    return _words(bind(SR.SharedRowCheck, W=W, ROW=row.shape[1], OFF=OFF, G=G), y, row, j).astype(np.uint16).reshape(len(j))
+    return _words(bind(SR.SharedRowCheck, W=W, ROW=row.shape[1], OFF=OFF, G=G), y, row, j).astype(np.uint16)
 
 
 def _set(row, y, j, W: int, OFF: int, G: int) -> np.ndarray:
@@ -61,12 +62,12 @@ SHAPES = [(1, 1, 0, 1), (1, 2, 0, 2), (1, 3, 0, 3), (1, 5, 1, 3), (1, 8, 0, 8), 
 
 @pytest.mark.parametrize("W,ROW,OFF,G", SHAPES)
 def test_the_check_is_zero_exactly_at_its_segment_at_every_j(W: int, ROW: int, OFF: int, G: int) -> None:
-    """Every 16-bit j: with segment j set to y, c = 0 for j < G and 0xFFFF for j >= G; with y in every W words from OFF that
-    fit the row, the same, so a j >= G is refused by the range bit even where the row goes on holding y; with one bit of
-    segment j flipped, c is that bit. Random rows give `shared_row_check_reference`'s c."""
+    """Every 16-bit j: with segment j set to y, d = 0 for j < G and every bit set for j >= G; with y in every W words from
+    OFF that fit the row, the same, so a j >= G is refused by the range bit even where the row goes on holding y; with one
+    bit of segment j flipped, d is that bit alone. Random rows give `shared_row_check_reference`'s d, segment j XOR y."""
     rng = np.random.default_rng(1000 * ROW + 100 * OFF + 10 * W + G)
     y = rng.integers(0, 1 << 16, (len(J), W), dtype=np.uint16)
-    want = np.where(J < G, 0, 0xFFFF).astype(np.uint16)
+    want = np.where(J[:, None] < G, 0, 0xFFFF).astype(np.uint16).repeat(W, axis=1)
     noise = rng.integers(0, 1 << 16, (len(J), ROW), dtype=np.uint16)
     assert np.array_equal(_check(y, _set(noise, y, J, W, OFF, G), J, W, OFF, G), want)
     tiled = noise.copy()
@@ -79,8 +80,14 @@ def test_the_check_is_zero_exactly_at_its_segment_at_every_j(W: int, ROW: int, O
         for b in range(16):
             row = _set(noise[:len(inside)], yy, inside, W, OFF, G)
             row[np.arange(len(inside)), OFF + inside.astype(np.int64) * W + w] ^= np.uint16(1 << b)
-            assert np.array_equal(_check(yy, row, inside, W, OFF, G), np.full(len(inside), 1 << b, np.uint16)), (w, b)
-    assert np.array_equal(_check(y, noise, J, W, OFF, G), SR.shared_row_check_reference(y, noise, J, G, OFF))
+            one = np.zeros((len(inside), W), np.uint16)
+            one[:, w] = 1 << b
+            assert np.array_equal(_check(yy, row, inside, W, OFF, G), one), (w, b)
+    got = _check(y, noise, J, W, OFF, G)
+    assert np.array_equal(got, SR.shared_row_check_reference(y, noise, J, G, OFF))
+    inside = J < G
+    seg = np.stack([noise[inside, OFF + W * J[inside].astype(np.int64) + w] for w in range(W)], 1)
+    assert np.array_equal(got[inside], seg ^ y[inside])
 
 
 def test_a_change_outside_the_segment_is_not_the_blocks() -> None:
@@ -96,7 +103,7 @@ def test_a_change_outside_the_segment_is_not_the_blocks() -> None:
         mine = (other >= OFF) & ((other - OFF) // W == j) & (other < OFF + G * W)
         flipped = row.copy()
         flipped[:, other] ^= np.uint16(0x8001)
-        assert np.array_equal(_check(y, flipped, j, W, OFF, G) == 0, ~mine), other
+        assert np.array_equal(_check(y, flipped, j, W, OFF, G).any(axis=1), mine), other
 
 
 @pytest.mark.parametrize("W,ROW,OFF,G", SHAPES)
@@ -155,8 +162,8 @@ PRODUCERS = [
 @pytest.mark.parametrize("FN,ROW,OFF,G", PRODUCERS)
 def test_the_writer_is_its_producer_then_the_check(FN, ROW: int, OFF: int, G: int) -> None:
     """On random inputs, rows with segment j set to FN's output (its bits as 16-bit words, least significant first) for about
-    half the instances and j over 0..G + 2: the writer is `shared_row_check_reference` of FN's words, 0 exactly where
-    j < G and segment j holds them."""
+    half the instances and j over 0..G + 2: the writer is `shared_row_check_reference` of FN's words, W words, 0 exactly
+    where j < G and segment j holds them."""
     rng = np.random.default_rng(ROW + G)
     N = 96
     xs = _inputs(rng, FN, N)
@@ -167,13 +174,23 @@ def test_the_writer_is_its_producer_then_the_check(FN, ROW: int, OFF: int, G: in
     other = rng.random(N) < 0.5
     row[other] = rng.integers(0, 1 << 16, row[other].shape, dtype=np.uint16)
     target = bind(SR.SharedRowWindow, FN=FN, ROW=ROW, OFF=OFF, G=G)
-    got = _words(target, *xs, row, j).astype(np.uint16).reshape(N)
+    got = _words(target, *xs, row, j).astype(np.uint16)
     assert np.array_equal(got, SR.shared_row_check_reference(y, row, j, G, OFF))
     holds = np.array([j[i] < G and np.array_equal(row[i, OFF + W * int(j[i]):OFF + W * (int(j[i]) + 1)], y[i])
                       for i in range(N)])
-    assert np.array_equal(got == 0, holds) and holds.any() and (~holds).any()
+    assert np.array_equal(~got.any(axis=1), holds) and holds.any() and (~holds).any()
     assert ands(target) == ands(FN) + ands(bind(SR.SharedRowCheck, W=W, ROW=ROW, OFF=OFF, G=G))
-    assert BL.is_boolean(target) and BL.elements(target.signature()[1]) == [16]
+    assert BL.is_boolean(target) and BL.elements(target.signature()[1]) == [16] * W
+
+
+@pytest.mark.parametrize("FN,ROW,OFF,G", PRODUCERS)
+def test_the_all_zero_instance_writes_zero(FN, ROW: int, OFF: int, G: int) -> None:
+    """C-Flock pads every proof block with the all-zero instance, whose pinned outputs must be zero: there the writer's d is 0
+    for every family that writes a shared row. The quant chunk's scale is 1.0 there, and it writes no shared row: its row is
+    its own output row."""
+    target = bind(SR.SharedRowWindow, FN=FN, ROW=ROW, OFF=OFF, G=G)
+    zeros = [np.zeros((1, len(BL.elements(t))), np.uint64) for _, t in target.signature()[0]]
+    assert _words(target, *zeros).any() == (FN.id.startswith("QuantChunkS8"))
 
 
 NORM = bind(RN.RmsNormOutSums, C=4, S=6, G=2, N=24, EPS=1e-5)
@@ -231,26 +248,26 @@ def test_a_norm_reads_and_writes_shared_rows() -> None:
     nrow = _set(rng.integers(0, 1 << 16, (N, 16), dtype=np.uint16), y, j, 4, 0, 4)
     bad = rng.random(N) < 0.3
     nrow[bad, 4 * j[bad].astype(np.int64)] ^= np.uint16(1)
-    got = _words(target, xrow, w, srow, xj, nrow, j).astype(np.uint16).reshape(N)
-    assert np.array_equal(got == 0, ~bad) and bad.any()
+    got = _words(target, xrow, w, srow, xj, nrow, j).astype(np.uint16)
+    assert got.shape == (N, 4) and np.array_equal(got.any(axis=1), bad) and bad.any()
     assert ands(target) == ands(NORM) + ands(bind(SR.SharedRowSelect, W=4, ROW=16, OFF=0, G=4)) + ands(
         bind(SR.SharedRowCheck, W=4, ROW=16, OFF=0, G=4))
 
 
 def test_the_costs_at_a_1_kib_row() -> None:
-    """(G - 1)·16·W tree ANDs, (W - 1)·16 to fold the segment's words, the range bit's and 16 to set c: at a 1 KiB row
-    (ROW = 512) 8,198 for 512 segments of 1 word, 8,203 for 16 of 32, 8,204 for 8 of 64 and 8,205 for 4 of 128, 4,109 for
-    the MLP sums' 4 of 64 from word 256; at a 256 B row, 2,056 for 128 of 1 (`MoeSelectBf16x128_v2`, a select alone, is
-    2,072) and 2,062 for 2 of 64. The select is the tree, 16·W to zero it past G and the range bit's."""
+    """(G - 1)·16·W tree ANDs, the range bit's and 16·W to set d's bits past G: at a 1 KiB row (ROW = 512) 8,198 for 512
+    segments of 1 word, 8,203 for 16 of 32, 8,204 for 8 of 64 and 8,205 for 4 of 128, 4,109 for the MLP sums' 4 of 64 from
+    word 256; at a 256 B row, 2,056 for 128 of 1 (`MoeSelectBf16x128_v2`, a select alone, is 2,072) and 2,062 for 2 of 64.
+    The select is the tree, 16·W to zero it past G and the range bit's."""
     check = lambda W, ROW, OFF, G: ands(bind(SR.SharedRowCheck, W=W, ROW=ROW, OFF=OFF, G=G))  # noqa: E731
     select = lambda W, ROW, OFF, G: ands(bind(SR.SharedRowSelect, W=W, ROW=ROW, OFF=OFF, G=G))  # noqa: E731
     assert check(1, 512, 0, 512) == 511 * 16 + 6 + 16 == 8198
-    assert check(32, 512, 0, 16) == 15 * 16 * 32 + 31 * 16 + 11 + 16 == 8203
-    assert check(64, 512, 0, 8) == 7 * 16 * 64 + 63 * 16 + 12 + 16 == 8204
-    assert check(128, 512, 0, 4) == 3 * 16 * 128 + 127 * 16 + 13 + 16 == 8205
-    assert check(64, 512, 256, 4) == 3 * 16 * 64 + 63 * 16 + 13 + 16 == 4109
+    assert check(32, 512, 0, 16) == 15 * 16 * 32 + 11 + 16 * 32 == 8203
+    assert check(64, 512, 0, 8) == 7 * 16 * 64 + 12 + 16 * 64 == 8204
+    assert check(128, 512, 0, 4) == 3 * 16 * 128 + 13 + 16 * 128 == 8205
+    assert check(64, 512, 256, 4) == 3 * 16 * 64 + 13 + 16 * 64 == 4109
     assert check(1, 128, 0, 128) == 127 * 16 + 8 + 16 == 2056
-    assert check(64, 128, 0, 2) == 64 * 16 + 63 * 16 + 14 + 16 == 2062
+    assert check(64, 128, 0, 2) == 64 * 16 + 14 + 16 * 64 == 2062
     assert ands(BM.select_bf16(128)) == 2072
     assert select(128, 512, 0, 4) == 3 * 16 * 128 + 16 * 128 + 13 == 8205
     assert select(64, 512, 0, 8) == 7 * 16 * 64 + 16 * 64 + 12 == 8204
