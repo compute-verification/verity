@@ -192,6 +192,10 @@ import Proofs.Flock.Claims.Recursion.RestReadsAt
 import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainRCapPrefix
 import Proofs.Flock.Claims.Recursion.HonestVerdictFinal
+import Proofs.Flock.Claims.Recursion.HonestIVStarR
+import Proofs.Flock.Claims.Recursion.HonestPartsR
+import Proofs.Flock.Claims.Recursion.HonestRepR
+import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.KSFlockLinR
