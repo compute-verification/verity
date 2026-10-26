@@ -69,7 +69,8 @@ has ``--disk-floor-gb`` free beyond one such window, and once a window's seal wo
 not sealed and the server stops: it refuses new requests, finishes those in flight, and exits. ``--copy-records-to`` (the
 run's ``$OUT``) gets a copy of the records (`serve_commit.MIRRORED`) after each close and each seal, and at the stop before
 the seals still pending. SIGTERM or SIGINT stops it: the open window is closed and its requests checked, the pending seals
-finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`).
+finish, and ``summary.json`` counts the requests and checks, the seals, and the admissions' order (`ReleaseOrder.summary`);
+it is written before the pending seals too, and its ``final`` is true only once every window's records are written.
 
 The engine runs eager, so each step makes hundreds of torch calls, each of which releases the GIL and takes it back. While
 the seal's thread runs Python, each take waits out the interpreter's switch interval, so the server serves with
@@ -734,8 +735,8 @@ def main(opts: Options) -> int:
         http.shutdown()
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
-        def stopped() -> dict[str, Any]:
-            got = {"served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+        def stopped(final: bool) -> dict[str, Any]:
+            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),
                    "mirror_errors": mirror.errors[:10] if mirror else None}
@@ -745,11 +746,11 @@ def main(opts: Options) -> int:
             return got
 
         if sealer is not None:                           # a cancel's SIGKILL can land before the pending seals end
-            stopped()
+            stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
         watchdog.stop()
-        summary = stopped()
+        summary = stopped(True)
         print(f"SERVE-OPENAI stopped: {json.dumps(summary)}", flush=True)
         trace.uninstall()
         if rows is not None:
