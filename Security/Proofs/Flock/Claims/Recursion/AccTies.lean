@@ -162,7 +162,7 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
         exact MoreSlots.lt_recOpen hsch hA
       by_cases hnm : nm = "acc"
       · subst hnm
-        refine ⟨l, LANES, HH, m, 0, rfl, List.mem_cons_self, hu, ?_⟩
+        refine ⟨l, LANES, HH, m, 0, hsv, List.mem_cons_self, hu, ?_⟩
         have hA : RecVStar.accReads r.shape (.recOpen l LANES HH m) =
             .ok (some ((Array.range (2 * (sch.levels[l]!).q)).map fun u =>
               some (u / (sch.levels[l]!).q * RecVStar.opensBelow sch sch.levels.size + RecVStar.opensBelow sch l +
@@ -184,14 +184,14 @@ theorem slotAt_of_holding {r : XR} (hstk : r.shape.stacked = none) {sch : Schedu
         · rw [if_pos h2] at hR
           subst h2
           obtain rfl := Option.some.inj hR
-          refine ⟨k, name, pt, 0, rfl, h1.2, List.mem_cons_self, h1.1, ?_⟩
+          refine ⟨k, name, pt, 0, hsv, h1.2, List.mem_cons_self, h1.1, ?_⟩
           rw [hN, Nat.add_zero]
         · rw [if_neg h2] at hR
           by_cases h3 : nm = "acc1"
           · rw [if_pos h3] at hR
             subst h3
             obtain rfl := Option.some.inj hR
-            refine ⟨k, name, pt, 1, rfl, h1.2, List.mem_cons_of_mem _ List.mem_cons_self, h1.1, ?_⟩
+            refine ⟨k, name, pt, 1, hsv, h1.2, List.mem_cons_of_mem _ List.mem_cons_self, h1.1, ?_⟩
             rw [hN, Nat.add_mul, Nat.one_mul]
           · rw [if_neg h3] at hR
             cases hR
@@ -232,7 +232,7 @@ theorem slotAt_out {r : XR} (hstk : r.shape.stacked = none) {sch : Schedule} (hs
       · exact h
       · exact absurd h (by decide)
     subst hd0
-    exact Or.inl ⟨l, LANES, HH, m, 1, hsv, List.mem_cons_of_mem _ List.mem_cons_self, hu, by omega⟩
+    exact Or.inl ⟨l, LANES, HH, m, 1, hsv, List.mem_cons_of_mem _ List.mem_cons_self, hu, by simp only at hP; omega⟩
   · exfalso
     simp only [List.mem_cons, Prod.mk.injEq, List.mem_nil_iff, or_false] at hd
     rcases hd with ⟨h, -⟩ | ⟨h, -⟩ <;> exact absurd h (by decide)
