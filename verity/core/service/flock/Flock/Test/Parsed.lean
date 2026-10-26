@@ -1,7 +1,8 @@
 /-
 `RecVStar.checkParsed` on R's opening part over row ports `m0` and `acc0` (V*'s rows `m0`, `acc0`, `v` of 64 words
 and `out` of 128): a circuit carrying V*'s META passes; one with two units per VU, a leaf cut, input leaves off V*'s, or
-a row port off V*'s by name, words or bits, or one too few or too many, is refused.
+a row port off V*'s by name, words or bits, a bit row (`sha512/row/v2`) even of V*'s bits, or one too few or too many,
+is refused.
 -/
 import Flock.RecVStar
 
@@ -30,6 +31,7 @@ def ok (c : Circuit) : Bool := (checkParsed opening c).isOk
 #guard !ok (circ [port "m0" 64, port "acc1" 64, port "v" 64, port "out" 128])
 #guard !ok (circ [port "m0" 64, port "acc0" 64, port "v" 128, port "out" 128])
 #guard !ok (circ [port "m0" 64, port "acc0" 64, port "v" 64, { port "out" 128 with bits := 2000, v2 := true }])
+#guard !ok (circ [port "m0" 64, port "acc0" 64, port "v" 64, { port "out" 128 with v2 := true }])
 #guard !ok (circ [port "m0" 64, port "acc0" 64, port "v" 64])
 #guard !ok (circ (rows ++ [port "w" 64]))
 #guard !ok { circ with leavesIn := #[] }
