@@ -106,7 +106,7 @@ theorem rootDecodes : RootDecodes := by
     have hidx : s * q.blocksPerSegment + v < q.blocks := by
       have h1 : s * q.blocksPerSegment + v < (s + 1) * q.blocksPerSegment := by rw [Nat.succ_mul]; omega
       exact Nat.lt_of_lt_of_le h1 (Nat.mul_le_mul_right _ hsq)
-    have hlv := hl _ (Nat.zero_le _) (by omega)
+    have hlv := hl (s * q.blocksPerSegment + v) (Nat.zero_le _) (by omega)
     rw [leaves_getElem!_at hS c.salt hs hv, leaves_getElem!_at hS' c.salt hs' hv'] at hlv
     have hrow : Merkle.rowDigest C[s][v] = Merkle.rowDigest C'[s][v] := by
       by_cases hli : leafInput c.salt s v (Merkle.rowDigest C[s][v]) = leafInput c.salt s v (Merkle.rowDigest C'[s][v])
