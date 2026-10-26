@@ -56,11 +56,15 @@ theorem topRows_wordsBytes (v : Array ℕ) (hv : v.size = 32) (hb : ∀ (j : ℕ
 /-! ## RecCap's port `top` -/
 
 theorem sameTop_self (a : Array (ByteArray × ByteArray)) : VStar.In.sameTop a a = true := by
-  simp [VStar.In.sameTop, Array.all_eq_true, Array.getElem_zip]
+  unfold VStar.In.sameTop
+  rw [Bool.and_eq_true, Array.all_eq_true]
+  refine ⟨beq_self_eq_true _, fun i hi => ?_⟩
+  rw [Array.getElem_zip]
+  simp
 
 /-- **A level both reps share**: `topsAt` makes one run of the level's nodes, each rep's first row `0`. -/
 theorem topsAt_same {src : VStar.In.Src} {l : ℕ} {a : Array (ByteArray × ByteArray)} (h2 : src.tops.size = 2)
-    (h0 : src.tops[0]![l]? = some a) (h1 : src.tops[1]![l]? = some a) (ha : a.all (·.1.size == 64) = true) :
+    (h0 : (src.tops[0]!)[l]? = some a) (h1 : (src.tops[1]!)[l]? = some a) (ha : a.all (·.1.size == 64) = true) :
     VStar.In.topsAt src l = .ok
       { rows := #[a].flatMap (fun t => t.flatMap fun (n, _) => (Firewall.topRows n).toArray),
         salts := #[a].flatMap (fun t => t.map (·.2)), first := #[0, 0] } := by
@@ -73,13 +77,15 @@ theorem capIn_ok {src : VStar.In.Src} {l N : ℕ} {T : VStar.In.Tops} (h : VStar
     VStar.In.capIn src l N = .ok #[("top", VStar.In.ownRows T.rows T.salts),
       ("out", VStar.In.ownRows (RecCoins.zeroRows N VStar.CAP_OUT_WORDS)
         ((Array.range N).map (RecCoins.zeroSalt RecCoins.CAP_ZERO_VALUE)))] := by
-  simp [VStar.In.capIn, h, hN]
+  subst hN
+  simp [VStar.In.capIn, h, bind, Except.bind, pure, Except.pure]
 
 /-- **An own-rows port's instance `n` reads row `n` under salt `n`.** -/
 theorem portRow_ownRows {nm : String} {rows : Array (Array ℕ)} {salts : Array ByteArray}
     {rest : Array (String × VStar.In.PortIn)} {n : ℕ} (hn : n < rows.size) (hs : n < salts.size) :
     portRow (#[(nm, VStar.In.ownRows rows salts)] ++ rest) nm n = some ⟨rows[n], salts[n]⟩ := by
-  simp [portRow, VStar.In.ownRows, Array.find?_append, Array.getElem?_range, hn, hs, Array.getElem?_zip,
-    Array.getElem?_eq_getElem hn, Array.getElem?_eq_getElem hs]
+  have hz : n < (rows.zip salts).size := by rw [Array.size_zip]; exact Nat.lt_min.2 ⟨hn, hs⟩
+  simp [portRow, VStar.In.ownRows, Array.find?_append, Array.getElem?_range, hn, Array.getElem?_map,
+    Array.getElem?_eq_getElem hz, Array.getElem_zip]
 
 end RecDeploy.VStarBuild

@@ -36,7 +36,8 @@ def A0 (mask : ℕ → ℕ → Bool) (c : Circuit) (pin : VStar.In.PartIn) : Cla
   VStarTrace.A mask c (fitPin c pin)
 
 theorem fitSalt_size (b : ByteArray) : (fitSalt b).size = HmRow.SALT_BYTES := by
-  simp [fitSalt, ByteArray.size]
+  show ((Array.range HmRow.SALT_BYTES).map fun i => b.data.getD i 0).size = _
+  rw [Array.size_map, Array.size_range]
 
 theorem fitSalt_of {b : ByteArray} (h : b.size = HmRow.SALT_BYTES) : fitSalt b = b := by
   cases b with
@@ -71,7 +72,7 @@ theorem portRow_fitPin (c : Circuit) (pin : VStar.In.PartIn) (nm : String) (n : 
   | none => simp [Function.comp_def, hf]
   | some e =>
     have he : e.1 = nm := by simpa using Array.find?_some hf
-    simp only [Function.comp_def, hf, Option.map_some, Option.bind_some]
+    simp only [Function.comp_def, hf, Option.map_some]
     cases hr : e.2.refs[n]? with
     | none => simp [hr]
     | some i => simp [hr, Array.getElem?_map, he]

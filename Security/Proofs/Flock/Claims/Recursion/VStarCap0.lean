@@ -160,11 +160,11 @@ theorem portRow_cap0 {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ : (I.fi
       msgs := msgsOf rs (roundRows (I.fit x) w ρ hist), tops := topsOf rs (roundRows (I.fit x) w ρ hist) } := by
     simp [srcOf, hr, hrs]
   have ht2 : (topsOf rs (roundRows (I.fit x) w ρ hist)).size = 2 := by simp [topsOf]
-  have ht0 : (topsOf rs (roundRows (I.fit x) w ρ hist))[0]![0]? = some ((List.range N).map fun n =>
+  have ht0 : ((topsOf rs (roundRows (I.fit x) w ρ hist))[0]!)[0]? = some ((List.range N).map fun n =>
       (wordsBytes (fitRow 32 ((I.rows w ρ.1 []).getD n #[])), saltBytes (ρ.2 0 n))).toArray := by
     rw [← hnode]
     rfl
-  have ht1 : (topsOf rs (roundRows (I.fit x) w ρ hist))[1]![0]? = some ((List.range N).map fun n =>
+  have ht1 : ((topsOf rs (roundRows (I.fit x) w ρ hist))[1]!)[0]? = some ((List.range N).map fun n =>
       (wordsBytes (fitRow 32 ((I.rows w ρ.1 []).getD n #[])), saltBytes (ρ.2 0 n))).toArray := by
     rw [← hnode]
     rfl

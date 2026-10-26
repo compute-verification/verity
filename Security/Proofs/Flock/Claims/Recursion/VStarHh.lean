@@ -30,7 +30,7 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
     unfold FlockSoundness.Refine.K512; rfl
   unfold FlockSoundness.Binding.commitString hmLeaf saltH
-  congr 1
+  refine congrArg₂ HAppend.hAppend ?_ ?_
   · have hl := length_xorMask (rowMsg ws) (List.ofFn y)
     have hd := FlockSoundness.Discharge.Hm.length_digBytes (FlockSoundness.Refine.H512 (rowMsg ws))
     have hk := FlockSoundness.Refine.K512.mask_len (List.ofFn y)
@@ -40,7 +40,7 @@ theorem commitString_rowMsg (ws : Array ℕ) (y : Salt) :
     rw [List.getElem_ofFn]
     simp only [FlockSoundness.Merkle.xorBytes, List.getElem_zipWith]
     show _ = digestOf ws ⟨i, hi⟩ ^^^ maskOf y ⟨i, hi⟩
-    congr 1
+    refine congrArg₂ HXor.hXor ?_ ?_
     · unfold digestOf
       rw [sha512_eq, List.getD_eq_getElem?_getD, List.getElem?_eq_getElem (by rw [hd]; exact hi)]
       rfl
@@ -98,7 +98,7 @@ theorem rowHidden_staged {st : Stage} {x : Msg} {ms : List (Msg × Claims.Out)} 
   rw [hr] at hr'
   cases hr'
   have hc0 := partCircuit_staged hS hx ht hpi hr hpc h0
-  obtain ⟨-, -, -, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
+  obtain ⟨u, -, -, -, hl, hrows⟩ := FlockSoundness.Discharge.Recursion.checkParsed_ok (htab 0 h0).2.2
   have hsv' : (Flock.RecVStar.statements r.shape).toOption.bind (·[s]?) = some sv := by
     rw [hss]
     exact hsv
