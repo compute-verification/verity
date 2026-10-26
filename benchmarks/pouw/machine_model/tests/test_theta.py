@@ -31,14 +31,19 @@ def test_d_by_route():
     assert d(SM90, "measured")[two] == 32.5
     assert d(SM120, "sheet")[two] == 4 and d(SM120, "measured")[two] == 8
     assert min(min(d(x, r).values()) for x in (SM120, SM90) for r in T.READINGS) == 4
+    tma, ffma = T.ADDING[10], T.ADDING[4]
+    assert d(SM90, "sheet")[tma] == 18.29 and d(SM90, "measured")[ffma] == 32.02
+    assert min(d(SM90, "sheet").values()) == 18.29 and d(SM120, "sheet")[tma] == 4.57
+    assert T.REDUCTIONS["nvls.red"] in d(SM90, "sheet") and T.REDUCTIONS["nvls.red"] not in d(SM120, "sheet")
 
 
 def test_strassen_saves_on_the_sheet_and_not_measured():
-    for data, rates in ((SM90, (10, 20, 20, 20 / 3)), (SM120, (1.25, 2.5, 5, 5 / 3))):
+    lanes = (10, 20, 20, 20 / 3, 10, 40, 40, 40, 40, 4096 / 3.93 * 10 / 32, 4096 / 224 * 10 / 32)
+    for data, rates in ((SM90, lanes), (SM120, (1.25, 2.5, 5, 5 / 3, 2.5, 10, 10, 10, 10, 1024 / 224 * 10 / 32))):
         t = T.theta(data)
         s = T.strassen(t, "sheet", 32)
         assert s.tensor == pytest.approx(7 / 8)
-        assert [s.rates[n] for n in T.ADDING] == pytest.approx(rates)
+        assert [s.rates[n] for n in T.ADDING if n in s.rates] == pytest.approx(rates)
         m = T.strassen(t, "measured", 32)
         assert m.tensor > 1.7 and not m.rates
     with pytest.raises(SystemExit, match="L is even"):
@@ -71,6 +76,39 @@ def test_r_h_against_r_min_and_gamma():
     assert loop.gamma == pytest.approx(280.89 / 128.01, abs=1e-3) and loop.r_h == pytest.approx(1.0547, abs=1e-4)
 
 
+def test_every_unit_has_a_verdict_and_the_bounded_ones_a_share():
+    for data, texture, absent in ((SM90, 16 / 4096, "rt"), (SM120, 16 / 1024, "nvlink.reduce")):
+        t = T.theta(data)
+        assert set(t.units) == set(T.UNITS) and t.units[absent].verdict == "absent"
+        assert T.free(t, "sheet") == pytest.approx({"tensor.s8.k32": texture})
+        assert all(u.gap for u in t.units.values() if u.verdict == "open")
+    rt = T.theta(SM120).units["rt"]
+    assert rt.verdict == "open" and T.share(T.theta(SM120), rt, "sheet") == pytest.approx(386.2 / 1024)
+
+
+def test_sha512_against_the_public_figures():
+    by = lambda data: {(s.public.card.split(" (")[0], s.public.form): s for s in T.sha(T.theta(data))}
+    rtx, h = by(SM120), by(SM90)
+    server = rtx["RTX PRO 6000 Blackwell Server Edition", "generic"]
+    assert server.per_clk == pytest.approx(7.894e9 / (188 * 2.43e9)) and server.c == 1
+    assert rtx["RTX PRO 6000 Blackwell Server Edition", "structured"].c == pytest.approx(0.878, abs=1e-3)
+    assert rtx["RTX PRO 6000 Blackwell Workstation Edition", "structured"].c == pytest.approx(0.832, abs=1e-3)
+    assert h["H100 SXM 80GB HBM3", "generic"].c == 1
+    assert h["H100 SXM 80GB HBM3", "structured"].c == pytest.approx(0.8847, abs=1e-3)
+
+
+def test_the_rules_refuse_a_missing_unit_or_an_unbounded_one(tmp_path):
+    shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
+    p = tmp_path / "d" / T.THETA
+    text = p.read_text()
+    p.write_text(text.replace('[[unit]]\nkey = "copy"', '[[ignored]]\nkey = "copy"'))
+    with pytest.raises(SystemExit, match="no \\[\\[unit\\]\\] for copy"):
+        T.theta(tmp_path / "d")
+    p.write_text(text.replace('bound = 16\nagainst = "tensor.s8.k32"\n', ""))
+    with pytest.raises(SystemExit, match="unit texture: a bounded unit gives `bound`"):
+        T.theta(tmp_path / "d")
+
+
 def test_the_rules_refuse_an_unsourced_or_wrong_rate(tmp_path):
     shutil.copytree(SM90, tmp_path / "d", ignore=shutil.ignore_patterns("census", "vectors", "designs"))
     p = tmp_path / "d" / T.THETA
@@ -91,6 +129,8 @@ def test_the_command_and_the_render(capsys):
     assert "7/8 · 4095.6 / 1995.7 = 1.7957 of naive: the level saves no tensor time" in out
     assert "r_H = 3.0000, r_min = 3" in out and "the least r_min here is li's 1" in out
     assert "280.89 / 128.01 = 2.194" in out
+    assert "texture: texture filtering: 4 texture units a SM; ≤ 16 against tensor.s8.k32: 0.39% / 0.39%" in out
+    assert "c_sha ≤ 0.885" in out
     assert main(["theta", "--check"]) == 0
     assert "holds" in capsys.readouterr().out
     assert main(["render", "theta"]) == 0

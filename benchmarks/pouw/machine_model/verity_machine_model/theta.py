@@ -21,6 +21,11 @@ value, and the sheet's where no run has one, which the result lists as filled).
   against the fold's own, r_min, and the slack r_H − r_min in tensor MAC-times a MAC over the cheapest adding route's
   exchange rate: the ε that slack would buy if ε were slack over exchange. A measured profile also gives γ, its
   SMSP-cycles a MMA over the lone INT8 MMA's at the measured rate.
+- `units`: every arithmetic or reduction unit RT-UNITS lists (`UNITS`), each with its verdict: a priced rate, an adding
+  route d reads, bounded outside the model (its most work a SM-clock over the rate it stands in for, summed by `free`),
+  open (with the run that would settle it), none, a clock or bandwidth scale, or absent.
+- `sha`: SHA-512, our measured compressions a SM-clock against each public implementation's figure (`[[public]]`) read
+  at its card's highest clock, the lowest per-clock reading it can have; ours over it, at most 1, is c_sha's reading.
 
 `figures` holds each rate's `figure`, the per-second number its document prints at `clock`, to 2 · sheet · SMs · clock.
 """
@@ -43,7 +48,28 @@ INT8 = "tensor.s8.k32"
 READINGS = ("sheet", "measured")
 FOLD_RATE = {"ALU": "alu.lop3", "IMAD": "imad", "SHFL": "shfl"}   # the lane rate each fold class issues at
 ADDING = ("IADD3, two deliveries a lane instruction", "IADD3, one delivery a lane instruction",
-          "IMAD a·1 + c, one delivery a lane instruction", "IADD3 on the ALU pipe and IMAD beside it")
+          "IMAD a·1 + c, one delivery a lane instruction", "IADD3 on the ALU pipe and IMAD beside it",
+          "FFMA a·1 + c, one delivery a lane instruction (exact below 2^24)",
+          "ATOMS.ADD into shared memory, one delivery a lane",
+          "RED.ADD into global memory at the L2, one delivery a lane",
+          "red.shared::cluster.add into a cluster peer's shared memory (DSMEM), one delivery a lane",
+          "cp.reduce.async.bulk .add, shared memory into global at the L2 (TMA: one instruction a bulk)",
+          "multimem.red .add through the NVSwitch (NVLink SHARP)",
+          "IADD3 and IMAD under issue, with TMA bulk reductions beside them")
+REDUCTIONS = {"smem.atom": ADDING[5], "l2.red": ADDING[6], "dsmem.red": ADDING[7], "tma.red": ADDING[8],
+              "nvls.red": ADDING[9]}
+# Every arithmetic or reduction unit RT-UNITS (CMP-139) lists; each θ has a `[[unit]]` for each, with its verdict.
+UNITS = ("tensor", "dp4a", "imad", "alu", "fp32", "fp64", "sfu", "uniform", "texture", "smem.atomics", "l2.atomics",
+         "tma.reduce", "dsmem", "nvlink.reduce", "copy", "video", "rt", "clocks", "compression")
+VERDICTS = {
+    "priced": "a θ rate the model prices",
+    "route": "an adding route d reads (an upper bound where no run has timed it)",
+    "bounded": "outside the model, bounded on documents",
+    "open": "outside the model, with a loose bound or none, and the run that would settle it",
+    "none": "does no exact arithmetic on a word or a SHA-512 compression",
+    "scale": "computes nothing: scales per-second figures, not θ's per-SM-clock ratios",
+    "absent": "not on this card",
+}
 
 
 @dataclass(frozen=True)
@@ -100,6 +126,29 @@ class Joint:
 
 
 @dataclass(frozen=True)
+class Unit:
+    key: str
+    what: str
+    verdict: str
+    rates: tuple[str, ...]  # the θ rates it is or rests on
+    bound: float | None     # most work it adds a SM-clock, in `against`'s unit
+    against: str | None     # the θ rate that work would stand in for
+    why: str
+    gap: str
+
+
+@dataclass(frozen=True)
+class Public:
+    impl: str               # the public implementation and its input form
+    form: str               # generic (a block the last compression's digest varies) or structured
+    gps: float              # 10⁹ SHA-512 compressions a second
+    card: str
+    sms: int                # the card's SMs, which needn't be θ's
+    mhz: float              # the card's highest clock: the per-SM-clock reading at it is the lowest
+    source: str
+
+
+@dataclass(frozen=True)
 class Theta:
     gpu: str
     sms: int
@@ -113,6 +162,8 @@ class Theta:
     fp8: tuple[dict, ...]
     writers: tuple[Writer, ...]
     joints: dict[str, Joint]
+    units: dict[str, Unit] = field(default_factory=dict)
+    public: tuple[Public, ...] = ()
 
     def at(self, key: str, reading: str) -> tuple[float | None, bool]:
         """A rate on the sheet or measured, and whether a measured reading took the sheet's value for want of a run."""
@@ -143,9 +194,18 @@ def theta(data: Path) -> Theta:
     writers = tuple(Writer(v["name"], v["rate"], v["per"], v["words"], v["pipe"], dict(v.get("joint", {})))
                     for v in t.get("writer", ()))
     joints = {v["name"]: Joint(v["name"], v["other"], v["source"]) for v in t.get("joint", ())}
+    units: dict[str, Unit] = {}
+    for v in t.get("unit", ()):
+        if v["key"] in units:
+            raise SystemExit(f"{p}: two units {v['key']}")
+        units[v["key"]] = Unit(v["key"], v["what"], v["verdict"], tuple(v.get("rates", ())), v.get("bound"),
+                               v.get("against"), v["why"], v.get("gap", ""))
+    public = tuple(Public(v["impl"], v["form"], v["gps"], v["card"], v["sms"], v["mhz"], v["source"])
+                   for v in t.get("public", ()))
     th = Theta(gpu=t["gpu"], sms=t["sms"], sms_source=t["sms_source"], honest=tuple(t["honest"]),
                documents=tuple(t["documents"]), clocks=clocks, rates=rates, capacities=caps,
-               paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints)
+               paths=tuple(t.get("path", ())), fp8=tuple(t.get("fp8", ())), writers=writers, joints=joints,
+               units=units, public=public)
     if problems := check(th):
         raise SystemExit(f"{p}:\n  " + "\n  ".join(problems))
     return th
@@ -179,6 +239,26 @@ def check(t: Theta) -> list[str]:
             out.append(f"no rate {k}; every derivation reads it")
     if not t.honest:
         out.append("`honest` lists no profile; r_H and Strassen's L read one")
+    if missing := [k for k in UNITS if k not in t.units]:
+        out.append(f"no [[unit]] for {', '.join(missing)}: every unit RT-UNITS lists has one, `absent` if the card "
+                   f"lacks it")
+    for u in t.units.values():
+        if u.verdict not in VERDICTS:
+            out.append(f"unit {u.key}: verdict {u.verdict!r} is none of {', '.join(VERDICTS)}")
+        if bad := [r for r in u.rates if r not in t.rates]:
+            out.append(f"unit {u.key}: no rate {', '.join(bad)}")
+        if u.verdict in ("priced", "route") and not u.rates:
+            out.append(f"unit {u.key}: a {u.verdict} unit names its rates")
+        if u.verdict == "route" and not set(u.rates) & set(REDUCTIONS):
+            out.append(f"unit {u.key}: a route unit names one of {', '.join(REDUCTIONS)}")
+        if u.verdict == "bounded" and (u.bound is None or u.against not in t.rates):
+            out.append(f"unit {u.key}: a bounded unit gives `bound` and the rate it is `against`")
+        if u.verdict == "open" and not u.gap:
+            out.append(f"unit {u.key}: an open unit names the run that would settle it in `gap`")
+        if u.against is not None and u.against not in t.rates:
+            out.append(f"unit {u.key}: no rate {u.against}")
+    if t.public and "sha512" not in t.rates:
+        out.append("[[public]] SHA-512 figures need the `sha512` rate they're read against")
     return out
 
 
@@ -243,6 +323,11 @@ def routes(t: Theta, reading: str) -> list[Route]:
     route(ADDING[3], ("alu.lop3", "imad", "issue"), both,
           lambda a, i, n: f"32 · (2 · {min(a / LANES, n):.4g} + {min(i / LANES, n - min(a / LANES, n)):.4g}) warp "
                           f"instructions of ALU at alu.lop3 {a:g} and IMAD at {i:g}, issue {n:g}")
+    route(ADDING[4], ("ffma",), lambda f: f, lambda f: f"ffma {f:g}")
+    for key, name in REDUCTIONS.items():
+        route(name, (key,), lambda r: r, lambda r, key=key: f"{key} {r:g}")
+    route(ADDING[10], ("alu.lop3", "imad", "issue", "tma.red"), lambda a, i, n, m: both(a, i, n) + m,
+          lambda a, i, n, m: f"{both(a, i, n):.4g} under issue {n:g} + tma.red {m:g}, which takes no lane")
     route("shared memory, STS then LDS of a word (the move alone)", ("smem.write", "smem.read"),
           lambda w, r: 1 / (4 / w + 4 / r), lambda w, r: f"words, 1 / (4/smem.write {w:g} + 4/smem.read {r:g})")
     route("SHFL, a word a lane (the move alone)", ("shfl",), lambda s: s, lambda s: f"shfl {s:g}")
@@ -388,3 +473,38 @@ def fold(t: Theta, data: Path, name: str) -> Fold:
     lone = h.words * h.depth * SMSPS / t.at(INT8, "measured")[0]
     return Fold(h.name, h.status, h.fold_name, h.L, per_word, dict(h.fold), slack, exchange, lone, h.measured,
                 h.measured_source)
+
+
+# --- units outside the priced pipes, and SHA-512 -----------------------------------------------------------------------
+
+def share(t: Theta, u: Unit, reading: str) -> float | None:
+    """A bounded or open unit's bound over the rate it stands in for, None when either is missing."""
+    if u.bound is None or u.against is None:
+        return None
+    v, _ = t.at(u.against, reading)
+    return None if v is None else u.bound / v
+
+
+def free(t: Theta, reading: str) -> dict[str, float]:
+    """The bounded units' shares summed by the rate they stand in for: the most work outside the model adds."""
+    out: dict[str, float] = {}
+    for u in t.units.values():
+        if u.verdict == "bounded" and (s := share(t, u, reading)) is not None:
+            out[u.against] = out.get(u.against, 0.0) + s
+    return out
+
+
+@dataclass(frozen=True)
+class ShaReading:
+    public: Public
+    per_clk: float          # the public figure's compressions a SM-clock at its card's highest clock
+    c: float                # ours over it, at most 1: c_sha's reading against this figure
+
+
+def sha(t: Theta) -> list[ShaReading]:
+    ours, _ = t.at("sha512", "measured")
+    out = []
+    for p in t.public:
+        per_clk = p.gps * 1e9 / (p.sms * p.mhz * 1e6)
+        out.append(ShaReading(p, per_clk, min(1.0, ours / per_clk)))
+    return out

@@ -588,3 +588,254 @@ source = "census JI3e_1: MMA 15.030 + every other 0.317"
 name = "JI3e_2"
 other = 0.172
 source = "census JI3e_2: MMA 15.539 + every other 0.172"
+
+# ---- the units RT-UNITS lists (CMP-139) outside the rates above: their rates, then a verdict a unit ---------------------
+# A reduction unit is an adding route d reads, at an upper bound where no run has timed it. Every 32-bit add it makes
+# moves a word through a shared-memory or L1 port (CPG 'Shared Memory': 32 banks, each 32 bits a clock), so 32 a
+# SM-clock bounds each. Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
+
+[[rate]]
+key = "smem.atom"
+what = "ATOMS.ADD.32 into shared memory, an add a lane"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the shared-memory port)"
+source = "CPG 'Shared Memory': 32 banks, each 32 bits a clock; an atomic add reads and writes its word there; no document gives ATOMS's rate"
+gap = "an ATOMS.ADD loop on the RTX PRO 6000 (GPU queue)"
+
+[[rate]]
+key = "l2.red"
+what = "RED.E.ADD.32 into global memory, done at the L2, an add a lane"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the L1 port its request passes)"
+source = "CPG §18.10 (CC 12.0): L1 and shared memory are one array, whose port takes 128 B a clock; no document gives the L2's atomic rate"
+gap = "a RED.E.ADD loop over distinct lines on the RTX PRO 6000 (GPU queue)"
+
+[[rate]]
+key = "dsmem.red"
+what = "red.shared::cluster.add.u32 into a cluster peer's shared memory (DSMEM), an add a lane"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the peer's shared-memory port)"
+source = "CPG 'Thread Block Clusters' and 'Distributed Shared Memory' (CC 9.0 and later); CPG 'Shared Memory': 32 banks × 32 bits a clock at the peer"
+gap = "a red.shared::cluster loop at cluster size 2 on the RTX PRO 6000 (GPU queue)"
+
+[[rate]]
+key = "tma.red"
+what = "cp.reduce.async.bulk.global.shared::cta.add.u32 (TMA bulk reduction, done at the L2), one instruction a bulk"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the shared-memory port it reads)"
+source = "PTX ISA 9.4, cp.reduce.async.bulk (sm_90 and later); CPG 'Shared Memory': each add reads its 4 B through the 128 B a clock port"
+gap = "a cp.reduce.async.bulk loop (16 KiB bulks into distinct lines) on the RTX PRO 6000 (GPU queue)"
+
+[[rate]]
+key = "tex"
+what = "texture filtering (TEX, bilinear), filtered texels"
+unit = "texels/SM/clk"
+sheet = 4
+grade = "whitepaper"
+source = "RTX Blackwell WP v1.1, Table 1 (RTX PRO 6000 Blackwell Workstation Edition): 'Texture Units 752', 'Texel Fill-rate (Gigatexels/sec) 1968.0' at 2,617 MHz: 752 · 2,617 MHz = 1,968.0 G, one bilinear texel a unit a clock, 4 units a SM (p. 7: '4 Texture Units' a SM); point sampling runs twice that"
+gap = "a TEX.LL loop on the RTX PRO 6000 (GPU queue)"
+
+[[rate]]
+key = "rt"
+what = "RT cores (4th generation, one a SM): BVH traversal, ray-box and ray-triangle tests, in NVIDIA's RT TFLOPS"
+unit = "FMA-equivalents/SM/clk"
+sheet = 386.2
+clock = "boost"
+figure = 380
+grade = "whitepaper (RT TFLOPS: the shader FLOPs NVIDIA counts the RT core as replacing)"
+source = "RTX Blackwell WP v1.1, Table 1: 'RT Cores 188 (4th Gen)', 'RT TFLOPS 380'; p. 13: 'double the throughput for Ray-Triangle Intersection' of the 3rd generation; no document gives a test rate"
+gap = "an OptiX probe of ray-triangle tests a SM-clock with exact barycentrics (power-of-two determinants) on the RTX PRO 6000 (GPU queue)"
+
+[[rate]]
+key = "mufu"
+what = "MUFU (rcp, rsq, lg2, ex2, sin, cos)"
+unit = "lanes/SM/clk"
+sheet = 16
+grade = "Programming Guide"
+source = "CPG Table 7, CC 12.0: '32-bit floating-point reciprocal, reciprocal square root, base-2 logarithm (__log2f), base 2 exponential (exp2f), sine (__sinf), cosine (__cosf)' 16"
+gap = "not timed (census row MUFU_EX2); no derivation reads it"
+
+[[rate]]
+key = "sha512"
+what = "SHA-512 compressions (one 128-B block each)"
+unit = "compressions/SM/clk"
+sheet = 0.018741
+grade = "Programming Guide (alu.lop3's 64 lanes over the kernel's 3,415 ALU instructions a compression)"
+source = "CPG Table 7, CC 12.0: 64 lanes a SM-clock for 32-bit shifts and logic; commit_gpu's SASS: 1,728 SHF, 927 LOP3, 760 IADD.64 a block, at 16 lanes a cycle a sub-partition (benchmarks/pouw/commit_gpu/README.md 'What decides the speed')"
+measured = 0.018129
+runs = "7.13 G compressions/s (r20261016-110413-c5d1, commit_gpu README) over 188 SMs at the node's 2,092 MHz lock; r20261016-110829-a28e 6.94 G/s"
+
+[[unit]]
+key = "tensor"
+what = "tensor cores, every format and shape the card has (INT8, FP8, MXFP8, NVFP4/MXFP4, FP16/BF16, TF32, FP64; 2:4 sparse INT8)"
+verdict = "priced"
+rates = ["tensor.s8.k32", "tensor.s8.k16", "tensor.s8.sp", "tensor.e4m3.k32", "tensor.e5m2.k32", "tensor.e4m3.k32.sf", "tensor.e2m1.k64", "tensor.f16.k16", "tensor.bf16.k16", "tensor.tf32.k8", "tensor.f64", "tensor.b1.k256", "tensor.s4"]
+why = "every form is a rate; b1 and INT4 have no native SASS on sm_120 (ptxas emulates them: tensor.b1.k256, tensor.s4)"
+
+[[unit]]
+key = "dp4a"
+what = "IDP.4A (dp4a), 4 INT8 MACs a lane"
+verdict = "priced"
+rates = ["dp4a"]
+why = "a rate; its MACs are exact INT8 products, priced like the tensor core's"
+
+[[unit]]
+key = "imad"
+what = "IMAD, IMAD.WIDE, IMAD.HI"
+verdict = "priced"
+rates = ["imad", "imad.wide", "imad.hi"]
+why = "each form a rate; IMAD.HI.U32 is the sheet's 32 with a gap (no sm_120 run)"
+
+[[unit]]
+key = "alu"
+what = "the integer ALU pipe: IADD3, LOP3, SHF, LEA.HI, PRMT, POPC, 64-bit adds"
+verdict = "priced"
+rates = ["alu.iadd3", "alu.lop3", "alu.shf", "alu.lea_hi", "alu.prmt", "alu.popc", "iadd64"]
+why = "each a rate; IADD3 is d's cheapest single route, and SHA-512's compressions run here (sha512)"
+
+[[unit]]
+key = "fp32"
+what = "FFMA and HFMA2"
+verdict = "priced"
+rates = ["ffma", "hfma2"]
+why = "rates; FFMA a·1 + c is exact below 2^24 (a word at L = 32 is below 2^20), so it is also an adding route of d"
+
+[[unit]]
+key = "fp64"
+what = "DFMA"
+verdict = "priced"
+rates = ["dfma"]
+why = "a rate; exact below 2^53"
+
+[[unit]]
+key = "sfu"
+what = "MUFU (rcp, rsq, lg2, ex2, sin, cos)"
+verdict = "none"
+rates = ["mufu"]
+why = "approximations (CPG 'Mathematical Functions': ulp errors), no product or integer op, so no exact part of a word or a compression"
+
+[[unit]]
+key = "uniform"
+what = "the uniform datapath"
+verdict = "priced"
+rates = ["uniform"]
+why = "a rate (measured 3.06 warp instructions a SM-clock); it computes one value a warp, so it carries no lane's word"
+
+[[unit]]
+key = "texture"
+what = "texture filtering: 4 texture units a SM"
+verdict = "bounded"
+rates = ["tex"]
+bound = 16
+against = "tensor.s8.k32"
+why = "a filtered fetch weighs at most 4 texels (2D bilinear; 3D trilinear's 8 run at half rate) by 9-bit fixed-point weights with 8 fractional bits (CPG 'Texture Fetching', linear filtering), so ≤ 4 · 4 = 16 products a SM-clock; point sampling is a load (l1.read); filtering is float, so no 64-bit integer op of a compression"
+
+[[unit]]
+key = "smem.atomics"
+what = "shared-memory atomics and reductions (ATOMS)"
+verdict = "route"
+rates = ["smem.atom"]
+why = "an adding route at ≤ 32 adds a SM-clock; each add takes a lane of an issued instruction, so it doesn't beat IADD3's two a lane under issue"
+
+[[unit]]
+key = "l2.atomics"
+what = "global atomics and reductions at the L2 (RED, ATOM)"
+verdict = "route"
+rates = ["l2.red"]
+why = "an adding route at ≤ 32 adds a SM-clock, a lane an add, like ATOMS"
+
+[[unit]]
+key = "tma.reduce"
+what = "TMA bulk reductions (cp.reduce.async.bulk .add/.min/.max/.and/.or/.xor)"
+verdict = "route"
+rates = ["tma.red"]
+why = "one instruction reduces a whole bulk, so its adds take no lane: d's `IADD3 and IMAD under issue, with TMA bulk reductions beside them` adds its ≤ 32 a SM-clock to the issue-bound pair's"
+
+[[unit]]
+key = "dsmem"
+what = "distributed shared memory in clusters (red.shared::cluster, ld/st.shared::cluster)"
+verdict = "route"
+rates = ["dsmem.red"]
+why = "an adding route at ≤ 32 adds a SM-clock, a lane an add"
+
+[[unit]]
+key = "nvlink.reduce"
+what = "NVLink and NVSwitch reductions"
+verdict = "absent"
+why = "the RTX PRO 6000 Blackwell has no NVLink (WP Table 1: 'PCI Express Interface Gen 5', no NVLink row); peers reach each other over PCIe, which reduces nothing"
+
+[[unit]]
+key = "copy"
+what = "copy engines (DMA: memcpy, memset, over GDDR7 and PCIe)"
+verdict = "none"
+why = "they move bytes and add nothing; the bytes they move are priced by hbm and the link"
+
+[[unit]]
+key = "video"
+what = "4 NVENC (9th gen) and 4 NVDEC (6th gen) (WP v1.1, 'Ninth-Generation NVENC', NVDEC: Workstation and Max-Q editions)"
+verdict = "open"
+why = "fixed-function: integer inverse transforms with fixed coefficients, interpolation with fixed taps, weighted prediction with one weight a slice and a reference; NVENC's motion search sums |a − b| over pixel blocks, which on 0/1 pixels is Σa + Σb − 2Σab, a b1 dot product; outputs clip to the stream's 8-12 bits, and no document gives a pixel or search rate to bound it"
+gap = "an NVENC motion-estimation-only and NVDEC pixel-rate probe on the RTX PRO 6000 (GPU queue)"
+
+[[unit]]
+key = "rt"
+what = "RT cores, one a SM"
+verdict = "open"
+rates = ["rt"]
+bound = 386.2
+against = "tensor.s8.k32"
+why = "a ray-triangle test computes ≤ 9 FP32 products (u, v, t: three 3-term dot products of the ray's origin with vectors of its direction and the triangle), exact for small integers when the determinant is a power of two, and returns them only to a hit program on the SM, whose instructions issue are priced; the only document bound is RT TFLOPS, which is loose"
+gap = "an OptiX probe of ray-triangle tests a SM-clock with exact barycentrics (rt's gap)"
+
+[[unit]]
+key = "clocks"
+what = "clock limits: the census's 2,092 MHz lock, fmax 2,430 MHz on vy-nebius-1, the Workstation Edition's 2,617 MHz boost"
+verdict = "scale"
+why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the clock the node runs at; the driver caps it at fmax, and a higher clock speeds the honest kernel too"
+
+[[unit]]
+key = "compression"
+what = "compressible memory (CU_MEM_ALLOCATION_COMP_GENERIC) and the card's lossless framebuffer compression"
+verdict = "open"
+why = "computes nothing, but a compressible operand (a degenerate workload's zeros) may move faster than hbm and l2.read price; the matmul words aren't bandwidth-bound at served K, so this reaches P2's bandwidth prices only; whether CC 12.0 reports generic compression is unchecked"
+gap = "a bandwidth probe of a compressible allocation of zeros against a plain one on the RTX PRO 6000 (GPU queue)"
+
+[[public]]
+impl = "hashcat 7.1.2 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"
+form = "generic"
+gps = 7.894
+card = "RTX PRO 6000 Blackwell Server Edition"
+sms = 188
+mhz = 2430
+source = "gist.github.com/blurbdust/5f7c8e07f8b0015c187e69f438e2e664: 'Hash-Mode 1800 (sha512crypt $6$, SHA512 (Unix)) [Iterations: 5000] Speed.#01: 1578.8 kH/s'; 1578.8e3 · 5,000 rounds, each one block (the 64-B digest, the salt and the password, at most 111 B together at hashcat's benchmark lengths); read at the 2,430 MHz fmax"
+
+[[public]]
+impl = "hashcat 7.1.2 SHA2-512 (mode 1700, -O: one-block short messages, early exit)"
+form = "structured"
+gps = 9.432
+card = "RTX PRO 6000 Blackwell Server Edition"
+sms = 188
+mhz = 2430
+source = "gist.github.com/blurbdust/5f7c8e07f8b0015c187e69f438e2e664: 'Hash-Mode 1700 (SHA2-512) Speed.#01: 9432.0 MH/s'"
+
+[[public]]
+impl = "hashcat 7.1.2 sha512crypt (mode 1800)"
+form = "generic"
+gps = 8.3565
+card = "RTX PRO 6000 Blackwell Workstation Edition"
+sms = 188
+mhz = 2617
+source = "gist.github.com/ressl/2cee75aa14d3b770ae9f6b0e0a7ec3fc: 'Hash-Mode 1800 ... Speed.#01: 1671.3 kH/s' (device #01 of two); read at the 2,617 MHz boost"
+
+[[public]]
+impl = "hashcat 7.1.2 SHA2-512 (mode 1700, -O)"
+form = "structured"
+gps = 10.7208
+card = "RTX PRO 6000 Blackwell Workstation Edition"
+sms = 188
+mhz = 2617
+source = "gist.github.com/ressl/2cee75aa14d3b770ae9f6b0e0a7ec3fc: 'Hash-Mode 1700 (SHA2-512) Speed.#01: 10720.8 MH/s'; openbenchmarking.org pts/hashcat SHA-512 averages 10.71 G/s over 7 results"

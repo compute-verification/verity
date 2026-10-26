@@ -672,3 +672,253 @@ pipe = "fma"
 name = "JI90_0"
 other = 0.981
 source = "census JI90_0: IGMMA.64x256x32 62.741 + every other warp instruction 0.981 SMSP-cycles (the DC census runs, r20261021-070616-d06c r20261021-074303-da7f r20261021-161119-62ac)"
+
+# ---- the units RT-UNITS lists (CMP-139) outside the rates above: their rates, then a verdict a unit ---------------------
+# A reduction unit is an adding route d reads, at an upper bound where no run has timed it. Every 32-bit add it makes
+# moves a word through a shared-memory or L1 port (CPG 'Shared Memory': 32 banks, each 32 bits a clock), so 32 a
+# SM-clock bounds each. Only TMA's bulk reduction takes no lane: one instruction moves a whole bulk.
+
+[[rate]]
+key = "tensor.s8.sp"
+what = "INT8 2:4 sparse wgmma m64nNk64 (IGMMA.SP), logical MACs"
+unit = "MACs/SM/clk"
+sheet = 8192
+clock = "tensor"
+figure = 3958
+grade = "data sheet (sparse)"
+source = "DS 'INT8 Tensor Core 3,958' with sparsity; PTX §9.7.15 (wgmma.mma_async.sp, .s8 m64nNk64)"
+gap = "census row IGMMA_SP_S8_N256 on the H200 (GPU queue)"
+
+[[rate]]
+key = "tensor.e4m3.sp"
+what = "FP8 E4M3 2:4 sparse wgmma m64nNk64 (QGMMA.SP), logical MACs"
+unit = "MACs/SM/clk"
+sheet = 8192
+clock = "tensor"
+figure = 3958
+grade = "data sheet (sparse)"
+source = "DS 'FP8 Tensor Core 3,958' with sparsity; PTX §9.7.15 (wgmma.mma_async.sp)"
+gap = "census row QGMMA_SP_E4M3_N256 on the H200 (GPU queue)"
+
+[[rate]]
+key = "smem.atom"
+what = "ATOMS.ADD.32 into shared memory, an add a lane"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the shared-memory port)"
+source = "CPG 'Shared Memory': 32 banks, each 32 bits a clock; an atomic add reads and writes its word there; no document gives ATOMS's rate"
+gap = "an ATOMS.ADD loop on the H200 (GPU queue)"
+
+[[rate]]
+key = "l2.red"
+what = "RED.E.ADD.32 into global memory, done at the L2, an add a lane"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the L1 port its request passes)"
+source = "CPG §18.8.3: L1 and shared memory are one array, whose port takes 128 B a clock; no document gives the L2's atomic rate"
+gap = "a RED.E.ADD loop over distinct lines on the H200 (GPU queue)"
+
+[[rate]]
+key = "dsmem.red"
+what = "red.shared::cluster.add.u32 into a cluster peer's shared memory (DSMEM), an add a lane"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the peer's shared-memory port)"
+source = "CPG §'Distributed Shared Memory' (CC 9.0 clusters); CPG 'Shared Memory': 32 banks × 32 bits a clock at the peer"
+gap = "a red.shared::cluster loop at cluster size 2 on the H200 (GPU queue)"
+
+[[rate]]
+key = "tma.red"
+what = "cp.reduce.async.bulk.global.shared::cta.add.u32 (TMA bulk reduction, done at the L2), one instruction a bulk"
+unit = "adds/SM/clk"
+sheet = 32
+grade = "Programming Guide (an upper bound: the shared-memory port it reads)"
+source = "PTX ISA 9.4, cp.reduce.async.bulk (sm_90 and later); CPG 'Shared Memory': each add reads its 4 B through the 128 B a clock port"
+gap = "a cp.reduce.async.bulk loop (16 KiB bulks into distinct lines) on the H200 (GPU queue)"
+
+[[rate]]
+key = "nvls.red"
+what = "multimem.ld_reduce / multimem.red .add through the NVSwitch (NVLink SHARP), adds a SM-clock of one GPU"
+unit = "adds/SM/clk"
+sheet = 3.93
+grade = "data sheet (an upper bound: the link)"
+source = "DS 'NVLink: 900GB/s' (450 GB/s each way); a received 4-B word of an 8-GPU sum carries at most 7 adds: 450e9 / 4 · 7 / (132 SMs · 1518 MHz, the lowest event clock under wgmma) = 3.93"
+gap = "a multimem.ld_reduce probe over the 8 H200s of vy-dc-h200 (GPU queue)"
+
+[[rate]]
+key = "tex"
+what = "texture filtering (TEX, bilinear), filtered texels"
+unit = "texels/SM/clk"
+sheet = 4
+grade = "whitepaper (H100 SXM5's texture units; a texel a unit a clock is GB202's)"
+source = "WP Table 3 'Texture Units 528' (H100 SXM5, 132 SMs: 4 a SM); RTX Blackwell WP v1.1 Table 1: 752 units give 1,968.0 Gtexels/s at 2,617 MHz, one bilinear texel a unit a clock"
+gap = "a TEX.LL loop on the H200 (GPU queue)"
+
+[[rate]]
+key = "mufu"
+what = "MUFU (rcp, rsq, lg2, ex2, sin, cos)"
+unit = "lanes/SM/clk"
+sheet = 16
+grade = "Programming Guide"
+source = "CPG Table 7, CC 9.0: '32-bit floating-point reciprocal, reciprocal square root, base-2 logarithm (__log2f), base 2 exponential (exp2f), sine (__sinf), cosine (__cosf)' 16"
+gap = "not timed (census row MUFU_EX2); no derivation reads it"
+
+[[rate]]
+key = "sha512"
+what = "SHA-512 compressions (one 128-B block each)"
+unit = "compressions/SM/clk"
+sheet = 0.022559
+grade = "Programming Guide (alu.lop3's 64 lanes over the kernel's 2,837 ALU instructions a compression)"
+source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654; r20261019-045723-c859, note:hash/20261019T0427Z-draft-dither-hb)"
+measured = 0.018327
+runs = "4.79 G compressions/s raw (r20261017-234343-61c6, note:circuits-rows-sha512-floor) over 132 SMs at the 1,980 MHz fmax, the lowest per-clock reading"
+
+[[unit]]
+key = "tensor"
+what = "tensor cores, every format and shape the H200 has (INT8, FP8, FP16/BF16, TF32, FP64, b1; 2:4 sparse INT8 and FP8)"
+verdict = "priced"
+rates = ["tensor.s8.k32", "tensor.s8.k32.n32", "tensor.s8.k32.sync", "tensor.s8.k16", "tensor.s8.sp", "tensor.e4m3.k32", "tensor.e5m2.k32", "tensor.e4m3.k32.sync", "tensor.e4m3.sp", "tensor.f16.k16", "tensor.f16.k16.sync", "tensor.f16.k8.sync", "tensor.bf16.k16", "tensor.tf32.k8", "tensor.tf32.k8.sync", "tensor.tf32.k4.sync", "tensor.f64", "tensor.b1.k256", "tensor.s4", "tensor.e2m1"]
+why = "every form is a rate; INT4 has no native SASS (ptxas emits a CALL) and FP4/MXFP have none on sm_90 (tensor.s4, tensor.e2m1)"
+
+[[unit]]
+key = "dp4a"
+what = "IDP.4A (dp4a), 4 INT8 MACs a lane on the IMAD pipe"
+verdict = "priced"
+rates = ["dp4a"]
+why = "a rate; its MACs are exact INT8 products, priced like the tensor core's"
+
+[[unit]]
+key = "imad"
+what = "IMAD, IMAD.WIDE, IMAD.HI"
+verdict = "priced"
+rates = ["imad", "imad.wide", "imad.hi"]
+why = "each form a rate; IMAD.HI measured at 30.6 lanes a SM-clock, twice an IMAD's cycles"
+
+[[unit]]
+key = "alu"
+what = "the integer ALU pipe: IADD3, LOP3, SHF, LEA.HI, PRMT, POPC, 64-bit adds"
+verdict = "priced"
+rates = ["alu.iadd3", "alu.lop3", "alu.shf", "alu.lea_hi", "alu.prmt", "alu.popc", "iadd64"]
+why = "each a rate; IADD3 is d's cheapest single route, and SHA-512's compressions run here (sha512)"
+
+[[unit]]
+key = "fp32"
+what = "FFMA and HFMA2 on the FMA pipe"
+verdict = "priced"
+rates = ["ffma", "hfma2"]
+why = "rates; FFMA a·1 + c is exact below 2^24 (a word at L = 32 is below 2^20), so it is also an adding route of d"
+
+[[unit]]
+key = "fp64"
+what = "DFMA"
+verdict = "priced"
+rates = ["dfma"]
+why = "a rate; exact below 2^53"
+
+[[unit]]
+key = "sfu"
+what = "MUFU (rcp, rsq, lg2, ex2, sin, cos)"
+verdict = "none"
+rates = ["mufu"]
+why = "approximations (CPG Table 'Mathematical Functions': ulp errors), no product or integer op, so no exact part of a word or a compression"
+
+[[unit]]
+key = "uniform"
+what = "the uniform datapath (integer only on sm_90)"
+verdict = "priced"
+rates = ["uniform"]
+why = "a rate (measured 2.04 warp instructions a SM-clock); it computes one value a warp, so it carries no lane's word"
+
+[[unit]]
+key = "texture"
+what = "texture filtering: 4 texture units a SM"
+verdict = "bounded"
+rates = ["tex"]
+bound = 16
+against = "tensor.s8.k32"
+why = "a filtered fetch weighs at most 4 texels (2D bilinear; 3D trilinear's 8 run at half rate) by 9-bit fixed-point weights with 8 fractional bits (CPG 'Texture Fetching', linear filtering), so ≤ 4 · 4 = 16 products a SM-clock; point sampling is a load (l1.read); filtering is float, so no 64-bit integer op of a compression"
+
+[[unit]]
+key = "smem.atomics"
+what = "shared-memory atomics and reductions (ATOMS)"
+verdict = "route"
+rates = ["smem.atom"]
+why = "an adding route at ≤ 32 adds a SM-clock; each add takes a lane of an issued instruction, so it doesn't beat IADD3's two a lane under issue"
+
+[[unit]]
+key = "l2.atomics"
+what = "global atomics and reductions at the L2 (RED, ATOM)"
+verdict = "route"
+rates = ["l2.red"]
+why = "an adding route at ≤ 32 adds a SM-clock, a lane an add, like ATOMS"
+
+[[unit]]
+key = "tma.reduce"
+what = "TMA bulk reductions (cp.reduce.async.bulk .add/.min/.max/.and/.or/.xor)"
+verdict = "route"
+rates = ["tma.red"]
+why = "one instruction reduces a whole bulk, so its adds take no lane: d's `IADD3 and IMAD under issue, with TMA bulk reductions beside them` adds its ≤ 32 a SM-clock to the issue-bound pair's"
+
+[[unit]]
+key = "dsmem"
+what = "distributed shared memory in clusters (red.shared::cluster, ld/st.shared::cluster)"
+verdict = "route"
+rates = ["dsmem.red"]
+why = "an adding route at ≤ 32 adds a SM-clock, a lane an add"
+
+[[unit]]
+key = "nvlink.reduce"
+what = "NVLink SHARP in-network reductions through the NVSwitch (multimem.ld_reduce, multimem.red)"
+verdict = "route"
+rates = ["nvls.red"]
+why = "an adding route at ≤ 3.93 adds a SM-clock, bounded by the 450 GB/s a direction NVLink carries; the network certifier sees the links"
+
+[[unit]]
+key = "copy"
+what = "copy engines (DMA: memcpy, memset, over HBM, NVLink and PCIe)"
+verdict = "none"
+why = "they move bytes and add nothing; the bytes they move are priced by hbm and the links"
+
+[[unit]]
+key = "video"
+what = "7 NVDEC and 7 NVJPG (DS 'Decoders: 7 NVDEC, 7 JPEG')"
+verdict = "open"
+why = "fixed-function: integer inverse transforms with fixed coefficients, interpolation with fixed taps, weighted prediction with one weight a slice and a reference; outputs clip to the stream's 8-12 bits, so no word of ≥ 20 bits leaves exactly, and each output pixel carries ≤ 2 products of a variable weight; no document gives a pixel rate to bound it"
+gap = "an NVDEC and NVJPG pixel-rate probe on the H200 (GPU queue)"
+
+[[unit]]
+key = "rt"
+what = "RT cores"
+verdict = "absent"
+why = "GH100 has none (the H100 WP's SM has no RT core)"
+
+[[unit]]
+key = "clocks"
+what = "clock limits: fmax 1,980 MHz, tensor 1,830 MHz, 1,518-1,797 MHz measured under a saturated wgmma"
+verdict = "scale"
+why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the sustained clock; the driver caps the clock at fmax (locks only lower it), and a higher clock speeds the honest kernel too"
+
+[[unit]]
+key = "compression"
+what = "compressible memory (CU_MEM_ALLOCATION_COMP_GENERIC): generic compression of DRAM and L2 traffic"
+verdict = "open"
+why = "computes nothing, but a compressible operand (a degenerate workload's zeros) moves faster than hbm and l2.read price (A100 WP 'Compute Data Compression': up to 4× DRAM and L2 read bandwidth); the matmul words aren't bandwidth-bound at served K, so this reaches P2's bandwidth prices only"
+gap = "a bandwidth probe of a compressible allocation of zeros against a plain one on the H200 (GPU queue)"
+
+[[public]]
+impl = "hashcat 6.2.6-850 sha512crypt (mode 1800, 5,000 rounds, each one compression of a block holding the last round's 64-B digest)"
+form = "generic"
+gps = 4.2685
+card = "H100 SXM 80GB HBM3 (GH100, 132 SMs, the H200's SMs and fmax)"
+sms = 132
+mhz = 1980
+source = "pastebin.com/T4SKGacf: 'Hash-Mode 1800 (sha512crypt $6$, SHA512 (Unix)) [Iterations: 5000] Speed.#1: 853.7 kH/s'; 853.7e3 · 5,000 rounds, each one block (the 64-B digest, the salt and the password, at most 111 B together at hashcat's benchmark lengths)"
+
+[[public]]
+impl = "hashcat 6.2.6-850 SHA2-512 (mode 1700, -O: one-block short messages, early exit)"
+form = "structured"
+gps = 5.4145
+card = "H100 SXM 80GB HBM3 (GH100, 132 SMs, the H200's SMs and fmax)"
+sms = 132
+mhz = 1980
+source = "pastebin.com/T4SKGacf: 'Hash-Mode 1700 (SHA2-512) Speed.#1: 5414.5 MH/s'"

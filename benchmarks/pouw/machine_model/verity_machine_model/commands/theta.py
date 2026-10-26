@@ -77,4 +77,37 @@ def run(args) -> int:
                     else "; Strassen frees no tensor time to trade it for: 0")
             print(f"    {reading:8} slack (r_H − r_min) at each class's lane rate: {f.slack[reading]:.4f} tensor "
                   f"MAC-times a MAC{tail}")
+    _units(t)
+    _sha(t)
     return 0 if ok else 1
+
+
+def _units(t: T.Theta) -> None:
+    print(f"\nunits RT-UNITS lists ({len(T.UNITS)}), each with its verdict; a bounded or open unit's most work a SM-clock "
+          f"over the rate it stands in for, on the sheet / measured:")
+    for verdict, meaning in T.VERDICTS.items():
+        us = [u for u in t.units.values() if u.verdict == verdict]
+        if not us:
+            continue
+        print(f"  {verdict}: {meaning}")
+        for u in us:
+            line = f"    {u.key}: {u.what}"
+            if (s := T.share(t, u, "sheet")) is not None:
+                m = T.share(t, u, "measured")
+                line += f"; ≤ {u.bound:g} against {u.against}: {100 * s:.2f}% / {100 * m:.2f}%"
+            print(line + (f"; settles it: {u.gap}" if u.gap else ""))
+    for reading in T.READINGS:
+        tot = T.free(t, reading)
+        print(f"  {reading:8} bounded units together add at most "
+              + (", ".join(f"{100 * v:.2f}% of {k}" for k, v in tot.items()) or "nothing"))
+
+
+def _sha(t: T.Theta) -> None:
+    if "sha512" not in t.rates:
+        return
+    r = t.rates["sha512"]
+    print(f"\nSHA-512, compressions a SM-clock: sheet {r.sheet:g} ({r.grade}); ours {r.measured:g} ({r.runs})")
+    for s in T.sha(t):
+        p = s.public
+        print(f"  {p.form:10} {p.impl} on the {p.card}: {p.gps:g} G/s over {p.sms} SMs at ≤ {p.mhz:g} MHz = "
+              f"≥ {s.per_clk:.6f}; ours over it {r.measured / s.per_clk:.3f}, c_sha ≤ {s.c:.3f}")

@@ -216,7 +216,7 @@ def _theta(data: Path) -> str | None:
     ss = {rd: T.strassen(t, rd, L) for rd in T.READINGS}
     body.append([f"Strassen at L = {L}: tensor time over naive", *(f"{ss[rd].tensor:.4f}" for rd in T.READINGS),
                  f"7/8 · ρ_k{L} / ρ_k{L // 2}"])
-    for name in T.ADDING:
+    for name in (n for n in T.ADDING if n in rs["sheet"]):
         body.append([f"exchange: {name}", *(f"{ss[rd].rates[name]:.3f}" if name in ss[rd].rates else "none"
                                             for rd in T.READINGS),
                      "5d/(4L) / (1 − tensor time); none: the level saves no tensor time"])
@@ -238,6 +238,22 @@ def _theta(data: Path) -> str | None:
                      f"measured SMSP-cycles a MMA over the lone INT8 MMA's {f.lone:.2f}"])
     out += ["### Derived (`machine-model theta` prints the arithmetic)",
             _table(["derived", "sheet", "measured", "how"], body)]
+    share = lambda u, rd: "" if (s := T.share(t, u, rd)) is None else f"{100 * s:.2f}%"
+    out += ["### Units RT-UNITS lists, with their verdicts",
+            _table(["unit", "what", "verdict", "rates", "bound a SM-clock", "share, sheet", "share, measured", "why",
+                    "settles it"],
+                   [[f"`{u.key}`", u.what, u.verdict, _code(u.rates),
+                     f"{u.bound:g} against `{u.against}`" if u.bound is not None else "", share(u, "sheet"),
+                     share(u, "measured"), u.why, u.gap] for u in t.units.values()])]
+    if "sha512" in t.rates:
+        ours = t.rates["sha512"].measured
+        out += ["### SHA-512 against the public figures (c_sha)",
+                _table(["form", "implementation", "card", "SMs", "G compressions/s", "at most MHz",
+                        "a SM-clock, at least", "ours over it", "c_sha at most", "source"],
+                       [[s.public.form, s.public.impl, s.public.card, f"{s.public.sms}", f"{s.public.gps:g}",
+                         f"{s.public.mhz:g}", f"{s.per_clk:.6f}", f"{ours / s.per_clk:.3f}", f"{s.c:.3f}",
+                         s.public.source]
+                        for s in T.sha(t)])]
     return "\n\n".join(out)
 
 
