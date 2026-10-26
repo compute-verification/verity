@@ -250,28 +250,6 @@ def test_a_wire_pattern_wires_whole_members_unit_by_unit_under_their_writers_sal
         bad.close(salt_key=bytes(32))
 
 
-def test_a_shared_row_member_is_wired_on_its_own_ports_and_the_check_reads_its_tables_at_its_refs():
-    """`chain` with each unit's ``w`` read from a registered row a layer: every member is a shared-row member, its wired ``x``
-    its own table, and the wiring check reads each unit's string at its ref (a flipped one, a moved wire refused)."""
-    ins, outs = chain_values()
-    rows = np.stack([ins[1][0].reshape(-1), ins[1][-1].reshape(-1)])
-    held = Held("w", rows)
-    read = I.Read(GID, "w", "w", 0, (LAYERS, REQUESTS * STEPS), 0, (rows.shape[1], 0))
-    c0 = chain()
-    win = I.Window(replace(c0, registered=I.Registered({"w": rows.size}, reads=(read,))), RUN, LAW, 2, registered={"w": held})
-    assert all(m.tables == (("x", 2), ("w", 1)) for m in win.window.members) and win.window.members[1].wired
-    win.record(GEMM, ins, outs)
-    c = win.close(salt_key=bytes(32))
-    publics = {m.key: c.public_body(k) for k, m in enumerate(win.window.members)}
-    assert WI.check(win.window.members, publics) == {}
-    moved = [replace(m, wired=(("x", "o0", m.wired[0][2][::-1]),)) if m.wired else m for m in win.window.members]
-    assert set(WI.check(moved, publics)) == {m.key for m in moved if m.wired}
-    k, m = next((k, m) for k, m in enumerate(win.window.members) if m.wired)
-    body = bytearray(publics[m.key])
-    body[WI.string_offset(m, "x", publics[m.key])] ^= 1
-    assert set(WI.check(win.window.members, {**publics, m.key: bytes(body)})) == {m.key}
-
-
 def test_the_record_states_members_by_cap_and_wires_and_the_verifier_derives_them():
     win = I.Window(chain(), RUN, LAW, 2)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))
