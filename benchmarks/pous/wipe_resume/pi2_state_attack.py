@@ -169,6 +169,28 @@ def attack(name, params, prims, salt, seg, w_seg, encode_segment):
     return rec
 
 
+def cpu_answer_ns(m: int, reps: int = 200) -> dict:
+    """An answer's work on this CPU in OpenSSL's Keccak: five SHAKE256 outputs of `m/8` bytes, one after another, and
+    their XOR. `shake_256(x).digest(m/8)` for a short `x` is one absorb and the attack's `⌈(m/8)/136⌉ − 1` squeeze
+    permutations, so it costs what resuming one stored state does; the median and the slowest of `reps`."""
+    import hashlib
+    import time
+
+    mb = m // 8
+    seeds = [bytes([PI_DOMAIN, i]) + bytes(32) for i in (1, 3, 5, 7, 9)]
+    ts = []
+    for _ in range(reps):
+        a = time.perf_counter_ns()
+        acc = 0
+        for s in seeds:
+            acc ^= int.from_bytes(hashlib.shake_256(s).digest(mb), "little")
+        acc.to_bytes(mb, "little")
+        ts.append(time.perf_counter_ns() - a)
+    ts.sort()
+    return {"block_bytes": mb, "reps": reps, "p50_ns": ts[len(ts) // 2], "max_ns": ts[-1],
+            "d5_deadline_ns": 6 * pi2_keccak_f(m) * KECCAK_F_NS - 1}
+
+
 def run(blocks: int, m: int, d: int = 12) -> list[dict]:
     salt = bytes(range(24))
     bp = band_codec.BandParams(blocks, m, d)
@@ -187,9 +209,12 @@ def main() -> None:
     ap.add_argument("--out", type=Path)
     args = ap.parse_args()
     recs = run(args.blocks, args.m)
+    cpu = cpu_answer_ns(args.m)
+    print(f"[cpu] an answer's five {cpu['block_bytes']}-byte SHAKE256 streams and their XOR: p50 {cpu['p50_ns'] / 1000:.1f} us, "
+          f"max {cpu['max_ns'] / 1000:.1f} us of {cpu['reps']}, vs the D=5 deadline {cpu['d5_deadline_ns'] / 1000:.1f} us")
     if args.out:
         args.out.mkdir(parents=True, exist_ok=True)
-        (args.out / "pi2_state_attack.json").write_text(json.dumps(recs, indent=1) + "\n")
+        (args.out / "pi2_state_attack.json").write_text(json.dumps({"blocks": recs, "cpu_answer": cpu}, indent=1) + "\n")
 
 
 if __name__ == "__main__":
