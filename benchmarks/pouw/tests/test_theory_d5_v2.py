@@ -1,6 +1,7 @@
 """theory/d5_v2.py (D5 v2, CMP-125): the period's dual prices sum to 1 over the capacities and price the period at its
-length; the tensor pipe has a price only past X0; on v3's operands the H200's job-only prices sit on the lanes (c = 1,
-the matmul unpriced: A26), and the RTX PRO 6000's public best saves exactly one digit of the peels."""
+length; the served prices are the honest period's, and its tensor pipe has a price only past X0; on v3's operands the
+H200's job-only prices sit on the lanes (c = 1, the matmul unpriced: A26), and the RTX PRO 6000's public best saves
+exactly one digit of the peels alone and takes the tile route when served."""
 import sys
 from pathlib import Path
 
@@ -23,18 +24,27 @@ def _job(name):
                                  schemes=None, lookups=False)
 
 
+def _mu(card, j, X):
+    return D.period(card, j, N, X, honest=True, lookups=False).mu
+
+
+def _job_only(card, j):
+    return D.at_prices(card, j, N, _mu(card, j, 0.0), False)
+
+
 def _served(card, j):
     x0 = D.first_tensor_bound(card, j, N, lookups=False)
-    return D.at_prices(card, j, N, D.period(card, j, N, x0 + 1e-4 * j["route"].c, lookups=False).mu, False)
+    return D.at_prices(card, j, N, _mu(card, j, x0 + 1e-4 * j["route"].c), False)
 
 
 @pytest.mark.parametrize("name", list(ROUNDS))
 def test_duals_sum_to_one_and_price_the_period_at_its_length(name):
     card, _, j = _job(name)
     for X in (0.0, 0.5 * j["route"].c, 10 * j["route"].c):
-        p = D.period(card, j, N, X, lookups=False)
-        assert sum(p.mu.get(nm, 0.0) * cap for nm, _, cap in PB._rows(card)) == pytest.approx(1.0)
-        assert PB.mu_cost(card, p.tot, p.mu) == pytest.approx(p.c)
+        for honest in (False, True):
+            p = D.period(card, j, N, X, honest=honest, lookups=False)
+            assert sum(p.mu.get(nm, 0.0) * cap for nm, _, cap in PB._rows(card)) == pytest.approx(1.0)
+            assert PB.mu_cost(card, p.tot, p.mu) == pytest.approx(p.c)
 
 
 @pytest.mark.parametrize("name", list(ROUNDS))
@@ -42,8 +52,18 @@ def test_the_tensor_pipe_has_a_price_only_past_x0(name):
     card, _, j = _job(name)
     x0 = D.first_tensor_bound(card, j, N, lookups=False)
     assert x0 > 0
-    assert D.tensor_price(card, D.period(card, j, N, 0.9 * x0, lookups=False).mu) == 0.0
-    assert D.tensor_price(card, D.period(card, j, N, x0 + 1e-3 * j["route"].c, lookups=False).mu) > 0.0
+    assert D.tensor_price(card, _mu(card, j, 0.9 * x0)) == 0.0
+    assert D.tensor_price(card, _mu(card, j, x0 + 1e-3 * j["route"].c)) > 0.0
+
+
+def test_served_prices_are_the_honest_periods():
+    """Credit can't depend on the prover's methods: the served duals are the honest period's (mu°). On the H200 the
+    hull's O-route frees the joint facet, so the hull's own period still leaves the tensor pipe free at twice the X
+    where the honest period prices it."""
+    card, _, j = _job("H200")
+    X = 2 * D.first_tensor_bound(card, j, N, lookups=False)
+    assert D.tensor_price(card, _mu(card, j, X)) > 0.0
+    assert D.tensor_price(card, D.period(card, j, N, X, lookups=False).mu) == 0.0
 
 
 @pytest.mark.parametrize("name", list(ROUNDS))
@@ -56,13 +76,13 @@ def test_the_makespan_increment_spans_the_job_and_the_tensor_only_limit(name):
     for X in (0.5 * T, 3 * T):
         assert D.increment(card, j, N, X, False)["c_inc"] <= 1 + 1e-9
     big = D.increment(card, j, N, 100 * T, False)["c_inc"]
-    assert big == pytest.approx(D.at_prices(card, j, N, D.period(card, j, N, 100 * T, lookups=False).mu, False)["c"])
+    assert big == pytest.approx(D.at_prices(card, j, N, _mu(card, j, 100 * T), False)["c"])
 
 
 @pytest.mark.parametrize("name", list(ROUNDS))
 def test_served_prices_credit_less_than_the_job_alone_at_8b_qkv(name):
     card, _, j = _job(name)
-    job, served = D.at_prices(card, j, N, j["route"].mu, False), _served(card, j)
+    job, served = _job_only(card, j), _served(card, j)
     for a in (job, served):
         assert a["pub"] <= a["opt"] * (1 + 1e-9) and a["opt"] <= a["H"] * (1 + 1e-9)
     assert served["c"] < job["c"]
@@ -71,15 +91,18 @@ def test_served_prices_credit_less_than_the_job_alone_at_8b_qkv(name):
 def test_h200_job_only_prices_sit_on_the_lanes():
     """A26: v3's H200 rounds are lane-saturated, so at the job's own prices no route pays and the matmul is free."""
     card, _, j = _job("H200")
-    a = D.at_prices(card, j, N, j["route"].mu, False)
+    a = _job_only(card, j)
     assert a["c"] == pytest.approx(1.0) and a["c_mm"] is None
-    assert "tensor" not in j["route"].binding and "alu" in j["route"].binding
+    assert D.priced(D.period(card, j, N, 0.0, honest=True, lookups=False)) == ["alu"]
     row = dict(w=1.0, job=dict(a, pub_inc=j["route"].c, H_inc=j["honest"].c), gamma=1.0, any=0.0)
     assert D.weighted([row], "job")["c_mm"] is None
 
 
-def test_rtx_public_best_saves_one_digit_of_the_peels():
-    """The zero-high-digit peel: the matmul's dense product and 2 + 2 digits against 2 + 1, at both prices."""
+def test_rtx_public_best_saves_one_digit_of_the_peels_alone_and_tiles_when_served():
+    """Job-only, the zero-high-digit peel: the matmul's dense product and 2 + 2 digits against 2 + 1. Served, the joint
+    facet's price makes the tile route (Z U^T on the ALU) the public best."""
     card, Lp, j = _job("RTX PRO 6000")
-    for a in (D.at_prices(card, j, N, j["route"].mu, False), _served(card, j)):
-        assert a["c_mm"] == pytest.approx((1 + 3 * Lp / K) / (1 + 4 * Lp / K))
+    assert _job_only(card, j)["c_mm"] == pytest.approx((1 + 3 * Lp / K) / (1 + 4 * Lp / K))
+    served = _served(card, j)
+    assert served["mix"].get("tiles", 0.0) == pytest.approx(1.0)
+    assert served["c_mm"] < (1 + 3 * Lp / K) / (1 + 4 * Lp / K)

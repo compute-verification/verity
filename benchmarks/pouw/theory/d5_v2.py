@@ -1,4 +1,4 @@
-"""D5 v2 (CMP-125): the public best on protocol v3's operands at the period's dual prices (P12), in model units.
+"""D5 v2 (CMP-125): the public best on protocol v3's operands at the honest period's dual prices (P12), in model units.
 
 Protocol v3 (PROTO-DESIGN-3, CMP-118 e0cd4061; `accel_score/nofold.py` and `v3_caps.py` at bbe690dfe5): v2's words, 16-bit
 prefix sums every L = t L' inner indices as SHA-512 hiding leaves (8 blocks, 16-ary tree, O the last 32-bit word); HYB
@@ -13,14 +13,17 @@ the peels, the hashing at nofold's compressions a MAC) against the hull of the p
 Hopcroft-Kerr and the integral catalogue, the tile route) with every way to O (the peels, the zero-high-digit peel,
 PD2-1's O-route). SHA-512 is priced in model units (U13): every schedule the model admits, so c_sha = 1 in-model.
 
-Prices mu are a period's LP duals (`price_methods`): SM-clocks a unit of each resource and facet, summing to 1 over the
-capacities. At mu, pub is the hull's cheapest program, H the honest kernel family's (no route beside the MMA, the
+Prices mu° are the honest period's LP duals (`price_methods` over the honest words' best program, OPT_honest; P12 and
+PROTO-DESIGN-4's mu°): SM-clocks a unit of each resource and facet, summing to 1 over the capacities. They are never
+the hull's own duals, so credit doesn't depend on the prover's methods (on the H200 the hull's period, its O-route
+freeing the joint facet, would price the tensor pipe only from about 5x the X). At mu°, pub is the hull's cheapest
+program, H the honest kernel family's (no route beside the MMA, the
 peels), OPT_honest the honest words' best (every route beside the MMA, the peels): c = pub / H, leak = 1 - pub /
 OPT_honest (the routes), eps_alg = 1 - OPT_honest / H (the deployed kernel's gap), each also for the matmul alone
 (pub_mm, H_mm: the job less its hashing, which costs pub_sha at mu on both sides).
 
-- job-only: the round alone, the hull's own duals. Where they sit on the lanes alone (the H200), the matmul has no
-  price on either side and c_mm is reported as unpriced.
+- job-only: the round alone (X = 0). Where its prices sit on the lanes alone (the H200), the matmul has no price on
+  either side and c_mm is reported as unpriced.
 - served period (the headline, 06:37Z): the round beside tensor-bound work the period always holds (QK^T, decode's
   uncredited share, other jobs), X MAC-times of dense s8 MMA a credited MAC. The duals are piecewise constant in X;
   the headline is the first segment where the tensor pipe has a price (X just past X0; below X0 the period's prices
@@ -150,10 +153,17 @@ def other_loads(card: pb.Card, X: float) -> dict:
     return {r: X * v for r, v in mma.items()}
 
 
-def period(card: pb.Card, j: dict, N: int, X: float, **kw) -> pb.Priced:
-    """The period's LP: the round's hull beside X MAC-times of other tensor work a credited MAC."""
-    return pb.price_methods(card, j["methods"], j["L"], N, pb.TOKENS, beside=True, items=(j["sha"],),
+def period(card: pb.Card, j: dict, N: int, X: float, honest: bool = False, **kw) -> pb.Priced:
+    """The period's LP beside X MAC-times of other tensor work a credited MAC: the round's hull, or (honest) the honest
+    words' best program (OPT_honest), whose duals mu° are the served period's prices."""
+    ms = j["methods"][:1] if honest else j["methods"]
+    return pb.price_methods(card, ms, j["L"], N, pb.TOKENS, beside=True, items=(j["sha"],),
                             lookups=bool(kw.get("lookups", True)), extra_fixed=other_loads(card, X))
+
+
+def priced(p: pb.Priced) -> list:
+    """The rows a price sits on (positive duals); `Priced.binding` lists every tight row."""
+    return [r for r, v in p.mu.items() if v > 1e-12]
 
 
 def increment(card: pb.Card, j: dict, N: int, X: float, lookups: bool = True) -> dict:
@@ -196,16 +206,19 @@ def at_prices(card: pb.Card, j: dict, N: int, mu: dict, lookups: bool = True) ->
 
 
 def first_tensor_bound(card: pb.Card, j: dict, N: int, **kw) -> float:
-    """X0: the least X at which the period's tensor pipe (with its facets) has a price."""
-    if tensor_price(card, period(card, j, N, 0.0, **kw).mu) > 1e-12:
+    """X0: the least X at which the honest period's tensor pipe (with its facets) has a price."""
+    def price(X):
+        return tensor_price(card, period(card, j, N, X, honest=True, **kw).mu)
+
+    if price(0.0) > 1e-12:
         return 0.0
     lo, hi = 0.0, j["route"].c
-    while tensor_price(card, period(card, j, N, hi, **kw).mu) <= 1e-12:
+    while price(hi) <= 1e-12:
         assert hi < 1e6 * j["route"].c, "the tensor pipe never binds"
         lo, hi = hi, 2 * hi
     for _ in range(X0_STEPS):
         mid = (lo + hi) / 2
-        lo, hi = (mid, hi) if tensor_price(card, period(card, j, N, mid, **kw).mu) <= 1e-12 else (lo, mid)
+        lo, hi = (mid, hi) if price(mid) <= 1e-12 else (lo, mid)
     return hi
 
 
@@ -217,28 +230,29 @@ def analyse(nf, card: str, K: int, N: int, t: int, Lp: int, pv: bool = False, se
     r, j = job(nf, card, K, N, t, Lp, pv, **kw)
     lk = kw.get("schemes", True)
     tc = j["route"].c
+    p0 = period(c, j, N, 0.0, honest=True, lookups=lk)
     out = dict(K=K, N=N, t=t, Lp=Lp, L=t * Lp, pv=pv, digits=r["digits"], gamma=r["gamma_max"],
                any=r["saved"] / r["T"], lane=j["lane"], minT=dict(c=j["c"], c_opt=j["c_opt"], eps_alg=j["eps_alg"]),
                hull=[(m.label, sorted(k for it in m.items for k in it[2])) for m in j["methods"]],
-               job=at_prices(c, j, N, j["route"].mu, lk), job_binding=j["route"].binding)
+               job=at_prices(c, j, N, p0.mu, lk), job_binding=priced(p0))
     out["job"].update(c_inc=j["route"].c / j["honest"].c, pub_inc=j["route"].c, H_inc=j["honest"].c)
     x0 = first_tensor_bound(c, j, N, lookups=lk)
-    p = period(c, j, N, x0 + 1e-4 * tc, lookups=lk)
+    p = period(c, j, N, x0 + 1e-4 * tc, honest=True, lookups=lk)
     out["served"] = dict(at_prices(c, j, N, p.mu, lk), **increment(c, j, N, x0 + 1e-4 * tc, lk), X0=x0 / tc,
-                         X0_macs=x0, binding=p.binding)
+                         X0_macs=x0, binding=priced(p))
     rows = []
     for f in sens:
-        p = period(c, j, N, x0 + f * tc, lookups=lk)
+        p = period(c, j, N, x0 + f * tc, honest=True, lookups=lk)
         a = at_prices(c, j, N, p.mu, lk)
         rows.append(dict(X=x0 / tc + f, c=a["c"], c_inc=increment(c, j, N, x0 + f * tc, lk)["c_inc"], c_mm=a["c_mm"],
-                         leak=a["leak"], eps_alg=a["eps_alg"], binding=p.binding, mix=a["mix"], routes=a["routes"]))
+                         leak=a["leak"], eps_alg=a["eps_alg"], binding=priced(p), mix=a["mix"], routes=a["routes"]))
     out["sens"] = rows
     out["worst"] = min(rows + [dict(out["served"], X=out["served"]["X0"])], key=lambda x: x["c"])
     out["fixed"] = {}
     for X in fixed:
-        p = period(c, j, N, X, lookups=lk)
+        p = period(c, j, N, X, honest=True, lookups=lk)
         a = at_prices(c, j, N, p.mu, lk)
-        out["fixed"][X] = dict(c=a["c"], **increment(c, j, N, X, lk), binding=p.binding, mix=a["mix"])
+        out["fixed"][X] = dict(c=a["c"], **increment(c, j, N, X, lk), binding=priced(p), mix=a["mix"])
     return out
 
 
@@ -511,8 +525,9 @@ def advice_rows(nf) -> dict:
                 row[adv] = dict(c=p.c, mix=p.mix, binding=p.binding)
             out[name, "standalone", m] = row
         r, j = job(nf, name, K, N, T_V3[name], Lp)
-        for label, mu in (("job-only", j["route"].mu),
-                          ("served", period(c, j, N, first_tensor_bound(c, j, N) + 1e-4 * j["route"].c).mu)):
+        x0 = first_tensor_bound(c, j, N)
+        for label, mu in (("job-only", period(c, j, N, 0.0, honest=True).mu),
+                          ("served", period(c, j, N, x0 + 1e-4 * j["route"].c, honest=True).mu)):
             row = {}
             for adv in (False, True):
                 p = pb.price_methods(c, j["methods"], L, N, pb.TOKENS, beside=True, items=(j["sha"],), lookups=True,
@@ -531,8 +546,8 @@ ADVICE_SIZE = (   # advice a W' entry (int8, one byte), as a multiple of the wei
 
 
 def named(res: dict, design: str = "CMP-118") -> list:
-    """WORKSOUND-INST-2's PubBest (L3): per card and world model, the hull's cheapest program at the period's dual
-    prices over the static rounds at the design's caps, MAC-weighted, as model cost a credited MAC (MAC-times at the
+    """WORKSOUND-INST-2's PubBest (L3): per card and world model, the hull's cheapest program at the honest period's
+    dual prices over the static rounds at the design's caps, MAC-weighted, as model cost a credited MAC (MAC-times at the
     card's θ s8 rate): pub_mm its matmul, pub_sha its hashing at the model's schedule (c_sha = 1 in-model), and the
     methods' MAC shares; served-period and job-only. pub_sha.<card> is the schedule's model cost a compression."""
     rows = []
@@ -603,8 +618,9 @@ def report(res: dict) -> None:
     pct = "{:.2%}".format
     for kind in ("static", "pv"):
         for design, cards in res[kind].items():
-            print(f"\n== {kind} rounds at {design}'s caps: per model (MAC-weighted), served-period | job-only; c = pub/H, "
-                  "c_mm the matmul's, leak = the routes (1 - pub/OPT_honest), eps_alg = the deployed gap; worst cell")
+            print(f"\n== {kind} rounds at {design}'s caps: per model (MAC-weighted), served-period | job-only, at the honest "
+                  "period's duals mu° (the priced rows after X0); c = pub/H, c_mm the matmul's, leak = the routes "
+                  "(1 - pub/OPT_honest), eps_alg = the deployed gap; worst cell")
             for card, models in cards.items():
                 for model, rows in models.items():
                     s, j = weighted(rows, "served"), weighted(rows, "job")
