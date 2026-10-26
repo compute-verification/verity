@@ -140,6 +140,103 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
         assert took <= A.warden_minutes(n, A.REHEARSAL_HEIGHT[0]) * 60, n
 
 
+def test_the_gates_prompts_rehearsal_sends_its_prompts_a_group_a_span_of_windows_and_its_minutes_cover_them(tmp_path):
+    """`warden-rehearse --scan --prompts --window-per-group` runs `rehearse --ids --prompts FILE --window-per-group` at
+    the scan's schedule, on the gate's witness file: request j is the (j mod n)-th prompt with exactly the request's
+    tokens, group g's n requests together half a bucket into link-window g·G, G the gate's `scan_group_windows`
+    (`group_windows` at the scan's schedule, for every token count the gate takes), and the run exactly its groups'
+    windows (`groups`), which `warden_group_minutes` covers with the origin's delay and 30 s for the key and the
+    check. Without `--window-per-group` the prompts go at the gate's arrivals."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    prompts = [[70001, 3], [5], [7]]
+    (tmp_path / A.PROMPTS).write_text(json.dumps(prompts))
+    req = {"device": "warden", "requests": 7, "scan": True, "prompts": {"count": 3, "ids": 4}, "window_per_group": True,
+           "tokens": 2, "height": 10, "temperature": 0.0, "top_p": 1.0}
+    args = ws.parser().parse_args(A.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    assert (args.ids, args.window_per_group, args.prompts, args.max_tokens, args.requests) == \
+        (True, True, tmp_path / A.PROMPTS, 2, 7)
+    params = ws._params(args)
+    assert params == sz.PARAMS
+    assert [ws.group_windows(params, t) for t in range(1, A.WARDEN_PROMPT_TOKENS[1] + 1)] == \
+        [A.scan_group_windows(t) for t in range(1, A.WARDEN_PROMPT_TOKENS[1] + 1)]
+    G, window_s = A.scan_group_windows(2), params.window * params.bucket_ms / 1000
+    traffic = ws.traffic_of(args, "torch-loop/mlp-w8a8-h128")
+    assert [x["ids"]["prompt"] for x in traffic] == [prompts[j % 3] for j in range(7)]
+    assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(2, 0.0, 1.0)}
+    assert [x["at"] for x in traffic] == [round((j // 3) * G * window_s + params.bucket_ms / 2000, 3) for j in range(7)]
+    assert [x["ids"]["user"] for x in traffic] == [f"user-{j}" for j in range(7)]
+    assert ws.groups(7, 3, params, 2) == [{"group": g, "requests": list(range(3 * g, min(7, 3 * g + 3))),
+                                           "windows": [g * G, (g + 1) * G]} for g in range(3)]
+    for groups in range(1, A.WARDEN_PROMPT_REQUESTS[1] + 1):
+        for tokens in (1, 2, A.WARDEN_PROMPT_TOKENS[1]):
+            took = groups * ws.group_windows(params, tokens) * window_s + args.start_in + 30
+            assert took <= A.warden_group_minutes(groups, tokens, A.REHEARSAL_HEIGHT[0]) * 60, (groups, tokens)
+
+    loose = ws.parser().parse_args(A.warden_command(req | {"window_per_group": False}, tmp_path, "u:1")[2:])
+    assert not loose.window_per_group and loose.prompts == tmp_path / A.PROMPTS
+    spread = ws.traffic_of(loose, "m")
+    assert [x["ids"]["prompt"] for x in spread] == [x["ids"]["prompt"] for x in traffic]
+    assert spread[0]["at"] == 0 and all(x["at"] < y["at"] for x, y in zip(spread, spread[1:]))
+    assert "--prompts" not in A.warden_command({"requests": 7, "scan": True}, tmp_path, "u")
+
+
+def test_rehearse_reads_prompts_the_ingress_bound_holds_and_takes_them_and_groups_only_with_what_they_need(tmp_path):
+    """`read_prompts` takes a JSON array of non-empty arrays of ids below 2^17 whose id requests the schedule's ingress
+    bound holds, the gate's longest (`WARDEN_PROMPT_IDS` ids of 17 bits, 62-byte names) among them at the scan's;
+    `rehearse` takes `--prompts` only with `--ids` and `--window-per-group` only with `--prompts`, and a group is at most
+    `lanes` prompts."""
+    sys.path.insert(0, str(HERE))
+    sys.path.insert(0, str(HERE.parent / "live_challenger"))
+    import auditor as A
+    import scan_zk as sz
+    longest = [[(1 << A.WARDEN_PROMPT_ID_BITS) - 1] * A.WARDEN_PROMPT_IDS[1]]
+    assert A.WARDEN_PROMPT_ID_BITS == ws.PROMPT_ID_BITS
+    assert ws.read_prompts(json.dumps(longest).encode(), sz.PARAMS) == longest
+    with pytest.raises(SystemExit, match=f"takes 48 ingress cells, past the schedule's {sz.PARAMS.ingress_cells}"):
+        ws.read_prompts(json.dumps([[0] * (A.WARDEN_PROMPT_IDS[1] + 50)]).encode(), sz.PARAMS)
+    for bad in (b"x", b"[]", b"[[]]", b"[1]", b"[[1.0]]", b"[[131072]]", b"[[-1]]", b"[[true]]", b'[["1"]]', b"{}"):
+        with pytest.raises(SystemExit, match="--prompts: "):
+            ws.read_prompts(bad, sz.PARAMS)
+    with pytest.raises(SystemExit, match="a group of 5 prompts, past the schedule's 4 lanes"):
+        ws.prompt_traffic([[1]] * 5, 5, model="m", params=sz.PARAMS, max_tokens=2, window_per_group=True)
+    (tmp_path / "p.json").write_text("[[1]]")
+    base = ["rehearse", "--fake", "--out", str(tmp_path / "run")]
+    for argv, why in ((["--prompts", str(tmp_path / "p.json")], "--prompts: id requests' prompts, with --ids"),
+                      (["--ids", "--window-per-group"], "--window-per-group: groups of the --prompts")):
+        with pytest.raises(SystemExit, match=why):
+            ws.rehearse(ws.parser().parse_args(base + argv))
+    assert not (tmp_path / "run").exists()
+
+
+def test_a_group_of_id_requests_admitted_at_a_windows_start_ends_within_its_group_windows(tmp_path):
+    """The bound `group_windows` rests on, on the warden itself at the scan's schedule: a group of `lanes` id requests
+    admitted together at a window's first bucket, each answered with `tokens` id events and the trailer (the loop's
+    two, and the gate's most, 64), ends every connection with its last cell D + ⌊tokens/r⌋ buckets after its
+    admission, so that one admitted two buckets late (`prompt_traffic`'s half a bucket, and the client's lag) still
+    ends within the group's G windows; the check accepts the run."""
+    sys.path.insert(0, str(HERE))
+    import scan_zk as sz
+    p = sz.PARAMS
+    for tokens in (2, 64):
+        G = ws.group_windows(p, tokens)
+        requests = [ws.id_request(model="m", user=f"user-{j}", prompt=[j + 1], max_tokens=tokens,
+                                  frame_bytes=p.cell_bytes, offset=0) for j in range(p.lanes)]
+        out = tmp_path / f"t{tokens}"
+        out.mkdir()
+        responses = [ws.id_response(list(range(tokens)), p.payload)] * p.lanes
+        warden = _run(out, tmp_path / f"key{tokens}", requests, responses, windows=G, params=p, id_payload=p.payload)
+        assert len(warden.log) == p.lanes and all(c["failed"] is None and not c["cut"] for c in warden.log)
+        assert {c["ended"] - c["admitted"] for c in warden.log} == {p.delay + tokens // p.slots}
+        assert all(c["admitted"] + 2 + p.delay + tokens // p.slots < G * p.window for c in warden.log)
+        result = ws.check(out)
+        assert result["accepted"], result["problems"]
+        assert (result["summary"]["ended"], result["summary"]["windows"]) == (p.lanes, G)
+    assert (ws.group_windows(p, 2), ws.group_windows(p, 64)) == (1, 2)
+
+
 def test_the_fake_endpoint_answers_a_request_as_vllm_streams_it():
     """Over loopback: the request's bytes reach the endpoint, which answers a chunked event stream and closes; the
     response parses to the endpoint's tokens, its finish reason and usage, and a cut response isn't complete."""
@@ -250,21 +347,23 @@ def refusing_commit(*args, **kwargs):
 
 
 def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False, servers: list | None = None) -> Warden:
-    """A run of the warden for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
+         process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
+         id_payload: int | None = None) -> Warden:
+    """A run of the warden at `params` for `windows` windows on a `VirtualClock`, published as `serve` and `client` publish one:
     its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when `process`), each window
     committed by `commit`, `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was
-    sent in; `servers` gets the server's side of each connection, in connect order. Returns the warden."""
-    tau = PARAMS.bucket_ms / 1000
+    sent in, each response read id-form at P = `id_payload` when given; `servers` gets the server's side of each
+    connection, in connect order. Returns the warden."""
+    tau = params.bucket_ms / 1000
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, 4)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, PARAMS, commit)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit)
         hooks, public = {"publish": publisher, "release": publisher.release}, publisher.key
     else:
         signer = ws.cs.signer(key, 4)
-        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), PARAMS, commit or WR.Cells.of)
+        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher}, signer.public_key()
     answers = iter(responses)
 
@@ -282,19 +381,19 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     async def main() -> tuple[list[_Writer], Warden]:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(PARAMS, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
+        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, **hooks)
         running = asyncio.create_task(warden.run())
         clients, tasks = [], []
         for request in requests:
             reader = asyncio.StreamReader()
-            reader.feed_data(cells(request, PARAMS.cell_bytes))
+            reader.feed_data(cells(request, params.cell_bytes))
             reader.feed_eof()
             clients.append(_Writer(warden))
             tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
         await warden.until(lambda w: w.ordinals == len(requests))
         PROCESS_CLOCK.append(clock)
         try:
-            for t in range(windows * PARAMS.window):
+            for t in range(windows * params.window):
                 await warden.until(settled)
                 clock.advance(t * tau)
                 await warden.until(lambda w, t=t: w.ticks > t)
@@ -306,21 +405,21 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
 
     clients, warden = asyncio.run(main())
     publisher.close()
-    deployment = ws.deployment_record(PARAMS, public, SESSION, origin_unix=0.0, windows=windows,
+    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows,
                                       listen=("127.0.0.1", 1), upstream=("127.0.0.1", 2), slack=warden.slack,
                                       run_id=warden.run_id)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):
-        shim = Shim(PARAMS.cell_bytes)
-        B = PARAMS.cell_bytes
+        shim = Shim(params.cell_bytes)
+        B = params.cell_bytes
         for t, data in client.writes:
             for i in range(0, len(data), B):
                 kind, shim.ordinal, payload = read_cell(data[i:i + B], B)
                 shim.arrivals.append((t * tau + 0.001, kind))
                 shim.data += payload if kind in (DATA, END) else b""
         shim.outcome = "end" if shim.arrivals and END in [k for _, k in shim.arrivals] else "cut"
-        log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0))
+        log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0, id_payload))
     (out / "client.json").write_text(json.dumps({"connections": log}))
     return warden
 
