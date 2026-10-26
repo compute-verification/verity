@@ -271,6 +271,9 @@ import Proofs.Flock.Claims.Recursion.VStarFitHeld
 import Proofs.Flock.Claims.Recursion.VStarFitPin
 import Proofs.Flock.Claims.Recursion.VStarFitRow
 import Proofs.Flock.Claims.Recursion.VStarFinal
+import Proofs.Flock.Claims.Recursion.SlotsDeployed
+import Proofs.Flock.Claims.Recursion.VStarTraceAt
+import Proofs.Flock.Claims.Recursion.HpEarlyStaged
 import Proofs.Flock.Claims.Recursion.LastSharedR
 import Proofs.Flock.Claims.Recursion.LastFilesR
 import Proofs.Flock.Claims.Recursion.VerdictRowEOpens
