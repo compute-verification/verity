@@ -423,11 +423,9 @@ names. A guarantee's `owner` merges apart from the rest of its entry, so one sid
 restatement both apply.
 
 It refuses when both sides changed one entry differently: a guarantee restated on both, a definition whose content both changed,
-a dependency both bumped. A refusal is a conflict in git, with the entries named. Resolve it the
-old way: take either side and run `check.py --update` on the merged tree. When one side stops reading a definition (or a
-module) in a module the other side changed, the record doesn't say which guarantees read it, so the merge keeps the union
-(the other side's hash; readers as sets less those no longer listed; a group left unread dropped) and prints one line
-naming them. The train's Lean check (`--regenerate`) commits the true `reads`.
+a dependency both bumped. When one side stops reading a definition in a module the other side changed, it keeps the union
+and names it on stderr; the train's Lean check regenerates `reads`. A refusal is a conflict in git, with the entries named.
+Resolve it the old way: take either side and run `check.py --update` on the merged tree.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the
