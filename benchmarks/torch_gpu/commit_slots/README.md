@@ -101,26 +101,31 @@ quantizer (2 units of codes and one of the scale), down and residual.
 
 ## Measured on the H200
 
-Run `r20261026-002612-bfed` (vy-dc-h200, one H200, commit 2eb946b41c, `gpu.sh`), on the call's own kernels, before it
-moved onto the engine:
+Run `r20261026-014030-c476` (vy-dc-h200, one H200, commit 3934f0782e, `gpu.sh`), on the engine:
 
-- **Bit-exact.** Every `check.py` check passed. That covers the fixture's root, the edge layout at 1 to 300 slots against
-  the reference and at 4,097 and 20,480 against the host twin, and two and three H200 layers. It also covers the frozen
-  layout at 20,480 slots (707 GB): six sampled slots rebuilt by the reference, and the step root from the device's slot
-  roots.
-- **Alone,** every op committed, 52 layers:
+- **Bit-exact.** The tests passed (21, the device against the host twin included), and so did every `check.py` check:
+  - the fixture's root;
+  - the edge layout at 1 to 300 slots against the reference, and at 4,097 and 20,480 against the host twin;
+  - two and three H200 layers, and three layers in two groups;
+  - the frozen layout at 4,096, 16,384 and 20,480 slots (141, 566 and 707 GB), each with six sampled slots rebuilt by
+    the reference and the step root from the device's slot roots.
+- **Alone,** every op committed, 52 layers. The share is of a step whose rest (the int8 GEMMs, attention and the
+  elementwise ops) takes 5.33 s at 16,384 slots and scales with the slots:
 
-  | slots | s a step | GB/s | rows kernel | fold |
-  | --- | --- | --- | --- | --- |
-  | 20,480 | 1.464 | 483 | 1.409 s | 38 ms |
-  | 4,096 | 0.395 | 358 | 0.352 s | 37 ms |
-  | 1,024 | 0.176 | 201 | 0.137 s | 37 ms |
+  | slots | layers a group | s a step | GB/s | rows | leaves | trees | share of the step |
+  | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 16,384 | 1 | 1.032 | 548 | 0.950 s | 48 ms | 34 ms | 16% |
+  | 20,480 | 1 | 1.289 | 548 | 1.182 s | 65 ms | 41 ms | 16% |
+  | 12,288 | 1 | 0.776 | 546 | 0.712 s | 38 ms | 26 ms | 16% |
+  | 4,096 | 4 | 0.262 | 540 | 0.240 s | 13 ms | 9 ms | 16% |
+  | 4,096 | 1 | 0.315 | 449 | 0.290 s | 15 ms | 11 ms | 19% |
+  | 1,024 | 1 | 0.111 | 318 | 0.101 s | 6 ms | 4 ms | 25% |
 
-  At 20,480 slots that's 3.79 G SHA-512 compressions/s of row data. It's 40% of a 3.7 s serving step and 20% of a
-  7.5 s one.
-- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 20,480, 945 TOPS): the GEMMs take 116.5 ms alone and
-  145 ms beside the commit (+24%). Overlapped, a layer takes 145 ms, against 150 ms run one after the other. Over a
-  step, the commit costs 20% of the GEMMs' 7.54 s.
+  At 16,384 slots that's 4.30 G SHA-512 compressions/s of row data. Rows are the engine's `rows` and `row_digests`;
+  trees are the unit, slot and step trees.
+- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 933 TOPS): the GEMMs take 94.3 ms alone and
+  112.8 ms beside the commit (+20%). Overlapped, a layer takes 112.8 ms, against 117.0 ms run one after the other, so
+  overlap saves little. Over a step, the commit costs 24% of the GEMMs' 4.91 s.
 
 ## Files
 
