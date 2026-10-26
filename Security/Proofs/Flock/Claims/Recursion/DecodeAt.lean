@@ -1,6 +1,7 @@
 import Proofs.Flock.Claims.Recursion.SameJAt
 import Proofs.Flock.Claims.Recursion.VerdictFramed
 import Proofs.Flock.Claims.Recursion.VerdictFramedJson
+import Proofs.Flock.Claims.Recursion.VerdictPublics
 import Proofs.Flock.Claims.Recursion.VerdictRowG
 import Proofs.Flock.Claims.Recursion.VerdictParts
 import Proofs.Flock.Claims.Recursion.InnerForm
