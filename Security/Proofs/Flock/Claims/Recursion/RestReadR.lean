@@ -11,8 +11,8 @@ rows read back, round 0 carries the link's nodes, the rounds after it the reps' 
 record value `decR` builds reads as custody's (`DecLive`).
 
 The fits are the one part that reads the rows' contents. `FitsLift` is what they need: a fit at some rows gives a fit
-at every rows of the same byte sizes. The honest proof fits the honest rows (`RepFits`), so with `FitsLift`, every
-rows the layout reads at the honest rows' sizes fit.
+at every rows of the same byte sizes, at a setup that folds at its own `k_log` (`RestFitsLift.fitsLift` proves it).
+The honest proof fits the honest rows (`RepFits`), so every rows the layout reads at the honest rows' sizes fit.
 -/
 
 namespace RecDeploy.RestRead
@@ -54,9 +54,9 @@ def DecLive (rd : Msg → Option FinalP) : Prop :=
     ∃ lv, liveOfJ d.spec (coinSubJ d.spec d.c₁ d.mids d.f.j) = .ok lv
 
 /-- **The last step reads**, at any reader: the statement sets up, the last message isn't tagged `0` and `rd` reads
-it, for the statement, with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as
-the reps' blocks, every rep's block has a fit, the proofs read are shaped for their files, and the record value reads
-as custody's where there is a coin a message and the statement passes its scope check. -/
+it with two proofs a table, round 0's rows read back as the link's nodes, the rounds after it as the reps' blocks, every
+rep's block has a fit, and the record value reads as custody's where there is a coin a message and the statement
+passes its scope check. -/
 theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : List Coin}
     {v : FlockDeploy.Ins × _root_.Flock.SessionSpec × Array _root_.Flock.Stmt} {a : Msg} {fl : FinalP} {c₁ : Coin}
     {r₀ : List ByteArray} {rss : List (List ByteArray)}
@@ -67,7 +67,7 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
     (hps : fl.ps.size = 2 * v.2.2.size) (hrss : (repLens v.2.1 v.2.2).sum = rss.length)
     (hfit : ∀ k < 2 * v.2.2.size, ∃ pT : Flock.Proof × F128,
       FitsRep (repCtx v.2.1 v.2.2 c₁ r₀ cs.tail.dropLast k) ((cutLens (repLens v.2.1 v.2.2) rss).getD k []) pT.1 pT.2)
-    (hsh : ∀ pf, FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf →
+    (hshape : ∀ pf, FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf →
       FlockDeploy.ShapedAt v.2.1 v.2.2 c₁ pf.1)
     (hlen : ms.length = cs.length) (hck : v.1.read.check = .ok ()) (hlive : DecLive rd) : ReadOkR rd x ms cs := by
   obtain ⟨d, hd⟩ : ∃ d, decR rd x ms cs = some d := by
@@ -97,12 +97,11 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
       obtain ⟨ys, hys⟩ := mapM_some_of hk
       rw [hys]
       exact ⟨_, rfl⟩
-    have hf1 : (rd a).filter (·.stmt == x) = some fl :=
-      Option.filter_eq_some_iff.2 ⟨hrd, by rw [hst]; exact beq_self_eq_true x⟩
-    have hf2 : (FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl).filter (fun pf =>
+    have hfl : (rd a).filter (·.stmt == x) = some fl := Option.filter_eq_some_iff.2 ⟨hrd, by simp [hst]⟩
+    have hpf' : (FlockDeploy.readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl).filter (fun pf =>
         @decide (FlockDeploy.ShapedAt v.2.1 v.2.2 c₁ pf.1) (Classical.propDecidable _)) = some pf :=
-      Option.filter_eq_some_iff.2 ⟨hpf, @decide_eq_true _ (Classical.propDecidable _) (hsh pf hpf)⟩
-    simp only [decR, Option.bind_eq_bind, Option.pure_def, hv, hlast, ha₁, hc, hf1, h0', hmid, hl, hf2,
+      Option.filter_eq_some_iff.2 ⟨hpf, @decide_eq_true _ (Classical.propDecidable _) (hshape pf hpf)⟩
+    simp only [decR, Option.bind_eq_bind, Option.pure_def, hv, hlast, ha₁, hc, hfl, h0', hmid, hl, hpf',
       Option.bind_some, Option.some.injEq, exists_eq']
   have ha := actR_of_decR hlast ha hd
   unfold ReadOkR
@@ -112,9 +111,11 @@ theorem readOkR_of {rd : Msg → Option FinalP} {x : Msg} {ms : List Msg} {cs : 
   subst e
   exact hlive x ms cs d hlen hd (by rw [hdd]; exact hck)
 
-/-- **A fit lifts to every rows of its rows' byte sizes**: rows the same sizes as fitting ones have a fit. -/
+/-- **A fit lifts to every rows of its rows' byte sizes**, at a setup that folds at its own `k_log`: rows the same
+sizes as fitting ones have a fit. -/
 def FitsLift : Prop :=
-  ∀ (c : FlockDeploy.RepCtx) (rows rows' : List (List ByteArray)) (p' : Flock.Proof) (T' : F128),
+  ∀ (c : FlockDeploy.RepCtx), c.st.fold.kLog = c.st.kLog → ∀ (rows rows' : List (List ByteArray)) (p' : Flock.Proof)
+    (T' : F128),
     FitsRep c rows' p' T' → rows.map (·.map ByteArray.size) = rows'.map (·.map ByteArray.size) →
       ∃ pT : Flock.Proof × F128, FitsRep c rows pT.1 pT.2
 
