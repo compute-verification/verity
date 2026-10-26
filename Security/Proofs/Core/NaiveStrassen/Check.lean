@@ -30,7 +30,7 @@ def rootOK (l : Nat) (t : Nat × Nat) : Bool :=
     (decide (l ≤ thmL) || decide (8 ^ l < fld (row t.1 (sz l) root) root))
 
 /-- Level `l`'s tables `t` against every option of the model, over the previous level's `prev`. -/
-def checkLevel (l : Nat) (t prev : Nat × Nat) : Bool :=
+@[irreducible] def checkLevel (l : Nat) (t prev : Nat × Nat) : Bool :=
   let n := sz l
   let m := sz (l - 1)
   decide (n ≤ gsz) && decide (t.1 < 2 ^ (64 * n * n)) && decide (t.2 < 2 ^ (64 * n * n)) &&

@@ -297,4 +297,325 @@ theorem Facts.core (F : Facts G Lmax g kc rest lo has) {fs : List Atom} (hD : Do
 
 end
 
+/-! ## From the check to the facts -/
+
+theorem allBelow_iff {n : Nat} {f : Nat → Bool} : allBelow n f = true ↔ ∀ k < n, f k = true := by
+  induction n with
+  | zero => exact ⟨fun _ _ h => absurd h (Nat.not_lt_zero _), fun _ => rfl⟩
+  | succ n ih =>
+    show (allBelow n f && f n) = true ↔ _
+    rw [Bool.and_eq_true, ih]
+    constructor
+    · rintro ⟨h1, h2⟩ k hk
+      rcases Nat.lt_succ_iff_lt_or_eq.mp hk with hk | rfl
+      · exact h1 k hk
+      · exact h2
+    · intro h; exact ⟨fun k hk => h k (Nat.lt_succ_of_lt hk), h n (Nat.lt_succ_self n)⟩
+
+/-- Level `l`'s computed tables. -/
+def tab (l : Nat) : Nat × Nat := (run l).2
+
+/-- The tables level `l` is checked over. -/
+def prv : Nat → Nat × Nat
+  | 0 => (0, 0)
+  | l + 1 => tab l
+
+theorem run_zero : run 0 = (checkLevel 0 (level 0 (0, 0)) (0, 0), level 0 (0, 0)) := rfl
+
+theorem run_succ (L : Nat) : run (L + 1) =
+    ((run L).1 && checkLevel (L + 1) (level (L + 1) (run L).2) (run L).2, level (L + 1) (run L).2) := rfl
+
+theorem run_checks : ∀ L, (run L).1 = true → ∀ l, l ≤ L → checkLevel l (tab l) (prv l) = true
+  | 0, h, l, hl => by
+    rw [run_zero] at h
+    rw [Nat.le_zero.mp hl, tab, run_zero]
+    exact h
+  | L + 1, h, l, hl => by
+    rw [run_succ, Bool.and_eq_true] at h
+    rcases Nat.lt_or_eq_of_le hl with hl | rfl
+    · exact run_checks L h.1 l (Nat.le_of_lt_succ hl)
+    · rw [tab, run_succ]
+      exact h.2
+
+/-- Level `l`'s `lo` at cells `i` and `j`. -/
+def LO (l i j : Nat) : Nat := fld (row (tab l).1 (sz l) i) j
+/-- Level `l`'s `has` at cells `i` and `j`. -/
+def HA (l i j : Nat) : Nat := fld (row (tab l).2 (sz l) i) j
+
+/-! ### Packed rows -/
+
+theorem fld_zero (j : Nat) : fld 0 j = 0 := by rw [fld_eq, getW, Nat.zero_div, Nat.zero_mod]
+
+theorem row_ge {T n i : Nat} (hT : T < 2 ^ (64 * n * n)) (hi : n ≤ i) : row T n i = 0 := by
+  rw [row_eq]; exact getW_eq_zero hT hi
+
+theorem packF_lt {f : Nat → Nat} {n : Nat} (hf : ∀ j < n, f j < 2 ^ 64) : packF f n < 2 ^ (64 * n) := by
+  rw [packF_eq]; exact packW_lt hf
+
+/-- Every entry of a table whose rows pass `small` is below `2^56`. -/
+theorem fld_row_lt {T n : Nat} (hT : T < 2 ^ (64 * n * n)) (hs : ∀ i < n, small n (row T n i) = true)
+    (i j : Nat) : fld (row T n i) j < 2 ^ 56 := by
+  by_cases hi : i < n
+  · by_cases hj : j < n
+    · exact (small_fld (hs i hi)).2 j hj
+    · rw [fld_row_ge (Nat.le_of_not_lt hj)]; exact Nat.two_pow_pos _
+  · rw [row_ge hT (Nat.le_of_not_lt hi), fld_zero]; exact Nat.two_pow_pos _
+
+theorem le_of_leRow {n X Y : Nat} (h : leRow n X Y = true) (hX : small n X = true)
+    (hY : ∀ j < n, fld Y j < 2 ^ 63) {j : Nat} (hj : j < n) : fld X j ≤ fld Y j :=
+  leRow_fld h (small_fld hX).1 (fun k hk => Nat.lt_trans ((small_fld hX).2 k hk) (by decide)) hY j hj
+
+theorem fld_add' {A B : Nat} (hA : ∀ k, fld A k < 2 ^ 56) (hB : ∀ k, fld B k < 2 ^ 56) (j : Nat) :
+    fld (A + B) j = fld A j + fld B j :=
+  fld_add (n := j + 1) (fun k _ => by have := hA k; have := hB k; omega) (Nat.lt_succ_self j)
+
+theorem fld_mul' {c X : Nat} (hX : ∀ k, c * fld X k < 2 ^ 64) (j : Nat) : fld (c * X) j = c * fld X j :=
+  fld_mul (n := j + 1) (fun k _ => hX k) (Nat.lt_succ_self j)
+
+theorem fld_mask' (X n j : Nat) : fld (X &&& rowMask n) j ≤ fld X j := by
+  rw [fld_mask]; split <;> omega
+
+theorem fld_mask_lt {X n j : Nat} (hj : j < n) : fld (X &&& rowMask n) j = fld X j := by
+  rw [fld_mask, ite_eq_left hj]
+
+theorem fld_transpose {T n i j : Nat} (hi : i < n) (hj : j < n) :
+    fld (row (transpose T n) n i) j = fld (row T n j) i := by
+  rw [transpose, row_packRows (fun k _ => packF_lt fun j _ => fld_lt _ _), ite_eq_left hi,
+    fld_packF (fun j _ => fld_lt _ _), ite_eq_left hj]
+
+theorem fld_gather {P m n μ k j : Nat} (hP : P < 2 ^ (64 * m * m)) (hj : j < n) :
+    fld (row (gatherT P m n μ) n k) j = fld (row P m k) (kc j μ) := by
+  rw [gatherT, row_packRows (fun k _ => packF_lt fun j _ => fld_lt _ _)]
+  by_cases hk : k < m
+  · rw [ite_eq_left hk, fld_packF (fun j _ => fld_lt _ _), ite_eq_left hj]
+  · rw [ite_eq_right hk, row_ge hP (Nat.le_of_not_lt hk), fld_zero, fld_zero]
+
+theorem atomMin_le_acc (fs : List Atom) (a b : Nat) : ∀ acc,
+    fs.foldl (fun acc f => if f.holds a b then min acc f.weight8 else acc) acc ≤ acc := by
+  induction fs with
+  | nil => intro acc; exact Nat.le_refl _
+  | cons f fs ih =>
+    intro acc
+    simp only [List.foldl_cons]
+    refine Nat.le_trans (ih _) ?_
+    split
+    · exact Nat.min_le_left _ _
+    · exact Nat.le_refl _
+
+theorem atomMin_le_BIG (fs : List Atom) (a b : Nat) : atomMin fs a b ≤ BIG := atomMin_le_acc fs a b BIG
+
+theorem atomMin_le {fs : List Atom} {f : Atom} (hf : f ∈ fs) {a b : Nat} (h : f.holds a b = true) :
+    atomMin fs a b ≤ f.weight8 := by
+  unfold atomMin
+  generalize BIG = acc
+  induction fs generalizing acc with
+  | nil => exact absurd hf List.not_mem_nil
+  | cons x xs ih =>
+    simp only [List.foldl_cons]
+    rcases List.mem_cons.mp hf with rfl | hf
+    · rw [ite_eq_left h]
+      exact Nat.le_trans (atomMin_le_acc xs a b _) (Nat.min_le_right _ _)
+    · exact ih hf _
+
+theorem fld_atomT {i j : Nat} (hi : i < gsz) (hj : j < gsz) :
+    fld (row atomT gsz i) j = atomMin rtx6000Sheet (g i) (g j) := by
+  have hB : ∀ i j, atomMin rtx6000Sheet (g i) (g j) < 2 ^ 64 := fun i j =>
+    Nat.lt_of_le_of_lt (atomMin_le_BIG _ _ _) (by decide)
+  unfold atomT
+  rw [row_packRows (fun k _ => packF_lt fun j _ => hB k j), ite_eq_left hi, fld_packF (fun j _ => hB i j),
+    ite_eq_left hj]
+
+/-- The sum of a scheme's gathered rows, fieldwise. -/
+theorem fld_foldl {j : Nat} {α : Type} (R : α → Nat) (hR : ∀ p k, fld (R p) k < 2 ^ 56)
+    (ps : List α) : ∀ acc : Nat, (∀ k, fld acc k + ps.length * 2 ^ 56 < 2 ^ 64) →
+      fld (ps.foldl (fun acc p => acc + R p) acc) j = fld acc j + (ps.map fun p => fld (R p) j).sum := by
+  induction ps with
+  | nil => intro acc _; simp
+  | cons p ps ih =>
+    intro acc h
+    simp only [List.foldl_cons, List.map_cons, List.sum_cons]
+    have hadd : ∀ k, fld (acc + R p) k = fld acc k + fld (R p) k := fun k =>
+      fld_add (n := k + 1) (fun k' _ => by
+        have h1 := h k'; have h2 := hR p k'; simp only [List.length_cons] at h1; omega) (Nat.lt_succ_self k)
+    rw [ih (acc + R p) (fun k => by
+      rw [hadd k]; have h1 := h k; have h2 := hR p k; simp only [List.length_cons] at h1; omega), hadd j,
+      Nat.add_assoc]
+
+/-! ### One level -/
+
+section level
+variable {l : Nat} {prev : Nat × Nat}
+
+theorem lvl_spec (hc : checkLevel l (tab l) prev = true) :
+    sz l ≤ gsz ∧ (tab l).1 < 2 ^ (64 * sz l * sz l) ∧ (tab l).2 < 2 ^ (64 * sz l * sz l) ∧
+      (tab l).1 = transpose (tab l).1 (sz l) ∧ (tab l).2 = transpose (tab l).2 (sz l) ∧
+      ∀ i < sz l, small (sz l) (row (tab l).1 (sz l) i) = true ∧ small (sz l) (row (tab l).2 (sz l) i) = true := by
+  simp only [checkLevel, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, allBelow_iff, Bool.or_eq_true] at hc
+  obtain ⟨⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩, -⟩ := hc
+  exact ⟨h1, h2, h3, h4, h5, fun i hi => ⟨(h6 i hi).1.1.1.1.1, (h6 i hi).1.1.1.1.2⟩⟩
+
+theorem lvl_lt (hc : checkLevel l (tab l) prev = true) (i j : Nat) : LO l i j < 2 ^ 56 ∧ HA l i j < 2 ^ 56 := by
+  obtain ⟨-, h2, h3, -, -, h6⟩ := lvl_spec hc
+  exact ⟨fld_row_lt h2 (fun i hi => (h6 i hi).1) i j, fld_row_lt h3 (fun i hi => (h6 i hi).2) i j⟩
+
+theorem lvl_out (hc : checkLevel l (tab l) prev = true) {i : Nat} (hi : sz l ≤ i) (j : Nat) :
+    LO l i j = 0 ∧ HA l i j = 0 := by
+  obtain ⟨-, h2, h3, -, -, -⟩ := lvl_spec hc
+  exact ⟨by rw [LO, row_ge h2 hi, fld_zero], by rw [HA, row_ge h3 hi, fld_zero]⟩
+
+theorem lvl_col (i : Nat) {j : Nat} (hj : sz l ≤ j) : LO l i j = 0 ∧ HA l i j = 0 :=
+  ⟨fld_row_ge hj, fld_row_ge hj⟩
+
+theorem lvl_symm (hc : checkLevel l (tab l) prev = true) (i j : Nat) : LO l i j = LO l j i ∧ HA l i j = HA l j i := by
+  obtain ⟨-, -, -, h4, h5, -⟩ := lvl_spec hc
+  by_cases hi : i < sz l
+  · by_cases hj : j < sz l
+    · refine ⟨?_, ?_⟩
+      · show fld (row (tab l).1 (sz l) i) j = _
+        rw [h4, fld_transpose hi hj]; rfl
+      · show fld (row (tab l).2 (sz l) i) j = _
+        rw [h5, fld_transpose hi hj]; rfl
+    · have := lvl_col (l := l) i (Nat.le_of_not_lt hj)
+      have := lvl_out hc (Nat.le_of_not_lt hj) i
+      omega
+  · have := lvl_out hc (Nat.le_of_not_lt hi) j
+    have := lvl_col (l := l) j (Nat.le_of_not_lt hi)
+    omega
+
+theorem lvl_rows (hc : checkLevel l (tab l) prev = true) {i : Nat} (hi : i < sz l) :
+    leRow (sz l) (row (tab l).1 (sz l) i) (8 ^ l * (row atomT gsz i &&& rowMask (sz l))) = true ∧
+    leRow (sz l) (row (tab l).2 (sz l) i) (row (tab l).1 (sz l) i + row (tab l).2 (sz l) 1) = true ∧
+    ∀ e < i, e = 0 ∨
+      (leRow (sz l) (row (tab l).1 (sz l) i) (row (tab l).1 (sz l) e + row (tab l).1 (sz l) (rest i e)) = true ∧
+        leRow (sz l) (row (tab l).2 (sz l) i) (row (tab l).2 (sz l) e + row (tab l).1 (sz l) (rest i e)) = true) ∧
+      leRow (sz l) (row (tab l).2 (sz l) i) (row (tab l).1 (sz l) e + row (tab l).2 (sz l) (rest i e)) = true := by
+  simp only [checkLevel, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, allBelow_iff, Bool.or_eq_true] at hc
+  have h := (hc.1.2 i hi).1
+  exact ⟨h.1.1.2, h.1.2, h.2⟩
+
+theorem lvl_atom (hc : checkLevel l (tab l) prev = true) (hl : l ≤ 15) (i j : Nat) :
+    LO l i j ≤ 8 ^ l * atomMin rtx6000Sheet (g i) (g j) := by
+  have hsz := (lvl_spec hc).1
+  by_cases hi : i < sz l
+  · by_cases hj : j < sz l
+    · have hsm := ((lvl_spec hc).2.2.2.2.2 i hi).1
+      have hB : ∀ k, 8 ^ l * fld (row atomT gsz i &&& rowMask (sz l)) k ≤ 8 ^ 15 * 65536 := fun k =>
+        Nat.mul_le_mul (Nat.pow_le_pow_right (by decide) hl)
+          (Nat.le_trans (fld_mask' _ _ _) (by
+            by_cases hk : k < gsz
+            · rw [fld_atomT (by omega) hk]; exact atomMin_le_BIG _ _ _
+            · rw [fld_row_ge (Nat.le_of_not_lt hk)]; exact Nat.zero_le _))
+      have h := le_of_leRow (lvl_rows hc hi).1 hsm (fun k _ => by
+        rw [fld_mul' (fun k => Nat.lt_of_le_of_lt (hB k) (by decide))]
+        exact Nat.lt_of_le_of_lt (hB k) (by decide)) hj
+      rw [fld_mul' (fun k => Nat.lt_of_le_of_lt (hB k) (by decide)), fld_mask_lt hj,
+        fld_atomT (by omega) (by omega)] at h
+      exact h
+    · rw [(lvl_col (l := l) i (Nat.le_of_not_lt hj)).1]; exact Nat.zero_le _
+  · rw [(lvl_out hc (Nat.le_of_not_lt hi) j).1]; exact Nat.zero_le _
+
+theorem lvl_split (hc : checkLevel l (tab l) prev = true) (i j e : Nat) (he : 1 ≤ e) (hei : e < i) :
+    LO l i j ≤ LO l e j + LO l (rest i e) j ∧ HA l i j ≤ HA l e j + LO l (rest i e) j ∧
+      HA l i j ≤ LO l e j + HA l (rest i e) j := by
+  by_cases hi : i < sz l
+  · by_cases hj : j < sz l
+    · obtain ⟨-, h2, h3, -, -, h6⟩ := lvl_spec hc
+      have hlo := fld_row_lt h2 (fun i hi => (h6 i hi).1)
+      have hha := fld_row_lt h3 (fun i hi => (h6 i hi).2)
+      obtain ⟨⟨s1, s2⟩, s3⟩ := ((lvl_rows hc hi).2.2 e hei).resolve_left (by omega)
+      have b : ∀ (A B : Nat), (∀ k, fld A k < 2 ^ 56) → (∀ k, fld B k < 2 ^ 56) → ∀ k < sz l,
+          fld (A + B) k < 2 ^ 63 := fun A B hA hB k _ => by
+        rw [fld_add' hA hB]; have := hA k; have := hB k; omega
+      refine ⟨?_, ?_, ?_⟩
+      · have := le_of_leRow s1 (h6 i hi).1 (b _ _ (hlo e) (hlo _)) hj
+        rwa [fld_add' (hlo e) (hlo _)] at this
+      · have := le_of_leRow s2 (h6 i hi).2 (b _ _ (hha e) (hlo _)) hj
+        rwa [fld_add' (hha e) (hlo _)] at this
+      · have := le_of_leRow s3 (h6 i hi).2 (b _ _ (hlo e) (hha _)) hj
+        rwa [fld_add' (hlo e) (hha _)] at this
+    · have := lvl_col (l := l) i (Nat.le_of_not_lt hj)
+      omega
+  · have := lvl_out hc (Nat.le_of_not_lt hi) j
+    omega
+
+theorem lvl_own (hc : checkLevel l (tab l) prev = true) (i j : Nat) : HA l i j ≤ LO l i j + HA l 1 j := by
+  by_cases hi : i < sz l
+  · by_cases hj : j < sz l
+    · obtain ⟨-, h2, h3, -, -, h6⟩ := lvl_spec hc
+      have hlo := fld_row_lt h2 (fun i hi => (h6 i hi).1)
+      have hha := fld_row_lt h3 (fun i hi => (h6 i hi).2)
+      have := le_of_leRow (lvl_rows hc hi).2.1 (h6 i hi).2 (fun k _ => by
+        rw [fld_add' (hlo i) (hha 1)]; have := hlo i k; have := hha 1 k; omega) hj
+      rwa [fld_add' (hlo i) (hha 1)] at this
+    · have := lvl_col (l := l) i (Nat.le_of_not_lt hj)
+      omega
+  · have := lvl_out hc (Nat.le_of_not_lt hi) j
+    omega
+
+end level
+
+theorem sum_le_mul {B : Nat} : ∀ {xs : List Nat}, (∀ x ∈ xs, x ≤ B) → xs.sum ≤ xs.length * B
+  | [], _ => by simp
+  | x :: xs, hx => by
+    have h1 := sum_le_mul (B := B) (xs := xs) fun y hy => hx y (List.mem_cons_of_mem _ hy)
+    have h2 := hx x List.mem_cons_self
+    simp only [List.length_cons, List.sum_cons, Nat.succ_mul]
+    omega
+
+theorem prof_strassen (F : Nat → Nat → Nat) :
+    (List.finRange strassen.R).map (fun t => F (l1 strassen.u[t.val]!) (l1 strassen.v[t.val]!)) =
+      strassenP.map (fun p => F p.1 p.2) := rfl
+
+theorem prof_winograd (F : Nat → Nat → Nat) :
+    (List.finRange winograd.R).map (fun t => F (l1 winograd.u[t.val]!) (l1 winograd.v[t.val]!)) =
+      winogradP.map (fun p => F p.1 p.2) := rfl
+
+section level'
+variable {l : Nat} {prev : Nat × Nat}
+
+theorem lvl_sch_rows (hc : checkLevel (l + 1) (tab (l + 1)) prev = true) {i : Nat} (hi : i < sz (l + 1)) :
+    leRow (sz (l + 1)) (row (tab (l + 1)).1 (sz (l + 1)) i)
+        (8 * (row prev.1 (sz l) i &&& rowMask (sz (l + 1)))) = true ∧
+      leRow (sz (l + 1)) (row (tab (l + 1)).2 (sz (l + 1)) i)
+        (7 * (row prev.1 (sz l) i &&& rowMask (sz (l + 1))) + (row prev.2 (sz l) i &&& rowMask (sz (l + 1)))) = true ∧
+      leRow (sz (l + 1)) (row (tab (l + 1)).1 (sz (l + 1)) i) (schemeRow prev.1 (sz l) (sz (l + 1)) i strassenP) = true ∧
+      leRow (sz (l + 1)) (row (tab (l + 1)).2 (sz (l + 1)) i) (schemeRow prev.1 (sz l) (sz (l + 1)) i strassenP) = true ∧
+      leRow (sz (l + 1)) (row (tab (l + 1)).1 (sz (l + 1)) i) (schemeRow prev.1 (sz l) (sz (l + 1)) i winogradP) = true ∧
+      leRow (sz (l + 1)) (row (tab (l + 1)).2 (sz (l + 1)) i) (schemeRow prev.1 (sz l) (sz (l + 1)) i winogradP) = true := by
+  simp only [checkLevel, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, allBelow_iff, Bool.or_eq_true,
+    Nat.add_sub_cancel] at hc
+  obtain ⟨⟨⟨⟨⟨h1, h2⟩, h3⟩, h4⟩, h5⟩, h6⟩ := ((hc.1.2 i hi).2).resolve_left (Nat.succ_ne_zero l)
+  exact ⟨h1, h2, h3, h4, h5, h6⟩
+
+/-- A scheme's row, fieldwise: the sum of the previous level's `lo` at the kid cells. -/
+theorem lvl_sch_fld (hc0 : checkLevel l (tab l) prev = true) (prof : List (Nat × Nat)) (hlen : prof.length ≤ 7)
+    {n i k : Nat} (hk : k < n) :
+    fld (schemeRow (tab l).1 (sz l) n i prof) k = (prof.map fun p => LO l (kc i p.1) (kc k p.2)).sum := by
+  have hP := (lvl_spec hc0).2.1
+  have hR : ∀ (p : Nat × Nat) k', fld (row (gatherT (tab l).1 (sz l) n p.2) n (kc i p.1)) k' < 2 ^ 56 := by
+    intro p k'
+    by_cases hk' : k' < n
+    · rw [fld_gather hP hk']; exact (lvl_lt hc0 _ _).1
+    · rw [fld_row_ge (Nat.le_of_not_lt hk')]; exact Nat.two_pow_pos _
+  have h7 := Nat.mul_le_mul_right (2 ^ 56) hlen
+  have e := fld_foldl (j := k) (α := Nat × Nat) (fun p : Nat × Nat => row (gatherT (tab l).1 (sz l) n p.2) n (kc i p.1)) hR prof 0
+    (fun k' => by have := fld_zero k'; omega)
+  rw [fld_zero, Nat.zero_add] at e
+  show fld (prof.foldl (fun acc p => acc + row (gatherT (tab l).1 (sz l) n p.2) n (kc i p.1)) 0) k = _
+  rw [e]
+  exact congrArg List.sum (List.map_congr_left fun p _ => fld_gather hP hk)
+
+theorem lvl_sch_lt (hc0 : checkLevel l (tab l) prev = true) (prof : List (Nat × Nat)) (hlen : prof.length ≤ 7)
+    {n i k : Nat} (hk : k < n) : fld (schemeRow (tab l).1 (sz l) n i prof) k < 2 ^ 63 := by
+  rw [lvl_sch_fld hc0 prof hlen hk]
+  have := sum_le_mul (B := 2 ^ 56) (xs := prof.map fun p => LO l (kc i p.1) (kc k p.2))
+    (fun x hx => by
+      obtain ⟨p, -, rfl⟩ := List.mem_map.mp hx
+      exact Nat.le_of_lt (lvl_lt hc0 _ _).1)
+  rw [List.length_map] at this
+  have := Nat.mul_le_mul_right (2 ^ 56) hlen
+  omega
+
+end level'
+
 end Verity.Accel.NaiveStrassen.Packed

@@ -45,7 +45,7 @@ def atomMin (fs : List Atom) (a b : Nat) : Nat :=
   fs.foldl (fun acc f => if f.holds a b then min acc f.weight8 else acc) BIG
 
 /-- The atom table on the whole grid, on the RTX PRO 6000's data sheet. -/
-def atomT : Nat := packRows (fun i => packF (fun j => atomMin rtx6000Sheet (g i) (g j)) gsz) gsz gsz
+@[irreducible] def atomT : Nat := packRows (fun i => packF (fun j => atomMin rtx6000Sheet (g i) (g j)) gsz) gsz gsz
 
 /-- Strassen's products' `(‖u‖₁, ‖v‖₁)`. -/
 def strassenP : List (Nat × Nat) := [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
@@ -109,7 +109,7 @@ def pass (n : Nat) (t : Nat × Nat) : Nat × Nat :=
   (symm s.1 n, symm s.2 n)
 
 /-- Level `l`'s tables from the previous level's. -/
-def level (l : Nat) (prev : Nat × Nat) : Nat × Nat :=
+@[irreducible] def level (l : Nat) (prev : Nat × Nat) : Nat × Nat :=
   iter (passes.getD l 0) (pass (sz l)) (initLevel l (sz (l - 1)) (sz l) prev)
 
 end Verity.Accel.NaiveStrassen.Packed
