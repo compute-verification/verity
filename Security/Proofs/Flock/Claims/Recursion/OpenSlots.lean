@@ -482,7 +482,7 @@ theorem msgs_slots (elem : (r : XR) → List (Fin r.w.parts.length × List (Msg 
         simp only [LayoutB.msg, hf, hnone]
         rfl
     · have he' : (rs.getD (i % rs.size) default).2.1.isEmpty = false := by simpa using he
-      have hf : (layAt (restR elem)).fixedAt x (i + 1) = none := by rw [hfi, he'] <;> rfl
+      have hf : (layAt (restR elem)).fixedAt x (i + 1) = none := by rw [hfi, he']; rfl
       have hpt : topsPiecesAt r rs i = (List.range (rs.getD (i % rs.size) default).2.1.size).map
           (capPieceAt r rs i) ++ rowPiece r i := by
         unfold topsPiecesAt
