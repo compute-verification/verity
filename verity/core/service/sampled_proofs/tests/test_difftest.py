@@ -1844,6 +1844,63 @@ def test_an_accepted_case_is_compared_whole(server):
         assert verdict_ == "accept" and json.loads(line) == answer(case) | {"reason": None}, (kind, line)
 
 
+ONE_STAGE_V2 = D.ProtocolPort("sampled-proofs-one-stage-zk", answer, CASES, package=PACKAGE)
+server_v2 = D.server_fixture(ONE_STAGE_V2)
+
+
+def _sha(b: bytes) -> str:
+    return hashlib.sha512(b).hexdigest()
+
+
+def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
+    """v2 (`SampledProofs.OneStageZk`, `one_stage.proofs.check_v2`) is v1 with the verdicts its own run of the verifier
+    on the proofs. An audit v1 accepts on the verdict its evidence hands in is, in v2: refused for naming verdicts;
+    rejected with them replaced by proofs naming no session (no session proved the units the evidence claims), and by
+    the session's own verdict when its files are not a statement's; refused when a file it names is in no blob, or its
+    sessions are not the evidence's. `test_proofs.py` holds the verdicts to `verify`'s on a real session."""
+    s = SETUPS[3]
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    d = {**DR.derive(s.program, s.query, law, None), "population": s.population, "units": [0, 3]}
+    proved = DR.proved(d)
+    evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
+                "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": LEAF, "log": [],
+              "partition": P.partition(s.program, s.query), "ports": s.ports, "program": s.desc, "query": s.query,
+              "registered": None, "scheme": SCHEME, "work_table": None}
+    v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+    assert D.replay(ONE_STAGE, v1, server)[0] == "accept"
+    circuit, public, record = b"not a circuit file", b"not a public file", b"{}"
+    blobs = [circuit.hex(), public.hex(), record.hex()]
+    p2 = params | {"proofs": {"circuit": _sha(circuit), "registered": None}}
+    base = {k: v for k, v in evidence.items() if k != "verdicts"}
+
+    def run(e, sessions=(), blobs_=blobs, p=p2):
+        case = {"blobs": list(blobs_), "commitment": _hex(rec), "evidence": _hex(e), "params": p}
+        out = server_v2.exchange(_json(case))
+        return out["verdict"], out["reason"]
+
+    def proofs(sessions):
+        return {"public": _sha(public), "sessions": [{"name": n, "record": _sha(record), "reps": {}} for n in sessions]}
+
+    assert run(evidence | {"proofs": proofs([])}) == (
+        "reject", "evidence: the evidence names verdicts: this audit's verdicts are its own run of the verifier on the "
+                  "proofs")
+    assert run(base | {"proofs": proofs([])}) == (
+        "reject", "proofs: the units the sessions proved are not the evidence's proved_units")
+    assert run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}) == ("reject", "verdict flock-verify/s did not accept")
+    got = run(base | {"proofs": proofs([])}, blobs_=blobs[1:])
+    assert got[0] == "reject" and got[1].startswith("proofs: circuit: no blob has the SHA-512"), got
+    got = run(base | {"proofs": proofs(["s"]), "sessions": ["s"]}, blobs_=blobs[:2])
+    assert got[0] == "reject" and got[1].startswith("proofs: session s's record: no blob has the SHA-512"), got
+    assert run(base | {"proofs": proofs(["s"]), "sessions": ["t"]}) == (
+        "reject", "evidence: proofs: the sessions are not the evidence's sessions, in order")
+    got = run(base | {"proofs": proofs([])}, p={k: v for k, v in p2.items() if k != "proofs"})
+    assert got[0] == "reject" and got[1].startswith("params: the parameters name no proofs"), got
+
+
 def committed_bits(j):
     """`Q_call` v1 at X over a program of root Calls (`partition_object.evaluate`): per distinct Definition, in Call order,
     its units' committed bits (`partition._committed_bits`), twice, as Lean gives them read off its layout and by the walk
