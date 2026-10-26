@@ -604,7 +604,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have htops : (q₁.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? =
       (q₂.ligerito.recursiveCaps.toList.map Array.toList)[ℓ]? := by
     rw [hfit₁.tops, hfit₂.tops, hsched₁, hsched₂]
-    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) => cutLens u.2.1.toList rs)
+    exact flatMap_zip_congr (fun (u : Flock.RecVStar.SchedRound) (rs : List ByteArray) =>
+        (cutLens u.2.1.toList rs).map (List.map nodeOf))
       (fun u : Flock.RecVStar.SchedRound => u.2.1.size)
       (fun u b => by simp [cutLens_length]) _ _ _ (preLig spec st + capRound sch.k0 (ℓ + 1) + 1)
       (fun j hj => hrow j (by omega)) (by omega) ℓ (by rw [hsumJ]; omega)
@@ -641,8 +642,8 @@ theorem capPrefixR (rd : Claims.Msg → Option FinalP) : CapPrefixR rd := by
   have hd := hel₁.2.1.symm.trans hel₂.2.1
   simp only [habs, ↓reduceIte, List.cons.injEq, and_true] at hd
   have hcb := congrArg (fun b : ByteArray => b.data.toList) hd
-  simp only at hcb
-  have hvv := colBytes_inj hcb
+  simp only [List.toList_toArray] at hcb
+  have hvv := colBytes_inj (padRow_inj hcb (by simp [Frame.colBytes_length]))
   have hkf : kFr q₁.ligerito.messages[capMsg sch.k0 ℓ]! = kFr q₂.ligerito.messages[capMsg sch.k0 ℓ]! := by
     simp only [List.cons.injEq, and_true] at hvv
     obtain ⟨e1, e2, e3, e4⟩ := hvv
