@@ -147,18 +147,22 @@ def split_dir(path: str) -> str | None:
     return next((d for d, index in SPLIT_DOCUMENT_DIRS.items() if path.startswith(d) or path == index), None)
 
 
+def markdown_cap(path: str) -> int:
+    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/verity/check/gates/markdown_caps.py`)
+    reads it and `markdown_over_cap` from this file at `main`, so keep both importable with the standard library alone."""
+    if os.path.basename(path) == "SKILL.md":
+        return OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
+    return PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
+
+
 def markdown_over_cap(path: str, size: int) -> str | None:
     """Why the markdown file ``path`` of ``size`` bytes is over its cap, and where its detail goes; None within it."""
+    if size <= (cap := markdown_cap(path)):
+        return None
     if os.path.basename(path) == "SKILL.md":
-        cap = OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
-        if size <= cap:
-            return None
         return (f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; compact it: keep the current "
                 "procedure and rules, drop what AGENTS.md or another skill states, and move dates and history to Daniel's "
                 "decisions log or a note (.agents/skills/authoring-skills/SKILL.md)")
-    cap = PROTOCOL_SIZE_CAP if os.path.basename(path) == "PROTOCOL.md" else MD_SIZE_CAP
-    if size <= cap:
-        return None
     where = f"one file per entry under {d}" if (d := split_dir(path)) else "the notes store (cite it by note:<id>)"
     return f"{path}: {size / 1024:.0f} KB > {cap // 1024} KB, {size - cap} bytes over; move detail to {where}"
 

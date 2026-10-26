@@ -20,8 +20,6 @@
     {"file": "verity_vllm/check/poc_description.py", "kind": "module-name", "symbol": "<module>", "detail": "poc_description"},
     {"file": "verity_vllm/check/poc_required_interface.py", "kind": "module-name", "symbol": "<module>", "detail": "poc_required_interface"},
     {"file": "verity_vllm/check/replay/replay.py", "kind": "doc-date", "symbol": "<module>", "detail": "date"},
-    {"file": "verity_vllm/correspondence/resolve.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "F-rN"},
-    {"file": "verity_vllm/correspondence/resolve.py", "kind": "doc-board-id", "symbol": "DescriptorCorrespondence.arg_slot", "detail": "F-rN"},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-board-id", "symbol": "<module>", "detail": "M-nnnn", "count": 2},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-round", "symbol": "<module>", "detail": "R1N", "count": 4},
     {"file": "verity_vllm/pipeline/admission_planner.py", "kind": "doc-round", "symbol": "gap_accounting", "detail": "R1N"},
