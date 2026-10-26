@@ -209,9 +209,11 @@ theorem enc_dec (v : Fin 16) : enc (dec ((v : ℕ) : Word)) = ((v : ℕ) : Word)
   have hv : ((v : ℕ) : Word).val = v := by
     rw [ZMod.val_natCast]
     exact Nat.mod_eq_of_lt (lt_trans v.isLt (by norm_num))
+  have hlt : ((v : ℕ) : Word).val < 17 := by rw [hv]; exact lt_trans v.isLt (by norm_num)
   unfold dec
-  rw [dif_pos (by rw [hv]; omega)]
-  exact ZMod.natCast_zmod_val _
+  split_ifs
+  show ((((v : ℕ) : Word).val : ℕ) : Word) = _
+  rw [hv]
 
 /-- **The witness round's knobs**: two words (`n = 2`, `n' = nb = L = 1`), the noise the word itself (word `i` is the
 dither's `d i`), a check of one of the two words (`s = 1`), no oracle, and the transparent root: each word reduced into
@@ -242,7 +244,7 @@ theorem twWord (a : twRound.Inst) (d : TDraw) (i : Fin 2) (j b : Fin 1) :
 
 theorem twOk_iff (a : twRound.Inst) (d : TDraw) (c : Fin 2) (T : TTr) :
     twRound.ok a d c T ↔ T c 0 0 = ((d c : ℕ) : Word) := by
-  show (∀ _ : Fin 1, T c 0 0 = noFoldWord twNF (twNF.noise a d) c 0 0) ↔ _
+  show (∀ _ : Fin 1, T c 0 0 = noFoldWord twNF (twNF.noise a d) c (0 : Fin 1) (0 : Fin 1)) ↔ _
   rw [twWord]
   exact ⟨fun h => h 0, fun h _ => h⟩
 
@@ -254,7 +256,8 @@ theorem twOpens_iff (o : Unit) (r : TRoot) (c : Fin 2) (T : TTr) :
 theorem twAccept_iff (o : Unit) (a : twRound.Inst) (d : TDraw) (c : Fin 2) (r : TRoot)
     (y : Fin 1 → Word × Unit) :
     twRound.accept o a d c r y ↔ enc (r c 0 0) = (y 0).1 ∧ (y 0).1 = ((d c : ℕ) : Word) := by
-  show (∀ q : Fin 1, enc (r c 0 0) = (y q).1 ∧ (y q).1 = noFoldWord twNF (twNF.noise a d) c 0 0) ↔ _
+  show (∀ q : Fin 1, enc (r c 0 0) = (y q).1 ∧
+    (y q).1 = noFoldWord twNF (twNF.noise a d) c (0 : Fin 1) (0 : Fin 1)) ↔ _
   rw [twWord]
   exact ⟨fun h => h 0, fun h q => by rw [Subsingleton.elim q 0]; exact h⟩
 
@@ -263,6 +266,7 @@ end Round
 section Sampling
 
 theorem prob_le_zero {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p ≤ 0 := by
+  classical
   unfold prob
   rw [filter_false_of_mem fun ω _ => h ω, card_empty, Nat.cast_zero, zero_div]
 
@@ -376,7 +380,7 @@ noncomputable def twPd : Period tw where
 /-- `μ` is the witness period's dual price at one credited unit: the honest strategy fills what the credited rounds
 leave with the other jobs. -/
 theorem twDual : twPd.DualOpt twμ 1 := by
-  refine ⟨twμ_nonneg, fun j r => ?_, fun j => ?_, fun j => 8 - twHon j, ⟨fun j => ?_, fun r => ?_⟩, ?_⟩
+  refine ⟨twμ_nonneg, fun (j r : Fin 3) => ?_, fun (j : Fin 3) => ?_, fun j => 8 - twHon j, ⟨fun j => ?_, fun r => ?_⟩, ?_⟩
   · show (0 : ℝ) ≤ if j = r then 1 else 0
     split_ifs <;> norm_num
   · show twμ j ≤ ∑ r : Fin 3, twμ r * if j = r then 1 else 0
@@ -509,7 +513,7 @@ theorem fill_past (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w v : Fin 2) (hv : 
   simp [fill, past, show v < w from hv]
 
 /-- Round `w`'s root, recomputed from the advice and the dither: the prover's own work. -/
-def rootOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv × TDraw) : TRoot :=
+noncomputable def rootOf (A : Prover tw twRound 2) (w : Fin 2) (p : twAdv × TDraw) : TRoot :=
   (TAlg.run (A.work w) ((), A.state () (fill p.1) w, p.2)).2
 
 theorem rootOf_past (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw × Fin 2) (w : Fin 2) :
@@ -517,7 +521,7 @@ theorem rootOf_past (A : Prover tw twRound 2) (o : Unit) (x : Fin 2 → TDraw ×
   cases o
   show (TAlg.run (A.work w) ((), A.state () (fill (past () x w)) w, (x w).1)).2 =
     (TAlg.run (A.work w) ((), A.state () x w, (x w).1)).2
-  rw [ShaRealize.state_congr A () w fun v hv => fill_past () x w v hv]
+  rw [Pouw.SecurityProofs.ShaRealize.state_congr A () w fun v hv => fill_past () x w v hv]
 
 /-- The root cells round `w`'s work varies: the MAC and hash units the machine charges it. -/
 noncomputable def cw (A : Prover tw twRound 2) (w : Fin 2) : ℕ :=
@@ -597,12 +601,10 @@ theorem twExtract : ExtractAdv tw twRound 2 twReg twBadv twξ (fun _ => 0) := by
   · refine prob_le_zero fun ox ⟨hacc, w, hw⟩ => hw ⟨?_, ?_⟩
     · have ha := (twAccept_iff _ _ _ _ _ _).1 (hacc w)
       refine (twOk_iff _ _ _ _).2 ?_
-      show enc (rootOf A w (past ox.1 ox.2 w, (ox.2 w).1) (ox.2 w).2 0 0) = _
-      rw [rootOf_past]
-      exact ha.1.trans ha.2
+      exact (congrArg (fun r : TRoot => enc (r (ox.2 w).2 0 0)) (rootOf_past A ox.1 ox.2 w)).trans
+        (ha.1.trans ha.2)
     · refine (twOpens_iff _ _ _ _).2 ?_
-      show _ = enc (rootOf A w (past ox.1 ox.2 w, (ox.2 w).1) (ox.2 w).2 0 0)
-      rw [rootOf_past]
+      exact (congrArg (fun r : TRoot => enc (r (ox.2 w).2 0 0)) (rootOf_past A ox.1 ox.2 w)).symm
 
 end Premises
 
