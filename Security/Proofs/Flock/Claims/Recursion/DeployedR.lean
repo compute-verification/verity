@@ -18,8 +18,9 @@ V\*'s bound layout `layoutBTops (finOpen (restR elem))`, fixes every choice the 
   other field from the opened rounds. The record value is not in it: `decR` builds it (`recJ`).
 * **V\*'s last message** (`finalR`): every earlier round's openings, row then salt, round by round in commit order;
   then the element-level last message; then a trailer the statement fixes (`trailer`): each opened row's byte length,
-  round by round, then the trailer's own length. `finalR` reads the trailer from the end, then cuts the rest at it
-  (`cutRounds`). Every byte `finalR` reads as a length is a constant of the statement, so it reads every witness.
+  round by round, then the trailer's own length, every number in variable-length bytes (`encV`, so no length needs to
+  fit a word). `finalR` reads the trailer from the end, then cuts the rest at it (`cutRounds`). Every byte `finalR`
+  reads as a length is a constant of the statement, so it reads every witness.
 * **The last round's pieces past the openings** (`restR elem`): the element-level last message's pieces (`elem`),
   then the trailer, constant bytes at the last part (`trailerPiece`). `elem` is the one choice still open: the
   pieces at the `rec-open` level parts' hidden rows and siblings. `ElemFramed elem` is the fact it is to meet: its
@@ -127,23 +128,41 @@ def cutRounds : List (List ℕ) → Msg → Option (List (List (Msg × Salt)) ×
   | [], m => some ([], m)
   | l :: ls, m => (cutRound l m).bind fun p => (cutRounds ls p.2).map fun q => (p.1 :: q.1, q.2)
 
-/-- **The trailer**: each opened row's byte length, round by round, then the trailer's own length. -/
+/-- **A number's variable-length bytes** (LEB128): seven bits a byte, the low ones first, the high bit set on every
+byte but the last. Every number has them, so no length the trailer holds needs to fit a word. -/
+def encV (n : ℕ) : Msg :=
+  if n < 128 then [n.toUInt8] else (n % 128 + 128).toUInt8 :: encV (n / 128)
+termination_by n
+decreasing_by omega
+
+/-- `encV` read off the front of a message. -/
+def rdVL : Msg → Option (ℕ × Msg)
+  | [] => none
+  | b :: t => if b.toNat < 128 then some (b.toNat, t) else (rdVL t).map fun p => (b.toNat - 128 + 128 * p.1, p.2)
+
+def rdV : Rd ℕ := fun m => rdVL m
+
+/-- A list, after its length's variable-length bytes. -/
+def encVL {α : Type} (e : α → Msg) (l : List α) : Msg := encV l.length ++ l.flatMap e
+
+def rdVLs {α : Type} (r : Rd α) : Rd (List α) := do FlockDeploy.rdListN r (← rdV)
+
+/-- **The trailer**: each opened row's byte length, round by round, then the trailer's own length, its bytes
+reversed so it reads off the message's end. -/
 def trailer (lens : List (List ℕ)) : Msg :=
-  encList (encList encNat) lens ++ encNat (encList (encList encNat) lens).length
+  encVL (encVL encV) lens ++ (encV (encVL (encVL encV) lens).length).reverse
 
 /-- **The deployed reader of V\*'s last message**: the trailer off its end, then the openings at its lengths, then
 the element-level last message. -/
 def finalR (m : Msg) : Option (List (List (Msg × Salt)) × Msg) :=
-  if m.length < 8 then none
-  else
-    match rdNat.run (m.drop (m.length - 8)) with
-    | some (n, []) =>
-      if n + 8 ≤ m.length then
-        match (rdList (rdList rdNat)).run ((m.take (m.length - 8)).drop (m.length - 8 - n)) with
-        | some (lens, []) => cutRounds lens (m.take (m.length - 8 - n))
-        | _ => none
-      else none
-    | _ => none
+  match rdVL m.reverse with
+  | some (n, rest) =>
+    if n ≤ rest.length then
+      match (rdVLs (rdVLs rdV)).run (rest.take n).reverse with
+      | some (lens, []) => cutRounds lens (rest.drop n).reverse
+      | _ => none
+    else none
+  | none => none
 
 /-! ## The last round's pieces past the openings (`restR`) -/
 
@@ -283,29 +302,47 @@ theorem rdR_encLast {stmt : Msg} {ps : List Flock.Proof} (hs : stmt.length < 2 ^
   unfold rdR encLast
   simp only [hb]
 
+theorem rdVL_encV : ∀ (n : ℕ) (rest : Msg), rdVL (encV n ++ rest) = some (n, rest) := by
+  intro n
+  induction n using Nat.strong_induction_on with
+  | _ n ih =>
+    intro rest
+    rw [encV]
+    split_ifs with h
+    · have hb : (n.toUInt8).toNat = n := by
+        rw [Nat.toUInt8, UInt8.toNat_ofNat]
+        exact Nat.mod_eq_of_lt (by omega)
+      simp only [List.singleton_append, rdVL, hb, h, ↓reduceIte]
+    · have hb : ((n % 128 + 128).toUInt8).toNat = n % 128 + 128 := by
+        rw [Nat.toUInt8, UInt8.toNat_ofNat]
+        exact Nat.mod_eq_of_lt (by omega)
+      have hlt : n / 128 < n := Nat.div_lt_self (by omega) (by omega)
+      simp only [List.cons_append, rdVL, hb, show ¬(n % 128 + 128 < 128) by omega, ↓reduceIte, ih _ hlt rest,
+        Option.map_some, Nat.add_sub_cancel, Option.some.injEq, Prod.mk.injEq, and_true]
+      omega
+
+theorem rdVLs_encVL {α : Type} {r : Rd α} {e : α → Msg} {l : List α}
+    (hr : ∀ a ∈ l, ∀ rest, r.run (e a ++ rest) = some (a, rest)) (rest : Msg) :
+    (rdVLs r).run (encVL e l ++ rest) = some (l, rest) := by
+  have hv : rdV.run (encV l.length ++ (l.flatMap e ++ rest)) = some (l.length, l.flatMap e ++ rest) :=
+    rdVL_encV _ _
+  simp only [rdVLs, encVL, List.append_assoc, StateT.run_bind, hv, Option.bind_eq_bind, Option.bind_some]
+  exact FlockComplete.rdListN_encList l hr rest
+
 /-- **`finalR` reads its trailer**: at any body `B`, the openings at the trailer's lengths and what follows. -/
-theorem finalR_trailer (B : Msg) (lens : List (List ℕ)) (hl : lens.length < 2 ^ 64)
-    (hl' : ∀ l ∈ lens, l.length < 2 ^ 64 ∧ ∀ n ∈ l, n < 2 ^ 64)
-    (hh : (encList (encList encNat) lens).length < 2 ^ 64) :
-    finalR (B ++ trailer lens) = cutRounds lens B := by
-  have hrd : (rdList (rdList rdNat)).run (encList (encList encNat) lens) = some (lens, []) := by
-    simpa using FlockComplete.rdList_encList (r := rdList rdNat) (e := encList encNat) (l := lens)
-      (fun l hm rest => FlockComplete.rdList_encList
-        (fun n hn rest => FlockComplete.rdNat_encNat ((hl' l hm).2 n hn) rest) (hl' l hm).1 rest) hl []
+theorem finalR_trailer (B : Msg) (lens : List (List ℕ)) : finalR (B ++ trailer lens) = cutRounds lens B := by
+  have hrd : (rdVLs (rdVLs rdV)).run (encVL (encVL encV) lens) = some (lens, []) := by
+    simpa using rdVLs_encVL (r := rdVLs rdV) (e := encVL encV) (l := lens)
+      (fun l _ rest => rdVLs_encVL (fun n _ rest => rdVL_encV n rest) rest) []
   unfold trailer
-  generalize encList (encList encNat) lens = h at hh hrd ⊢
-  have hm : B ++ (h ++ encNat h.length) = (B ++ h) ++ encNat h.length := (List.append_assoc ..).symm
-  have hlen : ((B ++ h) ++ encNat h.length).length = (B ++ h).length + 8 := by
-    rw [List.length_append, FlockComplete.encNat_length]
-  have hn : rdNat.run (encNat h.length) = some (h.length, []) := by
-    simpa using FlockComplete.rdNat_encNat hh []
-  have hBh : (B ++ h).length = B.length + h.length := List.length_append
-  rw [hm]
+  generalize encVL (encVL encV) lens = T at hrd ⊢
+  have hrev : (B ++ (T ++ (encV T.length).reverse)).reverse = encV T.length ++ (T.reverse ++ B.reverse) := by
+    simp [List.reverse_append]
   unfold finalR
-  rw [hlen, if_neg (by omega), Nat.add_sub_cancel, List.drop_left, hn]
+  rw [hrev, rdVL_encV]
   simp only
-  rw [if_pos (by omega), List.take_left, List.drop_left' (by omega : B.length = (B ++ h).length - h.length), hrd]
+  rw [if_pos (by simp), List.take_left' (by simp), List.reverse_reverse, hrd]
   simp only
-  rw [List.append_assoc, List.take_left' (by omega : B.length = (B ++ h).length - h.length)]
+  rw [List.drop_left' (by simp), List.reverse_reverse]
 
 end RecDeploy.DeployedR
