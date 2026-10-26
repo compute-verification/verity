@@ -2924,10 +2924,6 @@
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "accept"
    },
-   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
-    "function": "NetworkCheck.LinkWindow.verdict",
-    "outcome": "accept"
-   },
    "Properties.NetworkCertifier.undecidedPending": {
     "function": "NetworkCheck.Check.protocol.check",
     "outcome": "undecided"
@@ -3286,6 +3282,10 @@
    },
    "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": {
     "function": "RemoteAudit.Shared.run",
+    "outcome": "accept"
+   },
+   "Properties.NetworkCertifier.linkWindowAcceptMeans": {
+    "function": "NetworkCheck.LinkWindow.verdict",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.liveCoinBinding": {
