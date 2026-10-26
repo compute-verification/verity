@@ -4,7 +4,8 @@ import NciCheck.Protocol
 # What NCI's core protocol's acceptance means
 
 `NciCheck.Protocol.check` (`verity/core/protocols/network/nci/lean/NciCheck/Protocol.lean`, package `nci_check`) is NCI
-as a core protocol, `verity/nci/v1`, the component onsite composes (`Core.Onsite.components`): it runs the check of
+as a core protocol, `verity/nci/v1`, the registration check onsite runs before composing (`Core.Onsite.protocol`,
+`Core.Composition.registered`; it is not one of onsite's components): it runs the check of
 record, `NciCheck.Baseline.evaluate`, on the instance its params and evidence give (`instanceOf`) and the trusted input
 its params and commitment give (`trustedOf`).
 
@@ -12,8 +13,8 @@ its params and commitment give (`trustedOf`).
   verdict whose `complies` is `true`, the policy check (`NciCheck.Desc.evaluate`) gives that same verdict on the
   instance, and the profile is the verdict's report (`reportOf`).
 
-With `Properties.Composition`'s `AnswerAccepts` and `AcceptMeans` it takes an accepted onsite answer to an accepted
-check of record; `BaselineProvenance` (`Properties.Nci.Baseline`) and `DescWitnesses` (`Properties.NciDesc.Verdict`)
+With `Properties.Composition`'s `AnswerAccepts` and `AcceptRegistration` it takes an accepted onsite answer to an
+accepted check of record; `BaselineProvenance` (`Properties.Nci.Baseline`) and `DescWitnesses` (`Properties.NciDesc.Verdict`)
 say what that verdict means: θ holds what the deployment's first record registers, and the declaration complies.
 
 Proved as `NciCheck.Properties.SecurityProofs.ProtocolAccepts : NciCheck.Properties.ProtocolAccepts` in

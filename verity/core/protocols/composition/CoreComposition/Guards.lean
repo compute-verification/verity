@@ -1,7 +1,8 @@
 /-
 The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
 k = 2): every pair of the components' verdicts, reject dominating; a commitment that doesn't bind their digests; and
-every way the cases can fail to fit the composition.
+every way the cases can fail to fit the composition. Then the same two after a registration check, a third stub `r`
+(`registered`): its refusal refusing the whole, and the commitment binding its digest.
 -/
 import CoreComposition.Cases
 import CoreComposition.Stubs
@@ -86,5 +87,51 @@ private def readsBack (a : Answer) : Bool :=
 #guard (toy.answer (paramsOf [accepts "a", accepts "b"]).toUTF8 (commitmentOf toy [accepts "a", accepts "b"])
   "{\"components\":[{\"id\":\"a\"}]}".toUTF8).reason ==
   some "evidence: a component's case: the keys must be [commitment, evidence, id, params], not [id]"
+
+private def registeredToy : Protocol := registered "verity/toy/v1" (Stub.stub "r") [Stub.stub "a", Stub.stub "b"]
+
+private def answerR (r : Stubbed) (xs : List Stubbed) (c : ByteArray := commitmentOf registeredToy xs ++ r.root) :
+    Answer :=
+  Cases.answerRegistered registeredToy r.case (xs.map (·.case)) c
+
+-- a registered composition runs its registration check first: a registration it refuses refuses the whole, whatever the
+-- components answer
+#guard (answerR (accepts "r") [accepts "a", accepts "b"]).verdict == .accept
+#guard (answerR (rejects "r") [accepts "a", accepts "b"]).reason ==
+  some "registration: r reject: 1 of 2 drawn units failed"
+#guard (answerR (undecided "r") [accepts "a", accepts "b"]).reason ==
+  some "registration: r undecided: 1 of the 2 units drawn"
+#guard (answerR (rejects "r") [accepts "a", undecided "b"]).verdict == .reject
+#guard (answerR (undecided "r") [rejects "a", undecided "b"]).reason ==
+  some "registration: r undecided: 1 of the 2 units drawn"
+-- an accepted registration leaves the verdict to the components, as `product`'s
+#guard (answerR (accepts "r") [accepts "a", undecided "b"]).verdict == .undecided
+#guard (answerR (accepts "r") [undecided "a", rejects "b"]).reason == some "b reject: 1 of 2 drawn units failed"
+#guard (answerR (accepts "r") [accepts "a"]).reason == some "params: b is missing"
+-- the commitment binds the components' digests and then the registration's
+#guard (answerR (accepts "r") [accepts "a", accepts "b"]
+  (c := commitmentOf registeredToy [accepts "a", accepts "b"])).reason ==
+  some "the commitment does not bind the registration's digest"
+#guard (answerR (accepts "r") [accepts "a", accepts "b"]
+  (c := commitmentOf registeredToy [accepts "a", accepts "b"] ++ { accepts "r" with root := ⟨#[1]⟩ }.root)).reason ==
+  some "the commitment does not bind the registration's digest"
+#guard (answerR (accepts "r") [accepts "a", accepts "b"]
+  (c := commitmentOf toy [accepts "a", accepts "b"] ++ (accepts "r").root)).reason ==
+  some "the commitment does not bind the components' digests"
+#guard (answerR (accepts "r") [accepts "a", accepts "b"] (c := ByteArray.empty)).reason ==
+  some "commitment: the binding of the components' digests is 64 bytes, then the registration's digest: not 0 bytes"
+-- the registration is the registration check's, under the composition's params
+#guard (answerR (accepts "a") [accepts "a", accepts "b"]).reason == some "params: the registration is r's, not a's"
+#guard (registeredToy.answer (paramsOfRegistered (accepts "r").case [(accepts "a").case, (accepts "b").case]).toUTF8
+  (commitmentOf registeredToy [accepts "a", accepts "b"] ++ (accepts "r").root)
+  (evidenceOfRegistered { accepts "r" with k := 1 }.case [(accepts "a").case, (accepts "b").case]).toUTF8).reason ==
+  some "evidence: the registration's case carries params other than the composition's"
+#guard (registeredToy.answer (paramsOf [accepts "a", accepts "b"]).toUTF8
+  (commitmentOf registeredToy [accepts "a", accepts "b"] ++ (accepts "r").root)
+  (evidenceOfRegistered (accepts "r").case [(accepts "a").case, (accepts "b").case]).toUTF8).reason ==
+  some "params: the composition's params: the keys must be [components, registration], not [components]"
+-- on acceptance only the components' public outputs and profiles, keyed by their ids
+#guard (answerR (accepts "r") [accepts "a", accepts "b"]).published.map (·.compress) ==
+  some "{\"a\":{\"passed\":2},\"b\":{\"passed\":2}}"
 
 end Core.Composition.Guards

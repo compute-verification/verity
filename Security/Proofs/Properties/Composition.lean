@@ -3,8 +3,9 @@ import Properties.Composition
 /-!
 # The composition's properties, proved
 
-`answerAccepts` and `acceptMeans` of `Properties.Composition`, by unfolding `Core.Protocol.answer`, and
-`Core.Composition.check` into `run` and `judge`.
+`answerAccepts`, `acceptMeans` and `acceptRegistration` of `Properties.Composition`, by unfolding
+`Core.Protocol.answer`, `Core.Composition.check` into `run` and `judge`, and `Core.Composition.checkRegistered` into its
+registration check and then `check`.
 -/
 
 namespace Properties.Composition
@@ -139,5 +140,29 @@ theorem acceptMeans : AcceptMeans := by
   obtain ⟨P, n, k⟩ := x
   simp only at hd ⊢
   rw [hd]
+
+theorem acceptRegistration : AcceptRegistration := by
+  intro id R cs n ps b d k ev pub prof h
+  simp only [checkRegistered] at h
+  split at h
+  · cases h
+  rename_i hn
+  split at h
+  · cases h
+  rename_i hk
+  split at h
+  · cases h
+  rename_i hp
+  split at h
+  · cases h
+  rename_i hv
+  split at h
+  · cases h
+  rename_i hd
+  have hv' : (registrationAnswer R n k).verdict = .accept := Decidable.of_not_not hv
+  refine ⟨Decidable.of_not_not hn, Decidable.of_not_not hk, Decidable.of_not_not hp, answerAccepts _ _ _ _ hv', ?_,
+    acceptMeans _ _ _ _ _ _ _ h⟩
+  rw [← answer_digest hv']
+  exact Decidable.of_not_not hd
 
 end Properties.Composition
