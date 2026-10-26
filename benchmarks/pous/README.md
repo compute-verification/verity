@@ -78,6 +78,17 @@ Implementations:
     roots, the fastest of `--reps` on a pseudo-random block, against twice the limit (SeqRoot; the root is untuned, so an upper
     bound on the fastest GPU root).
   The transport is the harness's responder wire, not `p2-audit-wire/v4`'s frames.
+  - `store.py`: the served model's encoded weights store. It lays the MQA16K INT8 weights out in W with every tensor
+    starting on a block (`store.py layout` writes the layout JSON), and its `decode_layer` is the reference a
+    decode-to-staging kernel matches byte for byte. `store-toy/` is a 2-layer store at the registered width: its salt,
+    C*, negative blocks, and spot vectors at the real store's indices, with W and the staging buffers pinned by digest
+    (`store.py toy --plain` writes them). `tests/test_pous_p2_store.py` regenerates both. `store.py commit` is
+    `setup.commit` of the real W, regenerated in this layout from the seeded generator (`verity_torch_loop.weights`),
+    with each s8 tensor held to the generator's manifest by SHA-256 as the pass reads it. `store.py encode` draws the
+    salt from the auditor's coin and encodes C* on every GPU of a node (`pod.sh IMPL=p2-store ... -- encode ...`), as
+    canonical segment files a rerun resumes; `--segments LO:HI --order down` encodes a part and `finish` joins the
+    parts. `verify --decode` rereads a store and decodes it into the commitment, `spot` decodes random blocks against W
+    regenerated from the seed, and `tie` binds the store to the weights' registration digest.
 
 - `p2-gpu`: the efficient-cryptography campaign's tuned P2 kernel (`p2_gpu/`, CGBN) for the **experimental**
   `p2-16448/v2`, whose ChaCha8 keys the spec does not allow (its F4 names counter-mode SHA-512). The registered P2 with the
