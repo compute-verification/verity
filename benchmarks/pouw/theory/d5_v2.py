@@ -188,9 +188,10 @@ def at_prices(card: pb.Card, j: dict, N: int, mu: dict, lookups: bool = True) ->
     ps = min(pb.mu_cost(card, ld, mu) for ld in sha[2].values())
     hsh = sha[1] * ps
     routes = {k: v for k, v in pub.routes.items() if v > 1e-6 and not k.startswith("sha")}
+    pub_mm, H_mm = (0.0 if abs(x) < 1e-9 * hon.c else x for x in (pub.c - hsh, hon.c - hsh))
     return dict(c=pub.c / hon.c, leak=1 - pub.c / opt.c, eps_alg=1 - opt.c / hon.c,
-                c_mm=mm_ratio(pub.c - hsh, hon.c - hsh, hon.c), pub=pub.c, opt=opt.c, H=hon.c, pub_mm=pub.c - hsh,
-                H_mm=hon.c - hsh, pub_sha=hsh, pub_sha_clocks=ps / card.s8, comps=sha[1],
+                c_mm=mm_ratio(pub_mm, H_mm, hon.c), pub=pub.c, opt=opt.c, H=hon.c, pub_mm=pub_mm,
+                H_mm=H_mm, pub_sha=hsh, pub_sha_clocks=ps / card.s8, comps=sha[1],
                 mu={k: v * card.s8 for k, v in mu.items() if v > 1e-12}, mix=pub.mix, routes=routes)
 
 
@@ -673,8 +674,9 @@ def report(res: dict) -> None:
               + f" {'+'.join(d['binding'])}; A21: {d['a21']}")
     print("\n== advice on W' (P14, L28): standalone c, or the job's pub (MAC-times a credited MAC); without | with")
     for (card, label, m), row in res["advice"].items():
+        mix = ", ".join(f"{k} {v:.2f}" for k, v in row[True]["mix"].items() if v > 1e-3)
         print(f"  {card:13} {label:10} m {m:5}: {row[False]['c']:.4f} | {row[True]['c']:.4f} "
-              f"(gain {1 - row[True]['c'] / row[False]['c']:.2%}; with: {row[True]['mix']})")
+              f"(gain {1 - row[True]['c'] / row[False]['c']:.2%}; with: {mix})")
     print("\n== named programs")
     for r in res["named"]:
         print("  " + json.dumps(_f(r)))
