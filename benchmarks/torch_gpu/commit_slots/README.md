@@ -116,23 +116,26 @@ quantizer (2 units of codes and one of the scale), down and residual.
 
 ## Measured on the H200
 
-Run `r20261026-092158-634c` (vy-dc-h200, one H200, this directory at 1a452ff289 in a tree merged with #4612 for
-FAMILIES' layout, `gpu.sh` and one FAMILIES step), on the engine:
+Run `r20261026-101500-2636` (vy-dc-h200, one H200, the engine with its conflict-free mask and the leaf kernel at 1 block
+an SM, in a tree merged with #4612 for FAMILIES' layout: `gpu.sh`'s tests and check, and one FAMILIES step); the tables
+alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, before that mask:
 
-- **Bit-exact.** The tests passed (64, the device against the host twin included), and so did every `check.py` check:
+- **Bit-exact.** The tests passed (64, the device against the host twin included), and so did every `check.py` check,
+  each root equal to 1a452ff289's:
   - the fixture's root;
   - the edge layout at 1 to 300 slots against the reference, and at 4,097 and 20,480 against the host twin;
   - two and three H200 layers, and three layers in two groups;
   - the frozen layout at 4,096, 16,384 and 20,480 slots (141, 566 and 707 GB), each with six sampled slots rebuilt by
     the reference and the step root from the device's slot roots.
 - **FAMILIES at 4,096 slots** (#4612's layout: 6,102,102 units of 6,102,832 rows, 41 MB a slot, 168 GB a step). A step
-  holds 0.54 GiB beyond its plan (2.07 GiB) and inputs, 6 MiB of it frontiers, and takes 83.9 s (80.0 s and 2.05 GiB
-  with `temp_bytes` at 4 GiB), against 108.2 s at ten compressions a row-slot (run r20261026-082348-7996). The split:
-  hiding leaves with their frame leaves and the one-row units' slot-tree leaves 62.9 s (was 67.5 s), the multi-row
-  units' roots and slot-tree leaves 0.35 s (was 16.1 s), the fold 13.6 s (was 17.6 s) and row digests 7.0 s. Its rows
-  average 6.7 bytes, so the step is the hashing of 25.0G row-slots, not their bytes: nine SHA-512 compressions, three
-  ChaCha20 blocks and the hm96 mask each (The call, above). In G compressions/s against the engine's 4.79: leaves 2.39 (the
-  ChaCha20 blocks and the mask not counted), row digests 3.72, the fold 3.67, the step 2.69. The roots of six slots
+  holds 0.54 GiB beyond its plan (2.07 GiB) and inputs, 6 MiB of it frontiers, and takes 71.9 s (69.4 s and 2.05 GiB
+  with `temp_bytes` at 4 GiB), against 83.9 s with the mask's bank conflicts (run r20261026-092158-634c) and 108.2 s at
+  ten compressions a row-slot (run r20261026-082348-7996). The split: hiding leaves with their frame leaves and the
+  one-row units' slot-tree leaves 51.0 s (was 62.9 s), the multi-row units' roots and slot-tree leaves 0.35 s, the fold
+  13.6 s and row digests 7.0 s. Its rows average 6.7 bytes, so the step is the hashing of 25.0G row-slots, not their
+  bytes: nine SHA-512 compressions, three ChaCha20 blocks and the hm96 mask each (The call, above). In G compressions/s
+  against the engine's 4.79: leaves 2.94 (the ChaCha20 blocks and the mask not counted), row digests 3.72, the fold 3.67,
+  the step 3.13. The roots of six slots
   (0, 1, 3,321, 3,322, 4,094 and 4,095) equal the leaf-matrix path's, and the step root equals the reference's step
   tree.
   Over the same random unit leaves at 35 slots (one pass), the fold and close take 0.153 s and 0.37 GiB, against the
