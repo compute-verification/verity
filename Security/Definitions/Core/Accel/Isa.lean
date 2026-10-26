@@ -333,6 +333,8 @@ inductive Op (S : Type) where
   | mma (fa fb : Fmt) (sat : Bool) (sh : Shape) (sa sb : S)
   /-- a lane function on registers -/
   | lane (g : Lane)
+  /-- a uniform-datapath instruction: one lane function a warp computes once (`UIADD3`, `ULOP3`, …), on registers -/
+  | uni (g : Lane)
   /-- `n` words from store `s` to store `t` -/
   | copy (s t : S) (n : ℕ)
   /-- an atomic on a word of store `s`: input 0 and output 0 are that word, input 1 the register operand, and output
@@ -349,34 +351,34 @@ variable {S : Type}
 
 def nIn : Op S → ℕ
   | .mma fa fb _ sh _ _ => sh.wa fa + sh.wb fb + sh.m * sh.n
-  | .lane g => g.nIn
+  | .lane g | .uni g => g.nIn
   | .copy _ _ n => n
   | .atom _ _ => 2
 
 def nOut : Op S → ℕ
   | .mma _ _ _ sh _ _ => sh.m * sh.n
-  | .lane g => g.nOut
+  | .lane g | .uni g => g.nOut
   | .copy _ _ n => n
   | .atom _ _ => 2
 
 /-- The store input `i` is read from (`reg` is the register store). -/
 def inStore (reg : S) : (o : Op S) → Fin o.nIn → S
   | .mma fa fb _ sh sa sb, i => if i.val < sh.wa fa then sa else if i.val < sh.wa fa + sh.wb fb then sb else reg
-  | .lane _, _ => reg
+  | .lane _, _ | .uni _, _ => reg
   | .copy s _ _, _ => s
   | .atom s _, i => if i.val = 0 then s else reg
 
 /-- The store output `i` is written to. -/
 def outStore (reg : S) : (o : Op S) → Fin o.nOut → S
   | .mma .., _ => reg
-  | .lane _, _ => reg
+  | .lane _, _ | .uni _, _ => reg
   | .copy _ t _, _ => t
   | .atom s _, i => if i.val = 0 then s else reg
 
 /-- An opcode's semantics, the MMA's dot for formats `fa`, `fb`, saturation and `k` given by `dot`. -/
 def eval (dot : Fmt → Fmt → Bool → ℕ → Dot) : (o : Op S) → (Fin o.nIn → Word) → Fin o.nOut → Word
   | .mma fa fb sat sh _ _, v, o => mmaEval (dot fa fb sat sh.k) fa fb sh (getD v) o.val
-  | .lane g, v, o => g.eval (getD v) o.val
+  | .lane g, v, o | .uni g, v, o => g.eval (getD v) o.val
   | .copy _ _ _, v, o => getD v o.val
   | .atom _ .add, v, o => if o.val = 0 then getD v 0 + getD v 1 else getD v 0
   | .atom _ .exch, v, o => if o.val = 0 then getD v 1 else getD v 0

@@ -82,7 +82,8 @@ def P2Frame : Prop :=
     (dst : Fin (m.nOut o) → Machine.Operand) (pred : Option ℕ) (M : m.Mem) (l : m.Loc),
     (∀ i, (dst i).locIn (m.outStore o i) M ≠ some l) → Machine.execOp o src dst pred M l = M l
 
-/-- **P2, priced moves**: every opcode uses at least `1/32` of an issue slot, at any tensor weights. -/
+/-- **P2, priced moves**: every opcode uses at least `1/32` of an issue slot, at any tensor weights, so no instruction
+is free on every resource: not a `b1` MMA (a slot, whatever `Open.b1` is), a uniform instruction (a slot) or a move. -/
 def P2Priced : Prop := ∀ (weight : Fmt → ℚ≥0) (o : Op Store), 1 / 32 ≤ opUse weight o .issue
 
 end Verity.Accel

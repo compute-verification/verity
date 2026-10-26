@@ -13,7 +13,9 @@ capture fixes yet (`Open`). Both instances (`Accel.H200`, `Accel.Sm120`) are tab
   `imad` pipes, shared memory's banks, and device memory's bandwidth. The FP32 pipe's rate is the issue rate, so it
   is not a resource of its own; L2's bandwidth and the register file's ports are in no document, so they are free.
 * **Units** (`use`): an MMA uses `m·n·k·weight` tensor units and an issue slot; a lane function `1/32` of a slot
-  (a warp instruction is 32 lanes' functions) and one lane of its pipe; a copy `1/32` of a slot and, per word, one
+  (a warp instruction is 32 lanes' functions) and one lane of its pipe; a uniform instruction a whole slot (the
+  uniform datapath has its own ALU, but its instruction takes the warp's issue slot); a copy `1/32` of a slot and, per
+  word, one
   unit of each endpoint's bandwidth (a bank word for shared memory, a word for device memory; a register-to-register
   move a lane of the `alu`); an atomic `1/32` of a slot and one word of its store's bandwidth; a branch `1/32` of a
   slot.
@@ -73,6 +75,7 @@ def opUse (weight : Fmt → ℚ≥0) : Op Store → Res → ℚ≥0
     | .alu, .alu => 1
     | .imad, .imad => 1
     | _, _ => 0
+  | .uni _, r => if r = .issue then 1 else 0
   | .copy s t n, r =>
     (if r = .issue then 1 / 32 else 0) + (n : ℚ≥0) * (port s r + port t r) +
       (if s = .reg ∧ t = .reg ∧ r = .alu then (n : ℚ≥0) else 0)

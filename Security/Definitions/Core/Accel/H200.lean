@@ -29,9 +29,12 @@ reports.
 **Opcodes** (PTX ISA 9.0 §9.7.14–9.7.15): `mma.sync` at `m16n8` with both operands in registers, and `wgmma` at `m64`,
 `n` a multiple of 8 up to 256, `A` in registers or shared memory and `B` in shared memory; `k` as PTX gives it per
 format (`ks`); `s8`/`u8` either way, `e4m3`/`e5m2` either way (wgmma only: sm_90's `mma.sync` FP8 is two `f16` HMMAs
-and FADDs, not a tensor instruction of its own), the other formats with themselves. Every lane function; copies of at
-most 4 words (a lane's 128-bit load or store), and bulk copies of any length with shared memory at one end (TMA);
-atomics on shared memory, L2 and HBM.
+and FADDs, not a tensor instruction of its own), the other formats with themselves. Every lane function, and the
+integer ones on the uniform datapath too (`uni`, a whole issue slot each: CUDA Binary Utilities §4.3 lists Hopper's
+uniform opcodes, integer only, and no document gives their issue cost; measured at one slot beside an async `wgmma`,
+1.08–1.19 SMSP cycles, RT-H200-EMP, run r20261019-064443-0ae6, and 0.984 beside a saturated lane stream, the census's
+UNI line, DC-90; `[uniform_issue]` of the sm_90 sheet); copies of at most 4 words (a lane's 128-bit load or store),
+and bulk copies of any length with shared memory at one end (TMA); atomics on shared memory, L2 and HBM.
 
 **Captured dots** (`captured`): the integer path exactly, `silicon.integer.HOPPER_SM90_S8_K32` (the clamp or wrap at
 D; `wgmma` m64n64k32, m64n128k32 and m64n256k32 `.s8`, all eight forms, about 10.3–10.6 M elements each with the
@@ -44,7 +47,7 @@ a 14-bit adder, floor −139 (`total_fp8.HOPPER_E4M3_WGMMA_K32`, lane QZ, H100, 
 **Where the instance is coarser than the card** (each lets a program do more): the pools of `Card`; a `wgmma` charged
 one issue slot (it is a warpgroup's four warp instructions); `IMAD.WIDE` one `imad` lane (it takes two); FP32 lane
 functions charged an issue slot's share only; the shuffle pipe (32 lanes a clock) omitted, a cross-lane move being a
-register copy here; the uniform datapath omitted.
+register copy here; uniform registers pooled with the register file.
 
 **Not yet in the instance** (each a gap in faithfulness, not a relaxation): DMMA (`f64` MMA, 128 MACs an SM clock,
 32 units each), 2:4-sparse MMA (`.sp`, the same products at the same rate with a free gather of `A`), `f16`
@@ -101,6 +104,7 @@ def Avail : Op Store → Prop
       ((sh.m = 16 ∧ sh.n = 8 ∧ !fp8 fa ∧ sa = .reg ∧ sb = .reg) ∨
         (sh.m = 64 ∧ 8 ∣ sh.n ∧ 8 ≤ sh.n ∧ sh.n ≤ 256 ∧ (sa = .reg ∨ sa = .smem) ∧ sb = .smem))
   | .lane _ => True
+  | .uni g => g.pipe ≠ .fma
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
 

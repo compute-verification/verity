@@ -27,7 +27,11 @@ shared memory with L1, 128 KB an SM (whitepaper: 128 KB of L1 and shared memory 
 
 **Opcodes** (PTX ISA 9.0 §9.7.14): `mma.sync` at `m16n8`, both operands in registers (sm_120 has no `wgmma`), `k` per
 format (`ks`); `s8`/`u8` either way, `e4m3`, `e5m2` and `e2m1` in any pairing (`kind::f8f6f4`), the other formats with
-themselves. Every lane function; copies of at most 4 words, and bulk copies with shared memory at one end (TMA);
+themselves. Every lane function, and the integer ones on the uniform datapath too (`uni`, a whole issue slot each:
+CUDA Binary Utilities §4.4 lists the uniform opcodes CC 10.0 to 12.0 share, and no document gives their issue cost;
+one slot as measured on sm_100, RT-B200-EMP, run r20261019-055605-6cc2, and on sm_90, a placeholder until CALIB
+measures sm_120; whether sm_120's uniform datapath has functions beyond the integer ones is a gap); copies of at most
+4 words, and bulk copies with shared memory at one end (TMA);
 atomics on shared memory, L2 and GDDR7.
 
 **Captured dots** (`captured`): the integer path exactly (`models.BLACKWELL_SM120_S8_M16N8K32`, `_WRAP`,
@@ -88,6 +92,7 @@ def pair (fa fb : Fmt) : Bool := intPair fa fb || (f8f6f4 fa && f8f6f4 fb) || fa
 def Avail : Op Store → Prop
   | .mma fa fb _ sh sa sb => pair fa fb ∧ sh.k ∈ ks fa ∧ sh.m = 16 ∧ sh.n = 8 ∧ sa = .reg ∧ sb = .reg
   | .lane _ => True
+  | .uni g => g.pipe ≠ .fma
   | .copy s t n => n ≤ 4 ∨ (s = .smem ∧ t ≠ .reg) ∨ (t = .smem ∧ s ≠ .reg)
   | .atom s _ => s ≠ .reg
 
