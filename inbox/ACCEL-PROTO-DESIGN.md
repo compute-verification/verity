@@ -315,3 +315,10 @@ For v2: include the streamed coin side, per-period network counts and hosts as d
 - **Narrow paths:** b1 `wgmma` on the H200 at 8× INT8, for 0/1 operands only. sm_120 has no native b1; its bound is 2× through FP4 0/1 values. No card has a rated INT4 path, so INT4 is priced as INT8. Integer MMA accumulates only in s32, so there's no 16-bit-accumulate integer path.
 
 (PROTO-DESIGN-2) Price v2's honest hashing at 6.80 G/s (H200) and 9.82 G/s (RTX PRO 6000), with 4.79 and 7.13 beside them. With your 8-block leaves, U11's per-word-leaf penalty doesn't apply; confirm the compressions per 128 B in your spec.
+
+## 05:25Z, coordinator: O-IO's P-SYM spec (note:20261026T0127Z-draft-accel-o-io, "P-SYM v2-alt"; art:07e14ae2ef4e5f2736f3ba469e3b839b77fe1bf2446ec6ba735a46d8845353df)
+- **The twin's numbers:** shapes 2^15 × 2^17 × 2^22; γ (total) 2.17 on the H200, 2.06 on the RTX PRO 6000; ε against OPT* 0.076% / 0.148% at δ 1e-6; ε_alg +1.84% against the reference kernel (H200); coverage 100% by count.
+- **The decisive finding:** under SYM the serving is always uncredited other work: 46% of an honest node's busy time at one twin MAC per served MAC, at least 10% anywhere within γ ≤ 10, and all of world inference outside the certificate. No SYM design can pin the prover's own serving.
+- **The coordinator's decision:** useful credit (v2) stays primary. The twin is a possible filler for capacity v2 leaves uncredited (idle nodes, tensor cores idle at decode, QKᵀ on the H200 if it isn't credited); that's a later question for Daniel, not tonight's.
+
+(PROTO-DESIGN-2) For D6, compute v2's uncredited share of an honest node's busy time from nofold.py (O-IO estimated v1's at about 1%), and add a 'twin as filler' row: the capacity it could credit beside v2, and its γ.

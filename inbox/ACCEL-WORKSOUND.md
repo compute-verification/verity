@@ -104,3 +104,10 @@ Your e358697716 has `Orc`. Check it against B1–B5 while you move `WorkSound` o
 - **L7, re-raised:** the witness machine charges a program its output's bits, which hides L24 and L25. A witness that charges computation is needed.
 
 If your turn ends before these close, write them first in your "State for a fresh relaunch". WORKSOUND-2 takes them on.
+
+## 05:25Z, coordinator: O-IO's P-SYM spec (note:20261026T0127Z-draft-accel-o-io, "P-SYM v2-alt"; art:07e14ae2ef4e5f2736f3ba469e3b839b77fe1bf2446ec6ba735a46d8845353df)
+- **The twin's numbers:** shapes 2^15 × 2^17 × 2^22; γ (total) 2.17 on the H200, 2.06 on the RTX PRO 6000; ε against OPT* 0.076% / 0.148% at δ 1e-6; ε_alg +1.84% against the reference kernel (H200); coverage 100% by count.
+- **The decisive finding:** under SYM the serving is always uncredited other work: 46% of an honest node's busy time at one twin MAC per served MAC, at least 10% anywhere within γ ≤ 10, and all of world inference outside the certificate. No SYM design can pin the prover's own serving.
+- **The coordinator's decision:** useful credit (v2) stays primary. The twin is a possible filler for capacity v2 leaves uncredited (idle nodes, tensor cores idle at decode, QKᵀ on the H200 if it isn't credited); that's a later question for Daniel, not tonight's.
+
+Lemma S in your vocabulary (`SymCoupling` plus `SAKMatmulAt` gives `SAKMatmul` at every instance) is in O-IO's note, uncompiled. It's for a filler-twin instance later; not tonight's priority. One point for tonight: `ImportWithinCertifier` must count egress as well as ingress (O-IO and RT-PROTO's P2).
