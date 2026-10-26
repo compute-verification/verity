@@ -1,0 +1,4 @@
+order = 368
+path = "`theory/algo_cost.py`"
+runs_on = "CPU"
+what = "ACCEL ALGO-COST's pricing of known exact bilinear matmul schemes (Sedoglavic's catalogue: ⟨2,2,2;7⟩, ⟨2,3,3;15⟩, ⟨3,3,3;23⟩, ⟨4,4,4;48⟩) on v1's operands: exact overflow rates of t-term sums of wrap8 entries with ±80 noise, summed forms per side, Σ(f_p − 1), and each scheme's tensor price with 2:4 sparse overflow corrections against the standard product (note:compute-research/20261026T0340Z-draft-accel-algo-cost)"
