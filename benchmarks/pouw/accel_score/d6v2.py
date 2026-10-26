@@ -193,10 +193,11 @@ def evaluate(static: dict, pv: dict, rates=(True, False), sens: bool = False) ->
 
 def rule(static_keys: list, pv_keys: list) -> tuple[dict, dict, dict]:
     """v3.1's rule in size (module docstring). Returns (static, pv, sweep)."""
-    sweep, picks_ = {}, {}
+    sweep, picks_, raw = {}, {}, {}
     for tau in TAUS:
         st = {k: d6.rule_pick(*k, tau) for k in static_keys}
         pv = {k: d6.rule_pick(*k, tau, weight_coins=False) for k in pv_keys}
+        raw[tau] = pv
         ev = evaluate(st, pv, rates=(True,))
         users: dict = {}
         for (card, _, mname), e in ev.items():
@@ -220,7 +221,20 @@ def rule(static_keys: list, pv_keys: list) -> tuple[dict, dict, dict]:
         chosen[card] = min(near, key=lambda t: np.mean(sweep[card, t]["gamma"]))
     st = {k: picks_[chosen[k[0]]][0][k] for k in static_keys}
     pv = {k: picks_[chosen[k[0]]][1][k] for k in pv_keys}
-    return st, pv, dict(sweep=sweep, tau=chosen)
+    every = {k: raw[chosen[k[0]]][k] for k in pv_keys}
+    return st, pv, dict(sweep=sweep, tau=chosen, every_pv=every)
+
+
+def every_pv(static: dict, pv_all: dict) -> dict:
+    """Coverage first: every PV class credited at the chosen τ's pick, its least-γ L′ where none has γ ≤ 10, with no
+    value test (a sensitivity: does coverage reach 95% with the period's γ ≤ 10, and at what share)."""
+    out = {}
+    for (card, _, m), e in evaluate(static, pv_all, rates=(True,)).items():
+        model = d6.model_of(m)
+        out[card, m] = dict(cov=1 - e["world"]["uncredited"], gcov=coverage_gates(card, model, e["world"])["cov"],
+                            gamma=e["world"]["gamma"] * (1 + answers_share(card, model)),
+                            share=e["share"]["share"], s=e["size"]["s"])
+    return out
 
 
 def eps_skip(card: str, model: dict, eta_: float) -> dict:
@@ -345,7 +359,8 @@ def build(quick: bool = False) -> dict:
     static, pv, R = rule(st_keys, pv_keys)
     eta_ = d6.eta(static, pv, samples=40_000 if quick else 400_000)
     eta_min = min(x["eta"] for x in eta_.values())
-    out = dict(models=MODELS, taus=TAUS, rule=R, eta=eta_, q=Q, rows={}, census=CENSUS)
+    out = dict(models=MODELS, taus=TAUS, rule=R, eta=eta_, q=Q, rows={}, census=CENSUS,
+               every_pv=every_pv(static, R["every_pv"]))
     for (card, rate, m), e in evaluate(static, pv, sens=True).items():
         model = d6.model_of(m)
         e["eps"] = eps_skip(card, model, eta_min)
@@ -394,6 +409,8 @@ def verdict(D: dict) -> str:
     cg = min(r["gate_cov"]["cov"] for r in rows.values())
     sh = [r["share"]["share"] for r in rows.values()]
     ratio = max(r["exclusion"]["year"]["ratio"] for r in rows.values())
+    ev = D["every_pv"].values()
+    ecov, egc, egam = min(x["cov"] for x in ev), min(x["gcov"] for x in ev), max(x["gamma"] for x in ev)
 
     def ok(b):
         return "meets" if b else "MISSES"
@@ -404,7 +421,9 @@ def verdict(D: dict) -> str:
             f"of gates ≥ {pct(cg, 1)} ({ok(cg >= GOALS['cov'])} ≥ 95%, ratio {cg / 0.95:.3f}); perplexity carried, "
             f"worst +{100 * PPL_WORST:.2f}% (8B at 8K; {ok(PPL_WORST < GOALS['ppl'])} < 5%, ratio "
             f"{PPL_WORST / GOALS['ppl']:.3f}; V4 not run); credited share in size {pct(min(sh), 2)}–{pct(max(sh), 2)} "
-            f"(no target); U/s_× up to {ratio:.2f}× the census's counted operations a monitoring period")
+            f"(no target); U/s_× up to {ratio:.2f}× the census's counted operations a monitoring period; with every "
+            f"PV class credited, coverage of MACs ≥ {pct(ecov, 1)} ({ok(ecov >= GOALS['cov'])}), of gates ≥ "
+            f"{pct(egc, 1)} ({ok(egc >= GOALS['cov'])}), γ ≤ {egam:.2f} ({ok(egam <= GOALS['gamma'])})")
 
 
 def report(D: dict) -> str:
@@ -421,6 +440,11 @@ def report(D: dict) -> str:
              f"{sx['s_x']:.1f} gates (an s8 MAC). Results are per monitoring period (a week, a month, a year) over "
              f"the adversary resource model, census {CENSUS}. Columns are 8B / 70B / V4 unless stated; the headline "
              "is measured hashing.\n")
+    L.append("PoUW is one subprotocol envelope A_i: Pr[accept ∧ A ∉ A_i(S)] ≤ δ_i(S), with δ_i = δ_coin + δ_crypto, "
+             "and ε_skip is the envelope's slack, the share of S_reg A may skip. δ_coin is the sampling failure "
+             "reported here; δ_crypto (the commitments' and signatures' SHA-512) is beside it and not computed. "
+             "Network outsourcing is the channel term k_infil/k_exfil, in bits. Each serving block is padded to "
+             "exactly c_S gates.\n")
     L.append(verdict(D) + "\n")
 
     def gam(r):
@@ -451,6 +475,25 @@ def report(D: dict) -> str:
                  f"{SHORT[m]} {pct(rows[cards[0], 'measured', m]['gate_cov']['ew_share'], 2)}" for m in models)
              + " of the circuit's gates (`gates.elementwise_gates`, each step the repository's Boolean form; the "
              "count of steps a token is `coverage_gates`', a stated model of the serving circuit, not a traced one).\n")
+    cov_miss = [(c, SHORT[m]) for c in cards for m in models if 1 - rows[c, "measured", m]["world"]["uncredited"] < 0.95]
+    if cov_miss:
+        L.append("Coverage of MACs misses 95% on " + ", ".join(f"{c} {m}" for c, m in cov_miss) + ": the rule's value "
+                 "test serves every PV class with no L′ at γ ≤ 10 plain (the picks table's last column), because in "
+                 "size such a class adds CLOCK·η·(S_b/Φ)/(γ_k − 1) credited size per honest second, below the period's "
+                 "few-percent share. At μ° v1.1 credited many of them.\n")
+    ev = D["every_pv"]
+    L.append("**Coverage first** (a sensitivity): every PV class credited at the chosen τ's pick, its least-γ L′ "
+             "where none has γ ≤ 10, with no value test.\n")
+    L.append("| card, model | coverage of MACs (≥ 95%) | ratio | coverage of gates (≥ 95%) | ratio | γ (≤ 10) | ratio | "
+             "credited share in size | the headline's coverage of MACs / share |")
+    L.append("|---|---|---|---|---|---|---|---|---|")
+    for card in cards:
+        for m in models:
+            x, r = ev[card, m], rows[card, "measured", m]
+            L.append(f"| {card}, {SHORT[m]} | {pct(x['cov'], 1)} | {x['cov'] / 0.95:.3f} | {pct(x['gcov'], 1)} | "
+                     f"{x['gcov'] / 0.95:.3f} | {x['gamma']:.2f} | {x['gamma'] / 10:.3f} | {pct(x['share'], 2)} | "
+                     f"{pct(1 - r['world']['uncredited'], 1)} / {pct(r['share']['share'], 2)} |")
+    L.append("")
 
     # Credited share.
     L.append("### The credited share in size, S_reg over Φ·T of the honest period\n")
@@ -643,6 +686,9 @@ def report(D: dict) -> str:
     # The rule.
     R = D["rule"]
     L.append("### The picks: v3.1's rule in size\n")
+    L.append("τ bounds a pick's job-only leak, 1 − hull/OPT* in makespan (`d6.grid`): a time, which size replaces "
+             "by S_b against OPT*'s size (the S_b table's dense column). S_b barely moves with L′, so the rule "
+             "takes the least γ, and τ binds only through γ.\n")
     L.append("| card | τ | mean share in size | mean γ | mean S_b | PV classes past γ 10 / served plain |")
     L.append("|---|---|---|---|---|---|")
     for card in cards:
