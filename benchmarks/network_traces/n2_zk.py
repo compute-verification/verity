@@ -8,7 +8,7 @@ decides nothing.
 
     python benchmarks/network_traces/n2_zk.py virtual --out DIR [--requests 40] [--tokens 4]
     python benchmarks/network_traces/n2_zk.py prove --run DIR [--extra DIR] [--late DIR] --bin flock-circuit
-      --lean flock-verify --out DIR [--jobs 4] [--debug-clear] [--dry]
+      --lean flock-verify --out DIR [--jobs 1] [--debug-clear] [--dry]
 
 * **The runs.** A certifier-serve run's directory (`certifier_serve.py rehearse`'s per strategy, or `virtual`'s): its
   `plan.json`, `calibration.json`, `deployment.json` and `certified.jsonl`. `virtual` makes them on an injected clock
@@ -28,7 +28,8 @@ decides nothing.
 * **A round** (`member`), per link-window in order: register, select, one live `prove --zk` session behind the firewall on
   the statement (the server serving the stream's draw), deliver, and the outcome of record. Per window: prove (the
   session's wall time, the prover's ``prove_total_s``, proof bytes) and verify (the verifier of record's run, Lean
-  included). Then the link's network verdict (`LinkWindows.network_verdict`).
+  included). Then the link's network verdict (`LinkWindows.network_verdict`). The members' rounds run one after
+  another: outer proofs go through the firewall one at a time (`ONE_SESSION`), so ``--jobs`` is 1 and more is refused.
 * **What the verifier receives**, per link-window, kept under ``<member>/verifier/`` (`RECEIVED`): the registration record
   (the salted root, nothing of the certificates) and the draw; the two certificates' public fields, from the certifier,
   the auditor's device; the declared clock syncs; from the prover, the statement's public file (its header and each row's
@@ -56,7 +57,6 @@ import socket
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
@@ -68,7 +68,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import leak_scan as LS  # noqa: E402
-from verity.core.protocols.certifier import head_check as HC  # noqa: E402
+from verity.core.protocols.certifier import advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
 from verity.core.protocols.certifier.certificate import CertifiedRecord, Direction, Issuer  # noqa: E402
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
@@ -77,6 +77,8 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noq
 
 ENDS = ("egress", "ingress")
 ROUNDS = ("honest", "tampered", "extra", "late")
+#: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
+ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per link-window, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
@@ -410,6 +412,13 @@ def firewall(M, sg: SimpleNamespace) -> dict:
                                                      "program_file": sg.program_file})}
 
 
+def one_session(jobs: int) -> None:
+    """A driver's ``--jobs``: 1, its members proved one after another, each session behind the firewall alone
+    (`ONE_SESSION`); any other count is refused before anything runs."""
+    if jobs != 1:
+        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
+
+
 # --- the rounds -------------------------------------------------------------------------------------------------------
 
 def _certificate(c) -> dict:
@@ -423,21 +432,55 @@ def _free_port() -> int:
         return s.getsockname()[1]
 
 
-def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int) -> dict:
+def other_subset(drawn: dict) -> list[int]:
+    """A K-subset of the period's windows that isn't the draw's: the first K the draw didn't hold, then drawn ones
+    from the start where it left fewer than K (none other at K = n)."""
+    held = set(drawn["units"])
+    return sorted(([w for w in range(drawn["population"]) if w not in held] + drawn["units"])[:drawn["k"]])
+
+
+def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path, port: int,
+           coins=None, forge=None) -> dict:
     """The member's link-windows on its own stream, in order: register, select, prove the statement live behind the
     firewall, deliver, and decide on the proof (`LinkWindows.outcome`); then its network verdict. Writes what the
     verifier receives under ``out / "verifier"`` (`RECEIVED`), each file prefixed by its window. Window j's session
-    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free."""
+    listens on ``port + j``, or with ``port`` 0 on a port the OS picks free.
+
+    With ``a.draw`` K (> 0), the period is sampled (`LinkWindows.period_draw`): every window's salted root and the
+    advice's digest are committed first, then `coins` draw K of the windows, and only those are registered, proved and
+    decided; the draw is ``period.json`` beside what the verifier receives, and the network verdict is the sampled one,
+    with its ``wrong_units`` at the stream's δ (``a.delta``, by default `certifier_serve.DELTA`), on the draw of
+    record: the Lean verifier of record's (``--lean``) draw on the coins the period draw read (`service.lean_draw`),
+    which the windows proved must be. Coins with a ``drawn`` (the challenger's, `a5_coins.RankCoins`) end their turn
+    on the session once the draw has read them, and the result's ``segment`` is what they released. ``forge``, a
+    negative, is the prover's: of the period draw, the K windows it registers and proves instead, under a draw object
+    listing them (`other_subset`), which is what ``period.json`` then holds."""
     lw = rd.lw
-    stream = lw.stream(budget=rd.plan["windows"], delta=cs.DELTA, challenger="n2-zk", coins=cs._no_coins,
-                       clock=time.monotonic)
+    k = getattr(a, "draw", 0) or None
+    stream = lw.stream(budget=rd.plan["windows"], delta=getattr(a, "delta", None) or cs.DELTA, challenger="n2-zk",
+                       coins=cs._no_coins, clock=time.monotonic)
     env, av = firewall(M, sg), SimpleNamespace(bin=a.bin, lease=[], gpu=False)
     vdir = out / "verifier"
     vdir.mkdir(parents=True, exist_ok=True)
+    drawn, windows, segment = None, rd.windows, None
+    if k is not None:
+        try:
+            drawn = lw.period_draw(stream, [x.root.hex() for x in rd.windows], k, coins,
+                                   advice=None if rd.advice is None else AD.digest(rd.advice))
+        finally:
+            if callable(getattr(coins, "drawn", None)):
+                segment = coins.drawn()
+        log(f"{name}: drew windows {drawn['units']} ({drawn['k']} of {drawn['population']}) on "
+            f"{len(drawn['read']) // 2} coin bytes after the period's commitment {drawn['commitment'][:16]}")
+        if forge is not None:
+            drawn = {**drawn, "units": forge(drawn)}
+            log(f"{name}: the prover proves windows {drawn['units']} instead")
+        (vdir / "period.json").write_text(json.dumps(drawn, indent=1, sort_keys=True))
+        windows = [rd.windows[u] for u in drawn["units"]]
     previous, rows = None, []
-    for j, x in enumerate(rd.windows):
+    for j, x in enumerate(windows):
         wdir, pre = out / f"w{x.window:03d}", f"w{x.window:03d}-"
-        reg = lw.register(stream, lw.registration(x.opening, previous))
+        reg = lw.register(stream, lw.registration(x.opening, previous), drawn)
         previous = reg.digest
         if reg.record["roots"][0]["root"] != x.root.hex():
             raise SystemExit(f"{name} window {x.window}: the registered root is not the statement's")
@@ -497,19 +540,35 @@ def member(M, a, sg: SimpleNamespace, name: str, rd: SimpleNamespace, out: Path,
             f"{proof['opened_word']}, prove {row['prove']['session_s']} s (prove_total {row['prove']['prove_total_s']}"
             f" s, {row['prove']['proof_bytes']} B), verify {verify_s} s; "
             f"{'as expected' if row['as_expected'] else 'UNEXPECTED'}")
-    network = lw.network_verdict(stream, rd.plan["windows"])
-    return {"windows": rows, "network": network}
+    network = lw.network_verdict(stream, rd.plan["windows"], drawn)
+    if drawn is not None:
+        sel = network["selection"]
+        log(f"{name}: the draw of record ({sel['by']}) is windows {sel['units']}; proved "
+            f"{[r['window'] for r in rows]}; " + (f"REFUSED by name: {network['why']}" if network["why"] else
+                                                   "the windows proved are the draw of record's"))
+    return {"windows": rows, "network": network, **({} if drawn is None else {"period": drawn}),
+            **({} if segment is None else {"segment": segment})}
 
 
-def _member_scan(M, sg, rd, out: Path) -> dict:
-    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows if x.args is not None)
-    blobs, held, public = public_pieces(M.a8, *blobs_of(rd), sg.circuit.read_bytes() + rows)
+def _member_scan(M, sg, rd, out: Path, received=None) -> dict:
+    """The scan of what the verifier received for every window's witness pieces, leaving out the pieces the public
+    circuit or a received window's ``pub`` row holds; `received`, the windows the verifier got (a sampled period's
+    drawn ones), by default every one. The control (the prover's instance files) is to hold every held piece but a
+    head's zero-padded last chunk, which `public_pieces` (``fields``) leaves out of the held ones since a head inside
+    its row never shows it (``padded_tails`` counts them); the scan of what the verifier received still looks for
+    those."""
+    rows = b"".join(rd.lw.row(x.args, "pub") for x in rd.windows
+                    if x.args is not None and (received is None or x.window in received))
+    raw, held_blobs = blobs_of(rd)
+    blobs, held, public = public_pieces(M.a8, raw, held_blobs, sg.circuit.read_bytes() + rows)
+    tails = {f"{k} @{len(b) - len(b) % M.a8.PIECE}" for k, b in raw.items() if k in held_blobs and len(b) % M.a8.PIECE}
     control = out / "prover-instances.bin"
     with open(control, "wb") as f:
         for x in rd.windows:
             f.write((x.statement.dir / "inst-1.bin").read_bytes())
     got = M.a8.received(out / "verifier", control, blobs, held)
-    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"])}
+    return {**got, **LS.scan(got, blobs, out / "verifier"), "public_pieces": public, "files": len(got["files"]),
+            "padded_tails": len(tails & blobs.keys())}
 
 
 def prove(a) -> int:
@@ -565,8 +624,7 @@ def prove(a) -> int:
         res["received"] = _member_scan(M, sg, members[name], out / name)
         return name, res
 
-    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
-        done = dict(pool.map(lambda kv: go(*kv), enumerate(members)))
+    done = dict(go(k, name) for k, name in enumerate(members))
     ok = True
     for name, res in done.items():
         rec = res["received"]
@@ -603,7 +661,8 @@ def main(argv=None) -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=0,
                    help="member k's window j listens on PORT + 100k + j; 0 (the default): a free port for each session")
-    p.add_argument("--jobs", type=int, default=4, help="members proved at once")
+    p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (ONE_SESSION); more "
+                                                       "is refused")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or proved")
@@ -612,6 +671,7 @@ def main(argv=None) -> int:
         plan = virtual(a.out, a.requests, a.tokens)
         log(f"virtual: {plan['windows']} windows, served {plan['served']}, under {a.out}")
         return 0
+    one_session(a.jobs)
     a.rounds = tuple(x for x in a.rounds.split(",") if x)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")

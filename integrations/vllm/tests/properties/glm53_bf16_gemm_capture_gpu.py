@@ -242,7 +242,7 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     forward reduction leaves +1 while reverse (and, from four splits, tree) loses it.  Row 1 makes the first partial 2^16 + 1
     and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.
     """
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     if N < 3:
         raise ValueError(f"split-K probe needs at least three output rows, got {N}")
@@ -484,7 +484,7 @@ def case_key(model: str, phase: str, case: str, M: int) -> str:
 
 def expected_kernel(M: int, model: str = "glm53") -> dict[str, Any]:
     """The model's gate's kernel at M as `dispatch_sm90` names it, in the record's form."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     m = MODELS[model]
     kind, st = BC.dispatch_sm90(M, m.hidden, m.experts)
@@ -569,7 +569,7 @@ def _cublas_split_k(job: dict[str, Any]) -> int | None:
 
 def served_split(phase: str, M: int, K: int, N: int, scan_split: int | None = None) -> int | None:
     """The default reduce route's split count at these statics: the route table, else the scan's fit at this M."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     pinned = BC.default_cublas_split_k(phase, M, K, N)
     return pinned if pinned is not None else scan_split
@@ -669,7 +669,7 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
     crafted count probe atop a clone of W with an all-ones x row 0 (never for bmm), the fit's operand words, and the serial
     chain's words on the kept window."""
     import torch
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     m, top = MODELS[model], SCAN_M[-1]
     gen = torch.Generator(device="cuda").manual_seed(13000 + idx)
@@ -722,8 +722,8 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
 def scan_analyze(op: dict[str, Any], segments: list[list[dict[str, Any]]], rows: list[np.ndarray]) -> dict[str, Any]:
     """One scanned target's schedule map (module docstring, `scan`): the regimes, each regime's model read out of its kept
     words (the split count fitted behind its reduce, the serial chain without one), the model classes and the sweep."""
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-    from verity_vllm.program.registry import mla_check as MK
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import mla_check as MK
 
     regimes = scan_regimes(list(SCAN_M), [scan_signature(s) for s in segments], rows)
     cache: dict[bytes, tuple[list[int], bool]] = {}                                # same kept words, same model: fit each once
@@ -976,8 +976,8 @@ def _reference(job: dict[str, Any], a: dict[str, np.ndarray], r: int, n: int, fm
     from verity.ml.circuits.evaluation import evaluate
     from verity.ml.circuits.ops import gemm as CG
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity_vllm.program.registry import cublas_bf16 as CB
-    from verity_vllm.program.registry import ll_bf16 as LL
+    from verity.ml.definitions.registry import cublas_bf16 as CB
+    from verity.ml.definitions.registry import ll_bf16 as LL
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     K, N = job["K"], job["N"]
@@ -1010,8 +1010,8 @@ def compare(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _compare(job: dict[str, Any]) -> dict[str, Any]:
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-    from verity_vllm.program.registry import mla_check as MK
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import mla_check as MK
 
     a = _load(job["paths"])
     r0, r1 = job["rows"]
@@ -1078,9 +1078,9 @@ def bind_check(models: list[str] = list(MODELS), launches: list[dict[str, Any]] 
     from verity.ml.circuits.evaluation.batch import type_shape
     from verity.ml.circuits.ops import gemm as CG
     from verity.ml.circuits.ops.boolean import gemm as BG
-    from verity_vllm.program.registry import bf16_gemm_check as BC
-    from verity_vllm.program.registry import cublas_bf16 as CB
-    from verity_vllm.program.registry import ll_bf16 as LL
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import cublas_bf16 as CB
+    from verity.ml.definitions.registry import ll_bf16 as LL
 
     hop = word_of(BG.HopperBF16WgmmaDot16)
     targets = []
@@ -1213,7 +1213,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     env, cleared = environment(a.served_default, work / "triton_cache")
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
-    from verity_vllm.program.registry import bf16_gemm_check as BC
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
 
     tag = "GLM53-BF16-GEMM" + (" (served default)" if a.served_default else "")
     todo = cases(a.quick, only, models)
