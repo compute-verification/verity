@@ -462,7 +462,7 @@ theorem ivstarR_honest_session (rel : _root_.Flock.Readable.Parsed → _root_.Fl
       (bdC rel rd cols wE joinR rowIn final w).IVStar x () fun i => cs.getD i.val default).out = .acc := by
   obtain ⟨hl, hn⟩ := honestRounds_nAt (Ts := Ts) hx hs hcs hps hrep
   have hkx : (V false).k x = 2 + rounds false spec sts := by simp only [V, hx]
-  refine ivstarR_honest_run rel rd cols wE rowIn final w (by rw [hx]; rfl) hfin ?_ (fun j hj => ?_) hk ?_
+  refine ivstarR_honest_run rel rd cols wE rowIn final w (by simp [hx]) hfin ?_ (fun j hj => ?_) hk ?_
   · rw [salted_length, hl, repLens_sum htab, hkx]
     omega
   · rw [salted_getD_length]
