@@ -27,6 +27,7 @@ import Proofs.Flock.Claims
 import Proofs.Flock.SamplingClaims
 import Proofs.Flock.Bridge
 import Proofs.Flock.Bridge.Transports
+import Proofs.Flock.Bridge.TransportsRefs
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.SamplingScope
 
