@@ -463,7 +463,7 @@ def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_pa
     (urllib) the same."""
     ids = proto.IdsProtocol(True, payload=proto.ID_PAYLOAD, base=proto.PlainProtocol(True))
     with Serving(tmp_path, commit=False, protocol=ids) as s:
-        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]
+        assert [m["id"] for m in json.loads(urllib.request.urlopen(s.url + "/v1/models").read())["data"]] == ["m"]  # noqa: S310 (the test's own 127.0.0.1 endpoint)
         assert json.loads(s.post("/tokenize", {"model": "m", "prompt": "a bb ccc"})[1])["tokens"] == [1, 101, 102, 103]
         head, body = dechunked(s.send(shims_request(s.http.address[1])))
         status, probed = s.post("/v1/completions", dict(CERTIFIER_BODY, max_tokens=2, return_token_ids=True))
