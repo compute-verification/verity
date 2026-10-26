@@ -33,7 +33,9 @@ theorem wipeSound_of_streamed (h5 : Pous.Guarantees.StreamedWipeMeetsServer5GB) 
     (hop : W.AtOperatingPoint) : W.WipeSound := by
   intro θ F c σ s
   obtain ⟨hn, hr, hrk, hpt⟩ := hop θ s
-  refine (hc θ F c σ s).trans (add_le_add_right ?_ _)
+  refine (hc θ F c σ s).trans ?_
+  unfold WipeVocab.error
+  refine add_le_add ?_ le_rfl
   exact h5 (512 * W.n θ s + W.R θ s) (W.n θ s) (W.R θ s) rfl hn (W.r θ s) (W.k θ s) hr hrk hpt
     (40000000000 + W.egressBound θ s) (W.egressBound θ s) (W.κ θ s) (W.prf θ s) (W.prover θ F c σ s) le_rfl
 
