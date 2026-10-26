@@ -19,13 +19,24 @@ priced as a whole) on both cards.
 --cost: emulated b1's ALU time in INT8 product-times (A7's 0.77; AND + POPC + an add on D5's 64 ALU lanes is about
 1.25, and 1.6 with Harley-Seal's adds), one pass each; --pipes: the pipes it may run on (fma: LOP3 on all 128 INT32
 lanes of sm_120, which D5's card doesn't model); --skip-menu: skip the unpatched pass.
+
+--census: instead of one route at a fixed cost, every strategy of `b1_census.py` (the carry-save trees with either
+accumulator, and dp4a2 on the IMAD pipe) is a route of its own, each with its instruction counts on D5's resources:
+LOP3 and IADD3 on alu, IMAD and IDP.4A two slots on fma, POPC on an XU row added to θ (16 lane-ops a SM-clock, the
+census's 0.5 warp instructions), every one of them on issue and vec, the registers each reads (AND 2, a carry-save
+LOP3 3, POPC 1, IADD3 3, IMAD 2, IDP.4A 3, the chain's mask 1), and its operands from shared memory on D5's DP4A tile
+(`BESIDE_TILE`: 8 bytes and half an LDS.128 a word pair, over t). The LP mixes them per job.
 """
 import json
 import pickle
+import math
 import sys
 from dataclasses import replace
+from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
+sys.path.insert(0, str(Path(__file__).parent))
+import b1_census as b1c  # noqa: E402
 import d6  # noqa: E402
 
 pb = d6.pb
@@ -37,10 +48,14 @@ def _opt(name, default):
 
 COSTS = tuple(float(x) for x in _opt("--cost", "0.77").split(","))
 PIPES = tuple(_opt("--pipes", "alu,fma").split(","))
+CENSUS = "--census" in sys.argv
 A7_ALU = COSTS[0]
 XS = (0.0, 0.25, 1.0)
 MODELS = ("Llama-3.1-8B", "Llama-3.1-70B", "DeepSeek-V4-Pro")
 _orig = pb.tile_methods
+
+
+XU_LANES = 16.0
 
 
 def emu(card, pipe):
@@ -48,12 +63,35 @@ def emu(card, pipe):
     return {pipe: e, "issue": e, "vec": e, "rf": 3 * e}
 
 
+def census_routes(card):
+    t = pb.BESIDE_TILE
+    out = {}
+    for name, (g, fas, pops) in b1c.STRATEGIES.items():
+        for acc in ("iadd3", "imad"):
+            alu = g + 2 * fas + (pops / 2 if acc == "iadd3" else 0)
+            imad = pops if acc == "imad" else 0
+            vec = alu + pops + imad
+            rf = 2 * g + 6 * fas + pops + (1.5 * pops if acc == "iadd3" else 2 * pops)
+            ld = dict(alu=alu, xu=pops, fma=2 * imad, vec=vec, issue=vec + g / (2 * t), rf=rf, smem=8 * g / t)
+            out[f"{name}/{acc}"] = {r: x / (32 * g) for r, x in ld.items() if x}
+    ext = 1.5 / b1c.DP4A_CHAIN
+    ld = dict(fma=2.0, alu=ext, vec=1 + ext, issue=1 + ext + 1 / (2 * t), rf=3 + 2.5 / b1c.DP4A_CHAIN, smem=8 / t)
+    out["dp4a2"] = {r: x / b1c.DP4A_BITS for r, x in ld.items()}
+    return out
+
+
+def routes(card):
+    if CENSUS:
+        return census_routes(card)
+    return {f"b1 on {p}": emu(card, p) for p in PIPES}
+
+
 def patched(card, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits=(2, 2), o_route=True, zhd=True,
             schemes=None, v=pb.V2_V):
     ms = _orig(card, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits, o_route, zhd, schemes, v)
     if card.family != "sm_120":
         return ms
-    extra = {f"o_route b1 on {p}": emu(card, p) for p in PIPES}
+    extra = {f"o_route {k}": ld for k, ld in routes(card).items()}
     out = []
     for m in ms:
         if m.items and m.items[0][0] == "O":
@@ -62,12 +100,12 @@ def patched(card, t, Lp, K, bit, depth, L, zleaf, peels, dense, digits=(2, 2), o
         out.append(m)
     tiles = next(m for m in ms if m.label == "tiles")
     mma = dict(smem=1 / card.honest_tile[0] + 1 / card.honest_tile[1], rf=card.mma_rf, issue=card.mma_issue)
-    for p in PIPES:
+    for k, ld in routes(card).items():
         f = {r: y / t for r, y in mma.items()}
         f["tensor"] = 1 / (t * card.s8)
-        for r, y in emu(card, p).items():
+        for r, y in ld.items():
             f[r] = f.get(r, 0.0) + y
-        out.append(replace(tiles, label=f"tiles, b c^T by emulated b1 on {p}", fixed=f))
+        out.append(replace(tiles, label=f"tiles, b c^T by emulated {k}", fixed=f))
     return out
 
 
@@ -98,7 +136,12 @@ if __name__ == "__main__":
     static, pv = P["v3.1"]
     out = {} if "--skip-menu" in sys.argv else {"menu": run(("RTX PRO 6000", "H200"), "D5 v2 menu (D6)")}
     pb.tile_methods = patched
-    for A7_ALU in COSTS:
+    if CENSUS:
+        cap0 = pb.cap
+        pb.RES = pb.RES + ("xu",)
+        pb.cap = lambda card: {**cap0(card), "xu": XU_LANES if card.family == "sm_120" else math.inf}
+        out["b1 census routes"] = run(("RTX PRO 6000",), "+ b1 census routes")
+    for A7_ALU in () if CENSUS else COSTS:
         out[f"b1 {A7_ALU} on {'+'.join(PIPES)}"] = run(("RTX PRO 6000",), f"+ b1 {A7_ALU} {'+'.join(PIPES)}")
     json.dump({lab: {" | ".join(map(str, k)): v for k, v in r.items()} for lab, r in out.items()},
               open(sys.argv[3] + ".json", "w"), indent=1, default=str)
