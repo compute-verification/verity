@@ -6300,6 +6300,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -6414,6 +6415,7 @@
     "Flock.nextPow2": "672248e8c4c082f39e900d47584890b871bb09171798a196ac4378253b873524"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -6670,6 +6672,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -6790,6 +6793,7 @@
     "Flock.Registered.rowWords": "88b71b67bc7da442e3af20bc7d557b6a01b1f73607299f5c42ff7b1df66dee0b"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -7026,6 +7030,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld",
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "MemoryChallenger.Properties.SecurityProofs.judgeAccepts",
     "MemoryChallenger.Properties.SecurityProofs.judgeSigned",
     "MemoryChallenger.Properties.SecurityProofs.verdictAccepts",
@@ -8513,6 +8518,7 @@
     "PouwCheck.workloadOf._sparseCasesOn_1": "eefd4ccef0454fbbd77e58e4aa9ff2cd91bc1279023c2ce31aebd0c9792e3cc4"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8598,6 +8604,7 @@
     "PouwCheck.windowSaltReason": "8f833268c49da86b208a647ea45fefd68a1798b0f786ad6f650d8274906d99aa"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -8728,6 +8735,7 @@
     "_private.PouwCommit.Py.0.PouwCommit.pySpace": "c3ec0bc34652c6a6663e9741ef09984310ffc4f4741dfdcfb1ceff8b3cdaeaaf"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11019,6 +11027,7 @@
     "_private.SampledProofs.Challenger.0.SampledProofs.Challenger.hexAt": "955c0a2b26794035e957cb274044856fa7c1eda21739edc30fc526203c50aa7a"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11062,6 +11071,7 @@
     "_private.SampledProofs.ChallengerRecord.0.SampledProofs.Challenger.hexOf?._sparseCasesOn_1": "1a17f35f5b069009e84ec6d65f79026154b3c2bf14b6bc75a148865543afe4a3"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11218,6 +11228,7 @@
     "_private.SampledProofs.ChallengerSession.0.SampledProofs.Challenger.verifies": "b9b71e2ff104e74e2e67b4b245b1ae12ae7baca0dfbf59acd8fb67572395a007"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11329,6 +11340,7 @@
     "_private.SampledProofs.Json.0.SampledProofs.hexDigits": "4caf758cb28fc30e4e641ee7f8165b4f2fa6340f153d37dcaa1904c4ed3bfda2"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
@@ -11463,6 +11475,7 @@
     "_private.SampledProofs.PyJson.0.SampledProofs.PyJson.scaled": "b79e42b746949fff933b2307356c191b50aa25b45b1696d2f4b56553dab6e7a0"
    },
    "guarantees": [
+    "Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriod",
     "Properties.Pouw.Check.acceptMeans",
     "Properties.Pouw.Check.acceptedDraw",
     "Properties.Pouw.Check.acceptedInRange",
