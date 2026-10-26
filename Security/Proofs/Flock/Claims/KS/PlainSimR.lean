@@ -569,6 +569,7 @@ theorem plainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims
   have hr0' : rowsOf (plainDm P x spec st ω u r' 0) = some r₀' := hr0
   have hr₀' : rowsN (plainDm P x spec st ω u r' 0) = r₀ := by
     simp only [rowsN, rowsD, hr0', Option.getD_some, hr₀e]
+  clear hr₀e
   subst r₀
   obtain ⟨hrssL, hget⟩ := mapM_some_get hrss
   have hN : rss.length = plainN x := by simpa using hrssL
