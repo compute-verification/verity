@@ -1,4 +1,5 @@
 import Definitions.Core.NaiveStrassen
+import Proofs.Core.NaiveStrassen.Eval
 
 /-!
 # Naive tiled against Strassen: the statements and their non-vacuity witnesses

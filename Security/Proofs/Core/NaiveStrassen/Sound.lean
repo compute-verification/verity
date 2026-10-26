@@ -616,6 +616,112 @@ theorem lvl_sch_lt (hc0 : checkLevel l (tab l) prev = true) (prof : List (Nat ×
   have := Nat.mul_le_mul_right (2 ^ 56) hlen
   omega
 
+theorem lvl_triv (hc1 : checkLevel (l + 1) (tab (l + 1)) (tab l) = true) (hc0 : checkLevel l (tab l) prev = true)
+    (i j : Nat) : LO (l + 1) i j ≤ 8 * LO l i j ∧ HA (l + 1) i j ≤ 7 * LO l i j + HA l i j := by
+  by_cases hi : i < sz (l + 1)
+  · by_cases hj : j < sz (l + 1)
+    · have h6 := (lvl_spec hc1).2.2.2.2.2 i hi
+      obtain ⟨r1, r2, -⟩ := lvl_sch_rows hc1 hi
+      have hX : ∀ k, fld (row (tab l).1 (sz l) i &&& rowMask (sz (l + 1))) k < 2 ^ 56 := fun k =>
+        Nat.lt_of_le_of_lt (fld_mask' _ _ _) (lvl_lt hc0 i k).1
+      have hZ : ∀ k, fld (row (tab l).2 (sz l) i &&& rowMask (sz (l + 1))) k < 2 ^ 56 := fun k =>
+        Nat.lt_of_le_of_lt (fld_mask' _ _ _) (lvl_lt hc0 i k).2
+      have e8 := fld_mul' (c := 8) (X := row (tab l).1 (sz l) i &&& rowMask (sz (l + 1)))
+        (fun k => by have := hX k; omega)
+      have e7 := fld_mul' (c := 7) (X := row (tab l).1 (sz l) i &&& rowMask (sz (l + 1)))
+        (fun k => by have := hX k; omega)
+      have e7z : ∀ k, fld (7 * (row (tab l).1 (sz l) i &&& rowMask (sz (l + 1))) +
+          (row (tab l).2 (sz l) i &&& rowMask (sz (l + 1)))) k =
+          7 * fld (row (tab l).1 (sz l) i &&& rowMask (sz (l + 1))) k +
+            fld (row (tab l).2 (sz l) i &&& rowMask (sz (l + 1))) k := fun k => by
+        have := fld_add (n := k + 1) (X := 7 * (row (tab l).1 (sz l) i &&& rowMask (sz (l + 1))))
+          (Y := row (tab l).2 (sz l) i &&& rowMask (sz (l + 1)))
+          (fun k' _ => by have := e7 k'; have := hX k'; have := hZ k'; omega) (Nat.lt_succ_self k)
+        have := e7 k
+        omega
+      have a1 := le_of_leRow r1 h6.1 (fun k _ => by have := e8 k; have := hX k; omega) hj
+      have a2 := le_of_leRow r2 h6.2 (fun k _ => by have := e7z k; have := hX k; have := hZ k; omega) hj
+      rw [e8, fld_mask_lt hj] at a1
+      rw [e7z, fld_mask_lt hj, fld_mask_lt hj] at a2
+      exact ⟨a1, a2⟩
+    · have := lvl_col (l := l + 1) i (Nat.le_of_not_lt hj)
+      rw [this.1, this.2]; exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+  · have := lvl_out hc1 (Nat.le_of_not_lt hi) j
+    rw [this.1, this.2]; exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+
+theorem lvl_sch (hc1 : checkLevel (l + 1) (tab (l + 1)) (tab l) = true) (hc0 : checkLevel l (tab l) prev = true)
+    {s : Scheme} (hs : s = strassen ∨ s = winograd) (i j : Nat) :
+    LO (l + 1) i j ≤ ((List.finRange s.R).map fun t => LO l (kc i (l1 s.u[t.val]!)) (kc j (l1 s.v[t.val]!))).sum ∧
+      HA (l + 1) i j ≤ ((List.finRange s.R).map fun t => LO l (kc i (l1 s.u[t.val]!)) (kc j (l1 s.v[t.val]!))).sum := by
+  by_cases hi : i < sz (l + 1)
+  · by_cases hj : j < sz (l + 1)
+    · have h6 := (lvl_spec hc1).2.2.2.2.2 i hi
+      obtain ⟨-, -, r3, r4, r5, r6⟩ := lvl_sch_rows hc1 hi
+      rcases hs with rfl | rfl
+      · have hp := prof_strassen (fun a b => LO l (kc i a) (kc j b))
+        rw [hp, ← lvl_sch_fld hc0 strassenP (by decide) hj]
+        exact ⟨le_of_leRow r3 h6.1 (fun k hk => lvl_sch_lt hc0 strassenP (by decide) hk) hj,
+          le_of_leRow r4 h6.2 (fun k hk => lvl_sch_lt hc0 strassenP (by decide) hk) hj⟩
+      · have hp := prof_winograd (fun a b => LO l (kc i a) (kc j b))
+        rw [hp, ← lvl_sch_fld hc0 winogradP (by decide) hj]
+        exact ⟨le_of_leRow r5 h6.1 (fun k hk => lvl_sch_lt hc0 winogradP (by decide) hk) hj,
+          le_of_leRow r6 h6.2 (fun k hk => lvl_sch_lt hc0 winogradP (by decide) hk) hj⟩
+    · have := lvl_col (l := l + 1) i (Nat.le_of_not_lt hj)
+      rw [this.1, this.2]; exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+  · have := lvl_out hc1 (Nat.le_of_not_lt hi) j
+    rw [this.1, this.2]; exact ⟨Nat.zero_le _, Nat.zero_le _⟩
+
+theorem lvl_root (hc : checkLevel l (tab l) prev = true) :
+    (l ≤ thmL → 8 ^ (l + 1) + 32 ≤ HA l root root) ∧ (thmL < l → 8 ^ l < LO l root root) := by
+  simp only [checkLevel, Bool.and_eq_true] at hc
+  have h := hc.2
+  simp only [rootOK, Bool.and_eq_true, Bool.or_eq_true, Bool.not_eq_true', decide_eq_false_iff_not,
+    decide_eq_true_eq] at h
+  refine ⟨fun hl => h.1.resolve_left (fun h' => h' hl), fun hl => h.2.resolve_left (by omega)⟩
+
 end level'
+
+/-! ## The check bounds every schedule -/
+
+theorem facts (h : checkAll = true) : Facts gsz topL g kc rest LO HA := by
+  simp only [checkAll, Bool.and_eq_true, decide_eq_true_eq] at h
+  obtain ⟨⟨hg, h15⟩, hr⟩ := h
+  have hcl := run_checks topL hr
+  simp only [checkGrid, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq, allBelow_iff, Bool.or_eq_true] at hg
+  obtain ⟨⟨⟨⟨⟨⟨h0, h1⟩, hroot⟩, -⟩, hmono⟩, hkc⟩, hrest⟩ := hg
+  have hsz : ∀ l, l ≤ topL → sz l ≤ gsz := fun l hl => (lvl_spec (hcl l hl)).1
+  have hr15 : root = 15 := rfl
+  exact {
+    g0 := h0
+    g1 := h1
+    two_le := by omega
+    mono := fun k hk => hmono k (by omega)
+    kc_le := fun i hi ν h1 h4 => by
+      have := hkc i hi (ν - 1) (by omega)
+      rwa [Nat.sub_add_cancel h1] at this
+    rest_le := fun i hi e he1 hei => (hrest i hi e hei).resolve_left (by omega)
+    out := fun l hl i j hi => lvl_out (hcl l hl) (Nat.le_trans (hsz l hl) hi) j
+    symm := fun l hl i j => lvl_symm (hcl l hl) i j
+    atom := fun l hl i j => lvl_atom (hcl l hl) (by omega) i j
+    split := fun l hl i j e he hei => lvl_split (hcl l hl) i j e he hei
+    own := fun l hl i j => lvl_own (hcl l hl) i j
+    triv := fun l hl i j => lvl_triv (hcl (l + 1) hl) (hcl l (by omega)) i j
+    sch := fun l hl s hs i j => lvl_sch (hcl (l + 1) hl) (hcl l (by omega)) hs i j }
+
+theorem g_root (h : checkAll = true) : g root = 256 := by
+  simp only [checkAll, checkGrid, Bool.and_eq_true, decide_eq_true_eq, beq_iff_eq] at h
+  obtain ⟨⟨⟨⟨⟨⟨⟨⟨-, -⟩, -⟩, h256⟩, -⟩, -⟩, -⟩, -⟩, -⟩ := h
+  exact h256
+
+/-- **The tables bound every schedule** over atoms `fs` that the RTX PRO 6000 sheet's dominate, on int8 operands:
+fast ones by naive tiled's `8^(l+1)` plus 32 up to `thmL`, and all of them by `8^l` above it, to `topL`. -/
+theorem bound (h : checkAll = true) {fs : List Atom} (hD : Dom fs) {l : Nat} (hl : l ≤ topL) {S : Sched}
+    (hv : S.valid fs schemes 0 l 256 256 = true) :
+    (l ≤ thmL → S.fast = true → 8 ^ (l + 1) + 32 ≤ S.cost l) ∧ (thmL < l → 8 ^ l < S.cost l) := by
+  have hg := Nat.le_of_eq (g_root h)
+  obtain ⟨hlo, hhas⟩ := (facts h).core hD S l 256 256 hl hv root root hg hg
+  have hc := run_checks topL (by simp only [checkAll, Bool.and_eq_true] at h; exact h.2) l hl
+  obtain ⟨r1, r2⟩ := lvl_root hc
+  exact ⟨fun h1 hf => Nat.le_trans (r1 h1) (hhas hf), fun h2 => Nat.lt_of_lt_of_le (r2 h2) hlo⟩
 
 end Verity.Accel.NaiveStrassen.Packed
