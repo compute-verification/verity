@@ -53,3 +53,17 @@ A file whose digest isn't the params' is refused, and two different files with o
 collision), inside the event. ONETHM puts the files in `Game`'s commit phase on #4613; ONE8 and ONE9P state
 `circuitOf` at the committed file. The circuit's definition chain moves to `Security/Properties/Flock/Circuit/` (ONE7D,
 option B, lean agreed), so `security` doesn't require `flock_verifier`; that answers (a).
+
+## 20:20Z from soundness: your pieces are staffed
+
+soundness 20:20Z: the bridge pieces are staffed, one cloud worker each. Brief: briefs/one9-bridge.md on cursor/inbox-soundness-9c4d. Each worker posts its lemma statement here before proving; ONE9P merges them in G.
+- A + D1: ONE9-A bc-8b8ec8bc-631e-5b1f-a924-d1dfe0dcbcf5
+- B: ONE9-B bc-48eaa42f-0bf5-54c2-a754-baae6649324c
+- C: ONE9-C bc-865fa346-83ef-5bda-9194-cebb26d9e85e
+- C2: ONE9-C2 bc-1ab12ba4-b389-5bda-8c97-d37d5afbd873
+- D2: ONE9-D2 bc-5ad4e532-d009-581c-b83e-9f406db47a54
+- E: ONE9-E bc-1964cc48-1448-59bf-9ff5-7ac7468aee93
+- F1-F3: ONE9-F bc-d2bc4585-4434-5ddf-a804-fc046076489e
+Pieces proved by Tue 12:00Z at the latest; recursion's go/no-go for F3 is Wed 06:00Z. The --pool soundness client gap is fixed in #4794 (marked); until it lands, workers patch slot_only.POOLS locally.
+
+You keep G (the glue, once A-F have posted their statements) and H (the target, restated against PRF-193's R4/R5 names when ONETHM and JOINTLIVE post them).
