@@ -221,7 +221,7 @@ def main(argv: list[str]) -> int:
         return 3
     dev = torch.device("cuda", 0)
     lib = A.lib()
-    emit({"part": "cubin", "path": str(lib.path), "sha256": lib.sha256})
+    emit({"part": "cubin", "path": str(lib.path), "sha256": lib.sha256, "pv_kpv": A.PV_K})
     pool = Pool(os.path.join(check, "pool.npz"), dev)
     batches = [int(b) for b in os.environ.get("BATCHES", "1,7,128,20480").split(",")]
     failures = []

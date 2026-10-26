@@ -5,11 +5,14 @@
         s[b, h, j] = GemmCoordinate{K=D}(q[b, h], k[b, kv(h), j])               j < lens[b]
         s[b, h, j] = fill (default 0xFF80, -inf)                                lens[b] <= j < L
     pv(p, v, lens=None) -> o   p [B, H, L], v [B, L, D] or [B, Hkv, L, D] -> o [B, H, D]
-        o[b, h, d] = GemmCoordinate{K=pad16(n)}(p[b, h, :n] ++ 0, v[b, kv(h), :n, d] ++ 0)    n = lens[b]
+        o[b, h, d] = GemmCoordinatePad{T=n, K=kp}(p[b, h, :n], v[b, kv(h), :n, d])     n = lens[b], kp = max(kpv, pad16(n))
 
 Every tensor is bf16 but lens (int32 [B], on the device; default: every sequence holds L keys), D is a multiple of 16,
 kv(h) = h // (H // Hkv), and p's and v's words past lens[b] are never read as values (they enter as zero codes, as the
-Definition pads both operands).  `out=` takes a contiguous bf16 tensor of the result's shape and writes every word of it.
+Definition pads both operands).  GemmCoordinatePad_v1{T, K} is GemmCoordinate_v2{K} on both operands padded with K - T
+words of +0, and `kpv` (keyword, a multiple of 16) defaults to PV_K = 32, the H200 circuit's PV:
+GemmCoordinatePad_v1{T=n, K=32} at every length 1..32.  `out=` takes a contiguous bf16 tensor of the result's shape and
+writes every word of it.
 `check_lens` (default True) refuses lens outside [0, L], at the price of a device sync; pass False under a CUDA graph.
 `warps` (1, 2, 4 or 8 a block) decides only which warp runs a tile, never a word.  Kernels run on torch's current stream.
 
@@ -27,6 +30,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 NEG_INF = 0xFF80
+PV_K = 32
 WARPS = (1, 2, 4, 8)
 
 u, i32, vp, P = C.c_uint, C.c_int, C.c_void_p, C.POINTER
@@ -154,16 +158,20 @@ def qk(q: torch.Tensor, k: torch.Tensor, lens: torch.Tensor | None = None, *, ou
 
 
 def pv(p: torch.Tensor, v: torch.Tensor, lens: torch.Tensor | None = None, *, out: torch.Tensor | None = None,
-       warps: int = 4, check_lens: bool = True) -> torch.Tensor:
-    """O = P V per sequence: p [B, H, L], v [B, (Hkv,) L, D] bf16 -> [B, H, D] bf16 (the module docstring)."""
+       kpv: int = PV_K, warps: int = 4, check_lens: bool = True) -> torch.Tensor:
+    """O = P V per sequence: p [B, H, L], v [B, (Hkv,) L, D] bf16 -> [B, H, D] bf16, K = max(kpv, pad16(lens[b])) (the
+    module docstring)."""
     x, kv, ln, B, H, Hkv, L, D = _flat(p, v, lens, "pv")
     if p.shape[2] != L:
         raise ValueError(f"pv: p's {p.shape[2]} keys are not v's {L}")
+    if kpv < 0 or kpv % 16:
+        raise ValueError(f"pv: kpv {kpv} is not a multiple of 16")
     if check_lens:
         _check(ln, L, "pv")
     o = _out(out, (B, H, D), p, "pv")
     G = H // Hkv
     if B and H:
         lib().launch("attn_ref_pv", _grid(B * Hkv, G, D, warps), warps,
-                     [vp(x.data_ptr()), vp(kv.data_ptr()), vp(o.data_ptr()), vp(ln.data_ptr()), i32(G), i32(D), i32(L)])
+                     [vp(x.data_ptr()), vp(kv.data_ptr()), vp(o.data_ptr()), vp(ln.data_ptr()), i32(G), i32(D), i32(L),
+                      i32(kpv)])
     return o

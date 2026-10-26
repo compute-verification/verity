@@ -7,6 +7,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.ml.circuits import evaluation as E
+from verity.ml.circuits.defs import bind
+from verity.ml.circuits.ops import gemm as G
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import fixture as F  # noqa: E402
 import sass_gate  # noqa: E402
@@ -52,20 +56,33 @@ def test_gate_refuses(ptxas, sass, why):
     assert any(why in p for p in problems), problems
 
 
-@pytest.mark.parametrize("kind", ["specials", "tiny"])
+@pytest.mark.parametrize("kind", ["specials", "tiny", "subacc"])
 def test_pool_words_are_the_definitions(kind):
     """A sequence's S and O at every length agree with the reference evaluator on the sample fixture.py holds it to, and O at
-    a length off the 16-grid is the coordinate over both operands zero-padded."""
+    a length off the 16-grid is GemmCoordinatePad{T=n, K=32} on the first n keys."""
     i = F.KINDS.index(kind)
     seq = F.expected(i)
     assert seq["ref"]["qk"][1] == 0 and seq["ref"]["pv"][1] == 0 and seq["ref"]["qk"][0] == F.REF_PER_SEQ
     rng = np.random.default_rng(0)
     for n in (1, 15, 17, 31):
         h, d = rng.integers(0, F.H, 8), rng.integers(0, F.D, 8)
-        x = np.zeros((8, F.pad16(n)), np.uint16)
-        w = np.zeros((8, F.pad16(n)), np.uint16)
+        x = np.zeros((8, F.pv_k(n)), np.uint16)
+        w = np.zeros((8, F.pv_k(n)), np.uint16)
         x[:, :n], w[:, :n] = seq["P"][h, :n], seq["V"][:n, d].T
-        assert (F.coordinate(x, w, kernel="reference") == seq["O"][n - 1, h, d]).all()
+        assert x.shape[1] == 32
+        assert (F.pad_reference(x, w, n) == seq["O"][n - 1, h, d]).all()
+
+
+def test_subacc_reaches_the_padding_step_with_subnormal_accumulators():
+    """The constructed case: at n <= 16 most of PV's accumulators after the one live step are nonzero FP32 subnormals, the
+    words GemmCoordinatePad{K=32}'s all-+0 second step reads; and its words there equal one step's, K = pad16(n)."""
+    seq = F.sequence(F.KINDS.index("subacc"))
+    for n in (1, 7, 16):
+        x, w = F.pv_operands(seq["P"], seq["V"], n)
+        acc = np.asarray(E.evaluate_batch(bind(G.DotBf16, K=16, **G.GEMM_HOPPER), x[:, :16], w[:, :16]), np.uint32)
+        subnormal = (((acc >> 23) & 0xFF) == 0) & ((acc & 0x7FFFFF) != 0)
+        assert subnormal.mean() > 0.5, (n, subnormal.mean())
+        assert (F.coordinate(x, w) == F.coordinate(x[:, :16], w[:, :16])).all()
 
 
 @pytest.mark.slow

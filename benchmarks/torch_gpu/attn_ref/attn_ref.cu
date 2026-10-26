@@ -4,12 +4,14 @@
 // ascending k from a +0 accumulator, then one `cvt.rn.bf16.f32`.
 //
 //   attn_ref_qk   S[b,r,j] = GemmCoordinate{K=dim}(Q[b,r,:], K[b,j,:])                     j < len(b); fill for len(b) <= j < lcap
-//   attn_ref_pv   O[b,r,d] = GemmCoordinate{K=pad16(len)}(P[b,r,:len] ++ 0, V[b,:len,d] ++ 0)   len = len(b)
+//   attn_ref_pv   O[b,r,d] = GemmCoordinatePad{T=len, K=kp}(P[b,r,:len], V[b,:len,d])      len = len(b), kp = max(kpv, pad16(len))
 //
+// GemmCoordinatePad_v1{T, K} is GemmCoordinate_v2{K} on both operands padded with K - T words of +0.  kpv = 32 is the H200
+// circuit's PV, GemmCoordinatePad_v1{T=len, K=32}: two steps at every length 1..32, the second all +0 at len <= 16.
 // b is a (sequence, KV head) pair and r one of the query heads that read that KV head (attn_ref.py flattens MQA and GQA to
 // this); len(b) = lens[b] clamped to [0, lcap].  Every buffer is contiguous: Q [nb][rows][dim], K and V [nb][lcap][dim],
-// P and S [nb][rows][lcap], O [nb][rows][dim]; dim is a multiple of 16.  Positions past len(b) in K, V and P are never
-// multiplied: they enter the mma as zero codes, as the Definition pads both operands.
+// P and S [nb][rows][lcap], O [nb][rows][dim]; dim and kpv are multiples of 16.  Positions past len(b) in K, V and P are
+// never multiplied: they enter the mma as zero codes, as the Definition pads both operands.
 //
 // One warp owns one 16 x 8 tile of output words (16 query heads by 8 keys, or by 8 d) and carries all its accumulators
 // through the whole k range in registers: no split-K, no atomics, no shared memory.  The grid is (nb, row tiles / warps
@@ -89,10 +91,10 @@ extern "C" __global__ void __launch_bounds__(256) attn_ref_qk(const uint16_t* __
 
 extern "C" __global__ void __launch_bounds__(256) attn_ref_pv(const uint16_t* __restrict__ p, const uint16_t* __restrict__ v,
                                                               uint16_t* __restrict__ o, const int32_t* __restrict__ lens,
-                                                              int32_t rows, int32_t dim, int32_t lcap) {
+                                                              int32_t rows, int32_t dim, int32_t lcap, int32_t kpv) {
     const Tile w = tile();
     if (w.r0 >= rows) return;
-    const int len = min(max(lens[w.b], 0), lcap);
+    const int len = min(max(lens[w.b], 0), lcap), kp = max(kpv, len);
     const uint16_t* P = p + w.b * rows * lcap;
     const uint16_t* V = v + w.b * lcap * dim;
     uint16_t* O = o + w.b * rows * dim;
@@ -101,7 +103,7 @@ extern "C" __global__ void __launch_bounds__(256) attn_ref_pv(const uint16_t* __
     const uint16_t* pa = P + (int64_t)ra * lcap;
     const uint16_t* pb = P + (int64_t)rb * lcap;
     float acc[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-    for (int k0 = 0; k0 < len; k0 += 16) {
+    for (int k0 = 0; k0 < kp; k0 += 16) {
         const int lo = k0 + 2 * w.t, hi = lo + 8;
         const bool l0 = lo < len, l1 = lo + 1 < len, h0 = hi < len, h1 = hi + 1 < len;
         const uint32_t A[4] = {pack(word(pa + lo, aok && l0), word(pa + lo + 1, aok && l1)),
