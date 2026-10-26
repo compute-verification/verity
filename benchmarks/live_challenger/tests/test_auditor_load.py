@@ -10,6 +10,7 @@ never a salt. `test_warden_serve` holds `warden_command`'s load flags to `warden
 from __future__ import annotations
 
 import json
+import re
 import shlex
 import sys
 from datetime import datetime, timezone
@@ -30,6 +31,7 @@ TUNNEL = [sys.executable, "-c", "import signal; signal.pause()"]
 LOAD = ["load-relay", "--peer", "vy-nebius-1", "--port", "8011", "--sink-port", "8021", "--program", PROGRAM,
         "--shape", "tiny", "--minutes", "40"]
 LR = A._load_relay()
+UNIT = HERE.parents[2] / "tools/research/src/research/pods/nebius/challenger/vy-certifier@.service"
 
 
 @pytest.fixture
@@ -112,7 +114,7 @@ def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     (["--minutes", "16"], "--minutes 16: the tiny load takes 16 minutes"),
     (["--minutes", "26"], "--minutes 26: 100 requests take 11 minutes"),
     (["--minutes", "26"], "at height 20) after the load's 16: give --minutes 27 or more, or fewer --requests"),
-    (["--minutes", "121"], "--minutes '121': 1 to 120"),
+    (["--minutes", "171"], "--minutes '171': 1 to 170"),
     (["--tamper", "late"], "load-relay: unrecognized arguments: --tamper"),
     (["--load-store", "/tmp"], "load-relay: unrecognized arguments: --load-store"),
 ])
@@ -175,6 +177,13 @@ def test_a_loads_minutes_are_its_weights_and_witness_at_the_links_rate_and_the_e
     """H200: 139,736,443,904 B of weights and 192 B of salts a leaf (553,933,568 leaves) at 80 MB/s, and 900 s."""
     assert (A.load_minutes("h200"), A.load_minutes("tiny")) == (67, 16)
     assert set(A.LOAD_SHAPES) == set(LR.SHAPES) and LR.SALT_BYTES == 192
+
+
+def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h200_load_100_of_serving():
+    """The gate's cap and 10 minutes for the tunnels and the outcome are within the unit's RuntimeMaxSec (infra's)."""
+    limit = re.search(r"^RuntimeMaxSec=(\d+)h$", UNIT.read_text(), re.M)
+    assert limit and A.CERTIFIER_MINUTES[1] + 10 <= int(limit[1]) * 60
+    assert A.CERTIFIER_MINUTES[1] - A.load_minutes("h200") >= 100
 
 
 SALT = "5a" * 64
