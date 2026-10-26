@@ -340,7 +340,7 @@
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
-   "except": ["Properties.Accounting.Compose", "Properties.Accounting.Served", "Properties.Accounting.JointBridge"],
+   "except": ["Properties.Accounting.Compose", "Properties.Accounting.Served", "Properties.Accounting.JointBridge.SpaceOfPeriodHeld"],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
   "Properties.Accounting.JointBridge": {
