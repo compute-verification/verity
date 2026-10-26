@@ -122,7 +122,6 @@ SECONDS: dict[str, float] = {
     "tests/pipeline/test_tp_build_relabel.py": 32,
     "tests/check/test_provenance.py": 31,
     "tests/program/test_boolean_fp8.py": 30,
-    "tests/commit/test_oracle.py": 29,
     "tests/program/test_fp8_moe.py": 29,
     "tests/check/test_sampled_replay_glm53_rows.py": 29,
     "tests/pipeline/test_run_config_dry_run.py": 29,

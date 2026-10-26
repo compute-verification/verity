@@ -10,7 +10,7 @@ runtime capture and Match/Commit machinery (`verity_vllm`), and the qualificatio
 One distribution (`verity-vllm`), one package (`verity_vllm`), one subpackage per job; `tests/` mirrors the package.  Naming
 (Draft 3.1): core Verity nouns get the shortest names (`program`, `query`, `commit`), integration concepts carry their
 qualifier (`runtime` correspondence, `weights_of_record`), implementation artefacts have descriptive compound names
-(`native_collect`, `poc_*` for v1 leftovers).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
+(`native_collect`).  Build / Match / Commit are the stage drivers in `pipeline/`, not layers.
 Imports point down the layer order `pipeline` > `check` | `properties` > `acquire` | `protocol_options` > `observe` | `commit` >
 `engine` > `query` | `correspondence` > `program` > `collectives` > `config` (lint P9).
 
@@ -18,7 +18,7 @@ Imports point down the layer order `pipeline` > `check` | `properties` > `acquir
 verity_vllm/
   pipeline/           stage drivers      build.py match.py commit.py row*.py report.py hot.py layout.py cli.py llm.py research_tools.py tp/
   engine/             the vLLM engine    build.py run_facts.py code_identity.py kernel_identity.py vllm_adapter.py engine_driver.py engine_profile.py arrivals.py chunks.py static_schedule.py served_seed.py profiles/
-  program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py dtypes.py
+  program/            Program            registry/ frontend/ lifting/ verity/ml/kernels/ model.py workload.py compact.py
   query/              verification query module_body.py word.py cross_call.py required.py program_view.py manifest/ compare.py
   correspondence/     runtime corresp.   runtime.py reader_for_*.py resolve*.py capture_identities.py
   observe/            value observation  observer.py events.py log.py storage.py contract.py runtime_tree.py capture.py pinned.py kernel_trace.py fold/
@@ -118,7 +118,7 @@ runtime metadata in the identity tuple.
 `verdict.py` (with `commit_verdict`), `value_check.py` / `compiled_value_check.py` / `oracle_compare.py`,
 `fold_compare.py`, `operand_provenance.py`, input provenance (`weights_of_record.py`: checkpoint basis, `weights_pin`;
 `root_policy.py`), and batch invariance (`batch.py`: a template's outputs read no other owner's rows, and its launch shape doesn't
-pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates); `poc_*.py` are v1 leftovers.  Never: acquire or commit anything.
+pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s templates).  Never: acquire or commit anything.
 
 **`properties/`** holds the property harnesses: `noninterference.py`, `census.py` + `kernel_allowlist.py`, `golden.py` +
 `golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`, `protected.py`,
@@ -199,7 +199,7 @@ Layers and where they live (Draft 3 §12.1):
 | layer | responsibility | today |
 | --- | --- | --- |
 | Program | Definitions, Calls, dataflow, `program_digest` | `verity/ml/definitions/registry`, `verity_vllm/program/frontend` (lowering rules) |
-| query | Q(P), proof units, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record), `verity_vllm/check/poc_required_interface.py` |
+| query | Q(P), proof units, boundary and required values | `verity_vllm/query` (`module_body`, `word`), `verity_vllm/pipeline/manifest.py` (`verity-vllm manifest`: the manifest of record) |
 | runtime correspondence | Call ↔ module path / fx node / slot | `verity_vllm/correspondence`, `verity_vllm/program/lifting`, `verity_vllm/correspondence/reader_for_query.py`, `verity_vllm/correspondence/runtime.py` |
 | acquisition | acquisition plan, taps, hooks, collector | `verity_vllm/acquire` (`plan.py` ROUTE_OF_FAMILY, `install.py`, `stage.py`); hazard / analytic owners in `commit/committer/native_collect.py`, `commit/committer/native_host.py`, `commit/committer/hidden_gpu_src/` |
 | observation + resolution | capture log, fold, occurrence resolution | `pipeline/m1_capture.py`, `observe/fold/fold.py`, `check/match/batch_decomp.py` |
