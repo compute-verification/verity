@@ -788,13 +788,22 @@ gap = "not timed (census row MUFU_EX2); no derivation reads it"
 
 [[rate]]
 key = "sha512"
-what = "SHA-512 compressions (one 128-B block each)"
+what = "SHA-512 compressions of a variable message (one 128-B block each), commit_gpu's kernel"
+unit = "compressions/SM/clk"
+sheet = 0.018824
+grade = "Programming Guide (alu.lop3's 64 lanes over commit_gpu's 3,400 ALU instructions a compression)"
+source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; commit_gpu's SASS a block on sm_90 (the chained-compression loop): 3,608 instructions, 3,400 on the ALU pipe (SHF 1,728, LOP3 912, IADD3(.X) 760), about 152 IMAD (r20261018-062010-1c6b, note:hash/20261018T0632Z-draft-intpipe §1)"
+measured = 0.018327
+runs = "4.79 G compressions/s raw (r20261017-234343-61c6, note:circuits-rows-sha512-floor; 4.787 in r20261018-062010-1c6b, 97% of the sheet) over 132 SMs at the 1,980 MHz fmax, the lowest per-clock reading"
+
+[[rate]]
+key = "sha512.leaf"
+what = "SHA-512 compressions of the noise kernel's leaf block, whose message is partly constant"
 unit = "compressions/SM/clk"
 sheet = 0.022559
-grade = "Programming Guide (alu.lop3's 64 lanes over the kernel's 2,837 ALU instructions a compression)"
-source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654; r20261019-045723-c859, note:hash/20261019T0427Z-draft-dither-hb)"
-measured = 0.018327
-runs = "4.79 G compressions/s raw (r20261017-234343-61c6, note:circuits-rows-sha512-floor) over 132 SMs at the 1,980 MHz fmax, the lowest per-clock reading"
+grade = "Programming Guide (alu.lop3's 64 lanes over that kernel's 2,837 ALU instructions a compression)"
+source = "CPG Table 7, CC 9.0: 64 lanes a SM-clock for 32-bit shifts, logic and adds; SASS of the H200 noise kernel: 2,967 instructions a compression, 2,837 on the ALU pipe (SHF 1,427, LOP3 756, IADD3 654; r20261019-045723-c859, note:hash/20261019T0427Z-draft-dither-hb); a constant word is cheaper for honest and for any other kernel alike (RT-UNITS U10)"
+gap = "the noise kernel's leaf compressions timed alone on the H200 (GPU queue)"
 
 [[rate]]
 key = "host.link"
