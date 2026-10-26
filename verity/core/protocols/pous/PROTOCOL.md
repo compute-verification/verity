@@ -531,10 +531,20 @@ bits at `2^-128` for every `k` and `r` with `(r − 1)^k · 2^129 ≤ r^k` (that
 least read count `k = 5231`, for `39,721,768,854 + E` bits (the fill's 21,321,768,854, about 2.665 GB, plus the reserve:
 about 4.965 GB). At `r = 58` the fill's share alone is 2.706 GB.
 
-The `+ N` there is the count `C(N, m) ≤ 2^N` of the sets of `m = ⌈N/r⌉ − 1` missing labels, `N/512` bytes, 29.5 GB on a
-whole 8×H200 server. `StreamedWipeMeetsReadsTight` (`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`,
-proved in `Security/Proofs/Pous/StreamedWipe/Server.lean`) replaces it with `m · (⌊log₂⌊3N/m⌋⌋ + 1)`
-(`C(N, m) ≤ (e·N/m)^m`), so the fill's share is about `(N/r) · (512 + log₂(e·r))`. Per server (Daniel, 26 Oct: the
+**What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
+an efficient prover. The physical premises are the game's shape, and the deployment must make them true:
+
+- *no unaccounted tier*: `M` is every bit the server can hold when the fill ends, every memory tier the commitment
+  declares, and nothing else;
+- C6, *egress certified over the whole wipe*: `E` is at least the bits that left the boundary from the fill's start to
+  the last answer, as the network certifier counts them;
+- C5, *no side channel*: no label leaves except through that egress, and nothing reaches the server during the
+  challenges but the indices and what the outside sends.
+
+The `+ N` in `StreamedWipeMeetsReads`'s threshold is the count `C(N, m) ≤ 2^N` of the sets of `m = ⌈N/r⌉ − 1`
+missing labels, `N/512` bytes, 29.5 GB on a whole 8×H200 server. `StreamedWipeMeetsReadsTight`
+(`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`, proved in
+`Security/Proofs/Pous/StreamedWipe/Server.lean`) replaces it with `m · (⌊log₂⌊3N/m⌋⌋ + 1)` (`C(N, m) ≤ (e·N/m)^m`), so the fill's share is about `(N/r) · (512 + log₂(e·r))`. Per server (Daniel, 26 Oct: the
 wipe leaves at most 5 GB of the server's assumed memory capacity), `StreamedWipeMeetsServer` states it against the
 assumed capacity `M_s = 512 · N + R` over every tier, `R` being every bit outside the fill (the boot disk and the GPU
 contexts included): a server keeps at most `B(N, r, k, R) + E` bits, `B` the fill's share plus `R`.
@@ -550,16 +560,6 @@ and its least `k`, are:
 
 With today's fill-process contexts at zero reserve, `R = 8 × 1.2 GB = 9.6 GB` on its own, and no `r` reaches 5 GB.
 `8 × 0.3 GB + 1.5 GB` is a minimal context per GPU and a host OS.
-
-**What it rests on.** No named assumption. The PRF enters as the advantage term in the conclusion, which C3 bounds for
-an efficient prover. The physical premises are the game's shape, and the deployment must make them true:
-
-- *no unaccounted tier*: `M` is every bit the server can hold when the fill ends, every memory tier the commitment
-  declares, and nothing else;
-- C6, *egress certified over the whole wipe*: `E` is at least the bits that left the boundary from the fill's start to
-  the last answer, as the network certifier counts them;
-- C5, *no side channel*: no label leaves except through that egress, and nothing reaches the server during the
-  challenges but the indices and what the outside sends.
 
 **Measured** (`r20261019-061002-ee6b`, one RTX PRO 6000 Blackwell Server Edition with 188 SMs;
 `benchmarks/pous/streamed_wipe/run.sh`; every gate passed, 76 vectors against `streamed_wipe.label`):
@@ -901,10 +901,10 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `DenseMeets64`, `SegMeets14`, `SegTagMeets14` | the dense scheme at 64 KB, `D = 5`, `k = 106`, in the ideal-hash model: one segment, 448 segments (14 GB), and the 448 segments keyed as the implementation keys them, for every salt | proved |
 | `SegTagAuditSecure`, `DomainSepEquiv`, `TagInjective14` | the tagged keying's transfer: the tagged scheme is as secure as the global one, and the tags relabel the global indices injectively (448 distinct tags) | proved |
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
+| `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB`, `StreamedWipeMeetsServerH200`, `StreamedWipeMeetsServer8H200HBM`, `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200` | the streamed-label wipe as `StreamedWipeMeetsReads` states it, with the count of the missing labels, `m·(⌊log₂⌊3N/m⌋⌋ + 1)` for `m = ⌈N/r⌉ − 1`, in place of `N`; per server against its assumed memory capacity `M_s = 512·N + R`, at most `2^-128 + Adv_PRF` for `q ≥ B(N, r, k, R) + E`, and at the 5 GB point `B ≤ 4·10^10` for `q ≥ 4·10^10 + E`; one H200 at `k = 4695`, and an 8×H200 server with 3.9 GB outside the fill, its HBM at `k = 93,843`, with RAM at `k = 261,229` and every tier at `k = 1,268,143` | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
 | `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB`, `StreamedWipeMeets141GB` | the streamed-label wipe at `k = 2152` reads, `verity/wipe/v0`'s figure: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB and 141 GB the explicit thresholds | proved |
 | `StreamedWipeMeetsReads`, `StreamedWipeMeets141GB5` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GB and its 2.3 GB reserve) at `k = 5231`, `q ≥ 39,721,768,854 + E` bits, at most 5 GB | proved |
-| `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB`, `StreamedWipeMeetsServerH200`, `StreamedWipeMeetsServer8H200HBM`, `StreamedWipeMeetsServer8H200HBMRAM`, `StreamedWipeMeetsServer8H200` | the same with the count of the missing labels, `m·(⌊log₂⌊3N/m⌋⌋ + 1)` for `m = ⌈N/r⌉ − 1`, in place of `N`; per server against its assumed memory capacity `M_s = 512·N + R`, at most `2^-128 + Adv_PRF` for `q ≥ B(N, r, k, R) + E`, and at the 5 GB point `B ≤ 4·10^10` for `q ≥ 4·10^10 + E`; one H200 at `k = 4695`, and an 8×H200 server with 3.9 GB outside the fill, its HBM at `k = 93,843`, with RAM at `k = 261,229` and every tier at `k = 1,268,143` | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
 column at a time, where whole-label pebbling charges it a whole label. N10′, the column-aware restatement over
