@@ -1,9 +1,7 @@
 import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainRdRunK
-import Proofs.Flock.Claims.KS.PlainR
+import Proofs.Flock.Claims.KS.PlainRConflict
 import Proofs.Flock.Claims.KS.PlainKSLinR
-import Proofs.Flock.Claims.Recursion.DeploySessions
-import Proofs.Flock.Claims.Bridge.Committed
 
 /-!
 # The acceptance bound at `VR rd` against the reader's read sets
@@ -16,8 +14,6 @@ import Proofs.Flock.Claims.Bridge.Committed
 * `plainRawLevelColsRV rd v k ℓ`: `plainRawLevelCols` at that run, rep `k`'s level-`ℓ` columns of table 0.
 * `PlainAccPrRdR rd x`: `plain_accPr_le_rdAllK`'s statement at `VR rd`, with `GoodTable` at `deployPlain` (it reads
   neither `V` nor `cols`, so it is the same `GoodTable` at any record built on `deployPlain` with `V := VR rd`).
-* `colsRV_run`: since `VR rd` accepts only at its last round (`accLast_VR`), `colsRV rd` at an accepting run is
-  `colsR` at its messages and coins, since the answers show the coins (`run_outCoinsR`).
 * `plain_first_of_simDR`, `plain_le_sessionsRawLR`, `plainOffL_le_rdR`, `plain_accPr_le_rdLR`: the `K` chain at
   `VR rd`, at a simulator `P'` sending `plainRootR`'s roots (`PlainSimR`) with its clashes (`PlainClashRunR`).
 * `plain_accPr_le_rdAllR_of rd hno hIn : PlainAccPrRdR rd x`, from what the simulation and the decoders still owe
@@ -59,7 +55,6 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundne
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
 open Claims.Bridge.Live
 open Lean (Json)
-open RecDeploy (outCoin)
 
 /-- **Rep `k`'s level-`ℓ` columns of table 0 at `VR rd`, on a view**: `plainRawLevelCols` at the run `runOfRV rd`
 reads. -/
@@ -111,80 +106,6 @@ def PlainAccPrRdR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
           ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
             Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧
               u ≠ C p
-
-/-! ## The run's coins at `VR rd` -/
-
-/-- **`nextR`'s answer shows its round's coin** (`answersCoin_deploy`, at `next_msg_of_nextR`). -/
-theorem outCoin_nextR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
-    {c : Coin} {m : Claims.Msg} (h : ((nextR rd x as (cs ++ [c])).eval sha512).1 = .msg m) :
-    outCoin (.msg m) = c := by
-  rw [Claims.Bridge.answersCoin_deploy false sha512 x as cs c m (next_msg_of_nextR rd sha512 h)]
-  exact RecDeploy.coinOf_bytes c
-
-/-- **An accepting run of `nextR rd` shows its coins**: each message round's answer shows that round's coin
-(`outCoin_nextR`), and the accepting round shows `default`. -/
-theorem stepWith_outCoinsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
-    (ω : Ω) {k : ℕ} (r : Fin k → Coin) (vn : List Claims.Msg → Claims.OC Claims.Out)
-    (hvn : ∀ as, vn as = nextR rd x as ((List.range as.length).map (Claims.coinSeq r))) :
-    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
-      as.length = t.msgs.length →
-      (t.msgs.map Prod.snd).map outCoin = (List.range t.msgs.length).map (Claims.coinSeq r) →
-      (Claims.stepWith sha512 P x ω vn n hist as t).out = .acc →
-      ∃ L, (Claims.stepWith sha512 P x ω vn n hist as t).msgs.length = L + 1 ∧
-        ((Claims.stepWith sha512 P x ω vn n hist as t).msgs.map Prod.snd).map outCoin =
-          (List.range L).map (Claims.coinSeq r) ++ [default]
-  | 0, _, _, _, _, _, h => by simp [Claims.stepWith] at h
-  | n + 1, hist, as, t, hl, hc, h => by
-    rcases hv : (vn (as ++ [((P.next x hist ω).eval sha512).1])).eval sha512 with ⟨o, lo⟩
-    cases o with
-    | msg m =>
-      rw [RecDeploy.stepWith_succ_msg sha512 P x ω vn n hist as t hv] at h ⊢
-      have e : (List.range (as ++ [((P.next x hist ω).eval sha512).1]).length).map (Claims.coinSeq r) =
-          (List.range as.length).map (Claims.coinSeq r) ++ [Claims.coinSeq r as.length] := by
-        simp [List.range_succ]
-      have hv' : ((vn (as ++ [((P.next x hist ω).eval sha512).1])).eval sha512).1 = .msg m := by rw [hv]
-      rw [hvn, e] at hv'
-      have hm := outCoin_nextR hv'
-      rw [hl] at hm
-      refine stepWith_outCoinsR rd P x ω r vn hvn n _ _ _ (by simp [hl]) ?_ h
-      simp only [List.map_append, List.map_singleton, hc, hm, List.length_append, List.length_singleton,
-        List.range_succ]
-    | acc =>
-      rw [RecDeploy.stepWith_succ_acc sha512 P x ω vn n hist as t hv]
-      refine ⟨t.msgs.length, by simp, ?_⟩
-      simp only [List.map_append, List.map_singleton, hc]
-      rfl
-    | rej =>
-      rw [RecDeploy.stepWith_succ_rej sha512 P x ω vn n hist as t hv] at h
-      simp at h
-
-/-- **An accepting run at `VR rd` shows its coins but the last** (`stepWith_outCoinsR`). -/
-theorem run_outCoinsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
-    (r : Fin ((VR rd).k x) → Coin) (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
-    ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin =
-      ((List.range (Claims.run sha512 P (VR rd) x ω r).msgs.length).map (Claims.coinSeq r)).dropLast ++
-        [default] := by
-  obtain ⟨L, hL, he⟩ := stepWith_outCoinsR rd P x ω r _ (fun _ => rfl) ((VR rd).k x) [] [] ⟨[], [], [], .rej⟩ rfl
-    rfl h
-  have hL' : (Claims.run sha512 P (VR rd) x ω r).msgs.length = L + 1 := hL
-  have he' : ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin =
-      (List.range L).map (Claims.coinSeq r) ++ [default] := he
-  rw [he', hL', List.range_succ, List.map_append, List.map_singleton, List.dropLast_concat]
-
-/-- **`colsRV rd` reads an accepting run's columns**: `VR rd` accepts only at its last round (`accLast_VR`), and the
-view's coins are the run's (`run_outCoinsR`), so `colsRV_eq`. -/
-theorem colsRV_run (rd : Claims.Msg → Option FinalP) {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin}
-    (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
-    colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen =
-      colsR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
-        ((List.range ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) := by
-  have ha := FlockDeploy.KS.run_acc_next sha512 P (VR rd) x ω r h
-  have hlen := accLast_VR rd x _ _ (by simp) ha
-  refine colsRV_eq rfl ?_ ?_ ha
-  · rw [List.length_map]
-    exact run_outCoinsR rd P x ω r h
-  · rw [List.length_map, List.length_range]
-    exact hlen
 
 /-! ## The draw -/
 
@@ -273,7 +194,7 @@ def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover
 open Classical in
 /-- **The plain mixture's first bound at the statement's draw, from a simulation, at `VR rd`**
 (`plain_first_of_simDK`'s proof, at `plainVerdictAtJK id` by `plainVerdictAtJK_of_runR`, with `colsRV rd` the run's
-columns by `colsRV_run`). -/
+columns by `PlainRConflict`'s `colsRV_run`). -/
 theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
     (ω : Ω) {M : ℕ} (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins} {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json} (hset : setupOf false x = some (s₀, spec₀, sts₀))
     (hd : s₀.read.draw = some d) {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
@@ -308,7 +229,7 @@ theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P 
     obtain ⟨-, -, -, rfl, -⟩ := hd'
     simp [plainRootR, hv', hr₀, hl]
   rw [hroot, hsim u r' hacc s spec sts link c₁ mids f hact]
-  rw [colsRV_run rd hacc] at hno
+  rw [colsRV_run hacc] at hno
   exact hv d hd C hno
 
 open Classical in
