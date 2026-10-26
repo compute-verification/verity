@@ -1,15 +1,17 @@
 import Proofs.Flock.Claims.Recursion.NonVacuous
 import Proofs.Flock.Claims.Recursion.VerdictRowL
+import Proofs.Flock.Claims.Recursion.RoundCounts
 
 /-!
-# Row L's target, from the coin tie
+# Row L's target
 
-`TargetL` (row L at each rep, where the rows are asked) holds wherever `TargetZ` does (`targetL`). Row L's `params`,
-`initialCap` and `cap` hold outright there: the first two by the reader's pin, `cap` by the `after` base check
-(`after_of_base`, `DecAt.rootB_link`). Its `fc` holds by row C's `c` and the reader's pin once `z` is tied: `TargetZ`
-says each rep stream's round-2 coin, as the session records it, is the live coin the reader read rep `2 i + r`'s `z`
-from. The two can differ only where the record's per-stream round counts differ from the schedule's (`repLens`): custody
-pairs the flattened rounds with the round messages, so the offsets agree when each stream has its schedule's rounds.
+`TargetL` (row L at each rep, where the rows are asked) holds (`targetL_holds`). Row L's `params`, `initialCap` and `cap`
+hold by the reader's pin and the `after` base check (`after_of_base`, `DecAt.rootB_link`); its `fc` by row C's `c` and
+the reader's pin once `z` is tied (`targetL`, from `TargetZ`): each rep stream's round-2 coin, as the session records
+it, is the live coin the reader read rep `2 i + r`'s `z` from. That holds because the record `decR` hands over is the
+reader's (`recJ`), whose rep streams have the schedule's round counts stream by stream (`DecAt.hz`, `RoundCounts`), so
+`TargetZ` is proved (`targetZ`). The same per-stream counts give row R's `hsz` where the schedule's coin counts are the
+shape's `roundSizes` (`hsz_of_sched`).
 -/
 
 namespace RecDeploy
@@ -49,6 +51,33 @@ theorem targetL (acc : Msg → List Msg → List Coin → ℕ → Array F128) (h
     omega
   exact D.rowL_at cls (acc x ms cs) i r hst hf hx hi hti D.points_eq (idx_lt D hi r)
     (shaped_of_base hr hb D _ (idx_lt D hi r)) (after_of_base hr hb D) (hZ x ms cs hA D cls i hi r)
+
+/-- **Row L's coin tie holds** where the rows are asked: the rep streams' names are distinct at a dense inner
+statement (`DecAt.names_nodup`), and each stream has the schedule's rounds (`DecAt.hz`). -/
+theorem targetZ : TargetZ rd P := by
+  intro x ms cs hA D cls i hi r
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
+  have hti : i < D.spec.tables.size := by
+    obtain ⟨h1, h2⟩ := D.tables_of_dense hst hf hx
+    omega
+  exact D.hz cls i (D.names_nodup hst hf hx) hi hti r
+
+/-- **Row L's target holds.** -/
+theorem targetL_holds (acc : Msg → List Msg → List Coin → ℕ → Array F128) : TargetL rd P acc :=
+  targetL acc targetZ
+
+/-- **Row R's `hsz` where the rows are asked**, in `TargetR`'s form, where the schedule's coin counts at table `i` are
+`roundSizes` at its shape (`hsched`). -/
+theorem hsz_of_sched (acc : Msg → List Msg → List Coin → ℕ → Array F128) {x : Msg} {ms : List Msg} {cs : List Coin}
+    (hA : At rd P x ms cs) (D : DecAt rd x ms cs) (cls : HClass) {i : ℕ} (hi : i < D.sts.size)
+    (hsched : (RecDeploy.repSchedAt D.spec D.sts[i]!).map (·.1) = FlockVBridge.Family.roundSizes (D.sh cls i)) :
+    ∀ r : Fin 2, (D.rep cls (acc x ms cs) i r).rounds.toList.map Array.size =
+      FlockVBridge.Family.roundSizes (D.sh cls i) := by
+  obtain ⟨⟨xo, sto, hst, hf, hx⟩, -, -, -⟩ := id hA
+  have hti : i < D.spec.tables.size := by
+    obtain ⟨h1, h2⟩ := D.tables_of_dense hst hf hx
+    omega
+  exact fun r => D.hsz_of_sched cls i (acc x ms cs) (D.names_nodup hst hf hx) hi hti r hsched
 
 end Top
 
