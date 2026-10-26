@@ -148,13 +148,13 @@ def _program_json_layout(path: str, digest: str | None) -> tuple[int | None, lis
         if m and not params:
             try:
                 params = [n for n, _t in json.loads(m.group(1))]
-            except Exception:  # noqa: BLE001 -- a window cut through the list: stated as unknown
+            except (ValueError, TypeError):  # a window cut through the list: stated as unknown
                 params = []
         m = re.search(r'"tp":\s*(\{[^{}]*\})', text)
         if m and tp is None:
             try:
                 tp = json.loads(m.group(1))
-            except Exception:  # noqa: BLE001
+            except ValueError:
                 tp = None
     return n_in, params, tp, digest
 
@@ -162,7 +162,7 @@ def _program_json_layout(path: str, digest: str | None) -> tuple[int | None, lis
 def read_steps(record_dir: str) -> tuple[dict, dict[int, dict]]:
     """(RunHeader, {engine step: {rows, logits_rows, logits_indices}}) of the record's capture log -- `capture_log.read_steps`, the
     fold's own chronology (the row-count rule reads it)."""
-    from verity_vllm.check.match import capture_log as CL
+    from verity_vllm.observe import capture_log as CL
     d = match_dir(record_dir)
     log = os.path.join(d, "capture", "log.jsonl.gz")
     if not os.path.isfile(log):
@@ -217,7 +217,7 @@ def site_and_slot(hint: str | None, name: str | None, spec: str | None) -> tuple
 
 def _reads(operand_refs: Any, form: str, n_input_nodes: int | None) -> tuple[tuple[int, ...], tuple[int, ...]]:
     """(root node ids read, root parameter indices read) of a row's `operand_refs` in either stored form: runs `[space, idx, lo, hi]` or
-    [R17 mfast F2] progressions `["N"|"P", idx, lo, hi, dI, dL, dH, count]` (only the DISTINCT node / parameter ids matter to resolution)."""
+    progressions `["N"|"P", idx, lo, hi, dI, dL, dH, count]` (only the DISTINCT node / parameter ids matter to resolution)."""
     nodes: set[int] = set()
     params: set[int] = set()
     for a in operand_refs or ():

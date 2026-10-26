@@ -52,10 +52,11 @@ import os
 import time
 from dataclasses import dataclass
 
+from verity_vllm import settings
 from verity_vllm.check.match import prefix_reads as PX
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
-from verity_vllm.check.match.capture_log import read_steps, request_params
+from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.check.match.dag_form import dag_hashes, live_cone
 from verity_vllm.check.match.decomp_profile import (FORCE_DAG_ENV, PROFILE_ENV, _memo_stats, _install_profile_counters, _n_runs_of, _NoPhase,
                                                     _Phase, _profile_on)
@@ -90,7 +91,7 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
     ops = ops or record_ops()
     t0 = time.time()
     profiling = _profile_on()
-    force_dag = os.environ.get(FORCE_DAG_ENV, "").strip() == "1"
+    force_dag = (settings.get(FORCE_DAG_ENV) or "").strip() == "1"
     run_prof: dict = {"schema": "cb-a/x09-profile/v1", "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir,
                       "force_dag": force_dag, "pid": os.getpid(), "phases": {}, "requests": []}
     if profiling:
@@ -414,8 +415,8 @@ def decompose(oracle_dir: str, derived_dirs: list[str], log_path: str | None = N
             import resource
             run_prof["max_rss_mib_parent"] = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss // 1024)
             run_prof["max_rss_mib_children"] = int(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss // 1024)
-        except Exception:   # noqa: BLE001 - telemetry only
-            pass
+        except Exception as e:   # noqa: BLE001 - telemetry only
+            run_prof["max_rss_error"] = repr(e)[:200]
         out = os.environ[PROFILE_ENV]
         os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
         json.dump(run_prof, open(out, "w"), indent=1, default=str)
