@@ -72,8 +72,10 @@ every machine of a census deployment, the pooled total first and the per-window 
   turns a period's accepted answer of either path into the block record's certifier leg (`verity/block-record/v1`,
   CMP-95 item 6), the one shape a loop's leg and the H200 fallback write.
 - `verity_all_protocols/runner.py`: the windows, each report in `$OUT/w<W>/report.json` and `$OUT/reports.jsonl`, and
-  one `ALLP` line per window, led by the monitoring period. `--jobs J` audits J windows at once, each on its own ports,
-  and `--session-jobs S` (default 16) runs S of each audit's drawn members' proof sessions at once (`a5 --session-jobs`).
+  one `ALLP` line per window, led by the monitoring period. Outer proofs go through the firewall one at a time, one
+  firewalled session on the run whichever window it belongs to, so the windows are audited one after another and each
+  audit's drawn members' proof sessions too (`--jobs` and `--session-jobs` take only 1). Only what never goes through
+  the firewall overlaps: the next window's loop serves while a window is audited.
   `--start I` numbers another machine's windows apart. `--tamper W,...` makes those windows' loop record outputs that
   aren't its model's. `--registered` has the loop read its weights as registered values, committed once a run.
   `--pouw h1` (until ALLP-H1LOOP's `serve --pouw h1` lands) also serves PoUW's H1 window and audits it with
@@ -89,7 +91,7 @@ every machine of a census deployment, the pooled total first and the per-window 
 
 ~~~sh
 research run --on vy-nebius-cpu-4 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --windows 4 --jobs 4 --tamper 3
+  bash benchmarks/all_protocols/run.sh --windows 4 --tamper 3
 research run --on vy-nebius-cpu-5 --project verity --source . --cwd clone --mem-gb 96 -- \
-  bash benchmarks/all_protocols/run.sh --windows 4 --start 4 --jobs 4
+  bash benchmarks/all_protocols/run.sh --windows 4 --start 4
 ~~~
