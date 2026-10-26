@@ -5,8 +5,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
 (`LinkWindows.outcome(advice=…)`), through `n2_zk`'s statement and rounds (`n2_zk.stager`, `stage`, `member`).
 
     python benchmarks/network_traces/n2_advised_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
-      [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in]] [--members honest,moved,...] [--jobs 2] [--debug-clear]
-      [--dry]
+      [--seed 7 | --e2e RUN [--windows N] [--clock-stand-in] [--advice-from-io]]
+      [--draw K [--challenger local|gate:USER@HOST --main FILE [--peer NAME --challenger-key RECORD [--gate-key KEY]]]]
+      [--delta D] [--members honest,moved,...] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`simulated`). The advised tests' simulated vLLM serving (`advised_traffic.serve`: varied prompt and
   output lengths, chunked prefill, prefix-cache hits, a preemption resumed from a hit, the async row past a finish, a
@@ -24,8 +25,9 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   (``report.json``, the honest rehearsal's records under ``rehearsal/honest``, the endpoint's advice under
   ``endpoint/advice``), N2's link of its honest rehearsal (``served``: T = 60 on both ends, the egress allocation the
   calibration chose, R_in = 1, the certifier's salt heading every window) under the run's own certifier key, syncs and
-  id-request framing (`active.id_request_frames`). Its advice is the Commit windows' I1 advice that the report bound to
-  the run and rebuilt from its certified I/O, joined into one (`joined`), its requests in the certified arrival order,
+  id-request framing (`active.id_request_frames`). Its advice is the Commit windows' window advice that the report
+  bound to the run and rebuilt from its certified I/O, joined into one I1 v0 advice (`joined`: a request a window
+  carries in is the earlier window's, charged once), its requests in the certified arrival order,
   each kept output released in the bucket the certified I/O says its frame went out, and ``received`` the certified
   ingress heads' request frames; the tie the same stand-in, on the certified prompts. Its clock source
   (`served_clocks`) is the run's certifier's salted clock certificates with their openings (the certifier's
@@ -36,15 +38,32 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   refused unless ``--clock-stand-in`` takes `CertifierClocks` in their place, the syncs its certifier's proxy logged
   (``proxy.json.gz``), unsigned and labelled a stand-in. It is never the plan the prover declared. A run whose clock
   source gives fewer windows' syncs than are proved is refused too. The link's first ``--windows`` windows are
-  proved, by default every one.
+  proved, by default every one. A run with no endpoint advice and no ``report.json`` (a gate's rehearsal) takes
+  ``--advice-from-io``: the advice synthesized from its certified I/O (`from_io`), labelled so in ``traffic``.
 * **The tie** on either link is the stand-in, and the summary says so (``tie``): IoTieRequest is pinned at one size
   class, `TIE_PINNED`, and neither link's ingress is in it. The summary's ``clocks`` names the clock source.
+* **The period** (``--draw K``): each member's windows are sampled rather than all proved. The prover commits every
+  window's salted root and the advice's digest, the challenger then draws K of the windows on its coins
+  (`LinkWindows.period_draw`), and only the drawn windows are registered, proved and decided; the network verdict is
+  the sampled one, with ``wrong_units`` (at most ``bound`` wrong windows of the period's, ε = bound / n, at the
+  stream's δ, ``--delta``). Its draw of record is the Lean verifier of record's (``--lean``'s ``draw --population n
+  --k K --stream-file``, `service.lean_draw`) on the coins the period draw read, and it accepts only when the windows
+  proved are that draw's, refusing by name (``period-draw``) otherwise. The coins are the verifier's own by default;
+  ``--challenger local|gate:USER@HOST`` takes the auditor's challenger's instead (`Challenger`: one session, as
+  `records_audit` takes it, whose evidence the coins each member's Lean drew on are held to, `coins.coins_reason`). The
+  summary's ``draw`` and ``sampled`` report them, ``sampled`` per member in scan_zk's shape: ``draw`` {law, coins,
+  units, of, by}, ``audit`` {accepted, wrong_units} and ``charge`` {delta, wrong_units, epsilon}, None unless
+  accepted.
 * **Members.** One stream each, over the link's windows (``--members``: some of them): ``honest``, the session's
   advice and records; ``moved``, one kept output's release bucket one later (`advised_traffic.moved`); ``short``, one
   request's output length one short (`advised_traffic.with_output_len`); on the simulated link ``extra``, one frame
   more handed to the egress certifier in its first busy bucket, the egress records certified anew; and on the served
   link ``tampered``, window 0's egress head with one count more and its certificate unchanged (`n2_zk.one_count`),
-  since the run's certifier key isn't the driver's. The advice is public and the heads are witness: moved and short
+  since the run's certifier key isn't the driver's, and ``tampered_all``, that change in every window
+  (`every_count`), which a sampled period refuses whatever it draws; with ``--draw K`` (K < n), ``other_subset``, the
+  honest records with the prover proving another K-subset of the windows than the draw's (`n2_zk.other_subset`) under
+  a draw object listing them, every window accepted, which the network verdict refuses by name since the Lean's draw
+  on the period's coins isn't those windows. The advice is public and the heads are witness: moved and short
   change the view the verifier computes, extra and tampered the egress heads the prover commits. Each advice negative
   and extra is the first of its kind that `advised.view` takes in every window, so the unit takes every window's
   instance, and that the advised counts refuse in some window: the proof's verdict bit refuses it, with both head
@@ -55,16 +74,19 @@ behind the Lean firewall, delivered, and decided by N2's verifier of record with
   ``o0``, the verdict and deadline bits. A round registers, selects, proves live behind the firewall, delivers, and
   decides on the proof: the verifier's own Lean run, the ``pub`` row opened only to its own copy (its own view of the
   public advice) and the ``o0`` row read. Per window: prove (the session's wall time, the prover's ``prove_total_s``,
-  proof bytes) and verify (the verifier of record's run, Lean included): the per-window price.
+  proof bytes) and verify (the verifier of record's run, Lean included): the per-window price. The members run one
+  after another, one firewalled session at a time (`n2_zk.ONE_SESSION`: ``--jobs`` is 1).
 * **What the verifier receives** is `n2_zk.RECEIVED` per window and the advice (``advice.json``, with no tie),
   scanned for every piece of both ends' heads, head salts, siblings and certifier salts but those the public circuit
   or a window's ``pub`` row holds: on an advised link an accepted window's egress counts are its view's public
-  ``released``.
+  ``released``. A member fails on a piece the scan reads ``leaked`` (`leak_scan.classify`, as `n2_zk` decides), not on
+  a ``structured`` find (every find straddles the proof format's fields, or its bytes are public), which is listed.
 """
 from __future__ import annotations
 
 import argparse
 import gzip
+import hashlib
 import importlib.util
 import json
 import os
@@ -74,7 +96,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -85,6 +107,7 @@ sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
 import n2_zk as Z  # noqa: E402
+import window_chain as WC  # noqa: E402
 from n2_zk import ENDS  # noqa: E402
 from verity.core.protocols.certifier import advice as ADV, advised as AD, head_check as HC  # noqa: E402
 from verity.core.protocols.certifier import service as SVC  # noqa: E402
@@ -93,7 +116,9 @@ from verity.core.protocols.certifier.certificate import Direction, Issuer, param
 from verity.core.protocols.certifier.schedule import ClockSync  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams  # noqa: E402
 from verity.core.protocols.certifier.service import LinkWindows  # noqa: E402
+from verity.core.protocols.sampled_proofs import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 
 
 def _traffic():
@@ -108,7 +133,9 @@ T, WINDOWS, OWN, SEED = 512, 4, 1, 7
 SHAPE = AT.Shape(T, WINDOWS, GridParams(T, AT.R, 1), GridParams(T, 4, 1),
                  tuple(range(T - 8, T + 8)) + tuple(range(3 * T - 8, 3 * T + 8)))
 MEMBERS = ("honest", "moved", "short", "extra")
-E2E_MEMBERS = ("honest", "moved", "short", "tampered")
+E2E_MEMBERS = ("honest", "moved", "short", "tampered", "tampered_all")
+#: the sampled period's negative: the prover proves another K-subset than the draw of record's
+OTHER = "other_subset"
 #: IoTieRequest's one pinned size class (B, T, R, OWN): the only one whose ingress tie can be proved
 TIE_PINNED = (512, 4, 2, 1)
 
@@ -314,41 +341,67 @@ def simulated(seed: int = SEED, shape=SHAPE, own: int = OWN, height: int = 6) ->
                            clocks=clocks_label(lw, AT.SYNCS[:shape.windows]))
 
 
-def joined(advices: list[ADV.Advice], frames: dict[str, list[int]]) -> ADV.Advice:
-    """One advice of the link from its Commit windows' (`advices`, in order): their requests and steps in turn, each
-    window's request indices after the windows' before it, and kept output λ of the request with id i released in
-    bucket ``frames[i][λ]``."""
-    requests, steps = [], []
-    for a in advices:
-        off = len(requests)
-        requests += a.requests
-        steps += [ADV.StepAdvice(tuple(replace(r, request=r.request + off,
-                                               sources=tuple(replace(s, request=s.request + off) for s in r.sources))
-                                       for r in st.rows)) for st in a.steps]
-    probe = ADV.Advice(tuple(requests), tuple(steps), (0,) * sum(q.output_len for q in requests))
+def joined(advices: list[tuple[int, WA.Advice]], frames: dict[str, list[int]]) -> ADV.Advice:
+    """One advice of the link from its Commit windows' (`advices`, each its number and window advice, in order):
+    `window_chain.join`'s, their requests and steps in turn, each window's admitted requests after the windows' before
+    it and a request it carries in the earlier window's, and kept output λ of the request with id i released in bucket
+    ``frames[i][λ]``."""
+    return WC.join(advices, lambda k, rid, index, bucket: frames[rid][index])
+
+
+def from_io(io: list[dict]) -> ADV.Advice:
+    """A stand-in advice for a run whose endpoint kept none (``--advice-from-io``), synthesized from its certified I/O:
+    the certified requests in arrival order, each its id, prompt length, kept outputs and finish; one step that
+    prefills every whole prompt, sampling each request's first output, then step k one decode row for each request
+    with more than k outputs; each kept output released in the bucket its certified frame went out. `advised.view`
+    reads only the requests, the kept outputs and their releases, so the view is the one the endpoint's advice of the
+    same outputs gives; the steps are a schedule that replays to them, not the one serving ran, so nothing here
+    exercises I1's hold of the advice to the engine's steps."""
+    requests = tuple(ADV.RequestAdvice(r["user"], len(r["prompt"]), len(r["output"]), r["finish"]) for r in io)
+    steps = [ADV.StepAdvice(tuple(ADV.Row(i, "prefill", 0, q.prompt_len) for i, q in enumerate(requests)))]
+    for k in range(1, max(q.output_len for q in requests)):
+        steps.append(ADV.StepAdvice(tuple(ADV.Row(i, "decode", q.prompt_len + k - 1, 1)
+                                          for i, q in enumerate(requests) if q.output_len > k)))
+    frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
+    probe = ADV.Advice(requests, tuple(steps), (0,) * sum(q.output_len for q in requests))
     release = tuple(frames[requests[o.request].id][o.index] for o in ADV.outputs(probe))
-    return ADV.Advice(tuple(requests), tuple(steps), release)
+    return ADV.Advice(requests, tuple(steps), release)
 
 
-def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False) -> SimpleNamespace:
+def every_count(lw: LinkWindows, w: int, pair):
+    """Every window's egress head with one count more (`n2_zk.one_count`'s change, in each window): what a prover
+    that changed a count in every window commits, which a sampled period refuses whichever windows it draws."""
+    return Z.one_count(lw, 0, pair)
+
+
+def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False, advice_from_io: bool = False,
+        wanted=E2E_MEMBERS) -> SimpleNamespace:
     """network-e2e's run `run` on the advice profile as an advised link (the module docstring, "A served run's link"),
-    its first `windows` link-windows (0: every one): the link and its members (`E2E_MEMBERS`) on its certified records,
-    each (advice, [(egress, ingress)] per window, what was changed). `clock_stand_in`: `served_clocks`'s `stand_in`."""
+    its first `windows` link-windows (0: every one): the link and its members (`wanted`, of `E2E_MEMBERS`) on its
+    certified records, each (advice, [(egress, ingress)] per window, what was changed). `clock_stand_in`:
+    `served_clocks`'s `stand_in`. `advice_from_io`: the advice is `from_io`'s, for a run with no endpoint advice and no
+    report (a gate's rehearsal), labelled so in ``traffic``."""
     honest = run / "rehearsal" / "honest"
     plan, report, dep = (json.loads((honest / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                          "deployment.json"))
     if (plan.get("occupancy") or {}).get("kind") != "advice":
         raise SystemExit(f"{honest}: not a run on the advice profile")
-    bits = json.loads((run / "report.json").read_text())["chain"]["bits"]
-    bound = [c["window"] for c in bits["commit_windows"] if c["bound"] and c["rebuilt"]]
-    if not bound or not bits["bound"] or not bits["rebuilt"]:
-        raise SystemExit(f"{run}: the report binds no advice to the run and rebuilds none from its certified I/O")
     io = json.loads((honest / "io.json").read_text())["requests"]
     if any(len(r["frames"]) != len(r["output"]) for r in io):
         raise SystemExit("io.json's frames aren't one per kept output")
     frames = {r["user"]: [b for _, b in r["frames"]] for r in io}
-    advice = joined([ADV.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" / "advice.json")
-                                              .read_text())) for w in bound], frames)
+    if advice_from_io:
+        bound, advice = None, from_io(io)
+    else:
+        bits = json.loads((run / "report.json").read_text())["chain"]["bits"]
+        bound = [c["window"] for c in bits["commit_windows"] if c.get("bound") and c.get("rebuilt")]
+        if not bound or not bits["bound"] or not bits["rebuilt"]:
+            raise SystemExit(f"{run}: the report binds no advice to the run and rebuilds none from its certified I/O")
+        try:
+            advice = joined([(w, WA.from_json(json.loads((run / "endpoint" / "advice" / f"w{w}" / "private" /
+                                                           "advice.json").read_text()))) for w in bound], frames)
+        except ADV.MalformedAdvice as err:
+            raise SystemExit(f"{run}: the bound Commit windows' advice doesn't join into one: {err}") from None
     if [q.id for q in advice.requests] != [r["user"] for r in io] or \
             any(q.output_len != len(frames[q.id]) for q in advice.requests):
         raise SystemExit("the bound advice's requests aren't the certified ones in arrival order, each its outputs")
@@ -371,19 +424,26 @@ def e2e(run: Path, windows: int = 0, clock_stand_in: bool = False) -> SimpleName
     egress, ingress = ([list(p[d].head.counts) for p in pairs] for d in (0, 1))
     link = AD.LinkAdvice(advice, tuple(sum(c) - own for c in ingress))
     members = {"honest": (link, pairs[:windows], {})}
-    m = moved(lw, link, egress, ingress, syncs, windows * setup.egress_params.buckets)
-    if m is None:
-        raise SystemExit(f"the run's first {windows} windows have no moved release the views take and the advised "
-                         "counts refuse")
-    members["moved"] = (m[0], pairs[:windows], m[1])
-    m = short(lw, link, egress, ingress, syncs, windows)
-    if m is None:
-        raise SystemExit(f"the run's first {windows} windows have no output length one short the views take and the "
-                         "advised counts refuse")
-    members["short"] = (m[0], pairs[:windows], m[1])
+    if "moved" in wanted:
+        m = moved(lw, link, egress, ingress, syncs, windows * setup.egress_params.buckets)
+        if m is None:
+            raise SystemExit(f"the run's first {windows} windows have no moved release the views take and the advised "
+                             "counts refuse")
+        members["moved"] = (m[0], pairs[:windows], m[1])
+    if "short" in wanted:
+        m = short(lw, link, egress, ingress, syncs, windows)
+        if m is None:
+            raise SystemExit(f"the run's first {windows} windows have no output length one short the views take and "
+                             "the advised counts refuse")
+        members["short"] = (m[0], pairs[:windows], m[1])
     members["tampered"] = (link, [Z.one_count(lw, w, p) for w, p in enumerate(pairs[:windows])],
                            {"window": 0, "egress": "one count more, its certificate unchanged"})
-    traffic = {"run": str(run), "commit_windows": bound, "requests": len(advice.requests),
+    members["tampered_all"] = (link, [every_count(lw, w, p) for w, p in enumerate(pairs[:windows])],
+                               {"windows": "every one", "egress": "one count more, its certificate unchanged"})
+    traffic = {"run": str(run), "commit_windows": bound,
+               "advice": ("synthesized from the certified I/O (--advice-from-io, from_io): the run kept no endpoint "
+                          "advice") if advice_from_io else "the endpoint's, bound by the report",
+               "requests": len(advice.requests),
                "outputs": len(advice.release), "steps": len(advice.steps), "v0_bits": ADV.total_bits(advice),
                "received": list(link.received), "own": own, "max_released": max(max(c) for c in egress)}
     return SimpleNamespace(lw=lw, session=None, members=members, traffic=traffic, syncs=syncs, windows=windows,
@@ -423,24 +483,160 @@ def failed(x) -> list[str]:
 
 
 def expected(name: str, fails: list[list[str]]) -> bool:
-    """Whether each window's failed parts are the member's: none when honest; tampered, window 0's egress head its
-    signed digest (and the advised counts, which read the count it changed) and no other window; else the advised
-    counts alone, in at least one window."""
-    if name == "honest":
+    """Whether each window's failed parts are the member's: none when honest or other_subset; tampered, window 0's
+    egress head its signed digest (and the advised counts, which read the count it changed) and no other window; else
+    the advised counts alone, in at least one window."""
+    if name in ("honest", OTHER):
         return not any(fails)
     if name == "tampered":
         return "egress/signed" in fails[0] and set(fails[0]) <= {"egress/signed", "advised"} and not any(fails[1:])
+    if name == "tampered_all":
+        return all("egress/signed" in f and set(f) <= {"egress/signed", "advised"} for f in fails)
     return all(f in ([], ["advised"]) for f in fails) and ["advised"] in fails
 
 
 # --- the proofs -------------------------------------------------------------------------------------------------------
 
+COINS_ROOT = "verity/n2/period-coins/v0"
+
+
+def coins_root(periods: dict, k: int) -> str:
+    """The challenger session's root: K and every member's period as it is committed, `periods` member -> (each window's
+    salted root, hex; the advice's digest), what each member's ``period.json`` holds. The roots are salted afresh each
+    run, so each run opens its own session (the gate opens a root once), and the verifier recomputes it from what it
+    received."""
+    doc = {"format": COINS_ROOT, "k": k, "members": {n: {"roots": list(r), "advice": adv}
+                                                      for n, (r, adv) in sorted(periods.items())}}
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def coin_need(k: int, n: int, coin_bytes: int) -> int:
+    """The most coins a period draw of K of n windows reads (`a5_coins.need`'s rule for the period's `subset:K`): the
+    stream's sampler on bytes that reject no word, what it reads plus its longest stream once more."""
+    reads: list[int] = []
+
+    def zeros(m: int) -> bytes:
+        reads.append(m)
+        return bytes(m)
+    rule = S.Law(f"subset:{k}")
+    S.select_draw(rule, S.selection_law(rule, n), n, zeros)
+    return -(-(sum(reads) + max(reads, default=0)) // coin_bytes)
+
+
+class Challenger:
+    """The period draws' coins from the auditor's challenger (``--challenger local|gate:USER@HOST``), as
+    `records_audit` takes them (`a5_coins`): one session on `coins_root`, one rank per member, and each member's draw
+    in its own turn on the session's one client (`a5_coins.RankCoins`), its coins committed to its period's commitment
+    before any is read (`LinkWindows.period_draw`). Every rank plans its need together, before any member runs (the
+    members prove one at a time), so the session opens or is refused before anything is proved. Once every member
+    has drawn or won't, the session's evidence is published, and `check` holds each member's draw to it
+    (`coins.coins_reason`, with `a5_coins.negatives` refused the same way)."""
+
+    def __init__(self, a, rounds: dict, dest: Path) -> None:
+        if str(HERE.parent / "one_stage") not in sys.path:
+            sys.path.append(str(HERE.parent / "one_stage"))
+        import a5_coins as AC
+
+        self.AC, self.names, self.source = AC, list(rounds), a.challenger
+        self.root = coins_root({n: ([x.root.hex() for x in rd.windows],
+                                    None if rd.advice is None else AD.digest(rd.advice)) for n, rd in rounds.items()},
+                               a.draw)
+        self.manager, self.draws, self.finisher = AC.start(
+            a.challenger, self.root, list(range(len(self.names))), dest, a.main, ssh_key=a.gate_key, peer=a.peer,
+            key_record=a.challenger_key)
+        self.ranks = {n: AC.RankCoins(self.draws, r) for r, n in enumerate(self.names)}
+        self.published = self.pre = None
+        try:
+            with ThreadPoolExecutor(max_workers=len(self.names)) as pool:
+                list(pool.map(lambda n: self.ranks[n].plan(coin_need(a.draw, len(rounds[n].windows),
+                                                                     AC.Ch.COIN_BYTES)), self.names))
+        except Exception as e:
+            self.close()
+            raise SystemExit(f"the challenger's session for the period draws: {e}; "
+                             f"{(self.published or {}).get('error')}") from e
+        log(f"challenger {a.challenger}: session on root {self.root[:16]}, needs "
+            f"{ {n: c.need for n, c in self.ranks.items()} } coins")
+
+    def close(self) -> dict:
+        """Every member has drawn or won't: the session's evidence once it has ended (`a5_coins.Draws.evidence`)."""
+        if self.published is None:
+            for r in range(len(self.names)):
+                self.draws.skip(r)
+            self.finisher.join()
+            self.published, self.pre = self.draws.evidence(), self.draws.pre()
+            self.manager.shutdown()
+        return self.published
+
+    def check(self, done: dict, out: Path) -> dict:
+        """Each member's draw held to the session's evidence: the root the verifier recomputes from every member's
+        ``period.json`` (`coins_root`), the coins its draw read (``period.json``'s ``read``, which the network verdict's
+        Lean drew on, and which must be what its rank released) released after its period's commitment in that one
+        session (`coins.coins_reason`), and each of `a5_coins.negatives` refused. Writes each member's evidence beside
+        what its verifier received (``coins.json``)."""
+        published = self.close()
+        root = coins_root({n: (r["period"]["roots"], r["period"]["advice"]) for n, r in done.items()},
+                          next(iter(done.values()))["period"]["k"])
+        out_ = {}
+        for name, res in done.items():
+            segment, read = res.get("segment"), bytes.fromhex(res["period"]["read"])
+            same = read == bytes(self.ranks[name].read)
+            ev = None if segment is None else self.AC.evidence(published, segment)
+            after = bytes.fromhex(res["period"]["commitment"])
+
+            def reason(e):
+                return CC.coins_reason(e, root, after, read, self.AC.lms_verify)
+            why = (published.get("error") or "the draw released no segment") if ev is None else reason(ev)
+            negatives = ({} if ev is None or self.pre is None else
+                         {k: reason(v) is not None for k, v in self.AC.negatives(ev, self.pre).items()})
+            (out / name / "verifier" / "coins.json").write_text(json.dumps(ev, sort_keys=True))
+            out_[name] = {"source": f"challenger:{self.source}", "root": root, "root_ok": root == self.root,
+                          "session": published.get("trusted"), "plan": published.get("plan"), "coins_reason": why,
+                          "read_bytes": len(read), "read_is_released": same, "negatives_refused": negatives,
+                          "ok": root == self.root and why is None and same and bool(negatives)
+                          and all(negatives.values())}
+        return out_
+
+
+def coins(a, challenger: Challenger | None, name: str):
+    """Member `name`'s period draw's coins: the challenger's session's (``--challenger``), else the verifier's own, the
+    operating system's bytes as the Lean verifier of record reads them (`sampled_proofs.service`'s default,
+    `verifier.coins`); None when the period isn't sampled (``--draw 0``, every window)."""
+    if not a.draw:
+        return None
+    return challenger.ranks[name] if challenger is not None else S.V.coins
+
+
+def draw_label(a, windows: int) -> dict:
+    """The summary's ``draw``: how the period's windows are selected, with what coins, at what δ."""
+    if not a.draw:
+        return {"selection": "all", "k": windows, "population": windows, "coins": None,
+                "delta": a.delta or cs.DELTA}
+    if not 1 <= a.draw <= windows:
+        raise SystemExit(f"--draw {a.draw}: a period draw takes 1 to {windows} of the link's {windows} windows")
+    by = (f"the auditor's challenger's ({a.challenger}: a5_coins, one session for every member's draw, each after its "
+          "period's commitment, held to the session's evidence by coins_reason)" if a.challenger else
+          "the verifier's own: the operating system's bytes through the Lean verifier of record (sampled_proofs "
+          "verifier.coins), read only after the period's commitment; not the auditor's challenger's")
+    return {"selection": "sampled", "law": f"subset:{a.draw}", "k": a.draw, "population": windows,
+            "coins": {"source": f"challenger:{a.challenger}" if a.challenger else "verifier", "by": by},
+            "delta": a.delta or cs.DELTA}
+
+
 def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    sim = e2e(Path(a.e2e), a.windows, a.clock_stand_in) if a.e2e else simulated(a.seed)
+    wanted = a.members.split(",") if a.members else E2E_MEMBERS
+    sim = e2e(Path(a.e2e), a.windows, a.clock_stand_in, a.advice_from_io, wanted) if a.e2e else simulated(a.seed)
     lw = sim.lw
+    if a.draw and a.draw < sim.windows:
+        link, pairs, _ = sim.members["honest"]
+        sim.members[OTHER] = (link, pairs, {"draw": "the prover proves another K-subset of the windows than the "
+                                                    "draw of record's (n2_zk.other_subset), under a draw object "
+                                                    "listing them"})
+    elif a.members and OTHER in a.members.split(","):
+        raise SystemExit(f"{OTHER} proves another K-subset of a sampled period: it needs --draw K, K < "
+                         f"{sim.windows}")
     chosen = a.members.split(",") if a.members else list(sim.members)
     if not set(chosen) <= set(sim.members):
         raise SystemExit(f"--members {a.members}: the link's members are {list(sim.members)}")
@@ -456,7 +652,9 @@ def prove(a) -> int:
                               "ingress": asdict(sim.ingress)},
                      "traffic": sim.traffic, "changed": {k: w for k, (_, _, w) in sim.members.items()},
                      "advice": {name: AD.digest(rd.advice) for name, rd in rounds.items()},
-                     "debug_clear": a.debug_clear, "received": {**Z.RECEIVED, "advice.json": "the link's advice"}}
+                     "debug_clear": a.debug_clear, "received": {**Z.RECEIVED, "advice.json": "the link's advice"},
+                     "draw": draw_label(a, sim.windows)}
+    log(f"draw: {summary['draw']}")
     summary["instances_s"] = round(time.time() - t, 1)
     for name, rd in rounds.items():
         fails = [failed(x) for x in rd.windows]
@@ -490,30 +688,66 @@ def prove(a) -> int:
     log(f"staged: {summary['staging']}")
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
 
+    challenger = Challenger(a, rounds, out / "challenger") if a.draw and a.challenger else None
+
     def go(k: int, name: str) -> tuple[str, dict]:
         rd = rounds[name]
-        res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0)
+        res = Z.member(M, a, sg, name, rd, out / name, a.port + 100 * k if a.port else 0,
+                       coins=coins(a, challenger, name), forge=Z.other_subset if name == OTHER else None)
         (out / name / "verifier" / "advice.json").write_text(json.dumps(
             {"advice": ADV.to_json(rd.advice.advice), "received": list(rd.advice.received),
              "digest": AD.digest(rd.advice)}, sort_keys=True))
-        res["received"] = Z._member_scan(M, sg, rd, out / name)
+        res["received"] = Z._member_scan(M, sg, rd, out / name,
+                                         set(res["period"]["units"]) if "period" in res else None)
         return name, res
 
-    with ThreadPoolExecutor(max_workers=a.jobs) as pool:
-        done = dict(pool.map(lambda kv: go(*kv), enumerate(rounds)))
+    try:
+        done = dict(go(k, name) for k, name in enumerate(rounds))
+    finally:
+        if challenger is not None:
+            challenger.close()
+    checked = challenger.check(done, out) if challenger is not None else {}
+    if challenger is not None:
+        summary["challenger"] = {"root": challenger.root, "session": challenger.published.get("trusted"),
+                                 "plan": challenger.published.get("plan"), "error": challenger.published.get("error")}
     ok = True
     for name, res in done.items():
         rec = res["received"]
-        good = (all(r["as_expected"] for r in res["windows"]) and res["network"]["accepted"] == (name == "honest")
-                and (res["network"]["accepted"] is False or res["network"]["advice"] == AD.digest(rounds[name].advice))
-                and not rec["verifier_found"] and rec["control"]["holds_all"])
+        net = res["network"]
+        held = checked.get(name, {"ok": True})
+        accepted = net["accepted"] and held["ok"]
+        named = set(net.get("why") or ())
+        good = (all(r["as_expected"] for r in res["windows"]) and accepted == (name == "honest") and held["ok"]
+                and (net["accepted"] is False or net["advice"] == AD.digest(rounds[name].advice))
+                and named == ({SVC.PERIOD_DRAWN} if name == OTHER else set())
+                and not rec["leaked"] and rec["control"]["holds_all"])
         ok &= good
-        summary["members"][name].update(res, ok=good)
-        log(f"member {name}: network {'accept' if res['network']['accepted'] else 'refuse'} (refused windows "
-            f"{res['network']['refused']}), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
+        summary["members"][name].update(res, ok=good, **({"coins": held} if name in checked else {}))
+        if "wrong_units" in net:
+            sel, wu = net["selection"], net["wrong_units"]
+            summary.setdefault("sampled", {})[name] = {
+                "accepted": accepted,
+                "draw": {"law": f"subset:{sel['k']}", "coins": summary["draw"]["coins"]["source"], "units": sel["units"],
+                         "of": sel["population"], "commitment": sel["commitment"], "by": sel["by"],
+                         "coin_bytes": len(res["period"]["read"]) // 2},
+                "proved": [r["window"] for r in res["windows"]], "why": net["why"],
+                "audit": {"accepted": accepted, "wrong_units": wu},
+                "charge": {"delta": wu["delta"], "wrong_units": wu, "epsilon": wu["epsilon"]} if accepted else None,
+                **({"coins": held} if name in checked else {})}
+        log(f"member {name}: network {'accept' if net['accepted'] else 'refuse'} (refused windows {net['refused']}"
+            + (f"; the draw of record ({net['selection']['by']}) {net['selection']['units']}, {net['selection']['k']} "
+               f"of {net['selection']['population']}: at most {net['wrong_units']['bound']} wrong, epsilon "
+               f"{net['wrong_units']['epsilon']:.4f} at delta {net['wrong_units']['delta']:.3g}"
+               + (f"; refused by name {sorted(net['why'])}" if net["why"] else "") if "wrong_units" in net else "")
+            + (f"; challenger's coins {'hold' if held['ok'] else 'REFUSED: ' + str(held['coins_reason'])}, "
+               f"{sum(held['negatives_refused'].values())}/{len(held['negatives_refused'])} coin negatives refused"
+               if name in checked else "")
+            + f"), windows {[int(r['accepted']) for r in res['windows']]}, verifier received "
             f"{rec['verifier_bytes']} bytes in {rec['files']} files, witness pieces found there: "
-            f"{rec['verifier_found'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the "
-            f"public circuit or rows hold left out), control {rec['control']['blobs_found']}; "
+            f"{rec['verifier_found'] or 'none'}, leaked {rec['leaked'] or 'none'}, structured "
+            f"{rec['structured'] or 'none'} (of {rec['blobs']} blobs; {len(rec['public_pieces'])} pieces the "
+            f"public circuit or rows hold left out), control {rec['control']['blobs_found']} "
+            f"(holds all {rec['control']['holds_all']}, {rec.get('padded_tails', 0)} padded tails not held to it); "
             f"{'as expected' if good else 'UNEXPECTED'}")
     summary["windows"] = {name: [int(r["accepted"]) for r in res["windows"]] for name, res in done.items()}
     costs = [r for res in done.values() for r in res["windows"]]
@@ -543,20 +777,50 @@ def main(argv=None) -> int:
                    help="with --e2e, for a run without clocks.jsonl: its certifier's proxy log's syncs "
                         "(CertifierClocks, unsigned), labelled a stand-in, in place of the clock certificates; without "
                         "it such a run is refused")
+    p.add_argument("--advice-from-io", action="store_true",
+                   help="with --e2e, for a run with no endpoint advice and no report.json (a gate's rehearsal): the "
+                        "advice synthesized from its certified I/O (from_io), labelled so")
+    p.add_argument("--draw", type=int, default=0,
+                   help="K: each member's period sampled, K of its windows drawn after every window's root and the "
+                        "advice are committed, and only those proved (LinkWindows.period_draw); 0 (the default): every "
+                        "window, Selection All")
+    p.add_argument("--challenger", help="with --draw: the period draws on the auditor's challenger's coins (a5_coins, "
+                   "as records_audit takes them), not the verifier's own: local, or gate:USER@HOST (vy-challenger-1 "
+                   "through infra's gate, with --peer and --challenger-key)")
+    p.add_argument("--peer", help="with --challenger gate:USER@HOST: this machine as the gate's /etc/vy/peers names it, whose "
+                   "127.0.0.1 the session's challenger listens on")
+    p.add_argument("--challenger-key", help="with --challenger gate:USER@HOST: the challenger's key record of its deployment "
+                   "(infra's challenger-key/v1), never the session's key.json")
+    p.add_argument("--gate-key", help="with --challenger gate:USER@HOST: the lane's own gate key (default ssh's own)")
+    p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
+    p.add_argument("--delta", type=float, default=None,
+                   help="the stream's delta, at which a sampled verdict states its wrong units (default "
+                        "certifier_serve.DELTA, 2^-40)")
     p.add_argument("--members", help="comma-separated: the members proved (default every member of the link)")
     p.add_argument("--bin")
     p.add_argument("--lean")
     p.add_argument("--out", required=True)
     p.add_argument("--port", type=int, default=0, help="member k's window j listens on PORT + 100k + j; 0 (the "
                                                        "default): a free port for each session")
-    p.add_argument("--jobs", type=int, default=2, help="members proved at once")
+    p.add_argument("--jobs", type=int, default=1, help="1: the members proved one after another (n2_zk.ONE_SESSION); "
+                                                       "more is refused")
     p.add_argument("--debug-clear", action="store_true",
                    help="each verdict also carries the in-the-clear check on the opening, which decides nothing")
     p.add_argument("--dry", action="store_true", help="the instances and their references only: nothing lowered or "
                                                       "proved")
     a = ap.parse_args(argv)
+    Z.one_session(a.jobs)
     if not a.dry and not (a.bin and a.lean):
         raise SystemExit("prove needs --bin and --lean, or --dry")
+    if a.challenger:
+        if not a.draw:
+            ap.error("--challenger draws a sampled period's coins: it needs --draw K")
+        if a.challenger != "local" and not a.challenger.startswith("gate:"):
+            ap.error(f"--challenger is local or gate:USER@HOST, not {a.challenger!r}")
+        if a.challenger.startswith("gate:") and not (a.peer and a.challenger_key):
+            ap.error("--challenger gate:USER@HOST needs --peer and --challenger-key")
+        if not a.main:
+            ap.error("--challenger needs --main")
     return prove(a)
 
 

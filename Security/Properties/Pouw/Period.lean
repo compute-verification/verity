@@ -192,7 +192,8 @@ def checkedLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 <
 level has the population `N_p` and the draw size `K_d`, and the units it publishes as drawn (`Public.drawn`, the
 service's) are the units of the model's draw at the window's draw coin (`drawOf`). It holds when the model's
 permutation coin is read as the service's `subset:K′` draw from the challenger's draw coin
-(`SampledProofs.Select.select`), at one work level for every window. -/
+(`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock (ASK-133, option A,
+decided by the lane): a protocol-code fact to prove. -/
 def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
     (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n) (pub : Public) (prof : Core.Integrity),
@@ -203,7 +204,8 @@ def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
 /-- **The service is sound at `δ_ks` against the check**: in every window, the check accepts and some unit it
 publishes as drawn has an opening (`opened x w u`) that fails its relation (`rel`, the registered unit Program's) with
 probability at most `δ_ks` over the period's coins. C-Flock's soundness at each drawn unit, with one-stage's acceptance
-and the check's, is what it needs. -/
+and the check's, is what it needs. A named assumption in the lock (ASK-133, option A, decided by the lane): standard
+crypto, C-Flock's soundness. -/
 def ServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m Np n : ℕ} (p : Params)
     (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
@@ -218,7 +220,8 @@ others'). With the window's rows committed by its registration's roots, it is wh
 binding: an opening other than the committed row then opens a root fixed before the draw named the unit. It states
 the order only; the commitment is the roots', which on H1's path are tags (the loop's registration has `anchors []`
 and `wires []`). Its discharge path is CMP-91: ALLP-WIRE commits the loop's `x`, `sx`, weight rows and `sw` as anchors
-(hm96 rows in frame-v3-sha512 trees) before the window's draw coin, and ALLP-H1LOOP binds the H1 tiles' rows to them. -/
+(hm96 rows in frame-v3-sha512 trees) before the window's draw coin, and ALLP-H1LOOP binds the H1 tiles' rows to them. A
+named assumption in the lock (ASK-133, option A, decided by the lane): a protocol-code fact to prove. -/
 def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Windows (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x z : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n), ws.reg (spliceAt w.val m x z) w = ws.reg x w
 
@@ -306,7 +309,8 @@ every drawn unit's proof is held to) is `enc` of the window's round-0 coin, the 
 round's values are committed. The deployed path doesn't meet it: the loop is given its salt before it serves, nothing
 in the record binds the salt to a live coin (`core_check.salt` is not part of `answer`), and the check item names no
 coin mode, so the window is seeded. Its discharge path is CMP-90 (ALLP-SALT); CMP-81's per-epoch live salt is the
-fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. -/
+fix's shape (`Properties.Pouw.LiveSalt`, `PouwCheck.liveSaltCheck`), done for Pearl-C and not yet for H1. A named
+assumption in the lock (ASK-133, option A, decided by the lane): a deployment gap until CMP-90 (#4405). -/
 def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C m × B) n → Fin n → ByteArray)
     (enc : C → ByteArray) : Prop :=
   ∀ x w, salt x w = enc (coinAt (coinAt x w).1 ⟨0, hm⟩)
@@ -315,7 +319,8 @@ def SaltIsLiveCoin {C B : Type} {m n : ℕ} (hm : 0 < m) (salt : Paths (Paths C 
 the service proves of it (`staged s t`, the window's staged statement, which the leg's proofs are of) satisfy the
 pinned flat tile's rightness there (`flat s t`, `PouwH1Tile_v1`'s function at salt `s`, the circuit `core_check.opening`
 reads and the lucks are claims of). Nothing proves it yet, and neither side has a Lean function, so both are
-parameters of the statements that take it. -/
+parameters of the statements that take it. A named assumption in the lock (ASK-133, option A, decided by the lane): a
+protocol-code fact to prove. -/
 def StagedPins {Np : ℕ} {V : Type} (staged flat : ByteArray → Fin Np → (ℕ → V) → Prop) : Prop :=
   ∀ s t v, staged s t v → flat s t v
 

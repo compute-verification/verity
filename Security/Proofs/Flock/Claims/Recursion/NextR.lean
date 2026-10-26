@@ -19,17 +19,26 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
 * **A rep's proof** (`FitsRep`, `readRep`): rep `k`'s rounds are the schedule's (`RecDeploy.repSchedAt`); round `j`'s
   rows are its committed tops' nodes, then, where it absorbs, one row of the element values its squeeze answers (`vals`
   of the `j`-th chunk of `repFrames`, `T` among them). The proof's cap is round 0's nodes for its table, its recursive
-  caps the rounds' tops in order, and its nonces `0`. `readRep` takes a proof and `T` that fit, with the last message's
-  openings and the unabsorbed fields as V\* takes them (`absorbedFrom`, `repFrames_absorbedFrom`): what it reads of the
-  last message changes no absorbed value (`readRep_last`). The nonces are absorbed (`.bytes (le64 n)`) but no opened row
-  carries one, so the fit fixes them at `0`, the only nonce a deployed prover sends: every grinder ignores its bits
-  (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the firewall device's is `0`), and the inner
-  proofs of `art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3` carry only zeros
-  (`art:f8e2b70befdb81f371d17105e824e9ffa68f4f51cded57826217f94d46ae9456`). A proof with another nonce is decided by no
-  fit. Open: that an honest prover's rounds read back (some fit exists, and it is the prover's proof), which
-  `RecursiveKS` at `nextR` needs to be non-vacuous.
+  caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
+  (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, with
+  the last message's openings and the unabsorbed fields as V\* takes them (`absorbedFrom`, `repFrames_absorbedFrom`):
+  what it reads of the last message changes no absorbed value (`readRep_last`). The nonces are absorbed
+  (`.bytes (le64 n)`) but no opened row carries one, so the fit fixes them at `0`, the only nonce a deployed prover
+  sends: every grinder ignores its bits (`LiveChallenger`'s `pow_nonce` is `0` outside flock-live's R4 test, and the
+  firewall device's is `0`), and the inner proofs of
+  `art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3` carry only zeros
+  (`art:f8e2b70befdb81f371d17105e824e9ffa68f4f51cded57826217f94d46ae9456`). A proof with another nonce is decided by
+  no fit. An honest prover's rounds read back (some fit exists, and it is the prover's proof), which `RecursiveKS` at
+  `nextR` needs to be non-vacuous: `NextRHonest.lean` states it (`RepReadsBack`, `ReadsBack`) and `NextRFits.lean`
+  proves it (`readsBack`).
 * **The round messages custody and the verdict read** (`framesOf`): each round's framed bytes, the chunks of the
   decided proof's `repFrames`, with the round's coin.
+* **The record custody and the verdict read** (`recJ`, `recStreams`): the reader's, not the prover's: the honest
+  record's form at SHA-512, whose rep streams retain the round messages, each round counting its schedule's coins
+  (`RecDeploy.repSchedAt`) and holding its coin's first that many. This is what the shipped recursion enforces of the
+  inner record: check 5 holds its coins to the coin server's round for round (`RecVStar.innerCommits`, `CoinTie`), and
+  the coin server's rounds to the schedule (`RecVStar.checkSchedule`). At any hash but SHA-512 the record's digests
+  disagree with the verdict's, which then refuses.
 * **(a)** (`decR_fits`): at a decision, every rep's proof fits its opened rounds. **(b)** (`decR_publics`, `decR_s8`,
   `decR_rootB`): round 0 carries no public words; the link's are empty, and S8 passes on each.
 * **The step, the split and the composition** (`actR`, `nextR`, `lastSplitR`, `RecDeploy.decompB_nextR`): as `nextS`,
@@ -189,7 +198,9 @@ def chunksOf (c : RepCtx) (p : Flock.Proof) (T : F128) : List (List Frame) :=
   (chunks (repFrames c.st c.sch c.dom c.n p T)).1
 
 /-- **A proof and `T` fit a rep's opened rounds**: one chunk per round, as the schedule has; the cap is its table's
-level-0 top's nodes (round 0's); its recursive caps the rounds' tops, in order; every nonce `0`; and round `j`'s rows hold
+level-0 top's nodes (round 0's); its recursive caps the rounds' tops, in order; every nonce `0`; the lengths a proof
+decoded at the rep's shape has (`DecodeZL.ProofSizes`: no field carries an entry no frame reads, and two vectors
+absorbed back to back can't split one row two ways), at a schedule of at least two levels; and round `j`'s rows hold
 the values the `j`-th chunk absorbs. -/
 structure FitsRep (c : RepCtx) (rows : List (List ByteArray)) (p : Flock.Proof) (T : F128) : Prop where
   rounds : (chunksOf c p T).length = rows.length
@@ -198,6 +209,9 @@ structure FitsRep (c : RepCtx) (rows : List (List ByteArray)) (p : Flock.Proof) 
   tops : p.ligerito.recursiveCaps.toList.map Array.toList = topGroups c.sched rows
   nonces : (∀ n ∈ p.ligerito.queryNonces, n = 0) ∧ (∀ n ∈ p.ligerito.claimNonces, n = 0) ∧
     ∀ n ∈ p.ligerito.consistencyNonces, n = 0
+  sizes : ∃ e, c.n = 2 + e ∧
+    FlockSoundness.Discharge.DecodeZL.ProofSizes (FlockSoundness.Refine.shapeOf c.st c.sch e) p
+  levels : 2 ≤ c.sch.levels.size
   elems : ∀ j < rows.length, RowsAt (c.sched.getD j default) (rows.getD j []) (vals ((chunksOf c p T).getD j []))
 
 /-- **The absorbed fields of `a`, the openings of `q`, the rest as V\* takes them**: every field a rep's frames read
@@ -263,7 +277,11 @@ theorem fitsRep_absorbedFrom {c : RepCtx} {rows : List (List ByteArray)} {a : Fl
   have e : chunksOf c (absorbedFrom c a q) T = chunksOf c a T := by
     unfold chunksOf
     rw [repFrames_absorbedFrom]
-  exact ⟨by rw [e]; exact h.rounds, h.sched, h.cap, h.tops, h.nonces, by rw [e]; exact h.elems⟩
+  obtain ⟨x, hn, hs⟩ := h.sizes
+  exact ⟨by rw [e]; exact h.rounds, h.sched, h.cap, h.tops, h.nonces,
+    ⟨x, hn, hs.r1ab, hs.r1c, hs.zcRounds, hs.lcRounds, hs.zPartial, hs.rs, hs.rsEach, hs.cap, hs.capEach, hs.rcaps,
+      hs.rcapsEach, hs.yr, hs.messages, hs.queryNonces, hs.oodValues, hs.claimNonces, hs.consistencyNonces⟩,
+    h.levels, by rw [e]; exact h.elems⟩
 
 /-- The rep's round messages: each round's framed bytes. -/
 def framesOf (c : RepCtx) (p : Flock.Proof) (T : F128) : List Claims.Msg := (chunksOf c p T).map encs
@@ -365,9 +383,27 @@ structure DecR where
   mids : List (Claims.Msg × Coin)
   f : FinalP
 
+/-- **The rep streams' rounds as the reader fixes them**: rep `k`, in `spec.repStreams`' order, takes the `k`-th block
+of the round messages `ms`; its round `j` counts its schedule's coins `n`, holds the first `n` values of its coin among
+`cs`, and retains its message. -/
+def recStreams (spec : SessionSpec) (sts : Array Stmt) (ms : List Claims.Msg) (cs : List Coin) :
+    Array (Array Flock.Round) :=
+  ((List.range (2 * sts.size)).map fun k =>
+    (((cutLens (repLens spec sts) ms).getD k []).mapIdx fun j m =>
+      let n := ((RecDeploy.repSchedAt spec sts[k / 2]!).getD j default).1
+      (⟨n, ByteArray.empty, (cs.getD (((repLens spec sts).take k).sum + j) default).vals n,
+        some ⟨m.toArray⟩⟩ : Flock.Round)).toArray).toArray
+
+/-- **The record the reader hands over**: the honest record's form at SHA-512, at the link's `root_B`, the first
+coin's link points, the reader's streams (`recStreams`) and the proofs' files. -/
+def recJ (spec : SessionSpec) (sts : Array Stmt) (link : List ByteArray × List ByteArray) (c₁ : Coin)
+    (ms : List Claims.Msg) (cs : List Coin) (ps : Array Flock.Proof) : Json :=
+  FlockComplete.JsonRT.recordObj spec (Claims.hOf sha512) link.1.toArray (pointsOf spec c₁)
+    (recStreams spec sts ms cs) (filesAt (tabsOf sts) (pointsOf spec c₁) ps)
+
 /-- **The reading at a decision**: at a statement that sets up, the last message's proof (`rd`, for what no frame
-reads), round 0's rows as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), and the round
-messages their framed bytes, each with its round's coin. -/
+reads), round 0's rows as the link (`linkR`), the rounds after it as the reps' proofs (`readPs`), the round
+messages their framed bytes, each with its round's coin, and the record the reader's (`recJ`). -/
 def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.Msg) (cs : List Coin) : Option DecR := do
   let v ← setupOf false x
   let a ← as.getLast?
@@ -378,7 +414,8 @@ def decR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) (as : List Claims.
   let rss ← as.tail.dropLast.mapM rowsOf
   let link ← linkR v.2.2 r₀
   let pf ← readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl
-  pure ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast, ⟨fl.stmt, fl.j, pf.1⟩⟩
+  pure ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
+    ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩
 
 theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
     {d : DecR} (h : decR rd x as cs = some d) :
@@ -387,7 +424,8 @@ theorem decR_some {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : Lis
       setupOf false x = some v ∧ cs.head? = some c₁ ∧ rowsOf (as.headD []) = some r₀ ∧
       as.tail.dropLast.mapM rowsOf = some rss ∧ linkR v.2.2 r₀ = some link ∧
       readPs v.2.1 v.2.2 c₁ r₀ rss cs.tail.dropLast fl = some pf ∧
-      d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast, ⟨fl.stmt, fl.j, pf.1⟩⟩ := by
+      d = ⟨v.1, v.2.1, v.2.2, link, c₁, pf.2.zip cs.tail.dropLast,
+        ⟨fl.stmt, recJ v.2.1 v.2.2 link c₁ pf.2 cs.tail.dropLast pf.1, pf.1⟩⟩ := by
   simp only [decR, Option.bind_eq_bind, Option.pure_def] at h
   obtain ⟨v, h1, h⟩ := Option.bind_eq_some_iff.1 h
   obtain ⟨a, -, h⟩ := Option.bind_eq_some_iff.1 h

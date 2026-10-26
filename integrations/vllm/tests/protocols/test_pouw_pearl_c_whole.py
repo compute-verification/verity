@@ -78,6 +78,10 @@ class Run:
         self.replayed: list = []
         self.begun: list = []
         self.details = {"passes": []}
+        self.eager = 0
+
+    def eager_forward(self):
+        self.eager += 1
 
     def whole_key(self, retained=None):
         retained = self.retain is not None if retained is None else retained
@@ -201,6 +205,31 @@ def test_enabled_off_graphs_off_and_forwards_outside_a_pass_run_eagerly():
     with stack.pass_():
         assert step(mgr).cg_mode == NONE
     assert mgr.replayed == [] and run.replays == [] and mgr._graphs_captured
+
+
+def test_the_run_hears_of_each_eager_forward_of_a_pearl_c_pass_and_of_nothing_else():
+    """`PearlCDeviceRun.eager_forward` (``whole_eager``'s switch) runs once per forward a Pearl-C pass runs eagerly: before
+    the arm's graphs exist, and for a batch they lack (a prefill's); never for a replayed step, vLLM's own eager steps, a
+    forward outside a pass or with `enabled` off, or while `prepare` captures."""
+    run, stack, whole, mgr = setup()
+    step(mgr, 8192, None)
+    stack.activate(Arm("pearlc", "bf16", "pouw:pearl-c", spec=PassSpec(hashing=True)))
+    with stack.pass_():
+        step(mgr)
+    assert run.eager == 1
+    whole.prepare()
+    assert run.eager == 1
+    with stack.pass_():
+        assert step(mgr).cg_mode == FULL and run.eager == 1
+        assert step(mgr, 640, None).cg_mode == NONE and run.eager == 2
+    step(mgr, 640, None)
+    whole.enabled = False
+    with stack.pass_():
+        step(mgr, 640, None)
+    whole.enabled, whole.preparing = True, True
+    with stack.pass_():
+        step(mgr, 640, None)
+    assert run.eager == 2 and whole.take()["eager"] == 6
 
 
 def test_whole_step_refuses_an_engine_without_decode_graphs_it_can_capture_whole():
@@ -370,6 +399,8 @@ def test_a_pass_replays_whole_only_when_graphed_and_serial_and_its_key_says_whet
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "stats")
     run.whole_tree_sm = True
     assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats")
+    run.whole_prefetch_b = True
+    assert run.whole_key() == (True, frozenset(), name, True, True, "a_tree", "tree_sm", "stats", "prefetch_b")
     run.hashing = False
     assert run.whole_key() == (False, frozenset(), name, False, False)        # nothing to defer without hashing
     run.cur, run.graphs = PPD._Pass(None), False
@@ -524,10 +555,24 @@ class Lane:
     def wait_stream(self, other):
         self.log.append(f"{self.name} waits for {other.name}")
 
+    def wait_event(self, event):
+        self.log.append(f"{self.name} waits for {event.at}'s mark")
+
+
+class Mark:
+    """A stand-in of torch's CUDA event: where it was recorded, the record in the streams' log."""
+
+    def __init__(self, log):
+        self.log, self.at = log, None
+
+    def record(self, stream):
+        self.at = stream.name
+        self.log.append(f"{stream.name} marks")
+
 
 def _lanes(monkeypatch, torch, log):
-    """torch.cuda's current stream, `Stream` and `stream` over `Lane`s, the current one the capturing stream ("main"); the
-    streams the run makes are the side stream, then the tree stream, then the stats stream."""
+    """torch.cuda's current stream, `Stream` and `stream` over `Lane`s and `Event` over `Mark`s, the current one the
+    capturing stream ("main"); the streams the run makes are the side stream, then the tree stream, then the stats stream."""
     current, made = [Lane(log, "main")], iter(("side", "tree", "stats"))
 
     @contextlib.contextmanager
@@ -540,6 +585,7 @@ def _lanes(monkeypatch, torch, log):
     monkeypatch.setattr(torch.cuda, "current_stream", lambda device=None: current[0])
     monkeypatch.setattr(torch.cuda, "Stream", lambda device=None: Lane(log, next(made)))
     monkeypatch.setattr(torch.cuda, "stream", stream)
+    monkeypatch.setattr(torch.cuda, "Event", lambda: Mark(log))
     return current
 
 
@@ -657,7 +703,9 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
         monkeypatch):
     """Under ``whole_fork_stats`` a call's ``stats_a``, which reads A's words alone, goes on the stats stream after the
     call's A words, beside its A commitment (``rows_a``) and tree, and the capturing stream joins it in its place, before
-    ``eprime_a`` reads A's scales; every other step keeps its stream and order."""
+    ``eprime_a`` reads A's scales (the mark after it); every other step keeps its stream and order.  Under
+    ``whole_prefetch_b`` B̃'s prefetch follows ``stats_a`` there, which the join doesn't wait for and the forward's last
+    call joins; alone, the prefetch forks only itself."""
     torch = pytest.importorskip("torch")
     run, log = Calls(torch), []
     run.whole_defer, run.whole_defer_a, run.whole_fork_stats, run.device, run._graphs = True, True, True, "cuda", {}
@@ -673,30 +721,46 @@ def test_a_stats_forking_capture_runs_each_calls_a_scales_beside_its_a_commitmen
     for w, sh in shapes.items():
         run._graphs[run._graph_key(w, sh, 32)[0]] = PG._Graph(torch.zeros(1), torch.zeros(1), "graph",
                                                                [step(w, x) for x in names], (2, 5), 1, 2)
-    pipe = SimpleNamespace(b={}, size={"tree_a": 64})
+    pipes = {w: SimpleNamespace(b={}, size={"tree_a": 64}, prefetch_b=step(w, "prefetch_b")) for w in shapes}
 
     def forward():
         run.whole_capture_begin(run.whole_key(False))
         for i, (w, sh) in enumerate(shapes.items()):
             run.join_before(sh)
-            run._graph_call(w, sh, pipe, 1, 4, 32, i, None)
+            run._graph_call(w, sh, pipes[w], 1, 4, 32, i, None)
         return run.whole_capture_end()
 
     assert [c.w for c in forward()] == [7, 8, 9]
     main = lambda w, *xs: [f"{w}:{x} on main (1)" for x in xs]  # noqa: E731
-    stats = lambda w: ["stats waits for main", f"{w}:stats_a on stats (4)"]  # noqa: E731
+    stats = lambda w, *xs: ["stats waits for main", f"{w}:stats_a on stats (4)", "stats marks",  # noqa: E731
+                            *(f"{w}:{x} on stats (4)" for x in xs)]
+    joined = "main waits for stats's mark"
     tree = lambda w: ["tree waits for main", f"{w}:tree_seed_a on tree (3)"]  # noqa: E731
     side = lambda w: ["side waits for main", f"{w}:hash_leaf on side (2)", "side waits for tree",  # noqa: E731
                       f"{w}:scatter on side (2)"]
-    assert log == [*stats(7), *main(7, "rows_a"), *tree(7), "main waits for stats", *main(7, "eprime_a", "gemm"), *side(7),
-                   *stats(8), *main(8, "rows_a"), *tree(8), "main waits for side", "main waits for stats",
+    assert log == [*stats(7), *main(7, "rows_a"), *tree(7), joined, *main(7, "eprime_a", "gemm"), *side(7),
+                   *stats(8), *main(8, "rows_a"), *tree(8), "main waits for side", joined,
                    *main(8, "eprime_a", "gemm"), *side(8),
                    "main waits for side",                     # 9's call is of 8's shape: joined before it writes A's words
-                   *stats(9), *main(9, "rows_a"), *tree(9), "main waits for stats", *main(9, "eprime_a", "gemm"), *side(9),
+                   *stats(9), *main(9, "rows_a"), *tree(9), joined, *main(9, "eprime_a", "gemm"), *side(9),
                    "main waits for side", "main waits for tree"]
     assert run.kernel.dev.stream is None
     log.clear()
-    run.whole_fork_stats = False                              # the same graphs, stats_a on the capturing stream in its place
+    run.whole_prefetch_b = True                               # B̃'s prefetch after stats_a, joined at the forward's end
+    forward()
+    call = lambda w: [*stats(w, "prefetch_b"), *main(w, "rows_a"), *tree(w),  # noqa: E731
+                      *(["main waits for side"] if w == 8 else []), joined, *main(w, "eprime_a", "gemm"), *side(w)]
+    assert log == [*call(7), *call(8), "main waits for side", *call(9), "main waits for side", "main waits for tree",
+                   "main waits for stats"]
+    assert not run._prefetch_open
+    log.clear()
+    run.whole_fork_stats = False                              # the prefetch alone: stats_a in its place, nothing waits on it
+    forward()
+    assert log[:7] == ["stats waits for main", "7:prefetch_b on stats (4)", *main(7, "rows_a"), *tree(7),
+                       *main(7, "stats_a", "eprime_a")]
+    assert joined not in log and log[-1] == "main waits for stats"
+    log.clear()
+    run.whole_prefetch_b = False                              # the same graphs, stats_a on the capturing stream in its place
     forward()
     assert not any("stats waits" in x or "waits for stats" in x for x in log)
     assert log[:5] == [*main(7, "rows_a"), *tree(7), *main(7, "stats_a", "eprime_a")]
@@ -815,6 +879,13 @@ def test_leaving_a_tree_its_sm_needs_a_deferred_a_tree_on_a_kernel_whose_gemms_t
         k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
         with pytest.raises(ValueError, match="whole_tree_sm"):
             PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=True, whole_defer_a=defer_a, whole_tree_sm=True)
+
+
+def test_prefetching_b_needs_a_deferred_whole_capture_on_a_kernel_with_the_prefetch():
+    for pipeline, defer in ((SimpleNamespace(FUSED={}, prefetch_b=None), False), (SimpleNamespace(FUSED={}), True)):
+        k = SimpleNamespace(run=SimpleNamespace(Pipeline=pipeline))
+        with pytest.raises(ValueError, match="whole_prefetch_b"):
+            PPD.PearlCDeviceRun(None, "test", k, {}, {}, None, None, whole_defer=defer, whole_prefetch_b=True)
 
 
 def test_an_end_aside_needs_lagged_ends():
