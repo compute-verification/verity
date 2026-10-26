@@ -11,6 +11,10 @@ import Proofs.Pouw.RelativeSecurity
 * `workSoundH200_of_workSound`, `workSoundSm120_of_workSound`: the two instances.
 * `h200_floors`, `sm120_floors`: θ's floors with the product form are met by some open parameter on each card, so
   `WorkSoundAt`'s hypotheses on `x` are not empty.
+* `h200_onCard`, `sm120_onCard` (rule I): at those parameters, on any period's devices, `cardAccel` (programs as runs
+  within the devices' rates) is the devices under the identity match (`OnCard`) and meets (G1) and (G2), so the
+  hypotheses on `G` are not empty either. `cardAccel` is a witness, not the canonical card accelerator RT-LEAN L31
+  asks for: its programs are any runs within the rates, so `SAKMatmul` is false at it.
 -/
 
 namespace Pouw.SecurityProofs.DitherInstance
@@ -76,5 +80,143 @@ theorem h200_floors :
 theorem sm120_floors :
     ∃ x, Verity.Accel.Sm120.card.floors x ∧ Verity.Assumptions.AccelProductForm x :=
   ⟨floorOpen, le_rfl, floorOpen_productForm⟩
+
+section Witness
+
+/-- A run issues one list of instructions a tick of its schedule. -/
+theorem run_length {ι : Type} {m : Verity.Accel.Machine ι} (Prg : m.Prog ℕ) :
+    ∀ (σ : m.State ℕ) (sched : List (List ℕ)),
+      (Verity.Accel.Machine.run Prg σ sched).2.length = sched.length
+  | _, [] => rfl
+  | σ, θs :: rest => congrArg Nat.succ (run_length Prg (Verity.Accel.Machine.tick Prg σ θs).1 rest)
+
+/-- A run meeting the model uses each resource at most at its rate over the run's ticks and backlog. -/
+theorem cardUnits_le {ι : Type} {m : Verity.Accel.Machine ι} (Prg : m.Prog ℕ) (σ : m.State ℕ)
+    (sched : List (List ℕ)) (h : Verity.Accel.Machine.Fits Prg σ sched) (r : m.Res) :
+    cardUnits m (Verity.Accel.Machine.run Prg σ sched).2 r ≤ m.ρ r * ((sched.length + m.slack : ℕ) : ℚ≥0) := by
+  have hr := h.2.1 ⟨0, sched.length⟩ r
+  unfold cardUnits
+  rw [run_length, Finset.range_eq_Ico]
+  simpa [Verity.Window.ticks] using hr
+
+/-- Programs as runs with a use and a wall time, each resource used at most at its rate over the run's wall time;
+composing runs adds their uses and wall times. -/
+noncomputable def boundedMc {R : Type} (rate : R → ℝ) : Machine where
+  Alg I O := {a : (I → O) × (I → R → ℝ) × (I → ℝ) // ∀ i r, 0 ≤ a.2.1 i r ∧ a.2.1 i r ≤ rate r * a.2.2 i}
+  eval f := f.1.1
+  time _ := 0
+  cost _ _ := 0
+  size _ := 0
+  seq f g := ⟨(fun i => g.1.1 (f.1.1 i), fun i r => f.1.2.1 i r + g.1.2.1 (f.1.1 i) r,
+      fun i => f.1.2.2 i + g.1.2.2 (f.1.1 i)), fun i r =>
+    ⟨add_nonneg (f.2 i r).1 (g.2 _ r).1, by rw [mul_add]; exact add_le_add (f.2 i r).2 (g.2 _ r).2⟩⟩
+  pair f g := ⟨(fun i => (f.1.1 i, g.1.1 i), fun i r => f.1.2.1 i r + g.1.2.1 i r, fun i => f.1.2.2 i + g.1.2.2 i),
+    fun i r => ⟨add_nonneg (f.2 i r).1 (g.2 i r).1, by rw [mul_add]; exact add_le_add (f.2 i r).2 (g.2 i r).2⟩⟩
+  fst := ⟨(fun p => p.1, fun _ _ => 0, fun _ => 0), fun _ _ => ⟨le_rfl, by rw [mul_zero]⟩⟩
+  snd := ⟨(fun p => p.2, fun _ _ => 0, fun _ => 0), fun _ _ => ⟨le_rfl, by rw [mul_zero]⟩⟩
+  eval_seq _ _ _ := rfl
+  eval_pair _ _ _ := rfl
+  eval_fst _ := rfl
+  eval_snd _ := rfl
+  time_nonneg _ := le_rfl
+  cost_le_time _ _ := le_rfl
+  size_le_time _ := le_rfl
+  size_nonneg _ := le_rfl
+  time_seq_le _ _ := by norm_num
+  le_time_seq _ _ := le_rfl
+  time_pair_le _ _ := by norm_num
+  le_time_pair_left _ _ := le_rfl
+  le_time_pair_right _ _ := le_rfl
+  time_fst := rfl
+  time_snd := rfl
+
+/-- The period's devices' rates: the pooled cards' at `f` ticks a second, and the other devices'. -/
+noncomputable def devRate {c : Verity.Accel.Card} (D : Devices c) : Verity.Accel.Res ⊕ D.oth.Res → ℝ
+  | .inl r => ((poolCard c D.n D.n_pos).ρ r : ℝ) * D.f
+  | .inr h => D.oth.rate h
+
+/-- An accelerator on the period's devices at `x`: `boundedMc` at the devices' rates, the pooled cards' memory and the
+other devices', nothing imported, and MODEL-SPEC's (P1) and (P2). -/
+noncomputable def cardAccel (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) : Accel where
+  Mc := boundedMc (devRate D)
+  Res := Verity.Accel.Res ⊕ D.oth.Res
+  rate := devRate D
+  mem := (((D.machine x).chip + (D.machine x).mem : ℕ) : ℝ) + D.oth.mem
+  use f i r := f.1.2.1 i r
+  held _ _ := 0
+  wall f i := f.1.2.2 i
+  ext _ _ := 0
+  P1 := Verity.Accel.P1Int ∧ Verity.Accel.CapturedProductForm c
+  P2 := Verity.Accel.P2Local ∧ Verity.Accel.P2Distinct ∧ Verity.Accel.P2Frame ∧ Verity.Accel.P2Priced
+
+open Classical in
+/-- **`OnCard` is met, with G1 and G2** (rule I): at positive card rates and clock, positive other rates and their
+memory, `cardAccel` is the period's devices at `x` under the identity match, meeting (G1) and (G2). -/
+theorem cardAccel_onCard (c : Verity.Accel.Card) (x : Verity.Accel.Open) (D : Devices c) (P : RoundProto)
+    (L : Layout (D.machine x) P) (hρ : ∀ r, 0 < c.ρ r) (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h)
+    (hmem : 0 ≤ D.oth.mem) :
+    OnCard (cardAccel c x D) c x D P L (Equiv.refl _) ∧ (cardAccel c x D).G1 ∧ (cardAccel c x D).G2 := by
+  have hrate : ∀ r, 0 < devRate D r := by
+    rintro (r | h)
+    · exact mul_pos (NNRat.cast_pos.mpr (mul_pos (Nat.cast_pos.mpr D.n_pos) (hρ r))) hf
+    · exact hoth h
+  refine ⟨⟨fun _ => rfl, fun _ => rfl, rfl, Iff.rfl, Iff.rfl, ?_⟩, ?_, ⟨hrate, fun f i => ⟨le_rfl, f.2 i⟩⟩⟩
+  · intro M₀ Prg sched hfits
+    let m := D.machine x
+    let wl : m.Mem × P.Draw → ℝ := fun p => (((sched p.2).length + x.slack : ℕ) : ℝ) / D.f
+    let u : m.Mem × P.Draw → Verity.Accel.Res ⊕ D.oth.Res → ℝ := fun p q =>
+      match q with
+      | .inl r => if p.1 = M₀ then (cardUnits m (cardRun m Prg (L.putDraw p.2 p.1) (sched p.2)).2 r : ℝ) else 0
+      | .inr _ => 0
+    have hu : ∀ p q, 0 ≤ u p q ∧ u p q ≤ devRate D q * wl p := by
+      have hwl : ∀ p, 0 ≤ wl p := fun p => div_nonneg (Nat.cast_nonneg _) hf.le
+      rintro ⟨M, d⟩ (r | h)
+      · by_cases hM : M = M₀
+        · subst hM
+          have hle := cardUnits_le Prg _ _ (hfits d) r
+          have hR : devRate D (.inl r) * wl (M, d) =
+              ((poolCard c D.n D.n_pos).ρ r : ℝ) * (((sched d).length + x.slack : ℕ) : ℝ) := by
+            simp only [devRate, wl]
+            field_simp
+          simp only [u, ite_true]
+          refine ⟨NNRat.cast_nonneg _, ?_⟩
+          rw [hR]
+          exact_mod_cast hle
+        · simp only [u, hM, ite_false]
+          exact ⟨le_rfl, mul_nonneg (hrate _).le (hwl _)⟩
+      · exact ⟨le_rfl, mul_nonneg (hrate _).le (hwl _)⟩
+    refine ⟨⟨(fun p => L.getTr (cardRun m Prg (L.putDraw p.2 p.1) (sched p.2)).1.mem, u, wl), hu⟩, fun d =>
+      ⟨rfl, fun r => ?_, fun _ => rfl, rfl, rfl⟩⟩
+    show u (M₀, d) (.inl r) = _
+    simp only [u, ite_true]
+    rfl
+  · intro I O f i
+    show (0 : ℝ) + 0 ≤ _
+    rw [add_zero]
+    exact add_nonneg (Nat.cast_nonneg _) hmem
+
+theorem h200_rates_pos : ∀ r, 0 < Verity.Accel.H200.card.ρ r := by
+  intro r; cases r <;> norm_num [Verity.Accel.H200.card, Verity.Accel.H200.ρ]
+
+theorem sm120_rates_pos : ∀ r, 0 < Verity.Accel.Sm120.card.ρ r := by
+  intro r; cases r <;> norm_num [Verity.Accel.Sm120.card, Verity.Accel.Sm120.ρ]
+
+/-- **`WorkSoundH200`'s hypotheses on the card are met** (rule I): at θ's floors with the product form, on any
+period's devices with a positive clock and positive other rates, some accelerator is the devices under some match and
+meets (G1) and (G2). -/
+theorem h200_onCard (D : Devices Verity.Accel.H200.card) (P : RoundProto) (L : Layout (D.machine floorOpen) P)
+    (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
+      OnCard G Verity.Accel.H200.card floorOpen D P L e ∧ G.G1 ∧ G.G2 :=
+  ⟨_, _, cardAccel_onCard _ _ D P L h200_rates_pos hf hoth hmem⟩
+
+/-- **`WorkSoundSm120`'s hypotheses on the card are met** (rule I), as on the H200. -/
+theorem sm120_onCard (D : Devices Verity.Accel.Sm120.card) (P : RoundProto) (L : Layout (D.machine floorOpen) P)
+    (hf : 0 < D.f) (hoth : ∀ h, 0 < D.oth.rate h) (hmem : 0 ≤ D.oth.mem) :
+    ∃ (G : Accel) (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res),
+      OnCard G Verity.Accel.Sm120.card floorOpen D P L e ∧ G.G1 ∧ G.G2 :=
+  ⟨_, _, cardAccel_onCard _ _ D P L sm120_rates_pos hf hoth hmem⟩
+
+end Witness
 
 end Pouw.SecurityProofs.DitherInstance
