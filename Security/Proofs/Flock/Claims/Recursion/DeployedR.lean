@@ -310,12 +310,10 @@ theorem rdVL_encV : ∀ (n : ℕ) (rest : Msg), rdVL (encV n ++ rest) = some (n,
     rw [encV]
     split_ifs with h
     · have hb : (n.toUInt8).toNat = n := by
-        rw [Nat.toUInt8, UInt8.toNat_ofNat]
-        exact Nat.mod_eq_of_lt (by omega)
+        rw [Nat.toUInt8, UInt8.toNat_ofNat_of_lt' (by unfold UInt8.size; omega)]
       simp only [List.singleton_append, rdVL, hb, h, ↓reduceIte]
     · have hb : ((n % 128 + 128).toUInt8).toNat = n % 128 + 128 := by
-        rw [Nat.toUInt8, UInt8.toNat_ofNat]
-        exact Nat.mod_eq_of_lt (by omega)
+        rw [Nat.toUInt8, UInt8.toNat_ofNat_of_lt' (by unfold UInt8.size; omega)]
       have hlt : n / 128 < n := Nat.div_lt_self (by omega) (by omega)
       simp only [List.cons_append, rdVL, hb, show ¬(n % 128 + 128 < 128) by omega, ↓reduceIte, ih _ hlt rest,
         Option.map_some, Nat.add_sub_cancel, Option.some.injEq, Prod.mk.injEq, and_true]
