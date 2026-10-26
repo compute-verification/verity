@@ -1,14 +1,15 @@
 """verity_vllm.program.predict.window_circuit (V3b): a served window is its class's one Circuit of the catalog's units, a class
 Program a request, every input row wired from its writer's row, a registered read of the weights or the slot's ingress, and
 nothing free. Pinned on a TINY class of 2 slots, 4 prompt ids and 2 outputs (5 positions a Program), at a grain small enough
-to slice TINY's GEMMs and cut its ports; the class's circuit is the same for two windows that differ in everything but their
-request count.
+to slice TINY's GEMMs and cut its ports; the class's circuit, its blocks included, is the same for two windows that differ in
+everything but their request count.
 """
 from __future__ import annotations
 
 import json
 from collections import Counter
 
+import numpy as np
 import pytest
 from tests.program.predict import test_steps as S
 from verity_vllm.program.predict import window_circuit as WC
@@ -51,25 +52,35 @@ def _source(circuit, tid: str, port: str, unit: int, row: int = 0) -> tuple[str,
     return w.writer, int(w.writers(unit, 1, row)[0]), w.out
 
 
+def _blocks(circuit) -> bytes:
+    """The circuit's blocks as its record carries them, less the proof block's partition digest: that is its population
+    program's, which its templates fix (`Circuit.blocks_record`, pinned in the windows suite), and building it here would
+    run the embedding's population program."""
+    return IF.circuit_bytes(circuit.blocks.doc(sum(circuit.units.values()), ""))
+
+
 def test_two_windows_of_a_class_are_one_circuit(window):
     """The privacy property: WINDOW and OTHER differ in their requests' arrival steps, prompt lengths (4 and 3 against 3 and 2)
-    and output lengths, and their circuits' descriptions (units, wires, cuts, registered reads, ingress), templates and external
-    ports are byte for byte the same; a window of one request is another circuit, its Program count being the one public fact
-    a window adds."""
+    and output lengths, and their circuits' descriptions (units, wires, cuts, registered reads, ingress), blocks, templates and
+    external ports are byte for byte the same; a window of one request is another circuit, its Program count being the one
+    public fact a window adds."""
     circuit, _ = window
     other = _circuit(OTHER)
     assert IF.circuit_bytes(circuit.description()) == IF.circuit_bytes(other.description())
+    assert _blocks(circuit) == _blocks(other)
     assert (circuit.ids, circuit.external) == (other.ids, other.external)
     one = _circuit(([(4, 2, {**S.GREEDY, "max_tokens": 2})], [[(0, 0, 4)], [(0, 4, 1)]]))
     assert IF.circuit_bytes(one.description()) != IF.circuit_bytes(circuit.description())
     assert IF.circuit_bytes(one.description()) == IF.circuit_bytes(class_circuit(S._registered(), CLASS, 1, GRAIN).description())
+    assert (one.blocks.slots, one.blocks.steps) == (1, 5) and _blocks(one) != _blocks(circuit)
 
 
 def test_the_circuit_is_a_class_program_a_request_in_units_by_template_and_wire_patterns(window):
     """Each request is the class Program, its 5 positions each the whole stack, the LM head and the token select: TINY's GEMMs
     sliced 8 columns a unit, its attention and RoPE a unit a head (position p's heads over p + 1 keys), its token select four
     chunks and a combine, and positions 0..3's tokens `TokenFeed_v1` units; a port read from several writers is cut, its groups
-    gathered by `AllGather_v1` units, and the wiring is a pattern per run, not a wire per unit."""
+    gathered by `AllGather_v1` units, and the wiring is a pattern per run, not a wire per unit: a node's Programs' runs sit side
+    by side, so most patterns span both Programs."""
     circuit, ids = window
     label = {tid: name for name, tid in ids.items()}
     assert {label[IF.descriptor_id(fn)]: n for fn, n in circuit.templates} == {
@@ -84,18 +95,18 @@ def test_the_circuit_is_a_class_program_a_request_in_units_by_template_and_wire_
         COMBINE: {"idx": 4}, **{g: {"parts": int(g.split("WORLD=")[1].split(",")[0])} for g in ids if g.startswith("AllGather")}}
     family = {tid: name.split("{")[0] for name, tid in ids.items()}
     assert Counter((family[w.reader], w.port, family[w.writer], w.out) for w in circuit.wires) == {
-        ("AllGather_v1", "parts", "AllGather_v1", "o0"): 32, ("AllGather_v1", "parts", "AttentionHead_v18", "o0"): 10,
+        ("AllGather_v1", "parts", "AllGather_v1", "o0"): 32, ("AllGather_v1", "parts", "AttentionHead_v18", "o0"): 5,
         ("AllGather_v1", "parts", "Gemm_v2", "o0"): 5, ("AllGather_v1", "parts", "RoPEHead_v1", "o0"): 32,
         ("AllGather_v1", "parts", "TokenSelectChunk_v2", "o0"): 1, ("AttentionHead_v18", "k", "AllGather_v1", "o0"): 4,
         ("AttentionHead_v18", "k", "RoPEHead_v1", "o0"): 1, ("AttentionHead_v18", "q", "RoPEHead_v1", "o0"): 5,
-        ("AttentionHead_v18", "v", "AllGather_v1", "o0"): 5, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 4,
-        ("EmbeddingRead_v1", "tok", "TokenSelectCombine_v2", "o0"): 2, ("Gemm_v2", "x", "AllGather_v1", "o0"): 20,
-        ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 31, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 10,
-        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 10,
-        ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 10, ("RMSNormFusedCuda_v2", "x", "AllGather_v1", "o0"): 40,
-        ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 1,
+        ("AttentionHead_v18", "v", "AllGather_v1", "o0"): 5, ("EmbeddingRead_v1", "tok", "TokenFeed_v1", "o0"): 2,
+        ("EmbeddingRead_v1", "tok", "TokenSelectCombine_v2", "o0"): 1, ("Gemm_v2", "x", "AllGather_v1", "o0"): 10,
+        ("Gemm_v2", "x", "RMSNormFusedCuda_v2", "o0"): 16, ("Gemm_v2", "x", "RMSNormTriton_v5", "o0"): 5,
+        ("Gemm_v2", "x", "SiluMul_v2", "o0"): 1, ("RMSNormFusedCuda_v2", "res", "EmbeddingRead_v1", "o0"): 5,
+        ("RMSNormFusedCuda_v2", "res", "RMSNormFusedCuda_v2", "o1"): 5, ("RMSNormFusedCuda_v2", "x", "AllGather_v1", "o0"): 20,
+        ("RMSNormTriton_v5", "x", "EmbeddingRead_v1", "o0"): 1, ("RoPEHead_v1", "x", "Gemm_v2", "o0"): 20,
         ("SiluMul_v2", "gu", "AllGather_v1", "o0"): 1, ("TokenFeed_v1", "sel", "TokenSelectCombine_v2", "o0"): 1,
-        ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 4, ("TokenSelectChunk_v2", "x", "AllGather_v1", "o0"): 1,
+        ("TokenFeed_v1", "slot", "TokenFeed_v1", "o1"): 2, ("TokenSelectChunk_v2", "x", "AllGather_v1", "o0"): 1,
         ("TokenSelectCombine_v2", "best", "AllGather_v1", "o0"): 1, ("TokenSelectCombine_v2", "idx", "TokenSelectChunk_v2", "o1"): 1,
         ("TokenSelectCombine_v2", "x0", "Gemm_v2", "o0"): 1}
     assert circuit.external == (f"{ids[FIRST]}/slot", f"{ids[COMBINE]}/o0")
@@ -104,17 +115,16 @@ def test_the_circuit_is_a_class_program_a_request_in_units_by_template_and_wire_
 def test_a_positions_token_is_its_feed_below_the_prompt_cap_and_the_previous_select_past_it(window):
     """Each Program's slot is the system's ingress at its anchor, read by its first position's feed; each later feed reads its
     predecessor's slot and the previous position's select, and position p's embedding reads its feed's token for p < 4 and
-    position p - 1's select at p = 4. Program 1's units follow Program 0's in every template."""
+    position p - 1's select at p = 4. A node's Programs' units sit side by side: Program k's embedding and select at position
+    p are units 2p + k, its feed at position p units 2(p - 1) + k."""
     circuit, ids = window
     first, feed, emb, comb = ids[FIRST], ids[FEED], ids[EMB], ids[COMBINE]
     assert [g.doc() for g in circuit.ingress] == [{"reader": first, "port": "slot", "at": 0, "units": 2, "step": WC.ANCHOR}]
-    assert [_source(circuit, feed, "slot", u) for u in (0, 1, 2, 3)] == [(first, 0, "o1"), (feed, 0, "o1"), (feed, 1, "o1"),
-                                                                          (first, 1, "o1")]
-    assert [_source(circuit, feed, "sel", u) for u in (0, 2, 3, 5)] == [(comb, 0, "o0"), (comb, 2, "o0"), (comb, 5, "o0"),
-                                                                         (comb, 7, "o0")]
+    assert [_source(circuit, feed, "slot", u) for u in range(6)] == [(first, 0, "o1"), (first, 1, "o1"),
+                                                                      *((feed, u, "o1") for u in range(4))]
+    assert [_source(circuit, feed, "sel", u) for u in range(6)] == [(comb, u, "o0") for u in range(6)]
     assert [_source(circuit, emb, "tok", u) for u in range(10)] == [
-        (first, 0, "o0"), (feed, 0, "o0"), (feed, 1, "o0"), (feed, 2, "o0"), (comb, 3, "o0"),
-        (first, 1, "o0"), (feed, 3, "o0"), (feed, 4, "o0"), (feed, 5, "o0"), (comb, 8, "o0")]
+        (first, 0, "o0"), (first, 1, "o0"), *((feed, u, "o0") for u in range(6)), (comb, 6, "o0"), (comb, 7, "o0")]
 
 
 def test_the_weights_and_the_embedding_are_registered_reads(window):
@@ -126,8 +136,8 @@ def test_the_weights_and_the_embedding_are_registered_reads(window):
     reg = circuit.registered
     assert reg.params == {"weights": 91472}
     assert Counter((r.reader, r.port) for r in reg.reads) == {
-        (ids["Gemm_v2{K=64,N=8}"], "w"): 60, (ids["Gemm_v2{K=128,N=4}"], "w"): 1, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
-        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 20, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 40}
+        (ids["Gemm_v2{K=64,N=8}"], "w"): 30, (ids["Gemm_v2{K=128,N=4}"], "w"): 1, (ids["Gemm_v2{K=64,N=1}"], "w"): 1,
+        (ids["RMSNormFusedCuda_v2{N=64}"], "w"): 10, (ids["RMSNormTriton_v5{N=64}"], "w"): 1, (ids["RoPEHead_v1{D=16}"], "cs"): 20}
     assert [t.doc() for t in reg.tables] == [{"name": "embedding@0", "param": "weights", "offset": 0, "words": 64, "rows": 256}]
     assert sorted(r.doc().items() for r in reg.roots) == sorted(
         {"reader": ids[EMB], "port": p, "table": "embedding@0", "of": p, "at": 0, "units": 10}.items() for p in ("domain", "root"))
@@ -135,20 +145,78 @@ def test_the_weights_and_the_embedding_are_registered_reads(window):
                                                 "ports": ["row", "salt", "path"], "verdict": "o1", "at": 0, "units": 10}]
     assert [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["Gemm_v2{K=64,N=1}"]] == [(0, (10,), 0, (0,))]
     rope = [(r.at, r.radix, r.base, r.step) for r in reg.reads if r.reader == ids["RoPEHead_v1{D=16}"]]
-    assert rope[:3] == [(0, (4,), 90432, (0,)), (4, (2,), 90432, (0,)), (6, (4,), 90432, (0,))]
+    assert rope[:5] == [(0, (2, 4), 90432, (0, 0)), (8, (2, 2), 90432, (0, 0)), (12, (2, 4), 90432, (0, 0)),
+                        (20, (2, 2), 90432, (0, 0)), (24, (2, 4), 90448, (0, 0))]
 
 
 def test_a_head_attends_over_every_key_position_through_one_gather(window):
     """Position 4 (T 5) at layer 0: heads 0 and 1 share KV group 0, whose keys are one `AllGather_v1{5, 16}` row over the
-    RoPE'd keys of positions 0..4 (RoPE units 12p + 4, a position's 12 heads), Program 1's over its own (60 units on)."""
+    RoPE'd keys of positions 0..4. A position's RoPE units are 24, each node's two Programs' side by side (layer 0's queries
+    of Programs 0 and 1, 4 each, then their keys, 2 each, then layer 1's), so Program 0's keys of group 0 are units 24p + 8
+    and Program 1's 24p + 10; Program 1's heads are attention units 4..7."""
     circuit, ids = window
     att, rope = ids["AttentionHead_v18{T=5,D=16,BN=128,MASKED_FROM=0}"], ids["RoPEHead_v1{D=16}"]
     gather = _source(circuit, att, "k", 0)
     assert gather == _source(circuit, att, "k", 1) == (ids["AllGather_v1{WORLD=5,N=16}"], 0, "o0")
-    assert [_source(circuit, gather[0], "parts", 0, r) for r in range(5)] == [(rope, 12 * p + 4, "o0") for p in range(5)]
-    assert _source(circuit, att, "q", 0) == (rope, 48, "o0")
-    other = _source(circuit, att, "k", 8)
-    assert [_source(circuit, other[0], "parts", other[1], r) for r in range(5)] == [(rope, 60 + 12 * p + 4, "o0") for p in range(5)]
+    assert [_source(circuit, gather[0], "parts", 0, r) for r in range(5)] == [(rope, 24 * p + 8, "o0") for p in range(5)]
+    assert _source(circuit, att, "q", 0) == (rope, 96, "o0")
+    other = _source(circuit, att, "k", 4)
+    assert [_source(circuit, other[0], "parts", other[1], r) for r in range(5)] == [(rope, 24 * p + 10, "o0") for p in range(5)]
+    assert _source(circuit, att, "q", 4) == (rope, 100, "o0")
+
+
+def _labels(circuit) -> dict[str, np.ndarray]:
+    """Each template's units' (slot, step), by descriptor id: its inference entries expanded, an entry's digits in mixed radix
+    with the first the slowest."""
+    out = {tid: np.full((n, 2), -1, dtype=np.int64) for tid, n in circuit.units.items()}
+    for e in circuit.blocks.inference:
+        i, lab = np.arange(e.units, dtype=np.int64), np.zeros((e.units, 2), dtype=np.int64)
+        lab[:, 1] = e.step
+        for r, a in zip(reversed(e.radix), reversed(e.axes)):
+            if a != "-":
+                lab[:, int(a == "step")] += i % r
+            i //= r
+        out[e.template][e.at:e.at + e.units] = lab
+    return out
+
+
+def test_the_blocks_put_each_unit_at_its_programs_slot_and_its_positions_step(window):
+    """The inference block (`interface.Blocks`): the window's 2 Programs are its slots and the class's 5 positions its steps,
+    each node's units an entry of its Programs' runs side by side, like entries merged. Position p's embedding and select are
+    step p, its feed (p = 1..3) step p, a head over T keys step T - 1 (its digits layer, slot, head, as are its gathers'), and
+    the entries tile every template. Every wire's writer is of its reader's slot at its step or before: a Program reads only
+    its own units, a position only its own and earlier positions'."""
+    circuit, ids = window
+    label = {tid: name for name, tid in ids.items()}
+    assert (circuit.blocks.slots, circuit.blocks.steps, len(circuit.blocks.inference)) == (2, 5, 76)
+    by: dict[str, list] = {}
+    for e in circuit.blocks.inference:
+        by.setdefault(label[e.template], []).append((e.at, e.radix, e.axes, e.step))
+    assert set(by) == set(ids)
+    assert by[EMB] == by[COMBINE] == [(0, (5, 2), ("step", "slot"), 0)]
+    assert (by[FIRST], by[FEED]) == ([(0, (2,), ("slot",), 0)], [(0, (3, 2), ("step", "slot"), 1)])
+    att = "AttentionHead_v18{{T={},D=16,BN=128,MASKED_FROM=0}}"
+    assert by[att.format(5)] == by["AllGather_v1{WORLD=5,N=16}"] == [(0, (2, 2, 4), ("-", "slot", "-"), 4)]
+    assert [{s for *_, s in by[att.format(t)]} for t in range(1, 6)] == [{t} for t in range(5)]
+    assert by["RoPEHead_v1{D=16}"][:2] == [(0, (2, 4), ("slot", "-"), 0), (8, (2, 2), ("slot", "-"), 0)]
+    labels = _labels(circuit)
+    assert all((lab >= 0).all() for lab in labels.values())
+    for w in circuit.wires:
+        i = np.arange(w.units, dtype=np.int64)
+        reader, writer = labels[w.reader][w.at + i // w.cut[1]], labels[w.writer][w.source(i)]
+        assert (reader[:, 0] == writer[:, 0]).all() and (writer[:, 1] <= reader[:, 1]).all(), w.doc()
+
+
+def test_inference_entries_are_the_slots_runs_side_by_side():
+    """`_inference` merges a template's units of one (slot, step) into runs, takes each ``slots`` runs (slots 0, 1, ... of one
+    length at one step) as an entry, and merges like entries that follow on at one step under a ``-`` digit, then at
+    consecutive steps under a ``step`` digit; units that aren't such runs are refused by name."""
+    assert WC._inference({"t": [(0, 1, 0, 0), (1, 1, 0, 0), (2, 2, 1, 0), (4, 2, 0, 1), (6, 2, 1, 1)]}, 2) == [
+        IF.InferenceEntry("t", 0, (2, 2, 2), ("step", "slot", "-"), 0)]
+    assert WC._inference({"t": [(0, 1, 0, 3), (1, 1, 1, 3), (2, 1, 0, 3), (3, 1, 1, 3)]}, 2) == [
+        IF.InferenceEntry("t", 0, (2, 2), ("-", "slot"), 3)]
+    with pytest.raises(Unexpressible, match=r"t: units from 0 are not 2 slots' runs of one length at one step"):
+        WC._inference({"t": [(0, 2, 0, 0), (2, 1, 1, 0)]}, 2)
 
 
 def test_every_input_row_is_wired_registered_or_ingress_counted_from_the_description(window):
