@@ -44,8 +44,8 @@ uv run machine-model --device sm_100 sheet --eps --uni 0.1 0.02   # ... with a u
 uv run machine-model capacity 0.745/duo:0.6+lane:0.3 0.255/served:0.15   # the certified share σ of a window's capacity
 uv run machine-model counts e-l7qs 2048 28672 4096   # H's closed-form instruction counts and model bound at a shape
 uv run machine-model counts e-l7qs --check           # every ncu observation of H against them
-uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H, γ
-uv run machine-model render theta            # θ's rates, capacities, clocks, exact paths and FP8 atoms with sources
+uv run machine-model --device sm_90 theta    # θ: each figure at its clock, d by route, Strassen's exchange rate, B_RF, r_H, γ, units, c_sha
+uv run machine-model render theta            # θ's rates, capacities, clocks, exact paths, FP8 atoms, units and SHA-512, with sources
 ~~~
 
 The data, each kind of thing a file or a line of its own:
@@ -87,8 +87,9 @@ The data, each kind of thing a file or a line of its own:
 - `data/theta.toml` (and `data/devices/sm_90/theta.toml`, the H200's): θ, the accelerator model's parameters:
   every tensor rate by format and shape, every lane pipe, the register file, shared memory, L1, L2 and HBM, the
   capacities and clocks, each with its vendor document and page first, then the census or run that measured it, or the
-  run that would (`gap`); the exact paths (b1, INT4, FP4) with their ISA reference; the FP8 atoms' semantics; and the
-  units that write registers, which B_RF's LP reads.
+  run that would (`gap`); the exact paths (b1, INT4, FP4) with their ISA reference; the FP8 atoms' semantics; the
+  units that write registers, which B_RF's LP reads; a verdict for every unit RT-UNITS lists (`[[unit]]`); and the
+  public SHA-512 figures our compressions are read against (`[[public]]`).
 - `data/devices/sm_NN/`: another device's data ("Devices" below).
 
 The code:
@@ -114,7 +115,8 @@ The code:
 - `verity_machine_model/theta.py`: reading `theta.toml` and holding it to its rules, and what it derives on the data
   sheet and measured: d, one delivery in INT8 MAC units by route; Strassen's ALU-for-tensor-core exchange rate at the
   honest kernel's L; B_RF, the most register bits all units write a SM-clock, and c ≈ ρ₈/B_RF; and, for each honest
-  profile `honest` lists (duo's and LI's), r_H against the fold's r_min and, measured, γ against the lone INT8 MMA.
+  profile `honest` lists (duo's and LI's), r_H against the fold's r_min and, measured, γ against the lone INT8 MMA;
+  each RT-UNITS unit's verdict and the most a bounded one adds; and c_sha, our SHA-512 against each public figure.
 - `verity_machine_model/cli.py` and `verity_machine_model/commands/`: the `machine-model` command. `cli.py` only
   dispatches; each command is a module of `commands/` with its usage as its docstring, `add(sub)` its arguments and
   `run(args)` its body, so a new command is a new module and touches no other.
