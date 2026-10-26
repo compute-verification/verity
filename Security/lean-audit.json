@@ -8555,6 +8555,12 @@
    "assumptions": [],
    "type_hash": "5677dc78b1098f4956a21084ff940de6f71c34bf2f38bc3f2950cd7abe39ed89"
   },
+  "NetTiming.SecurityProofs.HorizonWrongUnitsLe": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe : NetTiming.Guarantees.HorizonWrongUnitsLe"],
+   "assumptions": [],
+   "type_hash": "a04fb3c7473ce600dcf3b75eae2ce8f5c3f7126156b07cf9112a51776a52712f"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
    "signature": ["NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted"],
@@ -11552,7 +11558,8 @@
    "Accounting.SecurityProofs.JointPeriod": "frozen (no-function): Like JointPerRun, it composes the five audits' per-period guarantees, each a hypothesis over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizon": "frozen (no-function): Like JointPeriod, over a horizon of periods on one coin space: each period's five per-period guarantees are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointHorizonBlocksAbstract": "frozen (no-function): Like JointHorizon, over a horizon of blocks on one coin space with extra events: each block's five per-period guarantees and each extra event's bound are hypotheses over an abstract period of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/JointPeriod.lean), and it bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list."
+   "Accounting.SecurityProofs.BandwidthOfAuditPerRun": "frozen (no-function,hash): It is BandwidthOfAudit at the coins drawn: it carries Bandwidth.SecurityProofs.AuditRO, a bound in the random-oracle model over an abstract chip program, to the per-run bandwidth guarantee (BandwidthSoundPerRun) of an abstract run of the device model whose verdicts are a field of the run (Security/Definitions/Accounting/BandwidthAudit.lean), not to a Lean function, and bounds a Pouw.pr event, which shape.events does not list.",
+   "NetTiming.SecurityProofs.HorizonWrongUnitsLe": "frozen (no-function): It is a fact of probability over an abstract horizon of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the horizon, with A3 and KS at the deployment) is not stated here."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16604,6 +16611,7 @@
     "Flock.SecurityProofs.SamplingClaimsStated",
     "Hash.SecurityProofs.RowBinding",
     "Hash.SecurityProofs.TreeBinding",
+    "NetTiming.SecurityProofs.HorizonWrongUnitsLe",
     "NetTiming.SecurityProofs.SampledAuditAccepted",
     "NetTiming.SecurityProofs.SampledLeakAccepted",
     "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedJ10RPerProver",
@@ -21060,6 +21068,13 @@
     "NetTiming.SecurityProofs.EncardChargedLe",
     "NetTiming.SecurityProofs.EncardChargedLeCounted"
    ]
+  },
+  "Definitions.NetworkCertifier.Guarantees.Horizon": {
+   "digest": "723d0a0a236028b921596dfdf2107229b3949843f4b0f74ea68fa8b9676a0546",
+   "definitions": {
+    "NetTiming.Guarantees.HorizonWrongUnitsLe": "714a21e19dcc8f20d883e5801e93168f3e81afc079674707adc46fc795b29482"
+   },
+   "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.SampledAudit": {
    "digest": "011843baa3d4e1e3587bd9a91e9f5c488c455b5f39760438f4b3ed1dcc1120b5",
