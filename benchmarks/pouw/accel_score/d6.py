@@ -5,7 +5,9 @@ of the period with every public route (`d5_routes.period`), priced at the honest
 route lowers pub and leaves honest time uncredited, never ε. v3.1 is v3 with L′ chosen by the coordinator's 07:04Z
 rule, taken at the period (`rule`). ε, in model units, is the sampling term (P15/P20's Poisson draw, η from the
 measured free-guess rate, P16's replica groups) plus ε_net (P18). γ is from measured hashing, with the paper ceiling
-beside it.
+beside it. Every LP (v3.1's picks, the period, the routes) hashes at every SHA-512 schedule θ admits (U13; ALGO-COST-3's
+A27b: R-hi on sm_120, unmeasured), so it is one for both hashing rates; v3's own picks stay as adopted (measured
+schedules).
 
     PUBLIC_BEST_DIR=<checkout of cursor/compute-research-accel-bet-algo-lab-ea24>/benchmarks/pouw/theory \\
         python3 benchmarks/pouw/accel_score/d6.py [--json OUT]
@@ -107,16 +109,15 @@ def quiet(f, *a, **kw):
         return f(*a, **kw)
 
 
-def job_methods(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True, paper: bool = False):
-    """D5's job at a pick with every route (d5_routes.methods), hashing at nofold's word model. paper: θ's SHA-512
-    menu with the unmeasured IMAD.HI schedule in it (the paper ceiling); else the measured schedules only."""
+def job_methods(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool = True):
+    """D5's job at a pick with every route (d5_routes.methods), hashing at nofold's word model, with every SHA-512
+    schedule θ admits in the LP (A27b: R-hi on sm_120, unmeasured). The LP is the model's, so it is one for both
+    hashing rates; the measured and paper rates differ only in the honest kernel's time (γ)."""
     r = nf.v2_round(card, K, N, t * Lp, 16, tiles=t, weight_coins=weight_coins)
     c = vc.CARDS[card][0]
     _, bit, depth = pb.BIT_COST[c.family][0]
-    m = dr.methods(c, t, Lp, K, N, bit, depth, nf.V_WIDTH[card], 1.0, digits=r["digits"], comps=r["comps"])
-    if paper:
-        name, w, _ = m["sha"]
-        m["sha"] = (name, w, {s: pb.sha_loads(c, s) for s in pb.SHA_SCHEDULES[c.family]})
+    m = dr.methods(c, t, Lp, K, N, bit, depth, nf.V_WIDTH[card], 1.0, digits=r["digits"], comps=r["comps"],
+                   model_sha=True)
     return c, m, r
 
 
@@ -159,14 +160,15 @@ _GRID: dict = {}
 
 def grid(card: str, K: int, N: int, weight_coins: bool = True) -> list[dict]:
     """Every L′ on v3's grid (t·L′ ≤ K, under the card's limit) for one round class, with its job-only leak
-    (`v3_caps.leak`: D5's LP at the round's makespan) and its γ at measured hashing (overlapped)."""
+    (`v3_caps.leak`: D5's LP at the round's makespan, every schedule θ admits) and its γ at measured hashing
+    (overlapped)."""
     key = (card, K, N, weight_coins)
     if key not in _GRID:
         _, t, lmax, _ = vc.CARDS[card]
         t = t if t * vc.LPS[0] <= K else 1
         _GRID[key] = []
         for Lp in [x for x in vc.LPS if t * x <= K and (lmax is None or x <= lmax)] or [K]:
-            lk, j, _ = vc.leak(card, K, N, t, Lp, weight_coins=weight_coins)
+            lk, j, _ = vc.leak(card, K, N, t, Lp, model_sha=True, weight_coins=weight_coins)
             _GRID[key].append(dict(t=t, Lp=Lp, leak=lk, gamma_lp=j["honest"].c,
                                    gamma=round_gamma(card, K, N, t, Lp, weight_coins)))
     return _GRID[key]
@@ -286,11 +288,11 @@ def as_picks(static: dict, pv: dict) -> dict:
 _JOB: dict = {}
 
 
-def job_lps(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool, paper: bool) -> tuple[dict, dict]:
+def job_lps(card: str, K: int, N: int, t: int, Lp: int, weight_coins: bool) -> tuple[dict, dict]:
     """A job's methods and its two LPs (dense, hull) as `price_methods` builds them, cached across designs."""
-    key = (card, K, N, t, Lp, weight_coins, paper)
+    key = (card, K, N, t, Lp, weight_coins)
     if key not in _JOB:
-        c, m, _ = job_methods(card, K, N, t, Lp, weight_coins=weight_coins, paper=paper)
+        c, m, _ = job_methods(card, K, N, t, Lp, weight_coins=weight_coins)
         _JOB[key] = (m, {wh: dr.captured(c, m, wh) for wh in ("dense", "hull")})
     return _JOB[key]
 
@@ -301,7 +303,7 @@ def serve_loads(card) -> dict:
                 issue=card.mma_issue)
 
 
-def period(card: str, model: dict, static: dict, pv: dict, paper: bool = False, beside: float = 0.0) -> dict:
+def period(card: str, model: dict, static: dict, pv: dict, beside: float = 0.0) -> dict:
     """Per credited MAC, in honest-kernel units at θ (c = SM-clocks · s8): OPT*'s period (`dense`: the honest words'
     best programs) and pub (`hull`: every route), each over the credited rounds alone and in the served period (plus
     QKᵀ, the indexer and plain PV as fixed load, and `beside` plain INT8 MACs a credited MAC of other tensor work:
@@ -327,7 +329,7 @@ def period(card: str, model: dict, static: dict, pv: dict, paper: bool = False, 
     cred = sum(it[2] for it in items)
     ms, freed_ = [], {}
     for K, N, w, p, wc in items:
-        m, lps = job_lps(card, K, N, p["t"], p["Lp"], wc, paper)
+        m, lps = job_lps(card, K, N, p["t"], p["Lp"], wc)
         ms.append((w / cred, m))
         for wh in jobs:
             box, pr = lps[wh]
@@ -513,13 +515,15 @@ def decode(static: dict) -> dict:
 
 def evaluate(static: dict, pv: dict, rates=(True, False)) -> dict:
     """One design at the world model: {(card, rate, model): its nofold row, period, credited share, worst round}."""
-    out = {}
+    out, pers = {}, {}
     pk = as_picks(static, pv)
     for built in rates:
         for row in nf.v2_world(0.0, built=built, picks=pk):
             card = row["card"].split(" built")[0]
             model = model_of(row["model"])
-            per = period(card, model, static, pv, paper=not built)
+            if (card, model["name"]) not in pers:
+                pers[card, model["name"]] = period(card, model, static, pv)
+            per = pers[card, model["name"]]
             out[card, "measured" if built else "paper", model["name"]] = dict(
                 card=card, rate="measured" if built else "paper", model=model["name"], world=row, period=per,
                 share=share(card, row, per), worst=worst_gamma(card, model, static, pv, built))

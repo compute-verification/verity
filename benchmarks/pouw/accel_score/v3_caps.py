@@ -23,11 +23,12 @@ CARDS = {"H200": (pb.H200, 2, None, 1e-4), "RTX PRO 6000": (pb.SM120, 3, 256, 0.
 LPS = (64, 128, 192, 256, 320, 384, 448, 512, 640, 768, 896, 1024, 1280, 1536, 1792, 2048)
 
 
-def leak(card: str, K: int, N: int, t: int, Lp: int, **kw) -> tuple[float, dict, dict]:
+def leak(card: str, K: int, N: int, t: int, Lp: int, model_sha: bool = False, **kw) -> tuple[float, dict, dict]:
     r = nf.v2_round(card, K, N, t * Lp, 16, tiles=t, **kw)
     c = CARDS[card][0]
     _, bit, depth = pb.BIT_COST[c.family][0]
-    j = dr.job(c, t, Lp, K, N, bit, depth, nf.V_WIDTH[card], 1.0, digits=r["digits"], comps=r["comps"])
+    j = dr.job(c, t, Lp, K, N, bit, depth, nf.V_WIDTH[card], 1.0, digits=r["digits"], comps=r["comps"],
+               model_sha=model_sha)
     return 1 - j["c_opt"], j, r
 
 

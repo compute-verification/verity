@@ -35,13 +35,18 @@ def _lp(hook):
         pb.linprog = orig
 
 
-def methods(card, t, Lp, K, n, bit, depth, v, hash_scale=1.0, o_route=True, zhd=True, digits=(2, 2), comps=None):
+def methods(card, t, Lp, K, n, bit, depth, v, hash_scale=1.0, o_route=True, zhd=True, digits=(2, 2), comps=None,
+            model_sha=False):
     """The job's pieces: L, the hash item, the dense method (the honest words with nofold's peel digits), every method
-    of the hull, and the deployed kernel's price. See `job`."""
+    of the hull, and the deployed kernel's price. See `job`. model_sha: the LP's hash item takes every SHA-512 schedule
+    θ admits, measured or not (U13; ALGO-COST-3's A27b: R-hi on sm_120); the deployed kernel's price keeps the
+    measured ones."""
     L = t * Lp
     if comps is not None:
         hash_scale = comps / pb.comps_per_mac(L)
     L, zleaf, sha, peels, dense, honest = pb._tile_honest(card, t, Lp, K, n, v, hash_scale)
+    if model_sha:
+        sha = (sha[0], sha[1], {s: pb.sha_loads(card, s) for s in pb.SHA_SCHEDULES[card.family]})
     dz, dy = digits
     peels = (peels[0], (dz + dy) * Lp / K, peels[2])
     honest = pb.price(card, dense, L, n, pb.TOKENS, beside=False, items=(peels, sha))
@@ -157,11 +162,12 @@ def period(card, jobs, fixed=None):
                 binding=[r for r, x in zip(names, load) if x >= T * card.s8 * (1 - 1e-6)], caps=caps)
 
 
-def job(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route=True, zhd=True, digits=(2, 2), comps=None):
+def job(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route=True, zhd=True, digits=(2, 2), comps=None,
+        model_sha=False):
     """D5's tile job with every route at A = B = 0. digits: the peels' base-128 digits of Z_X and Y_W (nofold's dz, dy;
     D5 fixes 2 + 2); the zero-high-digit route keeps one digit of Y_W. comps: SHA-512 compressions a MAC (nofold's word
-    model), which sets the hash scale over D5's 32-bit words instead of `hash_scale`."""
-    m = methods(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route, zhd, digits, comps)
+    model), which sets the hash scale over D5's 32-bit words instead of `hash_scale`. model_sha: see `methods`."""
+    m = methods(card, t, Lp, K, n, bit, depth, v, hash_scale, o_route, zhd, digits, comps, model_sha)
     best, hull = priced(card, m, "dense"), priced(card, m, "hull")
     return dict(c_opt=min(1.0, hull.c / best.c), eps_alg=1 - best.c / m["honest"].c, mix=hull.mix, best=best,
                 honest=m["honest"], hull=hull, methods=m)
