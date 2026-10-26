@@ -10,7 +10,7 @@ import Mathlib.Tactic.SplitIfs
   egress, `E' = E + chip + (mem − n · 512)`: the on-chip state and the store the fill leaves out are charged as egress.
   `hold` and the device's fill are the prover's fill, `StreamedReads`'s `answer` its answers and `keep` its keep, so a
   run the challenger accepts with `keep` returning `z` is one the prover wins. `SurvivorBound`'s `S_φ` is at least
-  `⌈n · 512/19⌉ + E + unfilled + chip`, the family's `⌈M/19⌉ + E'`.
+  `⌈n · 512/19⌉ + E + unfilled` (`unfilled = chip + (mem − fill)`), the family's `⌈M/19⌉ + E'`.
 * **The ideal game from the family** (`winIdeal_le_of_family`): `StreamedWipeMeetsFamily` at a key that is the whole
   label table, whose labels are a bijection of the key, so its real game is the ideal one and its PRF's advantage 0.
 * **What `check` publishes** (`check_accept`, `certify_certified`): an accepted `check` publishes `certify` of the
@@ -67,8 +67,8 @@ the streamed wipe's family bound (`StreamedWipeMeetsFamily`). The device's state
 streamed game whose inside is the `n · 512` bits the fill covers and whose egress is `E` plus the on-chip state plus
 the store the fill leaves out. -/
 theorem survivorBound_of_reads (hfam : Pous.Guarantees.StreamedWipeMeetsFamily) {ι : Type} {d : Device ι}
-    {C : Circuit} {B : ℕ} {s : Blocks C B} {j : Fin B} {n : ℕ} [NeZero n] (hn : 2 ^ 19 ≤ n)
-    (w : Verity.Wipe d s j (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n 2152)) (hfill : w.fill ≤ n * 512)
+    {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n : ℕ} [NeZero n] (hn : 2 ^ 19 ≤ n)
+    (w : Verity.Wipe d s b (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n 2152)) (hfill : w.fill ≤ n * 512)
     (hreads : Accounting.Assumptions.StreamedReads w) {foreignBits : ℕ}
     (hf : (n * 512 + 18) / 19 + w.egress ≤ foreignBits) :
     w.SurvivorBound foreignBits ((2⁻¹ : ℝ≥0∞) ^ 128) := by
@@ -156,7 +156,7 @@ theorem check_accept {schemes : Schemes} {p : WipeProtocol.Params} {c : Streamed
       · cases h
 
 theorem wipeSurvivorBound : WipeSurvivorBound := by
-  intro schemes p c e egressMib eps foreignBits memoryBits profile h ι d C B s j _ w hfill hegress hreads
+  intro schemes p c e egressMib eps foreignBits memoryBits profile h ι d C B s b _ w hfill hegress hreads
   obtain ⟨egress, hc⟩ := check_accept h
   obtain ⟨hk, hn, hm, -, rfl, rfl⟩ := certify_certified hc
   have heps : ((1 : ℕ) : ℝ≥0∞) / ((2 ^ 128 : ℕ) : ℝ≥0∞) = (2⁻¹ : ℝ≥0∞) ^ 128 := by

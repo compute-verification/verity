@@ -29,12 +29,12 @@ abbrev Labels (n : ℕ) : Type := Fin n → Pous.Bits 512
 /-- The streamed wipe's spot reads: `k` indices into the `n` labels. -/
 abbrev Reads (n k : ℕ) : Type := Fin k → Fin n
 
-variable {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {j : Fin B} {n k : ℕ}
+variable {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n k : ℕ}
 
 /-- **`answer` answers the wipe's accepted reads**: on every run the memory challenger accepts, from the device's state
 `σ` at the boundary, the labels `L` and the spot reads `c`, read `i`'s answer, `answer` of the device's state when the
 fill ends, the egress, the reads revealed before read `i` in order and read `i`'s index, is the label at that index. -/
-def Answers (w : Verity.Wipe d s j (Labels n) (Reads n k))
+def Answers (w : Verity.Wipe d s b (Labels n) (Reads n k))
     (answer : d.State → (Fin w.egress → Bool) → List (Fin n) → Fin n → Pous.Bits 512) : Prop :=
   ∀ σ L c, w.accepts σ L c → ∀ i : Fin k,
     answer (w.filled σ L).1 (w.filled σ L).2 (Pous.StreamedWipe.revealed c i) (c i) = L (c i)

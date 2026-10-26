@@ -16,9 +16,10 @@ session is a run of:
 * its reads answered from the device's state when the fill ends, the egress and the reads before them
   (`Accounting.Assumptions.StreamedReads`, the named premise: C5, the sequential reveal and the trusted challenger).
 
-The store the fill leaves out and the on-chip state are counted as `SurvivorBound` counts them, beside `foreign_bits`:
-in the streamed game they are egress, so nothing of the device's state goes uncounted. The labels are the ideal ones,
-uniform: the published `eps` leaves out the PRF's advantage (`prf/sha-512`), as `WipeProtocol.EXPERIMENTAL` says.
+The state the fill leaves out (`Verity.Wipe.unfilled`: the on-chip state and the store the fill doesn't reach) is
+counted as `SurvivorBound` counts it, beside `foreign_bits`: in the streamed game it is egress, so nothing of the
+device's state goes uncounted. The labels are the ideal ones, uniform: the published `eps` leaves out the PRF's
+advantage (`prf/sha-512`), as `WipeProtocol.EXPERIMENTAL` says.
 Proved from `Pous.Guarantees.StreamedWipeMeetsFamily` (`Proofs.Properties.Pous.Wipe`).
 -/
 
@@ -36,8 +37,8 @@ def WipeSurvivorBound : Prop :=
   ∀ (schemes : Schemes) (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
     (egressMib : Int) (eps : Core.Ratio) (foreignBits memoryBits : Nat) (profile : StreamedWipe.Params × Int),
     WipeProtocol.check schemes p c e = .accept ⟨true, egressMib, eps, foreignBits, memoryBits⟩ profile →
-    ∀ {ι : Type} (d : Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (j : Fin B) [NeZero c.params.labels]
-      (w : Verity.Wipe d s j (Accounting.Wipe.Labels c.params.labels)
+    ∀ {ι : Type} (d : Device ι) {C : Circuit} {B : ℕ} (s : Blocks C B) (b : Fin B) [NeZero c.params.labels]
+      (w : Verity.Wipe d s b (Accounting.Wipe.Labels c.params.labels)
         (Accounting.Wipe.Reads c.params.labels c.params.k)),
       w.fill = memoryBits → w.egress ≤ egressMib.toNat * WipeProtocol.UNIT_BITS →
       Accounting.Assumptions.StreamedReads w →

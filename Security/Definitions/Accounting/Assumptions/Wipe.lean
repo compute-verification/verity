@@ -32,8 +32,8 @@ fill ends, the wipe's egress `w.egress`, the reads revealed before it in order a
 C6, the egress's count, is not here: `w.egress` is what the certifier counts, and the property bounds it by the count
 the session publishes. A prover breaks this premise only through a channel no certifier sees, a store outside the
 device's state, or a challenger that accepts a wrong or early answer. -/
-def StreamedReads {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {j : Fin B} {n k : ℕ}
-    (w : Verity.Wipe d s j (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n k)) : Prop :=
+def StreamedReads {ι : Type} {d : Device ι} {C : Circuit} {B : ℕ} {s : Blocks C B} {b : Fin B} {n k : ℕ}
+    (w : Verity.Wipe d s b (Accounting.Wipe.Labels n) (Accounting.Wipe.Reads n k)) : Prop :=
   ∃ answer, Accounting.Wipe.Answers w answer
 
 end Accounting.Assumptions
