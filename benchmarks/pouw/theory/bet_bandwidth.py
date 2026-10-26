@@ -10,8 +10,9 @@ at the H200's rates (CALIB's theta, `benchmarks/pouw/machine_model/data/devices/
 - per protocol setting (shape, L, fold, whether the fold's states are committed too): the honest kernel's time a MAC
   under perfect overlap, its gamma against plain INT8 wgmma, and three readings of what the floor certifies:
   `c_4g` = (F / B_RF) / t_hon, the brief's time form; `c_px`, the best single price vector (FreedOfFloor's mu), an LP;
-  and `c_R` = 1 - eps under R-ACCEL-1's sum LP (`Period.FreedWithin`), where the other work Y is exact INT8 MACs on any
-  unit, valued one a MAC;
+  `c_R` = 1 - eps under R-ACCEL-1's sum LP (`Period.FreedWithin`), eps the most freed compute a credited MAC, where the
+  other work Y is exact INT8 MACs (on the tensor cores alone, or on any unit), valued one a MAC; and `c_DT`, the
+  constant of `FreedOfFloor`'s floor premise at the honest problem's dual price;
 - the hashing cap: forcing every committed word through SHA-512 (4.79 G compressions a second, CMP-107) caps c_4g at
   1024 rho_SHA / B_RF at every L, and costs gamma = (F / 1024) rho_8 / rho_SHA;
 - the F that c_R >= 0.99 needs, and the gamma an honest kernel must pay to commit it.
@@ -212,6 +213,17 @@ def jobs(reading: str, menu: str) -> dict[str, dict[str, Q]]:
     return out
 
 
+def c_dither(reading: str, menu: str, F: Q, hon: dict[str, Q]) -> Q:
+    """DITHER-THM's form (`Models.Pouw.Guarantees.Dither.FreedOfFloor`): the largest c with mu . X >= c mu . (W hon)
+    for every X the floor admits, at mu the dual of the honest problem (its kernel or none, beside Y), which
+    complementary slackness pins. That is F (mu's cheapest written bit) / (mu . hon)."""
+    Y = jobs(reading, menu)
+    _, _, duals = lp({**{k: Q(1) for k in Y}, "honest": Q(1)}, capacity_rows(reading, {**Y, "honest": hon}))
+    mu = dict(zip(resources(reading), duals))
+    bit = min(sum(mu[r] * u for r, u in wu.items()) / bits for bits, wu, _ in writers(reading).values())
+    return F * bit / sum(mu[r] * u for r, u in hon.items())
+
+
 def freed(reading: str, menu: str, F: Q, w0: Q | None, hon: dict[str, Q]) -> tuple[Q, Q, Q]:
     """(eps, W, Y on the tensor cores): the adversary held only to the floor (register bits >= F a credited MAC)
     against the best honest play (its kernel `hon`, used a MAC, or none, beside Y). `w0` caps the adversary's credited
@@ -260,7 +272,10 @@ def main() -> None:
         ("mma.sync tf32 k4", 4, "tree3", True),
     ]
     rows = []
-    print("\nsetting                              reading   F b/MAC  gamma   c_4g   c_px   c_R(TC Y)  c_R(all Y)  gamma_hash(all F)")
+    print("\nc_R = 1 - sup (freed / credited MAC) and c_DT = DITHER-THM's floor constant at the dual price, each with Y on"
+          " the tensor cores alone (TC) and on every unit (all)")
+    print("setting                              reading   F b/MAC  gamma   c_4g   c_px   c_R: TC all       c_DT: TC all"
+          "       gamma_hash(all F)")
     for shape, L, fold, commit_fold in settings:
         for reading in ("sheet", "measured"):
             use, written = honest_use(reading, shape, L, fold)
@@ -273,11 +288,13 @@ def main() -> None:
             w0 = rate("tensor.s8.k32", reading) / 10**6
             eps_tc, _, _ = freed(reading, "tc", F, w0, use)
             eps_all, _, _ = freed(reading, "all", F, w0, use)
+            cdt_tc = c_dither(reading, "tc", F, use)
+            cdt_all = c_dither(reading, "all", F, use)
             g_hash = F * rho8 / (1024 * RHO_SHA)
             name = f"{shape}, L={L}, {fold}{' +states' if commit_fold else ''}"
             rows.append((name, reading, gamma, c4g, cpx, 1 - eps_all))
             print(f"{name:36s} {reading:9s} {fmt(F):7s} {fmt(gamma):7s} {fmt(c4g):6s} {fmt(cpx):6s} "
-                  f"{fmt(1 - eps_tc):10s} {fmt(1 - eps_all):11s} {fmt(g_hash)}")
+                  f"{fmt(1 - eps_tc):4s} {fmt(1 - eps_all):8s} {fmt(cdt_tc):4s} {fmt(cdt_all):8s} {fmt(g_hash)}")
 
     print("\nR-ACCEL-1 sum LP, adversary at its best credited rate (eps there; the sup is the marginal eps above):")
     for reading in ("sheet", "measured"):
@@ -304,6 +321,14 @@ def main() -> None:
         cap = d_bit * brf[reading] / rate("tensor.s8.k32", reading)
         print(f"    {reading:9s} so at every setting the share of pooled compute R-ACCEL-1 certifies is at most "
               f"d_bit B_RF / rho_8 = {fmt(cap)} (c_R credited = d_bit F a credited MAC, and F a second <= B_RF)")
+        Y = jobs(reading, "all")
+        _, _, duals = lp({k: Q(1) for k in Y}, capacity_rows(reading, Y))
+        mu = dict(zip(resources(reading), duals))
+        per_price = {k: bits / sum(mu[r] * u for r, u in wu.items()) for k, (bits, wu, _) in writers(reading).items()}
+        computing = max(v for k, v in per_price.items() if not k.startswith("LDS"))
+        print(f"    {reading:9s} c_DT ceiling for computed (not loaded) words, at every gamma: bits a unit of mu of the best "
+              f"computing writer / the cheapest writer = {fmt(computing)} / {fmt(max(per_price.values()))} = "
+              f"{fmt(computing / max(per_price.values()))}")
 
     print(f"\nrule L, per {FLEET} H200s at the INT8 sheet peak, whole fleet on the setting (sheet reading); the model term"
           " is the same at delta = 1% and 1e-6, and the sampling terms only lower what is certified:")
