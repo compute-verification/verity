@@ -637,6 +637,39 @@ def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.Par
   link := some h.link
   rows
 
+/-- `withCoins` changes a statement's tags only for the coin server's coins, never for a keyed coin tree. -/
+theorem withCoins_tree (t : Tags) (s : CoinTree.Spec) : t.withCoins (.tree s) = t := by
+  unfold Tags.withCoins
+  rfl
+
+/-- **The session's tags at `partIns` are the compiled part's**: `verify --zk`'s (`ZkExec.zkTags`) at the keyed coin
+tree of one table and the part circuit's mask log, as `partVerdict` sets its session up. -/
+theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
+    (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
+    (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
+    (partIns tags0 circuitB pubB pj registered draw h j bindings rows).base.read.tags =
+      Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1 :=
+  congrArg (fun t => Zk.tags t (Zk.maskLogOf circuitB) 1) (withCoins_tree _ _)
+
+/-- **What the recursive setup reads of `partIns`** (piece D2's `SetupMatch`, field by field, in its order): `--zk`, the
+statement's and the session's tags, the part's circuit and staged public file, no lookup table, one table, the part's
+partition and program, no public input words, the registered reads, the draw `draw`, the inner shape, check 5's
+source, the commits, the link, `--rec-part j`, the bindings and the rows. -/
+theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
+    (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
+    (bindings : VStar.Bindings) (rows : Option (Array Registered.Port)) :
+    let i := partIns tags0 circuitB pubB pj registered draw h j bindings rows
+    i.base.read.zk = true ∧ i.base.stmtTags = tags0 ∧
+      i.base.read.tags = Zk.tags (tags0.withCoins (partCoins tags0)) (Zk.maskLogOf circuitB) 1 ∧
+      i.base.read.I.circuitFile = circuitB ∧ i.base.read.I.publicFile = pubB ∧ i.base.read.I.tables = [] ∧
+      i.base.read.I.count = 1 ∧ i.base.read.I.partition = some pj.partition ∧
+      i.base.read.I.program = some pj.program ∧ i.base.read.publicInputs = none ∧ i.base.registered = registered ∧
+      i.base.read.registered = registered.isSome ∧ i.base.read.draw = draw ∧ i.inner = some h.shape ∧
+      i.src = some h.src ∧ i.commits = some h.commits ∧ i.link = some h.link ∧ i.part = some j ∧
+      i.bindings = some bindings ∧ i.rows = rows :=
+  ⟨rfl, rfl, partIns_tags tags0 circuitB pubB pj registered draw h j bindings rows, rfl, rfl, rfl, rfl, rfl, rfl, rfl,
+    rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
+
 theorem mapM_some_ok {ε α β : Type} {f : α → Except ε β} {a : α} {b : β} (h : f a = .ok b) :
     (some a).mapM f = .ok (some b) := by
   simp only [Option.mapM, h]
