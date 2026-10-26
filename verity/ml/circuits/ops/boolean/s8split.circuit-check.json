@@ -1,0 +1,32 @@
+{
+ "definitions": {
+  "I32SumPartHalf_v1{G=64,HALF=0}": {
+   "and": 945,
+   "type": "3774c471dd1e2cd0d37ff0c01c7762ab61e4748a91a5c73320c7e5772191e406ddadf659b556967660166d650c3ff3c7603fda8e804c8d89c1ebd2bb9ae1880b"
+  },
+  "I32SumPartHalf_v1{G=64,HALF=1}": {
+   "and": 1953,
+   "type": "dce4c2fe4eb416a267958904398b24f526210442acfcf88348e7194798ebf44cdb2e4b94769ebe89b07bd771ddd6d697e8cbcc38cdbe7cc03faf6a72f3904f2c"
+  },
+  "S8AccumulatorPartHalf_v1{K=256,HALF=0}": {
+   "and": 33195,
+   "type": "60170c27b7cc198a52407c40972c14795f761517727a580dfc14015595e9a2208057aa840e25df4fde4a706c484b210a023c8d140aa8c42666dad21d3d8eeab1"
+  },
+  "S8AccumulatorPartHalf_v1{K=256,HALF=1}": {
+   "and": 33194,
+   "type": "960b64a7249cff6ab5567a84c2e8c6ab94462455db281593861af40e20ea93484dd65308c2c44099b316ed574c375f373b0dbffa3602e499c23cdb9bdc8fd433"
+  },
+  "ScaledMmS8Epilogue_v1{G=2}": {
+   "and": 5261,
+   "type": "3017f3dfd62780113c88c3b59c253da08a39bb1ec71f85061b70df09017faa6c203d0988cb0ec05cf707d016ddd59dab43260284bc2077f97db1548ca4bc1632"
+  },
+  "ScaledMmS8Epilogue_v1{G=4}": {
+   "and": 5323,
+   "type": "753e97a2fc3313234a64236468d12bfcc258d3a23d5c8e03291b088faa951fd80d471d11086239f579775e47cc7c0d36f4b5eb2885a4e308ea2e6b1e438a486e"
+  },
+  "ScaledMmS8Epilogue_v1{G=64}": {
+   "and": 7183,
+   "type": "6799a52a71ecea6420e5cc620030e7d86a5a6b648c273d27ec723711ed12229134adcd6d1fa3fc96828012626c9b3395ae7f1f809807bb923baafa7b0d73a71f"
+  }
+ }
+}
