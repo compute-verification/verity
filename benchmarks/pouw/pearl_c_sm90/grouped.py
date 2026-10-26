@@ -209,7 +209,7 @@ def tree_setup(R, dev) -> None:
 def zero_state(k: int) -> bytes:
     """The row digest of k zero FP32 words (`pearl_c.row_digest`) as pd_commit_gm reads it for a unit's filler rows: its eight
     state words, each from eight of the digest's bytes big-endian."""
-    from verity.core.protocols.pouw.schemes.pearl_c import row_digest
+    from verity.ml.protocols.pouw.schemes.pearl_c import row_digest
     return np.frombuffer(row_digest(bytes(4 * k)), ">u8").astype("<u8").tobytes()
 
 

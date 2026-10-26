@@ -36,8 +36,8 @@ from verity.ml.commitments import Commitment, Opening
 from verity.core.protocols.pouw.audit import Epoch, Sampled, TileOpening, Transcript, Verifier, Workload
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 SCHEMA = "verity-pouw/pearl-c-sm120-transcript/v2"
 #: a transcript recorded before epoch coins, salted from a beacon: read only as a recorded one (``--recorded``)

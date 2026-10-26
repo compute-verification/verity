@@ -17,7 +17,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity.core.protocols.certifier import compile_slice as CS
-from verity.core.protocols.certifier import compile_slice_v2 as V2, compile_slice_v3 as V3
+from verity.ml.protocols.certifier import compile_slice_v2 as V2, compile_slice_v3 as V3
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.ml.circuits import boolean as BL
 

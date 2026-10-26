@@ -18,7 +18,7 @@ sys.path.insert(0, str(HERE))
 
 import check as K  # noqa: E402
 import sass as S  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
 
 
 @pytest.fixture(scope="module")

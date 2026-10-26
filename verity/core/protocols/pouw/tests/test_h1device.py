@@ -14,10 +14,10 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
 
-from verity.core.protocols.pouw.circuit import h1device as D
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1device as D
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 
 ROOT = Path(__file__).resolve().parents[5]

@@ -30,7 +30,7 @@ from typing import Callable
 
 import numpy as np
 
-from verity.core.protocols.pouw.circuit import h1tile as H, seeds as SD, segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as H, seeds as SD, segment as SG
 
 M32 = (1 << 32) - 1
 P61 = (1 << 61) - 1

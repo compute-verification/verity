@@ -37,8 +37,8 @@ if str(HERE) not in sys.path:
 import producer as P  # noqa: E402
 import receipts as RC  # noqa: E402
 
-from verity.core.protocols.pouw.circuit import h1tile as HT  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
 #: Llama-3.1-8B's linears (name, n, K)
 LLAMA = [("qkv", 6144, 4096), ("o", 4096, 4096), ("gate_up", 28672, 4096), ("down", 4096, 14336)]

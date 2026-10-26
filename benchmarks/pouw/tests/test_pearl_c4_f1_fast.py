@@ -17,8 +17,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "core" /
 import f1_fast as Q  # noqa: E402
 import pearl_c4_vectors as V  # noqa: E402
 import test_pouw_pearl_c4 as T  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c4 as F  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c_work as W  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W  # noqa: E402
 import clear_work as CW  # noqa: E402
 
 

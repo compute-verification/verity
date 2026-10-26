@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import sys
 
-from verity.core.protocols.pouw.circuit.segment import _li_absorb, warp_checkpoint
+from verity.ml.protocols.pouw.circuit.segment import _li_absorb, warp_checkpoint
 
 M64 = (1 << 64) - 1
 

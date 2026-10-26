@@ -16,7 +16,7 @@ from types import SimpleNamespace
 import pytest
 
 from verity.core.protocols.certifier import compile_slice as CS, io_tie as IT, served_rows as SR
-from verity.core.protocols.certifier import served_tie as ST
+from verity.ml.protocols.certifier import served_tie as ST
 from verity.ml.commitments import hm96
 from verity.ml.commitments.frame_v3 import BitRowLeaf
 from verity.ml.commitments.indexed import RangeIndexedDomain

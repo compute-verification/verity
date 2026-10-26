@@ -270,7 +270,7 @@ using Shake256 = Sponge<24, 136>;
 using TurboShake128 = Sponge<12, 168>;
 constexpr uint8_t SHAKE_DS = 0x1F;
 
-// ---- ncp-v2 (`verity.core.protocols.pouw.circuit.ncp2`'s docstring; `pouw_native`) --------------------------------------------------------
+// ---- ncp-v2 (`verity.ml.protocols.pouw.circuit.ncp2`'s docstring; `pouw_native`) --------------------------------------------------------
 
 // Tags, as `ncp2` and `pouw_circuit` spell them (the unit tag's and the node tag's NUL included).
 #define NCP2_TAG_ROW "ncp2-row"

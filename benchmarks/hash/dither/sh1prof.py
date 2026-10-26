@@ -45,7 +45,7 @@ def main() -> int:
     argv = sys.argv[i + 1:]
     import receipts as RC
     import serve as SV
-    from verity.core.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
     from verity.core.protocols.sampled_proofs import challenger as Ch
     from tests.engine import int8_exact_gpu as G
     from verity_vllm.engine import int8_ops

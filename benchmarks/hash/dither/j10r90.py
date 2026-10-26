@@ -56,8 +56,8 @@ sys.path.insert(0, str(HERE.parents[2] / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(HERE.parents[2]))
 import j10r_units as J10R
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 #: the frozen shape's linears (n, k), s8_simple's SHAPES (MQA decoder: width 16384, 256 query heads of 64, 1 KV head,
 #: MLP 65536, 256 tokens)

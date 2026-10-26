@@ -2,7 +2,7 @@
 `EgressBucket_v1` unit, its ``row`` input port registered against the warden's signed root (`warden_rows.bucket_port`:
 unit base + t reads row t), proved by C-Flock `prove --zk` behind the Lean firewall and held by the Lean verifier's
 registered reads (`flock-verify verify --zk --registered`); each unit's one output, its 16-bit verdict, opened to the
-verifier. Standalone: no Spec holds these units yet (`verity.core.protocols.certifier.egress`).
+verifier. Standalone: no Spec holds these units yet (`verity.ml.protocols.certifier.egress`).
 
     python benchmarks/network_traces/egress_zk.py prove --bin flock-circuit --lean flock-verify --out DIR [--dry]
 
@@ -45,7 +45,7 @@ sys.path.insert(0, str(HERE))
 import warden_zk as WZ  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.crypto import lms  # noqa: E402
-from verity.core.protocols.certifier import egress as EG  # noqa: E402
+from verity.ml.protocols.certifier import egress as EG  # noqa: E402
 from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR  # noqa: E402
 from verity.core.protocols.certifier.active import DATA  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402

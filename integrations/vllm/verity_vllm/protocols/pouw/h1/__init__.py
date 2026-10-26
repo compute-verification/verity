@@ -1,5 +1,5 @@
-"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.core.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
-served int8 linear call as its own Program on bits, which `verity.core.protocols.pouw.circuit.compile` takes to H1 tile units.
+"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.ml.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
+served int8 linear call as its own Program on bits, which `verity.ml.protocols.pouw.circuit.compile` takes to H1 tile units.
 
 * **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
   the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
@@ -78,8 +78,8 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw.audit import commit_rows, weight_binding
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.sampled_proofs.challenger import CoinError

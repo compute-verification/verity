@@ -1,4 +1,4 @@
-"""Pearl-C4's tile check as a Program (`verity.core.protocols.pouw.circuit.pc4`): its primitives and float forms are the scheme's operations
+"""Pearl-C4's tile check as a Program (`verity.ml.protocols.pouw.circuit.pc4`): its primitives and float forms are the scheme's operations
 on the domain the row's admission bit admits, its units evaluate to `schemes.pearl_c4`'s forming, clean-up and checked
 words (the pinned ``test-16-nvfp4`` vector), its admission bit is `row_passes` on every row, and its partition computes
 every value in exactly one unit; its hiding Programs publish only admission bits and tile digests, their units' ports are
@@ -23,12 +23,12 @@ from verity.ml.circuits.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16W
 from verity.ml.circuits.ops.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.ml.circuits.silicon import fp32
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import pc4, plan
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import pc4, plan
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors, region_bytes
+from verity.ml.protocols.pouw.circuit import words as W
 from verity.core.protocols.pouw.protocol import DomainError
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-nvfp4")

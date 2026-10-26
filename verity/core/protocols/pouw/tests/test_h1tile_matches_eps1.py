@@ -14,9 +14,9 @@ import random
 
 import pytest
 
-from verity.core.protocols.pouw.circuit import eps1_reference as EPS
-from verity.core.protocols.pouw.circuit import h1tile as H
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import eps1_reference as EPS
+from verity.ml.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 pytestmark = pytest.mark.skipif(H.SG is None, reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
 

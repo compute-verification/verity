@@ -18,7 +18,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
-from verity.core.protocols.certifier import io_ids as I
+from verity.ml.protocols.certifier import io_ids as I
 from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden as W

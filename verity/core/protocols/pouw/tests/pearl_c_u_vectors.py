@@ -1,4 +1,4 @@
-"""U's pinned vectors (`verity.core.protocols.pouw.schemes.pearl_c_u`): ``uv run python verity/core/protocols/pouw/tests/pearl_c_u_vectors.py
+"""U's pinned vectors (`verity.ml.protocols.pouw.schemes.pearl_c_u`): ``uv run python verity/core/protocols/pouw/tests/pearl_c_u_vectors.py
 [GATE_CHECK_DIR]`` rewrites ``tests/vectors/pearl_c_u.json``.
 
 The cells come from the H100 kernel's gate problem, the one archive/pouw-blake3/pearl_c/fixture.py builds: 256 x 384 x 1,024,
@@ -22,8 +22,8 @@ from pathlib import Path
 import pearl_c_vectors as CV
 from verity.ml.circuits.silicon.models import HOPPER_BF16_WGMMA_K16
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_u as U
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_u as U
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c_u.json"
 CASE, INDEX, WEIGHT, SHAPE = "gpu-check", 5, 1, (256, 384, 1024)
@@ -182,7 +182,7 @@ def vectors(gate_dir: Path | None = None) -> dict:
         "status": U.STATUS,
         "status_detail": "equal to pearl-c-h100's CPU reference and, on these cells, to the H100 kernel's gate fixture; "
                          "silicon confirmation waits for the joint H100 request's B1 capture",
-        "module": "verity/core/protocols/pouw/schemes/pearl_c_u.py",
+        "module": "verity/ml/protocols/pouw/schemes/pearl_c_u.py",
         "problem": {"shape": list(SHAPE), "case": CASE, "index": INDEX, "weight": WEIGHT, "rows": list(ROWS),
                     "cols": list(COLS), "inputs": "verity/core/protocols/pouw/tests/pearl_c_vectors.py rows / rows_f32, as "
                                                   "archive/pouw-blake3/pearl_c/fixture.py builds them"},
