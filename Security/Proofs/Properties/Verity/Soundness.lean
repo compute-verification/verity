@@ -2,6 +2,7 @@ import Properties.Verity.Soundness
 import Proofs.Properties.Composition
 import Proofs.Accounting.JointPeriod
 import Proofs.Accounting.PouwWork
+import Proofs.Properties.Verity.Legs
 
 /-!
 # Soundness at the verifier of record, from its legs
