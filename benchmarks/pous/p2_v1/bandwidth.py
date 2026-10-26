@@ -3,7 +3,7 @@
 
     bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --out FILE
-    bandwidth.py session --store ENC --layout F --lib DIR --node NODE --verifier CMD --out DIR
+    bandwidth.py session --store ENC --layout F --lib DIR --node NODE (--verifier CMD | --connect HOST:PORT) --out DIR
                  [--windows 2] [--passes 2] [--samples 1024] [--window-s 1] [--deadline-s 1]
                  [--skip-layer L] [--expect accept|reject] [--device cuda] [--ref-decode]
 
@@ -19,7 +19,8 @@ the pass's receipt tree (`ReceiptTree`, `receipts.tree`'s, in worker processes).
 the chunk's rows, not fused into the decode kernel, so each byte is read from HBM twice.
 
 **The session.** `session` starts the verifier with `--verifier CMD` (the ssh command that runs `p2_party --stdio` on
-the auditor's host; on one host, the module itself, which certifies nothing), sends the request and answers each pass,
+the auditor's host; on one host, the module itself, which certifies nothing) or reaches `p2_party --listen` at
+`--connect HOST:PORT` (the auditor's gate port through `ssh -L`), sends the request and answers each pass,
 each window's openings (each unit's four blocks from the segment files with their PoUS vk paths, `VkPaths`, from the
 store's row digests) and returns the verifier's answer, written to `OUT/session.json` with each step's timings, and
 the line `BW VERDICT ...`. `--skip-layer L` is the cheat: it neither reads nor decodes layer L's tensors, and the
@@ -32,15 +33,14 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
 import multiprocessing as mp
 import os
-import shlex
 import socket
 import struct
 import subprocess
 import sys
 import time
+import traceback
 from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from dataclasses import dataclass
@@ -56,12 +56,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(STAGE))
 
-from verity.core.protocols.pous import setup as pous_setup  # noqa: E402
-from verity.core.protocols.pous import verifier as V  # noqa: E402
-from verity.core.protocols.pous.labels import salt_value, tag  # noqa: E402
-from verity.core.protocols.pous.schemes.p2 import P2Params  # noqa: E402
-from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts  # noqa: E402
-from verity.ml.commitments.merkle import merkle_depth  # noqa: E402
+from verity.core.protocols.pous import verifier as V
+from verity.core.protocols.pous.labels import salt_value, tag
+from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.core.protocols.remote_bandwidth import coins, p2, p2_party, receipts
+from verity.ml.commitments.merkle import merkle_depth
 
 BLOCK, UNIT = p2.BLOCK_BYTES, p2.UNIT_BLOCKS
 SALT = receipts.SALT_BYTES
@@ -174,7 +173,7 @@ def receipts_of(torch: Any, seed: bytes, sigma: Any, first: int = 0, chunk: int 
         s = sigma[lo:lo + chunk].contiguous()
         n = s.shape[0]
 
-        def const(v: int) -> Any:
+        def const(v: int, n: int = n) -> Any:
             return torch.full((n,), _s64(v), dtype=torch.int64, device=dev)
 
         g = torch.arange(first + lo, first + lo + n, dtype=torch.int64, device=dev)
@@ -255,9 +254,8 @@ class RefDecode:
     for a toy store where no GPU or library is."""
 
     def __init__(self, lib_dir: Any, build_dir: Any, params: Any, prefix: bytes) -> None:
-        import torch
-
         import layout as L
+        import torch
 
         self.torch, self.L = torch, L
         self.params, self.prefix, self.device = params, bytes(prefix), torch.device("cpu")
@@ -433,11 +431,10 @@ class Engine:
 
     def __init__(self, store: Path, layout: Path, lib: str, registration: p2.Registration, *, device: str = "cuda",
                  chunk: int = 1 << 16, readers: int = 6, skip_layer: int | None = None, ref_decode: bool = False) -> None:
-        import torch
-
         import full as F
         import layout as L
         import stage as S
+        import torch
 
         self.torch, self.F, self.L, self.S = torch, F, L, S
         self.device = torch.device(device)
@@ -641,39 +638,51 @@ def session(a: argparse.Namespace) -> int:
     reg = registration_of_store(a.store, node)
     if a.registration is not None and p2_party.registration_of(json.loads(a.registration.read_text())) != reg:
         raise SystemExit("the store's registration is not --registration's")
-    log_f = open(out / "prover.log", "a")
+    with open(out / "prover.log", "a") as log_f:
 
-    def log(m: str) -> None:
-        print(m, file=log_f, flush=True)
-        print(m, file=sys.stderr, flush=True)
+        def log(m: str) -> None:
+            print(m, file=log_f, flush=True)
+            print(m, file=sys.stderr, flush=True)
 
-    t0 = time.perf_counter()
-    vk = VkPaths(a.store, reg.params, reg.salt, reg.root, pool)
-    engine = Engine(a.store, a.layout, a.lib, reg, device=a.device, chunk=a.chunk, readers=a.readers,
-                    skip_layer=a.skip_layer, ref_decode=a.ref_decode)
-    prover = Prover(engine, vk, pool, log)
-    setup_s = time.perf_counter() - t0
-    request = p2_party.request_of(node, windows=a.windows, passes=a.passes, samples=a.samples,
-                                  window_ns=int(a.window_s * 1e9), deadline_ns=int(a.deadline_s * 1e9))
-    log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
-                              "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
-                              "skip_layer": a.skip_layer}}))
-    with open(out / "verifier.err", "ab") as err:
-        proc = subprocess.Popen(a.verifier, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err)
+        t0 = time.perf_counter()
+        vk = VkPaths(a.store, reg.params, reg.salt, reg.root, pool)
+        engine = Engine(a.store, a.layout, a.lib, reg, device=a.device, chunk=a.chunk, readers=a.readers,
+                        skip_layer=a.skip_layer, ref_decode=a.ref_decode)
+        prover = Prover(engine, vk, pool, log)
+        setup_s = time.perf_counter() - t0
+        request = p2_party.request_of(node, windows=a.windows, passes=a.passes, samples=a.samples,
+                                      window_ns=int(a.window_s * 1e9), deadline_ns=int(a.deadline_s * 1e9))
+        log(json.dumps({"start": {"node": a.node, "units": reg.blocks, "registration": reg.digest.hex(),
+                                  "request": request, "setup_s": round(setup_s, 3), "host": socket.gethostname(),
+                                  "skip_layer": a.skip_layer}}))
+        rc = None
         t1 = time.perf_counter()
         try:
-            answer = p2_party.prove(proc.stdout, proc.stdin, prover, request, log=lambda m: None)
-        finally:
-            proc.stdin.close()
-            rc = proc.wait()
-    wall = time.perf_counter() - t1
+            if a.connect is not None:
+                host, _, port = a.connect.rpartition(":")
+                with (socket.create_connection((host, int(port))) as conn, conn.makefile("rb") as r,
+                      conn.makefile("wb") as w):
+                    answer = p2_party.prove(r, w, prover, request)
+            else:
+                with open(out / "verifier.err", "ab") as err:
+                    proc = subprocess.Popen(a.verifier, shell=True, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                            stderr=err)
+                    try:
+                        answer = p2_party.prove(proc.stdout, proc.stdin, prover, request)
+                    finally:
+                        proc.stdin.close()
+                        rc = proc.wait()
+        except Exception as e:  # noqa: BLE001 - the prover's own failure, recorded as its answer, never the verifier's
+            log(json.dumps({"prover_error": traceback.format_exc()}))
+            answer = {"verdict": "prover-error", "reason": f"{type(e).__name__}: {e}"}
+        wall = time.perf_counter() - t1
     if pool is not None:
         pool.shutdown()
     line = verdict_line(answer, a.expect)
     doc = {"answer": answer, "request": request, "registration": p2_party.registration_json(reg), "steps": prover.steps,
            "opened": prover.opened, "setup_s": round(setup_s, 3), "session_wall_s": round(wall, 3),
-           "verifier_rc": rc, "verifier": a.verifier, "prover_host": socket.gethostname(), "skip_layer": a.skip_layer,
-           "store": str(a.store), "device": a.device, "verdict_line": line}
+           "verifier_rc": rc, "verifier": a.verifier or f"tcp {a.connect}", "prover_host": socket.gethostname(),
+           "skip_layer": a.skip_layer, "store": str(a.store), "device": a.device, "verdict_line": line}
     (out / "session.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
     print(line, flush=True)
     return 0 if line.endswith("PASS") else 1
@@ -694,7 +703,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     s.add_argument("--lib", default="unused", help="libp2v1.so's directory")
     s.add_argument("--node", required=True)
     s.add_argument("--registration", type=Path, help="the registration the store must have (registration_json)")
-    s.add_argument("--verifier", required=True, help="the shell command that starts p2_party --stdio")
+    to = s.add_mutually_exclusive_group(required=True)
+    to.add_argument("--verifier", help="the shell command that starts p2_party --stdio")
+    to.add_argument("--connect", help="HOST:PORT where p2_party --listen waits (the gate's port, through ssh -L)")
     s.add_argument("--out", type=Path, required=True)
     s.add_argument("--windows", type=int, default=2)
     s.add_argument("--passes", type=int, default=2)

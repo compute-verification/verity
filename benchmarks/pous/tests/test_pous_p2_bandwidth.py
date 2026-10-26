@@ -21,11 +21,11 @@ torch = pytest.importorskip("torch")
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
-from p2_v1 import bandwidth as B  # noqa: E402
+from p2_v1 import bandwidth as B
 
-from verity.core.protocols.pous import verifier as V  # noqa: E402
-from verity.core.protocols.pous.schemes.p2 import P2Params  # noqa: E402
-from verity.core.protocols.remote_bandwidth import p2, receipts  # noqa: E402
+from verity.core.protocols.pous import verifier as V
+from verity.core.protocols.pous.schemes.p2 import P2Params
+from verity.core.protocols.remote_bandwidth import p2, receipts
 
 SEED = hashlib.sha512(b"test_pous_p2_bandwidth/seed").digest()
 
@@ -119,8 +119,26 @@ def test_the_toy_served_through_the_staging_decode_is_accepted_and_a_skipped_lay
     assert a["verdict"] == "reject" and a["failure"] == "receipt"
 
 
+def test_a_session_reaches_a_listening_verifier_which_records_its_answer(tmp_path) -> None:
+    """The gate's shape: `p2_party --listen` on the auditor, the prover at `--connect`, the answer in `--answer`."""
+    reg = B.toy(tmp_path / "toy")
+    verifier = subprocess.Popen([sys.executable, "-m", "verity.core.protocols.remote_bandwidth.p2_party",
+                                 "--registration", str(tmp_path / "toy" / "registration.json"),
+                                 "--listen", "127.0.0.1:0", "--answer", str(tmp_path / "answer.json")],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, cwd=ROOT)
+    port = json.loads(verifier.stdout.readline())["listening"]
+    assert B.main(["session", "--store", str(tmp_path / "toy" / "store"), "--layout", str(tmp_path / "toy" / "layout.json"),
+                   "--node", reg.node.decode(), "--connect", f"127.0.0.1:{port}", "--device", "cpu", "--ref-decode",
+                   "--samples", "8", "--windows", "1", "--passes", "1", "--window-s", "0.001", "--deadline-s", "0.001",
+                   "--workers", "1", "--out", str(tmp_path / "out"), "--expect", "accept"]) == 0
+    assert verifier.wait() == 0
+    mine = json.loads((tmp_path / "answer.json").read_text())
+    assert mine == json.loads((tmp_path / "out" / "session.json").read_text())["answer"]
+    assert mine["verdict"] == "accept" and mine["receipts"] == reg.blocks
+
+
 def test_the_cli_runs_as_a_script(tmp_path) -> None:
-    p = subprocess.run([sys.executable, str(HERE / "p2_v1" / "bandwidth.py"), "toy", str(tmp_path)], capture_output=True,
-                       text=True, cwd=ROOT)
+    p = subprocess.run([sys.executable, str(HERE / "p2_v1" / "bandwidth.py"), "toy", str(tmp_path)], check=False,
+                       capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout)["units"] == 8

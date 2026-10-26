@@ -19,8 +19,8 @@ record of PoUS's setup, `registration_json`), never the prover's word for it, an
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
   8,224 bytes each, over the session's span.
 
-`python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT)` is the
-verifier's side (`main`). `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s
+`python -m verity.core.protocols.remote_bandwidth.p2_party --registration FILE (--stdio | --listen HOST:PORT)
+[--answer FILE]` is the verifier's side (`main`). `prove(reader, writer, prover)` is the prover's: it answers each message with `prover`'s
 `hold`, `run` and `open` until the answer, which it returns.
 
 No Lean replays a P2 session yet (`RemoteAudit.P2` checks one opening); the verdict here is the Python session's.
@@ -270,6 +270,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     where = ap.add_mutually_exclusive_group(required=True)
     where.add_argument("--stdio", action="store_true", help="the channel is this process's stdin and stdout")
     where.add_argument("--listen", help="HOST:PORT to accept one prover on (port 0: any, printed as {\"listening\"})")
+    ap.add_argument("--answer", type=Path, help="where to write the answer too: the verifier's own record of it")
     a = ap.parse_args(argv)
     reg = registration_of(json.loads(a.registration.read_text()))
 
@@ -286,6 +287,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             conn, _ = srv.accept()
             with conn, conn.makefile("rb") as r, conn.makefile("wb") as w:
                 out = session(r, w, reg, coins=secrets.token_bytes(64), log=log)
+    if a.answer is not None:
+        a.answer.write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
     log(f"answer {out['verdict']} {out.get('failure') or ''} q_bytes={out.get('q_bytes')} host={socket.gethostname()}")
     return 0
 
