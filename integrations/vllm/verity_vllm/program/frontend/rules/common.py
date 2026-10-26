@@ -75,7 +75,7 @@ def attention_scale(ctx, D: int, node, cap: float | None = None) -> tuple[Coll, 
         return (ctx.supplied(f"softcap_mul_d{D}", 32, softcap_mul_bits(D, cap), node),
                 ctx.supplied("softcap_scale_log2", 32, softcap_scale_log2_bits(cap), node))
     from verity_vllm.program.registry import b1
-    return (ctx.supplied(f"scale_log2_d{D}", 32, b1._scale_log2_bits(D), node),)
+    return (ctx.supplied(f"scale_log2_d{D}", 32, b1.scale_log2_bits(D), node),)
 
 
 def rows_of(x: Coll) -> tuple[list[Coll], tuple[int, ...]]:

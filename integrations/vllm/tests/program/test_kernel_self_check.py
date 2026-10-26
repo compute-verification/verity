@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from verity.ml.circuits.evaluation import kernels, self_check
+from verity_vllm.commit import challenge as CH
 from verity_vllm.program import registry
 from verity_vllm.program.kernels import kernel_registry as KR
 from verity_vllm.program.kernels import rows, twins
@@ -31,7 +32,7 @@ def test_every_row_family_and_twin_is_registered_with_core():
 
 @pytest.mark.parametrize("key,kernel", PAIRS, ids=[f"{k}-{kern}" for k, kern in PAIRS])
 def test_kernel_matches_the_reference(key, kernel):
-    assert KR.check(key, kernel, n=N) == []
+    assert KR.check(key, kernel, CH.generator, n=N) == []
 
 
 def test_attention_kernels_on_scores_below_two_to_the_minus_63(monkeypatch):

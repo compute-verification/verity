@@ -27,13 +27,19 @@
 #      CR_N2_ROUNDS (n2_zk.py's --rounds)  CR_N2_JOBS (members proved at once, 2)  CR_N2_WINDOWS (n2_advised_zk.py's
 #      --windows)  CR_N2_MEMBERS (its --members)  CR_N2_STANDIN=simulated (a dry run's: on the advice profile when the
 #      advice doesn't bind, the advised unit on n2_advised_zk's simulated link, labelled a stand-in)
+#      CR_N2_ARGS (more n2_advised_zk.py arguments, e.g. "--draw 4", a sampled period on the verifier's own coins)
 #      CR_N2_CMD (replaces the above; run with HONEST, CLIENT, BIN, LEAN, E2E and N2OUT set, writing N2OUT/summary.json)
 #      CR_WARDEN_RUN (the warden rehearsal's run, a path under the unpacked gates)  CR_SCAN_ARGS (more scan_zk.py
 #      arguments, e.g. "--draw 8")  CR_SCAN_CMD (replaces scan_zk.py prove; SCANOUT/summary.json)
-#      CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by default)
+#      CR_PATH=certifier-only (the records are the certifier rehearsal's alone, with no warden rows: the scan isn't run
+#      or required, and the report names what that path stubs, chain_record.STUBBED)
+#      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
+#      CR_SCAN_ONLY=1 (the scan alone, its report given no N2 summary: "scan only, N2 not given"; the record's N2 runs
+#      in jobs of its own)  CR_SERIAL=1 (n2 then scan; at once by default)  CR_CACHE (the build cache; hidden_zk's by
+#      default)
 # Kept in $OUT: the steps' records and logs, the public files and everything each verifier received; never a prover's
-# file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive or a signer's
-# state.
+# file (inst-*, prover-instances.bin, instances.bin) nor a circuit (its pin is kept), a session's archive, a signer's
+# state or a gate run's witness/ (custody uploads all of $OUT; a warden run's witness is its lane key's only).
 set -uo pipefail
 export HZ_CONFIGS=chain HZ_MEM_GB=${CR_MEM_GB:?}
 CR_CACHE=${CR_CACHE:-/workspace/research/cache/pouw-hidden-zk}
@@ -66,8 +72,8 @@ else CLIENT=$HONEST/client; [ -d "$CLIENT" ] || CLIENT=$HONEST; fi
 WARDEN=; [ -z "${CR_WARDEN_RUN:-}" ] || WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 log "chain: certifier run ${HONEST#$G/}, client ${CLIENT#$G/}, warden run ${WARDEN:-none}"
 mkdir -p "$OUT/gates"
-(cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M -print0 \
-  | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
+(cd "$G" && find . -type f \( -name '*.json' -o -name '*.jsonl' -o -name '*.log' \) -size -64M ! -path '*/witness/*' \
+  -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/gates/")
 
 setup
 "$PY" "$CR" custody --gates "$G" --out "$OUT/custody.json" 2>&1 | tee -a "$OUT/job.log" | cut -c1-2000
@@ -107,7 +113,7 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 n2() {
   export HONEST CLIENT BIN LEAN E2E N2OUT=$W/n2
   local advised="$PY benchmarks/network_traces/n2_advised_zk.py prove --bin $BIN --lean $LEAN --out $N2OUT \
-    --jobs ${CR_N2_JOBS:-2} ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS}"
+    --jobs ${CR_N2_JOBS:-2} ${CR_N2_MEMBERS:+--members $CR_N2_MEMBERS} ${CR_N2_ARGS:-}"
   if [ -n "${CR_N2_CMD:-}" ]; then cmd=$CR_N2_CMD
   elif [ "$PROFILE" != advice ]; then cmd="$PY benchmarks/network_traces/n2_zk.py prove --run $HONEST --bin $BIN \
     --lean $LEAN --out $N2OUT --jobs ${CR_N2_JOBS:-2} ${CR_N2_ROUNDS:+--rounds $CR_N2_ROUNDS}"
@@ -129,6 +135,10 @@ b = json.load(open(sys.argv[1]))["chain"]["bits"]; print((b.get("bound_why") or 
 }
 scan() {
   export WARDEN BIN LEAN SCANOUT=$W/scan
+  if [ "${CR_PATH:-}" = certifier-only ]; then
+    echo "the certifier-only path: no warden rows to scan, so no scan" > "$W/scan.why"; echo 2 > "$W/scan.rc"
+    log "chain: scan not run (CR_PATH=certifier-only)"; return
+  fi
   local wr=
   if [ -n "$WARDEN" ]; then
     if "$PY" benchmarks/network_traces/scan_zk.py prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
@@ -142,7 +152,7 @@ scan() {
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
   [ -n "$wr" ] && echo "$WARDEN" > "$W/scan.warden"
 }
-if [ -n "${CR_SERIAL:-}" ]; then n2; scan; else n2 & scan & wait; fi
+if [ -n "${CR_SCAN_ONLY:-}" ]; then scan; elif [ -n "${CR_SERIAL:-}" ]; then n2; scan; else n2 & scan & wait; fi
 
 # ---- the report --------------------------------------------------------------------------------------------------------
 "$PY" - "$OUT/job.json" "$W" <<EOF
@@ -152,14 +162,17 @@ w = Path(sys.argv[2])
 text = lambda f: (w / f).read_text().strip() if (w / f).is_file() else None
 json.dump({"run": os.environ.get("RESEARCH_RUN_ID"), "tree": "${RESEARCH_SOURCE_SHA:-$(git -C "$SRC" rev-parse HEAD 2>/dev/null)}",
            "gates": "${CR_GATES}".split(), "endpoint": os.environ.get("CR_ENDPOINT"), "profile": "$PROFILE",
+           "path": os.environ.get("CR_PATH"),
            "lean": "$(sha256sum "$LEAN" | cut -c1-64) $LEAN", "bin": "$(sha256sum "$BIN" | cut -c1-64)",
            "n2_cmd": os.environ.get("CR_N2_CMD"), "scan_cmd": os.environ.get("CR_SCAN_CMD"),
+           "scan_only": bool(os.environ.get("CR_SCAN_ONLY")),
            "rc": {"n2": text("n2.rc"), "scan": text("scan.rc")}, "why": {"n2": text("n2.why"), "scan": text("scan.why")},
            "stand_in": {"n2": text("n2.standin")}}, open(sys.argv[1], "w"), indent=1)
 EOF
 "$PY" "$CR" report --custody "$OUT/custody.json" --certs "$OUT/certs.json" --endpoint "$OUT/endpoint/report.json" \
-  --n2 "$OUT/n2/summary.json" --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
-  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") --out "$OUT/report" | tee -a "$OUT/job.log"
+  $( [ -n "${CR_SCAN_ONLY:-}" ] || echo --n2 "$OUT/n2/summary.json") --scan "$OUT/scan/summary.json" --job "$OUT/job.json" \
+  $( [ -f "$W/scan.warden" ] && echo --warden-run "$(cat "$W/scan.warden")") ${CR_AUDIT:+--audit $CR_AUDIT} \
+  --out "$OUT/report" | tee -a "$OUT/job.log"
 rc=${PIPESTATUS[0]}
 cat "$OUT/report/report.md" | tee -a "$OUT/job.log" | cut -c1-600
 log "chain: done, rc $rc"
