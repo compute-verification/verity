@@ -12,7 +12,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.protocols.certifier import advice as A, advised as AD, service as SVC
+from verity.core.protocols.certifier import advice as A, service as SVC
+from verity.ml.protocols.certifier import advised as AD
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
 
 import standin

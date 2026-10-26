@@ -36,7 +36,7 @@ from verity.ml.circuits.silicon.integer import (BLACKWELL_SM120_S8_M16N8K32, Int
                                                  s32_word)
 from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 
-import verity.core.protocols.pouw.circuit.words  # noqa: F401  (PouwNoiseByte)
+import verity.ml.protocols.pouw.circuit.words  # noqa: F401  (PouwNoiseByte)
 from verity.ml.definitions.registry import dsa, dsv4_qnorm_insert, flashmla, marlin_moe, topp_word_gates  # noqa: F401
 from verity.ml.definitions.registry.ref_prims import gather_f32
 

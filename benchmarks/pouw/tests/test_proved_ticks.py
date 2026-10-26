@@ -61,7 +61,7 @@ def test_a_family_without_a_sheet_clock_is_refused():
 
 
 def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_other_work_is_refused():
-    from verity.core.protocols.pouw.circuit import h1tile
+    from verity.ml.protocols.pouw.circuit import h1tile
 
     assert (h1tile.SCHEME, h1tile.FOLD) == (P.SCHEME, "fx1") and all("S8" in k for k in h1tile.KINDS)
     # benchmarks/datacenter's compiled s8 grid on its block, one 4 × 16 tile at K = 64 (test_datacenter's `work["a"]`):
@@ -78,7 +78,7 @@ def test_a_block_of_the_compiled_scheme_is_its_tiles_z_products_as_linears_and_o
             P.placed(wrong, grid)
 
 
-needs_h1 = pytest.mark.skipif(importlib.util.find_spec("verity.core.protocols.pouw.circuit.segment") is None,
+needs_h1 = pytest.mark.skipif(importlib.util.find_spec("verity.ml.protocols.pouw.circuit.segment") is None,
                               reason="H1's receipts (circuit.segment, E2E-120) are not on this tree")
 ROWS = Path(__file__).resolve().parents[3] / "Security" / "Proofs" / "Accounting" / "Gates" / "Rows.lean"
 
@@ -135,7 +135,7 @@ def test_placed_on_a_tiles_program_reads_census_v1(r, c, k, version):
     """The tile's Program, read as the datacenter reads a block (`logical.work`'s `mac:int8`, here census/v1's products by
     class), on v1 and on the one stream v3, is `tiles`' one tile and `placed` credits z's products. Slow on a process's first tile: census/v1 traces its
     seeds' SHA-512 on bits (about 35 s), then about 1 s a row; the fast rows above take the products from Lean alone."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     from verity.ml.circuits.census import PRODUCTS, census
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG

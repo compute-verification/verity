@@ -863,7 +863,7 @@ def unit_lowering(definition, name: str, in_rows: Sequence[tuple[str, Sequence[s
     it), of exactly its words (its bits a multiple of 16); output
     port ``o{j}`` is return field ``j``'s leaves concatenated the same way, zero-padded to whole u16 words. Every
     parameter (or each of its rows) is in one row, or is one of ``public``: a public input port before the rows, each leaf in
-    its own ceil(bits / 16) u16 words, low first (`verity.core.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
+    its own ceil(bits / 16) u16 words, low first (`verity.ml.protocols.pouw.circuit.anchors.region_words`' layout, the unit's leaves as
     `circuit.compose`'s public input ports read them). Returns the lowering and each output port's words. ``structural``:
     the unit as `struct_lower` lowers it on these ports (`TmplLowering`, the flat unit never built), else `ir_lower`'s
     (`unit_circuit`), its circuit dropped once laid out (nothing reads it after `ir_lower.layout`). ``reads``: ``inline``, each

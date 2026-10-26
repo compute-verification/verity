@@ -38,9 +38,9 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
-from verity.core.protocols.pouw.circuit import seeds as SD
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 M32 = (1 << 32) - 1
 R = C_ = 32

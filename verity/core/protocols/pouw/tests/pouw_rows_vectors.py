@@ -1,4 +1,4 @@
-"""Pinned vectors for the tile checks' committed rows (`verity.core.protocols.pouw.circuit.leaves`), against which C-Flock's ports are
+"""Pinned vectors for the tile checks' committed rows (`verity.ml.protocols.pouw.circuit.leaves`), against which C-Flock's ports are
 mapped: ``uv run python
 verity/core/protocols/pouw/tests/pouw_rows_vectors.py`` rewrites ``tests/vectors/pouw_rows.json``.  A change to that file is a change to
 a row schema and needs a reason in the PR.
@@ -19,8 +19,8 @@ from pathlib import Path
 
 from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, ROW_SEG_BYTES, SCHEMA_HM96_SHA512_ROW_SEG, row_bytes,
                                         sha512_row_seg_segment_prefix, sha512_row_seg_segments)
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.schemes import pearl_c as C
 
 OUT = Path(__file__).with_name("vectors") / "pouw_rows.json"
 ROLES = {"x": ROLE_X, "w": ROLE_W}

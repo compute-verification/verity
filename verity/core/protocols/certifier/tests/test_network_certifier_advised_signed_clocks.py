@@ -14,7 +14,8 @@ from fractions import Fraction
 import pytest
 
 from verity.ml.commitments.identity import tagged_sha512
-from verity.core.protocols.certifier import advice as A, advised as AD, service as SVC
+from verity.core.protocols.certifier import advice as A, service as SVC
+from verity.ml.protocols.certifier import advised as AD
 from verity.core.protocols.certifier.certificate import CLOCK_TAG, SALT_BYTES, CertifiedClock, Direction, Issuer, \
     SignerRefused, clock_commitment, clock_digest, parameters_digest
 from verity.core.protocols.certifier.schedule import ClockSync, SyncSet

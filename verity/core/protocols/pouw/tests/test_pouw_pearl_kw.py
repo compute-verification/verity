@@ -14,8 +14,8 @@ import pytest
 import pearl_vectors as PV
 from verity.ml.crypto.blake3 import blake3
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, PoUWScheme, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))

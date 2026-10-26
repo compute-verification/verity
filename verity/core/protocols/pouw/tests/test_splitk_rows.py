@@ -9,7 +9,7 @@ import pytest
 
 import splitk_rows_vectors as V
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 
 
 def test_the_pinned_vectors_are_the_chunk_rows():

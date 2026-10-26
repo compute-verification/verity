@@ -7,8 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 #: the liveness screen's relative band, far wider than its FP32 error (2⁻²³)
 BAND = 2.0 ** -10

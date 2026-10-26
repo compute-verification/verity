@@ -1,7 +1,7 @@
 """Pearl-C's sm_120 GPU check fixture, built off the card (needs verity and numpy): inputs at a small shape and every buffer
 pearl_c_sm120.cu's kernels write, in its row-major layout (A' and B~'s codes and the transposed F lines in K32 order along k,
 `k32`; every product over k is the unpermuted operands'), for forming v1 on `pearl_c_device.SM120` (G = 4) and
-`SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity.core.protocols.pouw.schemes.pearl_c` on the device record; the products
+`SM120_UNPROMOTED`.  Forming, lines and hashes come from `verity.ml.protocols.pouw.schemes.pearl_c` on the device record; the products
 over every cell are batched in numpy (the chains by the twin, `benchmarks/pouw/pearl_c/twin.py`, the peel with
 `verity.ml.kernels.tc.group_sum_total_batch` on the record's peel step; the H100 fixture's helpers,
 `benchmarks/pouw/pearl_c/fixture.py`, do the rest), and one whole 64 x 64 tile per variant is
@@ -48,9 +48,9 @@ from verity.ml.kernels.tc import group_sum_total_batch  # noqa: E402
 from verity.core.protocols.pouw.audit import (ROW_SCHEMA, TILE_SCHEMA, Epoch, Workload, activation_binding, commit_rows,  # noqa: E402
                                rows_domain, transcript_domain, weight_binding)
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, Tile  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_c as C  # noqa: E402
-from verity.core.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
-from verity.core.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_c as C  # noqa: E402
+from verity.ml.protocols.pouw.schemes import pearl_kw as P  # noqa: E402
+from verity.ml.protocols.pouw.schemes.pearl_c_device import (  # noqa: E402
     DEVICES,
     SM120,
     SM120_UNPROMOTED,

@@ -1,4 +1,4 @@
-"""The tile checks' committed rows and tile digest (`verity.core.protocols.pouw.circuit.leaves`): the row schemas' words and commit strings
+"""The tile checks' committed rows and tile digest (`verity.ml.protocols.pouw.circuit.leaves`): the row schemas' words and commit strings
 are the pinned vectors (``pouw_rows_vectors``), each row's bytes are the tensor's memory, a row's commit string is core's
 over `sha512/row-seg/v1` or `sha512/row/v2` at every padding and segment edge, the pinned row-seg rows are rebuilt from the
 spec and core's own row-seg vectors are PoUW's rows, each unit's statement rows are its ports' schemas, and the tile digest
@@ -21,9 +21,9 @@ from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_RO
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.ops.scalar import BitAnd, SelectBf16
 
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc4, pc8, rowk
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc4, pc8, rowk
+from verity.ml.protocols.pouw.schemes import pearl_c as C
 
 PINNED = json.loads(V.OUT.read_text())
 
@@ -86,7 +86,7 @@ def test_every_per_call_row_but_ok_the_tile_the_caps_and_the_cuts_is_a_row_seg_r
     digest, the cap's rows and the cut's six: A_i, A′_i ‖ P_A,i of both checks and A's salt-dead counts.  Every other row,
     each registered row (role W) and the cap's chunk digests and strip row (64 words, one whole block, so a unit that reads
     or writes one hashes a block before its last) included, is a `sha512/row/v2` row: no row is `sha512/row/v1`."""
-    from verity.core.protocols.pouw.circuit import cap
+    from verity.ml.protocols.pouw.circuit import cap
 
     used = {(row, role) for ports in (pc4.PORTS, pc8.PORTS, {"side": pc8.SIDE_PORTS}, cap.PORTS, rowk.PORTS4,
                                       rowk.PORTS8)
@@ -143,7 +143,7 @@ def test_advice_is_in_no_read_set():
     `pc8`'s units names its advice apart from its rows and regions; a tile with the cap's advice has the same statement
     rows as without, so no committed row (and no link, which reads one) holds a bit of it; and advice that is also a
     row's port or a public input region, or that names an output, is refused."""
-    from verity.core.protocols.pouw.circuit import cap
+    from verity.ml.protocols.pouw.circuit import cap
 
     for role, unit in pc8.PORTS.items():
         bound = {p for _r, _rl, ps in unit["rows"] for p in ps} | set(unit["regions"])

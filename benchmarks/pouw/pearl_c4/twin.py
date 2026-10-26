@@ -3,7 +3,7 @@ from its 64 A rows and 64 B rows (BF16 words) and the job's seeds.
 
 The per-element and per-word work is batched over `verity.ml.kernels.tc`' bit-exact steps: the noise atoms, the noisy block
 scales and the E2M1 cast, the chain, the fused A′·F_B and B̃·F_A, and the peel.  The per-row statistics, the lines and
-P_B's FP32 FMA chain come from the scalar reference (`verity.core.protocols.pouw.schemes.pearl_c4`).  The FP4 bench arm's gate compares
+P_B's FP32 FMA chain come from the scalar reference (`verity.ml.protocols.pouw.schemes.pearl_c4`).  The FP4 bench arm's gate compares
 the device's sampled tiles with `tile`; benchmarks/pouw/tests/test_pearl_c4_twin.py holds it to the scalar reference.
 """
 
@@ -15,9 +15,9 @@ import numpy as np
 from verity.ml.kernels.tc import block_scaled_batch, group_sum_total_batch
 from verity.ml.circuits.silicon import fp32
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_NVF4, HOPPER_BF16_M16N8K16
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 T = F.TILE
 R = F.R

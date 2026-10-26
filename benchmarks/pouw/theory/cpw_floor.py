@@ -39,7 +39,7 @@ import random
 import sys
 from fractions import Fraction
 
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 #: Sm120.lean at a495f9c5dd: N_w, ♭'s word floor (IMMA16832, LDSM_X4), fold (ALU, IMAD) and skip (NOROW), S
 NW = 128

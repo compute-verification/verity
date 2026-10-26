@@ -11,13 +11,13 @@ import importlib
 
 import pytest
 
-from verity.core.protocols.pouw.circuit import compile as C
-from verity.core.protocols.pouw.circuit import h1tile as H
+from verity.ml.protocols.pouw.circuit import compile as C
+from verity.ml.protocols.pouw.circuit import h1tile as H
 
 
 def _segment_present() -> bool:
     try:
-        importlib.import_module("verity.core.protocols.pouw.circuit.segment")
+        importlib.import_module("verity.ml.protocols.pouw.circuit.segment")
     except ImportError:
         return False
     return True

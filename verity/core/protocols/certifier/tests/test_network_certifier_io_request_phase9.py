@@ -20,7 +20,7 @@ import inspect
 
 import pytest
 
-from verity.core.protocols.certifier import io_request as Q
+from verity.ml.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import warden as W
 from verity.core.protocols.certifier.active import DATA, HEADER, id_request
 

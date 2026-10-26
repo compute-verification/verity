@@ -15,8 +15,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from verity.core.protocols.certifier import arith_encode as AE
-from verity.core.protocols.certifier import compile_slice as CS
+from verity.ml.protocols.certifier import arith_encode as AE
+from verity.ml.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SR
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 

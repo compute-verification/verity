@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The draw is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.core.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.ml.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -464,7 +464,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
 # --- the draw --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.core.protocols.pouw.circuit.plan import record_k
+    from verity.ml.protocols.pouw.circuit.plan import record_k
 
     return record_k(epsilon, delta)
 

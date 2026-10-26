@@ -69,9 +69,9 @@ from typing import Any
 
 from verity.core.protocols.pouw.audit import Epoch, Workload, hm96_kernel_constants, rows_domain, transcript_domain
 from verity.core.protocols.pouw.protocol import Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
     SCHEDULES,
     SERIAL,
@@ -170,7 +170,7 @@ def schedule_of(name: str | Schedule, scheme: C.PearlC) -> Schedule:
 
 def scheme_of(name: str, **instance: Any) -> C.PearlC:
     """The scheme `name` names (`SCHEMES`); `instance` (``k_min``, ``tile``) makes a test instance."""
-    from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+    from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
     if name not in SCHEMES:
         raise KeyError(f"{name!r}: this device path runs {', '.join(SCHEMES)}")
     sid = SchemeId.parse(name)

@@ -16,8 +16,8 @@ import struct
 from pathlib import Path
 
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
 
 OUT = Path(__file__).with_name("vectors") / "pearl_c4.json"
 #: (case, format, shape, unit index, weight id, test instance[, hashing]); the tile is the whole test shape, or the first

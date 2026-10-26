@@ -1,7 +1,7 @@
 """PoUW's `ncp-v2` in the model Program: `NcpLinearRow_v1{K,N}` and `NcpLinearRowBias_v1{K,N}`, one row of a PoUW linear's
 served output without and with its bias.
 
-A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity.core.protocols.pouw.circuit`), and its served y depends on x and W
+A PoUW linear's call is its own `NcpLinear_v1` Program call (`verity.ml.protocols.pouw.circuit`), and its served y depends on x and W
 alone: the noise cancels in Z = A·Bᵀ, which is exact. So one row of the model Program at a PoUW site is this Definition.
 It quantizes the row and each weight row with the adapter's quantizer (`protocol_options.pouw.quantize`,
 ``verity.pouw.symmetric-int7-rowmax-rne-f32/v1``):

@@ -10,9 +10,9 @@ import types
 from collections import Counter
 
 from verity.ml.circuits.types import Tuple
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import reference as R
-from verity.core.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import reference as R
+from verity.ml.protocols.pouw.schemes import pearl_c as C
 
 
 def f32(x: float) -> int:

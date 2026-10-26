@@ -156,7 +156,7 @@ def custody(gates: Path) -> dict:
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
     from verity.ml.crypto import lms
-    from verity.core.protocols.certifier import advised as AD
+    from verity.ml.protocols.certifier import advised as AD
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
@@ -510,7 +510,8 @@ def leak(run: Path, scan: dict | None = None, weights_bits: int = WEIGHTS_BITS) 
     registered, 32 + KO·IDB a request if ``prog`` were an input only at its anchored entries), no faulty term with
     every unit drawn, b = NS + NV, and Dj = 1. The period's link-windows and requests scale the run's own."""
     import scan_zk as SZ
-    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+    from verity.ml.protocols.certifier import ingress_scan as IS
+    from verity.core.protocols.certifier import warden as W
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}
     if not dep or not v.get("windows") or not v.get("requests"):
