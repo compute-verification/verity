@@ -3703,7 +3703,10 @@
    "type_hash": "9a2761d958d2d306a7d19b3244834d2b40d50f94d9553792ff9ad8de177c92ab"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundP2": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": ["Accounting.SecurityProofs.Remote.SketchBoundP2 : Accounting.Guarantees.Remote.SketchBoundP2"],
+   "assumptions": [],
+   "type_hash": "95231e6b3429b39ef547efa5374afdc67d4d10d42ccc1ea105c29600255be1ab"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundSession": {
    "owner": "@memory-accounting",
@@ -11470,6 +11473,7 @@
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledPerWindowV1Counted": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decision stream and counts under a count code (AdviceV1.bitsCounted: the decisions' charge, the mirror of arith_encode.py's reference_charge, plus any count code's length, lengths meeting Kraft) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "Accounting.SecurityProofs.Remote.SketchBoundLine": "frozen (no-function,hash): It carries the receipts' sketch bound to the memory line's coins (Accounting.Remote.Draw.Coins n κ X at X a sketch outcome, the space LineHeld is stated over), not the verifier's code: SketchBound at δ on the line's trace read on the sketch outcomes (Accounting.Remote.Held.Trace.sketch, a block computed on outside the node counted with the chips') is SketchBoundAt at δ on the line's trace, so Accounting.SecurityProofs.Remote.SketchBoundDeployed on that trace, its prover's coins carrying the openings coins, gives LineHeld's SketchBoundAt premise at its δs, timing.sketch_failure (red team RD-25, note:20261025T0040Z-report-sketch-lift).",
+   "Accounting.SecurityProofs.Remote.SketchBoundP2": "frozen (no-function,hash): It is Accounting.SecurityProofs.Remote.SketchBoundSession at the P2 store's receipts (units of four 2,056-byte blocks, 257 sectors, 16 sign rows, SHA-512 tags) and rank 12, as Accounting.SecurityProofs.Remote.SketchBoundDeployed is at 4096-byte blocks' 128 sectors, with at most Q + P candidate seeds and Q receipt-hash queries for Q the hashes the prover can try over the session: SketchBound at Q/2^96 + (Q + P)(ε + N/2^512) + (Q + P)^2/2^257 under SketchRank 16 257 12 ε and SketchHashRandom at ε_ro = (Q + P)^2/2^257, the sign keys' birthday among at most Q + P seeds (drafted for the P2 store, not decided; note:20261025T2335Z-report-bw-block)",
    "NetTiming.SecurityProofs.EncardChargedLeWhole": "frozen (no-function): It counts each window's decisions, hits and order entries by WindowCharge.charges, the definitions' mirror of window_charge.py's reference_window (ChargeCount_v2{N, H, O}'s charge, every count coded inside the coder as code_v1 codes it), not a compiled program's code: circuit-check holds ChargeCount_v2's circuit to that reference, and no Lean program of the network check computes the charge yet, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardAccSeqsWithinLeConstantRateV1Whole": "frozen (no-function): It bounds AccSeqsWithin with each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder), the observation sequences an abstract Program accepts with advice within the caps, not runs of the network check's code, and takes no assumption about the charge; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
    "NetTiming.SecurityProofs.EncardDecodableWithinLeCompiledV1Whole": "frozen (no-function,world-unlisted): It is stated over an arbitrary certifier Interaction, each window's decisions, hits and order entries (WindowCharge.bits: ChargeCount_v2's whole-window charge, the mirror of window_charge.py's reference_window, every count coded inside the coder) and an abstract compiler, and takes JitterBounded and W2 (Regenerates) about the Interaction, and CompilerPrecommitted and CompilerDeterministic about the compiler, not the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
@@ -11735,6 +11739,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.DeclaredCircuitRequirement",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
@@ -11792,6 +11797,7 @@
     "Accounting.SecurityProofs.Remote.LiveCoinsDrawn",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -11812,6 +11818,7 @@
    },
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -13710,6 +13717,13 @@
    },
    "guarantees": ["Accounting.SecurityProofs.Remote.SketchBoundLine"]
   },
+  "Definitions.Accounting.Guarantees.RemoteSketchP2": {
+   "digest": "47a18e25c5d7f0d519635325bfbbe628c5618d0728d5137548f539c135ad2d23",
+   "definitions": {
+    "Accounting.Guarantees.Remote.SketchBoundP2": "6ccd02d822a0bf11815b61ac9b628897c5ddec7d3d0afc1cf5ecba997bf65dcc"
+   },
+   "guarantees": ["Accounting.SecurityProofs.Remote.SketchBoundP2"]
+  },
   "Definitions.Accounting.Guarantees.Requirement": {
    "digest": "7a21f16296c6f5514f2dd726a10ec31d1e2e1490f70224f575c8f058aade0f4b",
    "definitions": {
@@ -14933,6 +14947,7 @@
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
@@ -15140,6 +15155,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -15218,6 +15234,7 @@
    "guarantees": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession"
    ]
   },
@@ -16107,6 +16124,7 @@
     "Accounting.SecurityProofs.RateAuditTensorSketchRank",
     "Accounting.SecurityProofs.RateTensorSketchTable",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservationSketch",
     "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
@@ -21381,6 +21399,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionConservation",
     "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
@@ -22876,6 +22895,7 @@
     "Accounting.SecurityProofs.Remote.PooledDraw",
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
     "Accounting.SecurityProofs.Remote.SketchBoundLine",
+    "Accounting.SecurityProofs.Remote.SketchBoundP2",
     "Accounting.SecurityProofs.Remote.SketchBoundSession",
     "Accounting.SecurityProofs.RemoteSessionRoutes",
     "Accounting.SecurityProofs.RemoteSessionRunConservation",
