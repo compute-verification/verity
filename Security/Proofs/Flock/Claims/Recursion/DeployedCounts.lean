@@ -90,9 +90,11 @@ theorem hmOut_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArr
   · obtain ⟨ls, hls⟩ := hm_parse_check hc
     exact g_of_range hls hr hk hcnt
   · obtain ⟨ls, hls⟩ := hm_parse_check_any hc
-    exact g_of_range hls hr hk hcnt
+    have hg := g_of_range (c := c₀) hls hr hk hcnt
+    exact hg
   · obtain ⟨ls, hls⟩ := hm_parse_check_any hc
-    exact g_of_range hls hr hk hcnt
+    have hg := g_of_range (c := c₀) hls hr hk hcnt
+    exact hg
 
 /-- `n` instances in `2^nbl` blocks of `g`, at `m ≤ 35` and `g · 2^7 ≤ 2^k_log`: at most `2^28`. -/
 theorem Counts.n_le {st : Stmt} (C : Counts st) : st.pub.n ≤ 268435456 := by
@@ -304,7 +306,7 @@ theorem resSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
   unfold ResLower.resSetupSt
   repeat' split
   all_goals first
-    | (simp; done)
+    | exact Nat.zero_le _
     | (rw [List.length_append]
        refine le_trans (Nat.add_le_add (commitIns_length_le _ _) (commitIns_length_le _ _)) ?_
        have hr := residualRows_size ‹_›
@@ -316,7 +318,7 @@ theorem openSetupSt_length_le (src : Option RecCoins.Source) (st : Stmt) :
   unfold ResLower.openSetupSt
   repeat' split
   all_goals first
-    | (simp; done)
+    | exact Nat.zero_le _
     | (refine le_trans (commitIns_length_le _ _) ?_
        have hd := openRows_dirs_le ‹_›
        omega)
@@ -363,7 +365,8 @@ theorem registered_staged {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : �
   split_ifs at h
   · simp at h
   have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
-  exact ⟨r, p, hr, hp, raw_ins_registered (RecRaw.ins_base (toOption_eq_some h'))⟩
+  have hreg := raw_ins_registered (RecRaw.ins_base (toOption_eq_some h'))
+  exact ⟨r, p, hr, hp, hreg⟩
 
 /-- **The registrations `x` carries are of size at most `K`**: wherever a part of `x` carries registration bytes the
 verifier reads as ports `own`, some `D` bounds each port's opening (`2 + log2ceil leaves` inputs) and
