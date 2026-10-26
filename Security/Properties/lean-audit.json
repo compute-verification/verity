@@ -39,6 +39,7 @@
   "Properties.RemoteAudit.Line",
   "Properties.RemoteAudit.Schedule",
   "Properties.RemoteAudit.Live",
+  "Properties.RemoteAudit.Component",
   "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod"
  ],
  "proved_in": ["../Proofs"],
@@ -403,7 +404,8 @@
     "Properties.RemoteAudit.Line",
     "Properties.RemoteAudit.Line.Premises",
     "Properties.RemoteAudit.Line.Record",
-    "Properties.RemoteAudit.Schedule"
+    "Properties.RemoteAudit.Schedule",
+    "Properties.RemoteAudit.Component"
    ],
    "why": "the properties are stated against the verifier's own functions, on Lean core: nothing of Mathlib or of `security`",
    "sealed": true
@@ -458,6 +460,11 @@
    ],
    "except": [],
    "why": "the memory line of record is stated against the line's and the verifier's own functions (RemoteAudit) and the memory model's trace, paced session, draw and premises (Definitions.Accounting.Remote, Definitions.Accounting.Assumptions), its probability `Pouw.pr` (Definitions.Pouw.Basic); never a proof"
+  },
+  "Properties.RemoteAudit.Component": {
+   "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
+   "except": [],
+   "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
   },
   "Properties.RemoteAudit.Schedule": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],
@@ -1732,6 +1739,12 @@
    "signature": ["Properties.Pouw.Window.workAtRefuses : Properties.Pouw.Window.WorkAtRefuses"],
    "assumptions": [],
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09"
+  },
+  "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Component.acceptIsVerified": {
+   "owner": "@memory-accounting"
   },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "owner": "@memory-accounting",
@@ -3100,6 +3113,14 @@
    },
    "Properties.RemoteAudit.recordKeptAfterDraw": {
     "function": "RemoteAudit.Session.run",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Component.acceptIsVerified": {
+    "function": "RemoteAudit.Protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.RemoteAudit.Component.SecurityProofs.lineHeldAtComponent": {
+    "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Line.lineChecked": {

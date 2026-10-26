@@ -76,9 +76,16 @@ def certified(record: audit.Record) -> tuple[dict[str, Any], dict[str, Any]]:
 
 
 def answer(session: audit.Session) -> dict[str, Any]:
-    """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it."""
+    """The session's answer in the core interface's canonical form, as `RemoteAudit.Protocol.check` gives it. Like the
+    check (`RemoteAudit.Protocol.sessionOf`), it refuses the sessions no property of the Lean covers: one drawn more than
+    one window an openings coin (`groups_per_coin` above 1) and one paced at one window in flight."""
     out = {"commitment": session.registration.digest.hex(), "profile": None, "protocol": PROTOCOL, "public": None,
            "reason": None}
+    if session.params.groups_per_coin != 1:
+        return out | {"reason": "groups_per_coin is 1: no property covers an openings coin over more than one window",
+                      "verdict": "reject"}
+    if session.params.pace is not None and session.params.pace.in_flight == 1:
+        return out | {"reason": "in_flight is 2: no property covers one window in flight", "verdict": "reject"}
     outcome = session.outcome
     if outcome == "accepted":
         public, profile = certified(session.record())
