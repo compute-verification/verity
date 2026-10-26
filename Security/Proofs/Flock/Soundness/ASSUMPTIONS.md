@@ -240,7 +240,7 @@ to prove: the derived column placements) in place of `pp`, and without `hA3`: th
 design, and the `_exec` forms at uniform byte tapes (`Binding/E2E.lean`). `flock_e2e_count_exec_hm96` takes `hks`
 and `hS`; the other three don't.
 
-**What it bounds.** The headline bounds faulty units of the pinned rows circuit; "computes the Definition" additionally
+**What it bounds.** The headline bounds faulty proof blocks of the pinned rows circuit; "computes the Definition" additionally
 needs `RowsCert` per template and the Definition's Boolean semantics in Lean (The circuit and the certificate, below).
 Once every Definition lowers to a Boolean circuit over AND, XOR and NOT (lane proofs-ir; Daniel, Sep 30), a generic
 Boolean-semantics lemma replaces the per-template `RowsCert`.
@@ -376,7 +376,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 ## Named hypotheses of the proof
 
 - **The circuit and the certificate** (no hypothesis). The end-to-end theorems are about `C = Prog.circuit`, the circuit
-  the statement's rows make, each unit its template's rows; "faulty" is measured there. The headline bounds faulty units
+  the statement's rows make, each unit its template's rows; "faulty" is measured there. The headline bounds faulty proof blocks
   of the pinned rows circuit; "computes the Definition" additionally needs `RowsCert` per template and the Definition's
   Boolean semantics in Lean. That is a separate theorem, `IsRowsUnit.computes_of_cert`
   (`Certificate.lean`): when the unit's rows are the rows `GateRows.rows G L` derives from a gate circuit
@@ -414,9 +414,9 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse trace's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
-| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn faulty unit accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
-| `Partition.LoweringSound` | — | a drawn faulty unit lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
-| `IsHarmBound` | `H` | every set of faulty units with acceptance probability at least `δ` has harm (a consumer's weight per faulty unit) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
+| `Partition.SessionSound` | `ε` | oracle layer only: a session with a drawn faulty proof block accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |
+| `Partition.LoweringSound` | — | a drawn faulty proof block lies in a session table whose statement no committed table satisfies | the lowering theorem (level 3, another lane) |
+| `IsHarmBound` | `H` | every set of faulty proof blocks with acceptance probability at least `δ` has harm (a consumer's weight per faulty proof block) at most `H` | the value core's `Stratified.harm_bound` returns; that implementation is not proved |
 
 Both per-unit hypotheses are averages over the whole audit, for every prover and every rule that picks a drawn unit
 before the session's first coin, not bounds state by state.

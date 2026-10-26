@@ -18,13 +18,13 @@ every machine of a census deployment, the pooled total first and the per-window 
     Space is a count: PoUS's shortness reads each window's own coins, so the period certifies at least `T − M + 1`
     windows at each δ, by `pooledShort`'s Chernoff form at `p` the windows' `eps` (#4418, given `FixedBefore`; #4413).
     Bandwidth fails with probability `T · eps`, not `eps`. Communication pays each window's own terms of the
-    certifier's itemized K every window and the faulty units once, `⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))` bits
+    certifier's itemized K every window and the faulty proof blocks once, `⌈ln(1/δ)/q⌉ · (16 + log2(N + 1))` bits
     (`HorizonLeakAccepted`, #4367, conditional on its per-window inputs until they are discharged).
   - `python -m verity_all_protocols.monitoring A/reports.jsonl B/reports.jsonl` pools windows run on several machines.
   - Communication per machine, beside it: the network certifier's `K` over a week, a month and a year
     (`communication`, `compose.communication`), at δ = 1/100 and 10⁻⁶. Where `resources.communication` pools every
     machine's windows as one sequence, this pools one machine's: each window draws its own live coins, so the faulty
-    units are paid for once over that machine's windows (`HorizonLeakAccepted`, #4367): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
+    proof blocks are paid for once over that machine's windows (`HorizonLeakAccepted`, #4367): `Fmax = ⌈ln(1/δ)/q⌉` with `q`
     the least `k_i/n_i`, `16 · Fmax + ⌈log2 (N + 1)^Fmax⌉` bits for them with `N = Σ n_i`, plus each window's schedule,
     cell, free-input and jitter terms, which add over the period (free inputs dominate while the loop's window registers
     none of its inputs), except with probability `δ + Σ_i (e_i + e'_i)`. Its `share` is K over the period's output bits,

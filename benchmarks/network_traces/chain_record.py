@@ -92,7 +92,7 @@ STUBBED = (
     "the weights' load isn't certified: nothing here shows the endpoint served the registered weights (NET-72a)")
 #: the rehearsal's strategies its own check accepts (certifier_serve.ACCEPTED): token's changed bytes only the tie refuses
 REHEARSAL_ACCEPTS = ("honest", "token")
-#: a proof unit's outputs, at most 16 bits: a faulty unit's leak
+#: a proof block's outputs, at most 16 bits: a faulty proof block's leak
 OUT_BITS = 16
 #: what `horizon_k`'s K rests on until its two per-window inputs are discharged (#4404's `compose.HORIZON_CONDITION`)
 HORIZON_CONDITION = ("NetTiming.Guarantees.HorizonLeakAccepted (#4367) is conditional: its per-window inputs hesc "

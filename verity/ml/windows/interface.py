@@ -1,9 +1,9 @@
 """What an integration hands Verity (Daniel, 24 Oct: integrations are frontends, and Verity is agnostic to them), one window
 at a time, in four records:
 
-1. **A circuit in proof units** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
+1. **A circuit in proof blocks** (:class:`Circuit`): templates, each a complete binding of a Definition in Verity's catalog
    (`catalog`), with its unit count, in order. Their population program and template query (`rows.population_program`)
-   partition it into proof units, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
+   partition it into proof blocks, and each unit's public layout is its Definition's bit rows (`layout`); ``external``
    names the ports that are the system's external I/O, ``wires`` the units that read another unit's output row whole
    (:class:`Wire`, one pattern for many units), and ``boundary`` its I/O layout as network-accounting's N1 states it. The
    window's ``circuit.json`` (`circuit_record`) holds the whole layout the verifier reads, stated per template and wire
@@ -585,7 +585,7 @@ def _committable(registered: Registered | None, ingress: Sequence[Ingress], what
 
 @dataclass(frozen=True)
 class Circuit:
-    """An integration's circuit in proof units: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
+    """An integration's circuit in proof blocks: ``templates``, each ``(template, units)`` in order, every template `catalog`'s
     and of its own descriptor id; ``external``, the ports (``<descriptor id>/<port>``) that are the system's external I/O;
     ``wires``, the units whose input rows are other units' output rows (`Wire`, `check_wires`); ``boundary``, its I/O
     layout (network-accounting's N1, ``verity/boundary/v1``), a JSON object carried as given; ``registered`` and

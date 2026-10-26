@@ -21,7 +21,7 @@ With one bit of a drawn unit's committed values flipped, it answered **⟨FLIP_V
 
 **The guarantee, at δ = 1%.** By ⟨BOUND_CITATION⟩: except with probability δ + ε_ks + ε_bind (ε_ks = ⟨EPS_KS⟩,
 ε_bind = ⟨EPS_BIND⟩), at most ⟨H_A⟩ of the block's ⟨BLOCK_ANDS⟩ ANDs (⟨H_A_SHARE⟩) and ⟨H_B⟩ of its
-⟨BLOCK_OUTPUT_BITS⟩ output bits are faulty. In proof units, the draw's own figure: at most ⟨H_UNITS⟩ of its
+⟨BLOCK_OUTPUT_BITS⟩ output bits are faulty. In proof blocks, the draw's own figure: at most ⟨H_UNITS⟩ of its
 ⟨UNITS_TOTAL⟩ units.
 
 - PoUW, on ⟨POUW_TILES⟩, ⟨POUW_TILES_DRAWN⟩ drawn: W_cert = ⟨POUW_W_CERT⟩ (⟨POUW_TILES_CREDITED⟩ tiles credited),

@@ -110,7 +110,7 @@ def test_ir_evaluation_is_the_direct_chain() -> None:
 
 
 def test_gemm_coordinate_circuit_shape() -> None:
-    """One proof unit = K/16 step gates + one cast gate (+ the zero constant): the shape the census counts over."""
+    """One proof block = K/16 step gates + one cast gate (+ the zero constant): the shape the census counts over."""
     prog, call = _standalone(bind(G.GemmCoordinate, K=1536, DOT=P.AmpereBF16TcDot16))
     circ = prog.circuit
     ids: dict[str, int] = {}
@@ -172,7 +172,7 @@ def test_sm120_coordinates_are_the_direct_chain() -> None:
 
 
 def test_sm120_coordinate_circuit_shapes() -> None:
-    """One proof unit = K/k step gates + one cast gate (+ the zero constant), each step reading the previous accumulator."""
+    """One proof block = K/k step gates + one cast gate (+ the zero constant), each step reading the previous accumulator."""
     for coord, binding, K, k, width in ((G.GemmCoordinateE4m3, G.GEMM_SM120_E4M3, 256, 32, 1 + 2 * 32),
                                         (G.GemmCoordinateNvf4, G.GEMM_SM120_NVF4, 256, 64, 1 + 2 * 64 + 2 * 4),
                                         (G.GemmCoordinateMxf4, G.GEMM_SM120_MXF4, 256, 64, 1 + 2 * 64 + 2 * 2)):

@@ -61,7 +61,7 @@ class Candidate:
     one can forfeit downstream.  A proved unit costs `ands` plus opening `rows` (bytes each) in circuit; serving commits
     `commit_bits` in `commit_rows` rows per unit whatever the law; one statement holds at most `cap` units
     (m = k_log + nbl <= 35); `per_replay` units of it lie in each replay unit of domain `replay`; and `kind` is its weight
-    class for the draw's weights (served proof units of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
+    class for the draw's weights (served proof blocks of one subcircuit, PoUW's tiles), the subcircuit itself when empty."""
 
     op: str
     template: str
