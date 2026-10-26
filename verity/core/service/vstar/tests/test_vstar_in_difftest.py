@@ -257,13 +257,15 @@ def top_sizes(v: dict) -> dict:
 
 
 TOP_SIZES = D.Port("vstar-difftest", "top_sizes", top_sizes,
-                   st.fixed_dictionaries({"m": st.integers(20, 37), "k_log": st.integers(0, 24), "claims": st.integers(0, 12),
+                   st.fixed_dictionaries({"m": st.integers(20, 37), "k_log": st.integers(6, 24), "claims": st.integers(0, 12),
                                           "holo": st.booleans()}), package=LEAN)
 
 
 def test_top_sizes_agree(server):
     """Lean's order of a rep's tops (`RecVStar.topSizes`, which `VStarBuild.topsOf` lists them in after level 0) is
-    `rec_live`'s schedule's, across fast100's m, k_log and claims, holo or not; m outside 22 to 35 is refused by both."""
+    `rec_live`'s schedule's, across fast100's m, k_log and claims, holo or not; m outside 22 to 35 is refused by both. k_log is at least 6, a block's 64 elements: below it Lean's
+    `SchedRound` (whether a round absorbs, not how much) can't tell z_partial's round from a 2-element one, which
+    `holo_rounds` refuses (m = 22, k_log = 0, r20261026-133212-4346)."""
     D.run(TOP_SIZES, examples=200, server=server)
 
 
