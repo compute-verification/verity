@@ -9,12 +9,12 @@ check_lens)` / `pv(p, v, lens=None, *, out, warps, check_lens)`, the shapes of t
              O[b,h,d] = GemmCoordinate_v2{K=kp, GEMM_HOPPER}(p[b,h,:n] ++ 0, v[b,kv(h),:n,d] ++ 0)    n = lens[b]
 
 kv(h) = h // (H / Hkv) (H / Hkv a power of two; MQA's k and v may drop the head axis), D 64 or 128, and kp = max(kpv,
-pad16(n)) with keyword ``kpv`` = 32 by default: the H200 model's PV (the skeleton's GemmCoordinatePad_v1{T, K=32}), every KV
-length 1..32 padded with +0 to K = 32; kpv=0 is attn_ref's K = pad16(n).  Tensors are bf16 (or int16 words) on one CUDA
-device; a copy is made only of one whose last dimension isn't contiguous (or, for q and k, whose rows aren't 4-byte
-aligned).  ``lens`` (B,) int32 in 0..T, default T each: words of p and v past lens[b] are read as +0, and a sequence of no
-keys gets O = +0.  ``check_lens`` (default True) refuses lens outside [0, T], at the price of a device sync; pass False under
-a CUDA graph, where the caller vouches for them.  ``out`` takes a contiguous bf16 tensor of the result's shape and writes
+pad16(n)) with keyword ``kpv`` = 32 by default: the H200 circuit's PV, GemmCoordinatePad_v1{T=n, K=32} (attn_ref's
+default too), every KV length 1..32 padded with +0 to K = 32, and pad16(n) past 32 keys.  Tensors are bf16 (or int16
+words) on one CUDA device; a copy is made only of one whose last dimension isn't contiguous (or, for q and k, whose rows
+aren't 4-byte aligned).  ``lens`` (B,) int32 in 0..T, default T each: words of p and v past lens[b] are read as +0, and a
+sequence of no keys gets O = +0.  ``check_lens`` (default True) refuses lens outside [0, T], at the price of a device sync;
+pass False under a CUDA graph, where the caller vouches for them.  ``out`` takes a contiguous bf16 tensor of the result's shape and writes
 every word of it.  ``warps`` (1, 2, 4 or 8 a block; default attn.LAUNCH's) decides only which warp runs a tile, never a word.
 Without lens each call is one launch; with lens, S is filled before the launch (one more pass over S) and, without
 check_lens, O is zeroed first (one over O).  Launches are on torch's current stream, from the cubin build.sh ships:

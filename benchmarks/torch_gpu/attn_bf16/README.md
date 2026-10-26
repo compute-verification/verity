@@ -2,9 +2,10 @@
 
 QK^T and PV for one H100/H200 (sm_90a) or RTX PRO 6000 (sm_120a), each output word exactly
 `GemmCoordinate_v2{K, GEMM_HOPPER}` (`verity.ml.circuits.ops.gemm`): K/16 `mma.sync.m16n8k16` BF16 steps in ascending k
-from +0, then `cvt.rn.bf16.f32`. QK^T's K is the head dim; PV's is the query's KV length, zero-padded to a multiple of 16
-in both operands. Softmax is its own unit, so QK^T's words come out and PV's P goes in. Decode (one query a sequence),
-causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a BF16 KV cache.
+from +0, then `cvt.rn.bf16.f32`. QK^T's K is the head dim; PV's is the larger of `kpv` and the query's KV length padded to
+a multiple of 16, both operands zero-padded to it. Softmax is its own unit, so QK^T's words come out and PV's P goes in.
+Decode (one query a sequence), causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a BF16 KV
+cache.
 
 - `attn_bf16.cu`: the kernels, and how each word's chain is fixed (one warp per 16 x 8 tile, no split-K, no atomics, and
   per-query zeroing of V in the block where the tile's queries stop at different keys). The `_h8` kernels put 8 query
@@ -18,8 +19,8 @@ causal prefill and prefill chunks, head dims 64 and 128, MHA, GQA and MQA over a
   each applies.
 - `attn.py`: the kernels as torch functions with `attn_ref`'s interface (the skeleton's), `qk(q, k, lens=None, *, out,
   fill, warps, check_lens)` and `pv(p, v, lens=None, *, out, kpv, warps, check_lens)`: S past `lens` is `fill` (-inf),
-  and PV's K is `kpv` = 32 for every KV length 1..32 (the skeleton's `GemmCoordinatePad_v1{T, K=32}`; `kpv=0` is
-  `attn_ref`'s pad16). Without `lens` each call is one launch on torch's current stream, from the shipped cubin.
+  and PV's K is `kpv` = 32 for every KV length 1..32 (the H200 circuit's `GemmCoordinatePad_v1{T, K=32}`, `attn_ref`'s
+  default too). Without `lens` each call is one launch on torch's current stream, from the shipped cubin.
 - `build.sh`: on a CPU node, both cubins (`-fmad=false`, no FTZ or fast-math), `sass_gate.py` on each, and
   `fixture.py`'s check.
 - `fixture.py`: the cases and the buffers the kernels must leave, from the Definition's twin, held to its reference
