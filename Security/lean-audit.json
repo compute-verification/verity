@@ -20822,16 +20822,16 @@
    "guarantees": ["NetTiming.SecurityProofs.HorizonWrongUnitsLe"]
   },
   "Definitions.NetworkCertifier.Guarantees.HorizonLeak": {
-   "digest": "9a338f3d040dc8379277f200566b269460639baf514f074ac01f42b58b324017",
+   "digest": "47f29231f2beefca5180296d91b49a6bf3f1eed7095713dbff4574516cace246",
    "definitions": {
-    "NetTiming.Guarantees.HorizonLeakAccepted": "a7859ef6b4ad98f4bdd1cd0c41e3da7d1faf1b6d996904f26db85eb7389dd9e6"
+    "NetTiming.Guarantees.HorizonLeakAccepted": "3c3e855432bbf9ac2e3d5f760c0f19a69c0f4189f9ed547291d9522c40a8d87c"
    },
    "guarantees": ["NetTiming.SecurityProofs.HorizonLeakAccepted"]
   },
   "Definitions.NetworkCertifier.Guarantees.Period": {
-   "digest": "77e7212a7b73c432df775e98ee123c66d9daf0ff17100eeb0f253909f4b1aff4",
+   "digest": "c1a9ff2deb9efeb3d8a794d0715d85718b6c05be736cfc3984a60903b5d01371",
    "definitions": {
-    "NetTiming.Guarantees.PeriodLeakAccepted": "26d88ed4b56eb9b0bb996edc95d9f60d3dc450a1fc296b384469ea6b8d6d35bd"
+    "NetTiming.Guarantees.PeriodLeakAccepted": "40b40ea29344f2cd0fa8f88dc624a5085cfe70b8df433327092504ee62ec8c74"
    },
    "guarantees": ["NetTiming.SecurityProofs.PeriodLeakAccepted"]
   },
@@ -21085,9 +21085,10 @@
    ]
   },
   "Definitions.NetworkCertifier.Tap": {
-   "digest": "676f6c792c2a4062eb135ff930509cda2c78ac0321a01c1a20603e2e39e81181",
+   "digest": "38030e45f405ac271aa77c4b87cf05aa6fbd7e6fccfdf61de810a8ece39e9a8a",
    "definitions": {
-    "NetTiming.TapRecord": "c5cddcdc452c903011fe46b319759549d0c439321722db0e2596e960f904d02f",
+    "NetTiming.TapRecord": "32b4847d8d23a91fece645b237d23ee2db5a181f72d194e30cf30b1d78b72e39",
+    "NetTiming.TapRecord.fits": "b1c5e47321838ab2a763e531e9ab3d4e5d05c79ab56416cd8a7ef9335b589075",
     "NetTiming.TapRecord.record": "a89a64449e10fb21db550c50134329e7153d12fff8381c7f12ea84af14d24b32",
     "NetTiming.tapCode": "e7fe36224fc6527ffca6264f8c5174f7242c48e3acd1586ce3c7b1cb5bcbbc0f"
    },
