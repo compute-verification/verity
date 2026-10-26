@@ -27,7 +27,7 @@ verity_vllm/
   commit/             commitment         merkle.py hashing.py identity.py binding.py padding_steps.py hidden_*.py committer/
   check/              checks -> verdicts match/ replay/ executed_prefix.py verdict.py gates.py weights_of_record.py root_policy.py ...
   properties/         property harnesses noninterference.py census.py kernel_allowlist.py golden.py holdout.py admission.py ...
-  collectives/        collectives        collective_record.py collective_sites.py embedding_shard.py
+  collectives/        collectives        collective_record.py collective_sites.py
   config.py target_family.py             run-definition locations; the target-family preflight
   settings.py                            every environment variable, declared once (role, type, doc); the run's record of them
   pins/               measured pins      <DEVICE>.json (cuBLAS routes, SMs) served/<ROLE>.<DEVICE>.json (a served Build's artifact, dispatch, MoE launches)
@@ -121,8 +121,8 @@ pick its Definition; `circuit-check --batch` runs it over `predict/batch.py`'s t
 `golden/`, `holdout.py`, `admission.py` (differential admission tests), `quarantine_lint.py`, `protected.py`,
 `fa_tap_exactness.py`, `norm_tap_exactness.py`, `router_tap_exactness.py`, `vocab_range_exactness.py`.  Never: a per-run check.
 
-**`collectives/`** holds the collective record (`collective_record.py`), the communicator hook sites (`collective_sites.py`)
-and the embedding shard layout (`embedding_shard.py`).
+**`collectives/`** holds the collective record (`collective_record.py`) and the communicator hook sites (`collective_sites.py`).
+The embedding shard's fold pattern is `EmbeddingShardCuda` in `observe/fold/patterns/collectives.py`.
 
 **`records/`** holds the typed stage records, one frozen dataclass per record kind one stage writes and another reads, whose `load`
 refuses a missing required field by file and field name (`fields.py`): `required_manifest.py` (the required-value manifest, as the
