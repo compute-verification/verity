@@ -951,6 +951,10 @@
    "owner": "@proofs",
    "digest": "bf19edae03fc6d856197b0b4b48fad91c9dc021892ca626e6dd3ed9f90b7fc3b"
   },
+  "FlockSoundness.Assumptions.LinkCRAt": {
+   "owner": "@proofs",
+   "digest": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30"
+  },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
    "owner": "@proofs",
    "digest": "405348e1e24e9f6ddc54ab19668d5bf3309ed47d3300bc438ffc37d5b5d1a560"
@@ -967,6 +971,14 @@
    "owner": "@proofs",
    "digest": "23148408aa91625eb6d49ddd90e118326fcdee28e72e5a719a34c28cc9114562"
   },
+  "FlockSoundness.Assumptions.TableCRAt": {
+   "owner": "@proofs",
+   "digest": "59144eca1337195cff560732b0893d04b932ff1e49776abb46964fa283596148"
+  },
+  "FlockSoundness.Assumptions.TableCRZAt": {
+   "owner": "@proofs",
+   "digest": "406013c1a29772f3fdb909233b6aae28f7b15c544dfd7be1e6cc47d09c18cca5"
+  },
   "FlockSoundness.Assumptions.UniformRandomBytes": {
    "owner": "@proofs",
    "digest": "f1093a52c3a1f70ccfd20362bda6eca853c1be02ab43b7260f78ef5df8720b39"
@@ -974,6 +986,18 @@
   "FlockSoundness.Assumptions.UniformRandomBytesTest": {
    "owner": "@proofs",
    "digest": "e5c2a5e2cfb598e2208b5ea0627f7a747fec4562254dae7bb3aaabec8ecb9d73"
+  },
+  "FlockSoundness.Assumptions.Zk.DrawAtZKHJ": {
+   "owner": "@proofs",
+   "digest": "5ecd2c392434ee4adccded7c46dad7418afc413895bcbed8ff830a8807038d55"
+  },
+  "FlockSoundness.Assumptions.Zk.DrawAtZKJ": {
+   "owner": "@proofs",
+   "digest": "c85b7cfdeae48b9e41f9bb9b97c5d45ba94e22bf4881def4137ebf6572fa8a96"
+  },
+  "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ": {
+   "owner": "@proofs",
+   "digest": "a0401cee0ada3f98049245a64eac3f2c0dc14242e799f6a026d571236f3677bb"
   },
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKHJLaw": {
    "owner": "@proofs",
@@ -994,6 +1018,10 @@
   "FlockSoundness.Assumptions.Zk.RecordCustodyZKLaw": {
    "owner": "@proofs",
    "digest": "167a5d1bdedaec8d47300f7df74e55fb375ec452c746823b6b6449e4801918cb"
+  },
+  "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ": {
+   "owner": "@proofs",
+   "digest": "2b15bc78f0f3937e56c0c67a13c380f4e4a38e0721b7d694cda1fa3a3b2b2a98"
   },
   "FlockSoundness.Audit.Adaptive.Play.Drawn": {
    "owner": "@proofs",
@@ -1795,6 +1823,9 @@
    "digest": "4c6906588d3bd24bfe0c02960ad2153360f4fb933cf00700cb76cb6c8a58df8e"
   },
   "RecDeploy.PartIn": {
+   "owner": "@proofs"
+  },
+  "RecDeploy.PlainLeavesAdmitted": {
    "owner": "@proofs"
   },
   "Verity.Advice.Framing.Separated": {
@@ -6766,13 +6797,13 @@
     "  {S : Finset (Fin n)} {t : FlockSoundness.Discharge.Exec.Transcript}",
     "  (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
     "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S)))",
-    "  (hok : FlockSoundness.Discharge.Composed.DrawOkZKJ I dj mPts S) (j : Fin (FlockSoundness.Discharge.Composed.nTab I)) :",
+    "  (hok : FlockSoundness.Assumptions.Zk.DrawAtZKJ I dj mPts S) (j : Fin (FlockSoundness.Discharge.Composed.nTab I)) :",
     "  Nonempty",
     "    (FlockSoundness.Discharge.Composed.DrawSetupZJ (FlockSoundness.Discharge.Composed.inputsJ I j.val) mPts",
     "      (FlockSoundness.Discharge.Composed.partS I (dj S) S j) (FlockSoundness.Discharge.Composed.drawJ I (dj S) j.val))"
    ],
    "assumptions": [],
-   "type_hash": "fa6a2905bbb83ff800f0dd42e66462f788c0960a32d8830b74cf1e54ce3cf833"
+   "type_hash": "08d62e347db1b8265035f49a5c1ab74e0dd45cc0c92f9dd8c298a9963b56851b"
   },
   "FlockSoundness.Discharge.Composed.y0_binder_16_2_1": {
    "owner": "@proofs",
@@ -7005,14 +7036,13 @@
     "  (ho : Eq c.outNet c.unitNet) (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)}",
     "  {t : FlockSoundness.Discharge.Exec.Transcript} (h : FlockSoundness.Discharge.ZkExec.AcceptsZK I t)",
     "  (hd : Eq (FlockSoundness.Discharge.Exec.recordDraw t.record) (Option.some (dj S)))",
-    "  (hok : FlockSoundness.Discharge.ZkHidden.DrawOkZKHJ I dj mPts S)",
-    "  (j : Fin (FlockSoundness.Discharge.Composed.nTab I)) :",
+    "  (hok : FlockSoundness.Assumptions.Zk.DrawAtZKHJ I dj mPts S) (j : Fin (FlockSoundness.Discharge.Composed.nTab I)) :",
     "  Nonempty",
     "    (FlockSoundness.Discharge.ZkHidden.DrawSetupZHJ (FlockSoundness.Discharge.Composed.inputsJ I j.val) mPts",
     "      (FlockSoundness.Discharge.Composed.partS I (dj S) S j) (FlockSoundness.Discharge.Composed.drawJ I (dj S) j.val))"
    ],
    "assumptions": [],
-   "type_hash": "258ffa5e095a1e3d8bb0a17f85efd8f136259467a95b03ee876dfa67a33ac85a"
+   "type_hash": "9af668d5cd1ba5e13f0570a2a633e6186e3852e2dbca2cad3d69676dcaf540f8"
   },
   "FlockSoundness.Discharge.ZkHidden.y0_binderH_16_2_1": {
    "owner": "@proofs",
@@ -10867,9 +10897,9 @@
    "Flock.SecurityProofs.EndToEndRegistered": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and two premises that aren't on the list: A3 (the verifier's IO.getRandomBytes is uniform) and live-verifier custody (RecordCustodyZKJ). It also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": "frozen (hash,world-unlisted,scope): It takes the table and link finders' collision bounds (TableCRZ, LinkCRZC) as hypotheses instead of a collision disjunct tied to the run, and live-verifier custody (RecordCustodyZKJ), a premise that isn't on the list; it also takes hscope (scopeOk), which flock_verify_sound now derives from acceptance.",
    "Flock.SecurityProofs.EndToEnd_refSetup": "lemma: leaves the list under the 5:11 PM ruling",
-   "Flock.SecurityProofs.RecursiveSound": "frozen (obligation,world-unlisted,scope): In fork form it assumes no hash, but it takes InnerSound as an open obligation; beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope).",
+   "Flock.SecurityProofs.RecursiveSound": "frozen (obligation,scope): In fork form it assumes no hash, but it takes InnerSound as an open obligation; beside VBridge, A3 (_hA3) and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope).",
    "Flock.SecurityProofs.RecursiveZK": "frozen (obligation,no-function): It takes the outer proof's zero knowledge (OuterViewZK) as an open obligation, and as a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512.",
-   "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (scope): It takes avoidsMask (_hdm) as a scope condition that the verifier doesn't refuse; Security/Proofs/Flock/Soundness/Discharge/FailClosed/Mask.lean:9-11 derives it from the setup, so restating on that removes the scope reason.",
+   "Flock.SecurityProofs.ZeroKnowledgeHidden": "frozen (no-function): As a simulation statement it has no acceptance of a function to take; stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512, and every table's setup avoids the mask slot (FailClosed.DrawSetupZHJ.avoidsMask).",
    "FlockSoundness.Audit.Law.closure_escape": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Law.covers_window": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Audit.Law.harm_le_unsoundWork": "lemma: leaves the list under the 5:11 PM ruling",
@@ -10917,7 +10947,7 @@
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_json_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_custody_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.Composed.zk_session_soundJ_nonvacuous": "lemma: leaves the list under the 5:11 PM ruling",
-   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes TableCRZ as a hypothesis and bounds the link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
+   "FlockSoundness.Discharge.FailClosed.flock_verify_sound": "frozen (hash): Scope now follows from acceptance, but it still takes the table finders' bounds as hypotheses, listed (TableCRZAt under --zk; TableCRAt, and LinkCRAt for the link, without it), and bounds the --zk link by if LinkCRZC then the bound else top; it also takes A3 (UniformRandomBytes) and live-verifier custody, both listed: RecordCustodyExec (RecordCustodyExecH at hidden outputs) without --zk, RecordCustodyZKLaw (RecordCustodyZKHLaw, and RecordCustodyZKJLaw, RecordCustodyZKHJLaw at J tables) under --zk.",
    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_empty_16_2_1": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.ZkHidden.drawSetupZKH_whole_mPts": "lemma: leaves the list under the 5:11 PM ruling",
    "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK": "lemma: leaves the list under the 5:11 PM ruling",
@@ -11096,7 +11126,7 @@
    "Flock.SecurityProofs.RecursiveCircuitIndist": "frozen (obligation,no-function): RecursiveCircuitPrivate's two-circuit form: it takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as an indistinguishability statement at two honest witnesses it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveCircuitPrivate": "frozen (obligation,no-function): It takes the registration's hiding (_hreg) and V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as open obligations; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
    "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": "frozen (obligation,no-function): It takes V*'s sessions' zero knowledge (_hOuter, OuterSessionsZK) as an open obligation; as a simulation statement at an honest witness it has no acceptance of a function to take. Stated at the hm96 hiding gap, the registration's leaves included, it takes no premise on the key or on SHA-512. It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes A3 (_hA3), the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
+   "Flock.SecurityProofs.RecursiveRanRegistered": "frozen (obligation,world-unlisted,scope): RecursiveSound's fork form with the registration's break, so it assumes no hash, but it takes InnerSound and what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the registration's binding at each row (_hbind) and the developer's openings (_hreg); beside VBridge, A3 (_hA3) and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205": "frozen (hash): It is flock_verify_sound's claim without --zk with each table's term 2^-205, so it takes what that claim takes: the table and link finders' bounds (TableCRL, LinkCRL) as hypotheses, and A3 (UniformRandomBytes) and live-verifier custody (RecordCustodyExec, RecordCustodyExecH with hidden outputs), both listed.",
    "Accounting.SecurityProofs.Joint": "frozen (no-function): It composes the compute, bandwidth and capacity audits' guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CovertResidual": "frozen (no-function): Like Joint, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (Security/Definitions/Accounting/Joint.lean), and bounds a Pouw.pr event, which shape.events does not list.",
@@ -11596,8 +11626,8 @@
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, under the named assumption HonestClock (honest-clock), both at the W1 machine (W1.w1Priced), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.NCP.GammaFromTTNCP_U": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:11, :28), not over a Lean function.",
    "NetTiming.SecurityProofs.EncardAccSeqsSampledLe": "frozen (no-function): It bounds AccSeqsSampled, the observation sequences the circuit's Program (circuitProgram) accepts with some faulty set that RAcc allows at delta, not runs of the network check's code, and takes the layout's fit (Layout.Fits) and the counts of the other inputs and of the faulty units' committed bits as premises; SampledAuditAccepted carries an accepted sampled audit to RAcc delta, so the two composed are the restatement path.",
-   "Flock.SecurityProofs.RecursiveSoundExec": "frozen (world-unlisted,scope): RecursiveSound at the compiled inner protocol the verifier of record runs (innerAt), with InnerSound proved (the compile lemma in fork form, an inner fork its fourth disjunct) and no A3; beside VBridge, the one listed premise it takes, which candidate 3 does not give in full, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
-   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge, the one listed premise it takes, it takes the outer sessions' custody (ZkOuter's field hRec) and their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
+   "Flock.SecurityProofs.RecursiveSoundExec": "frozen (scope): RecursiveSound at the compiled inner protocol the verifier of record runs (innerAt), with InnerSound proved (the compile lemma in fork form, an inner fork its fourth disjunct) and no A3; beside VBridge, which candidate 3 does not give in full, and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), both listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
+   "Flock.SecurityProofs.RecursiveRanRegisteredExec": "frozen (obligation,world-unlisted,scope): RecursiveRanRegistered at the compiled inner protocol the verifier of record runs (innerAt) and the executable's row registration (rowCommit, whose binding is proved), with InnerSound proved and no A3; it takes what an accepted run carries of the rows it read (_hop, _hx) as open obligations, beside the developer's openings (_hreg); beside VBridge and the outer sessions' custody (ZkOuter's fields hRec, Zk.RecordsCustodyZKJ, and hDraw, Zk.DrawCustodyZKHJ), all listed, it takes their scope (ZkOuter's parameter hscope). It stays here until RecursiveAudit is pinned after gap 4.",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorKOneSided per prover (CMP-33), the overlapped floor of record at each adversary's own error: the same floor and the same parity luck 0.854 per draw, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (ORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapOneSided and ChargeVF3j16Overlap, as OverlapFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorKPerProver": "frozen (no-function,world-unlisted,scope): OverlapFloorK per prover (CMP-33): the same floor and the same luck 3/4 per draw, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (ORunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundOverlapPerProver (ServiceSoundOverlap's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOverlapAffine and ChargeVF3j16Overlap, as OverlapFloorK does. It is a sibling of OverlapFloorKOneSidedPerProver, proved on its own scope; K1 is not claimed outside the two proved scopes (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
    "Pouw.SecurityProofs.RelativeSecurity.StagedFloorKOneSidedPerProver": "frozen (no-function,world-unlisted,scope): StagedFloorKOneSided per prover (CMP-33), the staged floor of record at each adversary's own error: the same floor and the same parity luck 0.854, each adversary's error its own (breakBound: at each value of its coins, 2^-40 + R (delta_b + delta_z) plus beta_b and beta_z times its binding and zero-knowledge finder terms, each finder read through ecr/sha-512 at a budget computed from the adversary's time and top where it fails it, capped at 1 and averaged over its coins). It is stated over an arbitrary Machine and Service, an analysis map (RunMap) and the analysis's collision finders (Finders), not the service's code, and takes three premises: ServiceSoundStagedPerProver (ServiceSoundStaged's premise with each round's binding and zero-knowledge breaks bounded adversary by adversary by a constant plus a weight times the probability that the analysis's finder for that adversary (Finders) finds a collision), KScopeOneSided and ChargeVF3j16, as StagedFloorKOneSided does. c = 1 on K's proved one-sided scope; K1 is not claimed outside the two proved scopes, and the verifier can't observe which case applies (note:proofs/20261018T1626Z-draft-pouw-service-sound-per-prover).",
@@ -36980,7 +37010,7 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Flock": {
-   "digest": "583d36cb0b1f2715675532d09c82c501e3ef9dac19aae9bab0c63f15ee96627e",
+   "digest": "30cfa7077c2a50a2f98623811f6c4b2f1af70ed06fb0b62b4240c6552403b051",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.Accepts": "3e28c7a7aae2a3fa30e640b765e02810a417301eec9132d5fbe835d290418847",
     "FlockSoundness.Discharge.Recursion.AcceptsV": "1c083a0b646e4afbe0d91abda9a75cbc265ba17849b2ecd1182d5600d6f9ccbb",
@@ -37002,7 +37032,7 @@
     "FlockSoundness.Discharge.Recursion.VStmt.law": "7ab38591fd610097acb55b851c20c288ecfca27eee1a84bcf5e8f80121fbbd0e",
     "FlockSoundness.Discharge.Recursion.VStmt.mPts": "3d07f41505d8af9181d5a02c5d1cdedb27d8fa74a8bbd699b32a7c0678c09294",
     "FlockSoundness.Discharge.Recursion.VStmt.nv": "89d382671d258ed285667c9d0224fe9ea7603f3437dbbaa212d187ea082a40df",
-    "FlockSoundness.Discharge.Recursion.ZkOuter": "2ef25916a8759c624a9c66a05a9eb1d0953192abf30416d77bd3033adb02e550",
+    "FlockSoundness.Discharge.Recursion.ZkOuter": "a0a643eb91e57ebe11cabcd45894f30a2f7aa16877b103713d3a7b5d53d46dfa",
     "FlockSoundness.Discharge.Recursion.ZkOuter.Fork": "0ed8e8e5107346b58f00176fe6c26cac60fb214f549cdac812a258d8e48a1f0d",
     "FlockSoundness.Discharge.Recursion.ZkOuter.Good": "a7f62dd805254165e01e83f2b0d72f60fc27e7c3d85743a5ce7e987c636567dc",
     "FlockSoundness.Discharge.Recursion.ZkOuter.RegAgree": "b96f21ec6296d8bf725f8026b85493411aa6779505095defb0b7fa1e1e2d242d",
@@ -37014,7 +37044,7 @@
     "FlockSoundness.Discharge.Recursion.ZkOuter.sim": "eef51739d217a2334e75cdaf9d32b6474711173f2f3bd3ad2c098653f15af6d8",
     "FlockSoundness.Discharge.Recursion.ZkOuter.toZkOuterD": "383489b07a8e43941eaae381197c56da2e7f4f750c45a3e9cae9d056e6a1f7ef",
     "FlockSoundness.Discharge.Recursion.ZkOuter.vb": "29c75fb849343514efd4356c3b5b734f15474be60a0c7dfc891792a9dcd100aa",
-    "FlockSoundness.Discharge.Recursion.ZkOuterD": "9475414485aa30cb6119e26109dc58487f23c2672e85cf672cc29c5dfd16a56a",
+    "FlockSoundness.Discharge.Recursion.ZkOuterD": "e35dd4cdd9b6e9bc150caef33f86997644c29169b59241c286acbdabb140f174",
     "FlockSoundness.Discharge.Recursion.ZkOuterD.I": "0f140e6f4196bb94b5472891f88afdddd895abb853326643e40ea8ab57aec9a1",
     "FlockSoundness.Discharge.Recursion.ZkOuterD.S₀": "b896aec6df9c3ff28da7ec38a9a2cd12976aaeec0dd4c29ab51009f83a6a39ae",
     "FlockSoundness.Discharge.Recursion.ZkOuterD.dj": "b972f8785cd46131e9a8c784de65befb8632413765977d4f5ad7aa8ab1fc336f",
@@ -37272,12 +37302,12 @@
    "guarantees": ["Flock.SecurityProofs.PublicAudit", "Flock.SecurityProofs.RecursiveAuditC3"]
   },
   "Proofs.Flock.Recursive.Raw": {
-   "digest": "9d8b3768fea08cef37d3079a37d56f8c23878429ff11017f49341b6ebfdadfec",
+   "digest": "f9c05166c00e96b16ca4b86f51b1545f661ccf95a11f52101d6a882876c8ed22",
    "definitions": {
     "FlockSoundness.Discharge.Recursion.Typed": "343edf0e59bc37666535b022b2ebdf69c6d87fb387e0b38c0cfc7d98f83f2d11",
     "FlockSoundness.Discharge.Recursion.VStmt.OuterR": "52f925e3e83c5df8d61e1dc66f7ceac14b64d12630608d5713104771a44d9cac",
     "FlockSoundness.Discharge.Recursion.ZkOuter.refuse": "00af8bc0e10bbd53d2f14e3a9f28dfe6671bb65ddd2094baa12817889375c853",
-    "FlockSoundness.Discharge.Recursion.ZkOuterR": "42e9d10ca7f0ec020a85557371a5df7c46976dbb3989ec4f3de03c1a04e56e71",
+    "FlockSoundness.Discharge.Recursion.ZkOuterR": "f01ed90f247c741a68e62bc3d424cd3e892631ce02c95d54767e901bcdd6e334",
     "FlockSoundness.Discharge.Recursion.ZkOuterR.I": "c3fa4bf1a8e00cb04f3aeab3ce9cb8e16bd528b5084d9fff294e5c13fcda9a4b",
     "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable": "08550918adf6a7c912926c925aca6d597c50330f9c2b7d071d66ff940fb46201",
     "FlockSoundness.Discharge.Recursion.ZkOuterR.Typable.S₀": "94f051105fde2af577ae1c3468cbc0d03fab14ee0af34eb8d665527bc66bd2cc",
@@ -37751,14 +37781,40 @@
    ]
   },
   "Proofs.Flock.Soundness.Assumptions.CustodyZk": {
-   "digest": "cd395c084d3f50514b8d079a702c09a74fade0f254bf50042966c87376a31ae6",
+   "digest": "558926c8fbd479699ad4aafc0f6c78e06f8e2ffa19c58e0bbc6803d47e728b7a",
    "definitions": {
+    "FlockSoundness.Assumptions.Zk.DrawAtZKHJ": "5ecd2c392434ee4adccded7c46dad7418afc413895bcbed8ff830a8807038d55",
+    "FlockSoundness.Assumptions.Zk.DrawAtZKJ": "c85b7cfdeae48b9e41f9bb9b97c5d45ba94e22bf4881def4137ebf6572fa8a96",
+    "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ": "a0401cee0ada3f98049245a64eac3f2c0dc14242e799f6a026d571236f3677bb",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKHJLaw": "3a23040e8d989f39188671d30f2b9a00b84e325f6b01e4817042185549b6bc37",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKHLaw": "91821631cb7864ebfa1b64c8ab518ce723c93c0c66240c588422b113befd68c5",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJLaw": "cb23603a029f8e6caa09cac7ce2b76a8ab002b205420ea56d5118618243c0741",
-    "FlockSoundness.Assumptions.Zk.RecordCustodyZKLaw": "167a5d1bdedaec8d47300f7df74e55fb375ec452c746823b6b6449e4801918cb"
+    "FlockSoundness.Assumptions.Zk.RecordCustodyZKLaw": "167a5d1bdedaec8d47300f7df74e55fb375ec452c746823b6b6449e4801918cb",
+    "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ": "2b15bc78f0f3937e56c0c67a13c380f4e4a38e0721b7d694cda1fa3a3b2b2a98"
    },
-   "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound"]
+   "guarantees": [
+    "Flock.SecurityProofs.PublicAudit",
+    "Flock.SecurityProofs.RecursiveAuditC3",
+    "Flock.SecurityProofs.RecursiveRanRegistered",
+    "Flock.SecurityProofs.RecursiveRanRegisteredExec",
+    "Flock.SecurityProofs.RecursiveSound",
+    "Flock.SecurityProofs.RecursiveSoundExec",
+    "FlockSoundness.Discharge.Composed.setupZJ_of_acceptsZK",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.ZkHidden.setupZHJ_of_acceptsZK"
+   ]
+  },
+  "Proofs.Flock.Soundness.Assumptions.Finders": {
+   "digest": "79d069c3d25dedd1e28979f6494d94dd9bcf41791e7bbcbc961d6de555dd73c4",
+   "definitions": {
+    "FlockSoundness.Assumptions.LinkCRAt": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
+    "FlockSoundness.Assumptions.TableCRAt": "59144eca1337195cff560732b0893d04b932ff1e49776abb46964fa283596148",
+    "FlockSoundness.Assumptions.TableCRZAt": "406013c1a29772f3fdb909233b6aae28f7b15c544dfd7be1e6cc47d09c18cca5"
+   },
+   "guarantees": [
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound",
+    "FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"
+   ]
   },
   "Proofs.Flock.Soundness.Assumptions.Inner": {
    "digest": "b94ddfde9baad66fa4c9d32e1e1f4785d38ae8cffb67d7ee355690bcaa0be546",
@@ -38812,7 +38868,7 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.Composed.Base": {
-   "digest": "b4f5e9ec51e764568d144a322f81c8a6513aa7313efe1f8188091e37fbac8a86",
+   "digest": "e81fc8217dd26d1e394e46313391258da2fb2bdc580d9f2c96eb65e73866bf78",
    "definitions": {
     "FlockSoundness.Discharge.Composed.CoinsZK": "897889c0c5319dde7853e92f803323171432a3a998557cd22e7113e7b41f867d",
     "FlockSoundness.Discharge.Composed.CoinsZK.beta": "9f5dd5c3493cff2d0df3d0efeddfc98494302cf7c721b0334f8f2add8781966d",
@@ -38839,22 +38895,16 @@
     "FlockSoundness.Discharge.Composed.RestZK.zc": "9cf7563096aaeecaf0e74d38fecdeb48fd10b71b6935224a4ed64dfcaa7048e9",
     "FlockSoundness.Discharge.Composed.RestZK.zeta": "25325f04bcf2d3679e6b8c088bc1bb50fabc80f53a6005ad4cac8632791cdd12",
     "FlockSoundness.Discharge.Composed.VLOf": "4ec99b2bae44e956647c4d76846dcb1f3a967c4d20c3726b2bf695345ab7f16f",
-    "FlockSoundness.Discharge.Composed.avoidsMask": "031fad599b8f21e1405606ab529862af01386fda10ccdc586267ab873e6943ad",
     "FlockSoundness.Discharge.Composed.claimsOf": "27520c0149cc9bf7bc0a5fe88eae1f309fc3e360bb913d294a50eb7f2e11081b",
-    "FlockSoundness.Discharge.Composed.deltaAvoidsMask": "598fc29215c99f15f65beec4f47387a884f74e5dd4d95decb5527a73ffeabb1c",
     "FlockSoundness.Discharge.Composed.eqWord": "9a7d2896a99544b563462d6f820847c15fb407fb40170968e7a4ba505faa00c9",
     "FlockSoundness.Discharge.Composed.hiCount": "7231bf030d216fd58d2dd7d2e40e1527803843633a7de920ca3ece308e73d5c0",
-    "FlockSoundness.Discharge.Composed.maskColB": "f60b07995705ac691a3394e567de0b1239e41b6600795d7f8e2393bd3f7bcf93",
     "FlockSoundness.Discharge.Composed.maskWordsOf": "5e8419174551074cd88cc1cdfb95a263ddbffe5c241c26194b5f29ed10e0634f",
     "FlockSoundness.Discharge.Composed.padLenOf": "53a26be22f056ce22a2d850bfc2a5568f4a7e684b42ef762380a6ff4dd76ccd0",
     "FlockSoundness.Discharge.Composed.padNOf": "47e756f551ae13f8abe58cdf5cf16fb41d8f931b846921818b989e6bf9f9a5ed",
     "FlockSoundness.Discharge.Composed.pointsOf": "7d6b90296b3d9590e3cfd493e0440ef6c97995d0a27d988087b8ac2783e71a36",
     "FlockSoundness.Discharge.Composed.pubRegOf": "d488f247ae6ab84de5c3dbe4337ed7ebd5b519965008b44149984cfa658cb2a5",
     "FlockSoundness.Discharge.Composed.regionBit": "ae71b5f4c528f9ab6efb6bd43b99ee70fbd9b4179d8a43fdd7e291de99890c75",
-    "FlockSoundness.Discharge.Composed.regionCellsOff": "f50395ca898dcdc64427286fd9ccbd227e0b8b76012cf4a3c08bfd586aaf8b87",
-    "FlockSoundness.Discharge.Composed.regionPtOf": "1a47801257aae853ea1a50029409dd62fa7d89bc30a8095e4ac961779468e48d",
-    "FlockSoundness.Discharge.Composed.regionWordsOff": "b3bc80e109e69f05a1ed75be9db7acab8c4454d446544fc1de3c2b69535c598f",
-    "FlockSoundness.Discharge.Composed.regionsAvoidMask": "fe8d53428bc1c8c2f6a08a756df1d701d4d492d163a002510be0c701b78c8b7e"
+    "FlockSoundness.Discharge.Composed.regionPtOf": "1a47801257aae853ea1a50029409dd62fa7d89bc30a8095e4ac961779468e48d"
    },
    "guarantees": [
     "Flock.SecurityProofs.PublicAudit",
@@ -39830,44 +39880,44 @@
    ]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.Numeric": {
-   "digest": "7bc06d8e26841aecd3be573abde9a6a18956b87ebd192b19b1df02a8d735bf8d",
+   "digest": "f583cd678cb85bd13b3a36a327c45232045af764c3ba1d3ca494d1145bbb1b66",
    "definitions": {
-    "FlockSoundness.Discharge.FailClosed.SoundExec205": "2a3c116522ea63e012e6e9dbd1380579096c5ce94a81356016172fc7f7f54d72",
+    "FlockSoundness.Discharge.FailClosed.SoundExec205": "19901de6911ddc83bb52840d94b761dda14819ac9ece09f03aad6e9d3df87e79",
     "FlockSoundness.Discharge.FailClosed.SoundExecH205": "843fc3cdb3277810d8ae0139568f69355b7be2aa93403651710e219b7ad27030",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHG205": "338f5b11826f197339832f4ae3d92233ff53bc207f9871da960ace0a37b1bc6f",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHG205": "fd6f358c23aa104da797c3e76fc9ca74f97aa836cae0c7c7798b79fcd62c5053",
     "FlockSoundness.Discharge.FailClosed.SoundExecHR205": "4f32021353f54bf36efb85fe9bb7c5f5e99066e2e6cf780b15c41d2c4a72b832",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRG205": "aa99268b24049c04a7649799f220dd1b8bfbf18c191d40b279ecb8062ae0301d",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRU205": "88f71ebd0d7bc1b4b7a462de8c47157a9a3e8ee5130801bccc3cd3d3fb08940d",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHU205": "a35c23b1ac52f0fc83336e8129fb131822627735be0efe69cfc54e048ceffe03",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRG205": "5fe12a3f055879e077fdc4c11e2f8e509d99bc20954f51a12c3ddd17f9331dc3",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRU205": "cf5e3b2785b844353b1a329d84597616c5266f3484947e6ca154dee700a81033",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHU205": "5d7e75059ab14624539c44bfb9df35d0ed229e5cb18d299d5802087601e1c31d",
     "FlockSoundness.StrictCR.ksAvgStrict205": "d448c4b949d77b7e62155db188eb366e6975d7aee007a419bb74ae8a314f28fb",
     "FlockSoundness.StrictCR.ksStrict205": "898bce35ae9bb722e0afe46a50741c351d914b4c2baa878886c0f87991fe8266"
    },
    "guarantees": ["FlockSoundness.Discharge.FailClosed.flock_verify_sound_205"]
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
-   "digest": "191f686e9854e73d8d3a53828ccb74e11fc624d60996ff9bc36721c434373665",
+   "digest": "c42decbb44e442d36e2d48cd890126af53542d24acdaa26ee1dff62ee8330ce3",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts": "ea5c4b6ca5cb51a75d8a57cd78a7f966035c1f7a2d7386f108d2540319c2cd29",
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
-    "FlockSoundness.Discharge.FailClosed.SoundExec": "f283a8493a914c90c1b1ecf5aa2e3d131e4e612a29a7bf6483745b8c0dda3dec",
+    "FlockSoundness.Discharge.FailClosed.SoundExec": "8d885934c7822bcf7ac82bfaf261dfef46a50685aaa49b7bcecc32670f13a9d3",
     "FlockSoundness.Discharge.FailClosed.SoundExecH": "bb58949b45fcb9282890d5d6b978250880995fe41821517a8205c3691095a7e5",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHG": "54cd86830d54336efbad132e0432b794dc5f3ccf915ecdcfdeaf6b39d375ccda",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHG": "5513d999a516abcdc1966f0d40042920a239993fd62ae271b78e47668ed5065d",
     "FlockSoundness.Discharge.FailClosed.SoundExecHR": "6ab3d8dae0c314ed5c1fb9fda99506648d7437dce61ec5b7b58850fb88832e79",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRG": "093e8f08e05b5fde0559273158d46862b18f1e5341a8cd7c86967106ca2cd911",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHRU": "f8d145fa71dd8ad0e44c6354f6eec64d3c90f3e6b47f4e12bf77eebb1b8758e9",
-    "FlockSoundness.Discharge.FailClosed.SoundExecHU": "0a5d4b5b9f2a6a849549e57458e8969703fffe28e537e4ce2bfeca4027513537",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRG": "7656ac5a00c5a565242a80f388a6ae8ab0a4ae37d106f54322ef70e964c43b7c",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHRU": "3643d930b75bada0c207119381e86ab17198fdef03ce29dfcce602f57014d1e3",
+    "FlockSoundness.Discharge.FailClosed.SoundExecHU": "6fbe3772615088e357f4845bc6d3257b3731912f45ab653c127e8648f98980ed",
     "FlockSoundness.Discharge.FailClosed.SoundExecJ": "ded5e66ad45478781ca06927a0a2cfc3042b791ccbc01e2d8bcf52855f77d5c2",
-    "FlockSoundness.Discharge.FailClosed.SoundZ": "9d263b73d7fbf5b40bac07d7b5cf6d7efed1120b3baac5938ebc4db0065c4907",
+    "FlockSoundness.Discharge.FailClosed.SoundZ": "23e5ce96a293593257030c9b54df7fcf6900b44d21853ed14d731b80dfef7e17",
     "FlockSoundness.Discharge.FailClosed.SoundZH": "ce8a783761d1547fe7c0ed6052a572143ea42cbfe4ea2053c87a039be6cef8ca",
-    "FlockSoundness.Discharge.FailClosed.SoundZHG": "b2aad17dd36a21525ed4be0ca0e113c300f54d2c802118052aafb857dccbb657",
+    "FlockSoundness.Discharge.FailClosed.SoundZHG": "8836f7c643a4548dfff3cb1bdcd9432a966ffcd5354321ec1316e5bc47560c86",
     "FlockSoundness.Discharge.FailClosed.SoundZHJ": "68ec30cf15ebf9023b837ede5616f1570ab5117a470a8dc59c32c3d0578d8da5",
-    "FlockSoundness.Discharge.FailClosed.SoundZHJG": "f498e1d1d5fec5c7b602aa7672ee14c5ef2f0cd9f885939935e2683a40dd2a0d",
+    "FlockSoundness.Discharge.FailClosed.SoundZHJG": "8e80bb0115411fbee4ce973e3a29e55c482d3ce18dea5d35e981a83e93bfa25f",
     "FlockSoundness.Discharge.FailClosed.SoundZHJR": "cbe33c6b3179255fed3b71ff53c50186cc593800d86ee01886fac3dacd8d8950",
-    "FlockSoundness.Discharge.FailClosed.SoundZHJRG": "3e217eadf70165151b70b6758d34e059cd6cf58e11837a5993abc690018e4bab",
-    "FlockSoundness.Discharge.FailClosed.SoundZHJRU": "892e7d02a0386b39ded3635a3f3ddaa6a0e27346538c4306cbf246989e1c0096",
-    "FlockSoundness.Discharge.FailClosed.SoundZHJU": "a878075d15f8aad04c699ef8efd55a7700b305add95ba420dff8a32e28fb2d64",
-    "FlockSoundness.Discharge.FailClosed.SoundZHU": "ba19b11a313b19bf2a49853215dd4005e4964e44e5f6e355cdf6785ed2e0525e",
-    "FlockSoundness.Discharge.FailClosed.SoundZJ": "fc8c0827b05d309b4d7244e4e2cc402b2503213b219f137c9cd2cef283e52d35",
+    "FlockSoundness.Discharge.FailClosed.SoundZHJRG": "1499611e9340efd0ba1d10482ae5da5ba54d414a88fb63dbf61d0611f96f113b",
+    "FlockSoundness.Discharge.FailClosed.SoundZHJRU": "19a770ccc53e72dea54c4d9508148bf9f666055334d6750481a935b8635c9049",
+    "FlockSoundness.Discharge.FailClosed.SoundZHJU": "2e09ea0700b95481c9716c2be30ed958bf732a2ab74ee4652d1579bb0ca32128",
+    "FlockSoundness.Discharge.FailClosed.SoundZHU": "2604fa167bf95da5db741170e2402dfd3b141821826d1e9396877d13dc4b5be4",
+    "FlockSoundness.Discharge.FailClosed.SoundZJ": "c4bddf7459a3176587aa216e125751aa5b29351a5a762cb00cf3daf06260b7e7",
     "FlockSoundness.Discharge.FailClosed.ViewZ": "e7f9fc1ffeeba8c430b9c2aef2bea0c80cb3147221c4dab9297448ce4d236e13",
     "FlockSoundness.Discharge.FailClosed.ViewZHJ": "a4369fba435bbe3080c6ac00d0314dc13ae45545926b8cea68a84ff3c0c1dcef",
     "FlockSoundness.Discharge.FailClosed.ViewZHJR": "7e841daac3ddd26fd203ca981000a491389c91ad52faabbe8e82503e028e848d"
@@ -45449,9 +45499,9 @@
    ]
   },
   "Proofs.Flock.ZeroKnowledgeHidden.Statement": {
-   "digest": "87d8fc97fbe5e1705ecc9d462cc9ebfd7d91a35e0ac367942573f755de1eb09a",
+   "digest": "ebe4237fe9ca008064c1a2861664d44caefa96f8df7ca3cade56dcc60e1179c4",
    "definitions": {
-    "Flock.Guarantees.ZeroKnowledgeHidden": "5e950165d8fc027c40ef703c86f1b4b35f0f48147878ceb683aa89c8b8da15e3"
+    "Flock.Guarantees.ZeroKnowledgeHidden": "e97810d67353f19fbd3b1214d078198f1c1e70af9df7dfb2ae023e3f66055827"
    },
    "guarantees": ["Flock.SecurityProofs.ZeroKnowledgeHidden"]
   },
