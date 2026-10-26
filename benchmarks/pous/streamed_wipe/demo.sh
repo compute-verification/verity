@@ -21,6 +21,8 @@
 #   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
 #                        labels, or fM, one label past f·M; a cheat's run expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
+#   --egress-bits N      the network certifier's egress count over the session, which a challenger here signs
+#                        (default: UNCOUNTED, the bound vacuous)
 #   --threads T          the native streamer's threads when the challenger runs here (default: every CPU)
 #   --store cuda|host    host: the CPU stand-in, host memory for the device (no GPU)
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
@@ -43,12 +45,13 @@ if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
-  SIMULATED=0 FOREIGN=0 EXPECT=
+  SIMULATED=0 FOREIGN=0 EXPECT= EGRESS=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) DRY=1 ;;
       --simulated) SIMULATED=1 ;;
+      --egress-bits) EGRESS=$2; shift ;;
       --foreign-gb) FOREIGN=$2; shift ;;
       --expect) EXPECT=$2; shift ;;
       --segments) SEGMENTS=$2; shift ;;
@@ -91,15 +94,15 @@ else
   fi
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
-    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" <<'EOF'
+    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" "${EGRESS:-null}" <<'EOF'
 import json, shlex, sys
 from fractions import Fraction
-path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign = sys.argv[1:]
+path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign, egress = sys.argv[1:]
 doc = {"tools": json.loads(tools),
        "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(reserve) << 30,
                 "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
                 "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
-                "placement": "simulated" if simulated == "1" else None}}
+                "placement": "simulated" if simulated == "1" else None, "egress_bits": json.loads(egress)}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))

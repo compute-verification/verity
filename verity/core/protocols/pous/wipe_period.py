@@ -242,7 +242,8 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
 
 
 CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
-          "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None}
+          "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None,
+          "egress_bits": None}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
 through `wipe_store`; `cuda`, GPU `device`'s memory), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills
 the device's free memory less `reserve_bytes`), the declared `tier` (the store's own by default), the deadline a read,
@@ -250,7 +251,8 @@ and the fill's streamer (`native`, `wipe_stream` on `threads` CPUs, or `python`)
 A challenger on its own host streams as its `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat
 that keeps that much prior content in place of the fill's first labels (`foreign_labels`; `"fM"`, one label past `f·M`),
 and `placement` `"simulated"` names a challenger on this node the stand-in for one on its own host
-(`wipe_party.placement`)."""
+(`wipe_party.placement`). `egress_bits` is the network certifier's count over the session, which a challenger on this
+node signs (`wipe_party --egress-bits`); `None` signs `UNCOUNTED`."""
 
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -261,10 +263,11 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
     c = CONFIG | got
     if c["store"] not in ("python", "host", "cuda") or c["streamer"] not in ("python", "native"):
         raise ValueError(f"period.json's wipe: store is python, host or cuda and streamer python or native, not {got}")
-    f = c["foreign_bytes"]
-    if not (f == "fM" or type(f) is int and f >= 0) or c["placement"] not in (None, "simulated"):
-        raise ValueError(f"period.json's wipe: foreign_bytes is a byte count or \"fM\" and placement null or "
-                         f"\"simulated\", not {got}")
+    f, e = c["foreign_bytes"], c["egress_bits"]
+    if not (f == "fM" or type(f) is int and f >= 0) or c["placement"] not in (None, "simulated") or not (
+            e is None or type(e) is int and e >= 0):
+        raise ValueError(f"period.json's wipe: foreign_bytes is a byte count or \"fM\", placement null or "
+                         f"\"simulated\" and egress_bits null or a bit count, not {got}")
     return c
 
 
@@ -305,8 +308,9 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     challenger's clock (`session`: the fill's GB/s, each read's round trip) and the streamer's (`report.fill`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, c = doc.get("tools") or {}, config(doc)
-    extra = ("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ())) \
-        if c["streamer"] == "native" else ()
+    extra = (("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ()))
+             if c["streamer"] == "native" else ()) + (() if c["egress_bits"] is None else
+                                                       ("--egress-bits", str(c["egress_bits"])))
     party = wipe_party.Party.of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
     memory = store_of(c)
     tier = c["tier"] or (TIER if memory is None else memory.tier)

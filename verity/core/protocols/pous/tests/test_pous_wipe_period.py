@@ -178,7 +178,8 @@ def test_the_config_and_the_device_fit() -> None:
         W.config({"wipe": {"segment": 4}})
     with pytest.raises(ValueError, match="store is python, host or cuda"):
         W.config({"wipe": {"store": "tpu"}})
-    for bad in ({"foreign_bytes": -1}, {"foreign_bytes": "f"}, {"foreign_bytes": 1.5}, {"placement": "far"}):
+    for bad in ({"foreign_bytes": -1}, {"foreign_bytes": "f"}, {"foreign_bytes": 1.5}, {"placement": "far"},
+                {"egress_bits": -1}, {"egress_bits": "0"}):
         with pytest.raises(ValueError, match="foreign_bytes is a byte count"):
             W.config({"wipe": bad})
     p = W.params_for()
