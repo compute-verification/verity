@@ -44,7 +44,7 @@ def _same(a: S.StepCommit, b: S.StepCommit) -> dict[str, Any]:
 def fixture_check() -> dict[str, Any]:
     doc = json.loads(S.FIXTURE.read_text())
     layout, slots = S.edge_layout(), doc["slots"]
-    outputs = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(slots, -1) for h in tensors] for tensors in doc["outputs"]]
+    outputs = [[np.frombuffer(bytes.fromhex(h), np.uint8).reshape(slots, -1).copy() for h in tensors] for tensors in doc["outputs"]]
     got = G.commit(G.Plan(bytes.fromhex(doc["context"]), layout), doc["step"], bytes.fromhex(doc["salt_key"]), _cuda(outputs),
                    slots)
     return {"name": "fixture", "ok": got.root.hex() == doc["root"]

@@ -35,7 +35,7 @@ gpu-lease 1 --wait --max-min "${LEASE_MIN:-25}" -- bash -c '
     esac
     rc=$?
     echo "$s rc $rc" >> "$O/rc.txt"
-    [ "$s" = tests ] && [ "$rc" != 0 ] && { echo "the tests failed: nothing after them runs" >> "$O/rc.txt"; break; }
+    if [ "$s" = tests ] && [ "$rc" != 0 ]; then echo "the tests failed: nothing after them runs" >> "$O/rc.txt"; break; fi
   done'
 echo "lease rc $?" >> "$O/rc.txt"
 cat "$O/rc.txt"

@@ -95,6 +95,28 @@ quantizer (2 units of codes and one of the scale), down and residual.
 | units | 25 a layer, 1,300 | 26,624,000 |
 | committed bytes | 663,824 a layer, 34,518,848 | 706,946,007,040 |
 
+## Measured on the H200
+
+Run `r20261026-002612-bfed` (vy-dc-h200, one H200, commit 2eb946b41c, `gpu.sh`):
+
+- **Bit-exact.** Every `check.py` check passed. That covers the fixture's root, the edge layout at 1 to 300 slots against
+  the reference and at 4,097 and 20,480 against the host twin, and two and three H200 layers. It also covers the frozen
+  layout at 20,480 slots (707 GB): six sampled slots rebuilt by the reference, and the step root from the device's slot
+  roots.
+- **Alone,** every op committed, 52 layers:
+
+  | slots | s a step | GB/s | rows kernel | fold |
+  | --- | --- | --- | --- | --- |
+  | 20,480 | 1.464 | 483 | 1.409 s | 38 ms |
+  | 4,096 | 0.395 | 358 | 0.352 s | 37 ms |
+  | 1,024 | 0.176 | 201 | 0.137 s | 37 ms |
+
+  At 20,480 slots that's 3.79 G SHA-512 compressions/s of row data. It's 40% of a 3.7 s serving step and 20% of a
+  7.5 s one.
+- **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 20,480, 945 TOPS): the GEMMs take 116.5 ms alone and
+  145 ms beside the commit (+24%). Overlapped, a layer takes 145 ms, against 150 ms run one after the other. Over a
+  step, the commit costs 20% of the GEMMs' 7.54 s.
+
 ## Files
 
 - `slots.py`: the reference, `edge_layout()`, `h200_layout()`, and `python slots.py fixture` (writes the fixture).
@@ -102,6 +124,7 @@ quantizer (2 units of codes and one of the scale), down and residual.
   per-slot fold and the step tree); `commit_slots.cu` the kernels; `commit_slots_host.cpp` the host twin.
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit`; builds cached under `~/.cache/verity/commit_slots`.
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 20,480 slots on sampled
-  slots); `bench.py`: GB/s and the share of a serving step at the frozen shape.
+  slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8 GEMMs;
+  `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the host twin against the reference, and (with a GPU) the kernels against the host twin.

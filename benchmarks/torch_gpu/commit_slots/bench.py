@@ -2,7 +2,7 @@
 
 1. **Alone.** A whole step, the 52 layers' outputs (resident, random) committed at each of ``--slots``: seconds a step, GB/s
    of committed bytes, the kernels' split (rows, units, fold, finish), and the step's share of a serving step of each of
-   ``--step-s`` seconds.
+   ``--step-s`` seconds at ``--step-slots`` slots, scaled with the slot count.
 2. **Beside the GEMMs.** At the first slot count, a layer's four int8 GEMMs at M = slots (cuBLASLt through
    ``torch._int_mm``: QKV, o_proj, up, down at the frozen widths) alone, the layer's commit alone, and both at once (the
    commit on the call's side stream): the GEMMs' slowdown, and a step estimate from the measured GEMMs.
@@ -59,7 +59,7 @@ def step(plan: G.Plan, bufs: list[torch.Tensor], slots: int, layers: int) -> dic
     return {"s": _ms(start, marks[-1][1]) / 1e3, "split_s": split}
 
 
-def alone(layout: S.Layout, slots: int, reps: int, step_s: list[float]) -> dict[str, Any]:
+def alone(layout: S.Layout, slots: int, reps: int, step_s: list[float], step_slots: int) -> dict[str, Any]:
     plan = G.Plan(CTX, layout)
     bufs = data(layout, slots)
     step(plan, bufs, slots, len(layout.groups))
@@ -72,7 +72,7 @@ def alone(layout: S.Layout, slots: int, reps: int, step_s: list[float]) -> dict[
     return {"slots": slots, "layers": len(layout.groups), "committed_bytes": nbytes, "rows": slots * layout.row_count,
             "units": slots * layout.unit_count, "s": [r["s"] for r in runs], "best_s": best["s"], "split_s": best["split_s"],
             "GB_per_s": nbytes / best["s"] / 1e9, "row_compressions_per_s": blocks / best["s"],
-            "share_of_step": {str(t): best["s"] / t for t in step_s}}
+            "share_of_step": {str(t): best["s"] / (t * slots / step_slots) for t in step_s}}
 
 
 def beside(layout: S.Layout, slots: int, reps: int) -> dict[str, Any]:
@@ -131,7 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--slots", type=int, nargs="+", default=[20480, 4096, 1024])
     ap.add_argument("--reps", type=int, default=3)
-    ap.add_argument("--step-s", type=float, nargs="+", default=[3.7, 7.5], help="serving step times to state the share at")
+    ap.add_argument("--step-s", type=float, nargs="+", default=[3.7, 7.5],
+                    help="serving step times at --step-slots to state the share at, scaled with the slots (a step's tokens)")
+    ap.add_argument("--step-slots", type=int, default=20480)
     ap.add_argument("--no-beside", action="store_true")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
@@ -143,7 +145,7 @@ def main(argv: list[str] | None = None) -> int:
                            "torch": torch.__version__, "nvidia_smi": smi, "layout": layout.name,
                            "slot_bytes": layout.slot_bytes, "alone": []}
     for slots in a.slots:
-        r = alone(layout, slots, a.reps, a.step_s)
+        r = alone(layout, slots, a.reps, a.step_s, a.step_slots)
         doc["alone"].append(r)
         print(json.dumps(r), flush=True)
     if not a.no_beside:
