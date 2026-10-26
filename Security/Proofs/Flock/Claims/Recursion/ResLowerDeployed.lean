@@ -845,9 +845,8 @@ theorem v_words {j : ℕ} {nm : String} {pt : VStar.Part} {c : Circuit} {u : VSt
     rw [hnone]
     simp
   rw [List.findIdx?_map] at hfind
-  have hq : c.ports.findIdx? (·.name == "v") = some pt.S.ports.length := by
-    rw [← List.findIdx?_toArray, Array.toArray_toList]
-    exact hfind
+  have hq : c.ports.findIdx? (·.name == "v") = some pt.S.ports.length :=
+    (List.findIdx?_toArray _ c.ports.toList).trans hfind
   rw [hqv] at hq
   cases hq
   have hw := take_words hr'
@@ -1045,8 +1044,9 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     intro k hk
     have h1 := FlockSoundness.Discharge.Hidden.outAt_succ st.c hj
     have h2 : FlockSoundness.Discharge.Hidden.outAt st.c (q - HmOut.nIn st.c + 1) ≤
-        FlockSoundness.Discharge.Hidden.outAt st.c st.c.outPorts.size :=
-      words_take_mono (·.2) st.c.outPorts.toList (by omega)
+        FlockSoundness.Discharge.Hidden.outAt st.c st.c.outPorts.size := by
+      unfold FlockSoundness.Discharge.Hidden.outAt
+      exact words_take_mono (·.2) st.c.outPorts.toList (by omega)
     rw [FlockSoundness.Discharge.HiddenExec.outAt_size] at h2
     rw [FlockSoundness.Discharge.Hidden.getElem!_eq_getD'] at h1
     omega
@@ -1057,7 +1057,8 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
     refine readForms_eq_of_bits (by
       simp only [outForms, List.length_map, List.length_range, FlockSoundness.Discharge.Hm.length_bytesOf, hwq, hq!]
       omega) fun i hi => ?_
-    have hi' : i < 16 * st.c.ports[q].words := by simpa [outForms, hwq] using hi
+    have hi' : i < 16 * st.c.ports[q].words := by
+      simpa [outForms, Array.getElem?_eq_getElem hqs] using hi
     have hk : i / 16 < (st.c.ports.getD (HmOut.nIn st.c + (q - HmOut.nIn st.c)) default).words := by
       rw [hqj, hwq]; omega
     have hm := FlockSoundness.Discharge.Hidden.msg_copy L L0 F0 hv1 hda hrows hz o hgn hj hk
@@ -1107,11 +1108,11 @@ theorem slotOut_table {tags : Flock.Tags} {cf pf : ByteArray} {coins : _} {table
 
 /-- `FlockDeploy.Raw.ins` reads its tags from `--statement`'s name, and C's under the session's coins. -/
 theorem raw_ins_tags {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) :
-    Tags.find? w.statement = some s.stmtTags ∧ ∃ coins, s.read.I.tags = s.stmtTags.withCoins coins := by
+    Tags.find? w.statement = some s.stmtTags ∧ s.read.I.tags = s.stmtTags.withCoins s.read.I.coins := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, _, rfl⟩)
+  all_goals first | (cases h; done) | (cases h; exact ⟨by assumption, rfl⟩)
 
 /-- A recursive statement's tags are a known statement's, and C's are them under the session's coins. -/
 theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
@@ -1126,7 +1127,7 @@ theorem insO_tags {x : Msg} {i : RecIns} (h : insO x = some i) :
     · simp at h
     have h' : w.ins.toOption = some i := by simpa using h
     obtain ⟨hf, hc⟩ := raw_ins_tags (RecRaw.ins_base (toOption_eq_some h'))
-    exact ⟨⟨_, hf⟩, hc⟩
+    exact ⟨⟨_, hf⟩, _, hc⟩
 
 /-- With an inner shape, `RecVStar.checkStmt` refuses a statement other than `verity/flock-circuit`. -/
 theorem checkStmt_name {i : Flock.RecVStar.Inner} {tags : Flock.Tags} {tables : List (String × ByteArray)}
@@ -1154,7 +1155,7 @@ theorem staged_hidden {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s 
   have e : p = { i.base.read with sts } := Option.some.inj (hx.symm.trans (parse_of_setupO hsu))
   subst e
   obtain ⟨hins, hset⟩ := setupO_some hsu
-  obtain ⟨-, -, hinner, -⟩ := insO_staged hins
+  obtain ⟨r, -, hinner, -⟩ := insO_staged hins
   have hC := RecIns.setup_checks hset
   rw [hinner, insO_staged_part hins] at hC
   have hn := checkStmt_name (checks_stmt hC t ht)
