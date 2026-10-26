@@ -2,7 +2,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Commit
 import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
 import Proofs.Flock.Soundness.Discharge.Layout.Scope
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+import Proofs.Flock.Soundness.ParseStmt
 
 /-!
 # A hidden-output statement's flat twin
@@ -144,16 +144,17 @@ theorem unitRowsFlat (ht : tags.typed = false)
 
 /-! ## The rows `scopeOkH` covers -/
 
-/-- **The hidden-output headlines' rows are covered**: on a circuit `HmOut.parse` accepts (`HmRow.parse`, then
-`HmOut.checkRows`), all `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port,
+/-- **The hidden-output headlines' rows are covered**: on a circuit `HmRow.parse` accepts after any nets ahead of the
+file's (`pre`: a templated file's read unit) and `HmOut.checkRows` passes, all `sha512/row/v1` rows (whole blocks, `ParseFacts.portWords`; one output row per output port,
 `Hidden.out_rows_v1`), or each row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port. -/
-theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
-    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+theorem rowsFit_of_rowsPre {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)}
+    {pre : Array (String × Net)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables (pre := pre) = .ok c) (hc : HmOut.checkRows c = .ok ())
     (h : (Layout.v1Ports c || Layout.bitRows c) = true) : Hidden.Any.RowsFitS c := by
-  have P := parse_facts hp
+  have P := (parse_factsPre_nets hp).1
   rcases Layout.rowsH_spec h with h1 | ⟨h2, hr, ho⟩
   · have hv : ∀ p ∈ c.ports.toList, p.v2 = false := fun p hm => (h1 p hm).1
-    obtain ⟨hu, hrep, hj⟩ := Hidden.out_rows_v1 hp hc hv
+    obtain ⟨hu, hrep, hj⟩ := Hidden.out_rows_v1Pre hp P hc hv
     refine Hidden.Any.RowsFit.rowsFitS ⟨⟨fun p hm => ?_, hrep, fun j hj' => (hj j hj').1⟩, fun p hm => ?_⟩
     · have hw := P.portWords p hm (hv p hm)
       exact ⟨hu p hm, (h1 p hm).2.1, by omega, by omega⟩
@@ -178,10 +179,54 @@ theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String ×
       · obtain ⟨hs, hb, hn, hf⟩ := Layout.segRow_spec hs
         exact Or.inr ⟨hs, hb, hn, hf⟩
 
+theorem rowsFit_of_rows {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ())
+    (h : (Layout.v1Ports c || Layout.bitRows c) = true) : Hidden.Any.RowsFitS c :=
+  rowsFit_of_rowsPre hp hc h
+
 /-- **`scopeOkH`'s rows are covered** (`rowsFit_of_rows`). -/
 theorem rowsFit_of_scope {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
     (hp : HmRow.parse tags cf tables = .ok c) (hc : HmOut.checkRows c = .ok ()) (h : Layout.scopeOkH c = true) :
     Hidden.Any.RowsFitS c :=
   rowsFit_of_rows hp hc (Layout.scopeOkH_rowsB h)
+
+theorem v1PortsL_unrolled (c : Circuit) : Layout.v1Ports (HmOut.unrolled c) = Layout.v1Ports c := by
+  unfold HmOut.unrolled; split
+  · split <;> rfl
+  · rfl
+
+theorem bitRowsL_unrolled (c : Circuit) : Layout.bitRows (HmOut.unrolled c) = Layout.bitRows c := by
+  unfold HmOut.unrolled; split
+  · split <;> rfl
+  · rfl
+
+/-- Unrolling a circuit keeps its rows: `RowsFitS` reads its ports, never its nets or template. -/
+theorem rowsFit_unrolled (c : Circuit) : Hidden.Any.RowsFitS (HmOut.unrolled c) ↔ Hidden.Any.RowsFitS c := by
+  unfold HmOut.unrolled; split
+  · split <;> exact Iff.rfl
+  · exact Iff.rfl
+
+/-- **A committed circuit's rows are covered** (`Hidden.Committed`): a flat file's `HmOut.parse`'s (`rowsFit_of_rows`),
+or a templated file's, whose rows are its `HmRow.parse`'s after the read unit (`rowsFit_of_rowsPre`). -/
+theorem rowsFit_of_committed {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hty : tags.typed = false) (h : Hidden.Committed tags cf tables c)
+    (hr : (Layout.v1Ports c || Layout.bitRows c) = true) : Hidden.Any.RowsFitS c := by
+  rcases h with h | h
+  · obtain ⟨hp, hc⟩ := Hidden.parse_untyped hty h
+    exact rowsFit_of_rows hp hc hr
+  · obtain ⟨tu, c₀, hp, hck, -, rfl⟩ := TmplValue.parseTmpl_cases h
+    exact rowsFit_of_rowsPre hp hck hr
+
+/-- **The statement circuit's rows are covered** where `Layout.scopeOkH` passes: `HmOut.parseStmt`'s circuit, a flat
+file's `HmOut.parse`'s or a templated file's committed circuit unrolled, whose rows are the committed circuit's
+(`rowsFit_unrolled`). -/
+theorem rowsFit_of_stmt {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit}
+    (hty : tags.typed = false) (hc : HmOut.parseStmt tags cf tables = .ok c) (h : Layout.scopeOkH c = true) :
+    Hidden.Any.RowsFitS c := by
+  have hr := Layout.scopeOkH_rowsB h
+  rcases parseStmt_cases hc with ⟨-, hc⟩ | ⟨-, ct, hct, rfl⟩
+  · exact rowsFit_of_committed hty (.inl hc) hr
+  · rw [v1PortsL_unrolled, bitRowsL_unrolled] at hr
+    exact (rowsFit_unrolled ct).2 (rowsFit_of_committed hty (.inr hct) hr)
 
 end FlockSoundness.Discharge.HiddenExec
