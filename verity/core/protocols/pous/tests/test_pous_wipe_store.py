@@ -1,8 +1,9 @@
 """`wipe_store`, the streamed wipe's prover keeping the fill in device memory, here on its host-memory stand-in: it keeps
 each frame where its labels go and answers each read from there, its gate writes both sides of every power-of-two byte
-boundary and refuses a store whose addresses wrap, a host without the CUDA driver is refused by name, and the leg runs
-whole on it against a challenger side of its own host that streams natively, recording the prover's, the session's and
-the streamer's figures and the store in the placement."""
+boundary and refuses a store whose addresses wrap, its cheat keeps prior content in the first labels' places and is
+rejected one label past f·M, a host without the CUDA driver is refused by name, and the leg runs whole on it against a
+challenger side of its own host that streams natively, recording the prover's, the session's and the streamer's figures
+and the store in the placement, and against a simulated placement's side on the cheat, rejecting."""
 
 from __future__ import annotations
 
@@ -12,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+import pous_test_signer as ts
+from verity.core.protocols.pous import memory_challenger as mc
 from verity.core.protocols.pous import streamed_wipe as sw
 from verity.core.protocols.pous import wipe_party as WP
 from verity.core.protocols.pous import wipe_period as W
@@ -82,6 +85,32 @@ def test_a_store_whose_addresses_wrap_is_refused_at_the_gate() -> None:
         p.gate()
 
 
+def test_the_cheat_keeps_prior_content_in_place_of_the_first_labels() -> None:
+    p = WS.StoreProver(SMALL, WS.HostMemory(), staging=1000, clock=Clock(), foreign=40)
+    p.receive(0, sw.labels(KEY, 0, 64))
+    kept = p.answer(range(64))
+    assert all(kept[64 * i:64 * (i + 1)] != sw.label(KEY, i) for i in range(40))
+    assert kept[64 * 40:] == sw.labels(KEY, 40, 24)
+    assert p.record()["foreign"] == {"labels": 40, "bytes": 40 * 64}
+    p.close()
+    with pytest.raises(ValueError, match="foreign is 65 labels"):
+        WS.StoreProver(SMALL, WS.HostMemory(), foreign=65)
+
+
+def test_a_store_keeping_prior_content_past_f_m_is_rejected() -> None:
+    """The GPU store's cheat one label past f·M, on host memory: like `Keeping`, it misses a read with probability at
+    least `1 − (18/19)^2152`; on these coins it misses one."""
+    params = W.params_for()
+    n = W.foreign_labels("fM", params)
+    assert (n - 1) * sw.LABEL_BITS <= -(-W.memory_bits(params) // 19) < n * sw.LABEL_BITS
+    store = WS.StoreProver(params, WS.HostMemory(), clock=Clock(), foreign=n)
+    w = W.run("n0", params, signer=ts.TestSigner(b"store cheat", 2), log=ts.session_log(), schemes=ts.SCHEMES,
+              protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=Clock(), coin_secret=b"coins", egress_bits=0,
+              prover=lambda _: store)
+    store.close()
+    assert w.verdict == "reject" and w.report["ended"] == sw.WRONG and "wrong answers" in w.answer["reason"]
+
+
 def test_a_host_without_the_cuda_driver_is_refused() -> None:
     with pytest.raises(RuntimeError, match="no CUDA driver on this host"):
         WS.Cuda(library="libcuda-absent.so.1")
@@ -119,3 +148,24 @@ def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_strea
     assert record["report"]["fill"]["labels"] == W.SEGMENT_LABELS and record["report"]["streamer"]["gates"]
     s = W.summary(record)
     assert s["verdict"] == "accept" and s["judge"] == "python" and s["segments"] == 1 and s["tier"] == "host-dram"
+
+
+def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
+    """`main` on period.json's cheat (`foreign_bytes` `fM`) with the challenger a process of its own on the prover's
+    node named `simulated`: the wipe rejects, `--expect reject` exits 0, and the record names the placement and what
+    the prover kept."""
+    period = tmp_path / "periods" / "p0"
+    period.mkdir(parents=True)
+    (period / "period.json").write_text(json.dumps({"wipe": {"store": "host", "segments": 1, "foreign_bytes": "fM",
+                                                             "placement": "simulated"}}))
+    device = tmp_path / "device"
+    device.mkdir()
+    side = WP.Party("n0", (sys.executable, str(Path(__file__).parent / "wipe_side.py"), str(device)))
+    monkeypatch.setattr(WP.Party, "of", classmethod(lambda cls, doc, node, d, extra=(): side))
+    out = tmp_path / "out"
+    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0", "--expect", "reject"]) == 0
+    record = json.loads((out / "wipe.json").read_text())
+    n = W.foreign_labels("fM", W.params_for())
+    assert record["answer"]["verdict"] == "reject" and record["prover"]["foreign"]["labels"] == n
+    assert record["placement"]["kind"] == "simulated" and record["placement"][WP.PREMISE].startswith("simulated: ")
+    assert W.summary(record)["foreign_labels"] == n == record["wipe"]["foreign_labels"]

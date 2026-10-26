@@ -140,7 +140,12 @@ def test_the_party_follows_period_json(tmp_path) -> None:
     assert wired == WP.Party("vy-auditor-1", ("vy-verifier-gate", "wipe"), ("127.0.0.1", 7962))
     native = WP.Party.of({}, "n0", tmp_path, ("--streamer", "build", "--threads", "8"))
     assert native.command[-4:] == ("--streamer", "build", "--threads", "8")
-    assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ")
+    assert WP.placement("n0", "n0")[WP.PREMISE].startswith("unmet: ") and WP.placement("n0", "n0")["kind"] == "prover-node"
+    assert WP.placement("n0", "a")["kind"] == "own-host"
+    simulated = WP.placement("n0", "n0", simulated=True)
+    assert simulated["kind"] == "simulated" and simulated[WP.PREMISE].startswith("simulated: ")
+    with pytest.raises(ValueError, match="simulated placement runs the memory challenger on the prover's node"):
+        WP.placement("n0", "a", simulated=True)
 
 
 def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
@@ -164,7 +169,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     record = json.loads((out / "wipe.json").read_text())
     assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
-    assert record["wipe"] == W.CONFIG | {"segments": W.SEGMENTS, "tier": W.TIER}
+    assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "memory_bits": M, "segments": W.SEGMENTS, "tier": W.TIER}
 
 
 def test_the_config_and_the_device_fit() -> None:
@@ -173,6 +178,12 @@ def test_the_config_and_the_device_fit() -> None:
         W.config({"wipe": {"segment": 4}})
     with pytest.raises(ValueError, match="store is python, host or cuda"):
         W.config({"wipe": {"store": "tpu"}})
+    for bad in ({"foreign_bytes": -1}, {"foreign_bytes": "f"}, {"foreign_bytes": 1.5}, {"placement": "far"}):
+        with pytest.raises(ValueError, match="foreign_bytes is a byte count"):
+            W.config({"wipe": bad})
+    p = W.params_for()
+    assert W.foreign_labels("fM", p) == W.SEGMENT_LABELS // 19 + 1
+    assert W.foreign_labels(100, p) == 2 and W.foreign_labels(0, p) == 0 and W.foreign_labels(1 << 40, p) == p.labels
 
     class Free(WS.Cuda):
         def __init__(self, free: int) -> None:

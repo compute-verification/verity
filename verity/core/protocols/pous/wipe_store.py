@@ -12,6 +12,8 @@ copy of what arrived.
 each read back; a mismatch raises, so a wrapped or truncated address shows before the fill, not as a rejected session),
 keeps each frame (`receive_into`, read from the connection straight into staging), answers each read (`answer`), and
 `record()`s its timings: the fill from its first frame to its last, the copies' share, and each read's device latency.
+With `foreign=n` it is the cheat `wipe_period.Keeping` is on host memory: the first `n` labels' places keep prior content
+of its own, so a wipe of it must reject once `n` labels exceed `f·M`.
 """
 
 from __future__ import annotations
@@ -223,15 +225,23 @@ def gate_indices(labels: int) -> list[int]:
 
 
 class StoreProver:
-    """The honest server keeping the fill of `params` in `memory` and answering from it, its timings on `clock`."""
+    """The honest server keeping the fill of `params` in `memory` and answering from it, its timings on `clock`; with
+    `foreign` labels, the server that keeps its own prior content in the first `foreign` labels' places instead."""
 
     def __init__(self, params: sw.WipeParams, memory: Memory, *, staging: int = STAGING,
-                 clock: Callable[[], int] = time.perf_counter_ns) -> None:
-        self.params, self.memory, self.clock = params, memory, clock
+                 clock: Callable[[], int] = time.perf_counter_ns, foreign: int = 0) -> None:
+        if not 0 <= foreign <= params.labels:
+            raise ValueError(f"foreign is {foreign} labels, outside 0 to the fill's {params.labels}")
+        self.params, self.memory, self.clock, self.foreign = params, memory, clock, foreign
         self.size = params.labels * LABEL
         self.base = memory.alloc(self.size)
         self.stage_addr, self.stage = memory.pinned(staging)
         self.read_addr, self.read = memory.pinned(LABEL)
+        self.prior_addr: int | None = None
+        if foreign:
+            self.prior_addr, self.prior = memory.pinned(staging)
+            for j in range(staging // LABEL):
+                self.prior[LABEL * j:LABEL * (j + 1)] = hashlib.sha512(b"prior content %d" % j).digest()
         self.gated: dict[str, Any] | None = None
         self.frames = self.filled = self.copy_ns = 0
         self.first_ns: int | None = None
@@ -265,8 +275,13 @@ class StoreProver:
         while done < n:
             m = min(n - done, len(self.stage))
             take(self.stage[:m])
+            dst = self.base + LABEL * start + done
+            prior = min(m, max(0, LABEL * self.foreign - LABEL * start - done))
             c = self.clock()
-            self.memory.htod(self.base + LABEL * start + done, self.stage_addr, m)
+            if prior:
+                self.memory.htod(dst, self.prior_addr, prior)
+            if prior < m:
+                self.memory.htod(dst + prior, self.stage_addr + prior, m - prior)
             self.copy_ns += self.clock() - c
             done += m
         self.frames, self.filled, self.last_ns = self.frames + 1, self.filled + n, self.clock()
@@ -309,16 +324,20 @@ class StoreProver:
         """The store, its gate, the fill (bytes, frames, from the first frame to the last, the copies' share) and each
         read's device latency, on this prover's clock."""
         span = 0 if self.first_ns is None or self.last_ns is None else self.last_ns - self.first_ns
-        return {"store": self.memory.info() | {"bytes": self.size}, "gate": self.gated,
-                "fill": {"bytes": self.filled, "frames": self.frames, "ns": span, "GBps": gbps(self.filled, span),
-                         "copy_ns": self.copy_ns, "copy_GBps": gbps(self.filled, self.copy_ns)},
-                "reads": percentiles(self.reads)}
+        out = {"store": self.memory.info() | {"bytes": self.size}, "gate": self.gated,
+               "fill": {"bytes": self.filled, "frames": self.frames, "ns": span, "GBps": gbps(self.filled, span),
+                        "copy_ns": self.copy_ns, "copy_GBps": gbps(self.filled, self.copy_ns)},
+               "reads": percentiles(self.reads)}
+        return out | {"foreign": {"labels": self.foreign, "bytes": LABEL * self.foreign}} if self.foreign else out
 
     def close(self) -> None:
         self.stage.release()
         self.read.release()
         self.memory.free_pinned(self.stage_addr)
         self.memory.free_pinned(self.read_addr)
+        if self.prior_addr is not None:
+            self.prior.release()
+            self.memory.free_pinned(self.prior_addr)
         self.memory.free(self.base)
 
 

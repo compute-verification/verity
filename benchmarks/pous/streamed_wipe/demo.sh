@@ -16,6 +16,11 @@
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side
 #                        there, e.g. 'python -m verity.core.protocols.pous.wipe_party --device D --listen 0.0.0.0:P
 #                        --streamer build'); without them it runs on this node, the premise unmet
+#   --simulated          the memory challenger here, named the stand-in for one on its own host (placement
+#                        `simulated`, the premise assumed; its key in this run's scratch all the same)
+#   --foreign-gb G|fM    the cheat: the prover keeps G GB (10^9 bytes) of prior content in place of the fill's first
+#                        labels, or fM, one label past f·M; a cheat's run expects reject
+#   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
 #   --threads T          the native streamer's threads when the challenger runs here (default: every CPU)
 #   --store cuda|host    host: the CPU stand-in, host memory for the device (no GPU)
 #   --gpu NAME           refuse a GPU whose name lacks NAME (default H200; any: take any)
@@ -26,7 +31,7 @@
 # Under gpu-lease when the node has it (outside the lease: uv sync, the Lean build, the streamer's build check).
 # Outputs under $OUT (a run's out/; else ./out): gpu.txt, env.txt, lake-build.log, period.json, wipe.json,
 # wipe.case.json, summary.json. Scratch (the challenger's key and session log, the built streamer) is a mktemp -d,
-# removed on exit: no key leaves the node. Exit 0 on an accepted wipe the Lean and the Python agree on.
+# removed on exit: no key leaves the node. Exit 0 on the expected verdict, the Lean and the Python agreeing.
 set -euo pipefail
 SELF=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 ROOT=$(cd "$(dirname "$SELF")/../../.." && pwd)
@@ -38,10 +43,14 @@ if [ "${1:-}" = leased ]; then
   [ -n "${GPU_LEASE_UUID:-}" ] && export CUDA_VISIBLE_DEVICES=$GPU_LEASE_UUID
 else
   DRY=0 SEGMENTS= RESERVE=1 CH= CH_ADDR= CH_CMD= THREADS= STORE=cuda GPU=H200 NODE=$(hostname) LIMIT=20000000 LEAN=1
+  SIMULATED=0 FOREIGN=0 EXPECT=
   ARGS=("$@")
   while [ $# -gt 0 ]; do
     case "$1" in
       --dry-run) DRY=1 ;;
+      --simulated) SIMULATED=1 ;;
+      --foreign-gb) FOREIGN=$2; shift ;;
+      --expect) EXPECT=$2; shift ;;
       --segments) SEGMENTS=$2; shift ;;
       --reserve-gib) RESERVE=$2; shift ;;
       --challenger) CH=$2; shift ;;
@@ -60,6 +69,8 @@ else
   if [ -n "$CH$CH_ADDR$CH_CMD" ] && [ -z "$CH" -o -z "$CH_ADDR" -o -z "$CH_CMD" ]; then
     echo "demo.sh: --challenger, --challenger-address and --challenger-command go together"; exit 2
   fi
+  [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
+  [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }
   [ "$DRY" = 1 ] && [ -z "$SEGMENTS" ] && SEGMENTS=64
   S=$(mktemp -d)
   trap 'rm -rf "$S"' EXIT
@@ -80,18 +91,21 @@ else
   fi
   mkdir -p "$S/periods/p0"
   uv run --no-sync python - "$S/periods/p0/period.json" "$TOOLS" "$STORE" "${SEGMENTS:-null}" "$RESERVE" "${THREADS:-null}" \
-    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" <<'EOF'
+    "$LIMIT" "$CH" "$CH_ADDR" "$CH_CMD" "$SIMULATED" "$FOREIGN" <<'EOF'
 import json, shlex, sys
-path, tools, store, segments, reserve, threads, limit, ch, addr, cmd = sys.argv[1:]
+from fractions import Fraction
+path, tools, store, segments, reserve, threads, limit, ch, addr, cmd, simulated, foreign = sys.argv[1:]
 doc = {"tools": json.loads(tools),
        "wipe": {"store": store, "segments": json.loads(segments), "reserve_bytes": int(reserve) << 30,
-                "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit)}}
+                "streamer": "native", "threads": json.loads(threads), "limit_ns": int(limit),
+                "foreign_bytes": foreign if foreign == "fM" else int(Fraction(foreign) * 10 ** 9),
+                "placement": "simulated" if simulated == "1" else None}}
 if ch:
     doc |= {"challenger_host": ch, "challenger": {"wipe": {"command": shlex.split(cmd), "address": addr}}}
 open(path, "w").write(json.dumps(doc, indent=1, sort_keys=True))
 EOF
   cp "$S/periods/p0/period.json" "$O/period.json"
-  export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_GPU=$GPU
+  export DEMO_PERIOD=$S/periods/p0 DEMO_NODE=$NODE DEMO_STORE=$STORE DEMO_GPU=$GPU DEMO_EXPECT=$EXPECT
   if [ "$STORE" = cuda ] && [ -z "${GPU_LEASE_UUID:-}" ] && command -v gpu-lease >/dev/null 2>&1; then
     GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 60 -- bash "$SELF" leased
   else
@@ -109,6 +123,6 @@ if [ "$DEMO_STORE" = cuda ]; then
 fi
 rc=0
 uv run --no-sync python -m verity.core.protocols.pous.wipe_period --period "$DEMO_PERIOD" --out "$O" --node "$DEMO_NODE" \
-  > "$O/summary.json" || rc=$?
+  --expect "$DEMO_EXPECT" > "$O/summary.json" || rc=$?
 cat "$O/summary.json"
 exit $rc

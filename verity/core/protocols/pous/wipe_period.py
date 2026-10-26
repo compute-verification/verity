@@ -242,12 +242,15 @@ def run(node: str, params: sw.WipeParams | None = None, *, signer: mc.Signer | N
 
 
 CONFIG = {"store": "python", "device": 0, "segments": None, "reserve_bytes": 1 << 30, "tier": None,
-          "limit_ns": LIMIT_NS, "streamer": "python", "threads": None}
+          "limit_ns": LIMIT_NS, "streamer": "python", "threads": None, "foreign_bytes": 0, "placement": None}
 """`period.json`'s `wipe` and its defaults: the prover's `store` (`python`, `streamed_wipe.Prover`; `host`, host memory
 through `wipe_store`; `cuda`, GPU `device`'s memory), the fill in 32 MiB `segments` (`SEGMENTS`; for `cuda`, `None` fills
 the device's free memory less `reserve_bytes`), the declared `tier` (the store's own by default), the deadline a read,
 and the fill's streamer (`native`, `wipe_stream` on `threads` CPUs, or `python`) when the challenger runs on this node.
-A challenger on its own host streams as its `challenger.wipe.command` says."""
+A challenger on its own host streams as its `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat
+that keeps that much prior content in place of the fill's first labels (`foreign_labels`; `"fM"`, one label past `f·M`),
+and `placement` `"simulated"` names a challenger on this node the stand-in for one on its own host
+(`wipe_party.placement`)."""
 
 
 def config(doc: Mapping[str, Any]) -> dict[str, Any]:
@@ -258,7 +261,19 @@ def config(doc: Mapping[str, Any]) -> dict[str, Any]:
     c = CONFIG | got
     if c["store"] not in ("python", "host", "cuda") or c["streamer"] not in ("python", "native"):
         raise ValueError(f"period.json's wipe: store is python, host or cuda and streamer python or native, not {got}")
+    f = c["foreign_bytes"]
+    if not (f == "fM" or type(f) is int and f >= 0) or c["placement"] not in (None, "simulated"):
+        raise ValueError(f"period.json's wipe: foreign_bytes is a byte count or \"fM\" and placement null or "
+                         f"\"simulated\", not {got}")
     return c
+
+
+def foreign_labels(foreign_bytes: int | str, p: sw.WipeParams) -> int:
+    """The labels a cheat of `foreign_bytes` keeps prior content in place of: whole labels covering the bytes, or for
+    `"fM"` the fewest labels past `⌈f·M⌉` bits, the least a wipe must reject."""
+    if foreign_bytes == "fM":
+        return -(-memory_bits(p) * F.numerator // F.denominator) // sw.LABEL_BITS + 1
+    return min(p.labels, -(-int(foreign_bytes) // sw.LABEL_BYTES))
 
 
 def store_of(c: Mapping[str, Any]) -> wipe_store.Memory | None:
@@ -296,14 +311,17 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     memory = store_of(c)
     tier = c["tier"] or (TIER if memory is None else memory.tier)
     params = params_for(segments_of(c, memory), limit_ns=c["limit_ns"], tier=tier)
-    store = None if memory is None else wipe_store.StoreProver(params, memory)
+    foreign = foreign_labels(c["foreign_bytes"], params)
+    store = None if memory is None else wipe_store.StoreProver(params, memory, foreign=foreign)
     try:
         if store is not None:
             store.gate()
         where = wipe_party.placement(node, party.host,
-                                     store=None if memory is None else memory.info() | {"bytes": store.size})
+                                     store=None if memory is None else memory.info() | {"bytes": store.size},
+                                     simulated=c["placement"] == "simulated")
         t = time.monotonic()
-        wipe = run(node, params, party=party, prover=sw.Prover if store is None else lambda _: store)
+        in_python = keeping(foreign) if foreign else sw.Prover
+        wipe = run(node, params, party=party, prover=in_python if store is None else lambda _: store)
         seconds = round(time.monotonic() - t, 2)
         prover = None if store is None else store.record()
     finally:
@@ -322,7 +340,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     (out / "wipe.case.json").write_text(json.dumps(wipe.case, sort_keys=True))
     (out / "wipe.json").write_text(json.dumps({"answer": answer, "lean": lean, "placement": where, "prover": prover,
                                                "report": wipe.report, "seconds": seconds, "session": timing(wipe.signed),
-                                               "wipe": c | {"segments": params.labels // SEGMENT_LABELS, "tier": tier}},
+                                               "wipe": c | {"foreign_labels": foreign, "memory_bits": memory_bits(params),
+                                                            "segments": params.labels // SEGMENT_LABELS, "tier": tier}},
                                               sort_keys=True, indent=1))
     return answer
 
@@ -331,8 +350,9 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
     """`wipe.json`'s headline: the verdict and who gave it, where each party ran, and the fill's and the reads' figures
     on each side."""
     a, prover, session, fill = record["answer"], record["prover"] or {}, record["session"] or {}, record["report"].get("fill")
+    w = record["wipe"]
     return {"verdict": a["verdict"], "reason": a["reason"], "public": a["public"], "judge": "lean" if record["lean"] else
-            "python", "segments": record["wipe"]["segments"], "tier": record["wipe"]["tier"],
+            "python", "segments": w["segments"], "tier": w["tier"], "foreign_labels": w.get("foreign_labels", 0),
             "placement": record["placement"], "seconds": record["seconds"],
             "challenger": {"fill_GBps": (session.get("fill") or {}).get("GBps"), "reads": session.get("reads"),
                            "streamer": fill},
@@ -342,20 +362,24 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """`python -m verity.core.protocols.pous.wipe_period --period DIR --out DIR [--node NAME]`: the leg on this node,
-    its summary printed; exit 0 on an accepted wipe, 1 otherwise."""
+    """`python -m verity.core.protocols.pous.wipe_period --period DIR --out DIR [--node NAME] [--expect VERDICT]`: the
+    leg on this node, its summary printed; exit 0 when the verdict is the expected one (`accept` by default), 1
+    otherwise."""
     ap = argparse.ArgumentParser(prog="python -m verity.core.protocols.pous.wipe_period", description=main.__doc__)
     ap.add_argument("--period", type=Path, required=True, help="the period's directory, holding period.json")
     ap.add_argument("--out", type=Path, required=True, help="where wipe.json and wipe.case.json go")
     ap.add_argument("--node", default=socket.gethostname(), help="the prover's node: the wiped server's id")
+    ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
+                    help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)
     answer = leg(a.period, a.node, a.out)
     print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
-    return 0 if answer["verdict"] == "accept" else 1
+    return 0 if answer["verdict"] == a.expect else 1
 
 
 __all__ = ["CONFIG", "EPS", "EXPERIMENTAL", "F", "LEAST_FILL_BYTES", "LIMIT_NS", "PROTOCOL", "READS", "SEGMENTS",
-           "UNCOUNTED", "Keeping", "Wipe", "answer", "case", "certify", "config", "digest", "gaps", "keeping", "leg",
+           "UNCOUNTED", "Keeping", "Wipe", "answer", "case", "certify", "config", "digest", "foreign_labels", "gaps",
+           "keeping", "leg",
            "main", "memory_bits", "outcome", "params_for", "profile", "run", "segments_of", "serve", "store_of",
            "summary", "timing"]
 

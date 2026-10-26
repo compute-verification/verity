@@ -173,15 +173,21 @@ class Party:
         return cls(host, tuple(entry["command"]), (h, int(p)))
 
 
-def placement(node: str, host: str, *, verifier: str | None = None,
-              store: Mapping[str, Any] | None = None) -> dict[str, Any]:
+def placement(node: str, host: str, *, verifier: str | None = None, store: Mapping[str, Any] | None = None,
+              simulated: bool = False) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-nebius-host`'s premise holds: that the memory challenger ran on a
-    machine the prover doesn't control, which is never the prover's node. `store` is the memory the prover kept the
-    fill in (`wipe_store`'s `info`), when it says."""
+    machine the prover doesn't control, which is never the prover's node. `kind` names the placement: `own-host`,
+    `simulated` (the challenger a process of its own on the prover's node, standing in for its own host, the premise
+    assumed) or `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says."""
     held = host != node
-    out = {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
-                     f"unmet: the memory challenger ran on the prover's node {node}")}
+    if simulated and held:
+        raise ValueError(f"a simulated placement runs the memory challenger on the prover's node {node}, not on {host}")
+    kind = "own-host" if held else "simulated" if simulated else "prover-node"
+    out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
+           PREMISE: {"own-host": f"holds: the memory challenger ran on {host}, not the prover's {node}",
+                     "simulated": f"simulated: the memory challenger ran as a process of its own on the prover's node "
+                                  f"{node}, its key in its own scratch, standing in for a host the prover doesn't control",
+                     "prover-node": f"unmet: the memory challenger ran on the prover's node {node}"}[kind]}
     return out if store is None else out | {"prover_store": dict(store)}
 
 
