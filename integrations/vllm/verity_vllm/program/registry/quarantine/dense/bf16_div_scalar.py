@@ -11,7 +11,7 @@ the same object so the quarantine's difftest adapter, `ALL_DEFINITIONS` and `SEM
 """
 from __future__ import annotations
 
-from verity_vllm.program.registry.dense import Bf16DivScalar, reciprocal_bits  # noqa: F401
+from verity_vllm.program.registry.dense import Bf16DivScalar, reciprocal_bits
 
 SEMANTIC_ID = "dense/Bf16DivScalar@v1"
 

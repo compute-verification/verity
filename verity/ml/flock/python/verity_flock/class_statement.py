@@ -454,7 +454,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.defs import CompositeDefinition
     from verity.ml.circuits.program import Program
-    from verity_vllm.pipeline.program_graph import _encoded, definition_digest
+    from verity_vllm.program.encoding import encode_specialization, definition_digest
 
     TG.load_registries()
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
@@ -471,7 +471,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
         if descriptor_id(fn) != fid:
             raise ValueError(f"{fid}: the registry binds {descriptor_id(fn)}")
         want = index.get(fid)
-        got = definition_digest(_encoded(fn)[1][fid]) if want else None
+        got = definition_digest(encode_specialization(fn)[1][fid]) if want else None
         if want and got != want:
             raise ValueError(f"{fid}: v0 digest {got} is not the row's {want}")
         fns.append(fn)

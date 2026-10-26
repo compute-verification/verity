@@ -16,7 +16,7 @@ A split's iterations (`mainloop_fwd_sm90_tma_gmma_ws.hpp`, IntraWGOverlap): its 
 blocks at or above the tile's `n_block_min_causal_local_mask` (MASKED_FROM, `attention_vocab.fa3_masked_from`) with `Check_inf`,
 the rest without.  So block b runs `AttnBlock_v4{..., FIRST = (b is the split's first), CHECK = FIRST or b >= MASKED_FROM}`.
 Each split ends with `SparseMlaSplitEnd_v1{DV=D, INV, SCALE=D^-0.5}` (the partial o * INV(sum) in f32 and the lse; its
-`scale_log2` word is `b1._scale_log2_bits(D)`'s) and the row with `SparseMlaCombine_v1{NSPLIT, DV=D, INV}`.
+`scale_log2` word is `b1.scale_log2_bits(D)`'s) and the row with `SparseMlaCombine_v1{NSPLIT, DV=D, INV}`.
 
 `SparseMlaCombine` is the combine's Definition at any head: `run_mha_fwd_combine` launches `FlashAttnFwdCombine<Shape<8, 128>,
 kLogMaxSplits 5, 256, 1, false, Varlen, bf16, float, Sm90>` for head_v > 64 and at most 32 splits, the instantiation sparse MLA's

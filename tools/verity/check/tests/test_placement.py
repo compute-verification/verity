@@ -290,6 +290,7 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     env = {"PATH": os.environ["PATH"], "CHECK_SLOTS": str(locks / "slots"), "LEAN_SLOTS": str(locks / "lean-slots")}
     r = subprocess.run([sys.executable, "-"], input=CHECK.slots_payload(), cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
+    doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set
     assert [(s["name"], s["holder"]["pid"] if s["holder"] else None, s["blocked"]) for s in doc["check"]["slots"]] == [
         ("c", os.getpid(), None), ("a", None, None)]
     pools = doc["lean"]["pools"]

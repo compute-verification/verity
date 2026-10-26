@@ -19,9 +19,12 @@ build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``defe
 ``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
-peers) are set: then it is a live session's on the auditor host, reserved at install, opened on the weights' root and its
-salt coin opened after it (`_LiveSession`), which the device run checks (`pouw_pearl_c_host.epoch_of`); the gate's result
-names the session (``coins``), and the arm's close ends it.
+peers) are set: then it is a live session's on the auditor host, reserved at install with its salt coin alone
+(`window.SALT_FAMILIES`), opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and epoch 0, the
+arm's one install under a fresh hm96 key) and its salt coin opened after it (`_LiveSession`), which the device run checks
+(`pouw_pearl_c_host.epoch_of`); the gate's result names the session (``coins``), and the arm's close ends it complete.
+``PEARLC_CHALLENGER_LANE`` (default ``vllm``) is the lane the gate key is registered for: while that lane's open period
+is H1's the arm refuses before reserving (`pouw_h1_window.period_reason`).
 """
 from __future__ import annotations
 
@@ -62,28 +65,29 @@ class _LiveSession:
     """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through ``ssh -R``. Reserved at
-    construction (`commit_coins.Gate`: ``reserve --peer NAME``, a live epoch's layout with one round coin), opened on the
-    weights' root once they are committed, its salt coin opened after it (`pouw_h1_window.open_session`), closed with the
-    arm."""
+    construction (`commit_coins.Gate`: ``reserve --peer NAME``, Pearl-C's layout, its salt coin alone,
+    `window.SALT_FAMILIES`), opened on salt epoch ``k``'s root over the weights' root once they are committed, its
+    salt coin opened after it (`pouw_h1_window.open_session`), closed with the arm, so it ends complete. Refused before
+    reserving while ``lane``'s open period in the auditor's ledger (``period``) is H1's, and before its open when the
+    reserve joined another period (`pouw_h1_window.reserve_salt`)."""
 
-    def __init__(self, gate: str, peer: str, epoch: int) -> None:
-        import json
+    #: the arm's salt epoch over its weights' root: one install, under a fresh hm96 key
+    k = 0
 
-        from verity.core.protocols.pouw import window as Wd
+    def __init__(self, gate: str, peer: str, epoch: int, lane: str) -> None:
         from verity_vllm.pipeline.commit_coins import Gate
+        from verity_vllm.protocols.pouw.h1 import window as PHW
 
         self.gate = Gate(gate)
-        families = json.dumps([list(f) for f in Wd.live_families(1)], separators=(",", ":"))
-        self.reserved = self.gate.call("reserve", "--peer", peer, "--scheme", Wd.LIVE_SCHEME, "--families", families,
-                                       "--epoch", str(epoch))
+        self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
         self.client = self.commitment = None
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
         from verity_vllm.protocols.pouw.h1 import window as PHW
 
-        self.client, self.commitment, opening, _, _, self.carried = PHW.open_session(
-            entry, self.gate.call, self.reserved["session"], root)
+        self.client, self.commitment, opening, _, self.carried = PHW.open_session(
+            entry, self.gate.call, self.reserved["session"], root, self.k)
         return opening
 
     def close(self) -> None:
@@ -109,6 +113,7 @@ class PearlCArm:
         self.epoch = int(os.environ.get("PEARLC_BENCH_EPOCH", "20261014"))
         self.gate_command = os.environ.get("PEARLC_CHALLENGER_GATE") or None
         self.peer = os.environ.get("PEARLC_CHALLENGER_PEER") or None
+        self.lane = os.environ.get("PEARLC_CHALLENGER_LANE") or "vllm"
         self.run = self.stack = self.weights = self.session = None
         self.coins: dict[str, Any] = {"source": "in-process"}
 
@@ -142,6 +147,7 @@ class PearlCArm:
 
     def ready(self, target: Any) -> None:
         from verity.core.protocols.pouw.audit import weights_root
+        from verity.core.protocols.pouw.salt import epoch_open_root
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
@@ -158,14 +164,14 @@ class PearlCArm:
                                "(this node's name in the challenger host's peers) together")
         kernel = PPD.Kernel.load(str(self.kernel_dir), self.cubin)
         if self.gate_command is not None:
-            self.session = _LiveSession(self.gate_command, self.peer, self.epoch)
+            self.session = _LiveSession(self.gate_command, self.peer, self.epoch, self.lane)
         salt_key = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(kernel, weights, scheme, salt_key=salt_key)
         if self.session is not None:
             opening = self.session.open(f"pouw:{scheme}", weights_root(roots))
             commitment = self.session.commitment
-            self.coins = {"source": "challenger", "session": self.session.carried,
-                          "salt_after": weights_root(roots).hex()}
+            self.coins = {"source": "challenger", "session": self.session.carried, "pass_index": self.session.k,
+                          "salt_after": epoch_open_root(weights_root(roots), self.session.k).hex()}
         else:
             coins = _Coins(self.epoch)
             opening, commitment = coins.open("salt", weights_root(roots)), coins.commitment
@@ -174,7 +180,8 @@ class PearlCArm:
         try:
             run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                       commitment, opening, schedule=self.schedule,
-                                      capacity=tiles, flag_rows=rows, salt_key=salt_key, **self.run_options)
+                                      capacity=tiles, flag_rows=rows, salt_key=salt_key,
+                                      pass_index=None if self.session is None else self.session.k, **self.run_options)
         except BaseException:
             if self.session is not None:
                 self.session.close()
@@ -270,24 +277,40 @@ class PearlCWholeArm(PearlCArm):
     ``PEARLC_WHOLE_FORK_STATS=0`` each call's A scales (`whole_fork_stats`: by default they run beside its A commitment),
     ``PEARLC_WHOLE_TREE_SM=0`` gives the GEMM beside A's tree every SM, ``PEARLC_LAG_ENDS=0`` reads each pass's
     commitment back at its own end, and ``PEARLC_ASIDE_ENDS=0`` runs a lagged end's tile tree on the step's stream (by
-    default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).
+    default, `aside_ends`, on a stream of its own, so the next step doesn't wait for it).  On pearl_c_sm120 (`RTX_ONLY`)
+    the stats stream also prefetches each call's B̃ into L2 (`whole_prefetch_b`, run.py's ``prefetch_b`` in its
+    ``PEARLC_PREFETCH_FORM``, default form 2; ``PEARLC_WHOLE_PREFETCH_B=0`` turns it off): served b8's ITL p50 went from
+    21.85 ms to 20.61 ms, 2.77x compiled stock's 7.43 (r20261024-193651-3ef1, bound to the GPU's NUMA node).  There a step
+    that runs eagerly (a prefill or mixed step) takes ``deferred-a`` in place of the serial schedule (`whole_eager`,
+    `PearlCDeviceRun.eager_forward`: its calls' tile hashing and A trees on side lanes; served b8 TPOT 3.05x compiled stock
+    against 3.43x, TTFT 157.7 ms against 253.1, ITL p50 unchanged, r20261024-191449-82e7); ``PEARLC_WHOLE_EAGER`` names
+    another schedule, on any kernel, or 0 none.
     A retained pass's whole capture keeps a stage for each weight and m₁₆, and the whole check runs at the largest size."""
 
     id = "pouw-pearl-c-whole"
     run_options = {"graphs": True, "whole_defer": True, "whole_defer_a": True, "whole_fork_stats": True, "lag_ends": True,
-                   "whole_tree_sm": True, "aside_ends": True}
+                   "whole_tree_sm": True, "aside_ends": True, "whole_prefetch_b": True, "whole_eager": "deferred-a"}
+    #: the options measured on pearl_c_sm120 alone (B̃'s prefetch is its pipeline's), which another kernel's arm leaves out
+    RTX_ONLY = ("whole_prefetch_b", "whole_eager")
 
     def __init__(self) -> None:
         super().__init__()
+        if self.kernel_dir.name != "pearl_c_sm120":
+            self.run_options = {k: v for k, v in self.run_options.items() if k not in self.RTX_ONLY}
         for option, env in (("whole_defer_a", "PEARLC_WHOLE_DEFER_A"), ("whole_fork_stats", "PEARLC_WHOLE_FORK_STATS"),
                             ("lag_ends", "PEARLC_LAG_ENDS"), ("whole_tree_sm", "PEARLC_WHOLE_TREE_SM"),
-                            ("aside_ends", "PEARLC_ASIDE_ENDS")):
+                            ("aside_ends", "PEARLC_ASIDE_ENDS"), ("whole_prefetch_b", "PEARLC_WHOLE_PREFETCH_B")):
             if os.environ.get(env) == "0":
                 self.run_options = {k: v for k, v in self.run_options.items() if k != option}
         if "whole_defer_a" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_tree_sm"}
         if "lag_ends" not in self.run_options:
             self.run_options = {k: v for k, v in self.run_options.items() if k != "aside_ends"}
+        eager = os.environ.get("PEARLC_WHOLE_EAGER")
+        if eager == "0":
+            self.run_options = {k: v for k, v in self.run_options.items() if k != "whole_eager"}
+        elif eager:
+            self.run_options = {**self.run_options, "whole_eager": eager}
         self.schedule = "serial"
         self.vllm_execution = os.environ.get("PEARLC_WHOLE_EXECUTION", "compiled")
         # Not ``execution``: the harness reads that as "build at vLLM's serving defaults", and this engine is FULL
