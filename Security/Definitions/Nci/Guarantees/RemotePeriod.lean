@@ -14,8 +14,10 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   below `(1 − ε)·T_cred`) with probability at most `p` over its coins. That is
   `Accounting.SecurityProofs.Compose.CircuitCredit`'s conclusion, `p = δ_s + δ_bind + δ_ks = 3 · 2⁻⁴⁰`, at window `t`'s
   play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
-  premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
-  accepted prefix, not time, so it does not give `wrong`'s form.
+  premises: that bridge is `Accounting.Guarantees.Compose.CircuitCreditPerWindow`, proved, with the window's play
+  (`CreditPlayOn`) its premise, which nothing in Lean yet builds from the deployment.
+  `ComposePeriod.CircuitCreditPeriod` credits live words over a period's accepted prefix, not time, so it does not give
+  `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its wrong
   units at registration, `wrongRegZ`), and its draw and verdict read its coins and the past. Two per-window bounds,
   each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the draw misses all

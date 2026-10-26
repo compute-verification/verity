@@ -2,7 +2,7 @@ import Definitions.Accounting.Guarantees.Compose
 import Definitions.Nci.Remote
 
 /-!
-# PoUW's credit, window by window over a monitoring period: the bridge to the remote dampener (stated)
+# PoUW's credit, window by window over a monitoring period: the bridge to the remote dampener
 
 `Nci.Guarantees.DampenerRemotePeriod` takes PoUW's leg per window: over a period of `T` windows on live coins, window
 `t`'s coins `Ω t` uniform and independent of the others', window `t`'s certificate is wrong (`wrong t`: accepted with
@@ -20,14 +20,13 @@ window is tied to `CircuitCredit` by `CreditPlayOn`: the window's coins carry th
 `CircuitCredit` holds of the play, and `wrong t` is its certificate's failure. A window that carries no PoUW play (a
 finer cut's coordinate holding only another protocol's coins) is never wrong.
 
-Reviewer: compute-accounting. A proof needs `Accounting.SecurityProofs.Compose.CircuitCredit` at each window's play and
-a change of measure: `Nci.Dampener.prob` under the uniform law on `Ω t` is the card ratio
-`Pouw.RelativeSecurity.prob` takes, and pulling an event of the play's coins back along `Ω t ≃ Paths … × R` multiplies
-its count and the space's by `|R|`. What no proof here gives is that the deployment's window is such a play:
-`CircuitCredit` speaks of a declared circuit, nothing builds a `Declared` from a compiled Program, and
-`Properties.Compose.UnitsOfLayout`, which would tie its units, commit coins and draw to the service's, is unproved.
-
-The statement is not proved: `CircuitCreditPerWindowStated` holds its text for the lock.
+Reviewer: compute-accounting. The proof, `Accounting.SecurityProofs.Compose.CircuitCreditPerWindow`, is
+`Accounting.SecurityProofs.Compose.CircuitCredit` at each window's play and a change of measure: `Nci.Dampener.prob`
+under the uniform law on `Ω t` is the card ratio `Pouw.RelativeSecurity.prob` takes, and pulling an event of the play's
+coins back along `Ω t ≃ Paths … × R` multiplies its count and the space's by `|R|`. What no proof here gives is that the
+deployment's window is such a play: `CircuitCredit` speaks of a declared circuit, nothing builds a `Declared` from a
+compiled Program, and `Properties.Compose.UnitsOfLayout`, which would tie its units, commit coins and draw to the
+service's, is unproved.
 -/
 
 namespace Accounting.Guarantees.Compose
@@ -89,11 +88,5 @@ def CircuitCreditPerWindow : Prop :=
       CreditPlayOn (Ω t) (fun a => wrong t (Function.update ξ t a)) p ∨ ∀ a, ¬ wrong t (Function.update ξ t a)) →
     ∀ t (ξ : (t : Fin T) → Ω t),
       Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p
-
-/-- **PoUW's credit, window by window, is stated**: `CircuitCreditPerWindow`, equal to itself, so the lock records its
-text and every definition it reads until it is proved. -/
-def CircuitCreditPerWindowStated : Prop :=
-  let s := CircuitCreditPerWindow
-  s = s
 
 end Accounting.Guarantees.Compose
