@@ -20,7 +20,8 @@ from verity.ml.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 
 _spec = importlib.util.spec_from_file_location(
-    "pouw_rounds_cases", Path(__file__).resolve().parents[1] / "lean/check/tests/pouw_rounds_cases.py")
+    "pouw_rounds_cases",
+    Path(__file__).resolve().parents[3] / "core/protocols/pouw/lean/check/tests/pouw_rounds_cases.py")
 rounds_cases = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(rounds_cases)
 

@@ -1,4 +1,4 @@
-"""Pinned vectors for the audit window's layout for gates (`verity.core.protocols.pouw.window`): ``uv run python
+"""Pinned vectors for the audit window's layout for gates (`verity.ml.pouw.window`): ``uv run python
 verity/ml/pouw/tests/window_vectors.py`` rewrites ``tests/vectors/window.json``.  A change to that file
 is a change to what the window's tile and entry circuits read (an entry row's bits, a side tree, the window root or the
 public inputs file C-Flock's verifier writes), and needs a reason in the PR.

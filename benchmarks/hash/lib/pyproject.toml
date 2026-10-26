@@ -25,6 +25,7 @@ inputs = [
   "verity/core/protocols/sampled_proofs/challenger.py",
   "verity/core/protocols/__init__.py",
   "verity/core/protocols/pouw",
+  "verity/ml/pouw",
   "verity/core/protocols/sampled_proofs",
   "benchmarks/pouw/commit_gpu/reference.py",
 ]

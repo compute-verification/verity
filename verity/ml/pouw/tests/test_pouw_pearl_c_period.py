@@ -22,7 +22,7 @@ from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
-PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
+PKG = Path(__file__).resolve().parents[3] / "core/protocols/pouw/lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases"):
     if _name not in sys.modules:
         _spec = importlib.util.spec_from_file_location(_name, PKG / f"{_name}.py")

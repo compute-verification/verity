@@ -2,7 +2,7 @@
 
     ml.circuits <- ml.commitments -> ml.crypto;  ml.randomness, ml.crypto and core.claims import no unit;  the
     catalog (ml.circuits.ops, .silicon, .targets) and the kernels (ml.kernels) build on ml.circuits, and the served
-    workloads' Definitions (ml.definitions) on the catalog and the kernels;
+    workloads' Definitions (ml.definitions) and PoUW's Python (ml.pouw) on the catalog;
     ml.circuits <- core.protocols.profile;  each protocol imports ml, the profile and the protocols it names in
     ``ALLOWED``, and no third-party package;  a verifier imports no ml (Daniel, 18 Oct): until a protocol's verifier of
     record is its Lean, its Python keeps only the ml edges ``CORE_ML_EDGES`` froze, what of ml core reaches is
@@ -71,11 +71,14 @@ ALLOWED = {
     # proof service's one challenger's (`sampled_proofs.challenger`, MEM-43).
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.sampled_proofs"},
-    # 2026-10-03 (Daniel, `.agents/skills/friction/SKILL.md`): PoUW's tile check is a sampled proof.  Its schemes and
-    # circuits are stated over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts its
-    # verifier recomputes): the one edge into the catalog.
-    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                            "ml.randomness", "core.protocols.profile", "core.protocols.sampled_proofs"},
+    # PoUW's verifier of record is its Lean (`lean/check`, `lean/commit`, `lean/window`); `verifier` is the
+    # standard-library module that builds and runs it.  Its Python is `ml.pouw`.
+    "core.protocols.pouw": set(),
+    # PoUW's Python (ONE-15): the references the difftests hold to its Lean, its schemes and circuits, stated over the
+    # catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts the Lean recomputes), and what
+    # the prover and the served path run.  Its core edges are the ML_IMPORTS_CORE entries for `ml/pouw/`.
+    "ml.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.randomness",
+                "core.protocols.profile", "core.protocols.sampled_proofs", "core.protocols.pouw"},
     # N2 of the proof-service plan: a link-window's network certificates are registered through the proof service; they
     # are LMS signatures (`ml.crypto.lms`).
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.sampled_proofs"},
@@ -118,6 +121,17 @@ ML_IMPORTS_CORE = {
     "ml/flock/python/verity_flock/inner_registered.py": "registers a staged inner statement's description rows with sampled "
                                                         "proofs' `one_stage.registered`, as V*'s builders do (the rec_* "
                                                         "entry), and moves with them in the follow-up to T2",
+    **dict.fromkeys(["ml/pouw/core_check.py", "ml/pouw/window.py", "ml/pouw/coins.py", "ml/pouw/credit.py",
+                     "ml/pouw/leaf_lanes.py", "ml/pouw/weights.py", "ml/pouw/salt.py", "ml/pouw/circuit/h1window.py",
+                     "ml/pouw/circuit/live_reads.py"],
+                    "PoUW's Python (ONE-15) states its units over sampled proofs' `one_stage` (`registered`, "
+                    "`produced`, `partition`, `registration`, `proofs`), draws with its `challenger` and registers "
+                    "through its `service`; these entries go when sampled proofs' Python leaves core too (proofs' "
+                    "share of ONE-15)"),
+    "ml/pouw/circuit/plan.py": "PoUW's draw plan is a stratified integrity profile (`core.protocols.profile`), which "
+                               "leaves core with sampled proofs' Python",
+    "ml/pouw/tests/*": "PoUW's tests run its Python through sampled proofs' service and challenger, the certifier (the "
+                       "salt's order) and the Lean verifier of record (`core.protocols.pouw.verifier`)",
 }
 #: A verifier imports no ``verity.ml`` code (Daniel, 18 Oct; AGENTS.md "Design rules"): Lean is the definition and the
 #: verifier of record, and ml's Python mirrors it.  Until a protocol's verifier of record is its Lean (the 8 Oct procedure,
@@ -129,16 +143,13 @@ CORE_ML_EDGES = {
     "core.protocols.pous": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"},
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness"},
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness"},
-    "core.protocols.pouw": {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto",
-                            "ml.randomness"},
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto"},
 }
 #: The units of ``verity.ml`` core's Python verifiers read, directly or through one another (what ``ALLOWED`` lets core
 #: reach): their verdicts rest on them, so they are on the soundness path, and AGENTS.md names each.  Frozen on 18 Oct
 #: with ``CORE_ML_EDGES``: it only shrinks, as each protocol's verifier of record becomes its Lean.  The rest of ml
-#: (C-Flock's prover, the private circuits) is not on it.
-SOUNDNESS_PATH = {"ml.circuits", "ml.circuits.ops", "ml.circuits.silicon", "ml.commitments", "ml.crypto", "ml.kernels",
-                  "ml.randomness"}
+#: (C-Flock's prover, the private circuits, PoUW's Python and the catalog it reads) is not on it.
+SOUNDNESS_PATH = {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness"}
 #: What a test that refuses a new core -> ml edge says.
 LEAN_OF_RECORD = ("a verifier imports no verity.ml code (Daniel, 18 Oct; AGENTS.md \"Design rules\", \"Lean is the definition "
                   "and the verifier of record\"): state it in Lean and import nothing from verity.ml")

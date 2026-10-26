@@ -49,7 +49,7 @@ def generate(seed: int = 0) -> list[dict]:
                                        VerificationLimits, verify_opening)
 
     # the clear audit's draws are a reference tool's (benchmarks/pouw/clear, not a package) in the checkout `audit` is from
-    sys.path.insert(0, str(Path(audit.__file__).resolve().parents[4] / "benchmarks" / "pouw" / "clear"))
+    sys.path.insert(0, str(Path(audit.__file__).resolve().parents[3] / "benchmarks" / "pouw" / "clear"))
     import clear_audit as CA
     import clear_work as CW
 

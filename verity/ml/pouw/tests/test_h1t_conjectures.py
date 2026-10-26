@@ -6,8 +6,9 @@ tests that `shape.conjectures` in `Security/lean-audit.json` names:
 * `HalfApartH1T`: on a legal unit, for each row, two distinct credited words agree on at most half of the row's salts,
   and a credited word takes any one value on at most half of them.
 
-The words are `lean/scripts/h1t_vectors.py`'s `row_words`, the function whose vectors the Lean kernel checks against
-`Unit.word` (`H1TChecks`); `test_the_model_is_the_leans_word` replays those vectors. A unit is decided two ways:
+The words are `verity/core/protocols/pouw/lean/scripts/h1t_vectors.py`'s `row_words`, the function whose vectors the
+Lean kernel checks against `Unit.word` (`H1TChecks`); `test_the_model_is_the_leans_word` replays those vectors. A unit is
+decided two ways:
 
 * **exhaustively** (`Case.live`): a unit of one slice whose columns are zero outside a few real lanes. A word reads only
   the salt fields `extract` returns, every field value has the same number of raw preimages, and a lane whose column
@@ -34,8 +35,8 @@ import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-LEAN = HERE.parents[3] / "Security"
-SCRIPT = HERE / "lean" / "scripts" / "h1t_vectors.py"
+LEAN = HERE.parents[2] / "Security"
+SCRIPT = HERE.parents[1] / "core/protocols/pouw/lean/scripts/h1t_vectors.py"
 SEED = 2026101001
 N = 256
 

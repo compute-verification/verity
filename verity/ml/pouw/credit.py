@@ -1,12 +1,13 @@
 """A served window's credited set, its drawn units and their outcome, its A rows, and the period it counts toward, as
 PoUW's verifier reads them (RT4-INT-32, -34 and -42; PRF-132). `_window_outcomes` and `_period_outcomes` are the Python
-reference of the Lean `PouwCheck.Credit` (`lean/check`), held to it by the difftest (`lean/check/tests/test_difftest.py`);
-`window` and `period_credit` are they with each drawn unit's outcome from the verifier of record's own run, which the
-Lean `PouwCheck.Credit.window` takes as given. Those outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`):
-the Lean decides which statements the verifier runs on, with which inputs, and what its answers credit; `_verified` is
-its Python reference, held to it by the difftest (`lean/check/tests/test_verified_difftest.py`). Each round's live
-outcome is the Lean's too (`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
-(`lean/check/tests/test_live_verified_difftest.py`).
+reference of the Lean `PouwCheck.Credit` (`verity/core/protocols/pouw/lean/check`), held to it by the difftest
+(`verity/core/protocols/pouw/lean/check/tests/test_difftest.py`); `window` and `period_credit` are they with each drawn
+unit's outcome from the verifier of record's own run, which the Lean `PouwCheck.Credit.window` takes as given. Those
+outcomes are the Lean's (`PouwCheck.Verified`, `_lean_verified`): the Lean decides which statements the verifier runs
+on, with which inputs, and what its answers credit; `_verified` is its Python reference, held to it by the difftest
+(`verity/core/protocols/pouw/lean/check/tests/test_verified_difftest.py`). Each round's live outcome is the Lean's too
+(`PouwCheck.LiveVerified`, `_lean_live_verified`), with `_live_verified` its reference
+(`verity/core/protocols/pouw/lean/check/tests/test_live_verified_difftest.py`).
 
 **`window` and `period_credit` are the only entries.** On one window's evidence and one round log, `window` runs every
 step and credits only when all of them accept: `_credited`, `core_check.rounds`, `_a_link`, `layout_of`, its period's
@@ -168,8 +169,8 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   ``--model``) before any window, so every window of a period opens the same B rows: a B row the prover changes
   after the salt, or between two windows of a period, its codes or its s_w, is refused, and so is a period whose open
   signs no weights' root. The open names the model the root is of (`MODEL_FIELD`, the auditor's registration of its
-  int8 checkpoint), and its role and checkpoint are one `PINNED_MODELS` pins (``lean/check/models.json``), else the
-  period counts nothing.
+  int8 checkpoint), and its role and checkpoint are one `PINNED_MODELS` pins
+  (``verity/core/protocols/pouw/lean/check/models.json``), else the period counts nothing.
 
 `calls_root` and `draw_root` are vllm's `pouw_h1.calls_root` and `pouw_h1_requests.draw_root`, byte for byte. Every
 refusal is (code, why), the first rule the input breaks, its why naming the fix; the Lean port writes the same strings.
@@ -257,7 +258,7 @@ MODEL_KEYS = ("checkpoint_sha512", "name")
 #: JSON of each of its files' SHA-512); the Lean embeds the same file. Credit counts only an int8 role's weights: the
 #: gate signs a weights' root only from an H1 registration, so an open naming another role (the remote memory audit's
 #: BF16 checkpoint) signs none and its period counts nothing
-MODELS = Path(__file__).parent / "lean/check/models.json"
+MODELS = Path(__file__).resolve().parents[2] / "core/protocols/pouw/lean/check/models.json"
 PINNED_MODELS = {role: e["checkpoint_sha512"] for role, e in json.loads(MODELS.read_text()).items()}
 MODEL_FIX = ("open the period with the gate's --model, which signs the auditor's registration of a checkpoint credit "
              "pins (models.json)")
@@ -1782,7 +1783,7 @@ def _live_verified(files: Any, run: Run) -> Lived:
     Program's digest, its open root and its session, at the step's m_s and the period's committed max_tokens). A
     session the verifier rejects refuses the window (``live``), and so does one that proved another unit than its
     round's. The Python reference of the Lean's `PouwCheck.LiveVerified` (`_lean_live_verified`), held to it by the
-    difftest (`lean/check/tests/test_live_verified_difftest.py`)."""
+    difftest (`verity/core/protocols/pouw/lean/check/tests/test_live_verified_difftest.py`)."""
     def lived(live: dict, raw: bytes, got: dict, roots: dict, ms: list[int], program: str, window: str, session: str,
               max_tokens: list[int]) -> tuple[list | None, tuple[str, str] | None]:
         statements = live["statements"]

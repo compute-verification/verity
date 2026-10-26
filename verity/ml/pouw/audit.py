@@ -12,7 +12,7 @@ path's prover commits and its verifier reads.
 
 The clear audit that drew, opened and recomputed tiles in the clear (`Prover`, `Verifier`, `Sampled`, `WorkProfile`) is a
 reference tool, not a verifier: ``benchmarks/pouw/clear/clear_audit.py``.  Served windows are checked by PoUW's verifier of
-record, the Lean (`lean/check`, `core_check`).
+record, the Lean (`verity/core/protocols/pouw/lean/check`, `core_check`).
 
 Commitments are `verity.ml.commitments.merkle` trees, framed SHA-256 unless a scheme names another frame hash:
 ``"hm96-sha512"`` (`HM96`) is ``frame-v3-sha512`` with hm96-sha512 leaves (`Hm96Domain`): each committed value is its preimage

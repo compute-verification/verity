@@ -3,7 +3,7 @@
 What Pearl-C's -h3 step (`pearl-c-sm120-v1-h3`, vLLM's `pouw` option) would save if A's commitment came from Commit's
 tree of the same activation instead of Pearl-C's own: the measured upper bound, on one RTX PRO 6000. It's a what-if:
 nothing here is served and no protocol changes. The dedup's design belongs to compute accounting, with circuits. This
-directory reads, builds and imports their code (`benchmarks/pouw/pearl_c_sm120`, `verity/core/protocols/pouw`, vLLM's
+directory reads, builds and imports their code (`benchmarks/pouw/pearl_c_sm120`, `verity/ml/pouw`, vLLM's
 `pouw_pearl_c_*`), and never edits it.
 
 - `step.py`: Llama-3.1-8B's 128 linear calls a step through the served executor (`PearlCDeviceRun`, subclassed), on

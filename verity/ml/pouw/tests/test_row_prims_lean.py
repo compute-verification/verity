@@ -1,7 +1,7 @@
 """The Lean word functions of PoUW's row-unit primitives (`Security/Definitions/Pouw/PearlC/RowPrims.lean`) are
-`verity.ml.pouw.circuit.words`': `lean/scripts/row_prims_vectors.py`, run again, writes the vectors the kernel checks
-(`RowPrimVectors.lean`, `Proofs/Pouw/PearlC/RowPrimChecks.lean`) byte for byte, each expected word the primitive's
-own `evaluate`."""
+`verity.ml.pouw.circuit.words`': `verity/core/protocols/pouw/lean/scripts/row_prims_vectors.py`, run again, writes the
+vectors the kernel checks (`RowPrimVectors.lean`, `Proofs/Pouw/PearlC/RowPrimChecks.lean`) byte for byte, each expected
+word the primitive's own `evaluate`."""
 from __future__ import annotations
 
 import subprocess

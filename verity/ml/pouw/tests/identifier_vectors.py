@@ -1,4 +1,4 @@
-"""Pinned vectors for the proof's identifier v1 (`verity.core.protocols.pouw.identifier`): ``uv run python
+"""Pinned vectors for the proof's identifier v1 (`verity.ml.pouw.identifier`): ``uv run python
 verity/ml/pouw/tests/identifier_vectors.py`` rewrites ``tests/vectors/identifier_v1.json``.  A change to that file is a change
 to the identifier, which C-Flock's verifier compares byte for byte, and needs a reason in the PR.
 

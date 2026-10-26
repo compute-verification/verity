@@ -3,7 +3,7 @@
 accepted. The drawn units are the draw coin's over the window's own layout, read from the descriptor of the circuit the
 period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s, and the weights a window
 registers are the ones its open root binds, every code and s_w of its B rows. The Lean (`PouwCheck.Credit`) is held to
-the same cases by `lean/check/tests/test_difftest.py`."""
+the same cases by `verity/core/protocols/pouw/lean/check/tests/test_difftest.py`."""
 from __future__ import annotations
 
 import hashlib
@@ -33,7 +33,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.gemm import S8_K_LIMIT
 
-PKG = Path(__file__).resolve().parents[1] / "lean/check/tests"
+PKG = Path(__file__).resolve().parents[3] / "core/protocols/pouw/lean/check/tests"
 for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("test_circuit_h1window", Path(__file__).parent)):
     if _name not in sys.modules:
         _spec = importlib.util.spec_from_file_location(_name, _dir / f"{_name}.py")

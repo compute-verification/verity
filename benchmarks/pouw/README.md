@@ -1,6 +1,6 @@
 # PoUW benchmarks
 
-The measuring side of `verity/core/protocols/pouw`: Pearl-C's kernels on the RTX PRO 6000 Blackwell (sm_120), their
+The measuring side of `verity/ml/pouw`: Pearl-C's kernels on the RTX PRO 6000 Blackwell (sm_120), their
 harness, the served vLLM path and its audits, and the CPU accounting. How a kernel is designed, gated, timed and landed is
 the kernel-engineering skill (`.agents/skills/kernel-engineering/SKILL.md`).
 

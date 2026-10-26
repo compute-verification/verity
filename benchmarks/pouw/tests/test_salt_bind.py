@@ -39,7 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
 import of_record as OR  # noqa: E402
 
-_CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"
+_CASES = Path(CC.__file__).resolve().parents[2] / "core/protocols/pouw/lean/check/tests"
 for _name in ("pouw_rounds_cases", "pouw_pass_cases", "pouw_check_cases", "pouw_opening_cases"):
     _spec = importlib.util.spec_from_file_location(_name, _CASES / f"{_name}.py")
     sys.modules[_name] = importlib.util.module_from_spec(_spec)

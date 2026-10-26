@@ -29,10 +29,9 @@ Top-level directories (a grouping, not an import name, except `verity/`):
       side and record.
   - `verity/ml/` (`verity.ml`): Python and CUDA: the provers, and Python that mirrors the Lean for the prover's speed.
     Until each protocol's verifier of record is Lean, these units are on the soundness path, because its Python verifier
-    reads them: `ml.circuits`, `ml.circuits.ops`, `ml.circuits.silicon`, `ml.kernels`, `ml.commitments`,
-    `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in `tests/test_boundaries.py`, all that
-    `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover, the private circuits and `ml.definitions`,
-    can't affect soundness.
+    reads them: `ml.circuits`, `ml.commitments`, `ml.crypto` and `ml.randomness` (`SOUNDNESS_PATH` in
+    `tests/test_boundaries.py`, all that `ALLOWED` lets core reach; it only shrinks). The rest, C-Flock's prover, the
+    private circuits, `ml.definitions`, `ml.pouw` and the catalog it reads, can't affect soundness.
     - `circuits` (format in `circuits/PROTOCOL.md`): circuits and their evaluator (`evaluation`), the Boolean profile
       (`boolean`), what models compute (`ops`, the primitive circuits' Definitions), what the GPUs actually compute
       (`silicon`, the exact hardware semantics) and `targets`.
@@ -40,6 +39,7 @@ Top-level directories (a grouping, not an import name, except `verity/`):
     - `commitments` (with Merkle multiproofs, `multiproof`), shared hash code (`crypto`), and the one challenge derivation
       (`randomness`).
     - `private_circuits`: the universal unit, one public Definition that runs any private circuit of a size class.
+    - `pouw`: PoUW's Python, held to its Lean (`verity/core/protocols/pouw/lean/`) by difftest.
     - `definitions`: the served workloads' kernel Definitions (`registry`, twins in `numerics`), their Boolean versions,
       the proof-unit cut (`word`), and their encoding and digest (`encoding`).
     - `flock/` (`verity_flock`, a distribution of its own, `flock/pyproject.toml` with its package in `flock/python/`):
@@ -86,13 +86,13 @@ Dependencies point inward, and `tests/test_boundaries.py` enforces them:
 - A verifier imports no `verity.ml` code (Design rules). Until its protocol's verifier of record is Lean, a Python
   verifier in `verity.core` keeps the edges into `verity.ml` it had on 18 Oct (`CORE_ML_EDGES`) and gains none, and
   what they reach (`SOUNDNESS_PATH`) only shrinks. `verity.ml` never imports `verity.core`, apart from the files
-  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, and hm96's test of its claims).
+  `ML_IMPORTS_CORE` names (C-Flock's tests and V*'s builders, hm96's test of its claims, and PoUW's Python).
 - Everything outside `verity/` may import `verity`. `verity` imports no other distribution of the workspace.
 - Inside `verity`, each unit imports only what `ALLOWED` lists. `ml.circuits`, `ml.randomness`, `ml.crypto` and
   `core.claims` import no other unit.
 - A protocol imports the parts of `verity.ml` it's allowed, the profile, itself, and the protocols `ALLOWED` lists for it
-  (PoUW and the network certifier import sampled proofs). PoUW is the one protocol that reads the primitive circuits'
-  Definitions and silicon semantics (`ml.circuits.ops`, `silicon`).
+  (the network certifier imports sampled proofs). `ml.pouw` reads the primitive circuits' Definitions and
+  silicon semantics (`ml.circuits.ops`, `silicon`).
 - Nothing outside `infra/` imports `infra/`, apart from the files `INFRA_IMPORTERS` names.
 - Nothing under `verity/` imports an integration, apart from the sites `KNOWN` lists in
   `tests/test_integration_boundaries.py`, which only shrinks (Design rules, "Integrations are frontends").

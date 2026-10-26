@@ -34,7 +34,8 @@ Everything else is the protocol's, the same for every scheme.
 
 Steps 1 to 4 are `audit`'s: what the served path's prover commits and its verifier reads. Step 5 is the served window's
 draw. Steps 6 and 7, run in the clear, are a reference tool and not a verifier (`benchmarks/pouw/clear/clear_audit.py`):
-the served window proves its drawn tiles in zero knowledge, and its verifier of record is the Lean (`lean/check`).
+the served window proves its drawn tiles in zero knowledge, and its verifier of record is the Lean
+(`verity/core/protocols/pouw/lean/check`).
 
 1. **Weights.** Each weight's rows are committed in a `verity.ml.commitments.merkle` tree bound to the weight id (owner −2);
    `weights_root` binds every weight root.
