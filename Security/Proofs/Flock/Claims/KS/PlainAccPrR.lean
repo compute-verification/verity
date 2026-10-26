@@ -1,5 +1,9 @@
 import Proofs.Flock.Claims.KS.PlainDrawRColsE
 import Proofs.Flock.Claims.KS.PlainRdRunK
+import Proofs.Flock.Claims.KS.PlainR
+import Proofs.Flock.Claims.KS.PlainKSLinR
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Bridge.Committed
 
 /-!
 # The acceptance bound at `VR rd` against the reader's read sets
@@ -12,6 +16,12 @@ import Proofs.Flock.Claims.KS.PlainRdRunK
 * `plainRawLevelColsRV rd v k ℓ`: `plainRawLevelCols` at that run, rep `k`'s level-`ℓ` columns of table 0.
 * `PlainAccPrRdR rd x`: `plain_accPr_le_rdAllK`'s statement at `VR rd`, with `GoodTable` at `deployPlain` (it reads
   neither `V` nor `cols`, so it is the same `GoodTable` at any record built on `deployPlain` with `V := VR rd`).
+* `colsRV_run`: where `VR rd` accepts only at its last round (`AccLast`), `colsRV rd` at an accepting run is
+  `colsR` at its messages and coins, since the answers show the coins (`run_outCoinsR`).
+* `plain_first_of_simDR`, `plain_le_sessionsRawLR`, `plainOffL_le_rdR`, `plain_accPr_le_rdLR`: the `K` chain at
+  `VR rd`, at a simulator `P'` sending `plainRootR`'s roots (`PlainSimR`) with its clashes (`PlainClashRunR`).
+* `plain_accPr_le_rdAllR_of rd hal hno hIn : PlainAccPrRdR rd x`, from what the simulation and the decoders still owe
+  (`PlainRdInR rd x`), and `rdAllAt_R`: `PlainKSLinR`'s `RdAllAt` at `deployPlainR Readable.relation rd`.
 -/
 
 namespace FlockDeploy
@@ -47,6 +57,7 @@ open Flock FlockSoundness FlockSoundness.Game FlockSoundness.Refine FlockSoundne
 open Claims.Bridge.CustodyPlain Claims.Bridge.DecodePlain Claims.Bridge.Custody Claims.Bridge.PlainDraw
 open Claims.Bridge.Live
 open Lean (Json)
+open RecDeploy (outCoin)
 
 /-- **Rep `k`'s level-`ℓ` columns of table 0 at `VR rd`, on a view**: `plainRawLevelCols` at the run `runOfRV rd`
 reads. -/
@@ -98,5 +109,618 @@ def PlainAccPrRdR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
           ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
             Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧
               u ≠ C p
+
+/-! ## The run's coins at `VR rd` -/
+
+/-- **`nextR`'s answer shows its round's coin** (`answersCoin_deploy`, at `next_msg_of_nextR`). -/
+theorem outCoin_nextR {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    {c : Coin} {m : Claims.Msg} (h : ((nextR rd x as (cs ++ [c])).eval sha512).1 = .msg m) :
+    outCoin (.msg m) = c := by
+  rw [Claims.Bridge.answersCoin_deploy false sha512 x as cs c m (next_msg_of_nextR rd sha512 h)]
+  exact RecDeploy.coinOf_bytes c
+
+/-- **An accepting run of `nextR rd` shows its coins**: each message round's answer shows that round's coin
+(`outCoin_nextR`), and the accepting round shows `default`. -/
+theorem stepWith_outCoinsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg)
+    (ω : Ω) {k : ℕ} (r : Fin k → Coin) (vn : List Claims.Msg → Claims.OC Claims.Out)
+    (hvn : ∀ as, vn as = nextR rd x as ((List.range as.length).map (Claims.coinSeq r))) :
+    ∀ (n : ℕ) (hist : List (Claims.Msg × Claims.Msg)) (as : List Claims.Msg) (t : Claims.Trace),
+      as.length = t.msgs.length →
+      (t.msgs.map Prod.snd).map outCoin = (List.range t.msgs.length).map (Claims.coinSeq r) →
+      (Claims.stepWith sha512 P x ω vn n hist as t).out = .acc →
+      ∃ L, (Claims.stepWith sha512 P x ω vn n hist as t).msgs.length = L + 1 ∧
+        ((Claims.stepWith sha512 P x ω vn n hist as t).msgs.map Prod.snd).map outCoin =
+          (List.range L).map (Claims.coinSeq r) ++ [default]
+  | 0, _, _, _, _, _, h => by simp [Claims.stepWith] at h
+  | n + 1, hist, as, t, hl, hc, h => by
+    rcases hv : (vn (as ++ [((P.next x hist ω).eval sha512).1])).eval sha512 with ⟨o, lo⟩
+    cases o with
+    | msg m =>
+      rw [RecDeploy.stepWith_succ_msg sha512 P x ω vn n hist as t hv] at h ⊢
+      have e : (List.range (as ++ [((P.next x hist ω).eval sha512).1]).length).map (Claims.coinSeq r) =
+          (List.range as.length).map (Claims.coinSeq r) ++ [Claims.coinSeq r as.length] := by
+        simp [List.range_succ]
+      have hv' : ((vn (as ++ [((P.next x hist ω).eval sha512).1])).eval sha512).1 = .msg m := by rw [hv]
+      rw [hvn, e] at hv'
+      have hm := outCoin_nextR hv'
+      rw [hl] at hm
+      refine stepWith_outCoinsR rd P x ω r vn hvn n _ _ _ (by simp [hl]) ?_ h
+      simp only [List.map_append, List.map_singleton, hc, hm, List.length_append, List.length_singleton,
+        List.range_succ] <;> rfl
+    | acc =>
+      rw [RecDeploy.stepWith_succ_acc sha512 P x ω vn n hist as t hv]
+      refine ⟨t.msgs.length, by simp, ?_⟩
+      simp only [List.map_append, List.map_singleton, hc] <;> rfl
+    | rej =>
+      rw [RecDeploy.stepWith_succ_rej sha512 P x ω vn n hist as t hv] at h
+      simp at h
+
+/-- **An accepting run at `VR rd` shows its coins but the last** (`stepWith_outCoinsR`). -/
+theorem run_outCoinsR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (r : Fin ((VR rd).k x) → Coin) (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
+    ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin =
+      ((List.range (Claims.run sha512 P (VR rd) x ω r).msgs.length).map (Claims.coinSeq r)).dropLast ++
+        [default] := by
+  obtain ⟨L, hL, he⟩ := stepWith_outCoinsR rd P x ω r _ (fun _ => rfl) ((VR rd).k x) [] [] ⟨[], [], [], .rej⟩ rfl
+    rfl h
+  have hL' : (Claims.run sha512 P (VR rd) x ω r).msgs.length = L + 1 := hL
+  have he' : ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.snd).map outCoin =
+      (List.range L).map (Claims.coinSeq r) ++ [default] := he
+  rw [he', hL', List.range_succ, List.map_append, List.map_singleton, List.dropLast_concat]
+
+/-- **`colsRV rd` reads an accepting run's columns** where `VR rd` accepts only at its last round (`hal`): the view's
+coins are the run's (`run_outCoinsR`), so `colsRV_eq`. -/
+theorem colsRV_run (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd)) {Ω : Type}
+    {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω} {r : Fin ((VR rd).k x) → Coin}
+    (h : (Claims.run sha512 P (VR rd) x ω r).out = .acc) :
+    colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen =
+      colsR rd x ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst)
+        ((List.range ((Claims.run sha512 P (VR rd) x ω r).msgs.map Prod.fst).length).map (Claims.coinSeq r)) := by
+  have ha := FlockDeploy.KS.run_acc_next sha512 P (VR rd) x ω r h
+  have hlen := hal x _ _ (by simp) ha
+  refine colsRV_eq rfl ?_ ?_ ha
+  · rw [List.length_map]
+    exact run_outCoinsR rd P x ω r h
+  · rw [List.length_map, List.length_range]
+    exact hlen
+
+/-! ## The draw -/
+
+/-- **`checksAtJ` refuses a session without a draw** (`drawLaw false tags none`). -/
+theorem checksAtJ_drawSome {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
+    {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : FinalJ} {v : Json}
+    (h : checksAtJ s spec x link c₁ mids f v = .ok ()) : ∃ d, s.read.draw = some d := by
+  unfold checksAtJ at h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  obtain ⟨_, -, h⟩ := FlockSoundness.Refine.ebind_ok h
+  cases hd : s.read.draw with
+  | none => simp [hd, ProvedScope.drawLaw] at h
+  | some d => exact ⟨d, rfl⟩
+
+/-- **An accepting step of `VR rd` at SHA-512 is at a statement that sets up at a draw** (`decideR_sha512`,
+`checksAtJ_drawSome`). -/
+theorem nextR_acc_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin}
+    (h : ((nextR rd x as cs).eval sha512).1 = .acc) :
+    ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
+  cases ha : actR rd x as cs with
+  | rej => revert h; simp [nextR, ha, Claims.OC.eval]
+  | coin c => revert h; simp [nextR, ha, Claims.OC.eval]
+  | decide s spec sts link c₁ mids f =>
+    obtain ⟨-, hc, -, -, -⟩ := decideR_sha512 ha h
+    obtain ⟨d, hd⟩ := checksAtJ_drawSome hc
+    exact ⟨s, spec, sts, d, actR_setupOf ha, hd⟩
+
+/-- **A statement some run of `VR rd` accepts at SHA-512 sets up at a draw** (`accK_draw` at `VR rd`). -/
+theorem accR_draw {rd : Claims.Msg → Option FinalP} {x : Claims.Msg}
+    (hacc : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) :
+    ∃ ins spec sts d, setupOf false x = some (ins, spec, sts) ∧ ins.read.draw = some d := by
+  unfold Claims.Flock.NoAcc at hacc
+  push Not at hacc
+  obtain ⟨Ω, P, ω, r, hr⟩ := hacc
+  obtain ⟨as, has⟩ := FlockDeploy.KS.stepWith_acc _ _ _ _ _ _ _ _ _ hr
+  exact nextR_acc_draw has
+
+/-! ## The simulator -/
+
+/-- **The roots `VR rd` links at `P`'s first message**: `linkR` at the statement's tables and the first message's rows
+(`plainRoot` at `decR`'s link). -/
+noncomputable def plainRootR {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) : Array ByteArray :=
+  (((setupOf false x).bind fun v => (rowsOf ((P.next x [] ω).eval sha512).1).bind (linkR v.2.2)).getD default).1.toArray
+
+/-- **A prover of the live session at one table simulates `P` at `VR rd`** (`PlainSimRunK` at `VR rd`): wherever
+`VR rd` accepts at `Φ (u, r')`, the live outcome of `P'` at the tape `(ω, u)` and `r'` is the run's (`viewOfJ` at the
+decided session's `jAt` and files). -/
+def PlainSimRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (mPts : ℕ) {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire nMax 1 mPts)
+    {τ : Type} (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin) :
+    Prop :=
+  ∀ u r', (Claims.run sha512 P (VR rd) x ω (Φ (u, r'))).out = .acc →
+    ∀ s spec sts link c₁ mids f,
+      actR rd x ((Claims.run sha512 P (VR rd) x ω (Φ (u, r'))).msgs.map Prod.fst)
+          ((List.range ((Claims.run sha512 P (VR rd) x ω (Φ (u, r'))).msgs.map Prod.fst).length).map
+            (Claims.coinSeq (Φ (u, r')))) = .decide s spec sts link c₁ mids f →
+        liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r' =
+          viewOfJ 1 mPts spec link c₁ (jAt sha512 spec sts c₁ mids f)
+            (FlockDeploy.filesAt (tabsOf sts) (pointsOf spec c₁) f.ps)
+
+/-- **A live event at `P'`'s outcome gives an accepting run of `P` at `VR rd` with a collision** (`PlainClashRunK` at
+`VR rd`). -/
+def PlainClashRunR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (mPts : ℕ) (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray) (w : Claims.Msg → Wire 65536 1 mPts) {τ : Type}
+    (P' : Claims.Prover (Ω × τ)) (Φ : τ × (Fin (N x + 2) → LCoin 65536) → Fin ((V false).k x) → Coin)
+    (pL : LiveOutJ 1 mPts → Prop) : Prop :=
+  ∀ u r', pL (liveOut (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u) r') → plainEv₁R rd P x ω (Φ (u, r'))
+
+/-- **A simulator of `P` at the plain table, at `VR rd`**: on every tape `u` it sends `plainRootR`'s roots, submits
+`repRounds` rounds on rep 0 and the rest on rep 1 at every link point (`SchedL`), and its live outcome is `P`'s run at
+`plainΦ`'s coins (`PlainSimRunR`). -/
+def PlainSimR (rd : Claims.Msg → Option FinalP) {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω)
+    (spec : SessionSpec) (st : Stmt) (hw : 2 * spec.mPts ≤ 65536) (P' : Claims.Prover (Ω × plainTape x)) : Prop :=
+  (∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+      (ω, u)).1 = plainRootR P x ω) ∧
+    (∀ u pts, SchedL (plainDg spec)
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x (ω, u)).1 pts
+      (plainN x) (fun _ _ => []) (repRounds false spec st)
+      ((liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+        (ω, u)).2 pts)) ∧
+    PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P' (plainΦ x spec st)
+
+open Classical in
+/-- **The plain mixture's first bound at the statement's draw, from a simulation, at `VR rd`**
+(`plain_first_of_simDK`'s proof, at `plainVerdictAtJK id` by `plainVerdictAtJK_of_runR`, with `colsRV rd` the run's
+columns by `colsRV_run`). -/
+theorem plain_first_of_simDR (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd))
+    {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) {M : ℕ} (C : Fin M → List 𝔽) (mPts : ℕ) {s₀ : Ins}
+    {spec₀ : SessionSpec} {sts₀ : Array Stmt} {d : Json} (hset : setupOf false x = some (s₀, spec₀, sts₀))
+    (hd : s₀.read.draw = some d) {nMax : ℕ} (N : Claims.Msg → ℕ) (dg : ByteArray → ByteArray)
+    (w : Claims.Msg → Wire nMax 1 mPts) {τ : Type} [Fintype τ] [Nonempty τ] (P' : Claims.Prover (Ω × τ))
+    (Φ : τ × (Fin (N x + 2) → LCoin nMax) → Fin ((V false).k x) → Coin)
+    (hΦ : ∀ E : (Fin ((V false).k x) → Coin) → Prop, Claims.Pr (fun p => E (Φ p)) = Claims.Pr E)
+    (hsim : PlainSimRunR rd P x ω mPts N dg w P' Φ) :
+    Claims.Pr (fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+        ¬ ∃ (p : Fin M) (v : List 𝔽),
+          Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some v ∧
+            v ≠ C p) ≤
+      (∑ u, (prob (plainVerdictAtJK id s₀.read.I d C (plainRootR P x ω))
+        (liveSession dg 1 mPts (N x)) (liveStrat (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x (ω, u))).toReal) /
+        Fintype.card τ := by
+  set E : (Fin ((V false).k x) → Coin) → Prop := fun r => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+    ¬ ∃ (p : Fin M) (v : List 𝔽),
+      Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some v ∧ v ≠ C p
+    with hEdef
+  refine Pr_le_liveMix (fun _ => 1) (fun _ => mPts) N dg w sha512 P' x ω
+    (plainVerdictAtJK id s₀.read.I d C (plainRootR P x ω)) E Φ (hΦ E) fun u r' hE => ?_
+  obtain ⟨hacc, hno⟩ := hE
+  obtain ⟨s, spec, sts, link, c₁, mids, f, hact, hv⟩ := plainVerdictAtJK_of_runR mPts rd hacc
+  obtain ⟨rfl, -, -⟩ : s = s₀ ∧ spec = spec₀ ∧ sts = sts₀ := by
+    have e := (actR_setupOf hact).symm.trans hset
+    simp only [Option.some.injEq, Prod.mk.injEq] at e
+    exact e
+  have hroot : plainRootR P x ω = link.1.toArray := by
+    obtain ⟨rest, hhead⟩ := run_head sha512 P (VR rd) x ω (Φ (u, r')) hacc
+    obtain ⟨v, c₁', r₀, rss, fl, link', pf, hv', -, hr₀, -, hl, -, hd'⟩ := decR_some (actR_decide hact)
+    rw [hhead, List.headD_cons] at hr₀
+    simp only [DecR.mk.injEq] at hd'
+    obtain ⟨-, -, -, rfl, -⟩ := hd'
+    simp [plainRootR, hv', hr₀, hl]
+  rw [hroot, hsim u r' hacc s spec sts link c₁ mids f hact]
+  rw [colsRV_run rd hal hacc] at hno
+  exact hv d hd C hno
+
+open Classical in
+/-- `plain_le_sessionsRawLK` at `VR rd`: the acceptance split at `VR rd`'s columns (`colsRV rd`). -/
+theorem plain_le_sessionsRawLR (rd : Claims.Msg → Option FinalP) {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
+    (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (h : tables false x = [(spec, st)])
+    (L : Layout st) (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω)
+    (C : Fin (wordLen false x) → List 𝔽)
+    (hT : ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+      (Claims.Flock.oracleOf C))
+    (τ : Type) [Fintype τ] [Nonempty τ] (cap₀ : Model.Cap Refine.Dig)
+    (σ : τ → Strategy (sessAfterL execArith Refine.H512 Refine.enc512 Lf
+      (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀))
+    (hacc : (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+        ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p) ≤
+      (∑ t, expect (ind fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL)))
+        (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t)) / Fintype.card τ) :
+    Claims.accPr sha512 (VR rd) P x ω ≤ εtable false x +
+      (∑ t, expect (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
+          SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL))
+        (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t)) / Fintype.card τ +
+      ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
+        (∑ t, Lock.nodeE (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ)
+          (Lock.nodeOff (fun d (outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8))) =>
+              opRL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD 0 dfltOutL))
+            (rowT (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).lanes (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).logLen)
+            (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ))
+          (lockSessL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
+            PT_LOCAL spec.mPts [] [] (Claims.Flock.oracleOf C) cap₀) (σ t)) / Fintype.card τ +
+      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
+  have hper : ∀ t, expect (ind fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
+        ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+        ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL)))
+      (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
+        ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t) ≤
+      Accounting.tableError ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ((L.model (Refine.regionsOf st)).shape spec.mPts) +
+      expect (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
+          SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL))
+        (sessAfterL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st))
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm PT_LOCAL spec.mPts [] [] cap₀) (σ t) +
+      ∑ r ∈ Finset.range 2, ∑ ℓ ∈ Finset.Icc 1 (l₀ :: l₁ :: rest).length,
+        Lock.nodeE (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ)
+          (Lock.nodeOff (fun d (outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8))) =>
+              opRL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d (outs.getD 0 dfltOutL))
+            (rowT (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).lanes (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ ℓ).logLen)
+            (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r ℓ))
+          (lockSessL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
+            PT_LOCAL spec.mPts [] [] (Claims.Flock.oracleOf C) cap₀) (σ t) := by
+    intro t
+    have hs := session_sound_of_table_accL_nodeOff execArith execArith_correct Refine.H512 Refine.enc512 Lf
+      (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hsch hm PT_LOCAL spec.mPts hlay [] [] cap₀
+      (fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+        cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+        ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (outs.getD 0 dfltOutL)))
+      (fun _ h => h.1) (Claims.Flock.oracleOf C) (σ t)
+    have e : (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
+        (AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀
+          (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+            (outs.getD 0 dfltOutL))) ∧
+        ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+          (Claims.Flock.oracleOf C)) = ind fun outs => AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512
+          Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀ (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+            (outs.getD 0 dfltOutL)) :=
+      congrArg ind (funext fun _ => propext (and_iff_left hT))
+    have e₀ : (ind fun outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8)) =>
+        (AccOne outs ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀
+          (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL) ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+            (outs.getD 0 dfltOutL))) ∧
+        ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+          (outs.getD 0 dfltOutL) ∧
+        Off₀L Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ cap₀
+          (Claims.Flock.oracleOf C) (outs.getD 0 dfltOutL)) = fun _ => 0 := by
+      funext outs
+      unfold ind
+      split_ifs with h0
+      · exact absurd ⟨h0.2.2, h0.2.1⟩ h0.1.2
+      · rfl
+    rw [← e]
+    refine le_trans hs (le_of_eq ?_)
+    simp only [List.length_nil]
+    rw [e₀, expect_const, add_zero]
+  have hsum := Finset.sum_le_sum fun t (_ : t ∈ Finset.univ) => hper t
+  have hdiv := div_le_div_of_nonneg_right hsum (Nat.cast_nonneg (Fintype.card τ))
+  rw [Claims.Flock.mean_add, Claims.Flock.mean_add, Claims.Flock.mean_const, mean_sum_sum,
+    εtable_one_plain h hsch L] at hdiv
+  have hsplit : Claims.accPr sha512 (VR rd) P x ω ≤
+      (Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+        ¬ ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p) +
+      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
+    unfold Claims.accPr
+    refine le_trans (Claims.Pr_mono fun r hr => ?_) (Claims.Pr_or_le _ _)
+    by_cases hq : ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+        Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p
+    · exact Or.inr ⟨hr, hq⟩
+    · exact Or.inl ⟨hr, hq⟩
+  linarith [hsplit, hacc, hdiv]
+
+
+open Classical in
+/-- `plainOffL_le_rdK` at a simulator `P'` sending `plainRootR`'s roots (`hσ`), at `plainVerdictAtJK id`. -/
+theorem plainOffL_le_rdR {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {st : Stmt}
+    (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (L : Layout st) (m k0 : ℕ)
+    (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts) (d : Json)
+    (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+        (plainVerdictAtJK id ins.read.I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+        (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+        (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+        j)
+    (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω) (ω : Ω) (P' : Claims.Prover (Ω × plainTape x))
+    (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+      (ω, u)).1 = plainRootR P x ω)
+    (C : Fin (wordLen false x) → List 𝔽) (T : Model.Oracle 𝔽) (r : Fin 2) (ℓ : Fin (l₀ :: l₁ :: rest).length) (j : ℕ)
+    (hL : plainN x + 2 = (V false).k x)
+    (hslot : ∀ u, SlotRSL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext
+      hk0 hm PT_LOCAL spec.mPts (capOfRoot (plainRootR P x ω)[0]!) r.val ℓ.val j
+      (simAt execArith Refine.H512 Refine.enc512 Lf (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _
+        (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDg spec)
+        (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+        (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+        (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+          P' x (ω, u)) (hσ u)))
+    (rdD : (Fin ((V false).k x) → Coin) → Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen) →
+      Finset (Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes) → 𝔽))
+    (w : (Fin ((V false).k x) → Coin) → Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen) →
+      Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes) → 𝔽)
+    (hwj : ∀ c c' : Fin ((V false).k x) → Coin, (∀ i : Fin ((V false).k x), i.val < j → c i = c' i) → w c = w c')
+    (hrel : ∀ (u : plainTape x) (rr : Fin (plainN x + 2) → LCoin 65536) a,
+      Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+          (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+          (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+          (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+          (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+          (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+            P' x (ω, u) rr) a →
+        ∀ q v, opCapL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val a q = some v →
+          v ∈ rdD (plainΦ x spec st (u, rr)) q) :
+    (∑ u, Lock.nodeE (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0)
+        (slotOf r.val (ℓ.val + 1))
+        (Lock.nodeOff (fun d (outs : List (Model.OutCL 𝔽 Refine.Dig (List UInt8))) =>
+            opRL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val (ℓ.val + 1) d
+              (outs.getD 0 dfltOutL))
+          (rowT (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes
+            (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen)
+          (plurSL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ 0) (slotOf r.val (ℓ.val + 1)))
+        (lockSessL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext
+          hk0 hm PT_LOCAL spec.mPts [] [] T (capOfRoot (plainRootR P x ω)[0]!))
+        (simAt execArith Refine.H512 Refine.enc512 Lf (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _
+          (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDg spec)
+          (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+          (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+          (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+            P' x (ω, u)) (hσ u))) /
+        Fintype.card (plainTape x) ≤
+      ∑ q, Claims.Pr fun c : Fin ((V false).k x) → Coin => (rdD c q).Nonempty ∧ rdD c q ≠ {w c q} := by
+  have hR : (∑ q, Claims.Pr fun c : Fin ((V false).k x) → Coin => (rdD c q).Nonempty ∧ rdD c q ≠ {w c q}) =
+      Claims.Ex fun p : plainTape x × (Fin (plainN x + 2) → LCoin 65536) =>
+        ∑ q, ind (fun c => (rdD c q).Nonempty ∧ rdD c q ≠ {w c q}) (plainΦ x spec st p) := by
+    rw [Claims.Bridge.Ex_sum_univ]
+    refine Finset.sum_congr rfl fun q _ => ?_
+    rw [← Pr_plainΦ (spec := spec) (st := st) hL, Claims.Bridge.Pr_eq_Ex]
+    rfl
+  rw [hR, Claims.Bridge.Ex_prod]
+  refine div_le_div_of_nonneg_right (Finset.sum_le_sum fun u _ => ?_) (Nat.cast_nonneg _)
+  refine ((slotOffRSL_le_offC execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁
+    rest ext hk0 hm PT_LOCAL spec.mPts (capOfRoot (plainRootR P x ω)[0]!) T r ℓ.val j _ (hslot u)).trans
+    ((offC_simAt_le execArith Refine.H512 Refine.enc512 Lf
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+      (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+      (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+        P' x (ω, u)) (hσ u) _ r.val ℓ.val j).trans
+      (Claims.Bridge.Live.offC_liveStrat_le plainN (plainDg spec) (plainW spec hw) sha512 P' x
+        (ω, u) _ j (fun rr => w (plainΦ x spec st (u, rr)))
+        (fun rr rr' h => hwj _ _ (plainΦ_prefix hL u h))))).trans
+    (Claims.Ex_mono fun rr => Finset.sum_le_sum fun q _ => Claims.Bridge.ind_le_ind_imp fun hoff => ?_)
+  obtain ⟨hs, hne⟩ := hoff
+  obtain ⟨v, hv⟩ := Option.isSome_iff_exists.1 hs
+  obtain ⟨a, ha, hav⟩ := Claims.Bridge.liveOp_some hv
+  have hd := hrel u rr a ha q v hav
+  refine ⟨⟨v, hd⟩, fun he => hne ?_⟩
+  rw [he, Finset.mem_singleton] at hd
+  rw [hv]
+  exact congrArg some hd
+
+open Classical in
+/-- `plain_accPr_le_rdLK` at `VR rd`, at a simulator `P'` of `P` (`hσ`, `hrun`), its clashes (`hsc`) and slots
+(`hslot`). -/
+theorem plain_accPr_le_rdLR (rd : Claims.Msg → Option FinalP)
+    (hal : Claims.Recursion.AccLast sha512 (VR rd)) {x : Claims.Msg} {ins : Ins} {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
+    (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512) (hset : setupOf false x = some (ins, spec, sts))
+    (h : tables false x = [(spec, st)]) {d : Json} (hd : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
+    (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (hk0 : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts)
+    (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+    (hdec : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
+      DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+        (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
+          ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+          ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+        (plainVerdictAtJK id ins.read.I d C rootB₀) opn (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+        (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+        (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+        j)
+    (hw : 2 * spec.mPts ≤ 65536) {Ω : Type} (P : Claims.Prover Ω)
+    (ω : Ω) (C : Fin (wordLen false x) → List 𝔽)
+    (hT : ¬ Committed execArith (L.model (Refine.regionsOf st)) ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+      (Claims.Flock.oracleOf C))
+    (P' : Claims.Prover (Ω × plainTape x))
+    (hσ : ∀ u, (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512 P' x
+      (ω, u)).1 = plainRootR P x ω)
+    (hrun : PlainSimRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P' (plainΦ x spec st))
+    (hsc : PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec hw) P'
+      (plainΦ x spec st)
+      (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+        (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+        (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+        (fun rs _ => capOfRoot rs[0]!) fun j => repsOf (D := Refine.Dig) execArith
+          ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j)))
+    (hslot : ∀ (r : Fin 2) (ℓ : Fin (l₀ :: l₁ :: rest).length) u,
+      SlotRSL execArith Refine.H512 Refine.enc512 Lf (L.model (Refine.regionsOf st)) m k0 l₀ l₁ rest ext hk0 hm
+        PT_LOCAL spec.mPts (capOfRoot (plainRootR P x ω)[0]!) r.val ℓ.val (forkRound spec st k0 r.val ℓ.val)
+        (simAt execArith Refine.H512 Refine.enc512 Lf (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _
+          (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn (plainDg spec)
+          (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+          (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+          (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+            P' x (ω, u)) (hσ u)))
+    (rdD : (r : Fin 2) → (ℓ : Fin (l₀ :: l₁ :: rest).length) → (Fin ((V false).k x) → Coin) →
+      Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen) →
+        Finset (Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes) → 𝔽))
+    (w : (r : Fin 2) → (ℓ : Fin (l₀ :: l₁ :: rest).length) → (Fin ((V false).k x) → Coin) →
+      Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).logLen) →
+        Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ.val + 1)).lanes) → 𝔽)
+    (hwj : ∀ r ℓ (c c' : Fin ((V false).k x) → Coin),
+      (∀ i : Fin ((V false).k x), i.val < forkRound spec st k0 r.val ℓ.val → c i = c' i) → w r ℓ c = w r ℓ c')
+    (hrel : ∀ r ℓ (u : plainTape x) (rr : Fin (plainN x + 2) → LCoin 65536) a,
+      Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+          (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+          (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+          (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+          (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+          (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+            P' x (ω, u) rr) a →
+        ∀ q v, opCapL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ.val a q = some v →
+          v ∈ rdD r ℓ (plainΦ x spec st (u, rr)) q) :
+    Claims.accPr sha512 (VR rd) P x ω ≤ εtable false x +
+      (Claims.Pr fun s : Fin ((V false).k x) → Coin => plainEv₁R rd P x ω s) +
+      ∑ r : Fin 2, ∑ ℓ : Fin (l₀ :: l₁ :: rest).length, ∑ q,
+        Claims.Pr (fun c : Fin ((V false).k x) → Coin => (rdD r ℓ c q).Nonempty ∧ rdD r ℓ c q ≠ {w r ℓ c q}) +
+      Claims.Pr fun r : Fin ((V false).k x) → Coin => (Claims.run sha512 P (VR rd) x ω r).out = .acc ∧
+        ∃ (p : Fin (wordLen false x)) (u : List 𝔽),
+          Claims.Flock.lookCol (colsRV rd (Claims.run sha512 P (VR rd) x ω r).seen 0) p.val = some u ∧ u ≠ C p := by
+  have hL := plainN_add hset
+  have htr := plain_first_of_simDR rd hal P x ω C spec.mPts hset hd plainN (plainDg spec) (plainW spec hw)
+    P' (plainΦ x spec st) (Pr_plainΦ hL) hrun
+  have hmain := plain_le_sessionsRawLR rd Lf h L m k0 l₀ l₁ rest ext hsch hk0 hm hlay P ω C hT (plainTape x)
+    (capOfRoot (plainRootR P x ω)[0]!) (fun u => simAt execArith Refine.H512 Refine.enc512 Lf
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+      (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+      (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+      (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+        P' x (ω, u)) (hσ u))
+    (le_trans htr (mean_live_le_simAt execArith Refine.H512 Refine.enc512 Lf
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+      (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+      (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+        P' x (ω, u)) (hσ)))
+  refine hmain.trans (add_le_add (add_le_add (add_le_add le_rfl ?_) ?_) le_rfl)
+  · exact le_trans (mean_selfClash_le_live execArith Refine.H512 Refine.enc512 Lf
+      (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay) _ (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+      (plainDg spec) (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+      (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (plainRootR P x ω)
+      (fun u => liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+        P' x (ω, u)) (hσ))
+      (liveMix_le_Pr (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec hw) sha512
+        P' x ω _ (plainEv₁R rd P x ω) (plainΦ x spec st) (Pr_plainΦ hL _) hsc)
+  · rw [Finset.sum_range]
+    refine Finset.sum_le_sum fun r _ => ?_
+    rw [Claims.Flock.sum_Icc_one]
+    exact Finset.sum_le_sum fun ℓ _ => plainOffL_le_rdR Lf L m k0 l₀ l₁ rest ext hsch hk0 hm hlay d opn hdec hw P ω P' hσ C
+      (Claims.Flock.oracleOf C) r ℓ _ hL (hslot r ℓ) (rdD r ℓ) (w r ℓ) (hwj r ℓ) (hrel r ℓ)
+
+/-! ## The bound at every accepted statement -/
+
+open Classical in
+/-- **What the bound at `VR rd` still reads off the simulation and the decoders**, at every plain statement in scope
+that sets up at a draw, its one table's `fast100` schedule and layout: a leaf, openings and decoders of the table
+(`hdec`, at `plainVerdictAtJK id`), and at each prover `P` and tape `ω` a simulator `P'` of `P` (`PlainSimR`) whose
+self-clashes are `VR rd`'s collisions (`PlainClashRunR`) and whose later-level openings are rows an accepting run of
+`VR rd` opens (`plainRawLevelColsRV`, `plainRel_ofK`'s conclusion). -/
+def PlainRdInR (rd : Claims.Msg → Option FinalP) (x : Claims.Msg) : Prop :=
+  ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)
+    (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf false x = some (ins, spec, sts)) (st : Stmt)
+    (_ : tables false x = [(spec, st)]) (d : Json) (_ : ins.read.draw = some d) (L : Layout st) (m k0 : ℕ)
+    (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
+    (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩) (_ : l₀.lanes = k0)
+    (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
+    (hlay : (L.model (Refine.regionsOf st)).LinkLayout PT_LOCAL spec.mPts),
+    ∃ (Lf : Merkle.Leaf (List 𝔽) (List UInt8) Refine.Dig Refine.H512)
+      (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Refine.Dig × Model.Salts (List UInt8))
+      (_ : ∀ (C : Fin (wordLen false x) → List 𝔽) (rootB₀ : Array ByteArray) j,
+        DecodesTable (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+          (fun _ o => o.accepted = true ∧ ¬ (Off₀L Refine.H512 Refine.enc512 Lf
+            ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (capOfRoot rootB₀[0]!) (Claims.Flock.oracleOf C) o ∧
+            ¬ SelfClashL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ o))
+          (plainVerdictAtJK id ins.read.I d C rootB₀) opn
+          (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+          (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+          (fun j => repsOf (D := Refine.Dig) execArith ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+          j),
+      ∀ {Ω : Type} (P : Claims.Prover Ω) (ω : Ω), ∃ P' : Claims.Prover (Ω × plainTape x),
+        PlainSimR rd P x ω spec st (plain_mPts hs hin hset).1 P' ∧
+        ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
+          PlainClashRunR rd P x ω spec.mPts plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1) P'
+            (plainΦ x spec st)
+            (LiveSelfClash Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩
+              (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+              (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay)) (fun _ _ => true)
+              (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!) fun j => repsOf (D := Refine.Dig) execArith
+                ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j)) ∧
+          ∀ (u : plainTape x) (rr : Fin (plainN x + 2) → LCoin 65536) a,
+            Claims.Bridge.RetOK (fun _ cap pend os => tableOutL Refine.H512 Refine.enc512 Lf cap pend os)
+                (plainVerdictAtJK id ins.read.I d C (plainRootR P x ω)) opn
+                (plainDec (plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay))
+                (fun _ _ => true) (fun _ _ _ => []) (fun rs _ => capOfRoot rs[0]!)
+                (fun j => repsOf (D := Refine.Dig) execArith
+                  ([plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay].get j))
+                (liveOut (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec)
+                  (plainW spec (plain_mPts hs hin hset).1) sha512 P' x (ω, u) rr) a →
+              ∀ (r : Fin 2) (ℓ : ℕ) (q : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).logLen))
+                (v : Fin (2 ^ (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).lanes) → 𝔽),
+                opCapL Refine.H512 Refine.enc512 Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r.val ℓ a q = some v →
+                (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, rr))).out = .acc ∧
+                  ∃ e, (q.val, e) ∈ plainRawLevelColsRV rd
+                      (Claims.run sha512 P (VR rd) x ω (plainΦ x spec st (u, rr))).seen r.val (ℓ + 1) ∧
+                    rowFin (lvOf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ (ℓ + 1)).lanes e = v
+
+open Classical in
+/-- **The bound at `VR rd` against the reader's read sets** (`plain_accPr_le_rdAllK`'s proof at `VR rd`): at a
+statement some run of `VR rd` accepts, where `VR rd` accepts only at its last round (`hal`), from the simulation and
+the decoders (`PlainRdInR`). -/
+theorem plain_accPr_le_rdAllR_of (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd))
+    {x : Claims.Msg} (hno : ¬ Claims.Flock.NoAcc sha512 (VR rd) x) (hIn : PlainRdInR rd x) : PlainAccPrRdR rd x := by
+  obtain ⟨s, hs, hin⟩ := accR_inScope Readable.relation hno
+  obtain ⟨ins, spec, sts, d, hset, hd⟩ := accR_draw hno
+  have h1 := plain_one hs hin hset
+  have h0 : 0 < sts.size := by omega
+  have hm := parse_m hs hset h0
+  have h22 : 22 ≤ (sts[0]'h0).m := by have := hin.1; simp only [Bool.false_eq_true, ↓reduceIte] at this; omega
+  have h35 : (sts[0]'h0).m ≤ 35 := by have := hin.2.1; omega
+  obtain ⟨L, hlay⟩ := plain_table0 hs hin hset h0
+  obtain ⟨k0, l₀, l₁, rest, ext, hsch, hk0, e⟩ := plain_sched h22 h35
+  obtain ⟨sch, hF, hF'⟩ := exec_sched hsch
+  have ht := tables_of_one hset h1
+  have hm13 : 13 ≤ (L.model (Refine.regionsOf (sts[0]'h0))).m := by show 13 ≤ (sts[0]'h0).m; omega
+  have hnc : ∀ C : Fin (wordLen false x) → List 𝔽, (∀ p, wide false x (C p)) →
+      ¬ Claims.Flock.GoodTable (deployPlain Readable.relation) (wordLen false) x C →
+      ¬ Committed execArith (L.model (Refine.regionsOf (sts[0]'h0))) ⟨_, k0, l₀ :: l₁ :: rest, ext⟩
+        (Claims.Flock.oracleOf C) := fun C hw hg => by
+    have := plain_not_committed hs hin hset h0 L C hw hg
+    rwa [e] at this
+  refine ⟨ins, spec, sts, sts[0]'h0, sch, (sts[0]'h0).m, k0, l₀, l₁, rest, ext, hset,
+    Array.getElem?_eq_getElem h0, hF, hF'.symm, ht, hsch, ?_⟩
+  intro Ω _ _ P ω C hw hg rdD w hwj hrd
+  obtain ⟨Lf, opn, hdec, hP⟩ := hIn s hs hin ins spec sts hset _ ht d hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay
+  obtain ⟨P', ⟨hσ, hS, hrun⟩, hC⟩ := hP P ω
+  obtain ⟨hsc, hrel⟩ := hC C hw
+  exact plain_accPr_le_rdLR rd hal Lf hset ht hd L _ k0 l₀ l₁ rest ext hsch hk0 hm13 hlay opn hdec
+    (plain_mPts hs hin hset).1 P ω C (hnc C hw hg) P' hσ hrun hsc
+    (fun r ℓ u => slotRSL_lead L (plain_mPts hs hin hset).2.2 execArith Refine.H512 Refine.enc512 Lf _ k0 l₀ l₁ rest
+      ext hsch hk0 hm13 PT_LOCAL spec.mPts (capOfRoot (plainRootR P x ω)[0]!)
+      (leadsAfter_simAt execArith Refine.H512 Refine.enc512 Lf
+        (plainTab L _ k0 l₀ l₁ rest ext hsch hm13 PT_LOCAL hlay) _ _ opn (plainDg spec)
+        (plainDec (plainTab L _ k0 l₀ l₁ rest ext hsch hm13 PT_LOCAL hlay)) (fun _ _ => true) (fun _ _ _ => [])
+        (fun rs _ => capOfRoot rs[0]!) (plainN x) (hdec C (plainRootR P x ω)) (fun _ => rfl) (plainRootR P x ω)
+        (liveStrat (fun _ => 1) (fun _ => spec.mPts) plainN (plainDg spec) (plainW spec (plain_mPts hs hin hset).1)
+          sha512 P' x (ω, u)) (hσ u) (hS u)) r ℓ.val)
+    rdD w hwj fun r ℓ u rr a ha q v hv => by
+      obtain ⟨hacc, e, he, rfl⟩ := hrel u rr a ha r ℓ.val q v hv
+      exact hrd r ℓ _ hacc q e he
+
+/-- **`RdAllAt` at the plain record at the deployed reader** (U2b's form), from `plain_accPr_le_rdAllR_of` at every
+statement some run of `VR rd` accepts. -/
+theorem rdAllAt_R (rd : Claims.Msg → Option FinalP) (hal : Claims.Recursion.AccLast sha512 (VR rd))
+    (hIn : ∀ x, ¬ Claims.Flock.NoAcc sha512 (VR rd) x → PlainRdInR rd x) :
+    RdAllAt (deployPlainR Readable.relation rd) (fun _ => plainRawLevelColsRV rd) :=
+  fun x hno => plain_accPr_le_rdAllR_of rd hal hno (hIn x hno)
 
 end FlockDeploy.KS
