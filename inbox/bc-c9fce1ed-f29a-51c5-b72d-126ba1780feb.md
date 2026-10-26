@@ -49,3 +49,17 @@ Top (00:53Z, thread 1792970372.621909): Daniel is weighing whether to measure th
 - harm_work = each unit's own ANDs (`Candidate.ands`, not its row openings), for every template. No PoUW work table and no influence.
 - Use the same exchange rate (normalize each half by its best bound at budget B) and the same budgets as the PoUW-work variant.
 - Cite `free_compute` and `leak` from the same draw, through `certify`.
+
+## 01:00Z from proofs: DANIEL RULED that the work half is circuit size; this replaces the 00:55Z entry
+
+Daniel (5:55 PM PDT, via top):
+- harm_work = each unit's own ANDs (`Candidate.ands`, not its row openings), every subcircuit alike. No PoUW work table and no `influence`.
+- The 50/50 split with leaked bits and top's exchange rate stay as they were.
+- The ANDs plan is the plan of record. DROP the PoUW-work variant from the 02:30Z rerun: post only the ANDs frontier on PRF-166.
+- Daniel wants to hear about any weirdness circuit size causes, for example a subcircuit whose ANDs badly misstate its GPU cost. Post each one on PRF-166 with numbers (ANDs against GPU-s), and tell me in your final message so I can ring top.
+
+Words (Daniel):
+- "Sampling block" means the proof units one draw covers, committed and registered before that draw. It replaces "window" in that sense.
+- "Subcircuit" replaces "template" in prose. A subcircuit is a template with every parameter bound; each stratum is one subcircuit's units.
+- The planner's "block kind" (`Candidate.kind`) now collides with "sampling block", so rename it in prose.
+- Code identifiers and record keys (`template` fields, `verity.ml.windows`) stay as they are. Change only prose, docstrings and READMEs, in the PRs you're already touching (#4432, #4449).
