@@ -30,6 +30,8 @@ output columns, `outRowForms`), and at a `rec-open` part's `dirs` (`openPorts`, 
   evaluations with no collision, so the rows are equal.
 * `valCalls_shaAt_layR`: `DeployedR.layR` records check 5's calls; `resSetup`: check 5's own evaluations at a V\*
   statement, which the deployed `Brings.setup` is to list (`hset`).
+* `vCols_of_base`, `oCols_staged`: where a copy's `v` and `out` columns sit, from the verifier's checks (`checkParsed`
+  holds the unit's input and output leaves to V\*'s, its words in order).
 * `VVTie`: the coin tie, `vvAt` at the coins is check 5's row at the V\* statement (`staged_rep_drawn`).
 * `ResLowered`: the share at the layout of record and `bdR rd wE final w`, per algebra part; `resLowered_parts` gives
   it at every part where the pieces are owned by algebra parts only, which is `DecompBR.ResLowJ`'s conclusion at each
