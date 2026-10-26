@@ -5,7 +5,8 @@ hm96's table) on a device. A step is committed as its groups' outputs arrive::
 
     sc = StepCommitter(plan, step, slots, salt_key)     # salt_key: slots.fresh_salt_key(), the prover's
     for tensors in each group's outputs:                 # e.g. a layer's ops, (slots, ...) CUDA tensors
-        sc.add(tensors)                                  # enqueued on the plan's side stream behind the current stream
+        done = sc.add(tensors)                           # on the plan's side stream behind the current stream; reuse the
+                                                         # tensors' memory only after the event `done`
     pending = sc.finish()                                # no host sync
     pending.result()                                     # slots.StepCommit(root, slot_roots), the reference's
 
@@ -257,12 +258,13 @@ class Pending:
 class StepCommitter:
     """Step ``step`` of ``slots`` slots under ``plan``, its salts under ``salt_key`` (32 bytes, the prover's): ``add`` each
     group's outputs in the layout's order, then ``finish``. On a CUDA plan every launch goes on the plan's side stream after
-    what the current stream has enqueued, and each added tensor is held for that stream (``record_stream``)."""
+    what the current stream has enqueued, and each added tensor is held for that stream (``record_stream``). With ``marks``
+    (a list), each launch appends ``(name, event)``, its end on the side stream (timing only)."""
 
-    def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes) -> None:
+    def __init__(self, plan: Plan, step: int, slots: int, salt_key: bytes, marks: list[tuple[str, Any]] | None = None) -> None:
         if len(salt_key) != 32:
             raise ValueError("a salt key is 32 bytes")
-        self.plan, self.slots, self.k = plan, slots, 0
+        self.plan, self.slots, self.k, self.marks = plan, slots, 0, marks
         w = plan.work(slots)
         st = Step()
         st.key[:] = [int(x) for x in np.frombuffer(salt_key, "<u4")]
@@ -280,11 +282,17 @@ class StepCommitter:
             torch = self.plan.torch
             with torch.cuda.device(self.plan.device):
                 rc = fn(self.plan.stream.cuda_stream, *args)
+                if self.marks is not None:
+                    ev = torch.cuda.Event(enable_timing=True)
+                    ev.record(self.plan.stream)
+                    self.marks.append((fn.__name__, ev))
         if rc:
             raise RuntimeError(f"{fn.__name__} failed: CUDA error {rc}")
 
-    def add(self, tensors: Sequence[Any]) -> None:
-        """The next group's outputs: tensor i of shape (slots, ...), each slot's bytes contiguous, ``group.sources[i]`` of them."""
+    def add(self, tensors: Sequence[Any]) -> Any:
+        """The next group's outputs: tensor i of shape (slots, ...), each slot's bytes contiguous, ``group.sources[i]`` of them.
+        Returns an event on the side stream after which the tensors may be overwritten (a producer that reuses its buffers
+        waits on it), or None on the host."""
         layout = self.plan.layout
         if self.k >= len(layout.groups):
             raise ValueError("every group is in")
@@ -305,6 +313,11 @@ class StepCommitter:
         self._call(self.plan.lib.cs_units, ctypes.byref(self.plan.ctx), ctypes.byref(self.st), ctypes.byref(gr))
         self._call(self.plan.lib.cs_fold, ctypes.byref(self.plan.ctx), ctypes.byref(self.st), ctypes.byref(gr))
         self.k += 1
+        if self.plan.host:
+            return None
+        done = self.plan.torch.cuda.Event()
+        done.record(self.plan.stream)
+        return done
 
     def _source(self, t: Any, n: int) -> tuple[int, int]:
         if self.plan.host:
