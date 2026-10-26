@@ -142,10 +142,9 @@ def AuditsSetup (pub : SetupProtocol.Public) (sc : SessionCommitment) : Prop :=
   pub.blocks = q.blocks ∧ pub.salt.size = Run.SALT ∧ sc.blocks = q.blocks ∧ sc.k = K ∧ sc.limitNs ≤ LIMIT_NS ∧
     sc.blockBytes = q.blockBytes ∧ sc.binding = pub.root
 
-/-- `C*` has the deployed point's shape: 8 segments of `2^16` blocks of 2,056 bytes, as `Decodes` requires. -/
-def Shaped (C : Array (Array ByteArray)) : Prop :=
-  C.size = q.segments ∧ ∀ s (hs : s < C.size), C[s].size = q.blocksPerSegment ∧
-    ∀ v (hv : v < C[s].size), C[s][v].size = q.blockBytes
+/-- `C*` has the deployed point's shape (`ShapedAt q`): 8 segments of `2^16` blocks of 2,056 bytes, as `Decodes`
+requires. -/
+def Shaped (C : Array (Array ByteArray)) : Prop := ShapedAt q C
 
 /-- What a leaf hashes for block `v` of segment `s` with row digest `R` (`Run.rowLeaf`, `Merkle.packageLeaf`):
 `0x00 ‖ salt ‖ u64le(s) ‖ u16le(v) ‖ R`. -/

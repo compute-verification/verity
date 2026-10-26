@@ -27,6 +27,7 @@
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.EndToEnd",
   "Properties.Pous.Period",
+  "Properties.Pous.Cited",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins",
@@ -482,6 +483,12 @@
    "signature": ["NciCheck.Properties.SecurityProofs.Witnesses : NciCheck.Properties.Witnesses"],
    "assumptions": [],
    "type_hash": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29"
+  },
+  "Pous.Cited.SecurityProofs.citedRunAccepted": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Cited.SecurityProofs.rootDecodes": {
+   "owner": "@memory-accounting"
   },
   "Pous.EndToEnd.SecurityProofs.drawExact": {
    "owner": "@memory-accounting",
@@ -2680,6 +2687,14 @@
    },
    "MemoryChallenger.Properties.SecurityProofs.verdictSigned": {
     "function": "MemoryChallenger.verdict",
+    "outcome": "accept"
+   },
+   "Pous.Cited.SecurityProofs.citedRunAccepted": {
+    "function": ["PousCheck.SetupProtocol.protocol.check", "PousCheck.RunProtocol.acceptsCited"],
+    "outcome": "accept"
+   },
+   "Pous.Cited.SecurityProofs.rootDecodes": {
+    "function": "PousCheck.SetupProtocol.protocol.check",
     "outcome": "accept"
    },
    "Pous.EndToEnd.SecurityProofs.drawExact": {

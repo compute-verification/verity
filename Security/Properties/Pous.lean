@@ -46,6 +46,11 @@ def Decodes (q : P2.Params) (salt : ByteArray) (C : Array (Array ByteArray)) (W 
         let at_ := (s * q.blocksPerSegment + j) * q.payloadBytes
         BlockDecodes q salt s j C[s][j] (W.extract at_ (at_ + q.payloadBytes))
 
+/-- `C*` has `q`'s shape: `segments` segments of `blocksPerSegment` blocks of `blockBytes` bytes, as `Decodes` requires. -/
+def ShapedAt (q : P2.Params) (C : Array (Array ByteArray)) : Prop :=
+  C.size = q.segments ∧ ∀ s (hs : s < C.size), C[s].size = q.blocksPerSegment ∧
+    ∀ v (hv : v < C[s].size), C[s][v].size = q.blockBytes
+
 /-- The leaves of `C*` (`verifier.segment_leaves`, segment by segment): `packageLeaf salt s v` of block `v` of segment
 `s`, in block order. -/
 def leaves (salt : ByteArray) (C : Array (Array ByteArray)) : Array ByteArray :=
