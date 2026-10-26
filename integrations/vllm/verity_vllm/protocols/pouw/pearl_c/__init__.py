@@ -39,7 +39,8 @@ torch's current stream, in the device's primary context:
   weight (linked to the first retained pass's), the leaves, the tile tree and the manifest (`write_manifest`) that the reference verifier reads
   (``benchmarks/pouw/pearl_c_vllm/verify_run.py``).  A retained pass starts from poisoned outputs (`poison`): a replay of an
   earlier pass's calls finds that pass's bytes still in the buffers, and they would be right for it, so a skipped write
-  must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.
+  must not be able to pass as a repeat.  `omit` drops named steps, for the negative control.  A pass's state and its end
+  are `ends`'s (`PassEnds`).
 
 The per-call host work is kept small (the decode profile, research store ``internal/pouw/rtx-pro/pouw-mvp-decode-profile.md``):
 the keys by native SHA-512 (`_Keys`, byte for byte `call_keys`, the index numbered across the epoch: `pouw_pass.call_index`)
@@ -56,18 +57,16 @@ lines, the leaves and the records, for the time split.  ``hashing`` may change b
 from __future__ import annotations
 
 import itertools
-import types
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pouw.audit import Epoch, Workload, rows_domain, transcript_domain
+from verity.core.protocols.pouw.audit import Workload, rows_domain
 from verity.core.protocols.pouw.protocol import Matmul, Shape
 from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as PW
+from verity.core.protocols.pouw.schemes import pearl_c_work as PW  # noqa: F401 - kept importable here, as the tests read it
 from verity.core.protocols.pouw.schemes.pearl_c_device import H100, SM120, SM120_UNPROMOTED
 from verity.core.protocols.pouw.serving import (
-    SCHEDULES,
     SERIAL,
     Schedule,
     SchemeId,
@@ -77,10 +76,12 @@ from verity.core.protocols.pouw.serving import (
 from verity_vllm.protocols.pouw.pearl_c.passes import EpochCalls, call_index, pass_dir, room
 from verity_vllm.protocols.pouw.pearl_c.graphs import GRAPH_ROWS, SLOT_BYTES, GraphCalls, _Graph
 from verity_vllm.protocols.pouw.pearl_c.lanes import (  # noqa: F401 - the schedule's names, kept importable here, as callers read them
+    SCHEDULES,
     SIDE_GROUPS,
     SIDE_IO,
     STEP_GROUPS,
     LaneCalls,
+    admitted,
     rotated,
     schedule_of,
     splits,
@@ -95,17 +96,16 @@ from verity_vllm.protocols.pouw.pearl_c.host import (
     _Driver,
     _Keys,
     _Lane,
-    _linked,
     _put,
     _stream,
     _TorchStream,
     _Uploads,
-    _write,
+    _write,  # noqa: F401 - kept importable here, as the tests read it
     _zeros,
     call_keys,  # noqa: F401 - kept importable here, as the tests read it
     epoch_of,
     memmove,
-    write_manifest,
+    write_manifest,  # noqa: F401 - kept importable here, as the tests read it
 )
 from verity_vllm.protocols.pouw.pearl_c.kernel import (
     Kernel,
@@ -117,7 +117,9 @@ from verity_vllm.protocols.pouw.pearl_c.manifest import (  # noqa: F401 - the ma
     MANIFEST_SCHEMAS,
     manifest_epoch,
     manifest_schema,
+    session_head,
 )
+from verity_vllm.protocols.pouw.pearl_c.ends import PassEnds, _Pass
 from verity_vllm.protocols.pouw.pearl_c.screen import (
     excluded,
     screen,
@@ -219,20 +221,6 @@ class _Shape:
         return self.keys if name == "keys" else self.b[name]
 
 
-@dataclass
-class _Pass:
-    retain: Path | None
-    run: str | None = None          # the run id a retained pass's manifest names
-    matmuls: list[Matmul] = field(default_factory=list)
-    flag_rows: int = 0               # rows of the pass's screen flags so far
-    records: list[PW.UnitRecord] = field(default_factory=list)
-    files: list[dict] = field(default_factory=list)
-    tiles: int = 0
-    poison: int | None = None       # the byte every call buffer starts the pass as, those created during it included
-    stepped: bool = False            # begun by an engine step's end (`PearlCDeviceRun.end_pass`'s ``step``)
-    base: int | None = None          # its call at position p has index base + p; None until its first call (`call_index`)
-
-
 def weight_roots(kernel: Kernel, weights: dict[int, Any], scheme: str = SCHEMES[0], salt_key: bytes | None = None) -> dict[int, bytes]:
     """Each weight's B-row tree root (phase ``epoch`` alone), before any salt: the composition's weight phase, under the scheme
     `scheme` names: its device record is the pipeline variant, and its hashing format gives the tree hash.  The trees' hm96
@@ -296,7 +284,7 @@ def _run(kernel: Kernel, pipe: Any, names: tuple[str, ...], stream: int) -> None
         kernel.dev.stream = None
 
 
-class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
+class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls, PassEnds):
     """One install's Pearl-C workload on the device, with `pouw._Run`'s interface (`gemm`, `finish`, `commits`, `details`) and
     the passes the bench and the verifier need (`begin`, `end`, `end_pass`)."""
 
@@ -304,18 +292,22 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
                  coins: SaltCoins, opening: SaltOpening, hashing: bool = True, capacity: int = LEAF_CAPACITY,
                  time_gemm: bool = False, schedule: str | Schedule = SERIAL, graphs: bool = False, whole_defer: bool = False,
                  flag_rows: int = FLAG_ROWS, salt_key: bytes | None = None, whole_defer_a: bool = False,
-                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False):
+                 whole_fork_stats: bool = False, lag_ends: bool = False, whole_tree_sm: bool = False, aside_ends: bool = False,
+                 pass_index: int | None = None, whole_prefetch_b: bool = False, whole_eager: str | Schedule | None = None):
         """`coins` is the epoch's coin commitment, held in this process or a live session's on the auditor host, and `opening`
-        its salt coin, opened after the weights' root (`epoch_of`, which raises `DomainError` otherwise): the salt is the coin's.
+        its salt coin, opened after the weights' root, or a live session's after salt epoch `pass_index`'s root (`epoch_of`,
+        which raises `DomainError` otherwise): the salt is the coin's.
         The whole capture's options: `whole_options`.  `lag_ends`: an engine step's pass end (`_ExecutorPass.end`, `end_pass`
         with ``step``) leaves its commitment's readback in flight (`end` with ``lag``, `LaneCalls.settle`); with `aside_ends`
-        too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`)."""
-        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends)
+        too, its tile tree runs on a stream of its own over a copy of the leaves (`LaneCalls._end_aside`).  `whole_eager`
+        is the schedule a forward a whole-step arm runs eagerly takes (`eager_forward`)."""
+        whole_options(entry, kernel, whole_defer, whole_defer_a, whole_fork_stats, whole_tree_sm, lag_ends, aside_ends,
+                      whole_prefetch_b)
         self.scheme, self.entry, self.kernel, self.hashing, self.capacity = scheme, entry, kernel, hashing, capacity
         self.nb, self.salt_key, self.retain_dir, self.retained, self._weight_files = kernel.run.NB, salt_key, None, 0, {}
         self.graphs = graphs and next(iter(weights.values())).device.type == "cuda"
         self.whole_defer, self.whole_defer_a, self.whole_fork_stats = whole_defer, whole_defer_a, whole_fork_stats
-        self.whole_tree_sm = whole_tree_sm
+        self.whole_tree_sm, self.whole_prefetch_b = whole_tree_sm, whole_prefetch_b
         self.lag_ends, self.aside_ends, self._lagged, self._end_side = lag_ends, aside_ends, None, None
         self._graphs: dict[tuple, _Graph] = {}
         self.variant = scheme.device.name
@@ -323,10 +315,12 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
         self.torch_stream = _TorchStream()
         self.roots, self.coins, self.opening = dict(roots), coins, opening
         self.epoch = epoch_of(Workload(tuple(Matmul(w, Shape(ROW_ALIGN, t.shape[1], t.shape[0]), w) for w, t in weights.items())),
-                              self.roots, coins, opening)
+                              self.roots, coins, opening, pass_index)
         self.salt = salt = self.epoch.salt
         self.device = next(iter(weights.values())).device
         self.schedule = schedule_of(schedule, scheme, kernel)
+        self.whole_eager = schedule_of(whole_eager, scheme, kernel) if whole_eager else None
+        self._eager_from: Schedule | None = None   # the open pass's own schedule, while an eager forward runs it under whole_eager
         self.main: _Lane | None = None      # the main lane, when the schedule runs it above the caller's priority
         self.sides: list[_Lane] = []         # the side lanes, as many as the schedule's ring, which calls take in turn
         self.fork: _Lane | None = None      # the lane graphs' fork beside the main lane's per-row keying, made at first use
@@ -361,7 +355,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
         self.stream = lambda: _stream(self.device)
         self.commits: dict[str, Any] = {"scheme": scheme.name, "salt": salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                                         "coins": coins.to_json(), "salt_opening": opening.to_json(),
-                                        "transcript_root": None, "units": 0, "tiles": 0}
+                                        "transcript_root": None, "units": 0, "tiles": 0,
+                                        **({} if pass_index is None else {"pass_index": pass_index})}
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "committer": f"pouw_pearl_c_device (GPU 1's pipeline, cubin {kernel.cubin_sha256[:16]}, "
                                                 f"sources {(kernel.source_sha256 or 'unrecorded')[:16]})",
@@ -373,7 +368,10 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
                        + (", a whole capture's tile hashing beside the next call" if whole_defer else "")
                        + (" and its A tree beside its forming and GEMM" if whole_defer_a else "")
                        + (" (the GEMM leaving the tree its SM)" if whole_tree_sm else "")
-                       + (", its A scales beside its A commitment" if whole_fork_stats else "")) if self.graphs else None,
+                       + (", its A scales beside its A commitment" if whole_fork_stats else "")
+                       + (", its B̃ prefetched into L2 beside its A commitment" if whole_prefetch_b else "")
+                       + (f", an eager forward's pass under {self.whole_eager.name}" if self.whole_eager else ""))
+            if self.graphs else None,
             "pass_end": ("an engine step's commitment read back at the next end" + (", its tile tree on a stream of its own"
                                                                                      if aside_ends else "")) if lag_ends else "read back at its end",
             "uncovered": "every GEMM outside LinearBase (lm_head, attention); served y's glue (bias) is not bound (red team F4)"}
@@ -406,6 +404,16 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
         stream = self.torch_stream(self.stream()) if stream is None else stream
         for lane in self.sides:
             stream.wait_stream(lane.stream)
+
+    def eager_forward(self) -> None:
+        """The open pass's forward runs eagerly under a whole-step arm (`pouw_pearl_c_whole.WholeStep`: a batch its graphs
+        lack, a prefill's or a mixed step's): with `whole_eager`, and before the pass's first call, the pass runs under that
+        schedule, so its calls' tile hashing and A trees go on side lanes beside their GEMMs, and the next `begin` puts the
+        pass's own schedule back.  The commitments are the pass's schedule's."""
+        if self.whole_eager is None or self.cur is None or self.cur.matmuls or self._eager_from is not None:
+            return
+        self._eager_from = self.schedule
+        self._use(self.whole_eager)
 
     # ---- the weight side --------------------------------------------------------------------------------------------
 
@@ -441,7 +449,8 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
         key = (m16, n, k)
         if key not in self.shapes:
             R = self.kernel.run
-            mp = R.cdiv(m16, R.BM_D) * R.BM_D
+            tile = R.BM if m16 > getattr(R, "MAINLOOP_ROWS", m16) else R.BM_D
+            mp = R.cdiv(m16, tile) * tile
             size = R.Pipeline.sizes(mp, n, k, m16)
             own = tuple(x for x in CALL_BUFFERS_OWN if x in size)
             sh = _Shape(m16, mp, n, k, {x: _zeros(size[x], self.device) for x in (*CALL_BUFFERS, *own)},
@@ -616,11 +625,13 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
     def begin(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None,
               stepped: bool = False, at: int | None = None) -> None:
         """A new pass: its own transcript under the install's epoch, its indices from `pass_base` (``at``), under `schedule` (the
-        last one's when None; a schedule changes only between passes).  With `retain`, the pass writes what the prover opens
-        from into that directory, from poisoned outputs, and its manifest names `run`.  `stepped`: a step's end begins it."""
+        last pass's own when None; a schedule changes only between passes, and before a pass's first call by `eager_forward`).
+        With `retain`, the pass writes what the prover opens from into that directory, from poisoned outputs, and its manifest
+        names `run`.  `stepped`: a step's end begins it."""
         self.join_sides()                   # the last pass's side lanes are done before anything new
         retain = retain or pass_dir(self)
-        self._use(self.schedule if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
+        last, self._eager_from = self._eager_from or self.schedule, None
+        self._use(last if schedule is None else schedule_of(schedule, self.scheme, self.kernel))
         self.cur = _Pass(Path(retain) if retain else None, run, stepped=stepped, base=self.pass_base(at))
         if retain and self.hashing:
             self.poison()
@@ -639,109 +650,6 @@ class PearlCDeviceRun(LaneCalls, GraphCalls, EpochCalls):
             for t in self._graph_buffers():
                 t.fill_(value)
 
-    def end(self, lag: bool = False) -> dict[str, Any]:
-        """Close the pass: its tile tree on the device, every A root, and with `retain` the manifest.  Returns the pass's
-        commitment (also in `commits` and `details["passes"]`).  With `lag` (on CUDA, without `retain`) the root, A's roots
-        and the flag counts are copied out behind the pass's work and the host doesn't wait for them: the returned dict gets
-        them, and `commits` its root, when the next end, `settle` or `finish` completes the readback."""
-        import torch
-        self.settle()
-        cur, K = self.cur, self.kernel
-        out: dict[str, Any] = {"units": len(cur.matmuls), "tiles": cur.tiles, "hashing": self.hashing,
-                               "schedule": self.schedule.name} | ({"base": cur.base} if cur.matmuls else {})
-        if self.hashing and cur.matmuls:
-            self.join_sides()
-            epoch = Epoch(Workload(tuple(cur.matmuls)), self.roots, self.salt)
-            R, count, nb = K.run, cur.tiles, self.nb
-            tree = _zeros(nb * (2 * R.pow2(count) - 1), self.device)
-            dom = _zeros(nb, self.device)
-            _put(dom, transcript_domain(epoch, count, self.tree_hash).domain_id)
-            ns = types.SimpleNamespace(dev=K.dev, b={"tree_t": tree.data_ptr()}, keys={"dom_t": dom.data_ptr(), **self.const_keys})
-            units = len(cur.matmuls)
-            flags = self.flag_buf[:cur.flag_rows].to(torch.int64).sum(0) if cur.flag_rows else torch.zeros(2, dtype=torch.int64)
-            aside = lag and self.aside_ends and cur.retain is None and self.device.type == "cuda"
-            leaves, side, got = self._end_aside(count, self.roots_buf[:nb * units], flags) if aside else \
-                (self.leaves.data_ptr(), None, None)
-            K.dev.stream = side.cuda_stream if aside else self.stream()
-            try:
-                for _, f in R.Pipeline.tree_setup(ns, "t", count, "dom_t"):
-                    f()
-                R.Pipeline.tree_leaves(ns, "t", leaves, count, "dom_t")
-                R.Pipeline.levels(ns, "t", count)
-            finally:
-                K.dev.stream = None
-            out.update(screened_rows=cur.flag_rows,
-                       excluded_rows=sum(len(r.excluded_a) for r in cur.records) if cur.retain is not None else None)
-            if aside:
-                with torch.cuda.stream(side):
-                    root, done = torch.empty(nb, dtype=torch.uint8, pin_memory=True).copy_(tree[-nb:], non_blocking=True), torch.cuda.Event()
-                    done.record()
-                tree.record_stream(side)
-                dom.record_stream(side)
-                self._lagged = (out, done, [got[0], root, got[1]], units, count)
-            elif lag and cur.retain is None and self.device.type == "cuda":
-                got = [torch.empty(t.shape, dtype=t.dtype, pin_memory=True).copy_(t, non_blocking=True)
-                       for t in (self.roots_buf[:nb * units], tree[-nb:], flags)]
-                done = torch.cuda.Event()
-                done.record()
-                self._lagged = (out, done, got, units, count)
-            else:
-                roots_a = _bytes(self.roots_buf[:nb * units])
-                self._ended(out, roots_a, _bytes(tree[-nb:]), flags.tolist(), units, count)
-                if cur.retain is not None:
-                    out["manifest"] = str(self._write_retained(cur, epoch, roots_a, tree, count))
-        self.details["passes"].append(out)
-        return out
-
-    def end_pass(self, retain: str | None = None, run: str | None = None, schedule: str | Schedule | None = None, *,
-                 step: bool = False) -> dict[str, Any]:
-        """`end` the open pass and `begin` the next (with `begin`'s arguments), so a pass is never left ended: a call after
-        this lands in the next pass, and `finish` doesn't end this one twice.  Returns the ended pass's commitment.  `step`:
-        an engine step's forward has returned (the PoUW option's hook, `pouw.install`).  Without it, a pass a step began that
-        has no call yet is that step's, already ended: nothing ends, the step's commitment is returned, and arguments apply."""
-        if not step and self.cur.stepped and not self.cur.matmuls:
-            if retain or run or schedule:
-                self.begin(retain, run, schedule, stepped=True)
-            return self.details["passes"][-1]
-        out = self.end(lag=step and self.lag_ends)
-        self.begin(retain, run, schedule, stepped=step)
-        return out
-
-    def _write_retained(self, cur: _Pass, epoch: Epoch, roots_a: bytes, tree: Any, count: int) -> Path:
-        import torch
-        d = cur.retain
-        wd = d / "weights"
-        wd.mkdir(parents=True, exist_ok=True)
-        weights = {}
-        for w in sorted(self.weights):
-            wt = self.weights[w]
-            size = self.kernel.run.Pipeline.sizes(self.kernel.run.BM, wt.n, wt.k, self.kernel.run.BM)["tree_b"]
-            weights[str(w)] = {"n": wt.n, "k": wt.k, "root": wt.root.hex(), "excluded_b": list(wt.excluded),
-                               "rows": _linked(wd / f"{w}.rows.bf16", self._weight_files, digest=False,
-                                               data=lambda wt=wt: _bytes(wt.tensor.to(torch.bfloat16).contiguous().view(torch.uint8))),
-                               "tree": _linked(wd / f"{w}.tree", self._weight_files, data=lambda wt=wt, size=size: _bytes(wt.b["tree_b"][:size]))}
-        matmuls = [{"index": u.index, "m": u.shape.m, "k": u.shape.k, "n": u.shape.n, "weight": u.weight,
-                    "real_rows": r.real_rows, "k_kept": r.k_kept, "excluded_a": list(r.excluded_a),
-                    "root_a": roots_a[self.nb * p:self.nb * (p + 1)].hex(), **f}
-                   for p, (u, r, f) in enumerate(zip(cur.matmuls, cur.records, cur.files))]
-        head = {"schema": MANIFEST_SCHEMA, "run": cur.run, "entry": self.entry, "scheme": self.scheme.name,
-                "scheme_args": {k: getattr(SchemeId.parse(self.scheme.name), k) for k in ("forming", "device", "hashing")},
-                "coins": self.coins.to_json(), "salt_opening": self.opening.to_json(), "salt": self.salt.hex(),
-                "cubin_sha256": self.kernel.cubin_sha256,
-                "kernel_source_sha256": self.kernel.source_sha256, "schedule": self.details["schedule"],
-                "records_root": PW.records_root(self.salt, epoch.weights_root,
-                                                {w: PW.Split(self.weights[w].k) for w in epoch.workload.weights()}, cur.records).hex(),
-                "commitment": {"root": _bytes(tree[-self.nb:]).hex(), "count": count},
-                "leaves": _write(d / "leaves", _bytes(self.leaves[:self.nb * count])),
-                "tree_t": _write(d / "tree_t", _bytes(tree)), "hm96_salt_key": self.salt_key.hex()}
-        return write_manifest(d, head, weights, matmuls)
-
-    def finish(self) -> None:
-        if self.cur is not None and self.cur.matmuls:
-            self.end()
-            self.cur = _Pass(None)
-        self.settle()
-
 
 class PearlCExecutor:
     """A `PearlCDeviceRun` behind `verity_vllm.protocols.linear.api.LinearExecutor`, the one object a `Stack` computes a site's y with.
@@ -754,15 +662,7 @@ class PearlCExecutor:
     controls = frozenset({"poison", "omit"})
 
     def __init__(self, run: PearlCDeviceRun) -> None:
-        self.run, self.name = run, run.entry
-        ok = set()
-        for name in SCHEDULES:
-            try:
-                schedule_of(name, run.scheme, run.kernel)
-            except ValueError:
-                continue
-            ok.add(name)
-        self.schedules = frozenset(ok)
+        self.run, self.name, self.schedules = run, run.entry, admitted(run.scheme, run.kernel)
 
     def refusals(self, sites: Any) -> list[str]:
         return refusals(self.run.scheme.name, {s.weight_id: (s.n, s.k) for s in sites})
