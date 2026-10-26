@@ -46,7 +46,7 @@ tile. With `--device-lean PATH` the script also reads a Device.lean and confirms
 its side channels and neither NVLink nor a host-RAM channel. That check is off by default, so the run reads only this
 package.
 
-Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Core/Device.lean] [--verdict PATH]`.
+Run: `python scope_offload.py [--mutations] [--device-lean Security/Definitions/Accounting/Device.lean] [--verdict PATH]`.
 Stdlib, exact_kit, and verity_machine_model for each headline design's eps and credited time a word.
 Sources: MAC_rate = s8 macs/SM/clk * SMs * f_max (note:20261017T1818Z-draft-axioms sec 2.1); the headline eps at both
 readings, `headline.row` for `machine_model/data/headline.toml`'s designs; PCIe5 x16 64 GB/s one way;

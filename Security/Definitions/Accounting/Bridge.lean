@@ -5,7 +5,7 @@ import Definitions.Accounting.Confidence
 /-!
 # The device's schedule, induced by the actual circuit (trusted)
 
-The device model (core's `Verity.Device`, `Schedule`) read off the actual circuit of
+The device model (`Accounting.Device`, `Schedule`) read off the actual circuit of
 `note:console/20261012T0645Z-draft-actual-circuit-model` (v2.3), on a run. The device is the location `chip ∪ mem`: its
 on-chip state is what the leaves of `chip` hold and what is in flight between them (`Actual.Run.state`), and its device
 memory the same of `mem`, so nothing it holds goes uncounted. Bits reach the chip from device memory on the link `hbm.1`
@@ -36,7 +36,7 @@ namespace Placed
 variable {L : Type*} (A : Placed L)
 
 /-- The pricing that counts the gates of op class `o`: one for each, nothing for the others. -/
-def classPrice (cls : Fin A.N → Option OpClass) (o : OpClass) : Fin A.N → ℕ := fun g => if cls g = some o then 1 else 0
+def classPrice (cls : Fin A.N → Option Op) (o : Op) : Fin A.N → ℕ := fun g => if cls g = some o then 1 else 0
 
 end Placed
 
@@ -48,8 +48,8 @@ open Classical in
 /-- **The schedule a run induces** on the device at `chip ∪ mem`, with its chip at `chip`, its memory at `mem`, its
 memory link `hbm` and its side channels `side` (each a link and its end at the device), each gate charged to `acct g`
 and counted as an op of `cls g`. -/
-noncomputable def schedule {E ι α : Type} (chip mem : Finset L) (cls : Fin R.A.N → Option OpClass)
-    (acct : Fin R.A.N → α) (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) : Schedule ι α := fun t =>
+noncomputable def schedule {E ι α : Type} (chip mem : Finset L) (cls : Fin R.A.N → Option Op) (acct : Fin R.A.N → α)
+    (link : Fin R.A.N → Fin R.A.N → E) (hbm : E × L) (side : ι → E × L) : Schedule ι α := fun t =>
   { ops := fun a o => (((R.A.region (chip ∪ mem) (Set.Ico t (t + 1))).filter fun g => cls g = some o).filter
       fun g => acct g = a).card
     read := fun a => R.A.width ((R.A.readOn link hbm.1 hbm.2 (Set.Ico t (t + 1))).filter fun s => acct s = a)

@@ -23,7 +23,6 @@ import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
-import Proofs.Core.Device
 import Proofs.Core.Accel.Principles
 import Proofs.Core.Accel.Float
 import Proofs.Core.Accel.Witness
