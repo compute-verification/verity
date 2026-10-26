@@ -54,9 +54,8 @@ theorem rd_bind {α β : Type} {a : Rd α} {f : α → Rd β} {s : Msg} {r : β 
 theorem rdTake_length {n : ℕ} {s s' : Msg} {a : List UInt8} (h : (rdTake n).run s = some (a, s')) : a.length = n := by
   simp only [rdTake, StateT.run] at h
   split_ifs at h with hle
-  · obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj h)
-    simp [hle]
-  · cases h
+  obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj h)
+  simp [hle]
 
 theorem foldr_lt : ∀ bs : List UInt8, bs.foldr (fun b acc => b.toNat + 256 * acc) 0 < 256 ^ bs.length
   | [] => by simp
@@ -86,7 +85,9 @@ def readTail : Rd RecX := do
   let parts ← rdList PartX.read
   pure ⟨inner, recInner, bindings, registration, parts⟩
 
-theorem read_eq : RecX.read = (do if (← rdStr) ≠ XFORMAT then failure; readTail) := rfl
+theorem read_eq : RecX.read = (do
+    if (← rdStr) ≠ XFORMAT then failure
+    readTail) := rfl
 
 theorem tail_inner_lt {s s' : Msg} {w : RecX} (h : readTail.run s = some (w, s')) : w.inner.length < 2 ^ 64 := by
   unfold readTail at h
@@ -241,9 +242,9 @@ theorem opens_ok (r : XR) (ws : List Claims.Flock.Wit) (k : ℕ) {sh : Flock.Sha
         simpa using hi') = _
       simp
     rw [e]
-    exact levelOk_levelProof r ws k (i + 1) hH hsl (hg (i + 1)) (by simp [hl4 (i + 1) (by omega) (by omega)])
+    exact levelOk_levelProof r ws k (i + 1) hH hsl (hg (i + 1)) (by rw [hl4 (i + 1) (by omega) (by omega)] <;> rfl)
   · exact levelOk_levelProof r ws k ((schR r).levels.size - 1) hH hsl (hg _)
-      (by simp [hl4 ((schR r).levels.size - 1) (by omega) (by omega)])
+      (by rw [hl4 ((schR r).levels.size - 1) (by omega) (by omega)] <;> rfl)
 
 /-! ## A rep's proof is shaped for its file -/
 
