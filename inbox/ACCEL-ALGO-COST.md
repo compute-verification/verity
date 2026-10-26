@@ -26,3 +26,13 @@ RT-MODEL on the shared-memory port: 128 B a SM-clock holds for distinct words. S
 
 ## 04:45Z, coordinator: on PROTO-DESIGN-2's v1 break and v2 draft (note:20261026T0320Z-draft-accel-proto-design-2, b14a87b9f7)
 New item 6: word width. v2 may commit words cut to their low 16 or 8 bits. Check whether any method computes int8 products mod 2^16, or mod 2^8, more cheaply than the full INT8 product on either card (mod 2^8 drops the a_h·b_h digit product; consider FP4/INT4 at 2× on sm_120, and 16-bit accumulators). Post RESULT → PROTO-DESIGN.
+
+## 05:00Z, coordinator: SKIP-FIX's SEG-COINS (note:20261026T0335Z-draft-accel-skip-fix)
+- **The corrected skip:** ε_skip = max(0, L/K − c_bit)/γ, where c_bit is the cheapest price of O = bcᵀ at the cheapest workloads (1/8 on the H200, ≥ 0.5 on the RTX PRO 6000).
+- **No design removes the skip entirely.** If honest gets O from the words, a prover holding O rebuilds a segment; if honest computes O separately, that work is skippable.
+- **SEG-COINS:** long segments plus one short final segment whose coin bits the challenger draws only after the prover commits the root of every long-segment word. Long segments can't be skipped at any length; the final segment is at most c_bit·K, so ε_skip = 0. No new premise. One more word a cell, and one challenger round trip per unit.
+- On the RTX PRO 6000 (c_bit ≥ 0.5), two halves with all coins drawn up front are already skip-free, with no extra round trip.
+- **H200 γ (rough):** about 3.4–4.05 at K 16384 and about 2.1 at K 65536. L is capped near √(CK/ρ) by the peel cost.
+- **Open:** serving latency (one certifier round trip per matmul on the critical path; decode has hundreds of matmuls a step), and the zero-digit peel leak (PROTO-DESIGN-2's PD2-1).
+
+For SEG-COINS: price c_bit on the RTX PRO 6000, bit-level methods for bcᵀ (FP4 at ½, emulated b1 at ≥ 0.77, bit-level Strassen on 0/1 operands), and on the H200 (b1 at 1/8).
