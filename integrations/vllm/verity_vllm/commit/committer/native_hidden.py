@@ -175,7 +175,12 @@ class NativeHiddenM1Source(HiddenM1Source):
                 merged.append(t)
         return type(first)(merged) if isinstance(first, (list, tuple)) else merged
 
+    #: a detached window's copy of the source (`window_views.window_source`): its stats stand as synced at the detach
+    stats_frozen = False
+
     def sync_stats(self) -> None:
+        if self.stats_frozen:
+            return
         st = self._w.stats()
         self.stats["launches"] = int(st["launches"])
         self.stats["bytes"] = int(st["bytes"])
@@ -244,7 +249,11 @@ class NativeHiddenM1SourceFA3(HiddenM1SourceFA3):
     def on_step_begin(self) -> None:
         self._w.on_step_begin()
 
+    stats_frozen = False          # as `NativeHiddenM1Source.stats_frozen`
+
     def sync_stats(self) -> None:
+        if self.stats_frozen:
+            return
         st = self._w.stats()
         self.stats["launches"] = int(st["launches"])
         self.stats["bytes"] = int(st["bytes"])

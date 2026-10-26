@@ -53,6 +53,7 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
 from verity_vllm.commit import leaf_rule, scheme, step_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
+from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import NativeRangeOpenings, open_levels
 from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
@@ -110,36 +111,6 @@ class TensorMeta:
     dev_off: int = 0                                             # arena staging: byte offset of this tensor in its device block
     stream_off: int = -1                                         # packed mode: byte offset of this tensor in the step's packed stream
     dev_block: Any = field(default=None, repr=False)             # arena staging: the device block (released after D2H)
-
-
-@dataclass
-class _StepJob:
-    step: int
-    metas: list[TensorMeta]
-    event: Any
-    t_step_end: float = 0.0
-    backlog: int = 0
-    blocks: list = field(default_factory=list)
-    arena: Any = None                       # arena staging: current device block
-    cursor: int = 0                         # arena staging: bytes used in `arena`
-    overflow: list = field(default_factory=list)   # arena staging: (block, used_bytes) of earlier, filled blocks of this step
-    stream: Any = None                      # packed mode: memoryview of the whole packed step stream (pinned host copy)
-    stream_handle: Any = None               # fast path: raw cudaStream_t of the compute stream (cached per step)
-    arena_ptr: Any = None                   # fast path: data_ptr of job.arena (cached)
-    host_pre: Any = None                    # inline-D2H: pinned host block already receiving the packed step (issued on the compute stream)
-    acq_s: float = 0.0                      # fast path: serving-thread seconds inside the hooks (acquisition + memcpy issue), this step
-    acq_bytes: int = 0
-    deferred_dst: list = field(default_factory=list)   # batched acquisition: arena views awaiting the step-end _foreach_copy_
-    deferred_src: list = field(default_factory=list)   # ... and their (held) sources
-    com: Any = None                         # window views: the view of the step's window the worker commits it into (None: the committer)
-    seq: int = -1                           # the step's id among every step the committer began (the collector's key for its windows)
-
-
-@dataclass
-class _WindowEnd:
-    """Queued behind a detached window's last step (`NativeHostCommitter.detach`): the worker ends the window there."""
-    view: Any
-    ended: threading.Event
 
 
 class _DeviceArena:
@@ -718,22 +689,6 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
                       "vocab": vocab, "hidden_m1": bool(hidden_m1), "attn_backend": attn_backend, "moe_layers": int(moe_layers), "moe_bytes_per_token": moe_pt}}
 
 
-def _window_source(src: Any) -> Any:
-    """A source as its detached window's finalize and readers see it: a shallow copy with its stats (synced first) and its rows
-    (`served_record.SamplerInputsSource`) copied, which the next window's steps and `begin_run` rebind or reset."""
-    import copy
-
-    if hasattr(src, "sync_stats"):
-        src.sync_stats()
-    c = copy.copy(src)
-    if hasattr(src, "sync_stats"):
-        c.sync_stats = lambda: None
-    for k in ("stats", "rows"):
-        if isinstance(getattr(src, k, None), dict):
-            setattr(c, k, dict(getattr(src, k)))
-    return c
-
-
 def _gib(n: float) -> str:
     return f"{n / 2**30:.2f} GiB"
 
@@ -762,7 +717,7 @@ def memtrace(where: str, step: int | None = None) -> None:
           f"device-used {(total - free) / 2**30:6.2f} GiB", flush=True)
 
 
-class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
+class NativeHostCommitter(WindowViews, NativeRangeOpenings, leaf_rule.LeafSchemeRule):
     name = "native_host"
 
     def __init__(self, engine: Any, *, program_digest: bytes | None = None, run_id: str = "run", chunk: int = DEFAULT_CHUNK,
@@ -796,14 +751,7 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self._hooks = hooks.Hooks()
         self._cur: _StepJob | None = None
         self._step_index = 0
-        self._seq = 0
-        # window views (`enable_window_views`): the open window's view, whether the last window was detached, and the windows
-        # detached (serving thread) and ended by the worker (`_WindowEnd`), whose difference is how far behind the worker is
-        self.window_views = False
-        self._view: Any = None
-        self._detached = False
-        self._windows_detached = self._windows_ended = 0
-        self.staged_bytes = 0                       # the bytes the open window's steps staged (their step ends'), serving thread
+        self._init_views()
         self._q: queue.Queue = queue.Queue()
         self._done: dict[int, StepCommitment] = {}
         self._levels: dict[int, list[list[bytes]]] = {}
@@ -1267,13 +1215,9 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self._padding = {}
         self.padding_stats = None
         self._step_index = 0
-        self.staged_bytes = 0
         self.spans = Spans(scheme.NAME)
         self.gc_pauses.pauses, self.gc_pauses.freeze_s = [], []
-        if not self._detached:
-            self.pool.reset()                       # a detached window's end resets it, in the worker's order (`_end_window`)
-        self._detached = False
-        self._view = None
+        self._reset_views()
         self.errors = []
 
     def close(self) -> None:
@@ -1281,88 +1225,11 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
         self._stop_worker()
         self._pool_exec.shutdown(wait=True)
 
-    # ------------------------------------------------------------------ window views: a window finalized while the next one runs
-    # With views on, each window's steps commit into a view of their own: a shallow copy of the committer taken at the window's first
-    # step, after its reset, so it holds that window's per-step dicts, lists and spans while `reset` rebinds the committer's for the
-    # next window. The worker commits each job into its `_StepJob.com`, so a step it absorbs after its window was detached still lands
-    # in its own window. The view's finalize waits for its own window's end (`_WindowEnd`), which the worker reaches after the window's
-    # last step: there the pinned blocks the window's values sit in are lent to the view (until `serve_seal.thaw`) and the pool is
-    # reset for the next window's steps, in the worker's order.
-
-    #: what a view shares with the committer once either has made it: one of each for the process
-    SHARED_LAZY = ("_side", "_gpu_ext", "_HG")
-
-    def enable_window_views(self) -> None:
-        """Commit each window into a view of its own (`detach`). The serving thread must take nothing from the pinned pool (the window's
-        end resets it on the worker): refused under direct staging and inline D2H, whose step ends take blocks."""
-        if self.staging != "arena" or self.inline_d2h:
-            raise ValueError(f"window views: the serving thread takes pinned blocks under staging={self.staging!r}"
-                             f"{' with inline D2H' if self.inline_d2h else ''}; only arena staging leaves the pool to the worker")
-        self.window_views = True
-
-    def _window_view(self) -> Any:
-        if not self.window_views:
-            return None
-        if self._view is None:
-            import copy
-
-            self._view = copy.copy(self)
-            self._view.installed = True             # guard: never install()/uninstall() a view
-        return self._view
-
-    def detach(self) -> Any:
-        """The open window handed off with its last step ended: its view, holding what the serving thread recorded of it, whose
-        `finalize` waits for the worker to absorb the window's steps; None for a window with no step. The next `reset` leaves the
-        pinned pool to the window's end."""
-        self._end_step()
-        view, self._view = self._view, None
-        if view is None:
-            return None
-        self._detach_into(view)
-        view._ended = threading.Event()
-        self._detached = True
-        self._windows_detached += 1
-        self._q.put(_WindowEnd(view, view._ended))
-        return view
-
-    def _detach_into(self, view: Any) -> None:
-        """What the serving thread recorded of the window that the next window's reset rebinds or clears, into its view."""
-        import copy
-
-        view._step_index = self._step_index
-        view.staged_bytes = self.staged_bytes
-        view.x03_expected, view.x03_committed = self.x03_expected, self.x03_committed
-        view.gc_pauses = copy.copy(self.gc_pauses)          # its lists: the reset rebinds the committer's
-        view.sources = [_window_source(s) for s in self.sources]
-
-    def _end_window(self, end: _WindowEnd) -> None:
-        """Worker: every step of ``end``'s window absorbed. Its pinned blocks go to its view, the pool is reset for the next window."""
-        try:
-            end.view.lent = self.pool.lend()
-            self.pool.reset()
-            self._window_ended(end.view)
-        finally:
-            self._windows_ended += 1
-            end.ended.set()
-
-    def _window_ended(self, view: Any) -> None:
-        """Worker, at a detached window's end: what else the window's end hands over or resets (the collector's plans)."""
-
-    def wait_absorbed(self) -> float:
-        """A detached window's view: block until the worker has ended the window (every one of its steps absorbed); the seconds."""
-        ended = getattr(self, "_ended", None)
-        if ended is None:
-            return 0.0
-        t0 = time.perf_counter()
-        ended.wait()
-        return time.perf_counter() - t0
-
     # ------------------------------------------------------------------ acquisition (serving thread)
 
     def _begin_step(self) -> None:
-        self._cur = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._seq)
+        self._cur = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
         self._step_index += 1
-        self._seq += 1
         for src in self.sources:
             src.on_step_begin()
         if self.arena is not None:
@@ -1921,26 +1788,17 @@ class NativeHostCommitter(NativeRangeOpenings, leaf_rule.LeafSchemeRule):
             job = self._q.get()
             if job is self._stop:
                 return
-            if isinstance(job, _WindowEnd):
-                self._end_window(job)
-                continue
-            com = job.com if job.com is not None else self
-            if com is not self:
-                for k in self.SHARED_LAZY:
-                    if getattr(com, k, None) is None and getattr(self, k, None) is not None:
-                        setattr(com, k, getattr(self, k))
-            try:
-                com._commit_step(job)
-            except Exception as e:  # noqa: BLE001
-                com.errors.append(f"worker step {job.step}: {e!r}"[:300])
-                for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
-                    self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
-                com._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
-            finally:
-                if com is not self:
-                    for k in self.SHARED_LAZY:
-                        if getattr(self, k, None) is None and getattr(com, k, None) is not None:
-                            setattr(self, k, getattr(com, k))
+            self._absorb_job(job)
+
+    def _absorb_step(self, job: _StepJob) -> None:
+        """Worker: commit ``job`` into this committer (or window view); a step that raises is recorded failed, its blocks released."""
+        try:
+            self._commit_step(job)
+        except Exception as e:  # noqa: BLE001
+            self.errors.append(f"worker step {job.step}: {e!r}"[:300])
+            for blk in [job.arena, *(b for b, _u in job.overflow)] if self.arena is not None and job.arena is not None else []:
+                self.arena.release(blk)      # the serving thread waits on the ring for the blocks a failed step holds
+            self._done[job.step] = StepCommitment(job.step, b"", b"", 0, 0, 0, b"", job.t_step_end, time.perf_counter(), job.backlog)
 
     # Ablations for the cost decomposition ONLY (env VERITY_ABL, comma list; none of them is a commitment):
     #   nocopy  : hooks + metadata + arena bookkeeping, no D2D snapshot launch      noworker: worker discards the step (no D2H, no hashing)

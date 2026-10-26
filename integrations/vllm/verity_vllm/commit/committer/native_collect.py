@@ -737,10 +737,9 @@ class NativeCollectCommitter(NativeHostCommitter):
         self.step_rows[step] = rows
 
     def _begin_step(self) -> None:
-        job = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._seq)
+        job = _StepJob(self._step_index, [], None, com=self._window_view(), seq=self._next_seq())
         self._cur = job
         self._step_index += 1
-        self._seq += 1
         for src in self.sources:
             src.on_step_begin()
         if self.windowed:

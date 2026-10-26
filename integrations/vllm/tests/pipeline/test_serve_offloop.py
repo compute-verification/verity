@@ -445,6 +445,33 @@ def test_a_detached_windows_late_steps_land_in_its_view_and_its_end_hands_its_bl
         NH.NativeHostCommitter.enable_window_views(SimpleNamespace(staging="direct", inline_d2h=False))
 
 
+def test_a_detached_windows_sources_keep_their_stats_and_rows_as_they_stood_at_the_detach():
+    """`window_views.window_source`: the next window's steps rebind the live source's rows and its native counters run on,
+    so the detached window's copy is synced once at the detach and then frozen (`stats_frozen`, honored by both native
+    hidden taps' ``sync_stats``), its stats and rows its own."""
+    from verity_vllm.commit.committer import native_hidden as NHID
+    from verity_vllm.commit.committer.window_views import window_source
+
+    class Src:
+        stats_frozen = False
+
+        def __init__(self) -> None:
+            self.stats, self.rows, self.live = {}, {"runner-a": 1}, 1
+
+        def sync_stats(self) -> None:
+            if not self.stats_frozen:
+                self.stats["launches"] = self.live
+
+    src = Src()
+    view = window_source(src)
+    src.live, src.rows["runner-a"] = 2, 2
+    src.sync_stats()
+    view.sync_stats()
+    assert (view.stats, view.rows, src.stats) == ({"launches": 1}, {"runner-a": 1}, {"launches": 2})
+    for tap in (NHID.NativeHiddenM1Source, NHID.NativeHiddenM1SourceFA3):
+        tap.sync_stats(SimpleNamespace(stats_frozen=True))          # no `_w`: a frozen copy never reads the live counters
+
+
 def test_the_serving_thread_counts_on_a_plan_only_if_it_survives_the_window_ends_ahead_of_its_step():
     """`NativeCollectCommitter._plan_held`: each detached window the worker has yet to end retires a generation of its
     plans (`PlanCache.end_run`) before it absorbs the step ending now, so with one such end ahead only the current
