@@ -30,6 +30,7 @@
   "Properties.Pous.Obligation",
   "Properties.Pous.EndToEndAt",
   "Properties.Pous.PeriodAt",
+  "Properties.Pous.PeriodDeployed",
   "Properties.Accounting.Requirement",
   "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins",
@@ -602,6 +603,15 @@
    "signature": ["Pous.Period.SecurityProofs.periodHeldDemo : Pous.Period.PeriodHeldDemo"],
    "assumptions": [],
    "type_hash": "dd2437050789b0efa4862ef682df951711b976fa9fae90350e72b8884fe4273d"
+  },
+  "Pous.Period.SecurityProofs.periodHeldDeployed": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Period.SecurityProofs.periodHeldHonest": {
+   "owner": "@memory-accounting"
+  },
+  "Pous.Period.SecurityProofs.periodHeldNontrivial": {
+   "owner": "@memory-accounting"
   },
   "PousCheck.Properties.SecurityProofs.acceptsDecodes": {
    "owner": "@memory-accounting",
@@ -3128,13 +3138,16 @@
    "Pous.Period.SecurityProofs.periodHeldDemo": "frozen (premise): periodHeldAt at Demo B's store, N = 1038*2^16 blocks, state bound 1,060,008,348,186 bits; its premises are periodHeldAt's.",
    "Pous.Period.SecurityProofs.obligationHeld": "frozen (premise): PeriodHeld at an audit window's snapshot of the mutable store, averaged over the other tags' key pairs: its event's acceptance is the deployed verifier's whole decision (Pous.EndToEnd.Accepted), but it is stated over an abstract joint run of the device model (Accounting.Run) and takes PeriodHeld's premises (CoinCommitHides, P2RingAuditSecure and Pous.Period.RingDevice with the other tags' keys among the other audits' coins) and the certificate's fit in the ring game's state bound, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodCapacity": "frozen (premise,no-function): PeriodHeld's reading in the joint run: under PeriodHeld's premises and a capacity verdict that is the deployed acceptance outside a break, the capacity audit of an abstract run of the device model has CapacitySoundPerRun and CapacitySound, which bound Pouw.pr events of a verdict that is a field of the run, not a Lean function.",
-   "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them"
+   "Pous.EndToEnd.RunCertifiesAt": "unstated: RunCertifies at every point; it joins the composed check's runCheckAcceptsAt with the setup check's acceptsDecodes and publishesRoot, all three proved and the last two at every parameter set, and runCertifiesAt proves it from them",
+   "Pous.Period.SecurityProofs.periodHeldDeployed": "frozen (premise): periodHeld at the deployed ring budget (RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64), the one pous-ring-speed derives from Delta + RTT = 854,000 ns and the measured round floor ROUND_NS = 361.55 / 3.490 ns (art:23a323f3, r20260929-060834-0ec4): DEADLINE_ROUNDS = 8,243 <= RING_D, and RING_D + 1 rounds take 1.995 x the limit; outside both regions where P2RingAuditSecure is refuted (D >= 32,894; L >= 2^169 at k = 105). Its premises are periodHeld's at that budget (CoinCommitHides, P2RingAuditSecure, Pous.Period.RingDevice), none under shape.premises.",
+   "Pous.Period.SecurityProofs.periodHeldHonest": "completeness: the honest lemma of periodHeld and periodHeldDeployed: at an honest period on one H200 holding all of C* (honestRun, 2^30 bits on chip, one PCIe Gen 5 x16 side channel of 437,248,000 bits a round), RingDevice holds at the deployed budget for every audit, the certificate HONEST_S = 63,000,000 bits is positive and fits the state bound, and the budget is the deadline's at the measured floor (DEADLINE_ROUNDS <= RING_D, the 1.995x margin)",
+   "Pous.Period.SecurityProofs.periodHeldNontrivial": "completeness: the nontrivial lemma of periodHeld and periodHeldDeployed: at a period whose capacity account holds nothing, an accept-all verdict fails their conclusion wherever the period's data holds no break (a concrete audit with no break needs SHA-512 on each of the table's 2^20 strings, so that is a hypothesis), and their event is false at the honest period"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
     "status": "open",
     "test": "verity/core/protocols/pous/tests/test_pous_p2_ring.py::test_p2_ring_audit_secure_at_a_scaled_point",
-    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean). Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
+    "why": "P2 in the ring model at the deployed point accepts a rho-bounded, (D, Q, L)-bounded responder with probability at most 1% + 2^-129 + 2^-130; open, and, if p is prime, false at D >= 32,894 (Q >= 2, L >= 65,789) for every k (PousP2Ring.tight_p16448, Security/Proofs/Pous/P2/RingTight.lean), and at L >= 2^30 for k <= 88 (PousP2Ring.not_meetsOn_b19_k88, Security/Proofs/Pous/P2/RingTrunc.lean); and, at k = 105, from L >= 2^169 with D >= 2 and Q >= 2 (Pous.Period.SecurityProofs.not_p2RingAuditSecure_trunc, Security/Proofs/Pous/PeriodDeployed.lean: 501,819 blocks without their low 168 bits), so the deployed budget (16,446, 2^20, 2^64) lies outside every refuted region. Its test plays the ring-model audit at a scaled point (w = 184, 16 blocks, lambda = 9) with those two attacks and seeded bounded responders."
    }
   },
   "events": ["Claims.Pr", "Pouw.pr"]
