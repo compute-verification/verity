@@ -43,10 +43,10 @@ def zeros (n : Nat) : ByteArray := ⟨Array.replicate n 0⟩
 
 /-- A row's first `words` u16 words as bytes, each little-endian (zeros past the row). -/
 def wordBytes (ws : Array Nat) (words : Nat) : ByteArray :=
-  ⟨(Array.range words).flatMap fun i => #[(ws.getD i 0 % 256).toUInt8, (ws.getD i 0 / 256 % 256).toUInt8]⟩
+  ⟨(Array.range (2 * words)).map fun j => (ws.getD (j / 2) 0 / 256 ^ (j % 2) % 256).toUInt8⟩
 
 /-- A salt as `SALT_BYTES` bytes (zeros past it). -/
-def saltOf (s : ByteArray) : ByteArray := s.extract 0 HmRow.SALT_BYTES ++ zeros (HmRow.SALT_BYTES - s.size)
+def saltOf (s : ByteArray) : ByteArray := ⟨(Array.range HmRow.SALT_BYTES).map fun j => s.data.getD j 0⟩
 
 /-- Instance `i`'s port-`p` row and salt: its table's; past the instances, the padding instance's row under a zero salt. -/
 def portIn (c : Circuit) (pin : In.PartIn) (p i : Nat) : ByteArray × ByteArray :=
@@ -59,7 +59,7 @@ def portIn (c : Circuit) (pin : In.PartIn) (p i : Nat) : ByteArray × ByteArray 
 
 /-- Instance `i`'s rows, ports side by side (`Instances::instance_rows`). -/
 def instRow (c : Circuit) (pin : In.PartIn) (i : Nat) : ByteArray :=
-  (List.range c.ports.size).foldl (fun acc p => acc ++ (portIn c pin p i).1) ByteArray.empty
+  ⟨(List.range c.ports.size).foldl (fun acc p => acc ++ (portIn c pin p i).1.data) #[]⟩
 
 /-- `put`: u64 word `i` of `ws` at columns `col + 64 i`, its bit `j` at `+ j`. -/
 def putWords (w : Array Bool) (col : Nat) (ws : Array UInt64) : Array Bool :=
@@ -125,6 +125,12 @@ def orU16 (w : Array Bool) (col v : Nat) : Array Bool :=
 
 def u16At (b : ByteArray) (at_ : Nat) : Nat := (b.get! at_).toNat + 256 * (b.get! (at_ + 1)).toNat
 
+/-- Leaf `j` of a unit's leaves `li` (its input group's port widths `bits`) at column `acc.2`, from the instance's rows: its
+u16 ORed in (a zero leaf, `-1`, left zero), the column advanced by the leaf's width. -/
+def leafStep (rows : ByteArray) (li : Array Int) (bits : Array Nat) (acc : Array Bool × Nat) (j : Nat) : Array Bool × Nat :=
+  let leaf := li.getD j (-1)
+  ((if 0 ≤ leaf then orU16 acc.1 acc.2 (u16At rows (2 * leaf.toNat)) else acc.1), acc.2 + bits.getD j 0)
+
 /-- Unit slot `k` of block `b`'s inputs (`Stmt::unit_inputs`): VU `k / upv`'s instance's row words at the unit's leaves,
 16 bits each from its first input group's first column (a zero leaf, `-1`, left zero), and at its leaf cuts; zero for a
 padding instance. -/
@@ -137,10 +143,7 @@ def unitIns (c : Circuit) (pin : In.PartIn) (b k : Nat) : Array Bool :=
     let rows := instRow c pin i
     let g0 := unit.inGroups.getD 0 default
     let li := c.leavesIn.getD u #[]
-    let w1 := ((List.range li.size).foldl (fun (acc : Array Bool × Nat) j =>
-        let leaf := li.getD j (-1)
-        ((if 0 ≤ leaf then orU16 acc.1 acc.2 (u16At rows (2 * leaf.toNat)) else acc.1), acc.2 + g0.bits.getD j 0))
-      (w0, g0.col * WORD)).1
+    let w1 := ((List.range li.size).foldl (leafStep rows li g0.bits) (w0, g0.col * WORD)).1
     let pc := portCols unit.inGroups
     c.leafCuts.foldl (fun acc x => if x.1 == u then orU16 acc (pc.getD x.2.1 default).1 (u16At rows (2 * x.2.2)) else acc) w1
   else w0
@@ -163,15 +166,16 @@ def nbl (c : Circuit) (pin : In.PartIn) : Nat := max 3 (log2ceil (max ((count pi
 def m (c : Circuit) (pin : In.PartIn) : Nat := c.kLog + nbl c pin
 
 /-- Every slot's values, per circuit and slot `x = block · count + k` of its range (`Stmt::converge`, `Stmt::slot_zab`):
-the rows' slots from `rowIns`, the units' from `unitIns`, any other circuit's from zero inputs. -/
+the rows' slots from `rowIns` (slot `k` of block `x / count`'s; a slot past them from zero inputs), the units' from
+`unitIns`, any other circuit's from zero inputs. -/
 def slots (c : Circuit) (pin : In.PartIn) : Array (Array (Array Bool)) :=
   let nb := 2 ^ nbl c pin
   let rows := (Array.range nb).map (rowIns c pin)
   (Array.range c.nets.size).map fun n =>
     let net := (c.nets.getD n default).2
     let cnt := (c.rangeOf n).count
-    if n == c.shaNet then (rows.flatMap (·.1)).map (evalNet net)
-    else if n == c.hmNet then (rows.flatMap (·.2)).map (evalNet net)
+    if n == c.shaNet then (Array.range (nb * cnt)).map fun x => evalNet net ((rows.getD (x / cnt) default).1.getD (x % cnt) #[])
+    else if n == c.hmNet then (Array.range (nb * cnt)).map fun x => evalNet net ((rows.getD (x / cnt) default).2.getD (x % cnt) #[])
     else if n == c.unitNet then (Array.range (nb * cnt)).map fun x => evalNet net (unitIns c pin (x / cnt) (x % cnt))
     else (Array.range (nb * cnt)).map fun _ => evalNet net (Array.replicate (net.inWords * WORD) false)
 
