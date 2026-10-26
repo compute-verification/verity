@@ -38,8 +38,11 @@ against BET-ALGO-LAB's own hull, and D5 v2's check:
 - `issue`: whether the hull's lower issue load is a route or degeneracy: each menu's least issue at makespan best.c;
 - `served`: the served-period column as a makespan: one shape's period with X plain s8 MACs beside each credited MAC,
   1 − (every route) / (honest menu), per X;
-- `v2`: D5 v2 (`d5_v2.py` beside --d5's public_best.py): where its served column's duals come from (the hull's
-  period against the honest menu's), the world's own beside load, its c_inc against makespans taken here, pub_sha.
+- `v2`: D5 v2 (`d5_v2.py` beside --d5's public_best.py) at CMP-118's caps: its job and served c at the honest
+  period's duals against the hull's and the makespan ratio, its X0 and c_inc against the LPs here, the world's own
+  beside load, pub_sha;
+- `gap`: D5 v2's served leak at v3.1's picks split into what the routes save in the period's makespan and the duality
+  gap of the honest period's duals in the hull's LP, at X0+ and fixed X.
 
     python3 benchmarks/pouw/theory/v3_reconcile.py --v3 DIR --a25 DIR [--d5 DIR] [--part reconcile,...] [--json OUT]
 
@@ -517,14 +520,7 @@ def v2(co: Codes, out: dict, scales=(("D5's schedule", None), ("U13 one-lane", 3
     X = 1 (D5 v2's | here); D5 v2's own X0, job c and served c beside. Then the world's own beside load in nofold's
     period (QKᵀ at 1 + SOFTMAX_PASS, the indexer) against `world_x`, and pub_sha as named against the LP's. On the
     H200 the job is also priced with in-model SHA-512 at U13's 35.4 SM-clocks."""
-    nf = co.nf["v3"]
-    saved = sys.modules.get("public_best")
-    sys.modules["public_best"] = co.d5
-    try:
-        D = load("d5_v2_check", f"{os.path.dirname(co.d5.__file__)}/d5_v2.py")
-    finally:
-        sys.modules["public_best"] = saved
-    pb = co.d5
+    nf, D, pb = co.nf["v3"], load_d5_v2(co), co.d5
 
     def lp(c, j, N, X, honest, beside=True):
         ms = j["methods"][:1] if honest else j["methods"]
@@ -591,8 +587,77 @@ def v2(co: Codes, out: dict, scales=(("D5's schedule", None), ("U13 one-lane", 3
         out["v2"].append(dict(card=card, pub_sha_named=s["model"], pub_sha_lp=s["d5_best"][1]))
 
 
+def load_d5_v2(co: Codes):
+    saved = sys.modules.get("public_best")
+    sys.modules["public_best"] = co.d5
+    try:
+        return load("d5_v2_check", f"{os.path.dirname(co.d5.__file__)}/d5_v2.py")
+    finally:
+        sys.modules["public_best"] = saved
+
+
+V31 = {"H200": {(65536, 16384): 448, (1536, 65536): 384}, "RTX PRO 6000": {}}
+GAP_X = (0.25, 0.5, 1.0, 2.0, 4.0)
+
+
+def gap(co: Codes, out: dict) -> None:
+    """D5 v2's served leak against the period's makespans, at v3.1's static picks (D6: the H200 at A27a's caps, the
+    RTX PRO 6000 at L′ 256). In the period beside X (MAC-times of s8 MMA a credited MAC), weak duality at any dual mu
+    of its rows gives pub(mu) + mu·X <= T_hull and OPT(mu) + mu·X <= T_OPT (OPT the honest words' best), with equality
+    at each LP's own duals. So the routes' term R(mu) = OPT(mu) - pub(mu) = S + gap_hull(mu) - gap_OPT(mu), where
+    S = T_OPT - T_hull is what the routes save in the period and each gap (>= 0) is T - (cost at mu) - mu·X. At mu°
+    (OPT's duals, D5 v2) gap_OPT = 0, so R(mu°) >= S; at the hull's duals R <= S. Per shape and MAC-weighted per model,
+    at each shape's X0+ (D5 v2's headline) and at fixed X: D5 v2's leak R/OPT at mu°, the round's makespan leak
+    S/(T_OPT - T0), and the share of R(mu°) that is gap; then the period's sums at X = 4 with X valued at its own
+    makespan T0 instead of mu°·X."""
+    D, pb, nf = load_d5_v2(co), co.d5, co.nf["v3"]
+    print("\n== D5 v2's served leak against the makespans at v3.1's picks: per X, D5 v2's leak R(mu°)/OPT(mu°) | "
+          "the round's makespan leak S/(T_OPT - T0) | gap_hull(mu°)/R(mu°); MAC-weighted per model")
+    for card, c in D.CARDS.items():
+        t = D.T_V3[card]
+        for model, shapes in D.SHAPES.items():
+            sums = {}
+            for K, N, reps in shapes:
+                Lp = V31[card].get((K, N), 512 if card == "H200" else 256)
+                _, j = D.job(nf, card, K, N, t, Lp)
+                x0 = D.first_tensor_bound(c, j, N)
+                cells, w = [], K * N * reps
+                for i, X in enumerate((x0 + 1e-4 * j["route"].c,) + GAP_X):
+                    o = D.other_loads(c, X)
+                    t0 = c.s8 * max(sum(a * o.get(r, 0.0) for r, a in wt.items()) / cp for _, wt, cp in pb._rows(c))
+                    ph, po = D.period(c, j, N, X), D.period(c, j, N, X, honest=True)
+                    T_hull, T_opt = ph.c, po.c
+                    a = D.at_prices(c, j, N, po.mu)
+                    muX = pb.mu_cost(c, o, po.mu)
+                    S, R = T_opt - T_hull, a["opt"] - a["pub"]
+                    g_hull, g_opt = T_hull - a["pub"] - muX, T_opt - a["opt"] - muX
+                    assert abs(R - (S + g_hull - g_opt)) < 1e-6 * T_opt and g_hull > -1e-6 * T_opt, (card, K, N, X)
+                    row = dict(card=card, model=model, K=K, N=N, t=t, Lp=Lp, X=X, x0=x0 if i == 0 else None, T0=t0,
+                               T_hull=T_hull, T_opt=T_opt, pub=a["pub"], opt=a["opt"], H=a["H"], muX=muX, S=S, R=R,
+                               gap_hull=g_hull, gap_opt=g_opt)
+                    out["gap"].append(row)
+                    s = sums.setdefault(i, dict.fromkeys(("R", "opt", "S", "inc", "gap", "pub", "T0", "T_hull"), 0.0))
+                    for k, v in (("R", R), ("opt", a["opt"]), ("S", S), ("inc", T_opt - t0), ("gap", g_hull),
+                                 ("pub", a["pub"]), ("T0", t0), ("T_hull", T_hull)):
+                        s[k] += w * v
+                    cells.append(f"{R / a['opt']:6.2%} | {S / (T_opt - t0):6.2%} | {g_hull / R if R > 1e-9 else 0:4.0%}")
+                print(f"  {card:13} {model:16} {K:5}x{N:<6} L′ {Lp:4} X0 {x0:.3f}: X0+ " + "; X ".join(
+                    [cells[0]] + [f"{x:g} {cl}" for x, cl in zip(GAP_X, cells[1:])]))
+            agg = [f"{s['R'] / s['opt']:6.2%} | {s['S'] / s['inc']:6.2%} | {s['gap'] / s['R'] if s['R'] > 0 else 0:4.0%}"
+                   for _, s in sorted(sums.items())]
+            print(f"  {card:13} {model:16} MAC-weighted:            X0+ " + "; X ".join(
+                [agg[0]] + [f"{x:g} {cl}" for x, cl in zip(GAP_X, agg[1:])]))
+            s4 = sums[len(GAP_X)]
+            print(f"  {card:13} {model:16} at X = 4, MAC-weighted: credit at mu° + X at T0 = "
+                  f"{(s4['pub'] + s4['T0']) / s4['T_hull']:.3f} of the hull's makespan")
+            out["gap"].append(dict(card=card, model=model, weighted=True, X=("X0+",) + GAP_X,
+                                   leak_mu0=[s["R"] / s["opt"] for _, s in sorted(sums.items())],
+                                   leak_makespan=[s["S"] / s["inc"] for _, s in sorted(sums.items())],
+                                   over_X4=(s4["pub"] + s4["T0"]) / s4["T_hull"]))
+
+
 PARTS = dict(reconcile=reconcile, caps=caps, picks=picks, pv=pv, d5=d5, u13=u13, perlp=perlp, pvtable=pvtable,
-             issue=issue, served=served, v2=v2)
+             issue=issue, served=served, v2=v2, gap=gap)
 
 
 def main(argv=None) -> None:
