@@ -119,14 +119,14 @@ theorem slot_rows_eq {c c' : Circuit} {nm nm' : String} {q q' n n' : ℕ} {w w' 
     hmDigest c' q' n') (by simp [hmCalls]))
   have hsp : FlockSoundness.Refine.K512.saltPrefix = Hm96.Default512.saltPrefix.data.toList := by
     unfold FlockSoundness.Refine.K512; rfl
+  have hy0 := List.mem_map_of_mem (f := Prod.fst)
+    (hin (Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512) (by simp [hmCalls]))
+  have hy0' := List.mem_map_of_mem (f := Prod.fst)
+    (hin' (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' n', (hmCommit c' q' n').drop 512) (by simp [hmCalls]))
   have hy : FlockSoundness.Refine.K512.saltPrefix ++ readForms w (hmSalt c q n) ∈ l.map Prod.fst := by
-    rw [hsp]
-    exact List.mem_map_of_mem (f := Prod.fst)
-      (hin (Hm96.Default512.saltPrefix.data.toList, hmSalt c q n, (hmCommit c q n).drop 512) (by simp [hmCalls]))
+    rw [hsp]; exact hy0
   have hy' : FlockSoundness.Refine.K512.saltPrefix ++ readForms w' (hmSalt c' q' n') ∈ l.map Prod.fst := by
-    rw [hsp]
-    exact List.mem_map_of_mem (f := Prod.fst)
-      (hin' (Hm96.Default512.saltPrefix.data.toList, hmSalt c' q' n', (hmCommit c' q' n').drop 512) (by simp [hmCalls]))
+    rw [hsp]; exact hy0'
   have e := commit_bind (r := rowPfx c q ++ readForms w (((rowHidden c nm n).getD []).map HmNets.Lin.var))
     (r' := rowPfx c' q' ++ readForms w' (((rowHidden c' nm' n').getD []).map HmNets.Lin.var))
     (y := readForms w (hmSalt c q n)) (y' := readForms w' (hmSalt c' q' n')) hT hnc hr hr' hy hy'
