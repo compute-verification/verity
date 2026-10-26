@@ -544,3 +544,13 @@ expected`, and it runs on any node with `research run --on auto --cwd source -- 
 benchmarks/pouw/sass_census/lowering.sh`. It is what shows that f16 accumulators, FP6 and QMMA.SF are native on
 sm_120, that OMMA.SF.SP is the native sparse FP4 form, that BMMA's XOR has no native SASS on sm_90a, and that
 tcgen05 and wgmma are absent on sm_120a.
+
+Two GPU probes on one leased RTX PRO 6000 settle sm_120 rows no document does, each launched with `research run --on
+vy-nebius-1 --cwd source` and its verdict line quoted in the row's source once it lands:
+
+- `../opcode_probe/probes/match.cu` (through `../opcode_probe/run.sh`) times MATCH.ANY with the lanes in 32, 4 and 1
+  classes, and .U64. Its hypothesis is the MATCH row's: at most 128/224 = 0.57 warp instructions a SM-clock (0.29 for
+  .U64), the rate an L tree of 7 units a lane dominates.
+- `../sass_census/multimem.sh` reads the card's multicast attribute and what `cuMulticastCreate` answers, and runs
+  `multimem.ld_reduce` (LDGMC) and `multimem.red` on ordinary memory. Its hypothesis is the sm_120 LDGMC row's: no
+  multicast object exists, and on a unicast address LDGMC faults or loads the one copy.

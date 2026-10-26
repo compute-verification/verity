@@ -15,7 +15,7 @@
 # - hole: no argument yet that an envelope op dominates it; `severity` says how much it could matter;
 # - absent: the opcode is in NVIDIA's family table, and the card can't execute it.
 #
-# Lowering probes are benchmarks/pouw/sass_census/lowering/ (ptxas 13.0, sm_90a and sm_120a; no GPU).
+# The lowering probe is benchmarks/pouw/sass_census/lowering.sh (ptxas 13.0, sm_90a and sm_120a; no GPU).
 
 # ---- tensor cores -----------------------------------------------------------------------------------------------------
 
@@ -131,7 +131,7 @@ fmt = "16"
 rate_value = { sm_90 = 4096, sm_120 = 1024 }
 cost = "2,048 kept products × 2 a warp instruction"
 argument = "T.sp's row at 16-bit elements, at twice the dense logical rate"
-source = "sm_120 WP Table 4 FP16 sparse 1007.6 TFLOPS at 2,617 MHz, 188 SMs (1,024 a SM-clock; census HMMASP16832 DS_tensor 16); sm_90 DS 'FP16 Tensor Core 1,979 TFLOPS' sparse at 1,830 MHz (4,096)"
+source = "sm_120 WP Table 4 FP16 sparse 1007.6 TFLOPS at 2,617 MHz, 188 SMs (1,024 a SM-clock; measured 1023.6 logical, r20261015-064426-11ec; census HMMASP16832 DS_tensor 16); sm_90 DS 'FP16 Tensor Core 1,979 TFLOPS' sparse at 1,830 MHz (4,096)"
 
 [[row]]
 ops = ["HMMA"]
@@ -143,7 +143,7 @@ fmt = "tf32"
 rate_value = { sm_90 = 2048, sm_120 = 512 }
 cost = "kept products × 4"
 argument = "T.sp's row at tf32 elements"
-source = "sm_120 WP Table 4 TF32 sparse 503.8 (512 a SM-clock); sm_90 DS 'TF32 Tensor Core 989 TFLOPS' sparse (2,048)"
+source = "sm_120 WP Table 4 TF32 sparse 503.8 (512 a SM-clock; measured 511.8 logical, r20261015-064426-11ec); sm_90 DS 'TF32 Tensor Core 989 TFLOPS' sparse (2,048)"
 
 [[row]]
 ops = ["HMMA"]
@@ -196,7 +196,7 @@ fmt = "8"
 rate_value = 2048
 cost = "4,096 kept products × 1 (8,192 logical) a warp instruction"
 argument = "T.sp's row at 8-bit elements"
-source = "WP Table 4 FP8 sparse 2015.2 at 2,617 MHz (2,048 a SM-clock); census QMMASP16864 M 16 SMSP-cycles for 8,192 logical MACs"
+source = "WP Table 4 FP8 sparse 2015.2 at 2,617 MHz (2,048 a SM-clock); census QMMASP16864 M 16 SMSP-cycles for 8,192 logical MACs (2047.3 logical, r20261015-064426-11ec)"
 
 [[row]]
 ops = ["QMMA"]
@@ -235,7 +235,7 @@ fmt = "4"
 rate_value = 4096
 cost = "8,192 kept products × 1/2 (16,384 logical) a warp instruction"
 argument = "T.sp's row at 4-bit elements with block scales; the WP's sparse FP4 figure is twice the dense, the dense rate in kept products"
-source = "WP Table 4 FP4 sparse 4030.4 at 2,617 MHz (4,096 a SM-clock); lowering probe: OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X is native; GPU probe omma_sp (see README 'Coverage')"
+source = "WP Table 4 FP4 sparse 4030.4 at 2,617 MHz (4,096 a SM-clock); measured 4094.4 logical, 16.01 SMSP-cycles a warp instruction (r20261015-064426-11ec, note:20261015T0608Z-draft-census-sm120 §1); lowering probe: OMMA.SF.SP.168128.F32.E2M1.E2M1.UE4M3.4X is native"
 
 [[row]]
 ops = ["OMMA"]
@@ -622,7 +622,7 @@ severity = "low"
 envelope = "L"
 units = 224
 argument = "each of 32 lanes writes a word that reads all 32 lanes' words: ≥ 7 L units a lane (≥ 14 for .U64), 224 a warp instruction, 7 issue slots' worth; dominated if MATCH.ANY issues at ≤ 128/224 = 0.57 warp instructions a SM-clock (≤ 0.29 for .U64); no document gives its rate"
-source = "GPU probe match_any (README 'Coverage')"
+source = "opcode_probe/probes/match.cu (README 'Coverage')"
 
 [[row]]
 ops = ["S2R", "CS2R", "B2R", "LEPC", "GETLMEMBASE", "SETLMEMBASE", "SETCTAID", "PMTRIG", "QSPC"]
@@ -738,8 +738,8 @@ mark = "coarse"
 envelope = "M"
 rate = "hbm"
 cost = "one M unit a word"
-argument = "a multicast object needs NVLink or an NVSwitch, which the card lacks (θ nvlink.reduce absent): with no multicast object every address is unicast, and a reduction over one copy is that copy, a load; GPU probe multicast checks the attribute"
-source = "θ nvlink.reduce (absent); lowering probe; GPU probe multicast (README 'Coverage')"
+argument = "a multicast object needs NVLink or an NVSwitch, which the card lacks (θ nvlink.reduce absent): with no multicast object every address is unicast, and a reduction over one copy is that copy, a load; multimem.red lowers to a plain REDG...STRONG.SYS on sm_120a, an L2 reduction"
+source = "θ nvlink.reduce (absent); lowering probe; sass_census/multimem.sh (README 'Coverage')"
 
 [[row]]
 ops = ["ATOMS", "REDS"]
@@ -839,7 +839,7 @@ severity = "low"
 envelope = "-"
 rate = "tex"
 argument = "a filtered fetch weighs ≤ 4 texels (8 trilinear, at half rate) by 9-bit fixed-point weights and converts each channel's format in the texture unit, beyond the lane's issue slot: ≤ 16 products a SM-clock a channel (θ texture), ≤ 64 over 4 channels, 6% of ρ_T on sm_120 and 1.6% on the H200; no envelope op has a texture unit's power, and the fix is a texture rate in each card's numbers"
-source = "θ tex (WP 4 texture units a SM, 4 texels a clock), θ texture's bound; census TEX*, TLD* (sm_120); GPU probe tex (README 'Coverage')"
+source = "θ tex (WP 4 texture units a SM, 4 texels a clock), θ texture's bound; sm_120 measured: bilinear TEX 0.1248 warp instructions a SM-clock, 3.99 filtered texels (rows.csv ROW_TEXBIL, r20261016-093909-ac84), any TEX 0.2493 (ROW_TEXI); census TEX*, TLD*"
 
 [[row]]
 ops = ["TMML", "TXQ"]
