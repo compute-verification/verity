@@ -725,10 +725,21 @@ def beside_sweep(P: dict, tau_picks: dict) -> dict:
                                                  share0=e["share"]["share"], leak0=e["period"]["leak_served"],
                                                  pub=per["hull"]["at_served"], opt=per["dense"]["at_served"],
                                                  net_most=per["hull"]["net_most"]["served"], unit=per["unit"],
-                                                 served=per["dense"]["served"], fixed_alone=per["fixed_alone"])
+                                                 served=per["dense"]["served"], fixed_alone=per["fixed_alone"],
+                                                 cred_macs=per["cred_macs"], q_sum=per["q_sum"])
                 out[name, card, mname, x]["share"] = (e["share"]["share"] * (1 - per["leak_served"])
                                                       / (1 - e["period"]["leak_served"]))
     return out
+
+
+def best_tau(B: dict, card: str, x: float) -> str:
+    """The rule's τ at beside load x (`rule`'s test there): the τ design with the largest mean credited share over the
+    models at x, ties within 0.1 point to the lower mean γ."""
+    models = [m["name"] for m in nf.WORLD]
+    taus = list(dict.fromkeys(k[0] for k in B if k[0].startswith("τ ")))
+    mean = {n: np.mean([B[n, card, m, x]["share"] for m in models]) for n in taus}
+    return min((n for n in taus if mean[n] >= max(mean.values()) - 1e-3),
+               key=lambda n: np.mean([B[n, card, m, x]["gamma"] for m in models]))
 
 
 def build() -> dict:
@@ -779,8 +790,9 @@ def report(D: dict) -> str:
              "on the RTX PRO 6000, route (iii), b cᵀ with b1 emulated on the lanes; `d5_routes.period`). A route that "
              "wins there leaves honest time uncredited and never adds to ε.\n")
     L.append("What changed from v1 (RT-PROTO-2's P21–P26, CMP-118 71d22b4c; the coordinator's 12:36Z decisions): "
-             "D5 v2.1 (0588f18015) carries route (iii), so the RTX PRO 6000's x > 0 cells are no longer upper bounds "
-             "(x = 0 doesn't move); the period's registered total is published before its first check (P21, in the "
+             "D5 v2.1 (0588f18015) carries route (iii) (x = 0 doesn't move), but θ's sm_120 joint issue rows are "
+             "closed rows (ALGO-COST-3's A36), so the RTX PRO 6000's x > 0 cells stay upper bounds until CALIB moves "
+             "θ (`theta.toml`) to a current vector, GPU work after M3; the period's registered total is published before its first check (P21, in the "
              "spec below, with the no-publication variant beside ε); a group is a serving replica, V4's 12 H200s or "
              "17 RTX PRO 6000s with the network certifier's boundary around it (P23); V4's static MACs are its "
              "checkpoint's matmuls at their own shapes, 48.85e9 a token, with no credit for the input embedding and "
@@ -926,28 +938,40 @@ def report(D: dict) -> str:
     L.append("")
     B = D["beside"]
 
-    def fixed_price(card, m, xp):
-        """Credit at the fixed price μ_xp (the honest period's duals at beside load xp), published: the credited share
-        with the honest period at x = 0 and at x = 1, ε at δ 1e-6, and the plain INT8 beside work it leaves unpriced,
-        x′ (alone − μ_xp-price) a credited MAC over pub(μ_xp), at x′ in BESIDE."""
-        r = rows[HEADLINE, card, "measured", m]
-        b0, bx, b1 = (B[HEADLINE, card, m, x] for x in (0.0, xp, 1.0))
+    def fixed_price(card, m, xp, design):
+        """Credit at the fixed price μ_xp (the honest period's duals at beside load xp, with `design`'s picks),
+        published: the credited share with the honest period at x = 0 and at x = 1, ε at δ 1e-6, and the plain INT8
+        beside work it leaves unpriced, x′ (alone − μ_xp-price) a credited MAC over pub(μ_xp), at x′ in BESIDE. ε_S and
+        the union take the headline's η, as every design's rows do (`build`)."""
+        b0, bx, b1 = (B[design, card, m, x] for x in (0.0, xp, 1.0))
         pub, s0 = bx["pub"], b0["share0"]
         sh0, sh1 = s0 * pub / b0["pub"], s0 * pub / b1["opt"] * b0["opt"] / b0["pub"]
-        e = r["eps"]
-        net = WIRE_BITS * nf.WORLD_TOKENS * bx["net_most"] / (r["period"]["cred_macs"] * pub)
-        ho = r["share"]["answers"] / sh0
+        e = rows[HEADLINE, card, "measured", m]["eps"]
+        net = WIRE_BITS * nf.WORLD_TOKENS * bx["net_most"] / (b0["cred_macs"] * pub)
+        ho = answer_time(card, model_of(m), b0) / sh0
         eps = (e["groups"][e["g"]]["eps_S"][1e-6] + net) * (1 + ho)
         hid = {x: x * (bx["unit"]["alone"] - bx["unit"]["at_served"]) / pub for x in BESIDE if x > 0}
-        rtp = {x: (B[HEADLINE, card, m, x]["fixed_alone"] - b0["fixed_alone"]
-                   - (B[HEADLINE, card, m, x]["served"] - b0["served"])) / b0["pub"] for x in BESIDE if x > 0}
+        rtp = {x: (B[design, card, m, x]["fixed_alone"] - b0["fixed_alone"]
+                   - (B[design, card, m, x]["served"] - b0["served"])) / b0["pub"] for x in BESIDE if x > 0}
         return dict(sh0=sh0, sh1=sh1, eps=eps, eps_year=eps + e["union"]["year"] * (1 + ho), hid=hid, rtp=rtp,
                     binding=bx["binding"])
+
+    h, t = vc.CARDS
+    tau1 = {card: best_tau(B, card, 1.0) for card in vc.CARDS}
+    fp = {(card, m, xp): fixed_price(card, m, xp, HEADLINE if xp == 0 else tau1[card])
+          for card in vc.CARDS for m in models for xp in (0.0, 1.0)}
+
+    def tau_label(card):
+        n = tau1[card]
+        return f"{n} ({HEADLINE}'s picks)" if n == f"τ {D['rule']['tau'][card]:g}" else f"{n}'s picks"
 
     L.append("**P22: credit at a fixed served price.** The headline credits at μ°, the honest period's duals with only "
              "its own uncredited work beside (x = 0). The alternative publishes μ¹, the honest period's duals at x = 1 "
              "(one plain INT8 MAC of other tensor work a credited MAC beside the period), as a protocol parameter "
-             "and credits pub(μ¹) whatever the period holds. ε holds at either fixed price (P15/P20). Hidden beside "
+             "and credits pub(μ¹) whatever the period holds. Its picks are the rule's at x = 1, the τ whose picks give "
+             "the largest mean credited share with the honest period at x = 1 (on D5 v2.1 τ 0.2 wins only at x = 0, "
+             f"ALGO-COST-3's A38): {tau_label(h)} on the {h} and {tau_label(t)} on the {t}, with μ¹ that τ's own "
+             "period's duals. ε holds at either fixed price (P15/P20). Hidden beside "
              "work is plain INT8 tensor work beside the credited rounds that the price doesn't value: x (its "
              "standalone time − its price) a credited MAC, over the claim. RT-PROTO-2's measure (its standalone time "
              "less the honest period's growth, over the claim at μ°) is beside it for μ°. A year's figures are "
@@ -960,8 +984,9 @@ def report(D: dict) -> str:
     L.append("|---|---|---|---|---|---|---|---|")
     for card in vc.CARDS:
         for m in models:
-            for lab, xp in (("μ° (the headline)", 0.0), ("μ¹ (x = 1, published)", 1.0)):
-                f = fixed_price(card, m, xp)
+            for xp in (0.0, 1.0):
+                f = fp[card, m, xp]
+                lab = "μ° (the headline)" if xp == 0 else f"μ¹ (x = 1, published), {tau_label(card)}"
                 cy = f["sh0"] * WORLD_FLOP["year"]
                 L.append(f"| {card}, {short[m]} | {lab} | {', '.join(f['binding'])} | {pct(f['sh0'], 1)} / "
                          f"{pct(f['sh1'], 1)} | {pct(f['eps'], 3)} | "
@@ -975,19 +1000,33 @@ def report(D: dict) -> str:
         return pct(lo, d) if f"{lo:.{d + 2}f}" == f"{hi:.{d + 2}f}" else f"{pct(lo, d)}–{pct(hi, d)}"
 
     def unit_ratio(card, x):
-        return [B[HEADLINE, card, m, x]["unit"]["at_served"] / B[HEADLINE, card, m, x]["unit"]["alone"]
-                for m in models]
+        d = HEADLINE if x == 0 else tau1[card]
+        return [B[d, card, m, x]["unit"]["at_served"] / B[d, card, m, x]["unit"]["alone"] for m in models]
+
+    def removed(card):
+        return [1 - fp[card, m, 1.0]["hid"][1.0] / fp[card, m, 0.0]["hid"][1.0] for m in models]
+
+    def cost(card):
+        return [fp[card, m, 1.0]["sh0"] / fp[card, m, 0.0]["sh0"] for m in models]
 
     def pub_ratio(card):
-        return [B[HEADLINE, card, m, 1.0]["pub"] / B[HEADLINE, card, m, 0.0]["pub"] for m in models]
+        return [B[tau1[card], card, m, 1.0]["pub"] / B[tau1[card], card, m, 0.0]["pub"] for m in models]
 
-    h, t = vc.CARDS
+    def picks_cost(card):
+        if tau1[card] == f"τ {D['rule']['tau'][card]:g}":
+            return ""
+        s = [B[tau1[card], card, m, 0.0]["share0"] / B[HEADLINE, card, m, 0.0]["share0"] for m in models]
+        return f"; on the {card} the rest is {tau1[card]}'s picks, whose share at x = 0 is {span(s, 1)} of {HEADLINE}'s"
+
     L.append(f"A plain INT8 MAC beside the claim is valued at {span(unit_ratio(h, 0.0))} of its standalone time by "
              f"μ° on the {h} and {span(unit_ratio(t, 0.0))} on the {t}, and at {span(unit_ratio(h, 1.0))} and "
-             f"{span(unit_ratio(t, 1.0))} by μ¹, where the joint facets bind. So μ¹ removes most of the {t}'s hidden "
-             f"work and less than half of the {h}'s, whose ALU still binds at μ¹. The cost is the credited share with "
-             f"nothing beside (x = 0): pub(μ¹) is {span(pub_ratio(h))} of pub(μ°) on the {h} and "
-             f"{span(pub_ratio(t))} on the {t}, because μ¹ values the credited rounds' lane work below μ°. With the "
+             f"{span(unit_ratio(t, 1.0))} by μ¹, where the joint facets bind. So μ¹ removes {span(removed(t))} of the "
+             f"{t}'s hidden work and {span(removed(h))} of the {h}'s, whose ALU still binds at μ¹. The cost is the "
+             f"credited share with nothing beside (x = 0): the μ¹ row's is {span(cost(h), 1)} of the headline's on "
+             f"the {h} and {span(cost(t), 1)} on the {t}. At the μ¹ row's picks pub(μ¹) is {span(pub_ratio(h), 1)} of "
+             f"pub(μ°) on the {h} and {span(pub_ratio(t), 1)} on the {t}, because μ¹ values the credited rounds' lane "
+             f"work below μ°{picks_cost(h)}{picks_cost(t)}. On the {t}, μ¹ is an x = 1 dual of θ's joint issue rows, "
+             "so its row carries the x > 0 cells' caveat (the beside table below). With the "
              "honest period at x = 1, credit at μ° reads above its x = 0 share: the credited rounds' own price falls "
              "at μ¹'s duals while their credit stays at pub(μ°), so the rise is the beside work's time counted in the "
              "claim (the hidden work again), not a gain. Whether the claim moves to μ¹ is Daniel's call (19:00Z); the "
@@ -1163,8 +1202,10 @@ def report(D: dict) -> str:
                 " / ".join(pct(B[name, card, m, x]["share"], 1) for m in models) + " ("
                 + " / ".join(pct(B[name, card, m, x]["leak"], 1) for m in models) + ")" for x in BESIDE) + " |")
     L.append("\nOn the RTX PRO 6000 these cells carry route (iii), b cᵀ with b1 emulated on the lanes, which D5 v2.1 "
-             "prices from the sm_120 census (ALGO-COST-3's A35, A38), so from x = 0.25 they are no longer upper bounds "
-             "as v1's were. On the H200 b1 is native.")
+             "prices from the sm_120 census (ALGO-COST-3's A35, A38). Its x > 0 cells are still upper bounds: beside "
+             "work moves the period onto the joint issue rows (MMA beside lane work), and θ's sm_120 joint rows are "
+             "closed rows (A36), so the cells stand as bounds until CALIB moves θ (`theta.toml`) to a current vector, "
+             "GPU work after M3. On the H200 b1 is native.")
 
     def census_rows(rows, label):
         cz = {k if k.count(" | ") == 3 else f"{HEADLINE} | {k}": v for k, v in rows.items()}
@@ -1190,6 +1231,18 @@ def report(D: dict) -> str:
                  f"v2.1's menu with route (iii) in it; {cv['ref']}). A sensitivity: D5 v2.1's card is the hull of "
                  "record (08:24Z).\n")
         census_rows(cv["rows"], cv["vector"])
+        card = "RTX PRO 6000"
+        side = {"lower": [], "higher": []}
+        for x in BESIDE:
+            if x > 0:
+                d = np.mean([B[HEADLINE, card, m, x]["share0"] * (1 - cv["rows"][f"{HEADLINE} | {card} | {m} | {x}"]["leak_served"])
+                             / (1 - B[HEADLINE, card, m, x]["leak0"]) - B[HEADLINE, card, m, x]["share"]
+                             for m in models])
+                side["lower" if d < 0 else "higher"].append(f"{x:g}")
+        L.append(f"\nOn {cv['vector']}, {HEADLINE}'s x > 0 cells read "
+                 + " and ".join(f"{k} than θ's at x = {', '.join(v)}" for k, v in side.items() if v)
+                 + f". {cv['vector']} isn't current either, so it doesn't settle the bound's direction; CALIB's vector "
+                 "does.")
     L.append("\nPB4: the same periods by makespan, which needs no duals. Cells: 1 − c_inc, the share of the credited "
              "rounds' honest makespan increment over the period's fixed load alone that pub's period saves, 8B / 70B / "
              "V4, beside the dual-price figure above. Credit stays at the duals (P12); c_inc shows how much of that "
@@ -1224,13 +1277,7 @@ def report(D: dict) -> str:
                              f"{p['hull'][kind]['at_tensor'] / p['hull'][kind]['w']:.3f}" if p["hull"][kind]["w"]
                              else "—" for p in pers) + " |")
     for card in vc.CARDS:
-        taus = [n for n in names if n.startswith("τ ")]
-        best = {}
-        for x in BESIDE:
-            mean = {n: np.mean([B[n, card, m, x]["share"] for m in models]) for n in taus}
-            top = max(mean.values())
-            best[x] = min((n for n in taus if mean[n] >= top - 1e-3),
-                          key=lambda n: np.mean([B[n, card, m, x]["gamma"] for m in models]))
+        best = {x: best_tau(B, card, x) for x in BESIDE}
         bind = {x: B[HEADLINE, card, models[0], x]["binding"] for x in BESIDE}
         L.append(f"\n{card}: the rule's τ by load: " + "; ".join(f"x {x:g} → {best[x][2:]}" for x in BESIDE)
                  + f". {HEADLINE}'s 8B period binds " + "; ".join(f"x {x:g}: {', '.join(bind[x])}" for x in BESIDE)
