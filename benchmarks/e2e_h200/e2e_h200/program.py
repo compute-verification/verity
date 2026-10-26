@@ -7,8 +7,8 @@ bits>``, a gain ``Array<H, bf16 bits>``, ``tok`` ``Array<H, Array<V, bf16 bits>>
 
 * ``token``: the slot's input token, a u16 word;
 * ``n``: the slot's key count, position + 1, a u16 word of kind position (`QkSoftmaxRowPad_v1`'s ``n``, and the padded PV's);
-* ``pos_col``: the position embedding at the slot's position, one bf16 word a coordinate (`POS_INPUT`; the registered
-  ``pos`` row of coordinate c at position p is row 32 c + p, a position the program can't fix);
+* ``p``: the slot's position, n - 1, an i32 word of kind position: the index each coordinate's ``MoeSelectBf16x{context}_v2``
+  takes into its ``pos`` rows (a root constant is data, so the Program can't compute it from ``n``);
 * ``keys``, ``values``: each layer's 32 K and V rows of the slot (head_dim bf16 words each), the rows committed at its
   positions 0 .. n - 1, this step's own at n - 1, the rest absent.
 
@@ -19,7 +19,7 @@ view; the Program calls the Boolean Definition whose `word` that is):
 
 | map key | Program's Definition |
 |---|---|
-| ``EmbeddingCoordinate_v1{V}`` | the same |
+| ``EmbeddingCoordinate_v1{V}`` | the same, its ``pos`` ``MoeSelectBf16x{context}_v2`` (``p``) over the coordinate's ``pos`` rows |
 | ``RmsSumSqChunks_v1{C, K}``, ``RmsNormOutSums_v1{C, S, G, N, EPS}`` | the same |
 | ``RowAbsMax_v1{N, RELU}`` | ``RowAbsMax_v2`` |
 | ``QuantChunkS8_v1{N, RELU}`` | ``QuantChunkS8_v2`` (chunk 0's scale is the linear's ``sx``) |
@@ -36,6 +36,7 @@ from __future__ import annotations
 
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.ops.boolean import gemm as BG
+from verity.ml.circuits.ops.boolean import moe as BM
 from verity.ml.circuits.ops.boolean import quant as BQ
 from verity.ml.circuits.ops.boolean import rmsnorm as RN
 from verity.ml.circuits.ops.boolean import rows as BR
@@ -53,26 +54,19 @@ from .shape import PV_K, Shape, check, forms
 
 BIT = Value(1)
 BF16 = U16 = Array(16, BIT)
-F32 = Array(32, BIT)
+F32 = I32 = Array(32, BIT)
 CODE = BQ.CODE
 S8_DOT = BG.GEMM_SM120_S8["DOT"]
 BF16_DOT = BG.GEMM_HOPPER["DOT"]
 NAME = "E2eH200Step"
 #: gathers as references (no unit): no Boolean gather Definition is on main
 GATHER = "references"
-#: the position embedding as a run input: the registered ``pos`` row a step reads depends on its position
-POS_INPUT = "pos_col"
 PV = ("PvRow", "PvRowPad")
 
 
 def _weight_type(t: SW.Tensor) -> Array:
     elem = {"s8": CODE, "f32": F32, "bf16": BF16}[t.dtype]
     return Array(t.cols, elem) if t.rows == 1 else Array(t.rows, Array(t.cols, elem))
-
-
-def weights(shape: Shape) -> list[SW.Tensor]:
-    """The tensors the Program reads, in stream order: all but ``pos`` (`POS_INPUT`)."""
-    return [t for t in SW.tensors(shape) if t.name != "pos"]
 
 
 def _pv(pv: str):
@@ -90,11 +84,11 @@ def program(shape: Shape, pv: str = "PvRow") -> Program:
     """The served step's Program at ``shape`` (module docstring)."""
     sh, f = check(shape), forms(shape)
     w, d, h, c, L = sh.width, sh.head_dim, sh.heads, f.chunk, sh.layers
-    ts = weights(sh)
+    ts = SW.tensors(sh)
     pv_def, padded = _pv(pv), pv == "PvRowPad"
     kv = Array(L, Array(PV_K, Array(d, BF16)))
     params = tuple((t.name, _weight_type(t)) for t in ts) + (
-        ("token", U16), ("n", U16), (POS_INPUT, Array(w, BF16)), ("keys", kv), ("values", kv))
+        ("token", U16), ("n", U16), ("p", I32), ("keys", kv), ("values", kv))
     ret_t = Tuple(U16, Array(L, Array(d, BF16)), Array(L, Array(d, BF16)))
 
     def body(B, S, *args):
@@ -140,7 +134,8 @@ def program(shape: Shape, pv: str = "PvRow") -> Program:
             return B.batch(bind(BR.Bf16AddRow, N=c), x.reshape(rows), y.reshape(rows), axes=(0, 0),
                            name=op).reshape(Array(w, BF16))
 
-        x = B.batch(bind(RW.EmbeddingCoordinate, V=sh.vocab), tok, a["tok"], a[POS_INPUT], axes=(None, 0, 0), name="embed")
+        pos = B.batch(BM.select_bf16(sh.context), a["p"], a["pos"], axes=(None, 0), name="pos")
+        x = B.batch(bind(RW.EmbeddingCoordinate, V=sh.vocab), tok, a["tok"], pos, axes=(None, 0, 0), name="embed")
         ks, vs = [], []
         for i in range(L):
             p = f"l{i}."
@@ -163,7 +158,7 @@ def program(shape: Shape, pv: str = "PvRow") -> Program:
         return tuple_of(nxt, array_of(ks), array_of(vs))
 
     fn = CompositeDefinition(NAME, 1, (), lambda S: (params, ret_t), body, register=False,
-                             ports=Ports(params={"n": In(kind="position")}),
+                             ports=Ports(params={"n": In(kind="position"), "p": In(kind="position")}),
                              doc=f"one slot's decode step of {sh.name} on circuits' FAMILIES map")
     names = tuple(t.name for t in ts)
     return Program(bind(fn), registered=names, theta=names)

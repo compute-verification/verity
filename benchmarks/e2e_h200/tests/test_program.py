@@ -69,9 +69,9 @@ def drive(shape):
 def inputs(shape, w: Weights, rp: Replayer, step: int, b: int) -> list[np.ndarray]:
     st = rp.steps[step]
     t = int(st.positions[b])
-    out = [bits(w.array(x.name)) for x in PR.weights(shape)]
+    out = [bits(w.array(x.name)) for x in SW.tensors(shape)]
     out += [bits(np.array([rp.tokens[step][b]], np.uint16)), bits(np.array([t + 1], np.uint16)),
-            bits(np.ascontiguousarray(w.array("pos")[:, t]).astype(np.uint16))]
+            bits(np.array([t], np.int32))]
     kv = [rp.kv(step, i, b) for i in range(shape.layers)]
     for j in (0, 1):
         rows = np.zeros((shape.layers, PV_K, shape.head_dim), np.uint16)
@@ -112,6 +112,11 @@ def test_every_family_is_the_drivers_table_and_the_return_is_the_steps_token_and
                 lo = 0 if name.endswith(".part") else table.size - 2
                 assert np.array_equal(got, table[lo:lo + got.size]), name
                 checked += 1
+            elif name == "pos":
+                t = int(rp.steps[step].positions[b])
+                assert np.array_equal(np.packbits(out, bitorder="little"),
+                                      np.ascontiguousarray(w.array("pos")[:, t]).astype(np.uint16).view(np.uint8)), name
+                checked += 1
             elif name in names:
                 assert np.array_equal(np.packbits(out, bitorder="little"),
                                       np.ascontiguousarray(tables[name][0][b]).view(np.uint8)), name
@@ -130,6 +135,5 @@ def test_every_family_is_the_drivers_table_and_the_return_is_the_steps_token_and
 def test_its_root_parameters_are_the_weights_by_name_then_the_run_inputs(served):
     shape, _w, _rp, prog = served
     names = [n for n, _ in prog.fn.signature()[0]]
-    ws = [t.name for t in SW.tensors(shape) if t.name != "pos"]
-    assert names == ws + ["token", "n", PR.POS_INPUT, "keys", "values"]
+    assert names == [t.name for t in SW.tensors(shape)] + ["token", "n", "p", "keys", "values"]
     assert SW.reader(shape, prog).digest == program_digest(prog)
