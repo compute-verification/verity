@@ -1,103 +1,56 @@
-"""The seeded weights of a `shape.Shape`: the stand-in for CMP-95 item 1 (ALLP-IFACE's generator and registration root) with
-the interface the driver reads, so the real generator replaces this module's `Weights` without touching the driver.
+"""The seeded weights the skeleton serves: ALLP-IFACE's generator and stream (`verity_torch_loop.weights`, CMP-95 item 1),
+with the reads the driver, the store and replay make.
 
-Each tensor is drawn from its own stream (PCG64 keyed by SHA-512 over the seed and the tensor's name), so any tensor, or W's
-bytes at any offset, can be produced alone and in any order: the encoder streams W, the driver's generator store regenerates
-one layer at a time, and replay reads a drawn unit's weight row without the store.
-
-* s8 codes uniform in [-127, 127]; the f32 channel scale (1 + N(0, 0.1)) / (73 sqrt K), so a linear's output is about as large
-  as its input; the query rows' scales carry the score scale 1/sqrt(64) = 2^-3 (exact);
-* norm gains bf16(1 + N(0, 0.1)); token embeddings bf16(N(0, 1)); position embeddings bf16(0.5 N(0, 1)).
-
-`fixture_root` is SHA-512 over the manifest and every tensor: a FIXTURE root, not the registration's hm96 / frame-v3-sha512 root.
+The weights stream (every tensor's little-endian bytes in `tensors(shape)` order, no padding) is what memory-accounting's
+store P2-encodes and what the store's decode call stages from; `generate` gives any tensor without the store, which replay
+reads a drawn unit's weight row from, so a wrong decode shows as a mismatch.
 """
 from __future__ import annotations
 
-import hashlib
-import json
-import math
+from dataclasses import asdict
 
 import numpy as np
 
 from .shape import Shape
+from verity_torch_loop import weights as SW
 
-DOMAIN = b"verity/e2e-h200/weights-fixture/v0\0"
-
-
-def _rng(seed: int, name: str) -> np.random.Generator:
-    h = hashlib.sha512(DOMAIN + seed.to_bytes(8, "big") + name.encode()).digest()
-    return np.random.Generator(np.random.PCG64(int.from_bytes(h[:16], "big")))
-
-
-def bf16_words(x: np.ndarray) -> np.ndarray:
-    """f32 values rounded to bf16 (nearest even), as u16 words."""
-    u = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32).astype(np.uint64)
-    return ((u + 0x7FFF + ((u >> 16) & 1)) >> 16).astype(np.uint16)
+#: the linears of a layer, in the order the step runs them
+LINEARS = ("wq", "wk", "wv", "wo", "wup", "wdown")
 
 
 class Weights:
-    def __init__(self, shape: Shape, seed: int = 0) -> None:
+    def __init__(self, shape: Shape, seed: bytes = SW.TEST_SEED) -> None:
         self.shape, self.seed = shape, seed
-        self.dims = {name: (n, k) for name, n, k in shape.tensors()}
-        self._base: dict[str, int] = {}
-        at = 0
-        for name, n, k in shape.tensors():
-            self._base[name] = at
-            at += n * k
+        self.t = {t.name: t for t in SW.tensors(shape)}
+        self.dims = {n: (t.rows, t.cols) for n, t in self.t.items() if t.kind == "s8"}
+        self.nbytes = SW.stream_bytes(shape)
 
-    def manifest(self) -> dict:
-        return {"generator": DOMAIN.rstrip(b"\0").decode(), "seed": self.seed, "shape": self.shape.name,
-                "tensors": [[name, n, k, self._base[name]] for name, n, k in self.shape.tensors()]}
+    def array(self, name: str) -> np.ndarray:
+        """A tensor whole: s8 codes (N, K) int8, scales (N,) f32, bf16 words (gains (H,), ``tok`` (V, H), ``pos`` (H, C))."""
+        a = SW.generate(self.shape, self.seed, name)
+        return a.reshape(-1) if self.t[name].rows == 1 else a
 
     def codes(self, name: str) -> np.ndarray:
-        n, k = self.dims[name]
-        return _rng(self.seed, name).integers(-127, 128, size=(n, k), dtype=np.int8)
+        return self.array(name)
 
     def row(self, name: str, i: int) -> np.ndarray:
-        """Row i of a tensor's codes (replay reads a drawn unit's weight row; this draws the tensor)."""
-        return self.codes(name)[i]
+        return SW.generate(self.shape, self.seed, name, [i])[0]
 
     def scales(self, name: str) -> np.ndarray:
-        n, k = self.dims[name]
-        s = (1 + 0.1 * _rng(self.seed, name + "/scale").standard_normal(n)) / (73 * math.sqrt(k))
-        if name.endswith(".qkv"):
-            s[:self.shape.d] *= 2.0 ** -3
-        return s.astype(np.float32)
-
-    def gain(self, layer: int | None, which: str) -> np.ndarray:
-        name = "final_norm" if layer is None else f"l{layer}.{which}_norm"
-        return bf16_words(1 + 0.1 * _rng(self.seed, name).standard_normal(self.shape.d))
-
-    def tok(self) -> np.ndarray:
-        return bf16_words(_rng(self.seed, "tok").standard_normal((self.shape.vocab, self.shape.d)))
-
-    def pos(self) -> np.ndarray:
-        return bf16_words(0.5 * _rng(self.seed, "pos").standard_normal((self.shape.ctx, self.shape.d)))
+        return self.array(f"{name}.scale")
 
     def base(self, name: str) -> int:
-        return self._base[name]
+        return self.t[name].offset
 
-    def w_bytes(self, start: int, length: int) -> bytes:
-        """W's bytes [start, start + length): the tensors' codes back to back (`shape.tensors()` order), row-major."""
-        out, end = bytearray(), start + length
-        for name, n, k in self.shape.tensors():
-            lo, hi = self._base[name], self._base[name] + n * k
-            if hi <= start or lo >= end:
-                continue
-            out += self.codes(name).reshape(-1).view(np.uint8)[max(start, lo) - lo:min(end, hi) - lo].tobytes()
-        if len(out) != length:
-            raise ValueError(f"W is {self.shape.w_bytes} bytes, not past {end}")
-        return bytes(out)
+    def stream(self, start: int, stop: int) -> bytes:
+        return SW.stream(self.shape, self.seed, start, stop)
 
-    def fixture_root(self) -> str:
-        h = hashlib.sha512(json.dumps(self.manifest(), sort_keys=True).encode())
-        for name, _, _ in self.shape.tensors():
-            h.update(self.codes(name).tobytes())
-            h.update(self.scales(name).tobytes())
-        for layer in range(self.shape.layers):
-            h.update(self.gain(layer, "attn").tobytes())
-            h.update(self.gain(layer, "mlp").tobytes())
-        h.update(self.gain(None, "final").tobytes())
-        h.update(self.tok().tobytes())
-        h.update(self.pos().tobytes())
-        return h.hexdigest()
+    def manifest(self) -> dict:
+        return {"generator": SW.FORMAT, "model": SW.model_id(self.shape, self.seed), "shape": asdict(self.shape),
+                "stream_bytes": self.nbytes, "seed_is_test_seed": self.seed == SW.TEST_SEED}
+
+    def registration_digest(self, salt_key: bytes = SW.TEST_SALT_KEY, program=SW.TEST_PROGRAM, workers: int = 1) -> str:
+        """`SW.registration_digest` for the reading ``program`` under ``salt_key`` (by default the test reader and key: the
+        step's Program and the prover's own key give the real one)."""
+        roots = SW.root(self.shape, self.seed, salt_key, program, workers=workers)
+        return SW.registration_digest(self.shape, program, roots)

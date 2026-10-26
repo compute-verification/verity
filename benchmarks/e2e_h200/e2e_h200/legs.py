@@ -40,10 +40,10 @@ def pous_spot_reads(store: Store, reads: int, seed: bytes) -> dict:
     n = store.rows.shape[0]
     rng = np.random.Generator(np.random.PCG64(int.from_bytes(hashlib.sha512(b"pous-spot\0" + seed).digest()[:16], "big")))
     picks = sorted({int(j) for j in rng.integers(0, n, size=reads)})
-    wb, bad = store.weights.shape.w_bytes, []
+    wb, bad = store.weights.nbytes, []
     for j in picks:
         lo = j * PAYLOAD
-        want = store.weights.w_bytes(lo, min(PAYLOAD, wb - lo)).ljust(PAYLOAD, b"\0")
+        want = store.weights.stream(lo, min(lo + PAYLOAD, wb)).ljust(PAYLOAD, b"\0")
         if decode_block(store.prefix, j, store.block(j)) != want:
             bad.append(j)
     return _entry("pous", "fixture", reads=len(picks), mismatched_blocks=bad,

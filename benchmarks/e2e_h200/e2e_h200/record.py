@@ -20,7 +20,7 @@ from typing import Any
 
 import numpy as np
 
-from .replay import Unit
+from .units import Unit
 from .shape import Shape
 
 BUNDLE_SCHEMA = "verity/e2e-h200/replay-bundle/v0 (provisional: CMP-95 item 5)"

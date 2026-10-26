@@ -1,9 +1,9 @@
 """MQA attention, each slot at its own position (`attend`), on the CPU through the Definitions' own numpy kernels: the stand-in
 for kernels' KP2-ATTN until it is handed over (a BF16 tensor-core product computed by torch is another function).
 
-    scores   GemmCoordinate_v2{K=64, GEMM_HOPPER} (`HopperBF16WgmmaDot16`'s 16-wide steps in ascending k from +0, then
+    scores   GemmCoordinate_v2{K=d, GEMM_HOPPER} (`HopperBF16WgmmaDot16`'s 16-wide steps in ascending k from +0, then
              `F2fpBf16`): query head h of slot b against the KV head's key at each position s <= t
-    softmax  SoftmaxMax / SoftmaxRecip / SoftmaxOut (circuits' plan, section 1): m the first greatest score,
+    softmax  SoftmaxRow_v1{N = t + 1} (circuits' plan, section 1): m the first greatest score,
              e_j = MufuEx2Ftz(RN(RN(x_j - m) * RN32(log2 e))), s their sum from +0 in ascending j, r = RN(1 / s),
              p_j = bf16(RN(e_j * r))
     pv       GemmCoordinatePad_v1{T = t + 1, K = 32}: p and the value column padded with +0 to K = 32, then
@@ -27,8 +27,8 @@ PAD_K = 32
 LOG2E = np.float32(1.4426950408889634)
 
 
-def qk_template():
-    return bind(G.GemmCoordinate, K=64, **G.GEMM_HOPPER)
+def qk_template(d: int):
+    return bind(G.GemmCoordinate, K=d, **G.GEMM_HOPPER)
 
 
 def pv_template():
@@ -45,12 +45,12 @@ def bf16_of_f32(x: np.ndarray) -> np.ndarray:
 
 
 def scores(q: np.ndarray, keys: np.ndarray) -> np.ndarray:
-    """q (B, H, 64) u16, keys (B, T, 64) u16 -> (B, H, T) u16."""
+    """q (B, H, d) u16, keys (B, T, d) u16 -> (B, H, T) u16."""
     b, h, d = q.shape
     t = keys.shape[1]
     x = np.broadcast_to(q[:, :, None, :], (b, h, t, d)).reshape(-1, d)
     w = np.broadcast_to(keys[:, None, :, :], (b, h, t, d)).reshape(-1, d)
-    return np.asarray(evaluate_batch(qk_template(), x, w), dtype=np.uint16).reshape(b, h, t)
+    return np.asarray(evaluate_batch(qk_template(d), x, w), dtype=np.uint16).reshape(b, h, t)
 
 
 @dataclass
@@ -83,7 +83,7 @@ def pad(a: np.ndarray, k: int = PAD_K) -> np.ndarray:
 
 
 def pv(p: np.ndarray, values: np.ndarray) -> np.ndarray:
-    """p (B, H, T) u16, values (B, T, 64) u16 -> (B, H, 64) u16."""
+    """p (B, H, T) u16, values (B, T, d) u16 -> (B, H, d) u16."""
     b, h, t = p.shape
     d = values.shape[-1]
     x = np.broadcast_to(pad(p)[:, :, None, :], (b, h, d, PAD_K)).reshape(-1, PAD_K)
