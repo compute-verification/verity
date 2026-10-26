@@ -801,7 +801,8 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     /usr/local/cuda) and gates both with the shipped pins; skipped without nvcc, cuobjdump and nvdisasm. It catches what the
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
     toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
-    note, 13.0 unpinned arguments)."""
+    note, 13.0 unpinned arguments), and one from 13.0.1 fails only on the div and sqrt slow-path bodies its numeric run
+    didn't pin (`test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested`)."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -822,9 +823,13 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
         if arch == "sm_90a" and not pinned:
             assert code[0]["unpinned"] == "no ptxas record (.note.nv.tkinfo)" \
                 or "with unpinned arguments '-arch sm_90a -m 64" in code[0]["unpinned"], code[0]["unpinned"]
-        assert rec["ok"] is (ok and pinned), (out, rec["offending"][:3])
-        if rec["ok"] and arch == "sm_120a":
+        assert rec["ok"] is (ok and pinned and arch == "sm_120a"), (out, rec["offending"][:3])
+        if rec["ok"]:
             assert rec["covered"] == PLAIN_COVERED, (out, rec["covered"])
+        elif pinned and ok:
+            assert {o["function"] for o in rec["offending"]} <= {"sqrt_k", "rho_k", "cdiv_k"} and all(
+                "isn't the pinned body" in o["why"] or "isn't a pinned one" in o["why"]
+                for o in rec["offending"] if "why" in o), (out, rec["offending"][:3])
         elif pinned:
             fns = {o["function"] for o in rec["offending"]}
             assert fns and (fns <= FP32_KERNELS or src == "ftz_refused.cu"), (out, fns)
