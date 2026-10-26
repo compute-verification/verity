@@ -154,7 +154,29 @@ def strassen2_overlapped(lane_load: float, lane_per_add: float, c_op: float = 8,
     return out
 
 
-STRASSEN_NU = [(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
+LADERMAN = (  # Laderman (1976) <3,3,3;23>: A-form ; B-form per product, then each c_ij's products
+    "11+12+13-21-22-32-33;22 11-21;-12+22 22;-11+12+21-22-23-31+33 -11+21+22;11-12+22 21+22;-11+12 11;11 "
+    "-11+31+32;11-13+23 -11+31;13-23 31+32;-11+13 11+12+13-22-23-31-32;23 32;-11+13+21-22-23-31+32 "
+    "-13+32+33;22+31-32 13-33;22-32 13;31 32+33;-31+32 -13+22+23;23+31-33 13-23;23-33 22+23;-31+33 12;21 "
+    "23;32 21;13 31;12 33;33",
+    "6,14,19 1,4,5,6,12,14,15 6,7,9,10,14,16,18 2,3,4,6,14,16,17 2,4,5,6,20 14,16,17,18,21 6,7,8,11,12,13,14 "
+    "12,13,14,15,22 6,7,8,9,23",
+)
+
+
+def laderman() -> tuple[list[int], list[int], bool]:
+    """Laderman's own forms: (A term counts, B term counts, whether the scheme reproduces a random integer product)."""
+    def form(s: str) -> list[tuple[int, int, int]]:
+        return [(-1 if t[0] == "-" else 1, int(t[-2]) - 1, int(t[-1]) - 1) for t in re.findall(r"[+-]?\d\d", s)]
+
+    prods = [tuple(form(x) for x in p.split(";")) for p in LADERMAN[0].split()]
+    rng = np.random.default_rng(1)
+    A, B = rng.integers(-9, 10, (3, 3)), rng.integers(-9, 10, (3, 3))
+    m = [sum(s * A[i, j] for s, i, j in fa) * sum(s * B[i, j] for s, i, j in fb) for fa, fb in prods]
+    C = [sum(m[int(x) - 1] for x in c.split(",")) for c in LADERMAN[1].split()]
+    return [len(fa) for fa, _ in prods], [len(fb) for _, fb in prods], C == list((A @ B).flatten())
+
+[(2, 2), (2, 1), (1, 2), (1, 2), (2, 1), (2, 2), (2, 2)]
 WINOGRAD_NU = [(1, 1), (1, 1), (4, 1), (1, 4), (2, 2), (3, 3), (2, 2)]
 
 
