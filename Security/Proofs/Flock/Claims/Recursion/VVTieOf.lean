@@ -77,7 +77,7 @@ theorem residualRows_some {inn : RecCoins.Inner} {sh : _root_.Flock.Shape} {extr
       | ok rows' =>
         rw [hr] at h
         cases h
-        exact ⟨gs, R, P, vs, rfl, rfl, hr⟩
+        exact ⟨gs, R, P, vs, hg, hj, hr⟩
 
 /-- **The part's `v` elements are its group's**: `part`'s `nv` is the number of group `j`'s `V` elements. -/
 theorem part_nv {sh : _root_.Flock.Shape} {j : ℕ} {S : _root_.Flock.RecOpen.GfS} {ns : List ℕ} {nv : ℕ}
