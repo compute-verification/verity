@@ -6,6 +6,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
