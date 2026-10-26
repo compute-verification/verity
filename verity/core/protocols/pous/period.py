@@ -17,17 +17,21 @@ is steps 1 to 3, `audit` steps 4 and 5, so a node's store can be set up once and
 What an accepted run certifies is `certify`'s, as `PousCheck.RunProtocol.certify` computes it: `s_bits = ⌊ρ·blocks·w⌋`
 at `eps = δ + 2^eps_log2` = 1/100 + 2^-128 when a certificate covers the point (`certificate`: P2's registered one at
 `run.DEPLOYED`, a 1 GiB `C*`, else P2's proved family `p2.family_certificate`, any `2^8` to `2^23` blocks at the
-registered width and prime), else 0 and 0 with the profile naming each gap. `certified_point` is the smallest such point
-holding a store, 256 blocks (526 KB) at least; the small point (`point_for`, 1,024-bit blocks) certifies nothing.
+registered width and prime, else the per-period guarantee `p2.wide_certificate`, `periodHeldAt`, to `2^27` blocks, which
+holds Demo B's `C*` of 1038 segments, 1,060,008,348,186 bits), else 0 and 0 with the profile naming each gap.
+`point_for` gives the smallest such point holding a store, 256 blocks (526 KB) at least; the small point
+(`point_for(size, W, C0)`, 1,024-bit blocks) certifies nothing.
 
 Encoding is the cost: two 16,448-bit roots a block, about 3.7 s a block on one core in this pure-Python reference path
 (r20261025-202504-23f6), so 16 core-minutes at 256 blocks and 550 core-hours at the deployed `2^19`; `encode` splits it
-over processes. An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
+over processes. The toy's 6,240,150-byte store is 3,039 blocks there, set up in 367 s in 32 processes (3.86 core-seconds
+a block, r20261026-161817-7dd1). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's root.
 
 `leg(period_dir, node, out)` is `benchmarks/all_protocols`' leg for space: by default it sets the node's store up once at
-`certified_point` and audits it every period, the coins fresh from the OS. The memory challenger is a party of its own
-(`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed parameters
-(`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the node.
+`point_for`'s certified point and audits it every period, the coins fresh from the OS. The memory challenger is a party
+of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
+parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
+node.
 `trusted-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
 still drawn on the node.
@@ -70,26 +74,25 @@ K = P2.CERT_K
 LIMIT_NS = P2.DELTA_NS + P2.RTT_ALLOWANCE_CAP_NS
 
 
-def point_for(size: int, w: int = W, c0: int = C0, k: int = K, limit_ns: int = LIMIT_NS) -> R.Point:
-    """The smallest point at width `w` whose payload holds `size` bytes: one segment of up to 2^16 blocks, then more."""
+def point_for(size: int, w: int = P2.POINT[0], c0: int = P2.POINT[1], k: int = K, limit_ns: int = LIMIT_NS) -> R.Point:
+    """The smallest point at width `w` whose payload holds `size` bytes: one segment of up to 2^16 blocks, then more. At
+    the registered width and prime, the default, it has at least `2^8` blocks (`p2.CERT_FAMILY_BLOCKS`), so with `k =
+    105` and `Δ + RTT` at the cap `certificate` covers it to `2^27` blocks; `point_for(size, W, C0)` is the small point."""
     payload = (w - 16) // 8
-    blocks = max(1, -(-size // payload))
+    least = P2.CERT_FAMILY_BLOCKS[0] if (w, c0) == P2.POINT[:2] else 1
+    blocks = max(least, -(-size // payload))
     segments = -(-blocks // (1 << 16))
     return R.Point(P2.P2Params(w, c0, -(-blocks // segments), segments), k, limit_ns)
 
 
-def certified_point(size: int) -> R.Point:
-    """The smallest point P2's proved family certifies (`p2.family_certificate`) whose payload holds `size` bytes: the
-    registered width and prime, at least `2^8` blocks (`p2.CERT_FAMILY_BLOCKS`), `k = 105` and `Δ + RTT` at the cap."""
-    w, c0, _ = P2.POINT
-    return point_for(max(size, P2.CERT_FAMILY_BLOCKS[0] * ((w - 16) // 8)), w, c0)
-
-
 def certificate(q: P2.P2Params) -> Any:
     """`PousCheck.RunProtocol.certificate`: P2's registered certificate when `q` is its point, segment count and all,
-    else P2's proved family's (`p2.family_certificate`), else none."""
+    else P2's proved family's (`p2.family_certificate`, `2^8` to `2^23` blocks), else the per-period guarantee's
+    (`p2.wide_certificate`, to `2^27` blocks), else none."""
     registered = P2.P2(P2.P2Params(q.w, q.c0, q.blocks_per_segment, q.segments)).certificate
-    return registered if registered is not None and registered.segments == q.segments else P2.family_certificate(q)
+    if registered is not None and registered.segments == q.segments:
+        return registered
+    return P2.family_certificate(q) or P2.wide_certificate(q)
 
 
 def gaps(point: R.Point) -> tuple[Any, list[str]]:
@@ -410,7 +413,7 @@ CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)
 
 def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     """Space's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`). By default the node's store is
-    set up once, at the smallest point P2's proved family certifies (`certified_point`): `W` is the node's records at its
+    set up once, at the smallest point P2's certificates cover (`point_for`): `W` is the node's records at its
     first period, encoded in up to `SETUP_WORKERS` processes and kept beside the periods (`pous-store`), and every period
     audits it with fresh coins, so an accepted period certifies `s_bits > 0` at the certificate's `eps`. With
     `{"pous": {"point": "small"}}` in `period.json`, each period sets the period's own records up at the small point
@@ -430,7 +433,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     t = time.monotonic()
     if small or not (kept / "store.json").exists():
         store = records(period_dir)
-        point = point_for(len(store)) if small else certified_point(len(store))
+        point = point_for(len(store), W, C0) if small else point_for(len(store))
         held = setup_store(store, secrets.token_bytes(64), point, workers=1 if small else workers)
         if not small:
             held.save(kept)
@@ -466,5 +469,5 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
 
 
 __all__ = ["PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit", "case",
-           "certificate", "certified_point", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
+           "certificate", "certify", "challenger", "encode", "gaps", "honest", "leg", "point_for",
            "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
