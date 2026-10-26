@@ -21,7 +21,7 @@ a period that realizes the protocol's audit, from the source's own premises:
 * PoUB: `Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod`, the bandwidth audit's game
   (`Bandwidth.Guarantees.AuditRO`), at `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`;
 * the network certifier: `Accounting.Guarantees.Bridge.CommOfPeriodLeakAccepted`, its period of sampled audits
-  (`NetTiming.Guarantees.PeriodLeakAccepted`), at `n·(δ + ε_ks + ε_bind)`.
+  (`NetTiming.Guarantees.PeriodLeakAccepted`), at `n·(δ + ε_ks + ε_bind + ε_tap)`.
 
 `JointHorizonBlocksDeployed` is `JointHorizonBlocks` with each block's five legs given that way: its hypotheses are each
 block's five realizations and their sources' premises, and its bound is each source's error summed over the blocks.
@@ -63,15 +63,15 @@ their sources' premises, block by block:
 * PoUB: block `b`'s PoUB audit is the bandwidth audit's game (`Accounting.RealizesBandwidthOfAuditPerRunPeriod`), with
   a bandwidth certificate of at most `k·b − S_chip − c − G·b − λ` bits;
 * the network certifier: block `b`'s network audit is the network certifier's period of `n_c` sampled audits
-  (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), under `Claims.Sampling.KS` and the decoder's radius,
-  each window's prover within `ε_ks` and `ε_bind`;
+  (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`), under `Claims.Sampling.KS`, the trace commitment's
+  binding (`Commitment.Binds`) and the decoder's radius, each window's prover within `ε_ks`, `ε_bind` and `ε_tap`;
 
 and, as in `JointHorizonBlocks`, each wipe's survivor bound holds at its error `ε_wipe b` and each block's memory term
 at `δ_PoUS b`. Then the probability that some block's accepted audit's claim fails, some accepted wipe's survivor bound
 fails, or some block's memory term fails while its PoUS accepted is at most
 $$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_s + n(\delta_{bind} + \delta_{ks})
   + (\delta + \varepsilon_{max}) + \big(\tfrac{k-1}{N}\big)^s + \tfrac{s}{2^h} + \tfrac{C(q_b, k)}{2^\lambda}
-  + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind})\Big) + \sum_b \varepsilon_{\mathrm{wipe},b}
+  + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind} + \varepsilon_{tap})\Big) + \sum_b \varepsilon_{\mathrm{wipe},b}
   + \sum_b \delta_{\mathrm{PoUS},b},$$
 `q_b = rate_oracle · T_b` the device's oracle queries over block `b`'s window.
 
@@ -81,7 +81,8 @@ term (`δ_PoUS b`) are taken as in `JointHorizonBlocks`: memory accounting's wip
 doesn't exist yet, and neither does a bridge from weights-only PoUS to `BlocksRun.MemoryTerm`. Each bridge's own gap
 stays as its realization's field or its source's premise: the program-from-circuit correspondence (M1, `wrong_eq`), the
 words fixed right as device-model work (RT4-LOGIC-6, `work_of_fixed`), PoUS at its challenge times only, and the
-network certifier's `Carries`/`Covered` on acceptance (`window_le`). As in `JointHorizonBlocks`, the state a block
+trace's values at the registered inputs and the records' coverage on the network certifier's acceptance
+(`window_le`). As in `JointHorizonBlocks`, the state a block
 carries across a wipe is outside the integrity bound (PRF-167). -/
 def JointHorizonBlocksDeployed : Prop :=
   ∀ (ι α I : Type) [Fintype ι] [Fintype α] [Fintype I] [DecidableEq I] (Ω : I → Type) [∀ i, Fintype (Ω i)]
@@ -185,11 +186,13 @@ def JointHorizonBlocksDeployed : Prop :=
     ∀ RN : (b : Fin B) →
       Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted (s.block b) (c b).K H D Ln Kₒ Sn lay kh δc decode regN
         Dj nc,
-    KS H D → 0 ≤ δc → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    ∀ εks εbind : ℝ,
+    KS H D → D.commit.Binds H → 0 ≤ δc → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    ∀ εks εbind εtap : ℝ,
     (∀ b ξ i, Claims.Sampling.κ D δc ((RN b).stmt ξ i) - δc +
       Real.sqrt (Claims.Sampling.γ D ((RN b).stmt ξ i) * PrB H D.V ((RN b).prover ξ i) ((RN b).stmt ξ i)) ≤ εks) →
     (∀ b ξ i, (Bext H D.V (E D decode) ((RN b).Tape ξ i) ((RN b).prover ξ i) ((RN b).stmt ξ i)).Pr H ≤ εbind) →
+    (∀ b ξ i, (Btap H D.V (E D decode) D.commit D.parse (RN b).tops ((RN b).Tape ξ i) ((RN b).prover ξ i)
+      ((RN b).stmt ξ i)).Pr H ≤ εtap) →
     -- the wipes and the memory terms, as in `JointHorizonBlocks`
     (∀ b, Pouw.pr (fun ξ => (s.wipe b).accepts ξ ∧ ¬ (s.wipe b).Survives f ξ) ≤ εWipe b) →
     (∀ b, Pouw.pr (fun ξ => (s.block b).accepts .pous ξ ∧ ¬ s.MemoryTerm b ξ) ≤ δPous b) →
@@ -200,7 +203,7 @@ def JointHorizonBlocksDeployed : Prop :=
           ((Pous.Params.δ : ℝ) + Pous.Params.εMax.toReal) +
           ((((k - 1 : ℕ) : ℝ) / N) ^ sB + (sB : ℝ) / 2 ^ h +
             (((d.rate .oracle * (s.block b).win.len).choose k : ℕ) : ℝ) / 2 ^ lam) +
-          nc * (δc + εks + εbind)) +
+          nc * (δc + εks + εbind + εtap)) +
         ∑ b, εWipe b + ∑ b, δPous b
 
 open FlockSoundness.Audit FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
@@ -214,7 +217,7 @@ sessions `S` (`Accounting.RealizesIntegrityOfIntegrityBlock`), its PoUW audit H1
 sampled audits (`Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted`). Then the probability that one of those three
 audits in some block accepts while its claim fails is at most
 $$\sum_b \Big(\delta_I + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}) + \delta_s + n(\delta_{bind} + \delta_{ks})
-  + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind})\Big).$$
+  + n_c(\delta_c + \varepsilon_{ks} + \varepsilon_{bind} + \varepsilon_{tap})\Big).$$
 Demo A has no wipe or memory term (memory accounting joins at M4 through `JointHorizonBlocksDeployed`); each bridge's own
 gap stays as its realization's field or its source's premise, as there. -/
 def JointHorizonBlocksDeployedA : Prop :=
@@ -302,13 +305,15 @@ def JointHorizonBlocksDeployedA : Prop :=
       {decode : List (ℕ × Col) → List Tn} {regN : Stmt → Finset ℕ} {Dj nc : ℕ},
     ∀ RN : (b : Fin B) →
       Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted (r b) (c b).K H D Ln Kₒ Sn lay kh δc decode regN Dj nc,
-    KS H D → 0 ≤ δc → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    ∀ εks εbind : ℝ,
+    KS H D → D.commit.Binds H → 0 ≤ δc → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
+    ∀ εks εbind εtap : ℝ,
     (∀ b ξ i, Claims.Sampling.κ D δc ((RN b).stmt ξ i) - δc +
       Real.sqrt (Claims.Sampling.γ D ((RN b).stmt ξ i) * PrB H D.V ((RN b).prover ξ i) ((RN b).stmt ξ i)) ≤ εks) →
     (∀ b ξ i, (Bext H D.V (E D decode) ((RN b).Tape ξ i) ((RN b).prover ξ i) ((RN b).stmt ξ i)).Pr H ≤ εbind) →
+    (∀ b ξ i, (Btap H D.V (E D decode) D.commit D.parse (RN b).tops ((RN b).Tape ξ i) ((RN b).prover ξ i)
+      ((RN b).stmt ξ i)).Pr H ≤ εtap) →
     Pouw.pr (fun ξ => ∃ b, ∃ a ∈ ({.sampled, .pouw, .network} : Finset Audit),
         (r b).accepts a ξ ∧ ¬ (r b).Holds (c b) p a ξ) ≤
-      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + (δs + n * (δbind + δks)) + nc * (δc + εks + εbind))
+      ∑ b : Fin B, ((ENNReal.ofReal δI + S.err b).toReal + (δs + n * (δbind + δks)) + nc * (δc + εks + εbind + εtap))
 
 end Accounting.Guarantees

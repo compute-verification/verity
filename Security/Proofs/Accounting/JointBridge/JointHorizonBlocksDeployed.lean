@@ -34,7 +34,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     RW hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
     hd hp hH Dr Qr Lr hP ΩW ΩQ run P round RS hdev hS
     N bits h sB G k lam hN0 RB hQ
-    Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hδc hdec εks εbind herr hbindN
+    Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
     hW hMem
   let δ : Fin B → Audit → ℝ := fun b a => match a with
     | .sampled => (ENNReal.ofReal δI + S.err b).toReal
@@ -42,7 +42,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     | .pous => (Pous.Params.δ : ℝ) + Pous.Params.εMax.toReal
     | .poub => (((k - 1 : ℕ) : ℝ) / N) ^ sB + (sB : ℝ) / 2 ^ h +
         (((d.rate .oracle * (s.block b).win.len).choose k : ℕ) : ℝ) / 2 ^ lam
-    | .network => nc * (δc + εks + εbind)
+    | .network => nc * (δc + εks + εbind + εtap)
   have hδ : ∀ b a, (s.block b).Sound (c b) p a (δ b a) := by
     intro b a
     cases a
@@ -54,7 +54,7 @@ theorem JointHorizonBlocksDeployed : Accounting.Guarantees.JointHorizonBlocksDep
     · exact Bridge.SpaceOfPeriodHeld hd hp hH Dr Qr Lr hP ι α d C I Ω (s.block b) (ΩW b) (ΩQ b) (run b) (P b)
         (round b) (c b) p (RS b) (hdev b) (hS b)
     · exact Bridge.BandwidthOfAuditPerRunPeriod N bits h sB G k lam ι α d C I Ω (s.block b) (c b) p hN0 (RB b) (hQ b)
-    · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hδc hdec εks εbind (herr b) (hbindN b)
+    · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hbc hδc hdec εks εbind εtap (herr b) (hbindN b) (htap b)
   refine (JointHorizonBlocks ι α I Ω d C B s c p f δ εWipe δPous hδ hW hMem).trans_eq ?_
   simp only [sum_univ_audit]
   rfl
@@ -66,11 +66,11 @@ theorem JointHorizonBlocksDeployedA : Accounting.Guarantees.JointHorizonBlocksDe
     S q δI hq hδI hqt hA3 RI hT hL hcert hfin
     ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind δks ws opened salt Wp Pl folded
     RW hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc hsalt hpins hmu hrb hguess hfix
-    Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hδc hdec εks εbind herr hbindN
+    Coin Col Tn _ _ _ _ _ H D Ln Kₒ Sn lay kh δc decode regN Dj nc RN hks hbc hδc hdec εks εbind εtap herr hbindN htap
   let δ : Fin B → Audit → ℝ := fun b a => match a with
     | .sampled => (ENNReal.ofReal δI + S.err b).toReal
     | .pouw => δs + n * (δbind + δks)
-    | .network => nc * (δc + εks + εbind)
+    | .network => nc * (δc + εks + εbind + εtap)
     | _ => 0
   have hδ : ∀ b, ∀ a ∈ ({.sampled, .pouw, .network} : Finset Audit), (r b).Sound (c b) p a (δ b a) := by
     intro b a ha
@@ -81,7 +81,7 @@ theorem JointHorizonBlocksDeployedA : Accounting.Guarantees.JointHorizonBlocksDe
     · exact Bridge.WorkOfH1CheckedCreditPeriod ι α I Ω d C (r b) (c b) p Sc Cd hn hN hr hM hK prm enc staged
         flat δs δbind δks (ws b) (opened b) (salt b) (Wp b) (Pl b) (folded b) (RW b) hScope hρ hw hluck (hgame b)
         (hdead b) (hpre b) (hbind b) (hreg b) (hdraw b) (hsvc b) (hsalt b) hpins (hmu b) (hrb b) (hguess b) (hfix b)
-    · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hδc hdec εks εbind (herr b) (hbindN b)
+    · exact Bridge.CommOfPeriodLeakAccepted (c b) p (RN b) hks hbc hδc hdec εks εbind εtap (herr b) (hbindN b) (htap b)
   refine (JointHorizonBlocksA ι α I Ω d C B r c p δ hδ).trans_eq (Finset.sum_congr rfl fun b _ => ?_)
   rw [Finset.sum_insert (by decide), Finset.sum_insert (by decide), Finset.sum_singleton]
   exact (add_assoc _ _ _).symm
