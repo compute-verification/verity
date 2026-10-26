@@ -28,7 +28,7 @@ from verity_vllm.check.replay import coverage as COV, index as IX, population as
 from verity_vllm.check.replay.evaluate import evaluate
 from verity_vllm.commit.binding import build_binding_map
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.program.registry import b1
+from verity.ml.definitions.registry import b1
 from verity_vllm.query.manifest.bind import Binder, coverage_check
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
