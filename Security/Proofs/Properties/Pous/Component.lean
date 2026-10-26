@@ -29,8 +29,8 @@ local instance instLawfulBEqByteArray_component : LawfulBEq ByteArray where
   eq_of_beq h := ByteArray.ext (beq_iff_eq.1 h)
   rfl {a} := show (a.data == a.data) = true from beq_iff_eq.2 rfl
 
-deriving instance LawfulBEq for StreamedWipe.Params
-deriving instance LawfulBEq for StreamedWipe.Commitment
+deriving instance ReflBEq, LawfulBEq for StreamedWipe.Params
+deriving instance ReflBEq, LawfulBEq for StreamedWipe.Commitment
 
 /-! ## PoUS's acceptance -/
 
@@ -91,8 +91,8 @@ private theorem exactly_ok {α : Type} {f : Lean.Json → Flock.V α} {enc : α 
         · subst hne
           simp [hf, hc1, hc2, bind, Except.bind, pure, Except.pure] at h
           subst h
-          exact ⟨s1, hc1, hc2⟩
-        · simp [hf, hc1, hc2, hne, bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+          exact ⟨s1, hc1, rfl⟩
+        · simp [hf, hc1, hc2, hne, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
 
 theorem runDigest : RunDigest := by
   intro b pub h
@@ -171,7 +171,8 @@ private theorem stores_eq {q : P2.Params} {pub : SetupProtocol.Public} {e e' : R
     (hS : ShapedAt q e.setup.store) (hS' : ShapedAt q e'.setup.store)
     (hl : ∀ i, 0 ≤ i → i < 0 + q.blocks →
       (leaves pub.salt e.setup.store)[i]! = (leaves pub.salt e'.setup.store)[i]!)
-    (hX : ¬ ∃ x ∈ forkStrings q pub e e', ∃ y ∈ forkStrings q pub e e', x ≠ y ∧ Sha512.hash x = Sha512.hash y) :
+    (hX : ¬ ∃ x ∈ forkStrings q pub e e', ∃ y ∈ forkStrings q pub e e',
+      x ≠ y ∧ Sha512.hash x = Sha512.hash y) :
     e.setup.store = e'.setup.store := by
   apply Array.ext (hS.1.trans hS'.1.symm)
   intro s hs hs'
@@ -204,7 +205,7 @@ private theorem rows_eq {d d' : ByteArray} {n : Nat} (hd : d.size = n * Merkle.D
     simp only [Run.row, Merkle.DIGEST, ByteArray.data_extract, Array.getElem?_extract, ByteArray.size_data, hd,
       hd'] at e
     have hc : k % 64 < min (64 * (k / 64 + 1)) (n * 64) - 64 * (k / 64) := by omega
-    rw [if_pos hc, if_pos hc, Nat.div_add_mod] at e
+    rw [ite_eq_left hc, ite_eq_left hc, Nat.div_add_mod] at e
     exact e
   · rw [Array.getElem?_eq_none (by simp only [ByteArray.size_data, hd]; omega),
       Array.getElem?_eq_none (by simp only [ByteArray.size_data, hd']; omega)]
@@ -213,7 +214,8 @@ private theorem digests_eq {q : P2.Params} {pub : SetupProtocol.Public} {e e' : 
     (hd : e.digests.size = q.blocks * Merkle.DIGEST) (hd' : e'.digests.size = q.blocks * Merkle.DIGEST)
     (hl : ∀ i, 0 ≤ i → i < 0 + q.blocks →
       (Run.rowLeaves q pub.salt e.digests)[i]! = (Run.rowLeaves q pub.salt e'.digests)[i]!)
-    (hX : ¬ ∃ x ∈ forkStrings q pub e e', ∃ y ∈ forkStrings q pub e e', x ≠ y ∧ Sha512.hash x = Sha512.hash y) :
+    (hX : ¬ ∃ x ∈ forkStrings q pub e e', ∃ y ∈ forkStrings q pub e e',
+      x ≠ y ∧ Sha512.hash x = Sha512.hash y) :
     e.digests = e'.digests := by
   refine rows_eq hd hd' fun i hi => ?_
   have hlv := hl i (Nat.zero_le _) (by simpa using hi)
@@ -234,8 +236,10 @@ private theorem setupCommitment_ext {a b : SetupProtocol.Commitment} (hw : a.w =
 
 theorem runBinds : RunBinds := by
   intro p pub e e' hA hA'
-  obtain ⟨hs, hc⟩ := (RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mp ((RunProtocol.protocol_accepts p pub e).mp hA)
-  obtain ⟨hs', hc'⟩ := (RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mp ((RunProtocol.protocol_accepts p pub e').mp hA')
+  obtain ⟨hs, hc⟩ :=
+    (RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mp ((RunProtocol.protocol_accepts p pub e).mp hA)
+  obtain ⟨hs', hc'⟩ :=
+    (RunProtocol.accepts_iff _ _ _ _ _ _ _ _ _).mp ((RunProtocol.protocol_accepts p pub e').mp hA')
   by_cases hX : ∃ x ∈ forkStrings p.point.params pub e e', ∃ y ∈ forkStrings p.point.params pub e e',
       x ≠ y ∧ Sha512.hash x = Sha512.hash y
   · exact .inr hX
@@ -356,12 +360,13 @@ private theorem wtail_accepted (s : StreamedWipe.Signed) (c : StreamedWipe.Commi
     clear h hL
     split_ifs with h1 h2 h3 h4 <;> refine ⟨_, rfl, ?_, fun he => ?_⟩ <;> (try simp at he) <;> (try simp) <;>
       (try omega)
+    rename_i h2 h3 h4
     intro hb
     exact ⟨by simpa using h1, by simpa using h2, by simpa using h3, by simpa using h4⟩)
   rw [show ∀ (x : Id (Array String)) (f : Array String → Id StreamedWipe.Verdict), (x >>= f) = f x.run from
     fun _ _ => rfl] at h
   simp only [Id.run] at m1 m2 h
-  have h0 : L.size = 0 := by simpa using h
+  have h0 : L.size = 0 := by simpa using (show Array.isEmpty L = true from h)
   exact ⟨Array.eq_empty_of_size_eq_zero (by omega), fun b hb => m2 (by omega) b (by simp; omega)⟩
 
 private theorem wpre_empty (schemes : Schemes) (trusted : List ByteArray) (s : StreamedWipe.Signed)
