@@ -1,4 +1,3 @@
-import Definitions.Core.Adversary
 import Definitions.Pous.Game.Prob
 
 /-!
@@ -197,21 +196,6 @@ def Accepts {s : ℕ} (A : Device N b h ρ S L q) (E : Store N b) (R : Bits ρ) 
   ∀ i, A.tags E R O (I i) = O (R, I i, E (I i))
 
 end Device
-
-/-- A device is an adversary of the window (core's `Verity.Adversary`): its state laid out from the store, its chip
-program in the world of the store and the coins (the certified stream and the oracle), its link bound `L` and query
-bound `q`. -/
-instance instAdversaryDevice (N b h ρ S L q : ℕ) :
-    Verity.Adversary (Device N b h ρ S L q) (Store N b) (Bits ρ × Oracle N b h ρ) S (World N b h ρ)
-      (Bits ρ × Fin N × Bits b) (Fin N → Bits h) L q where
-  state A := A.state
-  world A E c := A.world E c.1 c.2
-  run A st w := (A.chip st).run w
-  queries A st w := (A.chip st).queries w
-  ingressBits A st w := (A.chip st).ingressBits w
-  linkBits A st w := (A.chip st).linkBits w
-  queries_le A st w := (A.bounded st w).2
-  linkBits_le A st w := (A.bounded st w).1
 
 /-- **The rate audit's floor**, in bits times `c_enc`: `k·b·c_enc − (S + (L − ρ) + λ)·c_enc − (F − k·c_tag)·b`.
 Divided by `c_enc` it is `k·b − S − c_free − λ − (F − k·c_tag)·b/c_enc` bits, where `c_free = L − ρ` is the link's

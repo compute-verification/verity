@@ -23,8 +23,6 @@ import Proofs.Core.Round
 import Proofs.Core.Prims.Round
 import Proofs.Core.TC
 import Proofs.Core.Fp32
-import Proofs.Core.Device
-import Proofs.Core.Blocks
 
 /-!
 # Proofs of core's guarantees

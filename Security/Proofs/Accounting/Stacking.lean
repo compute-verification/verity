@@ -1050,10 +1050,10 @@ variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Layo
 blocks and the plan covers `W`'s reads in at most `N` blocks, the live bits the audit credits and the bits read from
 complete blocks total at most `k·N·B` each. -/
 theorem cap_of_matches (s : Store) (plan : ℕ → Finset ℕ) (B N k : ℕ) (win : Window) (hwin : win.len ≤ k)
-    (hm : ∀ t ∈ Window.steps win, StoreMatches W e ℓ s B t ∧ (s.resident t).card ≤ N ∧
+    (hm : ∀ t ∈ win.steps, StoreMatches W e ℓ s B t ∧ (s.resident t).card ≤ N ∧
       PlanMatches W e ℓ (plan t) B t ∧ (plan t).card ≤ N) :
-    ∑ t ∈ Window.steps win, creditedBits W e ℓ t ≤ k * N * B ∧ ∑ t ∈ Window.steps win, creditedReadBits W e ℓ t ≤ k * N * B := by
-  have hsum : ∑ _t ∈ Window.steps win, N * B ≤ k * N * B := by
+    ∑ t ∈ win.steps, creditedBits W e ℓ t ≤ k * N * B ∧ ∑ t ∈ win.steps, creditedReadBits W e ℓ t ≤ k * N * B := by
+  have hsum : ∑ _t ∈ win.steps, N * B ≤ k * N * B := by
     rw [Finset.sum_const, Window.steps, Nat.card_Ico, smul_eq_mul, Nat.add_sub_cancel_left, mul_assoc]
     exact Nat.mul_le_mul_right _ hwin
   refine ⟨(Finset.sum_le_sum fun t ht => ?_).trans hsum, (Finset.sum_le_sum fun t ht => ?_).trans hsum⟩

@@ -316,7 +316,7 @@ def StackedRequirementSketchDeployed : Prop :=
       ∀ Es, K.provenance.inputs Es ≤ 8 * Rin * life ∧
         K.provenance.gates (encodeBitsCost Gates.p1024 3 B εnum εden) Es ≤ (cρ * reads * life : ℕ)) →
     win.len ≤ n * P →
-    (∀ t ∈ Window.steps win, Requirement.StoreMatches W e ℓ mm 32768 t ∧ (mm.resident t).card ≤ N ∧
+    (∀ t ∈ win.steps, Requirement.StoreMatches W e ℓ mm 32768 t ∧ (mm.resident t).card ≤ N ∧
       Requirement.PlanMatches W e ℓ (plan t) 32768 t ∧ (plan t).card ≤ N) →
     let C := 8 * Rin * life + 1024 * (cρ * reads * life) / E
     let γ := 0.0015 + RateSketch.gammaSketch N 128 ρ S L (X + C)
@@ -324,10 +324,10 @@ def StackedRequirementSketchDeployed : Prop :=
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctOn
         (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w) (x.2 w).1 (x.2 w).2.1) ∧
         ((((∑ w, (A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
-              (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) < (1 - γ) * (∑ t ∈ Window.steps win, Requirement.creditedBits W e ℓ t : ℕ) ∨
+              (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) < (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedBits W e ℓ t : ℕ) ∨
           (((∑ w, (A.win w x.2).readsOn (RateSketch.programmed (RateSketch.coinStore enc choose slot) x.1 x.2 w)
               (x.2 w).1 (x.2 w).2.1 : ℕ)) : ℝ) <
-            (1 - γ) * (∑ t ∈ Window.steps win, Requirement.creditedReadBits W e ℓ t : ℕ)))
+            (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedReadBits W e ℓ t : ℕ)))
       ≤ 2 / 2 ^ 40 + (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * ((qtot : ℝ≥0∞) / 2 ^ 96) + (n * P : ℝ≥0∞) * δ
 
@@ -384,16 +384,16 @@ def StackedRequirementRelay : Prop :=
       ∀ Es R O, K.inputs Es R O ≤ 8 * Rin * life ∧
         K.gates (encodeBitsCost Fc k B εnum εden) Es R O ≤ (cρ * reads * life : ℕ)) →
     win.len ≤ n * P →
-    (∀ t ∈ Window.steps win, Requirement.StoreMatches W e ℓ mm b t ∧ (mm.resident t).card ≤ N ∧
+    (∀ t ∈ win.steps, Requirement.StoreMatches W e ℓ mm b t ∧ (mm.resident t).card ≤ N ∧
       Requirement.PlanMatches W e ℓ (plan t) b t ∧ (plan t).card ≤ N) →
     let C := 8 * Rin * life + 8 * Fc.bytes * (cρ * reads * life) / E
     let γ := dbar + Rate.Deployed.gammaPass N b ρ S (L + C) (lam + m * b) rounds cRoot F
     pr (fun x : (Ω × (Fin T → Ca)) × (Fin n → Rate.WindowCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (appendCoinBlocks enc choose slot x.1) (x.2 w).1) ∧
           ((((∑ w, (A.win w x.2).reads tier (appendCoinBlocks enc choose slot x.1) (x.2 w).1 : ℕ)) : ℝ) <
-              (1 - γ) * (∑ t ∈ Window.steps win, Requirement.creditedBits W e ℓ t : ℕ) ∨
+              (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedBits W e ℓ t : ℕ) ∨
             (((∑ w, (A.win w x.2).reads tier (appendCoinBlocks enc choose slot x.1) (x.2 w).1 : ℕ)) : ℝ) <
-              (1 - γ) * (∑ t ∈ Window.steps win, Requirement.creditedReadBits W e ℓ t : ℕ)))
+              (1 - γ) * (∑ t ∈ win.steps, Requirement.creditedReadBits W e ℓ t : ℕ)))
       ≤ ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
         (n * P * G : ℝ≥0∞) * ((N.choose m : ℝ≥0∞) * 2 ^ (L + C) / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam) + δ
 
