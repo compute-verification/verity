@@ -98,10 +98,10 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
     · cases hw
     change r.innerRaw.ins.toOption = some s at hw
     exact ⟨not_not.1 hz, toOption_eq_some hw⟩
-  obtain ⟨-, -, -, -, -, -, -, -, z9, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
+  obtain ⟨-, -, -, -, -, -, -, -, ⟨dr, z9, he⟩, -⟩ := ins_plainLeaves hw.2 hw.1 hs1 hs2
   rw [hb] at z9
   simp only [Option.mapM_some, hjd, Functor.map, Except.map, Except.ok.injEq] at z9
-  rw [← z9]
+  rw [he, ← z9]
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
@@ -150,11 +150,10 @@ theorem dense_stmt (S : Claims.JsonSpec FlockComplete.printJ Flock.canon) {xo : 
     cases e : ProvedScope.lawWhy false s.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
-  obtain ⟨t, ht⟩ := FlockComplete.JsonRT.draw_parse hdraw hdd
   have hg : Good d := by
     rcases FlockComplete.JsonRT.law_of_lawWhy hlw with ⟨K, strata, hK⟩ | ⟨k, hk⟩
-    · exact FlockComplete.JsonRT.good_stratified (S.parse_wf _ _ ht) hD hK
-    · exact FlockComplete.JsonRT.good_subset (S.parse_wf _ _ ht) hD hk
+    · exact FlockComplete.JsonRT.good_stratified (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hK
+    · exact FlockComplete.JsonRT.good_subset (FlockComplete.JsonRT.draw_wf hdraw hdd) hD hk
   have hnn : d ≠ Json.null := by
     intro hn'
     rw [hn'] at hD
