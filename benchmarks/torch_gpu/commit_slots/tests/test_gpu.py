@@ -108,7 +108,7 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: 
     retries (a retry frees its cache and waits on every stream), and the roots are an unpressured run's. What it catches
     that the roots' tests can't: a commit that keeps a freed table from the producer's next allocation, as
     ``record_stream`` onto the side stream did (a table was reusable only once that stream had run everything queued on
-    it when the table was freed, so with three groups' tables free here the fourth group's retried)."""
+    it when the table was freed, so with room for three groups' tables the fourth group's retried)."""
     dev, width, slots, lag = torch.device("cuda"), 4 << 20, 64, 2
     group = S.Group((width,), tuple((S.Row((S.Part(0, a, 32 << 10),)),) for a in range(0, width, 32 << 10)))
     plan = G.Plan(CTX, S.Layout("commit-slots/test-hbm-cap/v1", (group,) * 6))
@@ -139,8 +139,11 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: 
     torch.cuda.synchronize(dev)
     torch.cuda.empty_cache()
     free, _ = torch.cuda.mem_get_info(dev)
-    ballast = torch.empty(free - 3 * slots * width - (128 << 20), dtype=torch.uint8, device=dev)
+    left, ballast = (free - 3 * slots * width - (128 << 20)) // (2 << 20) * (2 << 20), []
     try:
+        while left > 0:
+            ballast.append(torch.empty(min(left, 1 << 30), dtype=torch.uint8, device=dev))
+            left -= min(left, 1 << 30)
         before = torch.cuda.memory_stats(dev)
         got, lagged = steps(50_000_000)
         after = torch.cuda.memory_stats(dev)
