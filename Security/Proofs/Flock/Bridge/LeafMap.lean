@@ -98,13 +98,13 @@ theorem portsOfL_ident (c : Flock.Circuit) (pub : Flock.Public) (nl : ℕ) (root
     portsOfL c (LeafMap.ident c pub nl) roots = portsOf c nl roots := rfl
 
 /-- The port of the row at claims position `i` (`0` where none). -/
-def portOfPos (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
+def portIdxOf (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (i : ℕ) : ℕ :=
   ((rowOfPos C rows i).map (·.port)).getD 0
 
 /-- **An opening's path at a leaf map**: its position's port's levels, after the salt. -/
 def pathOfL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (L : LeafMap) (o : Opening Bool) :
     Msg :=
-  pathOf (Flock.log2ceil (L.cnt (portOfPos C rows o.pos))) o
+  pathOf (Flock.log2ceil (L.cnt (portIdxOf C rows o.pos))) o
 
 theorem pathOfL_ident (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit)
     (pub : Flock.Public) (nl : ℕ) : pathOfL C rows (LeafMap.ident c pub nl) = pathOf (Flock.log2ceil nl) := rfl

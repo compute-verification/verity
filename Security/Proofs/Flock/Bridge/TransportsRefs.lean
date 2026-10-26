@@ -103,8 +103,8 @@ theorem find?_portsOfL (c : Flock.Circuit) (L : LeafMap) (roots : List Msg) {q :
     fun j hj => ?_⟩
   simpa [portsOfL_eq, portAtL, Claims.Sampling.bs_bytes, List.getD_eq_getElem?_getD] using hfirst j hj
 
-theorem portOfPos_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) : portOfPos C rows i = r.port := by
-  simp [portOfPos, hr]
+theorem portIdxOf_eq {i : ℕ} {r : RowAt} (hr : rowOfPos C rows i = some r) : portIdxOf C rows i = r.port := by
+  simp [portIdxOf, hr]
 
 /-- **Distinct roots at a leaf map**: under `dupName` each port has its own name, so its own domain, and
 `RootFixesDomainL` gives equal roots one domain. -/
@@ -174,7 +174,7 @@ theorem opens_commitDepL (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → 
       SamplingDeploy.pathMsg (FlockC3.RegLevels.sibsV (domOf c r.port) (leavesL c L r.port) r.leaf) := by
     unfold pathOfL
     dsimp only
-    rw [portOfPos_eq hr, ← hsl, pathOf_dataOfL hy hsz]
+    rw [portIdxOf_eq hr, ← hsl, pathOf_dataOfL hy hsz]
   have hlen : r.port < (rootsOfL c L).length := by rw [rootsOfL_length]; exact hq
   have hat : atOf C rows (rootsOfL c L) i = some ((rootsOfL c L).getD r.port [], r.leaf) := by
     have h1 : (rootsOfL c L)[r.port]? = some ((rootsOfL c L).getD r.port []) := by
