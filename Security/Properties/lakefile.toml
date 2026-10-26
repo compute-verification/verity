@@ -65,6 +65,10 @@ path = "../../verity/core/protocols/remote_bandwidth/lean"
 name = "core_requirement"
 path = "../../verity/core/primitives/requirement"
 
+[[require]]
+name = "core_vstar_recursive"
+path = "../../verity/core/service/vstar/recursive"
+
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
@@ -74,7 +78,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.NetworkCertifier", "Properties.CertifierNetwork", "Properties.CertifierNetwork.Runs",
   "Properties.Identity", "Properties.NciDesc", "Properties.NciDesc.Verdict", "Properties.NciDesc.Cover",
   "Properties.Nci.Baseline", "Properties.SampledProofs", "Properties.SampledProofs.Draw",
-  "Properties.SampledProofs.Halt", "Properties.SampledProofs.OneStageZk",
+  "Properties.SampledProofs.Halt", "Properties.SampledProofs.Recursive", "Properties.SampledProofs.OneStageZk",
   "Properties.Evaluate", "Properties.NetworkRecords",
   "Properties.Accounting.Requirement", "Properties.Accounting.Compose", "Properties.RemoteAudit",
   "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
