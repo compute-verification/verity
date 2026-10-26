@@ -43,6 +43,7 @@ PHASES = (
 STATUS_COLORS = {"proved": "#1a9850", "conditional": "#2c7bb6", "draft": "#f28e2b", "absent": "#999999",
                  "outside": "#cccccc"}
 TARGET_STYLES = ((":", "#7b3294"), ("--", "#d7191c"), ("-.", "#404040"))
+CONTOUR_STYLES = (("k", "solid"), ("#08306b", "dashed"), ("#54278f", "dashdot"))
 DPI = 130
 
 
@@ -251,24 +252,28 @@ def brackets(registry: Registry, out: Path, names: Sequence[str] | None = None,
         seen.add(text)
         return text
 
+    def edge(v: float) -> float:
+        return v if math.isfinite(v) else xmax
+
+    def num(v: float) -> str:
+        return f"{v:.3g}" if math.isfinite(v) else ("∞" if v > 0 else "—")
+
     for y, row in enumerate(reversed(rows)):
-        hi = row["hi"] if math.isfinite(row["hi"]) else xmax
-        ax.plot([row["lo"], hi], [y, y], c="#bbbbbb", lw=10, solid_capstyle="butt", zorder=1,
+        ax.plot([edge(row["lo"]), edge(row["hi"])], [y, y], c="#bbbbbb", lw=10, solid_capstyle="butt", zorder=1,
                 label=label("bracket [lo, hi]"))
         for e in row["bounds"]:
             if not math.isnan(e["rho"]):
-                ax.plot(e["rho"], y + 0.25, "o", ms=5, c=STATUS_COLORS[e["status"]], alpha=0.8, zorder=3,
+                ax.plot(edge(e["rho"]), y + 0.25, "o", ms=5, c=STATUS_COLORS[e["status"]], alpha=0.8, zorder=3,
                         label=label(f"a bound alone ({e['status']})"))
         for st, v in row["lo_by_status"].items():
-            ax.plot(v, y, "D", ms=9, c=STATUS_COLORS[st], mec="k", zorder=4,
+            ax.plot(edge(v), y, "D", ms=9, c=STATUS_COLORS[st], mec="k", zorder=4,
                     label=label(f"lo from {', '.join(STATUSES[:STATUSES.index(st) + 1])} bounds and cuts"))
         for e in row["attacks"]:
             if not math.isnan(e["rho"]):
-                v = e["rho"] if math.isfinite(e["rho"]) else xmax
-                ax.plot(v, y - 0.25, "v", ms=8, c=STATUS_COLORS[e["status"]], mec="k", zorder=3,
+                ax.plot(edge(e["rho"]), y - 0.25, "v", ms=8, c=STATUS_COLORS[e["status"]], mec="k", zorder=3,
                         label=label(f"an attack ({e['status']})"))
-        by = ", ".join(f"{st} {v:.3g}" for st, v in row["lo_by_status"].items())
-        ax.text(xmax * 1.05, y, f"ρ ∈ [{row['lo']:.3g}, {row['hi']:.3g}]\nlo by status: {by}", va="center",
+        by = ", ".join(f"{st} {num(v)}" for st, v in row["lo_by_status"].items())
+        ax.text(xmax * 1.05, y, f"ρ ∈ [{num(row['lo'])}, {num(row['hi'])}]\nlo by status: {by}", va="center",
                 fontsize=8)
     _targets(ax, targets, "x")
     ax.set_yticks(range(len(rows)), [f"{r['scenario']}\n{r['family']}" for r in reversed(rows)], fontsize=9)
@@ -328,6 +333,7 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
     """ρ over each pair of parameters in `specs` (a window around both plausible ranges), with its contours at each
     target (from the grid) and the frontier (by bisection, dots), today's values (★) and the plausible box (dashed)."""
     from matplotlib.colors import LogNorm
+    from matplotlib.lines import Line2D
 
     plt = _plt()
     names = list(names or registry.names("scenario"))
@@ -358,12 +364,15 @@ def phase(registry: Registry, out: Path, names: Sequence[str] | None = None, tar
         flat = [v for row in z for v in row if not math.isnan(v)]
         mesh = ax.pcolormesh(p["xs"], p["ys"], z, norm=norm, cmap="RdYlGn", shading="nearest")
         levels = [t for t in sorted(targets) if flat and min(flat) < t < max(flat)]
-        if levels:
-            cs = ax.contour(p["xs"], p["ys"], z, levels=levels, colors="k", linewidths=1.2)
-            ax.clabel(cs, fmt=lambda v: f"ρ = {v:g}", fontsize=8)
-        for t, (_, c) in zip(targets, TARGET_STYLES * len(targets), strict=False):
+        handles = []
+        for i, t in enumerate(targets):
+            c, ls = CONTOUR_STYLES[i % len(CONTOUR_STYLES)]
+            if t in levels:
+                ax.contour(p["xs"], p["ys"], z, levels=[t], colors=c, linewidths=1.4, linestyles=ls)
             pts = [(xv, yv) for xv, yv in p["frontier"][str(t)] if yv is not None]
             ax.plot([q[0] for q in pts], [q[1] for q in pts], "o", c="white", mec=c, mew=1.2, ms=4)
+            handles.append(Line2D([], [], c=c, ls=ls, marker="o", mfc="white", mec=c, ms=4, label=f"ρ = {t:g}"))
+        ax.legend(handles=handles, fontsize=8, loc="lower left", framealpha=0.85)
         p["not_reached"] = [t for t in targets if t not in levels]
         if p["not_reached"] and flat:
             ax.text(0.02, 0.98, "\n".join(f"ρ {'<' if max(flat) < t else '>'} {t:g} everywhere here "
