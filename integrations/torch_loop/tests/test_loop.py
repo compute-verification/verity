@@ -199,8 +199,9 @@ def test_registered_weights_leave_half_the_inputs_free_and_open_the_pinned_root(
     win, c, written = registered(tmp_path)
     assert win.mismatches() == {}
     doc = json.loads((tmp_path / "circuit.json").read_text())
-    assert IF.input_count(doc) == {"units": 1024, "inputs": 2_162_688, "wired": 0, "registered": 1_081_344, "ingress": 0,
-                                   "free": 1_081_344}
+    assert IF.input_count(doc, pins=set(WEIGHTS)) == {"units": 1024, "inputs": 2_162_688, "wired": 0, "registered": 1_081_344,
+                                                      "ingress": 0, "free": 1_081_344}
+    assert IF.input_count(doc)["free"] == 2_162_688
     rec = json.loads((tmp_path / "registration.json").read_text())
     w = win.window
     layer = CS.leaf_layer({m.key: (tmp_path / f"m{k}-public.bin").read_bytes() for k, m in enumerate(w.members)})
