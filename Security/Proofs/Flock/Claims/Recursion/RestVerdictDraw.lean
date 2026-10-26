@@ -1,5 +1,6 @@
 import Proofs.Flock.Claims.Recursion.RestVerdictCustody
 import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.JsonNorm
 
 /-!
 # `hrest`'s base checks with the draw tied at several tables
