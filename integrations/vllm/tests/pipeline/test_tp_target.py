@@ -280,14 +280,14 @@ def test_a_ranks_probe_reads_back_its_own_engines_execution(monkeypatch):
 @pytest.mark.parametrize("target", [H200, None], ids=["declared", "undeclared"])
 def test_a_ranks_header_is_made_over_an_engine_built_for_the_declared_target(monkeypatch, tmp_path, target):
     """`tp2_install`'s header is `make_header` over the rank's `Engine`, whose `target` is what `run_facts.profile_manifest` attests."""
-    from verity_vllm.engine import vllm_adapter as va
+    from verity_vllm.observe import capture
     seen = []
 
     def make_header(engine, workload, **kw):
         seen.append(engine)
         raise RuntimeError("header made")
 
-    monkeypatch.setattr(va, "make_header", make_header)
+    monkeypatch.setattr(capture, "make_header", make_header)
     _, w = _extension(monkeypatch, object())
     with pytest.raises(RuntimeError, match="header made"):
         w.tp2_install(out_dir=str(tmp_path), workload=WORKLOAD, case="C", cp={"repo": "org/model"}, engine_kwargs={}, env_flags={},
