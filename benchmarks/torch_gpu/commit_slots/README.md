@@ -160,6 +160,15 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
 - **Beside a layer's four int8 GEMMs** (`torch._int_mm`, M = 16,384, 939 TOPS): the GEMMs take 93.7 ms alone and
   107.1 ms beside the commit (+14%). Overlapped, a layer takes 107.1 ms, against 114.5 ms run one after the other, so
   overlap saves little. Over a step, the commit costs 22% of the GEMMs' 4.87 s.
+- **Beside ALLP-H200's served step** (`overlap.py`, run r20261026-161847-6d05 at ab7a09e2e0: `../../e2e_h200/`'s driver
+  at the frozen shape, 4,096 slots in micro-batches of 1,024, the demo weights resident; circuits' shared-row layout,
+  101,718 units in 102,448 rows, 27.4 MB a slot). Serving alone takes 3.25 s a step and the commit alone 1.43 s. Today's
+  loop (each group streamed to the side stream, the step's end waiting for its roots) takes 4.65 s a step. Overlapped
+  across the step boundary with no device-wide sync, it takes 4.61 s with the commit at low priority and 4.63 s at high
+  or equal priority, so 0.02 to 0.07 s of the commit hides (2 to 5%). Both fill every SM (the leaf kernel persistently,
+  one block an SM), so they take turns. SM clocks stay at 1,980 MHz, at 574 to 584 W against the 700 W cap with no
+  throttle reason, and HBM peaks at 146.3 GB, as in today's loop. With FAMILIES' layout (6,102,102 units) the commit
+  alone takes 71.18 s, and a step overlapped at low priority takes 74.94 s.
 
 ## Files
 
@@ -169,6 +178,9 @@ alone and beside the GEMMs are run `r20261026-092158-634c`'s, at 1a452ff289, bef
 - `check.py`: the GPU's roots against the reference's (edge layouts, and the H200 layout at 4,096 to 20,480 slots on
   sampled slots); `bench.py`: GB/s and the share of a serving step at the frozen shape, alone and beside the layer's int8
   GEMMs; `gpu.sh`: both, with the tests, under one GPU lease (its header has the `research run` line).
+- `overlap.py`: the commit beside `../../e2e_h200/`'s served step on one GPU: serving alone, the commit alone, today's
+  loop, and overlapped at low, high and equal priority, with nvidia-smi's clocks, power and HBM, and each overlapped
+  step's roots against today's loop's; `overlap.sh`: it under one GPU lease (its header has the `research run` line).
 - `tests/`: the reference against the fixture and C-Flock's salts and an independent tree build, openings and their
   refusals, the host twin against the reference (regrouped layouts included), the streamed slot trees against the leaf
   matrix they replaced and the reference (unit counts around powers of two, groups cut anywhere, one-slot passes), a
