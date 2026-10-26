@@ -33,7 +33,7 @@ layers = { value = 61, low = 61, high = 64, source = "Daniel's Notion page Proof
 d_model = { value = 7168, source = "Daniel's Notion page Proof of forward computation: Kimi K3, d_model 7168", status = "assumed" }
 
 # The reference datacenter under the proof of forward computation's rules: declared work runs as n_max-token episodes
-# (scenario.<name>.pofc names the rules; pofc_physical adds the forward-only links to the physical block).
+# (scenario.<name>.pofc names the rules; pofc_physical adds the forward-only links to the server-time block).
 [scenario.reference-onsite-h200-pofc]
 fleet = "world-h200"
 regime = "onsite"
