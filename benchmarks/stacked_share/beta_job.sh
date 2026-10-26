@@ -12,13 +12,14 @@
 #     --send DIR/tree.tar.gz --cwd clone/integrations/vllm -- bash ../../benchmarks/stacked_share/beta_job.sh
 set -euo pipefail
 export HF_HUB_OFFLINE=1
-HERE=../../benchmarks/stacked_share
+ROOT=$(cd ../.. && pwd)
+HERE=$ROOT/benchmarks/stacked_share
 ART=${ART:-art:c2086c4c7da0041dcbf0776357bce6c3d7127bef6d6245c8652a772024af240f}
 d=$(mktemp -d)
 trap 'rm -rf "$d"' EXIT
 if [ -x /workspace/jobs/venv312/bin/python3 ]; then
   PY=/workspace/jobs/venv312/bin/python3
-  export PYTHONPATH=.:../..:../../tools/research/src
+  export PYTHONPATH=$ROOT/integrations/vllm:$ROOT:$ROOT/tools/research/src
 else
   UV_PROJECT_ENVIRONMENT="$d/venv" uv sync -q --all-packages --extra torch-cpu > "$OUT/sync.log" 2>&1 || { tail -30 "$OUT/sync.log"; exit 4; }
   PY=$d/venv/bin/python
