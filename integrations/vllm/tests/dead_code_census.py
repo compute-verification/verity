@@ -18,7 +18,7 @@ circuit-check loads by path).  Edges: `import a.b`, `from a.b import c`
 literals that name an integration module (`importlib.import_module("verity_vllm.program.model")`, dotted registry paths), f-string
 prefixes (`f"verity.ml.definitions.registry.{m}"` + every short literal of the same file that completes to a module), path literals
 (`verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu.py`) and unique `<name>.py` literals joined at runtime.  Anything reachable from a
-root is LIVE.  `verity_vllm/engine/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
+root is LIVE.  `verity_vllm/observe/fold/profiles/**` is resolved by name at runtime: the whole package is reachable when any consumer is.
 `registry.catalog.load()` imports every module of `verity.ml.definitions.registry` but `quarantine` (`pkgutil`): they are reachable from it.
 
 CLASSES (per module of the census packages):
@@ -63,6 +63,7 @@ PATH_LITERAL_RE = re.compile(rf"^(?:{_TOPS}|verity/ml/definitions)(?:/[A-Za-z0-9
 #: Other lanes own these; the census reports them, the deletion plan never touches them (the keep-list names the non-live ones).
 PROTECTED = (
     "verity_vllm/engine/profiles/",
+    "verity_vllm/observe/fold/profiles/",
     "verity_vllm/query/",
     "verity_vllm/acquire/",
     "verity_vllm/check/match/global_match.py",
