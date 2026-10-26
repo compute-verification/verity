@@ -21,7 +21,8 @@ openings, and the fields the transcript never absorbs are what V\* takes for the
   carries is a `root_B` node (`linkR_rootB`), which `rec-cap` holds.
 * **A rep's proof** (`FitsRep`, `readRep`): rep `k`'s rounds are the schedule's (`RecDeploy.repSchedAt`); round `j`'s
   rows are its committed tops' node rows, then, where it absorbs, one row of the element values its squeeze answers (`vals`
-  of the `j`-th chunk of `repFrames`, `T` among them). The proof's cap is round 0's nodes for its table, its recursive
+  of the `j`-th chunk of `repFrames`, `T` among them), zero-padded to whole 128-byte blocks as the deployed prover writes
+  it (`padRow`; the frames' skeleton fixes how many values the row holds). The proof's cap is round 0's nodes for its table, its recursive
   caps the rounds' tops in order, its nonces `0`, and its fields of the lengths a proof decoded at the rep's shape has
   (`DecodeZL.ProofSizes`), so no field carries an entry no frame reads. `readRep` takes a proof and `T` that fit, with
   the last message's openings and the unabsorbed fields as V\* takes them (`absorbedFrom`, `repFrames_absorbedFrom`):
@@ -203,11 +204,25 @@ def vals : List Frame → List F128
   | .vec vs :: fs => vs ++ vals fs
   | _ :: fs => vals fs
 
+/-- **A round's value row as the deployed prover writes it**: the values' bytes, then zero bytes up to whole 128-byte
+blocks (`rec_live.message_rows`, `Firewall.messageRows`: 64 u16 words a block). -/
+def padRow (l : List UInt8) : List UInt8 := l ++ List.replicate ((128 - l.length % 128) % 128) 0
+
+theorem padRow_length_le (l : List UInt8) : (padRow l).length ≤ l.length + 127 := by
+  simp only [padRow, List.length_append, List.length_replicate]
+  omega
+
+/-- **A padded row fixes its bytes at their length.** -/
+theorem padRow_inj {l l' : List UInt8} (h : padRow l = padRow l') (hl : l.length = l'.length) : l = l' := by
+  have e := congrArg (List.take l.length) h
+  unfold padRow at e
+  rwa [List.take_left' rfl, List.take_left' hl.symm] at e
+
 /-- **Round `s`'s opened rows hold the values `vs` its squeeze answers**: its committed tops' nodes, then, where it
-absorbs, one row of `vs`; a round that absorbs nothing answers no value. -/
+absorbs, one row of `vs`, padded to whole blocks (`padRow`); a round that absorbs nothing answers no value. -/
 def RowsAt (s : RecVStar.SchedRound) (rs : List ByteArray) (vs : List F128) : Prop :=
   rs.length = s.2.1.toList.sum + (if s.2.2.2 then 1 else 0) ∧
-    rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(colBytes vs).toArray⟩ : ByteArray)] else []) ∧
+    rs.drop s.2.1.toList.sum = (if s.2.2.2 then [(⟨(padRow (colBytes vs)).toArray⟩ : ByteArray)] else []) ∧
     (s.2.2.2 = false → vs = [])
 
 /-- The tops the rounds commit, in order: each round's first rows, cut at its tops' node counts, each row's node. -/
