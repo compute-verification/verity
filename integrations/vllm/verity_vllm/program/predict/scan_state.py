@@ -23,13 +23,13 @@ from verity.ml.definitions.registry import io_shell as IO
 
 #: the registered value whose rows are the scan's states, one a bucket
 SCAN_STATE = "verity/certifier/scan-state/v1"
-#: the warden of record's cells (w63, `benchmarks/network_traces/scan_zk.W63`): B-byte cells, r a connection a bucket, C
+#: the network certifier run of record's cells (w63, `benchmarks/network_traces/scan_zk.W63`): B-byte cells, r a connection a bucket, C
 #: cells a request, ids of IDB bits, a request's ingress within WITHIN buckets
 B, R, C, IDB, WITHIN = 512, 4, 47, 17, 12
 
 
 def scan_class(lanes: int, outputs: int, every: int) -> IS.Class:
-    """The scan's class at a window class's lanes, outputs (KO) and timestep, on the warden of record's cells; its delay
+    """The scan's class at a window class's lanes, outputs (KO) and timestep, on the run of record's cells; its delay
     the least it takes, WITHIN + EVERY − 1 (27 at EVERY 16, w63's)."""
     return IS.Class(B=B, r=R, lanes=lanes, C=C, IDB=IDB, EVERY=every, WITHIN=WITHIN, D=WITHIN + every - 1, KO=outputs)
 
@@ -63,9 +63,9 @@ def bridge(cls: IS.Class, prompt: int) -> Any:
     """`io_shell.ScanSlots_v1` at ``cls``'s state row for prompts of at most ``prompt`` ids: each lane's occupancy word,
     prompt length, ``max_tokens`` and ids where `layout` puts them."""
     lay = layout(cls)
-    at = lambda f: tuple(lay[f"{j}.{f}"][0] for j in range(cls.NR))  # noqa: E731
-    return bind(IO.ScanSlots, NS=words(cls), NP=prompt, IDB=cls.IDB, K0=cls.K0, K=cls.K, OCC=at("occ"), LP=at("fields"),
-                MAX=at("max_tokens"), IDS=at("ids"))
+    at = {f: tuple(lay[f"{j}.{f}"][0] for j in range(cls.NR)) for f in ("occ", "fields", "max_tokens", "ids")}
+    return bind(IO.ScanSlots, NS=words(cls), NP=prompt, IDB=cls.IDB, K0=cls.K0, K=cls.K, OCC=at["occ"], LP=at["fields"],
+                MAX=at["max_tokens"], IDS=at["ids"])
 
 
 __all__ = ["SCAN_STATE", "bridge", "layout", "scan_class", "words"]
